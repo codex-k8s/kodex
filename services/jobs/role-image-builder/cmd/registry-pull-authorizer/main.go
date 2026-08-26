@@ -22,13 +22,20 @@ import (
 )
 
 const (
-	pullServerError          = "registry pull authorizer failed"
-	internalPullRegistryHost = "kodex-image-registry.kodex-system.svc.cluster.local:5000"
+	pullServerError                  = "registry pull authorizer failed"
+	pullBasicAuthenticationChallenge = `Basic realm="kodex-registry"`
+	internalPullRegistryHost         = "kodex-image-registry.kodex-system.svc.cluster.local:5000"
 )
 
 type pullProfile struct {
 	configFile   string
 	repositories []string
+}
+
+type pullAuthorizationDecision struct {
+	failure       string
+	statusCode    int
+	authChallenge string
 }
 
 func main() {
@@ -47,12 +54,13 @@ func main() {
 	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return errors.New("redirect rejected") }}
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		certificate, failure := pullClientCertificate(request)
+		decision := denyPullRequest(failure)
 		if failure == "" {
-			failure = pullAuthorizationFailure(request, certificate, registryHost)
+			decision = decidePullAuthorization(request, certificate, registryHost)
 		}
-		if failure != "" {
-			log.Printf("%s: request denied reason=%s", pullServerError, failure)
-			http.Error(writer, "request forbidden", http.StatusForbidden)
+		if decision.failure != "" {
+			log.Printf("%s: request denied reason=%s", pullServerError, decision.failure)
+			writePullAuthorizationDenial(writer, decision)
 			return
 		}
 		target := *backend
@@ -97,13 +105,13 @@ func pullClientCertificate(request *http.Request) (*x509.Certificate, string) {
 	return request.TLS.PeerCertificates[0], ""
 }
 
-func pullAuthorizationFailure(
+func decidePullAuthorization(
 	request *http.Request,
 	certificate *x509.Certificate,
 	registryHost string,
-) string {
+) pullAuthorizationDecision {
 	if request.Method != http.MethodGet && request.Method != http.MethodHead || strings.ContainsAny(request.URL.Path, "\r\n\\") {
-		return "request_shape"
+		return denyPullRequest("request_shape")
 	}
 	cn := certificate.Subject.CommonName
 	profiles := map[string]pullProfile{
@@ -112,22 +120,54 @@ func pullAuthorizationFailure(
 		"role-image-builder-input-read":   {"/identity/input-dockerconfig.json", []string{"kodex/role-image-inputs"}},
 	}
 	if profile, ok := profiles[cn]; ok {
-		username, password, supplied := request.BasicAuth()
-		if !supplied || !dockerCredentialMatches(profile.configFile, username, password, registryHost) {
-			return "profile_credential"
-		}
-		if !pathInRepositories(request.URL.Path, profile.repositories) {
-			return "profile_repository"
-		}
-		return ""
+		return decidePullProfileAuthorization(request, profile, registryHost)
 	}
 	if !authorizedNodePull(request, certificate, registryHost) {
-		return "node_identity"
+		return denyPullRequest("node_identity")
 	}
 	if !pathInRepositories(request.URL.Path, []string{"kodex/agent-runner", "kodex/roles"}) {
-		return "node_repository"
+		return denyPullRequest("node_repository")
 	}
-	return ""
+	return pullAuthorizationDecision{}
+}
+
+func decidePullProfileAuthorization(
+	request *http.Request,
+	profile pullProfile,
+	registryHost string,
+) pullAuthorizationDecision {
+	username, password, supplied := request.BasicAuth()
+	if !supplied {
+		if len(request.Header.Values("Authorization")) == 0 {
+			return pullAuthorizationDecision{
+				failure:       "profile_credential_missing",
+				statusCode:    http.StatusUnauthorized,
+				authChallenge: pullBasicAuthenticationChallenge,
+			}
+		}
+		return denyPullRequest("profile_credential")
+	}
+	if !dockerCredentialMatches(profile.configFile, username, password, registryHost) {
+		return denyPullRequest("profile_credential")
+	}
+	if !pathInRepositories(request.URL.Path, profile.repositories) {
+		return denyPullRequest("profile_repository")
+	}
+	return pullAuthorizationDecision{}
+}
+
+func denyPullRequest(failure string) pullAuthorizationDecision {
+	if failure == "" {
+		return pullAuthorizationDecision{}
+	}
+	return pullAuthorizationDecision{failure: failure, statusCode: http.StatusForbidden}
+}
+
+func writePullAuthorizationDenial(writer http.ResponseWriter, decision pullAuthorizationDecision) {
+	if decision.authChallenge != "" {
+		writer.Header().Set("WWW-Authenticate", decision.authChallenge)
+	}
+	http.Error(writer, "request denied", decision.statusCode)
 }
 
 func authorizedNodePull(request *http.Request, certificate *x509.Certificate, registryHost string) bool {

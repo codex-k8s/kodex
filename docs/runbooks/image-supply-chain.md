@@ -4,7 +4,7 @@ title: Диагностика автоматического admission обра�
 type: runbook
 status: approved
 owner: sre
-version: 1.0.6
+version: 1.0.7
 updated: 2026-08-26
 ---
 
@@ -96,6 +96,14 @@ IMAGE_ADMISSION_POLICY_JSON='<read-only ConfigMap JSON without secrets>' \
   credentials и policy inputs; ручной rollout не является штатным способом
   применения новой revision. Совпадение хеша mounted Docker config при старом
   времени создания Pod не доказывает, что daemon перечитал credential.
+- BuildKit readiness получает exact repository базового образа, его digest и
+  digest Dockerfile frontend только из server-rendered аннотаций PodTemplate
+  через Downward API. Эти значения должны совпадать с release lock и проходить
+  закрытую проверку формата до вызова `buildctl`. BuildKit не монтирует общую
+  `kodex-image-admission-policy`: постоянное имя такой проекции не связывает
+  readiness с exact release. При диагностике сверить аннотации нового
+  ReplicaSet и соответствующие `fieldRef`, не читать содержимое Secret и не
+  выполнять ручной rollout.
 - Registry guard сохраняет последний успешный ready marker только пока идёт
   ограниченный по времени readback текущего цикла. Медленный manifest readback
   не должен заранее исключать единственный endpoint из Service. Ошибка,

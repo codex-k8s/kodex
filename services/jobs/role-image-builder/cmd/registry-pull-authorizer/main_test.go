@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -53,6 +54,95 @@ func TestNodePullRepositoriesAreClosedToBootstrapAndRuntime(t *testing.T) {
 		if pathInRepositories(path, repositories) {
 			t.Fatalf("out-of-scope node pull path was accepted: %s", path)
 		}
+	}
+}
+
+func TestPullProfileBasicAuthenticationBoundary(t *testing.T) {
+	t.Parallel()
+	const registryHost = "images.kodex.works"
+	profile := pullProfile{
+		configFile: writeDockerConfig(t, map[string]string{
+			registryHost: base64.StdEncoding.EncodeToString([]byte("profile-user:profile-password")),
+		}),
+		repositories: []string{"kodex/dockerfile"},
+	}
+
+	tests := []struct {
+		name              string
+		authorization     string
+		wantAllowed       bool
+		wantStatus        int
+		wantAuthenticate  string
+		wantFailureReason string
+	}{
+		{
+			name:              "missing credential receives challenge",
+			wantStatus:        http.StatusUnauthorized,
+			wantAuthenticate:  pullBasicAuthenticationChallenge,
+			wantFailureReason: "profile_credential_missing",
+		},
+		{
+			name:              "wrong credential remains forbidden",
+			authorization:     "Basic " + base64.StdEncoding.EncodeToString([]byte("profile-user:wrong-password")),
+			wantStatus:        http.StatusForbidden,
+			wantFailureReason: "profile_credential",
+		},
+		{
+			name:          "valid credential is allowed",
+			authorization: "Basic " + base64.StdEncoding.EncodeToString([]byte("profile-user:profile-password")),
+			wantAllowed:   true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			request := httptest.NewRequest(http.MethodGet, "https://"+registryHost+"/v2/kodex/dockerfile/manifests/sha256:abc", nil)
+			if test.authorization != "" {
+				request.Header.Set("Authorization", test.authorization)
+			}
+
+			decision := decidePullProfileAuthorization(request, profile, registryHost)
+			if test.wantAllowed {
+				if decision.failure != "" || decision.statusCode != 0 || decision.authChallenge != "" {
+					t.Fatalf("valid profile credential was rejected: %+v", decision)
+				}
+				return
+			}
+			if decision.failure != test.wantFailureReason {
+				t.Fatalf("failure reason = %q, want %q", decision.failure, test.wantFailureReason)
+			}
+			recorder := httptest.NewRecorder()
+			writePullAuthorizationDenial(recorder, decision)
+			if recorder.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", recorder.Code, test.wantStatus)
+			}
+			if got := recorder.Header().Get("WWW-Authenticate"); got != test.wantAuthenticate {
+				t.Fatalf("WWW-Authenticate = %q, want %q", got, test.wantAuthenticate)
+			}
+			if body := recorder.Body.String(); body != "request denied\n" {
+				t.Fatalf("response body exposes unexpected detail: %q", body)
+			}
+		})
+	}
+}
+
+func TestPullProfileValidCredentialDoesNotBypassRepositoryBoundary(t *testing.T) {
+	t.Parallel()
+	const registryHost = "images.kodex.works"
+	profile := pullProfile{
+		configFile: writeDockerConfig(t, map[string]string{
+			registryHost: base64.StdEncoding.EncodeToString([]byte("profile-user:profile-password")),
+		}),
+		repositories: []string{"kodex/dockerfile"},
+	}
+	request := httptest.NewRequest(http.MethodGet, "https://"+registryHost+"/v2/kodex/roles/manifests/sha256:abc", nil)
+	request.SetBasicAuth("profile-user", "profile-password")
+
+	decision := decidePullProfileAuthorization(request, profile, registryHost)
+	if decision.failure != "profile_repository" || decision.statusCode != http.StatusForbidden || decision.authChallenge != "" {
+		t.Fatalf("out-of-scope repository decision = %+v", decision)
 	}
 }
 
