@@ -106,7 +106,7 @@ spec:
                   case "$frontend" in
                     *[!a-f0-9]*) fail_policy_input 'frontend digest' ;;
                   esac
-                  printf '# syntax=%s@sha256:%s\nFROM %s@%s\nRUN ["/bin/sh","-c","test -x /usr/local/bin/kodex-init && test -x /usr/local/bin/kodex-agent-runner"]\n' \
+                  printf '# syntax=%s@sha256:%s\nFROM %s@%s AS verify\nRUN ["/bin/sh","-c","test -x /usr/local/bin/kodex-init && test -x /usr/local/bin/kodex-agent-runner && printf ready > /kodex-readiness"]\nFROM scratch\nCOPY --from=verify /kodex-readiness /kodex-readiness\n' \
                     'kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/dockerfile' \
                     "$frontend" "$base" "$base_digest" >"$work/Dockerfile"
                   buildctl --addr tcp://127.0.0.1:1234 \

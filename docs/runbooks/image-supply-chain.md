@@ -4,7 +4,7 @@ title: Диагностика автоматического admission обра�
 type: runbook
 status: approved
 owner: sre
-version: 1.0.9
+version: 1.0.10
 updated: 2026-08-26
 ---
 
@@ -110,6 +110,12 @@ IMAGE_ADMISSION_POLICY_JSON='<read-only ConfigMap JSON without secrets>' \
   времени холодного пути запрещено: установка не должна зависеть от частично
   накопленного cache после отменённых probe. Исчерпание бюджета остаётся
   закрытым отказом readiness и не ослабляет digest, mTLS или repository policy.
+- Readiness Dockerfile использует exact `agent-runner` только как промежуточный
+  `verify` stage: там выполняется проверка обязательных бинарей и создаётся
+  маленький marker. Финальный `FROM scratch` содержит только marker, поэтому
+  staging push доказывает рабочий authenticated write path, но не копирует
+  многогигабайтные base layers. Делать verified base финальным stage запрещено:
+  такой probe измеряет повторную репликацию образа вместо готовности BuildKit.
 - Registry write authorizer сохраняет короткий 5-секундный budget чтения
   заголовков, но authenticated OCI request/response stream ограничивает 15
   минутами. Общий 30-секундный client/server timeout запрещён: он обрывает

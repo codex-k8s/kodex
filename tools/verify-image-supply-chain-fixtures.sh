@@ -297,7 +297,12 @@ done
 [ -n "$dockerfile_directory" ]
 grep -Fqx "# syntax=kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/dockerfile@sha256:$KODEX_BUILDKIT_READINESS_FRONTEND_SHA256" \
   "$dockerfile_directory/Dockerfile"
-grep -Fqx "FROM $KODEX_BUILDKIT_READINESS_BASE_REPOSITORY@$KODEX_BUILDKIT_READINESS_BASE_DIGEST" \
+grep -Fqx "FROM $KODEX_BUILDKIT_READINESS_BASE_REPOSITORY@$KODEX_BUILDKIT_READINESS_BASE_DIGEST AS verify" \
+  "$dockerfile_directory/Dockerfile"
+grep -Fqx 'RUN ["/bin/sh","-c","test -x /usr/local/bin/kodex-init && test -x /usr/local/bin/kodex-agent-runner && printf ready > /kodex-readiness"]' \
+  "$dockerfile_directory/Dockerfile"
+grep -Fqx 'FROM scratch' "$dockerfile_directory/Dockerfile"
+grep -Fqx 'COPY --from=verify /kodex-readiness /kodex-readiness' \
   "$dockerfile_directory/Dockerfile"
 printf 'called\n' >>"$KODEX_BUILDKIT_READINESS_CALLS"
 EOF
