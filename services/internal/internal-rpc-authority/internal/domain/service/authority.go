@@ -19,8 +19,6 @@ import (
 )
 
 const (
-	contextProtectedType           = "kodex-internal-rpc-auth+jws"
-	proofProtectedType             = "kodex-internal-rpc-authority-proof+jws"
 	contextKeyPurpose              = "AUTHORIZATION_CONTEXT"
 	proofKeyPurpose                = "AUTHORITY_PROOF"
 	keyStatusCurrent               = "CURRENT"
@@ -164,7 +162,7 @@ func (authority *Authority) Issue(
 		)
 	}
 	header, err := internalrpcauth.ParseProtectedHeader(proofCompact)
-	if err != nil || header.Type != proofProtectedType {
+	if err != nil || header.Type != internalrpcauth.AuthorityProofProtectedType {
 		return "", model.AuthorizationClaims{}, failure.Wrap(
 			failure.Unauthenticated,
 			"authority proof protected header failed",
@@ -182,7 +180,7 @@ func (authority *Authority) Issue(
 		proofCompact,
 		proofKey.Key,
 		internalrpcauth.ProtectedHeaderExpectation{
-			Type:  proofProtectedType,
+			Type:  internalrpcauth.AuthorityProofProtectedType,
 			KeyID: header.KeyID,
 		},
 	)
@@ -317,7 +315,7 @@ func (authority *Authority) Issue(
 		claims,
 		authority.signingKey,
 		internalrpcauth.ProtectedHeaderExpectation{
-			Type:  contextProtectedType,
+			Type:  internalrpcauth.AuthorizationContextProtectedType,
 			KeyID: authority.policy.SignerKeyID,
 		},
 	)
@@ -344,7 +342,7 @@ func (authority *Authority) Verify(
 		return model.AuthorizationClaims{}, err
 	}
 	header, err := internalrpcauth.ParseProtectedHeader(compact)
-	if err != nil || header.Type != contextProtectedType {
+	if err != nil || header.Type != internalrpcauth.AuthorizationContextProtectedType {
 		return model.AuthorizationClaims{}, failure.Wrap(
 			failure.Unauthenticated,
 			"authorization context protected header failed",
@@ -362,7 +360,7 @@ func (authority *Authority) Verify(
 		compact,
 		verificationKey.Key,
 		internalrpcauth.ProtectedHeaderExpectation{
-			Type:  contextProtectedType,
+			Type:  internalrpcauth.AuthorizationContextProtectedType,
 			KeyID: header.KeyID,
 		},
 	)

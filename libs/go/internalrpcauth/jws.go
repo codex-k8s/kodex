@@ -21,10 +21,12 @@ import (
 
 // Поддерживаемый алгоритм, критический header и ограничения контракта.
 const (
-	AlgorithmES256     = "ES256"
-	CriticalHeader     = "mcxv"
-	ContractVersion    = 1
-	MaxCompactJWSBytes = 8192
+	AlgorithmES256                    = "ES256"
+	CriticalHeader                    = "mcxv"
+	ContractVersion                   = 1
+	MaxCompactJWSBytes                = 8192
+	AuthorizationContextProtectedType = "kodex-internal-rpc-auth+jws"
+	AuthorityProofProtectedType       = "kodex-internal-rpc-authority-proof+jws"
 )
 
 // Канонические причины отклонения JWS/JWK.

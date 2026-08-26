@@ -21,7 +21,6 @@ import (
 )
 
 const (
-	proofType          = "kodex-authority-proof+jws"
 	workerGrantType    = "kodex-application-grant+jws"
 	maximumFileSize    = 1 << 20
 	workerGrantTTL     = 4 * time.Minute
@@ -366,7 +365,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		ProofRevision: revision, SignerGeneration: service.signerGeneration, CallerCredentialRevision: callerCredentialRevision, JTI: uuid.NewString(),
 		IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: expiresAt.Unix(),
 	}
-	compact, err := internalrpcauth.SignCanonicalJSON(claims, service.signer, internalrpcauth.ProtectedHeaderExpectation{Type: proofType, KeyID: service.signer.KeyID})
+	compact, err := internalrpcauth.SignCanonicalJSON(claims, service.signer, internalrpcauth.ProtectedHeaderExpectation{Type: internalrpcauth.AuthorityProofProtectedType, KeyID: service.signer.KeyID})
 	if err != nil {
 		return ResolveResult{}, errors.New("sign authority proof")
 	}
