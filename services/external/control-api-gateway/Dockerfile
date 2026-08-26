@@ -8,6 +8,7 @@ WORKDIR /workspace
 
 COPY libs/go/controlplaneapi/ libs/go/controlplaneapi/
 COPY libs/go/controlplaneclient/ libs/go/controlplaneclient/
+COPY libs/go/eventing/ libs/go/eventing/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/i18n/ libs/go/i18n/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
