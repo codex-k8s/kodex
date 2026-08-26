@@ -218,7 +218,10 @@ assert_socket_listening() {
   systemctl is-active --quiet "$unit" || fail "socket unit is not active: $unit"
   substate=$(systemctl show --property=SubState --value "$unit") ||
     fail "socket unit state is unavailable: $unit"
-  [[ "$substate" == listening ]] || fail "socket unit is not listening: $unit"
+  case "$substate" in
+    listening|running) ;;
+    *) fail "socket unit has an unexpected state: $unit ($substate)" ;;
+  esac
   systemctl is-failed --quiet "$unit" && fail "socket unit failed: $unit"
   systemctl is-failed --quiet "$unit_prefix-$port.service" &&
     fail "proxy service failed: $unit_prefix-$port.service"
