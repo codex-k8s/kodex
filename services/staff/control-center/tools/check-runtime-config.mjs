@@ -48,6 +48,10 @@ const expected = createHash("sha256")
   .digest("hex");
 if (revision !== expected) throw new Error("Runtime config revision mismatch");
 const readiness = JSON.parse(readinessText);
+const hsts =
+  'add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;';
+if (!headersText.split("\n").includes(hsts))
+  throw new Error("Production HSTS header is absent or weaker than required");
 if (
   readiness.runtimeConfigRevision !== expected ||
   readiness.tlsMode !== "mutual-verified"

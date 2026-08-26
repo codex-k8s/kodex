@@ -4,8 +4,8 @@ title: Проверка fresh web-only MVP перед демонстрацией
 type: qa-checklist
 status: approved
 owner: qa
-version: 1.0.0
-updated: 2026-08-25
+version: 1.0.1
+updated: 2026-08-26
 ---
 
 # Проверка fresh web-only MVP перед демонстрацией
@@ -185,9 +185,9 @@ limit. До этого запрещены повторные issuance/reissuance
 - [ ] `TLS-06` HTTPS работает без `-k` и browser security warnings; HTTP только
       перенаправляет на точный HTTPS origin; результат: `________`; evidence:
       `________________`.
-- [ ] `TLS-07` Security headers включают HSTS, CSP, anti-framing и запрет MIME
-      sniffing; mixed content отсутствует; результат: `________`; evidence:
-      `________________`.
+- [ ] `TLS-07` Security headers включают HSTS с `max-age` не меньше года и
+      `includeSubDomains`, CSP, anti-framing и запрет MIME sniffing; mixed
+      content отсутствует; результат: `________`; evidence: `________________`.
 
 ## 5. Фаза C: OIDC, session и API
 

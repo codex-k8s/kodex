@@ -1,20 +1,19 @@
 import { chmod, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
+import { authenticateOwner } from "./auth-flow";
 import { loadE2EAuthEnvironment } from "./environment";
 import { expect, test } from "./fixtures";
 
 const environment = loadE2EAuthEnvironment();
 
 test("владелец входит через настроенный OIDC", async ({ page, context }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Войти", exact: true }).click();
-
-  // Поставляемый профиль использует стандартную форму Keycloak. Пароль не
-  // попадает в reporter, trace, video или screenshot.
-  await page.locator('input[name="username"]').fill(environment.ownerUsername);
-  await page.locator('input[name="password"]').fill(environment.ownerPassword);
-  await page.locator('button[type="submit"], input[type="submit"]').click();
+  // Trace, video и screenshot отключены в auth config: credentials не попадают
+  // в reporter или browser artifacts.
+  await authenticateOwner(page, {
+    username: environment.ownerUsername,
+    password: environment.ownerPassword,
+  });
 
   await expect(page).toHaveURL(
     new RegExp(`^${escapeRegExp(environment.baseURL)}/`),
