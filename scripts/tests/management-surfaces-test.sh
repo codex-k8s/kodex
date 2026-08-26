@@ -61,6 +61,12 @@ validate_grafana_render() {
 
 bash -n "$bootstrap"
 bash -n "$keycloak_bootstrap"
+routes_apply_line=$(grep -n 'kubectl apply --server-side --field-manager=kodex-management -f "$routes"' \
+  "$bootstrap" | cut -d: -f1)
+oauth2_upgrade_line=$(grep -n 'helm upgrade --install "oauth2-$surface"' "$bootstrap" | cut -d: -f1)
+[[ -n "$routes_apply_line" && -n "$oauth2_upgrade_line" &&
+  "$routes_apply_line" -lt "$oauth2_upgrade_line" ]] ||
+  fail 'OAuth2 routes and NetworkPolicy are not applied before proxy rollout'
 rg -q -- '-s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=43200' "$keycloak_bootstrap" ||
   fail 'realm SSO lifetime contract is absent'
 rg -q -- '-s duplicateEmailsAllowed=false -s verifyEmail=false -s accessTokenLifespan=300' "$keycloak_bootstrap" ||
