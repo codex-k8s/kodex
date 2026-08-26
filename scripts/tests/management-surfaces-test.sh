@@ -229,6 +229,10 @@ if [[ "$arguments" == *' get ingress staff-control-center -o json '* ]]; then
   printf '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/router.middlewares":"kodex-system-oauth2-control-center-chain@kubernetescrd"}}}\n'
   exit 0
 fi
+if [[ "$arguments" == *' get ingress staff-control-center-api -o json '* ]]; then
+  printf '%s\n' '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/router.middlewares":"kodex-system-oauth2-control-center-auth@kubernetescrd","traefik.ingress.kubernetes.io/router.priority":"200"}},"spec":{"rules":[{"http":{"paths":[{"path":"/api/v1","pathType":"Prefix","backend":{"service":{"name":"staff-control-center","port":{"name":"https"}}}}]}}]}}'
+  exit 0
+fi
 if [[ "$arguments" == *' get service staff-control-center -o json '* ]]; then
   printf '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/service.serverstransport":"kodex-system-staff-control-center@kubernetescrd"}}}\n'
   exit 0
@@ -301,6 +305,14 @@ done
 kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" | yq -e \
   'select(.kind == "Ingress" and .metadata.name == "staff-control-center")' >/dev/null ||
   fail 'Control Center Ingress is absent from the platform release'
+kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" | yq -e '
+  select(.kind == "Ingress" and .metadata.name == "staff-control-center-api") |
+  .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+    "kodex-system-oauth2-control-center-auth@kubernetescrd" and
+  .metadata.annotations["traefik.ingress.kubernetes.io/router.priority"] == "200" and
+  .spec.rules[0].http.paths[0].path == "/api/v1" and
+  .spec.rules[0].http.paths[0].pathType == "Prefix"
+' >/dev/null || fail 'Control Center API Ingress does not preserve application authorization responses'
 kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" | yq -e '
   select(.kind == "Service" and .metadata.name == "staff-control-center") |
   .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
