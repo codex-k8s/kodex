@@ -4,7 +4,7 @@ title: Диагностика автоматического admission обра�
 type: runbook
 status: approved
 owner: sre
-version: 1.0.8
+version: 1.0.9
 updated: 2026-08-26
 ---
 
@@ -110,6 +110,12 @@ IMAGE_ADMISSION_POLICY_JSON='<read-only ConfigMap JSON without secrets>' \
   времени холодного пути запрещено: установка не должна зависеть от частично
   накопленного cache после отменённых probe. Исчерпание бюджета остаётся
   закрытым отказом readiness и не ослабляет digest, mTLS или repository policy.
+- Registry write authorizer сохраняет короткий 5-секундный budget чтения
+  заголовков, но authenticated OCI request/response stream ограничивает 15
+  минутами. Общий 30-секундный client/server timeout запрещён: он обрывает
+  large blob PUT посередине тела и оставляет backend с `unexpected EOF`.
+  Исчерпание 15 минут остаётся закрытым отказом; mTLS identity, repository и
+  method policy проверяются до передачи body в backend.
 - Registry guard сохраняет последний успешный ready marker только пока идёт
   ограниченный по времени readback текущего цикла. Медленный manifest readback
   не должен заранее исключать единственный endpoint из Service. Ошибка,

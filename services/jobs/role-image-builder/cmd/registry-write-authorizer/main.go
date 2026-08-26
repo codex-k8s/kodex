@@ -16,9 +16,12 @@ import (
 )
 
 const (
-	expectedClientCN = "kodex-buildkit-staging-push"
-	serverError      = "registry write authorizer failed"
-	denialLog        = "registry request denied"
+	expectedClientCN      = "kodex-buildkit-staging-push"
+	serverError           = "registry write authorizer failed"
+	denialLog             = "registry request denied"
+	registryHeaderTimeout = 5 * time.Second
+	registryStreamTimeout = 15 * time.Minute
+	registryIdleTimeout   = 30 * time.Second
 )
 
 type authorizationProfile struct {
@@ -42,9 +45,7 @@ func main() {
 		log.Fatal(serverError)
 	}
 	backend, _ := url.Parse(profile.backend)
-	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-		return errors.New("redirect rejected")
-	}}
+	client := newRegistryProxyClient()
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.TLS == nil || len(request.TLS.PeerCertificates) == 0 ||
 			len(request.TLS.VerifiedChains) == 0 {
@@ -93,12 +94,35 @@ func main() {
 		writer.WriteHeader(response.StatusCode)
 		_, _ = io.Copy(writer, io.LimitReader(response.Body, 1<<30))
 	})
-	server := &http.Server{Addr: profile.address, Handler: handler, ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 30 * time.Second,
-		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: pool}} //nolint:gosec // exact client CA and TLS 1.3.
+	server := newRegistryProxyServer(profile.address, handler, pool)
 	if err := server.ListenAndServeTLS("/identity/tls.crt", "/identity/tls.key"); err != nil {
 		log.Fatal(serverError)
 	}
+}
+
+func newRegistryProxyClient() *http.Client {
+	return &http.Client{
+		Timeout: registryStreamTimeout,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return errors.New("redirect rejected")
+		},
+	}
+}
+
+func newRegistryProxyServer(address string, handler http.Handler, pool *x509.CertPool) *http.Server {
+	return &http.Server{
+		Addr:              address,
+		Handler:           handler,
+		ReadHeaderTimeout: registryHeaderTimeout,
+		ReadTimeout:       registryStreamTimeout,
+		WriteTimeout:      registryStreamTimeout,
+		IdleTimeout:       registryIdleTimeout,
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS13,
+			ClientAuth: tls.RequireAndVerifyClientCert,
+			ClientCAs:  pool,
+		},
+	} //nolint:gosec // exact client CA and TLS 1.3.
 }
 
 func logRegistryDenial(profile authorizationProfile, reason, method string) {
