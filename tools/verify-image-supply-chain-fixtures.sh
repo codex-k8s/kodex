@@ -234,6 +234,38 @@ grep -Fq '.spec.template.metadata.annotations."kodex.dev/frontend-sha256" = stre
   "$repository_root/tools/release/render-web-only.sh"
 grep -Fq '.spec.template.metadata.annotations."kodex.dev/trusted-role-base-digest" = strenv(AGENT_RUNNER_DIGEST)' \
   "$repository_root/tools/release/render-web-only.sh"
+[[ $(grep -F -c 'with(select(.kind == "Deployment" and .metadata.name == "role-image-builder")' \
+  "$repository_root/tools/release/render-web-only.sh") -eq 1 ]]
+role_builder_deployment=$(kubectl kustomize \
+  "$repository_root/deploy/k8s/overlays/staging/role-image-builder" | yq -o=json -I=0 '
+    select(.kind == "Deployment" and .metadata.name == "role-image-builder")
+  ')
+jq -e '
+  .spec.template.metadata.annotations."kodex.dev/release-revision" ==
+    "0000000000000000000000000000000000000000" and
+  .spec.template.metadata.annotations."kodex.dev/trusted-role-base-repository" ==
+    "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner" and
+  .spec.template.metadata.annotations."kodex.dev/trusted-role-base-digest" ==
+    "sha256:0000000000000000000000000000000000000000000000000000000000000000" and
+  .spec.template.metadata.annotations."kodex.dev/frontend-sha256" ==
+    "0000000000000000000000000000000000000000000000000000000000000000" and
+  (.spec.template.spec.containers[] | select(.name == "role-image-builder") |
+    any(.env[];
+      .name == "ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_REPOSITORY" and
+      .valueFrom.fieldRef.fieldPath ==
+        "metadata.annotations[\u0027kodex.dev/trusted-role-base-repository\u0027]") and
+    any(.env[];
+      .name == "ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_DIGEST" and
+      .valueFrom.fieldRef.fieldPath ==
+        "metadata.annotations[\u0027kodex.dev/trusted-role-base-digest\u0027]") and
+    any(.env[];
+      .name == "ROLE_IMAGE_BUILDER_EXPECTED_FRONTEND_SHA256" and
+      .valueFrom.fieldRef.fieldPath ==
+        "metadata.annotations[\u0027kodex.dev/frontend-sha256\u0027]"))
+' <<<"$role_builder_deployment" >/dev/null || {
+  echo "role image builder pod revision does not own exact release inputs" >&2
+  exit 1
+}
 grep -Fq 'client-cert "$(cat /identity/registry-client.crt)"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq 'base-registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
