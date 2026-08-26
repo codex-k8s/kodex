@@ -72,6 +72,8 @@ repository_root=$(git rev-parse --show-toplevel)
 [[ "$(git -C "$repository_root" rev-parse HEAD)" == "$source_sha" ]] || fail 'HEAD does not match source SHA'
 [[ -z "$(git -C "$repository_root" status --porcelain --untracked-files=no)" ]] ||
   fail 'tracked worktree changes are forbidden'
+"$repository_root/scripts/tests/go-toolchain-contract-test.sh" >/dev/null ||
+  fail 'Go toolchain and Docker build context contract failed'
 manifest="$repository_root/tools/release/images.json"
 jq -e '.schema_version == 2 and (.images | length > 0)' "$manifest" >/dev/null || fail 'image manifest is invalid'
 
