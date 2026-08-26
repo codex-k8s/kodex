@@ -24,10 +24,10 @@ type proofResolverAttestor struct {
 func (attestor *proofResolverAttestor) Attest(
 	ctx context.Context,
 	state repository.SnapshotState,
-) (string, error) {
+) (repository.SnapshotAttestationReceipt, error) {
 	primaryReceipt, err := attestor.primary.Attest(ctx, state)
 	if err != nil {
-		return "", err
+		return repository.SnapshotAttestationReceipt{}, err
 	}
 	if err := snapshot.VerifyProofSigner(
 		attestor.privateJWKFile,
@@ -39,10 +39,10 @@ func (attestor *proofResolverAttestor) Attest(
 		attestor.signerGeneration,
 		attestor.now().UTC(),
 	); err != nil {
-		return "", errors.New("served authority proof resolver key rejected")
+		return repository.SnapshotAttestationReceipt{}, errors.New("served authority proof resolver key rejected")
 	}
 	if _, err := attestor.resolver.Attest(ctx, state); err != nil {
-		return "", errors.New("obtain authority proof resolver readback receipt")
+		return repository.SnapshotAttestationReceipt{}, errors.New("obtain authority proof resolver readback receipt")
 	}
 	return primaryReceipt, nil
 }

@@ -38,6 +38,10 @@ type Authority struct {
 	available      atomic.Bool
 	restoreBlocked atomic.Bool
 	attestor       repository.SnapshotAttestor
+	activationMu   sync.Mutex
+	pendingReceipt repository.SnapshotAttestationReceipt
+	pendingState   repository.SnapshotState
+	now            func() time.Time
 	admissionMu    sync.RWMutex
 	inflight       atomic.Int64
 }
@@ -50,7 +54,7 @@ func NewAuthority(
 	if domain == nil || attestor == nil {
 		return nil, errors.New("authority activation boundary is invalid")
 	}
-	application := &Authority{attestor: attestor}
+	application := &Authority{attestor: attestor, now: time.Now}
 	application.domain.Store(domain)
 	// Admission закрыт с момента создания. Его открывает только синхронно
 	// проверенное внешнее restore-состояние после активации served snapshot.
@@ -103,25 +107,7 @@ func (application *Authority) ActivateSnapshot(ctx context.Context) error {
 	if domain == nil {
 		return failure.New(failure.SnapshotRejected, "authority snapshot is unavailable")
 	}
-	state := domain.SnapshotState()
-	receiptID, err := application.attestor.Attest(ctx, repository.SnapshotState{
-		SourceRevision:          state.SourceRevision,
-		SourceDigestSHA256:      state.SourceDigestSHA256,
-		PredecessorRevision:     state.PredecessorRevision,
-		PredecessorDigestSHA256: state.PredecessorDigestSHA256,
-		KeySetRevision:          state.KeySetRevision,
-		PolicyRevision:          state.PolicyRevision,
-		SignerGeneration:        state.SignerGeneration,
-		History:                 state.History,
-	})
-	if err != nil {
-		return failure.Wrap(
-			failure.SnapshotRejected,
-			"obtain independent snapshot readback receipt",
-			err,
-		)
-	}
-	if err := domain.ActivateSnapshot(ctx, receiptID); err != nil {
+	if err := application.activateDomain(ctx, domain, "obtain independent snapshot readback receipt"); err != nil {
 		return err
 	}
 	application.SetAvailable(true)
@@ -146,19 +132,68 @@ func (application *Authority) ActivateReplacement(
 	if domain == nil {
 		return failure.New(failure.SnapshotRejected, "authority snapshot is unavailable")
 	}
-	state := domain.SnapshotState()
-	receiptID, err := application.attestor.Attest(ctx, state)
-	if err != nil {
-		return failure.Wrap(
-			failure.SnapshotRejected,
-			"obtain independent replacement snapshot readback receipt",
-			err,
-		)
-	}
-	if err := domain.ActivateSnapshot(ctx, receiptID); err != nil {
+	if err := application.activateDomain(ctx, domain, "obtain independent replacement snapshot readback receipt"); err != nil {
 		return err
 	}
 	return application.ReplaceActivatedSnapshot(domain)
+}
+
+func (application *Authority) activateDomain(
+	ctx context.Context,
+	domain *service.Authority,
+	attestationError string,
+) error {
+	application.activationMu.Lock()
+	defer application.activationMu.Unlock()
+
+	state := domain.SnapshotState()
+	receipt := application.pendingReceipt
+	if !sameSnapshotState(application.pendingState, state) ||
+		receipt.ReceiptID == "" ||
+		!receipt.ExpiresAt.After(application.now().Add(5*time.Second)) {
+		var err error
+		receipt, err = application.attestor.Attest(ctx, state)
+		if err != nil {
+			return failure.Wrap(failure.SnapshotRejected, attestationError, err)
+		}
+		if receipt.ReceiptID == "" ||
+			!receipt.ExpiresAt.After(application.now().Add(5*time.Second)) {
+			return failure.New(failure.SnapshotRejected, "snapshot readback receipt is expired")
+		}
+		application.pendingReceipt = receipt
+		application.pendingState = cloneSnapshotState(state)
+	}
+	if err := domain.ActivateSnapshot(ctx, receipt.ReceiptID); err != nil {
+		return err
+	}
+	application.pendingReceipt = repository.SnapshotAttestationReceipt{}
+	application.pendingState = repository.SnapshotState{}
+	return nil
+}
+
+func sameSnapshotState(left, right repository.SnapshotState) bool {
+	if left.SourceRevision != right.SourceRevision ||
+		left.SourceDigestSHA256 != right.SourceDigestSHA256 ||
+		left.PredecessorRevision != right.PredecessorRevision ||
+		left.PredecessorDigestSHA256 != right.PredecessorDigestSHA256 ||
+		left.KeySetRevision != right.KeySetRevision ||
+		left.PolicyRevision != right.PolicyRevision ||
+		left.SignerGeneration != right.SignerGeneration ||
+		len(left.History) != len(right.History) {
+		return false
+	}
+	for index := range left.History {
+		if left.History[index] != right.History[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func cloneSnapshotState(state repository.SnapshotState) repository.SnapshotState {
+	state.AttestationReceiptID = ""
+	state.History = append([]repository.RevisionDigest(nil), state.History...)
+	return state
 }
 
 // SetAvailable изменяет доступность с учётом restore fence.

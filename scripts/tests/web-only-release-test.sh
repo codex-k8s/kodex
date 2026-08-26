@@ -102,6 +102,28 @@ missing_postgres_clients=$(comm -23 "$postgres_clients" "$postgres_allowed_clien
 grep -Fxq kodex-postgresql-runtime-credentials "$postgres_allowed_clients" ||
   fail 'PostgreSQL credential reconciler is denied by NetworkPolicy'
 
+startup_readback_targets="$temporary_directory/startup-readback-targets"
+attestor_ingress_clients="$temporary_directory/attestor-ingress-clients"
+yq -N -r '
+  select(.kind == "ConfigMap" and
+    .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+  .data["key-delivery-targets.yaml"]
+' "$render" | yq -N -r '
+  .targets[] |
+  select(.startup_readback_required == true) |
+  .workload_id
+' | sort -u >"$startup_readback_targets"
+yq -N -r '
+  select(.kind == "NetworkPolicy" and
+    .metadata.name == "internal-rpc-authority-readback-attestor-exact-paths") |
+  .spec.ingress[].from[].podSelector.matchExpressions[]? |
+  select(.key == "app.kubernetes.io/name" and .operator == "In") |
+  .values[]
+' "$render" | sort -u >"$attestor_ingress_clients"
+missing_readback_clients=$(comm -23 "$startup_readback_targets" "$attestor_ingress_clients")
+[[ -z "$missing_readback_clients" ]] ||
+  fail "startup readback targets are denied by attestor NetworkPolicy: ${missing_readback_clients//$'\n'/,}"
+
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   any(.[];
     .kind == "CronJob" and

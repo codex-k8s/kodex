@@ -540,7 +540,8 @@ func activateSnapshotUntilReady(
 	ctx context.Context,
 	authorityApplication *application.Authority,
 ) error {
-	const retryInterval = time.Second
+	const maximumRetryInterval = 10 * time.Second
+	retryInterval := time.Second
 	for {
 		err := authorityApplication.ActivateSnapshot(ctx)
 		if err == nil {
@@ -553,6 +554,7 @@ func activateSnapshotUntilReady(
 			return errors.Join(err, ctx.Err())
 		case <-timer.C:
 		}
+		retryInterval = min(retryInterval*2, maximumRetryInterval)
 	}
 }
 
