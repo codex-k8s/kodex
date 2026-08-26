@@ -2,6 +2,8 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: staff-control-center-public
+  labels:
+    kodex.dev/owner-intent: "true"
   annotations:
     argocd.argoproj.io/sync-wave: "-9"
 spec:
