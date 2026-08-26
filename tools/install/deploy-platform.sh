@@ -449,14 +449,22 @@ if [[ "$mode" == apply ]]; then
 	# readiness requires readbacks from workloads applied in the next phase.
 	wait_authority_projections bootstrap
 
-	apply_render workloads '
-    select(.kind == "Deployment" or .kind == "DaemonSet" or .kind == "CronJob")
+	apply_render workloads-before-role-image-builder '
+    select((.kind == "Deployment" and .metadata.name != "role-image-builder") or
+      .kind == "DaemonSet" or .kind == "CronJob")
   '
   for dependency in egress-gateway kodex-image-registry-promotion; do
     kubectl --context "$context" -n "$namespace" rollout status "deployment/$dependency" \
       --timeout=15m >/dev/null || fail "release materializer dependency failed: $dependency"
   done
   apply_job release-artifact-materializer
+  for dependency in kodex-image-registry-pull kodex-buildkit; do
+    kubectl --context "$context" -n "$namespace" rollout status "deployment/$dependency" \
+      --timeout=15m >/dev/null || fail "role image builder dependency failed: $dependency"
+  done
+  apply_render role-image-builder '
+    select(.kind == "Deployment" and .metadata.name == "role-image-builder")
+  '
   wait_workloads
 fi
 
