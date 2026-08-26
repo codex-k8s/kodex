@@ -18,7 +18,8 @@ configMapGenerator:
   - name: control-plane-runtime
     literals:
       - CONTROL_PLANE_NATS_STREAM=CONTROL_PLANE
-      - CONTROL_PLANE_NATS_MAX_BYTES=34359738368
+      # 32 GiB account budget minus the mandatory 16 MiB session-revocation stream.
+      - CONTROL_PLANE_NATS_MAX_BYTES=34342961152
 generatorOptions:
   disableNameSuffixHash: true
 patches: null

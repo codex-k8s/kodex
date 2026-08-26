@@ -110,19 +110,42 @@ func (publisher *Publisher) Check(ctx context.Context) error {
 	return nil
 }
 
-// EnsureStream создаёт отсутствующий поток и закрыто отклоняет любое расхождение контракта.
+// EnsureStream создаёт отсутствующий поток, восстанавливает только пустой поток
+// после прерванного bootstrap и закрыто отклоняет расхождение непустого потока.
 func (publisher *Publisher) EnsureStream(ctx context.Context) error {
-	if _, err := publisher.jetstream.Stream(ctx, publisher.config.Stream); err == nil {
-		return publisher.Check(ctx)
+	if stream, err := publisher.jetstream.Stream(ctx, publisher.config.Stream); err == nil {
+		return publisher.reconcileEmptyStream(ctx, stream)
 	} else if !errors.Is(err, jetstream.ErrStreamNotFound) {
 		return errors.New("read NATS JetStream stream before bootstrap")
 	}
 	if _, err := publisher.jetstream.CreateStream(ctx, expectedStreamConfig(publisher.config)); err != nil {
 		// Параллельный bootstrap мог создать тот же exact stream между read и create.
-		if checkErr := publisher.Check(ctx); checkErr == nil {
-			return nil
+		stream, readErr := publisher.jetstream.Stream(ctx, publisher.config.Stream)
+		if readErr == nil {
+			if reconcileErr := publisher.reconcileEmptyStream(ctx, stream); reconcileErr == nil {
+				return nil
+			} else {
+				return fmt.Errorf("create NATS JetStream stream: %w; readback failed: %v", err, reconcileErr)
+			}
 		}
-		return errors.New("create NATS JetStream stream")
+		return fmt.Errorf("create NATS JetStream stream: %w; readback failed: %v", err, readErr)
+	}
+	return publisher.Check(ctx)
+}
+
+func (publisher *Publisher) reconcileEmptyStream(ctx context.Context, stream jetstream.Stream) error {
+	info, err := stream.Info(ctx)
+	if err != nil {
+		return errors.New("read NATS JetStream stream info")
+	}
+	if streamCompatible(info.Config, publisher.config) {
+		return nil
+	}
+	if info.State.Msgs != 0 || info.State.Bytes != 0 || info.State.Consumers != 0 {
+		return errors.New("NATS JetStream stream contract mismatch")
+	}
+	if _, err := publisher.jetstream.UpdateStream(ctx, expectedStreamConfig(publisher.config)); err != nil {
+		return fmt.Errorf("update empty NATS JetStream stream: %w", err)
 	}
 	return publisher.Check(ctx)
 }
