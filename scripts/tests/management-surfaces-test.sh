@@ -61,6 +61,22 @@ validate_grafana_render() {
 
 bash -n "$bootstrap"
 bash -n "$keycloak_bootstrap"
+(
+  rollback_arguments=""
+  helm() {
+    case "$1" in
+      status) printf '{"info":{"status":"pending-upgrade"}}\n' ;;
+      history)
+        printf '[{"revision":1,"status":"superseded"},{"revision":2,"status":"deployed"},{"revision":3,"status":"pending-upgrade"}]\n'
+        ;;
+      rollback) rollback_arguments="$*" ;;
+      *) return 1 ;;
+    esac
+  }
+  source <(sed -n '/^recover_interrupted_helm_release() {$/,/^}$/p' "$bootstrap")
+  recover_interrupted_helm_release oauth2-control-center kodex-system
+  [[ "$rollback_arguments" == 'rollback oauth2-control-center 2 --namespace kodex-system --wait --timeout 10m' ]]
+) || fail 'interrupted Helm release recovery contract is invalid'
 routes_apply_line=$(grep -n 'kubectl apply --server-side --field-manager=kodex-management -f "$routes"' \
   "$bootstrap" | cut -d: -f1)
 oauth2_upgrade_line=$(grep -n 'helm upgrade --install "oauth2-$surface"' "$bootstrap" | cut -d: -f1)

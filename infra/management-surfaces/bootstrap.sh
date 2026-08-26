@@ -126,6 +126,29 @@ download_chart() {
   printf '%s\n' "$archive"
 }
 
+recover_interrupted_helm_release() {
+  local release=$1 namespace=$2 status_json status rollback_revision
+  if ! status_json=$(helm status "$release" --namespace "$namespace" -o json 2>/dev/null); then
+    return 0
+  fi
+  status=$(jq -er '.info.status' <<<"$status_json") ||
+    fail "Helm release status is unreadable: $release"
+  case "$status" in
+    pending-upgrade|pending-rollback)
+      rollback_revision=$(helm history "$release" --namespace "$namespace" --max 20 -o json |
+        jq -er '
+          [.[] | select(.status == "deployed" or .status == "superseded")] |
+          sort_by(.revision | tonumber) | last | .revision | tostring
+        ') || fail "safe Helm rollback revision is absent: $release"
+      helm rollback "$release" "$rollback_revision" --namespace "$namespace" \
+        --wait --timeout 10m >/dev/null || fail "Helm rollback failed: $release"
+      ;;
+    pending-install|pending-uninstall)
+      fail "Helm release requires explicit recovery: $release ($status)"
+      ;;
+  esac
+}
+
 monitoring_chart=$(download_chart kube-prometheus-stack)
 oauth2_chart=$(download_chart oauth2-proxy)
 headlamp_chart=$(download_chart headlamp)
@@ -210,6 +233,7 @@ fi
 kubectl apply --server-side --field-manager=kodex-management -f "$script_directory/namespaces.yaml" >/dev/null
 if [[ "$mode" == apply-monitoring ]]; then
   kubectl -n observability get secret grafana-admin >/dev/null 2>&1 || fail 'Grafana admin Secret is absent'
+  recover_interrupted_helm_release kodex-monitoring observability
   helm upgrade --install kodex-monitoring "$monitoring_chart" --namespace observability \
     --values "$render_monitoring_values" --atomic --wait --timeout 20m
 fi
@@ -219,6 +243,7 @@ if [[ "$mode" == apply-surfaces ]]; then
     surface=${binding%%:*}; namespace=${binding#*:}
     kubectl -n "$namespace" get secret "oauth2-$surface" >/dev/null 2>&1 || fail "OAuth2 Secret is absent: $surface"
   done
+  recover_interrupted_helm_release kodex-headlamp platform-admin
   helm upgrade --install kodex-headlamp "$headlamp_chart" --namespace platform-admin \
     --values "$script_directory/headlamp-values.yaml" --atomic --wait --timeout 10m
   # Новые OAuth2 Proxy должны получить точный путь к issuer до OIDC discovery
@@ -231,6 +256,7 @@ if [[ "$mode" == apply-surfaces ]]; then
     IFS='|' read -r surface namespace host role issuer <<<"$binding"
     values="$temporary_directory/oauth-$surface.yaml"
     render_oauth_values "$surface" "$host" "$role" "$issuer" "$values"
+    recover_interrupted_helm_release "oauth2-$surface" "$namespace"
     helm upgrade --install "oauth2-$surface" "$oauth2_chart" --namespace "$namespace" \
       --values "$values" --atomic --wait --timeout 10m
   done
