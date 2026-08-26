@@ -150,6 +150,19 @@ if [[ "$*" == 'config current-context' ]]; then
   exit 0
 fi
 if [[ "$arguments" == *' apply '* ]]; then
+  manifest=""
+  while (($# > 0)); do
+    case "$1" in
+      -f) manifest=${2:-}; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  if [[ -f "$manifest" ]] && grep -q 'oauth2-control-center-exact-paths' "$manifest"; then
+    yq -e '
+      select(.kind == "NetworkPolicy" and .metadata.name == "oauth2-control-center-exact-paths") |
+      .spec.egress[].ports[] | select(.port == 8443 and (.port | tag) == "!!int")
+    ' "$manifest" >/dev/null
+  fi
   exit 0
 fi
 if [[ "$arguments" == *' get service sso -o json '* ]]; then
