@@ -169,6 +169,11 @@ KUBERNETES_API_SERVICE_CIDR="$kubernetes_api_service_cidr" yq '
     sub("__KODEX_KUBERNETES_API_SERVICE_CIDR__"; strenv(KUBERNETES_API_SERVICE_CIDR))
   )
 ' "$script_directory/routes.yaml" >"$routes"
+OIDC_TARGET_PORT="$oidc_target_port" yq -i '
+  with(select(.kind == "NetworkPolicy" and (.metadata.name | test("^oauth2-.+-exact-paths$")));
+    (.spec.egress[].ports[] | select(.port == strenv(OIDC_TARGET_PORT)).port) =
+      (strenv(OIDC_TARGET_PORT) | tonumber))
+' "$routes"
 endpoint_destinations=$(printf '%s\n' "${api_endpoint_cidrs[@]}" | jq -Rsc 'split("\n") | map(select(length > 0) | {ipBlock:{cidr:.}})')
 endpoint_ports=$(printf '%s\n' "${api_endpoint_ports[@]}" | jq -Rsc 'split("\n") | map(select(length > 0) | {protocol:"TCP",port:tonumber})')
 endpoint_rule=$(jq -cn --argjson to "$endpoint_destinations" --argjson ports "$endpoint_ports" '{to:$to,ports:$ports}')
