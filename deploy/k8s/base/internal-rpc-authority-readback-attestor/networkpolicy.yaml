@@ -28,10 +28,13 @@ spec:
               - key: app.kubernetes.io/name
                 operator: In
                 values:
+                  - automation-scheduler
                   - control-api-gateway
                   - integration-gateway
                   - control-plane
                   - internal-rpc-authority-publisher
+                  - role-image-builder
+                  - runtime-controller
       ports:
         - protocol: TCP
           port: 8443

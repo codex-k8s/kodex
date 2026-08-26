@@ -50,6 +50,13 @@ type SnapshotState struct {
 	AttestationReceiptID    string
 }
 
+// SnapshotAttestationReceipt связывает независимый receipt с его серверным
+// сроком действия. Клиент не вычисляет expiry локально.
+type SnapshotAttestationReceipt struct {
+	ReceiptID string
+	ExpiresAt time.Time
+}
+
 // RevisionDigest связывает revision с каноническим SHA-256 digest.
 type RevisionDigest struct {
 	Revision     uint64
@@ -71,5 +78,5 @@ type Store interface {
 
 // SnapshotAttestor получает независимый receipt обслуживаемого снимка.
 type SnapshotAttestor interface {
-	Attest(context.Context, SnapshotState) (string, error)
+	Attest(context.Context, SnapshotState) (SnapshotAttestationReceipt, error)
 }

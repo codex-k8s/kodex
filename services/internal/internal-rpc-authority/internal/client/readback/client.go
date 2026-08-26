@@ -121,32 +121,32 @@ func NewSecretAttestor(config SecretConfig) (*SecretAttestor, error) {
 func (attestor *SecretAttestor) Attest(
 	ctx context.Context,
 	state repository.SnapshotState,
-) (string, error) {
+) (repository.SnapshotAttestationReceipt, error) {
 	credentialMaterial, found, err := attestor.config.Delivery.ReadVersioned(
 		ctx,
 		attestor.config.CredentialPath,
 	)
 	if err != nil {
-		return "", fmt.Errorf("read normal readback credential: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("read normal readback credential: %w", err)
 	}
 	if !found {
-		return "", errors.New("read normal readback credential from Kubernetes Secret")
+		return repository.SnapshotAttestationReceipt{}, errors.New("read normal readback credential from Kubernetes Secret")
 	}
 	possessionMaterial, found, err := attestor.config.Delivery.ReadVersioned(
 		ctx,
 		attestor.config.PossessionPath,
 	)
 	if err != nil {
-		return "", fmt.Errorf("read readback possession key: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("read readback possession key: %w", err)
 	}
 	if !found {
-		return "", errors.New("read readback possession key from Kubernetes Secret")
+		return repository.SnapshotAttestationReceipt{}, errors.New("read readback possession key from Kubernetes Secret")
 	}
 	key, err := internalrpcauth.ParsePrivateJWK(
 		[]byte(possessionMaterial.Data["possession_private_jwk"]),
 	)
 	if err != nil {
-		return "", fmt.Errorf("parse readback possession private key: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("parse readback possession private key: %w", err)
 	}
 	client, err := New(Config{
 		Address: attestor.config.Address, TLS: attestor.config.TLS,
@@ -163,7 +163,7 @@ func (attestor *SecretAttestor) Attest(
 		UnaryInterceptor:        attestor.config.UnaryInterceptor,
 	})
 	if err != nil {
-		return "", err
+		return repository.SnapshotAttestationReceipt{}, err
 	}
 	return client.Attest(ctx, state)
 }
@@ -194,29 +194,29 @@ func NewFileAttestor(config FileConfig) (*FileAttestor, error) {
 func (attestor *FileAttestor) Attest(
 	ctx context.Context,
 	state repository.SnapshotState,
-) (string, error) {
+) (repository.SnapshotAttestationReceipt, error) {
 	intentID, err := readMountedValue(attestor.config.IntentIDFile, 128)
 	if err != nil {
-		return "", fmt.Errorf("read pinned readback intent: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("read pinned readback intent: %w", err)
 	}
 	credential, err := readMountedValue(
 		attestor.config.CredentialCompactFile,
 		internalrpcauth.MaxCompactJWSBytes,
 	)
 	if err != nil {
-		return "", fmt.Errorf("read normal readback credential: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("read normal readback credential: %w", err)
 	}
 	credentialJTI, err := readMountedValue(attestor.config.CredentialJTIFile, 128)
 	if err != nil {
-		return "", fmt.Errorf("read normal readback credential jti: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("read normal readback credential jti: %w", err)
 	}
 	privateRaw, err := readMountedValue(attestor.config.PossessionPrivateJWKFile, 64<<10)
 	if err != nil {
-		return "", fmt.Errorf("read readback possession private key: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("read readback possession private key: %w", err)
 	}
 	key, err := internalrpcauth.ParsePrivateJWK([]byte(privateRaw))
 	if err != nil {
-		return "", fmt.Errorf("parse readback possession private key: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("parse readback possession private key: %w", err)
 	}
 	client, err := New(Config{
 		Address: attestor.config.Address, TLS: attestor.config.TLS,
@@ -232,7 +232,7 @@ func (attestor *FileAttestor) Attest(
 		UnaryInterceptor:        attestor.config.UnaryInterceptor,
 	})
 	if err != nil {
-		return "", err
+		return repository.SnapshotAttestationReceipt{}, err
 	}
 	return client.Attest(ctx, state)
 }
@@ -275,7 +275,7 @@ func New(config Config) (*Client, error) {
 func (client *Client) Attest(
 	ctx context.Context,
 	state repository.SnapshotState,
-) (string, error) {
+) (repository.SnapshotAttestationReceipt, error) {
 	credentialDigestRaw := sha256.Sum256([]byte(client.config.CredentialCompact))
 	credentialDigest := hex.EncodeToString(credentialDigestRaw[:])
 	// Receipt короче credential, поэтому каждый новый цикл attestation обязан
@@ -283,7 +283,7 @@ func (client *Client) Attest(
 	// внутри этого вызова для безопасного повтора неоднозначного ответа.
 	challengeKey, err := newRequestUUID()
 	if err != nil {
-		return "", fmt.Errorf("create readback challenge request identifier: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("create readback challenge request identifier: %w", err)
 	}
 	connection, err := grpc.NewClient(
 		client.config.Address,
@@ -291,7 +291,7 @@ func (client *Client) Attest(
 		grpc.WithUnaryInterceptor(client.config.UnaryInterceptor),
 	)
 	if err != nil {
-		return "", fmt.Errorf("connect to readback attestor: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("connect to readback attestor: %w", err)
 	}
 	defer connection.Close()
 	api := internalrpcauthorityv1.NewAuthorityReadbackAttestorServiceClient(connection)
@@ -308,7 +308,7 @@ func (client *Client) Attest(
 			select {
 			case <-ctx.Done():
 				timer.Stop()
-				return "", ctx.Err()
+				return repository.SnapshotAttestationReceipt{}, ctx.Err()
 			case <-timer.C:
 			}
 		}
@@ -318,7 +318,7 @@ func (client *Client) Attest(
 		}
 	}
 	if err != nil {
-		return "", fmt.Errorf("issue readback attestation challenge: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("issue readback attestation challenge: %w", err)
 	}
 	if challenge.GetKind() !=
 		internalrpcauthorityv1.ReadbackAttestationKind_READBACK_ATTESTATION_KIND_SNAPSHOT ||
@@ -333,13 +333,13 @@ func (client *Client) Attest(
 		challenge.GetIssuedAt() == nil || challenge.GetIssuedAt().CheckValid() != nil ||
 		challenge.GetExpiresAt() == nil || challenge.GetExpiresAt().CheckValid() != nil ||
 		!challenge.GetExpiresAt().AsTime().After(challenge.GetIssuedAt().AsTime()) {
-		return "", errors.New("readback challenge binding rejected")
+		return repository.SnapshotAttestationReceipt{}, errors.New("readback challenge binding rejected")
 	}
 	thumbprint, err := internalrpcauth.PublicJWKThumbprintSHA256(
 		client.config.PossessionKey.PublicOnly(),
 	)
 	if err != nil {
-		return "", fmt.Errorf("fingerprint readback possession key: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("fingerprint readback possession key: %w", err)
 	}
 	// Повтор после неоднозначного ответа обязан подписывать байт-в-байт то же
 	// evidence. Server-issued challenge time исключает локальные timestamp из
@@ -380,7 +380,7 @@ func (client *Client) Attest(
 		},
 	)
 	if err != nil {
-		return "", fmt.Errorf("sign readback attestation evidence: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("sign readback attestation evidence: %w", err)
 	}
 	attestationKey := deterministicUUID(
 		"readback-attestation",
@@ -402,7 +402,7 @@ func (client *Client) Attest(
 			select {
 			case <-ctx.Done():
 				timer.Stop()
-				return "", ctx.Err()
+				return repository.SnapshotAttestationReceipt{}, ctx.Err()
 			case <-timer.C:
 			}
 		}
@@ -412,16 +412,21 @@ func (client *Client) Attest(
 		}
 	}
 	if err != nil {
-		return "", fmt.Errorf("attest served authority state: %w", err)
+		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("attest served authority state: %w", err)
 	}
 	if receipt.GetKind() !=
 		internalrpcauthorityv1.ReadbackAttestationKind_READBACK_ATTESTATION_KIND_SNAPSHOT ||
 		receipt.GetAttestationReceiptId() == "" ||
 		receipt.GetEvidenceDigestSha256() == "" ||
-		receipt.GetVerifierGeneration() == 0 {
-		return "", errors.New("readback attestation receipt binding rejected")
+		receipt.GetVerifierGeneration() == 0 ||
+		receipt.GetExpiresAt() == nil || receipt.GetExpiresAt().CheckValid() != nil ||
+		!receipt.GetExpiresAt().AsTime().After(time.Now()) {
+		return repository.SnapshotAttestationReceipt{}, errors.New("readback attestation receipt binding rejected")
 	}
-	return receipt.GetAttestationReceiptId(), nil
+	return repository.SnapshotAttestationReceipt{
+		ReceiptID: receipt.GetAttestationReceiptId(),
+		ExpiresAt: receipt.GetExpiresAt().AsTime().UTC(),
+	}, nil
 }
 
 func deterministicUUID(parts ...string) string {

@@ -521,11 +521,36 @@ func openRestorePostgres(
 	if err != nil {
 		return nil, errors.New("open restore controller PostgreSQL pool")
 	}
-	if err := pool.Ping(ctx); err != nil {
+	if err := waitForPostgresConnectivity(ctx, pool.Ping, 250*time.Millisecond, 2*time.Second); err != nil {
 		pool.Close()
 		return nil, errors.New("verify restore controller PostgreSQL connectivity")
 	}
 	return pool, nil
+}
+
+func waitForPostgresConnectivity(
+	ctx context.Context,
+	ping func(context.Context) error,
+	initialInterval time.Duration,
+	maximumInterval time.Duration,
+) error {
+	if ping == nil || initialInterval <= 0 || maximumInterval < initialInterval {
+		return errors.New("PostgreSQL connectivity retry policy is invalid")
+	}
+	interval := initialInterval
+	for {
+		if err := ping(ctx); err == nil {
+			return nil
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+		interval = min(interval*2, maximumInterval)
+	}
 }
 
 func loadControllerSigningKey(
