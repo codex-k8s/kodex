@@ -17,6 +17,10 @@ jq -e '
 ' "$lock" >/dev/null || fail 'management chart lock is invalid'
 for surface in control-center grafana headlamp; do
   rg -q "oauth2-$surface" "$bootstrap" || fail "OAuth2 surface is absent: $surface"
+  MIDDLEWARE_NAME="oauth2-$surface-errors" yq -e '
+    select(.kind == "Middleware" and .metadata.name == strenv(MIDDLEWARE_NAME)) |
+    .spec.errors.statusRewrites."401" == 302
+  ' "$routes" >/dev/null || fail "OAuth2 browser redirect is absent: $surface"
 done
 for ingress in kodex-grafana kodex-headlamp; do
   INGRESS_NAME="$ingress" yq -e \

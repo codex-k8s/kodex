@@ -4,6 +4,7 @@ metadata: {name: oauth2-control-center-errors, namespace: kodex-system}
 spec:
   errors:
     status: ["401-403"]
+    statusRewrites: {"401": 302}
     service: {name: oauth2-control-center, port: 80}
     query: /oauth2/sign_in?rd={url}
 ---
@@ -31,6 +32,7 @@ metadata: {name: oauth2-grafana-errors, namespace: observability}
 spec:
   errors:
     status: ["401-403"]
+    statusRewrites: {"401": 302}
     service: {name: oauth2-grafana, port: 80}
     query: /oauth2/sign_in?rd={url}
 ---
@@ -58,6 +60,7 @@ metadata: {name: oauth2-headlamp-errors, namespace: platform-admin}
 spec:
   errors:
     status: ["401-403"]
+    statusRewrites: {"401": 302}
     service: {name: oauth2-headlamp, port: 80}
     query: /oauth2/sign_in?rd={url}
 ---
