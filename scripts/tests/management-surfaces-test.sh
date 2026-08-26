@@ -8,6 +8,55 @@ routes="$repository_root/infra/management-surfaces/routes.yaml"
 values="$repository_root/infra/management-surfaces/oauth2-proxy-values.yaml"
 lock="$repository_root/infra/management-surfaces/charts.lock.json"
 identity="$repository_root/infra/identity/keycloak.yaml"
+headlamp_values="$repository_root/infra/management-surfaces/headlamp-values.yaml"
+monitoring_values="$repository_root/infra/management-surfaces/kube-prometheus-stack-values.yaml"
+temporary_directory=$(mktemp -d)
+trap 'rm -rf -- "$temporary_directory"' EXIT
+
+download_chart() {
+  local name=$1 chart repository version expected_sha directory archive
+  chart=$(jq -er --arg name "$name" '.charts[] | select(.name == $name) | .chart' "$lock")
+  repository=$(jq -er --arg name "$name" '.charts[] | select(.name == $name) | .repository' "$lock")
+  version=$(jq -er --arg name "$name" '.charts[] | select(.name == $name) | .version' "$lock")
+  expected_sha=$(jq -er --arg name "$name" '.charts[] | select(.name == $name) | .sha256' "$lock")
+  directory="$temporary_directory/charts/$name"
+  mkdir -p "$directory"
+  helm pull "$chart" --repo "$repository" --version "$version" --destination "$directory" >/dev/null
+  archive=$(find "$directory" -maxdepth 1 -type f -name '*.tgz' -print -quit)
+  [[ -n "$archive" ]] || fail "chart archive is absent: $name"
+  printf '%s  %s\n' "$expected_sha" "$archive" | sha256sum --check --status ||
+    fail "chart digest mismatch: $name"
+  printf '%s\n' "$archive"
+}
+
+validate_headlamp_render() {
+  yq -o=json -I=0 '.' "$1" | jq -s -e '
+    [.[] | select(.kind == "ClusterRoleBinding" and
+      .metadata.name == "kodex-headlamp-admin")] as $bindings |
+    ($bindings | length) == 1 and
+    $bindings[0].roleRef == {
+      apiGroup: "rbac.authorization.k8s.io",
+      kind: "ClusterRole",
+      name: "cluster-admin"
+    } and
+    $bindings[0].subjects == [{
+      kind: "ServiceAccount",
+      name: "kodex-headlamp",
+      namespace: "platform-admin"
+    }]
+  ' >/dev/null
+}
+
+validate_grafana_render() {
+  yq -o=json -I=0 '.' "$1" | jq -s -e '
+    [.[] | select(
+      (.kind == "Deployment" or .kind == "StatefulSet") and
+      .metadata.namespace == "observability" and
+      .metadata.name == "kodex-monitoring-grafana"
+    )] as $workloads |
+    ($workloads | length) == 1 and $workloads[0].kind == "StatefulSet"
+  ' >/dev/null
+}
 
 bash -n "$bootstrap"
 jq -e '
@@ -15,6 +64,162 @@ jq -e '
   ([.charts[].name] | sort) == ["headlamp","kube-prometheus-stack","oauth2-proxy"] and
   all(.charts[]; (.sha256 | test("^[a-f0-9]{64}$")))
 ' "$lock" >/dev/null || fail 'management chart lock is invalid'
+
+headlamp_chart=$(download_chart headlamp)
+monitoring_chart=$(download_chart kube-prometheus-stack)
+oauth2_chart=$(download_chart oauth2-proxy)
+headlamp_render="$temporary_directory/headlamp.yaml"
+monitoring_render="$temporary_directory/monitoring.yaml"
+rendered_monitoring_values="$temporary_directory/monitoring-values.yaml"
+helm template kodex-headlamp "$headlamp_chart" --namespace platform-admin \
+  --values "$headlamp_values" >"$headlamp_render"
+GRAFANA_ORIGIN=https://grafana.example.test yq '
+  (.. | select(tag == "!!str")) |=
+    sub("__KODEX_GRAFANA_ORIGIN__"; strenv(GRAFANA_ORIGIN))
+' "$monitoring_values" >"$rendered_monitoring_values"
+helm template kodex-monitoring "$monitoring_chart" --namespace observability \
+  --values "$rendered_monitoring_values" >"$monitoring_render"
+validate_headlamp_render "$headlamp_render" || fail 'Headlamp exact binding render is invalid'
+validate_grafana_render "$monitoring_render" || fail 'Grafana exact StatefulSet render is invalid'
+
+mkdir -p "$temporary_directory/bin"
+cat >"$temporary_directory/bin/go" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${1:-}" == run ]]
+EOF
+cat >"$temporary_directory/bin/helm" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${1:-}" == pull ]]
+chart=${2:-}
+destination=""
+while (($# > 0)); do
+  case "$1" in
+    --destination) destination=${2:-}; shift 2 ;;
+    *) shift ;;
+  esac
+done
+case "$chart" in
+  headlamp) source=${FIXTURE_HEADLAMP_CHART:?} ;;
+  kube-prometheus-stack) source=${FIXTURE_MONITORING_CHART:?} ;;
+  oauth2-proxy) source=${FIXTURE_OAUTH2_CHART:?} ;;
+  *) exit 1 ;;
+esac
+[[ -n "$destination" ]]
+cp -- "$source" "$destination/$(basename -- "$source")"
+EOF
+cat >"$temporary_directory/bin/kubectl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+arguments=" $* "
+if [[ "$*" == 'config current-context' ]]; then
+  printf 'fixture-context\n'
+  exit 0
+fi
+if [[ "$arguments" == *' apply '* ]]; then
+  exit 0
+fi
+if [[ "$arguments" =~ \ rollout\ status\ deployment/(oauth2-control-center|oauth2-grafana|oauth2-headlamp|kodex-headlamp)\  ]]; then
+  exit 0
+fi
+if [[ "$arguments" == *' get deployment oauth2-'*' -o json '* ]]; then
+  role=kodex-owner
+  [[ "$arguments" != *' get deployment oauth2-headlamp '* ]] || role=admin
+  printf '{"spec":{"template":{"spec":{"containers":[{"name":"oauth2-proxy","args":["--allowed-role=%s"]}]}}}}\n' "$role"
+  exit 0
+fi
+if [[ "$arguments" == *' get clusterrolebinding kodex-headlamp-admin -o json '* ]]; then
+  [[ "${FAKE_HEADLAMP_BINDING_NAME:?}" == kodex-headlamp-admin ]] || exit 1
+  printf '{"metadata":{"name":"kodex-headlamp-admin"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"ClusterRole","name":"%s"},"subjects":[{"kind":"ServiceAccount","name":"kodex-headlamp","namespace":"platform-admin"}]}\n' \
+    "${FAKE_HEADLAMP_BINDING_ROLE:?}"
+  exit 0
+fi
+if [[ "$arguments" == *' rollout status statefulset/kodex-monitoring-grafana '* ]]; then
+  [[ "${FAKE_GRAFANA_KIND:?}" == StatefulSet ]]
+  exit
+fi
+if [[ "$arguments" == *' rollout status deployment/kodex-monitoring-grafana '* ]]; then
+  [[ "${FAKE_GRAFANA_KIND:?}" == Deployment ]]
+  exit
+fi
+if [[ "$arguments" == *' get prometheus -o json '* ||
+  "$arguments" == *' get alertmanager -o json '* ]]; then
+  printf '{"items":[{"status":{"availableReplicas":1}}]}\n'
+  exit 0
+fi
+if [[ "$arguments" == *' get ingress kodex-grafana -o jsonpath='* ]]; then
+  printf 'grafana.example.test'
+  exit 0
+fi
+if [[ "$arguments" == *' get ingress kodex-headlamp -o jsonpath='* ]]; then
+  printf 'headlamp.example.test'
+  exit 0
+fi
+if [[ "$arguments" == *' get ingress kodex-grafana -o json '* ]]; then
+  printf '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/router.middlewares":"observability-oauth2-grafana-chain@kubernetescrd"}}}\n'
+  exit 0
+fi
+if [[ "$arguments" == *' get ingress kodex-headlamp -o json '* ]]; then
+  printf '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/router.middlewares":"platform-admin-oauth2-headlamp-chain@kubernetescrd"}}}\n'
+  exit 0
+fi
+if [[ "$arguments" == *' get ingress staff-control-center -o json '* ]]; then
+  printf '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/router.middlewares":"kodex-system-oauth2-control-center-chain@kubernetescrd"}}}\n'
+  exit 0
+fi
+printf 'Unexpected kubectl fixture call: %s\n' "$*" >&2
+exit 1
+EOF
+chmod 0700 "$temporary_directory/bin/go" "$temporary_directory/bin/helm" \
+  "$temporary_directory/bin/kubectl"
+
+readback_arguments=(
+  --context fixture-context
+  --mode readback
+  --oidc-issuer https://sso.example.test/realms/kodex
+  --control-center-host control.example.test
+  --grafana-host grafana.example.test
+  --headlamp-host headlamp.example.test
+  --public-ipv4-cidr 192.0.2.10/32
+  --ingress-class traefik
+  --cluster-issuer fixture-issuer
+  --ingress-namespace kube-system
+  --ingress-pod-name traefik
+  --kubernetes-api-service-cidr 10.43.0.1/32
+  --kubernetes-api-endpoint-cidrs 192.0.2.20/32
+  --kubernetes-api-endpoint-ports 6443
+)
+run_readback() {
+  local binding_name=$1 binding_role=$2 grafana_kind=$3
+  PATH="$temporary_directory/bin:$PATH" \
+    FIXTURE_HEADLAMP_CHART="$headlamp_chart" \
+    FIXTURE_MONITORING_CHART="$monitoring_chart" \
+    FIXTURE_OAUTH2_CHART="$oauth2_chart" \
+    FAKE_HEADLAMP_BINDING_NAME="$binding_name" \
+    FAKE_HEADLAMP_BINDING_ROLE="$binding_role" \
+    FAKE_GRAFANA_KIND="$grafana_kind" \
+    "$bootstrap" "${readback_arguments[@]}"
+}
+expect_readback_rejected() {
+  local binding_name=$1 binding_role=$2 grafana_kind=$3 expected_error=$4 label=$5
+  if run_readback "$binding_name" "$binding_role" "$grafana_kind" \
+    >"$temporary_directory/$label.out" 2>"$temporary_directory/$label.err"; then
+    fail "management readback accepted $label"
+  fi
+  grep -Fq "$expected_error" "$temporary_directory/$label.err" ||
+    fail "management readback rejected $label for an unexpected reason"
+}
+
+run_readback kodex-headlamp-admin cluster-admin StatefulSet >/dev/null ||
+  fail 'management readback rejected the exact pinned chart resources'
+expect_readback_rejected kodex-headlamp cluster-admin StatefulSet \
+  'Headlamp cluster-admin binding mismatch' wrong-binding-name
+expect_readback_rejected kodex-headlamp-admin view StatefulSet \
+  'Headlamp cluster-admin binding mismatch' wrong-binding-role
+expect_readback_rejected kodex-headlamp-admin cluster-admin Deployment \
+  'Grafana rollout failed' wrong-grafana-kind
+
 for surface in control-center grafana headlamp; do
   rg -q "oauth2-$surface" "$bootstrap" || fail "OAuth2 surface is absent: $surface"
   MIDDLEWARE_NAME="oauth2-$surface-errors" yq -e '

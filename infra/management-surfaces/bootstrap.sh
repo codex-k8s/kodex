@@ -227,8 +227,20 @@ if [[ "$mode" == readback ]]; then
     ' >/dev/null || fail "OAuth2 Proxy role gate mismatch: $deployment"
   done
   kubectl -n platform-admin rollout status deployment/kodex-headlamp --timeout=3m >/dev/null || fail 'Headlamp rollout failed'
-  [[ "$(kubectl get clusterrolebinding kodex-headlamp -o jsonpath='{.roleRef.name}')" == cluster-admin ]] || fail 'Headlamp cluster-admin binding mismatch'
-  kubectl -n observability rollout status deployment/kodex-monitoring-grafana --timeout=3m >/dev/null || fail 'Grafana rollout failed'
+  kubectl get clusterrolebinding kodex-headlamp-admin -o json | jq -e '
+    .metadata.name == "kodex-headlamp-admin" and
+    .roleRef == {
+      apiGroup: "rbac.authorization.k8s.io",
+      kind: "ClusterRole",
+      name: "cluster-admin"
+    } and
+    .subjects == [{
+      kind: "ServiceAccount",
+      name: "kodex-headlamp",
+      namespace: "platform-admin"
+    }]
+  ' >/dev/null || fail 'Headlamp cluster-admin binding mismatch'
+  kubectl -n observability rollout status statefulset/kodex-monitoring-grafana --timeout=3m >/dev/null || fail 'Grafana rollout failed'
   kubectl -n observability get prometheus -o json | jq -e '
     (.items | length) == 1 and (.items[0].status.availableReplicas // 0) >= 1
   ' >/dev/null || fail 'Prometheus readback failed'

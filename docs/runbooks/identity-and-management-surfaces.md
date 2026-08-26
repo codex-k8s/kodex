@@ -4,7 +4,7 @@ title: Identity и административные интерфейсы
 type: runbook
 status: approved
 owner: sre
-version: 2.0.1
+version: 2.0.2
 updated: 2026-08-26
 ---
 
@@ -57,7 +57,10 @@ OIDC client secrets, cookie secrets и Grafana admin password генерирую
 - анонимный browser GET получает `302` в exact Keycloak issuer, тогда как
   прямой `/oauth2/auth` без сессии остаётся `401`, а отказ по role - `403`;
 - Control Center не доступен в обход middleware;
-- Headlamp ServiceAccount связан ровно с `cluster-admin`;
+- Headlamp ServiceAccount связан с `cluster-admin` только через exact
+  `ClusterRoleBinding/kodex-headlamp-admin`;
+- Grafana готова как exact `StatefulSet/kodex-monitoring-grafana` в namespace
+  `observability`; `Deployment` с таким именем не является допустимой заменой;
 - Prometheus и Alertmanager не имеют публичного Ingress.
 
 Initial passwords после первого входа необходимо сменить. Потерянные значения
