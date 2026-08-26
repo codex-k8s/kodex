@@ -4,8 +4,8 @@ title: Диагностика internal RPC authority
 type: runbook
 status: approved
 owner: sre
-version: 2.0.0
-updated: 2026-08-25
+version: 2.1.0
+updated: 2026-08-27
 ---
 
 # Диагностика internal RPC authority
@@ -25,6 +25,9 @@ attestor и restore controller. Secret values, DSN и private keys не выво
 - mTLS и signed authorization context обязательны одновременно;
 - PostgreSQL сохраняет publication predecessor/history, readback receipts и
   replay high-watermark.
+- signed snapshot действует 180 дней. Следующая ревизия registry выпускается
+  forward-only до окончания этого окна; повторно подписывать или изменять
+  durable publication с тем же `source_revision` запрещено.
 
 ## Порядок fresh install
 
@@ -94,6 +97,15 @@ generation/digest и выполнить bounded retry. Несогласован�
 Проверить `session_user`, членство `NOLOGIN` role и SCRAM reconciliation Job.
 Runtime principal не должен получать superuser, `CREATEROLE` или bootstrap
 password.
+
+### Snapshot истёк или близок к истечению
+
+Проверить `published_at`, `source_revision` и `expected_readback_count` в
+`authority_snapshot_history`, не выводя signed payload. Истёкшую ревизию не
+удалять и не переподписывать. В registry publisher нужно выпустить следующую
+последовательную `source_revision`, сохранить predecessor/history и выполнить
+обычный exact-SHA deploy. Увеличение срока не восстанавливает уже подписанный
+истёкший snapshot без новой forward-only ревизии.
 
 ## Проверки кода
 

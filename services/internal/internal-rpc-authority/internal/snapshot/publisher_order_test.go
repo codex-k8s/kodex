@@ -82,6 +82,33 @@ func TestPublisherKeyDocumentsIgnoreRegistryMapOrder(t *testing.T) {
 	}
 }
 
+func TestPublisherKeyValidityAllowsPlannedForwardOnlyRotation(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(1_786_507_482, 0).UTC()
+	key := mustPublisherTestKey(t, "planned-rotation")
+	sets, err := publisherIssuerSets([]PublisherKey{
+		publisherTestKey(
+			"spiffe://kodex.local/issuer",
+			"issuer",
+			"AUTHORIZATION_CONTEXT",
+			1,
+			key,
+		),
+	}, now)
+	if err != nil {
+		t.Fatalf("build issuer set: %v", err)
+	}
+	if len(sets) != 1 || len(sets[0].Keys) != 1 {
+		t.Fatal("unexpected issuer set shape")
+	}
+	if got, want := sets[0].Keys[0].NotAfter, now.Add(PublisherSnapshotValidity).Unix(); got != want {
+		t.Fatalf("unexpected key validity: got %d, want %d", got, want)
+	}
+	if PublisherSnapshotValidity < 90*24*time.Hour {
+		t.Fatal("snapshot validity leaves no operational rotation window")
+	}
+}
+
 func TestBindPublisherKeyAudiencesUsesSignedPolicy(t *testing.T) {
 	t.Parallel()
 	issuer := "spiffe://kodex.local/ns/kodex-system/sa/caller"
