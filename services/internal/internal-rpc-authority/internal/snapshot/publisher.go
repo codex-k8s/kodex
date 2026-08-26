@@ -14,8 +14,9 @@ import (
 
 const zeroSHA256 = "0000000000000000000000000000000000000000000000000000000000000000"
 
-// PublisherSnapshotValidity ограничивает срок одного versioned snapshot.
-const PublisherSnapshotValidity = 24 * time.Hour
+// PublisherSnapshotValidity оставляет достаточно времени для плановой
+// forward-only ротации без суточного отказа неизменной установки.
+const PublisherSnapshotValidity = 180 * 24 * time.Hour
 
 // PublisherKey задаёт один server-owned ключ снимка.
 type PublisherKey struct {
