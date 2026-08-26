@@ -119,7 +119,7 @@ spec:
                     --output type=image,name=kodex-image-registry-push.kodex-system.svc.cluster.local:5001/staging/readiness:userns-probe,push=true \
                     --no-cache >/dev/null
             periodSeconds: 60
-            timeoutSeconds: 30
+            timeoutSeconds: 180
             failureThreshold: 6
           livenessProbe:
             exec:

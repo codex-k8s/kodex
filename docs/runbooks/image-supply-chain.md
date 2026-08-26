@@ -4,7 +4,7 @@ title: Диагностика автоматического admission обра�
 type: runbook
 status: approved
 owner: sre
-version: 1.0.7
+version: 1.0.8
 updated: 2026-08-26
 ---
 
@@ -104,6 +104,12 @@ IMAGE_ADMISSION_POLICY_JSON='<read-only ConfigMap JSON without secrets>' \
   readiness с exact release. При диагностике сверить аннотации нового
   ReplicaSet и соответствующие `fieldRef`, не читать содержимое Secret и не
   выполнять ручной rollout.
+- Actual build-path readiness имеет bounded budget 180 секунд. Этот бюджет
+  покрывает первый authenticated pull exact `agent-runner` digest на холодном
+  `emptyDir`, сборку probe-слоя и push в staging registry. Уменьшать его ниже
+  времени холодного пути запрещено: установка не должна зависеть от частично
+  накопленного cache после отменённых probe. Исчерпание бюджета остаётся
+  закрытым отказом readiness и не ослабляет digest, mTLS или repository policy.
 - Registry guard сохраняет последний успешный ready marker только пока идёт
   ограниченный по времени readback текущего цикла. Медленный manifest readback
   не должен заранее исключать единственный endpoint из Service. Ошибка,

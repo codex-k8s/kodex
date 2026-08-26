@@ -266,6 +266,7 @@ jq -e '
       .valueFrom.fieldRef.fieldPath ==
         "metadata.annotations[\u0027kodex.dev/frontend-sha256\u0027]") and
     (any(.volumeMounts[]?; .name == "image-policy") | not) and
+    .readinessProbe.timeoutSeconds == 180 and
     (.readinessProbe.exec.command[-1] | contains("/var/run/config/kodex/image-policy") | not) and
     (.readinessProbe.exec.command[-1] | contains("fail_policy_input"))) and
   (any(.spec.template.spec.volumes[]?; .name == "image-policy") | not)
