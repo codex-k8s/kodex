@@ -110,7 +110,7 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 		claims,
 		callerKey,
 		internalrpcauth.ProtectedHeaderExpectation{
-			Type: contextProtectedType, KeyID: callerKey.KeyID,
+			Type: internalrpcauth.AuthorizationContextProtectedType, KeyID: callerKey.KeyID,
 		},
 	)
 	if err != nil {
@@ -125,7 +125,7 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 		claims,
 		callerKey,
 		internalrpcauth.ProtectedHeaderExpectation{
-			Type: contextProtectedType, KeyID: callerKey.KeyID,
+			Type: internalrpcauth.AuthorizationContextProtectedType, KeyID: callerKey.KeyID,
 		},
 	)
 	if err != nil {
