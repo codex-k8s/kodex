@@ -241,6 +241,31 @@ spec:
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
+metadata: { name: sso-oauth2-proxy-ingress, namespace: identity }
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sso
+      app.kubernetes.io/component: identity-provider
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            { matchLabels: { kubernetes.io/metadata.name: kodex-system } }
+          podSelector:
+            { matchLabels: { app.kubernetes.io/instance: oauth2-control-center } }
+        - namespaceSelector:
+            { matchLabels: { kubernetes.io/metadata.name: observability } }
+          podSelector:
+            { matchLabels: { app.kubernetes.io/instance: oauth2-grafana } }
+        - namespaceSelector:
+            { matchLabels: { kubernetes.io/metadata.name: platform-admin } }
+          podSelector:
+            { matchLabels: { app.kubernetes.io/instance: oauth2-headlamp } }
+      ports: [{ protocol: TCP, port: __KODEX_OIDC_TARGET_PORT__ }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
 metadata: { name: grafana-exact-ingress, namespace: observability }
 spec:
   podSelector: { matchLabels: { app.kubernetes.io/name: grafana } }
