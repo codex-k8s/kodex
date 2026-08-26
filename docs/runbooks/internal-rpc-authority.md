@@ -32,8 +32,10 @@ attestor и restore controller. Secret values, DSN и private keys не выво
    principals из `kodex-postgresql-runtime-credentials` Secret.
 2. Завершаются `internal-rpc-authority-migrate` и `control-plane-migrate`.
 3. Запускается publisher.
-4. Installer ожидает все dynamic Secrets с generation больше нуля и точным
-   набором keys из `tools/install/secret-projections.json`.
+4. Installer ожидает обычные dynamic Secrets с generation больше нуля и точным
+   набором keys из `tools/install/secret-projections.json`. Event-scoped
+   restore credential и ACK до появления подписанной restore directive остаются
+   пустыми owner-managed placeholders с generation `0`.
 5. Только после этого запускаются остальные workloads.
 
 ## Read-only проверки
@@ -53,7 +55,10 @@ kubectl -n kodex-system get secret <name> -o json \
 
 Дополнительно сверить:
 
-- generation является положительным целым;
+- generation обычной dynamic projection является положительным целым;
+- event-scoped restore projection находится только в одном из двух состояний:
+  пустой placeholder с generation `0` либо полностью материализованный Secret
+  с положительной generation и точным набором keys;
 - labels указывают writer `internal-rpc-authority-publisher`;
 - Role publisher не имеет wildcard/list/delete Secret permissions;
 - consumer ServiceAccount не имеет update/patch Secret;
@@ -65,9 +70,13 @@ kubectl -n kodex-system get secret <name> -o json \
 
 ### Dynamic Secret остался generation 0
 
-Проверить publisher logs без env/volumes, PostgreSQL migration Job, publisher
-DSN Secret shape, Kubernetes API egress и exact RBAC. Не заполнять Secret
-вручную и не расширять Role wildcard-правами.
+Для event-scoped restore credential и ACK это штатное состояние, пока restore
+controller не выдал подписанную directive. Placeholder обязан оставаться
+пустым; частичные data keys при generation `0` являются инцидентом.
+
+Для любой другой dynamic projection проверить publisher logs без env/volumes,
+PostgreSQL migration Job, publisher DSN Secret shape, Kubernetes API egress и
+exact RBAC. Не заполнять Secret вручную и не расширять Role wildcard-правами.
 
 ### Publisher готов, consumer не стартует
 
