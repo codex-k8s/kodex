@@ -299,10 +299,10 @@ grep -Fqx "# syntax=kodex-image-registry.kodex-system.svc.cluster.local:5000/kod
   "$dockerfile_directory/Dockerfile"
 grep -Fqx "FROM $KODEX_BUILDKIT_READINESS_BASE_REPOSITORY@$KODEX_BUILDKIT_READINESS_BASE_DIGEST AS verify" \
   "$dockerfile_directory/Dockerfile"
-grep -Fqx 'RUN ["/bin/sh","-c","test -x /usr/local/bin/kodex-init && test -x /usr/local/bin/kodex-agent-runner && printf ready > /kodex-readiness"]' \
+grep -Fqx 'RUN ["/bin/sh","-c","test -x /usr/local/bin/kodex-init && test -x /usr/local/bin/kodex-agent-runner && printf ready > /tmp/kodex-readiness"]' \
   "$dockerfile_directory/Dockerfile"
 grep -Fqx 'FROM scratch' "$dockerfile_directory/Dockerfile"
-grep -Fqx 'COPY --from=verify /kodex-readiness /kodex-readiness' \
+grep -Fqx 'COPY --from=verify /tmp/kodex-readiness /kodex-readiness' \
   "$dockerfile_directory/Dockerfile"
 printf 'called\n' >>"$KODEX_BUILDKIT_READINESS_CALLS"
 EOF
