@@ -102,6 +102,9 @@ fi
 rg -Fq 'runtime-user-policy.pending' \
   "$repository_root/tools/install/reconcile-nats-runtime-users.sh" ||
   fail 'NATS reconciliation does not preserve interrupted-upgrade evidence'
+rg -Fq 'credential_matches "$material_directory/nats/users/$user_name.creds"' \
+  "$repository_root/tools/install/reconcile-nats-runtime-users.sh" ||
+  fail 'NATS reconciliation does not compare permissions embedded in material credentials'
 rg -Fq 'Kubernetes Secret content readback mismatch' \
   "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
   fail 'NATS materialization does not compare exact Kubernetes Secret content'
@@ -111,6 +114,9 @@ rg -Fq 'NATS credential revocation ordering mismatch' \
 rg -Fq 'runtime-user-policy.version" "$version_file"' \
   "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
   fail 'NATS materialization does not commit the cluster-applied policy revision'
+rg -Fq -- '--ignore-not-found -o name' \
+  "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
+  fail 'NATS materialization does not distinguish absent workloads from API errors'
 
 jq -e '
   .version == 1 and .namespace == "kodex-system" and (.secrets | length > 0) and

@@ -179,13 +179,23 @@ if [[ -d "$pending_directory" && ! -L "$pending_directory" ]]; then
 fi
 
 if [[ "$requires_rollout" == true ]]; then
-  if kubectl -n kodex-system get statefulset kodex-nats >/dev/null 2>&1; then
+  statefulset_name=$(kubectl -n kodex-system get statefulset kodex-nats \
+    --ignore-not-found -o name) || fail 'read NATS StatefulSet before credential rollout'
+  if [[ -n "$statefulset_name" && "$statefulset_name" != statefulset.apps/kodex-nats ]]; then
+    fail 'NATS StatefulSet readback is invalid'
+  fi
+  if [[ -n "$statefulset_name" ]]; then
     kubectl -n kodex-system rollout restart statefulset/kodex-nats >/dev/null
     kubectl -n kodex-system rollout status statefulset/kodex-nats --timeout=5m >/dev/null ||
       fail 'NATS rollout after credential rotation failed'
   fi
   for deployment in control-plane control-api-gateway; do
-    if kubectl -n kodex-system get deployment "$deployment" >/dev/null 2>&1; then
+    deployment_name=$(kubectl -n kodex-system get deployment "$deployment" \
+      --ignore-not-found -o name) || fail "read workload before NATS credential rollout: $deployment"
+    if [[ -n "$deployment_name" && "$deployment_name" != "deployment.apps/$deployment" ]]; then
+      fail "workload readback is invalid: $deployment"
+    fi
+    if [[ -n "$deployment_name" ]]; then
       kubectl -n kodex-system rollout restart "deployment/$deployment" >/dev/null
       kubectl -n kodex-system rollout status "deployment/$deployment" --timeout=5m >/dev/null ||
         fail "workload rollout after NATS credential rotation failed: $deployment"
@@ -193,11 +203,11 @@ if [[ "$requires_rollout" == true ]]; then
   done
 fi
 
-printf '%s\n' "$policy_version" >"$temporary_directory/runtime-user-policy.version"
-install -m 0600 "$temporary_directory/runtime-user-policy.version" "$version_file"
 if [[ -d "$pending_directory" && ! -L "$pending_directory" ]]; then
   find "$pending_directory" -mindepth 1 -maxdepth 1 -type f -delete
   rmdir "$pending_directory" || fail 'remove applied NATS credential evidence directory'
 fi
+printf '%s\n' "$policy_version" >"$temporary_directory/runtime-user-policy.version"
+install -m 0600 "$temporary_directory/runtime-user-policy.version" "$version_file"
 
 printf 'NATS runtime credentials materialized without secret output\n'

@@ -21,7 +21,7 @@ done
 
 [[ "$material_directory" == /* && -d "$material_directory" && ! -L "$material_directory" ]] ||
   fail 'material directory is invalid'
-for command_name in date find install jq mktemp nsc sha256sum sleep sort xargs; do
+for command_name in date find install jq mktemp nsc rmdir sha256sum sleep sort xargs; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
@@ -35,6 +35,12 @@ readonly policy_version=3
 
 [[ -d "$nsc_home" && ! -L "$nsc_home" && -s "$policy_file" && -s "$registry_file" ]] ||
   fail 'NATS policy sources are incomplete'
+[[ ! -e "$pending_directory" || (-d "$pending_directory" && ! -L "$pending_directory") ]] ||
+  fail 'NATS runtime user pending directory is invalid'
+if [[ -d "$pending_directory" &&
+  -z "$(find "$pending_directory" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+  rmdir "$pending_directory" || fail 'remove empty NATS runtime user pending directory'
+fi
 
 permission_matches() {
   local user_name=$1 publish_allow=$2 subscribe_allow=$3 readback
@@ -49,22 +55,41 @@ permission_matches() {
   ' <<<"$readback" >/dev/null
 }
 
+credential_matches() {
+  local credentials_file=$1 user_name=$2 publish_allow=$3 subscribe_allow=$4 readback
+  [[ -s "$credentials_file" && ! -L "$credentials_file" ]] || return 1
+  readback=$(nsc describe jwt --json --file "$credentials_file") || return 1
+  jq -e --arg name "$user_name" --arg publish "$publish_allow" \
+    --arg subscribe "$subscribe_allow" '
+    .name == $name and .nats.type == "user" and
+    ((.nats.pub.allow // []) | sort) == ($publish | split(",") | sort) and
+    ((.nats.sub.allow // []) | sort) == ($subscribe | split(",") | sort) and
+    ((.nats.pub.deny // []) | length) == 0 and
+    ((.nats.sub.deny // []) | length) == 0 and (.nats.resp // null) == null
+  ' <<<"$readback" >/dev/null
+}
+
 current_version=""
 if [[ -f "$version_file" && ! -L "$version_file" ]]; then
   current_version=$(<"$version_file")
 fi
 policy_exact=true
+credentials_exact=true
 while IFS='|' read -r user_name publish_allow subscribe_allow material_ref secret_name; do
   [[ -n "$user_name" && -n "$publish_allow" && -n "$subscribe_allow" &&
     -n "$material_ref" && -n "$secret_name" ]] || fail 'NATS user policy row is invalid'
   permission_matches "$user_name" "$publish_allow" "$subscribe_allow" || policy_exact=false
+  credential_matches "$material_directory/nats/users/$user_name.creds" \
+    "$user_name" "$publish_allow" "$subscribe_allow" || credentials_exact=false
 done <"$policy_file"
 if [[ "$current_version" == "$policy_version" && "$policy_exact" == true &&
+  "$credentials_exact" == true &&
   ! -e "$pending_directory" ]]; then
   printf 'unchanged\n'
   exit 0
 fi
-if [[ "$policy_exact" == true && ! -e "$pending_directory" ]]; then
+if [[ "$policy_exact" == true && "$credentials_exact" == true &&
+  ! -e "$pending_directory" ]]; then
   printf 'changed\n'
   exit 0
 fi
@@ -72,9 +97,6 @@ fi
 umask 077
 temporary_directory=$(mktemp -d "$material_directory/.nats-runtime-users.XXXXXX")
 trap 'rm -rf -- "$temporary_directory"' EXIT
-[[ ! -e "$pending_directory" || (-d "$pending_directory" && ! -L "$pending_directory") ]] ||
-  fail 'NATS runtime user pending directory is invalid'
-install -d -m 0700 "$pending_directory"
 
 install_runtime_credentials() {
   local source_directory=$1 user_name material_ref secret_name
@@ -94,10 +116,10 @@ install_runtime_credentials() {
     "$material_directory/projections.sha256"
 }
 
-if [[ "$policy_exact" == true ]]; then
+if [[ "$policy_exact" == true && -d "$pending_directory" ]]; then
   account_claim=$(nsc -H "$nsc_home" describe account --name APPLICATION --json) ||
     fail 'describe NATS application account'
-  while IFS='|' read -r user_name _ _ _ _; do
+  while IFS='|' read -r user_name publish_allow subscribe_allow _ _; do
     pending_credentials="$pending_directory/$user_name.previous.creds"
     [[ -s "$pending_credentials" && ! -L "$pending_credentials" ]] ||
       fail "pending previous NATS credentials are invalid: $user_name"
@@ -108,8 +130,14 @@ if [[ "$policy_exact" == true ]]; then
       user_subject=$(nsc -H "$nsc_home" describe user --account APPLICATION \
         --name "$user_name" --json | jq -er '.sub') ||
         fail "NATS user subject is invalid: $user_name"
-      if jq -e --arg subject "$user_subject" '
-        .sub == $subject and .nats.type == "user" and (.iat | type == "number")
+      if jq -e --arg subject "$user_subject" --arg name "$user_name" \
+        --arg publish "$publish_allow" --arg subscribe "$subscribe_allow" '
+        .sub == $subject and .name == $name and .nats.type == "user" and
+        (.iat | type == "number") and
+        ((.nats.pub.allow // []) | sort) == ($publish | split(",") | sort) and
+        ((.nats.sub.allow // []) | sort) == ($subscribe | split(",") | sort) and
+        ((.nats.pub.deny // []) | length) == 0 and
+        ((.nats.sub.deny // []) | length) == 0 and (.nats.resp // null) == null
       ' <<<"$current_claim" >/dev/null; then
         current_issued_at=$(jq -er '.iat' <<<"$current_claim")
         revocation_cutoff=$(jq -er --arg subject "$user_subject" '
@@ -133,6 +161,7 @@ if [[ "$policy_exact" == true ]]; then
   exit 0
 fi
 
+install -d -m 0700 "$pending_directory"
 revocation_cutoff=$(($(date +%s) + 1))
 
 while IFS='|' read -r user_name _ _ _ _; do
