@@ -97,9 +97,12 @@ Issuer дополнительно требует
 
 Verifier того же workload `control-plane` дополнительно подтверждает роль
 `AUTHORITY_PROOF_RESOLVER`: перед отдельным readback receipt он связывает
-доставленный через Kubernetes Secret proof private key с exact `CURRENT` JWK, issuer,
-аудиторией, поколением и source revision/digest proof trust. Receipt verifier
-не заменяет resolver receipt, а publisher остаётся неготовым до полного набора.
+доставленный через Kubernetes Secret proof private key и его обслуживаемое
+`current_generation` с exact `CURRENT` JWK, issuer, аудиторией, поколением и
+source revision/digest proof trust. Поколение перечитывается из того же
+версионированного Secret при каждой активации, поэтому forward-only rotation не
+зависит от статического env. Receipt verifier не заменяет resolver receipt, а
+publisher остаётся неготовым до полного набора.
 
 Обычные readback credential, ключ владения, restore role credential и restore
 ACK key issuer/verifier читают из точных Kubernetes Secret projections,
@@ -110,7 +113,7 @@ Snapshot создаётся заранее пустым ресурсом без
 секретного материала; publisher имеет только `get/update/patch`, выполняет
 `resourceVersion` CAS через exact Kubernetes API destination и после каждого
 изменения читает фактически обслуживаемый JWS. Один snapshot действует не
-более 24 часов; новая source revision должна быть опубликована и полностью
+более 180 дней; новая source revision должна быть опубликована и полностью
 подтверждена до истечения этого окна, иначе publisher и consumers закрывают
 readiness.
 

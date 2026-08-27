@@ -4,7 +4,7 @@ title: Диагностика internal RPC authority
 type: runbook
 status: approved
 owner: sre
-version: 2.1.0
+version: 2.2.0
 updated: 2026-08-27
 ---
 
@@ -106,6 +106,12 @@ password.
 последовательную `source_revision`, сохранить predecessor/history и выполнить
 обычный exact-SHA deploy. Увеличение срока не восстанавливает уже подписанный
 истёкший snapshot без новой forward-only ревизии.
+
+Если новая ревизия остаётся `PREPARED`, сравнить закрытый набор readback по
+`workload_id` и `role` с registry. Для `AUTHORITY_PROOF_RESOLVER` проверить без
+вывода private material, что `current_generation` resolver key Secret совпадает
+с поколением `CURRENT` записи доставленного proof trust. Verifier перечитывает
+это поколение при каждой активации; статический env поколения не используется.
 
 ## Проверки кода
 
