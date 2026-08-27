@@ -19,7 +19,8 @@ data:
   RUNTIME_CONTROLLER_CONTROL_PLANE_PRIVATE_KEY_FILE: "/var/run/secrets/kodex/runtime-controller/workload-tls/tls.key"
   RUNTIME_CONTROLLER_APPLICATION_GRANT_FILE: "/var/run/secrets/kodex/runtime-controller/application-grant/application-grant.jws"
   RUNTIME_CONTROLLER_PROVIDER_HTTPS_PROXY: "http://egress-gateway.kodex-system.svc:8080"
-  RUNTIME_CONTROLLER_STORAGE_CLASS: "runtime-session"
+  # Empty means the installation-selected default StorageClass.
+  RUNTIME_CONTROLLER_STORAGE_CLASS: ""
   RUNTIME_CONTROLLER_SESSION_PVC_SIZE: "20Gi"
   RUNTIME_CONTROLLER_RUNNER_SERVICE_ACCOUNT: "agent-runner"
   RUNTIME_CONTROLLER_MAXIMUM_CONCURRENT_TURNS: "16"

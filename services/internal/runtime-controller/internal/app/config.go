@@ -76,7 +76,7 @@ func loadConfig() (Config, error) {
 		ApplicationGrantFile:        "/var/run/secrets/kodex/runtime-controller/application-grant/application-grant.jws",
 		DefaultRoleImageReference:   "registry-pull.invalid/kodex/agent-runner@sha256:" + strings.Repeat("0", 64),
 		ProviderHTTPSProxy:          "http://egress-gateway.kodex-system.svc:8080",
-		StorageClass:                "runtime-session", SessionPVCSize: "20Gi",
+		StorageClass:                "", SessionPVCSize: "20Gi",
 		RunnerServiceAccount: "agent-runner", MaximumConcurrentTurns: 16, TurnCPUMilli: 2000, TurnMemoryBytes: 4 << 30,
 		PollInterval: 500 * time.Millisecond, InfrastructureCheckInterval: 10 * time.Second,
 		LeaseRenewInterval: 10 * time.Second, RequestTimeout: 5 * time.Second,
@@ -112,7 +112,7 @@ func (config Config) validate() error {
 	}
 	proxy, proxyErr := url.Parse(config.ProviderHTTPSProxy)
 	if !validDNSLabel(config.CallbackClientCASecret) || !validDNSLabel(config.CallbackClientTLSSecret) ||
-		!validDNSLabel(config.StorageClass) || !validDNSLabel(config.RunnerServiceAccount) ||
+		(config.StorageClass != "" && !validDNSSubdomain(config.StorageClass)) || !validDNSLabel(config.RunnerServiceAccount) ||
 		proxyErr != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.kodex-system.svc:8080" || proxy.Path != "" || proxy.RawQuery != "" || proxy.Fragment != "" || proxy.User != nil ||
 		!strings.Contains(config.PromotedRoleImageRepository, "/") || strings.ContainsAny(config.PromotedRoleImageRepository, "@${}") ||
 		!validPinnedImageReference(config.DefaultRoleImageReference) ||
@@ -142,4 +142,16 @@ func validPinnedImageReference(reference string) bool {
 
 func validDNSLabel(value string) bool {
 	return regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$`).MatchString(value)
+}
+
+func validDNSSubdomain(value string) bool {
+	if value == "" || len(value) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(value, ".") {
+		if !validDNSLabel(label) {
+			return false
+		}
+	}
+	return true
 }

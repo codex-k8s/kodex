@@ -80,7 +80,8 @@ func New(client kubernetes.Interface, config Config) (*Manager, error) {
 		config.CallbackTLSServerName == "" || config.CallbackClientCASecret == "" ||
 		config.CallbackClientTLSSecret == "" ||
 		config.ProviderHTTPSProxy == "" ||
-		config.StorageClass == "" || config.RunnerServiceAccount == "" ||
+		(config.StorageClass != "" && !validDNSSubdomain(config.StorageClass)) ||
+		config.RunnerServiceAccount == "" ||
 		config.PromotedRoleImageRepository == "" || config.RoleRuntimeContractRevision == 0 ||
 		!validPinnedImageReference(config.DefaultRoleImageReference) ||
 		len(config.RoleRuntimeContractSHA256) != sha256.Size*2 || config.TurnCPUMilli < 100 || config.TurnMemoryBytes < 128<<20 {
@@ -481,9 +482,13 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, sessionRef string)
 	if !apierrors.IsNotFound(err) {
 		return errors.New("read runtime session volume")
 	}
+	var storageClassName *string
+	if manager.config.StorageClass != "" {
+		storageClassName = &manager.config.StorageClass
+	}
 	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.Namespace,
 		Labels: map[string]string{managedLabel: "true", "runtime.kodex.dev/session-hash": shortHash(sessionRef)}},
-		Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, StorageClassName: &manager.config.StorageClass,
+		Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, StorageClassName: storageClassName,
 			Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: manager.pvcRequest}}}}
 	_, err = manager.client.CoreV1().PersistentVolumeClaims(manager.config.Namespace).Create(ctx, pvc, metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
@@ -614,6 +619,18 @@ func validDNSLabel(value string) bool {
 	for index, character := range value {
 		valid := character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '-'
 		if !valid || character == '-' && (index == 0 || index == len(value)-1) {
+			return false
+		}
+	}
+	return true
+}
+
+func validDNSSubdomain(value string) bool {
+	if value == "" || len(value) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(value, ".") {
+		if !validDNSLabel(label) {
 			return false
 		}
 	}
