@@ -106,6 +106,23 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	if _, err := client.CoreV1().PersistentVolumeClaims("kodex-system").Get(context.Background(), sessionPVCName(input.SessionRef), metav1.GetOptions{}); err != nil {
 		t.Fatalf("session volume was not materialized: %v", err)
 	}
+	pvc, err := client.CoreV1().PersistentVolumeClaims("kodex-system").Get(context.Background(), sessionPVCName(input.SessionRef), metav1.GetOptions{})
+	if err != nil || pvc.Spec.StorageClassName != nil {
+		t.Fatalf("session volume must use the cluster default StorageClass: storage_class=%v err=%v", pvc.Spec.StorageClassName, err)
+	}
+}
+
+func TestManagerAcceptsOnlyDefaultOrValidExplicitStorageClass(t *testing.T) {
+	t.Parallel()
+	config := testManagerConfig()
+	config.StorageClass = "fast.storage.example"
+	if _, err := New(fake.NewSimpleClientset(), config); err != nil {
+		t.Fatalf("valid explicit StorageClass was rejected: %v", err)
+	}
+	config.StorageClass = "invalid/storage-class"
+	if _, err := New(fake.NewSimpleClientset(), config); err == nil {
+		t.Fatal("invalid explicit StorageClass was accepted")
+	}
 }
 
 func TestEnsureTurnRejectsProviderCredentialOutsideRuntimeRevision(t *testing.T) {
@@ -242,17 +259,7 @@ func TestEnsureTurnRejectsExistingPodFromAnotherRevision(t *testing.T) {
 
 func newTestManager(t *testing.T, client *fake.Clientset) *Manager {
 	t.Helper()
-	manager, err := New(client, Config{
-		Environment: "test", Namespace: "kodex-system", ControllerPodUID: "controller-pod-uid", ControllerPodIP: "10.0.0.10",
-		CallbackTLSServerName:  "runtime-controller-callback.kodex-system.svc.cluster.local",
-		CallbackClientCASecret: "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
-		ProviderHTTPSProxy: "http://egress-gateway.kodex-system.svc:8080",
-		StorageClass:       "runtime-session", SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner",
-		PromotedRoleImageRepository: "registry.example/kodex/roles",
-		DefaultRoleImageReference:   "registry.example/kodex/agent-runner@" + testDefaultDigest,
-		RoleRuntimeContractRevision: 1,
-		RoleRuntimeContractSHA256:   testContractDigest, TurnCPUMilli: 2000, TurnMemoryBytes: 4 << 30,
-	})
+	manager, err := New(client, testManagerConfig())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -267,6 +274,20 @@ func newTestManager(t *testing.T, client *fake.Clientset) *Manager {
 		t.Fatalf("create provider credential fixture: %v", err)
 	}
 	return manager
+}
+
+func testManagerConfig() Config {
+	return Config{
+		Environment: "test", Namespace: "kodex-system", ControllerPodUID: "controller-pod-uid", ControllerPodIP: "10.0.0.10",
+		CallbackTLSServerName:  "runtime-controller-callback.kodex-system.svc.cluster.local",
+		CallbackClientCASecret: "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
+		ProviderHTTPSProxy: "http://egress-gateway.kodex-system.svc:8080",
+		StorageClass:       "", SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner",
+		PromotedRoleImageRepository: "registry.example/kodex/roles",
+		DefaultRoleImageReference:   "registry.example/kodex/agent-runner@" + testDefaultDigest,
+		RoleRuntimeContractRevision: 1,
+		RoleRuntimeContractSHA256:   testContractDigest, TurnCPUMilli: 2000, TurnMemoryBytes: 4 << 30,
+	}
 }
 
 func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {

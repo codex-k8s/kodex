@@ -642,6 +642,47 @@ wait_workloads() {
   ' "$render_file" | sort -u)
 }
 
+wait_system_assistant() {
+	local deadline warm_json pvc_name pvc_json leader_uid pods_json leader_pod endpoint
+	deadline=$((SECONDS + 15 * 60))
+	while ((SECONDS < deadline)); do
+		warm_json=$(kubectl --context "$context" -n "$namespace" get pod/system-assistant-warm -o json 2>/dev/null || true)
+		if [[ -n "$warm_json" ]] && jq -e '
+			any(.status.conditions[]?; .type == "Ready" and .status == "True")
+		' <<<"$warm_json" >/dev/null; then
+			pvc_name=$(jq -r '.spec.volumes[]? | select(.name == "session") | .persistentVolumeClaim.claimName // ""' <<<"$warm_json")
+			pvc_json=$(kubectl --context "$context" -n "$namespace" get "pvc/$pvc_name" -o json 2>/dev/null || true)
+			if [[ -n "$pvc_json" ]] && jq -e '
+				.status.phase == "Bound" and
+				(.spec.storageClassName | type == "string" and length > 0)
+			' <<<"$pvc_json" >/dev/null; then
+				break
+			fi
+		fi
+		sleep 2
+	done
+	((SECONDS < deadline)) || fail 'system assistant warm Pod or session PVC is not ready'
+
+	deadline=$((SECONDS + 2 * 60))
+	while ((SECONDS < deadline)); do
+		leader_uid=$(kubectl --context "$context" -n "$namespace" get lease/runtime-controller-leader \
+			-o jsonpath='{.spec.holderIdentity}' 2>/dev/null || true)
+		pods_json=$(kubectl --context "$context" -n "$namespace" get pods \
+			-l app.kubernetes.io/name=runtime-controller -o json 2>/dev/null || true)
+		leader_pod=$(jq -r --arg uid "$leader_uid" \
+			'[.items[]? | select(.metadata.uid == $uid) | .metadata.name] | first // ""' \
+			<<<"${pods_json:-{}}")
+		if [[ -n "$leader_pod" ]]; then
+			endpoint="/api/v1/namespaces/$namespace/pods/${leader_pod}:9090/proxy/assistant/readyz"
+			if kubectl --context "$context" get --raw "$endpoint" >/dev/null 2>&1; then
+				return
+			fi
+		fi
+		sleep 2
+	done
+	fail 'system assistant readiness was not reported by the runtime-controller leader'
+}
+
 if [[ "$mode" == prepare-preflight ]]; then
   prepare_image_admission_preflight
   printf 'Kodex platform preflight preparation completed\n'
@@ -755,6 +796,7 @@ fi
 wait_trust_material
 wait_authority_projections all
 wait_workloads
+wait_system_assistant
 for job_name in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
   control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
   [[ "$(kubectl --context "$context" -n "$namespace" get "job/$job_name" \

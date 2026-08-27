@@ -207,6 +207,13 @@ Platform preflight и readback повторяют проверку immutable, di
 создания runtime workloads и не переводит системного помощника в ложное
 состояние готовности.
 
+Session PVC системного помощника и обычных runtime создаются без фиксированного
+имени `StorageClass`: Kubernetes назначает default class выбранной установки.
+Финальный release readback ждёт `Bound` PVC, `Ready` Pod
+`system-assistant-warm` и успешный `/assistant/readyz` leader-реплики
+runtime-controller. Отсутствующий default `StorageClass` либо неготовый
+системный помощник останавливает релиз до сообщения об успешном завершении.
+
 Kubernetes Secrets защищаются k3s encryption at rest. Значения запрещены в
 GitHub artifacts, render, logs, Issue/PR и ConfigMap.
 

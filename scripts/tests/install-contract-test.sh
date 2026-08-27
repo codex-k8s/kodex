@@ -234,13 +234,27 @@ role_image_builder_apply_line=$(grep -nE '^[[:space:]]+apply_render role-image-b
 	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
 full_wait_line=$(grep -n '^wait_authority_projections all$' \
 	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
+assistant_wait_line=$(grep -n '^wait_system_assistant$' \
+	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
 [[ "$publisher_apply_line" -lt "$bootstrap_wait_line" &&
 	"$bootstrap_wait_line" -lt "$workloads_apply_line" &&
 	"$workloads_apply_line" -lt "$materializer_apply_line" &&
 	"$materializer_apply_line" -lt "$builder_dependencies_wait_line" &&
 	"$builder_dependencies_wait_line" -lt "$role_image_builder_apply_line" &&
-	"$role_image_builder_apply_line" -lt "$full_wait_line" ]] ||
+	"$role_image_builder_apply_line" -lt "$full_wait_line" &&
+	"$full_wait_line" -lt "$assistant_wait_line" ]] ||
 	fail 'authority bootstrap, materialization, role image builder and full readback phases are misordered'
+for assistant_readback_contract in \
+	'pod/system-assistant-warm' \
+	'.status.phase == "Bound"' \
+	'lease/runtime-controller-leader' \
+	'/proxy/assistant/readyz'; do
+	rg -Fq -- "$assistant_readback_contract" "$repository_root/tools/install/deploy-platform.sh" ||
+		fail "system assistant release readback contract is absent: $assistant_readback_contract"
+done
+grep -Fq 'RUNTIME_CONTROLLER_STORAGE_CLASS: ""' \
+	"$repository_root/deploy/k8s/base/runtime-controller/configmap.yaml" ||
+	fail 'runtime session PVC does not use the installation-selected default StorageClass'
 if rg -Fq 'gh variable get' "$repository_root/tools/install/configure-github.sh"; then
   fail 'GitHub variable readback relies on an unsupported gh subcommand'
 fi
