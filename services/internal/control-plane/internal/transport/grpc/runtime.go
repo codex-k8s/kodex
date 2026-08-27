@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"io"
+	"math"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -25,6 +26,18 @@ func mapInt64(values map[string]any, key string) int64 {
 	case int32:
 		return int64(value)
 	case int:
+		return int64(value)
+	case uint64:
+		if value > math.MaxInt64 {
+			return 0
+		}
+		return int64(value)
+	case uint32:
+		return int64(value)
+	case uint:
+		if uint64(value) > math.MaxInt64 {
+			return 0
+		}
 		return int64(value)
 	case float64:
 		return int64(value)
