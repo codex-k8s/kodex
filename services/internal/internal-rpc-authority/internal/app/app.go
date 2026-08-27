@@ -225,13 +225,13 @@ func Run(
 			)
 		}
 		activationAttestor = &proofResolverAttestor{
-			primary:          snapshotAttestor,
-			resolver:         resolverAttestor,
-			privateJWKFile:   config.ResolverProofPrivateJWKFile,
-			proofTrustFile:   config.ResolverProofTrustJWKFile,
-			issuer:           config.WorkloadSPIFFEID,
-			signerGeneration: config.ResolverProofSignerGeneration,
-			now:              time.Now,
+			primary:              snapshotAttestor,
+			resolver:             resolverAttestor,
+			privateJWKFile:       config.ResolverProofPrivateJWKFile,
+			signerGenerationFile: config.ResolverProofSignerGenerationFile,
+			proofTrustFile:       config.ResolverProofTrustJWKFile,
+			issuer:               config.WorkloadSPIFFEID,
+			now:                  time.Now,
 		}
 	}
 	authorityApplication, err := application.NewAuthority(

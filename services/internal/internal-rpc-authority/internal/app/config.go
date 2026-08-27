@@ -33,62 +33,62 @@ var (
 
 // Config задаёт полностью проверенную конфигурацию issuer или verifier.
 type Config struct {
-	Mode                             Mode
-	ServiceName                      string
-	SecretBackend                    string `env:"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND"`
-	WorkloadID                       string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_ID"`
-	SocketPath                       string
-	ExpectedProcessUID               uint32
-	ExpectedProcessGID               uint32
-	ExpectedPeerUID                  uint32 `env:"INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID"`
-	ExpectedPeerGID                  uint32 `env:"INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID"`
-	SocketMode                       os.FileMode
-	TechnicalListen                  string `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
-	PostgresDSNFile                  string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"`
-	PostgresTLSServerName            string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
-	PostgresExpectedSessionUser      string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
-	DatabaseCapabilityRole           string
-	PostgresMaxConnections           int32  `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_MAX_CONNECTIONS"`
-	SnapshotJWSFile                  string `env:"INTERNAL_RPC_AUTHORITY_SNAPSHOT_JWS_FILE"`
-	ManifestRootPublicJWKFile        string `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_PUBLIC_JWK_FILE"`
-	ManifestRootMetadataFile         string `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_METADATA_FILE"`
-	ManifestTrustBundleJWSFile       string `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_BUNDLE_JWS_FILE"`
-	ContextPrivateJWKFile            string `env:"INTERNAL_RPC_AUTHORITY_CONTEXT_PRIVATE_JWK_FILE"`
-	ProofTrustJWKFile                string `env:"INTERNAL_RPC_AUTHORITY_PROOF_TRUST_JWK_FILE"`
-	ReadbackCredentialSecret         string
-	ReadbackPossessionSecret         string
-	ResolverReadbackCredentialSecret string
-	ResolverReadbackPossessionSecret string
-	ResolverProofPrivateJWKFile      string `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_PRIVATE_JWK_FILE"`
-	ResolverProofTrustJWKFile        string `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_TRUST_JWK_FILE"`
-	ReadbackAttestorAddress          string `env:"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS"`
-	ReadbackAttestorTLSServerName    string `env:"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME"`
-	ReadbackAttestorCAFile           string `env:"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE"`
-	WorkloadCertificateFile          string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_CERTIFICATE_FILE"`
-	WorkloadPrivateKeyFile           string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_PRIVATE_KEY_FILE"`
-	RestoreRoleCredentialSecret      string
-	RestoreACKSecret                 string
-	RestoreControllerAddress         string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_ADDRESS"`
-	RestoreControllerTLSServerName   string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_TLS_SERVER_NAME"`
-	RestoreControllerCAFile          string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE"`
-	RestoreControllerCertificateFile string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CERTIFICATE_FILE"`
-	RestoreRoleTrustJWSFile          string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ROLE_TRUST_JWS_FILE"`
-	WorkloadSPIFFEID                 string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID"`
-	ReadbackRole                     string
-	WorkloadGeneration               uint64 `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_GENERATION"`
-	CredentialGeneration             uint64 `env:"INTERNAL_RPC_AUTHORITY_CREDENTIAL_GENERATION"`
-	PossessionKeyGeneration          uint64 `env:"INTERNAL_RPC_AUTHORITY_READBACK_POSSESSION_KEY_GENERATION"`
-	ResolverCredentialGeneration     uint64 `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_CREDENTIAL_GENERATION"`
-	ResolverPossessionKeyGeneration  uint64 `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_POSSESSION_KEY_GENERATION"`
-	ResolverProofSignerGeneration    uint64 `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_SIGNER_GENERATION"`
-	ResolverEnabled                  bool
-	RestoreACKKeyGeneration          uint64        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ACK_KEY_GENERATION"`
-	StartupTimeout                   time.Duration `env:"INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT"`
-	ReadinessTimeout                 time.Duration `env:"INTERNAL_RPC_AUTHORITY_READINESS_TIMEOUT"`
-	ShutdownTimeout                  time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
-	SnapshotReloadInterval           time.Duration `env:"INTERNAL_RPC_AUTHORITY_SNAPSHOT_RELOAD_INTERVAL"`
-	ReplayCleanupInterval            time.Duration `env:"INTERNAL_RPC_AUTHORITY_REPLAY_CLEANUP_INTERVAL"`
-	ReplayRetentionAfterExpiry       time.Duration
+	Mode                              Mode
+	ServiceName                       string
+	SecretBackend                     string `env:"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND"`
+	WorkloadID                        string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_ID"`
+	SocketPath                        string
+	ExpectedProcessUID                uint32
+	ExpectedProcessGID                uint32
+	ExpectedPeerUID                   uint32 `env:"INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID"`
+	ExpectedPeerGID                   uint32 `env:"INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID"`
+	SocketMode                        os.FileMode
+	TechnicalListen                   string `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
+	PostgresDSNFile                   string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"`
+	PostgresTLSServerName             string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
+	PostgresExpectedSessionUser       string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
+	DatabaseCapabilityRole            string
+	PostgresMaxConnections            int32  `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_MAX_CONNECTIONS"`
+	SnapshotJWSFile                   string `env:"INTERNAL_RPC_AUTHORITY_SNAPSHOT_JWS_FILE"`
+	ManifestRootPublicJWKFile         string `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_PUBLIC_JWK_FILE"`
+	ManifestRootMetadataFile          string `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_METADATA_FILE"`
+	ManifestTrustBundleJWSFile        string `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_BUNDLE_JWS_FILE"`
+	ContextPrivateJWKFile             string `env:"INTERNAL_RPC_AUTHORITY_CONTEXT_PRIVATE_JWK_FILE"`
+	ProofTrustJWKFile                 string `env:"INTERNAL_RPC_AUTHORITY_PROOF_TRUST_JWK_FILE"`
+	ReadbackCredentialSecret          string
+	ReadbackPossessionSecret          string
+	ResolverReadbackCredentialSecret  string
+	ResolverReadbackPossessionSecret  string
+	ResolverProofPrivateJWKFile       string `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_PRIVATE_JWK_FILE"`
+	ResolverProofSignerGenerationFile string `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_SIGNER_GENERATION_FILE"`
+	ResolverProofTrustJWKFile         string `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_TRUST_JWK_FILE"`
+	ReadbackAttestorAddress           string `env:"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS"`
+	ReadbackAttestorTLSServerName     string `env:"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME"`
+	ReadbackAttestorCAFile            string `env:"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE"`
+	WorkloadCertificateFile           string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_CERTIFICATE_FILE"`
+	WorkloadPrivateKeyFile            string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_PRIVATE_KEY_FILE"`
+	RestoreRoleCredentialSecret       string
+	RestoreACKSecret                  string
+	RestoreControllerAddress          string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_ADDRESS"`
+	RestoreControllerTLSServerName    string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_TLS_SERVER_NAME"`
+	RestoreControllerCAFile           string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE"`
+	RestoreControllerCertificateFile  string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CERTIFICATE_FILE"`
+	RestoreRoleTrustJWSFile           string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ROLE_TRUST_JWS_FILE"`
+	WorkloadSPIFFEID                  string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID"`
+	ReadbackRole                      string
+	WorkloadGeneration                uint64 `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_GENERATION"`
+	CredentialGeneration              uint64 `env:"INTERNAL_RPC_AUTHORITY_CREDENTIAL_GENERATION"`
+	PossessionKeyGeneration           uint64 `env:"INTERNAL_RPC_AUTHORITY_READBACK_POSSESSION_KEY_GENERATION"`
+	ResolverCredentialGeneration      uint64 `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_CREDENTIAL_GENERATION"`
+	ResolverPossessionKeyGeneration   uint64 `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_POSSESSION_KEY_GENERATION"`
+	ResolverEnabled                   bool
+	RestoreACKKeyGeneration           uint64        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ACK_KEY_GENERATION"`
+	StartupTimeout                    time.Duration `env:"INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT"`
+	ReadinessTimeout                  time.Duration `env:"INTERNAL_RPC_AUTHORITY_READINESS_TIMEOUT"`
+	ShutdownTimeout                   time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
+	SnapshotReloadInterval            time.Duration `env:"INTERNAL_RPC_AUTHORITY_SNAPSHOT_RELOAD_INTERVAL"`
+	ReplayCleanupInterval             time.Duration `env:"INTERNAL_RPC_AUTHORITY_REPLAY_CLEANUP_INTERVAL"`
+	ReplayRetentionAfterExpiry        time.Duration
 }
 
 // LoadConfig читает типизированное окружение и проверяет конфигурацию режима.
@@ -151,10 +151,10 @@ func LoadConfig(mode Mode) (Config, error) {
 		config.ResolverReadbackCredentialSecret = "internal-rpc-authority-control-plane-resolver-readback-credential"
 		config.ResolverReadbackPossessionSecret = "internal-rpc-authority-control-plane-resolver-readback-possession"
 		config.ResolverProofPrivateJWKFile = "/var/run/secrets/kodex/internal-rpc-authority/proof-signer/private.jwk"
+		config.ResolverProofSignerGenerationFile = "/var/run/secrets/kodex/internal-rpc-authority/proof-signer/current_generation"
 		config.ResolverProofTrustJWKFile = "/var/run/config/kodex/internal-rpc-authority/authority-proof-trust/jwks.json"
 		config.ResolverCredentialGeneration = 1
 		config.ResolverPossessionKeyGeneration = 1
-		config.ResolverProofSignerGeneration = 1
 		config.ResolverEnabled = true
 	default:
 		return Config{}, errors.New("unsupported internal-rpc-authority mode")
@@ -340,13 +340,12 @@ func (config Config) Validate() error {
 		(config.ResolverReadbackCredentialSecret == "" ||
 			config.ResolverReadbackPossessionSecret == "" ||
 			!filepath.IsAbs(config.ResolverProofPrivateJWKFile) ||
+			!filepath.IsAbs(config.ResolverProofSignerGenerationFile) ||
 			!filepath.IsAbs(config.ResolverProofTrustJWKFile) ||
 			config.ResolverCredentialGeneration == 0 ||
 			config.ResolverCredentialGeneration > maximumSafeInteger ||
 			config.ResolverPossessionKeyGeneration == 0 ||
-			config.ResolverPossessionKeyGeneration > maximumSafeInteger ||
-			config.ResolverProofSignerGeneration == 0 ||
-			config.ResolverProofSignerGeneration > maximumSafeInteger) {
+			config.ResolverPossessionKeyGeneration > maximumSafeInteger) {
 		return errors.New("authority proof resolver readback boundary is invalid")
 	}
 	if config.StartupTimeout < time.Second ||
