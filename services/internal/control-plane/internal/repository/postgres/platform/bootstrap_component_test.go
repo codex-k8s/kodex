@@ -52,6 +52,8 @@ var (
 	bootstrapComponentCorePromptUpgradeReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_warm_heartbeat_counts.sql
 	bootstrapComponentWarmHeartbeatCountsQuery string
+	//go:embed testdata/sql/bootstrap_component_provider_credential_readback.sql
+	bootstrapComponentProviderCredentialReadbackQuery string
 )
 
 func TestBootstrapComponent(t *testing.T) {
@@ -107,6 +109,9 @@ func TestBootstrapComponent(t *testing.T) {
 		})
 	}
 	assertBootstrapReadback(t, ctx, pool)
+	t.Run("provider credential legacy repair creates an immutable next revision", func(t *testing.T) {
+		testProviderCredentialLegacyRepair(t, ctx, repository, pool)
+	})
 	t.Run("OIDC candidate receives project membership without internal identifiers", func(t *testing.T) {
 		testProjectMembershipCandidate(t, ctx, repository)
 	})
@@ -137,6 +142,79 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("system assistant core prompt upgrades forward only", func(t *testing.T) {
 		testSystemAssistantCorePromptUpgrade(t, ctx, repository, pool)
 	})
+}
+
+func testProviderCredentialLegacyRepair(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	t.Helper()
+	readback := func() (revision, accountVersion, count int64, uid, resourceVersion, digest string) {
+		t.Helper()
+		if err := pool.QueryRow(ctx, bootstrapComponentProviderCredentialReadbackQuery).Scan(
+			&revision,
+			&uid,
+			&resourceVersion,
+			&digest,
+			&accountVersion,
+			&count,
+		); err != nil {
+			t.Fatalf("read provider credential reconciliation: %v", err)
+		}
+		return
+	}
+	initialRevision, initialAccountVersion, initialCount, _, _, initialDigest := readback()
+	if initialRevision != 1 || initialCount != 1 {
+		t.Fatalf("unexpected initial provider credential state: revision=%d count=%d", initialRevision, initialCount)
+	}
+	const repairedUID = "10000000-0000-4000-8000-000000000002"
+	const repairedResourceVersion = "2"
+	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
+		SecretName:            "runtime-provider-openai-default-r1",
+		SecretUID:             repairedUID,
+		SecretResourceVersion: repairedResourceVersion,
+		ContentSHA256:         initialDigest,
+	}); err != nil {
+		t.Fatalf("configure repaired provider credential: %v", err)
+	}
+	if err := repository.Bootstrap(ctx); err != nil {
+		t.Fatalf("reconcile repaired provider credential: %v", err)
+	}
+	revision, accountVersion, count, uid, resourceVersion, digest := readback()
+	if revision != 2 || accountVersion != initialAccountVersion+1 || count != 2 ||
+		uid != repairedUID || resourceVersion != repairedResourceVersion || digest != initialDigest {
+		t.Fatalf("unexpected repaired provider credential state: revision=%d account_version=%d count=%d uid=%s resource_version=%s digest_match=%t",
+			revision, accountVersion, count, uid, resourceVersion, digest == initialDigest)
+	}
+	if err := repository.Bootstrap(ctx); err != nil {
+		t.Fatalf("repeat provider credential reconciliation: %v", err)
+	}
+	repeatedRevision, repeatedAccountVersion, repeatedCount, repeatedUID, repeatedResourceVersion, repeatedDigest := readback()
+	if repeatedRevision != revision || repeatedAccountVersion != accountVersion || repeatedCount != count ||
+		repeatedUID != uid || repeatedResourceVersion != resourceVersion || repeatedDigest != digest {
+		t.Fatal("repeated provider credential reconciliation was not idempotent")
+	}
+	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
+		SecretName:            "runtime-provider-openai-default-r1",
+		SecretUID:             "10000000-0000-4000-8000-000000000003",
+		SecretResourceVersion: "3",
+		ContentSHA256:         strings.Repeat("f", 64),
+	}); err != nil {
+		t.Fatalf("configure drifted provider credential fixture: %v", err)
+	}
+	if err := repository.Bootstrap(ctx); err == nil {
+		t.Fatal("provider credential content drift was accepted without an explicit revision")
+	}
+	finalRevision, finalAccountVersion, finalCount, finalUID, finalResourceVersion, finalDigest := readback()
+	if finalRevision != revision || finalAccountVersion != accountVersion || finalCount != count ||
+		finalUID != uid || finalResourceVersion != resourceVersion || finalDigest != digest {
+		t.Fatal("rejected provider credential drift changed durable state")
+	}
+	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
+		SecretName:            "runtime-provider-openai-default-r1",
+		SecretUID:             repairedUID,
+		SecretResourceVersion: repairedResourceVersion,
+		ContentSHA256:         initialDigest,
+	}); err != nil {
+		t.Fatalf("restore provider credential fixture: %v", err)
+	}
 }
 
 func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {

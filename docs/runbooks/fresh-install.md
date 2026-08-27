@@ -196,7 +196,9 @@ ConfigMap installer сверяет фактический digest, UID и `resour
 Повторный запуск с тем же материалом сохраняет revision без изменений. Старый
 mutable `r1`, созданный версией installer до этого инварианта, удаляется только
 при подтверждённом field manager `kodex-install` и создаётся заново; bootstrap
-платформы затем фиксирует новые UID и `resourceVersion`. Изменение уже
+платформы при следующем старте создаёт новую монотонную credential revision в
+БД и атомарно фиксирует новые UID и `resourceVersion`, не изменяя прежнюю
+immutable revision. Повторный bootstrap после этого является no-op. Изменение уже
 immutable `r1` закрыто отклоняется: ротация credentials должна создавать новую
 revision, а не менять существующую.
 

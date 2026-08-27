@@ -27,6 +27,12 @@ var (
 	queryRepositoryBootstrapInsertProviderCredentialRevision string
 	//go:embed sql/repository_bootstrap_activate_provider_credential_revision.sql
 	queryRepositoryBootstrapActivateProviderCredentialRevision string
+	//go:embed sql/provider_credential__get_current_for_reconcile.sql
+	queryProviderCredentialGetCurrentForReconcile string
+	//go:embed sql/provider_credential__insert_reconciled_revision.sql
+	queryProviderCredentialInsertReconciledRevision string
+	//go:embed sql/provider_account__activate_reconciled_credential.sql
+	queryProviderAccountActivateReconciledCredential string
 	//go:embed sql/repository_select_default_provider_account.sql
 	queryRepositorySelectDefaultProviderAccount string
 	//go:embed sql/repository_bootstrap_insert_role_definitions_ref_stable_key_name.sql

@@ -137,6 +137,9 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		return errors.New("lock installation bootstrap")
 	}
 	if bootstrappedAt != nil {
+		if err := repository.reconcileProviderCredential(ctx, tx); err != nil {
+			return err
+		}
 		if err := repository.reconcileSystemAssistantCorePrompt(
 			ctx,
 			tx,
@@ -303,6 +306,57 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		return errors.New("complete bootstrap")
 	}
 	return tx.Commit(ctx)
+}
+
+func (repository *Repository) reconcileProviderCredential(ctx context.Context, tx pgx.Tx) error {
+	var organizationID, accountID, currentCredentialID, secretName, secretUID, secretResourceVersion, contentSHA256 string
+	var revisionNumber int64
+	if err := tx.QueryRow(ctx, queryProviderCredentialGetCurrentForReconcile).Scan(
+		&organizationID,
+		&accountID,
+		&currentCredentialID,
+		&revisionNumber,
+		&secretName,
+		&secretUID,
+		&secretResourceVersion,
+		&contentSHA256,
+	); err != nil {
+		return errors.New("read current provider credential revision")
+	}
+	configured := repository.providerCredential
+	if secretName == configured.SecretName && secretUID == configured.SecretUID &&
+		secretResourceVersion == configured.SecretResourceVersion && contentSHA256 == configured.ContentSHA256 {
+		return nil
+	}
+	if secretName != configured.SecretName || contentSHA256 != configured.ContentSHA256 {
+		return errors.New("provider credential rotation requires an explicit revision")
+	}
+	credentialRef, err := newRef("pcr")
+	if err != nil {
+		return err
+	}
+	var nextCredentialID string
+	if err := tx.QueryRow(ctx, queryProviderCredentialInsertReconciledRevision, pgx.StrictNamedArgs{
+		"ref":                     credentialRef,
+		"organization_id":         organizationID,
+		"provider_account_id":     accountID,
+		"revision_number":         revisionNumber + 1,
+		"secret_name":             configured.SecretName,
+		"secret_uid":              configured.SecretUID,
+		"secret_resource_version": configured.SecretResourceVersion,
+		"content_sha256":          configured.ContentSHA256,
+	}).Scan(&nextCredentialID); err != nil {
+		return errors.New("create reconciled provider credential revision")
+	}
+	tag, err := tx.Exec(ctx, queryProviderAccountActivateReconciledCredential, pgx.StrictNamedArgs{
+		"provider_account_id":            accountID,
+		"current_credential_revision_id": currentCredentialID,
+		"next_credential_revision_id":    nextCredentialID,
+	})
+	if err != nil || tag.RowsAffected() != 1 {
+		return errors.New("activate reconciled provider credential revision")
+	}
+	return nil
 }
 
 func (repository *Repository) reconcileSystemAssistantCorePrompt(
