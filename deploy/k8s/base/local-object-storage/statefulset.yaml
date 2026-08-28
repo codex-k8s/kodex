@@ -41,11 +41,10 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - server
-            - -dir=/data
+            - -dir=/data/volume
             - -master.dir=/data/master
             - -master.telemetry=false
             - -master.volumeSizeLimitMB=1024
-            - -volume.dir=/data/volume
             - -volume.max=4
             - -filer
             - -filer.disableDirListing=true
@@ -131,4 +130,3 @@ spec:
         resources:
           requests:
             storage: 4Gi
-
