@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { Plus } from "@lucide/vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
+import AgentCatalog from "@/features/agents/catalog/AgentCatalog.vue";
+import {
+  parseAgentCatalogView,
+  type AgentCatalogView,
+} from "@/features/agents/catalog/model";
 import { usePlatformStore } from "@/features/platform/store";
 import { isAgentDraftComplete } from "@/features/platform/agent-form";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -9,8 +15,8 @@ import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
-import SafeSummary from "@/shared/ui/SafeSummary.vue";
-import StatusBadge from "@/shared/ui/StatusBadge.vue";
+
+const catalogViewStorageKey = "kodex.agents.catalog.view";
 
 const platform = usePlatformStore();
 const route = useRoute();
@@ -28,6 +34,7 @@ const list = computed(() =>
 const runtimes = computed(() =>
   Object.values(platform.runtimes).filter((item) => item.ready),
 );
+const catalogView = ref<AgentCatalogView>("grid");
 const dialog = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
@@ -70,6 +77,24 @@ async function load(): Promise<void> {
 }
 
 onMounted(() => void load());
+
+onMounted(() => {
+  try {
+    catalogView.value = parseAgentCatalogView(
+      window.localStorage.getItem(catalogViewStorageKey),
+    );
+  } catch {
+    catalogView.value = "grid";
+  }
+});
+
+watch(catalogView, (value) => {
+  try {
+    window.localStorage.setItem(catalogViewStorageKey, value);
+  } catch {
+    // Выбор вида остаётся рабочим в текущей сессии без localStorage.
+  }
+});
 </script>
 
 <template>
@@ -81,6 +106,7 @@ onMounted(() => void load());
         type="button"
         @click="openDialog"
       >
+        <Plus :size="17" aria-hidden="true" />
         {{ $t("agents.new") }}
       </button></template
     >
@@ -98,24 +124,15 @@ onMounted(() => void load());
           type="button"
           @click="openDialog"
         >
+          <Plus :size="17" aria-hidden="true" />
           {{ $t("agents.new") }}
         </button></template
       >
-      <div class="entity-list">
-        <RouterLink
-          v-for="agent in list"
-          :key="agent.ref"
-          :to="`/projects/${projectRef}/agents/${agent.ref}`"
-          class="entity-row"
-          ><div>
-            <h3>{{ agent.name }}</h3>
-            <p>{{ agent.purpose }}</p>
-          </div>
-          <StatusBadge :state="agent.state" /><SafeSummary
-            :content="agent.currentActivity"
-            :fallback="agent.roleDescription"
-        /></RouterLink>
-      </div>
+      <AgentCatalog
+        v-model:view="catalogView"
+        :agents="list"
+        :project-ref="projectRef"
+      />
     </AsyncState>
     <ModalDialog
       v-if="dialog"
@@ -189,6 +206,7 @@ onMounted(() => void load());
           type="submit"
           :disabled="busy || !formReady"
         >
+          <Plus :size="17" aria-hidden="true" />
           {{ $t("common.create") }}
         </button></template
       ></ModalDialog

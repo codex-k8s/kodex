@@ -228,6 +228,14 @@ const ru = {
     knowledge: "Знания",
     enabled: "Сотрудник включён",
     currentActivity: "Сейчас",
+    catalogSearch: "Поиск сотрудников",
+    catalogSearchPlaceholder: "Найти по имени, назначению или роли",
+    catalogClearSearch: "Очистить поиск",
+    catalogView: "Вид каталога сотрудников",
+    catalogGrid: "Карточки",
+    catalogTable: "Таблица",
+    catalogResetFilters: "Сбросить фильтры",
+    updatedAt: "Изменён",
     validate: "Проверить инструкции",
     publish: "Опубликовать инструкции",
     rollback: "Вернуть опубликованную версию",
@@ -556,6 +564,71 @@ const ru = {
       DESTRUCTIVE: "необратимое действие",
     },
   },
+  integrationsRedesign: {
+    tabsLabel: "Разделы интеграций",
+    tabs: {
+      CONNECTIONS: "Подключения",
+      CATALOG: "Каталог пакетов",
+      GRANTS: "Разрешения",
+      APPROVALS: "Ожидают решения",
+    },
+    catalogTitle: "Каталог пакетов",
+    catalogDescription:
+      "Типизированные возможности внешних систем. Подключайте только необходимые пакеты.",
+    packageCount: "Пакетов: {count}",
+    searchPackages: "Найти пакет или возможность",
+    category: "Категория",
+    allCategories: "Все категории",
+    firstParty: "first-party",
+    customPackage: "пользовательский пакет",
+    connectionCount: "Подключений: {count}",
+    capabilityCount: "Возможностей: {count}",
+    approvalCapabilityCount: "Human Gate: {count}",
+    packageDetails: "Описание пакета",
+    packageDetailsUnavailable:
+      "Backend пока не отдаёт версию, YAML, происхождение и историю пакета.",
+    connectUnavailable:
+      "Подключение недоступно без CREATE_CONNECTION и доступного definition.",
+    noPackages: "Пакеты не найдены",
+    noPackagesHint: "Измените поиск или выбранную категорию.",
+    zeroConnectionsReady:
+      "Платформа полностью работоспособна без внешних подключений.",
+    connectionsTitle: "Рабочие подключения",
+    connectionsDescription:
+      "Health, учётные данные и доступные серверные команды каждого подключения.",
+    activeGrants: "активных разрешений",
+    capabilitiesShort: "возможностей",
+    grantsAction: "Разрешения",
+    grantsTitle: "Разрешения подключений",
+    grantsDescription:
+      "Каждое разрешение связывает одну capability с одним ИИ-сотрудником или Процессом.",
+    grantCount: "Разрешений: {count}",
+    connectionPicker: "Подключение",
+    allConnections: "Все подключения",
+    targetKind: {
+      AGENT: "ИИ-сотрудник",
+      WORKFLOW: "Процесс",
+      UNKNOWN: "Получатель не определён",
+    },
+    noGrantsHint:
+      "Выберите управляемое подключение, Проект, получателя и capability.",
+    grantEditorTitle: "Выдать разрешение",
+    chooseConnectionHint: "Выберите подключение с действием MANAGE_GRANTS.",
+    resourceScopeUnavailable:
+      "Resource scope, режим учётной записи, срок и Human Gate policy не представлены текущим API. Разрешение нельзя расширить локально.",
+    approvalsTitle: "Решения Human Gate",
+    approvalsDescription:
+      "Неизменяемое намерение, effect preview, actor, root initiator и результат решения.",
+    backendUnavailableShort: "backend недоступен",
+    approvalQueue: "Ожидают решения",
+    approvalReadUnavailable: "Очередь интеграционных решений недоступна",
+    approvalReadGap:
+      "Текущий OwnerGate не связывает решение с integration connection, capability, resource scope и effect preview.",
+    effectPreview: "Что изменится",
+    noIntentSelected: "намерение не загружено",
+    approvalFailClosed:
+      "Одобрение, возврат на доработку и отклонение отключены: UI не выполняет решение без авторитетного integration intent и OCC readback.",
+  },
   decisions: {
     title: "Решения",
     subtitle: "Долговечные Human Gates, ожидающие вашего выбора",
@@ -625,6 +698,87 @@ const ru = {
       MANAGE_SCHEDULES: "Управление автоматизациями",
       MANAGE_INTEGRATIONS: "Управление интеграциями",
       VIEW_AUDIT: "Просмотр аудита",
+    },
+  },
+  accessRedesign: {
+    tabsLabel: "Разделы управления доступом",
+    tabs: {
+      MEMBERS: "Участники",
+      GROUPS: "Группы OIDC",
+      ROLES: "Роли",
+      EFFECTIVE: "Эффективный доступ",
+      AGENT_SCOPE: "Область ИИ-сотрудников",
+    },
+    membersTitle: "Участники и назначения",
+    organizationMembersDescription:
+      "Платформенная роль назначается в Kodex; identity подтверждает OIDC.",
+    projectMembersDescription:
+      "Прямые полномочия действуют только в текущем Проекте.",
+    memberCount: "Участников: {count}",
+    systemRole: "системная роль",
+    projectBindingsUnavailable:
+      "Проектные bindings и их источники не представлены API",
+    rolesTitle: "Роли Kodex",
+    rolesDescription:
+      "Системные роли неизменяемы; пользовательские роли должны быть versioned.",
+    createRole: "Создать роль",
+    systemRoles: "Системные роли",
+    systemRolesHint:
+      "Закрытый набор платформенных ролей из текущего membership contract.",
+    immutable: "Неизменяемы",
+    organizationScope: "Организация",
+    projectScope: "Проект",
+    assignedMembers: "назначено",
+    activeMembers: "активно",
+    roleDescription: {
+      OWNER:
+        "Полное управление организацией; критические ограничения подтверждает сервер.",
+      ADMINISTRATOR:
+        "Настройка платформы, интеграций и доступа в разрешённых границах.",
+      OPERATOR: "Запуск работы и операционные действия в доступных Проектах.",
+      MEMBER: "Работа только в Проектах с отдельным назначением полномочий.",
+      AUDITOR: "Просмотр разрешённых результатов и аудита без изменений.",
+    },
+    customRoles: "Пользовательские роли",
+    customRolesHint:
+      "Новая версия не должна изменять существующие bindings автоматически.",
+    customRolesUnavailable: "Versioned custom roles пока недоступны",
+    customRolesGap:
+      "Generated API не содержит role definition, version, permission registry и binding lifecycle.",
+    backendUnavailableShort: "backend недоступен",
+    groupsSearch: "Найти группу OIDC",
+    addBinding: "Добавить привязку",
+    subject: "Участник",
+    resource: "Ресурс",
+    action: "Действие",
+    why: "Почему?",
+    projectSelector: "Проект",
+    agentSelector: "ИИ-сотрудники",
+    effectiveResult: "Эффективный результат",
+    failClosed:
+      "Недоступные RBAC-операции отключены. UI не вычисляет authority, bindings или effective access локально.",
+    surface: {
+      GROUPS: {
+        title: "Группы OIDC",
+        description:
+          "Состав групп принадлежит identity provider; Kodex хранит только прикладные role bindings.",
+        emptyTitle: "Группы и bindings не загружены",
+        gap: "Нет API групп, состояния синхронизации и привязок к versioned ролям и областям.",
+      },
+      EFFECTIVE: {
+        title: "Эффективный доступ",
+        description:
+          "Авторитетное объяснение результата для участника, действия и конкретного ресурса.",
+        emptyTitle: "Explain-access недоступен",
+        gap: "Нет серверного расчёта allow-chain, источников назначения и scoped результата.",
+      },
+      AGENT_SCOPE: {
+        title: "Область ИИ-сотрудников",
+        description:
+          "Один Проект, выбранные экземпляры ИИ-сотрудников и закрытый набор действий.",
+        emptyTitle: "Entity-scoped binding недоступен",
+        gap: "Текущий project membership принимает плоский список permissions без agent refs и versioned binding.",
+      },
     },
   },
   administration: {
@@ -1029,6 +1183,14 @@ const en = {
     knowledge: "Knowledge",
     enabled: "Employee enabled",
     currentActivity: "Current activity",
+    catalogSearch: "Search employees",
+    catalogSearchPlaceholder: "Find by name, purpose, or role",
+    catalogClearSearch: "Clear search",
+    catalogView: "Employee catalog view",
+    catalogGrid: "Cards",
+    catalogTable: "Table",
+    catalogResetFilters: "Reset filters",
+    updatedAt: "Updated",
     validate: "Validate instructions",
     publish: "Publish instructions",
     rollback: "Restore published version",
@@ -1361,6 +1523,71 @@ const en = {
       DESTRUCTIVE: "destructive action",
     },
   },
+  integrationsRedesign: {
+    tabsLabel: "Integration sections",
+    tabs: {
+      CONNECTIONS: "Connections",
+      CATALOG: "Package catalog",
+      GRANTS: "Grants",
+      APPROVALS: "Pending decisions",
+    },
+    catalogTitle: "Package catalog",
+    catalogDescription:
+      "Typed external-system capabilities. Connect only the packages you need.",
+    packageCount: "Packages: {count}",
+    searchPackages: "Find a package or capability",
+    category: "Category",
+    allCategories: "All categories",
+    firstParty: "first-party",
+    customPackage: "custom package",
+    connectionCount: "Connections: {count}",
+    capabilityCount: "Capabilities: {count}",
+    approvalCapabilityCount: "Human Gate: {count}",
+    packageDetails: "Package details",
+    packageDetailsUnavailable:
+      "The backend does not expose package version, YAML, origin, or history yet.",
+    connectUnavailable:
+      "Connecting requires CREATE_CONNECTION and an available definition.",
+    noPackages: "No packages found",
+    noPackagesHint: "Change the search text or selected category.",
+    zeroConnectionsReady:
+      "The platform remains fully operational without external connections.",
+    connectionsTitle: "Active connections",
+    connectionsDescription:
+      "Health, credential state, and server-authorized actions for each connection.",
+    activeGrants: "active grants",
+    capabilitiesShort: "capabilities",
+    grantsAction: "Grants",
+    grantsTitle: "Connection grants",
+    grantsDescription:
+      "Each grant binds one capability to one AI employee or Process.",
+    grantCount: "Grants: {count}",
+    connectionPicker: "Connection",
+    allConnections: "All connections",
+    targetKind: {
+      AGENT: "AI employee",
+      WORKFLOW: "Process",
+      UNKNOWN: "Unknown recipient",
+    },
+    noGrantsHint:
+      "Choose a manageable connection, Project, recipient, and capability.",
+    grantEditorTitle: "Issue a grant",
+    chooseConnectionHint: "Choose a connection with the MANAGE_GRANTS action.",
+    resourceScopeUnavailable:
+      "Resource scope, credential mode, expiry, and Human Gate policy are not represented by the current API. The UI cannot widen the grant locally.",
+    approvalsTitle: "Human Gate decisions",
+    approvalsDescription:
+      "Immutable intent, effect preview, actor, root initiator, and decision outcome.",
+    backendUnavailableShort: "backend unavailable",
+    approvalQueue: "Pending decisions",
+    approvalReadUnavailable: "Integration decision queue unavailable",
+    approvalReadGap:
+      "The current OwnerGate does not bind a decision to an integration connection, capability, resource scope, and effect preview.",
+    effectPreview: "Effect preview",
+    noIntentSelected: "intent not loaded",
+    approvalFailClosed:
+      "Approve, request changes, and reject are disabled: the UI will not decide without an authoritative integration intent and OCC readback.",
+  },
   decisions: {
     ...ru.decisions,
     title: "Decisions",
@@ -1431,6 +1658,88 @@ const en = {
       MANAGE_SCHEDULES: "Manage automations",
       MANAGE_INTEGRATIONS: "Manage integrations",
       VIEW_AUDIT: "View audit",
+    },
+  },
+  accessRedesign: {
+    tabsLabel: "Access management sections",
+    tabs: {
+      MEMBERS: "Members",
+      GROUPS: "OIDC groups",
+      ROLES: "Roles",
+      EFFECTIVE: "Effective access",
+      AGENT_SCOPE: "AI employee scope",
+    },
+    membersTitle: "Members and assignments",
+    organizationMembersDescription:
+      "Kodex assigns the platform role; OIDC confirms identity.",
+    projectMembersDescription:
+      "Direct permissions apply only within the current Project.",
+    memberCount: "Members: {count}",
+    systemRole: "system role",
+    projectBindingsUnavailable:
+      "Project bindings and assignment sources are not exposed by the API",
+    rolesTitle: "Kodex roles",
+    rolesDescription:
+      "System roles are immutable; custom roles must be versioned.",
+    createRole: "Create role",
+    systemRoles: "System roles",
+    systemRolesHint:
+      "Closed platform-role set from the current membership contract.",
+    immutable: "Immutable",
+    organizationScope: "Organization",
+    projectScope: "Project",
+    assignedMembers: "assigned",
+    activeMembers: "active",
+    roleDescription: {
+      OWNER:
+        "Full organization management; the server enforces critical constraints.",
+      ADMINISTRATOR:
+        "Platform, integration, and access configuration within authorized boundaries.",
+      OPERATOR:
+        "Run work and perform operational actions in accessible Projects.",
+      MEMBER: "Work only in Projects with separately assigned permissions.",
+      AUDITOR: "View permitted results and audit records without changes.",
+    },
+    customRoles: "Custom roles",
+    customRolesHint:
+      "A new version must not silently change existing bindings.",
+    customRolesUnavailable: "Versioned custom roles are unavailable",
+    customRolesGap:
+      "The generated API has no role definition, version, permission registry, or binding lifecycle.",
+    backendUnavailableShort: "backend unavailable",
+    groupsSearch: "Find an OIDC group",
+    addBinding: "Add binding",
+    subject: "Member",
+    resource: "Resource",
+    action: "Action",
+    why: "Why?",
+    projectSelector: "Project",
+    agentSelector: "AI employees",
+    effectiveResult: "Effective result",
+    failClosed:
+      "Unavailable RBAC operations are disabled. The UI does not calculate authority, bindings, or effective access locally.",
+    surface: {
+      GROUPS: {
+        title: "OIDC groups",
+        description:
+          "Group membership belongs to the identity provider; Kodex stores application role bindings only.",
+        emptyTitle: "Groups and bindings are not loaded",
+        gap: "There is no API for groups, sync state, or bindings to versioned roles and scopes.",
+      },
+      EFFECTIVE: {
+        title: "Effective access",
+        description:
+          "Authoritative result explanation for a member, action, and concrete resource.",
+        emptyTitle: "Explain-access is unavailable",
+        gap: "There is no server-side allow-chain, assignment-source, and scoped-result calculation.",
+      },
+      AGENT_SCOPE: {
+        title: "AI employee scope",
+        description:
+          "One Project, selected AI employee instances, and a closed action set.",
+        emptyTitle: "Entity-scoped binding is unavailable",
+        gap: "The current project membership accepts a flat permission list without agent refs or a versioned binding.",
+      },
     },
   },
   administration: {

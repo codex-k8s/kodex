@@ -1,22 +1,26 @@
 <script setup lang="ts">
+import { Plus } from "@lucide/vue";
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
+import AccessMembersPanel from "@/features/access/ui/AccessMembersPanel.vue";
+import AccessRolesPanel from "@/features/access/ui/AccessRolesPanel.vue";
+import AccessSectionTabs from "@/features/access/ui/AccessSectionTabs.vue";
+import AccessUnavailablePanel from "@/features/access/ui/AccessUnavailablePanel.vue";
+import {
+  buildSystemRoles,
+  filterMemberships,
+  type AccessSection,
+  type PlatformRole,
+  type ProjectPermission,
+} from "@/features/access/ui/model";
 import { usePlatformStore } from "@/features/platform/store";
-import type {
-  Membership,
-  PlatformMembershipCreateInput,
-  ProjectMembershipCreateInput,
-} from "@/shared/api/generated/openapi/types.gen";
+import type { Membership } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
-import StatusBadge from "@/shared/ui/StatusBadge.vue";
-
-type ProjectPermission = ProjectMembershipCreateInput["permissions"][number];
-type PlatformRole = PlatformMembershipCreateInput["platformRole"];
 
 interface AccessForm {
   userRef: string;
@@ -27,6 +31,8 @@ interface AccessForm {
 
 const platform = usePlatformStore();
 const route = useRoute();
+const activeSection = ref<AccessSection>("MEMBERS");
+const memberSearch = ref("");
 const projectRef = computed(() =>
   typeof route.params.projectRef === "string" ? route.params.projectRef : "",
 );
@@ -38,6 +44,10 @@ const list = computed(() =>
       : platform.memberships,
   ),
 );
+const filteredList = computed(() =>
+  filterMemberships(list.value, memberSearch.value),
+);
+const systemRoles = computed(() => buildSystemRoles(list.value));
 const candidates = computed(() =>
   Object.values(
     organizationScope.value
@@ -57,6 +67,14 @@ const canAdd = computed(() =>
     : platform.projectMembershipActions
   ).includes("MANAGE_MEMBERS"),
 );
+const unavailableSection = computed(
+  () =>
+    activeSection.value as Extract<
+      AccessSection,
+      "GROUPS" | "EFFECTIVE" | "AGENT_SCOPE"
+    >,
+);
+
 const selected = ref<Membership>();
 const dialog = ref(false);
 const candidateSearch = ref("");
@@ -208,7 +226,11 @@ async function revoke(membership: Membership): Promise<void> {
   }
 }
 
-watch(projectRef, () => void load());
+watch(projectRef, () => {
+  activeSection.value = "MEMBERS";
+  memberSearch.value = "";
+  void load();
+});
 watch(candidateSearch, () => {
   if (candidateSearchTimer) clearTimeout(candidateSearchTimer);
   candidateSearchTimer = setTimeout(loadCandidates, 250);
@@ -228,14 +250,16 @@ onUnmounted(() => {
   >
     <template #actions>
       <button
-        v-if="canAdd"
+        v-if="activeSection === 'MEMBERS' && canAdd"
         class="button button--primary"
         type="button"
         @click="add"
       >
+        <Plus :size="16" aria-hidden="true" />
         {{ $t(organizationScope ? "access.addOrganization" : "access.add") }}
       </button>
     </template>
+
     <section class="scope-summary" aria-live="polite">
       <strong>{{
         $t(
@@ -252,10 +276,19 @@ onUnmounted(() => {
         )
       }}</span>
     </section>
+
+    <AccessSectionTabs
+      :active="activeSection"
+      :member-count="list.length"
+      :role-count="systemRoles.length"
+      @select="activeSection = $event"
+    />
+
     <AsyncState
+      v-if="activeSection === 'MEMBERS'"
       :loading="platform.loading[listKey]"
       :problem="platform.problems[listKey]"
-      :empty="list.length === 0"
+      :empty="filteredList.length === 0"
       :empty-title="
         $t(
           organizationScope
@@ -272,49 +305,33 @@ onUnmounted(() => {
       "
       @retry="load"
     >
-      <div class="entity-list">
-        <article
-          v-for="membership in list"
-          :key="membership.ref"
-          class="entity-row"
-        >
-          <div>
-            <h3>{{ membership.user.displayName }}</h3>
-            <p>
-              {{ membership.user.emailHint }} ·
-              {{ $t(`access.roles.${membership.platformRole}`) }}
-            </p>
-            <p v-if="!organizationScope" class="secondary">
-              {{
-                $t("access.permissionCount", {
-                  count: membership.permissions.length,
-                })
-              }}
-            </p>
-          </div>
-          <StatusBadge :state="membership.active ? 'ACTIVE' : 'DISABLED'" />
-          <div class="entity-row__actions">
-            <button
-              v-if="membership.nextActions.includes('EDIT')"
-              class="button"
-              type="button"
-              @click="edit(membership)"
-            >
-              {{ $t("common.edit") }}</button
-            ><button
-              v-if="membership.nextActions.includes('REVOKE')"
-              class="button button--danger"
-              type="button"
-              :disabled="busy"
-              @click="revoke(membership)"
-            >
-              {{ $t("access.revoke") }}
-            </button>
-          </div>
-        </article>
-      </div>
+      <AccessMembersPanel
+        :memberships="filteredList"
+        :organization-scope="organizationScope"
+        :search="memberSearch"
+        :busy="busy"
+        @update:search="memberSearch = $event"
+        @edit="edit"
+        @revoke="revoke"
+      />
     </AsyncState>
+
+    <AsyncState
+      v-else-if="activeSection === 'ROLES'"
+      :loading="platform.loading[listKey]"
+      :problem="platform.problems[listKey]"
+      @retry="load"
+    >
+      <AccessRolesPanel
+        :roles="systemRoles"
+        :organization-scope="organizationScope"
+      />
+    </AsyncState>
+
+    <AccessUnavailablePanel v-else :section="unavailableSection" />
+
     <ProblemNotice v-if="problem && !dialog" :problem="problem" compact />
+
     <ModalDialog
       v-if="dialog"
       :title="
@@ -328,21 +345,23 @@ onUnmounted(() => {
       "
       :busy="busy"
       @close="closeDialog"
-      ><form id="membership-form" class="form-grid" @submit.prevent="submit">
+    >
+      <form id="membership-form" class="form-grid" @submit.prevent="submit">
         <div v-if="selected" class="field field--wide">
-          <span>{{ $t("access.member") }}</span
-          ><strong>{{ selected.user.displayName }}</strong>
+          <span>{{ $t("access.member") }}</span>
+          <strong>{{ selected.user.displayName }}</strong>
         </div>
         <template v-else>
-          <label class="field field--wide"
-            ><span>{{ $t("access.searchMember") }}</span
-            ><input
+          <label class="field field--wide">
+            <span>{{ $t("access.searchMember") }}</span>
+            <input
               v-model="candidateSearch"
               type="search"
               :placeholder="$t('access.searchMemberPlaceholder')"
               autocomplete="off"
               autofocus
-          /></label>
+            />
+          </label>
           <AsyncState
             class="field--wide candidate-state"
             :loading="platform.loading[candidateKey]"
@@ -358,9 +377,9 @@ onUnmounted(() => {
             "
             @retry="add"
           >
-            <label class="field field--wide"
-              ><span>{{ $t("access.member") }}</span
-              ><select v-model="form.userRef" required>
+            <label class="field field--wide">
+              <span>{{ $t("access.member") }}</span>
+              <select v-model="form.userRef" required>
                 <option value="" disabled>
                   {{ $t("access.chooseMember") }}
                 </option>
@@ -372,13 +391,13 @@ onUnmounted(() => {
                   {{ candidate.displayName
                   }}{{ candidate.emailHint ? ` · ${candidate.emailHint}` : "" }}
                 </option>
-              </select></label
-            >
+              </select>
+            </label>
           </AsyncState>
         </template>
-        <label v-if="organizationScope" class="field field--wide"
-          ><span>{{ $t("access.role") }}</span
-          ><select v-model="form.platformRole">
+        <label v-if="organizationScope" class="field field--wide">
+          <span>{{ $t("access.role") }}</span>
+          <select v-model="form.platformRole">
             <option value="OWNER">{{ $t("access.roles.OWNER") }}</option>
             <option value="ADMINISTRATOR">
               {{ $t("access.roles.ADMINISTRATOR") }}
@@ -386,23 +405,24 @@ onUnmounted(() => {
             <option value="OPERATOR">{{ $t("access.roles.OPERATOR") }}</option>
             <option value="MEMBER">{{ $t("access.roles.MEMBER") }}</option>
             <option value="AUDITOR">{{ $t("access.roles.AUDITOR") }}</option>
-          </select></label
-        >
+          </select>
+        </label>
         <fieldset v-else class="permission-grid field--wide">
           <legend>{{ $t("access.permissions") }}</legend>
-          <label v-for="permission in permissions" :key="permission"
-            ><input
+          <label v-for="permission in permissions" :key="permission">
+            <input
               type="checkbox"
               :checked="form.permissions.includes(permission)"
               :disabled="permission === 'VIEW'"
               @change="togglePermission(permission)"
-            />{{ $t(`access.permission.${permission}`) }}</label
-          >
+            />
+            {{ $t(`access.permission.${permission}`) }}
+          </label>
         </fieldset>
-        <label v-if="selected" class="field field--wide inline-control"
-          ><input v-model="form.active" type="checkbox" />
-          <span>{{ $t("access.active") }}</span></label
-        >
+        <label v-if="selected" class="field field--wide inline-control">
+          <input v-model="form.active" type="checkbox" />
+          <span>{{ $t("access.active") }}</span>
+        </label>
         <ProblemNotice
           v-if="problem"
           class="field--wide"
@@ -410,24 +430,25 @@ onUnmounted(() => {
           compact
         />
       </form>
-      <template #actions
-        ><button
+      <template #actions>
+        <button
           class="button"
           type="button"
           :disabled="busy"
           @click="closeDialog"
         >
-          {{ $t("common.cancel") }}</button
-        ><button
+          {{ $t("common.cancel") }}
+        </button>
+        <button
           class="button button--primary"
           form="membership-form"
           type="submit"
           :disabled="busy"
         >
           {{ $t(selected ? "common.save" : "access.add") }}
-        </button></template
-      ></ModalDialog
-    >
+        </button>
+      </template>
+    </ModalDialog>
   </PageFrame>
 </template>
 
@@ -435,11 +456,11 @@ onUnmounted(() => {
 .scope-summary {
   display: grid;
   gap: 4px;
-  margin-bottom: 18px;
-}
-.scope-summary span,
-.secondary {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
   color: var(--text-secondary);
+  background: var(--panel);
 }
 .candidate-state {
   min-height: 92px;
@@ -448,14 +469,14 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  border: 0;
   padding: 0;
+  border: 0;
 }
 .permission-grid label,
 .inline-control {
   display: flex;
-  gap: 8px;
   align-items: flex-start;
+  gap: 8px;
   font-weight: 400;
 }
 .permission-grid input,

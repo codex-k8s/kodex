@@ -56,6 +56,8 @@ async function render(): Promise<string> {
         nodes,
         edges,
         selectedRef: "node_agent",
+        futureNodeRefs: ["node_agent"],
+        activeNodeRefs: ["node_root"],
       }),
   });
   app.use(
@@ -118,5 +120,14 @@ describe("RunGraphCanvas", () => {
     expect(html).toContain("Делегирование ИИ-сотрудника");
     expect(html).toContain("Аналитик продаж с подробным понятным названием");
     expect(html).not.toContain(">DELEGATED_TO<");
+  });
+
+  it("отмечает будущие и активные узлы без подмены состояния", async () => {
+    const html = await render();
+
+    expect(html).toContain("canvas-node--future");
+    expect(html).toContain("canvas-node--active");
+    expect(html).toContain('data-node-future="true"');
+    expect(html).toContain("В очереди");
   });
 });
