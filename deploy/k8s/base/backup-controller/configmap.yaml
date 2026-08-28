@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-controller-runtime
+  labels:
+    app.kubernetes.io/name: backup-controller
+data:
+  BACKUP_CONTROLLER_TECHNICAL_LISTEN: ":9090"
+  BACKUP_CONTROLLER_CREDENTIALS_FILE: /var/run/secrets/kodex/backup-controller/credentials.json
+  BACKUP_CONTROLLER_REPOSITORY_CREDENTIALS_FILE: /var/run/secrets/kodex/backup-controller/restore/repository.json
+  BACKUP_CONTROLLER_RESTORE_TARGETS_FILE: /var/run/secrets/kodex/backup-controller/restore/targets.json
+  BACKUP_CONTROLLER_RESTORE_APPROVAL_FILE: /var/run/secrets/kodex/backup-controller/restore/approval.json
+  BACKUP_CONTROLLER_WORK_DIRECTORY: /work
+  BACKUP_CONTROLLER_REPOSITORY_PREFIX: kodex
+  BACKUP_CONTROLLER_BACKUP_INTERVAL: 24h
+  BACKUP_CONTROLLER_BACKUP_TIMEOUT: 6h
+  BACKUP_CONTROLLER_STARTUP_TIMEOUT: 45s
+  BACKUP_CONTROLLER_SHUTDOWN_TIMEOUT: 30s
+  BACKUP_CONTROLLER_READINESS_INTERVAL: 30s
+  BACKUP_CONTROLLER_RETENTION_MINIMUM_AGE: 720h
+  BACKUP_CONTROLLER_RETENTION_KEEP: "14"
+  BACKUP_CONTROLLER_MAXIMUM_DATABASE_BYTES: "137438953472"

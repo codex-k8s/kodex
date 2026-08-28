@@ -37,6 +37,13 @@ spec:
         - {protocol: TCP, port: 19333}
         - {protocol: TCP, port: 8888}
         - {protocol: TCP, port: 18888}
+        - {protocol: TCP, port: 8333}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: backup-controller
+      ports:
+        - {protocol: TCP, port: 8333}
     - from:
         - podSelector:
             matchLabels:
@@ -105,6 +112,7 @@ spec:
         - {protocol: TCP, port: 19333}
         - {protocol: TCP, port: 8888}
         - {protocol: TCP, port: 18888}
+        - {protocol: TCP, port: 8333}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -124,4 +132,3 @@ spec:
               app.kubernetes.io/component: object-storage
       ports:
         - {protocol: TCP, port: 8333}
-
