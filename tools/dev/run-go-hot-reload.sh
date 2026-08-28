@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
 set -eu
+umask 0000
 
 fail() {
   printf 'Kodex development hot reload failed: %s\n' "$*" >&2

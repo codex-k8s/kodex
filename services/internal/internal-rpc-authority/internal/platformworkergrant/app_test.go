@@ -51,3 +51,10 @@ func TestWriteAtomicRejectsSymlinkDirectory(t *testing.T) {
 		t.Fatal("symlink output directory был принят")
 	}
 }
+
+func TestSupportedWorkloadsIncludeSessionArchive(t *testing.T) {
+	t.Parallel()
+	if _, ok := supportedWorkloads["session-archive"]; !ok {
+		t.Fatal("session-archive отсутствует в закрытом реестре platform worker")
+	}
+}

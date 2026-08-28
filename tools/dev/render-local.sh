@@ -63,7 +63,7 @@ done
   fail 'local session archive image must use an exact manifest digest'
 [[ "$backup_controller_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
   fail 'local backup-controller image must use an exact manifest digest'
-for command_name in git jq kubectl sha256sum yq; do
+for command_name in git go jq kubectl sha256sum yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
@@ -80,15 +80,46 @@ aws_cli_image=$(jq -er '
 ' "$lock_file") || fail 'AWS CLI image lock is absent'
 [[ "$aws_cli_image" =~ ^docker\.io/amazon/aws-cli@sha256:[a-f0-9]{64}$ ]] ||
   fail 'AWS CLI image lock is invalid'
+air_module=$(jq -er '.tools.air.module' "$lock_file") || fail 'Air module lock is absent'
+air_version=$(jq -er '.tools.air.version' "$lock_file") || fail 'Air version lock is absent'
+[[ "$air_module" == "github.com/air-verse/air" && "$air_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+  fail 'Air tool lock is invalid'
 # These directories are mounted directly as hostPath volumes. k3s may remap
 # container root to an unprivileged host UID, so the local-only shared caches
 # must be writable independently of the private state directory permissions.
-install -d -m 0777 "$cache_root/go-mod" "$cache_root/go-build" "$cache_root/go-tools" \
+go_module_cache="$cache_root/go-mod-v2"
+go_prime_cache="$cache_root/go-build/host-prime"
+install -d -m 0777 "$go_module_cache" "$go_prime_cache" "$cache_root/go-build" "$cache_root/go-tools" \
   "$cache_root/node-modules"
-chmod 0777 "$cache_root/go-mod" "$cache_root/go-build" "$cache_root/go-tools" \
+chmod 0777 "$go_module_cache" "$go_prime_cache" "$cache_root/go-build" "$cache_root/go-tools" \
   "$cache_root/node-modules"
 install -d -m 0777 "$source_root/services/staff/control-center/node_modules"
 chmod 0777 "$source_root/services/staff/control-center/node_modules"
+
+# Local NetworkPolicy intentionally blocks arbitrary Internet access from pods.
+# Prime every module used by hot-reload workloads on the host so migrations and
+# service restarts are deterministic and do not weaken that boundary.
+go_modules=(
+  services/internal/control-plane
+  services/internal/internal-rpc-authority
+  services/internal/runtime-controller
+  services/external/control-api-gateway
+  services/external/egress-gateway
+  services/external/integration-gateway
+  services/jobs/automation-scheduler
+  services/jobs/session-archive
+)
+for module in "${go_modules[@]}"; do
+  [[ -f "$source_root/$module/go.mod" ]] || fail "Go module is absent: $module"
+  GOMODCACHE="$go_module_cache" GOCACHE="$go_prime_cache" GOWORK=off GOTOOLCHAIN=local \
+    go -C "$source_root/$module" mod download || fail "Go module cache prime failed: $module"
+done
+if [[ ! -x "$cache_root/go-tools/air" ]]; then
+  GOBIN="$cache_root/go-tools" GOMODCACHE="$go_module_cache" GOCACHE="$go_prime_cache" \
+    GOWORK=off GOTOOLCHAIN=local go install "$air_module@$air_version" ||
+    fail 'Air installation failed'
+fi
+chmod -R a+rX,u+w,g+w,o+w "$go_module_cache" "$go_prime_cache"
 
 temporary_directory=$(mktemp -d)
 render="$temporary_directory/local.yaml"
@@ -246,7 +277,7 @@ add_development_volumes() {
             .name != "dev-go-build" and .name != "dev-go-tools"))) +
         [
           {"name":"dev-source","hostPath":{"path":strenv(SOURCE_ROOT),"type":"Directory"}},
-          {"name":"dev-go-mod","hostPath":{"path":(strenv(CACHE_ROOT) + "/go-mod"),"type":"Directory"}},
+          {"name":"dev-go-mod","hostPath":{"path":(strenv(CACHE_ROOT) + "/go-mod-v2"),"type":"Directory"}},
           {"name":"dev-go-build","hostPath":{"path":(strenv(CACHE_ROOT) + "/go-build"),"type":"Directory"}},
           {"name":"dev-go-tools","hostPath":{"path":(strenv(CACHE_ROOT) + "/go-tools"),"type":"Directory"}}
         ]
