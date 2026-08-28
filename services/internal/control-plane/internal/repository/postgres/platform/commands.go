@@ -32,6 +32,12 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	if err != nil {
 		return command.Result{}, err
 	}
+	prepared, err := repository.prepareCommandObjects(ctx, scope, &input)
+	if err != nil {
+		return command.Result{}, err
+	}
+	keepPrepared := false
+	defer func() { repository.cleanupPreparedObjects(ctx, prepared, keepPrepared) }()
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return command.Result{}, fmt.Errorf("begin command transaction: %w", errs.ErrUnavailable)
@@ -116,6 +122,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	if err := tx.Commit(ctx); err != nil {
 		return command.Result{}, fmt.Errorf("commit command transaction: %w", errs.ErrConflict)
 	}
+	keepPrepared = resultContainsPreparedObjects(outcome.result, prepared)
 	return outcome.result, nil
 }
 

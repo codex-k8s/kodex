@@ -23,6 +23,13 @@ type Config struct {
 	PostgresCAFile                  string        `env:"CONTROL_PLANE_POSTGRES_CA_FILE"`
 	PostgresTLSServerName           string        `env:"CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME"`
 	PostgresMaxConnections          int32         `env:"CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS"`
+	ObjectStorageEndpoint           string        `env:"CONTROL_PLANE_OBJECT_STORAGE_ENDPOINT"`
+	ObjectStorageRegion             string        `env:"CONTROL_PLANE_OBJECT_STORAGE_REGION"`
+	ObjectStorageBucket             string        `env:"CONTROL_PLANE_OBJECT_STORAGE_BUCKET"`
+	ObjectStorageAccessKeyFile      string        `env:"CONTROL_PLANE_OBJECT_STORAGE_ACCESS_KEY_FILE"`
+	ObjectStorageSecretKeyFile      string        `env:"CONTROL_PLANE_OBJECT_STORAGE_SECRET_KEY_FILE"`
+	ObjectStorageUsePathStyle       bool          `env:"CONTROL_PLANE_OBJECT_STORAGE_USE_PATH_STYLE"`
+	ObjectStorageAllowInsecureLocal bool          `env:"CONTROL_PLANE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL"`
 	NATSURL                         string        `env:"CONTROL_PLANE_NATS_URL"`
 	NATSTLSServerName               string        `env:"CONTROL_PLANE_NATS_TLS_SERVER_NAME"`
 	NATSCAFile                      string        `env:"CONTROL_PLANE_NATS_CA_FILE"`
@@ -91,26 +98,31 @@ type Config struct {
 func loadConfig() (Config, error) {
 	config := Config{
 		GRPCListen: ":8443", TechnicalListen: ":9090",
-		ServerCertificateFile:   "/var/run/secrets/kodex/control-plane/workload-tls/tls.crt",
-		ServerPrivateKeyFile:    "/var/run/secrets/kodex/control-plane/workload-tls/tls.key",
-		ClientCAFile:            "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
-		PostgresDSNFile:         "/var/run/secrets/kodex/control-plane/postgres-runtime/dsn",
-		PostgresCAFile:          "/var/run/config/kodex/control-plane/postgres/ca.pem",
-		PostgresTLSServerName:   "control-plane-postgresql-rw.kodex-system.svc.cluster.local",
-		PostgresMaxConnections:  16,
-		NATSURL:                 "tls://nats.kodex-system.svc:4222",
-		NATSTLSServerName:       "nats.kodex-system.svc.cluster.local",
-		NATSCAFile:              "/var/run/config/kodex/control-plane/nats/ca.pem",
-		NATSCertificateFile:     "/var/run/secrets/kodex/control-plane/nats-client/tls.crt",
-		NATSPrivateKeyFile:      "/var/run/secrets/kodex/control-plane/nats-client/tls.key",
-		NATSCredentialsFile:     "/var/run/secrets/kodex/control-plane/nats/user.creds",
-		NATSStream:              "CONTROL_PLANE",
-		NATSReplicas:            3,
-		NATSMaxBytes:            32 << 30,
-		DefaultRuntimeProvider:  "openai-codex",
-		DefaultRuntimeModel:     "gpt-5.6-sol",
-		AuthorityVerifierSocket: authorityclient.VerifierSocketPath,
-		AuthorityVerifierUID:    29002, AuthorityVerifierGID: 29000,
+		ServerCertificateFile:      "/var/run/secrets/kodex/control-plane/workload-tls/tls.crt",
+		ServerPrivateKeyFile:       "/var/run/secrets/kodex/control-plane/workload-tls/tls.key",
+		ClientCAFile:               "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
+		PostgresDSNFile:            "/var/run/secrets/kodex/control-plane/postgres-runtime/dsn",
+		PostgresCAFile:             "/var/run/config/kodex/control-plane/postgres/ca.pem",
+		PostgresTLSServerName:      "control-plane-postgresql-rw.kodex-system.svc.cluster.local",
+		PostgresMaxConnections:     16,
+		ObjectStorageRegion:        "us-east-1",
+		ObjectStorageBucket:        "kodex-artifacts",
+		ObjectStorageAccessKeyFile: "/var/run/secrets/kodex/control-plane/object-storage/access-key-id",
+		ObjectStorageSecretKeyFile: "/var/run/secrets/kodex/control-plane/object-storage/secret-access-key",
+		ObjectStorageUsePathStyle:  true,
+		NATSURL:                    "tls://nats.kodex-system.svc:4222",
+		NATSTLSServerName:          "nats.kodex-system.svc.cluster.local",
+		NATSCAFile:                 "/var/run/config/kodex/control-plane/nats/ca.pem",
+		NATSCertificateFile:        "/var/run/secrets/kodex/control-plane/nats-client/tls.crt",
+		NATSPrivateKeyFile:         "/var/run/secrets/kodex/control-plane/nats-client/tls.key",
+		NATSCredentialsFile:        "/var/run/secrets/kodex/control-plane/nats/user.creds",
+		NATSStream:                 "CONTROL_PLANE",
+		NATSReplicas:               3,
+		NATSMaxBytes:               32 << 30,
+		DefaultRuntimeProvider:     "openai-codex",
+		DefaultRuntimeModel:        "gpt-5.6-sol",
+		AuthorityVerifierSocket:    authorityclient.VerifierSocketPath,
+		AuthorityVerifierUID:       29002, AuthorityVerifierGID: 29000,
 		AuthorityPolicyFile:            "/var/run/config/kodex/control-plane/authority/policy.json",
 		ProofSignerFile:                "/var/run/secrets/kodex/internal-rpc-authority/proof-signer/private.jwk",
 		ProofSignerTrustFile:           "/var/run/config/kodex/internal-rpc-authority/authority-proof-trust/jwks.json",
@@ -149,7 +161,7 @@ func (config Config) validate() error {
 			return errors.New("control-plane listen address is invalid")
 		}
 	}
-	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
+	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.ObjectStorageAccessKeyFile, config.ObjectStorageSecretKeyFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("control-plane file path is invalid")
 		}
@@ -195,6 +207,12 @@ func (config Config) validate() error {
 		jwksErr != nil || jwks.Scheme != "https" || jwks.Hostname() != issuer.Hostname() || jwks.User != nil || jwks.RawQuery != "" || jwks.Fragment != "" || jwks.Path == "" ||
 		connectErr != nil || connectHost == "" || net.ParseIP(connectHost) != nil || connectPort != "443" {
 		return errors.New("control-plane OIDC boundary is invalid")
+	}
+	objectEndpoint, objectEndpointErr := url.Parse(config.ObjectStorageEndpoint)
+	localInsecure := config.ObjectStorageAllowInsecureLocal && objectEndpoint != nil && objectEndpoint.Scheme == "http" && strings.HasSuffix(objectEndpoint.Hostname(), ".kodex-system.svc.cluster.local")
+	if objectEndpointErr != nil || objectEndpoint == nil || (objectEndpoint.Scheme != "https" && !localInsecure) || objectEndpoint.Host == "" || objectEndpoint.User != nil || objectEndpoint.RawQuery != "" || objectEndpoint.Fragment != "" ||
+		(objectEndpoint.Path != "" && objectEndpoint.Path != "/") || !validRuntimeIdentifier(config.ObjectStorageRegion) || !validDNSLabel(config.ObjectStorageBucket) {
+		return errors.New("control-plane object storage boundary is invalid")
 	}
 	if info, err := os.Lstat(filepath.Dir(config.AuthorityVerifierSocket)); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return errors.New("control-plane authority socket directory is invalid")

@@ -148,6 +148,11 @@ type CompletedArtifact struct {
 	FileName, MediaType, SHA256 string
 	SizeBytes                   int64
 	Content                     []byte
+	Prepared                    *PreparedArtifact
+}
+type PreparedArtifact struct {
+	Ref, ObjectKey, ObjectVersion, ObjectETag, MediaType, Digest, ScanState, PreviewState string
+	SizeBytes                                                                             int64
 }
 type DelegateInput struct {
 	LeaseRef, Fence, TargetAgentRef, WorkflowStepKey, Task string

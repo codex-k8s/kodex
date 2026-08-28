@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -36,6 +37,7 @@ type Repository struct {
 	defaultRuntimeModel    string
 	providerCredential     ProviderCredentialConfig
 	roleImages             RoleImageConfig
+	objects                objectstorage.Store
 }
 
 // ProviderCredentialConfig содержит только безопасную identity неизменяемой
@@ -57,11 +59,11 @@ type RoleImageConfig struct {
 	LeaseSigningKey                             []byte
 }
 
-func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string) (*Repository, error) {
-	if pool == nil || defaultRuntimeProvider != "openai-codex" || defaultRuntimeModel == "" {
-		return nil, errors.New("PostgreSQL pool is required")
+func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string, objects objectstorage.Store) (*Repository, error) {
+	if pool == nil || defaultRuntimeProvider != "openai-codex" || defaultRuntimeModel == "" || objects == nil {
+		return nil, errors.New("control-plane repository dependencies are required")
 	}
-	return &Repository{pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel}, nil
+	return &Repository{pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel, objects: objects}, nil
 }
 
 func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error {
@@ -119,6 +121,9 @@ func (repository *Repository) Ready(ctx context.Context) error {
 	}
 	if schemaVersion != 1 {
 		return errors.New("control-plane schema version is unsupported")
+	}
+	if err := repository.objects.Check(ctx); err != nil {
+		return errors.New("artifact object storage is unavailable")
 	}
 	return nil
 }
