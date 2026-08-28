@@ -59,6 +59,9 @@ func (client *Client) Progress(ctx context.Context, input model.Input, code stri
 }
 
 func (client *Client) Complete(ctx context.Context, input model.Input, payload runtimecontract.RunnerCompletionRequest) error {
+	if err := payload.Validate(); err != nil {
+		return errors.New("validate runtime completion: " + err.Error())
+	}
 	return client.post(ctx, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/complete", payload)
 }
 

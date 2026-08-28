@@ -66,6 +66,26 @@ func TestPostReportsOnlySafeHTTPStatus(t *testing.T) {
 	}
 }
 
+func TestCompleteRejectsInvalidPayloadBeforeTransport(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called = true
+	}))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket"}
+	err = client.Complete(context.Background(), validWarmTurnFixture(), runtimecontract.RunnerCompletionRequest{})
+	if err == nil || err.Error() != "validate runtime completion: runner completion is invalid" {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if called {
+		t.Fatal("invalid runtime completion reached the callback transport")
+	}
+}
+
 func validWarmTurnFixture() runtimecontract.RunnerInput {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
 	return runtimecontract.RunnerInput{
