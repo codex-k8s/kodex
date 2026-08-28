@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -116,8 +117,8 @@ func TestPrepareHomeMaterializesOnlyBoundEnvironment(t *testing.T) {
 	if config.ModelReasoningEffort != "high" || config.History.Persistence != "none" ||
 		config.ShellEnvironmentPolicy.Set["APP_MODE"] != "review" ||
 		config.ShellEnvironmentPolicy.Set["CRM_TOKEN"] != "" ||
-		config.ShellEnvironmentPolicy.Filters["CRM_TOKEN"] != "include" ||
-		config.ShellEnvironmentPolicy.Filters["KODEX_MCP_PROXY_TOKEN"] != "" {
+		!slices.Equal(config.ShellEnvironmentPolicy.IncludeOnly, []string{"APP_MODE", "CRM_TOKEN", "HOME", "PATH"}) ||
+		slices.Contains(config.ShellEnvironmentPolicy.IncludeOnly, "KODEX_MCP_PROXY_TOKEN") {
 		t.Fatalf("unexpected effective config: %#v", config)
 	}
 }

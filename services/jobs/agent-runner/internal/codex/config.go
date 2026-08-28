@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -43,7 +44,7 @@ type historyConfig struct {
 type shellEnvironmentPolicy struct {
 	Inherit               string            `toml:"inherit"`
 	IgnoreDefaultExcludes bool              `toml:"ignore_default_excludes"`
-	Filters               map[string]string `toml:"filters"`
+	IncludeOnly           []string          `toml:"include_only"`
 	Set                   map[string]string `toml:"set"`
 }
 
@@ -92,14 +93,19 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		historyPersistence = "save-all"
 	}
 	environmentSet := map[string]string{"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp"}
-	environmentFilters := map[string]string{"PATH": "include", "HOME": "include"}
+	environmentNames := map[string]struct{}{"PATH": {}, "HOME": {}}
 	for _, item := range input.EnvironmentValues {
 		environmentSet[item.Name] = item.Value
-		environmentFilters[item.Name] = "include"
+		environmentNames[item.Name] = struct{}{}
 	}
 	for _, item := range input.SecretProjections {
-		environmentFilters[item.Name] = "include"
+		environmentNames[item.Name] = struct{}{}
 	}
+	includeOnly := make([]string, 0, len(environmentNames))
+	for name := range environmentNames {
+		includeOnly = append(includeOnly, name)
+	}
+	slices.Sort(includeOnly)
 	config := runtimeConfig{Model: input.Model, ModelReasoningEffort: overlay.ModelReasoningEffort,
 		Personality: overlay.Personality, AllowLoginShell: &allowLoginShell, ApprovalPolicy: input.CodexApprovalPolicy,
 		DefaultPermissions: permissionProfileName, CLIAuthCredentialStore: "file",
@@ -111,7 +117,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 				"/proc":        "deny",
 			}}},
 		ShellEnvironmentPolicy: shellEnvironmentPolicy{Inherit: "all", IgnoreDefaultExcludes: true,
-			Filters: environmentFilters, Set: environmentSet},
+			IncludeOnly: includeOnly, Set: environmentSet},
 		MCPServers: map[string]mcpServerConfig{"kodex": {URL: mcpURL,
 			BearerTokenEnvVar: "KODEX_MCP_PROXY_TOKEN",
 			Required:          true, StartupTimeoutSeconds: 15, ToolTimeoutSeconds: 60}}}
@@ -125,7 +131,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		!decoded.MCPServers["kodex"].Required ||
 		decoded.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
 		decoded.DefaultPermissions != permissionProfileName || decoded.Permissions[permissionProfileName].Extends != permissionBase ||
-		decoded.ShellEnvironmentPolicy.Inherit != "all" || len(decoded.ShellEnvironmentPolicy.Filters) != len(environmentFilters) ||
+		decoded.ShellEnvironmentPolicy.Inherit != "all" || !slices.Equal(decoded.ShellEnvironmentPolicy.IncludeOnly, includeOnly) ||
 		decoded.Permissions[permissionProfileName].Filesystem[filepath.Join(input.CodexHome, "auth.json")] != "deny" {
 		return errors.New("validate Codex configuration")
 	}

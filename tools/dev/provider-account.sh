@@ -42,7 +42,7 @@ while (($# > 0)); do
 done
 
 case "$command_name" in authorize|import|list) ;; *) usage; fail 'command is invalid' ;; esac
-for command in codex jq kubectl sha256sum stat; do
+for command in codex install jq kubectl mktemp realpath sha256sum stat; do
   command -v "$command" >/dev/null 2>&1 || fail "$command is required"
 done
 [[ -f "$kubeconfig" && -r "$kubeconfig" ]] || fail 'Kubernetes configuration is absent'
@@ -85,6 +85,15 @@ permissions=$(stat -c '%a' "$auth_file")
 jq -e 'type == "object" and length > 0' "$auth_file" >/dev/null || fail 'authorization JSON is invalid'
 CODEX_HOME="$(dirname -- "$auth_file")" codex login status >/dev/null ||
   fail 'Codex does not recognize the authorization file'
+
+install -d -m 0700 "$account_home"
+canonical_auth_file="$account_home/auth.json"
+if [[ "$(realpath -e -- "$auth_file")" != "$canonical_auth_file" ]]; then
+  temporary_auth_file=$(mktemp "$account_home/.auth.json.XXXXXX")
+  install -m 0600 "$auth_file" "$temporary_auth_file"
+  mv -f -- "$temporary_auth_file" "$canonical_auth_file"
+fi
+auth_file="$canonical_auth_file"
 
 digest=$(sha256sum "$auth_file" | awk '{print $1}')
 key_digest=$(printf '%s' "$account_key" | sha256sum | awk '{print $1}')
@@ -155,5 +164,13 @@ if [[ "$account_key" == default-openai-codex ]]; then
     ' | kubectl apply --server-side --force-conflicts \
       --field-manager=kodex-local-dev -f - >/dev/null
 fi
+
+metadata_file="$account_home/account.json"
+temporary_metadata=$(mktemp "$account_home/.account.json.XXXXXX")
+jq -n --arg account_key "$account_key" --arg account_name "$account_name" '
+  {version:1, accountKey:$account_key, name:$account_name}
+' >"$temporary_metadata"
+chmod 0600 "$temporary_metadata"
+mv -f -- "$temporary_metadata" "$metadata_file"
 
 printf 'Kodex provider account reconciled: %s revision %s\n' "$account_key" "$readback_revision"

@@ -236,19 +236,26 @@ kubectl -n identity patch serverstransport sso-public --type=merge \
 
 "$repository_root/tools/install/materialize-nats-runtime-users.sh" \
   --context "$context" --material-directory "$material_directory"
-provider_auth=${KODEX_DEV_PROVIDER_AUTH_FILE:-"$state_directory/inputs/openai-auth.json"}
-if [[ -n "${KODEX_DEV_PROVIDER_AUTH_FILE:-}" ]]; then
-  [[ "$provider_auth" == /* && -f "$provider_auth" && ! -L "$provider_auth" ]] ||
-    fail 'KODEX_DEV_PROVIDER_AUTH_FILE must be an absolute regular non-symlink file'
-  [[ "$(stat -c '%u' "$provider_auth")" == "$(id -u)" &&
-    $((8#$(stat -c '%a' "$provider_auth") & 8#077)) == 0 ]] ||
-    fail 'KODEX_DEV_PROVIDER_AUTH_FILE must be owned by the current user and private'
-  [[ "$(stat -c '%s' "$provider_auth")" -le 1048576 ]] ||
-    fail 'KODEX_DEV_PROVIDER_AUTH_FILE exceeds the supported size'
-elif [[ ! -e "$provider_auth" ]]; then
+provider_auth=${KODEX_DEV_PROVIDER_AUTH_FILE:-}
+if [[ -z "$provider_auth" ]]; then
+  persisted_default_auth="$state_directory/provider-accounts/default-openai-codex/auth.json"
+  if [[ -f "$persisted_default_auth" && ! -L "$persisted_default_auth" ]]; then
+    provider_auth="$persisted_default_auth"
+  else
+    provider_auth="$state_directory/inputs/openai-auth.json"
+  fi
+fi
+if [[ ! -e "$provider_auth" && "$provider_auth" == "$state_directory/inputs/openai-auth.json" ]]; then
   printf '%s\n' '{"auth_mode":"local-development","access_token":"not-configured"}' >"$provider_auth"
   chmod 0600 "$provider_auth"
 fi
+[[ "$provider_auth" == /* && -f "$provider_auth" && ! -L "$provider_auth" ]] ||
+  fail 'provider authorization must be an absolute regular non-symlink file'
+[[ "$(stat -c '%u' "$provider_auth")" == "$(id -u)" &&
+  $((8#$(stat -c '%a' "$provider_auth") & 8#077)) == 0 ]] ||
+  fail 'provider authorization must be owned by the current user and private'
+[[ "$(stat -c '%s' "$provider_auth")" -le 1048576 ]] ||
+  fail 'provider authorization exceeds the supported size'
 "$repository_root/tools/install/materialize-secrets.sh" --context "$context" \
   --material-directory "$material_directory" \
   --oidc-ca-file "$state_directory/kodex-local-ca.crt" \
@@ -297,6 +304,33 @@ api_endpoint_port=$(jq -er '
   --backup-controller-image "$backup_controller_image"
 "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode apply \
   --render "$state_directory/render.yaml"
+
+provider_metadata=("$state_directory"/provider-accounts/*/account.json)
+restored_provider_accounts=0
+for metadata_file in "${provider_metadata[@]}"; do
+  [[ -e "$metadata_file" ]] || continue
+  [[ -f "$metadata_file" && ! -L "$metadata_file" &&
+    "$(stat -c '%u' "$metadata_file")" == "$(id -u)" &&
+    $((8#$(stat -c '%a' "$metadata_file") & 8#077)) == 0 ]] ||
+    fail 'provider account metadata is unsafe'
+  account_key=$(jq -er '
+    select(.version == 1 and (.accountKey | type == "string") and
+      (.name | type == "string" and length > 0 and length <= 160)) |
+    .accountKey
+  ' "$metadata_file") || fail 'provider account metadata is invalid'
+  account_name=$(jq -er '.name' "$metadata_file") || fail 'provider account name is invalid'
+  [[ "$account_key" == "$(basename -- "$(dirname -- "$metadata_file")")" ]] ||
+    fail 'provider account metadata directory binding is invalid'
+  "$repository_root/tools/dev/provider-account.sh" import \
+    --kubeconfig "$kubeconfig" --context "$context" --state-directory "$state_directory" \
+    --account-key "$account_key" --name "$account_name" \
+    --auth-file "$(dirname -- "$metadata_file")/auth.json"
+  restored_provider_accounts=$((restored_provider_accounts + 1))
+done
+if ((restored_provider_accounts > 0)); then
+  "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
+    --render "$state_directory/render.yaml"
+fi
 
 "$repository_root/tools/deploy/configure-keycloak.sh" --context "$context" --mode readback \
   --public-origin "https://$public_host" --grafana-origin "https://$grafana_host" \

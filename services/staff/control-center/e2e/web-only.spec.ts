@@ -69,7 +69,7 @@ let workflowRunRef = initialRefs.workflowRunRef ?? "";
 
 async function openKodex(page: Page, newConversation = false): Promise<void> {
   await page.getByRole("button", { name: "Открыть Kodex" }).click();
-  const dialog = page.getByRole("dialog", { name: "Помощник Kodex" });
+  const dialog = page.getByRole("dialog", { name: "Kodex" });
   await expect(dialog).toBeVisible();
   if (!newConversation) return;
   await dialog.getByRole("button", { name: "История диалогов" }).click();
@@ -82,7 +82,7 @@ async function applyLatestKodexPlan(
   page: Page,
   expectedText: string,
 ): Promise<void> {
-  const dialog = page.getByRole("dialog", { name: "Помощник Kodex" });
+  const dialog = page.getByRole("dialog", { name: "Kodex" });
   const planCard = dialog.locator(".assistant-plan-card").last();
   await expect(planCard).toContainText(expectedText, { timeout: 120_000 });
   await planCard.getByRole("button", { name: "Открыть план" }).click();
@@ -127,13 +127,13 @@ test.describe("web-only fresh installation", () => {
 
     await page.getByRole("button", { name: "Начать с помощником" }).click();
     await expect(
-      page.getByRole("dialog", { name: "Помощник Kodex" }),
+      page.getByRole("dialog", { name: "Kodex" }),
     ).toBeVisible();
 
     if (discoveryMode && projectRef) {
       await gotoWithRetry(page, `/projects/${projectRef}`);
       await expectPageHeading(page, projectName);
-      const currentUser = page.locator("details.current-user-menu > summary");
+      const currentUser = page.locator("button[aria-haspopup='menu']");
       await expect(currentUser).toBeVisible();
       await expect(currentUser).toHaveAttribute(
         "aria-label",
@@ -164,7 +164,7 @@ test.describe("web-only fresh installation", () => {
     await expect(page).toHaveURL(/\/projects\/[^/]+$/);
     projectRef = routeRef(page, "projects");
     persistRefs();
-    const currentUser = page.locator("details.current-user-menu > summary");
+    const currentUser = page.locator("button[aria-haspopup='menu']");
     await expect(currentUser).toBeVisible();
     await expect(currentUser).toHaveAttribute(
       "aria-label",
@@ -501,7 +501,7 @@ test.describe("web-only fresh installation", () => {
     await gotoWithRetry(page, "/");
     await openKodex(page);
     await expect(
-      page.getByRole("dialog", { name: "Помощник Kodex" }),
+      page.getByRole("dialog", { name: "Kodex" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Удалить|Архивировать|Отключить/ }),
@@ -514,7 +514,7 @@ test.describe("web-only fresh installation", () => {
     requireRefs("projectRef");
     await gotoWithRetry(page, `/projects/${projectRef}`);
     await openKodex(page, true);
-    const dialog = page.getByRole("dialog", { name: "Помощник Kodex" });
+    const dialog = page.getByRole("dialog", { name: "Kodex" });
     await expect(dialog).toContainText(projectName);
     const purpose =
       "Квалификация входящих лидов с явной проверкой полноты коммерческого предложения.";
@@ -2004,11 +2004,11 @@ test.describe("web-only fresh installation", () => {
       projectsBeforeRejectedMutations,
     );
 
-    const currentUserMenu = page.locator("details.current-user-menu");
-    const currentUserMenuButton = currentUserMenu.locator(":scope > summary");
+    const currentUserMenuButton = page.locator("button[aria-haspopup='menu']");
+    const currentUserMenu = currentUserMenuButton.locator("..");
     await expect(currentUserMenuButton).toBeVisible();
     await currentUserMenuButton.click();
-    await expect(currentUserMenu).toHaveAttribute("open", "");
+    await expect(currentUserMenuButton).toHaveAttribute("aria-expanded", "true");
     const logoutButton = currentUserMenu.getByRole("button", {
       name: "Выйти",
       exact: true,
