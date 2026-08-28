@@ -19,7 +19,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -599,10 +598,8 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	hasArchiveBinding := payload.CodexSessionID != "" || payload.ArchiveRelativePath != "" || payload.ArchiveSHA256 != "" || payload.ArchiveSizeBytes != 0
-	if hasArchiveBinding && (uuid.Validate(payload.CodexSessionID) != nil ||
-		!strings.HasSuffix(payload.ArchiveRelativePath, "rollout-"+payload.CodexSessionID+".jsonl") ||
-		!strings.HasPrefix(payload.ArchiveRelativePath, ".kodex/state/codex-home/sessions/") ||
-		strings.Contains(payload.ArchiveRelativePath, "..") || len(payload.ArchiveSHA256) != 64 ||
+	if hasArchiveBinding && (runtimecontract.ValidateCodexArchiveIdentity(payload.CodexSessionID, payload.ArchiveRelativePath) != nil ||
+		len(payload.ArchiveSHA256) != 64 ||
 		payload.ArchiveSizeBytes < 1 || payload.ArchiveSizeBytes > runtimecontract.MaximumSessionSourceBytes) {
 		return commandOutcome{}, errs.ErrInvalid
 	}

@@ -497,9 +497,8 @@ func (request RunnerCompletionRequest) Validate() error {
 		return errors.New("runner completion is invalid")
 	}
 	hasArchiveBinding := request.CodexSessionID != "" || request.ArchiveRelativePath != "" || request.ArchiveSHA256 != "" || request.ArchiveSizeBytes != 0
-	if hasArchiveBinding && (!uuidPattern.MatchString(request.CodexSessionID) ||
-		!validArchiveRelativePath(request.ArchiveRelativePath) || !sha256Pattern.MatchString(request.ArchiveSHA256) ||
-		!strings.HasSuffix(request.ArchiveRelativePath, "rollout-"+request.CodexSessionID+".jsonl") ||
+	if hasArchiveBinding && (ValidateCodexArchiveIdentity(request.CodexSessionID, request.ArchiveRelativePath) != nil ||
+		!sha256Pattern.MatchString(request.ArchiveSHA256) ||
 		request.ArchiveSizeBytes <= 0 || request.ArchiveSizeBytes > MaximumSessionSourceBytes) {
 		return errors.New("runner completion archive binding is invalid")
 	}

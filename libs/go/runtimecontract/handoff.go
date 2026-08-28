@@ -248,7 +248,7 @@ func validCodexTerminalBinding(handoff HandoffV2) bool {
 	if handoff.CodexSessionID == "" && handoff.ArchiveRelativePath == "" && handoff.ArchiveSHA256 == "" && handoff.ArchiveProvenance == "" {
 		return handoff.Outcome == "BLOCKED" && strings.HasPrefix(handoff.TerminalReference, "preflight://")
 	}
-	return uuidPattern.MatchString(handoff.CodexSessionID) && validArchiveRelativePath(handoff.ArchiveRelativePath) &&
+	return ValidateCodexArchiveIdentity(handoff.CodexSessionID, handoff.ArchiveRelativePath) == nil &&
 		sha256Pattern.MatchString(handoff.ArchiveSHA256) && handoff.ArchiveProvenance != "" &&
 		validCodexArchiveProvenance(handoff.ArchiveProvenance, handoff.ArchiveRelativePath, handoff.ArchiveSHA256)
 }
@@ -267,6 +267,17 @@ func validArchiveRelativePath(value string) bool {
 	return regexp.MustCompile(`^\.kodex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`).MatchString(value) &&
 		len(value) <= 255 &&
 		!strings.Contains(value, "\\") && !strings.Contains(value, "..")
+}
+
+// ValidateCodexArchiveIdentity проверяет, что rollout находится в каноническом
+// каталоге Codex и оканчивается exact UUID связанной сессии. Codex добавляет
+// перед UUID timestamp, поэтому полное имя файла не равно rollout-<UUID>.jsonl.
+func ValidateCodexArchiveIdentity(sessionID, relativePath string) error {
+	if !uuidPattern.MatchString(sessionID) || !validArchiveRelativePath(relativePath) ||
+		!strings.HasSuffix(relativePath, "-"+sessionID+".jsonl") {
+		return errors.New("Codex archive identity is invalid")
+	}
+	return nil
 }
 
 // SignedHandoffV1 — detached-authority envelope. KeyID выбирается только из
