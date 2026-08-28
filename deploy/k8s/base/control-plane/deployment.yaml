@@ -58,6 +58,20 @@ spec:
               value: /var/run/config/kodex/control-plane/observability/otel-ca.pem
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.1"
+            - name: CONTROL_PLANE_OBJECT_STORAGE_ENDPOINT
+              valueFrom: {secretKeyRef: {name: kodex-external-s3, key: endpoint}}
+            - name: CONTROL_PLANE_OBJECT_STORAGE_REGION
+              valueFrom: {secretKeyRef: {name: kodex-external-s3, key: region}}
+            - name: CONTROL_PLANE_OBJECT_STORAGE_BUCKET
+              valueFrom: {secretKeyRef: {name: kodex-external-s3, key: bucket}}
+            - name: CONTROL_PLANE_OBJECT_STORAGE_ACCESS_KEY_FILE
+              value: /var/run/secrets/kodex/control-plane/object-storage/access-key-id
+            - name: CONTROL_PLANE_OBJECT_STORAGE_SECRET_KEY_FILE
+              value: /var/run/secrets/kodex/control-plane/object-storage/secret-access-key
+            - name: CONTROL_PLANE_OBJECT_STORAGE_USE_PATH_STYLE
+              value: "true"
+            - name: CONTROL_PLANE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL
+              value: "false"
             - name: SENTRY_DSN_FILE
               value: /var/run/secrets/kodex/control-plane/observability/sentry-dsn
             - name: SENTRY_EXPECTED_HOST
@@ -189,6 +203,9 @@ spec:
             - name: postgres-ca
               mountPath: /var/run/config/kodex/control-plane/postgres
               readOnly: true
+            - name: object-storage
+              mountPath: /var/run/secrets/kodex/control-plane/object-storage
+              readOnly: true
             - name: nats-credential
               mountPath: /var/run/secrets/kodex/control-plane/nats
               readOnly: true
@@ -244,6 +261,15 @@ spec:
             items:
               - key: ca.pem
                 path: ca.pem
+        - name: object-storage
+          secret:
+            secretName: kodex-external-s3
+            defaultMode: 0440
+            items:
+              - key: access-key
+                path: access-key-id
+              - key: secret-key
+                path: secret-access-key
         - name: nats-credential
           secret:
             secretName: control-plane-nats

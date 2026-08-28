@@ -4,8 +4,8 @@ title: Runtime, сессии и запуски
 type: architecture
 status: approved
 owner: architect
-version: 1.1.0
-updated: 2026-08-23
+version: 1.1.1
+updated: 2026-08-28
 ---
 
 # Runtime, сессии и запуски
@@ -93,5 +93,6 @@ browser current snapshot, sequence и ordered deltas; reconnect использу
 Control-plane metadata, provider history manifest и Artifacts имеют явную
 retention policy. Execution Pod и ephemeral workspace удаляются только после
 terminal owner state и сохранённого bounded result/history. External channel
-delete не инициирует core cleanup. Long-term external archive backend относится
-к отдельному storage adapter и не обязателен для fresh web-only MVP.
+delete не инициирует core cleanup. До реализации session-archive unit #1002
+session PVC нельзя удалить, если дальнейшее продолжение требует Codex JSONL.
+S3 archive/restore и guarded удаление такого PVC относятся только к #1002.

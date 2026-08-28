@@ -4,8 +4,8 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.0.10
-updated: 2026-08-26
+version: 2.1.0
+updated: 2026-08-28
 ---
 
 # Чистое развертывание Kodex
@@ -27,16 +27,20 @@ bare-metal узла уничтожает все Kubernetes workloads, PVC и con
 5. Grafana, Prometheus, Alertmanager и Headlamp;
 6. локальный OCI registry;
 7. GitHub Actions Runner Controller и rootless BuildKit sidecar;
-8. PostgreSQL, Redis/NATS и все deployable Kodex в `kodex-system`.
+8. PostgreSQL, NATS и все deployable Kodex в `kodex-system`.
 
-S3 не является обязательной зависимостью web-first MVP. Внешний S3 включается
-только явной настройкой для backup/export. Встроенный object storage не
-устанавливается скрыто.
+S3-compatible storage является обязательной зависимостью web-first MVP.
+Production использует заранее созданные внешний HTTPS endpoint и bucket;
+встроенный object storage не разворачивается.
 
-При `KODEX_ENABLE_EXTERNAL_S3=true` установщик материализует параметры в
-Secret `kodex-external-s3`. Пока deployable adapter не выбран продуктовым
-профилем, этот Secret не монтируется в Pod и сам по себе не включает хранение
-artifact или backup.
+При установке компонента `secrets` установщик требует S3 env и материализует
+Secret `kodex-external-s3` с keys `endpoint`, `region`, `bucket`, `access-key`,
+`secret-key`; значения не входят в Git или render. При установке только
+компонента `platform` оператор заранее создаёт Secret с теми же exact keys, а
+установщик выполняет закрытый readback. Control-plane получает metadata через
+`secretKeyRef`, credentials через read-only files и остаётся not ready, если
+Secret, bucket либо authenticated `HeadBucket` недоступны. Bucket создаётся
+оператором до запуска platform.
 
 Служебный bootstrap registry принадлежит namespace `kodex-infra`; application
 registry и workloads Kodex принадлежат `kodex-system`. Смешивать эти границы
@@ -72,6 +76,15 @@ authority, но направляет raw TLS tunnel на этот внутрен
 namespace пока закрыто отклоняется, чтобы manifests и security policy не
 создавали ложную изоляцию.
 
+### Локальный hot-reload
+
+`dev.sh up` добавляет к web-only render SeaweedFS release 4.41 в
+`kodex-system`: один StatefulSet с PVC, внутренний S3 Service на TCP/8333,
+deny-by-default policy и bucket bootstrap Job. `tools/dev/deploy-local.sh`
+создаёт immutable `kodex-external-s3` из случайных credential files и никогда
+не печатает значения. Job создаёт `kodex-artifacts` до migrations и запуска
+control-plane; повторный apply выполняет exact Secret/job/readiness readback.
+
 ## 2. Подготовка `.kodex-env`
 
 ```bash
@@ -96,8 +109,8 @@ chmod 0600 .kodex-env
 - owner PAT и ARC PAT GitHub;
 - registry write identity для existing-Kubernetes без bundled registry;
 - Codex `auth.json` как base64 либо путь к файлу;
-- режим внешних tracing/Sentry exporters и необязательные Sentry/external S3
-  параметры.
+- режим внешних tracing/Sentry exporters, обязательные external S3 параметры и
+  необязательный Sentry DSN.
 
 На доверенном admin host или self-hosted runner файл можно собрать напрямую из
 GitHub Variables/Secrets, предварительно передав их в environment шага:
@@ -110,7 +123,7 @@ GitHub Variables/Secrets, предварительно передав их в en
 
 - Variables: mode, DNS, namespace/context, ingress/OIDC selectors, ACME email;
 - Secrets: Keycloak/owner initial passwords, GitHub PAT, registry password,
-  OpenAI auth, Sentry DSN и S3 credentials;
+  OpenAI auth, Sentry DSN и обязательные S3 credentials;
 - локальный material: `.kodex-material`, CA/private keys и recovery state.
 
 Bundled MVP по умолчанию использует `KODEX_DISABLE_OBSERVABILITY=true`. Это
@@ -217,6 +230,10 @@ runtime-controller. Отсутствующий default `StorageClass` либо �
 Kubernetes Secrets защищаются k3s encryption at rest. Значения запрещены в
 GitHub artifacts, render, logs, Issue/PR и ConfigMap.
 
+Secret `kodex-external-s3` не выдаётся browser, gateway, runtime Pod или agent.
+Production endpoint обязан быть HTTPS без `skipTLSVerify`; local HTTP разрешён
+только для точного Service DNS `seaweedfs-s3.kodex-system.svc.cluster.local`.
+
 ## 4. Preflight и reset
 
 ```bash
@@ -304,7 +321,7 @@ Actions; установщик скачивает digest-bound render и прим
 4. повторный public TLS preflight, CRD и foundation; в режиме `deferred`
    публичный Certificate исключается;
 5. Certificate/Bundle readback;
-6. PostgreSQL и NATS;
+6. PostgreSQL, NATS и проверка обязательного внешнего S3 Secret/bucket;
 7. authority и control-plane migrations;
 8. static PostgreSQL role reconciliation;
 9. broker bootstrap;
@@ -366,6 +383,8 @@ labels и затем воссоздаётся из exact render. Такой же
 - Control Center, Grafana и Headlamp закрыты OAuth2 Proxy;
 - Headlamp пропускает только Keycloak `admin` и использует `cluster-admin`;
 - все platform StatefulSet/Deployment готовы, migration Jobs успешны;
+- production control-plane прошёл authenticated `HeadBucket` внешнего S3, а
+  local SeaweedFS, S3 EndpointSlice и `seaweedfs-bucket-bootstrap` готовы;
 - отсутствуют `CrashLoopBackOff`, `ImagePullBackOff`, `ErrImagePull` и
   `CreateContainerConfigError`;
 - API/OIDC и browser E2E пройдены без раскрытия credentials.

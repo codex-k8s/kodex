@@ -4,8 +4,8 @@ title: Технологический стек
 type: architecture
 status: approved
 owner: architect
-version: 1.1.0
-updated: 2026-07-28
+version: 1.2.0
+updated: 2026-08-28
 ---
 
 # Технологический стек
@@ -23,7 +23,7 @@ updated: 2026-07-28
 | Source of truth | PostgreSQL             | forward-only goose, named SQL                                    |
 | Cache           | Локальный bounded cache; Redis optional | cache не является source of truth                   |
 | Broker          | NATS JetStream         | broker-neutral relay/inbox API                                   |
-| Artifact store  | PostgreSQL bounded content port | fresh MVP; S3 adapter допускается позже                 |
+| Artifact store  | S3-compatible storage | immutable bodies; metadata и exact receipts в PostgreSQL       |
 | Runtime         | Kubernetes             | Kustomize base + environment overlays                            |
 | Secrets         | Kubernetes Secrets     | encryption at rest, exact RBAC и workload-bound delivery         |
 | Identity        | Keycloak/OIDC          | внешняя identity не заменяет доменную authorization              |

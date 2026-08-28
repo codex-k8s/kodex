@@ -4,8 +4,8 @@ title: Infrastructure Guide
 type: guide
 status: approved
 owner: SRE
-version: 2.0.1
-updated: 2026-08-25
+version: 2.1.0
+updated: 2026-08-28
 ---
 
 # Infrastructure Guide
@@ -51,6 +51,12 @@ Static Secret обновляет installer. Runtime key-delivery Secret обно
 annotation и compare/readback. Workload получает только exact keys выбранного
 Secret как read-only volume или `secretKeyRef`.
 
+Artifact storage использует Secret `kodex-external-s3`. Endpoint, region и
+bucket поступают control-plane через `secretKeyRef`; `access-key` и `secret-key`
+монтируются отдельными read-only files. Secret отсутствует в render и Git.
+Локальный `tools/dev/deploy-local.sh` создаёт его из случайных файлов без вывода
+значений; production installer материализует его из owner input.
+
 PostgreSQL bootstrap создаёт `NOLOGIN` group roles. Одноразовая Job задаёт
 SCRAM passwords для закрытого списка LOGIN roles из Secret, после чего migrations
 и runtime используют разные principals. Caller-set GUC не считается identity.
@@ -77,15 +83,21 @@ Prometheus/Alertmanager извне отсутствует.
 
 ## Network policy
 
-Policy строится по итоговому render. Для PostgreSQL, NATS, telemetry,
-Kubernetes API и registry задаются exact destination и port. Правило только по
-порту, wildcard egress и обход proxy запрещены.
+Policy строится по итоговому render. Для PostgreSQL, NATS, object storage,
+telemetry, Kubernetes API и registry задаются exact destination и port. Local
+control-plane обращается только к Pod selector SeaweedFS на TCP/8333. Для
+production внешний S3 должен получить environment-specific exact egress path;
+правило только по порту, wildcard egress и обход proxy запрещены.
 
 ## Stateful dependencies
 
-Web-first профиль включает PostgreSQL и NATS. Redis добавляется только unit,
-которому он действительно нужен. S3 не является обязательным для MVP;
-production backup подключает внешний S3 отдельным capability и Secret.
+Web-first профиль включает PostgreSQL, NATS и обязательный S3-compatible
+artifact storage. Local hot-reload разворачивает SeaweedFS 4.41 с PVC в
+`kodex-system`; production использует внешний S3 и не разворачивает встроенный
+object store. Redis добавляется только unit, которому он действительно нужен.
+
+Session archive/restore и backup controller не являются побочными обязанностями
+artifact storage: это самостоятельные deployable units #1002 и #1003.
 
 ## Ресурсы и устойчивость
 
@@ -102,10 +114,14 @@ CLI/binary/chart pins и SHA-256 хранятся в `tools/install/components.l
 `infra/**/charts.lock.json` и ARC chart lock. Обновление версии выполняется
 отдельным PR с проверкой официальной документации и checksum.
 
+Local SeaweedFS version и immutable image digest зафиксированы в
+`tools/dev/components.lock.json`; manifest получает reference только из этого
+lock при local render.
+
 ## Запрещённые подходы
 
 - secret values в Git, GitHub variables, ConfigMap или manifest;
-- скрытая установка обязательного object storage;
+- скрытая установка либо отключение обязательного artifact object storage;
 - ручной untracked deployment;
 - direct push в `main`;
 - применение render без exact digest/provenance;

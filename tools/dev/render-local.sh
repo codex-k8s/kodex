@@ -59,6 +59,12 @@ done
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 [[ "$repository_root" == "$source_root" ]] || fail 'source root must match the current worktree'
+lock_file="$repository_root/tools/dev/components.lock.json"
+seaweedfs_image=$(jq -er '
+  .images[] | select(.name == "seaweedfs" and .version == "4.41") | .reference
+' "$lock_file") || fail 'SeaweedFS image lock is absent'
+[[ "$seaweedfs_image" =~ ^docker\.io/chrislusf/seaweedfs@sha256:[a-f0-9]{64}$ ]] ||
+  fail 'SeaweedFS image lock is invalid'
 # These directories are mounted directly as hostPath volumes. k3s may remap
 # container root to an unprivileged host UID, so the local-only shared caches
 # must be writable independently of the private state directory permissions.
@@ -72,6 +78,8 @@ chmod 0777 "$source_root/services/staff/control-center/node_modules"
 temporary_directory=$(mktemp -d)
 render="$temporary_directory/local.yaml"
 kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" >"$render"
+printf '\n---\n' >>"$render"
+kubectl kustomize "$repository_root/deploy/k8s/base/local-object-storage" >>"$render"
 
 source_revision=$(git -C "$source_root" rev-parse HEAD)
 source_digest=$(printf '%s' "$source_revision" | sha256sum | awk '{print $1}')
@@ -84,7 +92,8 @@ PUBLIC_HOST="$public_host" PUBLIC_ORIGIN="$public_origin" \
 OIDC_ISSUER="$oidc_issuer" OIDC_JWKS_URL="$oidc_jwks_url" \
 OIDC_HOST="$oidc_host" OIDC_ORIGIN="$oidc_origin" \
 KUBERNETES_SERVICE_CIDR="$kubernetes_service_cidr" \
-SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" yq -i '
+SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
+SEAWEEDFS_IMAGE="$seaweedfs_image" yq -i '
   (.. | select(tag == "!!str")) |= (
     sub("__KODEX_PUBLIC_HOST__"; strenv(PUBLIC_HOST)) |
     sub("__KODEX_PUBLIC_ORIGIN__"; strenv(PUBLIC_ORIGIN)) |
@@ -101,6 +110,7 @@ SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" yq -i '
     sub("__KODEX_OIDC_POD_NAME__"; "sso") |
     sub("__KODEX_OIDC_POD_COMPONENT__"; "identity-provider") |
     sub("__KODEX_KUBERNETES_API_SERVICE_CIDR__"; strenv(KUBERNETES_SERVICE_CIDR)) |
+    sub("__KODEX_SEAWEEDFS_IMAGE__"; strenv(SEAWEEDFS_IMAGE)) |
     sub("registry-pull\\.invalid"; "registry.local.kodex") |
     sub("admission-tools\\.invalid"; "admission-tools.local.kodex")
   ) |
@@ -127,7 +137,8 @@ SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" yq -i '
 # BuildKit и promotion до отдельной локальной задачи.
 yq -i '
   select(
-    .kind != "NetworkPolicy" and
+    (.kind != "NetworkPolicy" or
+      (.metadata.name | test("^(control-plane|seaweedfs)"))) and
     .kind != "PodDisruptionBudget" and
     .kind != "ServiceMonitor" and
     .kind != "PodMonitor" and
@@ -149,7 +160,8 @@ yq -i '
     (.kind != "Job" or .metadata.name == "control-plane-migrate" or
       .metadata.name == "control-plane-broker-bootstrap" or
       .metadata.name == "internal-rpc-authority-migrate" or
-      .metadata.name == "kodex-postgresql-runtime-credentials")
+      .metadata.name == "kodex-postgresql-runtime-credentials" or
+      .metadata.name == "seaweedfs-bucket-bootstrap")
   )
 ' "$render"
 
@@ -159,11 +171,18 @@ OIDC_HOST="$oidc_host" yq -i '
     .data.oidcConnectAddress = "sso.identity.svc.cluster.local:443" |
     .data.oidcTlsServerName = strenv(OIDC_HOST)
   ) |
+  with(select(.kind == "NetworkPolicy" and .metadata.name == "control-plane-exact-runtime-paths");
+    (.spec.egress[].ports[] | select(.port == "__KODEX_OIDC_TARGET_PORT__").port) = 443
+  ) |
   with(select(.kind == "Deployment" and .metadata.name == "control-api-gateway");
     (.spec.template.spec.containers[] | select(.name == "control-api-gateway") |
       .env[] | select(.name == "CONTROL_API_GATEWAY_RATE_LIMIT").value) = "1200" |
     (.spec.template.spec.containers[] | select(.name == "control-api-gateway") |
       .env[] | select(.name == "CONTROL_API_GATEWAY_PER_SUBJECT_WEBSOCKET_CONCURRENCY").value) = "16"
+  ) |
+  with(select(.kind == "Deployment" and .metadata.name == "control-plane");
+    (.spec.template.spec.containers[] | select(.name == "control-plane") |
+      .env[] | select(.name == "CONTROL_PLANE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL").value) = "true"
   ) |
   with(select(.kind == "StatefulSet" and .metadata.name == "kodex-postgresql");
     (.spec.template.spec.containers[] | select(.name == "postgresql") | .args) += [
@@ -542,5 +561,11 @@ yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center"
   fail 'frontend development workload is absent'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$output" >/dev/null ||
   fail 'Control Plane development workload is absent'
+yq -e 'select(.kind == "StatefulSet" and .metadata.name == "seaweedfs")' "$output" >/dev/null ||
+  fail 'SeaweedFS local workload is absent'
+yq -e 'select(.kind == "Job" and .metadata.name == "seaweedfs-bucket-bootstrap")' "$output" >/dev/null ||
+  fail 'SeaweedFS bucket bootstrap is absent'
+yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "control-plane-local-object-storage-egress")' "$output" >/dev/null ||
+  fail 'Control Plane local object storage egress is absent'
 
 printf 'Kodex local render created: %s\n' "$output"

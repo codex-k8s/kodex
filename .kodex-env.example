@@ -75,11 +75,10 @@ KODEX_OPENAI_AUTH_JSON_B64=eyJyZXBsYWNlIjoibWUifQ==
 KODEX_SENTRY_DSN=
 KODEX_DISABLE_OBSERVABILITY=true
 
-# S3 не требуется web-first MVP. При true установщик проверяет параметры
-# внешнего S3; встроенный object storage намеренно не связывается с данными Kodex.
-KODEX_ENABLE_EXTERNAL_S3=false
+# Внешний S3-compatible bucket обязателен для production application-профиля.
+# Локальный hot-reload вместо этих параметров поднимает SeaweedFS внутри k3s.
 KODEX_S3_ENDPOINT=https://s3.example.com
 KODEX_S3_REGION=us-east-1
-KODEX_S3_BUCKET=kodex-backups
+KODEX_S3_BUCKET=kodex-artifacts
 KODEX_S3_ACCESS_KEY=
 KODEX_S3_SECRET_KEY=

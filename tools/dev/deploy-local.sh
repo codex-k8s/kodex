@@ -26,7 +26,7 @@ done
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
 [[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
-for command_name in jq kubectl yq; do
+for command_name in jq kubectl openssl yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'Kubernetes context mismatch'
@@ -105,6 +105,85 @@ ensure_seed_secrets() {
   done < <(yq -N -r 'select(.kind == "Secret") | .metadata.name' "$render" | sort -u)
 }
 
+readback_local_object_storage_secret() {
+  local state
+  state=$(kubectl -n "$namespace" get secret/kodex-external-s3 -o json 2>/dev/null) ||
+    fail 'local object storage Secret is absent'
+  jq -e '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["app.kubernetes.io/name"] == "seaweedfs" and
+    .metadata.labels["app.kubernetes.io/component"] == "object-storage" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .immutable == true and
+    ((.data | keys | sort) ==
+      (["access-key","bucket","endpoint","region","s3.json","secret-key"] | sort)) and
+    ((.data.endpoint | @base64d) ==
+      "http://seaweedfs-s3.kodex-system.svc.cluster.local:8333") and
+    ((.data.region | @base64d) == "us-east-1") and
+    ((.data.bucket | @base64d) == "kodex-artifacts") and
+    ((.data["s3.json"] | @base64d | fromjson) as $config |
+      ($config.identities | length) == 1 and
+      $config.identities[0].name == "control-plane" and
+      ($config.identities[0].credentials | length) == 1 and
+      $config.identities[0].credentials[0].accessKey ==
+        ((.data["access-key"] | @base64d) | rtrimstr("\n")) and
+      $config.identities[0].credentials[0].secretKey ==
+        ((.data["secret-key"] | @base64d) | rtrimstr("\n")) and
+      ($config.identities[0].actions | sort) ==
+        (["Admin","List","Read","Tagging","Write"] | sort))
+  ' <<<"$state" >/dev/null || fail 'local object storage Secret readback failed'
+}
+
+ensure_local_object_storage_secret() {
+  local secret_directory="$temporary_directory/object-storage-secret"
+  if kubectl -n "$namespace" get secret/kodex-external-s3 >/dev/null 2>&1; then
+    readback_local_object_storage_secret
+    return
+  fi
+
+  install -d -m 0700 "$secret_directory"
+  openssl rand -hex 16 >"$secret_directory/access-key"
+  openssl rand -hex 32 >"$secret_directory/secret-key"
+  printf '%s' 'http://seaweedfs-s3.kodex-system.svc.cluster.local:8333' >"$secret_directory/endpoint"
+  printf '%s' 'us-east-1' >"$secret_directory/region"
+  printf '%s' 'kodex-artifacts' >"$secret_directory/bucket"
+  jq -n --rawfile access_key "$secret_directory/access-key" \
+    --rawfile secret_key "$secret_directory/secret-key" '
+      {
+        identities: [{
+          name: "control-plane",
+          credentials: [{
+            accessKey: ($access_key | rtrimstr("\n")),
+            secretKey: ($secret_key | rtrimstr("\n"))
+          }],
+          actions: ["Admin","Read","List","Tagging","Write"]
+        }]
+      }
+    ' >"$secret_directory/s3.json"
+  chmod 0600 "$secret_directory"/*
+
+  kubectl -n "$namespace" create secret generic kodex-external-s3 \
+    --from-file=access-key="$secret_directory/access-key" \
+    --from-file=secret-key="$secret_directory/secret-key" \
+    --from-file=endpoint="$secret_directory/endpoint" \
+    --from-file=region="$secret_directory/region" \
+    --from-file=bucket="$secret_directory/bucket" \
+    --from-file=s3.json="$secret_directory/s3.json" \
+    --dry-run=client -o yaml |
+    yq '
+      .immutable = true |
+      .metadata.labels = {
+        "app.kubernetes.io/part-of":"kodex",
+        "app.kubernetes.io/name":"seaweedfs",
+        "app.kubernetes.io/component":"object-storage",
+        "app.kubernetes.io/managed-by":"tools-dev",
+        "kodex.dev/local-profile":"hot-reload"
+      }
+    ' |
+    kubectl apply --server-side --field-manager=kodex-local-dev -f - >/dev/null
+  readback_local_object_storage_secret
+}
+
 wait_warm_runtime() {
   local pod=system-assistant-warm deadline=$((SECONDS + 300))
   while ((SECONDS < deadline)); do
@@ -158,6 +237,7 @@ wait_stable_workloads() {
 }
 
 if [[ "$mode" == apply ]]; then
+  ensure_local_object_storage_secret
   ensure_seed_secrets
   apply_render foundation '
     select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "Job" and
@@ -165,10 +245,12 @@ if [[ "$mode" == apply ]]; then
   '
   wait_certificates
   apply_render statefulsets 'select(.kind == "StatefulSet")'
-  for workload in kodex-postgresql kodex-nats; do
+  for workload in kodex-postgresql kodex-nats seaweedfs; do
     kubectl -n "$namespace" rollout status "statefulset/$workload" --timeout=10m >/dev/null ||
       fail "local StatefulSet is unavailable: $workload"
   done
+
+  apply_job seaweedfs-bucket-bootstrap
 
   apply_job internal-rpc-authority-migrate
   apply_job control-plane-migrate
@@ -184,7 +266,8 @@ if [[ "$mode" == apply ]]; then
 fi
 
 wait_certificates
-for workload in kodex-postgresql kodex-nats; do
+readback_local_object_storage_secret
+for workload in kodex-postgresql kodex-nats seaweedfs; do
   kubectl -n "$namespace" rollout status "statefulset/$workload" --timeout=10m >/dev/null ||
     fail "local StatefulSet is unavailable: $workload"
 done
@@ -197,11 +280,19 @@ while IFS= read -r workload; do
   }
 done < <(yq -N -r 'select(.kind == "Deployment") | .metadata.name' "$render" | sort -u)
 
-for job in internal-rpc-authority-migrate control-plane-migrate \
+for job in seaweedfs-bucket-bootstrap internal-rpc-authority-migrate control-plane-migrate \
   kodex-postgresql-runtime-credentials control-plane-broker-bootstrap; do
   [[ "$(kubectl -n "$namespace" get "job/$job" -o jsonpath='{.status.succeeded}')" == 1 ]] ||
     fail "local Job readback failed: $job"
 done
+
+kubectl -n "$namespace" get endpointslice \
+  -l kubernetes.io/service-name=seaweedfs-s3 -o json | jq -e '
+    any(.items[];
+      any(.ports[]?; .name == "s3" and .protocol == "TCP" and .port == 8333) and
+      any(.endpoints[]?; .conditions.ready == true and (.addresses | length) > 0)
+    )
+  ' >/dev/null || fail 'SeaweedFS S3 EndpointSlice readback failed'
 
 wait_warm_runtime
 wait_stable_workloads

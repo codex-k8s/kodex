@@ -40,7 +40,10 @@ jq -e '
   .schemaVersion == 1 and (.charts | length) == 1 and
   .charts[0].name == "traefik" and
   (.charts[0].version | test("^[0-9]+\\.[0-9]+\\.[0-9]+$")) and
-  (.charts[0].sha256 | test("^[a-f0-9]{64}$"))
+  (.charts[0].sha256 | test("^[a-f0-9]{64}$")) and
+  (.images | length) == 1 and .images[0].name == "seaweedfs" and
+  .images[0].version == "4.41" and
+  (.images[0].reference | test("^docker\\.io/chrislusf/seaweedfs@sha256:[a-f0-9]{64}$"))
 ' "$lock_file" >/dev/null || fail 'development component lock is invalid'
 
 download_chart() {

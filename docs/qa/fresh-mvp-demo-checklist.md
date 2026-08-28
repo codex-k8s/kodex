@@ -4,7 +4,7 @@ title: Проверка fresh web-only MVP перед демонстрацией
 type: qa-checklist
 status: approved
 owner: qa
-version: 1.2.0
+version: 1.3.0
 updated: 2026-08-28
 ---
 
@@ -136,6 +136,11 @@ TLS-сертификата и финальный trusted E2E после отде
       Gate, а детерминированный fault-injection требует отдельной безопасной
       оснастки и не является условием продуктовой приёмки этого local MVP.
 
+Результаты `LOCAL-01`--`LOCAL-18` получены до обязательного S3 baseline из
+Issue #996 и не доказывают SeaweedFS render, bucket bootstrap либо хранение
+artifact body вне PostgreSQL. Для нового exact SHA эти пункты и S3-проверки
+ниже выполняются заново; перенос прежнего `PASS` запрещён.
+
 ## 3. Фаза A: pre-public-TLS readback
 
 Эта фаза не открывает публичный origin и не инициирует ACME issuance. Она
@@ -177,6 +182,10 @@ TLS-сертификата и финальный trusted E2E после отде
 - [ ] `DATA-05` В Pod specs нет неожиданных Secret mounts/env, service-account
       token не монтируется туда, где он не требуется; результат: `________`;
       evidence: `________________`.
+- [ ] `DATA-06` PostgreSQL содержит только artifact metadata и exact S3 receipt;
+      новый artifact body отсутствует в `bytea`, а object key/version/ETag,
+      digest и size совпадают с авторитетным readback; результат: `________`;
+      evidence: `________________`.
 
 ### 3.3 Внутренний trust и stateful dependencies
 
@@ -193,6 +202,11 @@ TLS-сертификата и финальный trusted E2E после отде
       `________________`.
 - [ ] `STATE-03` PostgreSQL и NATS Service имеют готовые EndpointSlice без
       `notReadyAddresses`; результат: `________`; evidence: `________________`.
+- [ ] `STATE-04` В local-профиле SeaweedFS 4.41 использует digest-pinned image,
+      Ready StatefulSet, Bound PVC и готовый S3 EndpointSlice TCP/8333. В
+      production встроенный SeaweedFS отсутствует, а control-plane проходит
+      authenticated `HeadBucket` внешнего HTTPS S3; результат: `________`;
+      evidence: `________________`.
 
 ### 3.4 Migrations, bootstrap jobs и authority
 
@@ -209,6 +223,11 @@ TLS-сертификата и финальный trusted E2E после отде
 - [ ] `JOB-06` Для всех Jobs отсутствуют активные/failed attempts после
       terminal success; в безопасных логах нет secret values; результат:
       `________`; evidence: `________________`.
+- [ ] `JOB-07` В local-профиле `seaweedfs-bucket-bootstrap` имеет
+      `succeeded=1`, повторный apply подтверждает существующий
+      `kodex-artifacts`, а logs/render/evidence не содержат credentials;
+      production использует заранее созданный bucket и получает `NOT RUN` для
+      local Job; результат: `________`; evidence: `________________`.
 - [ ] `AUTH-01` `internal-rpc-authority-publisher` полностью готов; результат:
       `________`; evidence: `________________`.
 - [ ] `AUTH-02` Обычные dynamic Secret projections имеют generation больше
@@ -451,9 +470,10 @@ limit. До этого запрещены повторные issuance/reissuance
 - [ ] `FLOW-16` ИИ-сотрудник с capability `Файлы` получает только exact CLEAN
       версии, закреплённые в `RuntimeRevision`: digest/size повторно проверены,
       содержимое доступно в private workspace, broad storage credential
-      отсутствует. Generated artifact связан с exact Session/Turn/Run/node/
-      attempt до terminal transition; результат: `________`; evidence:
-      `________________`.
+      отсутствует. Upload/download и generated artifact используют immutable S3
+      body с PostgreSQL receipt; artifact связан с exact
+      Session/Turn/Run/node/attempt до terminal transition; результат:
+      `________`; evidence: `________________`.
 - [ ] `FLOW-17` Markdown и структурированный результат отображаются inline
       безопасным renderer: HTML и script не исполняются, внешние изображения
       самопроизвольно не загружаются, raw JSON/provider output не подменяет
@@ -592,7 +612,8 @@ npm run test:e2e
 - `ARCH-MC-007`, `ARCH-MC-008`, `ARCH-MC-011` — server-owned execution,
   RuntimeRevision, artifact materialization и fresh web-only профиль.
 - `ADR-MC-004`, `ADR-MC-006`, `ADR-MC-007`, `ADR-MC-011` — account affinity,
-  bounded artifact storage, durable schedule и политика координации.
+  обязательное S3-хранилище artifact bodies, durable schedule и политика
+  координации.
 - `GOV-DOC-003` — классификация PASS/FAIL/NOT RUN и граница browser E2E.
 - `RUN-MC-002` — порядок fresh installation и обязательный readback.
 - Playwright `/microsoft/playwright/v1.61.0` через Context7 — automatic
@@ -619,5 +640,7 @@ npm run test:e2e
   catalog и отсутствие подключений являются штатным Ready-состоянием
   web-only core по [PRD-MC-005](../product/requirements.md) и
   [ARCH-MC-011](../architecture/web-first-platform-reset.md).
-- Multipart/large-object upload и обязательный внешний object storage не входят
-  в fresh MVP по [ADR-MC-006](../decisions/0006-artifact-storage.md).
+- Multipart/large-object upload и range download не входят в fresh MVP.
+  S3-compatible storage обязательно по
+  [ADR-MC-006](../decisions/0006-artifact-storage.md); session archive и backup
+  controller остаются отдельными units #1002 и #1003.

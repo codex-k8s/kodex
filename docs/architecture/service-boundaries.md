@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.3.0
-updated: 2026-08-25
+version: 1.3.1
+updated: 2026-08-28
 ---
 
 # Границы сервисов и структура репозитория
@@ -53,7 +53,7 @@ runbook и ручная проверка входят в один Issue и од�
 | ------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
 | `internal-rpc-authority` | workload-local internal sidecar | короткоживущие authorization contexts, signing key lifecycle, JWKS manifest и verifier snapshot                                            | пользователи, роли, проекты, permissions и transport identity caller    |
 | `control-plane`          | internal service                | организации, Проекты, агенты, role image lifecycle, integrations metadata, runtime revisions, sessions, Run graph/events, schedules, memory, gates и artifact metadata | channel transport, Kubernetes resources, MCP execution и AI process  |
-| `runtime-controller`     | internal controller             | reconciliation pod/PVC/Secret/ConfigMap, capacity, TTL, archive/restore и runtime health                                                   | бизнесовая конфигурация, Codex process и пользовательские сообщения     |
+| `runtime-controller`     | internal controller             | reconciliation pod/PVC/Secret/ConfigMap, capacity, TTL и runtime health; archive/restore добавит отдельный unit #1002                     | бизнесовая конфигурация, Codex process, session archive job и пользовательские сообщения |
 | `control-api-gateway`    | external gateway                | HTTP/WebSocket transport state и owner session boundary                                                                                    | domain state и прямой доступ к PostgreSQL                               |
 | `egress-gateway`         | platform external gateway       | immutable FQDN/443 policy, CONNECT+ClientHello SNI validation, server-owned DNS snapshot и literal dial                                    | TLS termination, application credentials, provider lifecycle и business state |
 | `interaction-gateway`    | optional external adapter       | independent inbound/notification/result-mirror/gate-decision deliveries                                                                     | core readiness, sessions, gates, artifacts и terminal Run state          |
