@@ -9,6 +9,7 @@ import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import SafeSummary from "@/shared/ui/SafeSummary.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const platform = usePlatformStore();
@@ -110,10 +111,10 @@ onMounted(() => void load());
             <h3>{{ agent.name }}</h3>
             <p>{{ agent.purpose }}</p>
           </div>
-          <StatusBadge :state="agent.state" /><span>{{
-            agent.currentActivity ?? agent.roleDescription
-          }}</span></RouterLink
-        >
+          <StatusBadge :state="agent.state" /><SafeSummary
+            :content="agent.currentActivity"
+            :fallback="agent.roleDescription"
+        /></RouterLink>
       </div>
     </AsyncState>
     <ModalDialog

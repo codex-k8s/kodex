@@ -205,6 +205,10 @@ func transportError(err error) error {
 		return status.Error(codes.AlreadyExists, "idempotency key was reused with a different intent")
 	case errors.Is(err, errs.ErrProtected):
 		return status.Error(codes.FailedPrecondition, "protected system resource cannot be changed")
+	case errors.Is(err, errs.ErrCapabilityRequired):
+		return status.Error(codes.FailedPrecondition, "required capability is not enabled")
+	case errors.Is(err, errs.ErrAlreadyResolved):
+		return status.Error(codes.FailedPrecondition, "resource is already resolved")
 	case errors.Is(err, errs.ErrConflict):
 		return status.Error(codes.Aborted, "resource state changed")
 	case errors.Is(err, errs.ErrUnavailable):

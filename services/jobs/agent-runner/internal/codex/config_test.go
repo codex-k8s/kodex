@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -35,10 +36,17 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	metadata, err := toml.Decode(string(raw), &config)
 	profile := config.Permissions[config.DefaultPermissions]
 	if err != nil || len(metadata.Undecoded()) != 0 || profile.Extends != ":workspace" ||
-		profile.Filesystem[home] != "deny" || profile.Filesystem[filepath.Join(home, "**")] != "deny" ||
-		profile.Filesystem["/proc/**"] != "deny" ||
+		profile.Filesystem[filepath.Join(home, "auth.json")] != "deny" || profile.Filesystem[home] != "" ||
+		profile.Filesystem["/proc"] != "deny" ||
+		profile.Filesystem["/run/secrets"] != "deny" ||
+		profile.Filesystem["/var/run/secrets"] != "" ||
 		config.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" {
 		t.Fatalf("provider permission boundary is incomplete: %#v", config)
+	}
+	for path := range profile.Filesystem {
+		if filepath.IsAbs(path) && strings.Contains(path, "*") {
+			t.Fatalf("absolute deny path must not require a pre-sandbox glob scan: %q", path)
+		}
 	}
 }
 

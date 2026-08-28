@@ -46,9 +46,14 @@ type Config struct {
 // После restart leases истекают в control-plane и материализуются заново.
 type Coordinator struct {
 	mu   sync.Mutex
-	warm []runtimecontract.RunnerInput
+	warm []warmExecution
 	wake chan struct{}
 	done map[string]chan struct{}
+}
+
+type warmExecution struct {
+	input               runtimecontract.RunnerInput
+	compatibilityDigest string
 }
 
 func NewCoordinator() *Coordinator {
@@ -66,21 +71,22 @@ func (coordinator *Coordinator) Register(input runtimecontract.RunnerInput) <-ch
 	return done
 }
 
-func (coordinator *Coordinator) EnqueueWarm(input runtimecontract.RunnerInput) error {
-	if input.Mode != runtimecontract.RunnerModeTurn || !input.SystemAssistant || input.Validate() != nil {
+func (coordinator *Coordinator) EnqueueWarm(input runtimecontract.RunnerInput, compatibilityDigest string) error {
+	if input.Mode != runtimecontract.RunnerModeTurn || !input.SystemAssistant || input.Validate() != nil ||
+		len(compatibilityDigest) != sha256.Size*2 {
 		return errors.New("warm execution input is invalid")
 	}
 	coordinator.mu.Lock()
 	defer coordinator.mu.Unlock()
 	for _, current := range coordinator.warm {
-		if current.LeaseRef == input.LeaseRef {
+		if current.input.LeaseRef == input.LeaseRef {
 			return nil
 		}
 	}
 	if len(coordinator.warm) >= 16 {
 		return errors.New("warm execution queue is full")
 	}
-	coordinator.warm = append(coordinator.warm, input)
+	coordinator.warm = append(coordinator.warm, warmExecution{input: input, compatibilityDigest: compatibilityDigest})
 	select {
 	case coordinator.wake <- struct{}{}:
 	default:
@@ -92,10 +98,10 @@ func (coordinator *Coordinator) NextWarm(ctx context.Context, revisionDigest str
 	for {
 		coordinator.mu.Lock()
 		for index, input := range coordinator.warm {
-			if input.RuntimeRevisionDigest == revisionDigest {
+			if input.compatibilityDigest == revisionDigest {
 				coordinator.warm = append(coordinator.warm[:index], coordinator.warm[index+1:]...)
 				coordinator.mu.Unlock()
-				return input, true
+				return input.input, true
 			}
 		}
 		coordinator.mu.Unlock()
@@ -264,19 +270,28 @@ func (server *Server) artifact(writer http.ResponseWriter, request *http.Request
 
 func (server *Server) nextWarm(writer http.ResponseWriter, request *http.Request) {
 	revisionRef := request.Header.Get("X-Kodex-Runtime-Revision")
+	revisionDigest := request.Header.Get("X-Kodex-Runtime-Revision-Digest")
 	token, ok := bearer(request)
 	if !ok {
+		server.logger.WarnContext(request.Context(), "warm runtime callback authorization rejected", "error_class", "bearer")
 		http.NotFound(writer, request)
 		return
 	}
-	bound, err := server.manager.ResolveWarm(request.Context(), revisionRef, token)
+	bound, err := server.manager.ResolveWarm(request.Context(), revisionRef, revisionDigest, token)
 	if err != nil {
+		server.logger.WarnContext(request.Context(), "warm runtime callback authorization rejected", "error_class", "ticket", "reason", err.Error())
+		http.NotFound(writer, request)
+		return
+	}
+	compatibilityDigest, err := runtimecontract.WarmCompatibilityDigest(bound)
+	if err != nil {
+		server.logger.WarnContext(request.Context(), "warm runtime callback authorization rejected", "error_class", "compatibility")
 		http.NotFound(writer, request)
 		return
 	}
 	wait, cancel := context.WithTimeout(request.Context(), server.config.WarmLongPoll)
 	defer cancel()
-	input, available := server.coordinator.NextWarm(wait, bound.RuntimeRevisionDigest)
+	input, available := server.coordinator.NextWarm(wait, compatibilityDigest)
 	writer.Header().Set("Content-Type", "application/json")
 	if !available {
 		writer.WriteHeader(http.StatusNoContent)
@@ -324,7 +339,8 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(request.Context()), server.config.RequestTimeout)
 	defer cancel()
-	_, err := server.control.Runtime.CompleteExecution(ctx, &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "complete")}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: payload.Success, ResultSummary: payload.ResultSummary, SafeErrorCode: payload.SafeErrorCode, Artifacts: artifacts})
+	usage := &controlplanev1.TokenUsage{TotalTokens: payload.Usage.TotalTokens, InputTokens: payload.Usage.InputTokens, CachedInputTokens: payload.Usage.CachedInputTokens, CacheWriteInputTokens: payload.Usage.CacheWriteInputTokens, OutputTokens: payload.Usage.OutputTokens, ReasoningOutputTokens: payload.Usage.ReasoningOutputTokens, ModelContextWindow: payload.Usage.ModelContextWindow}
+	_, err := server.control.Runtime.CompleteExecution(ctx, &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "complete")}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: payload.Success, ResultSummary: payload.ResultSummary, SafeErrorCode: payload.SafeErrorCode, Artifacts: artifacts, Usage: usage})
 	if err != nil && status.Code(err) != codes.AlreadyExists {
 		writeControlError(writer, err)
 		return
@@ -345,6 +361,12 @@ type mcpRequest struct {
 	ID      json.RawMessage `json:"id"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params,omitempty"`
+}
+
+type mcpToolCallParams struct {
+	Name      string          `json:"name"`
+	Arguments map[string]any  `json:"arguments"`
+	Metadata  json.RawMessage `json:"_meta,omitempty"`
 }
 
 func (server *Server) mcp(writer http.ResponseWriter, request *http.Request, leaseRef string) {
@@ -373,7 +395,7 @@ func (server *Server) mcp(writer http.ResponseWriter, request *http.Request, lea
 func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{}
 	if input.SystemAssistant {
-		result = append(result, assistantPlanTool())
+		result = append(result, configurationCatalogTool(), assistantPlanTool(input))
 	}
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, delegationTool(input.DelegationTargets))
@@ -413,19 +435,16 @@ func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string
 }
 
 func (server *Server) callTool(writer http.ResponseWriter, request *http.Request, rpc mcpRequest, input runtimecontract.RunnerInput) {
-	var params struct {
-		Name      string         `json:"name"`
-		Arguments map[string]any `json:"arguments"`
-	}
-	decoder := json.NewDecoder(bytes.NewReader(rpc.Params))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&params) != nil || !errors.Is(decoder.Decode(&struct{}{}), io.EOF) {
+	params, err := decodeMCPToolCallParams(rpc.Params)
+	if err != nil {
 		server.writeMCPError(writer, rpc.ID, -32602, "Invalid params")
 		return
 	}
 	var result any
-	var err error
+	err = nil
 	switch params.Name {
+	case "get_configuration_catalog":
+		result, err = configurationCatalog(input, params.Arguments)
 	case "propose_configuration_plan":
 		result, err = server.proposeAssistantPlan(request.Context(), input, params.Arguments, rpc.ID)
 	case "delegate_agent":
@@ -440,6 +459,23 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		encoded, _ = json.Marshal(map[string]string{"error_code": "TOOL_UNAVAILABLE"})
 	}
 	server.writeMCPResult(writer, rpc.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "isError": err != nil})
+}
+
+func decodeMCPToolCallParams(raw json.RawMessage) (mcpToolCallParams, error) {
+	var params mcpToolCallParams
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&params) != nil || !errors.Is(decoder.Decode(&struct{}{}), io.EOF) ||
+		params.Name == "" || params.Arguments == nil {
+		return mcpToolCallParams{}, errors.New("MCP tool call params are invalid")
+	}
+	if len(params.Metadata) != 0 {
+		var metadata map[string]json.RawMessage
+		if json.Unmarshal(params.Metadata, &metadata) != nil {
+			return mcpToolCallParams{}, errors.New("MCP tool call metadata is invalid")
+		}
+	}
+	return params, nil
 }
 
 func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {

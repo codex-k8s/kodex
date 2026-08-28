@@ -87,14 +87,42 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	if !hasMount(pod.Spec.Containers[1], "provider-auth") {
 		t.Fatal("provider runtime has no provider authentication mount")
 	}
-	if input.CodexHome != "/tmp/codex-home" {
-		t.Fatalf("provider state path = %q; secret-bearing state must not use the session volume", input.CodexHome)
+	providerMounts := make(map[string]string)
+	for _, mount := range pod.Spec.Containers[1].VolumeMounts {
+		if mount.Name == "provider-auth" {
+			if !mount.ReadOnly {
+				t.Fatal("provider authentication mount is writable")
+			}
+			providerMounts[mount.MountPath] = mount.SubPath
+		}
+	}
+	if providerMounts[input.ProviderAuthFile] != "auth.json" ||
+		providerMounts[input.ProviderAuthSHA256File] != "auth.sha256" || len(providerMounts) != 2 {
+		t.Fatalf("provider credentials are not mounted as exact subPath files: %#v", providerMounts)
+	}
+	providerSecurity := pod.Spec.Containers[1].SecurityContext
+	if providerSecurity == nil || providerSecurity.RunAsUser == nil || *providerSecurity.RunAsUser != 10002 ||
+		providerSecurity.AllowPrivilegeEscalation == nil || *providerSecurity.AllowPrivilegeEscalation ||
+		providerSecurity.ReadOnlyRootFilesystem == nil || !*providerSecurity.ReadOnlyRootFilesystem ||
+		providerSecurity.SeccompProfile == nil || providerSecurity.SeccompProfile.Type != corev1.SeccompProfileTypeUnconfined ||
+		providerSecurity.AppArmorProfile == nil || providerSecurity.AppArmorProfile.Type != corev1.AppArmorProfileTypeUnconfined {
+		t.Fatalf("provider sandbox security context = %#v", providerSecurity)
+	}
+	if input.CodexHome != "/workspace/.kodex/state/codex-home" {
+		t.Fatalf("provider state path = %q; resumable Codex state must use the session volume", input.CodexHome)
 	}
 	if len(input.InputArtifacts) != 1 || input.InputArtifacts[0].Ref != "artifact_abcdefgh" || input.InputArtifacts[0].Digest != testArtifactDigest {
 		t.Fatalf("runtime artifact catalog = %#v", input.InputArtifacts)
 	}
+	if input.ProjectRef != "prj_abcdefgh" {
+		t.Fatalf("runtime project binding = %q", input.ProjectRef)
+	}
 	if !hasEnv(pod.Spec.Containers[1], "HTTPS_PROXY", "http://egress-gateway.kodex-system.svc:8080") {
 		t.Fatal("provider runtime is not fenced through the egress gateway")
+	}
+	if !hasEnv(pod.Spec.Containers[0], "OTEL_SDK_DISABLED", "true") ||
+		!hasEnv(pod.Spec.Containers[0], "DEPLOYMENT_ENVIRONMENT", "test") {
+		t.Fatal("role runtime does not have a valid telemetry identity")
 	}
 	secret, err := client.CoreV1().Secrets("kodex-system").Get(context.Background(), ticketName(input.LeaseRef), metav1.GetOptions{})
 	if err != nil || secret.Immutable == nil || !*secret.Immutable || len(secret.Data[ticketKey]) != 64 {
@@ -159,6 +187,45 @@ func TestValidateImageAcceptsOnlyPromotedOrExactReleaseDefault(t *testing.T) {
 	}
 }
 
+func TestBuildTurnInputSelectsCodexSandboxFromArtifactCapability(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		capabilities []*controlplanev1.PlatformCapability
+		want         string
+	}{
+		{
+			name:         "artifact output",
+			capabilities: []*controlplanev1.PlatformCapability{{Key: runtimecontract.ArtifactCapability}},
+			want:         "workspace-write",
+		},
+		{name: "no capability", want: "read-only"},
+		{
+			name:         "unknown workspace capability",
+			capabilities: []*controlplanev1.PlatformCapability{{Key: "platform.workspace.write"}},
+			want:         "read-only",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			execution := testExecution(false)
+			execution.Revision.Capabilities = test.capabilities
+			if test.want == "read-only" {
+				execution.Revision.Artifacts = nil
+			}
+			manager := newTestManager(t, fake.NewSimpleClientset())
+			input, _, err := manager.BuildTurnInput(execution)
+			if err != nil {
+				t.Fatalf("BuildTurnInput() error = %v", err)
+			}
+			if input.CodexSandbox != test.want {
+				t.Fatalf("CodexSandbox = %q, want %q", input.CodexSandbox, test.want)
+			}
+		})
+	}
+}
+
 func TestTurnPodStateRejectsStaleWarmRevision(t *testing.T) {
 	warmPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "system-assistant-warm", Namespace: "kodex-system", Annotations: map[string]string{revisionAnnotation: strings.Repeat("c", 64)}}, Status: corev1.PodStatus{Phase: corev1.PodRunning}}
 	client := fake.NewSimpleClientset(warmPod)
@@ -167,12 +234,67 @@ func TestTurnPodStateRejectsStaleWarmRevision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildTurnInput() error = %v", err)
 	}
-	state, err := manager.TurnPodState(context.Background(), input)
+	state, err := manager.TurnPodState(context.Background(), input, true)
 	if err != nil {
 		t.Fatalf("TurnPodState() error = %v", err)
 	}
 	if state != "CONFLICT" {
 		t.Fatalf("TurnPodState() = %q, want CONFLICT", state)
+	}
+}
+
+func TestTurnPodStateUsesColdPodForSystemAssistantFallback(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, binding, err := manager.BuildTurnInput(testExecution(true))
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+		t.Fatalf("EnsureTurn() error = %v", err)
+	}
+	state, err := manager.TurnPodState(context.Background(), input, false)
+	if err != nil {
+		t.Fatalf("TurnPodState() error = %v", err)
+	}
+	if state != "UNKNOWN" {
+		t.Fatalf("TurnPodState() = %q, want UNKNOWN for fake cold Pod", state)
+	}
+}
+
+func TestWarmCompatibilityIgnoresTurnIdentityButRejectsRuntimeDrift(t *testing.T) {
+	t.Parallel()
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	warm, _, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	if err != nil {
+		t.Fatalf("BuildWarmInput() error = %v", err)
+	}
+	turn, _, err := manager.BuildTurnInput(testExecution(true))
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	turn.RuntimeRevisionRef = "revision_turn1234"
+	turn.RuntimeRevisionDigest = strings.Repeat("e", 64)
+	turn.SessionRef = "session_turn1234"
+	turn.Task = "A different bounded turn input."
+	warmDigest, err := runtimecontract.WarmCompatibilityDigest(warm)
+	if err != nil {
+		t.Fatalf("WarmCompatibilityDigest(warm) error = %v", err)
+	}
+	turnDigest, err := runtimecontract.WarmCompatibilityDigest(turn)
+	if err != nil {
+		t.Fatalf("WarmCompatibilityDigest(turn) error = %v", err)
+	}
+	if warmDigest != turnDigest {
+		t.Fatalf("turn identity changed warm compatibility: warm=%s turn=%s", warmDigest, turnDigest)
+	}
+	turn.Model = "different-model"
+	drifted, err := runtimecontract.WarmCompatibilityDigest(turn)
+	if err != nil {
+		t.Fatalf("WarmCompatibilityDigest(drifted turn) error = %v", err)
+	}
+	if drifted == warmDigest {
+		t.Fatal("model drift preserved warm compatibility")
 	}
 }
 
@@ -183,7 +305,7 @@ func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildWarmInput() error = %v", err)
 	}
-	terminal := manager.runtimePod(input, binding, ticketName("warm-"+input.RuntimeRevisionRef), "system-assistant-warm", "warm")
+	terminal := manager.runtimePod(input, binding, manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), "system-assistant-warm", "warm")
 	terminal.Status.Phase = corev1.PodFailed
 	if _, err := client.CoreV1().Pods("kodex-system").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Create(terminal warm Pod) error = %v", err)
@@ -204,6 +326,38 @@ func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
 	}
 }
 
+func TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, binding, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	if err != nil {
+		t.Fatalf("BuildWarmInput() error = %v", err)
+	}
+	terminal := manager.runtimePod(input, binding, manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), "system-assistant-warm", "warm")
+	terminal.Status.Phase = corev1.PodRunning
+	terminal.Status.ContainerStatuses = []corev1.ContainerStatus{
+		{Name: "role-runtime", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}}},
+		{Name: "provider-runtime", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+	}
+	if _, err := client.CoreV1().Pods("kodex-system").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create(terminal warm Pod) error = %v", err)
+	}
+	ready, err := manager.EnsureWarm(context.Background(), input, binding)
+	if err != nil {
+		t.Fatalf("EnsureWarm() error = %v", err)
+	}
+	if ready {
+		t.Fatal("recreated warm Pod cannot be ready before Kubernetes observation")
+	}
+	pod, err := client.CoreV1().Pods("kodex-system").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get(recreated warm Pod) error = %v", err)
+	}
+	if warmPodTerminal(pod) {
+		t.Fatalf("running warm Pod with a terminated runtime was not recreated: %#v", pod.Status.ContainerStatuses)
+	}
+}
+
 func TestEnsureWarmReplacesTicketFromPreviousControllerInstance(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -218,10 +372,46 @@ func TestEnsureWarmReplacesTicketFromPreviousControllerInstance(t *testing.T) {
 		t.Fatalf("EncodeRunnerInput() error = %v", err)
 	}
 	immutable := true
-	secretName := ticketName("warm-" + input.RuntimeRevisionRef)
+	secretName := ticketName("warm-legacy-" + input.RuntimeRevisionRef)
 	_, err = client.CoreV1().Secrets("kodex-system").Create(context.Background(), &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "kodex-system",
 			Annotations: map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, controllerAnnotation: "previous-controller"}},
+		Immutable: &immutable, Data: map[string][]byte{inputKey: raw, ticketKey: []byte(strings.Repeat("a", 64))},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Create(stale warm ticket) error = %v", err)
+	}
+	if _, err := manager.EnsureWarm(context.Background(), input, binding); err != nil {
+		t.Fatalf("EnsureWarm() error = %v", err)
+	}
+	current, err := client.CoreV1().Secrets("kodex-system").Get(context.Background(), manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get(current warm ticket) error = %v", err)
+	}
+	bound, err := runtimecontract.DecodeRunnerInput(current.Data[inputKey])
+	if err != nil || bound.WorkloadInstance != "controller-pod-uid" || current.Annotations[controllerAnnotation] != "controller-pod-uid" {
+		t.Fatalf("warm ticket still belongs to previous controller: input=%#v err=%v", bound, err)
+	}
+}
+
+func TestEnsureWarmReplacesTicketWithStaleCallbackAddress(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, binding, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	if err != nil {
+		t.Fatalf("BuildWarmInput() error = %v", err)
+	}
+	staleInput := input
+	staleInput.CallbackURL = "https://10.0.0.9:8444"
+	raw, err := runtimecontract.EncodeRunnerInput(staleInput)
+	if err != nil {
+		t.Fatalf("EncodeRunnerInput() error = %v", err)
+	}
+	immutable := true
+	secretName := manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest)
+	_, err = client.CoreV1().Secrets("kodex-system").Create(context.Background(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "kodex-system",
+			Annotations: map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, controllerAnnotation: manager.config.ControllerPodUID}},
 		Immutable: &immutable, Data: map[string][]byte{inputKey: raw, ticketKey: []byte(strings.Repeat("a", 64))},
 	}, metav1.CreateOptions{})
 	if err != nil {
@@ -235,8 +425,8 @@ func TestEnsureWarmReplacesTicketFromPreviousControllerInstance(t *testing.T) {
 		t.Fatalf("Get(current warm ticket) error = %v", err)
 	}
 	bound, err := runtimecontract.DecodeRunnerInput(current.Data[inputKey])
-	if err != nil || bound.WorkloadInstance != "controller-pod-uid" || current.Annotations[controllerAnnotation] != "controller-pod-uid" {
-		t.Fatalf("warm ticket still belongs to previous controller: input=%#v err=%v", bound, err)
+	if err != nil || bound.CallbackURL != input.CallbackURL {
+		t.Fatalf("warm ticket retained stale callback address: input=%#v err=%v", bound, err)
 	}
 }
 
@@ -292,14 +482,15 @@ func testManagerConfig() Config {
 
 func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 	return &controlplanev1.ClaimedExecution{
-		Run: &controlplanev1.Run{Ref: "run_abcdefgh"}, Node: &controlplanev1.RunNode{Ref: "node_abcdefgh"},
+		Run: &controlplanev1.Run{Ref: "run_abcdefgh", ProjectRef: "prj_abcdefgh"}, Node: &controlplanev1.RunNode{Ref: "node_abcdefgh"},
 		Revision: &controlplanev1.RuntimeRevisionSnapshot{
 			Ref: "revision_abcdefgh", Version: 1, SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", Attempt: 1,
 			AgentRef: "agent_abcdefgh", Instructions: "Complete the server-owned task.", Runtime: &controlplanev1.RuntimeSelection{Provider: "openai", Model: "codex"},
 			RevisionDigest: strings.Repeat("a", 64), SystemAssistant: systemAssistant,
 			ImageReference: "registry.example/kodex/roles@" + testDigest, ImageManifestDigest: testDigest,
 			RoleRuntimeContractRevision: 1, RoleRuntimeContractSha256: testContractDigest,
-			Artifacts: []*controlplanev1.Artifact{{Ref: "artifact_abcdefgh", FileName: "brief.txt", MediaType: "text/plain", SizeBytes: 12, Digest: testArtifactDigest, Revision: 1, Version: 1}},
+			Capabilities: []*controlplanev1.PlatformCapability{{Key: runtimecontract.ArtifactCapability}},
+			Artifacts:    []*controlplanev1.Artifact{{Ref: "artifact_abcdefgh", FileName: "brief.txt", MediaType: "text/plain", SizeBytes: 12, Digest: testArtifactDigest, Revision: 1, Version: 1}},
 			ProviderCredential: &controlplanev1.ProviderCredentialBinding{
 				AccountRef: "pacc_abcdefgh", CredentialRevisionRef: "pcr_abcdefgh", CredentialRevision: 1,
 				SecretName: "runtime-provider-openai-default-r1", SecretUid: "10000000-0000-4000-8000-000000000001",

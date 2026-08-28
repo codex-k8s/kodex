@@ -33,3 +33,16 @@ func TestCastRuntimeRevisionPreservesUnsignedContractRevision(t *testing.T) {
 		t.Fatalf("revision runtime-контракта потеряна: %d", revision.GetRoleRuntimeContractRevision())
 	}
 }
+
+func TestCastClaimPreservesAuthoritativeProjectBinding(t *testing.T) {
+	t.Parallel()
+
+	claim := castClaim(map[string]any{
+		"runRef":     "run_abcdefgh",
+		"projectRef": "prj_abcdefgh",
+		"sessionRef": "ses_abcdefgh",
+	})
+	if claim.GetRun().GetProjectRef() != "prj_abcdefgh" {
+		t.Fatalf("project binding потерян: %q", claim.GetRun().GetProjectRef())
+	}
+}

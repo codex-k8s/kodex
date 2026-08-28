@@ -131,6 +131,14 @@ func (server *Server) GetAgent(w http.ResponseWriter, r *http.Request, ref gener
 	}
 	writeMessage(w, http.StatusOK, response, "agent", "")
 }
+func (server *Server) ListAgentInstructionVersions(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.ListAgentInstructionVersionsParams) {
+	response, err := server.control.Query.ListAgentInstructionVersions(r.Context(), &controlplanev1.ListAgentInstructionVersionsRequest{AgentRef: ref, Page: page(p.PageSize, p.PageToken)})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "instructionVersions")
+}
 func (server *Server) ListWorkflows(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListWorkflowsParams) {
 	r, ok := withProjectReference(w, r, ref)
 	if !ok {
@@ -195,7 +203,11 @@ func (server *Server) ListRunEvents(w http.ResponseWriter, r *http.Request, ref 
 	}
 	value["items"] = value["events"]
 	delete(value, "events")
+	if localizer, ok := w.(interface{ Localize(string) string }); ok {
+		LocalizeSafeErrors(value, localizer.Localize)
+	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
 	_ = jsonEncoder(w).Encode(value)
 }
 func (server *Server) ListOwnerGates(w http.ResponseWriter, r *http.Request, p generated.ListOwnerGatesParams) {

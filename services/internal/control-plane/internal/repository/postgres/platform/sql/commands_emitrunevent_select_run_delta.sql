@@ -7,6 +7,7 @@ SELECT root.ref,
        root.graph_revision,
        root.event_sequence,
        root.version,
+       root.usage,
        COALESCE((
            SELECT array_agg(artifact.ref ORDER BY artifact.created_at)
            FROM control_plane.artifacts artifact

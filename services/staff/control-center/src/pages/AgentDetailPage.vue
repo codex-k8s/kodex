@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
+import InstructionHistory from "@/features/agents/components/InstructionHistory.vue";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
@@ -57,6 +58,9 @@ const latestBuild = computed(() => {
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
 });
 const instructions = ref("");
+const instructionHistory = computed(
+  () => platform.instructionVersions[agentRef.value] ?? [],
+);
 const task = ref("");
 const busy = ref(false);
 const editingProfile = ref(false);
@@ -86,6 +90,7 @@ function hasCapability(key: string): boolean {
 async function load() {
   await Promise.all([
     platform.loadAgent(agentRef.value),
+    platform.loadInstructionVersions(agentRef.value),
     platform.loadRuntimes(),
     platform.loadCapabilities(),
   ]);
@@ -174,20 +179,13 @@ async function prepareRoleEnvironment() {
   busy.value = true;
   problem.value = undefined;
   try {
-    const recipe = await platform.saveRoleImageRecipe(
+    await platform.saveRoleImageRecipe(
       projectRef.value,
       agent.value.roleDefinitionRef,
       t("roleEnvironments.recipeName", { name: agent.value.name }),
       { environmentKey: selectedEnvironment.value },
       roleImageRecipe.value,
     );
-    if (recipe.nextActions.includes("REQUEST_BUILD")) {
-      await platform.changeRoleImageRecipe(
-        projectRef.value,
-        recipe,
-        "REQUEST_BUILD",
-      );
-    }
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -228,7 +226,30 @@ async function instructionAction(action: "VALIDATE" | "PUBLISH" | "ROLLBACK") {
   busy.value = true;
   problem.value = undefined;
   try {
-    await platform.instructionCommand(agent.value, action);
+    const updated = await platform.instructionCommand(agent.value, action);
+    instructions.value =
+      updated.draftInstructions?.content ??
+      updated.publishedInstructions?.content ??
+      "";
+    await platform.loadInstructionVersions(agentRef.value);
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    busy.value = false;
+  }
+}
+async function rollbackInstructions(publishedInstructionRef: string) {
+  if (!agent.value?.nextActions.includes("ROLLBACK")) return;
+  busy.value = true;
+  problem.value = undefined;
+  try {
+    const updated = await platform.instructionCommand(
+      agent.value,
+      "ROLLBACK",
+      publishedInstructionRef,
+    );
+    instructions.value = updated.publishedInstructions?.content ?? "";
+    await platform.loadInstructionVersions(agentRef.value);
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -455,6 +476,18 @@ onMounted(() => void load());
                 {{ $t("agents.publish") }}
               </button>
             </div>
+            <InstructionHistory
+              :versions="instructionHistory"
+              :current-ref="agent.publishedInstructions?.ref"
+              :can-rollback="agent.nextActions.includes('ROLLBACK')"
+              :busy="busy"
+              @rollback="rollbackInstructions"
+            />
+            <ProblemNotice
+              v-if="platform.problems.instructionVersions"
+              :problem="platform.problems.instructionVersions"
+              compact
+            />
           </article>
           <article class="panel role-environment-panel">
             <div class="section-header">

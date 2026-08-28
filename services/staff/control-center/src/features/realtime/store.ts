@@ -95,6 +95,9 @@ const platformKinds = new Set<PlatformKind>([
   "ROLE_IMAGE_RECIPE",
 ]);
 
+// Browsers only permit applications to send close code 1000 or 3000-4999.
+const clientReconnectCloseCode = 4000;
+
 export type PlatformSequenceOutcome =
   | "applied"
   | "duplicate"
@@ -260,7 +263,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
         if (outcome === "gap" || outcome === "invalid") {
           state[runRef] = { state: "recovering", attempt: previousAttempt };
           socket.close(
-            1012,
+            clientReconnectCloseCode,
             outcome === "gap" ? "GAP_DETECTED" : "INVALID_DELTA",
           );
         }
@@ -272,7 +275,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
         const ready = envelope as unknown as ReadyWire;
         if ((platform.graphs[runRef]?.sequence ?? 0) !== ready.latestSequence) {
           state[runRef] = { state: "recovering", attempt: previousAttempt };
-          socket.close(1012, "READY_SEQUENCE_MISMATCH");
+          socket.close(clientReconnectCloseCode, "READY_SEQUENCE_MISMATCH");
           return;
         }
         state[runRef] = { state: "live", attempt: 0 };
@@ -445,7 +448,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
             );
             if (outcome === "duplicate") return;
             if (outcome !== "applied") {
-              socket.close(1012, "GAP_DETECTED");
+              socket.close(clientReconnectCloseCode, "GAP_DETECTED");
               return;
             }
             await platform.reloadPlatformKind(invalidation.kind);
@@ -458,7 +461,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
               !Number.isSafeInteger(envelope.latestSequence) ||
               Number(envelope.latestSequence) !== platformSequence.value
             ) {
-              socket.close(1012, "READY_SEQUENCE_MISMATCH");
+              socket.close(clientReconnectCloseCode, "READY_SEQUENCE_MISMATCH");
               return;
             }
             Object.assign(platformState, {
@@ -490,7 +493,10 @@ export const useRealtimeStore = defineStore("realtime", () => {
               Number(envelope.latestSequence) !== platformSequence.value ||
               typeof envelope.serverTime !== "string"
             ) {
-              socket.close(1012, "HEARTBEAT_SEQUENCE_MISMATCH");
+              socket.close(
+                clientReconnectCloseCode,
+                "HEARTBEAT_SEQUENCE_MISMATCH",
+              );
               return;
             }
             Object.assign(platformState, {
@@ -509,7 +515,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
             attempt: previousAttempt,
             problemCode: "AUTHORITATIVE_RELOAD_FAILED",
           });
-          socket.close(1012, "AUTHORITATIVE_RELOAD_FAILED");
+          socket.close(clientReconnectCloseCode, "AUTHORITATIVE_RELOAD_FAILED");
         });
     });
     socket.addEventListener("close", () => {

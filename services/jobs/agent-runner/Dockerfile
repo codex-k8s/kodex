@@ -9,7 +9,7 @@ RUN mkdir -p /out /tmp/kodex-go-build-cache \
 	&& /usr/bin/env -i PATH=/usr/local/go/bin:/usr/bin:/bin HOME=/tmp GOCACHE=/tmp/kodex-go-build-cache GOENV=off GOTOOLCHAIN=local GOWORK=off CGO_ENABLED=0 /usr/local/go/bin/go build -trimpath -buildvcs=false -o /out/kodex-go-toolchain-guard /tmp/kodex-go-toolchain-guard.go \
 	&& rm -rf /tmp/kodex-go-toolchain-guard.go /tmp/kodex-go-build-cache
 
-FROM docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS context
+FROM docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS runner-build
 
 ENV GOTOOLCHAIN=local
 
@@ -23,6 +23,42 @@ RUN go mod download
 RUN test "$(go env GOVERSION)" = "go1.26.6"
 RUN mkdir -p /out/kodex-protected \
 	&& CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-X main.buildVersion=0.1.0' -o /out/kodex-protected/kodex-agent-runner ./cmd/agent-runner
+
+# Локальный runtime сохраняет тот же защищенный entrypoint и UID-контракт, но
+# не собирает полный набор инструментов роли. Production-образ остается
+# последним stage этого Dockerfile и не зависит от local-runtime.
+FROM docker.io/library/node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 AS local-runtime
+
+ARG KODEX_CODEX_PACKAGE=@openai/codex@0.144.1
+
+RUN set -eu; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends bubblewrap ca-certificates git openssh-client tini; \
+	npm install --global "${KODEX_CODEX_PACKAGE}"; \
+	groupadd --gid 10001 kodex; \
+	useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin kodex; \
+	mkdir -p /home/kodex /workspace /codex-home /run/secrets/kodex/runtime/provider; \
+	touch /run/secrets/kodex/runtime/provider/auth.json /run/secrets/kodex/runtime/provider/auth.sha256; \
+	chmod 0755 /run/secrets/kodex/runtime/provider; \
+	chmod 0400 /run/secrets/kodex/runtime/provider/auth.json /run/secrets/kodex/runtime/provider/auth.sha256; \
+	chown -R 10001:10001 /home/kodex /workspace /codex-home; \
+	codex --version >/dev/null; \
+	rm -rf /var/lib/apt/lists/* /root/.cache
+
+COPY --chmod=0555 --from=build /out/kodex-go-toolchain-guard /usr/local/bin/kodex-init
+COPY --chmod=0555 --from=runner-build /out/kodex-protected/kodex-agent-runner /usr/local/bin/kodex-agent-runner
+
+ENV HOME=/home/kodex \
+	NPM_CONFIG_CACHE=/home/kodex/.npm \
+	XDG_CONFIG_HOME=/home/kodex/.config \
+	XDG_CACHE_HOME=/home/kodex/.cache
+
+USER 10001:10001
+
+ENTRYPOINT ["/usr/local/bin/kodex-init", "entrypoint", "/usr/local/bin/kodex-agent-runner"]
+CMD ["runtime-session"]
+
+FROM runner-build AS toolchain-build
 
 ARG GOOSE_VERSION=v3.27.1
 ARG OAPI_CODEGEN_VERSION=v2.7.1
@@ -82,12 +118,12 @@ ARG WAIT_ON_VERSION=9.0.10
 ARG KODEX_AGENT_RUNNER_UID=10001
 ARG KODEX_AGENT_RUNNER_GID=10001
 
-COPY --from=1 /out/kodex-protected/ /usr/local/bin/
+COPY --from=toolchain-build /out/kodex-protected/ /usr/local/bin/
 
 ENV PATH=/opt/kodex/bootstrap-go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin \
 	PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-COPY --from=0 /usr/local/go/ /opt/kodex/bootstrap-go/
+COPY --from=build /usr/local/go/ /opt/kodex/bootstrap-go/
 
 RUN set -eu; \
 	test -f /etc/apt/sources.list.d/debian.sources; \
@@ -98,6 +134,7 @@ RUN set -eu; \
 	apt-get update; \
 	apt-get install -y --no-install-recommends \
 		bash \
+		bubblewrap \
 		build-essential \
 		ca-certificates \
 		chromium \
@@ -218,7 +255,10 @@ RUN set -eu; \
 
 RUN groupadd --gid "${KODEX_AGENT_RUNNER_GID}" kodex \
 	&& useradd --uid "${KODEX_AGENT_RUNNER_UID}" --gid "${KODEX_AGENT_RUNNER_GID}" --no-create-home --shell /usr/sbin/nologin kodex \
-	&& mkdir -p /home/kodex/.npm /home/kodex/.config /home/kodex/.cache /workspace /codex-home \
+	&& mkdir -p /home/kodex/.npm /home/kodex/.config /home/kodex/.cache /workspace /codex-home /run/secrets/kodex/runtime/provider \
+	&& touch /run/secrets/kodex/runtime/provider/auth.json /run/secrets/kodex/runtime/provider/auth.sha256 \
+	&& chmod 0755 /run/secrets/kodex/runtime/provider \
+	&& chmod 0400 /run/secrets/kodex/runtime/provider/auth.json /run/secrets/kodex/runtime/provider/auth.sha256 \
 	&& chown -R "${KODEX_AGENT_RUNNER_UID}:${KODEX_AGENT_RUNNER_GID}" /home/kodex /workspace /codex-home
 
 ENV HOME=/home/kodex \
@@ -226,11 +266,11 @@ ENV HOME=/home/kodex \
 	XDG_CONFIG_HOME=/home/kodex/.config \
 	XDG_CACHE_HOME=/home/kodex/.cache
 
-COPY --chmod=0555 --from=0 /out/kodex-go-toolchain-guard /kodex-go-toolchain-guard
+COPY --chmod=0555 --from=build /out/kodex-go-toolchain-guard /kodex-go-toolchain-guard
 RUN ["/kodex-go-toolchain-guard", "prepare", "services"]
-COPY --from=0 /usr/local/go/ /usr/local/go/
-COPY --from=1 /out/kodex-protected/ /opt/kodex/protected-artifacts/
-COPY --from=0 /out/kodex-go-toolchain-guard /opt/kodex/protected-artifacts/kodex-init
+COPY --from=build /usr/local/go/ /usr/local/go/
+COPY --from=toolchain-build /out/kodex-protected/ /opt/kodex/protected-artifacts/
+COPY --from=build /out/kodex-go-toolchain-guard /opt/kodex/protected-artifacts/kodex-init
 ENV GOROOT=/usr/local/go \
 	GOENV=off \
 	GOFLAGS= \

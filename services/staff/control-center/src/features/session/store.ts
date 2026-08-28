@@ -35,6 +35,7 @@ export type SessionPhase =
 
 const sessionRevisionKey = "kodex.session.revision";
 const sessionRenewalIntervalMs = 5 * 60 * 1000;
+const sessionProbeRetryDelaysMs = [250, 500, 1_000] as const;
 
 function oidcManager(): UserManager {
   const config = runtimeConfig().oidc;
@@ -81,22 +82,34 @@ export const useSessionStore = defineStore("session", () => {
     const current = ++generation;
     phase.value = "checking";
     problem.value = undefined;
-    try {
-      await unwrap(getBootstrapState({ signal: requestSignal() }));
-      if (current !== generation) return;
-      phase.value = "authenticated";
-      startRenewal();
-      resetUnauthorizedNotification();
-    } catch (error) {
-      if (current !== generation) return;
-      const normalized = asProblem(error);
-      problem.value = normalized;
-      phase.value =
-        normalized.kind === "unauthorized"
-          ? "unauthenticated"
-          : normalized.kind === "forbidden"
-            ? "forbidden"
-            : "error";
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await unwrap(getBootstrapState({ signal: requestSignal() }));
+        if (current !== generation) return;
+        phase.value = "authenticated";
+        startRenewal();
+        resetUnauthorizedNotification();
+        return;
+      } catch (error) {
+        if (current !== generation) return;
+        const normalized = asProblem(error);
+        const retryDelay = sessionProbeRetryDelaysMs[attempt];
+        if (normalized.retryable && retryDelay !== undefined) {
+          await new Promise<void>((resolve) =>
+            globalThis.setTimeout(resolve, retryDelay),
+          );
+          if (current !== generation) return;
+          continue;
+        }
+        problem.value = normalized;
+        phase.value =
+          normalized.kind === "unauthorized"
+            ? "unauthenticated"
+            : normalized.kind === "forbidden"
+              ? "forbidden"
+              : "error";
+        return;
+      }
     }
   }
 

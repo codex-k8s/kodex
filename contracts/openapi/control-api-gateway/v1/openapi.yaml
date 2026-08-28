@@ -436,6 +436,18 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Agent' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/agents/{agentRef}/instruction-versions:
+    get:
+      tags: [Agents]
+      operationId: listAgentInstructionVersions
+      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: История опубликованных версий инструкций
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstructionVersionPage' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/agents/{agentRef}/commands:
     post:
       tags: [Agents]
@@ -457,7 +469,7 @@ paths:
     post:
       tags: [Agents]
       operationId: createInstructionDraft
-      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/IfMatchOptional' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
       requestBody:
         required: true
         content:
@@ -1444,13 +1456,14 @@ components:
     BootstrapState:
       type: object
       additionalProperties: false
-      required: [initialized, onboardingComplete, webOnlyReady, assistant, currentUser, nextActions]
+      required: [initialized, onboardingComplete, webOnlyReady, assistant, currentUser, platformRole, nextActions]
       properties:
         initialized: { type: boolean }
         onboardingComplete: { type: boolean }
         webOnlyReady: { type: boolean }
         assistant: { $ref: '#/components/schemas/SystemAssistant' }
         currentUser: { $ref: '#/components/schemas/UserSummary' }
+        platformRole: { type: string, enum: [OWNER, ADMINISTRATOR, OPERATOR, MEMBER, AUDITOR] }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
     Project:
       type: object
@@ -1561,6 +1574,13 @@ components:
         validationMessages: { type: array, maxItems: 100, items: { type: string, maxLength: 300 } }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         publishedAt: { $ref: '#/components/schemas/Timestamp' }
+    InstructionVersionPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/InstructionVersion' } }
+        nextPageToken: { type: string, maxLength: 32 }
     Agent:
       type: object
       additionalProperties: false
@@ -1878,10 +1898,22 @@ components:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         displayName: { type: string, maxLength: 160 }
         version: { type: integer, format: int64, minimum: 1 }
+    TokenUsage:
+      type: object
+      additionalProperties: false
+      required: [totalTokens, inputTokens, cachedInputTokens, cacheWriteInputTokens, outputTokens, reasoningOutputTokens, modelContextWindow]
+      properties:
+        totalTokens: { type: integer, format: int64, minimum: 0 }
+        inputTokens: { type: integer, format: int64, minimum: 0 }
+        cachedInputTokens: { type: integer, format: int64, minimum: 0 }
+        cacheWriteInputTokens: { type: integer, format: int64, minimum: 0 }
+        outputTokens: { type: integer, format: int64, minimum: 0 }
+        reasoningOutputTokens: { type: integer, format: int64, minimum: 0 }
+        modelContextWindow: { type: integer, format: int64, minimum: 0 }
     Run:
       type: object
       additionalProperties: false
-      required: [ref, version, projectRef, sessionRef, rootRunRef, target, title, state, source, initiator, attempt, graphRevision, lastEventSequence, createdAt, nextActions]
+      required: [ref, version, projectRef, sessionRef, rootRunRef, target, title, state, source, initiator, attempt, graphRevision, lastEventSequence, usage, inputArtifactRefs, artifactRefs, gateRefs, createdAt, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -1903,6 +1935,10 @@ components:
         resultSummary: { type: string, maxLength: 4000 }
         safeErrorCode: { type: string, maxLength: 80 }
         safeErrorMessage: { type: string, maxLength: 500 }
+        usage: { $ref: '#/components/schemas/TokenUsage' }
+        inputArtifactRefs: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        artifactRefs: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        gateRefs: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/OpaqueRef' } }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         startedAt: { $ref: '#/components/schemas/Timestamp' }
         finishedAt: { $ref: '#/components/schemas/Timestamp' }
@@ -1949,7 +1985,7 @@ components:
     RunDelta:
       type: object
       additionalProperties: false
-      required: [ref, version, state, graphRevision, lastEventSequence, artifactRefs, gateRefs, nextActions]
+      required: [ref, version, state, graphRevision, lastEventSequence, usage, artifactRefs, gateRefs, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -1959,6 +1995,7 @@ components:
         resultSummary: { type: string, maxLength: 4000 }
         safeErrorCode: { type: string, maxLength: 80 }
         safeErrorMessage: { type: string, maxLength: 500 }
+        usage: { $ref: '#/components/schemas/TokenUsage' }
         artifactRefs: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/OpaqueRef' } }
         gateRefs: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/OpaqueRef' } }
         startedAt: { $ref: '#/components/schemas/Timestamp' }

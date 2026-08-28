@@ -96,6 +96,115 @@ func TestNormalizeEnumCollections(t *testing.T) {
 	}
 }
 
+func TestMessageMapConvertsProtoInt64ToOpenAPIJSONNumber(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.AssistantPlan{Ref: "pln-example", Version: 7})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["version"] != float64(7) {
+		t.Fatalf("version не преобразован в JSON number: %#v", value)
+	}
+	for _, key := range []string{"operations", "nextActions"} {
+		if items, ok := value[key].([]any); !ok || len(items) != 0 {
+			t.Fatalf("пустая обязательная коллекция %s не материализована: %#v", key, value)
+		}
+	}
+	if _, exists := value["projectRef"]; exists {
+		t.Fatalf("отсутствующая optional ссылка ошибочно материализована: %#v", value)
+	}
+}
+
+func TestMessageMapMaterializesZeroTokenUsage(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.Run{
+		Ref:   "run-example",
+		Usage: &controlplanev1.TokenUsage{},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	usage, ok := value["usage"].(map[string]any)
+	if !ok {
+		t.Fatalf("нулевой TokenUsage не материализован: %#v", value)
+	}
+	for _, key := range []string{
+		"totalTokens",
+		"inputTokens",
+		"cachedInputTokens",
+		"cacheWriteInputTokens",
+		"outputTokens",
+		"reasoningOutputTokens",
+		"modelContextWindow",
+	} {
+		if usage[key] != float64(0) {
+			t.Fatalf("нулевое поле %s не материализовано как JSON number: %#v", key, usage)
+		}
+	}
+}
+
+func TestMessageMapDoesNotMaterializeAbsentOptionalScalar(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.MutationContext{IdempotencyKey: "idem-example"})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if _, exists := value["expectedVersion"]; exists {
+		t.Fatalf("отсутствующее optional поле ошибочно материализовано: %#v", value)
+	}
+}
+
+func TestMessageMapMaterializesNestedEmptyCollections(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.ListAssistantConversationsResponse{
+		Conversations: []*controlplanev1.AssistantConversation{{Ref: "cnv-example", Version: 1}},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	conversations, ok := value["conversations"].([]any)
+	if !ok || len(conversations) != 1 {
+		t.Fatalf("conversation list искажён: %#v", value)
+	}
+	conversation := conversations[0].(map[string]any)
+	if turns, ok := conversation["turns"].([]any); !ok || len(turns) != 0 {
+		t.Fatalf("пустой обязательный turns не материализован: %#v", conversation)
+	}
+}
+
+func TestMessageMapPreservesRunNodeIdentityWhileNormalizingRunTarget(t *testing.T) {
+	t.Parallel()
+	value, err := messageMap(&controlplanev1.GetRunGraphResponse{
+		Run: &controlplanev1.Run{
+			Ref:    "run_example001",
+			Target: targetProto("AGENT", "agt_example001"),
+		},
+		Graph: &controlplanev1.RunGraph{
+			RunRef: "run_example001",
+			Nodes: []*controlplanev1.RunNode{{
+				Ref: "nod_example001", RunRef: "run_example001", AgentRef: "agt_example001",
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	run := value["run"].(map[string]any)
+	target := run["target"].(map[string]any)
+	if target["type"] != "AGENT" || target["ref"] != "agt_example001" {
+		t.Fatalf("run target не нормализован: %#v", target)
+	}
+	nodes := value["graph"].(map[string]any)["nodes"].([]any)
+	node := nodes[0].(map[string]any)
+	if node["ref"] != "nod_example001" || node["agentRef"] != "agt_example001" {
+		t.Fatalf("identity agent node искажена: %#v", node)
+	}
+}
+
 func TestNormalizeFlattensAgentRuntimeWithExplicitReadiness(t *testing.T) {
 	t.Parallel()
 	value := map[string]any{"runtime": map[string]any{

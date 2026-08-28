@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -254,8 +255,12 @@ func (repository *Repository) changeArtifactBinding(ctx context.Context, tx pgx.
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	var agentID string
-	if err := tx.QueryRow(ctx, queryArtifactsChangeartifactbindingSelectAgentsOrganizationIdProjectIdRef, scope.organizationID, projectID, payload.AgentRef).Scan(&agentID); err != nil {
+	var canManageArtifacts bool
+	if err := tx.QueryRow(ctx, queryArtifactsChangeartifactbindingSelectAgentsOrganizationIdProjectIdRef, scope.organizationID, projectID, payload.AgentRef, runtimecontract.ArtifactCapability).Scan(&agentID, &canManageArtifacts); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
+	}
+	if payload.Enabled && !canManageArtifacts {
+		return commandOutcome{}, errs.ErrConflict
 	}
 	changed := false
 	if payload.Enabled {

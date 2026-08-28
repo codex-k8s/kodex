@@ -33,6 +33,7 @@ const (
 	PlatformQueryService_ListProjectMembershipCandidates_FullMethodName  = "/controlplane.v1.PlatformQueryService/ListProjectMembershipCandidates"
 	PlatformQueryService_ListAgents_FullMethodName                       = "/controlplane.v1.PlatformQueryService/ListAgents"
 	PlatformQueryService_GetAgent_FullMethodName                         = "/controlplane.v1.PlatformQueryService/GetAgent"
+	PlatformQueryService_ListAgentInstructionVersions_FullMethodName     = "/controlplane.v1.PlatformQueryService/ListAgentInstructionVersions"
 	PlatformQueryService_ListWorkflows_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListWorkflows"
 	PlatformQueryService_GetWorkflow_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetWorkflow"
 	PlatformQueryService_ListRuns_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListRuns"
@@ -71,6 +72,7 @@ type PlatformQueryServiceClient interface {
 	ListProjectMembershipCandidates(ctx context.Context, in *ListProjectMembershipCandidatesRequest, opts ...grpc.CallOption) (*ListProjectMembershipCandidatesResponse, error)
 	ListAgents(ctx context.Context, in *ListAgentsRequest, opts ...grpc.CallOption) (*ListAgentsResponse, error)
 	GetAgent(ctx context.Context, in *GetAgentRequest, opts ...grpc.CallOption) (*GetAgentResponse, error)
+	ListAgentInstructionVersions(ctx context.Context, in *ListAgentInstructionVersionsRequest, opts ...grpc.CallOption) (*ListAgentInstructionVersionsResponse, error)
 	ListWorkflows(ctx context.Context, in *ListWorkflowsRequest, opts ...grpc.CallOption) (*ListWorkflowsResponse, error)
 	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*GetWorkflowResponse, error)
 	ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error)
@@ -231,6 +233,16 @@ func (c *platformQueryServiceClient) GetAgent(ctx context.Context, in *GetAgentR
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetAgentResponse)
 	err := c.cc.Invoke(ctx, PlatformQueryService_GetAgent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListAgentInstructionVersions(ctx context.Context, in *ListAgentInstructionVersionsRequest, opts ...grpc.CallOption) (*ListAgentInstructionVersionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAgentInstructionVersionsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListAgentInstructionVersions_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -417,6 +429,7 @@ type PlatformQueryServiceServer interface {
 	ListProjectMembershipCandidates(context.Context, *ListProjectMembershipCandidatesRequest) (*ListProjectMembershipCandidatesResponse, error)
 	ListAgents(context.Context, *ListAgentsRequest) (*ListAgentsResponse, error)
 	GetAgent(context.Context, *GetAgentRequest) (*GetAgentResponse, error)
+	ListAgentInstructionVersions(context.Context, *ListAgentInstructionVersionsRequest) (*ListAgentInstructionVersionsResponse, error)
 	ListWorkflows(context.Context, *ListWorkflowsRequest) (*ListWorkflowsResponse, error)
 	GetWorkflow(context.Context, *GetWorkflowRequest) (*GetWorkflowResponse, error)
 	ListRuns(context.Context, *ListRunsRequest) (*ListRunsResponse, error)
@@ -484,6 +497,9 @@ func (UnimplementedPlatformQueryServiceServer) ListAgents(context.Context, *List
 }
 func (UnimplementedPlatformQueryServiceServer) GetAgent(context.Context, *GetAgentRequest) (*GetAgentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAgent not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListAgentInstructionVersions(context.Context, *ListAgentInstructionVersionsRequest) (*ListAgentInstructionVersionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAgentInstructionVersions not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) ListWorkflows(context.Context, *ListWorkflowsRequest) (*ListWorkflowsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListWorkflows not implemented")
@@ -802,6 +818,24 @@ func _PlatformQueryService_GetAgent_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformQueryServiceServer).GetAgent(ctx, req.(*GetAgentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListAgentInstructionVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAgentInstructionVersionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListAgentInstructionVersions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListAgentInstructionVersions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListAgentInstructionVersions(ctx, req.(*ListAgentInstructionVersionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1156,6 +1190,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAgent",
 			Handler:    _PlatformQueryService_GetAgent_Handler,
+		},
+		{
+			MethodName: "ListAgentInstructionVersions",
+			Handler:    _PlatformQueryService_ListAgentInstructionVersions_Handler,
 		},
 		{
 			MethodName: "ListWorkflows",

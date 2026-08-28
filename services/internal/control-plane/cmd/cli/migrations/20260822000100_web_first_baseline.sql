@@ -367,7 +367,6 @@ CREATE TABLE control_plane.instruction_versions (
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     published_at timestamptz,
     UNIQUE (agent_id, version_number),
-    UNIQUE (agent_id, digest),
     CHECK ((state = 'PUBLISHED') = (published_at IS NOT NULL))
 );
 

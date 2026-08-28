@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "charts": [
+    {
+      "name": "traefik",
+      "repository": "https://traefik.github.io/charts",
+      "chart": "traefik",
+      "version": "41.3.0",
+      "sha256": "3b38b4d9aa1237902d0043f36f0c21c9b3afc4458ccd6310f0f4a284b2c6c7d8"
+    }
+  ],
+  "tools": {
+    "air": {
+      "module": "github.com/air-verse/air",
+      "version": "v1.63.4"
+    }
+  }
+}

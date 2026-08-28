@@ -28,13 +28,14 @@ import (
 )
 
 const (
-	managedLabel         = "runtime.kodex.dev/managed"
-	modeLabel            = "runtime.kodex.dev/mode"
-	revisionAnnotation   = "runtime.kodex.dev/revision-digest"
-	controllerAnnotation = "runtime.kodex.dev/controller-pod-uid"
-	podAnnotation        = "runtime.kodex.dev/pod-name"
-	inputKey             = "runtime.json"
-	ticketKey            = "token"
+	managedLabel                = "runtime.kodex.dev/managed"
+	modeLabel                   = "runtime.kodex.dev/mode"
+	revisionAnnotation          = "runtime.kodex.dev/revision-digest"
+	warmCompatibilityAnnotation = "runtime.kodex.dev/warm-compatibility-digest"
+	controllerAnnotation        = "runtime.kodex.dev/controller-pod-uid"
+	podAnnotation               = "runtime.kodex.dev/pod-name"
+	inputKey                    = "runtime.json"
+	ticketKey                   = "token"
 )
 
 type Config struct {
@@ -171,6 +172,7 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 	revision := execution.GetRevision()
 	input := manager.baseInput(revision, runtimecontract.RunnerModeTurn)
 	input.RunRef, input.NodeRef, input.SessionRef, input.TurnRef = execution.GetRun().GetRef(), execution.GetNode().GetRef(), revision.GetSessionRef(), revision.GetTurnRef()
+	input.ProjectRef = execution.GetRun().GetProjectRef()
 	input.AgentRef, input.Attempt = revision.GetAgentRef(), revision.GetAttempt()
 	input.LeaseRef, input.LeaseFence, input.LeaseGeneration = execution.GetLease().GetRef(), execution.GetLease().GetFence(), execution.GetLease().GetGeneration()
 	input.Task, input.BoundedInput = execution.GetTask(), map[string]any{}
@@ -201,7 +203,7 @@ func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionS
 
 func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapshot, mode string) runtimecontract.RunnerInput {
 	return runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV4, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
+		Schema: runtimecontract.RunnerInputSchemaV5, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
 		RuntimeRevisionRef: revision.GetRef(), RuntimeRevisionVersion: revision.GetVersion(), RuntimeRevisionDigest: revision.GetRevisionDigest(),
 		ImageReference: revision.GetImageReference(), ImageManifestDigest: revision.GetImageManifestDigest(),
 		RoleRuntimeContractRevision: revision.GetRoleRuntimeContractRevision(), RoleRuntimeContractSHA256: revision.GetRoleRuntimeContractSha256(),
@@ -215,8 +217,8 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		CallbackTLS: runtimecontract.RuntimeTLSBinding{ServerName: manager.config.CallbackTLSServerName,
 			CAFile: "/var/run/config/kodex/runtime/callback/ca.crt", CertificateFile: "/var/run/secrets/kodex/runtime/callback-client/tls.crt", PrivateKeyFile: "/var/run/secrets/kodex/runtime/callback-client/tls.key"},
 		ExecutionTicketFile: "/var/run/secrets/kodex/runtime/ticket/token",
-		ProviderAuthFile:    "/var/run/secrets/kodex/runtime/provider/auth.json", ProviderAuthSHA256File: "/var/run/secrets/kodex/runtime/provider/auth.sha256",
-		WorkspaceRoot: "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/tmp/codex-home",
+		ProviderAuthFile:    "/run/secrets/kodex/runtime/provider/auth.json", ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
+		WorkspaceRoot: "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
 	}
 }
 
@@ -233,7 +235,7 @@ func providerSecretBinding(revision *controlplanev1.RuntimeRevisionSnapshot) (Pr
 func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision *controlplanev1.RuntimeRevisionSnapshot) {
 	for _, capability := range revision.GetCapabilities() {
 		input.Capabilities = append(input.Capabilities, capability.GetKey())
-		if capability.GetKey() == "platform.workspace.write" {
+		if capability.GetKey() == runtimecontract.ArtifactCapability {
 			input.CodexSandbox = "workspace-write"
 		}
 	}
@@ -303,11 +305,13 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		return false, err
 	}
 	const podName = "system-assistant-warm"
-	secretName := ticketName("warm-" + input.RuntimeRevisionRef)
+	secretName := manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest)
+	compatibilityDigest, _ := runtimecontract.WarmCompatibilityDigest(input)
 	existing, err := manager.client.CoreV1().Pods(manager.config.Namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err == nil && (existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest ||
+		existing.Annotations[warmCompatibilityAnnotation] != compatibilityDigest ||
 		existing.Annotations[controllerAnnotation] != manager.config.ControllerPodUID ||
-		existing.Status.Phase == corev1.PodFailed || existing.Status.Phase == corev1.PodSucceeded) {
+		warmPodTerminal(existing)) {
 		if deleteErr := manager.client.CoreV1().Pods(manager.config.Namespace).Delete(ctx, podName, metav1.DeleteOptions{GracePeriodSeconds: int64Pointer(0)}); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
 			return false, errors.New("replace stale warm runtime pod")
 		}
@@ -345,7 +349,12 @@ func (manager *Manager) removeConflictingWarmTicket(ctx context.Context, secretN
 	}
 	if secret.Annotations[revisionAnnotation] == input.RuntimeRevisionDigest &&
 		secret.Annotations[controllerAnnotation] == manager.config.ControllerPodUID {
-		return nil
+		bound, decodeErr := runtimecontract.DecodeRunnerInput(secret.Data[inputKey])
+		if decodeErr == nil && bound.WorkloadInstance == input.WorkloadInstance &&
+			bound.CallbackURL == input.CallbackURL && bound.CallbackTLS == input.CallbackTLS &&
+			bound.ExecutionTicketFile == input.ExecutionTicketFile {
+			return nil
+		}
 	}
 	if err := manager.client.CoreV1().Secrets(manager.config.Namespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		return errors.New("replace stale warm runtime ticket")
@@ -360,24 +369,28 @@ func (manager *Manager) RegisterWarmTurn(ctx context.Context, input runtimecontr
 	return manager.ensureTicket(ctx, ticketName(input.LeaseRef), "system-assistant-warm", "warm-turn", input, token)
 }
 
-func (manager *Manager) WarmTicket(ctx context.Context, revisionRef string) (string, error) {
-	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, ticketName("warm-"+revisionRef), metav1.GetOptions{})
+func (manager *Manager) WarmTicket(ctx context.Context, revisionRef, revisionDigest string) (string, error) {
+	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, manager.warmTicketName(revisionRef, revisionDigest), metav1.GetOptions{})
 	if err != nil || len(secret.Data[ticketKey]) < 32 {
 		return "", errors.New("read warm runtime ticket")
 	}
 	return string(secret.Data[ticketKey]), nil
 }
 
-func (manager *Manager) ResolveWarm(ctx context.Context, revisionRef, token string) (runtimecontract.RunnerInput, error) {
-	if revisionRef == "" || token == "" {
-		return runtimecontract.RunnerInput{}, errors.New("warm runtime callback authority is invalid")
+func (manager *Manager) ResolveWarm(ctx context.Context, revisionRef, revisionDigest, token string) (runtimecontract.RunnerInput, error) {
+	if revisionRef == "" || len(revisionDigest) != sha256.Size*2 || token == "" {
+		return runtimecontract.RunnerInput{}, errors.New("warm runtime callback authority is incomplete")
 	}
-	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, ticketName("warm-"+revisionRef), metav1.GetOptions{})
-	if err != nil || subtle.ConstantTimeCompare(secret.Data[ticketKey], []byte(token)) != 1 {
-		return runtimecontract.RunnerInput{}, errors.New("warm runtime callback authority is invalid")
+	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, manager.warmTicketName(revisionRef, revisionDigest), metav1.GetOptions{})
+	if err != nil {
+		return runtimecontract.RunnerInput{}, errors.New("warm runtime callback ticket is unavailable")
+	}
+	if subtle.ConstantTimeCompare(secret.Data[ticketKey], []byte(token)) != 1 {
+		return runtimecontract.RunnerInput{}, errors.New("warm runtime callback ticket does not match")
 	}
 	input, err := runtimecontract.DecodeRunnerInput(secret.Data[inputKey])
-	if err != nil || input.Mode != runtimecontract.RunnerModeWarm || input.RuntimeRevisionRef != revisionRef {
+	if err != nil || input.Mode != runtimecontract.RunnerModeWarm || input.RuntimeRevisionRef != revisionRef ||
+		input.RuntimeRevisionDigest != revisionDigest {
 		return runtimecontract.RunnerInput{}, errors.New("warm runtime callback binding is invalid")
 	}
 	return input, nil
@@ -417,9 +430,9 @@ func (manager *Manager) DeleteTurn(ctx context.Context, leaseRef string) error {
 	return result
 }
 
-func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.RunnerInput) (string, error) {
+func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.RunnerInput, warmExecution bool) (string, error) {
 	podName := turnPodName(input.LeaseRef)
-	if input.SystemAssistant {
+	if warmExecution {
 		podName = "system-assistant-warm"
 	}
 	pod, err := manager.client.CoreV1().Pods(manager.config.Namespace).Get(ctx, podName, metav1.GetOptions{})
@@ -429,7 +442,12 @@ func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.
 	if err != nil {
 		return "", errors.New("read runtime execution pod")
 	}
-	if pod.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest {
+	if warmExecution {
+		compatibility, compatibilityErr := runtimecontract.WarmCompatibilityDigest(input)
+		if compatibilityErr != nil || pod.Annotations[warmCompatibilityAnnotation] != compatibility {
+			return "CONFLICT", nil
+		}
+	} else if pod.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest {
 		return "CONFLICT", nil
 	}
 	switch pod.Status.Phase {
@@ -515,19 +533,35 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 	baseMounts := []corev1.VolumeMount{{Name: "session", MountPath: "/workspace"}, {Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true}, {Name: "runtime-input", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true}, {Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true}, {Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true}, {Name: "provider-socket", MountPath: "/run/kodex/provider"}, {Name: "tmp", MountPath: "/tmp"}}
 	requests := corev1.ResourceList{corev1.ResourceCPU: *resource.NewMilliQuantity(manager.config.TurnCPUMilli, resource.DecimalSI), corev1.ResourceMemory: *resource.NewQuantity(manager.config.TurnMemoryBytes, resource.BinarySI)}
 	role := corev1.Container{Name: "role-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: roleArgs,
-		Env:   []corev1.EnvVar{{Name: "KODEX_RUNTIME_REVISION_FILE", Value: "/var/run/config/kodex/runtime/runtime.json"}},
+		Env: []corev1.EnvVar{
+			{Name: "KODEX_RUNTIME_REVISION_FILE", Value: "/var/run/config/kodex/runtime/runtime.json"},
+			{Name: "OTEL_SDK_DISABLED", Value: "true"},
+			{Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment},
+		},
 		Ports: []corev1.ContainerPort{{Name: "runtime-health", ContainerPort: 9090}}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: baseMounts,
 		Resources:    corev1.ResourceRequirements{Requests: requests, Limits: requests},
 		StartupProbe: httpProbe("/readyz", "runtime-health", 2, 60), ReadinessProbe: httpProbe("/readyz", "runtime-health", 5, 3), LivenessProbe: httpProbe("/healthz", "runtime-health", 10, 3)}
 	provider := corev1.Container{Name: "provider-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-provider"},
 		Env: []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: input.CodexHome},
 			{Name: "HTTPS_PROXY", Value: manager.config.ProviderHTTPSProxy}, {Name: "HTTP_PROXY", Value: manager.config.ProviderHTTPSProxy},
-			{Name: "NO_PROXY", Value: "127.0.0.1,localhost"}, {Name: "OTEL_SDK_DISABLED", Value: "true"}, {Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment}}, SecurityContext: restrictedSecurityContext(10002),
-		VolumeMounts: []corev1.VolumeMount{{Name: "session", MountPath: "/workspace"}, {Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true}, {Name: "provider-auth", MountPath: "/var/run/secrets/kodex/runtime/provider", ReadOnly: true}, {Name: "provider-socket", MountPath: "/run/kodex/provider"}, {Name: "provider-tmp", MountPath: "/tmp"}},
-		Resources:    smallResources(), ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", "/run/kodex/provider/provider.sock"}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30}}
+			{Name: "NO_PROXY", Value: "127.0.0.1,localhost"}, {Name: "OTEL_SDK_DISABLED", Value: "true"}, {Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment}}, SecurityContext: providerSandboxSecurityContext(10002),
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "session", MountPath: "/workspace"},
+			{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true},
+			{Name: "provider-auth", MountPath: "/run/secrets/kodex/runtime/provider/auth.json", SubPath: "auth.json", ReadOnly: true},
+			{Name: "provider-auth", MountPath: "/run/secrets/kodex/runtime/provider/auth.sha256", SubPath: "auth.sha256", ReadOnly: true},
+			{Name: "provider-socket", MountPath: "/run/kodex/provider"},
+			{Name: "provider-tmp", MountPath: "/tmp"},
+		},
+		Resources: smallResources(), ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", "/run/kodex/provider/provider.sock"}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30}}
+	annotations := map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, controllerAnnotation: manager.config.ControllerPodUID}
+	if mode == "warm" {
+		compatibility, _ := runtimecontract.WarmCompatibilityDigest(input)
+		annotations[warmCompatibilityAnnotation] = compatibility
+	}
 	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: manager.config.Namespace,
 		Labels:      map[string]string{managedLabel: "true", modeLabel: mode, "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment},
-		Annotations: map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, controllerAnnotation: manager.config.ControllerPodUID}},
+		Annotations: annotations},
 		Spec: corev1.PodSpec{ServiceAccountName: manager.config.RunnerServiceAccount, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(30),
 			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			InitContainers:  []corev1.Container{{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: baseMounts, Resources: smallResources()}},
@@ -592,6 +626,18 @@ func podReady(pod *corev1.Pod) bool {
 	return false
 }
 
+func warmPodTerminal(pod *corev1.Pod) bool {
+	if pod == nil || pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
+		return true
+	}
+	for _, status := range pod.Status.ContainerStatuses {
+		if status.State.Terminated != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func newTicket() (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
@@ -603,6 +649,9 @@ func newTicket() (string, error) {
 func shortHash(value string) string {
 	digest := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(digest[:8])
+}
+func (manager *Manager) warmTicketName(revisionRef, revisionDigest string) string {
+	return ticketName("warm-" + revisionRef + "|" + revisionDigest + "|" + manager.config.ControllerPodUID + "|" + manager.config.ControllerPodIP)
 }
 func ticketName(value string) string                             { return "runtime-ticket-" + shortHash(value) }
 func turnPodName(value string) string                            { return "runtime-turn-" + shortHash(value) }
@@ -639,6 +688,15 @@ func validDNSSubdomain(value string) bool {
 
 func restrictedSecurityContext(uid int64) *corev1.SecurityContext {
 	return &corev1.SecurityContext{RunAsNonRoot: boolPointer(true), RunAsUser: int64Pointer(uid), RunAsGroup: int64Pointer(uid), AllowPrivilegeEscalation: boolPointer(false), ReadOnlyRootFilesystem: boolPointer(true), Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}, SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}}
+}
+
+func providerSandboxSecurityContext(uid int64) *corev1.SecurityContext {
+	securityContext := restrictedSecurityContext(uid)
+	// Codex строит внутреннюю файловую и сетевую границу через bubblewrap.
+	// Default seccomp/AppArmor профили Kubernetes блокируют создание его user namespace.
+	securityContext.SeccompProfile = &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeUnconfined}
+	securityContext.AppArmorProfile = &corev1.AppArmorProfile{Type: corev1.AppArmorProfileTypeUnconfined}
+	return securityContext
 }
 
 func smallResources() corev1.ResourceRequirements {

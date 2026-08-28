@@ -26,6 +26,29 @@ func TestAssistantOperationCommandUsesClosedSpecializedRegistry(t *testing.T) {
 	}
 }
 
+func TestAssistantOperationProjectBindingUsesConversationAuthority(t *testing.T) {
+	t.Parallel()
+	operation := entity.AssistantPlanOperation{Type: "CREATE_AGENT", Summary: "Create analyst", Input: map[string]any{
+		"projectRef": "current", "name": "Analyst", "purpose": "Analyze leads",
+		"roleDescription": "Sales analyst", "instructions": "Analyze facts and mark assumptions.",
+	}}
+	bound, err := bindAssistantOperationProject(operation, "prj_authoritative")
+	if err != nil || assistantString(bound.Input, "projectRef") != "prj_authoritative" {
+		t.Fatalf("bind current project: operation=%#v err=%v", bound, err)
+	}
+	if assistantString(operation.Input, "projectRef") != "current" {
+		t.Fatal("binding must not mutate the runtime tool payload")
+	}
+	operation.Input["projectRef"] = "prj_other"
+	if _, err := bindAssistantOperationProject(operation, "prj_authoritative"); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("cross-project operation must be rejected, got %v", err)
+	}
+	operation.Input["projectRef"] = "current"
+	if _, err := bindAssistantOperationProject(operation, ""); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("project-scoped operation without conversation project must be rejected, got %v", err)
+	}
+}
+
 func TestAssistantOperationCommandBuildsWorkflowAndSystemAssistantRun(t *testing.T) {
 	t.Parallel()
 	workflow := entity.AssistantPlanOperation{Type: "CREATE_WORKFLOW", Summary: "Create workflow", Input: map[string]any{
@@ -52,6 +75,30 @@ func TestAssistantOperationCommandBuildsWorkflowAndSystemAssistantRun(t *testing
 	mapped, err = assistantOperationCommand(run)
 	if err != nil || mapped.Payload.(command.LaunchRunInput).Source != "SYSTEM_ASSISTANT" {
 		t.Fatalf("assistant launch source must be server-owned: %#v err=%v", mapped, err)
+	}
+}
+
+func TestAssistantOperationCommandNormalizesNamedParallelGroups(t *testing.T) {
+	t.Parallel()
+	workflow := entity.AssistantPlanOperation{Type: "CREATE_WORKFLOW", Summary: "Create workflow", Input: map[string]any{
+		"projectRef": "prj_12345678", "name": "Lead qualification", "purpose": "Qualify inbound leads", "coordinatorAgentRef": "agt_coord001",
+		"maxConcurrency": float64(2), "timeoutSeconds": float64(7200),
+		"steps": []any{
+			map[string]any{"name": "Research", "purpose": "Research the lead", "agentRef": "agt_analyst1", "parallel": true,
+				"parallelGroup": "lead-qualification", "timeoutSeconds": float64(3600), "expectedResult": "Lead profile", "humanGate": false,
+				"gateDecisions": []any{}, "requiredCapabilityKeys": []any{}},
+			map[string]any{"name": "Draft", "purpose": "Draft the offer", "agentRef": "agt_writer01", "parallel": true,
+				"parallelGroup": "lead-qualification", "timeoutSeconds": float64(3600), "expectedResult": "Offer", "humanGate": true,
+				"gateDecisions": []any{"APPROVE", "REJECT", "REQUEST_CHANGES"}, "requiredCapabilityKeys": []any{}},
+		},
+	}}
+	mapped, err := assistantOperationCommand(workflow)
+	if err != nil {
+		t.Fatalf("map workflow with named parallel group: %v", err)
+	}
+	draft := mapped.Payload.(command.WorkflowInput).Draft
+	if draft.Steps[0].ParallelGroup != 1 || draft.Steps[1].ParallelGroup != 1 || len(draft.Steps[0].DependsOn) != 0 || len(draft.Steps[1].DependsOn) != 0 {
+		t.Fatalf("named parallel group was not normalized consistently: %#v", draft.Steps)
 	}
 }
 

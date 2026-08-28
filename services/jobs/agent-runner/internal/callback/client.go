@@ -101,6 +101,7 @@ func (client *Client) NextWarm(ctx context.Context, input model.Input) (model.In
 	}
 	request.Header.Set("Authorization", "Bearer "+client.token)
 	request.Header.Set("X-Kodex-Runtime-Revision", input.RuntimeRevisionRef)
+	request.Header.Set("X-Kodex-Runtime-Revision-Digest", input.RuntimeRevisionDigest)
 	request.Header.Set("Accept", "application/json")
 	response, err := client.http.Do(request)
 	if err != nil {
@@ -118,8 +119,22 @@ func (client *Client) NextWarm(ctx context.Context, input model.Input) (model.In
 		return model.Input{}, false, errors.New("warm runtime response is invalid")
 	}
 	turn, err := runtimecontract.DecodeRunnerInput(raw)
-	if err != nil || turn.Mode != runtimecontract.RunnerModeTurn || !turn.SystemAssistant || turn.RuntimeRevisionDigest != input.RuntimeRevisionDigest {
-		return model.Input{}, false, errors.New("warm runtime turn binding is invalid")
+	if err != nil {
+		return model.Input{}, false, errors.New("decode warm runtime turn")
+	}
+	if turn.Mode != runtimecontract.RunnerModeTurn || !turn.SystemAssistant {
+		return model.Input{}, false, errors.New("warm runtime turn kind is invalid")
+	}
+	warmCompatibility, warmErr := runtimecontract.WarmCompatibilityDigest(input)
+	if warmErr != nil {
+		return model.Input{}, false, errors.New("warm runtime compatibility is invalid")
+	}
+	turnCompatibility, turnErr := runtimecontract.WarmCompatibilityDigest(turn)
+	if turnErr != nil {
+		return model.Input{}, false, errors.New("warm runtime turn compatibility is invalid")
+	}
+	if turnCompatibility != warmCompatibility {
+		return model.Input{}, false, errors.New("warm runtime turn compatibility mismatch")
 	}
 	return turn, true, nil
 }

@@ -106,6 +106,9 @@ func (server *Server) ServeRunHTTP(writer http.ResponseWriter, request *http.Req
 		server.closeProblem(streamContext, connection, "INVALID_RESUME", localize)
 		return
 	}
+	// После RESUME protocol является server-write-only. CloseRead отслеживает
+	// закрытие peer и освобождает stream concurrency slot без ожидания записи.
+	streamContext = connection.CloseRead(streamContext)
 	snapshot, err := server.control.Query.GetRunGraph(streamContext, &controlplanev1.GetRunGraphRequest{RunRef: runRef})
 	if err != nil {
 		server.closeProblem(streamContext, connection, "RUN_UNAVAILABLE", localize)

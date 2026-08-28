@@ -11,11 +11,12 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
 const (
-	RunnerInputSchemaV4       = "kodex.agent-runner-input.v4"
+	RunnerInputSchemaV5       = "kodex.agent-runner-input.v5"
 	RunnerModeTurn            = "TURN"
 	RunnerModeWarm            = "WARM"
 	MaximumRunnerInputBytes   = 2 << 20
@@ -25,6 +26,7 @@ const (
 	MaximumCompletionBytes    = 16 << 20
 	MaximumCompletionFiles    = 32
 	MaximumProgressTextBytes  = 2 << 10
+	ArtifactCapability        = "platform.artifact.manage"
 )
 
 var opaqueReferencePattern = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}_[A-Za-z0-9_-]{8,84}$`)
@@ -89,6 +91,7 @@ type RunnerInput struct {
 	Mode                        string                   `json:"mode"`
 	WorkloadInstance            string                   `json:"workload_instance"`
 	RunRef                      string                   `json:"run_ref,omitempty"`
+	ProjectRef                  string                   `json:"project_ref,omitempty"`
 	NodeRef                     string                   `json:"node_ref,omitempty"`
 	SessionRef                  string                   `json:"session_ref"`
 	TurnRef                     string                   `json:"turn_ref,omitempty"`
@@ -133,7 +136,7 @@ type RunnerInput struct {
 }
 
 func (input RunnerInput) Validate() error {
-	if input.Schema != RunnerInputSchemaV4 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
+	if input.Schema != RunnerInputSchemaV5 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
 		input.WorkloadInstance == "" || len(input.WorkloadInstance) > 128 ||
 		!opaqueReferencePattern.MatchString(input.SessionRef) || !opaqueReferencePattern.MatchString(input.AgentRef) ||
 		!(opaqueReferencePattern.MatchString(input.RuntimeRevisionRef) || systemRuntimeRevisionPattern.MatchString(input.RuntimeRevisionRef)) || input.RuntimeRevisionVersion < 1 ||
@@ -149,11 +152,17 @@ func (input RunnerInput) Validate() error {
 		input.CallbackTLS.validate() != nil || !validCallbackURL(input.CallbackURL, input.CallbackTLS.ServerName) ||
 		!validSecretFile(input.ExecutionTicketFile) || !validSecretFile(input.ProviderAuthFile) ||
 		!validSecretFile(input.ProviderAuthSHA256File) || input.WorkspaceRoot != "/workspace" ||
-		input.OutboxRoot != "/workspace/.kodex/outbox" || input.CodexHome != "/tmp/codex-home" ||
+		input.OutboxRoot != "/workspace/.kodex/outbox" || input.CodexHome != "/workspace/.kodex/state/codex-home" ||
 		len(input.SessionContext) > 128 || len(input.DelegationTargets) > 128 || len(input.IntegrationGrants) > 256 ||
 		len(input.InputArtifacts) > MaximumInputArtifacts ||
 		len(input.Capabilities) > 256 {
 		return errors.New("runner input is invalid")
+	}
+	if len(input.InputArtifacts) > 0 && !containsString(input.Capabilities, ArtifactCapability) {
+		return errors.New("runner artifact capability is missing")
+	}
+	if input.ProjectRef != "" && !opaqueReferencePattern.MatchString(input.ProjectRef) {
+		return errors.New("runner project binding is invalid")
 	}
 	if input.Mode == RunnerModeTurn {
 		if !opaqueReferencePattern.MatchString(input.RunRef) || !opaqueReferencePattern.MatchString(input.NodeRef) ||
@@ -195,6 +204,15 @@ func (input RunnerInput) Validate() error {
 	return nil
 }
 
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
+}
+
 func validArtifactFileName(value string) bool {
 	return value != "" && len(value) <= 255 && value != "." && value != ".." && !strings.ContainsAny(value, "/\\\x00\r\n")
 }
@@ -219,6 +237,49 @@ func DecodeRunnerInput(raw []byte) (RunnerInput, error) {
 	return input, nil
 }
 
+// WarmCompatibilityDigest связывает always-hot runtime только с полями,
+// которые определяют его неизменяемое окружение. Идентификаторы Session,
+// Turn и execution input остаются частью полного RuntimeRevisionDigest.
+func WarmCompatibilityDigest(input RunnerInput) (string, error) {
+	if !input.SystemAssistant {
+		return "", errors.New("warm runtime compatibility requires system assistant")
+	}
+	capabilities := append([]string(nil), input.Capabilities...)
+	sort.Strings(capabilities)
+	payload := struct {
+		ImageReference              string
+		ImageManifestDigest         string
+		RoleRuntimeContractRevision uint64
+		RoleRuntimeContractSHA256   string
+		Instructions                string
+		Provider                    string
+		Model                       string
+		ProviderAccountRef          string
+		ProviderCredentialRef       string
+		ProviderCredentialRevision  int64
+		ProviderCredentialSHA256    string
+		CodexSandbox                string
+		CodexApprovalPolicy         string
+		Capabilities                []string
+	}{
+		ImageReference: input.ImageReference, ImageManifestDigest: input.ImageManifestDigest,
+		RoleRuntimeContractRevision: input.RoleRuntimeContractRevision,
+		RoleRuntimeContractSHA256:   input.RoleRuntimeContractSHA256,
+		Instructions:                input.Instructions, Provider: input.Provider, Model: input.Model,
+		ProviderAccountRef: input.ProviderAccountRef, ProviderCredentialRef: input.ProviderCredentialRef,
+		ProviderCredentialRevision: input.ProviderCredentialRevision,
+		ProviderCredentialSHA256:   input.ProviderCredentialSHA256,
+		CodexSandbox:               input.CodexSandbox, CodexApprovalPolicy: input.CodexApprovalPolicy,
+		Capabilities: capabilities,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", errors.New("encode warm runtime compatibility")
+	}
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:]), nil
+}
+
 func (binding RuntimeTLSBinding) validate() error {
 	if binding.ServerName == "" || net.ParseIP(binding.ServerName) != nil || !strings.HasSuffix(binding.ServerName, ".svc.cluster.local") {
 		return errors.New("runtime TLS server name is invalid")
@@ -239,7 +300,8 @@ func validCallbackURL(raw, serverName string) bool {
 }
 
 func validSecretFile(path string) bool {
-	return filepath.IsAbs(path) && filepath.Clean(path) == path && strings.HasPrefix(path, "/var/run/secrets/")
+	return filepath.IsAbs(path) && filepath.Clean(path) == path &&
+		(strings.HasPrefix(path, "/var/run/secrets/") || strings.HasPrefix(path, "/run/secrets/"))
 }
 
 func validPinnedImage(reference, digest string) bool {
@@ -259,18 +321,44 @@ type RunnerArtifact struct {
 	Content   []byte `json:"content"`
 }
 
+// TokenUsage — измеренный provider runtime расход одного turn.
+// Cached/cache-write/reasoning входят соответственно в input/output и не
+// прибавляются к total повторно.
+type TokenUsage struct {
+	TotalTokens           int64 `json:"total_tokens"`
+	InputTokens           int64 `json:"input_tokens"`
+	CachedInputTokens     int64 `json:"cached_input_tokens"`
+	CacheWriteInputTokens int64 `json:"cache_write_input_tokens"`
+	OutputTokens          int64 `json:"output_tokens"`
+	ReasoningOutputTokens int64 `json:"reasoning_output_tokens"`
+	ModelContextWindow    int64 `json:"model_context_window"`
+}
+
+func (usage TokenUsage) Validate() error {
+	if usage.TotalTokens < 0 || usage.InputTokens < 0 || usage.CachedInputTokens < 0 ||
+		usage.CacheWriteInputTokens < 0 || usage.OutputTokens < 0 || usage.ReasoningOutputTokens < 0 ||
+		usage.ModelContextWindow < 0 || usage.TotalTokens != usage.InputTokens+usage.OutputTokens ||
+		usage.CachedInputTokens > usage.InputTokens || usage.CacheWriteInputTokens > usage.InputTokens ||
+		usage.ReasoningOutputTokens > usage.OutputTokens {
+		return errors.New("token usage is invalid")
+	}
+	return nil
+}
+
 type RunnerCompletionRequest struct {
 	RuntimeRevisionDigest string           `json:"runtime_revision_digest"`
 	Success               bool             `json:"success"`
 	ResultSummary         string           `json:"result_summary"`
 	SafeErrorCode         string           `json:"safe_error_code,omitempty"`
+	Usage                 TokenUsage       `json:"usage"`
 	Artifacts             []RunnerArtifact `json:"artifacts,omitempty"`
 }
 
 func (request RunnerCompletionRequest) Validate() error {
 	if !sha256Pattern.MatchString(request.RuntimeRevisionDigest) || len(request.ResultSummary) > 64<<10 ||
 		len(request.SafeErrorCode) > 128 || len(request.Artifacts) > MaximumCompletionFiles ||
-		(request.Success && strings.TrimSpace(request.ResultSummary) == "") || (!request.Success && request.SafeErrorCode == "") {
+		(request.Success && strings.TrimSpace(request.ResultSummary) == "") || (!request.Success && request.SafeErrorCode == "") ||
+		request.Usage.Validate() != nil {
 		return errors.New("runner completion is invalid")
 	}
 	total := 0

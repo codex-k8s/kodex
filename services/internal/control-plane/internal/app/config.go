@@ -108,7 +108,7 @@ func loadConfig() (Config, error) {
 		NATSReplicas:            3,
 		NATSMaxBytes:            32 << 30,
 		DefaultRuntimeProvider:  "openai-codex",
-		DefaultRuntimeModel:     "gpt-5",
+		DefaultRuntimeModel:     "gpt-5.6-sol",
 		AuthorityVerifierSocket: authorityclient.VerifierSocketPath,
 		AuthorityVerifierUID:    29002, AuthorityVerifierGID: 29000,
 		AuthorityPolicyFile:            "/var/run/config/kodex/control-plane/authority/policy.json",

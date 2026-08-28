@@ -56,6 +56,13 @@ const agents = computed(() =>
     )
     .sort((left, right) => left.name.localeCompare(right.name)),
 );
+function agentSupportsFiles(agentRef: string): boolean {
+  return (
+    platform.agents[agentRef]?.capabilities.some(
+      (capability) => capability.key === "platform.artifact.manage",
+    ) ?? false
+  );
+}
 const filteredArtifacts = computed(() => {
   const normalizedSearch = search.value.trim().toLocaleLowerCase(locale.value);
   return projectArtifacts.value.filter((artifact) => {
@@ -519,6 +526,7 @@ onBeforeUnmount(clearPreview);
                 :checked="selectedArtifact.agentBindings.includes(agent.ref)"
                 :disabled="
                   !selectedArtifact.nextActions.includes('BIND') ||
+                  !agentSupportsFiles(agent.ref) ||
                   bindingBusy === `${selectedArtifact.ref}:${agent.ref}`
                 "
                 @change="
@@ -531,7 +539,11 @@ onBeforeUnmount(clearPreview);
               />
               <span>
                 <strong>{{ agent.name }}</strong>
-                <small>{{ agent.purpose }}</small>
+                <small>{{
+                  agentSupportsFiles(agent.ref)
+                    ? agent.purpose
+                    : $t("files.agentFilesCapabilityRequired")
+                }}</small>
               </span>
             </label>
           </section>

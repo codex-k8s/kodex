@@ -38,6 +38,7 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	}
 	actorScope.organizationID = machineScope.organizationID
 	seen := make(map[string]struct{}, len(payload.Operations))
+	normalizedOperations := make([]entity.AssistantPlanOperation, 0, len(payload.Operations))
 	for _, operation := range payload.Operations {
 		if operation.Key == "" || len(operation.Key) > 96 {
 			return commandOutcome{}, errs.ErrInvalid
@@ -46,6 +47,10 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		seen[operation.Key] = struct{}{}
+		operation, err = bindAssistantOperationProject(operation, projectRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
 		planned, err := assistantOperationCommand(operation)
 		if err != nil {
 			return commandOutcome{}, err
@@ -53,6 +58,7 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 		if err := repository.authorizeCommand(ctx, tx, actorScope, planned); err != nil {
 			return commandOutcome{}, err
 		}
+		normalizedOperations = append(normalizedOperations, operation)
 	}
 	planRef, err := newRef("pln")
 	if err != nil {
@@ -60,7 +66,7 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	}
 	var planID string
 	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertAssistantPlansRefConversationRefOperations,
-		planRef, machineScope.organizationID, conversationRef, strings.TrimSpace(payload.Summary), asJSON(payload.Operations),
+		planRef, machineScope.organizationID, conversationRef, strings.TrimSpace(payload.Summary), asJSON(normalizedOperations),
 	).Scan(&planID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
@@ -69,7 +75,7 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	plan := entity.AssistantPlan{Ref: planRef, Summary: strings.TrimSpace(payload.Summary), State: "PROPOSED", Version: 1,
-		Operations: payload.Operations, CreatedAt: time.Now().UTC()}
+		Operations: normalizedOperations, CreatedAt: time.Now().UTC()}
 	conversation := entity.AssistantConversation{Ref: conversationRef, ProjectRef: projectRef, State: "ACTIVE",
 		Version: conversationVersion + 1, LatestPlan: &plan, UpdatedAt: time.Now().UTC()}
 	proposal := commandOutcome{projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_PLAN",
@@ -83,6 +89,28 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	}
 	proposal.result = command.Result{Conversation: &conversation, Plan: &plan}
 	return proposal, nil
+}
+
+func bindAssistantOperationProject(operation entity.AssistantPlanOperation, projectRef string) (entity.AssistantPlanOperation, error) {
+	switch operation.Type {
+	case "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "LAUNCH_RUN":
+	default:
+		return operation, nil
+	}
+	if projectRef == "" {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	requested := assistantString(operation.Input, "projectRef")
+	if requested != "" && requested != "current" && requested != projectRef {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	boundInput := make(map[string]any, len(operation.Input))
+	for key, value := range operation.Input {
+		boundInput[key] = value
+	}
+	boundInput["projectRef"] = projectRef
+	operation.Input = boundInput
+	return operation, nil
 }
 
 func assistantOperationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
@@ -232,6 +260,7 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 	}
 	frontier := []string{}
 	parallelGroups := map[int32][]string{}
+	parallelGroupLabels := map[string]int64{}
 	for index, raw := range rawSteps {
 		stepInput, ok := raw.(map[string]any)
 		if !ok || !onlyAssistantFields(stepInput, "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys") ||
@@ -240,7 +269,7 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 		}
 		parallel, parallelOK := assistantBoolValue(stepInput, "parallel")
 		humanGate, humanGateOK := assistantBoolValue(stepInput, "humanGate")
-		parallelGroup, parallelGroupOK := assistantInt64(stepInput, "parallelGroup")
+		parallelGroup, parallelGroupOK := assistantParallelGroup(stepInput, "parallelGroup", parallel, parallelGroupLabels)
 		stepTimeout, timeoutOK := assistantInt64(stepInput, "timeoutSeconds")
 		gateDecisions, gateDecisionsOK := assistantStringsValue(stepInput, "gateDecisions")
 		requiredCapabilities, requiredCapabilitiesOK := assistantStringsValue(stepInput, "requiredCapabilityKeys")
@@ -355,6 +384,29 @@ func assistantInt64(input map[string]any, key string) (int64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func assistantParallelGroup(input map[string]any, key string, parallel bool, labels map[string]int64) (int64, bool) {
+	if value, ok := assistantInt64(input, key); ok {
+		return value, true
+	}
+	label, ok := input[key].(string)
+	label = strings.TrimSpace(label)
+	if !ok || label == "" || len(label) > 80 {
+		return 0, false
+	}
+	if !parallel {
+		return 0, true
+	}
+	if value, exists := labels[label]; exists {
+		return value, true
+	}
+	if len(labels) >= 50 {
+		return 0, false
+	}
+	value := int64(len(labels) + 1)
+	labels[label] = value
+	return value, true
 }
 
 func assistantObjectValue(input map[string]any, key string) (map[string]any, bool) {

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -70,6 +71,14 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	outcome, err := repository.applyCommand(ctx, tx, scope, input)
 	if err != nil {
 		return command.Result{}, err
+	}
+	// Пустой опрос runtime является наблюдением, а не устойчивым доменным действием.
+	// Receipt и аудит для него превращали бы исправный простой в постоянную запись.
+	if input.Kind == command.ClaimExecution && len(outcome.result.RuntimeItems) == 0 {
+		if err := tx.Commit(ctx); err != nil {
+			return command.Result{}, fmt.Errorf("commit empty runtime claim: %w", errs.ErrConflict)
+		}
+		return outcome.result, nil
 	}
 	if outcome.resourceRef == "" {
 		return command.Result{}, errs.ErrConflict
@@ -712,14 +721,20 @@ func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx,
 		if strings.TrimSpace(payload.Instructions) == "" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		var number int32
-		if err := tx.QueryRow(ctx, queryCommandsChangeinstructionsSelectNextDraftVersion, agentID).Scan(&number); err != nil {
+		digest := sha256.Sum256([]byte(payload.Instructions))
+		tag, err := tx.Exec(ctx, queryCommandsChangeinstructionsUpdateCurrentDraft, agentID, payload.Instructions, hex.EncodeToString(digest[:]), scope.actorID)
+		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		ref, _ := newRef("ins")
-		digest := sha256.Sum256([]byte(payload.Instructions))
-		if _, err := tx.Exec(ctx, queryCommandsChangeinstructionsInsertDraftVersion, ref, scope.organizationID, agentID, number, payload.Instructions, hex.EncodeToString(digest[:]), scope.actorID); err != nil {
-			return commandOutcome{}, mapWriteError(err)
+		if tag.RowsAffected() == 0 {
+			var number int32
+			if err := tx.QueryRow(ctx, queryCommandsChangeinstructionsSelectNextDraftVersion, agentID).Scan(&number); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			ref, _ := newRef("ins")
+			if _, err := tx.Exec(ctx, queryCommandsChangeinstructionsInsertDraftVersion, ref, scope.organizationID, agentID, number, payload.Instructions, hex.EncodeToString(digest[:]), scope.actorID); err != nil {
+				return commandOutcome{}, mapWriteError(err)
+			}
 		}
 	case command.ValidateInstructions:
 		var content string
@@ -858,7 +873,7 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 		item.ProjectRef = payload.ProjectRef
 		item.CoordinatorAgentRef = payload.CoordinatorAgentRef
 		item.Draft = &draft
-		item.NextActions = []string{"OPEN", "EDIT"}
+		item.NextActions = workflowActions(item, true, true)
 		return commandOutcome{result: command.Result{Workflow: &item}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "WORKFLOW", resourceRef: ref, summary: "i18n:WORKFLOW_CREATED", platformEvent: "WORKFLOW_CHANGED"}, nil
 	}
 	if payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
@@ -1116,6 +1131,27 @@ func validCapabilityKey(value string) bool {
 	return true
 }
 
+func (repository *Repository) agentsHaveCapabilities(ctx context.Context, tx pgx.Tx, organizationID, projectID string, agentRefs, capabilities []string) (bool, error) {
+	seen := make(map[string]struct{}, len(agentRefs))
+	for _, agentRef := range agentRefs {
+		if agentRef == "" {
+			continue
+		}
+		if _, exists := seen[agentRef]; exists {
+			continue
+		}
+		seen[agentRef] = struct{}{}
+		var allowed bool
+		if err := tx.QueryRow(ctx, queryCommandsChangeworkflowValidateAgentCapabilities, organizationID, projectID, agentRef, capabilities).Scan(&allowed); err != nil {
+			return false, err
+		}
+		if !allowed {
+			return false, nil
+		}
+	}
+	return len(seen) > 0, nil
+}
+
 func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LaunchRunInput)
 	if !ok || payload.ProjectRef == "" || strings.TrimSpace(payload.Task) == "" || len(payload.Task) > 32768 || len(payload.Title) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) || len(payload.ArtifactRefs) > 50 {
@@ -1137,12 +1173,14 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	var workflowVersionID, workflowVersionRef, workflowVersionDigest string
 	var coordinatorRef, coordinatorName string
 	var workflowVersion entity.WorkflowVersion
+	var targetAgentRefs []string
 	runConcurrency := int32(defaultAgentRunConcurrency)
 	switch payload.Target.Type {
 	case "AGENT":
 		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectAgentsOrganizationIdProjectIdRef, scope.organizationID, projectID, payload.Target.Ref).Scan(&targetName); err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
+		targetAgentRefs = []string{payload.Target.Ref}
 	case "WORKFLOW":
 		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectWorkflowsOrganizationIdProjectIdRef, pgx.StrictNamedArgs{
 			"organization_id": scope.organizationID,
@@ -1157,9 +1195,22 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		if !validWorkflowRunInput(workflowVersion.Inputs, payload.Input) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+		targetAgentRefs = append(targetAgentRefs, coordinatorRef)
+		for _, step := range workflowVersion.Steps {
+			targetAgentRefs = append(targetAgentRefs, step.AgentRef)
+		}
 		runConcurrency = workflowVersion.Concurrency
 	default:
 		return commandOutcome{}, errs.ErrInvalid
+	}
+	if len(payload.ArtifactRefs) > 0 {
+		allowed, err := repository.agentsHaveCapabilities(ctx, tx, scope.organizationID, projectID, targetAgentRefs, []string{runtimecontract.ArtifactCapability})
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if !allowed {
+			return commandOutcome{}, errs.ErrCapabilityRequired
+		}
 	}
 	sessionRef := payload.SessionRef
 	var sessionID string
@@ -1374,6 +1425,14 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 	if err != nil {
 		return entity.RunEvent{}, err
 	}
+	runState = ""
+	if delta.Run != nil {
+		runState = delta.Run.State
+	}
+	nodeState = ""
+	if delta.Node != nil {
+		nodeState = delta.Node.State
+	}
 	incidentRef := ""
 	if incident != nil {
 		incidentCopy := *incident
@@ -1410,12 +1469,18 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 
 func (repository *Repository) readRunEventDelta(ctx context.Context, tx pgx.Tx, organizationID, rootRunID, nodeRef, edgeRef, gateRef, artifactRef string) (entity.RunEventDelta, error) {
 	var run entity.RunDelta
+	var usage []byte
 	if err := tx.QueryRow(ctx, queryCommandsEmitruneventSelectRunDelta, organizationID, rootRunID).Scan(
 		&run.Ref, &run.State, &run.ResultSummary, &run.SafeErrorCode, &run.SafeErrorMessage,
-		&run.GraphRevision, &run.EventSequence, &run.Version, &run.ArtifactRefs, &run.GateRefs,
+		&run.GraphRevision, &run.EventSequence, &run.Version, &usage, &run.ArtifactRefs, &run.GateRefs,
 		&run.StartedAt, &run.FinishedAt,
 	); err != nil {
 		return entity.RunEventDelta{}, fmt.Errorf("read run event delta: %w", errs.ErrUnavailable)
+	}
+	var usageErr error
+	run.Usage, usageErr = decodeRunUsage(usage)
+	if usageErr != nil {
+		return entity.RunEventDelta{}, fmt.Errorf("decode run event usage: %w", usageErr)
 	}
 	run.ResultSummary = truncate(run.ResultSummary, 4000)
 	run.SafeErrorCode = truncate(run.SafeErrorCode, 80)
@@ -1791,7 +1856,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		&predecessorNodeID, &predecessorNodeRef, &predecessorRunID, &sessionID,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return commandOutcome{}, errs.ErrConflict
+		return commandOutcome{}, errs.ErrAlreadyResolved
 	}
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable

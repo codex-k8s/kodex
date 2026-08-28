@@ -1,5 +1,6 @@
 -- name: artifacts_changeartifactbinding_select_agents_organization_id_project_id_ref :one
-SELECT id::text
+SELECT id::text,
+       $4::text=ANY(capabilities)
 FROM control_plane.agents
 WHERE organization_id=$1::uuid
   AND project_id=$2::uuid

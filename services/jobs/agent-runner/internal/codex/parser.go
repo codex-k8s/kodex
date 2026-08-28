@@ -8,6 +8,7 @@ import (
 	"io"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/google/uuid"
 )
 
@@ -26,6 +27,7 @@ type Result struct {
 	ArchivePath         string
 	ArchiveRelativePath string
 	ArchiveSHA256       string
+	Usage               runtimecontract.TokenUsage
 }
 
 type messageKind uint8
@@ -151,6 +153,9 @@ type protocolState struct {
 	turnStarted       uint32
 	terminals         uint32
 	result            Result
+	latestUsage       runtimecontract.TokenUsage
+	usageBaseline     runtimecontract.TokenUsage
+	baselineCaptured  bool
 	agentMessages     map[string]agentMessage
 	finalID           string
 	fallbackID        string
@@ -163,6 +168,15 @@ type agentMessage struct {
 
 func newProtocolState(expectedSessionID string) *protocolState {
 	return &protocolState{expectedSessionID: expectedSessionID, agentMessages: make(map[string]agentMessage)}
+}
+
+func (state *protocolState) captureUsageBaseline() error {
+	if state.baselineCaptured || state.turnID != "" || state.latestUsage.Validate() != nil {
+		return errors.New("Codex app-server token usage baseline is invalid")
+	}
+	state.usageBaseline = state.latestUsage
+	state.baselineCaptured = true
+	return nil
 }
 
 func (state *protocolState) initialize(raw json.RawMessage, expectedHome string) error {
@@ -184,8 +198,8 @@ func (state *protocolState) initialize(raw json.RawMessage, expectedHome string)
 
 func (state *protocolState) bindThread(raw json.RawMessage, expectedModel, expectedWorkspace, expectedApproval string) error {
 	fields, err := decodeObject(raw, schema([]string{"approvalPolicy", "approvalsReviewer", "cwd", "model", "modelProvider", "sandbox", "thread"},
-		"approvalPolicy", "approvalsReviewer", "cwd", "instructionSources", "model", "modelProvider", "serviceTier",
-		"reasoningEffort", "sandbox", "thread"))
+		"activePermissionProfile", "approvalPolicy", "approvalsReviewer", "cwd", "initialTurnsPage", "instructionSources",
+		"model", "modelProvider", "multiAgentMode", "reasoningEffort", "runtimeWorkspaceRoots", "sandbox", "serviceTier", "thread"))
 	if err != nil {
 		return errors.New("Codex app-server thread response is invalid")
 	}
@@ -223,8 +237,8 @@ func (state *protocolState) bindThreadRead(raw json.RawMessage) error {
 func parseThread(raw json.RawMessage) (string, string, error) {
 	fields, err := decodeObject(raw, schema([]string{"cliVersion", "createdAt", "cwd", "ephemeral", "id", "modelProvider",
 		"preview", "sessionId", "source", "status", "turns", "updatedAt"}, "agentNickname", "agentRole", "cliVersion",
-		"createdAt", "cwd", "ephemeral", "forkedFromId", "gitInfo", "id", "modelProvider", "name", "parentThreadId",
-		"path", "preview", "recencyAt", "sessionId", "source", "status", "threadSource", "turns", "updatedAt"))
+		"createdAt", "cwd", "ephemeral", "extra", "forkedFromId", "gitInfo", "historyMode", "id", "modelProvider",
+		"name", "parentThreadId", "path", "preview", "recencyAt", "sessionId", "source", "status", "threadSource", "turns", "updatedAt"))
 	if err != nil {
 		return "", "", err
 	}
@@ -283,6 +297,16 @@ func (state *protocolState) notification(method string, raw json.RawMessage) err
 		}
 		state.turnStarted++
 		return state.consumeItems(turn.items, false)
+	case "thread/tokenUsage/updated":
+		fields, _ := decodeObject(raw, notificationSchema(method))
+		if err := state.validateUsageTuple(fields); err != nil {
+			return err
+		}
+		usage, err := parseTokenUsage(fields["tokenUsage"])
+		if err != nil {
+			return err
+		}
+		state.latestUsage = usage
 	case "item/started", "item/completed":
 		fields, _ := decodeObject(raw, notificationSchema(method))
 		if err := state.validateTurnTuple(fields); err != nil {
@@ -331,6 +355,93 @@ func (state *protocolState) notification(method string, raw json.RawMessage) err
 		return err
 	}
 	return nil
+}
+
+func (state *protocolState) validateUsageTuple(fields map[string]json.RawMessage) error {
+	threadID, threadErr := decodeBoundedString(fields["threadId"], 128)
+	turnID, turnErr := decodeBoundedString(fields["turnId"], 128)
+	if threadErr != nil || turnErr != nil || uuid.Validate(turnID) != nil || threadID != state.threadID ||
+		(state.turnID != "" && turnID != state.turnID) {
+		return errors.New("Codex app-server token usage tuple is invalid")
+	}
+	return nil
+}
+
+func parseTokenUsage(raw json.RawMessage) (runtimecontract.TokenUsage, error) {
+	fields, err := decodeObject(raw, schema([]string{"last", "total"}, "last", "modelContextWindow", "total"))
+	if err != nil {
+		return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage is invalid")
+	}
+	var contextWindow int64
+	if rawWindow, present := fields["modelContextWindow"]; present && !bytes.Equal(rawWindow, []byte("null")) {
+		if strictDecode(rawWindow, &contextWindow) != nil || contextWindow < 0 {
+			return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage is invalid")
+		}
+	}
+	total, err := parseTokenUsageBreakdown(fields["total"], contextWindow)
+	if err != nil {
+		return runtimecontract.TokenUsage{}, err
+	}
+	last, err := parseTokenUsageBreakdown(fields["last"], contextWindow)
+	if err != nil || last.TotalTokens > total.TotalTokens || last.InputTokens > total.InputTokens ||
+		last.CachedInputTokens > total.CachedInputTokens || last.CacheWriteInputTokens > total.CacheWriteInputTokens ||
+		last.OutputTokens > total.OutputTokens || last.ReasoningOutputTokens > total.ReasoningOutputTokens {
+		return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage is invalid")
+	}
+	return total, nil
+}
+
+func parseTokenUsageBreakdown(raw json.RawMessage, contextWindow int64) (runtimecontract.TokenUsage, error) {
+	fields, err := decodeObject(raw, schema(
+		[]string{"cachedInputTokens", "inputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens"},
+		"cachedInputTokens", "inputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens",
+	))
+	if err != nil {
+		return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage breakdown is invalid")
+	}
+	usage := runtimecontract.TokenUsage{ModelContextWindow: contextWindow}
+	values := []struct {
+		raw    json.RawMessage
+		target *int64
+	}{
+		{fields["totalTokens"], &usage.TotalTokens},
+		{fields["inputTokens"], &usage.InputTokens},
+		{fields["cachedInputTokens"], &usage.CachedInputTokens},
+		{fields["outputTokens"], &usage.OutputTokens},
+		{fields["reasoningOutputTokens"], &usage.ReasoningOutputTokens},
+	}
+	for _, value := range values {
+		if strictDecode(value.raw, value.target) != nil {
+			return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage breakdown is invalid")
+		}
+	}
+	if usage.Validate() != nil {
+		return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage breakdown is invalid")
+	}
+	return usage, nil
+}
+
+func tokenUsageDelta(final, baseline runtimecontract.TokenUsage) (runtimecontract.TokenUsage, error) {
+	delta := runtimecontract.TokenUsage{
+		TotalTokens:           nonNegativeDelta(final.TotalTokens, baseline.TotalTokens),
+		InputTokens:           nonNegativeDelta(final.InputTokens, baseline.InputTokens),
+		CachedInputTokens:     nonNegativeDelta(final.CachedInputTokens, baseline.CachedInputTokens),
+		CacheWriteInputTokens: nonNegativeDelta(final.CacheWriteInputTokens, baseline.CacheWriteInputTokens),
+		OutputTokens:          nonNegativeDelta(final.OutputTokens, baseline.OutputTokens),
+		ReasoningOutputTokens: nonNegativeDelta(final.ReasoningOutputTokens, baseline.ReasoningOutputTokens),
+		ModelContextWindow:    final.ModelContextWindow,
+	}
+	if delta.Validate() != nil {
+		return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage delta is invalid")
+	}
+	return delta, nil
+}
+
+func nonNegativeDelta(final, baseline int64) int64 {
+	if final <= baseline {
+		return 0
+	}
+	return final - baseline
 }
 
 func (state *protocolState) validateTurnTuple(fields map[string]json.RawMessage) error {
@@ -568,9 +679,14 @@ func parseCodexErrorInfo(raw json.RawMessage) (string, bool) {
 }
 
 func (state *protocolState) terminalResult() (Result, error) {
-	if state.terminals != 1 || state.result.SessionID == "" || state.result.Outcome == "" || state.threadPath == "" {
+	if state.terminals != 1 || state.result.SessionID == "" || state.result.Outcome == "" || state.threadPath == "" || !state.baselineCaptured {
 		return Result{}, errors.New("Codex app-server lifecycle is incomplete")
 	}
+	usage, err := tokenUsageDelta(state.latestUsage, state.usageBaseline)
+	if err != nil {
+		return Result{}, err
+	}
+	state.result.Usage = usage
 	return state.result, nil
 }
 
@@ -665,6 +781,16 @@ func TerminalPresentation(code string) (outcome, markdown, nextAction string) {
 		return "BLOCKED", "i18n:RUNTIME_CONFIGURATION_STALE", "CREATE_FRESH_TURN"
 	case "provider_error_info_invalid", "provider_interrupted", "":
 		return "FAILED", "i18n:PROVIDER_RESULT_UNVERIFIABLE", "RETRY_FRESH_TURN"
+	case "provider_other_error":
+		return "FAILED", "i18n:PROVIDER_RESULT_UNVERIFIABLE", "RETRY_FRESH_TURN"
+	case "provider_internal_error", "provider_transport_failure":
+		return "FAILED", "i18n:PROVIDER_OVERLOADED", "RETRY_LATER"
+	case "provider_bad_request", "provider_sandbox_error":
+		return "BLOCKED", "i18n:PROVIDER_RESULT_UNVERIFIABLE", "REVIEW_CONFIGURATION"
+	case "context_window_exceeded", "session_budget_exceeded":
+		return "BLOCKED", "i18n:PROVIDER_RESULT_UNVERIFIABLE", "CREATE_FRESH_SESSION"
+	case "thread_rollback_failed", "active_turn_not_steerable":
+		return "FAILED", "i18n:PROVIDER_RESULT_UNVERIFIABLE", "CREATE_FRESH_TURN"
 	default:
 		return "FAILED", "i18n:PROVIDER_RESULT_UNKNOWN", "RETRY_FRESH_TURN"
 	}

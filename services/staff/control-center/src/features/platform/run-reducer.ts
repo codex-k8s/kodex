@@ -4,6 +4,7 @@ import type {
   Run,
   RunEvent,
   RunGraph,
+  RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 
 export type RunEventOutcome = "applied" | "duplicate" | "gap" | "invalid";
@@ -16,6 +17,16 @@ export interface RunProjection {
   artifacts: Record<string, Artifact>;
 }
 
+const nodeStateRank: Record<RunNode["state"], number> = {
+  QUEUED: 0,
+  RUNNING: 1,
+  WAITING: 2,
+  SUCCEEDED: 3,
+  FAILED: 3,
+  CANCELLED: 3,
+  SKIPPED: 3,
+};
+
 function replaceOrAppend<T extends { ref: string }>(
   items: T[],
   value: T,
@@ -23,6 +34,39 @@ function replaceOrAppend<T extends { ref: string }>(
   const index = items.findIndex((item) => item.ref === value.ref);
   if (index === -1) items.push(value);
   else items[index] = value;
+}
+
+function mergeByRef<T extends { ref: string }>(
+  current: T[],
+  incoming: T[],
+  select: (current: T, incoming: T) => T,
+): T[] {
+  const merged = new Map(current.map((item) => [item.ref, item]));
+  for (const item of incoming) {
+    const previous = merged.get(item.ref);
+    merged.set(item.ref, previous ? select(previous, item) : item);
+  }
+  return [...merged.values()];
+}
+
+// Run graph topology is append-only within one root run. A reconnect snapshot
+// may race a committed event batch, so an equal/newer cursor must not erase a
+// node or roll a terminal node back to an in-progress state.
+export function mergeRunGraph(
+  current: RunGraph | undefined,
+  incoming: RunGraph,
+): RunGraph {
+  if (!current || incoming.sequence < current.sequence)
+    return current ?? incoming;
+  return {
+    ...incoming,
+    nodes: mergeByRef(current.nodes, incoming.nodes, (previous, next) =>
+      nodeStateRank[previous.state] > nodeStateRank[next.state]
+        ? previous
+        : next,
+    ),
+    edges: mergeByRef(current.edges, incoming.edges, (_previous, next) => next),
+  };
 }
 
 function isConsistent(event: RunEvent): boolean {
@@ -59,14 +103,18 @@ export function reduceRunEvent(
   if (!isConsistent(event) || event.graphRevision <= graph.revision)
     return "invalid";
 
-  if (event.node) replaceOrAppend(graph.nodes, event.node);
   if (event.edge) {
     const nodeRefs = new Set(graph.nodes.map((node) => node.ref));
+    if (event.node) nodeRefs.add(event.node.ref);
     if (
       !nodeRefs.has(event.edge.sourceNodeRef) ||
       !nodeRefs.has(event.edge.targetNodeRef)
     )
       return "invalid";
+  }
+
+  if (event.node) replaceOrAppend(graph.nodes, event.node);
+  if (event.edge) {
     replaceOrAppend(graph.edges, event.edge);
   }
   if (event.gate) projection.gates[event.gate.ref] = event.gate;
@@ -81,6 +129,7 @@ export function reduceRunEvent(
     run.resultSummary = event.run.resultSummary;
     run.safeErrorCode = event.run.safeErrorCode;
     run.safeErrorMessage = event.run.safeErrorMessage;
+    run.usage = event.run.usage;
     run.startedAt = event.run.startedAt;
     run.finishedAt = event.run.finishedAt;
     run.nextActions = event.run.nextActions;

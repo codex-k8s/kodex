@@ -7,6 +7,7 @@ import type {
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 import {
+  mergeRunGraph,
   reduceRunEvent,
   type RunProjection,
 } from "@/features/platform/run-reducer";
@@ -35,6 +36,18 @@ function rootRun(): Run {
     attempt: 1,
     graphRevision: 2,
     lastEventSequence: 1,
+    usage: {
+      totalTokens: 0,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheWriteInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      modelContextWindow: 0,
+    },
+    inputArtifactRefs: [],
+    artifactRefs: [],
+    gateRefs: [],
     createdAt: occurredAt,
     nextActions: ["OPEN", "CANCEL"],
   };
@@ -105,6 +118,15 @@ function delegationEvent(): RunEvent {
       state: "RUNNING",
       graphRevision: 3,
       lastEventSequence: 2,
+      usage: {
+        totalTokens: 120,
+        inputTokens: 100,
+        cachedInputTokens: 40,
+        cacheWriteInputTokens: 0,
+        outputTokens: 20,
+        reasoningOutputTokens: 5,
+        modelContextWindow: 200000,
+      },
       artifactRefs: [],
       gateRefs: [],
       nextActions: ["OPEN", "CANCEL"],
@@ -134,6 +156,7 @@ describe("reduceRunEvent", () => {
     );
     expect(state.graphs[rootRunRef]?.edges).toHaveLength(1);
     expect(state.runs[rootRunRef]?.lastEventSequence).toBe(2);
+    expect(state.runs[rootRunRef]?.usage.totalTokens).toBe(120);
   });
 
   it("игнорирует повтор at-least-once delivery", () => {
@@ -163,7 +186,43 @@ describe("reduceRunEvent", () => {
 
     expect(reduceRunEvent(state, event)).toBe("invalid");
     expect(state.graphs[rootRunRef]?.sequence).toBe(1);
+    expect(state.graphs[rootRunRef]?.nodes).toHaveLength(1);
     expect(state.events[rootRunRef]).toEqual({});
+  });
+
+  it("не теряет topology и terminal-state при racing snapshot", () => {
+    const current = projection().graphs[rootRunRef];
+    expect(current).toBeDefined();
+    const completed = delegationEvent().node;
+    expect(completed).toBeDefined();
+    if (!current || !completed) return;
+    completed.state = "SUCCEEDED";
+    completed.finishedAt = occurredAt;
+    current.sequence = 5;
+    current.revision = 6;
+    current.nodes.push(completed);
+    const edge = delegationEvent().edge;
+    expect(edge).toBeDefined();
+    if (!edge) return;
+    current.edges.push(edge);
+
+    const staleSnapshot: RunGraph = {
+      runRef: rootRunRef,
+      sequence: 5,
+      revision: 6,
+      nodes: [
+        rootNode(),
+        { ...completed, state: "RUNNING", finishedAt: undefined },
+      ],
+      edges: [],
+    };
+    const merged = mergeRunGraph(current, staleSnapshot);
+
+    expect(merged.nodes).toHaveLength(2);
+    expect(merged.nodes.find((node) => node.ref === completed.ref)?.state).toBe(
+      "SUCCEEDED",
+    );
+    expect(merged.edges).toHaveLength(1);
   });
 
   it("добавляет и обновляет server-owned инцидент необязательной доставки", () => {
@@ -182,6 +241,7 @@ describe("reduceRunEvent", () => {
         state: "RUNNING",
         graphRevision: 3,
         lastEventSequence: 2,
+        usage: rootRun().usage,
         artifactRefs: [],
         gateRefs: [],
         nextActions: ["OPEN", "CANCEL"],

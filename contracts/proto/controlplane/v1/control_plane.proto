@@ -28,6 +28,7 @@ service PlatformQueryService {
   rpc ListProjectMembershipCandidates(ListProjectMembershipCandidatesRequest) returns (ListProjectMembershipCandidatesResponse);
   rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
   rpc GetAgent(GetAgentRequest) returns (GetAgentResponse);
+  rpc ListAgentInstructionVersions(ListAgentInstructionVersionsRequest) returns (ListAgentInstructionVersionsResponse);
   rpc ListWorkflows(ListWorkflowsRequest) returns (ListWorkflowsResponse);
   rpc GetWorkflow(GetWorkflowRequest) returns (GetWorkflowResponse);
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
@@ -520,6 +521,19 @@ message RunTarget {
   int64 target_version = 4;
 }
 
+// TokenUsage содержит только server-observed расход provider turn. Cached и
+// reasoning counters являются подмножествами input/output и не суммируются с
+// total повторно.
+message TokenUsage {
+  int64 total_tokens = 1;
+  int64 input_tokens = 2;
+  int64 cached_input_tokens = 3;
+  int64 cache_write_input_tokens = 4;
+  int64 output_tokens = 5;
+  int64 reasoning_output_tokens = 6;
+  int64 model_context_window = 7;
+}
+
 message Run {
   string ref = 1;
   int64 version = 2;
@@ -551,6 +565,13 @@ message Run {
   // Run. Optional delivery failure не изменяет core state и имеет
   // core_affected=false.
   repeated Incident incidents = 25;
+  TokenUsage usage = 26;
+  // input_artifact_refs перечисляет server-resolved входные файлы запуска.
+  repeated string input_artifact_refs = 27;
+  // artifact_refs перечисляет доступные через отдельный owner API результаты.
+  repeated string artifact_refs = 28;
+  // gate_refs перечисляет долговечные Human Gate корневого запуска.
+  repeated string gate_refs = 29;
 }
 
 message RunNode {
@@ -616,6 +637,8 @@ message RunDelta {
   google.protobuf.Timestamp finished_at = 12;
   // next_actions вычислены control-plane с учётом lifecycle и полномочий actor.
   repeated NextAction next_actions = 13;
+  // usage — агрегированный server-observed расход root Run на этой sequence.
+  TokenUsage usage = 14;
 }
 
 message RunEvent {
@@ -892,6 +915,7 @@ message BootstrapState {
   SystemAssistant assistant = 4;
   UserSummary current_user = 5;
   repeated NextAction next_actions = 6;
+  PlatformRole platform_role = 7;
 }
 
 message Overview {
@@ -1758,6 +1782,7 @@ message CompleteExecutionRequest {
   string result_summary = 6;
   string safe_error_code = 7;
   repeated CompletedArtifactInput artifacts = 8;
+  TokenUsage usage = 9;
 }
 message CompleteExecutionResponse {
   Run run = 1;
@@ -1990,4 +2015,13 @@ message AcceptInteractionMessageResponse {
   InteractionMessageOutcome outcome = 1;
   string message_key = 2;
   string accepted_resource_ref = 3;
+}
+
+message ListAgentInstructionVersionsRequest {
+  string agent_ref = 1;
+  PageRequest page = 2;
+}
+message ListAgentInstructionVersionsResponse {
+  repeated InstructionVersion instruction_versions = 1;
+  PageInfo page = 2;
 }

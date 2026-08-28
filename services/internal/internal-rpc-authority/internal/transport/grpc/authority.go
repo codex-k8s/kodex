@@ -331,6 +331,10 @@ var (
 
 func mapError(err error, correlationID string) error {
 	switch {
+	case errors.Is(err, context.Canceled):
+		return status.Error(codes.Canceled, context.Canceled.Error())
+	case errors.Is(err, context.DeadlineExceeded):
+		return status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
 	case failure.IsKind(err, failure.OperationNotAllowed):
 		return authorizationError(errorSpecOperationNotAllowed, correlationID)
 	case failure.IsKind(err, failure.AuthorityRejected):

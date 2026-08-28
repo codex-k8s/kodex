@@ -11,6 +11,7 @@ type RunDelta struct {
 	ResultSummary     *string      `json:"resultSummary,omitempty"`
 	SafeErrorCode     *string      `json:"safeErrorCode,omitempty"`
 	SafeErrorMessage  *string      `json:"safeErrorMessage,omitempty"`
+	Usage             TokenUsage   `json:"usage"`
 	ArtifactRefs      []string     `json:"artifactRefs"`
 	GateRefs          []string     `json:"gateRefs"`
 	StartedAt         *string      `json:"startedAt,omitempty"`

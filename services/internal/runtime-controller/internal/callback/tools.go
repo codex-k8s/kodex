@@ -1,30 +1,81 @@
 package callback
 
-func assistantPlanTool() map[string]any {
+import (
+	"errors"
+	"sort"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+)
+
+func configurationCatalogTool() map[string]any {
+	return map[string]any{
+		"name":        "get_configuration_catalog",
+		"description": "Return the server-owned current Project reference and exact existing AI employee references available to the System Assistant. Call this before every project-scoped configuration plan. Treat names as display data and pass only exact opaque refs to plan operations.",
+		"inputSchema": objectSchema(nil, map[string]any{}),
+	}
+}
+
+func configurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
+	if !input.SystemAssistant || len(arguments) != 0 {
+		return nil, errors.New("configuration catalog is not available")
+	}
+	targets := append([]runtimecontract.RunnerDelegationTarget(nil), input.DelegationTargets...)
+	sort.Slice(targets, func(left, right int) bool {
+		if targets[left].Name == targets[right].Name {
+			return targets[left].Ref < targets[right].Ref
+		}
+		return targets[left].Name < targets[right].Name
+	})
+	agents := make([]map[string]string, 0, len(targets))
+	for _, target := range targets {
+		agents = append(agents, map[string]string{
+			"ref": target.Ref, "name": target.Name, "purpose": target.Purpose,
+			"role_description": target.RoleDescription,
+		})
+	}
+	return map[string]any{
+		"current_project_ref": input.ProjectRef,
+		"agents":              agents,
+	}, nil
+}
+
+func assistantPlanTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "propose_configuration_plan",
-		"description": "Propose a bounded Kodex configuration plan for explicit user approval. This tool never applies the plan.",
+		"description": "Propose a bounded Kodex configuration plan for explicit user approval. This tool never applies the plan. Call get_configuration_catalog first for project-scoped operations and use only its exact string refs; never pass names, objects, aliases, or invented refs. Each operation is exactly {type, summary, input}. CREATE_WORKFLOW input uses a flat steps array. Every step is exactly {name, purpose, agentRef, parallel, parallelGroup, timeoutSeconds, expectedResult, humanGate, gateDecisions, requiredCapabilityKeys}; parallelGroup may be an integer from 0 to 50 or a short stable label shared by parallel steps. Nested groups, task, instructions, humanDecision, and agent name objects are invalid. Supported operation inputs: CREATE_PROJECT {name, purpose, language}; CREATE_AGENT {projectRef, roleDefinitionRef?, name, purpose, roleDescription, avatarUrl?, runtimeRef?, instructions}; CREATE_WORKFLOW {projectRef, name, purpose, coordinatorAgentRef, inputFields?, steps, maxConcurrency?, timeoutSeconds?, completionCriteria?}; CHANGE_CAPABILITY {agentRef, capabilityKey, enabled, expectedVersion}; CHANGE_INTEGRATION_GRANT {connectionRef, capabilityKey, agentRef or workflowRef, enabled, expectedVersion}; CREATE_INTEGRATION_CONNECTION {definitionKey, name, publicConfiguration}; TEST_INTEGRATION_CONNECTION {connectionRef, expectedVersion}; CREATE_SCHEDULE {projectRef, name, targetType, targetRef, preset, timeOfDay, dayOfWeek?, timezone, input, sessionPolicy, notificationPolicy}; LAUNCH_RUN {projectRef, targetType, targetRef, title, task, sessionRef?, input, artifactRefs?}.",
 		"inputSchema": objectSchema([]string{"summary", "operations"}, map[string]any{
 			"summary": stringSchema(1, 2000),
 			"operations": map[string]any{"type": "array", "minItems": 1, "maxItems": 32,
-				"items": map[string]any{"oneOf": assistantPlanOperationSchemas()}},
+				"items": map[string]any{"oneOf": assistantPlanOperationSchemas(input)}},
 		}),
 	}
 }
 
-func assistantPlanOperationSchemas() []map[string]any {
+func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[string]any {
+	projectRef := opaqueRefSchema()
+	agentRef := opaqueRefSchema()
+	if input.ProjectRef != "" {
+		projectRef = enumSchema(input.ProjectRef)
+	}
+	if len(input.DelegationTargets) != 0 {
+		refs := make([]string, 0, len(input.DelegationTargets))
+		for _, target := range input.DelegationTargets {
+			refs = append(refs, target.Ref)
+		}
+		agentRef = enumSchema(refs...)
+	}
 	return []map[string]any{
 		assistantOperationSchema("CREATE_PROJECT", objectSchema([]string{"name", "purpose", "language"}, map[string]any{
 			"name": stringSchema(1, 160), "purpose": stringSchema(1, 2000), "language": enumSchema("ru", "en"),
 		})),
 		assistantOperationSchema("CREATE_AGENT", objectSchema([]string{"projectRef", "name", "purpose", "roleDescription", "instructions"}, map[string]any{
-			"projectRef": opaqueRefSchema(), "roleDefinitionRef": opaqueRefSchema(), "name": stringSchema(1, 160),
+			"projectRef": projectRef, "roleDefinitionRef": opaqueRefSchema(), "name": stringSchema(1, 160),
 			"purpose": stringSchema(1, 2000), "roleDescription": stringSchema(1, 2000), "avatarUrl": stringSchema(0, 500),
 			"runtimeRef": opaqueRefSchema(), "instructions": stringSchema(20, 65536),
 		})),
-		assistantOperationSchema("CREATE_WORKFLOW", workflowInputSchema()),
+		assistantOperationSchema("CREATE_WORKFLOW", workflowInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("CHANGE_CAPABILITY", objectSchema([]string{"agentRef", "capabilityKey", "enabled", "expectedVersion"}, map[string]any{
-			"agentRef": opaqueRefSchema(), "capabilityKey": capabilityKeySchema(), "enabled": map[string]any{"type": "boolean"},
+			"agentRef": agentRef, "capabilityKey": capabilityKeySchema(), "enabled": map[string]any{"type": "boolean"},
 			"expectedVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991},
 		})),
 		assistantOperationSchema("CHANGE_INTEGRATION_GRANT", integrationGrantInputSchema()),
@@ -35,8 +86,8 @@ func assistantPlanOperationSchemas() []map[string]any {
 		assistantOperationSchema("TEST_INTEGRATION_CONNECTION", objectSchema([]string{"connectionRef", "expectedVersion"}, map[string]any{
 			"connectionRef": opaqueRefSchema(), "expectedVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991},
 		})),
-		assistantOperationSchema("CREATE_SCHEDULE", scheduleInputSchema()),
-		assistantOperationSchema("LAUNCH_RUN", runInputSchema()),
+		assistantOperationSchema("CREATE_SCHEDULE", scheduleInputSchema(projectRef, agentRef)),
+		assistantOperationSchema("LAUNCH_RUN", runInputSchema(projectRef, agentRef)),
 	}
 }
 
@@ -58,7 +109,7 @@ func assistantOperationSchema(kind string, input map[string]any) map[string]any 
 	})
 }
 
-func workflowInputSchema() map[string]any {
+func workflowInputSchema(projectRef, agentRef map[string]any) map[string]any {
 	inputField := objectSchema([]string{"label", "valueType", "required", "options"}, map[string]any{
 		"label": stringSchema(1, 160), "description": stringSchema(0, 500),
 		"valueType": enumSchema("TEXT", "LONG_TEXT", "NUMBER", "BOOLEAN", "DATE", "SELECT"),
@@ -66,14 +117,16 @@ func workflowInputSchema() map[string]any {
 		"options":   map[string]any{"type": "array", "maxItems": 50, "uniqueItems": true, "items": stringSchema(1, 160)},
 	})
 	step := objectSchema([]string{"name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys"}, map[string]any{
-		"name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "agentRef": opaqueRefSchema(),
-		"parallel": map[string]any{"type": "boolean"}, "parallelGroup": map[string]any{"type": "integer", "minimum": 0, "maximum": 50},
+		"name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "agentRef": agentRef,
+		"parallel": map[string]any{"type": "boolean"}, "parallelGroup": map[string]any{"oneOf": []map[string]any{
+			{"type": "integer", "minimum": 0, "maximum": 50}, stringSchema(1, 80),
+		}},
 		"timeoutSeconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}, "expectedResult": stringSchema(0, 1000),
 		"humanGate": map[string]any{"type": "boolean"}, "gateDecisions": stringArraySchema(0, 4, []string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}),
 		"requiredCapabilityKeys": map[string]any{"type": "array", "maxItems": 50, "uniqueItems": true, "items": capabilityKeySchema()},
 	})
 	return objectSchema([]string{"projectRef", "name", "purpose", "coordinatorAgentRef", "steps"}, map[string]any{
-		"projectRef": opaqueRefSchema(), "name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "coordinatorAgentRef": opaqueRefSchema(),
+		"projectRef": projectRef, "name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "coordinatorAgentRef": agentRef,
 		"inputFields":    map[string]any{"type": "array", "maxItems": 100, "items": inputField},
 		"steps":          map[string]any{"type": "array", "minItems": 1, "maxItems": 200, "items": step},
 		"maxConcurrency": map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
@@ -81,9 +134,9 @@ func workflowInputSchema() map[string]any {
 	})
 }
 
-func scheduleInputSchema() map[string]any {
+func scheduleInputSchema(projectRef, targetRef map[string]any) map[string]any {
 	return objectSchema([]string{"projectRef", "name", "targetType", "targetRef", "preset", "timeOfDay", "timezone", "input", "sessionPolicy", "notificationPolicy"}, map[string]any{
-		"projectRef": opaqueRefSchema(), "name": stringSchema(1, 160), "targetType": enumSchema("AGENT", "WORKFLOW"), "targetRef": opaqueRefSchema(),
+		"projectRef": projectRef, "name": stringSchema(1, 160), "targetType": enumSchema("AGENT"), "targetRef": targetRef,
 		"preset": stringSchema(1, 120), "timeOfDay": stringSchema(0, 5), "dayOfWeek": stringSchema(0, 9), "timezone": stringSchema(1, 80),
 		"input":              map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
 		"sessionPolicy":      enumSchema("NEW_EACH_RUN", "CONTINUE_ONE"),
@@ -91,9 +144,9 @@ func scheduleInputSchema() map[string]any {
 	})
 }
 
-func runInputSchema() map[string]any {
+func runInputSchema(projectRef, targetRef map[string]any) map[string]any {
 	return objectSchema([]string{"projectRef", "targetType", "targetRef", "title", "task", "input"}, map[string]any{
-		"projectRef": opaqueRefSchema(), "targetType": enumSchema("AGENT", "WORKFLOW"), "targetRef": opaqueRefSchema(),
+		"projectRef": projectRef, "targetType": enumSchema("AGENT"), "targetRef": targetRef,
 		"title": stringSchema(1, 240), "task": stringSchema(1, 32768), "sessionRef": opaqueRefSchema(),
 		"input":        map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
 		"artifactRefs": map[string]any{"type": "array", "maxItems": 50, "uniqueItems": true, "items": opaqueRefSchema()},

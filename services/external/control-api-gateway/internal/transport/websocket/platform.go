@@ -95,6 +95,9 @@ func (server *Server) ServePlatformHTTP(writer http.ResponseWriter, request *htt
 		server.closeProblem(streamContext, connection, "INVALID_RESUME", localize)
 		return
 	}
+	// После RESUME protocol является server-write-only. CloseRead отслеживает
+	// закрытие peer и освобождает stream concurrency slot без ожидания записи.
+	streamContext = connection.CloseRead(streamContext)
 	cursor, err := server.control.Query.GetPlatformEventCursor(streamContext, &controlplanev1.GetPlatformEventCursorRequest{})
 	if err != nil || !safeRef.MatchString(cursor.GetOrganizationRef()) || cursor.GetCurrentSequence() < 0 {
 		server.closeProblem(streamContext, connection, "PLATFORM_UNAVAILABLE", localize)

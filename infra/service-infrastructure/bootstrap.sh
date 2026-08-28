@@ -110,7 +110,7 @@ if [[ "$mode" == apply-controllers ]]; then
   trust_chart=$(download_chart trust-manager)
   helm upgrade --install kodex-trust-manager "$trust_chart" \
     --namespace cert-manager --values "$script_directory/trust-manager-values.yaml" \
-    --atomic --wait --timeout 10m
+    --rollback-on-failure --wait --timeout 10m
 fi
 
 if [[ "$mode" == readback ]]; then

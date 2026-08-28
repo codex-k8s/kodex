@@ -3,13 +3,23 @@ import { createSSRApp, h, type Component } from "vue";
 import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { renderToString } from "@vue/server-renderer";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import AssistantPage from "@/pages/AssistantPage.vue";
 import { usePlatformStore } from "@/features/platform/store";
+import { useRealtimeStore } from "@/features/realtime/store";
 import { AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
+
+beforeAll(() => {
+  vi.stubGlobal("window", {
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
+});
+
+afterAll(() => vi.unstubAllGlobals());
 
 function messages() {
   return {
@@ -20,6 +30,10 @@ function messages() {
       retry: "Повторить",
       close: "Закрыть",
       input: "Вы",
+      edit: "Изменить",
+      reject: "Отклонить",
+      requestChanges: "Запросить изменения",
+      unknownStatus: "Статус недоступен",
     },
     app: { assistantShort: "Помощник" },
     assistant: {
@@ -40,7 +54,11 @@ function messages() {
       ACCESS_DENIED: "Недостаточно прав для просмотра.",
       default: "Не удалось выполнить действие.",
     },
-    states: { READY: "Готов" },
+    states: {
+      READY: "Готов",
+      COMPLETED: "Готово",
+      WAITING_HUMAN: "Ждёт решения",
+    },
   };
 }
 
@@ -153,6 +171,40 @@ describe("authoritative UI states and accessibility", () => {
       readinessSummary: "Готов принимать задания",
       nextActions: ["OPEN", "CREATE_CONVERSATION", "ADD_TURN", "EDIT"],
     };
+    platform.conversations.cnv_test12345678 = {
+      ref: "cnv_test12345678",
+      version: 1,
+      title: "Настройка проекта",
+      turns: [
+        {
+          ref: "trn_test12345678",
+          sequence: 1,
+          role: "ASSISTANT",
+          content: "План: `pln_test12345678`, версия 1",
+          state: "COMPLETED",
+          plan: {
+            ref: "pln_test12345678",
+            version: 1,
+            conversationRef: "cnv_test12345678",
+            auditSummary: "Будет создан один проект",
+            applied: false,
+            nextActions: ["APPLY_PLAN"],
+            operations: [
+              {
+                ref: "op_test12345678",
+                type: "CREATE_PROJECT",
+                title: "Создать проект",
+                summary: "Новая рабочая область",
+                permitted: true,
+              },
+            ],
+          },
+          createdAt: "2026-08-27T17:00:00Z",
+        },
+      ],
+      updatedAt: "2026-08-27T17:00:00Z",
+    };
+    useRealtimeStore(pinia).platformState.state = "live";
     const app = createSSRApp(AssistantPage);
     app.use(pinia);
     app.use(router);
@@ -172,6 +224,10 @@ describe("authoritative UI states and accessibility", () => {
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain("Новый диалог");
     expect(html).toContain("Отправить помощнику");
+    expect(html).toContain("Будет создан один проект");
+    expect(html).toContain("Создать проект");
+    expect(html).toContain("Применить разрешённые изменения");
+    expect(html).not.toContain("pln_test12345678");
     expect(html).not.toMatch(/Удалить|Архивировать|Отключить/);
   });
 });

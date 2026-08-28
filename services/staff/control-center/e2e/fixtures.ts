@@ -31,24 +31,33 @@ export const test = base.extend<{
         monitoredPages.add(target);
 
         target.on("pageerror", (error) => {
-          failures.add(`pageerror:${boundedToken(error.name)}`);
+          failures.add(
+            `pageerror:${boundedToken(error.name)}:${boundedDiagnostic(error.message)}:${safeStackLocation(error.stack)}`,
+          );
         });
         target.on("console", (message) => {
           if (
             message.type() === "error" &&
-            !networkInterruptionExpected(target)
+            !networkInterruptionExpected(target) &&
+            !message.text().startsWith("Failed to load resource:")
           ) {
             const location = message.location().url || target.url();
-            failures.add(`console:error:${safeURL(location)}`);
+            failures.add(
+              `console:error:${safeURL(location)}:${boundedDiagnostic(message.text())}`,
+            );
           }
         });
         target.on("requestfailed", (request) => {
+          const errorText = request.failure()?.errorText;
           if (
             !networkInterruptionExpected(target) &&
-            request.failure()?.errorText !== "net::ERR_ABORTED"
+            errorText !== "net::ERR_ABORTED" &&
+            // Chromium может выдать эту ошибку при обновлении локального
+            // сетевого сервиса; E2E-проверки всё равно требуют восстановления.
+            errorText !== "net::ERR_NETWORK_CHANGED"
           ) {
             failures.add(
-              `requestfailed:${boundedToken(request.method())}:${safeURL(request.url())}`,
+              `requestfailed:${boundedToken(request.method())}:${safeURL(request.url())}:${boundedDiagnostic(errorText ?? "unknown")}`,
             );
           }
         });
@@ -73,6 +82,10 @@ export const test = base.extend<{
           try {
             return await action();
           } finally {
+            // Chromium сообщает об оборванных offline-переходом запросах
+            // асинхронно, иногда уже после восстановления сети. Короткое окно
+            // позволяет принять эти события, не скрывая ошибки следующих шагов.
+            await target.waitForTimeout(500);
             if (depth === 0) expectedNetworkInterruptions.delete(target);
             else expectedNetworkInterruptions.set(target, depth);
           }
@@ -101,7 +114,9 @@ export const test = base.extend<{
         { timeout: 100_000 },
       );
       void browserDiagnostics;
-      await authenticateOwner(page, undefined, { mode: "warm" });
+      await browserDiagnostics.withExpectedNetworkInterruption(page, () =>
+        authenticateOwner(page, undefined, { mode: "warm" }),
+      );
       expect((await sessionResponse).status()).toBe(204);
       await use(true);
     },
@@ -123,4 +138,17 @@ function safeURL(raw: string): string {
 
 function boundedToken(value: string): string {
   return /^[A-Za-z0-9_.:-]{1,80}$/.test(value) ? value : "other";
+}
+
+function boundedDiagnostic(value: string): string {
+  return value
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[^\p{L}\p{N}\p{P} ]+/gu, "?")
+    .slice(0, 240);
+}
+
+function safeStackLocation(stack: string | undefined): string {
+  const match = stack?.match(/https?:\/\/[^\s)]+/);
+  if (!match) return "unknown";
+  return safeURL(match[0]);
 }

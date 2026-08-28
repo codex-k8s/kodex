@@ -17,7 +17,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(base, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	if err := app.Run(base, ctx, os.Args, buildVersion); err != nil {
-		fmt.Fprintln(os.Stderr, "agent-runner execution failed")
+		fmt.Fprintf(os.Stderr, "agent-runner execution failed: %v\n", err)
 		os.Exit(1)
 	}
 }

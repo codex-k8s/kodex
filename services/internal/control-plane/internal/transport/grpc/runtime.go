@@ -218,7 +218,7 @@ func (server *Server) ReportExecutionProgress(ctx context.Context, request *cont
 }
 
 func (server *Server) CompleteExecution(ctx context.Context, request *controlplanev1.CompleteExecutionRequest) (*controlplanev1.CompleteExecutionResponse, error) {
-	payload := command.CompleteExecutionInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
+	payload := command.CompleteExecutionInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode(), Usage: usageFromProto(request.GetUsage())}
 	for _, item := range request.GetArtifacts() {
 		payload.Artifacts = append(payload.Artifacts, command.CompletedArtifact{FileName: item.GetFileName(), MediaType: item.GetMediaType(), SizeBytes: item.GetSizeBytes(), Content: item.GetContent(), SHA256: item.GetSha256()})
 	}
