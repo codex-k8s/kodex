@@ -318,6 +318,8 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		}
 		principal.ExternalActorID, principal.ExternalTenantID = verified.Subject, verified.OrganizationID
 		principal.ExternalDisplayName, principal.ExternalEmailHint = verified.DisplayName, verified.EmailHint
+		principal.ExternalIssuer, principal.ExternalGroups = verified.Issuer, verified.Groups
+		principal.ExternalSessionRevision, principal.OwnerClaim = verified.SessionRevision, verified.OwnerClaim
 		actorKind, actorSource, actorReference, actorRevision = "HUMAN", "OIDC_SESSION", verified.SessionID, verified.SessionRevision
 		callerCredentialRevision = verified.SessionRevision
 	} else {

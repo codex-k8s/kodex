@@ -1,0 +1,343 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "controlplane/v1/control_plane.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// AccessService владеет прикладной allow-only policy. OIDC поставляет только
+// identity/groups; actor и organization всегда выводятся из signed context.
+service AccessService {
+  rpc ListPermissionRegistry(ListPermissionRegistryRequest) returns (ListPermissionRegistryResponse);
+  rpc ListAccessSubjects(ListAccessSubjectsRequest) returns (ListAccessSubjectsResponse);
+  rpc ListOIDCGroups(ListOIDCGroupsRequest) returns (ListOIDCGroupsResponse);
+  rpc ListAccessRoles(ListAccessRolesRequest) returns (ListAccessRolesResponse);
+  rpc ListAccessRoleVersions(ListAccessRoleVersionsRequest) returns (ListAccessRoleVersionsResponse);
+  rpc ListAccessBindings(ListAccessBindingsRequest) returns (ListAccessBindingsResponse);
+  rpc QueryEffectiveAccess(QueryEffectiveAccessRequest) returns (QueryEffectiveAccessResponse);
+  rpc ExplainAccess(ExplainAccessRequest) returns (ExplainAccessResponse);
+  rpc SimulateAccess(SimulateAccessRequest) returns (SimulateAccessResponse);
+
+  rpc CreateAccessRole(CreateAccessRoleRequest) returns (CreateAccessRoleResponse);
+  rpc CreateAccessRoleVersion(CreateAccessRoleVersionRequest) returns (CreateAccessRoleVersionResponse);
+  rpc ArchiveAccessRole(ArchiveAccessRoleRequest) returns (ArchiveAccessRoleResponse);
+  rpc CreateAccessBinding(CreateAccessBindingRequest) returns (CreateAccessBindingResponse);
+  rpc ChangeAccessBinding(ChangeAccessBindingRequest) returns (ChangeAccessBindingResponse);
+  rpc RevokeAccessBinding(RevokeAccessBindingRequest) returns (RevokeAccessBindingResponse);
+}
+
+enum PermissionRisk {
+  PERMISSION_RISK_UNSPECIFIED = 0;
+  PERMISSION_RISK_READ = 1;
+  PERMISSION_RISK_WRITE = 2;
+  PERMISSION_RISK_APPROVE = 3;
+  PERMISSION_RISK_ADMIN = 4;
+}
+
+enum AccessSubjectKind {
+  ACCESS_SUBJECT_KIND_UNSPECIFIED = 0;
+  ACCESS_SUBJECT_KIND_USER = 1;
+  ACCESS_SUBJECT_KIND_OIDC_GROUP = 2;
+  ACCESS_SUBJECT_KIND_SERVICE = 3;
+}
+
+enum AccessScopeKind {
+  ACCESS_SCOPE_KIND_UNSPECIFIED = 0;
+  ACCESS_SCOPE_KIND_ORGANIZATION = 1;
+  ACCESS_SCOPE_KIND_PROJECT = 2;
+  ACCESS_SCOPE_KIND_RESOURCE_KIND = 3;
+  ACCESS_SCOPE_KIND_RESOURCE_INSTANCE = 4;
+}
+
+enum AccessResourceKind {
+  ACCESS_RESOURCE_KIND_UNSPECIFIED = 0;
+  ACCESS_RESOURCE_KIND_ORGANIZATION = 1;
+  ACCESS_RESOURCE_KIND_PROJECT = 2;
+  ACCESS_RESOURCE_KIND_AGENT = 3;
+  ACCESS_RESOURCE_KIND_WORKFLOW = 4;
+  ACCESS_RESOURCE_KIND_RUN = 5;
+  ACCESS_RESOURCE_KIND_OWNER_GATE = 6;
+  ACCESS_RESOURCE_KIND_ARTIFACT = 7;
+  ACCESS_RESOURCE_KIND_SCHEDULE = 8;
+  ACCESS_RESOURCE_KIND_INTEGRATION = 9;
+}
+
+enum AccessRoleKind {
+  ACCESS_ROLE_KIND_UNSPECIFIED = 0;
+  ACCESS_ROLE_KIND_SYSTEM = 1;
+  ACCESS_ROLE_KIND_CUSTOM = 2;
+}
+
+enum AccessRoleState {
+  ACCESS_ROLE_STATE_UNSPECIFIED = 0;
+  ACCESS_ROLE_STATE_ACTIVE = 1;
+  ACCESS_ROLE_STATE_ARCHIVED = 2;
+}
+
+enum AccessBindingState {
+  ACCESS_BINDING_STATE_UNSPECIFIED = 0;
+  ACCESS_BINDING_STATE_ACTIVE = 1;
+  ACCESS_BINDING_STATE_REVOKED = 2;
+}
+
+enum OIDCGroupState {
+  OIDC_GROUP_STATE_UNSPECIFIED = 0;
+  OIDC_GROUP_STATE_ACTIVE = 1;
+  OIDC_GROUP_STATE_STALE = 2;
+}
+
+enum AccessDecision {
+  ACCESS_DECISION_UNSPECIFIED = 0;
+  ACCESS_DECISION_ALLOWED = 1;
+  ACCESS_DECISION_DENIED = 2;
+}
+
+message PermissionDefinition {
+  string key = 1;
+  string name_key = 2;
+  string description_key = 3;
+  PermissionRisk risk = 4;
+  repeated AccessScopeKind allowed_scopes = 5;
+  repeated AccessResourceKind resource_kinds = 6;
+  bool owner_condition_supported = 7;
+}
+
+message AccessSubject {
+  string ref = 1;
+  AccessSubjectKind kind = 2;
+  string display_name = 3;
+  bool active = 4;
+  repeated string oidc_group_refs = 5;
+}
+
+message OIDCGroup {
+  string ref = 1;
+  string display_name = 2;
+  OIDCGroupState state = 3;
+  int32 member_count = 4;
+  int32 binding_count = 5;
+  google.protobuf.Timestamp last_seen_at = 6;
+  google.protobuf.Timestamp synced_at = 7;
+}
+
+message AccessRoleVersion {
+  string ref = 1;
+  string role_ref = 2;
+  int64 revision = 3;
+  string name = 4;
+  string description = 5;
+  repeated string permission_keys = 6;
+  repeated AccessScopeKind allowed_scopes = 7;
+  string change_comment = 8;
+  google.protobuf.Timestamp created_at = 9;
+  UserSummary created_by = 10;
+}
+
+message AccessRole {
+  string ref = 1;
+  int64 version = 2;
+  AccessRoleKind kind = 3;
+  AccessRoleState state = 4;
+  AccessRoleVersion current_version = 5;
+  int32 binding_count = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message AccessScope {
+  AccessScopeKind kind = 1;
+  string project_ref = 2;
+  AccessResourceKind resource_kind = 3;
+  string resource_ref = 4;
+}
+
+message AccessConditions {
+  optional google.protobuf.Timestamp valid_from = 1;
+  optional google.protobuf.Timestamp valid_until = 2;
+  bool require_owner = 3;
+}
+
+message AccessBinding {
+  string ref = 1;
+  int64 version = 2;
+  AccessBindingState state = 3;
+  AccessSubject subject = 4;
+  AccessRoleVersion role_version = 5;
+  AccessScope scope = 6;
+  AccessConditions conditions = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message AccessExplanationStep {
+  string code = 1;
+  string binding_ref = 2;
+  string role_ref = 3;
+  string role_version_ref = 4;
+  AccessSubjectKind source_kind = 5;
+  string source_ref = 6;
+  AccessScope scope = 7;
+}
+
+message EffectiveAccessDecision {
+  string permission_key = 1;
+  AccessDecision decision = 2;
+  AccessScope target = 3;
+  repeated AccessExplanationStep explanation = 4;
+}
+
+message AccessRoleDraft {
+  repeated string permission_keys = 1;
+  repeated AccessScopeKind allowed_scopes = 2;
+}
+
+message AccessBindingDraft {
+  AccessSubjectKind subject_kind = 1;
+  string subject_ref = 2;
+  AccessScope scope = 3;
+  AccessConditions conditions = 4;
+}
+
+message ListPermissionRegistryRequest {}
+message ListPermissionRegistryResponse { repeated PermissionDefinition permissions = 1; }
+
+message ListAccessSubjectsRequest {
+  PageRequest page = 1;
+  string query = 2;
+  AccessSubjectKind kind = 3;
+}
+message ListAccessSubjectsResponse {
+  repeated AccessSubject subjects = 1;
+  PageInfo page = 2;
+}
+
+message ListOIDCGroupsRequest {
+  PageRequest page = 1;
+  string query = 2;
+}
+message ListOIDCGroupsResponse {
+  repeated OIDCGroup groups = 1;
+  PageInfo page = 2;
+}
+
+message ListAccessRolesRequest {
+  PageRequest page = 1;
+  bool include_archived = 2;
+}
+message ListAccessRolesResponse {
+  repeated AccessRole roles = 1;
+  PageInfo page = 2;
+}
+
+message ListAccessRoleVersionsRequest {
+  string role_ref = 1;
+  PageRequest page = 2;
+}
+message ListAccessRoleVersionsResponse {
+  AccessRole role = 1;
+  repeated AccessRoleVersion versions = 2;
+  PageInfo page = 3;
+}
+
+message ListAccessBindingsRequest {
+  PageRequest page = 1;
+  AccessSubjectKind subject_kind = 2;
+  string subject_ref = 3;
+  string role_ref = 4;
+  string project_ref = 5;
+  bool include_revoked = 6;
+}
+message ListAccessBindingsResponse {
+  repeated AccessBinding bindings = 1;
+  PageInfo page = 2;
+}
+
+message QueryEffectiveAccessRequest {
+  string subject_ref = 1;
+  AccessScope target = 2;
+  repeated string permission_keys = 3;
+}
+message QueryEffectiveAccessResponse {
+  AccessSubject subject = 1;
+  repeated EffectiveAccessDecision decisions = 2;
+  google.protobuf.Timestamp evaluated_at = 3;
+}
+
+message ExplainAccessRequest {
+  string subject_ref = 1;
+  string permission_key = 2;
+  AccessScope target = 3;
+}
+message ExplainAccessResponse {
+  AccessSubject subject = 1;
+  EffectiveAccessDecision result = 2;
+  google.protobuf.Timestamp evaluated_at = 3;
+}
+
+message SimulateAccessRequest {
+  string subject_ref = 1;
+  string permission_key = 2;
+  AccessScope target = 3;
+  AccessRoleDraft role = 4;
+  AccessBindingDraft binding = 5;
+  google.protobuf.Timestamp evaluated_at = 6;
+}
+message SimulateAccessResponse {
+  AccessSubject subject = 1;
+  EffectiveAccessDecision current = 2;
+  EffectiveAccessDecision simulated = 3;
+  google.protobuf.Timestamp evaluated_at = 4;
+}
+
+message CreateAccessRoleRequest {
+  MutationContext mutation = 1;
+  string name = 2;
+  string description = 3;
+  repeated string permission_keys = 4;
+  repeated AccessScopeKind allowed_scopes = 5;
+  string change_comment = 6;
+}
+message CreateAccessRoleResponse { AccessRole role = 1; }
+
+message CreateAccessRoleVersionRequest {
+  MutationContext mutation = 1;
+  string role_ref = 2;
+  string name = 3;
+  string description = 4;
+  repeated string permission_keys = 5;
+  repeated AccessScopeKind allowed_scopes = 6;
+  string change_comment = 7;
+}
+message CreateAccessRoleVersionResponse { AccessRole role = 1; }
+
+message ArchiveAccessRoleRequest {
+  MutationContext mutation = 1;
+  string role_ref = 2;
+}
+message ArchiveAccessRoleResponse { AccessRole role = 1; }
+
+message CreateAccessBindingRequest {
+  MutationContext mutation = 1;
+  AccessSubjectKind subject_kind = 2;
+  string subject_ref = 3;
+  string role_version_ref = 4;
+  AccessScope scope = 5;
+  AccessConditions conditions = 6;
+}
+message CreateAccessBindingResponse { AccessBinding binding = 1; }
+
+message ChangeAccessBindingRequest {
+  MutationContext mutation = 1;
+  string binding_ref = 2;
+  string role_version_ref = 3;
+  AccessScope scope = 4;
+  AccessConditions conditions = 5;
+}
+message ChangeAccessBindingResponse { AccessBinding binding = 1; }
+
+message RevokeAccessBindingRequest {
+  MutationContext mutation = 1;
+  string binding_ref = 2;
+}
+message RevokeAccessBindingResponse { AccessBinding binding = 1; }

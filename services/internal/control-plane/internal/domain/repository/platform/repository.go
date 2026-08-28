@@ -57,13 +57,17 @@ type ArtifactDownload struct {
 // стабильную system identity. Ни один идентификатор из browser payload не
 // является authority без повторного разрешения в PostgreSQL.
 type ProofPrincipalInput struct {
-	ExternalActorID     string
-	ExternalTenantID    string
-	ExternalDisplayName string
-	ExternalEmailHint   string
-	CallerWorkload      string
-	Operation           string
-	ProjectRef          string
+	ExternalActorID         string
+	ExternalTenantID        string
+	ExternalDisplayName     string
+	ExternalEmailHint       string
+	ExternalIssuer          string
+	ExternalGroups          []string
+	ExternalSessionRevision uint64
+	OwnerClaim              bool
+	CallerWorkload          string
+	Operation               string
+	ProjectRef              string
 }
 
 // ProofAuthority — внутренние UUID, которые допускаются wire-контрактом
@@ -122,6 +126,14 @@ type Repository interface {
 	ListAssistantConversations(context.Context, value.Principal, query.Filter) ([]entity.AssistantConversation, string, error)
 	GetAdministration(context.Context, value.Principal) (Administration, error)
 	ListAuditEvents(context.Context, value.Principal, query.Filter) ([]entity.AuditEvent, string, error)
+	ListPermissionRegistry(context.Context, value.Principal) ([]entity.PermissionDefinition, error)
+	ListAccessSubjects(context.Context, value.Principal, query.Filter, string) ([]entity.AccessSubject, string, error)
+	ListOIDCGroups(context.Context, value.Principal, query.Filter) ([]entity.OIDCGroup, string, error)
+	ListAccessRoles(context.Context, value.Principal, query.Page, bool) ([]entity.AccessRole, string, error)
+	ListAccessRoleVersions(context.Context, value.Principal, string, query.Page) (entity.AccessRole, []entity.AccessRoleVersion, string, error)
+	ListAccessBindings(context.Context, value.Principal, query.AccessBindingFilter) ([]entity.AccessBinding, string, error)
+	QueryEffectiveAccess(context.Context, value.Principal, string, entity.AccessScope, []string, time.Time) (entity.EffectiveAccess, error)
+	SimulateAccess(context.Context, value.Principal, command.AccessSimulationInput) (entity.AccessSimulation, error)
 	Execute(context.Context, command.Command) (command.Result, error)
 	ReconcileWarmRuntime(context.Context, value.Principal, string) (entity.SystemAssistant, map[string]any, bool, error)
 	ReportWarmRuntime(context.Context, value.Principal, command.WarmRuntimeInput) (entity.SystemAssistant, error)

@@ -148,6 +148,142 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("system assistant core prompt upgrades forward only", func(t *testing.T) {
 		testSystemAssistantCorePromptUpgrade(t, ctx, repository, pool)
 	})
+	t.Run("enterprise access restricts exact agent and project", func(t *testing.T) {
+		testEnterpriseAccessRestriction(t, ctx, repository)
+	})
+}
+
+func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	ownerInput := platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Enterprise owner", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
+	}
+	owner := resolvedTestPrincipal(t, ctx, repository, ownerInput, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct enterprise access service: %v", err)
+	}
+	createProject := func(key, name string) entity.Project {
+		result, createErr := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.ProjectInput{Name: name, Language: "en"}})
+		if createErr != nil || result.Project == nil {
+			t.Fatalf("create enterprise access project: result=%#v err=%v", result.Project, createErr)
+		}
+		return *result.Project
+	}
+	projectA := createProject("enterprise-project-a", "Enterprise project A")
+	projectB := createProject("enterprise-project-b", "Enterprise project B")
+	agentA := createLifecycleAgent(t, ctx, service, owner, projectA.Ref, "enterprise-agent-a", "Enterprise agent A")
+	agentB := createLifecycleAgent(t, ctx, service, owner, projectA.Ref, "enterprise-agent-b", "Enterprise agent B")
+	agentOtherProject := createLifecycleAgent(t, ctx, service, owner, projectB.Ref, "enterprise-agent-c", "Enterprise agent C")
+
+	candidateInput := platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000009003", ExternalTenantID: ownerInput.ExternalTenantID,
+		ExternalDisplayName: "Restricted operator", CallerWorkload: "control-api-gateway", Operation: "platform.access.effective.explain",
+	}
+	if _, err := repository.ResolveProofAuthority(ctx, candidateInput); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("unbound OIDC identity received authority: %v", err)
+	}
+	subjects, _, err := service.ListAccessSubjects(ctx, owner, query.Filter{
+		Query: candidateInput.ExternalDisplayName, Page: query.Page{Size: 20},
+	}, "USER")
+	if err != nil || len(subjects) != 1 {
+		t.Fatalf("list synchronized restricted OIDC identity: subjects=%#v err=%v", subjects, err)
+	}
+	candidateRef := subjects[0].Ref
+
+	createRole := func(key, name string, permissions, scopes []string) entity.AccessRole {
+		result, createErr := service.Execute(ctx, command.Command{Kind: command.CreateAccessRole, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.AccessRoleInput{
+				Name: name, PermissionKeys: permissions, AllowedScopes: scopes, ChangeComment: "component scenario",
+			}})
+		if createErr != nil || result.AccessRole == nil {
+			t.Fatalf("create enterprise access role: result=%#v err=%v", result.AccessRole, createErr)
+		}
+		return *result.AccessRole
+	}
+	projectViewer := createRole("enterprise-project-viewer", "Project viewer", []string{"project.view"}, []string{"PROJECT"})
+	agentLauncher := createRole("enterprise-agent-launcher", "Exact agent launcher", []string{"agent.view", "agent.launch"}, []string{"RESOURCE_INSTANCE"})
+	createBinding := func(key string, role entity.AccessRole, accessScope entity.AccessScope) {
+		result, createErr := service.Execute(ctx, command.Command{Kind: command.CreateAccessBinding, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.AccessBindingInput{
+				SubjectKind: "USER", SubjectRef: candidateRef, RoleVersionRef: role.CurrentVersion.Ref, Scope: accessScope,
+			}})
+		if createErr != nil || result.AccessBinding == nil {
+			t.Fatalf("create enterprise access binding: result=%#v err=%v", result.AccessBinding, createErr)
+		}
+	}
+	createBinding("enterprise-bind-project-a", projectViewer, entity.AccessScope{Kind: "PROJECT", ProjectRef: projectA.Ref})
+	createBinding("enterprise-bind-agent-a", agentLauncher, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: projectA.Ref, ResourceKind: "AGENT", ResourceRef: agentA.Ref})
+	authority, err := repository.ResolveProofAuthority(ctx, candidateInput)
+	if err != nil {
+		t.Fatalf("resolve restricted OIDC identity after binding: %v", err)
+	}
+	candidate := value.Principal{ActorID: authority.ActorID, AuthorityTenant: authority.OrganizationID,
+		Permission: candidateInput.Operation, CorrelationRef: "enterprise-access-candidate", CallerWorkload: "control-api-gateway", CredentialRevision: 1}
+	resolvedCandidate, err := repository.ResolvePrincipal(ctx, candidate)
+	if err != nil {
+		t.Fatalf("resolve restricted application principal: %v", err)
+	}
+	var membershipRelationKind string
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT relation.relkind::text
+		FROM pg_catalog.pg_class relation
+		JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+		WHERE namespace.nspname = 'control_plane' AND relation.relname = 'memberships'
+	`).Scan(&membershipRelationKind); err != nil || membershipRelationKind != "v" {
+		t.Fatalf("membership presentation is not a view: kind=%q err=%v", membershipRelationKind, err)
+	}
+	var flattenedLaunchBindings int
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM control_plane.memberships membership
+		JOIN control_plane.subjects subject ON subject.id = membership.subject_id
+		JOIN control_plane.projects project ON project.id = membership.project_id
+		WHERE subject.ref = $1 AND project.ref = $2
+		  AND 'LAUNCH_RUNS' = ANY(membership.permissions)
+	`, resolvedCandidate.ActorID, projectA.Ref).Scan(&flattenedLaunchBindings); err != nil || flattenedLaunchBindings != 0 {
+		t.Fatalf("exact Agent binding was flattened to project launch authority: count=%d err=%v", flattenedLaunchBindings, err)
+	}
+
+	explained, err := service.QueryEffectiveAccess(ctx, candidate, resolvedCandidate.ActorID,
+		entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: projectA.Ref, ResourceKind: "AGENT", ResourceRef: agentA.Ref},
+		[]string{"agent.launch"}, time.Time{})
+	if err != nil || len(explained.Decisions) != 1 || !explained.Decisions[0].Allowed {
+		t.Fatalf("exact agent explain failed: result=%#v err=%v", explained, err)
+	}
+	if _, err := service.QueryEffectiveAccess(ctx, candidate, resolvedCandidate.ActorID,
+		entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: projectA.Ref, ResourceKind: "AGENT", ResourceRef: agentB.Ref},
+		[]string{"agent.launch"}, time.Time{}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("foreign agent explain leaked resource existence: %v", err)
+	}
+
+	launch := func(key string, project entity.Project, agent entity.Agent) (command.Result, error) {
+		return service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: candidate,
+			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.LaunchRunInput{
+				ProjectRef: project.Ref, Task: "Run the bounded enterprise access scenario.", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref},
+			}})
+	}
+	allowed, err := launch("enterprise-launch-agent-a", projectA, agentA)
+	if err != nil || allowed.Run == nil {
+		t.Fatalf("exact agent launch was denied: run=%#v err=%v", allowed.Run, err)
+	}
+	if _, err := launch("enterprise-launch-agent-b", projectA, agentB); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("other agent was not closed as not found: %v", err)
+	}
+	if _, err := launch("enterprise-launch-project-b", projectB, agentOtherProject); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("other project was not closed as not found: %v", err)
+	}
+
+	candidateInput.ProjectRef = projectA.Ref
+	if _, err := repository.ResolveProofAuthority(ctx, candidateInput); err != nil {
+		t.Fatalf("project A proof was denied: %v", err)
+	}
+	candidateInput.ProjectRef = projectB.Ref
+	if _, err := repository.ResolveProofAuthority(ctx, candidateInput); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("project B proof was not denied: %v", err)
+	}
 }
 
 func testInstructionDraftSave(t *testing.T, ctx context.Context, repository *Repository) {
@@ -586,6 +722,24 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	if err != nil || added.Membership == nil || !added.Membership.Active {
 		t.Fatalf("add project membership: membership=%#v err=%v", added.Membership, err)
 	}
+	var presentationKind string
+	var canonicalPermissions []string
+	var projectionRows, roleVersionRows int
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT binding.presentation_kind,
+		       role_version.permission_keys,
+		       (SELECT count(*) FROM control_plane.memberships membership WHERE membership.ref = binding.ref),
+		       (SELECT count(*) FROM control_plane.application_role_versions version WHERE version.role_id = role.id)
+		FROM control_plane.access_bindings binding
+		JOIN control_plane.application_role_versions role_version ON role_version.id = binding.role_version_id
+		JOIN control_plane.application_roles role ON role.id = role_version.role_id
+		WHERE binding.ref = $1
+	`, added.Membership.Ref).Scan(&presentationKind, &canonicalPermissions, &projectionRows, &roleVersionRows); err != nil ||
+		presentationKind != "PROJECT_MEMBERSHIP" || projectionRows != 1 || roleVersionRows != 1 ||
+		!contains(canonicalPermissions, "project.view") || !contains(canonicalPermissions, "access.manage") {
+		t.Fatalf("project membership is not a canonical projection: kind=%q permissions=%v projection=%d versions=%d err=%v",
+			presentationKind, canonicalPermissions, projectionRows, roleVersionRows, err)
+	}
 	candidateAuthority, err := repository.ResolveProofAuthority(ctx, candidateInput)
 	if err != nil {
 		t.Fatalf("resolve candidate after membership: %v", err)
@@ -775,6 +929,30 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	}); !errors.Is(err, domainerrs.ErrForbidden) {
 		t.Fatalf("project manager granted permission it does not hold: %v", err)
 	}
+	projectMembershipVersion := added.Membership.Version
+	changedProjectMembership, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeMembership, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "project-membership-canonical-update", ExpectedVersion: &projectMembershipVersion},
+		Payload: command.MembershipInput{ProjectRef: projectRef, MembershipRef: added.Membership.Ref,
+			Permissions: []string{"VIEW"}, Active: true},
+	})
+	if err != nil || changedProjectMembership.Membership == nil ||
+		changedProjectMembership.Membership.Version != projectMembershipVersion+1 {
+		t.Fatalf("change canonical project membership: membership=%#v err=%v", changedProjectMembership.Membership, err)
+	}
+	added.Membership = changedProjectMembership.Membership
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT role_version.permission_keys,
+		       (SELECT count(*) FROM control_plane.application_role_versions version WHERE version.role_id = role.id)
+		FROM control_plane.access_bindings binding
+		JOIN control_plane.application_role_versions role_version ON role_version.id = binding.role_version_id
+		JOIN control_plane.application_roles role ON role.id = role_version.role_id
+		WHERE binding.ref = $1
+	`, added.Membership.Ref).Scan(&canonicalPermissions, &roleVersionRows); err != nil ||
+		roleVersionRows != 2 || !contains(canonicalPermissions, "project.view") || contains(canonicalPermissions, "access.manage") {
+		t.Fatalf("membership update did not create an immutable canonical role version: permissions=%v versions=%d err=%v",
+			canonicalPermissions, roleVersionRows, err)
+	}
 	ownerVersion := ownerMembership.Version
 	if _, err := service.Execute(ctx, command.Command{
 		Kind: command.ChangePlatformMembership, Principal: owner,
@@ -796,6 +974,17 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	withoutProject.ProjectRef = ""
 	if _, err := repository.ResolveProofAuthority(ctx, withoutProject); !errors.Is(err, domainerrs.ErrForbidden) {
 		t.Fatalf("suspended organization member retained authority: %v", err)
+	}
+	var activePresentationBindings int
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM control_plane.access_bindings binding
+		JOIN control_plane.subjects subject ON subject.id = binding.subject_id
+		WHERE subject.ref = $1
+		  AND binding.presentation_kind IN ('PLATFORM_MEMBERSHIP', 'PROJECT_MEMBERSHIP')
+		  AND binding.state = 'ACTIVE'
+	`, organizationMember.Membership.User.Ref).Scan(&activePresentationBindings); err != nil || activePresentationBindings != 0 {
+		t.Fatalf("suspension left active canonical membership bindings: count=%d err=%v", activePresentationBindings, err)
 	}
 	projectMemberships, _, err := service.ListMemberships(ctx, owner, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
 	if err != nil {
@@ -1821,6 +2010,9 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 
 func resolvedTestPrincipal(t *testing.T, ctx context.Context, repository *Repository, input platformrepo.ProofPrincipalInput, workload string) value.Principal {
 	t.Helper()
+	if workload == "control-api-gateway" {
+		input.OwnerClaim = true
+	}
 	authority, err := repository.ResolveProofAuthority(ctx, input)
 	if err != nil {
 		t.Fatalf("resolve test proof authority: %v", err)

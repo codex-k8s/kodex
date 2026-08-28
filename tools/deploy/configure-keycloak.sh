@@ -394,7 +394,7 @@ if [[ "$mode" == apply ]]; then
   done < <(keycloak_request get "clients/$control_center_id/protocol-mappers/models" -r "$realm" |
     jq -r '
       .[] | select(.name == "organization-id" or .name == "session-revision" or
-        .name == "control-api-audience" or .name == "realm roles" or
+        .name == "control-api-audience" or .name == "realm roles" or .name == "kodex-groups" or
         .name == "kodex-organization-id" or .name == "kodex-session-revision" or
         .name == "kodex-control-api-audience" or .name == "kodex-realm-roles") |
       .id
@@ -411,6 +411,8 @@ if [[ "$mode" == apply ]]; then
     '{"included.client.audience":"kodex-control-api","access.token.claim":"true","id.token.claim":"false","userinfo.token.claim":"false","introspection.token.claim":"true"}'
   replace_mapper "$control_center_id" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+  replace_mapper "$control_center_id" kodex-groups oidc-group-membership-mapper \
+    '{"claim.name":"groups","full.path":"false","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
 
   owner_count=$(keycloak_request get users -r "$realm" -q "username=$owner_username" |
     jq -r --arg username "$owner_username" '[.[] | select(.username == $username)] | length')
@@ -470,7 +472,10 @@ jq -e --arg organization_id "$organization_id" '
   mapper("kodex-organization-id").config."claim.value" == $organization_id and
   mapper("kodex-session-revision").config."claim.value" == "1" and
   mapper("kodex-control-api-audience").config."included.client.audience" == "kodex-control-api" and
-  mapper("kodex-realm-roles").config."claim.name" == "realm_access.roles"
+  mapper("kodex-realm-roles").config."claim.name" == "realm_access.roles" and
+  mapper("kodex-groups").protocolMapper == "oidc-group-membership-mapper" and
+  mapper("kodex-groups").config."claim.name" == "groups" and
+  mapper("kodex-groups").config."full.path" == "false"
 ' <<<"$mapper_json" >/dev/null || fail 'OIDC claim mapper readback failed'
 
 owner_id=$(keycloak_request get users -r "$realm" -q "username=$owner_username" |

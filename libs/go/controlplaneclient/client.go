@@ -71,6 +71,7 @@ type Client struct {
 	Runtime         controlplanev1.RuntimeWorkServiceClient
 	Interaction     controlplanev1.InteractionWorkServiceClient
 	RoleImages      controlplanev1.RoleImageServiceClient
+	Access          controlplanev1.AccessServiceClient
 	resolver        internalrpcauthorityv1.AuthorityProofResolverServiceClient
 	issuer          *authorityclient.LocalConnection
 	raw, protected  *grpc.ClientConn
@@ -138,6 +139,7 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	client.Runtime = controlplanev1.NewRuntimeWorkServiceClient(protected)
 	client.Interaction = controlplanev1.NewInteractionWorkServiceClient(protected)
 	client.RoleImages = controlplanev1.NewRoleImageServiceClient(protected)
+	client.Access = controlplanev1.NewAccessServiceClient(protected)
 	return client, nil
 }
 

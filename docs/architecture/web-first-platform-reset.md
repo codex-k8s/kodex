@@ -4,8 +4,8 @@ title: Целевая архитектура web-first платформы
 type: architecture
 status: approved
 owner: architect
-version: 1.0.2
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-08-28
 ---
 
 # Целевая архитектура web-first платформы
@@ -39,7 +39,7 @@ connection или credential не входит в core readiness.
 
 | Компонент | Авторитетное состояние | Не владеет |
 |---|---|---|
-| `control-plane` | Organization, Membership, Project, Agent, Instruction, Workflow, Session, Turn, Run graph/events, Human Gate, artifact metadata, Schedule, Integration metadata/grants, audit, idempotency, outbox, system assistant | provider credentials и внешние эффекты |
+| `control-plane` | Organization, Subject, permission registry, role/version/binding, Project, Agent, Instruction, Workflow, Session, Turn, Run graph/events, Human Gate, artifact metadata, Schedule, Integration metadata/grants, audit, idempotency, outbox, system assistant | provider credentials и внешние эффекты |
 | `control-api-gateway` | browser session, CSRF и ограниченный connection state | lifecycle, permissions, domain projections, event store |
 | `runtime-controller` | materialization/claim readback конкретной execution attempt | Проекты, агенты, root lineage и решения |
 | `agent-runner` | только процесс выполнения выданной immutable attempt | domain state, orchestration authority и delivery routing |
@@ -54,20 +54,29 @@ connection или credential не входит в core readiness.
 ## Организация и полномочия
 
 Bootstrap создаёт одну Organization, но все агрегаты и queries сохраняют
-`organization_id`. Проверенный OIDC issuer + subject разрешается в User и
-активную Membership. Browser payload не принимает actor, organization, owner,
-root lineage или permission.
+`organization_id`. Проверенный OIDC issuer + subject разрешается в Subject, а
+bounded groups синхронизируются как identity read model. Browser payload не
+принимает actor, organization, owner, root lineage или permission.
 
-Platform roles: `OWNER`, `ADMINISTRATOR`, `OPERATOR`, `MEMBER`, `AUDITOR`.
-Project membership отдельно задаёт typed permissions. Полномочия всегда
-вычисляет `control-plane` из активных memberships и server-owned ownership.
-Скрытый или чужой объект неотличим от отсутствующего.
+Application policy является allow-only: закрытый permission registry,
+immutable version системной/custom role и user/OIDC-group/service binding с
+organization/project/resource-kind/resource-instance scope. Полномочия всегда
+вычисляет `control-plane` из pinned role version, актуальных binding,
+server-owned ownership и точного target. Скрытый или чужой объект неотличим от
+отсутствующего; OIDC role/group не является policy authority.
+
+Старый Membership contract является только presentation adapter. Его команды
+создают или изменяют canonical role/version/binding в той же транзакции, а
+чтение выполняется через SQL view над binding с server-owned presentation
+marker. Отдельной membership write model нет. Exact resource binding не
+проецируется в project-wide permissions.
 
 ## Защищённые агрегаты и команды
 
 | Агрегат | Разрешённые специализированные команды |
 |---|---|
-| Membership | add, change role/permissions, suspend, remove; последний Owner защищён |
+| Membership compatibility adapter | add, change role/permissions, suspend, remove через canonical role/version/binding; последний Owner защищён |
+| AccessRole, AccessBinding | create role/version, archive custom role, create/change/revoke binding; system role immutable |
 | Agent | create, update profile, create/validate/publish/rollback instructions, enable, disable, archive, grant/revoke capability |
 | System Assistant | update owner supplement, activate shipped prompt/runtime revision, recover warm runtime; delete/disable/archive запрещены |
 | Workflow | create draft, update section, validate, publish, archive |
@@ -84,12 +93,12 @@ Project membership отдельно задаёт typed permissions. Полном
 
 | Инициатор и endpoint | Gateway mapping | Control-plane command/query | Authority и concurrency | Состояние и событие | Потребитель результата |
 |---|---|---|---|---|---|
-| `POST /api/v1/projects` | `CreateProject` | Project service | OIDC membership, `Idempotency-Key` | Project + audit + `project.created` | PWA global snapshot |
+| `POST /api/v1/projects` | `CreateProject` | Project service | OIDC actor с canonical `project.create`, `Idempotency-Key` | Project + audit + `project.created` | PWA global snapshot |
 | `POST /api/v1/projects/{projectRef}/agents` | `CreateAgent` | Agent service | project `AGENT_CREATE`, idempotency | Agent draft + audit + `agent.created` | PWA project snapshot |
-| `GET /api/v1/administration/membership-candidates`, `GET /api/v1/projects/{projectRef}/membership-candidates` | bounded catalog query | Membership service | OIDC actor; organization/project `MANAGE_MEMBERS`; eligibility назначается сервером | read-only список пользователей по имени/email без subject/UUID | форма управления доступом |
+| `GET /api/v1/administration/membership-candidates`, `GET /api/v1/projects/{projectRef}/membership-candidates` | bounded catalog query | Access service | OIDC actor; canonical organization/project `access.manage`; legacy `MANAGE_MEMBERS` только presentation mapping | read-only список пользователей по имени/email без subject/UUID | форма управления доступом |
 | `POST /api/v1/agents/{agentRef}/instruction-commands` | typed instruction RPC | Instruction service | owner resolve before `If-Match` | immutable published version + `agent.instructions_published` | runtime revision resolver |
 | `POST /api/v1/projects/{projectRef}/workflows` | `CreateWorkflow` | Workflow service | project `WORKFLOW_MANAGE`, idempotency | Workflow draft + audit | authoritative reads |
-| `GET /api/v1/search` | `SearchPlatform` | Control-plane query service | OIDC actor + organization membership; eligibility каждого Project по тому же `VIEW` rule, что list/detail | bounded read-only projection без domain event | глобальная панель Control Center |
+| `GET /api/v1/search` | `SearchPlatform` | Control-plane query service | OIDC actor с binding; eligibility каждого Project по canonical `project.view`, как list/detail | bounded read-only projection без domain event | глобальная панель Control Center |
 | `POST /api/v1/workflows/{workflowRef}/commands` | validate/publish/archive | Workflow service | owner resolve + OCC | published version + `workflow.published` | run target catalog |
 | `POST /api/v1/runs` | `LaunchAgent` или `LaunchWorkflow` | Execution service | target resolve, `RUN_LAUNCH`, idempotency | Session/Turn/Run/root node/task + `run.created` | runtime-controller, WS projector |
 | `POST /api/v1/sessions/{sessionRef}/turns` | `EnqueueTurn` | Execution service | session eligibility, FIFO, idempotency | Turn + node/event + `run.turn_queued` | runtime-controller, WS projector |
@@ -224,9 +233,10 @@ secrets и files по WebSocket запрещены.
 
 Fresh install использует одну baseline migration `control_plane_baseline`.
 Legacy aliases, backfill, cutover, dual read/write и migration jobs отсутствуют.
-Bootstrap идемпотентно создаёт organization, initial owner membership contract,
-system assistant, core prompt, platform capabilities, built-in integration
-definitions, default runtime policy и system policies. Повтор после завершённого
+Bootstrap идемпотентно создаёт organization, initial owner claim contract,
+permission registry, system roles/bindings, system assistant, core prompt,
+platform capabilities, built-in integration definitions, default runtime
+policy и system policies. Повтор после завершённого
 bootstrap сверяет защищённые revision, digest и content core prompt: новая
 поставляемая revision применяется forward-only, а rollback либо конфликт одной
 revision закрывают startup. Остальные baseline-записи принадлежат installation

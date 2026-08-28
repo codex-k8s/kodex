@@ -13,8 +13,6 @@ var (
 	queryRepositoryBootstrapInsertOwnerClaimContractsOrganizationIdStableKeyState string
 	//go:embed sql/repository_bootstrap_insert_subjects_ref_issuer_display_name.sql
 	queryRepositoryBootstrapInsertSubjectsRefIssuerDisplayName string
-	//go:embed sql/bootstrap_create_system_membership.sql
-	queryRepositoryBootstrapSystemMembership string
 	//go:embed sql/repository_bootstrap_insert_platform_capabilities_stable_key_name_description.sql
 	queryRepositoryBootstrapInsertPlatformCapabilitiesStableKeyNameDescription string
 	//go:embed sql/repository_bootstrap_insert_runtime_profiles_stable_key_provider_runtime_revision.sql
@@ -69,12 +67,10 @@ var (
 	queryCreateInstallationOwnerSubject string
 	//go:embed sql/proof_owner_update_subject_profile.sql
 	queryUpdateOIDCSubjectProfile string
-	//go:embed sql/proof_owner_create_membership.sql
-	queryCreateInstallationOwnerMembership string
 	//go:embed sql/proof_owner_claim_installation.sql
 	queryClaimInstallationOwnership string
-	//go:embed sql/proof_owner_check_membership.sql
-	queryCheckInstallationOwnerMembership string
+	//go:embed sql/proof_subject_has_active_binding.sql
+	queryProofSubjectHasActiveBinding string
 	//go:embed sql/proof_system_resolve_identity.sql
 	queryResolveSystemWorkloadIdentity string
 	//go:embed sql/proof_project_authorize_membership.sql

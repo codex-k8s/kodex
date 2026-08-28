@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -21,9 +22,11 @@ import (
 )
 
 const (
-	maximumBearerBytes  = 2300
+	maximumBearerBytes  = 16384
 	maximumDisplayRunes = 160
 	maximumEmailBytes   = 254
+	maximumGroups       = 100
+	maximumGroupRunes   = 200
 	ownerScope          = "kodex.owner"
 	ownerRealmRole      = "kodex-owner"
 	unknownUserName     = "i18n:OIDC_USER_NAME"
@@ -47,9 +50,12 @@ type Config struct {
 type Principal struct {
 	Subject         string
 	OrganizationID  string
+	Issuer          string
 	SessionID       string
 	DisplayName     string
 	EmailHint       string
+	Groups          []string
+	OwnerClaim      bool
 	SessionRevision uint64
 	ExpiresAt       time.Time
 }
@@ -76,15 +82,16 @@ func (transport exactTransport) RoundTrip(request *http.Request) (*http.Response
 }
 
 type claims struct {
-	SessionID       string `json:"sid"`
-	OrganizationID  string `json:"organization_id"`
-	SessionRevision uint64 `json:"session_revision"`
-	TokenID         string `json:"jti"`
-	Scope           string `json:"scope"`
-	Name            string `json:"name"`
-	PreferredName   string `json:"preferred_username"`
-	Email           string `json:"email"`
-	EmailVerified   bool   `json:"email_verified"`
+	SessionID       string   `json:"sid"`
+	OrganizationID  string   `json:"organization_id"`
+	SessionRevision uint64   `json:"session_revision"`
+	TokenID         string   `json:"jti"`
+	Scope           string   `json:"scope"`
+	Name            string   `json:"name"`
+	PreferredName   string   `json:"preferred_username"`
+	Email           string   `json:"email"`
+	EmailVerified   bool     `json:"email_verified"`
+	Groups          []string `json:"groups"`
 	RealmAccess     struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access"`
@@ -186,9 +193,11 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 		return Principal{}, errors.New("OIDC bearer exceeds the signing-key grace window")
 	}
 	var values claims
-	if token.Claims(&values) != nil || uuid.Validate(values.OrganizationID) != nil ||
-		values.SessionRevision == 0 || !containsWord(values.Scope, ownerScope) ||
-		!contains(values.RealmAccess.Roles, ownerRealmRole) {
+	if token.Claims(&values) != nil || uuid.Validate(values.OrganizationID) != nil || values.SessionRevision == 0 {
+		return Principal{}, errors.New("OIDC session claims are invalid")
+	}
+	groups, groupsErr := normalizeGroups(values.Groups)
+	if groupsErr != nil {
 		return Principal{}, errors.New("OIDC session claims are invalid")
 	}
 	subject, subjectErr := oidcidentity.Subject(token.Issuer, token.Subject)
@@ -200,10 +209,32 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 		return Principal{}, errors.New("OIDC session claims are invalid")
 	}
 	return Principal{
-		Subject: subject, OrganizationID: values.OrganizationID, SessionID: sessionID,
+		Subject: subject, OrganizationID: values.OrganizationID, Issuer: token.Issuer, SessionID: sessionID,
 		DisplayName: safeDisplayName(values.Name, values.PreferredName), EmailHint: maskedVerifiedEmail(values.Email, values.EmailVerified),
+		Groups: groups, OwnerClaim: containsWord(values.Scope, ownerScope) && contains(values.RealmAccess.Roles, ownerRealmRole),
 		SessionRevision: values.SessionRevision, ExpiresAt: token.Expiry,
 	}, nil
+}
+
+func normalizeGroups(values []string) ([]string, error) {
+	if len(values) > maximumGroups {
+		return nil, errors.New("too many OIDC groups")
+	}
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || utf8.RuneCountInString(value) > maximumGroupRunes || strings.ContainsAny(value, "\r\n\x00") {
+			return nil, errors.New("OIDC group is invalid")
+		}
+		if _, duplicate := seen[value]; duplicate {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 func safeDisplayName(name, preferredName string) string {

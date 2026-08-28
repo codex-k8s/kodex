@@ -62,6 +62,12 @@ const (
 	CompleteIntegrationInvocation Kind = "COMPLETE_INTEGRATION_INVOCATION"
 	CompleteInteractionDelivery   Kind = "COMPLETE_INTERACTION_DELIVERY"
 	AcceptInteractionMessage      Kind = "ACCEPT_INTERACTION_MESSAGE"
+	CreateAccessRole              Kind = "CREATE_ACCESS_ROLE"
+	CreateAccessRoleVersion       Kind = "CREATE_ACCESS_ROLE_VERSION"
+	ArchiveAccessRole             Kind = "ARCHIVE_ACCESS_ROLE"
+	CreateAccessBinding           Kind = "CREATE_ACCESS_BINDING"
+	ChangeAccessBinding           Kind = "CHANGE_ACCESS_BINDING"
+	RevokeAccessBinding           Kind = "REVOKE_ACCESS_BINDING"
 )
 
 type Command struct {
@@ -185,22 +191,24 @@ type InteractionMessageInput struct {
 }
 
 type Result struct {
-	Project      *entity.Project
-	Membership   *entity.Membership
-	Agent        *entity.Agent
-	Workflow     *entity.Workflow
-	Run          *entity.Run
-	Graph        *entity.RunGraph
-	Gate         *entity.OwnerGate
-	Artifact     *entity.Artifact
-	Schedule     *entity.Schedule
-	Connection   *entity.IntegrationConnection
-	Conversation *entity.AssistantConversation
-	Plan         *entity.AssistantPlan
-	Assistant    *entity.SystemAssistant
-	Event        *entity.RunEvent
-	CreatedRefs  []string
-	Duplicate    bool
-	Runtime      map[string]any
-	RuntimeItems []map[string]any
+	Project       *entity.Project
+	Membership    *entity.Membership
+	Agent         *entity.Agent
+	Workflow      *entity.Workflow
+	Run           *entity.Run
+	Graph         *entity.RunGraph
+	Gate          *entity.OwnerGate
+	Artifact      *entity.Artifact
+	Schedule      *entity.Schedule
+	Connection    *entity.IntegrationConnection
+	Conversation  *entity.AssistantConversation
+	Plan          *entity.AssistantPlan
+	Assistant     *entity.SystemAssistant
+	Event         *entity.RunEvent
+	CreatedRefs   []string
+	Duplicate     bool
+	Runtime       map[string]any
+	RuntimeItems  []map[string]any
+	AccessRole    *entity.AccessRole
+	AccessBinding *entity.AccessBinding
 }

@@ -4,8 +4,8 @@ title: Логическая модель данных web-first платформ
 type: architecture
 status: approved
 owner: architect
-version: 1.1.0
-updated: 2026-08-23
+version: 1.2.0
+updated: 2026-08-28
 ---
 
 # Логическая модель данных web-first платформы
@@ -20,10 +20,22 @@ updated: 2026-08-23
 | --- | --- |
 | `installation` | stable installation identity и bootstrap revision |
 | `organizations` | tenant boundary, slug, locale и lifecycle |
-| `subjects` | server-resolved OIDC issuer/subject identity |
+| `subjects` | server-resolved user/service identity |
 | `owner_claim_contracts` | initial owner bootstrap contract без статического owner UUID |
-| `memberships` | organization platform role и status |
+| `permission_registry` | закрытый registry application permissions и допустимых scope/resource kind |
+| `oidc_groups`, `oidc_group_memberships` | bounded token-derived group read model без policy authority |
+| `application_roles`, `application_role_versions` | system/custom role и immutable version с permission set |
+| `access_bindings` | user/group/service binding, pinned role version, scope, UTC conditions, OCC state |
+| `memberships` | read-only SQL view старых endpoints, вычисляемый из canonical `access_bindings`; не policy authority и не отдельное хранилище |
 | `projects` | единственный пользовательский контейнер, version/OCC и lifecycle |
+
+Role version не изменяется после создания. Binding scope хранит server-resolved
+UUID ресурса, но наружу возвращает только opaque ref. Effective access не
+материализуется как доверенный кеш: решение строится из актуальных binding,
+OIDC group membership и точного server-resolved target в одной snapshot.
+Legacy membership-команды атомарно создают либо изменяют custom role version и
+binding с server-owned presentation marker. Binding уровня `RESOURCE_KIND` и
+`RESOURCE_INSTANCE` в широкую project membership projection не попадает.
 
 ## Agents, instructions и role images
 
@@ -113,4 +125,5 @@ digest. Один key с тем же intent возвращает receipt, а с �
 - retry создаёт новую attempt/revision/lease и `RETRY_OF` edge;
 - Human Gate и callback имеют одного доменного winner;
 - external IDs и display values не являются authority;
-- legacy table aliases, backfill, dual read/write и compatibility views отсутствуют.
+- legacy authority tables, backfill и dual read/write отсутствуют; допустима
+  только read-only compatibility view, вычисляемая из canonical RBAC state.

@@ -1,11 +1,14 @@
 -- name: project_membership__update :one
-UPDATE control_plane.memberships
-SET permissions = @permissions::text[],
-    active = @active,
-    version = version + 1,
-    updated_at = clock_timestamp()
-WHERE id = @membership_id::uuid
-  AND organization_id = @organization_id::uuid
-  AND project_id = @project_id::uuid
-  AND version = @expected_version
-RETURNING ref, permissions, active, version;
+SELECT updated.binding_ref,
+       @permissions::text[],
+       updated.binding_state = 'ACTIVE',
+       updated.binding_version
+FROM control_plane.update_project_membership(
+    @membership_id::uuid,
+    @organization_id::uuid,
+    @project_id::uuid,
+    @expected_version,
+    @permissions::text[],
+    @active,
+    @actor_id::uuid
+) updated;

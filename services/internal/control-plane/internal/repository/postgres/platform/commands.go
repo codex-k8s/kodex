@@ -173,6 +173,9 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.completeInteractionDelivery(ctx, tx, scope, input)
 	case command.AcceptInteractionMessage:
 		return repository.acceptInteractionMessage(ctx, tx, scope, input)
+	case command.CreateAccessRole, command.CreateAccessRoleVersion, command.ArchiveAccessRole,
+		command.CreateAccessBinding, command.ChangeAccessBinding, command.RevokeAccessBinding:
+		return repository.applyAccessCommand(ctx, tx, scope, input)
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -203,7 +206,7 @@ func (repository *Repository) createProject(ctx context.Context, tx pgx.Tx, scop
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
-	membershipRef, _ := newRef("mem")
+	membershipRef, _ := newRef("abnd")
 	if _, err = tx.Exec(ctx, queryCommandsCreateprojectInsertMembershipsRefProjectIdRole, membershipRef, scope.organizationID, ref, scope.actorID, allPermissions()); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
@@ -259,7 +262,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 		if payload.UserRef == "" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		ref, err := newRef("mem")
+		ref, err := newRef("abnd")
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -269,6 +272,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 			"project_id":      projectID,
 			"user_ref":        payload.UserRef,
 			"permissions":     payload.Permissions,
+			"actor_id":        scope.actorID,
 		}).Scan(
 			&item.Ref, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked,
 			&item.User.Active, &item.Role, &item.Permissions, &item.Active, &item.Version,
@@ -312,6 +316,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 			"expected_version": *input.Mutation.ExpectedVersion,
 			"permissions":      payload.Permissions,
 			"active":           payload.Active,
+			"actor_id":         scope.actorID,
 		}).Scan(&item.Ref, &item.Permissions, &item.Active, &item.Version)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
@@ -381,7 +386,7 @@ func (repository *Repository) changePlatformMembership(ctx context.Context, tx p
 		if payload.UserRef == "" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		ref, err := newRef("mem")
+		ref, err := newRef("abnd")
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -390,6 +395,7 @@ func (repository *Repository) changePlatformMembership(ctx context.Context, tx p
 			"organization_id": scope.organizationID,
 			"user_ref":        payload.UserRef,
 			"platform_role":   payload.Role,
+			"actor_id":        scope.actorID,
 		}).Scan(
 			&item.Ref, &subjectID, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked,
 			&item.User.Active, &item.Role, &item.Active, &item.Version)
