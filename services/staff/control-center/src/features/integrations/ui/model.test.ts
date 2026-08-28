@@ -30,9 +30,18 @@ function definition(
         description: "Чтение данных",
         risk: "READ",
         approvalRequired: false,
+        operation: `${key}.read`,
+        approvalPolicy: "NONE",
+        resourceKind: "GITHUB_REPOSITORY",
+        inputFields: [],
       },
     ],
     configurationFields: [],
+    schemaVersion: "integrations.kodex.io/v1",
+    definitionVersion: "1.0.0",
+    origin: "SHIPPED",
+    digest: "a".repeat(64),
+    adapter: "GITHUB",
     ...overrides,
   };
 }
@@ -53,6 +62,9 @@ function connection(
     capabilities: definition(definitionKey).capabilities,
     grants: [],
     nextActions: [],
+    definitionVersion: "1.0.0",
+    definitionDigest: "a".repeat(64),
+    publicConfiguration: {},
     ...overrides,
   };
 }
@@ -93,6 +105,10 @@ describe("integrations presentation model", () => {
               description: "Поиск задач",
               risk: "READ",
               approvalRequired: false,
+              operation: "jira.issue.read",
+              approvalPolicy: "NONE",
+              resourceKind: "GITHUB_REPOSITORY",
+              inputFields: [],
             },
           ],
         }),
@@ -120,6 +136,13 @@ describe("integrations presentation model", () => {
           workflowRef: "workflow-release",
           targetName: "Проверка релиза",
           enabled: false,
+          risk: "READ",
+          approvalPolicy: "NONE",
+          resourceScope: {
+            kind: "GITHUB_REPOSITORY",
+            values: { repository: "codex-k8s/kodex" },
+            digest: "b".repeat(64),
+          },
         },
         {
           ref: "grant-agent",
@@ -128,6 +151,13 @@ describe("integrations presentation model", () => {
           agentRef: "agent-release",
           targetName: "Инженер релизов",
           enabled: true,
+          risk: "READ",
+          approvalPolicy: "NONE",
+          resourceScope: {
+            kind: "GITHUB_REPOSITORY",
+            values: { repository: "codex-k8s/kodex" },
+            digest: "b".repeat(64),
+          },
         },
       ],
     });
