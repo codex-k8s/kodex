@@ -14,8 +14,8 @@ grep -Fq 'canonical_auth_file="$account_home/auth.json"' "$provider_script" ||
   fail 'provider import does not retain a canonical private auth snapshot'
 grep -Fq '{version:1, accountKey:$account_key, name:$account_name}' "$provider_script" ||
   fail 'provider account metadata is not persisted'
-grep -Fq 'persisted_default_auth="$state_directory/provider-accounts/default-openai-codex/auth.json"' "$dev_script" ||
-  fail 'local deployment does not prefer the persisted default account'
+grep -Fq 'provider_auth=${KODEX_DEV_PROVIDER_AUTH_FILE:-"$state_directory/inputs/openai-auth.json"}' "$dev_script" ||
+  fail 'immutable installation material is not separated from provider account revisions'
 grep -Fq 'provider_metadata=("$state_directory"/provider-accounts/*/account.json)' "$dev_script" ||
   fail 'local deployment does not discover persisted provider accounts'
 grep -Fq 'provider account metadata directory binding is invalid' "$dev_script" ||

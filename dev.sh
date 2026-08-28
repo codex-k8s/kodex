@@ -236,15 +236,7 @@ kubectl -n identity patch serverstransport sso-public --type=merge \
 
 "$repository_root/tools/install/materialize-nats-runtime-users.sh" \
   --context "$context" --material-directory "$material_directory"
-provider_auth=${KODEX_DEV_PROVIDER_AUTH_FILE:-}
-if [[ -z "$provider_auth" ]]; then
-  persisted_default_auth="$state_directory/provider-accounts/default-openai-codex/auth.json"
-  if [[ -f "$persisted_default_auth" && ! -L "$persisted_default_auth" ]]; then
-    provider_auth="$persisted_default_auth"
-  else
-    provider_auth="$state_directory/inputs/openai-auth.json"
-  fi
-fi
+provider_auth=${KODEX_DEV_PROVIDER_AUTH_FILE:-"$state_directory/inputs/openai-auth.json"}
 if [[ ! -e "$provider_auth" && "$provider_auth" == "$state_directory/inputs/openai-auth.json" ]]; then
   printf '%s\n' '{"auth_mode":"local-development","access_token":"not-configured"}' >"$provider_auth"
   chmod 0600 "$provider_auth"
