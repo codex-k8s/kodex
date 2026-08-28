@@ -26,28 +26,50 @@ import {
   runGraphNodeHeight,
   runGraphNodeWidth,
 } from "@/features/runs/run-graph-layout";
+import {
+  fitRunGraphView,
+  zoomRunGraphAtPoint,
+  type RunGraphPoint,
+  type RunGraphView,
+} from "@/features/runs/run-graph-viewport";
 import type {
   RunEdge,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
-const props = defineProps<{
-  nodes: RunNode[];
-  edges: RunEdge[];
-  selectedRef?: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    nodes: RunNode[];
+    edges: RunEdge[];
+    selectedRef?: string;
+    futureNodeRefs?: string[];
+    activeNodeRefs?: string[];
+  }>(),
+  {
+    selectedRef: undefined,
+    futureNodeRefs: () => [],
+    activeNodeRefs: () => [],
+  },
+);
 const emit = defineEmits<{ select: [node: RunNode] }>();
 const { t } = useI18n();
 
-const minimumZoom = 0.85;
-const maximumZoom = 1.5;
-const zoom = ref(1);
+const minimumZoom = 0.3;
+const maximumZoom = 1.8;
+const zoomStep = 0.12;
+const view = ref<RunGraphView>({ x: 0, y: 0, scale: 1 });
 const viewMode = ref<"graph" | "outline">("graph");
 const viewport = ref<HTMLElement>();
 const outline = ref<HTMLElement>();
-const userAdjustedZoom = ref(false);
+const userAdjustedView = ref(false);
+const pointerActive = ref(false);
+const futureRefs = computed(() => new Set(props.futureNodeRefs));
+const activeRefs = computed(() => new Set(props.activeNodeRefs));
+const activePointers = new Map<number, RunGraphPoint>();
 let resizeObserver: ResizeObserver | undefined;
+let suppressNodeClick = false;
+let clearClickTimer: number | undefined;
 
 const layout = computed(() => layoutRunGraph(props.nodes, props.edges));
 const nodeByRef = computed(
@@ -137,53 +159,201 @@ const outlineItems = computed(() => {
   }));
 });
 
-function changeZoom(delta: number): void {
-  userAdjustedZoom.value = true;
-  zoom.value = Math.min(maximumZoom, Math.max(minimumZoom, zoom.value + delta));
-}
-
 function fit(userInitiated = false): void {
   const width = viewport.value?.clientWidth ?? 0;
   const height = viewport.value?.clientHeight ?? 0;
-  if (!width || !height || !layout.value.width || !layout.value.height) return;
-  if (userInitiated) userAdjustedZoom.value = true;
-  zoom.value = Math.min(
-    1,
-    Math.max(
-      minimumZoom,
-      Math.min(
-        (width - 28) / layout.value.width,
-        (height - 28) / layout.value.height,
-      ),
-    ),
+  if (!width || !height) return;
+  if (userInitiated) userAdjustedView.value = true;
+  view.value = fitRunGraphView(
+    { width: layout.value.width, height: layout.value.height },
+    { width, height },
+    minimumZoom,
+    Math.min(maximumZoom, 1.1),
+    width < 600 ? 18 : 32,
   );
-  if (viewport.value) {
-    viewport.value.scrollLeft = 0;
-    viewport.value.scrollTop = 0;
-  }
+}
+
+function viewportCenter(): RunGraphPoint {
+  return {
+    x: (viewport.value?.clientWidth ?? 0) / 2,
+    y: (viewport.value?.clientHeight ?? 0) / 2,
+  };
+}
+
+function setZoom(scale: number, point = viewportCenter()): void {
+  userAdjustedView.value = true;
+  view.value = zoomRunGraphAtPoint(
+    view.value,
+    scale,
+    point,
+    minimumZoom,
+    maximumZoom,
+  );
+}
+
+function changeZoom(delta: number): void {
+  setZoom(view.value.scale + delta);
 }
 
 function setViewMode(mode: "graph" | "outline"): void {
   viewMode.value = mode;
-  if (mode === "graph" && !userAdjustedZoom.value) {
+  if (mode === "graph" && !userAdjustedView.value) {
     void nextTick(() => fit());
   }
 }
 
+function eventPoint(event: PointerEvent | WheelEvent): RunGraphPoint {
+  const bounds = viewport.value?.getBoundingClientRect();
+  return {
+    x: event.clientX - (bounds?.left ?? 0),
+    y: event.clientY - (bounds?.top ?? 0),
+  };
+}
+
+function handleWheel(event: WheelEvent): void {
+  const factor = Math.exp(-event.deltaY * 0.0014);
+  setZoom(view.value.scale * factor, eventPoint(event));
+}
+
+function handlePointerDown(event: PointerEvent): void {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  if (clearClickTimer !== undefined) window.clearTimeout(clearClickTimer);
+  activePointers.set(event.pointerId, eventPoint(event));
+  pointerActive.value = true;
+  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+}
+
+function midpoint(points: RunGraphPoint[]): RunGraphPoint {
+  const first = points[0] ?? { x: 0, y: 0 };
+  const second = points[1] ?? first;
+  return {
+    x: (first.x + second.x) / 2,
+    y: (first.y + second.y) / 2,
+  };
+}
+
+function distance(points: RunGraphPoint[]): number {
+  const first = points[0] ?? { x: 0, y: 0 };
+  const second = points[1] ?? first;
+  return Math.hypot(first.x - second.x, first.y - second.y);
+}
+
+function handlePointerMove(event: PointerEvent): void {
+  const previous = activePointers.get(event.pointerId);
+  if (!previous) return;
+  const previousPoints = [...activePointers.values()];
+  const current = eventPoint(event);
+  activePointers.set(event.pointerId, current);
+
+  if (activePointers.size >= 2 && previousPoints.length >= 2) {
+    const nextPoints = [...activePointers.values()];
+    const previousMidpoint = midpoint(previousPoints);
+    const nextMidpoint = midpoint(nextPoints);
+    const previousDistance = distance(previousPoints);
+    const nextDistance = distance(nextPoints);
+    const translated = {
+      x: view.value.x + nextMidpoint.x - previousMidpoint.x,
+      y: view.value.y + nextMidpoint.y - previousMidpoint.y,
+      scale: view.value.scale,
+    };
+    view.value = zoomRunGraphAtPoint(
+      translated,
+      previousDistance
+        ? view.value.scale * (nextDistance / previousDistance)
+        : view.value.scale,
+      nextMidpoint,
+      minimumZoom,
+      maximumZoom,
+    );
+    userAdjustedView.value = true;
+    suppressNodeClick = true;
+    return;
+  }
+
+  const deltaX = current.x - previous.x;
+  const deltaY = current.y - previous.y;
+  if (!deltaX && !deltaY) return;
+  view.value = {
+    ...view.value,
+    x: view.value.x + deltaX,
+    y: view.value.y + deltaY,
+  };
+  userAdjustedView.value = true;
+  suppressNodeClick = true;
+}
+
+function handlePointerEnd(event: PointerEvent): void {
+  activePointers.delete(event.pointerId);
+  pointerActive.value = activePointers.size > 0;
+  const target = event.currentTarget as HTMLElement;
+  if (target.hasPointerCapture(event.pointerId)) {
+    target.releasePointerCapture(event.pointerId);
+  }
+  clearClickTimer = window.setTimeout(() => {
+    suppressNodeClick = false;
+  }, 0);
+}
+
+function handleNodeClick(event: MouseEvent, node: RunNode): void {
+  if (suppressNodeClick) {
+    event.preventDefault();
+    event.stopPropagation();
+    suppressNodeClick = false;
+    return;
+  }
+  emit("select", node);
+}
+
+function handleViewportKeydown(event: KeyboardEvent): void {
+  const panDistance = event.shiftKey ? 96 : 42;
+  if (["+", "="].includes(event.key)) {
+    event.preventDefault();
+    changeZoom(zoomStep);
+    return;
+  }
+  if (event.key === "-") {
+    event.preventDefault();
+    changeZoom(-zoomStep);
+    return;
+  }
+  if (event.key === "0") {
+    event.preventDefault();
+    fit(true);
+    return;
+  }
+  const delta: RunGraphPoint | undefined = {
+    ArrowLeft: { x: panDistance, y: 0 },
+    ArrowRight: { x: -panDistance, y: 0 },
+    ArrowUp: { x: 0, y: panDistance },
+    ArrowDown: { x: 0, y: -panDistance },
+  }[event.key];
+  if (!delta) return;
+  event.preventDefault();
+  userAdjustedView.value = true;
+  view.value = {
+    ...view.value,
+    x: view.value.x + delta.x,
+    y: view.value.y + delta.y,
+  };
+}
+
 watch(runSignature, (current, previous) => {
-  if (current !== previous) userAdjustedZoom.value = false;
+  if (current !== previous) userAdjustedView.value = false;
 });
 watch(graphSignature, () => {
-  if (!userAdjustedZoom.value) void nextTick(() => fit());
+  if (!userAdjustedView.value) void nextTick(() => fit());
 });
 onMounted(() => {
   resizeObserver = new ResizeObserver(() => {
-    if (!userAdjustedZoom.value) fit();
+    if (!userAdjustedView.value) fit();
   });
   if (viewport.value) resizeObserver.observe(viewport.value);
   void nextTick(() => fit());
 });
-onBeforeUnmount(() => resizeObserver?.disconnect());
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
+  if (clearClickTimer !== undefined) window.clearTimeout(clearClickTimer);
+});
 
 function compactDisplayName(displayName: string): string {
   const characters = Array.from(displayName);
@@ -297,27 +467,28 @@ function compareNodes(left: RunNode, right: RunNode): number {
           type="button"
           :aria-label="$t('runs.zoomOut')"
           :title="$t('runs.zoomOut')"
-          :disabled="zoom <= minimumZoom"
-          @click="changeZoom(-0.1)"
+          :disabled="view.scale <= minimumZoom"
+          @click="changeZoom(-zoomStep)"
         >
           <Minus :size="17" aria-hidden="true" />
         </button>
         <output :aria-label="$t('runs.zoom')">
-          {{ Math.round(zoom * 100) }}%
+          {{ Math.round(view.scale * 100) }}%
         </output>
         <button
           class="icon-button"
           type="button"
           :aria-label="$t('runs.zoomIn')"
           :title="$t('runs.zoomIn')"
-          :disabled="zoom >= maximumZoom"
-          @click="changeZoom(0.1)"
+          :disabled="view.scale >= maximumZoom"
+          @click="changeZoom(zoomStep)"
         >
           <Plus :size="17" aria-hidden="true" />
         </button>
         <button
           class="button button--ghost graph-fit-button"
           type="button"
+          :aria-label="$t('runs.fitGraph')"
           :title="$t('runs.fitGraph')"
           @click="fit(true)"
         >
@@ -330,113 +501,122 @@ function compareNodes(left: RunNode, right: RunNode): number {
     <div
       ref="viewport"
       class="graph-viewport"
+      :class="{ 'graph-viewport--panning': pointerActive }"
       role="region"
       :aria-label="$t('runs.graph')"
       tabindex="0"
+      @wheel.prevent="handleWheel"
+      @pointerdown="handlePointerDown"
+      @pointermove="handlePointerMove"
+      @pointerup="handlePointerEnd"
+      @pointercancel="handlePointerEnd"
+      @keydown="handleViewportKeydown"
     >
       <div
-        class="graph-stage"
+        class="graph-surface"
         :style="{
-          width: layout.width * zoom + 'px',
-          height: layout.height * zoom + 'px',
+          width: layout.width + 'px',
+          height: layout.height + 'px',
+          transform:
+            'translate3d(' +
+            view.x +
+            'px,' +
+            view.y +
+            'px,0) scale(' +
+            view.scale +
+            ')',
         }"
       >
-        <div
-          class="graph-surface"
-          :style="{
-            width: layout.width + 'px',
-            height: layout.height + 'px',
-            transform: 'scale(' + zoom + ')',
-          }"
+        <svg
+          class="graph-edges"
+          :viewBox="'0 0 ' + layout.width + ' ' + layout.height"
+          aria-hidden="true"
         >
-          <svg
-            class="graph-edges"
-            :viewBox="'0 0 ' + layout.width + ' ' + layout.height"
-            aria-hidden="true"
-          >
-            <defs>
-              <marker
-                id="run-graph-arrow"
-                markerWidth="9"
-                markerHeight="9"
-                refX="8"
-                refY="4.5"
-                orient="auto"
-              >
-                <path d="M 0 0 L 9 4.5 L 0 9 z" />
-              </marker>
-            </defs>
-            <g
-              v-for="item in layout.edges"
-              :key="item.edge.ref"
-              :data-edge-ref="item.edge.ref"
-              :data-edge-type="item.edge.type"
+          <defs>
+            <marker
+              id="run-graph-arrow"
+              markerWidth="9"
+              markerHeight="9"
+              refX="8"
+              refY="4.5"
+              orient="auto"
             >
-              <title>{{ edgeAccessibleLabel(item.edge) }}</title>
-              <path
-                :d="item.path"
-                :class="
-                  'graph-edge graph-edge--' + item.edge.type.toLowerCase()
-                "
-                marker-end="url(#run-graph-arrow)"
-              />
-              <text
-                class="graph-edge-label"
-                :x="item.labelX"
-                :y="item.labelY"
-                text-anchor="middle"
-              >
-                {{ compactEdgeLabel(item.edge) }}
-              </text>
-            </g>
-          </svg>
-          <button
-            v-for="item in layout.nodes"
-            :key="item.node.ref"
-            type="button"
-            class="canvas-node"
-            :data-node-ref="item.node.ref"
-            :data-node-type="item.node.type"
-            :class="[
-              'canvas-node--' + item.node.state.toLowerCase(),
-              { 'canvas-node--selected': item.node.ref === selectedRef },
-            ]"
-            :style="{
-              left: item.x + 'px',
-              top: item.y + 'px',
-              width: runGraphNodeWidth + 'px',
-              height: runGraphNodeHeight + 'px',
-            }"
-            :aria-pressed="item.node.ref === selectedRef"
-            @click="emit('select', item.node)"
+              <path d="M 0 0 L 9 4.5 L 0 9 z" />
+            </marker>
+          </defs>
+          <g
+            v-for="item in layout.edges"
+            :key="item.edge.ref"
+            :data-edge-ref="item.edge.ref"
+            :data-edge-type="item.edge.type"
           >
-            <span class="canvas-node__heading">
-              <component
-                :is="nodeIcon(item.node.type)"
-                class="canvas-node__type"
-                :size="16"
-                aria-hidden="true"
-              />
-              <strong :title="item.node.displayName">
-                {{ compactDisplayName(item.node.displayName) }}
-              </strong>
-              <StatusBadge :state="item.node.state" />
-            </span>
-            <span class="canvas-node__role" :title="item.node.role">
-              {{ item.node.role || $t("runs.nodeTypes." + item.node.type) }}
-            </span>
-            <span
-              class="canvas-node__progress"
-              :title="item.node.progressSummary || item.node.inputSummary"
+            <title>{{ edgeAccessibleLabel(item.edge) }}</title>
+            <path
+              :d="item.path"
+              :class="'graph-edge graph-edge--' + item.edge.type.toLowerCase()"
+              marker-end="url(#run-graph-arrow)"
+            />
+            <text
+              class="graph-edge-label"
+              :x="item.labelX"
+              :y="item.labelY"
+              text-anchor="middle"
             >
-              {{
-                item.node.progressSummary ||
-                item.node.inputSummary ||
-                $t("runs.waitingForActivity")
-              }}
-            </span>
-          </button>
-        </div>
+              {{ compactEdgeLabel(item.edge) }}
+            </text>
+          </g>
+        </svg>
+        <button
+          v-for="item in layout.nodes"
+          :key="item.node.ref"
+          type="button"
+          class="canvas-node"
+          :data-node-ref="item.node.ref"
+          :data-node-type="item.node.type"
+          :data-node-future="futureRefs.has(item.node.ref) || undefined"
+          :class="[
+            'canvas-node--' + item.node.state.toLowerCase(),
+            {
+              'canvas-node--selected': item.node.ref === selectedRef,
+              'canvas-node--future': futureRefs.has(item.node.ref),
+              'canvas-node--active': activeRefs.has(item.node.ref),
+            },
+          ]"
+          :style="{
+            left: item.x + 'px',
+            top: item.y + 'px',
+            width: runGraphNodeWidth + 'px',
+            height: runGraphNodeHeight + 'px',
+          }"
+          :aria-pressed="item.node.ref === selectedRef"
+          @click="handleNodeClick($event, item.node)"
+        >
+          <span class="canvas-node__heading">
+            <component
+              :is="nodeIcon(item.node.type)"
+              class="canvas-node__type"
+              :size="16"
+              aria-hidden="true"
+            />
+            <strong :title="item.node.displayName">
+              {{ compactDisplayName(item.node.displayName) }}
+            </strong>
+            <StatusBadge :state="item.node.state" />
+          </span>
+          <span class="canvas-node__role" :title="item.node.role">
+            {{ item.node.role || $t("runs.nodeTypes." + item.node.type) }}
+          </span>
+          <span
+            class="canvas-node__progress"
+            :title="item.node.progressSummary || item.node.inputSummary"
+          >
+            {{
+              item.node.progressSummary ||
+              item.node.inputSummary ||
+              $t("runs.waitingForActivity")
+            }}
+          </span>
+        </button>
       </div>
     </div>
 
@@ -457,6 +637,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
         :aria-selected="item.node.ref === selectedRef"
         :class="{
           'graph-outline-node--selected': item.node.ref === selectedRef,
+          'graph-outline-node--future': futureRefs.has(item.node.ref),
+          'graph-outline-node--active': activeRefs.has(item.node.ref),
         }"
         @keydown="moveOutlineFocus"
         @click="emit('select', item.node)"
@@ -494,6 +676,9 @@ function compareNodes(left: RunNode, right: RunNode): number {
 <style scoped>
 .graph-canvas-shell {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
 }
@@ -530,21 +715,27 @@ function compareNodes(left: RunNode, right: RunNode): number {
   gap: 6px;
 }
 .graph-viewport {
-  min-height: 500px;
-  max-height: 650px;
-  overflow: auto;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background:
     linear-gradient(var(--hairline) 1px, transparent 1px),
     linear-gradient(90deg, var(--hairline) 1px, transparent 1px), var(--canvas);
   background-size: 24px 24px;
-  scrollbar-gutter: stable;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
-.graph-stage,
-.graph-surface {
-  position: relative;
+.graph-viewport--panning {
+  cursor: grabbing;
 }
 .graph-surface {
+  position: absolute;
+  left: 0;
+  top: 0;
   transform-origin: left top;
+  will-change: transform;
 }
 .graph-edges {
   position: absolute;
@@ -559,7 +750,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
   stroke-width: 2;
 }
 .graph-edge--callback_to,
-.graph-edge--retry_of {
+.graph-edge--retry_of,
+.graph-edge--waiting_for {
   stroke-dasharray: 6 5;
 }
 .graph-edges marker path {
@@ -593,7 +785,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
 .canvas-node--running {
   border-left-color: var(--accent);
 }
-.canvas-node--waiting {
+.canvas-node--waiting,
+.canvas-node--queued {
   border-left-color: var(--warning);
 }
 .canvas-node--succeeded {
@@ -603,9 +796,29 @@ function compareNodes(left: RunNode, right: RunNode): number {
 .canvas-node--cancelled {
   border-left-color: var(--danger);
 }
+.canvas-node--skipped {
+  border-left-color: var(--subtle);
+}
+.canvas-node--future {
+  border-style: dashed;
+  border-left-width: 2px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  box-shadow: none;
+  opacity: 0.7;
+}
+.canvas-node--active::after {
+  position: absolute;
+  inset: 3px;
+  border: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 6px;
+  pointer-events: none;
+  content: "";
+  animation: run-node-pulse 1.8s ease-in-out infinite;
+}
 .canvas-node--selected {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  opacity: 1;
 }
 .canvas-node__heading {
   display: grid;
@@ -642,10 +855,12 @@ function compareNodes(left: RunNode, right: RunNode): number {
 }
 .graph-outline {
   display: none;
+  align-content: start;
   min-width: 0;
+  min-height: 0;
   gap: 8px;
   padding: 10px;
-  overflow-x: clip;
+  overflow: auto;
   background: var(--canvas);
 }
 .graph-canvas-shell--outline .graph-viewport {
@@ -671,6 +886,13 @@ function compareNodes(left: RunNode, right: RunNode): number {
   background: var(--surface);
   color: inherit;
   text-align: start;
+}
+.graph-outline-node--future {
+  border-style: dashed;
+  opacity: 0.7;
+}
+.graph-outline-node--active {
+  border-inline-start-color: var(--accent);
 }
 .graph-outline-node__body,
 .graph-outline-node__heading {
@@ -705,14 +927,34 @@ function compareNodes(left: RunNode, right: RunNode): number {
   border-color: var(--accent);
   border-inline-start-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+  opacity: 1;
+}
+@keyframes run-node-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-node--active::after {
+    animation: none;
+    opacity: 0.75;
+  }
 }
 @media (max-width: 760px) {
-  .graph-toolbar,
-  .graph-viewport {
-    display: none;
+  .graph-toolbar {
+    min-height: 52px;
   }
-  .graph-outline {
-    display: grid;
+  .graph-toolbar .icon-button,
+  .graph-fit-button {
+    min-width: 38px;
+    min-height: 38px;
+  }
+  .graph-fit-button span {
+    display: none;
   }
   .graph-outline-node {
     width: calc(100% - min(calc(var(--tree-depth) * 12px), 36px));

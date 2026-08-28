@@ -1,10 +1,24 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { Play, Power, PowerOff } from "@lucide/vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
-import { usePlatformStore } from "@/features/platform/store";
 import InstructionHistory from "@/features/agents/components/InstructionHistory.vue";
+import AgentAccessPanel from "@/features/agents/detail/AgentAccessPanel.vue";
+import AgentApiGaps from "@/features/agents/detail/AgentApiGaps.vue";
+import AgentApplyState from "@/features/agents/detail/AgentApplyState.vue";
+import AgentEnvironmentPanel from "@/features/agents/detail/AgentEnvironmentPanel.vue";
+import AgentInstructionsPanel from "@/features/agents/detail/AgentInstructionsPanel.vue";
+import AgentProfilePanel from "@/features/agents/detail/AgentProfilePanel.vue";
+import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
+import {
+  sameProfileDraft,
+  type AgentDetailTab,
+  type AgentProfileDraft,
+  type ApplyBoundary,
+} from "@/features/agents/detail/model";
+import { usePlatformStore } from "@/features/platform/store";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
@@ -19,13 +33,13 @@ const router = useRouter();
 const agentRef = computed(() => String(route.params.agentRef));
 const projectRef = computed(() => String(route.params.projectRef));
 const agent = computed(() => platform.agents[agentRef.value]);
-const runtimes = computed(() =>
-  Object.values(platform.runtimes).filter((item) => item.ready),
+const runtimes = computed(() => Object.values(platform.runtimes));
+const canEdit = computed(
+  () => agent.value?.nextActions.includes("EDIT") ?? false,
 );
-const canManageCapabilities = computed(() =>
-  agent.value?.nextActions.includes("MANAGE_CAPABILITIES"),
+const canManageCapabilities = computed(
+  () => agent.value?.nextActions.includes("MANAGE_CAPABILITIES") ?? false,
 );
-const canEdit = computed(() => agent.value?.nextActions.includes("EDIT"));
 const capabilityCatalog = computed(() => {
   const values = [...platform.capabilities].sort(
     (left, right) =>
@@ -50,7 +64,6 @@ const roleEnvironments = computed(() =>
       left.key.localeCompare(right.key),
   ),
 );
-const selectedEnvironment = ref("");
 const latestBuild = computed(() => {
   const recipe = roleImageRecipe.value;
   if (!recipe) return undefined;
@@ -58,37 +71,145 @@ const latestBuild = computed(() => {
     .filter((item) => item.recipeRef === recipe.ref)
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
 });
-const instructions = ref("");
 const instructionHistory = computed(
   () => platform.instructionVersions[agentRef.value] ?? [],
 );
-const task = ref("");
-const busy = ref(false);
-const editingProfile = ref(false);
-const capabilityBusy = ref("");
-const problem = ref<AppProblem>();
-const profile = reactive({
+const instructionState = computed(
+  () =>
+    agent.value?.draftInstructions?.state ??
+    agent.value?.publishedInstructions?.state ??
+    "DRAFT",
+);
+const instructionValidationMessages = computed(
+  () => agent.value?.draftInstructions?.validationMessages ?? [],
+);
+
+const activeTab = ref<AgentDetailTab>("profile");
+const profileDraft = ref<AgentProfileDraft>({
   name: "",
   purpose: "",
   roleDescription: "",
   avatarUrl: "",
-  runtimeRef: "",
 });
+const runtimeRef = ref("");
+const instructions = ref("");
+const selectedEnvironment = ref("");
+const task = ref("");
+const busy = ref(false);
+const capabilityBusy = ref("");
+const problem = ref<AppProblem>();
+const applyState = ref<"APPLIED" | "DRAFT" | "RUNNING" | "FAILED">("APPLIED");
+const applyScope = ref(t("agents.profile"));
+const applyBoundary = ref<ApplyBoundary>("next-run");
 
-function syncProfile(): void {
-  if (!agent.value) return;
-  profile.name = agent.value.name;
-  profile.purpose = agent.value.purpose;
-  profile.roleDescription = agent.value.roleDescription;
-  profile.avatarUrl = agent.value.avatarUrl ?? "";
-  profile.runtimeRef = agent.value.runtimeRef;
-}
+const currentProfile = computed<AgentProfileDraft>(() => ({
+  name: agent.value?.name ?? "",
+  purpose: agent.value?.purpose ?? "",
+  roleDescription: agent.value?.roleDescription ?? "",
+  avatarUrl: agent.value?.avatarUrl ?? "",
+}));
+const profileDirty = computed(
+  () => !sameProfileDraft(profileDraft.value, currentProfile.value),
+);
+const runtimeDirty = computed(
+  () => Boolean(agent.value) && runtimeRef.value !== agent.value?.runtimeRef,
+);
+const authoritativeInstructions = computed(
+  () =>
+    agent.value?.draftInstructions?.content ??
+    agent.value?.publishedInstructions?.content ??
+    "",
+);
+const instructionsDirty = computed(
+  () => instructions.value !== authoritativeInstructions.value,
+);
+
+const tabs = computed<Array<{ id: AgentDetailTab; label: string }>>(() => [
+  { id: "profile", label: t("agents.profile") },
+  { id: "instructions", label: t("agents.instructions") },
+  { id: "runtime", label: "Runtime" },
+  { id: "environment", label: t("roleEnvironments.title") },
+  { id: "access", label: t("agents.capabilities") },
+]);
 
 function hasCapability(key: string): boolean {
   return agent.value?.capabilities.some((item) => item.key === key) ?? false;
 }
 
-async function load() {
+function tabScope(tab: AgentDetailTab): string {
+  return tabs.value.find((item) => item.id === tab)?.label ?? tab;
+}
+
+function tabBoundary(tab: AgentDetailTab): ApplyBoundary {
+  if (tab === "instructions") return "published";
+  if (tab === "runtime" || tab === "environment") return "next-turn";
+  return "next-run";
+}
+
+function tabHasDraft(tab: AgentDetailTab): boolean {
+  if (tab === "profile") return profileDirty.value;
+  if (tab === "runtime") return runtimeDirty.value;
+  if (tab === "instructions") return instructionsDirty.value;
+  if (tab === "environment")
+    return (
+      selectedEnvironment.value !==
+      (roleImageRecipe.value?.environment.environmentKey ?? "")
+    );
+  return false;
+}
+
+function selectTab(tab: AgentDetailTab): void {
+  activeTab.value = tab;
+  applyScope.value = tabScope(tab);
+  applyBoundary.value = tabBoundary(tab);
+  applyState.value = tabHasDraft(tab) ? "DRAFT" : "APPLIED";
+}
+
+function markDraft(scope: string, boundary: ApplyBoundary): void {
+  applyState.value = "DRAFT";
+  applyScope.value = scope;
+  applyBoundary.value = boundary;
+}
+
+function markApplying(scope: string, boundary: ApplyBoundary): void {
+  applyState.value = "RUNNING";
+  applyScope.value = scope;
+  applyBoundary.value = boundary;
+}
+
+function markApplied(): void {
+  applyState.value = "APPLIED";
+}
+
+function markCurrent(scope: string, boundary: ApplyBoundary): void {
+  applyScope.value = scope;
+  applyBoundary.value = boundary;
+  markApplied();
+}
+
+function markFailed(): void {
+  applyState.value = "FAILED";
+}
+
+function syncProfile(value = agent.value): void {
+  if (!value) return;
+  profileDraft.value = {
+    name: value.name,
+    purpose: value.purpose,
+    roleDescription: value.roleDescription,
+    avatarUrl: value.avatarUrl ?? "",
+  };
+}
+
+function syncRuntime(value = agent.value): void {
+  if (value) runtimeRef.value = value.runtimeRef;
+}
+
+function syncInstructions(): void {
+  instructions.value = authoritativeInstructions.value;
+}
+
+async function load(): Promise<void> {
   await Promise.all([
     platform.loadAgent(agentRef.value),
     platform.loadInstructionVersions(agentRef.value),
@@ -96,10 +217,9 @@ async function load() {
     platform.loadCapabilities(),
   ]);
   syncProfile();
-  instructions.value =
-    agent.value?.draftInstructions?.content ??
-    agent.value?.publishedInstructions?.content ??
-    "";
+  syncRuntime();
+  syncInstructions();
+
   await Promise.all([
     platform.loadRoleEnvironments(),
     platform.loadRoleImageRecipes(
@@ -117,59 +237,173 @@ async function load() {
   } else {
     selectedEnvironment.value =
       roleEnvironments.value.find((item) => item.recommended && item.available)
-        ?.key ?? "";
+        ?.key ??
+      roleEnvironments.value.find((item) => item.available)?.key ??
+      "";
   }
 }
 
+function updateProfile(value: AgentProfileDraft): void {
+  profileDraft.value = value;
+  if (sameProfileDraft(value, currentProfile.value))
+    markCurrent(tabScope("profile"), "next-run");
+  else markDraft(tabScope("profile"), "next-run");
+}
+
+function updateRuntime(value: string): void {
+  runtimeRef.value = value;
+  if (value === agent.value?.runtimeRef)
+    markCurrent(tabScope("runtime"), "next-turn");
+  else markDraft(tabScope("runtime"), "next-turn");
+}
+
+function updateInstructions(value: string): void {
+  instructions.value = value;
+  if (value === authoritativeInstructions.value)
+    markCurrent(tabScope("instructions"), "published");
+  else markDraft(tabScope("instructions"), "published");
+}
+
+function updateEnvironment(value: string): void {
+  selectedEnvironment.value = value;
+  if (value === roleImageRecipe.value?.environment.environmentKey)
+    markCurrent(tabScope("environment"), "next-turn");
+  else markDraft(tabScope("environment"), "next-turn");
+}
+
 async function saveProfile(): Promise<void> {
-  if (!agent.value || !canEdit.value) return;
+  if (!agent.value || !canEdit.value || !profileDirty.value) return;
   busy.value = true;
   problem.value = undefined;
+  markApplying(tabScope("profile"), "next-run");
   try {
-    await platform.saveAgent(
+    const updated = await platform.saveAgent(
       projectRef.value,
       {
-        name: profile.name,
-        purpose: profile.purpose,
-        roleDescription: profile.roleDescription,
+        name: profileDraft.value.name.trim(),
+        purpose: profileDraft.value.purpose.trim(),
+        roleDescription: profileDraft.value.roleDescription.trim(),
         roleDefinitionRef: agent.value.roleDefinitionRef,
-        avatarUrl: profile.avatarUrl || undefined,
-        runtimeRef: profile.runtimeRef,
+        avatarUrl: profileDraft.value.avatarUrl.trim() || undefined,
+        runtimeRef: agent.value.runtimeRef,
       },
       agent.value,
     );
-    syncProfile();
-    editingProfile.value = false;
+    syncProfile(updated);
+    markApplied();
   } catch (error) {
     problem.value = asProblem(error);
+    markFailed();
   } finally {
     busy.value = false;
   }
 }
 
-function cancelProfile(): void {
-  syncProfile();
-  editingProfile.value = false;
-}
-
-async function toggleCapability(key: string): Promise<void> {
-  if (!agent.value || !canManageCapabilities.value || capabilityBusy.value)
-    return;
-  capabilityBusy.value = key;
+async function saveRuntime(): Promise<void> {
+  if (!agent.value || !canEdit.value || !runtimeDirty.value) return;
+  busy.value = true;
   problem.value = undefined;
+  markApplying(tabScope("runtime"), "next-turn");
   try {
-    await platform.changeAgent(agent.value, {
-      action: hasCapability(key) ? "REVOKE_CAPABILITY" : "GRANT_CAPABILITY",
-      capabilityKey: key,
-    });
+    const updated = await platform.saveAgent(
+      projectRef.value,
+      {
+        name: agent.value.name,
+        purpose: agent.value.purpose,
+        roleDescription: agent.value.roleDescription,
+        roleDefinitionRef: agent.value.roleDefinitionRef,
+        avatarUrl: agent.value.avatarUrl,
+        runtimeRef: runtimeRef.value,
+      },
+      agent.value,
+    );
+    syncRuntime(updated);
+    markApplied();
   } catch (error) {
     problem.value = asProblem(error);
+    markFailed();
   } finally {
-    capabilityBusy.value = "";
+    busy.value = false;
   }
 }
 
-async function prepareRoleEnvironment() {
+async function saveInstructions(): Promise<void> {
+  if (
+    !agent.value?.nextActions.includes("EDIT") ||
+    !instructionsDirty.value ||
+    !instructions.value.trim()
+  )
+    return;
+  busy.value = true;
+  problem.value = undefined;
+  markApplying(tabScope("instructions"), "published");
+  try {
+    const updated = await platform.saveInstructions(
+      agent.value,
+      instructions.value,
+    );
+    instructions.value =
+      updated.draftInstructions?.content ??
+      updated.publishedInstructions?.content ??
+      "";
+    markApplied();
+  } catch (error) {
+    problem.value = asProblem(error);
+    markFailed();
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function instructionAction(
+  action: "VALIDATE" | "PUBLISH",
+): Promise<void> {
+  if (!agent.value?.nextActions.includes(action) || instructionsDirty.value)
+    return;
+  busy.value = true;
+  problem.value = undefined;
+  markApplying(tabScope("instructions"), "published");
+  try {
+    const updated = await platform.instructionCommand(agent.value, action);
+    instructions.value =
+      updated.draftInstructions?.content ??
+      updated.publishedInstructions?.content ??
+      "";
+    await platform.loadInstructionVersions(agentRef.value);
+    markApplied();
+  } catch (error) {
+    problem.value = asProblem(error);
+    markFailed();
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function rollbackInstructions(
+  publishedInstructionRef: string,
+): Promise<void> {
+  if (!agent.value?.nextActions.includes("ROLLBACK")) return;
+  busy.value = true;
+  problem.value = undefined;
+  markApplying(tabScope("instructions"), "published");
+  try {
+    const updated = await platform.instructionCommand(
+      agent.value,
+      "ROLLBACK",
+      publishedInstructionRef,
+    );
+    instructions.value = updated.publishedInstructions?.content ?? "";
+    await platform.loadInstructionVersions(agentRef.value);
+    markApplied();
+  } catch (error) {
+    problem.value = asProblem(error);
+    markFailed();
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function prepareRoleEnvironment(): Promise<void> {
   if (
     !agent.value?.roleDefinitionRef ||
     !canEdit.value ||
@@ -179,6 +413,7 @@ async function prepareRoleEnvironment() {
     return;
   busy.value = true;
   problem.value = undefined;
+  markApplying(tabScope("environment"), "next-turn");
   try {
     await platform.saveRoleImageRecipe(
       projectRef.value,
@@ -187,8 +422,10 @@ async function prepareRoleEnvironment() {
       { environmentKey: selectedEnvironment.value },
       roleImageRecipe.value,
     );
+    markApplied();
   } catch (error) {
     problem.value = asProblem(error);
+    markFailed();
   } finally {
     busy.value = false;
   }
@@ -198,66 +435,43 @@ async function changeRoleEnvironment(action: "ARCHIVE" | "RESTORE") {
   if (!roleImageRecipe.value?.nextActions.includes(action)) return;
   busy.value = true;
   problem.value = undefined;
+  markApplying(tabScope("environment"), "next-turn");
   try {
     await platform.changeRoleImageRecipe(
       projectRef.value,
       roleImageRecipe.value,
       action,
     );
+    markApplied();
   } catch (error) {
     problem.value = asProblem(error);
+    markFailed();
   } finally {
     busy.value = false;
   }
 }
-async function saveInstructions() {
-  if (!agent.value?.nextActions.includes("EDIT")) return;
-  busy.value = true;
+
+async function toggleCapability(key: string): Promise<void> {
+  if (!agent.value || !canManageCapabilities.value || capabilityBusy.value)
+    return;
+  capabilityBusy.value = key;
   problem.value = undefined;
+  markApplying(tabScope("access"), "next-run");
   try {
-    await platform.saveInstructions(agent.value, instructions.value);
+    await platform.changeAgent(agent.value, {
+      action: hasCapability(key) ? "REVOKE_CAPABILITY" : "GRANT_CAPABILITY",
+      capabilityKey: key,
+    });
+    markApplied();
   } catch (error) {
     problem.value = asProblem(error);
+    markFailed();
   } finally {
-    busy.value = false;
+    capabilityBusy.value = "";
   }
 }
-async function instructionAction(action: "VALIDATE" | "PUBLISH" | "ROLLBACK") {
-  if (!agent.value?.nextActions.includes(action)) return;
-  busy.value = true;
-  problem.value = undefined;
-  try {
-    const updated = await platform.instructionCommand(agent.value, action);
-    instructions.value =
-      updated.draftInstructions?.content ??
-      updated.publishedInstructions?.content ??
-      "";
-    await platform.loadInstructionVersions(agentRef.value);
-  } catch (error) {
-    problem.value = asProblem(error);
-  } finally {
-    busy.value = false;
-  }
-}
-async function rollbackInstructions(publishedInstructionRef: string) {
-  if (!agent.value?.nextActions.includes("ROLLBACK")) return;
-  busy.value = true;
-  problem.value = undefined;
-  try {
-    const updated = await platform.instructionCommand(
-      agent.value,
-      "ROLLBACK",
-      publishedInstructionRef,
-    );
-    instructions.value = updated.publishedInstructions?.content ?? "";
-    await platform.loadInstructionVersions(agentRef.value);
-  } catch (error) {
-    problem.value = asProblem(error);
-  } finally {
-    busy.value = false;
-  }
-}
-async function launch() {
+
+async function launch(): Promise<void> {
   if (!agent.value?.nextActions.includes("LAUNCH") || !task.value.trim())
     return;
   busy.value = true;
@@ -277,7 +491,8 @@ async function launch() {
     busy.value = false;
   }
 }
-async function toggle() {
+
+async function toggle(): Promise<void> {
   if (
     !agent.value?.nextActions.includes(
       agent.value.enabled ? "DISABLE" : "ENABLE",
@@ -285,16 +500,21 @@ async function toggle() {
   )
     return;
   busy.value = true;
+  problem.value = undefined;
+  markApplying(tabScope("profile"), "next-run");
   try {
     await platform.changeAgent(agent.value, {
       action: agent.value.enabled ? "DISABLE" : "ENABLE",
     });
+    markApplied();
   } catch (error) {
     problem.value = asProblem(error);
+    markFailed();
   } finally {
     busy.value = false;
   }
 }
+
 onMounted(() => void load());
 </script>
 
@@ -302,500 +522,361 @@ onMounted(() => void load());
   <PageFrame
     :title="agent?.name ?? $t('agents.title')"
     :subtitle="agent?.purpose"
+    :eyebrow="$t('nav.agent')"
   >
-    <template #actions
-      ><StatusBadge v-if="agent" :state="agent.state" /><button
+    <template #actions>
+      <StatusBadge v-if="agent" :state="agent.state" />
+      <button
         v-if="agent?.nextActions.includes(agent.enabled ? 'DISABLE' : 'ENABLE')"
         class="button"
         type="button"
         :disabled="busy"
         @click="toggle"
       >
+        <PowerOff v-if="agent.enabled" :size="16" aria-hidden="true" />
+        <Power v-else :size="16" aria-hidden="true" />
         {{ agent.enabled ? $t("common.disable") : $t("common.enable") }}
-      </button></template
-    >
+      </button>
+    </template>
+
     <AsyncState
       :loading="platform.loading.agent"
       :problem="platform.problems.agent"
       @retry="load"
     >
-      <div v-if="agent" class="detail-layout">
-        <section class="detail-main">
-          <article class="panel">
-            <div class="section-header">
-              <h2>{{ $t("agents.profile") }}</h2>
-              <button
-                v-if="!editingProfile && agent.nextActions.includes('EDIT')"
-                class="button"
-                type="button"
-                :disabled="busy"
-                @click="editingProfile = true"
-              >
-                {{ $t("common.edit") }}
-              </button>
-            </div>
-            <form
-              v-if="editingProfile"
-              class="form-grid profile-form"
-              @submit.prevent="saveProfile"
+      <div v-if="agent" class="agent-detail-page">
+        <AgentApplyState
+          :state="applyState"
+          :scope="applyScope"
+          :boundary="applyBoundary"
+        />
+
+        <div class="agent-tabs" role="tablist" :aria-label="$t('nav.agent')">
+          <button
+            v-for="tab in tabs"
+            :id="`agent-tab-${tab.id}`"
+            :key="tab.id"
+            class="agent-tab"
+            type="button"
+            role="tab"
+            :aria-selected="activeTab === tab.id"
+            :aria-controls="`agent-panel-${tab.id}`"
+            @click="selectTab(tab.id)"
+          >
+            {{ tab.label }}
+            <span v-if="tab.id === 'instructions' && agent.draftInstructions">
+              {{ $t("states." + agent.draftInstructions.state) }}
+            </span>
+          </button>
+        </div>
+
+        <section
+          v-if="activeTab === 'profile'"
+          id="agent-panel-profile"
+          class="agent-panel agent-profile-layout"
+          role="tabpanel"
+          aria-labelledby="agent-tab-profile"
+        >
+          <AgentProfilePanel
+            :model-value="profileDraft"
+            :role-name="agent.roleDefinitionName ?? agent.name"
+            :can-edit="canEdit"
+            :busy="busy"
+            :dirty="profileDirty"
+            @update:model-value="updateProfile"
+            @save="saveProfile"
+          />
+          <aside class="agent-profile-aside">
+            <section
+              v-if="agent.nextActions.includes('LAUNCH')"
+              class="panel launch-panel"
             >
-              <label class="field"
-                ><span>{{ $t("common.name") }}</span
-                ><input v-model.trim="profile.name" required maxlength="120"
-              /></label>
-              <label class="field"
-                ><span>{{ $t("common.purpose") }}</span
-                ><input
-                  v-model.trim="profile.purpose"
-                  required
-                  maxlength="1000"
-              /></label>
-              <label class="field field--wide"
-                ><span>{{ $t("agents.role") }}</span
-                ><textarea
-                  v-model.trim="profile.roleDescription"
-                  required
-                  maxlength="1000"
-                />
+              <h2>{{ $t("runs.new") }}</h2>
+              <label class="field">
+                <span>{{ $t("runs.task") }}</span>
+                <textarea v-model="task" required maxlength="8000" />
               </label>
-              <label class="field"
-                ><span>{{ $t("agents.runtime") }}</span
-                ><select v-model="profile.runtimeRef" required>
-                  <option
-                    v-for="runtime in runtimes"
-                    :key="runtime.ref"
-                    :value="runtime.ref"
-                  >
-                    {{ runtime.name }}
-                  </option>
-                </select></label
+              <button
+                class="button button--primary"
+                type="button"
+                :disabled="busy || !task.trim()"
+                @click="launch"
               >
-              <label class="field"
-                ><span>{{ $t("agents.avatar") }}</span
-                ><input
-                  v-model.trim="profile.avatarUrl"
-                  type="url"
-                  maxlength="500"
-              /></label>
-              <div class="inline-actions field--wide">
-                <button
-                  class="button"
-                  type="button"
-                  :disabled="busy"
-                  @click="cancelProfile"
-                >
-                  {{ $t("common.cancel") }}
-                </button>
-                <button
-                  class="button button--primary"
-                  type="submit"
-                  :disabled="busy || !profile.runtimeRef"
-                >
-                  {{ $t("common.save") }}
-                </button>
-              </div>
-            </form>
-            <template v-else>
-              <h3>{{ agent.roleDefinitionName ?? agent.name }}</h3>
-              <p>{{ agent.roleDescription }}</p>
-              <dl class="metadata">
+                <Play :size="16" aria-hidden="true" />{{ $t("common.launch") }}
+              </button>
+            </section>
+            <section class="panel agent-summary">
+              <h2>{{ $t("common.details") }}</h2>
+              <dl>
                 <div>
                   <dt>{{ $t("agents.runtime") }}</dt>
                   <dd>{{ agent.runtimeName }}</dd>
                 </div>
                 <div>
-                  <dt>
-                    {{ $t("common.version", { version: agent.version }) }}
-                  </dt>
-                  <dd>{{ new Date(agent.updatedAt).toLocaleString() }}</dd>
+                  <dt>{{ $t("agents.provider") }}</dt>
+                  <dd>{{ agent.runtimeProvider ?? $t("common.noData") }}</dd>
+                </div>
+                <div>
+                  <dt>{{ $t("agents.model") }}</dt>
+                  <dd class="mono">
+                    {{ agent.runtimeModel ?? $t("common.noData") }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ $t("agents.instructions") }}</dt>
+                  <dd>
+                    {{
+                      agent.publishedInstructions
+                        ? $t("agents.revision", {
+                            revision: agent.publishedInstructions.revision,
+                          })
+                        : $t("common.noData")
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ $t("agents.capabilities") }}</dt>
+                  <dd>{{ agent.capabilities.length }}</dd>
                 </div>
               </dl>
-              <details class="runtime-details">
-                <summary>{{ $t("common.advanced") }}</summary>
-                <dl class="metadata">
-                  <div>
-                    <dt>{{ $t("agents.provider") }}</dt>
-                    <dd>{{ agent.runtimeProvider }}</dd>
-                  </div>
-                  <div>
-                    <dt>{{ $t("agents.model") }}</dt>
-                    <dd>{{ agent.runtimeModel }}</dd>
-                  </div>
-                  <div>
-                    <dt>{{ $t("agents.runtimeRevision") }}</dt>
-                    <dd>{{ agent.runtimeRevision }}</dd>
-                  </div>
-                </dl>
-              </details>
-            </template>
-            <ProblemNotice
-              v-if="platform.problems.runtimes"
-              :problem="platform.problems.runtimes"
-              compact
-            />
-          </article>
-          <article class="panel">
-            <div class="section-header">
-              <h2>{{ $t("agents.instructions") }}</h2>
-              <StatusBadge
-                :state="
-                  agent.draftInstructions?.state ??
-                  agent.publishedInstructions?.state ??
-                  'DRAFT'
-                "
-              />
-            </div>
-            <textarea
-              v-model="instructions"
-              maxlength="65536"
-              :readonly="!canEdit"
-            />
-            <div class="inline-actions">
-              <button
-                v-if="agent.nextActions.includes('EDIT')"
-                class="button"
-                type="button"
-                :disabled="busy"
-                @click="saveInstructions"
-              >
-                {{ $t("common.save") }}</button
-              ><button
-                v-if="agent.nextActions.includes('VALIDATE')"
-                class="button"
-                type="button"
-                :disabled="busy"
-                @click="instructionAction('VALIDATE')"
-              >
-                {{ $t("agents.validate") }}</button
-              ><button
-                v-if="agent.nextActions.includes('PUBLISH')"
-                class="button button--primary"
-                type="button"
-                :disabled="busy"
-                @click="instructionAction('PUBLISH')"
-              >
-                {{ $t("agents.publish") }}
-              </button>
-            </div>
-            <InstructionHistory
-              :versions="instructionHistory"
-              :current-ref="agent.publishedInstructions?.ref"
-              :can-rollback="agent.nextActions.includes('ROLLBACK')"
-              :busy="busy"
-              @rollback="rollbackInstructions"
-            />
-            <ProblemNotice
-              v-if="platform.problems.instructionVersions"
-              :problem="platform.problems.instructionVersions"
-              compact
-            />
-          </article>
-          <article class="panel role-environment-panel">
-            <div class="section-header">
-              <div>
-                <h2>{{ $t("roleEnvironments.title") }}</h2>
-                <p>{{ $t("roleEnvironments.description") }}</p>
-              </div>
-              <StatusBadge v-if="latestBuild" :state="latestBuild.stage" />
-              <StatusBadge
-                v-else-if="roleImageRecipe?.promotedImageReady"
-                state="READY"
-              />
-            </div>
-            <fieldset
-              class="environment-options"
-              :disabled="busy || !agent.roleDefinitionRef || !canEdit"
-            >
-              <legend class="sr-only">
-                {{ $t("roleEnvironments.choose") }}
-              </legend>
-              <label
-                v-for="environment in roleEnvironments"
-                :key="environment.key"
-                class="environment-option"
-                :class="{
-                  'environment-option--selected':
-                    selectedEnvironment === environment.key,
-                  'environment-option--unavailable': !environment.available,
-                }"
-              >
-                <input
-                  v-model="selectedEnvironment"
-                  type="radio"
-                  name="role-environment"
-                  :value="environment.key"
-                  :disabled="!environment.available"
-                />
-                <span>
-                  <strong>{{ $t(environment.nameMessageKey) }}</strong>
-                  <small v-if="environment.recommended">
-                    {{ $t("roleEnvironments.recommended") }}
-                  </small>
-                  <span>{{ $t(environment.descriptionMessageKey) }}</span>
-                  <span class="environment-software">
-                    {{
-                      environment.softwareMessageKeys
-                        .map((key) => $t(key))
-                        .join(" · ")
-                    }}
-                  </span>
-                  <span v-if="!environment.available">
-                    {{
-                      $t(
-                        environment.unavailableMessageKey ??
-                          "roleEnvironments.unavailable",
-                      )
-                    }}
-                  </span>
-                </span>
-              </label>
-            </fieldset>
-            <p v-if="!agent.roleDefinitionRef" role="status">
-              {{ $t("roleEnvironments.roleUnavailable") }}
-            </p>
-            <p v-if="latestBuild" class="build-progress" aria-live="polite">
-              {{
-                $t("roleEnvironments.buildProgress", {
-                  progress: latestBuild.progressPercent,
-                })
-              }}
-            </p>
-            <div class="inline-actions">
-              <button
-                v-if="canEdit"
-                class="button button--primary"
-                type="button"
-                :disabled="
-                  busy ||
-                  !agent.roleDefinitionRef ||
-                  !selectedEnvironment ||
-                  !platform.roleEnvironments[selectedEnvironment]?.available
-                "
-                @click="prepareRoleEnvironment"
-              >
-                {{ $t("roleEnvironments.prepare") }}
-              </button>
-              <button
-                v-if="roleImageRecipe?.nextActions.includes('ARCHIVE')"
-                class="button"
-                type="button"
-                :disabled="busy"
-                @click="changeRoleEnvironment('ARCHIVE')"
-              >
-                {{ $t("common.archive") }}
-              </button>
-              <button
-                v-if="roleImageRecipe?.nextActions.includes('RESTORE')"
-                class="button"
-                type="button"
-                :disabled="busy"
-                @click="changeRoleEnvironment('RESTORE')"
-              >
-                {{ $t("roleEnvironments.restore") }}
-              </button>
-            </div>
-            <details v-if="roleImageRecipe || latestBuild">
-              <summary>{{ $t("common.advanced") }}</summary>
-              <dl class="metadata">
-                <div v-if="roleImageRecipe">
-                  <dt>
-                    {{
-                      $t("common.version", {
-                        version: roleImageRecipe.version,
-                      })
-                    }}
-                  </dt>
-                  <dd>{{ $t("states." + roleImageRecipe.state) }}</dd>
-                </div>
-                <div v-if="latestBuild">
-                  <dt>{{ $t("roleEnvironments.lastBuild") }}</dt>
-                  <dd>{{ $t("states." + latestBuild.stage) }}</dd>
-                </div>
-              </dl>
-            </details>
-            <ProblemNotice
-              v-if="platform.problems.roleImages"
-              :problem="platform.problems.roleImages"
-              compact
-            />
-          </article>
-          <ProblemNotice v-if="problem" :problem="problem" compact />
+            </section>
+          </aside>
         </section>
-        <aside class="detail-side">
-          <section
-            v-if="agent.nextActions.includes('LAUNCH')"
-            class="panel launch-panel"
+
+        <section
+          v-else-if="activeTab === 'instructions'"
+          id="agent-panel-instructions"
+          class="agent-panel"
+          role="tabpanel"
+          aria-labelledby="agent-tab-instructions"
+        >
+          <AgentInstructionsPanel
+            :model-value="instructions"
+            :state="instructionState"
+            :validation-messages="instructionValidationMessages"
+            :can-edit="canEdit"
+            :can-validate="agent.nextActions.includes('VALIDATE')"
+            :can-publish="agent.nextActions.includes('PUBLISH')"
+            :busy="busy"
+            :dirty="instructionsDirty"
+            @update:model-value="updateInstructions"
+            @save="saveInstructions"
+            @validate="instructionAction('VALIDATE')"
+            @publish="instructionAction('PUBLISH')"
           >
-            <h2>{{ $t("runs.new") }}</h2>
-            <label class="field"
-              ><span>{{ $t("runs.task") }}</span
-              ><textarea v-model="task" required maxlength="8000" /></label
-            ><button
-              class="button button--primary"
-              type="button"
-              :disabled="busy || !task.trim()"
-              @click="launch"
-            >
-              {{ $t("common.launch") }}
-            </button>
-          </section>
-          <section class="panel">
-            <div class="section-header">
-              <h2>{{ $t("agents.capabilities") }}</h2>
-              <span v-if="canManageCapabilities" class="secondary-text">
-                {{ $t("agents.capabilitiesHelp") }}
-              </span>
-            </div>
-            <div class="capability-list">
-              <label
-                v-for="capability in capabilityCatalog"
-                :key="capability.key"
-                class="capability-item"
-              >
-                <input
-                  v-if="canManageCapabilities"
-                  type="checkbox"
-                  :checked="hasCapability(capability.key)"
-                  :disabled="Boolean(capabilityBusy)"
-                  @change="toggleCapability(capability.key)"
-                />
-                <span>
-                  <strong>{{ capability.name }}</strong>
-                  <small>{{ capability.description }}</small>
-                </span>
-              </label>
-              <p v-if="!capabilityCatalog.length">{{ $t("common.empty") }}</p>
-            </div>
-            <p v-if="capabilityBusy" class="secondary-text" aria-live="polite">
-              {{ $t("agents.capabilitySaving") }}
-            </p>
-            <ProblemNotice
-              v-if="platform.problems.capabilities"
-              :problem="platform.problems.capabilities"
-              compact
-            />
-          </section>
-          <section class="panel">
-            <h2>{{ $t("agents.knowledge") }}</h2>
-            <p>{{ agent.knowledgeArtifactRefs.length }}</p>
-          </section>
-        </aside>
+            <template #history>
+              <InstructionHistory
+                :versions="instructionHistory"
+                :current-ref="agent.publishedInstructions?.ref"
+                :can-rollback="agent.nextActions.includes('ROLLBACK')"
+                :busy="busy"
+                @rollback="rollbackInstructions"
+              />
+            </template>
+          </AgentInstructionsPanel>
+          <ProblemNotice
+            v-if="platform.problems.instructionVersions"
+            :problem="platform.problems.instructionVersions"
+            compact
+          />
+        </section>
+
+        <section
+          v-else-if="activeTab === 'runtime'"
+          id="agent-panel-runtime"
+          class="agent-panel"
+          role="tabpanel"
+          aria-labelledby="agent-tab-runtime"
+        >
+          <AgentRuntimePanel
+            :model-value="runtimeRef"
+            :runtimes="runtimes"
+            :can-edit="canEdit"
+            :busy="busy"
+            :dirty="runtimeDirty"
+            @update:model-value="updateRuntime"
+            @save="saveRuntime"
+          />
+          <ProblemNotice
+            v-if="platform.problems.runtimes"
+            :problem="platform.problems.runtimes"
+            compact
+          />
+        </section>
+
+        <section
+          v-else-if="activeTab === 'environment'"
+          id="agent-panel-environment"
+          class="agent-panel"
+          role="tabpanel"
+          aria-labelledby="agent-tab-environment"
+        >
+          <AgentEnvironmentPanel
+            :model-value="selectedEnvironment"
+            :environments="roleEnvironments"
+            :recipe="roleImageRecipe"
+            :latest-build="latestBuild"
+            :can-edit="canEdit && Boolean(agent.roleDefinitionRef)"
+            :busy="busy"
+            @update:model-value="updateEnvironment"
+            @save="prepareRoleEnvironment"
+            @archive="changeRoleEnvironment('ARCHIVE')"
+            @restore="changeRoleEnvironment('RESTORE')"
+          />
+          <p
+            v-if="!agent.roleDefinitionRef"
+            class="agent-role-unavailable"
+            role="status"
+          >
+            {{ $t("roleEnvironments.roleUnavailable") }}
+          </p>
+          <ProblemNotice
+            v-if="platform.problems.roleEnvironments"
+            :problem="platform.problems.roleEnvironments"
+            compact
+          />
+          <ProblemNotice
+            v-if="platform.problems.roleImages"
+            :problem="platform.problems.roleImages"
+            compact
+          />
+        </section>
+
+        <section
+          v-else
+          id="agent-panel-access"
+          class="agent-panel"
+          role="tabpanel"
+          aria-labelledby="agent-tab-access"
+        >
+          <AgentAccessPanel
+            :capabilities="capabilityCatalog"
+            :granted-keys="agent.capabilities.map((item) => item.key)"
+            :integrations="agent.integrations"
+            :knowledge-count="agent.knowledgeArtifactRefs.length"
+            :can-manage="canManageCapabilities"
+            :busy-key="capabilityBusy"
+            @toggle="toggleCapability"
+          />
+          <ProblemNotice
+            v-if="platform.problems.capabilities"
+            :problem="platform.problems.capabilities"
+            compact
+          />
+        </section>
+
+        <ProblemNotice v-if="problem" :problem="problem" compact />
+        <AgentApiGaps />
       </div>
     </AsyncState>
   </PageFrame>
 </template>
 
 <style scoped>
-.detail-layout {
+.agent-detail-page {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.7fr);
-  gap: 18px;
-}
-.detail-main,
-.detail-side {
-  display: grid;
-  align-content: start;
   gap: 16px;
 }
-.metadata {
+.agent-tabs {
   display: flex;
-  gap: 28px;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: thin;
 }
-.metadata dt {
-  color: var(--subtle);
-  font-size: 0.8rem;
+.agent-tab {
+  display: inline-flex;
+  min-height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-weight: 600;
 }
-.metadata dd {
-  margin: 4px 0;
-}
-.inline-actions,
-.chip-list {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-}
-.chip-list span {
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: var(--accent-soft);
+.agent-tab:hover,
+.agent-tab:focus-visible {
   color: var(--accent-strong);
-  font-size: 0.82rem;
+  background: var(--accent-soft);
 }
-.launch-panel {
+.agent-tab[aria-selected="true"] {
+  border-bottom-color: var(--accent);
+  color: var(--accent-strong);
+}
+.agent-tab span {
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+.agent-panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.agent-profile-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.34fr);
+  align-items: start;
+}
+.agent-profile-aside {
+  display: grid;
+  gap: 16px;
+}
+.launch-panel,
+.agent-summary {
   display: grid;
   gap: 12px;
 }
-.profile-form,
-.capability-list {
+.launch-panel h2,
+.agent-summary h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.launch-panel textarea {
+  min-height: 150px;
+}
+.agent-summary dl {
   display: grid;
-  gap: 10px;
+  gap: 0;
+  margin: 0;
 }
-.runtime-details {
-  margin-top: 14px;
-}
-.runtime-details summary {
-  cursor: pointer;
-}
-.capability-item {
+.agent-summary dl div {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1.2fr);
   gap: 10px;
-  align-items: start;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
+  padding: 8px 0;
+  border-top: 1px solid var(--hairline);
 }
-.capability-item strong,
-.capability-item small {
-  display: block;
-}
-.capability-item small,
-.secondary-text {
-  color: var(--text-secondary);
-  font-size: 0.84rem;
-}
-.environment-options {
-  display: grid;
-  gap: 10px;
-  padding: 0;
-  border: 0;
-}
-.environment-option {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  cursor: pointer;
-}
-.environment-option > span,
-.environment-option > span > span {
-  display: block;
-}
-.environment-option strong {
-  margin-right: 8px;
-}
-.environment-option small {
-  color: var(--accent-strong);
-}
-.environment-option--selected {
-  border-color: var(--accent-strong);
-}
-.environment-option--unavailable {
-  cursor: not-allowed;
-  opacity: 0.65;
-}
-.environment-software,
-.build-progress {
-  margin-top: 6px;
+.agent-summary dt {
   color: var(--subtle);
-  font-size: 0.86rem;
 }
-@media (max-width: 900px) {
-  .detail-layout {
+.agent-summary dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.agent-role-unavailable {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+@media (max-width: 940px) {
+  .agent-profile-layout {
     grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .agent-tab {
+    min-height: 40px;
+    padding-inline: 10px;
   }
 }
 </style>

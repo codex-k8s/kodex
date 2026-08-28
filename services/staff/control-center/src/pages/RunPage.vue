@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Activity } from "@lucide/vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import {
@@ -8,7 +16,10 @@ import {
 } from "@/features/platform/run-refresh";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
+import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
+import type { PresentedRunEvent } from "@/features/runs/run-activity";
 import type {
   Artifact,
   OwnerGate,
@@ -73,6 +84,9 @@ const runSubtitle = computed(
   () =>
     safeRuntimeText(run.value?.currentActivity) ??
     run.value?.target.displayName,
+);
+const runInputSummary = computed(() =>
+  safeRuntimeText(run.value?.inputSummary),
 );
 
 const presentedGraph = computed(() =>
@@ -142,12 +156,7 @@ function eventFallback(event: RunEvent): string {
   }
 }
 
-type PresentedEvent = RunEvent & {
-  displaySummary: string;
-  displayProgress?: string;
-};
-
-const eventList = computed<PresentedEvent[]>(() =>
+const eventList = computed<PresentedRunEvent[]>(() =>
   Object.values(platform.events[graph.value?.runRef ?? runRef.value] ?? {})
     .sort((a, b) => a.sequence - b.sequence)
     .map((event) => ({
@@ -171,14 +180,35 @@ const selectedRef = ref<string>();
 const openedStreamRef = ref<string>();
 const selectedNode = computed(
   () =>
-    graph.value?.nodes.find((n) => n.ref === selectedRef.value) ??
-    graph.value?.nodes.find((n) => n.state === "RUNNING") ??
-    graph.value?.nodes[0],
+    presentedGraph.value?.nodes.find((n) => n.ref === selectedRef.value) ??
+    presentedGraph.value?.nodes.find((n) => n.state === "RUNNING") ??
+    presentedGraph.value?.nodes[0],
 );
-const selectedNodeEvents = computed(() =>
-  eventList.value
-    .filter((event) => event.nodeRef === selectedNode.value?.ref)
-    .slice(-20),
+const openGateNodeRefs = computed(
+  () =>
+    new Set(
+      gateList.value
+        .filter((gate) => gate.state === "OPEN")
+        .map((gate) => gate.nodeRef),
+    ),
+);
+const futureNodeRefs = computed(() =>
+  (presentedGraph.value?.nodes ?? [])
+    .filter(
+      (node) =>
+        (node.state === "QUEUED" || node.state === "WAITING") &&
+        !node.startedAt &&
+        !openGateNodeRefs.value.has(node.ref),
+    )
+    .map((node) => node.ref),
+);
+const activeNodeRefs = computed(() =>
+  (presentedGraph.value?.nodes ?? [])
+    .filter(
+      (node) =>
+        node.state === "RUNNING" || openGateNodeRefs.value.has(node.ref),
+    )
+    .map((node) => node.ref),
 );
 const lifecycleState = computed(() => run.value?.state);
 const usageItems = computed(() => {
@@ -210,23 +240,16 @@ const resultOutcomeState = computed(() => {
   return run.value.state === "SUCCEEDED" ? "OUTCOME_SUCCEEDED" : undefined;
 });
 
-const selectedNodeRole = computed(() => {
-  const role = safeRuntimeText(selectedNode.value?.role);
-  return (
-    role ??
-    (selectedNode.value
-      ? translator.t(`runs.nodeTypes.${selectedNode.value.type}`)
-      : undefined)
-  );
-});
-const selectedNodeProgress = computed(() =>
-  safeRuntimeText(selectedNode.value?.progressSummary),
-);
 const turn = ref("");
 const comment = ref("");
 const busy = ref(false);
 const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
+const activityOpen = ref(false);
+const activityNodeRef = ref<string>();
+const nodeInspectorOpen = ref(true);
+const mobilePane = ref<"graph" | "activity">("graph");
+const activityTrigger = ref<HTMLButtonElement>();
 const hasAuthoritativeSnapshot = computed(() =>
   Boolean(run.value && graph.value),
 );
@@ -331,6 +354,21 @@ async function decide(
 }
 function select(node: RunNode) {
   selectedRef.value = node.ref;
+  nodeInspectorOpen.value = true;
+  mobilePane.value = "graph";
+}
+function openActivity(nodeRef?: string): void {
+  activityNodeRef.value = nodeRef;
+  activityOpen.value = true;
+  mobilePane.value = "activity";
+}
+function showGraph(): void {
+  activityOpen.value = false;
+  mobilePane.value = "graph";
+}
+function closeActivity(): void {
+  showGraph();
+  void nextTick(() => activityTrigger.value?.focus());
 }
 async function downloadArtifact(artifact: Artifact): Promise<void> {
   if (!artifact.nextActions.includes("DOWNLOAD")) return;
@@ -372,6 +410,11 @@ watch(runRef, async (next, previous) => {
   if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
   else realtime.closeRun(previous);
   lastRefreshKey = undefined;
+  activityOpen.value = false;
+  activityNodeRef.value = undefined;
+  selectedRef.value = undefined;
+  nodeInspectorOpen.value = true;
+  mobilePane.value = "graph";
   await load(next);
   if (runRef.value === next) openCurrentStream();
 });
@@ -398,6 +441,16 @@ onBeforeUnmount(() => {
           <StatusBadge :state="resultOutcomeState" />
         </span>
       </div>
+      <button
+        v-if="run"
+        ref="activityTrigger"
+        class="button"
+        type="button"
+        @click="openActivity()"
+      >
+        <Activity :size="17" aria-hidden="true" />
+        {{ $t("runs.activity") }}
+      </button>
       <button
         v-if="run?.nextActions.includes('CANCEL')"
         class="button button--danger"
@@ -509,134 +562,90 @@ onBeforeUnmount(() => {
           </div>
         </article>
       </section>
-      <div v-if="run && presentedGraph" class="run-workspace">
-        <section class="graph-panel">
+      <div
+        v-if="run && presentedGraph"
+        class="run-mobile-tabs"
+        role="tablist"
+        :aria-label="$t('runs.activity')"
+      >
+        <button
+          id="run-graph-tab"
+          class="button"
+          type="button"
+          role="tab"
+          aria-controls="run-graph-panel"
+          :aria-selected="mobilePane === 'graph'"
+          @click="showGraph"
+        >
+          {{ $t("runs.graph") }}
+        </button>
+        <button
+          id="run-activity-tab"
+          class="button"
+          type="button"
+          role="tab"
+          aria-controls="run-activity-drawer"
+          :aria-selected="mobilePane === 'activity'"
+          @click="openActivity()"
+        >
+          {{ $t("runs.activity") }}
+          <span>{{ eventList.length }}</span>
+        </button>
+      </div>
+      <div
+        v-if="run && presentedGraph"
+        class="run-workspace"
+        :class="{ 'run-workspace--activity': activityOpen }"
+      >
+        <section id="run-graph-panel" class="graph-panel">
           <div class="workspace-heading">
             <h2>{{ $t("runs.graph") }}</h2>
-            <span>{{ presentedGraph.nodes.length }}</span>
+            <span>
+              {{ presentedGraph.nodes.length }} ·
+              {{ presentedGraph.edges.length }}
+            </span>
           </div>
-          <RunGraphCanvas
+          <div class="graph-panel__canvas">
+            <RunGraphCanvas
+              :nodes="presentedGraph.nodes"
+              :edges="presentedGraph.edges"
+              :selected-ref="selectedNode?.ref"
+              :future-node-refs="futureNodeRefs"
+              :active-node-refs="activeNodeRefs"
+              @select="select"
+            />
+          </div>
+          <div class="graph-panel__realtime" role="status" aria-live="polite">
+            <span
+              class="live-indicator"
+              :class="`live-indicator--${streamState?.state ?? 'connecting'}`"
+            >
+              ● {{ $t("runs.live") }}
+            </span>
+            <span>#{{ presentedGraph.sequence }}</span>
+          </div>
+        </section>
+
+        <aside v-if="selectedNode && nodeInspectorOpen" class="node-panel">
+          <RunNodeInspector
+            :node="selectedNode"
             :nodes="presentedGraph.nodes"
-            :edges="presentedGraph.edges"
-            :selected-ref="selectedNode?.ref"
-            @select="select"
+            :artifacts="artifactList"
+            :project-ref="routeProjectRef ?? run.projectRef"
+            @close="nodeInspectorOpen = false"
+            @activity="openActivity"
           />
-        </section>
-        <section class="timeline-panel">
-          <div class="workspace-heading">
-            <h2>{{ $t("runs.activity") }}</h2>
-          </div>
-          <ol class="timeline">
-            <li v-for="event in eventList" :key="event.sequence">
-              <span class="timeline__marker" aria-hidden="true" />
-              <div>
-                <SafeMarkdown :content="event.displaySummary" />
-                <SafeMarkdown
-                  v-if="event.displayProgress"
-                  :content="event.displayProgress"
-                />
-                <small>{{
-                  new Date(event.occurredAt).toLocaleTimeString()
-                }}</small>
-              </div>
-            </li>
-          </ol>
-          <p v-if="!eventList.length" class="empty-compact">
-            {{ $t("runs.noEvents") }}
-          </p>
-        </section>
-        <aside class="node-panel">
-          <div class="workspace-heading">
-            <h2>{{ $t("runs.context") }}</h2>
-          </div>
-          <template v-if="selectedNode"
-            ><StatusBadge :state="selectedNode.state" />
-            <h3>{{ selectedNode.displayName }}</h3>
-            <SafeMarkdown
-              v-if="selectedNode.inputSummary"
-              :content="selectedNode.inputSummary"
-            />
-            <SafeMarkdown
-              v-if="selectedNodeProgress"
-              :content="selectedNodeProgress"
-            />
-            <ProblemNotice
-              v-if="selectedNode.safeErrorCode"
-              :problem="
-                asProblem({
-                  status: 500,
-                  code: selectedNode.safeErrorCode,
-                  detail: selectedNode.safeErrorMessage,
-                  correlationId: '',
-                })
-              "
-              compact
-            />
-            <dl class="metadata">
-              <div>
-                <dt>
-                  {{ $t("runs.attempt", { attempt: selectedNode.attempt }) }}
-                </dt>
-                <dd>{{ selectedNodeRole }}</dd>
-              </div>
-            </dl>
-            <div v-if="selectedNode.integrationNames?.length" class="chip-list">
-              <span v-for="name in selectedNode.integrationNames" :key="name">{{
-                name
-              }}</span>
-            </div>
-            <dl class="node-relations">
-              <div v-if="selectedNode.callbackSummary">
-                <dt>{{ $t("runs.callback") }}</dt>
-                <dd>
-                  <SafeMarkdown :content="selectedNode.callbackSummary" />
-                </dd>
-              </div>
-              <div v-if="selectedNode.artifactRefs.length">
-                <dt>{{ $t("runs.artifacts") }}</dt>
-                <dd>{{ selectedNode.artifactRefs.length }}</dd>
-              </div>
-              <div v-if="selectedNode.childRunRefs.length">
-                <dt>{{ $t("runs.childRuns") }}</dt>
-                <dd class="node-links">
-                  <RouterLink
-                    v-for="childRef in selectedNode.childRunRefs"
-                    :key="childRef"
-                    :to="runPath(childRef, routeProjectRef ?? run.projectRef)"
-                  >
-                    {{ $t("runs.openChildRun") }}
-                  </RouterLink>
-                </dd>
-              </div>
-              <div v-if="selectedNode.startedAt">
-                <dt>{{ $t("runs.startedAt") }}</dt>
-                <dd>{{ new Date(selectedNode.startedAt).toLocaleString() }}</dd>
-              </div>
-              <div v-if="selectedNode.finishedAt">
-                <dt>{{ $t("runs.finishedAt") }}</dt>
-                <dd>
-                  {{ new Date(selectedNode.finishedAt).toLocaleString() }}
-                </dd>
-              </div>
-            </dl>
-            <section class="node-conversation" aria-live="polite">
-              <h3>{{ $t("runs.nodeConversation") }}</h3>
-              <ol v-if="selectedNodeEvents.length">
-                <li v-for="event in selectedNodeEvents" :key="event.sequence">
-                  <SafeMarkdown :content="event.displaySummary" />
-                  <SafeMarkdown
-                    v-if="event.displayProgress"
-                    :content="event.displayProgress"
-                  />
-                  <time :datetime="event.occurredAt">
-                    {{ new Date(event.occurredAt).toLocaleTimeString() }}
-                  </time>
-                </li>
-              </ol>
-              <p v-else>{{ $t("runs.noNodeActivity") }}</p>
-            </section></template
-          >
         </aside>
+
+        <RunActivityDrawer
+          :open="activityOpen"
+          :run="run"
+          :nodes="presentedGraph.nodes"
+          :events="eventList"
+          :initiator-summary="runInputSummary"
+          :initial-node-ref="activityNodeRef"
+          @close="closeActivity"
+        />
       </div>
       <section v-if="run" class="run-bottom">
         <article v-if="run.resultSummary" class="panel run-result">
@@ -806,135 +815,72 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 .run-workspace {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(360px, 1.25fr) minmax(300px, 0.8fr) minmax(
-      260px,
-      0.65fr
-    );
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 1fr);
+  height: clamp(590px, calc(100vh - 250px), 760px);
   min-height: 590px;
   border: 1px solid var(--border);
-  border-radius: 11px;
+  border-radius: 8px;
   background: var(--surface);
   overflow: hidden;
 }
 .graph-panel,
-.timeline-panel,
 .node-panel {
-  padding: 15px;
-  overflow: auto;
+  min-width: 0;
+  min-height: 0;
 }
-.timeline-panel,
+.graph-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--canvas);
+}
 .node-panel {
   border-left: 1px solid var(--border);
+  overflow: hidden;
 }
 .workspace-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 46px;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 .workspace-heading h2 {
-  margin: 0 0 12px;
-}
-.timeline {
-  display: grid;
-  gap: 0;
   margin: 0;
-  padding: 0;
-  list-style: none;
+  font-size: 0.95rem;
 }
-.timeline li {
-  position: relative;
-  display: grid;
-  grid-template-columns: 18px 1fr;
-  gap: 8px;
-  padding: 0 0 18px;
+.workspace-heading > span {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
 }
-.timeline li::before {
-  position: absolute;
-  left: 5px;
-  top: 8px;
-  bottom: -2px;
-  width: 1px;
-  background: var(--border);
-  content: "";
+.graph-panel__canvas {
+  min-height: 0;
 }
-.timeline li:last-child::before {
-  display: none;
-}
-.timeline__marker {
-  z-index: 1;
-  width: 11px;
-  height: 11px;
-  margin-top: 5px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-.timeline p {
-  margin: 4px 0;
-}
-.timeline :deep(.safe-markdown > p),
-.node-conversation :deep(.safe-markdown > p) {
-  margin: 0;
-}
-.timeline small {
-  color: var(--subtle);
-}
-.metadata dt {
-  color: var(--subtle);
-  font-size: 0.8rem;
-}
-.metadata dd {
-  margin: 4px 0;
-}
-.node-relations {
-  display: grid;
+.graph-panel__realtime {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  margin-top: 16px;
-}
-.node-relations dt {
-  color: var(--subtle);
-  font-size: 0.78rem;
-}
-.node-relations dd {
-  margin: 3px 0 0;
-}
-.node-links {
-  display: grid;
-  gap: 4px;
-}
-.node-conversation {
-  margin-top: 18px;
-  padding-top: 14px;
+  min-height: 34px;
+  padding: 6px 14px;
   border-top: 1px solid var(--border);
-}
-.node-conversation ol {
-  display: grid;
-  gap: 10px;
-  padding: 0;
-  list-style: none;
-}
-.node-conversation li {
-  padding: 9px;
-  border-radius: 8px;
   background: var(--panel);
-}
-.node-conversation p {
-  margin: 4px 0;
-}
-.node-conversation time {
-  color: var(--subtle);
+  color: var(--muted);
   font-size: 0.75rem;
 }
-.chip-list {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+.graph-panel__realtime .live-indicator {
+  margin-left: 0;
 }
-.chip-list span {
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  font-size: 0.78rem;
+.graph-panel__realtime > span:last-child {
+  font-family: var(--font-mono);
+}
+.run-mobile-tabs {
+  display: none;
 }
 .run-bottom {
   display: grid;
@@ -962,37 +908,56 @@ onBeforeUnmount(() => {
   text-decoration: none;
   cursor: pointer;
 }
-.empty-compact {
-  color: var(--muted);
-}
-@media (max-width: 1150px) {
-  .run-workspace {
-    grid-template-columns: 1fr 1fr;
-  }
-  .node-panel {
-    grid-column: 1/-1;
-    border-left: 0;
-    border-top: 1px solid var(--border);
-  }
-}
 @media (max-width: 760px) {
   .gate-strip article,
-  .run-workspace,
   .run-bottom {
     grid-template-columns: 1fr;
-  }
-  .timeline-panel,
-  .node-panel {
-    border-left: 0;
-    border-top: 1px solid var(--border);
   }
   .run-summary .live-indicator {
     margin-left: 0;
   }
-  .graph-panel,
-  .timeline-panel,
+  .run-mobile-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-bottom: 8px;
+  }
+  .run-mobile-tabs .button {
+    min-width: 0;
+    border-radius: 0;
+  }
+  .run-mobile-tabs .button:first-child {
+    border-radius: 7px 0 0 7px;
+  }
+  .run-mobile-tabs .button:last-child {
+    border-radius: 0 7px 7px 0;
+  }
+  .run-mobile-tabs .button[aria-selected="true"] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+  }
+  .run-mobile-tabs span {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+  }
+  .run-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    height: max(600px, calc(100dvh - 250px));
+    min-height: 600px;
+  }
+  .run-workspace--activity .graph-panel,
+  .run-workspace--activity .node-panel {
+    display: none;
+  }
   .node-panel {
-    max-height: none;
+    position: absolute;
+    z-index: 5;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-height: 56%;
+    border-top: 1px solid var(--border);
+    border-left: 0;
   }
   .artifact-row {
     grid-template-columns: 1fr auto;
