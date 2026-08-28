@@ -9,6 +9,8 @@ var (
 	queryRuntimeClaimExecutionSelectClaimableAgentExecutions string
 	//go:embed sql/runtime_claimexecution_insert_runtime_revision.sql
 	queryRuntimeClaimExecutionInsertRuntimeRevision string
+	//go:embed sql/runtime_claimexecution_select_assistant_context.sql
+	queryRuntimeClaimexecutionSelectAssistantContext string
 	//go:embed sql/runtime_claimexecution_insert_runtime_leases_ref_run_id_workload_instance.sql
 	queryRuntimeClaimexecutionInsertRuntimeLeasesRefRunIdWorkloadInstance string
 	//go:embed sql/runtime_claimexecution_update_run_nodes_state_started_at_version.sql
@@ -101,6 +103,18 @@ var (
 	queryRuntimeDelegateexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt string
 	//go:embed sql/runtime_delegateexecution_insert_run_nodes_ref_root_run_id_parent_node_id.sql
 	queryRuntimeDelegateexecutionInsertRunNodesRefRootRunIdParentNodeId string
+	//go:embed sql/runtime_delegateexecution_materialize_planned_node.sql
+	queryRuntimeDelegateexecutionMaterializePlannedNode string
+	//go:embed sql/runtime_proposeassistantmetadata_update_conversation.sql
+	queryRuntimeProposeassistantmetadataUpdateConversation string
+	//go:embed sql/runtime_proposerunmetadata_update_run.sql
+	queryRuntimeProposerunmetadataUpdateRun string
+	//go:embed sql/runtime_recordtoolcall_select_actor_and_grant.sql
+	queryRuntimeRecordtoolcallSelectActorAndGrant string
+	//go:embed sql/runtime_recordtoolcall_update_event.sql
+	queryRuntimeRecordtoolcallUpdateEvent string
+	//go:embed sql/runtime_recordtoolcall_update_outbox.sql
+	queryRuntimeRecordtoolcallUpdateOutbox string
 	//go:embed sql/runtime_delegateexecution_insert_delegation_edge.sql
 	queryRuntimeDelegateexecutionInsertDelegationEdge string
 	//go:embed sql/runtime_delegateexecution_insert_callback_edge.sql

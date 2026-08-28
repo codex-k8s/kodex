@@ -13,7 +13,8 @@ import (
 func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	switch input.Kind {
 	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
-		command.DelegateExecution, command.ProposeAssistantPlan, command.MaterializeOccurrence,
+		command.DelegateExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
+		command.ProposeRunMetadata, command.RecordRunToolCall, command.MaterializeOccurrence,
 		command.CompleteSessionSnapshot, command.CompleteSessionRestore,
 		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
 		command.FailSessionArchiveTask,
@@ -124,7 +125,8 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "organization.view", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.view", "PROJECT", payload.ProjectRef, payload.ProjectRef)
-	case command.AssistantTurnInput, command.AssistantPlanInput, command.AssistantInstructionsInput:
+	case command.AssistantTurnInput, command.AssistantConversationTitleInput,
+		command.AssistantPlanInput, command.AssistantPlanDraftInput, command.AssistantInstructionsInput:
 		return "organization.manage", organization, nil
 	default:
 		if input.Kind == command.CompleteOnboarding {

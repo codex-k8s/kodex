@@ -3502,8 +3502,12 @@ const (
 	SystemAssistantService_GetSystemAssistant_FullMethodName               = "/controlplane.v1.SystemAssistantService/GetSystemAssistant"
 	SystemAssistantService_ListAssistantConversations_FullMethodName       = "/controlplane.v1.SystemAssistantService/ListAssistantConversations"
 	SystemAssistantService_CreateAssistantConversation_FullMethodName      = "/controlplane.v1.SystemAssistantService/CreateAssistantConversation"
+	SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName = "/controlplane.v1.SystemAssistantService/UpdateAssistantConversationTitle"
 	SystemAssistantService_AddAssistantTurn_FullMethodName                 = "/controlplane.v1.SystemAssistantService/AddAssistantTurn"
+	SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName         = "/controlplane.v1.SystemAssistantService/UpdateAssistantPlanDraft"
+	SystemAssistantService_ValidateAssistantPlan_FullMethodName            = "/controlplane.v1.SystemAssistantService/ValidateAssistantPlan"
 	SystemAssistantService_ApplyAssistantPlan_FullMethodName               = "/controlplane.v1.SystemAssistantService/ApplyAssistantPlan"
+	SystemAssistantService_RejectAssistantPlan_FullMethodName              = "/controlplane.v1.SystemAssistantService/RejectAssistantPlan"
 	SystemAssistantService_UpdateAssistantOwnerInstructions_FullMethodName = "/controlplane.v1.SystemAssistantService/UpdateAssistantOwnerInstructions"
 	SystemAssistantService_RecoverSystemAssistant_FullMethodName           = "/controlplane.v1.SystemAssistantService/RecoverSystemAssistant"
 )
@@ -3515,8 +3519,12 @@ type SystemAssistantServiceClient interface {
 	GetSystemAssistant(ctx context.Context, in *GetSystemAssistantRequest, opts ...grpc.CallOption) (*GetSystemAssistantResponse, error)
 	ListAssistantConversations(ctx context.Context, in *ListAssistantConversationsRequest, opts ...grpc.CallOption) (*ListAssistantConversationsResponse, error)
 	CreateAssistantConversation(ctx context.Context, in *CreateAssistantConversationRequest, opts ...grpc.CallOption) (*CreateAssistantConversationResponse, error)
+	UpdateAssistantConversationTitle(ctx context.Context, in *UpdateAssistantConversationTitleRequest, opts ...grpc.CallOption) (*UpdateAssistantConversationTitleResponse, error)
 	AddAssistantTurn(ctx context.Context, in *AddAssistantTurnRequest, opts ...grpc.CallOption) (*AddAssistantTurnResponse, error)
+	UpdateAssistantPlanDraft(ctx context.Context, in *UpdateAssistantPlanDraftRequest, opts ...grpc.CallOption) (*UpdateAssistantPlanDraftResponse, error)
+	ValidateAssistantPlan(ctx context.Context, in *ValidateAssistantPlanRequest, opts ...grpc.CallOption) (*ValidateAssistantPlanResponse, error)
 	ApplyAssistantPlan(ctx context.Context, in *ApplyAssistantPlanRequest, opts ...grpc.CallOption) (*ApplyAssistantPlanResponse, error)
+	RejectAssistantPlan(ctx context.Context, in *RejectAssistantPlanRequest, opts ...grpc.CallOption) (*RejectAssistantPlanResponse, error)
 	UpdateAssistantOwnerInstructions(ctx context.Context, in *UpdateAssistantOwnerInstructionsRequest, opts ...grpc.CallOption) (*UpdateAssistantOwnerInstructionsResponse, error)
 	RecoverSystemAssistant(ctx context.Context, in *RecoverSystemAssistantRequest, opts ...grpc.CallOption) (*RecoverSystemAssistantResponse, error)
 }
@@ -3559,6 +3567,16 @@ func (c *systemAssistantServiceClient) CreateAssistantConversation(ctx context.C
 	return out, nil
 }
 
+func (c *systemAssistantServiceClient) UpdateAssistantConversationTitle(ctx context.Context, in *UpdateAssistantConversationTitleRequest, opts ...grpc.CallOption) (*UpdateAssistantConversationTitleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateAssistantConversationTitleResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *systemAssistantServiceClient) AddAssistantTurn(ctx context.Context, in *AddAssistantTurnRequest, opts ...grpc.CallOption) (*AddAssistantTurnResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AddAssistantTurnResponse)
@@ -3569,10 +3587,40 @@ func (c *systemAssistantServiceClient) AddAssistantTurn(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *systemAssistantServiceClient) UpdateAssistantPlanDraft(ctx context.Context, in *UpdateAssistantPlanDraftRequest, opts ...grpc.CallOption) (*UpdateAssistantPlanDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateAssistantPlanDraftResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) ValidateAssistantPlan(ctx context.Context, in *ValidateAssistantPlanRequest, opts ...grpc.CallOption) (*ValidateAssistantPlanResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateAssistantPlanResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_ValidateAssistantPlan_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *systemAssistantServiceClient) ApplyAssistantPlan(ctx context.Context, in *ApplyAssistantPlanRequest, opts ...grpc.CallOption) (*ApplyAssistantPlanResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ApplyAssistantPlanResponse)
 	err := c.cc.Invoke(ctx, SystemAssistantService_ApplyAssistantPlan_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) RejectAssistantPlan(ctx context.Context, in *RejectAssistantPlanRequest, opts ...grpc.CallOption) (*RejectAssistantPlanResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RejectAssistantPlanResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_RejectAssistantPlan_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3606,8 +3654,12 @@ type SystemAssistantServiceServer interface {
 	GetSystemAssistant(context.Context, *GetSystemAssistantRequest) (*GetSystemAssistantResponse, error)
 	ListAssistantConversations(context.Context, *ListAssistantConversationsRequest) (*ListAssistantConversationsResponse, error)
 	CreateAssistantConversation(context.Context, *CreateAssistantConversationRequest) (*CreateAssistantConversationResponse, error)
+	UpdateAssistantConversationTitle(context.Context, *UpdateAssistantConversationTitleRequest) (*UpdateAssistantConversationTitleResponse, error)
 	AddAssistantTurn(context.Context, *AddAssistantTurnRequest) (*AddAssistantTurnResponse, error)
+	UpdateAssistantPlanDraft(context.Context, *UpdateAssistantPlanDraftRequest) (*UpdateAssistantPlanDraftResponse, error)
+	ValidateAssistantPlan(context.Context, *ValidateAssistantPlanRequest) (*ValidateAssistantPlanResponse, error)
 	ApplyAssistantPlan(context.Context, *ApplyAssistantPlanRequest) (*ApplyAssistantPlanResponse, error)
+	RejectAssistantPlan(context.Context, *RejectAssistantPlanRequest) (*RejectAssistantPlanResponse, error)
 	UpdateAssistantOwnerInstructions(context.Context, *UpdateAssistantOwnerInstructionsRequest) (*UpdateAssistantOwnerInstructionsResponse, error)
 	RecoverSystemAssistant(context.Context, *RecoverSystemAssistantRequest) (*RecoverSystemAssistantResponse, error)
 	mustEmbedUnimplementedSystemAssistantServiceServer()
@@ -3629,11 +3681,23 @@ func (UnimplementedSystemAssistantServiceServer) ListAssistantConversations(cont
 func (UnimplementedSystemAssistantServiceServer) CreateAssistantConversation(context.Context, *CreateAssistantConversationRequest) (*CreateAssistantConversationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateAssistantConversation not implemented")
 }
+func (UnimplementedSystemAssistantServiceServer) UpdateAssistantConversationTitle(context.Context, *UpdateAssistantConversationTitleRequest) (*UpdateAssistantConversationTitleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateAssistantConversationTitle not implemented")
+}
 func (UnimplementedSystemAssistantServiceServer) AddAssistantTurn(context.Context, *AddAssistantTurnRequest) (*AddAssistantTurnResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddAssistantTurn not implemented")
 }
+func (UnimplementedSystemAssistantServiceServer) UpdateAssistantPlanDraft(context.Context, *UpdateAssistantPlanDraftRequest) (*UpdateAssistantPlanDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateAssistantPlanDraft not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) ValidateAssistantPlan(context.Context, *ValidateAssistantPlanRequest) (*ValidateAssistantPlanResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateAssistantPlan not implemented")
+}
 func (UnimplementedSystemAssistantServiceServer) ApplyAssistantPlan(context.Context, *ApplyAssistantPlanRequest) (*ApplyAssistantPlanResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ApplyAssistantPlan not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) RejectAssistantPlan(context.Context, *RejectAssistantPlanRequest) (*RejectAssistantPlanResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RejectAssistantPlan not implemented")
 }
 func (UnimplementedSystemAssistantServiceServer) UpdateAssistantOwnerInstructions(context.Context, *UpdateAssistantOwnerInstructionsRequest) (*UpdateAssistantOwnerInstructionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateAssistantOwnerInstructions not implemented")
@@ -3717,6 +3781,24 @@ func _SystemAssistantService_CreateAssistantConversation_Handler(srv interface{}
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SystemAssistantService_UpdateAssistantConversationTitle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateAssistantConversationTitleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).UpdateAssistantConversationTitle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).UpdateAssistantConversationTitle(ctx, req.(*UpdateAssistantConversationTitleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SystemAssistantService_AddAssistantTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddAssistantTurnRequest)
 	if err := dec(in); err != nil {
@@ -3735,6 +3817,42 @@ func _SystemAssistantService_AddAssistantTurn_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SystemAssistantService_UpdateAssistantPlanDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateAssistantPlanDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).UpdateAssistantPlanDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).UpdateAssistantPlanDraft(ctx, req.(*UpdateAssistantPlanDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_ValidateAssistantPlan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateAssistantPlanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).ValidateAssistantPlan(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_ValidateAssistantPlan_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).ValidateAssistantPlan(ctx, req.(*ValidateAssistantPlanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SystemAssistantService_ApplyAssistantPlan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ApplyAssistantPlanRequest)
 	if err := dec(in); err != nil {
@@ -3749,6 +3867,24 @@ func _SystemAssistantService_ApplyAssistantPlan_Handler(srv interface{}, ctx con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SystemAssistantServiceServer).ApplyAssistantPlan(ctx, req.(*ApplyAssistantPlanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_RejectAssistantPlan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RejectAssistantPlanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).RejectAssistantPlan(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_RejectAssistantPlan_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).RejectAssistantPlan(ctx, req.(*RejectAssistantPlanRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3809,12 +3945,28 @@ var SystemAssistantService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _SystemAssistantService_CreateAssistantConversation_Handler,
 		},
 		{
+			MethodName: "UpdateAssistantConversationTitle",
+			Handler:    _SystemAssistantService_UpdateAssistantConversationTitle_Handler,
+		},
+		{
 			MethodName: "AddAssistantTurn",
 			Handler:    _SystemAssistantService_AddAssistantTurn_Handler,
 		},
 		{
+			MethodName: "UpdateAssistantPlanDraft",
+			Handler:    _SystemAssistantService_UpdateAssistantPlanDraft_Handler,
+		},
+		{
+			MethodName: "ValidateAssistantPlan",
+			Handler:    _SystemAssistantService_ValidateAssistantPlan_Handler,
+		},
+		{
 			MethodName: "ApplyAssistantPlan",
 			Handler:    _SystemAssistantService_ApplyAssistantPlan_Handler,
+		},
+		{
+			MethodName: "RejectAssistantPlan",
+			Handler:    _SystemAssistantService_RejectAssistantPlan_Handler,
 		},
 		{
 			MethodName: "UpdateAssistantOwnerInstructions",
@@ -3837,6 +3989,9 @@ const (
 	RuntimeWorkService_CompleteExecution_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
 	RuntimeWorkService_DelegateExecution_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
 	RuntimeWorkService_ProposeAssistantPlan_FullMethodName              = "/controlplane.v1.RuntimeWorkService/ProposeAssistantPlan"
+	RuntimeWorkService_ProposeAssistantMetadata_FullMethodName          = "/controlplane.v1.RuntimeWorkService/ProposeAssistantMetadata"
+	RuntimeWorkService_ProposeRunMetadata_FullMethodName                = "/controlplane.v1.RuntimeWorkService/ProposeRunMetadata"
+	RuntimeWorkService_RecordRunToolCall_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/RecordRunToolCall"
 	RuntimeWorkService_ReconcileWarmRuntime_FullMethodName              = "/controlplane.v1.RuntimeWorkService/ReconcileWarmRuntime"
 	RuntimeWorkService_ReportWarmRuntime_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/ReportWarmRuntime"
 	RuntimeWorkService_ClaimDueSchedules_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/ClaimDueSchedules"
@@ -3860,6 +4015,9 @@ type RuntimeWorkServiceClient interface {
 	CompleteExecution(ctx context.Context, in *CompleteExecutionRequest, opts ...grpc.CallOption) (*CompleteExecutionResponse, error)
 	DelegateExecution(ctx context.Context, in *DelegateExecutionRequest, opts ...grpc.CallOption) (*DelegateExecutionResponse, error)
 	ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error)
+	ProposeAssistantMetadata(ctx context.Context, in *ProposeAssistantMetadataRequest, opts ...grpc.CallOption) (*ProposeAssistantMetadataResponse, error)
+	ProposeRunMetadata(ctx context.Context, in *ProposeRunMetadataRequest, opts ...grpc.CallOption) (*ProposeRunMetadataResponse, error)
+	RecordRunToolCall(ctx context.Context, in *RecordRunToolCallRequest, opts ...grpc.CallOption) (*RecordRunToolCallResponse, error)
 	ReconcileWarmRuntime(ctx context.Context, in *ReconcileWarmRuntimeRequest, opts ...grpc.CallOption) (*ReconcileWarmRuntimeResponse, error)
 	ReportWarmRuntime(ctx context.Context, in *ReportWarmRuntimeRequest, opts ...grpc.CallOption) (*ReportWarmRuntimeResponse, error)
 	ClaimDueSchedules(ctx context.Context, in *ClaimDueSchedulesRequest, opts ...grpc.CallOption) (*ClaimDueSchedulesResponse, error)
@@ -3944,6 +4102,36 @@ func (c *runtimeWorkServiceClient) ProposeAssistantPlan(ctx context.Context, in 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ProposeAssistantPlanResponse)
 	err := c.cc.Invoke(ctx, RuntimeWorkService_ProposeAssistantPlan_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ProposeAssistantMetadata(ctx context.Context, in *ProposeAssistantMetadataRequest, opts ...grpc.CallOption) (*ProposeAssistantMetadataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProposeAssistantMetadataResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ProposeAssistantMetadata_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ProposeRunMetadata(ctx context.Context, in *ProposeRunMetadataRequest, opts ...grpc.CallOption) (*ProposeRunMetadataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProposeRunMetadataResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ProposeRunMetadata_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) RecordRunToolCall(ctx context.Context, in *RecordRunToolCallRequest, opts ...grpc.CallOption) (*RecordRunToolCallResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordRunToolCallResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_RecordRunToolCall_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -4061,6 +4249,9 @@ type RuntimeWorkServiceServer interface {
 	CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error)
 	DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error)
 	ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error)
+	ProposeAssistantMetadata(context.Context, *ProposeAssistantMetadataRequest) (*ProposeAssistantMetadataResponse, error)
+	ProposeRunMetadata(context.Context, *ProposeRunMetadataRequest) (*ProposeRunMetadataResponse, error)
+	RecordRunToolCall(context.Context, *RecordRunToolCallRequest) (*RecordRunToolCallResponse, error)
 	ReconcileWarmRuntime(context.Context, *ReconcileWarmRuntimeRequest) (*ReconcileWarmRuntimeResponse, error)
 	ReportWarmRuntime(context.Context, *ReportWarmRuntimeRequest) (*ReportWarmRuntimeResponse, error)
 	ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error)
@@ -4101,6 +4292,15 @@ func (UnimplementedRuntimeWorkServiceServer) DelegateExecution(context.Context, 
 }
 func (UnimplementedRuntimeWorkServiceServer) ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ProposeAssistantPlan not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ProposeAssistantMetadata(context.Context, *ProposeAssistantMetadataRequest) (*ProposeAssistantMetadataResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ProposeAssistantMetadata not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ProposeRunMetadata(context.Context, *ProposeRunMetadataRequest) (*ProposeRunMetadataResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ProposeRunMetadata not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) RecordRunToolCall(context.Context, *RecordRunToolCallRequest) (*RecordRunToolCallResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordRunToolCall not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) ReconcileWarmRuntime(context.Context, *ReconcileWarmRuntimeRequest) (*ReconcileWarmRuntimeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReconcileWarmRuntime not implemented")
@@ -4275,6 +4475,60 @@ func _RuntimeWorkService_ProposeAssistantPlan_Handler(srv interface{}, ctx conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeWorkServiceServer).ProposeAssistantPlan(ctx, req.(*ProposeAssistantPlanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ProposeAssistantMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProposeAssistantMetadataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ProposeAssistantMetadata(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ProposeAssistantMetadata_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ProposeAssistantMetadata(ctx, req.(*ProposeAssistantMetadataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ProposeRunMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProposeRunMetadataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ProposeRunMetadata(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ProposeRunMetadata_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ProposeRunMetadata(ctx, req.(*ProposeRunMetadataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_RecordRunToolCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordRunToolCallRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).RecordRunToolCall(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_RecordRunToolCall_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).RecordRunToolCall(ctx, req.(*RecordRunToolCallRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4493,6 +4747,18 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ProposeAssistantPlan",
 			Handler:    _RuntimeWorkService_ProposeAssistantPlan_Handler,
+		},
+		{
+			MethodName: "ProposeAssistantMetadata",
+			Handler:    _RuntimeWorkService_ProposeAssistantMetadata_Handler,
+		},
+		{
+			MethodName: "ProposeRunMetadata",
+			Handler:    _RuntimeWorkService_ProposeRunMetadata_Handler,
+		},
+		{
+			MethodName: "RecordRunToolCall",
+			Handler:    _RuntimeWorkService_RecordRunToolCall_Handler,
 		},
 		{
 			MethodName: "ReconcileWarmRuntime",

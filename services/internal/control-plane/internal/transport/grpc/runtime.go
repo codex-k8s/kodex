@@ -168,6 +168,18 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	if boundedInput, ok := values["input"].(map[string]any); ok {
 		result.BoundedInput = structure(boundedInput)
 	}
+	if context, ok := values["assistantContext"].(map[string]any); ok {
+		result.AssistantContext = &controlplanev1.AssistantContextDescriptor{Route: mapString(context, "route"),
+			EntityKind: mapString(context, "entityKind"), EntityRef: mapString(context, "entityRef"),
+			EntityName: mapString(context, "entityName"), AllowedOperations: []controlplanev1.AssistantPlanOperation_Type{}}
+		if version := mapInt64(context, "entityVersion"); version > 0 {
+			result.AssistantContext.EntityVersion = &version
+		}
+		for _, operation := range mapStrings(context, "allowedOperations") {
+			result.AssistantContext.AllowedOperations = append(result.AssistantContext.AllowedOperations,
+				controlplanev1.AssistantPlanOperation_Type(controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+operation]))
+		}
+	}
 	return result
 }
 
@@ -275,9 +287,7 @@ func (server *Server) ProposeAssistantPlan(ctx context.Context, request *control
 		if item == nil || item.GetType() == controlplanev1.AssistantPlanOperation_TYPE_UNSPECIFIED {
 			return nil, transportError(errs.ErrInvalid)
 		}
-		operations = append(operations, entity.AssistantPlanOperation{
-			Key: item.GetRef(), Type: enumSuffix(item.GetType(), "TYPE_"), Summary: item.GetSummary(), Input: asMap(item.GetBoundedInput()),
-		})
+		operations = append(operations, assistantOperation(item))
 	}
 	payload := command.ProposeAssistantPlanInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Summary: request.GetSummary(), Operations: operations}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ProposeAssistantPlan_FullMethodName, command.ProposeAssistantPlan, request.GetMutation(), payload)
@@ -285,6 +295,59 @@ func (server *Server) ProposeAssistantPlan(ctx context.Context, request *control
 		return nil, err
 	}
 	return &controlplanev1.ProposeAssistantPlanResponse{Plan: castPlan(result.Plan), Conversation: castConversation(*result.Conversation)}, nil
+}
+
+func (server *Server) ProposeAssistantMetadata(ctx context.Context, request *controlplanev1.ProposeAssistantMetadataRequest) (*controlplanev1.ProposeAssistantMetadataResponse, error) {
+	payload := command.ProposeAssistantMetadataInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Title: request.GetTitle()}
+	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ProposeAssistantMetadata_FullMethodName, command.ProposeAssistantMetadata, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.ProposeAssistantMetadataResponse{Conversation: castConversation(*result.Conversation)}, nil
+}
+
+func (server *Server) ProposeRunMetadata(ctx context.Context, request *controlplanev1.ProposeRunMetadataRequest) (*controlplanev1.ProposeRunMetadataResponse, error) {
+	payload := command.ProposeRunMetadataInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Title: request.GetTitle(), ActivitySummary: request.GetActivitySummary()}
+	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ProposeRunMetadata_FullMethodName, command.ProposeRunMetadata, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.ProposeRunMetadataResponse{Run: castRun(*result.Run), Event: castEvent(*result.Event)}, nil
+}
+
+func (server *Server) RecordRunToolCall(ctx context.Context, request *controlplanev1.RecordRunToolCallRequest) (*controlplanev1.RecordRunToolCallResponse, error) {
+	payload := command.RunToolCallInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(),
+		CallRef: request.GetCallRef(), Tool: request.GetTool(), SafeParameters: asMap(request.GetSafeParameters()),
+		CapabilityRef: request.GetCapabilityRef(), GrantRef: request.GetGrantRef(), State: enumSuffix(request.GetState(), "RUN_TOOL_CALL_STATE_"),
+		DurationMS: request.GetDurationMs(), SafeResult: request.GetSafeResult()}
+	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_RecordRunToolCall_FullMethodName, command.RecordRunToolCall, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.RecordRunToolCallResponse{Event: castEvent(*result.Event)}, nil
+}
+
+func assistantOperations(items []*controlplanev1.AssistantPlanOperation) []entity.AssistantPlanOperation {
+	result := make([]entity.AssistantPlanOperation, 0, len(items))
+	for _, item := range items {
+		if item != nil {
+			result = append(result, assistantOperation(item))
+		}
+	}
+	return result
+}
+
+func assistantOperation(item *controlplanev1.AssistantPlanOperation) entity.AssistantPlanOperation {
+	parameters := asMap(item.GetParameters())
+	if item.GetParameters() == nil {
+		parameters = asMap(item.GetBoundedInput())
+	}
+	return entity.AssistantPlanOperation{
+		Key: item.GetRef(), Type: enumSuffix(item.GetType(), "TYPE_"), Action: enumSuffix(item.GetAction(), "ACTION_"),
+		Title: item.GetTitle(), Summary: item.GetSummary(), Parameters: parameters, Before: asMap(item.GetBefore()), After: asMap(item.GetAfter()),
+		Target:          entity.AssistantPlanTarget{Kind: item.GetTargetKind(), Ref: item.GetTargetRef(), Name: item.GetTargetName(), Version: item.ExpectedVersion},
+		ExpectedVersion: item.ExpectedVersion, Selected: item.GetSelected(),
+	}
 }
 
 func (server *Server) ReconcileWarmRuntime(ctx context.Context, request *controlplanev1.ReconcileWarmRuntimeRequest) (*controlplanev1.ReconcileWarmRuntimeResponse, error) {

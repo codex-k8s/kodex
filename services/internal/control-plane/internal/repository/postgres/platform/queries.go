@@ -650,7 +650,7 @@ func scanRun(row rowScanner, actorScoped bool) (entity.Run, error) {
 	var item entity.Run
 	var input, usage []byte
 	var canCancel, canLaunch bool
-	destinations := []any{&item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputArtifactRefs, &item.ArtifactRefs, &item.GateRefs, &usage, &item.CreatedAt, &item.StartedAt, &item.FinishedAt}
+	destinations := []any{&item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.TitleSource, &item.ActivitySummary, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputArtifactRefs, &item.ArtifactRefs, &item.GateRefs, &usage, &item.CreatedAt, &item.StartedAt, &item.FinishedAt}
 	if actorScoped {
 		destinations = append(destinations, &canCancel, &canLaunch)
 	} else {
@@ -967,7 +967,7 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 
 func scanRunNode(row rowScanner) (entity.RunNode, error) {
 	var node entity.RunNode
-	if err := row.Scan(&node.Ref, &node.RunRef, &node.ParentNodeRef, &node.Type, &node.State, &node.DisplayName, &node.Role, &node.AgentRef, &node.TurnRef, &node.Attempt, &node.InputSummary, &node.ProgressSummary, &node.IntegrationNames, &node.CallbackSummary, &node.SafeErrorCode, &node.SafeErrorMessage, &node.NextActions, &node.CreatedAt, &node.StartedAt, &node.FinishedAt, &node.ArtifactRefs, &node.ChildRunRefs); err != nil {
+	if err := row.Scan(&node.Ref, &node.RunRef, &node.ParentNodeRef, &node.Type, &node.State, &node.DisplayName, &node.Role, &node.AgentRef, &node.TurnRef, &node.Attempt, &node.InputSummary, &node.ProgressSummary, &node.IntegrationNames, &node.CallbackSummary, &node.SafeErrorCode, &node.SafeErrorMessage, &node.NextActions, &node.MaterializationState, &node.CreatedAt, &node.StartedAt, &node.FinishedAt, &node.ArtifactRefs, &node.ChildRunRefs); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.RunNode{}, errs.ErrNotFound
 		}
@@ -1009,8 +1009,8 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 	var result []entity.RunEvent
 	for rows.Next() {
 		var e entity.RunEvent
-		var delta []byte
-		if err := rows.Scan(&e.Ref, &e.RunRef, &e.Sequence, &e.Type, &e.NodeRef, &e.EdgeRef, &e.GateRef, &e.ArtifactRef, &e.Summary, &e.Progress, &e.RunState, &e.NodeState, &delta, &e.OccurredAt); err != nil {
+		var delta, toolCall []byte
+		if err := rows.Scan(&e.Ref, &e.RunRef, &e.Sequence, &e.Type, &e.NodeRef, &e.EdgeRef, &e.GateRef, &e.ArtifactRef, &e.Summary, &e.Progress, &e.RunState, &e.NodeState, &delta, &e.Actor.Kind, &e.Actor.Ref, &e.Actor.Name, &e.MessageKind, &toolCall, &e.OccurredAt); err != nil {
 			return nil, 0, false, errs.ErrUnavailable
 		}
 		if err := json.Unmarshal(delta, &e.Delta); err != nil || e.Delta.Run == nil {
@@ -1018,6 +1018,9 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 		}
 		if e.Delta.Incident != nil {
 			e.IncidentRef = e.Delta.Incident.Ref
+		}
+		if len(toolCall) != 0 && json.Unmarshal(toolCall, &e.ToolCall) != nil {
+			return nil, 0, false, errs.ErrUnavailable
 		}
 		applyEventActionPermissions(&e, permissions)
 		e.GraphRevision = e.Delta.Run.GraphRevision
@@ -1432,7 +1435,10 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 	var result []entity.AssistantConversation
 	for rows.Next() {
 		var item entity.AssistantConversation
-		if err := rows.Scan(&item.Ref, &item.Title, &item.ProjectRef, &item.SessionRef, &item.State, &item.Version, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(&item.Ref, &item.Title, &item.TitleSource, &item.TitleRevision, &item.ProjectRef,
+			&item.SessionRef, &item.State, &item.Version, &item.Context.Route, &item.Context.EntityKind,
+			&item.Context.EntityRef, &item.Context.EntityName, &item.Context.EntityVersion,
+			&item.Context.AllowedOperations, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
 		if err := repository.attachConversation(ctx, scope, &item); err != nil {
@@ -1457,7 +1463,10 @@ func (repository *Repository) attachConversation(ctx context.Context, scope scop
 	}
 	var raw []byte
 	var plan entity.AssistantPlan
-	err = repository.pool.QueryRow(ctx, queryQueriesAttachconversationSelectAssistantPlansOrganizationIdRef, scope.organizationID, item.Ref).Scan(&plan.Ref, &plan.Summary, &plan.State, &plan.Version, &raw, &plan.CreatedAt, &plan.AppliedAt)
+	err = repository.pool.QueryRow(ctx, queryQueriesAttachconversationSelectAssistantPlansOrganizationIdRef, scope.organizationID, item.Ref).Scan(
+		&plan.Ref, &plan.Summary, &plan.State, &plan.Version, &plan.Revision, &plan.ValidatedRevision,
+		&plan.ContentDigest, &plan.ValidationProblems, &raw, &plan.CreatedAt, &plan.ValidatedAt, &plan.AppliedAt,
+	)
 	if err == nil {
 		_ = json.Unmarshal(raw, &plan.Operations)
 		item.LatestPlan = &plan

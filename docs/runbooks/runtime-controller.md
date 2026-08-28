@@ -44,6 +44,19 @@ limits и observed `READY`. Idle Pod не имеет active Turn. При restart
 revision change controller заменяет materialization; readiness помощника не
 может быть положительной до фактического callback/provider warm path.
 
+Assistant runtime получает contextual descriptor и только закрытые tools,
+соответствующие server-owned allowed operations. `propose_assistant_metadata`
+может предложить bounded title, а `propose_configuration_plan` передаёт только
+explicit operations с target/parameters/before/after. Ни один из этих tools не
+применяет план и не выдаёт runtime новые полномочия.
+
+Обычный и assistant runtime могут вызвать `propose_run_metadata`. После каждого
+terminal MCP call controller отправляет одну bounded проекцию через
+`RecordRunToolCall`: tool, safe parameters, exact capability/grant, outcome,
+duration и safe result. Ошибка проекции считается ошибкой рабочего path и может
+быть безопасно повторена по тому же idempotency key; raw arguments/result в
+control-plane не отправляются.
+
 ## Probes
 
 - `/healthz` — controller process;
@@ -72,3 +85,8 @@ GOWORK=off go test ./...
 cd ../../..
 make test-web-only-release
 ```
+
+При диагностике tool-call projection дополнительно сверить соответствие tool и
+capability, наличие grant в immutable RuntimeRevision и отсутствие ключей
+`secret`, `token`, `password`, `credential`, `payload` или `raw` в safe
+parameters.

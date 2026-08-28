@@ -793,6 +793,8 @@ export type Run = {
     retryOfRunRef?: OpaqueRef;
     target: RunTarget;
     title: string;
+    titleSource: 'SERVER_DEFAULT' | 'AGENT_PROPOSED' | 'USER_EDITED';
+    activitySummary: string;
     inputSummary?: string;
     state: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
     source: 'CONTROL_CENTER' | 'SYSTEM_ASSISTANT' | 'SCHEDULE' | 'INTEGRATION' | 'AGENT_DELEGATION' | 'MATTERMOST';
@@ -820,7 +822,8 @@ export type RunNode = {
     runRef: OpaqueRef;
     parentNodeRef?: OpaqueRef;
     type: 'ROOT_PROCESS' | 'AGENT_EXECUTION' | 'HUMAN_GATE' | 'EXTERNAL_ACTION';
-    state: 'QUEUED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
+    state: 'PLANNED' | 'QUEUED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
+    planned?: boolean;
     displayName: string;
     role?: string;
     agentRef?: OpaqueRef;
@@ -870,7 +873,7 @@ export type RunEvent = {
     ref: OpaqueRef;
     runRef: OpaqueRef;
     sequence: number;
-    type: 'RUN_CREATED' | 'RUN_STATE_CHANGED' | 'NODE_ADDED' | 'NODE_STATE_CHANGED' | 'EDGE_ADDED' | 'TURN_QUEUED' | 'TURN_STARTED' | 'TURN_PROGRESS' | 'TURN_COMPLETED' | 'DELEGATION_CREATED' | 'CALLBACK_DELIVERED' | 'OWNER_GATE_OPENED' | 'OWNER_GATE_RESOLVED' | 'ARTIFACT_AVAILABLE' | 'INCIDENT_LINKED';
+    type: 'RUN_CREATED' | 'RUN_STATE_CHANGED' | 'RUN_METADATA_UPDATED' | 'NODE_ADDED' | 'NODE_STATE_CHANGED' | 'EDGE_ADDED' | 'TURN_QUEUED' | 'TURN_STARTED' | 'TURN_PROGRESS' | 'TURN_COMPLETED' | 'DELEGATION_CREATED' | 'CALLBACK_DELIVERED' | 'OWNER_GATE_OPENED' | 'OWNER_GATE_RESOLVED' | 'ARTIFACT_AVAILABLE' | 'INCIDENT_LINKED' | 'TOOL_CALL_RECORDED' | 'PLAN_UPDATED';
     nodeRef?: OpaqueRef;
     edgeRef?: OpaqueRef;
     gateRef?: OpaqueRef;
@@ -878,7 +881,10 @@ export type RunEvent = {
     summary: string;
     progress?: string;
     runState?: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
-    nodeState?: 'QUEUED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
+    nodeState?: 'PLANNED' | 'QUEUED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
+    actor?: RunEventActor;
+    messageKind?: 'STATE' | 'USER_MESSAGE' | 'ASSISTANT_MESSAGE' | 'INTERMEDIATE_MESSAGE' | 'FINAL_MESSAGE' | 'TOOL_CALL' | 'PLAN_UPDATE' | 'ARTIFACT' | 'INCIDENT' | 'OWNER_GATE';
+    toolCall?: RunToolCall;
     occurredAt: Timestamp;
     graphRevision: number;
     run: RunDelta;
@@ -887,6 +893,26 @@ export type RunEvent = {
     gate?: OwnerGate;
     artifact?: Artifact;
     incident?: Incident;
+};
+
+export type RunEventActor = {
+    kind: 'USER' | 'AGENT' | 'SYSTEM_ASSISTANT' | 'PLATFORM' | 'INTEGRATION';
+    ref: string;
+    name: string;
+};
+
+export type RunToolCall = {
+    ref: OpaqueRef;
+    tool: string;
+    safeParameters: {
+        [key: string]: unknown;
+    };
+    capabilityRef?: string;
+    grantRef?: OpaqueRef;
+    state: 'SUCCEEDED' | 'FAILED';
+    durationMs: number;
+    safeResult: string;
+    auditRef: OpaqueRef;
 };
 
 export type RunGraph = {
@@ -1145,21 +1171,51 @@ export type IntegrationGrantInput = {
 
 export type AssistantPlanOperation = {
     ref: OpaqueRef;
-    type: 'CREATE_PROJECT' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION';
+    type: 'CREATE_PROJECT' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW';
+    action: 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'EXECUTE';
     title: string;
     summary: string;
+    target: AssistantPlanTarget;
+    expectedVersion?: number;
+    parameters: {
+        [key: string]: unknown;
+    };
+    before: {
+        [key: string]: unknown;
+    };
+    after: {
+        [key: string]: unknown;
+    };
+    selected: boolean;
     permitted: boolean;
     unavailableReason?: string;
+    validationProblems: Array<string>;
+};
+
+export type AssistantPlanOperationInput = AssistantPlanOperation;
+
+export type AssistantPlanTarget = {
+    kind: string;
+    ref?: OpaqueRef;
+    name: string;
+    version?: number;
 };
 
 export type AssistantPlan = {
     ref: OpaqueRef;
     version: number;
+    revision: number;
+    validatedRevision?: number;
+    state: 'DRAFT' | 'VALID' | 'INVALID' | 'STALE' | 'APPLIED' | 'REJECTED';
     conversationRef: OpaqueRef;
     projectRef?: OpaqueRef;
     operations: Array<AssistantPlanOperation>;
     auditSummary: string;
     applied: boolean;
+    contentDigest: string;
+    validationProblems: Array<string>;
+    validatedAt?: Timestamp;
+    appliedAt?: Timestamp;
     nextActions: Array<NextAction>;
 };
 
@@ -1177,15 +1233,56 @@ export type AssistantConversation = {
     ref: OpaqueRef;
     version: number;
     title: string;
+    titleSource: 'SERVER_DEFAULT' | 'AGENT_PROPOSED' | 'USER_EDITED';
+    titleRevision: number;
+    context: AssistantContextDescriptor;
     projectRef?: OpaqueRef;
     turns: Array<AssistantTurn>;
     updatedAt: Timestamp;
 };
 
+export type AssistantContextDescriptor = {
+    route: string;
+    entityKind: string;
+    entityRef: string;
+    entityName: string;
+    entityVersion?: number;
+    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW'>;
+};
+
 export type AssistantPlanReceipt = {
-    plan: AssistantPlan;
-    conversation: AssistantConversation;
+    ref: OpaqueRef;
+    planRef: OpaqueRef;
+    planRevision: number;
+    outcome: 'APPLIED' | 'CONFLICT' | 'REJECTED';
+    operationReceipts: Array<{
+        operationRef: OpaqueRef;
+        resourceRef: OpaqueRef;
+        outcome: 'APPLIED';
+        auditRef: OpaqueRef;
+    }>;
+    conflicts: Array<{
+        operationRef: OpaqueRef;
+        targetRef: string;
+        field: string;
+        expected: unknown;
+        actual: unknown;
+    }>;
+    auditRefs: Array<OpaqueRef>;
     createdResourceRefs: Array<OpaqueRef>;
+    createdAt: Timestamp;
+};
+
+export type AssistantPlanApplicationResponse = {
+    conversation: AssistantConversation;
+    plan: AssistantPlan;
+    createdResourceRefs: Array<OpaqueRef>;
+    receipt: AssistantPlanReceipt;
+};
+
+export type AssistantPlanDecisionResponse = {
+    plan: AssistantPlan;
+    receipt: AssistantPlanReceipt;
 };
 
 export type AuditEvent = {
@@ -3958,8 +4055,8 @@ export type ListAssistantConversationsResponse = ListAssistantConversationsRespo
 
 export type CreateAssistantConversationData = {
     body: {
-        title: string;
         projectRef?: OpaqueRef;
+        context?: AssistantContextDescriptor;
     };
     headers: {
         'Idempotency-Key': string;
@@ -3987,6 +4084,40 @@ export type CreateAssistantConversationResponses = {
 };
 
 export type CreateAssistantConversationResponse = CreateAssistantConversationResponses[keyof CreateAssistantConversationResponses];
+
+export type UpdateAssistantConversationTitleData = {
+    body: {
+        title: string;
+    };
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        conversationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/assistant-conversations/{conversationRef}/title';
+};
+
+export type UpdateAssistantConversationTitleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UpdateAssistantConversationTitleError = UpdateAssistantConversationTitleErrors[keyof UpdateAssistantConversationTitleErrors];
+
+export type UpdateAssistantConversationTitleResponses = {
+    /**
+     * Авторитетный title диалога обновлён владельцем
+     */
+    200: AssistantConversation;
+};
+
+export type UpdateAssistantConversationTitleResponse = UpdateAssistantConversationTitleResponses[keyof UpdateAssistantConversationTitleResponses];
 
 export type AddAssistantTurnData = {
     body: {
@@ -4023,7 +4154,9 @@ export type AddAssistantTurnResponses = {
 export type AddAssistantTurnResponse = AddAssistantTurnResponses[keyof AddAssistantTurnResponses];
 
 export type ApplyAssistantPlanData = {
-    body?: never;
+    body: {
+        revision: number;
+    };
     headers: {
         'If-Match': string;
         'Idempotency-Key': string;
@@ -4049,10 +4182,113 @@ export type ApplyAssistantPlanResponses = {
     /**
      * Typed operations применены в пределах прав пользователя
      */
-    200: AssistantPlanReceipt;
+    200: AssistantPlanApplicationResponse;
 };
 
 export type ApplyAssistantPlanResponse = ApplyAssistantPlanResponses[keyof ApplyAssistantPlanResponses];
+
+export type UpdateAssistantPlanDraftData = {
+    body: {
+        summary: string;
+        operations: Array<AssistantPlanOperationInput>;
+    };
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        planRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/assistant-plans/{planRef}/draft';
+};
+
+export type UpdateAssistantPlanDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UpdateAssistantPlanDraftError = UpdateAssistantPlanDraftErrors[keyof UpdateAssistantPlanDraftErrors];
+
+export type UpdateAssistantPlanDraftResponses = {
+    /**
+     * Создана новая immutable revision draft
+     */
+    200: AssistantPlan;
+};
+
+export type UpdateAssistantPlanDraftResponse = UpdateAssistantPlanDraftResponses[keyof UpdateAssistantPlanDraftResponses];
+
+export type ValidateAssistantPlanData = {
+    body: {
+        revision: number;
+    };
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        planRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/assistant-plans/{planRef}/validation';
+};
+
+export type ValidateAssistantPlanErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateAssistantPlanError = ValidateAssistantPlanErrors[keyof ValidateAssistantPlanErrors];
+
+export type ValidateAssistantPlanResponses = {
+    /**
+     * Validation readback для точной revision
+     */
+    200: AssistantPlan;
+};
+
+export type ValidateAssistantPlanResponse = ValidateAssistantPlanResponses[keyof ValidateAssistantPlanResponses];
+
+export type RejectAssistantPlanData = {
+    body: {
+        revision: number;
+    };
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        planRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/assistant-plans/{planRef}/rejection';
+};
+
+export type RejectAssistantPlanErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RejectAssistantPlanError = RejectAssistantPlanErrors[keyof RejectAssistantPlanErrors];
+
+export type RejectAssistantPlanResponses = {
+    /**
+     * Draft отклонён с immutable receipt
+     */
+    200: AssistantPlanDecisionResponse;
+};
+
+export type RejectAssistantPlanResponse = RejectAssistantPlanResponses[keyof RejectAssistantPlanResponses];
 
 export type GetAdministrationData = {
     body?: never;

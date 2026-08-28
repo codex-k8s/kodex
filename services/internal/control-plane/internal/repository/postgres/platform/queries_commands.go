@@ -157,6 +157,10 @@ var (
 	queryCommandsInsertagentnodeInsertRunNodesRefRootRunIdParentNodeId string
 	//go:embed sql/commands_insertagentnode_insert_run_edges_ref_root_run_id_target_node_id.sql
 	queryCommandsInsertagentnodeInsertRunEdgesRefRootRunIdTargetNodeId string
+	//go:embed sql/commands_launchrun_insert_planned_workflow_node.sql
+	queryCommandsLaunchrunInsertPlannedWorkflowNode string
+	//go:embed sql/commands_launchrun_insert_planned_workflow_edge.sql
+	queryCommandsLaunchrunInsertPlannedWorkflowEdge string
 	//go:embed sql/commands_emitplatformevent_update_installation_platform_sequence.sql
 	queryCommandsEmitplatformeventUpdateInstallationPlatformSequence string
 	//go:embed sql/commands_emitplatformevent_insert_outbox_events_event_id_ordering_key_payload.sql

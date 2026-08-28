@@ -1438,13 +1438,34 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [title]
               properties:
-                title: { type: string, minLength: 1, maxLength: 160 }
                 projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+                context: { $ref: '#/components/schemas/AssistantContextDescriptor' }
       responses:
         '201':
           description: Диалог создан
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssistantConversation' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/assistant-conversations/{conversationRef}/title:
+    put:
+      tags: [Assistant]
+      operationId: updateAssistantConversationTitle
+      parameters: [{ $ref: '#/components/parameters/ConversationRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [title]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 160 }
+      responses:
+        '200':
+          description: Авторитетный title диалога обновлён владельцем
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AssistantConversation' }
@@ -1477,12 +1498,86 @@ paths:
       tags: [Assistant]
       operationId: applyAssistantPlan
       parameters: [{ $ref: '#/components/parameters/PlanRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision]
+              properties: { revision: { type: integer, format: int64, minimum: 1 } }
       responses:
         '200':
           description: Typed operations применены в пределах прав пользователя
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/AssistantPlanReceipt' }
+              schema: { $ref: '#/components/schemas/AssistantPlanApplicationResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/assistant-plans/{planRef}/draft:
+    put:
+      tags: [Assistant]
+      operationId: updateAssistantPlanDraft
+      parameters: [{ $ref: '#/components/parameters/PlanRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [summary, operations]
+              properties:
+                summary: { type: string, minLength: 1, maxLength: 2000 }
+                operations: { type: array, minItems: 1, maxItems: 32, items: { $ref: '#/components/schemas/AssistantPlanOperationInput' } }
+      responses:
+        '200':
+          description: Создана новая immutable revision draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssistantPlan' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/assistant-plans/{planRef}/validation:
+    post:
+      tags: [Assistant]
+      operationId: validateAssistantPlan
+      parameters: [{ $ref: '#/components/parameters/PlanRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision]
+              properties: { revision: { type: integer, format: int64, minimum: 1 } }
+      responses:
+        '200':
+          description: Validation readback для точной revision
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssistantPlan' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/assistant-plans/{planRef}/rejection:
+    post:
+      tags: [Assistant]
+      operationId: rejectAssistantPlan
+      parameters: [{ $ref: '#/components/parameters/PlanRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision]
+              properties: { revision: { type: integer, format: int64, minimum: 1 } }
+      responses:
+        '200':
+          description: Draft отклонён с immutable receipt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssistantPlanDecisionResponse' }
         default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/administration:
@@ -2907,7 +3002,7 @@ components:
     Run:
       type: object
       additionalProperties: false
-      required: [ref, version, projectRef, sessionRef, rootRunRef, target, title, state, source, initiator, attempt, graphRevision, lastEventSequence, usage, inputArtifactRefs, artifactRefs, gateRefs, createdAt, nextActions]
+      required: [ref, version, projectRef, sessionRef, rootRunRef, target, title, titleSource, activitySummary, state, source, initiator, attempt, graphRevision, lastEventSequence, usage, inputArtifactRefs, artifactRefs, gateRefs, createdAt, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -2918,6 +3013,8 @@ components:
         retryOfRunRef: { $ref: '#/components/schemas/OpaqueRef' }
         target: { $ref: '#/components/schemas/RunTarget' }
         title: { type: string, maxLength: 240 }
+        titleSource: { type: string, enum: [SERVER_DEFAULT, AGENT_PROPOSED, USER_EDITED] }
+        activitySummary: { type: string, maxLength: 500 }
         inputSummary: { type: string, maxLength: 2000 }
         state: { type: string, enum: [QUEUED, RUNNING, WAITING_HUMAN, CANCELLING, SUCCEEDED, FAILED, CANCELLED] }
         source: { type: string, enum: [CONTROL_CENTER, SYSTEM_ASSISTANT, SCHEDULE, INTEGRATION, AGENT_DELEGATION, MATTERMOST] }
@@ -2947,7 +3044,8 @@ components:
         runRef: { $ref: '#/components/schemas/OpaqueRef' }
         parentNodeRef: { $ref: '#/components/schemas/OpaqueRef' }
         type: { type: string, enum: [ROOT_PROCESS, AGENT_EXECUTION, HUMAN_GATE, EXTERNAL_ACTION] }
-        state: { type: string, enum: [QUEUED, RUNNING, WAITING, SUCCEEDED, FAILED, CANCELLED, SKIPPED] }
+        state: { type: string, enum: [PLANNED, QUEUED, RUNNING, WAITING, SUCCEEDED, FAILED, CANCELLED, SKIPPED] }
+        planned: { type: boolean }
         displayName: { type: string, maxLength: 160 }
         role: { type: string, maxLength: 240 }
         agentRef: { $ref: '#/components/schemas/OpaqueRef' }
@@ -3003,7 +3101,7 @@ components:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         runRef: { $ref: '#/components/schemas/OpaqueRef' }
         sequence: { type: integer, format: int64, minimum: 1 }
-        type: { type: string, enum: [RUN_CREATED, RUN_STATE_CHANGED, NODE_ADDED, NODE_STATE_CHANGED, EDGE_ADDED, TURN_QUEUED, TURN_STARTED, TURN_PROGRESS, TURN_COMPLETED, DELEGATION_CREATED, CALLBACK_DELIVERED, OWNER_GATE_OPENED, OWNER_GATE_RESOLVED, ARTIFACT_AVAILABLE, INCIDENT_LINKED] }
+        type: { type: string, enum: [RUN_CREATED, RUN_STATE_CHANGED, RUN_METADATA_UPDATED, NODE_ADDED, NODE_STATE_CHANGED, EDGE_ADDED, TURN_QUEUED, TURN_STARTED, TURN_PROGRESS, TURN_COMPLETED, DELEGATION_CREATED, CALLBACK_DELIVERED, OWNER_GATE_OPENED, OWNER_GATE_RESOLVED, ARTIFACT_AVAILABLE, INCIDENT_LINKED, TOOL_CALL_RECORDED, PLAN_UPDATED] }
         nodeRef: { $ref: '#/components/schemas/OpaqueRef' }
         edgeRef: { $ref: '#/components/schemas/OpaqueRef' }
         gateRef: { $ref: '#/components/schemas/OpaqueRef' }
@@ -3011,7 +3109,10 @@ components:
         summary: { type: string, maxLength: 500 }
         progress: { type: string, maxLength: 1000 }
         runState: { type: string, enum: [QUEUED, RUNNING, WAITING_HUMAN, CANCELLING, SUCCEEDED, FAILED, CANCELLED] }
-        nodeState: { type: string, enum: [QUEUED, RUNNING, WAITING, SUCCEEDED, FAILED, CANCELLED, SKIPPED] }
+        nodeState: { type: string, enum: [PLANNED, QUEUED, RUNNING, WAITING, SUCCEEDED, FAILED, CANCELLED, SKIPPED] }
+        actor: { $ref: '#/components/schemas/RunEventActor' }
+        messageKind: { type: string, enum: [STATE, USER_MESSAGE, ASSISTANT_MESSAGE, INTERMEDIATE_MESSAGE, FINAL_MESSAGE, TOOL_CALL, PLAN_UPDATE, ARTIFACT, INCIDENT, OWNER_GATE] }
+        toolCall: { $ref: '#/components/schemas/RunToolCall' }
         occurredAt: { $ref: '#/components/schemas/Timestamp' }
         graphRevision: { type: integer, format: int64, minimum: 1 }
         run: { $ref: '#/components/schemas/RunDelta' }
@@ -3020,6 +3121,28 @@ components:
         gate: { $ref: '#/components/schemas/OwnerGate' }
         artifact: { $ref: '#/components/schemas/Artifact' }
         incident: { $ref: '#/components/schemas/Incident' }
+    RunEventActor:
+      type: object
+      additionalProperties: false
+      required: [kind, ref, name]
+      properties:
+        kind: { type: string, enum: [USER, AGENT, SYSTEM_ASSISTANT, PLATFORM, INTEGRATION] }
+        ref: { type: string, maxLength: 96 }
+        name: { type: string, maxLength: 300 }
+    RunToolCall:
+      type: object
+      additionalProperties: false
+      required: [ref, tool, safeParameters, state, durationMs, safeResult, auditRef]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        tool: { type: string, minLength: 1, maxLength: 120 }
+        safeParameters: { type: object, maxProperties: 32, additionalProperties: true }
+        capabilityRef: { type: string, maxLength: 160 }
+        grantRef: { $ref: '#/components/schemas/OpaqueRef' }
+        state: { type: string, enum: [SUCCEEDED, FAILED] }
+        durationMs: { type: integer, format: int64, minimum: 0, maximum: 86400000 }
+        safeResult: { type: string, maxLength: 2000 }
+        auditRef: { $ref: '#/components/schemas/OpaqueRef' }
     RunGraph:
       type: object
       additionalProperties: false
@@ -3318,26 +3441,53 @@ components:
     AssistantPlanOperation:
       type: object
       additionalProperties: false
-      required: [ref, type, title, summary, permitted]
+      required: [ref, type, action, title, summary, target, parameters, before, after, selected, permitted, validationProblems]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
-        type: { type: string, enum: [CREATE_PROJECT, CREATE_AGENT, CREATE_WORKFLOW, CHANGE_CAPABILITY, CHANGE_INTEGRATION_GRANT, CREATE_SCHEDULE, LAUNCH_RUN, CREATE_INTEGRATION_CONNECTION, TEST_INTEGRATION_CONNECTION] }
+        type: { type: string, enum: [CREATE_PROJECT, CREATE_AGENT, CREATE_WORKFLOW, CHANGE_CAPABILITY, CHANGE_INTEGRATION_GRANT, CREATE_SCHEDULE, LAUNCH_RUN, CREATE_INTEGRATION_CONNECTION, TEST_INTEGRATION_CONNECTION, ARCHIVE_AGENT, ARCHIVE_WORKFLOW] }
+        action: { type: string, enum: [CREATE, UPDATE, ARCHIVE, EXECUTE] }
         title: { type: string, maxLength: 200 }
         summary: { type: string, maxLength: 1000 }
+        target: { $ref: '#/components/schemas/AssistantPlanTarget' }
+        expectedVersion: { type: integer, format: int64, minimum: 1 }
+        parameters: { type: object, maxProperties: 100, additionalProperties: true }
+        before: { type: object, maxProperties: 100, additionalProperties: true }
+        after: { type: object, maxProperties: 100, additionalProperties: true }
+        selected: { type: boolean }
         permitted: { type: boolean }
         unavailableReason: { type: string, maxLength: 500 }
+        validationProblems: { type: array, maxItems: 50, items: { type: string, maxLength: 500 } }
+    AssistantPlanOperationInput:
+      allOf:
+        - { $ref: '#/components/schemas/AssistantPlanOperation' }
+    AssistantPlanTarget:
+      type: object
+      additionalProperties: false
+      required: [kind, name]
+      properties:
+        kind: { type: string, minLength: 1, maxLength: 80 }
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, maxLength: 300 }
+        version: { type: integer, format: int64, minimum: 1 }
     AssistantPlan:
       type: object
       additionalProperties: false
-      required: [ref, version, conversationRef, operations, auditSummary, applied, nextActions]
+      required: [ref, version, revision, state, conversationRef, operations, auditSummary, applied, contentDigest, validationProblems, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
+        revision: { type: integer, format: int64, minimum: 1 }
+        validatedRevision: { type: integer, format: int64, minimum: 1 }
+        state: { type: string, enum: [DRAFT, VALID, INVALID, STALE, APPLIED, REJECTED] }
         conversationRef: { $ref: '#/components/schemas/OpaqueRef' }
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
         operations: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/AssistantPlanOperation' } }
         auditSummary: { type: string, maxLength: 1000 }
         applied: { type: boolean }
+        contentDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        validationProblems: { type: array, maxItems: 100, items: { type: string, maxLength: 500 } }
+        validatedAt: { $ref: '#/components/schemas/Timestamp' }
+        appliedAt: { $ref: '#/components/schemas/Timestamp' }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
     AssistantTurn:
       type: object
@@ -3354,22 +3504,84 @@ components:
     AssistantConversation:
       type: object
       additionalProperties: false
-      required: [ref, version, title, turns, updatedAt]
+      required: [ref, version, title, titleSource, titleRevision, context, turns, updatedAt]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
         title: { type: string, maxLength: 160 }
+        titleSource: { type: string, enum: [SERVER_DEFAULT, AGENT_PROPOSED, USER_EDITED] }
+        titleRevision: { type: integer, format: int64, minimum: 1 }
+        context: { $ref: '#/components/schemas/AssistantContextDescriptor' }
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
         turns: { type: array, maxItems: 1000, items: { $ref: '#/components/schemas/AssistantTurn' } }
         updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    AssistantContextDescriptor:
+      type: object
+      additionalProperties: false
+      required: [route, entityKind, entityRef, entityName, allowedOperations]
+      properties:
+        route: { type: string, maxLength: 500 }
+        entityKind: { type: string, maxLength: 80 }
+        entityRef: { type: string, maxLength: 96 }
+        entityName: { type: string, maxLength: 300 }
+        entityVersion: { type: integer, format: int64, minimum: 1 }
+        allowedOperations:
+          type: array
+          maxItems: 32
+          items: { type: string, enum: [CREATE_PROJECT, CREATE_AGENT, CREATE_WORKFLOW, CHANGE_CAPABILITY, CHANGE_INTEGRATION_GRANT, CREATE_SCHEDULE, LAUNCH_RUN, CREATE_INTEGRATION_CONNECTION, TEST_INTEGRATION_CONNECTION, ARCHIVE_AGENT, ARCHIVE_WORKFLOW] }
     AssistantPlanReceipt:
       type: object
       additionalProperties: false
-      required: [plan, conversation, createdResourceRefs]
+      required: [ref, planRef, planRevision, outcome, operationReceipts, conflicts, auditRefs, createdResourceRefs, createdAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        planRef: { $ref: '#/components/schemas/OpaqueRef' }
+        planRevision: { type: integer, format: int64, minimum: 1 }
+        outcome: { type: string, enum: [APPLIED, CONFLICT, REJECTED] }
+        operationReceipts:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            additionalProperties: false
+            required: [operationRef, resourceRef, outcome, auditRef]
+            properties:
+              operationRef: { $ref: '#/components/schemas/OpaqueRef' }
+              resourceRef: { $ref: '#/components/schemas/OpaqueRef' }
+              outcome: { type: string, enum: [APPLIED] }
+              auditRef: { $ref: '#/components/schemas/OpaqueRef' }
+        conflicts:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            additionalProperties: false
+            required: [operationRef, targetRef, field, expected, actual]
+            properties:
+              operationRef: { $ref: '#/components/schemas/OpaqueRef' }
+              targetRef: { type: string, maxLength: 96 }
+              field: { type: string, maxLength: 120 }
+              expected: {}
+              actual: {}
+        auditRefs: { type: array, maxItems: 40, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        createdResourceRefs: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    AssistantPlanApplicationResponse:
+      type: object
+      additionalProperties: false
+      required: [conversation, plan, createdResourceRefs, receipt]
+      properties:
+        conversation: { $ref: '#/components/schemas/AssistantConversation' }
+        plan: { $ref: '#/components/schemas/AssistantPlan' }
+        createdResourceRefs: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        receipt: { $ref: '#/components/schemas/AssistantPlanReceipt' }
+    AssistantPlanDecisionResponse:
+      type: object
+      additionalProperties: false
+      required: [plan, receipt]
       properties:
         plan: { $ref: '#/components/schemas/AssistantPlan' }
-        conversation: { $ref: '#/components/schemas/AssistantConversation' }
-        createdResourceRefs: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        receipt: { $ref: '#/components/schemas/AssistantPlanReceipt' }
     AuditEvent:
       type: object
       additionalProperties: false

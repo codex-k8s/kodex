@@ -115,8 +115,12 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.assistant.get":                                   controlplanev1.SystemAssistantService_GetSystemAssistant_FullMethodName,
 		"platform.assistant.conversations.list":                    controlplanev1.SystemAssistantService_ListAssistantConversations_FullMethodName,
 		"platform.assistant.conversations.create":                  controlplanev1.SystemAssistantService_CreateAssistantConversation_FullMethodName,
+		"platform.assistant.conversations.title.update":            controlplanev1.SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName,
 		"platform.assistant.turns.add":                             controlplanev1.SystemAssistantService_AddAssistantTurn_FullMethodName,
 		"platform.assistant.plans.apply":                           controlplanev1.SystemAssistantService_ApplyAssistantPlan_FullMethodName,
+		"platform.assistant.plans.draft.update":                    controlplanev1.SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName,
+		"platform.assistant.plans.validate":                        controlplanev1.SystemAssistantService_ValidateAssistantPlan_FullMethodName,
+		"platform.assistant.plans.reject":                          controlplanev1.SystemAssistantService_RejectAssistantPlan_FullMethodName,
 		"platform.assistant.owner-instructions.update":             controlplanev1.SystemAssistantService_UpdateAssistantOwnerInstructions_FullMethodName,
 		"platform.assistant.recover":                               controlplanev1.SystemAssistantService_RecoverSystemAssistant_FullMethodName,
 	}
@@ -124,17 +128,20 @@ func ControlAPIGatewayOperations() map[string]string {
 
 func RuntimeOperations() map[string]string {
 	return map[string]string{
-		"platform.runtime.execution.claim":         controlplanev1.RuntimeWorkService_ClaimExecution_FullMethodName,
-		"platform.runtime.execution.artifact.read": controlplanev1.RuntimeWorkService_ReadExecutionArtifact_FullMethodName,
-		"platform.runtime.execution.renew":         controlplanev1.RuntimeWorkService_RenewExecution_FullMethodName,
-		"platform.runtime.execution.progress":      controlplanev1.RuntimeWorkService_ReportExecutionProgress_FullMethodName,
-		"platform.runtime.execution.complete":      controlplanev1.RuntimeWorkService_CompleteExecution_FullMethodName,
-		"platform.runtime.execution.delegate":      controlplanev1.RuntimeWorkService_DelegateExecution_FullMethodName,
-		"platform.runtime.assistant.plan.propose":  controlplanev1.RuntimeWorkService_ProposeAssistantPlan_FullMethodName,
-		"platform.runtime.warm.reconcile":          controlplanev1.RuntimeWorkService_ReconcileWarmRuntime_FullMethodName,
-		"platform.runtime.warm.report":             controlplanev1.RuntimeWorkService_ReportWarmRuntime_FullMethodName,
-		"platform.runtime.integration.resolve":     controlplanev1.RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName,
-		"platform.runtime.integration.get":         controlplanev1.RuntimeWorkService_GetIntegrationInvocation_FullMethodName,
+		"platform.runtime.execution.claim":            controlplanev1.RuntimeWorkService_ClaimExecution_FullMethodName,
+		"platform.runtime.execution.artifact.read":    controlplanev1.RuntimeWorkService_ReadExecutionArtifact_FullMethodName,
+		"platform.runtime.execution.renew":            controlplanev1.RuntimeWorkService_RenewExecution_FullMethodName,
+		"platform.runtime.execution.progress":         controlplanev1.RuntimeWorkService_ReportExecutionProgress_FullMethodName,
+		"platform.runtime.execution.complete":         controlplanev1.RuntimeWorkService_CompleteExecution_FullMethodName,
+		"platform.runtime.execution.delegate":         controlplanev1.RuntimeWorkService_DelegateExecution_FullMethodName,
+		"platform.runtime.assistant.metadata.propose": controlplanev1.RuntimeWorkService_ProposeAssistantMetadata_FullMethodName,
+		"platform.runtime.assistant.plan.propose":     controlplanev1.RuntimeWorkService_ProposeAssistantPlan_FullMethodName,
+		"platform.runtime.run.metadata.propose":       controlplanev1.RuntimeWorkService_ProposeRunMetadata_FullMethodName,
+		"platform.runtime.tool-call.record":           controlplanev1.RuntimeWorkService_RecordRunToolCall_FullMethodName,
+		"platform.runtime.warm.reconcile":             controlplanev1.RuntimeWorkService_ReconcileWarmRuntime_FullMethodName,
+		"platform.runtime.warm.report":                controlplanev1.RuntimeWorkService_ReportWarmRuntime_FullMethodName,
+		"platform.runtime.integration.resolve":        controlplanev1.RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName,
+		"platform.runtime.integration.get":            controlplanev1.RuntimeWorkService_GetIntegrationInvocation_FullMethodName,
 	}
 }
 

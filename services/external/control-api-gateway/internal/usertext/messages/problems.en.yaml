@@ -188,6 +188,8 @@ NEW_ASSISTANT_CONVERSATION:
   other: New conversation
 ASSISTANT_CONVERSATION_CREATED:
   other: Assistant conversation created
+ASSISTANT_CONVERSATION_TITLE_UPDATED:
+  other: Assistant conversation title updated
 ASSISTANT_TURN_QUEUED:
   other: Assistant command queued
 ASSISTANT_TURN_ACCEPTED:
@@ -196,6 +198,18 @@ ASSISTANT_PLAN_APPLIED:
   other: Assistant plan applied
 ASSISTANT_PLAN_PROPOSED:
   other: Assistant change plan proposed
+ASSISTANT_PLAN_DRAFT_UPDATED:
+  other: Assistant plan draft updated
+ASSISTANT_PLAN_VALIDATED:
+  other: Assistant plan validated
+ASSISTANT_PLAN_REJECTED:
+  other: Assistant plan rejected
+ASSISTANT_PLAN_CONFLICT:
+  other: Assistant plan became stale because resources changed
+RUN_METADATA_UPDATED:
+  other: Run metadata updated
+RUNTIME_TOOL_CALL_RECORDED:
+  other: Runtime tool call recorded
 ASSISTANT_INSTRUCTIONS_UPDATED:
   other: Assistant instruction supplement updated
 ASSISTANT_RECOVERY_REQUESTED:

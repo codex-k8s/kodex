@@ -183,6 +183,15 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 	if revision.GetBoundedInput() != nil {
 		input.BoundedInput = revision.GetBoundedInput().AsMap()
 	}
+	if context := revision.GetAssistantContext(); context != nil {
+		input.AssistantContext = &runtimecontract.RunnerAssistantContext{Route: context.GetRoute(), EntityKind: context.GetEntityKind(),
+			EntityRef: context.GetEntityRef(), EntityName: context.GetEntityName(), EntityVersion: context.EntityVersion}
+		for _, operation := range context.GetAllowedOperations() {
+			if operation != controlplanev1.AssistantPlanOperation_TYPE_UNSPECIFIED {
+				input.AssistantContext.AllowedOperations = append(input.AssistantContext.AllowedOperations, strings.TrimPrefix(operation.String(), "TYPE_"))
+			}
+		}
+	}
 	manager.addCatalog(&input, revision)
 	binding, err := providerSecretBinding(revision)
 	if err != nil {

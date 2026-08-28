@@ -28,9 +28,19 @@ incidents, graph revision и next event sequence. RunNode представляе
 process, agent execution, Human Gate или bounded external action. RunEdge имеет
 семантику `DELEGATED_TO`, `CALLBACK_TO`, `RETRY_OF`, `CONTINUES`, `WAITING_FOR`.
 
-Tool calls остаются в timeline/detail node и не засоряют основной graph.
-Frontend получает готовые nodes/edges/state/nextActions от control-plane и не
-выводит causality или terminal state локально.
+При запуске immutable WorkflowVersion control-plane сразу добавляет в graph
+snapshot все будущие workflow nodes со state/materialization state `PLANNED` и
+server-owned dependency edges. Делегирование материализует существующий node,
+связывает child Run/Turn и переводит его в `QUEUED`, не создавая второй node или
+второе planning edge. Cancel закрывает также ещё не материализованные nodes.
+
+Tool calls остаются в timeline/detail node и не засоряют основной graph. Каждый
+terminal tool-call projection содержит только tool name, bounded safe
+parameters, capability/grant ref, state, duration, safe result и audit ref.
+Raw MCP request/response, prompt, provider payload, file body и secret material
+не входят ни в RunEvent, ни в outbox envelope. Frontend получает готовые
+nodes/edges/state/nextActions от control-plane и не выводит causality или
+terminal state локально.
 
 ## RuntimeRevision
 
@@ -99,6 +109,13 @@ Retry допустимой terminal attempt создаёт новую attempt, R
 browser current snapshot, sequence и ordered deltas; reconnect использует
 `afterSequence`, catch-up и fallback snapshot. Duplicate игнорируется, gap не
 заполняется phantom state.
+
+RunEvent имеет server-resolved actor (`USER`, `AGENT`, `SYSTEM_ASSISTANT`,
+`PLATFORM`, `INTEGRATION`) и закрытый message kind. Presentation metadata Run
+хранит server-owned title source и bounded activity summary. Runtime tool может
+предложить title/activity, но не получает право менять lifecycle или выполнять
+внешний effect. #997 фиксирует только generic typed projection; реализация
+конкретного integration effect принадлежит отдельному adapter unit.
 
 ## Retention
 

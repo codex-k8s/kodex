@@ -9,6 +9,9 @@ import type { RunEdge } from "./RunEdge";
 import type { OwnerGate } from "./OwnerGate";
 import type { Artifact } from "./Artifact";
 import type { Incident } from "./Incident";
+import type { RunEventActor } from "./RunEventActor";
+import type { RunEventMessageKind } from "./RunEventMessageKind";
+import type { RunToolCall } from "./RunToolCall";
 
 export interface RunEvent {
   ref: string;
@@ -31,4 +34,7 @@ export interface RunEvent {
   gate?: OwnerGate;
   artifact?: Artifact;
   incident?: Incident;
+  actor: RunEventActor;
+  messageKind: RunEventMessageKind;
+  toolCall?: RunToolCall;
 }

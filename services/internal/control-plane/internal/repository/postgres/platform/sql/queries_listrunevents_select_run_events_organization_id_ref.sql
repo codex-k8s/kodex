@@ -12,6 +12,11 @@ SELECT event.ref,
        COALESCE(event.run_state, ''),
        COALESCE(event.node_state, ''),
        event.safe_delta,
+       event.actor_kind,
+       event.actor_ref,
+       event.actor_name,
+       event.message_kind,
+       event.tool_call,
        event.occurred_at
 FROM control_plane.run_events event
 JOIN control_plane.runs root ON root.id = event.root_run_id

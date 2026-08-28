@@ -114,8 +114,12 @@ service SystemAssistantService {
   rpc GetSystemAssistant(GetSystemAssistantRequest) returns (GetSystemAssistantResponse);
   rpc ListAssistantConversations(ListAssistantConversationsRequest) returns (ListAssistantConversationsResponse);
   rpc CreateAssistantConversation(CreateAssistantConversationRequest) returns (CreateAssistantConversationResponse);
+  rpc UpdateAssistantConversationTitle(UpdateAssistantConversationTitleRequest) returns (UpdateAssistantConversationTitleResponse);
   rpc AddAssistantTurn(AddAssistantTurnRequest) returns (AddAssistantTurnResponse);
+  rpc UpdateAssistantPlanDraft(UpdateAssistantPlanDraftRequest) returns (UpdateAssistantPlanDraftResponse);
+  rpc ValidateAssistantPlan(ValidateAssistantPlanRequest) returns (ValidateAssistantPlanResponse);
   rpc ApplyAssistantPlan(ApplyAssistantPlanRequest) returns (ApplyAssistantPlanResponse);
+  rpc RejectAssistantPlan(RejectAssistantPlanRequest) returns (RejectAssistantPlanResponse);
   rpc UpdateAssistantOwnerInstructions(UpdateAssistantOwnerInstructionsRequest) returns (UpdateAssistantOwnerInstructionsResponse);
   rpc RecoverSystemAssistant(RecoverSystemAssistantRequest) returns (RecoverSystemAssistantResponse);
 }
@@ -128,6 +132,9 @@ service RuntimeWorkService {
   rpc CompleteExecution(CompleteExecutionRequest) returns (CompleteExecutionResponse);
   rpc DelegateExecution(DelegateExecutionRequest) returns (DelegateExecutionResponse);
   rpc ProposeAssistantPlan(ProposeAssistantPlanRequest) returns (ProposeAssistantPlanResponse);
+  rpc ProposeAssistantMetadata(ProposeAssistantMetadataRequest) returns (ProposeAssistantMetadataResponse);
+  rpc ProposeRunMetadata(ProposeRunMetadataRequest) returns (ProposeRunMetadataResponse);
+  rpc RecordRunToolCall(RecordRunToolCallRequest) returns (RecordRunToolCallResponse);
   rpc ReconcileWarmRuntime(ReconcileWarmRuntimeRequest) returns (ReconcileWarmRuntimeResponse);
   rpc ReportWarmRuntime(ReportWarmRuntimeRequest) returns (ReportWarmRuntimeResponse);
   rpc ClaimDueSchedules(ClaimDueSchedulesRequest) returns (ClaimDueSchedulesResponse);
@@ -309,6 +316,7 @@ enum RunNodeState {
   RUN_NODE_STATE_FAILED = 5;
   RUN_NODE_STATE_CANCELLED = 6;
   RUN_NODE_STATE_SKIPPED = 7;
+  RUN_NODE_STATE_PLANNED = 8;
 }
 
 enum RunEdgeType {
@@ -337,6 +345,38 @@ enum RunEventType {
   RUN_EVENT_TYPE_OWNER_GATE_RESOLVED = 13;
   RUN_EVENT_TYPE_ARTIFACT_AVAILABLE = 14;
   RUN_EVENT_TYPE_INCIDENT_LINKED = 15;
+  RUN_EVENT_TYPE_RUN_METADATA_UPDATED = 16;
+  RUN_EVENT_TYPE_TOOL_CALL_RECORDED = 17;
+  RUN_EVENT_TYPE_PLAN_UPDATED = 18;
+}
+
+enum RunEventActorKind {
+  RUN_EVENT_ACTOR_KIND_UNSPECIFIED = 0;
+  RUN_EVENT_ACTOR_KIND_USER = 1;
+  RUN_EVENT_ACTOR_KIND_AGENT = 2;
+  RUN_EVENT_ACTOR_KIND_SYSTEM_ASSISTANT = 3;
+  RUN_EVENT_ACTOR_KIND_PLATFORM = 4;
+  RUN_EVENT_ACTOR_KIND_INTEGRATION = 5;
+}
+
+enum RunEventMessageKind {
+  RUN_EVENT_MESSAGE_KIND_UNSPECIFIED = 0;
+  RUN_EVENT_MESSAGE_KIND_STATE = 1;
+  RUN_EVENT_MESSAGE_KIND_USER_MESSAGE = 2;
+  RUN_EVENT_MESSAGE_KIND_ASSISTANT_MESSAGE = 3;
+  RUN_EVENT_MESSAGE_KIND_INTERMEDIATE_MESSAGE = 4;
+  RUN_EVENT_MESSAGE_KIND_FINAL_MESSAGE = 5;
+  RUN_EVENT_MESSAGE_KIND_TOOL_CALL = 6;
+  RUN_EVENT_MESSAGE_KIND_PLAN_UPDATE = 7;
+  RUN_EVENT_MESSAGE_KIND_ARTIFACT = 8;
+  RUN_EVENT_MESSAGE_KIND_INCIDENT = 9;
+  RUN_EVENT_MESSAGE_KIND_OWNER_GATE = 10;
+}
+
+enum RunToolCallState {
+  RUN_TOOL_CALL_STATE_UNSPECIFIED = 0;
+  RUN_TOOL_CALL_STATE_SUCCEEDED = 1;
+  RUN_TOOL_CALL_STATE_FAILED = 2;
 }
 
 enum OwnerGateState {
@@ -634,6 +674,8 @@ message Run {
   repeated string artifact_refs = 28;
   // gate_refs перечисляет долговечные Human Gate корневого запуска.
   repeated string gate_refs = 29;
+  string title_source = 30;
+  string activity_summary = 31;
 }
 
 message RunNode {
@@ -659,6 +701,9 @@ message RunNode {
   google.protobuf.Timestamp started_at = 20;
   google.protobuf.Timestamp finished_at = 21;
   repeated NextAction next_actions = 22;
+  // planned=true означает, что вершина уже является частью immutable workflow
+  // snapshot, но execution lease для неё ещё не материализован.
+  bool planned = 23;
 }
 
 message RunEdge {
@@ -732,6 +777,27 @@ message RunEvent {
   // incident присутствует для безопасной диагностической проекции; secret и
   // сырой ответ внешнего provider в событие не попадают.
   Incident incident = 20;
+  RunEventActor actor = 21;
+  RunEventMessageKind message_kind = 22;
+  RunToolCall tool_call = 23;
+}
+
+message RunEventActor {
+  RunEventActorKind kind = 1;
+  string ref = 2;
+  string name = 3;
+}
+
+message RunToolCall {
+  string ref = 1;
+  string tool = 2;
+  google.protobuf.Struct safe_parameters = 3;
+  string capability_ref = 4;
+  string grant_ref = 5;
+  RunToolCallState state = 6;
+  int64 duration_ms = 7;
+  string safe_result = 8;
+  string audit_ref = 9;
 }
 
 message RunGraph {
@@ -921,14 +987,45 @@ message AssistantPlanOperation {
     TYPE_CREATE_INTEGRATION_CONNECTION = 8;
     // Поставить проверку существующего подключения в долговечную очередь.
     TYPE_TEST_INTEGRATION_CONNECTION = 9;
+    // Архивировать обычного ИИ-сотрудника по exact version.
+    TYPE_ARCHIVE_AGENT = 10;
+    // Архивировать универсальный Процесс по exact version.
+    TYPE_ARCHIVE_WORKFLOW = 11;
+  }
+  enum Action {
+    ACTION_UNSPECIFIED = 0;
+    ACTION_CREATE = 1;
+    ACTION_UPDATE = 2;
+    ACTION_ARCHIVE = 3;
+    ACTION_EXECUTE = 4;
   }
   string ref = 1;
   Type type = 2;
   string title = 3;
   string summary = 4;
-  google.protobuf.Struct bounded_input = 5;
+  google.protobuf.Struct bounded_input = 5 [deprecated = true];
   bool permitted = 6;
   string unavailable_reason = 7;
+  Action action = 8;
+  string target_kind = 9;
+  string target_ref = 10;
+  string target_name = 11;
+  optional int64 expected_version = 12;
+  google.protobuf.Struct parameters = 13;
+  google.protobuf.Struct before = 14;
+  google.protobuf.Struct after = 15;
+  bool selected = 16;
+  repeated string validation_problems = 17;
+}
+
+enum AssistantPlanState {
+  ASSISTANT_PLAN_STATE_UNSPECIFIED = 0;
+  ASSISTANT_PLAN_STATE_DRAFT = 1;
+  ASSISTANT_PLAN_STATE_VALID = 2;
+  ASSISTANT_PLAN_STATE_INVALID = 3;
+  ASSISTANT_PLAN_STATE_STALE = 4;
+  ASSISTANT_PLAN_STATE_APPLIED = 5;
+  ASSISTANT_PLAN_STATE_REJECTED = 6;
 }
 
 message AssistantPlan {
@@ -940,6 +1037,49 @@ message AssistantPlan {
   string audit_summary = 6;
   bool applied = 7;
   repeated NextAction next_actions = 8;
+  AssistantPlanState state = 9;
+  int64 revision = 10;
+  optional int64 validated_revision = 11;
+  string content_digest = 12;
+  repeated string validation_problems = 13;
+  google.protobuf.Timestamp validated_at = 14;
+  google.protobuf.Timestamp applied_at = 15;
+}
+
+message AssistantContextDescriptor {
+  string route = 1;
+  string entity_kind = 2;
+  string entity_ref = 3;
+  string entity_name = 4;
+  optional int64 entity_version = 5;
+  repeated AssistantPlanOperation.Type allowed_operations = 6;
+}
+
+message AssistantPlanOperationReceipt {
+  string operation_ref = 1;
+  string resource_ref = 2;
+  string outcome = 3;
+  string audit_ref = 4;
+}
+
+message AssistantPlanConflict {
+  string operation_ref = 1;
+  string target_ref = 2;
+  string field = 3;
+  google.protobuf.Value expected = 4;
+  google.protobuf.Value actual = 5;
+}
+
+message AssistantPlanReceipt {
+  string ref = 1;
+  string plan_ref = 2;
+  int64 plan_revision = 3;
+  string outcome = 4;
+  repeated AssistantPlanOperationReceipt operations = 5;
+  repeated AssistantPlanConflict conflicts = 6;
+  repeated string audit_refs = 7;
+  repeated string created_resource_refs = 8;
+  google.protobuf.Timestamp created_at = 9;
 }
 
 message AssistantTurn {
@@ -959,6 +1099,9 @@ message AssistantConversation {
   string project_ref = 4;
   repeated AssistantTurn turns = 5;
   google.protobuf.Timestamp updated_at = 6;
+  string title_source = 7;
+  int64 title_revision = 8;
+  AssistantContextDescriptor context = 9;
 }
 
 message SystemAssistant {
@@ -1702,10 +1845,20 @@ message ListAssistantConversationsResponse {
 }
 message CreateAssistantConversationRequest {
   MutationContext mutation = 1;
-  string title = 2;
+  reserved 2;
+  reserved "title";
   string project_ref = 3;
+  AssistantContextDescriptor context = 4;
 }
 message CreateAssistantConversationResponse {
+  AssistantConversation conversation = 1;
+}
+message UpdateAssistantConversationTitleRequest {
+  MutationContext mutation = 1;
+  string conversation_ref = 2;
+  string title = 3;
+}
+message UpdateAssistantConversationTitleResponse {
   AssistantConversation conversation = 1;
 }
 message AddAssistantTurnRequest {
@@ -1718,14 +1871,42 @@ message AddAssistantTurnResponse {
   AssistantConversation conversation = 1;
   SystemAssistant assistant = 2;
 }
+message UpdateAssistantPlanDraftRequest {
+  MutationContext mutation = 1;
+  string plan_ref = 2;
+  string summary = 3;
+  repeated AssistantPlanOperation operations = 4;
+}
+message UpdateAssistantPlanDraftResponse {
+  AssistantPlan plan = 1;
+}
+message ValidateAssistantPlanRequest {
+  MutationContext mutation = 1;
+  string plan_ref = 2;
+  int64 revision = 3;
+}
+message ValidateAssistantPlanResponse {
+  AssistantPlan plan = 1;
+}
 message ApplyAssistantPlanRequest {
   MutationContext mutation = 1;
   string plan_ref = 2;
+  int64 revision = 3;
 }
 message ApplyAssistantPlanResponse {
   AssistantConversation conversation = 1;
   AssistantPlan plan = 2;
   repeated string created_resource_refs = 3;
+  AssistantPlanReceipt receipt = 4;
+}
+message RejectAssistantPlanRequest {
+  MutationContext mutation = 1;
+  string plan_ref = 2;
+  int64 revision = 3;
+}
+message RejectAssistantPlanResponse {
+  AssistantPlan plan = 1;
+  AssistantPlanReceipt receipt = 2;
 }
 message UpdateAssistantOwnerInstructionsRequest {
   MutationContext mutation = 1;
@@ -1815,6 +1996,7 @@ message RuntimeRevisionSnapshot {
   // Provider thread ID назначен Codex app-server и сохранён control-plane из
   // terminal handoff предыдущего turn.
   string codex_session_id = 47;
+  AssistantContextDescriptor assistant_context = 48;
 }
 
 message ProviderCredentialBinding {
@@ -2104,6 +2286,45 @@ message ProposeAssistantPlanRequest {
 message ProposeAssistantPlanResponse {
   AssistantPlan plan = 1;
   AssistantConversation conversation = 2;
+}
+message ProposeAssistantMetadataRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string title = 5;
+}
+message ProposeAssistantMetadataResponse {
+  AssistantConversation conversation = 1;
+}
+message ProposeRunMetadataRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string title = 5;
+  string activity_summary = 6;
+}
+message ProposeRunMetadataResponse {
+  Run run = 1;
+  RunEvent event = 2;
+}
+message RecordRunToolCallRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string call_ref = 5;
+  string tool = 6;
+  google.protobuf.Struct safe_parameters = 7;
+  string capability_ref = 8;
+  string grant_ref = 9;
+  RunToolCallState state = 10;
+  int64 duration_ms = 11;
+  string safe_result = 12;
+}
+message RecordRunToolCallResponse {
+  RunEvent event = 1;
 }
 message ReconcileWarmRuntimeRequest {
   string workload_instance = 1;
