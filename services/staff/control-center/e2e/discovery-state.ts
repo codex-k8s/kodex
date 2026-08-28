@@ -17,6 +17,7 @@ export interface DiscoveryRefs {
   readonly instructionRunRef?: string;
   readonly projectRef?: string;
   readonly publishedInstructionRef?: string;
+  readonly runtimeEnvironmentRef?: string;
   readonly scheduledRunRef?: string;
   readonly workflowRef?: string;
   readonly workflowRunRef?: string;

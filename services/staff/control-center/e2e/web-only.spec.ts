@@ -40,6 +40,18 @@ const uploadedFileName = `${environment.resourcePrefix}-lead-context.txt`;
 const automationName = `${environment.resourcePrefix} — ежечасная проверка лидов`;
 const automationTask =
   "Проверь новые синтетические лиды и подготовь краткий статус.";
+const automationEditedTask =
+  "Проверь новые синтетические лиды и подготовь краткий статус без персональных данных.";
+const runtimeEnvironmentName = `${environment.resourcePrefix} — среда E2E`;
+const runtimeOverlay = [
+  'model_reasoning_effort = "high"',
+  'personality = "pragmatic"',
+  "allow_login_shell = false",
+  "",
+  "[history]",
+  'persistence = "none"',
+].join("\n");
+const accessRoleName = `${environment.resourcePrefix} — точечный запуск сотрудника`;
 
 const initialRefs = loadDiscoveryRefs(environment.resourcePrefix);
 let projectRef = initialRefs.projectRef ?? "";
@@ -51,6 +63,7 @@ let firstRunRef = initialRefs.firstRunRef ?? "";
 let continuationRunRef = initialRefs.continuationRunRef ?? "";
 let instructionRunRef = initialRefs.instructionRunRef ?? "";
 let publishedInstructionRef = initialRefs.publishedInstructionRef ?? "";
+let runtimeEnvironmentRef = initialRefs.runtimeEnvironmentRef ?? "";
 let scheduledRunRef = initialRefs.scheduledRunRef ?? "";
 let workflowRunRef = initialRefs.workflowRunRef ?? "";
 
@@ -495,6 +508,297 @@ test.describe("web-only fresh installation", () => {
     ).toHaveCount(0);
   });
 
+  test("контекстный Kodex показывает полный редактируемый план без скрытых изменений", async ({
+    page,
+  }) => {
+    requireRefs("projectRef");
+    await gotoWithRetry(page, `/projects/${projectRef}`);
+    await openKodex(page, true);
+    const dialog = page.getByRole("dialog", { name: "Помощник Kodex" });
+    await expect(dialog).toContainText(projectName);
+    const purpose =
+      "Квалификация входящих лидов с явной проверкой полноты коммерческого предложения.";
+    await dialog
+      .getByPlaceholder("Опишите, что нужно настроить или запустить")
+      .fill(
+        `Для текущего Проекта измени только назначение на «${purpose}». Не меняй и не создавай другие объекты.`,
+      );
+    await dialog.getByRole("button", { name: "Отправить помощнику" }).click();
+    const planCard = dialog.locator(".assistant-plan-card").last();
+    await expect(planCard).toContainText(projectName, { timeout: 120_000 });
+    await expect(planCard).toContainText(purpose);
+    await planCard.getByRole("button", { name: "Открыть план" }).click();
+
+    const editor = dialog.locator(".assistant-plan-editor");
+    await expect(editor).toContainText(
+      "Скрытых изменений нет. План применяется одной транзакцией",
+    );
+    await expect(editor.getByLabel("Что изменит план")).not.toHaveValue("");
+    const operations = editor.locator(".assistant-plan-operation");
+    await expect(operations).toHaveCount(1);
+    const operation = operations.first();
+    await expect(operation).toContainText(/update/i);
+    await expect(operation.getByLabel("Название операции")).not.toHaveValue("");
+    await expect(
+      operation.getByLabel("Описание и последствия"),
+    ).not.toHaveValue("");
+    await expect(operation.locator(".assistant-plan-target")).toContainText(
+      projectName,
+    );
+    await expect(operation.locator("details")).toContainText(
+      "Текущее состояние",
+    );
+    const parameters = operation.getByLabel("Явные параметры операции, JSON");
+    const after = operation.getByLabel("Состояние после операции, JSON");
+    expect(JSON.parse(await parameters.inputValue())).toMatchObject({
+      purpose,
+    });
+    expect(JSON.parse(await after.inputValue())).toMatchObject({ purpose });
+
+    const rejection = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith("/rejection"),
+    );
+    await editor.getByRole("button", { name: "Отклонить" }).click();
+    expect((await rejection).status()).toBe(200);
+  });
+
+  test("runtime сотрудника публикует policy, config.toml overlay и окружение", async ({
+    page,
+  }) => {
+    requireRefs("projectRef", "coordinatorRef");
+    if (!discoveryMode || !runtimeEnvironmentRef) {
+      await gotoWithRetry(page, `/projects/${projectRef}/environments/new`);
+      await expectPageHeading(page, "Новое окружение");
+      await page.getByLabel("Название").fill(runtimeEnvironmentName);
+      await page
+        .getByLabel("Описание")
+        .fill("Несекретное окружение для проверки следующей RuntimeRevision.");
+      await page.getByRole("button", { name: "Добавить переменную" }).click();
+      await page.getByLabel("Имя переменной").fill("KODEX_E2E_MODE");
+      await page.getByLabel("Несекретное значение").fill("redesign");
+      const creation = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname ===
+            `/api/v1/projects/${projectRef}/runtime-environments`,
+      );
+      await page.getByRole("button", { name: "Создать", exact: true }).click();
+      expect((await creation).status()).toBe(201);
+      await expect(page).toHaveURL(/\/environments\/[^/]+$/);
+      runtimeEnvironmentRef = routeRef(page, "environments");
+      persistRefs();
+      await expect(page.locator("#main-content")).toContainText(
+        "KODEX_E2E_MODE",
+      );
+    }
+
+    await gotoWithRetry(
+      page,
+      `/projects/${projectRef}/agents/${coordinatorRef}`,
+    );
+    const runtimeResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        new URL(response.url()).pathname ===
+          `/api/v1/agents/${coordinatorRef}/runtime-configuration`,
+    );
+    await page.getByRole("button", { name: "Runtime", exact: true }).click();
+    expect((await runtimeResponse).status()).toBe(200);
+    const runtimePanel = page.locator("#agent-panel-runtime");
+    await expect(
+      runtimePanel.getByRole("heading", {
+        name: "Runtime и рабочее окружение",
+      }),
+    ).toBeVisible();
+
+    const providerRow = runtimePanel.locator(".runtime-row").filter({
+      hasText: "Провайдер",
+    });
+    const profileRow = runtimePanel.locator(".runtime-row").filter({
+      hasText: "Runtime-профиль",
+    });
+    const modelRow = runtimePanel.locator(".runtime-row").filter({
+      hasText: "Модель",
+    });
+    await expect(providerRow.locator("input")).not.toHaveValue("");
+    await expect(modelRow.locator("input")).not.toHaveValue("");
+    const providerName = await providerRow.locator("input").inputValue();
+    const modelName = await modelRow.locator("input").inputValue();
+    await expect(profileRow.locator("select option:checked")).toContainText(
+      /.+ · .+/,
+    );
+
+    const policy = runtimePanel
+      .locator(".runtime-row")
+      .filter({ hasText: "Политика учётных записей" })
+      .locator("select");
+    const policyBefore = await policy.inputValue();
+    const policyAfter = "LEAST_USED";
+    if (policyBefore !== policyAfter) {
+      await policy.selectOption(policyAfter);
+      const runtimePublication = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname ===
+            `/api/v1/agents/${coordinatorRef}/runtime-configuration`,
+      );
+      await runtimePanel
+        .getByRole("button", { name: "Опубликовать runtime-конфигурацию" })
+        .click();
+      expect((await runtimePublication).status()).toBe(200);
+    }
+    await expect(policy).toHaveValue(policyAfter);
+    await expect(
+      runtimePanel.locator(".runtime-history > div"),
+    ).not.toHaveCount(0);
+
+    const overlayEditor = runtimePanel
+      .locator(".toml-editor")
+      .filter({ hasText: "Черновик overlay" });
+    const readOverlayState = async (): Promise<{
+      draftContent?: string;
+      draftState?: string;
+      publishedContent: string;
+    }> =>
+      page.evaluate(async (agentRef) => {
+        const response = await fetch(
+          `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
+        );
+        if (!response.ok) {
+          throw new Error(
+            `runtime overlay readback failed: ${String(response.status)}`,
+          );
+        }
+        const body = (await response.json()) as {
+          draftOverlay?: { content: string; state: string };
+          publishedOverlay: { content: string };
+        };
+        return {
+          draftContent: body.draftOverlay?.content,
+          draftState: body.draftOverlay?.state,
+          publishedContent: body.publishedOverlay.content,
+        };
+      }, coordinatorRef);
+    let overlayState = await readOverlayState();
+    if (overlayState.publishedContent !== runtimeOverlay) {
+      if (overlayState.draftContent !== runtimeOverlay) {
+        await overlayEditor.locator("textarea").fill(runtimeOverlay);
+        const draftCreation = page.waitForResponse(
+          (response) =>
+            response.request().method() === "POST" &&
+            new URL(response.url()).pathname ===
+              `/api/v1/agents/${coordinatorRef}/config-overlay-drafts`,
+        );
+        await runtimePanel
+          .getByRole("button", { name: "Сохранить черновик" })
+          .click();
+        expect((await draftCreation).status()).toBe(201);
+        overlayState = await readOverlayState();
+      }
+      if (overlayState.draftState !== "VALID") {
+        const validation = page.waitForResponse(
+          (response) =>
+            response.request().method() === "POST" &&
+            new URL(response.url()).pathname.endsWith(
+              "/config-overlay-drafts/validation",
+            ),
+        );
+        await runtimePanel
+          .getByRole("button", { name: "Проверить TOML" })
+          .click();
+        expect((await validation).status()).toBe(200);
+      }
+      const publication = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname.endsWith(
+            "/config-overlay-drafts/publication",
+          ),
+      );
+      await runtimePanel
+        .getByRole("button", { name: "Опубликовать overlay" })
+        .click();
+      expect((await publication).status()).toBe(200);
+    }
+    await expect(
+      runtimePanel
+        .locator(".toml-editor")
+        .filter({ hasText: "Безопасное представление" })
+        .locator("textarea"),
+    ).toHaveValue(/model_reasoning_effort = "high"/);
+
+    const environmentPicker = runtimePanel.locator(
+      ".runtime-row--picker [role=combobox]",
+    );
+    await environmentPicker.click();
+    await expect(environmentPicker).toHaveAttribute("aria-expanded", "true");
+    await runtimePanel
+      .getByRole("heading", { name: "Runtime и рабочее окружение" })
+      .click();
+    await expect(environmentPicker).toHaveAttribute("aria-expanded", "false");
+    const boundEnvironmentRef = await page.evaluate(async (agentRef) => {
+      const response = await fetch(
+        `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
+      );
+      const body = (await response.json()) as { environment: { ref: string } };
+      return body.environment.ref;
+    }, coordinatorRef);
+    if (boundEnvironmentRef !== runtimeEnvironmentRef) {
+      await environmentPicker.click();
+      const popover = page.locator(".async-picker__popover");
+      await popover
+        .locator('input[type="search"]')
+        .fill(runtimeEnvironmentName);
+      await popover
+        .getByRole("option", { name: new RegExp(runtimeEnvironmentName) })
+        .click();
+      const binding = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname ===
+            `/api/v1/agents/${coordinatorRef}/runtime-environment-binding`,
+      );
+      await runtimePanel
+        .getByRole("button", { name: "Назначить окружение" })
+        .click();
+      expect((await binding).status()).toBe(200);
+    }
+
+    const readback = await page.evaluate(async (agentRef) => {
+      const response = await fetch(
+        `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
+      );
+      if (!response.ok)
+        throw new Error(`runtime readback failed: ${String(response.status)}`);
+      return (await response.json()) as {
+        configuration: {
+          model: string;
+          provider: string;
+          providerPolicy: { mode: string };
+          version: number;
+        };
+        environment: { ref: string; currentVersion: { revision: number } };
+        publishedOverlay: { content: string; state: string };
+        safeEffectiveConfig: string;
+      };
+    }, coordinatorRef);
+    expect(readback.configuration.provider).toBe(providerName);
+    expect(readback.configuration.model).toBe(modelName);
+    expect(readback.configuration.version).toBeGreaterThan(0);
+    expect(readback.configuration.providerPolicy.mode).toBe(policyAfter);
+    expect(readback.environment.ref).toBe(runtimeEnvironmentRef);
+    expect(readback.environment.currentVersion.revision).toBeGreaterThan(0);
+    expect(readback.publishedOverlay).toMatchObject({
+      content: runtimeOverlay,
+      state: "PUBLISHED",
+    });
+    expect(readback.safeEffectiveConfig).toContain(
+      'model_reasoning_effort = "high"',
+    );
+  });
+
   test("файл загружается, просматривается, привязывается и скачивается", async ({
     page,
   }) => {
@@ -583,6 +887,124 @@ test.describe("web-only fresh installation", () => {
     expect(await readFile(path, "utf8")).toBe(content);
   });
 
+  test("workboard сохраняет контекст Проекта, а запуск выбирает файлы и сессию", async ({
+    page,
+  }) => {
+    requireRefs(
+      "projectRef",
+      "coordinatorRef",
+      "firstRunRef",
+      "continuationRunRef",
+    );
+    await gotoWithRetry(page, `/projects/${projectRef}`);
+    await expectPageHeading(page, projectName);
+    const workboard = page.locator(".project-workboard");
+    await expect(workboard).toBeVisible();
+    await expect(workboard).toContainText("Требует внимания");
+    await expect(workboard).toContainText("Выполняется сейчас");
+    await expect(workboard).toContainText("Недавние результаты");
+    await expect(workboard).toContainText("Ресурсы Проекта");
+    await expect(
+      workboard.getByRole("link", { name: "Все запуски Проекта" }),
+    ).toHaveAttribute("href", `/projects/${projectRef}/runs`);
+    await expect(
+      workboard.getByRole("link", { name: "Все файлы Проекта" }),
+    ).toHaveAttribute("href", `/projects/${projectRef}/files`);
+
+    await gotoWithRetry(
+      page,
+      `/projects/${projectRef}/runs/new?targetType=AGENT&targetRef=${encodeURIComponent(coordinatorRef)}`,
+    );
+    await expect(page.locator(".project-context")).toContainText(projectName);
+    await expect(page.getByLabel("Цель")).toHaveValue(coordinatorRef);
+
+    const chooseFiles = page
+      .locator("#new-run-files-title")
+      .locator("xpath=ancestor::section[1]")
+      .getByRole("button");
+    await expect(chooseFiles).toBeEnabled();
+    await chooseFiles.click();
+    const filePicker = page.locator(".new-run-file-picker__overlay");
+    await expect(filePicker).toBeVisible();
+    const viewToggle = filePicker.locator(".view-mode-toggle");
+    const listView = viewToggle.getByRole("button").nth(0);
+    const gridView = viewToggle.getByRole("button").nth(1);
+    await expect(listView).toHaveAttribute("aria-pressed", "true");
+    await gridView.click();
+    await expect(
+      filePicker.locator(".new-run-file-picker__picker"),
+    ).toHaveClass(/new-run-file-picker__picker--grid/);
+    await listView.click();
+    await expect(
+      filePicker.locator(".new-run-file-picker__picker"),
+    ).toHaveClass(/new-run-file-picker__picker--list/);
+    const filteredArtifacts = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === "GET" &&
+        url.pathname === `/api/v1/projects/${projectRef}/artifacts` &&
+        url.searchParams.get("query") === uploadedFileName
+      );
+    });
+    await filePicker.locator('input[type="search"]').fill(uploadedFileName);
+    expect((await filteredArtifacts).status()).toBe(200);
+    const artifactOption = filePicker
+      .getByRole("option")
+      .filter({ hasText: uploadedFileName });
+    await expect(artifactOption).toHaveCount(1);
+    await artifactOption.click();
+    await expect(artifactOption).toHaveAttribute("aria-selected", "true");
+    await filePicker.locator(".overlay-panel__footer .button--primary").click();
+    await expect(filePicker).toHaveCount(0);
+    await expect(page.locator(".selected-file")).toContainText(
+      uploadedFileName,
+    );
+
+    const sessionReadback = await page.evaluate(
+      async ({ initialRef, continuedRef }) => {
+        const [initialResponse, continuedResponse] = await Promise.all([
+          fetch(`/api/v1/runs/${encodeURIComponent(initialRef)}`),
+          fetch(`/api/v1/runs/${encodeURIComponent(continuedRef)}`),
+        ]);
+        if (!initialResponse.ok || !continuedResponse.ok)
+          throw new Error("session lineage readback failed");
+        const initial = (await initialResponse.json()) as {
+          sessionRef: string;
+          title: string;
+        };
+        const continued = (await continuedResponse.json()) as {
+          sessionRef: string;
+        };
+        return { initial, continued };
+      },
+      { initialRef: firstRunRef, continuedRef: continuationRunRef },
+    );
+    expect(sessionReadback.continued.sessionRef).toBe(
+      sessionReadback.initial.sessionRef,
+    );
+    await page.getByRole("radio", { name: /Продолжить существующую/ }).check();
+    await page.locator("#new-run-session-picker-trigger").click();
+    const sessionPicker = page.locator(".new-run-session-picker__overlay");
+    await expect(sessionPicker).toBeVisible();
+    await sessionPicker
+      .locator('input[type="search"]')
+      .fill(sessionReadback.initial.title);
+    await sessionPicker
+      .getByRole("option")
+      .filter({ hasText: sessionReadback.initial.title })
+      .first()
+      .click();
+    await expect(sessionPicker).toHaveCount(0);
+    await expect(page.locator(".launch-summary")).toContainText(
+      sessionReadback.initial.title,
+    );
+    await expect(
+      page.getByRole("button", {
+        name: /Архивировать сессию|Восстановить сессию/,
+      }),
+    ).toHaveCount(0);
+  });
+
   test("привязанный knowledge-файл доступен ИИ-сотруднику", async ({
     page,
   }) => {
@@ -601,7 +1023,7 @@ test.describe("web-only fresh installation", () => {
     );
   });
 
-  test("автоматизация создаётся, проходит pause/resume и запускается", async ({
+  test("автоматизация создаётся, редактируется, запускается и архивируется", async ({
     page,
   }) => {
     requireRefs("projectRef", "coordinatorRef");
@@ -615,7 +1037,9 @@ test.describe("web-only fresh installation", () => {
     expect((await schedulesResponse).status()).toBe(200);
     await expectPageHeading(page, "Автоматизации");
 
-    let row = page.locator(".entity-row").filter({ hasText: automationName });
+    let row = page.locator(".automation-row").filter({
+      hasText: automationName,
+    });
     if ((await row.count()) === 0) {
       await page
         .getByRole("button", { name: "Новая автоматизация" })
@@ -638,14 +1062,27 @@ test.describe("web-only fresh installation", () => {
         .getByRole("button", { name: "Создать", exact: true })
         .click();
       await expect(dialog).toHaveCount(0);
-      row = page.locator(".entity-row").filter({ hasText: automationName });
+      row = page.locator(".automation-row").filter({
+        hasText: automationName,
+      });
     }
     await expect(row).toHaveCount(1);
+    await row.click();
+    const details = page.locator(".automation-details");
+    await expect(details).toContainText(automationName);
+    if ((await row.locator(".status-badge").textContent()) === "Архивирован") {
+      await expect(details).toContainText(automationEditedTask);
+      if (scheduledRunRef) {
+        await gotoWithRetry(page, `/runs/${scheduledRunRef}`);
+        await waitForTerminalSuccess(page);
+      }
+      return;
+    }
     if (
       (await row.locator(".status-badge").textContent()) === "Приостановлено"
     ) {
       const enableResponse = scheduleCommandResponse(page);
-      await row.getByRole("button", { name: "Включить" }).click();
+      await details.getByRole("button", { name: "Включить" }).click();
       expect(
         (await enableResponse).status(),
         await mutationFailureDiagnostic(await enableResponse, page),
@@ -654,14 +1091,14 @@ test.describe("web-only fresh installation", () => {
     await expect(row.locator(".status-badge")).toHaveText("Активен");
 
     const pauseResponse = scheduleCommandResponse(page);
-    await row.getByRole("button", { name: "Приостановить" }).click();
+    await details.getByRole("button", { name: "Приостановить" }).click();
     const paused = await pauseResponse;
     expect(paused.status(), await mutationFailureDiagnostic(paused, page)).toBe(
       200,
     );
     await expect(row.locator(".status-badge")).toHaveText("Приостановлено");
     const resumeResponse = scheduleCommandResponse(page);
-    await row.getByRole("button", { name: "Включить" }).click();
+    await details.getByRole("button", { name: "Включить" }).click();
     const resumed = await resumeResponse;
     expect(
       resumed.status(),
@@ -724,6 +1161,47 @@ test.describe("web-only fresh installation", () => {
     persistRefs();
     await gotoWithRetry(page, `/runs/${scheduledRunRef}`);
     await waitForTerminalSuccess(page);
+
+    await gotoWithRetry(page, `/projects/${projectRef}/automations`);
+    row = page.locator(".automation-row").filter({ hasText: automationName });
+    await row.click();
+    const edit = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        /^\/api\/v1\/schedules\/[^/]+$/.test(new URL(response.url()).pathname),
+    );
+    await page
+      .locator(".automation-details")
+      .getByRole("button", { name: "Изменить автоматизацию" })
+      .click();
+    const editDialog = page.getByRole("dialog", {
+      name: "Изменить автоматизацию",
+    });
+    await editDialog.getByLabel("Задача").fill(automationEditedTask);
+    await editDialog.getByRole("button", { name: "Сохранить" }).click();
+    expect((await edit).status()).toBe(200);
+    await expect(editDialog).toHaveCount(0);
+    await expect(page.locator(".automation-details")).toContainText(
+      automationEditedTask,
+    );
+
+    const archive = scheduleCommandResponse(page);
+    await page
+      .locator(".automation-details")
+      .getByRole("button", { name: "Архивировать" })
+      .click();
+    const archiveDialog = page.getByRole("dialog", {
+      name: "Архивировать автоматизацию?",
+    });
+    await expect(archiveDialog).toContainText(
+      "Автоматизация и её история останутся доступны только для чтения",
+    );
+    await archiveDialog.getByRole("button", { name: "Архивировать" }).click();
+    expect((await archive).status()).toBe(200);
+    await expect(row.locator(".status-badge")).toHaveText("Архивирован");
+    await expect(page.locator(".automation-details")).toContainText(
+      automationEditedTask,
+    );
   });
 
   test("сотрудник без capability Файлы не получает файл", async ({ page }) => {
@@ -754,15 +1232,11 @@ test.describe("web-only fresh installation", () => {
       `/projects/${projectRef}/runs/new?targetType=AGENT&targetRef=${encodeURIComponent(analystRef)}`,
     );
     await expect(page.getByLabel("Задание")).toBeVisible();
-    const fileChoices = page.getByRole("checkbox", {
-      name: new RegExp(uploadedFileName),
-    });
-    await expect.poll(() => fileChoices.count()).toBeGreaterThan(0);
-    expect(
-      await fileChoices.evaluateAll((choices) =>
-        choices.every((choice) => (choice as HTMLInputElement).disabled),
-      ),
-    ).toBe(true);
+    const chooseFiles = page
+      .locator("#new-run-files-title")
+      .locator("xpath=ancestor::section[1]")
+      .getByRole("button");
+    await expect(chooseFiles).toBeDisabled();
     await expect(page.locator("#main-content")).toContainText(
       "Сначала выдайте всем выбранным ИИ-сотрудникам возможность «Файлы»",
     );
@@ -1158,6 +1632,252 @@ test.describe("web-only fresh installation", () => {
     }
   });
 
+  test("enterprise RBAC объясняет точечный allow и отказывает другому сотруднику", async ({
+    page,
+  }) => {
+    requireRefs("projectRef", "coordinatorRef", "analystRef");
+    await gotoWithRetry(page, "/administration/access/roles");
+    await expectPageHeading(page, "Участники и доступ");
+    let roleCard = page
+      .locator(".role-card")
+      .filter({ hasText: accessRoleName });
+    if ((await roleCard.count()) === 0) {
+      await page.getByRole("button", { name: "Создать роль" }).click();
+      const dialog = page.getByRole("dialog", {
+        name: "Новая пользовательская роль",
+      });
+      await dialog.getByLabel("Название").fill(accessRoleName);
+      await dialog
+        .getByLabel("Понятное назначение")
+        .fill("Запуск и просмотр одного явно выбранного ИИ-сотрудника.");
+      await dialog
+        .getByRole("checkbox", { name: /Просматривать ИИ-сотрудников/ })
+        .check();
+      await dialog
+        .getByRole("checkbox", { name: /Запускать ИИ-сотрудников/ })
+        .check();
+      await dialog.getByRole("checkbox", { name: /Конкретный ресурс/ }).check();
+      await dialog
+        .getByLabel("Причина изменения")
+        .fill("Проверка enterprise RBAC в локальном E2E.");
+      const creation = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname ===
+            "/api/v1/administration/access/roles",
+      );
+      await dialog.getByRole("button", { name: "Создать роль v1" }).click();
+      expect((await creation).status()).toBe(201);
+      roleCard = page.locator(".role-card").filter({ hasText: accessRoleName });
+    }
+    await expect(roleCard).toContainText("Конкретный ресурс");
+    await expect(roleCard).toContainText("Полномочий: 2");
+
+    const setup = await page.evaluate(
+      async ({
+        exactAgentRef,
+        expectedRoleName,
+        otherAgentRef,
+        projectRef,
+      }) => {
+        type Subject = {
+          ref: string;
+          kind: "USER" | "OIDC_GROUP" | "SERVICE";
+          displayName: string;
+        };
+        type Candidate = Subject;
+        const [rolesResponse, subjectsResponse, groupsResponse] =
+          await Promise.all([
+            fetch(
+              "/api/v1/administration/access/roles?pageSize=100&includeArchived=false",
+            ),
+            fetch("/api/v1/administration/access/subjects?pageSize=100"),
+            fetch("/api/v1/administration/access/oidc-groups?pageSize=100"),
+          ]);
+        if (!rolesResponse.ok || !subjectsResponse.ok || !groupsResponse.ok)
+          throw new Error("RBAC catalog readback failed");
+        const roles = (await rolesResponse.json()) as {
+          items: Array<{
+            ref: string;
+            currentVersion: { ref: string; name: string };
+          }>;
+        };
+        const role = roles.items.find(
+          (item) => item.currentVersion.name === expectedRoleName,
+        );
+        if (!role) throw new Error("E2E access role is absent");
+        const subjects = (await subjectsResponse.json()) as {
+          items: Subject[];
+        };
+        const groups = (await groupsResponse.json()) as {
+          items: Array<{ ref: string; displayName: string }>;
+        };
+        const candidates: Candidate[] = [
+          ...subjects.items.filter((subject) => subject.kind !== "USER"),
+          ...groups.items.map((group) => ({
+            ...group,
+            kind: "OIDC_GROUP" as const,
+          })),
+        ];
+        const bindingsResponse = await fetch(
+          `/api/v1/administration/access/bindings?pageSize=100&projectRef=${encodeURIComponent(projectRef)}&roleRef=${encodeURIComponent(role.ref)}&includeRevoked=false`,
+        );
+        if (!bindingsResponse.ok)
+          throw new Error("RBAC binding catalog readback failed");
+        const bindings = (await bindingsResponse.json()) as {
+          items: Array<{
+            subject: { ref: string };
+            scope: { resourceKind?: string; resourceRef?: string };
+          }>;
+        };
+        const existing = bindings.items.find(
+          (binding) =>
+            binding.scope.resourceKind === "AGENT" &&
+            binding.scope.resourceRef === exactAgentRef,
+        );
+        const existingCandidate = existing
+          ? candidates.find(
+              (candidate) => candidate.ref === existing.subject.ref,
+            )
+          : undefined;
+        if (existingCandidate) {
+          return {
+            candidate: existingCandidate,
+            exactAgentRef,
+            otherAgentRef,
+            projectRef,
+            roleRef: role.ref,
+            roleVersionRef: role.currentVersion.ref,
+          };
+        }
+        for (const candidate of candidates) {
+          const response = await fetch(
+            "/api/v1/administration/access/effective-access/query",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                subjectRef: candidate.ref,
+                permissionKeys: ["agent.launch"],
+                target: {
+                  kind: "RESOURCE_INSTANCE",
+                  projectRef,
+                  resourceKind: "AGENT",
+                  resourceRef: exactAgentRef,
+                },
+              }),
+            },
+          );
+          if (!response.ok) continue;
+          const body = (await response.json()) as {
+            items: Array<{ decision: string }>;
+          };
+          if (body.items[0]?.decision === "DENIED") {
+            return {
+              candidate,
+              exactAgentRef,
+              otherAgentRef,
+              projectRef,
+              roleRef: role.ref,
+              roleVersionRef: role.currentVersion.ref,
+            };
+          }
+        }
+        throw new Error(
+          "Нет служебного субъекта или OIDC-группы без исходного agent.launch",
+        );
+      },
+      {
+        exactAgentRef: coordinatorRef,
+        expectedRoleName: accessRoleName,
+        otherAgentRef: analystRef,
+        projectRef,
+      },
+    );
+
+    const existingBinding = await page.evaluate(
+      async ({ exactAgentRef, projectRef, roleRef, subjectRef }) => {
+        const response = await fetch(
+          `/api/v1/administration/access/bindings?pageSize=100&projectRef=${encodeURIComponent(projectRef)}&roleRef=${encodeURIComponent(roleRef)}&subjectRef=${encodeURIComponent(subjectRef)}&includeRevoked=false`,
+        );
+        if (!response.ok) throw new Error("RBAC binding readback failed");
+        const body = (await response.json()) as {
+          items: Array<{ scope: { resourceRef?: string } }>;
+        };
+        return body.items.some(
+          (item) => item.scope.resourceRef === exactAgentRef,
+        );
+      },
+      {
+        exactAgentRef: coordinatorRef,
+        projectRef,
+        roleRef: setup.roleRef,
+        subjectRef: setup.candidate.ref,
+      },
+    );
+    if (!existingBinding) {
+      await gotoWithRetry(page, "/administration/access/bindings");
+      await page.getByRole("button", { name: "Создать привязку" }).click();
+      const dialog = page.getByRole("dialog", {
+        name: "Новая привязка роли",
+      });
+      await dialog
+        .getByLabel("Тип субъекта")
+        .selectOption(setup.candidate.kind);
+      await dialog.getByLabel("Субъект").selectOption(setup.candidate.ref);
+      await dialog.getByLabel("Версия роли").selectOption(setup.roleVersionRef);
+      await dialog.getByLabel("Тип области").selectOption("RESOURCE_INSTANCE");
+      await dialog.getByLabel("Проект").selectOption(projectRef);
+      await dialog.getByLabel("Тип ресурса").selectOption("AGENT");
+      await dialog.getByLabel("ИИ-сотрудник").selectOption(coordinatorRef);
+      const creation = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname ===
+            "/api/v1/administration/access/bindings",
+      );
+      await dialog.getByRole("button", { name: "Создать привязку" }).click();
+      expect((await creation).status()).toBe(201);
+      const card = page.locator(".binding-card").filter({
+        hasText: setup.candidate.displayName,
+      });
+      await expect(card).toContainText(accessRoleName);
+      await expect(card).toContainText(coordinatorName);
+    }
+
+    await gotoWithRetry(page, "/administration/access/effective");
+    const form = page.locator(".effective-form");
+    await form.getByLabel("Субъект").selectOption(setup.candidate.ref);
+    await form.getByLabel("Действие").selectOption("agent.launch");
+    await form.getByLabel("Тип области").selectOption("RESOURCE_INSTANCE");
+    await form.getByLabel("Проект").selectOption(projectRef);
+    await form.getByLabel("Тип ресурса").selectOption("AGENT");
+    await form.getByLabel("ИИ-сотрудник").selectOption(coordinatorRef);
+    const allowed = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith("/effective-access/explain"),
+    );
+    await form.getByRole("button", { name: "Объяснить решение" }).click();
+    expect((await allowed).status()).toBe(200);
+    const result = page.locator(".result-panel");
+    await expect(result).toContainText("Разрешено");
+    await expect(result).toContainText("Область привязки совпадает");
+
+    await form.getByLabel("ИИ-сотрудник").selectOption(analystRef);
+    const denied = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith("/effective-access/explain"),
+    );
+    await form.getByRole("button", { name: "Объяснить решение" }).click();
+    expect((await denied).status()).toBe(200);
+    await expect(result).toContainText("Запрещено");
+    await expect(result).toContainText(
+      "Подходящая разрешающая привязка отсутствует",
+    );
+  });
+
   test("core остаётся готовым без подключённых интеграций", async ({
     page,
   }) => {
@@ -1195,11 +1915,11 @@ test.describe("web-only fresh installation", () => {
     await expect(page.locator("#main-content")).toContainText("Core-платформа");
 
     await gotoWithRetry(page, "/administration/access");
-    await expectPageHeading(page, "Участники организации");
-    await expect(page.locator(".entity-row")).not.toHaveCount(0);
+    await expectPageHeading(page, "Участники и доступ");
+    await expect(page.locator(".access-table__row")).not.toHaveCount(0);
     await gotoWithRetry(page, `/projects/${projectRef}/members`);
     await expectPageHeading(page, "Участники и доступ");
-    await expect(page.locator(".entity-row")).not.toHaveCount(0);
+    await expect(page.locator(".access-table__row")).not.toHaveCount(0);
 
     await gotoWithRetry(
       page,
@@ -1321,6 +2041,7 @@ function currentRefs(): DiscoveryRefs {
     continuationRunRef,
     instructionRunRef,
     publishedInstructionRef,
+    runtimeEnvironmentRef,
     scheduledRunRef,
     workflowRunRef,
   };
@@ -1339,6 +2060,8 @@ function requireRefs(...required: ReadonlyArray<keyof DiscoveryRefs>): void {
   instructionRunRef = persisted.instructionRunRef ?? instructionRunRef;
   publishedInstructionRef =
     persisted.publishedInstructionRef ?? publishedInstructionRef;
+  runtimeEnvironmentRef =
+    persisted.runtimeEnvironmentRef ?? runtimeEnvironmentRef;
   scheduledRunRef = persisted.scheduledRunRef ?? scheduledRunRef;
   workflowRunRef = persisted.workflowRunRef ?? workflowRunRef;
   const refs = currentRefs();
