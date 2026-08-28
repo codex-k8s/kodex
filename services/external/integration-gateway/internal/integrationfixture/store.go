@@ -26,9 +26,23 @@ type Projection struct {
 	Count     int64  `json:"count"`
 }
 
+// DiagnosticProjection доступен только через local-only fixture и позволяет
+// E2E доказать provider effect и exact replay без записи в provider напрямую.
+type DiagnosticProjection struct {
+	Journal             string `json:"journal"`
+	Count               int64  `json:"count"`
+	Value               string `json:"value"`
+	LastEffectKey       string `json:"last_effect_key"`
+	ReplayCount         int64  `json:"replay_count"`
+	LastReplayEffectKey string `json:"last_replay_effect_key"`
+}
+
 type journalState struct {
-	sequence int64
-	value    string
+	sequence            int64
+	value               string
+	lastEffectKey       string
+	replayCount         int64
+	lastReplayEffectKey string
 }
 
 type receipt struct {
@@ -61,6 +75,18 @@ func (store *Store) Read(journal, effectKey string) Projection {
 	}
 }
 
+func (store *Store) ReadDiagnostic(journal string) DiagnosticProjection {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	state := store.journals[journal]
+	return DiagnosticProjection{
+		Journal: journal, Count: state.sequence, Value: state.value,
+		LastEffectKey: state.lastEffectKey, ReplayCount: state.replayCount,
+		LastReplayEffectKey: state.lastReplayEffectKey,
+	}
+}
+
 func (store *Store) Append(journal, effectKey, value string) (Projection, bool, error) {
 	digest := requestDigest(journal, value)
 	store.mu.Lock()
@@ -70,6 +96,10 @@ func (store *Store) Append(journal, effectKey, value string) (Projection, bool, 
 		if stored.requestDigest != digest {
 			return Projection{}, false, errIdempotencyConflict
 		}
+		state := store.journals[journal]
+		state.replayCount++
+		state.lastReplayEffectKey = effectKey
+		store.journals[journal] = state
 		return stored.projection, true, nil
 	}
 	if len(store.receipts) >= maximumEffects {
@@ -81,6 +111,7 @@ func (store *Store) Append(journal, effectKey, value string) (Projection, bool, 
 	}
 	state.sequence++
 	state.value = value
+	state.lastEffectKey = effectKey
 	store.journals[journal] = state
 	projection := Projection{
 		Journal: journal, EffectKey: effectKey, Sequence: state.sequence,

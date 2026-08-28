@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"sync/atomic"
+	"time"
 	"unicode/utf8"
 )
 
@@ -18,6 +19,8 @@ const (
 	maximumJournalBytes    = 120
 	maximumValueBytes      = 4096
 	maximumRequestBodySize = 8 << 10
+	replayFaultValuePrefix = "kodex-e2e-replay:"
+	replayFaultDelay       = 4 * time.Second
 )
 
 var idempotencyKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
@@ -28,12 +31,17 @@ type errorResponse struct {
 
 // Handler обслуживает только закрытый synthetic journal contract.
 type Handler struct {
-	store *Store
-	ready atomic.Bool
+	store       *Store
+	ready       atomic.Bool
+	replayDelay time.Duration
 }
 
 func NewHandler(store *Store) *Handler {
-	return &Handler{store: store}
+	return newHandler(store, replayFaultDelay)
+}
+
+func newHandler(store *Store, delay time.Duration) *Handler {
+	return &Handler{store: store, replayDelay: delay}
 }
 
 func (handler *Handler) SetReady(ready bool) {
@@ -54,6 +62,10 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 		handler.serveReadiness(writer, request)
 		return
 	}
+	if journal, ok := diagnosticJournalPath(request.URL.EscapedPath()); ok {
+		handler.readDiagnostic(writer, request, journal)
+		return
+	}
 
 	journal, entries, ok := journalPath(request.URL.EscapedPath())
 	if !ok {
@@ -65,6 +77,18 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 	handler.readJournal(writer, request, journal)
+}
+
+func (handler *Handler) readDiagnostic(writer http.ResponseWriter, request *http.Request, journal string) {
+	if request.Method != http.MethodGet {
+		writeError(writer, http.StatusMethodNotAllowed, "method_not_allowed")
+		return
+	}
+	if !emptyBody(request.Body) {
+		writeError(writer, http.StatusBadRequest, "request_body_invalid")
+		return
+	}
+	writeJSON(writer, http.StatusOK, handler.store.ReadDiagnostic(journal))
 }
 
 func (handler *Handler) serveHealth(writer http.ResponseWriter, request *http.Request) {
@@ -144,10 +168,35 @@ func (handler *Handler) appendEntry(writer http.ResponseWriter, request *http.Re
 		writeError(writer, http.StatusInternalServerError, "internal_error")
 		return
 	}
+	if !replayed && strings.HasPrefix(value, replayFaultValuePrefix) && handler.replayDelay > 0 {
+		timer := time.NewTimer(handler.replayDelay)
+		defer timer.Stop()
+		select {
+		case <-request.Context().Done():
+			return
+		case <-timer.C:
+		}
+	}
 	if replayed {
 		writer.Header().Set("Idempotency-Replayed", "true")
 	}
 	writeJSON(writer, http.StatusOK, projection)
+}
+
+func diagnosticJournalPath(escapedPath string) (string, bool) {
+	const prefix = "/v1/diagnostics/journals/"
+	if !strings.HasPrefix(escapedPath, prefix) {
+		return "", false
+	}
+	remainder := strings.TrimPrefix(escapedPath, prefix)
+	if remainder == "" || strings.Contains(remainder, "/") {
+		return "", false
+	}
+	journal, err := url.PathUnescape(remainder)
+	if err != nil || strings.Contains(journal, "/") || !validBoundedString(journal, maximumJournalBytes) {
+		return "", false
+	}
+	return journal, true
 }
 
 func journalPath(escapedPath string) (string, bool, bool) {

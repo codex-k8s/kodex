@@ -4,7 +4,7 @@ title: Диагностика integration-gateway
 type: runbook
 status: approved
 owner: sre
-version: 3.1.0
+version: 3.2.0
 updated: 2026-08-28
 ---
 
@@ -94,6 +94,83 @@ line или отчёт. Двухфазная команда Control Center со�
 `kodex-integration-credentials`, после чего Connection получает только
 authoritative Secret metadata и content digest. В production fixture owner и
 repository не имеют default и всегда задаются Connection config.
+
+## Поддерживаемый deployed local E2E
+
+Отдельный entrypoint `scripts/tests/integration-deployed-e2e.sh` проверяет
+развёрнутый local path, не подменяя `integration-gateway` прямым provider
+вызовом. Сценарий создаёт одноразовые Project, Agent и Connection через
+Control API, запускает обычный agent Run и требует вызов typed
+`invoke_integration` через runtime MCP boundary.
+
+Synthetic-профиль выполняет:
+
+1. READ без Human Gate и без изменения journal;
+2. WRITE с `REJECT`, после которого provider count остаётся равен нулю;
+3. WRITE с `APPROVE`, после provider effect принудительно пересоздаёт только
+   local Pod `integration-gateway`;
+4. ждёт истечения 30-секундной invocation lease и повторного exact claim;
+5. сверяет local-only diagnostic readback: `count=1`, `replay_count>=1` и
+   одинаковый last effect/replay key.
+
+Прямая local fixture ручка используется только для readback. Запись в journal
+через неё запрещена тестовым сценарием. Специальное значение с префиксом
+`kodex-e2e-replay:` задерживает только первый ответ local-only fixture на четыре
+секунды, чтобы воспроизводимо создать crash window после durable provider
+effect. Повтор с тем же effect key отвечает немедленно.
+
+Перед запуском требуются готовый local namespace и установленные зависимости
+Control Center:
+
+```bash
+cd services/staff/control-center
+npm ci --ignore-scripts
+cd ../../..
+
+export KODEX_E2E_KUBECONFIG='/absolute/path/to/local-kubeconfig'
+export KODEX_E2E_BASE_URL='https://<trusted-local-origin>'
+export KODEX_E2E_OWNER_USERNAME='<local-owner>'
+export KODEX_E2E_OWNER_PASSWORD='<owner-private-value>'
+export KODEX_E2E_RESOURCE_PREFIX='integration-unique-slug'
+export KODEX_E2E_CONFIRM_DISPOSABLE='I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION'
+make test-integration-deployed-e2e
+```
+
+Значения credentials не передаются в аргументах процессов. Auth storage,
+Playwright output и port-forward log создаются в owner-private temporary
+directory и удаляются по `trap`; screenshot, trace, video и HTML report
+отключены. Для одной установки каждый запуск использует новый
+`KODEX_E2E_RESOURCE_PREFIX`, потому что Project является audit evidence и не
+удаляется сценарием.
+
+GitHub-профиль выключен по умолчанию. Он включается только явным
+`KODEX_INTEGRATION_E2E_GITHUB=1`, всегда ограничен private repository
+`codex-k8s/kodex-integration-e2e` и требует ровно один источник token:
+
+```bash
+export KODEX_INTEGRATION_E2E_GITHUB=1
+export KODEX_GITHUB_BOT_PAT_FILE='/absolute/owner-private/path/kodex-agent.token'
+make test-integration-deployed-e2e
+```
+
+Вместо файла допускается owner-private environment
+`KODEX_GITHUB_BOT_PAT`; одновременно задавать оба источника запрещено. Файл
+должен быть regular non-symlink, принадлежать текущему UID и не иметь прав для
+group/other. Token передаётся в двухфазную credential-команду платформы и не
+попадает в argv, Connection readback, reporter или artifacts.
+
+GitHub-сценарий читает metadata exact private repository, затем через
+`invoke_integration` создаёт ровно один issue с уникальным marker после Human
+Gate. Прямой GitHub API применяется только для authoritative before/after
+readback и cleanup: созданный issue закрывается в `finally`. `gh` и прямой API
+не используются как доказательство платформенного write.
+
+Статическая проверка TypeScript и обнаружения отдельного suite выполняется без
+мутаций:
+
+```bash
+make test-integration-deployed-e2e-check
+```
 
 ## Диагностика
 

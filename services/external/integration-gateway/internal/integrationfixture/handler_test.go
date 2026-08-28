@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestReadinessAndStrictJournalContract(t *testing.T) {
@@ -75,6 +76,29 @@ func TestWriteRetryReturnsExactReadbackAndConflictDoesNotMutate(t *testing.T) {
 	if current.Sequence != 1 || current.Count != 1 || current.Value != "first" {
 		t.Fatalf("conflicting retry mutated journal: %#v", current)
 	}
+}
+
+func TestReplayDiagnosticProvesOneEffect(t *testing.T) {
+	t.Parallel()
+	handler := newHandler(NewStore(), time.Millisecond)
+	handler.SetReady(true)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	endpoint := server.URL + "/v1/journals/replay/entries"
+	headers := http.Header{"Content-Type": {"application/json"}, "Idempotency-Key": {"eff-replay"}}
+	body := `{"value":"kodex-e2e-replay:once"}`
+	requestProjection(t, server.Client(), http.MethodPost, endpoint, body, headers)
+	requestProjection(t, server.Client(), http.MethodPost, endpoint, body, headers)
+
+	diagnostic := requestDiagnostic(t, server.Client(), server.URL+"/v1/diagnostics/journals/replay")
+	if diagnostic.Count != 1 || diagnostic.Value != "kodex-e2e-replay:once" ||
+		diagnostic.LastEffectKey != "eff-replay" || diagnostic.ReplayCount != 1 ||
+		diagnostic.LastReplayEffectKey != "eff-replay" {
+		t.Fatalf("replay diagnostic = %#v", diagnostic)
+	}
+	assertStatus(t, server.Client(), http.MethodPost, server.URL+"/v1/diagnostics/journals/replay", "", nil, http.StatusMethodNotAllowed)
+	assertStatus(t, server.Client(), http.MethodGet, server.URL+"/v1/diagnostics/journals/replay?unsafe=true", "", nil, http.StatusBadRequest)
 }
 
 func TestConcurrentRetryCreatesOneEffect(t *testing.T) {
@@ -190,6 +214,29 @@ func requestProjection(t *testing.T, client *http.Client, method, endpoint, body
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&projection); err != nil || !errorsIsEOF(decoder.Decode(&struct{}{})) {
 		t.Fatalf("decode projection: %#v, %v", projection, err)
+	}
+	return projection
+}
+
+func requestDiagnostic(t *testing.T, client *http.Client, endpoint string) DiagnosticProjection {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("diagnostic status = %d", response.StatusCode)
+	}
+	var projection DiagnosticProjection
+	decoder := json.NewDecoder(response.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&projection); err != nil || !errorsIsEOF(decoder.Decode(&struct{}{})) {
+		t.Fatalf("decode diagnostic: %#v, %v", projection, err)
 	}
 	return projection
 }

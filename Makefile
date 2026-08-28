@@ -11,7 +11,7 @@ GRPC_GO_PLUGIN_LOCAL_VERSION := 1.6.2
 CONTROL_API_GATEWAY_ASYNCAPI_PARSER_VERSION := 3.6.3
 OAPI_CODEGEN_VERSION := v2.7.1
 
-.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-openapi-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-service-infrastructure-bootstrap test-management-surfaces test-install-contract test-authority-policy-codegen test-control-plane-postgres test-internal-rpc-authority-postgres test-session-archive-seaweedfs-e2e test-integration-synthetic test-full-local-e2e-entrypoint test-local-material-contract-revision test-go test-go-all tidy-go govulncheck gen-integration-packages check-integration-package-codegen gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
+.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-openapi-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-service-infrastructure-bootstrap test-management-surfaces test-install-contract test-authority-policy-codegen test-control-plane-postgres test-internal-rpc-authority-postgres test-session-archive-seaweedfs-e2e test-integration-synthetic test-full-local-e2e-entrypoint test-local-material-contract-revision test-integration-deployed-e2e-check test-integration-deployed-e2e test-go test-go-all tidy-go govulncheck gen-integration-packages check-integration-package-codegen gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -67,6 +67,16 @@ test-full-local-e2e-entrypoint:
 
 test-local-material-contract-revision:
 	@./scripts/tests/local-material-contract-revision-test.sh
+
+test-integration-deployed-e2e-check:
+	@cd services/staff/control-center && \
+		KODEX_E2E_CHECK_ONLY=1 KODEX_E2E_PROFILE=web-only KODEX_E2E_RESOURCE_PREFIX=check-only \
+		./node_modules/.bin/tsc --noEmit -p tsconfig.e2e.json && \
+		KODEX_E2E_CHECK_ONLY=1 KODEX_E2E_PROFILE=web-only KODEX_E2E_RESOURCE_PREFIX=check-only \
+		./node_modules/.bin/playwright test --config playwright.integration.config.ts --list
+
+test-integration-deployed-e2e:
+	@./scripts/tests/integration-deployed-e2e.sh
 
 test-go: test-go-toolchain-contract check-sql-boundary
 	@./scripts/test-go-modules.sh
