@@ -8,8 +8,10 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 up|status|smoke|e2e|down [--kubeconfig <path>] [--context <name>]" \
+    "Usage: $0 up|status|smoke|e2e|full-e2e|down [--kubeconfig <path>] [--context <name>]" \
     "       $0 e2e [--resource-prefix <slug>] [--run-timeout-ms <milliseconds>]" \
+    "       $0 full-e2e [--check] [--skip-build] [--resource-prefix <slug>]" \
+    "         [--target <test-make-target>]..." \
     "       $0 provider-authorize|provider-import|provider-list [provider options]" \
     '  [--state-directory <path>]' >&2
 }
@@ -18,6 +20,9 @@ command_name=${1:-}
 [[ -n "$command_name" ]] || { usage; exit 1; }
 shift
 case "$command_name" in
+  full-e2e)
+    exec "$(dirname -- "${BASH_SOURCE[0]}")/tools/dev/full-local-e2e.sh" "$@"
+    ;;
   provider-authorize)
     exec "$(dirname -- "${BASH_SOURCE[0]}")/tools/dev/provider-account.sh" authorize "$@"
     ;;
@@ -173,12 +178,16 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
   exit 0
 fi
 
+material_directory="$state_directory/material"
+material_action=$("$repository_root/tools/dev/reconcile-local-material.sh" --context "$context" \
+  --state-directory "$state_directory" --mode reconcile)
+printf 'Kodex local material action: %s\n' "$material_action"
+
 kubectl create namespace kodex-system --dry-run=client -o yaml |
   kubectl apply --server-side --field-manager=kodex-local-dev -f - >/dev/null
 kubectl label namespace kodex-system app.kubernetes.io/part-of=kodex \
   kodex.dev/environment=staging kodex.dev/local-profile=hot-reload --overwrite >/dev/null
 
-material_directory="$state_directory/material"
 if [[ ! -d "$material_directory" ]]; then
   registry_username="$state_directory/inputs/registry-username"
   registry_password="$state_directory/inputs/registry-password"
@@ -217,6 +226,8 @@ fi
 "$repository_root/infra/identity/bootstrap.sh" --context "$context" --mode apply \
   --oidc-host "$oidc_host" --ingress-class traefik --cluster-issuer kodex-local \
   --ingress-namespace kube-system --ingress-pod-name traefik
+kubectl label namespace identity app.kubernetes.io/part-of=kodex kodex.dev/capability=identity \
+  kodex.dev/environment=staging kodex.dev/local-profile=hot-reload --overwrite >/dev/null
 kubectl -n identity patch serverstransport sso-public --type=merge \
   -p '{"spec":{"rootCAsSecrets":["sso-public-tls"]}}' >/dev/null
 "$repository_root/tools/deploy/configure-keycloak.sh" --context "$context" --mode apply \
@@ -242,6 +253,8 @@ fi
   --material-directory "$material_directory" \
   --oidc-ca-file "$state_directory/kodex-local-ca.crt" \
   --provider-auth-file "$provider_auth"
+"$repository_root/tools/dev/reconcile-local-material.sh" --context "$context" \
+  --state-directory "$state_directory" --mode commit >/dev/null
 
 "$repository_root/tools/dev/build-local-runner.sh" \
   --source-root "$repository_root" --state-directory "$state_directory"

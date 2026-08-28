@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail() {
+  printf 'Kodex full local E2E entrypoint test failed: %s\n' "$*" >&2
+  exit 1
+}
+
+repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+entrypoint="$repository_root/tools/dev/full-local-e2e.sh"
+temporary_directory=$(mktemp -d)
+trap 'rm -rf -- "$temporary_directory"' EXIT
+fixture_root="$temporary_directory/repository"
+fake_bin="$temporary_directory/bin"
+state_directory="$temporary_directory/state"
+command_log="$temporary_directory/commands.log"
+kubeconfig="$temporary_directory/kubeconfig"
+mkdir -p "$fixture_root/tools/dev" "$fixture_root/services/staff/control-center" "$fake_bin"
+cp "$entrypoint" "$fixture_root/tools/dev/full-local-e2e.sh"
+printf '{}\n' >"$fixture_root/services/staff/control-center/package.json"
+mkdir -p "$fixture_root/services/staff/control-center/node_modules/.bin"
+printf '#!/usr/bin/env bash\nexit 0\n' \
+  >"$fixture_root/services/staff/control-center/node_modules/.bin/tsc"
+printf '#!/usr/bin/env bash\nexit 0\n' \
+  >"$fixture_root/services/staff/control-center/node_modules/.bin/playwright"
+chmod +x "$fixture_root/services/staff/control-center/node_modules/.bin/tsc" \
+  "$fixture_root/services/staff/control-center/node_modules/.bin/playwright"
+printf 'fixture\n' >"$kubeconfig"
+
+cat >"$fake_bin/kubectl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  'config current-context') printf '%s\n' "${KODEX_TEST_CONTEXT:?}" ;;
+  'get --raw=/readyz') printf 'ok\n' ;;
+  'get namespace/kodex-system -o json')
+    [[ "${KODEX_TEST_NAMESPACE_PRESENT:-true}" == true ]] || exit 1
+    printf '%s\n' '{"metadata":{"labels":{"app.kubernetes.io/part-of":"kodex","kodex.dev/environment":"staging","kodex.dev/local-profile":"hot-reload"}}}'
+    ;;
+  *) printf 'unexpected kubectl call: %s\n' "$*" >&2; exit 1 ;;
+esac
+EOF
+cat >"$fake_bin/npm" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'npm %s\n' "$*" >>"${KODEX_TEST_COMMAND_LOG:?}"
+EOF
+cat >"$fake_bin/make" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'make %s\n' "$*" >>"${KODEX_TEST_COMMAND_LOG:?}"
+EOF
+cat >"$fixture_root/dev.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'dev %s\n' "$*" >>"${KODEX_TEST_COMMAND_LOG:?}"
+command_name=${1:?}
+shift
+state_directory=""
+resource_prefix=""
+while (($# > 0)); do
+  case "$1" in
+    --state-directory) state_directory=${2:?}; shift 2 ;;
+    --resource-prefix) resource_prefix=${2:?}; shift 2 ;;
+    *) shift 2 ;;
+  esac
+done
+if [[ "$command_name" == e2e ]]; then
+  mkdir -p "$state_directory/e2e"
+  jq -n '{version:1,status:"passed",summary:{passed:7},results:[]}' \
+    >"$state_directory/e2e/$resource_prefix-report.json"
+fi
+EOF
+chmod +x "$fake_bin"/* "$fixture_root/dev.sh" "$fixture_root/tools/dev/full-local-e2e.sh"
+
+export PATH="$fake_bin:$PATH"
+export KODEX_TEST_COMMAND_LOG="$command_log"
+export KODEX_TEST_CONTEXT=fixture-local
+
+"$fixture_root/tools/dev/full-local-e2e.sh" --check \
+  --kubeconfig "$kubeconfig" --context fixture-local \
+  --state-directory "$state_directory" --resource-prefix contract-check \
+  --target test-extra >/dev/null
+grep -Fxq 'npm --prefix '"$fixture_root"'/services/staff/control-center run test:e2e:check' \
+  "$command_log" || fail '--check did not validate the browser suite'
+grep -Fxq 'make --no-print-directory -n -C '"$fixture_root"' test-extra' "$command_log" ||
+  fail '--check did not validate the additional target'
+if grep -q '^dev ' "$command_log"; then
+  fail '--check invoked mutating local development commands'
+fi
+
+: >"$command_log"
+KODEX_TEST_CREDENTIAL='must-not-be-persisted' \
+  "$fixture_root/tools/dev/full-local-e2e.sh" \
+    --kubeconfig "$kubeconfig" --context fixture-local \
+    --state-directory "$state_directory" --resource-prefix contract-full \
+    --run-timeout-ms 60000 --target test-extra >/dev/null
+grep -Fq 'dev up ' "$command_log" || fail 'full run did not delegate deployment to dev.sh up'
+grep -Fq 'dev e2e ' "$command_log" || fail 'full run did not delegate browser E2E to dev.sh e2e'
+grep -Fxq 'make --no-print-directory -C '"$fixture_root"' test-extra' "$command_log" ||
+  fail 'full run did not execute the additional target'
+summary="$state_directory/e2e/contract-full-summary.json"
+jq -e '
+  .version == 1 and .status == "passed" and .context == "fixture-local" and
+  .resourcePrefix == "contract-full" and .buildMode == "rebuilt" and
+  .browser == {status:"passed",counts:{passed:7}} and
+  .additionalTargets == ["test-extra"] and
+  [.phases[].name] == ["local-render-deploy","browser-auth-and-full-e2e","additional:test-extra"] and
+  all(.phases[]; .status == "passed")
+' "$summary" >/dev/null || fail 'redacted full-run summary is invalid'
+[[ "$(stat -c '%a' "$summary")" == 600 ]] || fail 'summary permissions are not private'
+if grep -Fq 'must-not-be-persisted' "$summary"; then
+  fail 'summary persisted a credential value'
+fi
+
+: >"$command_log"
+"$fixture_root/tools/dev/full-local-e2e.sh" --skip-build \
+  --kubeconfig "$kubeconfig" --context fixture-local \
+  --state-directory "$state_directory" --resource-prefix contract-reuse \
+  --run-timeout-ms 60000 >/dev/null
+grep -Fq 'dev status ' "$command_log" || fail '--skip-build did not perform readback'
+grep -Fq 'dev e2e ' "$command_log" || fail '--skip-build did not run browser E2E'
+if grep -Fq 'dev up ' "$command_log"; then
+  fail '--skip-build invoked build or deployment'
+fi
+jq -e '.status == "passed" and .buildMode == "reused"' \
+  "$state_directory/e2e/contract-reuse-summary.json" >/dev/null ||
+  fail '--skip-build summary is invalid'
+
+if "$fixture_root/tools/dev/full-local-e2e.sh" --check \
+  --kubeconfig "$kubeconfig" --context production-cluster \
+  --state-directory "$state_directory" --resource-prefix contract-prod >/dev/null 2>&1; then
+  fail 'production context was accepted'
+fi
+if "$fixture_root/tools/dev/full-local-e2e.sh" --check \
+  --kubeconfig "$kubeconfig" --context fixture-local \
+  --state-directory "$state_directory" --resource-prefix contract-target \
+  --target deploy-production >/dev/null 2>&1; then
+  fail 'unsafe additional target was accepted'
+fi
+
+printf 'Kodex full local E2E entrypoint tests passed\n'

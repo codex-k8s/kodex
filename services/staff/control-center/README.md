@@ -188,6 +188,30 @@ npm run test:e2e
 сети, browser binary и credentials для обоих профилей. Это не считается
 фактическим E2E PASS.
 
+Поддерживаемый оркестратор полного локального контура запускается из корня
+репозитория. Он требует точный non-production context, делегирует
+render/deploy/readback существующему `dev.sh`, выполняет auth smoke и полный
+browser E2E, а затем сохраняет отдельный redacted summary без credentials:
+
+```bash
+./dev.sh full-e2e --context radar-dev-local \
+  --resource-prefix local-acceptance-001 \
+  --target test-integration-synthetic
+```
+
+`--check` выполняет только preflight и `test:e2e:check`, не разворачивая стенд.
+`--skip-build` допускается только для уже готового точного local profile и
+заменяет `up` на authoritative `status`/readback. Дополнительные цели передаются
+повторяемым `--target` и ограничены Make-целями `test-*`; их собственные env и
+credential files оркестратор не копирует в summary. Итог находится в
+`.kodex-dev/e2e/<resource-prefix>-summary.json` с mode `0600`.
+
+Перед локальным `up` проверяется ревизия реестра Secret projections и NATS
+material contract. При drift disposable namespaces `kodex-system` и `identity`
+пересоздаются автоматически вместе с installation material. Локальные
+`credentials.env`, `provider-accounts/` и `cache/` сохраняются; другие
+namespaces, включая соседние проекты, reconciler не адресует.
+
 ## Codegen и быстрые проверки
 
 ```bash
