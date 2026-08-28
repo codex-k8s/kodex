@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronDown, Languages, LogOut } from "@lucide/vue";
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type {
@@ -8,6 +8,7 @@ import type {
   UserSummary,
 } from "@/shared/api/generated/openapi/types.gen";
 import type { SupportedLocale } from "@/shared/locale";
+import { useDismissibleLayer } from "@/shared/ui/useDismissibleLayer";
 
 const props = defineProps<{
   user: UserSummary;
@@ -20,6 +21,8 @@ const emit = defineEmits<{
   logout: [];
 }>();
 const { t } = useI18n();
+const root = ref<HTMLElement>();
+const open = ref(false);
 const roleLabel = computed(() => t(`access.roles.${props.platformRole}`));
 const initials = computed(() => {
   const parts = props.user.displayName.trim().split(/\s+/).filter(Boolean);
@@ -34,11 +37,22 @@ const accessibleLabel = computed(() =>
     role: roleLabel.value,
   }),
 );
+useDismissibleLayer(root, () => {
+  open.value = false;
+});
 </script>
 
 <template>
-  <details class="current-user-menu">
-    <summary :aria-label="accessibleLabel" :title="accessibleLabel">
+  <div ref="root" class="current-user-menu">
+    <button
+      class="current-user-menu__trigger"
+      type="button"
+      :aria-label="accessibleLabel"
+      :title="accessibleLabel"
+      :aria-expanded="open"
+      aria-haspopup="menu"
+      @click="open = !open"
+    >
       <span class="current-user__avatar" aria-hidden="true">{{
         initials
       }}</span>
@@ -47,8 +61,8 @@ const accessibleLabel = computed(() =>
         <small>{{ roleLabel }}</small>
       </span>
       <ChevronDown class="desktop-only" :size="15" aria-hidden="true" />
-    </summary>
-    <div class="current-user-menu__popover">
+    </button>
+    <div v-if="open" class="current-user-menu__popover" role="menu">
       <div class="current-user-menu__identity">
         <strong>{{ user.displayName }}</strong>
         <small>{{ roleLabel }}</small>
@@ -65,7 +79,10 @@ const accessibleLabel = computed(() =>
             type="button"
             :class="{ 'segmented-control__active': locale === value }"
             :aria-pressed="locale === value"
-            @click="emit('changeLocale', value)"
+            @click="
+              emit('changeLocale', value);
+              open = false;
+            "
           >
             {{ value === "ru" ? "RU" : "EN" }}
           </button>
@@ -75,13 +92,16 @@ const accessibleLabel = computed(() =>
         v-if="canLogout"
         class="current-user-menu__action"
         type="button"
-        @click="emit('logout')"
+        @click="
+          emit('logout');
+          open = false;
+        "
       >
         <LogOut :size="16" aria-hidden="true" />
         {{ $t("auth.logout") }}
       </button>
     </div>
-  </details>
+  </div>
 </template>
 
 <style scoped>
@@ -89,7 +109,7 @@ const accessibleLabel = computed(() =>
   position: relative;
   min-width: 0;
 }
-.current-user-menu summary {
+.current-user-menu__trigger {
   display: flex;
   align-items: center;
   min-width: 0;
@@ -97,13 +117,12 @@ const accessibleLabel = computed(() =>
   padding: 4px;
   border-radius: 7px;
   cursor: pointer;
-  list-style: none;
+  color: inherit;
+  border: 0;
+  background: transparent;
 }
-.current-user-menu summary::-webkit-details-marker {
-  display: none;
-}
-.current-user-menu summary:hover,
-.current-user-menu[open] summary {
+.current-user-menu__trigger:hover,
+.current-user-menu__trigger[aria-expanded="true"] {
   background: var(--panel);
 }
 .current-user__avatar {

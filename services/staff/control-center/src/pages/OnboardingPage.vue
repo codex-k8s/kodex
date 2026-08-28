@@ -8,8 +8,10 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { useContextualAssistant } from "@/features/assistant/contextual-assistant";
 
 const platform = usePlatformStore();
+const contextualAssistant = useContextualAssistant();
 const router = useRouter();
 const busy = ref(false);
 const problem = ref<AppProblem>();
@@ -70,11 +72,14 @@ onMounted(async () => {
         </ol>
         <ProblemNotice v-if="problem" :problem="problem" compact />
         <div class="onboarding-actions">
-          <RouterLink
+          <button
             class="button button--primary button--large"
-            to="/assistant"
-            >{{ $t("onboarding.startAssistant") }}</RouterLink
+            type="button"
+            :disabled="!assistantReady"
+            @click="contextualAssistant.show"
           >
+            {{ $t("onboarding.startAssistant") }}
+          </button>
           <button
             v-if="canFinish"
             class="button button--secondary button--large"

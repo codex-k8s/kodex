@@ -6,6 +6,7 @@ import { useRoute, useRouter } from "vue-router";
 import { usePlatformStore } from "@/features/platform/store";
 import InstructionHistory from "@/features/agents/components/InstructionHistory.vue";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -269,7 +270,7 @@ async function launch() {
       title: task.value.trim().slice(0, 160),
       task: task.value.trim(),
     });
-    await router.push(`/runs/${run.ref}`);
+    await router.push(runPath(run.ref, projectRef.value));
   } catch (error) {
     problem.value = asProblem(error);
   } finally {

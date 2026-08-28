@@ -132,8 +132,68 @@
   --canvas: #f7f9fb;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color: #eef1f4;
+    background: #16191d;
+    --accent: #62a8e8;
+    --accent-strong: #8fc3f1;
+    --accent-soft: #1f3346;
+    --success: #63c887;
+    --success-soft: #1c3527;
+    --warning: #e0bd62;
+    --warning-soft: #3b311b;
+    --danger: #ed8787;
+    --danger-soft: #432525;
+    --muted: #aeb7c0;
+    --subtle: #8c969f;
+    --text: #eef1f4;
+    --text-secondary: #b9c1c9;
+    --border: #3a4047;
+    --border-strong: #505860;
+    --hairline: #2a2f34;
+    --surface: #1d2125;
+    --panel: #22272c;
+    --canvas: #16191d;
+  }
+}
+
+:root[data-theme="dark"] {
+  color: #eef1f4;
+  background: #16191d;
+  --accent: #62a8e8;
+  --accent-strong: #8fc3f1;
+  --accent-soft: #1f3346;
+  --success: #63c887;
+  --success-soft: #1c3527;
+  --warning: #e0bd62;
+  --warning-soft: #3b311b;
+  --danger: #ed8787;
+  --danger-soft: #432525;
+  --muted: #aeb7c0;
+  --subtle: #8c969f;
+  --text: #eef1f4;
+  --text-secondary: #b9c1c9;
+  --border: #3a4047;
+  --border-strong: #505860;
+  --hairline: #2a2f34;
+  --surface: #1d2125;
+  --panel: #22272c;
+  --canvas: #16191d;
+}
+
 * {
   box-sizing: border-box;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 html,
 body,
@@ -251,20 +311,23 @@ p {
   height: 100%;
   object-fit: contain;
 }
-.global-search {
-  flex: 1 1 360px;
+.global-search-wrap {
+  position: relative;
+  flex: 1 1 auto;
   min-width: 180px;
-  max-width: 360px;
+}
+.global-search {
+  width: 100%;
 }
 .global-search input {
   width: 100%;
 }
 .global-search-results {
-  position: fixed;
+  position: absolute;
   z-index: 50;
-  top: 56px;
-  left: min(280px, 20vw);
-  width: min(640px, calc(100vw - 300px));
+  top: calc(100% + 8px);
+  left: 0;
+  width: 100%;
   max-height: min(70vh, 620px);
   overflow-y: auto;
   padding: 12px;
@@ -381,6 +444,9 @@ p {
   border-radius: 10px;
   background: var(--accent-soft);
   text-decoration: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .assistant-entry:hover,
 .assistant-entry:focus-visible {
@@ -1131,15 +1197,12 @@ time,
   .topbar-project-switcher {
     flex-basis: 190px;
   }
-  .global-search {
-    max-width: 280px;
-  }
   .decision-link__label,
   .topbar .current-user__text,
-  .topbar .current-user-menu summary > svg {
+  .topbar .current-user-menu__trigger > svg {
     display: none;
   }
-  .topbar .current-user-menu summary {
+  .topbar .current-user-menu__trigger {
     min-width: 36px;
     min-height: 36px;
     justify-content: center;
@@ -1150,6 +1213,11 @@ time,
   .desktop-only,
   .decision-link {
     display: none;
+  }
+  .global-search-wrap {
+    position: static;
+    flex: 0 0 auto;
+    min-width: 0;
   }
   .global-search {
     display: none;
@@ -1167,6 +1235,7 @@ time,
     border-bottom: 1px solid var(--border);
   }
   .global-search-results {
+    position: fixed;
     top: 111px;
     left: 8px;
     width: calc(100vw - 16px);
@@ -1196,7 +1265,7 @@ time,
     min-width: 0;
   }
   .icon-button,
-  .topbar .current-user-menu summary {
+  .topbar .current-user-menu__trigger {
     width: 44px;
     min-width: 44px;
     height: 44px;
@@ -1303,7 +1372,7 @@ time,
     z-index: 25;
     inset: auto 0 0;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     min-height: 62px;
     padding-bottom: env(safe-area-inset-bottom);
     border-top: 1px solid var(--border);
@@ -1330,6 +1399,33 @@ time,
   .mobile-tabs a.router-link-active {
     color: var(--accent);
     background: var(--accent-soft);
+  }
+}
+
+.kodex-fab {
+  position: fixed;
+  z-index: 45;
+  right: 24px;
+  bottom: 24px;
+  display: inline-grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  color: #fff;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 12px 30px rgb(20 97 174 / 0.3);
+  cursor: pointer;
+}
+.kodex-fab:hover,
+.kodex-fab:focus-visible {
+  background: var(--accent-strong);
+}
+@media (max-width: 900px) {
+  .kodex-fab {
+    right: 14px;
+    bottom: 74px;
   }
 }
 
