@@ -1,0 +1,109 @@
+---
+id: RUN-MC-024
+title: Backup, retention и restore drill
+type: runbook
+status: approved
+owner: sre
+version: 1.0.0
+updated: 2026-08-28
+---
+
+# Backup, retention и restore drill
+
+Runbook не разрешает deploy, удаление backup, создание production database или
+запуск restore без отдельного owner OK. Secret values, DSN, passwords, access
+keys, session tokens, TLS private keys и содержимое dump не выводить.
+
+## Контракт Secret
+
+Deployment читает только key `credentials.json` Kubernetes Secret
+`backup-controller-credentials`. JSON schema version 1 содержит
+`destination`, непустые `databases` и `objectStores`. S3 entry содержит имена
+полей `name`, `endpoint`, `region`, `bucket`, `prefix`, `accessKeyId`,
+`secretAccessKey`, optional `sessionToken`, `usePathStyle`; database entry —
+`name`, `host`, `port`, `database`, `user`, `password`, optional `role`,
+`tlsMode`, `tlsServerName`, `caFile`, optional client certificate paths,
+`schemaKind` и optional `declaredSchemaVersion`. Значения хранятся только в
+Secret и здесь не документируются.
+
+One-shot restore дополнительно читает:
+
+- `repository.json` Secret `backup-controller-repository`, содержащий schema
+  version 1 и только backup `destination`;
+- `targets.json` owner-created Secret `backup-controller-restore-targets` с
+  новыми database names и отдельным пустым versioned S3 target;
+- `approval.json` owner-created Secret `backup-controller-restore-approval` с
+  schema version 1, `approvalId`, `restoreId`, exact `backupId`,
+  `targetSetSha256` и `expiresAt` не дальше 24 часов.
+
+CA и client TLS material также монтируются из Kubernetes Secret. Production
+конфигурация с HTTP S3, plaintext PostgreSQL, неточным SNI или отсутствующей CA
+закрыто отклоняется.
+
+Base NetworkPolicy разрешает только cluster-local PostgreSQL и SeaweedFS
+fixture. Production overlay обязан материализовать
+`external-egress-networkpolicy.template.yaml` с exact destination CIDR для S3
+и, при необходимости, отдельной restore database; wildcard egress запрещён.
+
+## Read-only проверка
+
+1. Проверить `/healthz`, `/readyz`, `/status` и `up{service="backup-controller"}`.
+2. Сверить возраст `kodex_backup_controller_last_successful_backup_timestamp_seconds`,
+   счётчики `backup_runs_total`, `database_actions_total`,
+   `object_actions_total` и `retention_runs_total`.
+3. В versioned repository проверить наличие exact `manifest.json` и
+   `verification.json` одного `backupId`. Manifest допустим только со
+   `state=complete`, совпадающими counts и exact receipts всех dump/schema/S3
+   copies. Не считать `attempt.json` или `failure.json` успешным backup.
+4. Проверить, что source bucket и backup bucket имеют versioning `Enabled`, а
+   platform-owned source objects содержат metadata `kodex-sha256`.
+5. Для retention убедиться, что хотя бы один сохранённый backup имеет валидный
+   `restore-drills/<restoreId>.json`. При его отсутствии outcome `protected` —
+   ожидаемый закрытый отказ удаления.
+
+## Owner-gated restore drill
+
+1. Владелец выбирает exact verified `backupId` и готовит новые отсутствующие
+   target database names. Использовать source database, существующую database
+   или непустой S3 target prefix запрещено.
+2. SRE создаёт Secret targets без вывода значений и запускает image командой
+   `fingerprint-targets`. Владелец независимо сверяет target set и выпускает
+   отдельный approval Secret с полученным digest и коротким expiry.
+3. После отдельного owner OK SRE материализует
+   `deploy/k8s/base/backup-controller/restore-drill-job.template.yaml`, заменяет
+   только exact image/release placeholders и уникальное имя Job, затем запускает
+   один Job. Параллельный backup/retention закрыто блокируется S3 operation lock.
+4. Успех принимать только при `Complete` Job и immutable restore drill receipt,
+   где совпадают approval, request digest, target digest, database schema
+   versions, object counts, sizes и SHA-256. Проверить рост
+   `restore_drills_total{outcome="success"}` при доступном scrape one-shot job.
+5. Восстановленные database и S3 objects остаются отдельными. Controller не
+   переключает traffic, не меняет source и не очищает target; cleanup требует
+   отдельного owner-approved кодового действия.
+
+Partial restore создаёт terminal `failure.json`; повтор с тем же `restoreId`
+запрещён. После устранения причины владелец выдаёт новый approval, новый
+`restoreId` и новый пустой target.
+
+## Отказы
+
+- `backup repository operation is already locked`: убедиться, что Deployment
+  или restore Job ещё работает. Автоматически удалять lock запрещено. Для
+  аварийного lock после `expiresAt` владелец подтверждает отсутствие живой
+  операции, SRE фиксирует exact lock version receipt и удаляет только эту
+  version через проверяемый repository tool; затем выполняет readback отсутствия.
+- `immutable S3 object already exists`: не перезаписывать key и не отключать
+  version checks; выяснить повтор operation ID или постороннюю запись.
+- `backup verification receipt is unavailable`: backup не является restore
+  point. Исправить dependency и запустить новый backup либо explicit `verify`
+  для того же immutable manifest.
+- `restore target database already exists` или `restore S3 target is not empty`:
+  не очищать target автоматически; подготовить новый target и новый approval.
+- PostgreSQL tool failure: сверить server major 17/18, TLS, роль backup,
+  свободное ephemeral storage и timeout. stderr намеренно не содержит payload.
+
+## Rollback
+
+Вернуть Deployment на прежний exact image digest. Backup objects, manifests,
+verification, restore receipts и operation locks не переписывать. Retention
+остановить до подтверждения хотя бы одного сохранённого verified restore point.

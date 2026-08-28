@@ -1,0 +1,58 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: backup-controller
+  labels:
+    app.kubernetes.io/name: backup-controller
+spec:
+  groups:
+    - name: backup-controller.availability
+      rules:
+        - alert: BackupControllerUnavailable
+          expr: absent(up{service="backup-controller"}) or sum(up{service="backup-controller"}) < 1
+          for: 10m
+          labels: {severity: critical}
+          annotations:
+            summary: Backup-controller недоступен
+            description: Prometheus не видит готовый backup-controller.
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/backup-controller.md
+        - alert: BackupControllerNotReady
+          expr: absent(kodex_backup_controller_readiness{ready="true"}) or sum(kodex_backup_controller_readiness{ready="true"}) < 1
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Backup-controller не проходит readiness
+            description: PostgreSQL или один из обязательных S3 paths недоступен либо несовместим.
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/backup-controller.md
+        - alert: BackupControllerBackupOverdue
+          expr: absent(kodex_backup_controller_last_successful_backup_timestamp_seconds) or time() - max(kodex_backup_controller_last_successful_backup_timestamp_seconds) > 108000
+          for: 30m
+          labels: {severity: critical}
+          annotations:
+            summary: Нет свежего verified backup
+            description: Последний полный backup с independent readback старше 30 часов.
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/backup-controller.md
+        - alert: BackupControllerFailures
+          expr: increase(kodex_backup_controller_backup_runs_total{outcome="error"}[1h]) > 0
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: Backup-controller завершил цикл с ошибкой
+            description: Проверить failure receipt, PostgreSQL, immutable S3 receipts и свободное workspace.
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/backup-controller.md
+        - alert: BackupControllerRetentionProtected
+          expr: increase(kodex_backup_controller_retention_runs_total{outcome="protected"}[24h]) > 0
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: Retention защищённо остановлен
+            description: Нет verified restore point, который можно сохранить при удалении старых backup.
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/backup-controller.md
+        - alert: BackupControllerRestoreDrillOverdue
+          expr: absent(kodex_backup_controller_last_verified_restore_timestamp_seconds) or time() - max(kodex_backup_controller_last_verified_restore_timestamp_seconds) > 3024000
+          for: 1h
+          labels: {severity: warning}
+          annotations:
+            summary: Restore drill просрочен
+            description: Последний owner-gated restore drill старше 35 дней или ещё не выполнялся.
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/backup-controller.md

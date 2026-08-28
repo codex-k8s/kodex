@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backup-controller
+  labels:
+    app.kubernetes.io/name: backup-controller
+spec:
+  selector:
+    app.kubernetes.io/name: backup-controller
+    app.kubernetes.io/component: backup-job
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP

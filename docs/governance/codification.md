@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.0
-updated: 2026-08-25
+version: 2.2.1
+updated: 2026-08-28
 ---
 
 # Кодификация документов и задач
@@ -121,6 +121,7 @@ updated: 2026-07-28
 | `GO-DOC-006`       | `docs/guides/shared-go-libraries.md`                        |
 | `SVC-MC-005`       | `services/internal/runtime-controller/README.md`            |
 | `SVC-MC-017`       | `services/jobs/agent-runner/README.md`                      |
+| `JOB-MC-003`       | `services/jobs/backup-controller/README.md`                 |
 | `RUN-MC-008`       | `docs/runbooks/runtime-controller.md`                       |
 | `FE-DOC-001`       | `docs/guides/frontend-vue.md`                               |
 | `INFRA-DOC-001`    | `docs/guides/infrastructure.md`                             |
@@ -136,5 +137,6 @@ updated: 2026-07-28
 | `RUN-MC-016`       | `docs/runbooks/automation-scheduler.md`                     |
 | `RUN-MC-022`       | `docs/runbooks/interaction-gateway.md`                      |
 | `RUN-MC-023`       | `docs/runbooks/identity-and-management-surfaces.md`         |
+| `RUN-MC-024`       | `docs/runbooks/backup-controller.md`                        |
 
 При добавлении управляемого документа реестр обновляется в том же PR.

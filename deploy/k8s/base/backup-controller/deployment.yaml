@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backup-controller
+  labels:
+    app.kubernetes.io/name: backup-controller
+    app.kubernetes.io/component: backup-job
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backup-controller
+      app.kubernetes.io/component: backup-job
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backup-controller
+        app.kubernetes.io/component: backup-job
+      annotations:
+        kubectl.kubernetes.io/default-container: backup-controller
+    spec:
+      serviceAccountName: backup-controller
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: backup-controller
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/backup-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          args: [serve]
+          envFrom:
+            - configMapRef:
+                name: backup-controller-runtime
+          env:
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['kodex.dev/environment']
+            - name: BACKUP_CONTROLLER_RELEASE_REVISION
+              value: sha256:0000000000000000000000000000000000000000000000000000000000000000
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          startupProbe:
+            httpGet: {path: /healthz, port: metrics}
+            timeoutSeconds: 2
+            periodSeconds: 2
+            failureThreshold: 45
+          readinessProbe:
+            httpGet: {path: /readyz, port: metrics}
+            timeoutSeconds: 2
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet: {path: /healthz, port: metrics}
+            timeoutSeconds: 2
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 1Gi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+              ephemeral-storage: 160Gi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: credentials
+              mountPath: /var/run/secrets/kodex/backup-controller
+              readOnly: true
+            - name: tls
+              mountPath: /var/run/secrets/kodex/backup-controller/tls
+              readOnly: true
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: credentials
+          secret:
+            secretName: backup-controller-credentials
+            defaultMode: 0440
+            items:
+              - key: credentials.json
+                path: credentials.json
+        - name: tls
+          secret:
+            secretName: backup-controller-tls
+            defaultMode: 0440
+        - name: work
+          emptyDir:
+            sizeLimit: 160Gi

@@ -39,12 +39,24 @@ spec:
                 [ "$SECONDS" -lt "$deadline" ] || { printf 'SeaweedFS master readiness timed out\n' >&2; exit 1; }
                 sleep 2
               done
-              output="$(printf 's3.bucket.create -name kodex-artifacts\ns3.bucket.list\n' |
+              output="$(printf 's3.bucket.create -name kodex-artifacts\ns3.bucket.create -name kodex-backups\ns3.bucket.create -name kodex-restore-fixture\ns3.bucket.list\n' |
                 weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888 2>/dev/null)"
-              printf '%s\n' "$output" | grep -Eq '(^|[[:space:]])kodex-artifacts($|[[:space:]])' || {
-                printf 'SeaweedFS bucket readback failed\n' >&2
-                exit 1
-              }
+              for bucket in kodex-artifacts kodex-backups kodex-restore-fixture; do
+                printf '%s\n' "$output" | grep -Eq "(^|[[:space:]])${bucket}($|[[:space:]])" || {
+                  printf 'SeaweedFS bucket readback failed\n' >&2
+                  exit 1
+                }
+                curl --fail --silent --show-error --max-time 5 -X PUT \
+                  -H 'Content-Type: application/xml' \
+                  --data-binary '<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Status>Enabled</Status></VersioningConfiguration>' \
+                  "http://seaweedfs-s3:8333/${bucket}?versioning"
+                curl --fail --silent --show-error --max-time 5 \
+                  "http://seaweedfs-s3:8333/${bucket}?versioning" |
+                  grep -q '<Status>Enabled</Status>' || {
+                    printf 'SeaweedFS bucket versioning readback failed\n' >&2
+                    exit 1
+                  }
+              done
           resources:
             requests: {cpu: 10m, memory: 32Mi}
             limits: {cpu: 200m, memory: 128Mi}
