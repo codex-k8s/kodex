@@ -4,8 +4,8 @@ title: Высокоуровневая архитектура
 type: architecture
 status: approved
 owner: architect
-version: 1.1.6
-updated: 2026-08-24
+version: 1.2.0
+updated: 2026-08-28
 ---
 
 # Высокоуровневая архитектура
@@ -35,7 +35,7 @@ flowchart LR
     EG --> EXT[Внешние системы]
     MG --> AP[Ручное согласование]
     AR --> CP
-    CP --> AB[(Bounded artifact storage)]
+    CP --> S3[(S3-compatible artifact bodies)]
     IA --> MM
     RIB[Role Image Builder] --> REG[(OCI Registry)]
     RIB --> ADM[SBOM, scan, sign, admit]
@@ -104,7 +104,8 @@ namespace. Следующие фазы
 - передает прогресс и потребление лимитов;
 - вызывает разрешенные инструменты MCP;
 - публикует итоговый результат;
-- сохраняет архив сессии;
+- сохраняет активный session JSONL на session PVC; S3 archive/restore относится
+  к отдельному unit #1002;
 - корректно завершает дочерние процессы и обрабатывает остановку.
 
 Компонент запуска не содержит бизнес-логику внешних каналов, создания проектов

@@ -504,7 +504,7 @@ Production-действия выполняются только после от�
 ## Базовый стек
 
 Базовый стек: Go, Vue, TypeScript, gRPC/Protobuf, OpenAPI/REST, AsyncAPI,
-WebSockets, PostgreSQL, optional Redis, optional S3-compatible storage,
+WebSockets, PostgreSQL, optional Redis, обязательное S3-compatible storage,
 NATS JetStream, Kubernetes, Prometheus/Grafana, OpenTelemetry/Jaeger, Sentry,
 Kubernetes Secrets, Keycloak, GitHub и optional Mattermost.
 

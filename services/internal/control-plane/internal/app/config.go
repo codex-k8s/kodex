@@ -208,16 +208,27 @@ func (config Config) validate() error {
 		connectErr != nil || connectHost == "" || net.ParseIP(connectHost) != nil || connectPort != "443" {
 		return errors.New("control-plane OIDC boundary is invalid")
 	}
-	objectEndpoint, objectEndpointErr := url.Parse(config.ObjectStorageEndpoint)
-	localInsecure := config.ObjectStorageAllowInsecureLocal && objectEndpoint != nil && objectEndpoint.Scheme == "http" && strings.HasSuffix(objectEndpoint.Hostname(), ".kodex-system.svc.cluster.local")
-	if objectEndpointErr != nil || objectEndpoint == nil || (objectEndpoint.Scheme != "https" && !localInsecure) || objectEndpoint.Host == "" || objectEndpoint.User != nil || objectEndpoint.RawQuery != "" || objectEndpoint.Fragment != "" ||
-		(objectEndpoint.Path != "" && objectEndpoint.Path != "/") || !validRuntimeIdentifier(config.ObjectStorageRegion) || !validDNSLabel(config.ObjectStorageBucket) {
+	if !validObjectStorageBoundary(config) {
 		return errors.New("control-plane object storage boundary is invalid")
 	}
 	if info, err := os.Lstat(filepath.Dir(config.AuthorityVerifierSocket)); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return errors.New("control-plane authority socket directory is invalid")
 	}
 	return nil
+}
+
+func validObjectStorageBoundary(config Config) bool {
+	endpoint, err := url.Parse(config.ObjectStorageEndpoint)
+	if err != nil || endpoint == nil {
+		return false
+	}
+	localInsecure := config.ObjectStorageAllowInsecureLocal && endpoint.Scheme == "http" &&
+		endpoint.Hostname() == "seaweedfs-s3.kodex-system.svc.cluster.local" &&
+		endpoint.Port() == "8333"
+	return (endpoint.Scheme == "https" || localInsecure) && endpoint.Host != "" &&
+		endpoint.User == nil && endpoint.RawQuery == "" && endpoint.Fragment == "" &&
+		(endpoint.Path == "" || endpoint.Path == "/") &&
+		validRuntimeIdentifier(config.ObjectStorageRegion) && validDNSLabel(config.ObjectStorageBucket)
 }
 
 func validDNSLabel(value string) bool {

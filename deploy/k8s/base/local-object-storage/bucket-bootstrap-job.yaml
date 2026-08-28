@@ -1,0 +1,63 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seaweedfs-bucket-bootstrap
+  labels:
+    app.kubernetes.io/name: seaweedfs-bucket-bootstrap
+    app.kubernetes.io/component: object-storage-bootstrap
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: seaweedfs-bucket-bootstrap
+        app.kubernetes.io/component: object-storage-bootstrap
+    spec:
+      serviceAccountName: seaweedfs-bucket-bootstrap
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        runAsGroup: 10000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrap
+          image: __KODEX_SEAWEEDFS_IMAGE__
+          imagePullPolicy: IfNotPresent
+          command: [/bin/sh, -ec]
+          env:
+            - {name: HOME, value: /tmp}
+          args:
+            - |
+              deadline=$((SECONDS + 120))
+              until curl --fail --silent --show-error --max-time 2 http://seaweedfs:9333/cluster/status >/dev/null; do
+                [ "$SECONDS" -lt "$deadline" ] || { printf 'SeaweedFS master readiness timed out\n' >&2; exit 1; }
+                sleep 2
+              done
+              output="$(printf 's3.bucket.create -name kodex-artifacts\ns3.bucket.list\n' |
+                weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888 2>/dev/null)"
+              printf '%s\n' "$output" | grep -Eq '(^|[[:space:]])kodex-artifacts($|[[:space:]])' || {
+                printf 'SeaweedFS bucket readback failed\n' >&2
+                exit 1
+              }
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10000
+            runAsGroup: 10000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 8Mi}

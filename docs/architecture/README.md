@@ -4,8 +4,8 @@ title: Архитектурная основа Kodex
 type: architecture-index
 status: approved
 owner: architect
-version: 1.1.0
-updated: 2026-08-25
+version: 1.2.0
+updated: 2026-08-28
 ---
 
 # Архитектурная основа Kodex
@@ -20,8 +20,10 @@ Kodex строится как независимая от поставщика �
   правилам `project-template`.
 - Fresh install использует единую baseline schema без compatibility, dual-write,
   legacy migration и cutover paths.
-- PostgreSQL является источником истины для metadata, bounded artifact content,
-  desired state, queues, graph/events и audit fresh web-only профиля.
+- PostgreSQL является источником истины для metadata, desired state, queues,
+  graph/events и audit fresh web-only профиля. Неизменяемые artifact bodies
+  находятся в обязательном S3-compatible storage, а PostgreSQL хранит точные
+  object receipts и digests.
 - Kubernetes исполняет рабочую нагрузку, но не хранит бизнес-состояние.
 - Control Center работает без внешних интеграций. Mattermost может принимать
   входящие сообщения, доставлять уведомления, зеркалировать результаты и
@@ -66,8 +68,8 @@ Kodex строится как независимая от поставщика �
 - OpenAPI для внешних HTTP-контрактов.
 - AsyncAPI для долговечных событий.
 - Protobuf/gRPC для всех типизированных внутренних синхронных контрактов.
-- Redis и S3 могут добавляться специализированными cache/storage adapters, но не
-  являются обязательными зависимостями fresh web-only профиля.
+- S3-compatible artifact storage обязателен; Redis добавляется только
+  специализированным cache adapter, когда он действительно нужен unit.
 - NATS JetStream для доменных событий за broker-neutral relay/inbox API.
 - OpenTelemetry, Prometheus и Grafana для наблюдаемости.
 - BuildKit для сборки образов ролей.

@@ -9,6 +9,13 @@
       "sha256": "3b38b4d9aa1237902d0043f36f0c21c9b3afc4458ccd6310f0f4a284b2c6c7d8"
     }
   ],
+  "images": [
+    {
+      "name": "seaweedfs",
+      "version": "4.41",
+      "reference": "docker.io/chrislusf/seaweedfs@sha256:43b768cd62b00d132439cda881b93fd1adebf1b315e996e794087743821d771d"
+    }
+  ],
   "tools": {
     "air": {
       "module": "github.com/air-verse/air",
