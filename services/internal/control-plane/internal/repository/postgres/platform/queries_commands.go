@@ -225,6 +225,8 @@ var (
 	queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState string
 	//go:embed sql/commands_resolvegate_update_owner_gates_state_decision_decision_comment.sql
 	queryCommandsResolvegateUpdateOwnerGatesStateDecisionDecisionComment string
+	//go:embed sql/commands_resolvegate_update_integration_invocation.sql
+	queryCommandsResolvegateUpdateIntegrationInvocation string
 	//go:embed sql/commands_resolvegate_insert_change_request_turn.sql
 	queryCommandsResolvegateInsertChangeRequestTurn string
 	//go:embed sql/commands_resolvegate_update_change_request_session.sql

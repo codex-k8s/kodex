@@ -8,6 +8,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -142,6 +143,12 @@ func (server *Server) ArchiveSchedule(ctx context.Context, request *controlplane
 
 func (server *Server) CreateIntegrationConnection(ctx context.Context, request *controlplanev1.CreateIntegrationConnectionRequest) (*controlplanev1.CreateIntegrationConnectionResponse, error) {
 	payload := command.ConnectionInput{DefinitionKey: request.GetDefinitionKey(), Name: request.GetName(), PublicConfiguration: asMap(request.GetPublicConfiguration()), Enabled: true}
+	if credential := request.GetCredentialRevision(); credential != nil {
+		payload.CredentialRevision = &entity.IntegrationCredentialRevision{
+			SecretRef: credential.GetSecretRef(), SecretUID: credential.GetSecretUid(), SecretResourceVersion: credential.GetSecretResourceVersion(),
+			ContentSHA256: credential.GetContentSha256(),
+		}
+	}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateIntegrationConnection_FullMethodName, command.CreateConnection, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err

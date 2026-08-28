@@ -399,24 +399,63 @@ func (e InstructionVersionState) Valid() bool {
 	}
 }
 
+// Defines values for IntegrationCapabilityApprovalPolicy.
+const (
+	IntegrationCapabilityApprovalPolicyHUMANEACHEFFECT IntegrationCapabilityApprovalPolicy = "HUMAN_EACH_EFFECT"
+	IntegrationCapabilityApprovalPolicyNONE            IntegrationCapabilityApprovalPolicy = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationCapabilityApprovalPolicy enum.
+func (e IntegrationCapabilityApprovalPolicy) Valid() bool {
+	switch e {
+	case IntegrationCapabilityApprovalPolicyHUMANEACHEFFECT:
+		return true
+	case IntegrationCapabilityApprovalPolicyNONE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationCapabilityResourceKind.
+const (
+	IntegrationCapabilityResourceKindGITHUBREPOSITORY  IntegrationCapabilityResourceKind = "GITHUB_REPOSITORY"
+	IntegrationCapabilityResourceKindMATTERMOSTCHANNEL IntegrationCapabilityResourceKind = "MATTERMOST_CHANNEL"
+	IntegrationCapabilityResourceKindSYNTHETICJOURNAL  IntegrationCapabilityResourceKind = "SYNTHETIC_JOURNAL"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationCapabilityResourceKind enum.
+func (e IntegrationCapabilityResourceKind) Valid() bool {
+	switch e {
+	case IntegrationCapabilityResourceKindGITHUBREPOSITORY:
+		return true
+	case IntegrationCapabilityResourceKindMATTERMOSTCHANNEL:
+		return true
+	case IntegrationCapabilityResourceKindSYNTHETICJOURNAL:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IntegrationCapabilityRisk.
 const (
-	DESTRUCTIVE IntegrationCapabilityRisk = "DESTRUCTIVE"
-	READ        IntegrationCapabilityRisk = "READ"
-	SENSITIVE   IntegrationCapabilityRisk = "SENSITIVE"
-	WRITE       IntegrationCapabilityRisk = "WRITE"
+	IntegrationCapabilityRiskDESTRUCTIVE IntegrationCapabilityRisk = "DESTRUCTIVE"
+	IntegrationCapabilityRiskREAD        IntegrationCapabilityRisk = "READ"
+	IntegrationCapabilityRiskSENSITIVE   IntegrationCapabilityRisk = "SENSITIVE"
+	IntegrationCapabilityRiskWRITE       IntegrationCapabilityRisk = "WRITE"
 )
 
 // Valid indicates whether the value is a known member of the IntegrationCapabilityRisk enum.
 func (e IntegrationCapabilityRisk) Valid() bool {
 	switch e {
-	case DESTRUCTIVE:
+	case IntegrationCapabilityRiskDESTRUCTIVE:
 		return true
-	case READ:
+	case IntegrationCapabilityRiskREAD:
 		return true
-	case SENSITIVE:
+	case IntegrationCapabilityRiskSENSITIVE:
 		return true
-	case WRITE:
+	case IntegrationCapabilityRiskWRITE:
 		return true
 	default:
 		return false
@@ -486,6 +525,105 @@ func (e IntegrationConnectionCommandAction) Valid() bool {
 	case IntegrationConnectionCommandActionENABLE:
 		return true
 	case IntegrationConnectionCommandActionTEST:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationDefinitionAdapter.
+const (
+	GITHUB                IntegrationDefinitionAdapter = "GITHUB"
+	MATTERMOSTINTERACTION IntegrationDefinitionAdapter = "MATTERMOST_INTERACTION"
+	SYNTHETICHTTP         IntegrationDefinitionAdapter = "SYNTHETIC_HTTP"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationDefinitionAdapter enum.
+func (e IntegrationDefinitionAdapter) Valid() bool {
+	switch e {
+	case GITHUB:
+		return true
+	case MATTERMOSTINTERACTION:
+		return true
+	case SYNTHETICHTTP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationDefinitionOrigin.
+const (
+	SHIPPED IntegrationDefinitionOrigin = "SHIPPED"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationDefinitionOrigin enum.
+func (e IntegrationDefinitionOrigin) Valid() bool {
+	switch e {
+	case SHIPPED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationGrantApprovalPolicy.
+const (
+	IntegrationGrantApprovalPolicyHUMANEACHEFFECT IntegrationGrantApprovalPolicy = "HUMAN_EACH_EFFECT"
+	IntegrationGrantApprovalPolicyNONE            IntegrationGrantApprovalPolicy = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationGrantApprovalPolicy enum.
+func (e IntegrationGrantApprovalPolicy) Valid() bool {
+	switch e {
+	case IntegrationGrantApprovalPolicyHUMANEACHEFFECT:
+		return true
+	case IntegrationGrantApprovalPolicyNONE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationGrantRisk.
+const (
+	IntegrationGrantRiskDESTRUCTIVE IntegrationGrantRisk = "DESTRUCTIVE"
+	IntegrationGrantRiskREAD        IntegrationGrantRisk = "READ"
+	IntegrationGrantRiskSENSITIVE   IntegrationGrantRisk = "SENSITIVE"
+	IntegrationGrantRiskWRITE       IntegrationGrantRisk = "WRITE"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationGrantRisk enum.
+func (e IntegrationGrantRisk) Valid() bool {
+	switch e {
+	case IntegrationGrantRiskDESTRUCTIVE:
+		return true
+	case IntegrationGrantRiskREAD:
+		return true
+	case IntegrationGrantRiskSENSITIVE:
+		return true
+	case IntegrationGrantRiskWRITE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationResourceScopeKind.
+const (
+	IntegrationResourceScopeKindGITHUBREPOSITORY  IntegrationResourceScopeKind = "GITHUB_REPOSITORY"
+	IntegrationResourceScopeKindMATTERMOSTCHANNEL IntegrationResourceScopeKind = "MATTERMOST_CHANNEL"
+	IntegrationResourceScopeKindSYNTHETICJOURNAL  IntegrationResourceScopeKind = "SYNTHETIC_JOURNAL"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationResourceScopeKind enum.
+func (e IntegrationResourceScopeKind) Valid() bool {
+	switch e {
+	case IntegrationResourceScopeKindGITHUBREPOSITORY:
+		return true
+	case IntegrationResourceScopeKindMATTERMOSTCHANNEL:
+		return true
+	case IntegrationResourceScopeKindSYNTHETICJOURNAL:
 		return true
 	default:
 		return false
@@ -2221,12 +2359,22 @@ type InstructionVersionPage struct {
 
 // IntegrationCapability defines model for IntegrationCapability.
 type IntegrationCapability struct {
-	ApprovalRequired bool                      `json:"approvalRequired"`
-	Description      string                    `json:"description"`
-	Key              string                    `json:"key"`
-	Name             string                    `json:"name"`
-	Risk             IntegrationCapabilityRisk `json:"risk"`
+	ApprovalPolicy   IntegrationCapabilityApprovalPolicy `json:"approvalPolicy"`
+	ApprovalRequired bool                                `json:"approvalRequired"`
+	Description      string                              `json:"description"`
+	InputFields      []IntegrationConfigurationField     `json:"inputFields"`
+	Key              string                              `json:"key"`
+	Name             string                              `json:"name"`
+	Operation        string                              `json:"operation"`
+	ResourceKind     IntegrationCapabilityResourceKind   `json:"resourceKind"`
+	Risk             IntegrationCapabilityRisk           `json:"risk"`
 }
+
+// IntegrationCapabilityApprovalPolicy defines model for IntegrationCapability.ApprovalPolicy.
+type IntegrationCapabilityApprovalPolicy string
+
+// IntegrationCapabilityResourceKind defines model for IntegrationCapability.ResourceKind.
+type IntegrationCapabilityResourceKind string
 
 // IntegrationCapabilityRisk defines model for IntegrationCapability.Risk.
 type IntegrationCapabilityRisk string
@@ -2246,18 +2394,22 @@ type IntegrationConfigurationFieldValueType string
 
 // IntegrationConnection defines model for IntegrationConnection.
 type IntegrationConnection struct {
-	Capabilities          []IntegrationCapability    `json:"capabilities"`
-	CredentialsConfigured bool                       `json:"credentialsConfigured"`
-	CredentialsHint       string                     `json:"credentialsHint"`
-	DefinitionKey         string                     `json:"definitionKey"`
-	Grants                []IntegrationGrant         `json:"grants"`
-	LastTestOutcome       *string                    `json:"lastTestOutcome,omitempty"`
-	LastTestedAt          *Timestamp                 `json:"lastTestedAt,omitempty"`
-	Name                  string                     `json:"name"`
-	NextActions           []NextAction               `json:"nextActions"`
-	Ref                   OpaqueRef                  `json:"ref"`
-	State                 IntegrationConnectionState `json:"state"`
-	Version               int64                      `json:"version"`
+	Capabilities          []IntegrationCapability             `json:"capabilities"`
+	CredentialRevision    *IntegrationCredentialRevisionInput `json:"credentialRevision,omitempty"`
+	CredentialsConfigured bool                                `json:"credentialsConfigured"`
+	CredentialsHint       string                              `json:"credentialsHint"`
+	DefinitionDigest      string                              `json:"definitionDigest"`
+	DefinitionKey         string                              `json:"definitionKey"`
+	DefinitionVersion     string                              `json:"definitionVersion"`
+	Grants                []IntegrationGrant                  `json:"grants"`
+	LastTestOutcome       *string                             `json:"lastTestOutcome,omitempty"`
+	LastTestedAt          *Timestamp                          `json:"lastTestedAt,omitempty"`
+	Name                  string                              `json:"name"`
+	NextActions           []NextAction                        `json:"nextActions"`
+	PublicConfiguration   map[string]interface{}              `json:"publicConfiguration"`
+	Ref                   OpaqueRef                           `json:"ref"`
+	State                 IntegrationConnectionState          `json:"state"`
+	Version               int64                               `json:"version"`
 }
 
 // IntegrationConnectionState defines model for IntegrationConnection.State.
@@ -2273,33 +2425,74 @@ type IntegrationConnectionCommandAction string
 
 // IntegrationConnectionInput defines model for IntegrationConnectionInput.
 type IntegrationConnectionInput struct {
-	DefinitionKey       string                  `json:"definitionKey"`
-	Name                string                  `json:"name"`
-	PublicConfiguration *map[string]interface{} `json:"publicConfiguration,omitempty"`
+	CredentialRevision  *IntegrationCredentialRevision `json:"credentialRevision,omitempty"`
+	DefinitionKey       string                         `json:"definitionKey"`
+	Name                string                         `json:"name"`
+	PublicConfiguration *map[string]interface{}        `json:"publicConfiguration,omitempty"`
+}
+
+// IntegrationCredentialRevision defines model for IntegrationCredentialRevision.
+type IntegrationCredentialRevision struct {
+	ContentSha256         string             `json:"contentSha256"`
+	CreatedAt             *Timestamp         `json:"createdAt,omitempty"`
+	Ref                   OpaqueRef          `json:"ref"`
+	Revision              int64              `json:"revision"`
+	SecretRef             string             `json:"secretRef"`
+	SecretResourceVersion string             `json:"secretResourceVersion"`
+	SecretUid             openapi_types.UUID `json:"secretUid"`
+}
+
+// IntegrationCredentialRevisionInput defines model for IntegrationCredentialRevisionInput.
+type IntegrationCredentialRevisionInput struct {
+	ContentSha256         string             `json:"contentSha256"`
+	SecretRef             string             `json:"secretRef"`
+	SecretResourceVersion string             `json:"secretResourceVersion"`
+	SecretUid             openapi_types.UUID `json:"secretUid"`
 }
 
 // IntegrationDefinition defines model for IntegrationDefinition.
 type IntegrationDefinition struct {
+	Adapter             IntegrationDefinitionAdapter    `json:"adapter"`
 	Available           bool                            `json:"available"`
 	BuiltIn             bool                            `json:"builtIn"`
 	Capabilities        []IntegrationCapability         `json:"capabilities"`
 	Category            string                          `json:"category"`
 	ConfigurationFields []IntegrationConfigurationField `json:"configurationFields"`
+	CredentialSecretKey *string                         `json:"credentialSecretKey,omitempty"`
+	DefinitionVersion   string                          `json:"definitionVersion"`
 	Description         string                          `json:"description"`
+	Digest              string                          `json:"digest"`
 	Key                 string                          `json:"key"`
 	Name                string                          `json:"name"`
+	Origin              IntegrationDefinitionOrigin     `json:"origin"`
+	SchemaVersion       string                          `json:"schemaVersion"`
 }
+
+// IntegrationDefinitionAdapter defines model for IntegrationDefinition.Adapter.
+type IntegrationDefinitionAdapter string
+
+// IntegrationDefinitionOrigin defines model for IntegrationDefinition.Origin.
+type IntegrationDefinitionOrigin string
 
 // IntegrationGrant defines model for IntegrationGrant.
 type IntegrationGrant struct {
-	AgentRef      *OpaqueRef `json:"agentRef,omitempty"`
-	CapabilityKey string     `json:"capabilityKey"`
-	Enabled       bool       `json:"enabled"`
-	Ref           OpaqueRef  `json:"ref"`
-	TargetName    string     `json:"targetName"`
-	Version       int64      `json:"version"`
-	WorkflowRef   *OpaqueRef `json:"workflowRef,omitempty"`
+	AgentRef       *OpaqueRef                     `json:"agentRef,omitempty"`
+	ApprovalPolicy IntegrationGrantApprovalPolicy `json:"approvalPolicy"`
+	CapabilityKey  string                         `json:"capabilityKey"`
+	Enabled        bool                           `json:"enabled"`
+	Ref            OpaqueRef                      `json:"ref"`
+	ResourceScope  IntegrationResourceScope       `json:"resourceScope"`
+	Risk           IntegrationGrantRisk           `json:"risk"`
+	TargetName     string                         `json:"targetName"`
+	Version        int64                          `json:"version"`
+	WorkflowRef    *OpaqueRef                     `json:"workflowRef,omitempty"`
 }
+
+// IntegrationGrantApprovalPolicy defines model for IntegrationGrant.ApprovalPolicy.
+type IntegrationGrantApprovalPolicy string
+
+// IntegrationGrantRisk defines model for IntegrationGrant.Risk.
+type IntegrationGrantRisk string
 
 // IntegrationGrantInput defines model for IntegrationGrantInput.
 type IntegrationGrantInput struct {
@@ -2308,6 +2501,16 @@ type IntegrationGrantInput struct {
 	Enabled       bool       `json:"enabled"`
 	WorkflowRef   *OpaqueRef `json:"workflowRef,omitempty"`
 }
+
+// IntegrationResourceScope defines model for IntegrationResourceScope.
+type IntegrationResourceScope struct {
+	Digest string                       `json:"digest"`
+	Kind   IntegrationResourceScopeKind `json:"kind"`
+	Values map[string]string            `json:"values"`
+}
+
+// IntegrationResourceScopeKind defines model for IntegrationResourceScope.Kind.
+type IntegrationResourceScopeKind string
 
 // Membership defines model for Membership.
 type Membership struct {

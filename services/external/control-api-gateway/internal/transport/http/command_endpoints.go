@@ -524,7 +524,19 @@ func (server *Server) CreateIntegrationConnection(w http.ResponseWriter, r *http
 		}
 	}
 	public, _ := structpb.NewStruct(config)
-	response, err := server.control.Command.CreateIntegrationConnection(r.Context(), &controlplanev1.CreateIntegrationConnectionRequest{Mutation: m, DefinitionKey: body.DefinitionKey, Name: body.Name, PublicConfiguration: public})
+	var credentialRevision *controlplanev1.IntegrationCredentialRevisionInput
+	if credential := body.CredentialRevision; credential != nil {
+		credentialRevision = &controlplanev1.IntegrationCredentialRevisionInput{
+			SecretRef:             credential.SecretRef,
+			SecretUid:             credential.SecretUid.String(),
+			SecretResourceVersion: credential.SecretResourceVersion,
+			ContentSha256:         credential.ContentSha256,
+		}
+	}
+	response, err := server.control.Command.CreateIntegrationConnection(r.Context(), &controlplanev1.CreateIntegrationConnectionRequest{
+		Mutation: m, DefinitionKey: body.DefinitionKey, Name: body.Name,
+		PublicConfiguration: public, CredentialRevision: credentialRevision,
+	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

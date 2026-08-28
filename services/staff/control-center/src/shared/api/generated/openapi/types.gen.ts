@@ -680,6 +680,10 @@ export type IntegrationCapability = {
     description: string;
     risk: 'READ' | 'WRITE' | 'SENSITIVE' | 'DESTRUCTIVE';
     approvalRequired: boolean;
+    operation: string;
+    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
+    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL';
+    inputFields: Array<IntegrationConfigurationField>;
 };
 
 export type IntegrationConfigurationField = {
@@ -700,6 +704,37 @@ export type IntegrationDefinition = {
     available: boolean;
     capabilities: Array<IntegrationCapability>;
     configurationFields: Array<IntegrationConfigurationField>;
+    schemaVersion: string;
+    definitionVersion: string;
+    origin: 'SHIPPED';
+    digest: string;
+    adapter: 'SYNTHETIC_HTTP' | 'GITHUB' | 'MATTERMOST_INTERACTION';
+    credentialSecretKey?: string;
+};
+
+export type IntegrationResourceScope = {
+    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL';
+    values: {
+        [key: string]: string;
+    };
+    digest: string;
+};
+
+export type IntegrationCredentialRevision = {
+    ref: OpaqueRef;
+    revision: number;
+    secretRef: string;
+    secretUid: string;
+    secretResourceVersion: string;
+    contentSha256: string;
+    createdAt?: Timestamp;
+};
+
+export type IntegrationCredentialRevisionInput = {
+    secretRef: string;
+    secretUid: string;
+    secretResourceVersion: string;
+    contentSha256: string;
 };
 
 export type IntegrationGrant = {
@@ -710,6 +745,9 @@ export type IntegrationGrant = {
     workflowRef?: OpaqueRef;
     targetName: string;
     enabled: boolean;
+    risk: 'READ' | 'WRITE' | 'SENSITIVE' | 'DESTRUCTIVE';
+    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
+    resourceScope: IntegrationResourceScope;
 };
 
 export type IntegrationConnection = {
@@ -725,6 +763,12 @@ export type IntegrationConnection = {
     capabilities: Array<IntegrationCapability>;
     grants: Array<IntegrationGrant>;
     nextActions: Array<NextAction>;
+    definitionVersion: string;
+    definitionDigest: string;
+    publicConfiguration: {
+        [key: string]: unknown;
+    };
+    credentialRevision?: IntegrationCredentialRevisionInput;
 };
 
 export type IntegrationConnectionInput = {
@@ -733,6 +777,7 @@ export type IntegrationConnectionInput = {
     publicConfiguration?: {
         [key: string]: unknown;
     };
+    credentialRevision?: IntegrationCredentialRevision;
 };
 
 export type IntegrationConnectionCommand = {

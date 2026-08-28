@@ -8,8 +8,10 @@ require (
 	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
 	github.com/codex-k8s/kodex/libs/go/credentialfs v0.0.0
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
+	github.com/codex-k8s/kodex/libs/go/integrationpackage v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
+	github.com/google/go-github/v74 v74.0.0
 	github.com/google/uuid v1.6.0
 )
 
@@ -23,6 +25,7 @@ require (
 	github.com/getsentry/sentry-go v0.48.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
@@ -38,6 +41,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
@@ -56,6 +60,8 @@ replace github.com/codex-k8s/kodex/libs/go/credentialfs => ../../../libs/go/cred
 replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcserver
 
 replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpserver
+
+replace github.com/codex-k8s/kodex/libs/go/integrationpackage => ../../../libs/go/integrationpackage
 
 replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
 

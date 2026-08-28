@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -38,6 +39,7 @@ type Repository struct {
 	providerCredential     ProviderCredentialConfig
 	roleImages             RoleImageConfig
 	objects                objectstorage.Store
+	integrationDefinitions map[string]integrationpackage.Package
 }
 
 // ProviderCredentialConfig содержит только безопасную identity неизменяемой
@@ -63,7 +65,14 @@ func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string,
 	if pool == nil || defaultRuntimeProvider != "openai-codex" || defaultRuntimeModel == "" || objects == nil {
 		return nil, errors.New("control-plane repository dependencies are required")
 	}
-	return &Repository{pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel, objects: objects}, nil
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		return nil, errors.New("load shipped integration definitions")
+	}
+	return &Repository{
+		pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel,
+		objects: objects, integrationDefinitions: definitions,
+	}, nil
 }
 
 func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error {
@@ -153,6 +162,9 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		); err != nil {
 			return err
 		}
+		if err := repository.reconcileIntegrationDefinitions(ctx, tx); err != nil {
+			return err
+		}
 		return tx.Commit(ctx)
 	}
 	organizationRef, err := newRef("org")
@@ -232,49 +244,8 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		roleRef, organizationID, systemSubjectID).Scan(&systemRoleID); err != nil {
 		return errors.New("seed system assistant role definition")
 	}
-	definitions := []struct {
-		key, name, description, category string
-		capabilities                     []entity.IntegrationCapability
-		fields                           []entity.IntegrationConfigurationField
-	}{
-		{
-			key: "github", name: "GitHub", description: "i18n:INTEGRATION_GITHUB_DESCRIPTION", category: "i18n:INTEGRATION_CATEGORY_DEVELOPMENT",
-			capabilities: []entity.IntegrationCapability{{Key: "github.repository.read", Name: "i18n:INTEGRATION_GITHUB_REPOSITORY_READ_NAME", Description: "i18n:INTEGRATION_GITHUB_REPOSITORY_READ_DESCRIPTION", Risk: "READ"}},
-			fields: []entity.IntegrationConfigurationField{
-				{Key: "owner", Label: "i18n:INTEGRATION_FIELD_GITHUB_OWNER_LABEL", Help: "i18n:INTEGRATION_FIELD_GITHUB_OWNER_HELP", ValueType: "TEXT", Required: true, Placeholder: "i18n:INTEGRATION_FIELD_GITHUB_OWNER_PLACEHOLDER"},
-				{Key: "repository", Label: "i18n:INTEGRATION_FIELD_GITHUB_REPOSITORY_LABEL", Help: "i18n:INTEGRATION_FIELD_GITHUB_REPOSITORY_HELP", ValueType: "TEXT", Required: true, Placeholder: "i18n:INTEGRATION_FIELD_GITHUB_REPOSITORY_PLACEHOLDER"},
-			},
-		},
-		{
-			key: "kubernetes", name: "Kubernetes", description: "i18n:INTEGRATION_KUBERNETES_DESCRIPTION", category: "i18n:INTEGRATION_CATEGORY_INFRASTRUCTURE",
-			capabilities: []entity.IntegrationCapability{{Key: "kubernetes.workload.read", Name: "i18n:INTEGRATION_KUBERNETES_WORKLOAD_READ_NAME", Description: "i18n:INTEGRATION_KUBERNETES_WORKLOAD_READ_DESCRIPTION", Risk: "SENSITIVE"}},
-			fields: []entity.IntegrationConfigurationField{
-				{Key: "server_url", Label: "i18n:INTEGRATION_FIELD_SERVER_URL_LABEL", Help: "i18n:INTEGRATION_FIELD_SERVER_URL_HELP", ValueType: "URL", Required: true, Placeholder: "https://api.example.test"},
-				{Key: "allowed_namespaces", Label: "i18n:INTEGRATION_FIELD_NAMESPACES_LABEL", Help: "i18n:INTEGRATION_FIELD_NAMESPACES_HELP", ValueType: "STRING_LIST", Required: true, Placeholder: "sales, support"},
-			},
-		},
-		{
-			key: "mattermost", name: "Mattermost", description: "i18n:INTEGRATION_MATTERMOST_DESCRIPTION", category: "i18n:INTEGRATION_CATEGORY_COMMUNICATIONS",
-			capabilities: []entity.IntegrationCapability{
-				{Key: "mattermost.inbound", Name: "i18n:INTEGRATION_MATTERMOST_INBOUND_NAME", Description: "i18n:INTEGRATION_MATTERMOST_INBOUND_DESCRIPTION", Risk: "READ"},
-				{Key: "mattermost.notifications", Name: "i18n:INTEGRATION_MATTERMOST_NOTIFICATIONS_NAME", Description: "i18n:INTEGRATION_MATTERMOST_NOTIFICATIONS_DESCRIPTION", Risk: "WRITE"},
-				{Key: "mattermost.result_mirror", Name: "i18n:INTEGRATION_MATTERMOST_RESULT_MIRROR_NAME", Description: "i18n:INTEGRATION_MATTERMOST_RESULT_MIRROR_DESCRIPTION", Risk: "WRITE"},
-				{Key: "mattermost.gate_decisions", Name: "i18n:INTEGRATION_MATTERMOST_GATE_DECISIONS_NAME", Description: "i18n:INTEGRATION_MATTERMOST_GATE_DECISIONS_DESCRIPTION", Risk: "SENSITIVE"},
-			},
-			fields: []entity.IntegrationConfigurationField{
-				{Key: "base_url", Label: "i18n:INTEGRATION_FIELD_BASE_URL_LABEL", Help: "i18n:INTEGRATION_FIELD_BASE_URL_HELP", ValueType: "URL", Required: true, Placeholder: "https://chat.example.test"},
-				{Key: "team_name", Label: "i18n:INTEGRATION_FIELD_TEAM_LABEL", Help: "i18n:INTEGRATION_FIELD_TEAM_HELP", ValueType: "TEXT", Required: true, Placeholder: "operations"},
-				{Key: "channel_name", Label: "i18n:INTEGRATION_FIELD_CHANNEL_LABEL", Help: "i18n:INTEGRATION_FIELD_CHANNEL_HELP", ValueType: "TEXT", Required: true, Placeholder: "ai-employees"},
-			},
-		},
-	}
-	for _, definition := range definitions {
-		capabilityJSON, _ := json.Marshal(definition.capabilities)
-		configurationJSON, _ := json.Marshal(definition.fields)
-		if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertIntegrationDefinitionsStableKeyDescriptionCapabilities,
-			definition.key, definition.name, definition.description, definition.category, capabilityJSON, configurationJSON); err != nil {
-			return errors.New("seed integration definition")
-		}
+	if err := repository.reconcileIntegrationDefinitions(ctx, tx); err != nil {
+		return err
 	}
 	agentRef, err := newRef("agt")
 	if err != nil {
@@ -311,6 +282,98 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		return errors.New("complete bootstrap")
 	}
 	return tx.Commit(ctx)
+}
+
+func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Context, tx pgx.Tx) error {
+	keys := make([]string, 0, len(repository.integrationDefinitions))
+	for _, definition := range integrationpackage.Sorted(repository.integrationDefinitions) {
+		var storedVersion, storedDigest string
+		err := tx.QueryRow(ctx, queryRepositoryReconcileIntegrationDefinition, definition.Metadata.Key).Scan(&storedVersion, &storedDigest)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return errors.New("read integration definition revision")
+		}
+		if err == nil {
+			comparison, compareErr := compareIntegrationDefinitionVersions(storedVersion, definition.Metadata.Version)
+			if compareErr != nil || comparison > 0 || comparison == 0 && storedDigest != definition.Digest {
+				return errors.New("integration definition revision rollback or digest mismatch")
+			}
+		}
+		capabilities := make([]entity.IntegrationCapability, 0, len(definition.Spec.Capabilities))
+		for _, capability := range definition.Spec.Capabilities {
+			capabilities = append(capabilities, entity.IntegrationCapability{
+				Key: capability.Key, Name: capability.Key, Operation: capability.Operation, Risk: capability.Risk,
+				ApprovalPolicy: capability.ApprovalPolicy, ResourceKind: capability.ResourceScope.Kind,
+				InputFields: integrationConfigurationFields(capability.InputFields),
+			})
+		}
+		fields := integrationConfigurationFields(definition.Spec.ConfigurationFields)
+		capabilityJSON, capabilityErr := json.Marshal(capabilities)
+		configurationJSON, configurationErr := json.Marshal(fields)
+		if capabilityErr != nil || configurationErr != nil {
+			return errors.New("encode integration definition")
+		}
+		credentialKey := ""
+		if definition.Spec.Credential != nil {
+			credentialKey = definition.Spec.Credential.SecretKey
+		}
+		if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertIntegrationDefinitionsStableKeyDescriptionCapabilities,
+			definition.Metadata.Key, definition.Spec.Name, definition.Spec.Description, definition.Spec.Category,
+			capabilityJSON, configurationJSON, definition.APIVersion, definition.Metadata.Version,
+			definition.Metadata.Origin, definition.Digest, definition.Spec.Adapter, credentialKey,
+		); err != nil {
+			return errors.New("reconcile integration definition")
+		}
+		keys = append(keys, definition.Metadata.Key)
+	}
+	if _, err := tx.Exec(ctx, queryRepositoryDisableUnshippedIntegrationDefinitions, keys); err != nil {
+		return errors.New("disable unshipped integration definitions")
+	}
+	return nil
+}
+
+func integrationConfigurationFields(fields []integrationpackage.Field) []entity.IntegrationConfigurationField {
+	result := make([]entity.IntegrationConfigurationField, 0, len(fields))
+	for _, field := range fields {
+		result = append(result, entity.IntegrationConfigurationField{
+			Key: field.Key, Label: field.Key, ValueType: field.Type, Required: field.Required,
+		})
+	}
+	return result
+}
+
+func compareIntegrationDefinitionVersions(left, right string) (int, error) {
+	parse := func(raw string) ([3]uint64, error) {
+		var result [3]uint64
+		parts := strings.Split(raw, ".")
+		if len(parts) != len(result) {
+			return result, errors.New("integration definition version is invalid")
+		}
+		for index, part := range parts {
+			value, err := strconv.ParseUint(part, 10, 32)
+			if err != nil || index == 0 && value == 0 {
+				return result, errors.New("integration definition version is invalid")
+			}
+			result[index] = value
+		}
+		return result, nil
+	}
+	parsedLeft, err := parse(left)
+	if err != nil {
+		return 0, err
+	}
+	parsedRight, err := parse(right)
+	if err != nil {
+		return 0, err
+	}
+	for index := range parsedLeft {
+		if parsedLeft[index] < parsedRight[index] {
+			return -1, nil
+		}
+		if parsedLeft[index] > parsedRight[index] {
+			return 1, nil
+		}
+	}
+	return 0, nil
 }
 
 func (repository *Repository) reconcileProviderCredential(ctx context.Context, tx pgx.Tx) error {

@@ -244,6 +244,14 @@ INTEGRATION_ACTION_COMPLETED:
   other: Integration action completed
 INTEGRATION_INVOCATION_COMPLETED:
   other: Integration invocation completed
+INTEGRATION_EFFECT_GATE_NODE_NAME:
+  other: Integration action approval
+INTEGRATION_EFFECT_GATE_TITLE:
+  other: Approve integration action
+INTEGRATION_EFFECT_GATE_PROMPT:
+  other: Review the exact action and resource scope before execution
+INTEGRATION_EFFECT_OWNER_DECISION_REQUIRED:
+  other: Integration action requires your approval
 OWNER_DECISION_REQUIRED:
   other: Human decision required
 OWNER_GATE_CANCELLED:

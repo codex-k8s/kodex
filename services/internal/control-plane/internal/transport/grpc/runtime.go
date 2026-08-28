@@ -318,7 +318,15 @@ func (server *Server) ClaimIntegrationConnectionTests(ctx context.Context, reque
 	response := &controlplanev1.ClaimIntegrationConnectionTestsResponse{}
 	for _, item := range items {
 		configuration, _ := item["configuration"].(map[string]any)
-		response.Claims = append(response.Claims, &controlplanev1.IntegrationConnectionTestClaim{TestRef: mapString(item, "testRef"), ConnectionRef: mapString(item, "connectionRef"), DefinitionKey: mapString(item, "definitionKey"), CredentialMaterializationRef: mapString(item, "credentialRef"), PublicConfiguration: structure(configuration), Lease: castLease(item)})
+		claim := &controlplanev1.IntegrationConnectionTestClaim{
+			TestRef: mapString(item, "testRef"), ConnectionRef: mapString(item, "connectionRef"),
+			DefinitionKey: mapString(item, "definitionKey"), PublicConfiguration: structure(configuration), Lease: castLease(item),
+			DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
+		}
+		if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
+			claim.CredentialRevision = castIntegrationCredential(credential)
+		}
+		response.Claims = append(response.Claims, claim)
 	}
 	return response, nil
 }
@@ -341,7 +349,15 @@ func (server *Server) ResolveIntegrationInvocation(ctx context.Context, request 
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &controlplanev1.ResolveIntegrationInvocationResponse{InvocationRef: mapString(result, "invocationRef"), GrantRef: mapString(result, "grantRef"), Operation: mapString(result, "operation")}, nil
+	resourceScope, _ := result["resourceScope"].(map[string]string)
+	return &controlplanev1.ResolveIntegrationInvocationResponse{
+		InvocationRef: mapString(result, "invocationRef"), GrantRef: mapString(result, "grantRef"),
+		Operation: mapString(result, "operation"), State: mapString(result, "state"), GateRef: mapString(result, "gateRef"),
+		Risk: integrationRisk(mapString(result, "risk")), ResourceScope: &controlplanev1.IntegrationResourceScope{
+			Kind: integrationResourceKind(mapString(result, "resourceKind")), Values: resourceScope,
+			Digest: mapString(result, "resourceScopeDigest"),
+		},
+	}, nil
 }
 
 func (server *Server) ClaimIntegrationInvocations(ctx context.Context, request *controlplanev1.ClaimIntegrationInvocationsRequest) (*controlplanev1.ClaimIntegrationInvocationsResponse, error) {
@@ -357,7 +373,24 @@ func (server *Server) ClaimIntegrationInvocations(ctx context.Context, request *
 	for _, item := range items {
 		configuration, _ := item["configuration"].(map[string]any)
 		boundedInput, _ := item["boundedInput"].(map[string]any)
-		response.Claims = append(response.Claims, &controlplanev1.IntegrationInvocationClaim{InvocationRef: mapString(item, "invocationRef"), DefinitionKey: mapString(item, "definitionKey"), ConnectionRef: mapString(item, "connectionRef"), CredentialMaterializationRef: mapString(item, "credentialRef"), CapabilityKey: mapString(item, "capabilityKey"), PublicConfiguration: structure(configuration), BoundedInput: structure(boundedInput), Lease: castLease(item)})
+		resourceScope, _ := item["resourceScope"].(map[string]string)
+		claim := &controlplanev1.IntegrationInvocationClaim{
+			InvocationRef: mapString(item, "invocationRef"), DefinitionKey: mapString(item, "definitionKey"),
+			ConnectionRef: mapString(item, "connectionRef"), CapabilityKey: mapString(item, "capabilityKey"),
+			PublicConfiguration: structure(configuration), BoundedInput: structure(boundedInput), Lease: castLease(item),
+			DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
+			Operation: mapString(item, "operation"), Risk: integrationRisk(mapString(item, "risk")),
+			ApprovalPolicy: integrationApprovalPolicy(mapString(item, "approvalPolicy")),
+			ResourceScope: &controlplanev1.IntegrationResourceScope{
+				Kind: integrationResourceKind(mapString(item, "resourceKind")), Values: resourceScope,
+				Digest: mapString(item, "resourceScopeDigest"),
+			},
+			EffectKey: mapString(item, "effectKey"), InputDigest: mapString(item, "inputDigest"),
+		}
+		if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
+			claim.CredentialRevision = castIntegrationCredential(credential)
+		}
+		response.Claims = append(response.Claims, claim)
 	}
 	return response, nil
 }
@@ -371,11 +404,22 @@ func (server *Server) GetIntegrationInvocation(ctx context.Context, request *con
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &controlplanev1.GetIntegrationInvocationResponse{State: mapString(result, "state"), ResultSummary: mapString(result, "resultSummary"), SafeErrorCode: mapString(result, "safeErrorCode")}, nil
+	return &controlplanev1.GetIntegrationInvocationResponse{
+		State: mapString(result, "state"), ResultSummary: mapString(result, "resultSummary"),
+		SafeErrorCode: mapString(result, "safeErrorCode"), GateRef: mapString(result, "gateRef"),
+		EffectReceiptRef: mapString(result, "effectReceiptRef"),
+	}, nil
 }
 
 func (server *Server) CompleteIntegrationInvocation(ctx context.Context, request *controlplanev1.CompleteIntegrationInvocationRequest) (*controlplanev1.CompleteIntegrationInvocationResponse, error) {
 	payload := command.IntegrationInvocationInput{InvocationRef: request.GetInvocationRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
+	if receipt := request.GetEffectReceipt(); receipt != nil {
+		payload.ReceiptRef = receipt.GetRef()
+		payload.EffectKey = receipt.GetEffectKey()
+		payload.InputDigest = receipt.GetInputDigest()
+		payload.ProviderEffectRef = receipt.GetProviderEffectRef()
+		payload.ResponseDigest = receipt.GetResponseDigest()
+	}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName, command.CompleteIntegrationInvocation, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err

@@ -2,6 +2,8 @@ package platform
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +15,7 @@ import (
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -214,27 +217,54 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if payload.Name == "" || len(payload.Name) > 160 {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		var schema []byte
-		if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionSelectIntegrationDefinitionsStableKeyEnabled, payload.DefinitionKey).Scan(&schema); errors.Is(err, pgx.ErrNoRows) {
+		definition, exists := repository.integrationDefinitions[payload.DefinitionKey]
+		if !exists {
+			return commandOutcome{}, errs.ErrNotFound
+		}
+		var storedVersion, storedDigest string
+		if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionSelectIntegrationDefinitionsStableKeyEnabled, payload.DefinitionKey).Scan(&storedVersion, &storedDigest); errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrNotFound
 		} else if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		var fields []entity.IntegrationConfigurationField
-		if json.Unmarshal(schema, &fields) != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+		if storedVersion != definition.Metadata.Version || storedDigest != definition.Digest {
+			return commandOutcome{}, errs.ErrConflict
 		}
-		configuration, valid := validateIntegrationConfiguration(fields, payload.PublicConfiguration)
-		if !valid {
+		configuration, valid := integrationStringConfiguration(payload.PublicConfiguration)
+		if !valid || definition.ValidateConfiguration(configuration) != nil ||
+			!validIntegrationCredentialInput(definition.Spec.Credential != nil, payload.CredentialRevision) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		ref, _ := newRef("int")
-		credentialRef := "icr_" + ref
+		maskedCredentials := "NOT_CONFIGURED"
+		if definition.Spec.Credential != nil {
+			maskedCredentials = "CONFIGURED"
+		}
 		var item entity.IntegrationConnection
+		var connectionID string
 		var config []byte
-		err := tx.QueryRow(ctx, queryConfigurationChangeconnectionInsertIntegrationConnectionsRefDefinitionKeyState, ref, scope.organizationID, payload.Name, credentialRef, asJSON(configuration), scope.actorID, payload.DefinitionKey).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.Enabled, &item.Version, &config, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryConfigurationChangeconnectionInsertIntegrationConnectionsRefDefinitionKeyState,
+			ref, scope.organizationID, payload.Name, maskedCredentials, asJSON(configuration), scope.actorID,
+			definition.Metadata.Version, definition.Digest, payload.DefinitionKey,
+		).Scan(&connectionID, &item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.Enabled, &item.Version, &config, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
+		}
+		if credential := payload.CredentialRevision; credential != nil {
+			credentialRef, _ := newRef("icr")
+			var credentialID string
+			stored := &entity.IntegrationCredentialRevision{}
+			if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionInsertCredentialRevision,
+				credentialRef, scope.organizationID, connectionID, credential.SecretRef, credential.SecretUID,
+				credential.SecretResourceVersion, credential.ContentSHA256, scope.actorID,
+			).Scan(&credentialID, &stored.Ref, &stored.Revision, &stored.SecretRef, &stored.SecretUID,
+				&stored.SecretResourceVersion, &stored.ContentSHA256, &stored.CreatedAt); err != nil {
+				return commandOutcome{}, mapWriteError(err)
+			}
+			if tag, err := tx.Exec(ctx, queryConfigurationChangeconnectionActivateCredentialRevision, connectionID, credentialID); err != nil || tag.RowsAffected() != 1 {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			item.CredentialRevision = stored
 		}
 		if json.Unmarshal(config, &item.PublicConfiguration) != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -295,10 +325,14 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if payload.WorkflowRef != "" {
 		targetType, targetRef = "WORKFLOW", payload.WorkflowRef
 	}
-	var connectionID, definitionKey, connectionState string
+	var connectionID, definitionKey, connectionState, definitionVersion, definitionDigest string
 	var connectionEnabled bool
 	var connectionVersion int64
-	if err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrantSelectIntegrationConnectionsOrganizationIdRefEnabled, scope.organizationID, payload.ConnectionRef).Scan(&connectionID, &definitionKey, &connectionEnabled, &connectionState, &connectionVersion); errors.Is(err, pgx.ErrNoRows) {
+	var encodedConfiguration []byte
+	if err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrantSelectIntegrationConnectionsOrganizationIdRefEnabled, scope.organizationID, payload.ConnectionRef).Scan(
+		&connectionID, &definitionKey, &connectionEnabled, &connectionState, &connectionVersion,
+		&encodedConfiguration, &definitionVersion, &definitionDigest,
+	); errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
 	} else if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -319,32 +353,32 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	} else if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	var capabilities []byte
-	if err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrantSelectIntegrationDefinitionsStableKey, definitionKey).Scan(&capabilities); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
-	}
-	var catalog []entity.IntegrationCapability
-	if json.Unmarshal(capabilities, &catalog) != nil {
-		return commandOutcome{}, errs.ErrUnavailable
-	}
-	valid := false
-	risk := "READ"
-	for _, capability := range catalog {
-		if !contains([]string{"READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"}, capability.Risk) {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		if capability.Key == payload.CapabilityKey {
-			valid = true
-			risk = capability.Risk
-		}
-	}
-	if !valid {
+	definition, exists := repository.integrationDefinitions[definitionKey]
+	capability, valid := definition.Capability(payload.CapabilityKey)
+	if !exists || !valid || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	configuration := map[string]string{}
+	if json.Unmarshal(encodedConfiguration, &configuration) != nil || definition.ValidateConfiguration(configuration) != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	resourceScope, err := capability.ResourceScopeValues(configuration)
+	if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	encodedScope, err := json.Marshal(resourceScope)
+	if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	scopeDigest := sha256.Sum256(encodedScope)
 	var grantRef string
 	if payload.Enabled {
 		grantRef, _ = newRef("grt")
-		err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrantInsertIntegrationGrantsRefConnectionIdTargetKind, grantRef, scope.organizationID, connectionID, payload.CapabilityKey, targetType, targetRef, approvalPolicy(risk), scope.actorID).Scan(&grantRef)
+		err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrantInsertIntegrationGrantsRefConnectionIdTargetKind,
+			grantRef, scope.organizationID, connectionID, payload.CapabilityKey, targetType, targetRef,
+			capability.ApprovalPolicy, scope.actorID, capability.Risk, capability.ResourceScope.Kind,
+			encodedScope, hex.EncodeToString(scopeDigest[:]), definition.Metadata.Version, definition.Digest,
+		).Scan(&grantRef)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
@@ -367,14 +401,39 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	}
 	return commandOutcome{result: command.Result{Connection: &connection}, projectID: projectID, projectRef: projectRef, resourceKind: "INTEGRATION_GRANT", resourceRef: grantRef, summary: "i18n:INTEGRATION_GRANT_UPDATED", platformEvent: "INTEGRATION_GRANT_CHANGED"}, nil
 }
-func approvalPolicy(risk string) string {
-	if risk == "SENSITIVE" || risk == "DESTRUCTIVE" {
-		return "OWNER_EACH_EFFECT"
+func integrationStringConfiguration(input map[string]any) (map[string]string, bool) {
+	result := make(map[string]string, len(input))
+	for key, raw := range input {
+		value, ok := raw.(string)
+		value = strings.TrimSpace(value)
+		if !ok || value == "" {
+			return nil, false
+		}
+		result[key] = value
 	}
-	if risk == "WRITE" {
-		return "OWNER_FOR_HIGH_RISK"
+	return result, true
+}
+
+func validIntegrationCredentialInput(required bool, credential *entity.IntegrationCredentialRevision) bool {
+	if !required {
+		return credential == nil
 	}
-	return "NONE"
+	if credential == nil || credential.Ref != "" || credential.Revision != 0 ||
+		uuid.Validate(credential.SecretUID) != nil || credential.SecretResourceVersion == "" ||
+		len(credential.SecretResourceVersion) > 128 || len(credential.ContentSHA256) != sha256.Size*2 ||
+		!strings.HasPrefix(credential.SecretRef, "kodex-system/kodex-integration-credentials#") {
+		return false
+	}
+	key := strings.TrimPrefix(credential.SecretRef, "kodex-system/kodex-integration-credentials#")
+	if key == "" || len(key) > 253 || strings.ContainsAny(key, "\x00/\\\r\n") {
+		return false
+	}
+	for _, character := range credential.ContentSHA256 {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func validateIntegrationConfiguration(fields []entity.IntegrationConfigurationField, input map[string]any) (map[string]any, bool) {

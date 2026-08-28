@@ -1,13 +1,15 @@
 -- name: interaction_list_sources :many
 SELECT
     c.ref,
-    c.credential_materialization_ref,
+    max(COALESCE(c.credential_materialization_ref, credential_revision.ref)),
     c.public_configuration->>'base_url',
     c.public_configuration->>'team_name',
     c.public_configuration->>'channel_name',
     min(project.language),
     array_agg(DISTINCT g.capability_key ORDER BY g.capability_key)
 FROM control_plane.integration_connections c
+LEFT JOIN control_plane.integration_credential_revisions credential_revision
+  ON credential_revision.id = c.credential_revision_id
 JOIN control_plane.integration_grants g ON g.connection_id = c.id
 LEFT JOIN control_plane.agents agent
   ON g.target_kind = 'AGENT'

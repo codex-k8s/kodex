@@ -4,18 +4,19 @@ title: Диагностика integration-gateway
 type: runbook
 status: approved
 owner: sre
-version: 2.0.0
-updated: 2026-08-23
+version: 3.0.0
+updated: 2026-08-28
 ---
 
 # Диагностика integration-gateway
 
 ## Штатное пустое состояние
 
-Gateway обязан стартовать и быть Ready при нуле definitions, connections и
-credentials. GitHub, GitLab, Kubernetes, Mattermost и model provider не являются
-startup dependency. Отсутствующая или disabled integration отображается как
-capability unavailable, но не как отказ платформы.
+Gateway обязан стартовать и быть Ready при нуле connections и credentials.
+Shipped definitions загружаются локально и сверяются по версии/digest с
+control-plane. GitHub, synthetic fixture и Mattermost не являются startup
+dependency. Отсутствующая или disabled integration отображается как capability
+unavailable, но не как отказ платформы.
 
 ## MCP admission
 
@@ -23,15 +24,16 @@ Runtime вызывает только зарегистрированный typed
 проверяются exact:
 
 - organization/project/session/turn/attempt и immutable input digest;
-- IntegrationDefinition/capability schema revision;
-- active Connection metadata и credential revision;
+- IntegrationDefinition version/origin/digest и capability operation;
+- active Connection metadata и credential revision без secret value;
 - server-owned Agent/Workflow grant;
 - risk и наличие явного grant;
 - application grant, mTLS peer, method, fence и replay watermark.
 
 Gateway не предоставляет universal HTTP/API proxy. Provider credentials
-остаются в credential filesystem/secret storage; role Pod получает только
-session-scoped MCP binding. Raw provider response не выходит в audit/event/PWA.
+остаются в Kubernetes Secret, смонтированном только в `integration-gateway`;
+role Pod получает только session-scoped MCP binding. Raw provider response не
+выходит в audit/event/PWA.
 
 ## Probes
 
@@ -42,23 +44,68 @@ providers не вызываются на Kubernetes probe. Их фактичес
 
 ## Effect и grant
 
-Один provider effect связывается с exact invocation/attempt/fence. После
-durable completion receipt тот же invocation не исполняется повторно.
-Поставляемые definitions содержат только типизированные read capabilities;
-write/destructive adapters в текущий каталог не входят. Любой новый такой
-adapter обязан сначала определить отдельную approval policy и Human Gate
-lifecycle, а не наследовать разрешение read-adapter. Expired/stale grant или
-изменённый input закрыто отклоняется.
+Один provider effect связывается с exact invocation/attempt/fence, definition
+digest, resource scope, input digest и effect key. READ может перейти к claim
+без согласования. WRITE, SENSITIVE и DESTRUCTIVE создают отдельный Human Gate
+до claim; credential не выдаётся worker до `APPROVED`. После durable completion
+receipt тот же invocation не исполняется повторно. Exact повтор завершения
+возвращает readback одной receipt, несовпадающий повтор закрыто отклоняется.
+
+## Credential revision
+
+Connection хранит только `secret_ref`, Secret UID, `resourceVersion`, revision
+и SHA-256 содержимого. Для shipped GitHub package допустим только ref вида
+`kodex-system/kodex-integration-credentials#token`. Gateway сверяет все поля,
+читает ровно key `token` из root-mounted Secret и проверяет digest перед
+созданием provider client. В connection config, Proto, PostgreSQL, логах и
+документации token value отсутствует.
+
+## Exact egress
+
+GitHub adapter имеет фиксированный endpoint `https://api.github.com/` и идёт
+только через `egress-gateway.kodex-system.svc.cluster.local:8080`. Shared policy
+разрешает exact FQDN `api.github.com:443`; runtime NetworkPolicy разрешает
+только pod `egress-gateway` с component `platform-egress` на `8080/TCP`.
+Synthetic adapter принимает только
+`integration-synthetic.kodex-system.svc.cluster.local:8080`, а NetworkPolicy —
+только pod labels `integration-synthetic`/`integration-fixture`. Redirect
+запрещён.
+
+## Изолированный GitHub fixture
+
+Live fixture не входит в локальный baseline и запускается parent после
+integration. Его безопасная конфигурация передаётся только окружением тестовой
+оснастки:
+
+```text
+KODEX_INTEGRATION_E2E_GITHUB_OWNER=codex-k8s
+KODEX_INTEGRATION_E2E_GITHUB_REPOSITORY=kodex-integration-e2e
+KODEX_GITHUB_BOT_PAT=<Kubernetes Secret source only>
+```
+
+Repository private; `kodex-agent` имеет pull/push без admin. Значение
+`KODEX_GITHUB_BOT_PAT` не включается в package, Connection, manifest, command
+line или отчёт. Secret controller создаёт/обновляет
+`kodex-integration-credentials`, после чего Connection получает только
+authoritative Secret metadata и content digest. В production fixture owner и
+repository не имеют default и всегда задаются Connection config.
 
 ## Диагностика
 
 | Safe code | Действие |
 |---|---|
-| definition unavailable | проверить catalog revision и enabled state |
-| connection unavailable | проверить metadata/credential masked state и отдельный test |
-| grant required | выдать exact capability Agent/Workflow через Control Center |
-| provider unavailable | проверить exact egress host/SNI/CA и provider status |
-| replay or fence conflict | не повторять вручную; сверить authoritative receipt |
+| `INTEGRATION_CONFIGURATION_INVALID` | сверить package fields, exact scope и input digest |
+| `INTEGRATION_CREDENTIAL_UNAVAILABLE` | сверить Secret ref/UID/resourceVersion/digest, не читать value в диагностике |
+| `INTEGRATION_AUTH_REJECTED` | проверить права token на exact repository |
+| `INTEGRATION_RATE_LIMITED` | дождаться provider retry window, не обходить receipt |
+| `INTEGRATION_UNAVAILABLE` | проверить exact egress host/SNI и provider status |
+| `INTEGRATION_REQUEST_REJECTED` | проверить typed input и provider resource state |
+| `INTEGRATION_RESPONSE_INVALID` | считать effect неизвестным и сверить authoritative provider state/receipt |
+| replay или fence conflict | не повторять вручную; сверить authoritative receipt |
 
 Secret values, provider bodies и MCP bearer не печатаются. Ошибка возвращает
 stable key; локализованный пользовательский текст находится в YAML i18n.
+
+Frontend и browser E2E не входят в backend unit Issue #999 и остаются явно
+зафиксированной проверкой parent. Локальная реализация не создаёт GitHub
+repository и не обращается к cluster.

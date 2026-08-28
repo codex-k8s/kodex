@@ -364,6 +364,36 @@ enum ConnectionState {
   CONNECTION_STATE_DEGRADED = 7;
 }
 
+// IntegrationRisk задаёт закрытый класс риска capability.
+enum IntegrationRisk {
+  INTEGRATION_RISK_UNSPECIFIED = 0;
+  INTEGRATION_RISK_READ = 1;
+  INTEGRATION_RISK_WRITE = 2;
+  INTEGRATION_RISK_SENSITIVE = 3;
+  INTEGRATION_RISK_DESTRUCTIVE = 4;
+}
+
+// IntegrationApprovalPolicy задаёт обязательный Human Gate до claim effect.
+enum IntegrationApprovalPolicy {
+  INTEGRATION_APPROVAL_POLICY_UNSPECIFIED = 0;
+  INTEGRATION_APPROVAL_POLICY_NONE = 1;
+  INTEGRATION_APPROVAL_POLICY_HUMAN_EACH_EFFECT = 2;
+}
+
+// IntegrationResourceKind ограничивает provider resource одной typed boundary.
+enum IntegrationResourceKind {
+  INTEGRATION_RESOURCE_KIND_UNSPECIFIED = 0;
+  INTEGRATION_RESOURCE_KIND_SYNTHETIC_JOURNAL = 1;
+  INTEGRATION_RESOURCE_KIND_GITHUB_REPOSITORY = 2;
+  INTEGRATION_RESOURCE_KIND_MATTERMOST_CHANNEL = 3;
+}
+
+// IntegrationDefinitionOrigin фиксирует источник immutable definition revision.
+enum IntegrationDefinitionOrigin {
+  INTEGRATION_DEFINITION_ORIGIN_UNSPECIFIED = 0;
+  INTEGRATION_DEFINITION_ORIGIN_SHIPPED = 1;
+}
+
 enum AssistantRuntimeState {
   ASSISTANT_RUNTIME_STATE_UNSPECIFIED = 0;
   ASSISTANT_RUNTIME_STATE_PROVISIONING = 1;
@@ -749,6 +779,11 @@ message IntegrationCapability {
   string description = 3;
   string risk = 4;
   bool approval_required = 5;
+  string operation = 6;
+  IntegrationRisk typed_risk = 7;
+  IntegrationApprovalPolicy approval_policy = 8;
+  IntegrationResourceKind resource_kind = 9;
+  repeated IntegrationConfigurationField input_fields = 10;
 }
 
 message IntegrationConfigurationField {
@@ -769,6 +804,39 @@ message IntegrationDefinition {
   bool available = 6;
   repeated IntegrationCapability capabilities = 7;
   repeated IntegrationConfigurationField configuration_fields = 8;
+  string schema_version = 9;
+  string definition_version = 10;
+  IntegrationDefinitionOrigin origin = 11;
+  string digest = 12;
+  string adapter = 13;
+  string credential_secret_key = 14;
+}
+
+// IntegrationResourceScope содержит только server-derived exact resource values.
+message IntegrationResourceScope {
+  IntegrationResourceKind kind = 1;
+  map<string, string> values = 2;
+  string digest = 3;
+}
+
+// IntegrationCredentialRevision содержит identity Kubernetes Secret revision без values.
+message IntegrationCredentialRevision {
+  string ref = 1;
+  int64 revision = 2;
+  string secret_ref = 3;
+  string secret_uid = 4;
+  string secret_resource_version = 5;
+  string content_sha256 = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+// IntegrationCredentialRevisionInput ссылается на уже материализованный Secret,
+// но не позволяет клиенту назначать domain ref, revision и timestamps.
+message IntegrationCredentialRevisionInput {
+  string secret_ref = 1;
+  string secret_uid = 2;
+  string secret_resource_version = 3;
+  string content_sha256 = 4;
 }
 
 message IntegrationGrant {
@@ -786,6 +854,9 @@ message IntegrationGrant {
   string capability_description = 12;
   string risk = 13;
   string target_name = 14;
+  IntegrationRisk typed_risk = 15;
+  IntegrationApprovalPolicy approval_policy = 16;
+  IntegrationResourceScope resource_scope = 17;
 }
 
 message IntegrationConnection {
@@ -801,6 +872,10 @@ message IntegrationConnection {
   repeated IntegrationCapability capabilities = 10;
   repeated IntegrationGrant grants = 11;
   repeated NextAction next_actions = 12;
+  string definition_version = 13;
+  string definition_digest = 14;
+  google.protobuf.Struct public_configuration = 15;
+  IntegrationCredentialRevision credential_revision = 16;
 }
 
 message AssistantPlanOperation {
@@ -1552,6 +1627,8 @@ message CreateIntegrationConnectionRequest {
   string name = 3;
   reserved 4;
   google.protobuf.Struct public_configuration = 5;
+  // credential_revision обязателен только для definition с credential contract.
+  IntegrationCredentialRevisionInput credential_revision = 6;
 }
 message CreateIntegrationConnectionResponse {
   IntegrationConnection connection = 1;
@@ -1867,6 +1944,9 @@ message IntegrationConnectionTestClaim {
   string credential_materialization_ref = 4;
   google.protobuf.Struct public_configuration = 5;
   WorkLease lease = 6;
+  IntegrationCredentialRevision credential_revision = 7;
+  string definition_version = 8;
+  string definition_digest = 9;
 }
 message ClaimIntegrationConnectionTestsRequest {
   string workload_instance = 1;
@@ -1901,6 +1981,10 @@ message ResolveIntegrationInvocationResponse {
   string invocation_ref = 1;
   string grant_ref = 2;
   string operation = 3;
+  string state = 4;
+  string gate_ref = 5;
+  IntegrationRisk risk = 6;
+  IntegrationResourceScope resource_scope = 7;
 }
 message IntegrationInvocationClaim {
   string invocation_ref = 1;
@@ -1911,6 +1995,15 @@ message IntegrationInvocationClaim {
   google.protobuf.Struct public_configuration = 6;
   google.protobuf.Struct bounded_input = 7;
   WorkLease lease = 8;
+  IntegrationCredentialRevision credential_revision = 9;
+  string definition_version = 10;
+  string definition_digest = 11;
+  string operation = 12;
+  IntegrationRisk risk = 13;
+  IntegrationApprovalPolicy approval_policy = 14;
+  IntegrationResourceScope resource_scope = 15;
+  string effect_key = 16;
+  string input_digest = 17;
 }
 message ClaimIntegrationInvocationsRequest {
   string workload_instance = 1;
@@ -1926,6 +2019,18 @@ message GetIntegrationInvocationResponse {
   string state = 1;
   string result_summary = 2;
   string safe_error_code = 3;
+  string gate_ref = 4;
+  string effect_receipt_ref = 5;
+}
+
+// IntegrationEffectReceipt является immutable exactly-once readback одного effect key.
+message IntegrationEffectReceipt {
+  string ref = 1;
+  string effect_key = 2;
+  string input_digest = 3;
+  string provider_effect_ref = 4;
+  string response_digest = 5;
+  string result_summary = 6;
 }
 message CompleteIntegrationInvocationRequest {
   MutationContext mutation = 1;
@@ -1936,6 +2041,7 @@ message CompleteIntegrationInvocationRequest {
   bool success = 6;
   string result_summary = 7;
   string safe_error_code = 8;
+  IntegrationEffectReceipt effect_receipt = 9;
 }
 message CompleteIntegrationInvocationResponse {
   Run run = 1;

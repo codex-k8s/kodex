@@ -4,8 +4,8 @@ title: Control-plane
 type: service
 status: approved
 owner: backend
-version: 1.1.0
-updated: 2026-08-23
+version: 1.2.0
+updated: 2026-08-28
 ---
 
 # Control-plane
@@ -23,7 +23,8 @@ updated: 2026-08-23
 - Workflow и его версии;
 - Session, FIFO Turn, Run, RunNode, RunEdge и RunEvent;
 - Human Gate, Artifact metadata/content и Schedule;
-- IntegrationDefinition, Connection metadata и typed Grant;
+- version-pinned IntegrationDefinition, Connection credential revision
+  metadata, typed Grant, IntegrationInvocation и immutable effect receipt;
 - immutable RuntimeRevision, lease/fence, delegation и callback receipt;
 - системного помощника, его protected core prompt, durable Session и warm
   desired state;
@@ -57,12 +58,13 @@ bounded application grant и server-owned high-watermark.
 
 ## PostgreSQL
 
-Fresh install последовательно использует baseline и forward-only расширение
-lifecycle расписаний:
+Fresh install последовательно использует baseline и forward-only расширения
+lifecycle расписаний и типизированных интеграций:
 
 ```text
 cmd/cli/migrations/20260822000100_web_first_baseline.sql
 cmd/cli/migrations/20260828000100_schedule_archive_lifecycle.sql
+cmd/cli/migrations/20260828099600_integration_backend_unit.sql
 ```
 
 Production SQL отсутствует в Go literals. Каждый запрос находится в отдельном
@@ -106,7 +108,8 @@ bootstrap transaction. Она создаёт:
 - Organization и `installation-owner` claim contract;
 - системный Subject и membership для внутренних worker operations;
 - platform capabilities и safe default runtime profile;
-- built-in optional IntegrationDefinition для GitHub, Kubernetes и Mattermost;
+- shipped IntegrationDefinition для synthetic HTTP и GitHub, а также
+  совместимое определение Mattermost для существующего `interaction-gateway`;
 - единственный Agent со stable key `system-assistant`;
 - immutable published core prompt;
 - долговечную system Session и warm runtime desired state.
@@ -165,9 +168,10 @@ make test-web-only-release
 ```
 
 `test-control-plane-postgres` запускает disposable PostgreSQL 18, выполняет
-`goose up`, `status`, повторный `up`, два bootstrap и отрицательные проверки
-защиты system assistant/core prompt. Production DSN и live data не
-используются.
+`goose up`, `status`, повторный `up`, два bootstrap и проверяет protected
+integration lifecycle: WRITE invocation не выдаётся до отдельного Human Gate,
+а повторное завершение читает единственную immutable effect receipt.
+Production DSN и live data не используются.
 
 ## Развёртывание
 

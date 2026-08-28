@@ -47,6 +47,31 @@ func (store *Store) Read(reference, name string) ([]byte, error) {
 	return value, nil
 }
 
+// ReadKey читает один data key заранее смонтированного exact Kubernetes Secret.
+func (store *Store) ReadKey(name string) ([]byte, error) {
+	if store == nil || !safeName(name) {
+		return nil, errors.New("credential key is invalid")
+	}
+	root, err := filepath.EvalSymlinks(store.root)
+	if err != nil {
+		return nil, errors.New("credential root is unavailable")
+	}
+	resolved, err := filepath.EvalSymlinks(filepath.Join(root, name))
+	if err != nil {
+		return nil, errors.New("credential file is unavailable")
+	}
+	relative, err := filepath.Rel(root, resolved)
+	if err != nil || relative == "." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) ||
+		filepath.IsAbs(relative) || filepath.Base(relative) != name {
+		return nil, errors.New("credential file escapes root")
+	}
+	value, err := securefile.ReadWithin(root, resolved, maximumCredentialBytes)
+	if err != nil {
+		return nil, errors.New("credential file is unavailable")
+	}
+	return value, nil
+}
+
 func safeName(name string) bool {
 	if name == "" || len(name) > 128 || filepath.Base(name) != name || name == "." || name == ".." {
 		return false

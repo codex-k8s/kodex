@@ -244,6 +244,14 @@ INTEGRATION_ACTION_COMPLETED:
   other: Действие интеграции завершено
 INTEGRATION_INVOCATION_COMPLETED:
   other: Вызов интеграции завершён
+INTEGRATION_EFFECT_GATE_NODE_NAME:
+  other: Согласование действия интеграции
+INTEGRATION_EFFECT_GATE_TITLE:
+  other: Согласуйте действие интеграции
+INTEGRATION_EFFECT_GATE_PROMPT:
+  other: Проверьте точное действие и область ресурсов перед выполнением
+INTEGRATION_EFFECT_OWNER_DECISION_REQUIRED:
+  other: Действие интеграции требует вашего решения
 OWNER_DECISION_REQUIRED:
   other: Требуется решение человека
 OWNER_GATE_CANCELLED:

@@ -170,7 +170,38 @@ func castRuntime(value entity.RuntimeSelection) *controlplanev1.RuntimeSelection
 	return &controlplanev1.RuntimeSelection{Ref: value.Ref, Name: value.Name, Revision: value.RuntimeRevision, Ready: value.Ready, Provider: value.Provider, Model: value.Model}
 }
 func castIntegrationCapability(value entity.IntegrationCapability) *controlplanev1.IntegrationCapability {
-	return &controlplanev1.IntegrationCapability{Key: value.Key, Name: value.Name, Description: value.Description, Risk: value.Risk, ApprovalRequired: value.Risk == "SENSITIVE" || value.Risk == "DESTRUCTIVE"}
+	result := &controlplanev1.IntegrationCapability{
+		Key: value.Key, Name: value.Name, Description: value.Description, Operation: value.Operation,
+		Risk: value.Risk, TypedRisk: integrationRisk(value.Risk), ApprovalRequired: value.ApprovalPolicy != "NONE",
+		ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy), ResourceKind: integrationResourceKind(value.ResourceKind),
+	}
+	for _, field := range value.InputFields {
+		result.InputFields = append(result.InputFields, castIntegrationField(field))
+	}
+	return result
+}
+
+func integrationRisk(value string) controlplanev1.IntegrationRisk {
+	return controlplanev1.IntegrationRisk(controlplanev1.IntegrationRisk_value["INTEGRATION_RISK_"+value])
+}
+
+func integrationApprovalPolicy(value string) controlplanev1.IntegrationApprovalPolicy {
+	return controlplanev1.IntegrationApprovalPolicy(controlplanev1.IntegrationApprovalPolicy_value["INTEGRATION_APPROVAL_POLICY_"+value])
+}
+
+func integrationResourceKind(value string) controlplanev1.IntegrationResourceKind {
+	return controlplanev1.IntegrationResourceKind(controlplanev1.IntegrationResourceKind_value["INTEGRATION_RESOURCE_KIND_"+value])
+}
+
+func castIntegrationField(value entity.IntegrationConfigurationField) *controlplanev1.IntegrationConfigurationField {
+	return &controlplanev1.IntegrationConfigurationField{Key: value.Key, Label: value.Label, Help: value.Help, ValueType: value.ValueType, Required: value.Required, Placeholder: value.Placeholder}
+}
+
+func castIntegrationCredential(value entity.IntegrationCredentialRevision) *controlplanev1.IntegrationCredentialRevision {
+	return &controlplanev1.IntegrationCredentialRevision{
+		Ref: value.Ref, Revision: value.Revision, SecretRef: value.SecretRef, SecretUid: value.SecretUID,
+		SecretResourceVersion: value.SecretResourceVersion, ContentSha256: value.ContentSHA256, CreatedAt: timestamp(value.CreatedAt),
+	}
 }
 func castInstruction(value *entity.InstructionVersion) *controlplanev1.InstructionVersion {
 	if value == nil {
@@ -295,17 +326,26 @@ func castSchedule(value entity.Schedule) *controlplanev1.Schedule {
 	return &controlplanev1.Schedule{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Target: castRunTarget(value.Target), State: scheduleState(value), Preset: value.Preset, CronExpression: value.CronExpression, Timezone: value.Timezone, Input: structure(value.Input), SessionPolicy: value.SessionPolicy, NotificationPolicy: value.NotificationPolicy, NextRunAt: optionalTimestamp(value.NextRunAt), NextActions: nextActions(value.NextActions), TimeOfDay: value.TimeOfDay, DayOfWeek: value.DayOfWeek}
 }
 func castDefinition(value entity.IntegrationDefinition) *controlplanev1.IntegrationDefinition {
-	result := &controlplanev1.IntegrationDefinition{Key: value.Key, Name: value.Name, Description: value.Description, Category: value.Category, BuiltIn: true, Available: value.Enabled}
+	result := &controlplanev1.IntegrationDefinition{
+		Key: value.Key, Name: value.Name, Description: value.Description, Category: value.Category, BuiltIn: true, Available: value.Enabled,
+		SchemaVersion: value.SchemaVersion, DefinitionVersion: value.DefinitionVersion,
+		Origin: controlplanev1.IntegrationDefinitionOrigin_INTEGRATION_DEFINITION_ORIGIN_SHIPPED,
+		Digest: value.Digest, Adapter: value.Adapter, CredentialSecretKey: value.CredentialSecretKey,
+	}
 	for _, capability := range value.Capabilities {
 		result.Capabilities = append(result.Capabilities, castIntegrationCapability(capability))
 	}
 	for _, field := range value.ConfigurationFields {
-		result.ConfigurationFields = append(result.ConfigurationFields, &controlplanev1.IntegrationConfigurationField{Key: field.Key, Label: field.Label, Help: field.Help, ValueType: field.ValueType, Required: field.Required, Placeholder: field.Placeholder})
+		result.ConfigurationFields = append(result.ConfigurationFields, castIntegrationField(field))
 	}
 	return result
 }
 func castGrant(value entity.IntegrationGrant) *controlplanev1.IntegrationGrant {
-	grant := &controlplanev1.IntegrationGrant{Ref: value.Ref, Version: value.Version, CapabilityKey: value.CapabilityKey, TargetName: value.TargetName, Enabled: value.Enabled}
+	grant := &controlplanev1.IntegrationGrant{
+		Ref: value.Ref, Version: value.Version, CapabilityKey: value.CapabilityKey, TargetName: value.TargetName, Enabled: value.Enabled,
+		TypedRisk: integrationRisk(value.Risk), ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy),
+		ResourceScope: &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(value.ResourceKind), Values: value.ResourceScope, Digest: value.ResourceScopeDigest},
+	}
 	if value.TargetType == "AGENT" {
 		grant.AgentRef = value.TargetRef
 	} else {
@@ -320,7 +360,16 @@ func castConnection(value entity.IntegrationConnection) *controlplanev1.Integrat
 	} else if value.MaskedCredentialsState == "INVALID" {
 		credentialsHint = "i18n:INTEGRATION_CREDENTIAL_INVALID"
 	}
-	result := &controlplanev1.IntegrationConnection{Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name, State: connectionState(value.State), CredentialsConfigured: value.MaskedCredentialsState == "CONFIGURED", CredentialsHint: credentialsHint, LastTestedAt: optionalTimestamp(value.LastTestedAt), LastTestOutcome: value.LastTestSummary, NextActions: nextActions(value.NextActions)}
+	result := &controlplanev1.IntegrationConnection{
+		Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
+		DefinitionVersion: value.DefinitionVersion, DefinitionDigest: value.DefinitionDigest,
+		State: connectionState(value.State), CredentialsConfigured: value.MaskedCredentialsState == "CONFIGURED",
+		CredentialsHint: credentialsHint, LastTestedAt: optionalTimestamp(value.LastTestedAt), LastTestOutcome: value.LastTestSummary,
+		PublicConfiguration: structure(value.PublicConfiguration), NextActions: nextActions(value.NextActions),
+	}
+	if credential := value.CredentialRevision; credential != nil {
+		result.CredentialRevision = castIntegrationCredential(*credential)
+	}
 	for _, capability := range value.Capabilities {
 		result.Capabilities = append(result.Capabilities, castIntegrationCapability(capability))
 	}
