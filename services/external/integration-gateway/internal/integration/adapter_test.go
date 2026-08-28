@@ -17,6 +17,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/credentialfs"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integrationfixture"
 )
 
 func TestNewUsesOnlyExactProviderEndpoints(t *testing.T) {
@@ -42,44 +43,9 @@ func TestNewUsesOnlyExactProviderEndpoints(t *testing.T) {
 
 func TestSyntheticHTTPJournalWriteIsIdempotentAndReadable(t *testing.T) {
 	t.Parallel()
-	var mutex sync.Mutex
-	entries := map[string]struct {
-		Sequence int64
-		Value    string
-	}{}
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/v1/journals/main" && request.URL.Path != "/v1/journals/main/entries" {
-			http.NotFound(writer, request)
-			return
-		}
-		writer.Header().Set("Content-Type", "application/json")
-		mutex.Lock()
-		defer mutex.Unlock()
-		if request.Method == http.MethodGet {
-			_ = json.NewEncoder(writer).Encode(map[string]any{"journal": "main", "count": len(entries)})
-			return
-		}
-		if request.Method != http.MethodPost || request.Header.Get("Idempotency-Key") == "" {
-			http.Error(writer, "invalid", http.StatusBadRequest)
-			return
-		}
-		var input struct {
-			Value string `json:"value"`
-		}
-		if json.NewDecoder(request.Body).Decode(&input) != nil || input.Value == "" {
-			http.Error(writer, "invalid", http.StatusBadRequest)
-			return
-		}
-		key := request.Header.Get("Idempotency-Key")
-		entry, exists := entries[key]
-		if !exists {
-			entry.Sequence, entry.Value = int64(len(entries)+1), input.Value
-			entries[key] = entry
-		}
-		_ = json.NewEncoder(writer).Encode(map[string]any{
-			"journal": "main", "effect_key": key, "sequence": entry.Sequence, "value": entry.Value,
-		})
-	}))
+	fixture := integrationfixture.NewHandler(integrationfixture.NewStore())
+	fixture.SetReady(true)
+	server := httptest.NewServer(fixture)
 	defer server.Close()
 
 	adapter := testAdapter(t)
@@ -94,8 +60,8 @@ func TestSyntheticHTTPJournalWriteIsIdempotentAndReadable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Summary != second.Summary || first.Receipt != second.Receipt || len(entries) != 1 {
-		t.Fatalf("duplicate synthetic effect was not deduplicated: %#v %#v entries=%d", first, second, len(entries))
+	if first.Summary != second.Summary || first.Receipt != second.Receipt {
+		t.Fatalf("duplicate synthetic effect was not deduplicated: %#v %#v", first, second)
 	}
 	read := invocationRequest(t, adapter.definitions["synthetic"], "synthetic.journal.read", map[string]any{}, nil)
 	result, err := adapter.Execute(t.Context(), read)

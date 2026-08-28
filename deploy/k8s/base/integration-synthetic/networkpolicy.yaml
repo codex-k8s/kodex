@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: integration-synthetic-default-deny
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: integration-synthetic
+      app.kubernetes.io/component: integration-fixture
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: integration-synthetic-exact-runtime-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: integration-synthetic
+      app.kubernetes.io/component: integration-fixture
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: integration-gateway
+              app.kubernetes.io/component: integration-worker
+      ports:
+        - {protocol: TCP, port: 8080}
+  egress: []

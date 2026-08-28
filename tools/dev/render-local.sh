@@ -80,6 +80,8 @@ render="$temporary_directory/local.yaml"
 kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" >"$render"
 printf '\n---\n' >>"$render"
 kubectl kustomize "$repository_root/deploy/k8s/base/local-object-storage" >>"$render"
+printf '\n---\n' >>"$render"
+kubectl kustomize "$repository_root/deploy/k8s/overlays/local/integration-synthetic" >>"$render"
 
 source_revision=$(git -C "$source_root" rev-parse HEAD)
 source_digest=$(printf '%s' "$source_revision" | sha256sum | awk '{print $1}')
@@ -138,7 +140,7 @@ SEAWEEDFS_IMAGE="$seaweedfs_image" yq -i '
 yq -i '
   select(
     (.kind != "NetworkPolicy" or
-      (.metadata.name | test("^(control-plane|seaweedfs)"))) and
+      (.metadata.name | test("^(control-plane|seaweedfs|integration-gateway|integration-synthetic)"))) and
     .kind != "PodDisruptionBudget" and
     .kind != "ServiceMonitor" and
     .kind != "PodMonitor" and
@@ -153,6 +155,7 @@ yq -i '
     (.kind != "Deployment" or .metadata.name == "control-plane" or
       .metadata.name == "control-api-gateway" or .metadata.name == "egress-gateway" or
       .metadata.name == "runtime-controller" or .metadata.name == "integration-gateway" or
+      .metadata.name == "integration-synthetic" or
       .metadata.name == "automation-scheduler" or .metadata.name == "staff-control-center" or
       .metadata.name == "internal-rpc-authority-publisher" or
       .metadata.name == "internal-rpc-authority-readback-attestor" or
@@ -362,12 +365,26 @@ patch_go_container Deployment runtime-controller platform-worker-grant-agent ser
 patch_go_container Deployment integration-gateway integration-gateway services/external/integration-gateway ./cmd/integration-gateway
 patch_go_container Deployment integration-gateway internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment integration-gateway platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
+patch_go_container Deployment integration-synthetic integration-synthetic services/external/integration-gateway ./cmd/integration-synthetic
 patch_go_container Deployment automation-scheduler automation-scheduler services/jobs/automation-scheduler ./cmd/automation-scheduler
 patch_go_container Deployment automation-scheduler internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment automation-scheduler platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
 patch_go_container Deployment internal-rpc-authority-publisher publisher services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-publisher
 patch_go_container Deployment internal-rpc-authority-readback-attestor readback-attestor services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-readback-attestor
 patch_go_container Deployment internal-rpc-authority-restore-controller restore-controller services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-restore-controller
+
+yq -i '
+  with(select(.kind == "Deployment" and .metadata.name == "integration-synthetic");
+    (.spec.template.spec.containers[] | select(.name == "integration-synthetic")) |= (
+      .resources = {
+        "requests":{"cpu":"25m","memory":"64Mi"},
+        "limits":{"cpu":"500m","memory":"512Mi"}
+      } |
+      .securityContext.readOnlyRootFilesystem = true
+    ) |
+    (.spec.template.spec.volumes[] | select(.name == "tmp")).emptyDir = {"sizeLimit":"64Mi"}
+  )
+' "$render"
 
 for workload in control-plane control-api-gateway runtime-controller integration-gateway automation-scheduler; do
   patch_go_init_container "$workload" internal-rpc-authority-socket-init \
@@ -561,6 +578,34 @@ yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center"
   fail 'frontend development workload is absent'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$output" >/dev/null ||
   fail 'Control Plane development workload is absent'
+yq -e 'select(.kind == "Deployment" and .metadata.name == "integration-synthetic")' "$output" >/dev/null ||
+  fail 'integration-synthetic development workload is absent'
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "integration-synthetic" and
+    .metadata.namespace == "kodex-system" and
+    .spec.replicas == 1 and .spec.strategy.type == "Recreate" and
+    .spec.template.spec.automountServiceAccountToken == false and
+    .spec.template.spec.securityContext.runAsNonRoot == true and
+    any(.spec.template.spec.containers[];
+      .name == "integration-synthetic" and
+      .securityContext.allowPrivilegeEscalation == false and
+      .securityContext.readOnlyRootFilesystem == true and
+      .securityContext.capabilities.drop == ["ALL"] and
+      .resources.requests.cpu == "25m" and .resources.requests.memory == "64Mi" and
+      .resources.limits.cpu == "500m" and .resources.limits.memory == "512Mi"))
+' >/dev/null || fail 'integration-synthetic security or resource boundary is invalid'
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  any(.[];
+    .kind == "NetworkPolicy" and .metadata.name == "integration-synthetic-exact-runtime-paths" and
+    .metadata.namespace == "kodex-system" and .spec.egress == [] and
+    .spec.ingress[0].from[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-system" and
+    .spec.ingress[0].from[0].podSelector.matchLabels["app.kubernetes.io/name"] == "integration-gateway" and
+    .spec.ingress[0].from[0].podSelector.matchLabels["app.kubernetes.io/component"] == "integration-worker" and
+    .spec.ingress[0].ports == [{"protocol":"TCP","port":8080}])
+' >/dev/null || fail 'integration-synthetic exact NetworkPolicy is absent'
+yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "integration-gateway-exact-runtime-paths")' "$output" >/dev/null ||
+  fail 'integration-gateway exact NetworkPolicy is absent from the local fixture path'
 yq -e 'select(.kind == "StatefulSet" and .metadata.name == "seaweedfs")' "$output" >/dev/null ||
   fail 'SeaweedFS local workload is absent'
 yq -e 'select(.kind == "Job" and .metadata.name == "seaweedfs-bucket-bootstrap")' "$output" >/dev/null ||
