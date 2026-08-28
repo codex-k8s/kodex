@@ -238,6 +238,7 @@ type IntegrationGrant struct {
 
 type IntegrationConnection struct {
 	Ref, DefinitionKey, DefinitionName, Name, State, MaskedCredentialsState string
+	CredentialSecretKey                                                     string
 	DefinitionVersion, DefinitionDigest                                     string
 	LastTestSummary                                                         string
 	Enabled                                                                 bool

@@ -42,17 +42,17 @@ func TestValidateIntegrationConfigurationUsesClosedTypedSchema(t *testing.T) {
 
 func TestConnectionActionsAreServerOwnedAndPermissionAware(t *testing.T) {
 	t.Parallel()
-	connected := entity.IntegrationConnection{Enabled: true, State: "CONNECTED"}
+	connected := entity.IntegrationConnection{Enabled: true, State: "CONNECTED", MaskedCredentialsState: "CONFIGURED", CredentialSecretKey: "token"}
 	if got := connectionActions(connected, false, false); !reflect.DeepEqual(got, []string{"OPEN"}) {
 		t.Fatalf("read-only actor received mutation actions: %v", got)
 	}
 	if got := connectionActions(connected, false, true); !reflect.DeepEqual(got, []string{"OPEN", "MANAGE_GRANTS"}) {
 		t.Fatalf("project integration manager actions: %v", got)
 	}
-	if got := connectionActions(connected, true, true); !reflect.DeepEqual(got, []string{"OPEN", "TEST", "DISABLE", "MANAGE_GRANTS"}) {
+	if got := connectionActions(connected, true, true); !reflect.DeepEqual(got, []string{"OPEN", "CONFIGURE_CREDENTIAL", "TEST", "DISABLE", "MANAGE_GRANTS"}) {
 		t.Fatalf("platform integration manager actions: %v", got)
 	}
-	testingState := entity.IntegrationConnection{Enabled: true, State: "TESTING"}
+	testingState := entity.IntegrationConnection{Enabled: true, State: "TESTING", MaskedCredentialsState: "CONFIGURED", CredentialSecretKey: "token"}
 	if got := connectionActions(testingState, true, true); !reflect.DeepEqual(got, []string{"OPEN", "DISABLE"}) {
 		t.Fatalf("testing connection exposed conflicting actions: %v", got)
 	}

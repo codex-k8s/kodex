@@ -87,6 +87,7 @@ service PlatformCommandService {
   rpc UpdateSchedule(UpdateScheduleRequest) returns (UpdateScheduleResponse);
   rpc SetScheduleEnabled(SetScheduleEnabledRequest) returns (SetScheduleEnabledResponse);
   rpc CreateIntegrationConnection(CreateIntegrationConnectionRequest) returns (CreateIntegrationConnectionResponse);
+  rpc ConfigureIntegrationConnectionCredential(ConfigureIntegrationConnectionCredentialRequest) returns (ConfigureIntegrationConnectionCredentialResponse);
   rpc TestIntegrationConnection(TestIntegrationConnectionRequest) returns (TestIntegrationConnectionResponse);
   rpc SetIntegrationConnectionEnabled(SetIntegrationConnectionEnabledRequest) returns (SetIntegrationConnectionEnabledResponse);
   rpc ChangeIntegrationGrant(ChangeIntegrationGrantRequest) returns (ChangeIntegrationGrantResponse);
@@ -205,6 +206,7 @@ enum NextAction {
   NEXT_ACTION_CREATE_CONNECTION = 30;
   NEXT_ACTION_CREATE_CONVERSATION = 31;
   NEXT_ACTION_COMPLETE_ONBOARDING = 32;
+  NEXT_ACTION_CONFIGURE_CREDENTIAL = 33;
 }
 
 enum EntityLifecycle {
@@ -826,15 +828,6 @@ message IntegrationCredentialRevision {
   string secret_resource_version = 5;
   string content_sha256 = 6;
   google.protobuf.Timestamp created_at = 7;
-}
-
-// IntegrationCredentialRevisionInput ссылается на уже материализованный Secret,
-// но не позволяет клиенту назначать domain ref, revision и timestamps.
-message IntegrationCredentialRevisionInput {
-  string secret_ref = 1;
-  string secret_uid = 2;
-  string secret_resource_version = 3;
-  string content_sha256 = 4;
 }
 
 message IntegrationGrant {
@@ -1626,10 +1619,17 @@ message CreateIntegrationConnectionRequest {
   string name = 3;
   reserved 4;
   google.protobuf.Struct public_configuration = 5;
-  // credential_revision обязателен только для definition с credential contract.
-  IntegrationCredentialRevisionInput credential_revision = 6;
+  reserved 6;
 }
 message CreateIntegrationConnectionResponse {
+  IntegrationConnection connection = 1;
+}
+message ConfigureIntegrationConnectionCredentialRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  bytes credential_value = 3;
+}
+message ConfigureIntegrationConnectionCredentialResponse {
   IntegrationConnection connection = 1;
 }
 message TestIntegrationConnectionRequest {

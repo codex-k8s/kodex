@@ -720,21 +720,8 @@ export type IntegrationResourceScope = {
     digest: string;
 };
 
-export type IntegrationCredentialRevision = {
-    ref: OpaqueRef;
-    revision: number;
-    secretRef: string;
-    secretUid: string;
-    secretResourceVersion: string;
-    contentSha256: string;
-    createdAt?: Timestamp;
-};
-
-export type IntegrationCredentialRevisionInput = {
-    secretRef: string;
-    secretUid: string;
-    secretResourceVersion: string;
-    contentSha256: string;
+export type IntegrationCredentialInput = {
+    value: string;
 };
 
 export type IntegrationGrant = {
@@ -768,7 +755,6 @@ export type IntegrationConnection = {
     publicConfiguration: {
         [key: string]: unknown;
     };
-    credentialRevision?: IntegrationCredentialRevisionInput;
 };
 
 export type IntegrationConnectionInput = {
@@ -777,7 +763,6 @@ export type IntegrationConnectionInput = {
     publicConfiguration?: {
         [key: string]: unknown;
     };
-    credentialRevision?: IntegrationCredentialRevision;
 };
 
 export type IntegrationConnectionCommand = {
@@ -2893,6 +2878,38 @@ export type GetIntegrationConnectionResponses = {
 };
 
 export type GetIntegrationConnectionResponse = GetIntegrationConnectionResponses[keyof GetIntegrationConnectionResponses];
+
+export type ConfigureIntegrationConnectionCredentialData = {
+    body: IntegrationCredentialInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/credential';
+};
+
+export type ConfigureIntegrationConnectionCredentialErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ConfigureIntegrationConnectionCredentialError = ConfigureIntegrationConnectionCredentialErrors[keyof ConfigureIntegrationConnectionCredentialErrors];
+
+export type ConfigureIntegrationConnectionCredentialResponses = {
+    /**
+     * Credential безопасно материализован в Kubernetes Secret и привязан как новая server-owned ревизия
+     */
+    200: IntegrationConnection;
+};
+
+export type ConfigureIntegrationConnectionCredentialResponse = ConfigureIntegrationConnectionCredentialResponses[keyof ConfigureIntegrationConnectionCredentialResponses];
 
 export type CommandIntegrationConnectionData = {
     body: IntegrationConnectionCommand;

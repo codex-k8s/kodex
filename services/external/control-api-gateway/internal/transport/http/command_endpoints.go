@@ -518,18 +518,9 @@ func (server *Server) CreateIntegrationConnection(w http.ResponseWriter, r *http
 		}
 	}
 	public, _ := structpb.NewStruct(config)
-	var credentialRevision *controlplanev1.IntegrationCredentialRevisionInput
-	if credential := body.CredentialRevision; credential != nil {
-		credentialRevision = &controlplanev1.IntegrationCredentialRevisionInput{
-			SecretRef:             credential.SecretRef,
-			SecretUid:             credential.SecretUid.String(),
-			SecretResourceVersion: credential.SecretResourceVersion,
-			ContentSha256:         credential.ContentSha256,
-		}
-	}
 	response, err := server.control.Command.CreateIntegrationConnection(r.Context(), &controlplanev1.CreateIntegrationConnectionRequest{
 		Mutation: m, DefinitionKey: body.DefinitionKey, Name: body.Name,
-		PublicConfiguration: public, CredentialRevision: credentialRevision,
+		PublicConfiguration: public,
 	})
 	if err != nil {
 		writeRPCProblem(w, err)
@@ -537,6 +528,29 @@ func (server *Server) CreateIntegrationConnection(w http.ResponseWriter, r *http
 	}
 	writeMessage(w, http.StatusCreated, response, "connection", "")
 }
+
+func (server *Server) ConfigureIntegrationConnectionCredential(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.ConfigureIntegrationConnectionCredentialParams) {
+	body, ok := decodeJSON[generated.IntegrationCredentialInput](w, r)
+	if !ok {
+		return
+	}
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	credential := []byte(stringValue(body.Value))
+	body.Value = nil
+	defer clear(credential)
+	response, err := server.control.Command.ConfigureIntegrationConnectionCredential(r.Context(), &controlplanev1.ConfigureIntegrationConnectionCredentialRequest{
+		Mutation: m, ConnectionRef: ref, CredentialValue: credential,
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "connection", "")
+}
+
 func (server *Server) CommandIntegrationConnection(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.CommandIntegrationConnectionParams) {
 	body, ok := decodeJSON[generated.IntegrationConnectionCommand](w, r)
 	if !ok {

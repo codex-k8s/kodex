@@ -22,13 +22,28 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-type Service struct{ repository repository.Repository }
+type Service struct {
+	repository             repository.Repository
+	credentialMaterializer CredentialMaterializer
+}
 
-func New(repo repository.Repository) (*Service, error) {
+type Option func(*Service)
+
+func WithCredentialMaterializer(materializer CredentialMaterializer) Option {
+	return func(service *Service) { service.credentialMaterializer = materializer }
+}
+
+func New(repo repository.Repository, options ...Option) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("platform repository is required")
 	}
-	return &Service{repository: repo}, nil
+	service := &Service{repository: repo}
+	for _, option := range options {
+		if option != nil {
+			option(service)
+		}
+	}
+	return service, nil
 }
 
 func (service *Service) Bootstrap(ctx context.Context) error {
@@ -390,10 +405,20 @@ func (service *Service) Execute(ctx context.Context, input command.Command) (com
 		return command.Result{}, errs.ErrInvalid
 	}
 	input.Mutation.Operation = "controlplane." + strings.ToLower(string(input.Kind))
+	intentPayload := input.Payload
+	if input.Kind == command.ConfigureConnectionCredential {
+		payload, ok := input.Payload.(command.ConnectionInput)
+		if !ok || payload.CredentialRevision == nil {
+			return command.Result{}, errs.ErrInvalid
+		}
+		intentPayload = struct {
+			Ref, MaterializationRef, ContentSHA256 string
+		}{payload.Ref, payload.MaterializationRef, payload.CredentialRevision.ContentSHA256}
+	}
 	input.Mutation.IntentDigest = digest(struct {
 		Kind    command.Kind
 		Payload any
-	}{input.Kind, input.Payload})
+	}{input.Kind, intentPayload})
 	if err := input.Mutation.Validate(); err != nil {
 		return command.Result{}, errs.ErrInvalid
 	}
@@ -515,6 +540,7 @@ func knownCommand(kind command.Kind) bool {
 		command.LaunchRun, command.AddSessionTurn, command.CancelRun, command.RetryRun,
 		command.ResolveOwnerGate, command.ChangeArtifactBinding, command.CreateSchedule,
 		command.UpdateSchedule, command.SetScheduleEnabled, command.CreateConnection,
+		command.ConfigureConnectionCredential,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant,
 		command.CreateAssistantConversation, command.AddAssistantTurn, command.ApplyAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,

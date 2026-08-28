@@ -72,6 +72,14 @@ spec:
               valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: secretResourceVersion}}
             - name: CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256
               valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: contentSHA256}}
+            - name: CONTROL_PLANE_INTEGRATION_CREDENTIAL_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: CONTROL_PLANE_INTEGRATION_CREDENTIAL_SECRET_NAME
+              value: kodex-integration-credentials
+            - name: CONTROL_PLANE_KUBERNETES_API_TIMEOUT
+              value: 3s
             - name: CONTROL_PLANE_OIDC_ISSUER
               valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcIssuer}}
             - name: CONTROL_PLANE_OIDC_AUDIENCE
@@ -177,6 +185,9 @@ spec:
               drop:
                 - ALL
           volumeMounts:
+            - name: kube-api-access
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
             - name: workload-tls
               mountPath: /var/run/secrets/kodex/control-plane/workload-tls
               readOnly: true
@@ -222,6 +233,23 @@ spec:
             - name: tmp
               mountPath: /tmp
       volumes:
+        - name: kube-api-access
+          projected:
+            defaultMode: 0440
+            sources:
+              - serviceAccountToken:
+                  expirationSeconds: 600
+                  path: token
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+              - downwardAPI:
+                  items:
+                    - path: namespace
+                      fieldRef:
+                        fieldPath: metadata.namespace
         - name: workload-tls
           secret:
             secretName: internal-rpc-authority-control-plane-workload-tls

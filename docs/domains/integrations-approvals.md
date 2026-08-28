@@ -4,7 +4,7 @@ title: Интеграции и согласования
 type: domain
 status: approved
 owner: architect
-version: 1.1.0
+version: 1.2.0
 updated: 2026-08-28
 ---
 
@@ -42,6 +42,16 @@ updated: 2026-08-28
 6. Согласованное действие выполняется закрытым типизированным adapter-ом.
 7. Успех атомарно фиксирует terminal invocation и одну immutable effect
    receipt; exact retry читает её, а несовпадение закрыто отклоняется.
+
+## Настройка credential
+
+Connection и credential создаются двумя командами. Browser сначала создаёт
+Connection без secret metadata. Затем специализированная команда с OCC и
+semantic idempotency передаёт значение доверенному materializer. Он записывает
+детерминированный data key в единственный Kubernetes Secret и возвращает
+server-owned metadata; только после этого control-plane создаёт immutable
+revision и активирует её. Повтор того же idempotency key с другим значением
+запрещён. Публичный readback содержит только маскированное состояние.
 
 ## Контракт MCP среды выполнения
 

@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  IntegrationConnection,
   Project,
   ProjectPage,
   Run,
@@ -19,6 +20,8 @@ const getRunGraphMock = vi.hoisted(() => vi.fn());
 const listRunEventsMock = vi.hoisted(() => vi.fn());
 const listAgentInstructionVersionsMock = vi.hoisted(() => vi.fn());
 const downloadArtifactMock = vi.hoisted(() => vi.fn());
+const createIntegrationConnectionMock = vi.hoisted(() => vi.fn());
+const configureIntegrationConnectionCredentialMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   ...(await importOriginal<
@@ -31,6 +34,9 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   listRunEvents: listRunEventsMock,
   listAgentInstructionVersions: listAgentInstructionVersionsMock,
   downloadArtifact: downloadArtifactMock,
+  createIntegrationConnection: createIntegrationConnectionMock,
+  configureIntegrationConnectionCredential:
+    configureIntegrationConnectionCredentialMock,
 }));
 vi.mock("@/shared/api/client", () => ({
   requestSignal: () => new AbortController().signal,
@@ -170,6 +176,27 @@ function runEvent(sequence: number): RunEvent {
   };
 }
 
+function integrationConnection(
+  version: number,
+  credentialsConfigured = false,
+): IntegrationConnection {
+  return {
+    ref: "connection_github",
+    version,
+    definitionKey: "github",
+    name: "Основная организация",
+    state: credentialsConfigured ? "CONNECTED" : "NOT_CONNECTED",
+    credentialsConfigured,
+    credentialsHint: credentialsConfigured ? "••••••••" : "Не настроены",
+    capabilities: [],
+    grants: [],
+    nextActions: [],
+    definitionVersion: "1.0.0",
+    definitionDigest: "sha256:definition",
+    publicConfiguration: { organization: "codex-k8s" },
+  };
+}
+
 describe("platform store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -180,7 +207,13 @@ describe("platform store", () => {
     listRunEventsMock.mockReset();
     listAgentInstructionVersionsMock.mockReset();
     downloadArtifactMock.mockReset();
+    createIntegrationConnectionMock.mockReset();
+    configureIntegrationConnectionCredentialMock.mockReset();
     selectProjectRef(undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("не позволяет старому HTTP response перезаписать новый", async () => {
@@ -436,5 +469,86 @@ describe("platform store", () => {
     expect(store.projectList).toEqual([]);
     expect(store.projectCollectionActions).toEqual([]);
     expect(selectedProjectRef()).toBeUndefined();
+  });
+
+  it("настраивает credential отдельной versioned-командой и хранит только masked readback", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const created = integrationConnection(4);
+    const configured = integrationConnection(5, true);
+    createIntegrationConnectionMock.mockResolvedValue({
+      data: created,
+      response: new Response(null, { status: 201 }),
+    });
+    configureIntegrationConnectionCredentialMock.mockResolvedValue({
+      data: configured,
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+    const rawCredential = "test-only-secret-value";
+
+    const metadata = await store.connectIntegration({
+      definitionKey: "github",
+      name: "Основная организация",
+      publicConfiguration: { organization: "codex-k8s" },
+    });
+    const result = await store.configureConnectionCredential(
+      metadata,
+      rawCredential,
+      "credential-request-key",
+    );
+
+    expect(result).toEqual(configured);
+    expect(configureIntegrationConnectionCredentialMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { connectionRef: created.ref },
+        body: { value: rawCredential },
+        headers: {
+          "If-Match": '"4"',
+          "Idempotency-Key": "credential-request-key",
+          "X-CSRF-Token": "a".repeat(43),
+        },
+      }),
+    );
+    expect(store.connections[created.ref]).toEqual(configured);
+    expect(JSON.stringify(store.connections)).not.toContain(rawCredential);
+  });
+
+  it("сохраняет созданное подключение при временной ошибке credential-шагa", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const created = integrationConnection(4);
+    createIntegrationConnectionMock.mockResolvedValue({
+      data: created,
+      response: new Response(null, { status: 201 }),
+    });
+    configureIntegrationConnectionCredentialMock.mockResolvedValue({
+      error: {
+        status: 503,
+        code: "CREDENTIAL_STORE_UNAVAILABLE",
+        retryable: true,
+      },
+      response: new Response(null, { status: 503 }),
+    });
+    const store = usePlatformStore();
+
+    const metadata = await store.connectIntegration({
+      definitionKey: "github",
+      name: "Основная организация",
+    });
+    await expect(
+      store.configureConnectionCredential(
+        metadata,
+        "test-only-secret-value",
+        "credential-request-key",
+      ),
+    ).rejects.toMatchObject({
+      code: "CREDENTIAL_STORE_UNAVAILABLE",
+      retryable: true,
+    });
+
+    expect(store.connections[created.ref]).toEqual(created);
   });
 });

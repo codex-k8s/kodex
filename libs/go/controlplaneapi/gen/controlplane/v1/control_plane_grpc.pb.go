@@ -1265,45 +1265,46 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	PlatformCommandService_CompleteOnboarding_FullMethodName              = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
-	PlatformCommandService_CreateProject_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateProject"
-	PlatformCommandService_UpdateProject_FullMethodName                   = "/controlplane.v1.PlatformCommandService/UpdateProject"
-	PlatformCommandService_AddPlatformMembership_FullMethodName           = "/controlplane.v1.PlatformCommandService/AddPlatformMembership"
-	PlatformCommandService_ChangePlatformMembership_FullMethodName        = "/controlplane.v1.PlatformCommandService/ChangePlatformMembership"
-	PlatformCommandService_RemovePlatformMembership_FullMethodName        = "/controlplane.v1.PlatformCommandService/RemovePlatformMembership"
-	PlatformCommandService_AddProjectMembership_FullMethodName            = "/controlplane.v1.PlatformCommandService/AddProjectMembership"
-	PlatformCommandService_ChangeProjectMembership_FullMethodName         = "/controlplane.v1.PlatformCommandService/ChangeProjectMembership"
-	PlatformCommandService_RemoveProjectMembership_FullMethodName         = "/controlplane.v1.PlatformCommandService/RemoveProjectMembership"
-	PlatformCommandService_CreateAgent_FullMethodName                     = "/controlplane.v1.PlatformCommandService/CreateAgent"
-	PlatformCommandService_UpdateAgent_FullMethodName                     = "/controlplane.v1.PlatformCommandService/UpdateAgent"
-	PlatformCommandService_SetAgentEnabled_FullMethodName                 = "/controlplane.v1.PlatformCommandService/SetAgentEnabled"
-	PlatformCommandService_ArchiveAgent_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ArchiveAgent"
-	PlatformCommandService_CreateInstructionDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/CreateInstructionDraft"
-	PlatformCommandService_ValidateInstructionDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/ValidateInstructionDraft"
-	PlatformCommandService_PublishInstructionDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PublishInstructionDraft"
-	PlatformCommandService_RollbackInstructions_FullMethodName            = "/controlplane.v1.PlatformCommandService/RollbackInstructions"
-	PlatformCommandService_ChangeAgentCapability_FullMethodName           = "/controlplane.v1.PlatformCommandService/ChangeAgentCapability"
-	PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName     = "/controlplane.v1.PlatformCommandService/ChangeAgentIntegrationGrant"
-	PlatformCommandService_CreateWorkflow_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateWorkflow"
-	PlatformCommandService_UpdateWorkflowDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/UpdateWorkflowDraft"
-	PlatformCommandService_ValidateWorkflowDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/ValidateWorkflowDraft"
-	PlatformCommandService_PublishWorkflowDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/PublishWorkflowDraft"
-	PlatformCommandService_ArchiveWorkflow_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ArchiveWorkflow"
-	PlatformCommandService_LaunchRun_FullMethodName                       = "/controlplane.v1.PlatformCommandService/LaunchRun"
-	PlatformCommandService_AddSessionTurn_FullMethodName                  = "/controlplane.v1.PlatformCommandService/AddSessionTurn"
-	PlatformCommandService_CancelRun_FullMethodName                       = "/controlplane.v1.PlatformCommandService/CancelRun"
-	PlatformCommandService_RetryRun_FullMethodName                        = "/controlplane.v1.PlatformCommandService/RetryRun"
-	PlatformCommandService_ResolveOwnerGate_FullMethodName                = "/controlplane.v1.PlatformCommandService/ResolveOwnerGate"
-	PlatformCommandService_UploadArtifact_FullMethodName                  = "/controlplane.v1.PlatformCommandService/UploadArtifact"
-	PlatformCommandService_DownloadArtifact_FullMethodName                = "/controlplane.v1.PlatformCommandService/DownloadArtifact"
-	PlatformCommandService_ChangeArtifactBinding_FullMethodName           = "/controlplane.v1.PlatformCommandService/ChangeArtifactBinding"
-	PlatformCommandService_CreateSchedule_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateSchedule"
-	PlatformCommandService_UpdateSchedule_FullMethodName                  = "/controlplane.v1.PlatformCommandService/UpdateSchedule"
-	PlatformCommandService_SetScheduleEnabled_FullMethodName              = "/controlplane.v1.PlatformCommandService/SetScheduleEnabled"
-	PlatformCommandService_CreateIntegrationConnection_FullMethodName     = "/controlplane.v1.PlatformCommandService/CreateIntegrationConnection"
-	PlatformCommandService_TestIntegrationConnection_FullMethodName       = "/controlplane.v1.PlatformCommandService/TestIntegrationConnection"
-	PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName = "/controlplane.v1.PlatformCommandService/SetIntegrationConnectionEnabled"
-	PlatformCommandService_ChangeIntegrationGrant_FullMethodName          = "/controlplane.v1.PlatformCommandService/ChangeIntegrationGrant"
+	PlatformCommandService_CompleteOnboarding_FullMethodName                       = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
+	PlatformCommandService_CreateProject_FullMethodName                            = "/controlplane.v1.PlatformCommandService/CreateProject"
+	PlatformCommandService_UpdateProject_FullMethodName                            = "/controlplane.v1.PlatformCommandService/UpdateProject"
+	PlatformCommandService_AddPlatformMembership_FullMethodName                    = "/controlplane.v1.PlatformCommandService/AddPlatformMembership"
+	PlatformCommandService_ChangePlatformMembership_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ChangePlatformMembership"
+	PlatformCommandService_RemovePlatformMembership_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RemovePlatformMembership"
+	PlatformCommandService_AddProjectMembership_FullMethodName                     = "/controlplane.v1.PlatformCommandService/AddProjectMembership"
+	PlatformCommandService_ChangeProjectMembership_FullMethodName                  = "/controlplane.v1.PlatformCommandService/ChangeProjectMembership"
+	PlatformCommandService_RemoveProjectMembership_FullMethodName                  = "/controlplane.v1.PlatformCommandService/RemoveProjectMembership"
+	PlatformCommandService_CreateAgent_FullMethodName                              = "/controlplane.v1.PlatformCommandService/CreateAgent"
+	PlatformCommandService_UpdateAgent_FullMethodName                              = "/controlplane.v1.PlatformCommandService/UpdateAgent"
+	PlatformCommandService_SetAgentEnabled_FullMethodName                          = "/controlplane.v1.PlatformCommandService/SetAgentEnabled"
+	PlatformCommandService_ArchiveAgent_FullMethodName                             = "/controlplane.v1.PlatformCommandService/ArchiveAgent"
+	PlatformCommandService_CreateInstructionDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateInstructionDraft"
+	PlatformCommandService_ValidateInstructionDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ValidateInstructionDraft"
+	PlatformCommandService_PublishInstructionDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/PublishInstructionDraft"
+	PlatformCommandService_RollbackInstructions_FullMethodName                     = "/controlplane.v1.PlatformCommandService/RollbackInstructions"
+	PlatformCommandService_ChangeAgentCapability_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ChangeAgentCapability"
+	PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName              = "/controlplane.v1.PlatformCommandService/ChangeAgentIntegrationGrant"
+	PlatformCommandService_CreateWorkflow_FullMethodName                           = "/controlplane.v1.PlatformCommandService/CreateWorkflow"
+	PlatformCommandService_UpdateWorkflowDraft_FullMethodName                      = "/controlplane.v1.PlatformCommandService/UpdateWorkflowDraft"
+	PlatformCommandService_ValidateWorkflowDraft_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ValidateWorkflowDraft"
+	PlatformCommandService_PublishWorkflowDraft_FullMethodName                     = "/controlplane.v1.PlatformCommandService/PublishWorkflowDraft"
+	PlatformCommandService_ArchiveWorkflow_FullMethodName                          = "/controlplane.v1.PlatformCommandService/ArchiveWorkflow"
+	PlatformCommandService_LaunchRun_FullMethodName                                = "/controlplane.v1.PlatformCommandService/LaunchRun"
+	PlatformCommandService_AddSessionTurn_FullMethodName                           = "/controlplane.v1.PlatformCommandService/AddSessionTurn"
+	PlatformCommandService_CancelRun_FullMethodName                                = "/controlplane.v1.PlatformCommandService/CancelRun"
+	PlatformCommandService_RetryRun_FullMethodName                                 = "/controlplane.v1.PlatformCommandService/RetryRun"
+	PlatformCommandService_ResolveOwnerGate_FullMethodName                         = "/controlplane.v1.PlatformCommandService/ResolveOwnerGate"
+	PlatformCommandService_UploadArtifact_FullMethodName                           = "/controlplane.v1.PlatformCommandService/UploadArtifact"
+	PlatformCommandService_DownloadArtifact_FullMethodName                         = "/controlplane.v1.PlatformCommandService/DownloadArtifact"
+	PlatformCommandService_ChangeArtifactBinding_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ChangeArtifactBinding"
+	PlatformCommandService_CreateSchedule_FullMethodName                           = "/controlplane.v1.PlatformCommandService/CreateSchedule"
+	PlatformCommandService_UpdateSchedule_FullMethodName                           = "/controlplane.v1.PlatformCommandService/UpdateSchedule"
+	PlatformCommandService_SetScheduleEnabled_FullMethodName                       = "/controlplane.v1.PlatformCommandService/SetScheduleEnabled"
+	PlatformCommandService_CreateIntegrationConnection_FullMethodName              = "/controlplane.v1.PlatformCommandService/CreateIntegrationConnection"
+	PlatformCommandService_ConfigureIntegrationConnectionCredential_FullMethodName = "/controlplane.v1.PlatformCommandService/ConfigureIntegrationConnectionCredential"
+	PlatformCommandService_TestIntegrationConnection_FullMethodName                = "/controlplane.v1.PlatformCommandService/TestIntegrationConnection"
+	PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName          = "/controlplane.v1.PlatformCommandService/SetIntegrationConnectionEnabled"
+	PlatformCommandService_ChangeIntegrationGrant_FullMethodName                   = "/controlplane.v1.PlatformCommandService/ChangeIntegrationGrant"
 )
 
 // PlatformCommandServiceClient is the client API for PlatformCommandService service.
@@ -1349,6 +1350,7 @@ type PlatformCommandServiceClient interface {
 	UpdateSchedule(ctx context.Context, in *UpdateScheduleRequest, opts ...grpc.CallOption) (*UpdateScheduleResponse, error)
 	SetScheduleEnabled(ctx context.Context, in *SetScheduleEnabledRequest, opts ...grpc.CallOption) (*SetScheduleEnabledResponse, error)
 	CreateIntegrationConnection(ctx context.Context, in *CreateIntegrationConnectionRequest, opts ...grpc.CallOption) (*CreateIntegrationConnectionResponse, error)
+	ConfigureIntegrationConnectionCredential(ctx context.Context, in *ConfigureIntegrationConnectionCredentialRequest, opts ...grpc.CallOption) (*ConfigureIntegrationConnectionCredentialResponse, error)
 	TestIntegrationConnection(ctx context.Context, in *TestIntegrationConnectionRequest, opts ...grpc.CallOption) (*TestIntegrationConnectionResponse, error)
 	SetIntegrationConnectionEnabled(ctx context.Context, in *SetIntegrationConnectionEnabledRequest, opts ...grpc.CallOption) (*SetIntegrationConnectionEnabledResponse, error)
 	ChangeIntegrationGrant(ctx context.Context, in *ChangeIntegrationGrantRequest, opts ...grpc.CallOption) (*ChangeIntegrationGrantResponse, error)
@@ -1734,6 +1736,16 @@ func (c *platformCommandServiceClient) CreateIntegrationConnection(ctx context.C
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) ConfigureIntegrationConnectionCredential(ctx context.Context, in *ConfigureIntegrationConnectionCredentialRequest, opts ...grpc.CallOption) (*ConfigureIntegrationConnectionCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfigureIntegrationConnectionCredentialResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ConfigureIntegrationConnectionCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformCommandServiceClient) TestIntegrationConnection(ctx context.Context, in *TestIntegrationConnectionRequest, opts ...grpc.CallOption) (*TestIntegrationConnectionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TestIntegrationConnectionResponse)
@@ -1807,6 +1819,7 @@ type PlatformCommandServiceServer interface {
 	UpdateSchedule(context.Context, *UpdateScheduleRequest) (*UpdateScheduleResponse, error)
 	SetScheduleEnabled(context.Context, *SetScheduleEnabledRequest) (*SetScheduleEnabledResponse, error)
 	CreateIntegrationConnection(context.Context, *CreateIntegrationConnectionRequest) (*CreateIntegrationConnectionResponse, error)
+	ConfigureIntegrationConnectionCredential(context.Context, *ConfigureIntegrationConnectionCredentialRequest) (*ConfigureIntegrationConnectionCredentialResponse, error)
 	TestIntegrationConnection(context.Context, *TestIntegrationConnectionRequest) (*TestIntegrationConnectionResponse, error)
 	SetIntegrationConnectionEnabled(context.Context, *SetIntegrationConnectionEnabledRequest) (*SetIntegrationConnectionEnabledResponse, error)
 	ChangeIntegrationGrant(context.Context, *ChangeIntegrationGrantRequest) (*ChangeIntegrationGrantResponse, error)
@@ -1927,6 +1940,9 @@ func (UnimplementedPlatformCommandServiceServer) SetScheduleEnabled(context.Cont
 }
 func (UnimplementedPlatformCommandServiceServer) CreateIntegrationConnection(context.Context, *CreateIntegrationConnectionRequest) (*CreateIntegrationConnectionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateIntegrationConnection not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ConfigureIntegrationConnectionCredential(context.Context, *ConfigureIntegrationConnectionCredentialRequest) (*ConfigureIntegrationConnectionCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfigureIntegrationConnectionCredential not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) TestIntegrationConnection(context.Context, *TestIntegrationConnectionRequest) (*TestIntegrationConnectionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TestIntegrationConnection not implemented")
@@ -2589,6 +2605,24 @@ func _PlatformCommandService_CreateIntegrationConnection_Handler(srv interface{}
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_ConfigureIntegrationConnectionCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigureIntegrationConnectionCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ConfigureIntegrationConnectionCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ConfigureIntegrationConnectionCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ConfigureIntegrationConnectionCredential(ctx, req.(*ConfigureIntegrationConnectionCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformCommandService_TestIntegrationConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(TestIntegrationConnectionRequest)
 	if err := dec(in); err != nil {
@@ -2785,6 +2819,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateIntegrationConnection",
 			Handler:    _PlatformCommandService_CreateIntegrationConnection_Handler,
+		},
+		{
+			MethodName: "ConfigureIntegrationConnectionCredential",
+			Handler:    _PlatformCommandService_ConfigureIntegrationConnectionCredential_Handler,
 		},
 		{
 			MethodName: "TestIntegrationConnection",

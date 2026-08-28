@@ -1266,7 +1266,8 @@ func scanConnection(row rowScanner) (entity.IntegrationConnection, error) {
 		&item.Ref, &item.DefinitionKey, &item.DefinitionName, &item.Name, &item.State,
 		&item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version,
 		&configuration, &capabilities, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt,
-		&item.DefinitionVersion, &item.DefinitionDigest, &credential.Ref, &credential.Revision,
+		&item.DefinitionVersion, &item.DefinitionDigest, &item.CredentialSecretKey,
+		&credential.Ref, &credential.Revision,
 		&credential.SecretRef, &credential.SecretUID, &credential.SecretResourceVersion,
 		&credential.ContentSHA256, &credentialCreatedAt,
 	); err != nil {
@@ -1302,7 +1303,10 @@ func connectionActions(item entity.IntegrationConnection, manageConnection, mana
 		}
 		return actions
 	}
-	if manageConnection && item.State != "TESTING" {
+	if manageConnection && item.CredentialSecretKey != "" && item.State != "TESTING" {
+		actions = append(actions, "CONFIGURE_CREDENTIAL")
+	}
+	if manageConnection && item.State != "TESTING" && item.MaskedCredentialsState == "CONFIGURED" {
 		actions = append(actions, "TEST")
 	}
 	if manageConnection {

@@ -39,6 +39,9 @@ type Config struct {
 	DefaultProviderSecretUID        string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_UID"`
 	DefaultProviderSecretVersion    string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_RESOURCE_VERSION"`
 	DefaultProviderCredentialSHA256 string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256"`
+	IntegrationCredentialNamespace  string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_NAMESPACE"`
+	IntegrationCredentialSecretName string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_SECRET_NAME"`
+	KubernetesAPITimeout            time.Duration `env:"CONTROL_PLANE_KUBERNETES_API_TIMEOUT"`
 	AuthorityVerifierSocket         string        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_SOCKET"`
 	AuthorityVerifierUID            uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_UID"`
 	AuthorityVerifierGID            uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_GID"`
@@ -91,26 +94,29 @@ type Config struct {
 func loadConfig() (Config, error) {
 	config := Config{
 		GRPCListen: ":8443", TechnicalListen: ":9090",
-		ServerCertificateFile:   "/var/run/secrets/kodex/control-plane/workload-tls/tls.crt",
-		ServerPrivateKeyFile:    "/var/run/secrets/kodex/control-plane/workload-tls/tls.key",
-		ClientCAFile:            "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
-		PostgresDSNFile:         "/var/run/secrets/kodex/control-plane/postgres-runtime/dsn",
-		PostgresCAFile:          "/var/run/config/kodex/control-plane/postgres/ca.pem",
-		PostgresTLSServerName:   "control-plane-postgresql-rw.kodex-system.svc.cluster.local",
-		PostgresMaxConnections:  16,
-		NATSURL:                 "tls://nats.kodex-system.svc:4222",
-		NATSTLSServerName:       "nats.kodex-system.svc.cluster.local",
-		NATSCAFile:              "/var/run/config/kodex/control-plane/nats/ca.pem",
-		NATSCertificateFile:     "/var/run/secrets/kodex/control-plane/nats-client/tls.crt",
-		NATSPrivateKeyFile:      "/var/run/secrets/kodex/control-plane/nats-client/tls.key",
-		NATSCredentialsFile:     "/var/run/secrets/kodex/control-plane/nats/user.creds",
-		NATSStream:              "CONTROL_PLANE",
-		NATSReplicas:            3,
-		NATSMaxBytes:            32 << 30,
-		DefaultRuntimeProvider:  "openai-codex",
-		DefaultRuntimeModel:     "gpt-5.6-sol",
-		AuthorityVerifierSocket: authorityclient.VerifierSocketPath,
-		AuthorityVerifierUID:    29002, AuthorityVerifierGID: 29000,
+		ServerCertificateFile:           "/var/run/secrets/kodex/control-plane/workload-tls/tls.crt",
+		ServerPrivateKeyFile:            "/var/run/secrets/kodex/control-plane/workload-tls/tls.key",
+		ClientCAFile:                    "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
+		PostgresDSNFile:                 "/var/run/secrets/kodex/control-plane/postgres-runtime/dsn",
+		PostgresCAFile:                  "/var/run/config/kodex/control-plane/postgres/ca.pem",
+		PostgresTLSServerName:           "control-plane-postgresql-rw.kodex-system.svc.cluster.local",
+		PostgresMaxConnections:          16,
+		NATSURL:                         "tls://nats.kodex-system.svc:4222",
+		NATSTLSServerName:               "nats.kodex-system.svc.cluster.local",
+		NATSCAFile:                      "/var/run/config/kodex/control-plane/nats/ca.pem",
+		NATSCertificateFile:             "/var/run/secrets/kodex/control-plane/nats-client/tls.crt",
+		NATSPrivateKeyFile:              "/var/run/secrets/kodex/control-plane/nats-client/tls.key",
+		NATSCredentialsFile:             "/var/run/secrets/kodex/control-plane/nats/user.creds",
+		NATSStream:                      "CONTROL_PLANE",
+		NATSReplicas:                    3,
+		NATSMaxBytes:                    32 << 30,
+		DefaultRuntimeProvider:          "openai-codex",
+		DefaultRuntimeModel:             "gpt-5.6-sol",
+		IntegrationCredentialNamespace:  "kodex-system",
+		IntegrationCredentialSecretName: "kodex-integration-credentials",
+		KubernetesAPITimeout:            3 * time.Second,
+		AuthorityVerifierSocket:         authorityclient.VerifierSocketPath,
+		AuthorityVerifierUID:            29002, AuthorityVerifierGID: 29000,
 		AuthorityPolicyFile:            "/var/run/config/kodex/control-plane/authority/policy.json",
 		ProofSignerFile:                "/var/run/secrets/kodex/internal-rpc-authority/proof-signer/private.jwk",
 		ProofSignerTrustFile:           "/var/run/config/kodex/internal-rpc-authority/authority-proof-trust/jwks.json",
@@ -166,6 +172,8 @@ func (config Config) validate() error {
 		!validDNSLabel(config.DefaultProviderSecretName) || !validUUID(config.DefaultProviderSecretUID) ||
 		config.DefaultProviderSecretVersion == "" || len(config.DefaultProviderSecretVersion) > 128 ||
 		!validSHA256(config.DefaultProviderCredentialSHA256) ||
+		config.IntegrationCredentialNamespace != "kodex-system" || config.IntegrationCredentialSecretName != "kodex-integration-credentials" ||
+		config.KubernetesAPITimeout < 500*time.Millisecond || config.KubernetesAPITimeout > 10*time.Second ||
 		config.ImagePolicyRevision == 0 || !validSHA256(config.ImagePolicySHA256) ||
 		config.ImageBuildLeaseDuration < 30*time.Second || config.ImageBuildLeaseDuration > 30*time.Minute ||
 		config.ImageAdmissionClaimTTL < time.Minute || config.ImageAdmissionClaimTTL > time.Hour ||

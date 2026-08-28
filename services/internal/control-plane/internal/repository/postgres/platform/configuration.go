@@ -183,14 +183,13 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, errs.ErrConflict
 		}
 		configuration, valid := integrationStringConfiguration(payload.PublicConfiguration)
-		if !valid || definition.ValidateConfiguration(configuration) != nil ||
-			!validIntegrationCredentialInput(definition.Spec.Credential != nil, payload.CredentialRevision) {
+		if !valid || definition.ValidateConfiguration(configuration) != nil || payload.CredentialRevision != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		ref, _ := newRef("int")
-		maskedCredentials := "NOT_CONFIGURED"
+		maskedCredentials := "CONFIGURED"
 		if definition.Spec.Credential != nil {
-			maskedCredentials = "CONFIGURED"
+			maskedCredentials = "NOT_CONFIGURED"
 		}
 		var item entity.IntegrationConnection
 		var connectionID string
@@ -201,22 +200,6 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		).Scan(&connectionID, &item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.Enabled, &item.Version, &config, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
-		}
-		if credential := payload.CredentialRevision; credential != nil {
-			credentialRef, _ := newRef("icr")
-			var credentialID string
-			stored := &entity.IntegrationCredentialRevision{}
-			if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionInsertCredentialRevision,
-				credentialRef, scope.organizationID, connectionID, credential.SecretRef, credential.SecretUID,
-				credential.SecretResourceVersion, credential.ContentSHA256, scope.actorID,
-			).Scan(&credentialID, &stored.Ref, &stored.Revision, &stored.SecretRef, &stored.SecretUID,
-				&stored.SecretResourceVersion, &stored.ContentSHA256, &stored.CreatedAt); err != nil {
-				return commandOutcome{}, mapWriteError(err)
-			}
-			if tag, err := tx.Exec(ctx, queryConfigurationChangeconnectionActivateCredentialRevision, connectionID, credentialID); err != nil || tag.RowsAffected() != 1 {
-				return commandOutcome{}, errs.ErrConflict
-			}
-			item.CredentialRevision = stored
 		}
 		if json.Unmarshal(config, &item.PublicConfiguration) != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -231,6 +214,44 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	var item entity.IntegrationConnection
+	if input.Kind == command.ConfigureConnectionCredential {
+		credential := payload.CredentialRevision
+		var connectionID, credentialSecretKey string
+		if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionSelectCredentialTarget,
+			scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion,
+		).Scan(&connectionID, &credentialSecretKey); errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		} else if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if credentialSecretKey == "" || payload.MaterializationRef == "" || len(payload.MaterializationRef) > 128 ||
+			!validIntegrationCredentialInput(true, credential) {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		credentialRef, _ := newRef("icr")
+		var credentialID string
+		stored := &entity.IntegrationCredentialRevision{}
+		if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionInsertCredentialRevision,
+			credentialRef, scope.organizationID, connectionID, credential.SecretRef, credential.SecretUID,
+			credential.SecretResourceVersion, credential.ContentSHA256, scope.actorID,
+		).Scan(&credentialID, &stored.Ref, &stored.Revision, &stored.SecretRef, &stored.SecretUID,
+			&stored.SecretResourceVersion, &stored.ContentSHA256, &stored.CreatedAt); err != nil {
+			return commandOutcome{}, mapWriteError(err)
+		}
+		var updatedRef string
+		if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionActivateCredentialRevision,
+			connectionID, credentialID, payload.MaterializationRef, *input.Mutation.ExpectedVersion,
+		).Scan(&updatedRef); errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		} else if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		item, readErr := readConnection(ctx, tx, scope, updatedRef)
+		if readErr != nil {
+			return commandOutcome{}, readErr
+		}
+		return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref, summary: "i18n:INTEGRATION_CREDENTIAL_CONFIGURED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
+	}
 	if input.Kind == command.TestConnection {
 		var connectionID string
 		err := tx.QueryRow(ctx, queryConfigurationChangeconnectionUpdateIntegrationConnectionsStateLastTestSummaryVersion, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(&connectionID, &item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt)

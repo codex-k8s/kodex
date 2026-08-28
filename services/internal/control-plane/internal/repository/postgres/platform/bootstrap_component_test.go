@@ -345,7 +345,15 @@ func testOptionalInteractionIncident(t *testing.T, ctx context.Context, reposito
 		Kind: command.CreateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "interaction-connection-create"},
 		Payload: command.ConnectionInput{DefinitionKey: "mattermost", Name: "Optional customer channel", PublicConfiguration: map[string]any{
 			"base_url": "https://mattermost.example.test", "team_name": "customer-success", "channel_name": "ai-results",
-		}, CredentialRevision: &entity.IntegrationCredentialRevision{
+		}},
+	})
+	if err != nil || connection.Connection == nil {
+		t.Fatalf("create Mattermost connection: connection=%#v err=%v", connection.Connection, err)
+	}
+	connection, err = service.Execute(ctx, command.Command{
+		Kind: command.ConfigureConnectionCredential, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "interaction-connection-credential", ExpectedVersion: &connection.Connection.Version},
+		Payload: command.ConnectionInput{Ref: connection.Connection.Ref, MaterializationRef: "interaction-mattermost-token", CredentialRevision: &entity.IntegrationCredentialRevision{
 			SecretRef: "kodex-system/kodex-integration-credentials#mattermost-token",
 			SecretUID: "30000000-0000-4000-8000-000000000001", SecretResourceVersion: "1",
 			ContentSHA256: strings.Repeat("a", 64),
@@ -463,7 +471,7 @@ func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, re
 		Kind: command.CreateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-synthetic-create"},
 		Payload: command.ConnectionInput{DefinitionKey: "synthetic", Name: "Synthetic journal", PublicConfiguration: map[string]any{"journal": "component-main"}},
 	})
-	if err != nil || created.Connection == nil || created.Connection.MaskedCredentialsState != "NOT_CONFIGURED" || created.Connection.State != "NOT_CONNECTED" || len(created.Connection.Capabilities) != 2 {
+	if err != nil || created.Connection == nil || created.Connection.MaskedCredentialsState != "CONFIGURED" || created.Connection.State != "NOT_CONNECTED" || len(created.Connection.Capabilities) != 2 {
 		t.Fatalf("create integration connection: connection=%#v err=%v", created.Connection, err)
 	}
 	project, err := service.Execute(ctx, command.Command{

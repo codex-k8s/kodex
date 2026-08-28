@@ -88,6 +88,12 @@ spec:
         - protocol: TCP
           port: 4222
     - to:
+        - ipBlock:
+            cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: __KODEX_OIDC_NAMESPACE__

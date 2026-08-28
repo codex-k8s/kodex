@@ -76,6 +76,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.schedules.update":                      controlplanev1.PlatformCommandService_UpdateSchedule_FullMethodName,
 		"platform.command.schedules.enable":                      controlplanev1.PlatformCommandService_SetScheduleEnabled_FullMethodName,
 		"platform.command.integrations.create":                   controlplanev1.PlatformCommandService_CreateIntegrationConnection_FullMethodName,
+		"platform.command.integrations.configure-credential":     controlplanev1.PlatformCommandService_ConfigureIntegrationConnectionCredential_FullMethodName,
 		"platform.command.integrations.test":                     controlplanev1.PlatformCommandService_TestIntegrationConnection_FullMethodName,
 		"platform.command.integrations.enable":                   controlplanev1.PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName,
 		"platform.command.integration-grants.change":             controlplanev1.PlatformCommandService_ChangeIntegrationGrant_FullMethodName,

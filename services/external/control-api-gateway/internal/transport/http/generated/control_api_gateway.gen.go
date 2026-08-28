@@ -2391,22 +2391,21 @@ type IntegrationConfigurationFieldValueType string
 
 // IntegrationConnection defines model for IntegrationConnection.
 type IntegrationConnection struct {
-	Capabilities          []IntegrationCapability             `json:"capabilities"`
-	CredentialRevision    *IntegrationCredentialRevisionInput `json:"credentialRevision,omitempty"`
-	CredentialsConfigured bool                                `json:"credentialsConfigured"`
-	CredentialsHint       string                              `json:"credentialsHint"`
-	DefinitionDigest      string                              `json:"definitionDigest"`
-	DefinitionKey         string                              `json:"definitionKey"`
-	DefinitionVersion     string                              `json:"definitionVersion"`
-	Grants                []IntegrationGrant                  `json:"grants"`
-	LastTestOutcome       *string                             `json:"lastTestOutcome,omitempty"`
-	LastTestedAt          *Timestamp                          `json:"lastTestedAt,omitempty"`
-	Name                  string                              `json:"name"`
-	NextActions           []NextAction                        `json:"nextActions"`
-	PublicConfiguration   map[string]interface{}              `json:"publicConfiguration"`
-	Ref                   OpaqueRef                           `json:"ref"`
-	State                 IntegrationConnectionState          `json:"state"`
-	Version               int64                               `json:"version"`
+	Capabilities          []IntegrationCapability    `json:"capabilities"`
+	CredentialsConfigured bool                       `json:"credentialsConfigured"`
+	CredentialsHint       string                     `json:"credentialsHint"`
+	DefinitionDigest      string                     `json:"definitionDigest"`
+	DefinitionKey         string                     `json:"definitionKey"`
+	DefinitionVersion     string                     `json:"definitionVersion"`
+	Grants                []IntegrationGrant         `json:"grants"`
+	LastTestOutcome       *string                    `json:"lastTestOutcome,omitempty"`
+	LastTestedAt          *Timestamp                 `json:"lastTestedAt,omitempty"`
+	Name                  string                     `json:"name"`
+	NextActions           []NextAction               `json:"nextActions"`
+	PublicConfiguration   map[string]interface{}     `json:"publicConfiguration"`
+	Ref                   OpaqueRef                  `json:"ref"`
+	State                 IntegrationConnectionState `json:"state"`
+	Version               int64                      `json:"version"`
 }
 
 // IntegrationConnectionState defines model for IntegrationConnection.State.
@@ -2422,29 +2421,14 @@ type IntegrationConnectionCommandAction string
 
 // IntegrationConnectionInput defines model for IntegrationConnectionInput.
 type IntegrationConnectionInput struct {
-	CredentialRevision  *IntegrationCredentialRevision `json:"credentialRevision,omitempty"`
-	DefinitionKey       string                         `json:"definitionKey"`
-	Name                string                         `json:"name"`
-	PublicConfiguration *map[string]interface{}        `json:"publicConfiguration,omitempty"`
+	DefinitionKey       string                  `json:"definitionKey"`
+	Name                string                  `json:"name"`
+	PublicConfiguration *map[string]interface{} `json:"publicConfiguration,omitempty"`
 }
 
-// IntegrationCredentialRevision defines model for IntegrationCredentialRevision.
-type IntegrationCredentialRevision struct {
-	ContentSha256         string             `json:"contentSha256"`
-	CreatedAt             *Timestamp         `json:"createdAt,omitempty"`
-	Ref                   OpaqueRef          `json:"ref"`
-	Revision              int64              `json:"revision"`
-	SecretRef             string             `json:"secretRef"`
-	SecretResourceVersion string             `json:"secretResourceVersion"`
-	SecretUid             openapi_types.UUID `json:"secretUid"`
-}
-
-// IntegrationCredentialRevisionInput defines model for IntegrationCredentialRevisionInput.
-type IntegrationCredentialRevisionInput struct {
-	ContentSha256         string             `json:"contentSha256"`
-	SecretRef             string             `json:"secretRef"`
-	SecretResourceVersion string             `json:"secretResourceVersion"`
-	SecretUid             openapi_types.UUID `json:"secretUid"`
+// IntegrationCredentialInput defines model for IntegrationCredentialInput.
+type IntegrationCredentialInput struct {
+	Value *string `json:"value,omitempty"`
 }
 
 // IntegrationDefinition defines model for IntegrationDefinition.
@@ -3475,6 +3459,13 @@ type CommandIntegrationConnectionParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ConfigureIntegrationConnectionCredentialParams defines parameters for ConfigureIntegrationConnectionCredential.
+type ConfigureIntegrationConnectionCredentialParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // ChangeIntegrationGrantParams defines parameters for ChangeIntegrationGrant.
 type ChangeIntegrationGrantParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -3778,6 +3769,9 @@ type CreateIntegrationConnectionJSONRequestBody = IntegrationConnectionInput
 // CommandIntegrationConnectionJSONRequestBody defines body for CommandIntegrationConnection for application/json ContentType.
 type CommandIntegrationConnectionJSONRequestBody = IntegrationConnectionCommand
 
+// ConfigureIntegrationConnectionCredentialJSONRequestBody defines body for ConfigureIntegrationConnectionCredential for application/json ContentType.
+type ConfigureIntegrationConnectionCredentialJSONRequestBody = IntegrationCredentialInput
+
 // ChangeIntegrationGrantJSONRequestBody defines body for ChangeIntegrationGrant for application/json ContentType.
 type ChangeIntegrationGrantJSONRequestBody = IntegrationGrantInput
 
@@ -3918,6 +3912,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/integration-connections/{connectionRef}/commands)
 	CommandIntegrationConnection(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params CommandIntegrationConnectionParams)
+
+	// (PUT /api/v1/integration-connections/{connectionRef}/credential)
+	ConfigureIntegrationConnectionCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ConfigureIntegrationConnectionCredentialParams)
 
 	// (POST /api/v1/integration-connections/{connectionRef}/grants)
 	ChangeIntegrationGrant(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ChangeIntegrationGrantParams)
@@ -5831,6 +5828,112 @@ func (siw *ServerInterfaceWrapper) CommandIntegrationConnection(w http.ResponseW
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CommandIntegrationConnection(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfigureIntegrationConnectionCredential operation middleware
+func (siw *ServerInterfaceWrapper) ConfigureIntegrationConnectionCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConfigureIntegrationConnectionCredentialParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfigureIntegrationConnectionCredential(w, r, connectionRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9652,6 +9755,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections", wrapper.CreateIntegrationConnection)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}", wrapper.GetIntegrationConnection)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/commands", wrapper.CommandIntegrationConnection)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/credential", wrapper.ConfigureIntegrationConnectionCredential)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/grants", wrapper.ChangeIntegrationGrant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-definitions", wrapper.ListIntegrationDefinitions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/onboarding/completion", wrapper.CompleteOnboarding)

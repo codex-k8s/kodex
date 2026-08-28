@@ -1067,6 +1067,23 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/IntegrationConnection' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/credential:
+    put:
+      tags: [Integrations]
+      operationId: configureIntegrationConnectionCredential
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IntegrationCredentialInput' }
+      responses:
+        '200':
+          description: Credential безопасно материализован в Kubernetes Secret и привязан как новая server-owned ревизия
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IntegrationConnection' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/integration-connections/{connectionRef}/commands:
     post:
       tags: [Integrations]
@@ -2258,27 +2275,12 @@ components:
           maxProperties: 8
           additionalProperties: { type: string, maxLength: 2048 }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
-    IntegrationCredentialRevision:
+    IntegrationCredentialInput:
       type: object
       additionalProperties: false
-      required: [ref, revision, secretRef, secretUid, secretResourceVersion, contentSha256]
+      required: [value]
       properties:
-        ref: { $ref: '#/components/schemas/OpaqueRef' }
-        revision: { type: integer, format: int64, minimum: 1 }
-        secretRef: { type: string, minLength: 1, maxLength: 253 }
-        secretUid: { type: string, format: uuid }
-        secretResourceVersion: { type: string, minLength: 1, maxLength: 128 }
-        contentSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
-        createdAt: { $ref: '#/components/schemas/Timestamp' }
-    IntegrationCredentialRevisionInput:
-      type: object
-      additionalProperties: false
-      required: [secretRef, secretUid, secretResourceVersion, contentSha256]
-      properties:
-        secretRef: { type: string, minLength: 1, maxLength: 253 }
-        secretUid: { type: string, format: uuid }
-        secretResourceVersion: { type: string, minLength: 1, maxLength: 128 }
-        contentSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        value: { type: string, minLength: 1, maxLength: 16384, writeOnly: true }
     IntegrationGrant:
       type: object
       additionalProperties: false
@@ -2314,7 +2316,6 @@ components:
         definitionVersion: { type: string, minLength: 1, maxLength: 32 }
         definitionDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
         publicConfiguration: { type: object, maxProperties: 50, additionalProperties: true }
-        credentialRevision: { $ref: '#/components/schemas/IntegrationCredentialRevisionInput' }
     IntegrationConnectionInput:
       type: object
       additionalProperties: false
@@ -2323,7 +2324,6 @@ components:
         definitionKey: { type: string, minLength: 1, maxLength: 100 }
         name: { type: string, minLength: 1, maxLength: 160 }
         publicConfiguration: { type: object, maxProperties: 50, additionalProperties: true }
-        credentialRevision: { $ref: '#/components/schemas/IntegrationCredentialRevision' }
     IntegrationConnectionCommand:
       type: object
       additionalProperties: false

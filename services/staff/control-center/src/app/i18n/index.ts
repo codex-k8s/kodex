@@ -487,6 +487,36 @@ const ru = {
       "Подключений пока нет. Core-платформа полностью доступна без них.",
     credentialSetup:
       "После создания подключения защищённые учётные данные настраиваются через разрешённый способ материализации этой установки.",
+    credentialValue: "Секретное значение",
+    credentialValueHelp:
+      "Значение передаётся один раз по защищённому API, не сохраняется в браузере и после настройки отображается только как маска.",
+    credentialRequired: "Введите учётные данные для продолжения.",
+    credentialsNotRequired:
+      "Для этого подключения защищённые учётные данные не требуются.",
+    credentialsConfigured: "Учётные данные настроены",
+    credentialsNotConfigured: "Учётные данные не настроены",
+    configureCredential: "Настроить учётные данные",
+    configureCredentialNamed: "Настроить учётные данные: {name}",
+    retryCredential: "Повторить настройку",
+    metadataAlreadyCreated:
+      "Подключение уже создано. Будут настроены только учётные данные; новый экземпляр не появится.",
+    metadataPreserved:
+      "Подключение сохранено. Повторите только этот шаг — дубликат создан не будет.",
+    credentialFailedTitle: "Учётные данные не настроены",
+    credentialErrors: {
+      unauthorized:
+        "Сессия завершена. Войдите снова и откройте подключение для повторной настройки.",
+      forbidden:
+        "У вас нет полномочий для настройки учётных данных этого подключения.",
+      notFound:
+        "Подключение больше недоступно. Обновите список подключений перед повторной настройкой.",
+      conflict:
+        "Подключение изменилось. Закройте форму, откройте подключение снова и повторите настройку.",
+      unavailable:
+        "Защищённое хранилище временно недоступно. Повторите настройку позже.",
+      default:
+        "Не удалось безопасно сохранить учётные данные. Проверьте значение и повторите настройку.",
+    },
     connectNamed: "Подключить {name}",
     webOnlyReady:
       "Подключения необязательны: Проекты, ИИ-сотрудники и запуски работают без внешних систем.",
@@ -1244,6 +1274,36 @@ const en = {
       "No connections yet. The core platform is fully available without them.",
     credentialSetup:
       "After the connection is created, protected credentials are configured through the deployment's authorized materialization method.",
+    credentialValue: "Secret value",
+    credentialValueHelp:
+      "The value is sent once through the protected API, is not stored in the browser, and is only shown as masked after setup.",
+    credentialRequired: "Enter credentials to continue.",
+    credentialsNotRequired:
+      "This connection does not require protected credentials.",
+    credentialsConfigured: "Credentials configured",
+    credentialsNotConfigured: "Credentials not configured",
+    configureCredential: "Configure credentials",
+    configureCredentialNamed: "Configure credentials: {name}",
+    retryCredential: "Retry credential setup",
+    metadataAlreadyCreated:
+      "The connection already exists. Only credentials will be configured; no duplicate will be created.",
+    metadataPreserved:
+      "The connection is preserved. Retry only this step; no duplicate will be created.",
+    credentialFailedTitle: "Credentials were not configured",
+    credentialErrors: {
+      unauthorized:
+        "Your session ended. Sign in again and reopen the connection to retry setup.",
+      forbidden:
+        "You do not have permission to configure credentials for this connection.",
+      notFound:
+        "The connection is no longer available. Refresh the connection list before retrying setup.",
+      conflict:
+        "The connection changed. Close the form, reopen the connection, and retry setup.",
+      unavailable:
+        "The protected credential store is temporarily unavailable. Retry later.",
+      default:
+        "The credentials could not be stored safely. Check the value and retry setup.",
+    },
     connectNamed: "Connect {name}",
     webOnlyReady:
       "Connections are optional: Projects, AI employees, and runs work without external systems.",
