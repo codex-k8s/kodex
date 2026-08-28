@@ -27,35 +27,54 @@ spec:
           type: RuntimeDefault
       containers:
         - name: bootstrap
-          image: __KODEX_SEAWEEDFS_IMAGE__
+          image: __KODEX_AWS_CLI_IMAGE__
           imagePullPolicy: IfNotPresent
           command: [/bin/sh, -ec]
           env:
             - {name: HOME, value: /tmp}
+            - {name: AWS_DEFAULT_REGION, value: us-east-1}
+            - {name: AWS_EC2_METADATA_DISABLED, value: "true"}
+            - {name: AWS_MAX_ATTEMPTS, value: "2"}
+            - {name: AWS_RETRY_MODE, value: standard}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: {name: kodex-external-s3, key: access-key}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: {name: kodex-external-s3, key: secret-key}
           args:
             - |
-              deadline=$((SECONDS + 120))
-              until curl --fail --silent --show-error --max-time 2 http://seaweedfs:9333/cluster/status >/dev/null; do
-                [ "$SECONDS" -lt "$deadline" ] || { printf 'SeaweedFS master readiness timed out\n' >&2; exit 1; }
+              endpoint=http://seaweedfs-s3:8333
+              AWS_ACCESS_KEY_ID=$(printf '%s' "$AWS_ACCESS_KEY_ID" | tr -d '\r\n')
+              AWS_SECRET_ACCESS_KEY=$(printf '%s' "$AWS_SECRET_ACCESS_KEY" | tr -d '\r\n')
+              export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+              [ "${#AWS_ACCESS_KEY_ID}" -eq 32 ] && [ "${#AWS_SECRET_ACCESS_KEY}" -eq 64 ] || {
+                printf 'SeaweedFS S3 credential shape is invalid\n' >&2
+                exit 1
+              }
+              case "$AWS_ACCESS_KEY_ID$AWS_SECRET_ACCESS_KEY" in
+                *[!a-f0-9]*) printf 'SeaweedFS S3 credential shape is invalid\n' >&2; exit 1 ;;
+              esac
+              aws_s3api() {
+                aws --endpoint-url="$endpoint" --cli-connect-timeout 2 --cli-read-timeout 3 s3api "$@"
+              }
+              attempt=0
+              until aws_s3api list-buckets >/dev/null 2>&1; do
+                attempt=$((attempt + 1))
+                [ "$attempt" -lt 60 ] || { printf 'SeaweedFS S3 readiness timed out\n' >&2; exit 1; }
                 sleep 2
               done
-              output="$(printf 's3.bucket.create -name kodex-artifacts\ns3.bucket.create -name kodex-backups\ns3.bucket.create -name kodex-restore-fixture\ns3.bucket.create -name kodex-session-archives\ns3.bucket.list\n' |
-                weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888 2>/dev/null)"
               for bucket in kodex-artifacts kodex-backups kodex-restore-fixture kodex-session-archives; do
-                printf '%s\n' "$output" | grep -Eq "(^|[[:space:]])${bucket}($|[[:space:]])" || {
-                  printf 'SeaweedFS bucket readback failed\n' >&2
+                aws_s3api head-bucket --bucket "$bucket" >/dev/null 2>&1 ||
+                  aws_s3api create-bucket --bucket "$bucket" >/dev/null
+                aws_s3api put-bucket-versioning --bucket "$bucket" \
+                  --versioning-configuration Status=Enabled >/dev/null
+                status=$(aws_s3api get-bucket-versioning \
+                  --bucket "$bucket" --query Status --output text)
+                [ "$status" = Enabled ] || {
+                  printf 'SeaweedFS bucket versioning readback failed\n' >&2
                   exit 1
                 }
-                curl --fail --silent --show-error --max-time 5 -X PUT \
-                  -H 'Content-Type: application/xml' \
-                  --data-binary '<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Status>Enabled</Status></VersioningConfiguration>' \
-                  "http://seaweedfs-s3:8333/${bucket}?versioning"
-                curl --fail --silent --show-error --max-time 5 \
-                  "http://seaweedfs-s3:8333/${bucket}?versioning" |
-                  grep -q '<Status>Enabled</Status>' || {
-                    printf 'SeaweedFS bucket versioning readback failed\n' >&2
-                    exit 1
-                  }
               done
           resources:
             requests: {cpu: 10m, memory: 32Mi}

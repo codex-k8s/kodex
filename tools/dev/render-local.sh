@@ -75,6 +75,11 @@ seaweedfs_image=$(jq -er '
 ' "$lock_file") || fail 'SeaweedFS image lock is absent'
 [[ "$seaweedfs_image" =~ ^docker\.io/chrislusf/seaweedfs@sha256:[a-f0-9]{64}$ ]] ||
   fail 'SeaweedFS image lock is invalid'
+aws_cli_image=$(jq -er '
+  .images[] | select(.name == "aws-cli" and .version == "2.36.34") | .reference
+' "$lock_file") || fail 'AWS CLI image lock is absent'
+[[ "$aws_cli_image" =~ ^docker\.io/amazon/aws-cli@sha256:[a-f0-9]{64}$ ]] ||
+  fail 'AWS CLI image lock is invalid'
 # These directories are mounted directly as hostPath volumes. k3s may remap
 # container root to an unprivileged host UID, so the local-only shared caches
 # must be writable independently of the private state directory permissions.
@@ -105,7 +110,7 @@ OIDC_ISSUER="$oidc_issuer" OIDC_JWKS_URL="$oidc_jwks_url" \
 OIDC_HOST="$oidc_host" OIDC_ORIGIN="$oidc_origin" \
 KUBERNETES_SERVICE_CIDR="$kubernetes_service_cidr" \
 SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
-SEAWEEDFS_IMAGE="$seaweedfs_image" yq -i '
+SEAWEEDFS_IMAGE="$seaweedfs_image" AWS_CLI_IMAGE="$aws_cli_image" yq -i '
   (.. | select(tag == "!!str")) |= (
     sub("__KODEX_PUBLIC_HOST__"; strenv(PUBLIC_HOST)) |
     sub("__KODEX_PUBLIC_ORIGIN__"; strenv(PUBLIC_ORIGIN)) |
@@ -123,6 +128,7 @@ SEAWEEDFS_IMAGE="$seaweedfs_image" yq -i '
     sub("__KODEX_OIDC_POD_COMPONENT__"; "identity-provider") |
     sub("__KODEX_KUBERNETES_API_SERVICE_CIDR__"; strenv(KUBERNETES_SERVICE_CIDR)) |
     sub("__KODEX_SEAWEEDFS_IMAGE__"; strenv(SEAWEEDFS_IMAGE)) |
+    sub("__KODEX_AWS_CLI_IMAGE__"; strenv(AWS_CLI_IMAGE)) |
     sub("registry-pull\\.invalid"; "registry.local.kodex") |
     sub("admission-tools\\.invalid"; "admission-tools.local.kodex")
   ) |

@@ -14,6 +14,11 @@
       "name": "seaweedfs",
       "version": "4.41",
       "reference": "docker.io/chrislusf/seaweedfs@sha256:43b768cd62b00d132439cda881b93fd1adebf1b315e996e794087743821d771d"
+    },
+    {
+      "name": "aws-cli",
+      "version": "2.36.34",
+      "reference": "docker.io/amazon/aws-cli@sha256:cf1f5e5741c33f3fee383296ba8045b96b9eb93c3de017be6688fb00356352d7"
     }
   ],
   "tools": {

@@ -163,14 +163,16 @@ readback_local_object_storage_secret() {
       "http://seaweedfs-s3.kodex-system.svc.cluster.local:8333") and
     ((.data.region | @base64d) == "us-east-1") and
     ((.data.bucket | @base64d) == "kodex-artifacts") and
+    ((.data["access-key"] | @base64d) | length == 32 and test("^[a-f0-9]+$")) and
+    ((.data["secret-key"] | @base64d) | length == 64 and test("^[a-f0-9]+$")) and
     ((.data["s3.json"] | @base64d | fromjson) as $config |
       ($config.identities | length) == 1 and
       $config.identities[0].name == "control-plane" and
       ($config.identities[0].credentials | length) == 1 and
       $config.identities[0].credentials[0].accessKey ==
-        ((.data["access-key"] | @base64d) | rtrimstr("\n")) and
+        (.data["access-key"] | @base64d) and
       $config.identities[0].credentials[0].secretKey ==
-        ((.data["secret-key"] | @base64d) | rtrimstr("\n")) and
+        (.data["secret-key"] | @base64d) and
       ($config.identities[0].actions | sort) ==
         (["Admin","List","Read","Tagging","Write"] | sort))
   ' <<<"$state" >/dev/null || fail 'local object storage Secret readback failed'
@@ -234,15 +236,29 @@ readback_session_archive() {
 }
 
 ensure_local_object_storage_secret() {
-  local secret_directory="$temporary_directory/object-storage-secret"
-  if kubectl -n "$namespace" get secret/kodex-external-s3 >/dev/null 2>&1; then
-    readback_local_object_storage_secret
-    return
+  local secret_directory="$temporary_directory/object-storage-secret" state
+  state=$(kubectl -n "$namespace" get secret/kodex-external-s3 -o json 2>/dev/null || true)
+  if [[ -n "$state" ]]; then
+    if jq -e '
+      ((.data["access-key"] | @base64d) | length == 32 and test("^[a-f0-9]+$")) and
+      ((.data["secret-key"] | @base64d) | length == 64 and test("^[a-f0-9]+$"))
+    ' <<<"$state" >/dev/null 2>&1; then
+      readback_local_object_storage_secret
+      return
+    fi
+    jq -e '
+      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+      .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
+    ' <<<"$state" >/dev/null ||
+      fail 'malformed object storage Secret is not owned by the local Kodex profile'
+    kubectl -n "$namespace" delete secret/kodex-external-s3 --wait=true --timeout=2m >/dev/null
+    kubectl -n "$namespace" delete pod/seaweedfs-0 --ignore-not-found \
+      --wait=true --timeout=3m >/dev/null
   fi
 
   install -d -m 0700 "$secret_directory"
-  openssl rand -hex 16 >"$secret_directory/access-key"
-  openssl rand -hex 32 >"$secret_directory/secret-key"
+  printf '%s' "$(openssl rand -hex 16)" >"$secret_directory/access-key"
+  printf '%s' "$(openssl rand -hex 32)" >"$secret_directory/secret-key"
   printf '%s' 'http://seaweedfs-s3.kodex-system.svc.cluster.local:8333' >"$secret_directory/endpoint"
   printf '%s' 'us-east-1' >"$secret_directory/region"
   printf '%s' 'kodex-artifacts' >"$secret_directory/bucket"
@@ -252,8 +268,8 @@ ensure_local_object_storage_secret() {
         identities: [{
           name: "control-plane",
           credentials: [{
-            accessKey: ($access_key | rtrimstr("\n")),
-            secretKey: ($secret_key | rtrimstr("\n"))
+            accessKey: $access_key,
+            secretKey: $secret_key
           }],
           actions: ["Admin","Read","List","Tagging","Write"]
         }]
