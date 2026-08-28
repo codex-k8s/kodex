@@ -144,6 +144,8 @@ SCHEDULE_CREATED:
   other: Расписание создано
 SCHEDULE_UPDATED:
   other: Расписание обновлено
+SCHEDULE_ARCHIVED:
+  other: Расписание архивировано
 SCHEDULED_RUN_TASK:
   other: Запуск по расписанию
 SCHEDULE_OCCURRENCE_MATERIALIZED:

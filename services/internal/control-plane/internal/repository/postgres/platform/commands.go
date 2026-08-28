@@ -23,6 +23,8 @@ import (
 type commandOutcome struct {
 	result                                                                   command.Result
 	projectID, projectRef, resourceKind, resourceRef, summary, platformEvent string
+	platformAggregateVersion                                                 int64
+	platformState                                                            string
 }
 
 const defaultAgentRunConcurrency = 8
@@ -102,7 +104,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		return command.Result{}, fmt.Errorf("insert command audit event: %w", errs.ErrUnavailable)
 	}
 	if outcome.platformEvent != "" {
-		if err := repository.emitPlatformEvent(ctx, tx, scope, outcome.platformEvent, outcome.projectRef, outcome.resourceRef, outcome.summary); err != nil {
+		if err := repository.emitCommandOutcomePlatformEvent(ctx, tx, scope, outcome); err != nil {
 			return command.Result{}, err
 		}
 	}
@@ -155,7 +157,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.resolveGate(ctx, tx, scope, input)
 	case command.ChangeArtifactBinding:
 		return repository.changeArtifactBinding(ctx, tx, scope, input)
-	case command.CreateSchedule, command.UpdateSchedule, command.SetScheduleEnabled:
+	case command.CreateSchedule, command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule:
 		return repository.changeSchedule(ctx, tx, scope, input)
 	case command.CreateConnection, command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
 		return repository.changeConnection(ctx, tx, scope, input)
@@ -1386,12 +1388,28 @@ func truncate(value string, maximum int) string {
 }
 
 func (repository *Repository) emitPlatformEvent(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string) error {
+	return repository.emitPlatformEventSnapshot(ctx, tx, scope, eventName, projectRef, aggregateRef, summary, 1, "")
+}
+
+func (repository *Repository) emitCommandOutcomePlatformEvent(ctx context.Context, tx pgx.Tx, scope scope, outcome commandOutcome) error {
+	version := outcome.platformAggregateVersion
+	if version < 1 {
+		version = 1
+	}
+	return repository.emitPlatformEventSnapshot(ctx, tx, scope, outcome.platformEvent, outcome.projectRef, outcome.resourceRef, outcome.summary, version, outcome.platformState)
+}
+
+func (repository *Repository) emitPlatformEventSnapshot(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string, aggregateVersion int64, state string) error {
 	var sequence int64
 	if err := tx.QueryRow(ctx, queryCommandsEmitplatformeventUpdateInstallationPlatformSequence).Scan(&sequence); err != nil {
 		return errs.ErrUnavailable
 	}
 	eventID := uuid.New()
-	payload := map[string]any{"eventId": eventID.String(), "eventName": eventName, "eventVersion": 1, "occurredAt": time.Now().UTC(), "organizationRef": scope.organizationRef, "aggregateRef": aggregateRef, "aggregateVersion": 1, "sequence": sequence, "correlationRef": scope.correlationRef, "data": map[string]any{"kind": platformEventKind(eventName), "safeSummary": summary}}
+	data := map[string]any{"kind": platformEventKind(eventName), "safeSummary": summary}
+	if state != "" {
+		data["state"] = state
+	}
+	payload := map[string]any{"eventId": eventID.String(), "eventName": eventName, "eventVersion": 1, "occurredAt": time.Now().UTC(), "organizationRef": scope.organizationRef, "aggregateRef": aggregateRef, "aggregateVersion": aggregateVersion, "sequence": sequence, "correlationRef": scope.correlationRef, "data": data}
 	if projectRef != "" {
 		payload["projectRef"] = projectRef
 	}

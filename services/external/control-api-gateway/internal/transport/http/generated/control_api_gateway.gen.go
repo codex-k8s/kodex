@@ -1073,19 +1073,19 @@ func (e RoleImageRecipeState) Valid() bool {
 
 // Defines values for RoleImageRecipeCommandAction.
 const (
-	ARCHIVE      RoleImageRecipeCommandAction = "ARCHIVE"
-	REQUESTBUILD RoleImageRecipeCommandAction = "REQUEST_BUILD"
-	RESTORE      RoleImageRecipeCommandAction = "RESTORE"
+	RoleImageRecipeCommandActionARCHIVE      RoleImageRecipeCommandAction = "ARCHIVE"
+	RoleImageRecipeCommandActionREQUESTBUILD RoleImageRecipeCommandAction = "REQUEST_BUILD"
+	RoleImageRecipeCommandActionRESTORE      RoleImageRecipeCommandAction = "RESTORE"
 )
 
 // Valid indicates whether the value is a known member of the RoleImageRecipeCommandAction enum.
 func (e RoleImageRecipeCommandAction) Valid() bool {
 	switch e {
-	case ARCHIVE:
+	case RoleImageRecipeCommandActionARCHIVE:
 		return true
-	case REQUESTBUILD:
+	case RoleImageRecipeCommandActionREQUESTBUILD:
 		return true
-	case RESTORE:
+	case RoleImageRecipeCommandActionRESTORE:
 		return true
 	default:
 		return false
@@ -1547,16 +1547,19 @@ func (e ScheduleState) Valid() bool {
 
 // Defines values for ScheduleCommandAction.
 const (
-	ENABLE ScheduleCommandAction = "ENABLE"
-	PAUSE  ScheduleCommandAction = "PAUSE"
+	ScheduleCommandActionARCHIVE ScheduleCommandAction = "ARCHIVE"
+	ScheduleCommandActionENABLE  ScheduleCommandAction = "ENABLE"
+	ScheduleCommandActionPAUSE   ScheduleCommandAction = "PAUSE"
 )
 
 // Valid indicates whether the value is a known member of the ScheduleCommandAction enum.
 func (e ScheduleCommandAction) Valid() bool {
 	switch e {
-	case ENABLE:
+	case ScheduleCommandActionARCHIVE:
 		return true
-	case PAUSE:
+	case ScheduleCommandActionENABLE:
+		return true
+	case ScheduleCommandActionPAUSE:
 		return true
 	default:
 		return false
@@ -3829,6 +3832,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/runtime-selections)
 	ListRuntimeSelections(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/schedules/{scheduleRef})
+	GetSchedule(w http.ResponseWriter, r *http.Request, scheduleRef ScheduleRef)
 
 	// (PATCH /api/v1/schedules/{scheduleRef})
 	UpdateSchedule(w http.ResponseWriter, r *http.Request, scheduleRef ScheduleRef, params UpdateScheduleParams)
@@ -8300,6 +8306,38 @@ func (siw *ServerInterfaceWrapper) ListRuntimeSelections(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// GetSchedule operation middleware
+func (siw *ServerInterfaceWrapper) GetSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scheduleRef" -------------
+	var scheduleRef ScheduleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scheduleRef", r.PathValue("scheduleRef"), &scheduleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSchedule(w, r, scheduleRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // UpdateSchedule operation middleware
 func (siw *ServerInterfaceWrapper) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 
@@ -9487,6 +9525,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/events", wrapper.ListRunEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/graph", wrapper.GetRunGraph)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-selections", wrapper.ListRuntimeSelections)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/schedules/{scheduleRef}", wrapper.GetSchedule)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/schedules/{scheduleRef}", wrapper.UpdateSchedule)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/schedules/{scheduleRef}/commands", wrapper.CommandSchedule)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/search", wrapper.SearchPlatform)

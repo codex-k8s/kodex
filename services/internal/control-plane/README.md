@@ -4,7 +4,7 @@ title: Control-plane
 type: service
 status: approved
 owner: backend
-version: 1.0.0
+version: 1.1.0
 updated: 2026-08-23
 ---
 
@@ -57,10 +57,12 @@ bounded application grant и server-owned high-watermark.
 
 ## PostgreSQL
 
-Fresh install использует одну baseline migration:
+Fresh install последовательно использует baseline и forward-only расширение
+lifecycle расписаний:
 
 ```text
 cmd/cli/migrations/20260822000100_web_first_baseline.sql
+cmd/cli/migrations/20260828000100_schedule_archive_lifecycle.sql
 ```
 
 Production SQL отсутствует в Go literals. Каждый запрос находится в отдельном
@@ -80,6 +82,21 @@ DSN читается из файла и не выводится. Kubernetes Job
 `deploy/k8s/base/control-plane/migration-job.yaml` вызывает `up` до rollout.
 Legacy expand/backfill/contract и cutover path отсутствуют, потому что reset
 поддерживает только fresh installation.
+
+## Lifecycle расписаний
+
+Owner-facing API предоставляет `ListSchedules`, специализированный
+`GetSchedule`, `CreateSchedule`, `UpdateSchedule`, `SetScheduleEnabled` и
+`ArchiveSchedule`. Archive является terminal soft transition, а не SQL
+`DELETE`: Schedule остаётся доступен как read-only история, получает новый
+version и больше не возвращает mutation actions.
+
+Архивация одной PostgreSQL-транзакцией проверяет `MANAGE_SCHEDULES`,
+idempotency и expected version, переводит Schedule в `ARCHIVED`, отключает его,
+очищает `next_run_at`, отменяет нематериализованные `DUE|CLAIMED` occurrences и
+очищает их lease/fence. Та же транзакция сохраняет audit,
+`SCHEDULE_CHANGED` и command receipt. Уже `MATERIALIZED` occurrence и связанный
+Run не отменяются: Run продолжает жить по immutable snapshot.
 
 ## Bootstrap
 

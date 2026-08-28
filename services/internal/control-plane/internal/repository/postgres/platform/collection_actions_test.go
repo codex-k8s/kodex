@@ -102,8 +102,14 @@ func TestProjectResourceActionsArePermissionAware(t *testing.T) {
 	if got := artifactActions("CLEAN", false); !reflect.DeepEqual(got, []string{"DOWNLOAD"}) {
 		t.Fatalf("viewer received unexpected artifact actions: %v", got)
 	}
-	if got := scheduleActions(entity.Schedule{Enabled: true}, false); !reflect.DeepEqual(got, []string{"OPEN"}) {
+	if got := scheduleActions(entity.Schedule{State: "ACTIVE", Enabled: true}, false); !reflect.DeepEqual(got, []string{"OPEN"}) {
 		t.Fatalf("read-only actor received schedule mutations: %v", got)
+	}
+	if got := scheduleActions(entity.Schedule{State: "ACTIVE", Enabled: true}, true); !reflect.DeepEqual(got, []string{"OPEN", "EDIT", "ARCHIVE", "DISABLE"}) {
+		t.Fatalf("active schedule manager received incorrect actions: %v", got)
+	}
+	if got := scheduleActions(entity.Schedule{State: "ARCHIVED"}, true); !reflect.DeepEqual(got, []string{"OPEN"}) {
+		t.Fatalf("archived schedule exposed mutations: %v", got)
 	}
 	if got := roleImageActions(entity.RoleImageRecipe{State: "ACTIVE"}, false); !reflect.DeepEqual(got, []string{"OPEN"}) {
 		t.Fatalf("read-only actor received role image mutations: %v", got)

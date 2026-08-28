@@ -968,6 +968,18 @@ paths:
               schema: { $ref: '#/components/schemas/Schedule' }
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/schedules/{scheduleRef}:
+    get:
+      tags: [Automations]
+      operationId: getSchedule
+      parameters: [{ $ref: '#/components/parameters/ScheduleRef' }]
+      responses:
+        '200':
+          description: Расписание, включая read-only историю после архивации
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Schedule' }
+        default: { $ref: '#/components/responses/Problem' }
     patch:
       tags: [Automations]
       operationId: updateSchedule
@@ -2202,7 +2214,7 @@ components:
       type: object
       additionalProperties: false
       required: [action]
-      properties: { action: { type: string, enum: [ENABLE, PAUSE] } }
+      properties: { action: { type: string, enum: [ENABLE, PAUSE, ARCHIVE] } }
     IntegrationCapability:
       type: object
       additionalProperties: false

@@ -5,6 +5,7 @@ SELECT s.id::text,
        s.preset,
        s.cron_expression,
        s.timezone,
+       s.lifecycle_state,
        s.version
 FROM control_plane.schedules s
 JOIN control_plane.projects p ON p.id = s.project_id

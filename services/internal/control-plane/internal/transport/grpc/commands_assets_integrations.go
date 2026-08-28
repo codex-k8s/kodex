@@ -132,6 +132,14 @@ func (server *Server) SetScheduleEnabled(ctx context.Context, request *controlpl
 	return &controlplanev1.SetScheduleEnabledResponse{Schedule: castSchedule(*result.Schedule)}, nil
 }
 
+func (server *Server) ArchiveSchedule(ctx context.Context, request *controlplanev1.ArchiveScheduleRequest) (*controlplanev1.ArchiveScheduleResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ArchiveSchedule_FullMethodName, command.ArchiveSchedule, request.GetMutation(), command.ScheduleInput{Ref: request.GetScheduleRef()})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.ArchiveScheduleResponse{Schedule: castSchedule(*result.Schedule)}, nil
+}
+
 func (server *Server) CreateIntegrationConnection(ctx context.Context, request *controlplanev1.CreateIntegrationConnectionRequest) (*controlplanev1.CreateIntegrationConnectionResponse, error) {
 	payload := command.ConnectionInput{DefinitionKey: request.GetDefinitionKey(), Name: request.GetName(), PublicConfiguration: asMap(request.GetPublicConfiguration()), Enabled: true}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateIntegrationConnection_FullMethodName, command.CreateConnection, request.GetMutation(), payload)

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -49,6 +50,8 @@ var (
 	bootstrapComponentExpireScheduleClaimQuery string
 	//go:embed testdata/sql/bootstrap_component_schedule_target_state_readback.sql
 	bootstrapComponentScheduleTargetStateReadbackQuery string
+	//go:embed testdata/sql/bootstrap_component_schedule_archive_readback.sql
+	bootstrapComponentScheduleArchiveReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_core_prompt_upgrade_readback.sql
 	bootstrapComponentCorePromptUpgradeReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_warm_heartbeat_counts.sql
@@ -638,6 +641,18 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	if schedules[0].TimeOfDay != "09:00" || schedules[0].CronExpression != "0 9 * * *" || schedules[0].NextRunAt == nil {
 		t.Fatalf("owner-friendly schedule was not normalized: %#v", schedules[0])
 	}
+	scheduleDetail, err := service.GetSchedule(ctx, candidate, scheduleResult.Schedule.Ref)
+	if err != nil || scheduleDetail.Ref != scheduleResult.Schedule.Ref || !reflect.DeepEqual(scheduleDetail.NextActions, []string{"OPEN"}) {
+		t.Fatalf("read-only schedule detail is not authoritative: schedule=%#v err=%v", scheduleDetail, err)
+	}
+	readOnlyVersion := scheduleResult.Schedule.Version
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.ArchiveSchedule, Principal: candidate,
+		Mutation: value.Mutation{IdempotencyKey: "membership-action-schedule-archive-denied", ExpectedVersion: &readOnlyVersion},
+		Payload:  command.ScheduleInput{Ref: scheduleResult.Schedule.Ref},
+	}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("read-only actor archived schedule: %v", err)
+	}
 	runResult, err := service.Execute(ctx, command.Command{
 		Kind: command.LaunchRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-action-run"},
 		Payload: command.LaunchRunInput{ProjectRef: projectRef, Title: "Readback run", Task: "Produce a bounded readback result.", Target: entity.RunTarget{Type: "AGENT", Ref: actionAgent.Ref}},
@@ -939,6 +954,90 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 	}
 	if err := repository.pool.QueryRow(ctx, bootstrapComponentScheduleTargetStateReadbackQuery, targetSchedule.Schedule.Ref, stringMap(targetClaims[0], "occurrenceRef")).Scan(&scheduleEnabled, &occurrenceState, &leaseCleared); err != nil || scheduleEnabled {
 		t.Fatalf("target reenable implicitly enabled schedule: enabled=%t err=%v", scheduleEnabled, err)
+	}
+
+	archiveCandidate, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateSchedule, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "schedule-create-archive"},
+		Payload: command.ScheduleInput{ProjectRef: project.Project.Ref, Name: "Archive accounting summary", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Preset: "DAILY", TimeOfDay: "11:00", Timezone: "Europe/Saratov", Input: map[string]any{"task": "Prepare an archive lifecycle summary."}, SessionPolicy: "NEW_EACH_RUN", NotificationPolicy: "CONTROL_CENTER_ONLY"},
+	})
+	if err != nil || archiveCandidate.Schedule == nil {
+		t.Fatalf("create archive lifecycle schedule: schedule=%#v err=%v", archiveCandidate.Schedule, err)
+	}
+	if _, err := repository.pool.Exec(ctx, bootstrapComponentMakeScheduleDueQuery, archiveCandidate.Schedule.Ref); err != nil {
+		t.Fatalf("make archive lifecycle schedule due: %v", err)
+	}
+	archiveClaims, err := service.ClaimDueSchedules(ctx, schedulerClaim, "scheduler-archive-lifecycle-component", 1)
+	if err != nil || len(archiveClaims) != 1 {
+		t.Fatalf("claim archive lifecycle schedule: claims=%#v err=%v", archiveClaims, err)
+	}
+	archiveVersion := archiveCandidate.Schedule.Version
+	archiveCommand := command.Command{
+		Kind: command.ArchiveSchedule, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-archive", ExpectedVersion: &archiveVersion},
+		Payload:  command.ScheduleInput{Ref: archiveCandidate.Schedule.Ref},
+	}
+	archived, err := service.Execute(ctx, archiveCommand)
+	if err != nil || archived.Schedule == nil || archived.Schedule.State != "ARCHIVED" || archived.Schedule.Enabled || archived.Schedule.NextRunAt != nil || !reflect.DeepEqual(archived.Schedule.NextActions, []string{"OPEN"}) {
+		t.Fatalf("archive schedule: schedule=%#v err=%v", archived.Schedule, err)
+	}
+	replayedArchive, err := service.Execute(ctx, archiveCommand)
+	if err != nil || replayedArchive.Schedule == nil || replayedArchive.Schedule.Version != archived.Schedule.Version {
+		t.Fatalf("replay schedule archive: schedule=%#v err=%v", replayedArchive.Schedule, err)
+	}
+	archivedDetail, err := service.GetSchedule(ctx, owner, archiveCandidate.Schedule.Ref)
+	if err != nil || archivedDetail.State != "ARCHIVED" || archivedDetail.Target.Ref != agent.Ref || archivedDetail.Input["task"] != "Prepare an archive lifecycle summary." {
+		t.Fatalf("read archived schedule history: schedule=%#v err=%v", archivedDetail, err)
+	}
+	var lifecycleState string
+	var nextRunCleared bool
+	var archiveAuditCount, archiveEventCount int64
+	if err := repository.pool.QueryRow(ctx, bootstrapComponentScheduleArchiveReadbackQuery, archiveCandidate.Schedule.Ref, stringMap(archiveClaims[0], "occurrenceRef")).Scan(&lifecycleState, &scheduleEnabled, &nextRunCleared, &occurrenceState, &leaseCleared, &archiveAuditCount, &archiveEventCount); err != nil || lifecycleState != "ARCHIVED" || scheduleEnabled || !nextRunCleared || occurrenceState != "CANCELLED" || !leaseCleared || archiveAuditCount != 1 || archiveEventCount != 1 {
+		t.Fatalf("archive lifecycle readback: lifecycle=%q enabled=%t next_run_cleared=%t occurrence=%q lease_cleared=%t audits=%d events=%d err=%v", lifecycleState, scheduleEnabled, nextRunCleared, occurrenceState, leaseCleared, archiveAuditCount, archiveEventCount, err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.UpdateSchedule, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-update-archived", ExpectedVersion: &archived.Schedule.Version},
+		Payload:  command.ScheduleInput{Ref: archiveCandidate.Schedule.Ref, Name: "Archived schedule mutation", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Preset: "DAILY", TimeOfDay: "12:00", Timezone: "UTC", Input: map[string]any{}, SessionPolicy: "NEW_EACH_RUN", NotificationPolicy: "CONTROL_CENTER_ONLY"},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("archived schedule accepted update: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.SetScheduleEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-enable-archived", ExpectedVersion: &archived.Schedule.Version},
+		Payload:  command.ScheduleInput{Ref: archiveCandidate.Schedule.Ref, Enabled: true},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("archived schedule was enabled: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.MaterializeOccurrence, Principal: schedulerMaterialize,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-archived-occurrence-materialize"},
+		Payload:  command.OccurrenceInput{OccurrenceRef: stringMap(archiveClaims[0], "occurrenceRef"), LeaseRef: stringMap(archiveClaims[0], "leaseRef"), Fence: stringMap(archiveClaims[0], "fence"), Generation: archiveClaims[0]["generation"].(int64)},
+	}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("archived schedule lease retained materialization authority: %v", err)
+	}
+	claimsAfterArchive, err := service.ClaimDueSchedules(ctx, schedulerClaim, "scheduler-archive-lifecycle-component", 1)
+	if err != nil || len(claimsAfterArchive) != 0 {
+		t.Fatalf("archived schedule produced a future claim: claims=%#v err=%v", claimsAfterArchive, err)
+	}
+	currentForStaleArchive, err := service.GetSchedule(ctx, owner, created.Schedule.Ref)
+	if err != nil {
+		t.Fatalf("read schedule before stale archive scenario: %v", err)
+	}
+	staleVersion := currentForStaleArchive.Version
+	paused, err := service.Execute(ctx, command.Command{
+		Kind: command.SetScheduleEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-pause-before-stale-archive", ExpectedVersion: &staleVersion},
+		Payload:  command.ScheduleInput{Ref: created.Schedule.Ref, Enabled: false},
+	})
+	if err != nil || paused.Schedule == nil || paused.Schedule.Version <= staleVersion {
+		t.Fatalf("prepare stale schedule archive: schedule=%#v err=%v", paused.Schedule, err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.ArchiveSchedule, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-stale-archive", ExpectedVersion: &staleVersion},
+		Payload:  command.ScheduleInput{Ref: created.Schedule.Ref},
+	}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
+		t.Fatalf("stale schedule archive was not rejected by OCC: %v", err)
 	}
 }
 

@@ -190,7 +190,7 @@ type Artifact struct {
 
 type Schedule struct {
 	Ref, ProjectRef, Name, Preset, CronExpression, TimeOfDay, DayOfWeek, Timezone string
-	SessionPolicy, NotificationPolicy                                             string
+	SessionPolicy, NotificationPolicy, State                                      string
 	Target                                                                        RunTarget
 	Input                                                                         map[string]any
 	Enabled                                                                       bool

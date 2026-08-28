@@ -4,7 +4,7 @@ title: Процессы и автоматизации
 type: domain
 status: approved
 owner: architect
-version: 2.1.0
+version: 2.2.0
 updated: 2026-08-23
 ---
 
@@ -47,6 +47,16 @@ Scheduler лишь claim-ит due occurrence и просит control-plane mater
 Run. Claim связан с workload, schedule, occurrence, version, attempt, immutable
 input digest и fence. Retry создаёт новую attempt; disable/cancel/terminal
 закрывают leases и grants owner-транзакцией.
+
+Schedule имеет различимые `ACTIVE`, `PAUSED`, `NEEDS_ATTENTION` и terminal
+`ARCHIVED`. Архивация не удаляет Schedule и историю occurrences: detail/read
+остаётся доступен по прежнему owner-scoped ref, но изменение, включение и новый
+запуск закрыто запрещены. В одной owner-транзакции архивирование проверяет
+`MANAGE_SCHEDULES`, expected version и idempotency, переводит Schedule в
+`ARCHIVED`, очищает `next_run_at`, отменяет только нематериализованные
+`DUE|CLAIMED` occurrences и их leases, фиксирует audit, receipt и
+`SCHEDULE_CHANGED`. Уже материализованный Run продолжает исполняться по своему
+immutable snapshot и управляется обычным Run lifecycle.
 
 ## Human Gate
 

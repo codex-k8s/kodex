@@ -119,8 +119,17 @@ func artifactSource(value string) controlplanev1.ArtifactSource {
 	raw := controlplanev1.ArtifactSource_value["ARTIFACT_SOURCE_"+value]
 	return controlplanev1.ArtifactSource(raw)
 }
-func scheduleState(enabled bool) controlplanev1.ScheduleState {
-	if enabled {
+func scheduleState(schedule entity.Schedule) controlplanev1.ScheduleState {
+	switch schedule.State {
+	case "ARCHIVED":
+		return controlplanev1.ScheduleState_SCHEDULE_STATE_ARCHIVED
+	case "NEEDS_ATTENTION":
+		return controlplanev1.ScheduleState_SCHEDULE_STATE_NEEDS_ATTENTION
+	case "", "ACTIVE":
+	default:
+		return controlplanev1.ScheduleState_SCHEDULE_STATE_UNSPECIFIED
+	}
+	if schedule.Enabled {
 		return controlplanev1.ScheduleState_SCHEDULE_STATE_ACTIVE
 	}
 	return controlplanev1.ScheduleState_SCHEDULE_STATE_PAUSED
@@ -283,7 +292,7 @@ func castArtifact(value entity.Artifact) *controlplanev1.Artifact {
 	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, SessionRef: value.SessionRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: artifactSource(value.Source), Revision: int32(value.Revision), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions), Digest: value.Digest}
 }
 func castSchedule(value entity.Schedule) *controlplanev1.Schedule {
-	return &controlplanev1.Schedule{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Target: castRunTarget(value.Target), State: scheduleState(value.Enabled), Preset: value.Preset, CronExpression: value.CronExpression, Timezone: value.Timezone, Input: structure(value.Input), SessionPolicy: value.SessionPolicy, NotificationPolicy: value.NotificationPolicy, NextRunAt: optionalTimestamp(value.NextRunAt), NextActions: nextActions(value.NextActions), TimeOfDay: value.TimeOfDay, DayOfWeek: value.DayOfWeek}
+	return &controlplanev1.Schedule{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Target: castRunTarget(value.Target), State: scheduleState(value), Preset: value.Preset, CronExpression: value.CronExpression, Timezone: value.Timezone, Input: structure(value.Input), SessionPolicy: value.SessionPolicy, NotificationPolicy: value.NotificationPolicy, NextRunAt: optionalTimestamp(value.NextRunAt), NextActions: nextActions(value.NextActions), TimeOfDay: value.TimeOfDay, DayOfWeek: value.DayOfWeek}
 }
 func castDefinition(value entity.IntegrationDefinition) *controlplanev1.IntegrationDefinition {
 	result := &controlplanev1.IntegrationDefinition{Key: value.Key, Name: value.Name, Description: value.Description, Category: value.Category, BuiltIn: true, Available: value.Enabled}

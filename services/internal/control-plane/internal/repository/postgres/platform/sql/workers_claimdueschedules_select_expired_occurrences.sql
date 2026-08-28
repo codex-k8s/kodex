@@ -11,6 +11,8 @@ JOIN control_plane.schedules schedule ON schedule.id = occurrence.schedule_id
 WHERE occurrence.organization_id = $1::uuid
   AND occurrence.state = 'CLAIMED'
   AND occurrence.lease_expires_at <= clock_timestamp()
+  AND schedule.lifecycle_state = 'ACTIVE'
+  AND schedule.enabled
 ORDER BY occurrence.lease_expires_at, occurrence.created_at
 FOR UPDATE OF occurrence SKIP LOCKED
 LIMIT $2

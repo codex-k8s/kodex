@@ -40,6 +40,7 @@ service PlatformQueryService {
   rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
   rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
   rpc ListSchedules(ListSchedulesRequest) returns (ListSchedulesResponse);
+  rpc GetSchedule(GetScheduleRequest) returns (GetScheduleResponse);
   rpc ListIntegrationDefinitions(ListIntegrationDefinitionsRequest) returns (ListIntegrationDefinitionsResponse);
   rpc ListIntegrationConnections(ListIntegrationConnectionsRequest) returns (ListIntegrationConnectionsResponse);
   rpc GetIntegrationConnection(GetIntegrationConnectionRequest) returns (GetIntegrationConnectionResponse);
@@ -86,6 +87,7 @@ service PlatformCommandService {
   rpc CreateSchedule(CreateScheduleRequest) returns (CreateScheduleResponse);
   rpc UpdateSchedule(UpdateScheduleRequest) returns (UpdateScheduleResponse);
   rpc SetScheduleEnabled(SetScheduleEnabledRequest) returns (SetScheduleEnabledResponse);
+  rpc ArchiveSchedule(ArchiveScheduleRequest) returns (ArchiveScheduleResponse);
   rpc CreateIntegrationConnection(CreateIntegrationConnectionRequest) returns (CreateIntegrationConnectionResponse);
   rpc TestIntegrationConnection(TestIntegrationConnectionRequest) returns (TestIntegrationConnectionResponse);
   rpc SetIntegrationConnectionEnabled(SetIntegrationConnectionEnabledRequest) returns (SetIntegrationConnectionEnabledResponse);
@@ -1522,7 +1524,6 @@ message SetScheduleEnabledRequest {
 message SetScheduleEnabledResponse {
   Schedule schedule = 1;
 }
-
 message ListIntegrationDefinitionsRequest {
   string category = 1;
 }
@@ -2024,4 +2025,18 @@ message ListAgentInstructionVersionsRequest {
 message ListAgentInstructionVersionsResponse {
   repeated InstructionVersion instruction_versions = 1;
   PageInfo page = 2;
+}
+
+message GetScheduleRequest {
+  string schedule_ref = 1;
+}
+message GetScheduleResponse {
+  Schedule schedule = 1;
+}
+message ArchiveScheduleRequest {
+  MutationContext mutation = 1;
+  string schedule_ref = 2;
+}
+message ArchiveScheduleResponse {
+  Schedule schedule = 1;
 }

@@ -40,7 +40,7 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		ref, _ := newRef("sch")
 		var item entity.Schedule
 		var next *time.Time
-		err = tx.QueryRow(ctx, queryConfigurationChangescheduleInsertSchedulesRefProjectIdTargetType, ref, scope.organizationID, projectID, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, normalized.Next, scope.actorID).Scan(&item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &next, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+		err = tx.QueryRow(ctx, queryConfigurationChangescheduleInsertSchedulesRefProjectIdTargetType, ref, scope.organizationID, projectID, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, normalized.Next, scope.actorID).Scan(&item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled, &item.Version, &next, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
@@ -51,14 +51,14 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		item.DayOfWeek = payload.DayOfWeek
 		item.NextRunAt = next
 		item.NextActions = scheduleActions(item, true)
-		return commandOutcome{result: command.Result{Schedule: &item}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "SCHEDULE", resourceRef: ref, summary: "i18n:SCHEDULE_CREATED", platformEvent: "SCHEDULE_CHANGED"}, nil
+		return scheduleCommandOutcome(item, projectID, payload.ProjectRef, "i18n:SCHEDULE_CREATED"), nil
 	}
 	if payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	var scheduleID, projectID, projectRef, storedPreset, storedCron, storedTimezone string
+	var scheduleID, projectID, projectRef, storedPreset, storedCron, storedTimezone, storedState string
 	var storedVersion int64
-	if err := tx.QueryRow(ctx, queryConfigurationChangescheduleSelectScheduleForUpdate, scope.organizationID, payload.Ref).Scan(&scheduleID, &projectID, &projectRef, &storedPreset, &storedCron, &storedTimezone, &storedVersion); errors.Is(err, pgx.ErrNoRows) {
+	if err := tx.QueryRow(ctx, queryConfigurationChangescheduleSelectScheduleForUpdate, scope.organizationID, payload.Ref).Scan(&scheduleID, &projectID, &projectRef, &storedPreset, &storedCron, &storedTimezone, &storedState, &storedVersion); errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
 	} else if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -66,8 +66,33 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 	if storedVersion != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
+	if storedState == "ARCHIVED" {
+		return commandOutcome{}, errs.ErrConflict
+	}
 	var item entity.Schedule
-	if input.Kind == command.UpdateSchedule {
+	summary := "i18n:SCHEDULE_UPDATED"
+	if input.Kind == command.ArchiveSchedule {
+		var archivedInput []byte
+		if err := tx.QueryRow(ctx, queryConfigurationChangescheduleArchiveSchedule, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(
+			&projectID, &projectRef, &item.Ref, &item.Name, &item.Target.Type, &item.Target.Ref,
+			&item.Preset, &item.CronExpression, &item.Timezone, &archivedInput,
+			&item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled,
+			&item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt,
+		); errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		} else if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if _, err := tx.Exec(ctx, queryConfigurationChangescheduleCancelClaimedOccurrences, scheduleID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		item.ProjectRef = projectRef
+		if json.Unmarshal(archivedInput, &item.Input) != nil || attachScheduleDisplay(&item) != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		item.NextActions = []string{"OPEN"}
+		summary = "i18n:SCHEDULE_ARCHIVED"
+	} else if input.Kind == command.UpdateSchedule {
 		normalized, normalizeErr := normalizeScheduleInput(payload, time.Now().UTC())
 		if normalizeErr != nil {
 			return commandOutcome{}, normalizeErr
@@ -78,7 +103,7 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		payload.CronExpression = normalized.CronExpression
 		payload.TimeOfDay = normalized.TimeOfDay
 		payload.DayOfWeek = normalized.DayOfWeek
-		err := tx.QueryRow(ctx, queryConfigurationChangescheduleUpdateSchedulesNameTargetTypeTargetRef, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, normalized.Next).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryConfigurationChangescheduleUpdateSchedulesNameTargetTypeTargetRef, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, normalized.Next).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -94,7 +119,7 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		if nextErr != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		err := tx.QueryRow(ctx, queryConfigurationChangescheduleUpdateSchedulesEnabledVersionUpdatedAt, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Enabled, next).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryConfigurationChangescheduleUpdateSchedulesEnabledVersionUpdatedAt, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Enabled, next).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -107,12 +132,35 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 			}
 		}
 	}
-	item.ProjectRef = projectRef
-	if displayErr := attachScheduleDisplay(&item); displayErr != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+	if input.Kind != command.ArchiveSchedule {
+		item.ProjectRef = projectRef
+		if displayErr := attachScheduleDisplay(&item); displayErr != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		item.NextActions = scheduleActions(item, true)
 	}
-	item.NextActions = scheduleActions(item, true)
-	return commandOutcome{result: command.Result{Schedule: &item}, projectID: projectID, projectRef: projectRef, resourceKind: "SCHEDULE", resourceRef: item.Ref, summary: "i18n:SCHEDULE_UPDATED", platformEvent: "SCHEDULE_CHANGED"}, nil
+	return scheduleCommandOutcome(item, projectID, projectRef, summary), nil
+}
+
+func scheduleCommandOutcome(item entity.Schedule, projectID, projectRef, summary string) commandOutcome {
+	state := item.State
+	if state == "" || state == "ACTIVE" {
+		state = "PAUSED"
+		if item.Enabled {
+			state = "ACTIVE"
+		}
+	}
+	return commandOutcome{
+		result:                   command.Result{Schedule: &item},
+		projectID:                projectID,
+		projectRef:               projectRef,
+		resourceKind:             "SCHEDULE",
+		resourceRef:              item.Ref,
+		summary:                  summary,
+		platformEvent:            "SCHEDULE_CHANGED",
+		platformAggregateVersion: item.Version,
+		platformState:            state,
+	}
 }
 
 func normalizeScheduleInput(payload command.ScheduleInput, after time.Time) (scheduleservice.Normalized, error) {
@@ -575,7 +623,7 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			return commandOutcome{}, err
 		}
 		if outcome.platformEvent != "" {
-			if err := repository.emitPlatformEvent(ctx, tx, scope, outcome.platformEvent, outcome.projectRef, outcome.resourceRef, outcome.summary); err != nil {
+			if err := repository.emitCommandOutcomePlatformEvent(ctx, tx, scope, outcome); err != nil {
 				return commandOutcome{}, err
 			}
 		}
