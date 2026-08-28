@@ -100,7 +100,3 @@ export function verifyScheduleCommandReadback(
     });
   return readback;
 }
-
-export function scheduleCanBeDeleted(): false {
-  return false;
-}

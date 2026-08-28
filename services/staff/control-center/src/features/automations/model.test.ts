@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  scheduleCanBeDeleted,
   scheduleInput,
   verifyScheduleCommandReadback,
   verifyScheduleReadback,
@@ -75,7 +74,7 @@ describe("automations model", () => {
     ).toBe(4);
   });
 
-  it("проверяет readback команды и закрывает удаление без API", () => {
+  it("проверяет authoritative readback команды, включая архивацию", () => {
     const mutation = schedule({ state: "PAUSED", version: 4 });
     expect(
       verifyScheduleCommandReadback(
@@ -89,7 +88,12 @@ describe("automations model", () => {
         schedule({ state: "ACTIVE", version: 5 }),
       ),
     ).toThrow(AppProblem);
-    expect(scheduleCanBeDeleted()).toBe(false);
+    expect(
+      verifyScheduleCommandReadback(
+        schedule({ state: "ARCHIVED", version: 5 }),
+        schedule({ state: "ARCHIVED", version: 5, nextActions: ["OPEN"] }),
+      ).state,
+    ).toBe("ARCHIVED");
   });
 
   it("не принимает неизвестный preset как изменяемый ScheduleInput", () => {

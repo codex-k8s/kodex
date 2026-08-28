@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CircleAlert, Trash2 } from "@lucide/vue";
+import { Archive, CircleAlert } from "@lucide/vue";
 
 import type { Schedule } from "@/shared/api/generated/openapi/types.gen";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -39,7 +39,7 @@ const emit = defineEmits<{ close: []; confirm: [] }>();
         :disabled="busy"
         @click="emit('confirm')"
       >
-        <Trash2 :size="16" aria-hidden="true" />
+        <Archive :size="16" aria-hidden="true" />
         {{ confirmLabel }}
       </button>
     </template>

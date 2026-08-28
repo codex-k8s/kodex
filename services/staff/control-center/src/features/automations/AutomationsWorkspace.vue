@@ -13,7 +13,7 @@ import {
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
-import AutomationDeleteDialog from "@/features/automations/AutomationDeleteDialog.vue";
+import AutomationArchiveDialog from "@/features/automations/AutomationArchiveDialog.vue";
 import AutomationEditorDialog from "@/features/automations/AutomationEditorDialog.vue";
 import {
   verifyScheduleCommandReadback,
@@ -41,7 +41,7 @@ const editorScheduleRef = ref("");
 const editorBusy = ref(false);
 const editorProblem = ref<AppProblem>();
 const commandBusy = ref("");
-const deleteScheduleRef = ref("");
+const archiveScheduleRef = ref("");
 const problem = ref<AppProblem>();
 
 const project = computed(() => platform.projects[props.projectRef]);
@@ -71,8 +71,8 @@ const selectedSchedule = computed(() =>
 const editorSchedule = computed(() =>
   schedules.value.find((schedule) => schedule.ref === editorScheduleRef.value),
 );
-const deleteSchedule = computed(() =>
-  schedules.value.find((schedule) => schedule.ref === deleteScheduleRef.value),
+const archiveSchedule = computed(() =>
+  schedules.value.find((schedule) => schedule.ref === archiveScheduleRef.value),
 );
 const agents = computed(() =>
   Object.values(platform.agents)
@@ -96,12 +96,10 @@ const custom = computed(() =>
     ? {
         actions: "Automation actions",
         allStates: "All states",
-        delete: "Delete",
-        deleteDescription:
-          "The automation must remain unchanged unless the server confirms deletion.",
-        deleteTitle: "Delete automation?",
-        deleteUnavailable:
-          "Deletion is unavailable: the current API contract has no delete operation.",
+        archive: "Archive",
+        archiveDescription:
+          "Future runs will be cancelled. The automation and its history will remain available read-only.",
+        archiveTitle: "Archive automation?",
         edit: "Edit automation",
         lastResult: "Last result",
         list: "Project automations",
@@ -115,12 +113,10 @@ const custom = computed(() =>
     : {
         actions: "Действия с автоматизацией",
         allStates: "Все состояния",
-        delete: "Удалить",
-        deleteDescription:
-          "Автоматизация должна остаться без изменений, пока сервер не подтвердит удаление.",
-        deleteTitle: "Удалить автоматизацию?",
-        deleteUnavailable:
-          "Удаление недоступно: текущий контракт API не содержит операции удаления.",
+        archive: "Архивировать",
+        archiveDescription:
+          "Будущие запуски будут отменены. Автоматизация и её история останутся доступны только для чтения.",
+        archiveTitle: "Архивировать автоматизацию?",
         edit: "Изменить автоматизацию",
         lastResult: "Последний результат",
         list: "Автоматизации Проекта",
@@ -220,7 +216,12 @@ async function command(
   schedule: Schedule,
   action: ScheduleCommand["action"],
 ): Promise<void> {
-  const requiredAction = action === "PAUSE" ? "DISABLE" : "ENABLE";
+  const requiredAction =
+    action === "PAUSE"
+      ? "DISABLE"
+      : action === "ARCHIVE"
+        ? "ARCHIVE"
+        : "ENABLE";
   if (!schedule.nextActions.includes(requiredAction)) return;
   commandBusy.value = schedule.ref;
   problem.value = undefined;
@@ -240,19 +241,15 @@ async function command(
   }
 }
 
-function requestDelete(schedule: Schedule): void {
-  deleteScheduleRef.value = schedule.ref;
+function requestArchive(schedule: Schedule): void {
+  archiveScheduleRef.value = schedule.ref;
 }
 
-function confirmDelete(): void {
-  deleteScheduleRef.value = "";
-  problem.value = new AppProblem({
-    status: 501,
-    code: "SCHEDULE_DELETE_UNSUPPORTED",
-    retryable: false,
-    kind: "unavailable",
-    title: custom.value.deleteUnavailable,
-  });
+async function confirmArchive(): Promise<void> {
+  const schedule = archiveSchedule.value;
+  if (!schedule) return;
+  await command(schedule, "ARCHIVE");
+  if (!problem.value) archiveScheduleRef.value = "";
 }
 
 onMounted(
@@ -436,7 +433,7 @@ onMounted(
           </dl>
           <div class="automation-details__actions" :aria-label="custom.actions">
             <button
-              v-if="selectedSchedule.nextActions.includes('EDIT')"
+              v-if="selectedSchedule.nextActions.includes('ARCHIVE')"
               class="button button--primary"
               type="button"
               @click="openEdit(selectedSchedule)"
@@ -468,10 +465,10 @@ onMounted(
               v-if="selectedSchedule.nextActions.includes('EDIT')"
               class="button button--danger"
               type="button"
-              @click="requestDelete(selectedSchedule)"
+              @click="requestArchive(selectedSchedule)"
             >
               <Trash2 :size="16" aria-hidden="true" />
-              {{ custom.delete }}
+              {{ custom.archive }}
             </button>
           </div>
         </aside>
@@ -488,15 +485,16 @@ onMounted(
       @close="editorOpen = false"
       @submit="submitEditor"
     />
-    <AutomationDeleteDialog
-      v-if="deleteSchedule"
-      :schedule="deleteSchedule"
-      :title="custom.deleteTitle"
-      :description="custom.deleteDescription"
+    <AutomationArchiveDialog
+      v-if="archiveSchedule"
+      :schedule="archiveSchedule"
+      :title="custom.archiveTitle"
+      :description="custom.archiveDescription"
       :cancel-label="$t('common.cancel')"
-      :confirm-label="custom.delete"
-      @close="deleteScheduleRef = ''"
-      @confirm="confirmDelete"
+      :confirm-label="custom.archive"
+      :busy="commandBusy === archiveSchedule.ref"
+      @close="archiveScheduleRef = ''"
+      @confirm="confirmArchive"
     />
   </section>
 </template>
