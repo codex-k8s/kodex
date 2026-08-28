@@ -2,6 +2,7 @@
 package workload
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -12,6 +13,7 @@ import (
 	"net"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -31,6 +33,8 @@ const (
 	managedLabel                = "runtime.kodex.dev/managed"
 	modeLabel                   = "runtime.kodex.dev/mode"
 	revisionAnnotation          = "runtime.kodex.dev/revision-digest"
+	configAnnotation            = "runtime.kodex.dev/config-digest"
+	environmentAnnotation       = "runtime.kodex.dev/environment-digest"
 	warmCompatibilityAnnotation = "runtime.kodex.dev/warm-compatibility-digest"
 	controllerAnnotation        = "runtime.kodex.dev/controller-pod-uid"
 	podAnnotation               = "runtime.kodex.dev/pod-name"
@@ -202,8 +206,8 @@ func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionS
 }
 
 func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapshot, mode string) runtimecontract.RunnerInput {
-	return runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV5, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
+	input := runtimecontract.RunnerInput{
+		Schema: runtimecontract.RunnerInputSchemaV6, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
 		RuntimeRevisionRef: revision.GetRef(), RuntimeRevisionVersion: revision.GetVersion(), RuntimeRevisionDigest: revision.GetRevisionDigest(),
 		ImageReference: revision.GetImageReference(), ImageManifestDigest: revision.GetImageManifestDigest(),
 		RoleRuntimeContractRevision: revision.GetRoleRuntimeContractRevision(), RoleRuntimeContractSHA256: revision.GetRoleRuntimeContractSha256(),
@@ -212,6 +216,22 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		ProviderCredentialRef:      revision.GetProviderCredential().GetCredentialRevisionRef(),
 		ProviderCredentialRevision: revision.GetProviderCredential().GetCredentialRevision(),
 		ProviderCredentialSHA256:   revision.GetProviderCredential().GetContentSha256(),
+		RuntimeConfigRef:           revision.GetRuntimeConfigRef(),
+		RuntimeConfigVersion:       revision.GetRuntimeConfigVersion(),
+		RuntimeConfigDigest:        revision.GetRuntimeConfigDigest(),
+		ProviderPolicyRef:          revision.GetProviderPolicyRef(),
+		ProviderPolicyVersion:      revision.GetProviderPolicyVersion(),
+		ProviderPolicyDigest:       revision.GetProviderPolicyDigest(),
+		ConfigOverlayRef:           revision.GetConfigOverlayRef(),
+		ConfigOverlayVersion:       revision.GetConfigOverlayVersion(),
+		ConfigOverlayDigest:        revision.GetConfigOverlayDigest(),
+		ConfigOverlay:              revision.GetConfigOverlay(),
+		RuntimeEnvironmentRef:      revision.GetRuntimeEnvironmentRef(),
+		RuntimeEnvironmentVersion:  revision.GetRuntimeEnvironmentVersion(),
+		RuntimeEnvironmentDigest:   revision.GetRuntimeEnvironmentDigest(),
+		EnvironmentBindingRef:      revision.GetEnvironmentBindingRef(),
+		EnvironmentBindingVersion:  revision.GetEnvironmentBindingVersion(),
+		EnvironmentBindingDigest:   revision.GetEnvironmentBindingDigest(),
 		CodexSandbox:               "read-only", CodexApprovalPolicy: "never",
 		CallbackURL: "https://" + net.JoinHostPort(manager.config.ControllerPodIP, "8444"),
 		CallbackTLS: runtimecontract.RuntimeTLSBinding{ServerName: manager.config.CallbackTLSServerName,
@@ -220,6 +240,17 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		ProviderAuthFile:    "/run/secrets/kodex/runtime/provider/auth.json", ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
 		WorkspaceRoot: "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
 	}
+	for _, item := range revision.GetEnvironmentValues() {
+		input.EnvironmentValues = append(input.EnvironmentValues, runtimecontract.RuntimeEnvironmentValue{Name: item.GetName(), Value: item.GetValue()})
+	}
+	for _, item := range revision.GetSecretProjections() {
+		input.SecretProjections = append(input.SecretProjections, runtimecontract.RuntimeSecretProjection{
+			Name: item.GetName(), SecretName: item.GetSecretName(), SecretKey: item.GetSecretKey(),
+			SecretUID: item.GetSecretUid(), SecretResourceVersion: item.GetSecretResourceVersion(),
+			ContentSHA256: item.GetContentSha256(),
+		})
+	}
+	return input
 }
 
 func providerSecretBinding(revision *controlplanev1.RuntimeRevisionSnapshot) (ProviderSecretBinding, error) {
@@ -267,6 +298,10 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 	if err := manager.validateProviderSecret(ctx, input, providerBinding); err != nil {
 		return err
 	}
+	environmentSecrets, err := manager.materializeEnvironmentSecrets(ctx, input)
+	if err != nil {
+		return err
+	}
 	if err := manager.ensureSessionPVC(ctx, input.SessionRef); err != nil {
 		return err
 	}
@@ -276,7 +311,7 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 	}
 	secretName := ticketName(input.LeaseRef)
 	podName := turnPodName(input.LeaseRef)
-	if err := manager.ensureTicket(ctx, secretName, podName, "turn", input, token); err != nil {
+	if err := manager.ensureTicket(ctx, secretName, podName, "turn", input, token, environmentSecrets); err != nil {
 		return err
 	}
 	pod := manager.runtimePod(input, providerBinding, secretName, podName, "turn")
@@ -299,6 +334,10 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		return false, errors.New("warm runtime input is invalid")
 	}
 	if err := manager.validateProviderSecret(ctx, input, providerBinding); err != nil {
+		return false, err
+	}
+	environmentSecrets, err := manager.materializeEnvironmentSecrets(ctx, input)
+	if err != nil {
 		return false, err
 	}
 	if err := manager.ensureSessionPVC(ctx, input.SessionRef); err != nil {
@@ -325,7 +364,7 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		if ticketErr != nil {
 			return false, ticketErr
 		}
-		if ticketErr = manager.ensureTicket(ctx, secretName, podName, "warm", input, token); ticketErr != nil {
+		if ticketErr = manager.ensureTicket(ctx, secretName, podName, "warm", input, token, environmentSecrets); ticketErr != nil {
 			return false, ticketErr
 		}
 		pod := manager.runtimePod(input, providerBinding, secretName, podName, "warm")
@@ -366,7 +405,7 @@ func (manager *Manager) RegisterWarmTurn(ctx context.Context, input runtimecontr
 	if input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil || token == "" {
 		return errors.New("warm turn registration is invalid")
 	}
-	return manager.ensureTicket(ctx, ticketName(input.LeaseRef), "system-assistant-warm", "warm-turn", input, token)
+	return manager.ensureTicket(ctx, ticketName(input.LeaseRef), "system-assistant-warm", "warm-turn", input, token, nil)
 }
 
 func (manager *Manager) WarmTicket(ctx context.Context, revisionRef, revisionDigest string) (string, error) {
@@ -467,19 +506,27 @@ func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.
 	}
 }
 
-func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode string, input runtimecontract.RunnerInput, token string) error {
+func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode string, input runtimecontract.RunnerInput, token string, environmentSecrets map[string][]byte) error {
 	raw, err := runtimecontract.EncodeRunnerInput(input)
 	if err != nil {
 		return err
 	}
 	immutable := true
+	data := map[string][]byte{inputKey: raw, ticketKey: []byte(token)}
+	for key, value := range environmentSecrets {
+		data[key] = append([]byte(nil), value...)
+	}
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.Namespace,
-		Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, controllerAnnotation: manager.config.ControllerPodUID, podAnnotation: podName}},
-		Immutable: &immutable, Type: corev1.SecretTypeOpaque, Data: map[string][]byte{inputKey: raw, ticketKey: []byte(token)}}
+		Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: map[string]string{
+			revisionAnnotation: input.RuntimeRevisionDigest, configAnnotation: input.RuntimeConfigDigest,
+			environmentAnnotation: input.RuntimeEnvironmentDigest, controllerAnnotation: manager.config.ControllerPodUID, podAnnotation: podName,
+		}},
+		Immutable: &immutable, Type: corev1.SecretTypeOpaque, Data: data}
 	_, err = manager.client.CoreV1().Secrets(manager.config.Namespace).Create(ctx, secret, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		existing, getErr := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, name, metav1.GetOptions{})
 		if getErr != nil || existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest ||
+			mode != "warm-turn" && !environmentProjectionMatches(input, existing.Data) ||
 			subtle.ConstantTimeCompare(existing.Data[ticketKey], []byte(token)) != 1 && mode == "warm-turn" {
 			return errors.New("existing runtime ticket conflicts with immutable execution")
 		}
@@ -554,7 +601,16 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 			{Name: "provider-tmp", MountPath: "/tmp"},
 		},
 		Resources: smallResources(), ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", "/run/kodex/provider/provider.sock"}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30}}
-	annotations := map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, controllerAnnotation: manager.config.ControllerPodUID}
+	for _, item := range input.EnvironmentValues {
+		provider.Env = append(provider.Env, corev1.EnvVar{Name: item.Name, Value: item.Value})
+	}
+	for _, item := range input.SecretProjections {
+		provider.Env = append(provider.Env, corev1.EnvVar{Name: item.Name, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: ticketSecret}, Key: environmentProjectionKey(item.Name), Optional: boolPointer(false),
+		}}})
+	}
+	annotations := map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, configAnnotation: input.RuntimeConfigDigest,
+		environmentAnnotation: input.RuntimeEnvironmentDigest, controllerAnnotation: manager.config.ControllerPodUID}
 	if mode == "warm" {
 		compatibility, _ := runtimecontract.WarmCompatibilityDigest(input)
 		annotations[warmCompatibilityAnnotation] = compatibility
@@ -612,6 +668,55 @@ func (manager *Manager) validateProviderSecret(ctx context.Context, input runtim
 		return errors.New("provider credential revision digest is invalid")
 	}
 	return nil
+}
+
+func (manager *Manager) materializeEnvironmentSecrets(ctx context.Context, input runtimecontract.RunnerInput) (map[string][]byte, error) {
+	result := make(map[string][]byte, len(input.SecretProjections))
+	totalBytes := 0
+	for _, item := range input.EnvironmentValues {
+		totalBytes += len(item.Name) + len(item.Value)
+	}
+	for _, item := range input.SecretProjections {
+		if !validDNSSubdomain(item.SecretName) {
+			return nil, errors.New("runtime Secret projection is invalid")
+		}
+		secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, item.SecretName, metav1.GetOptions{})
+		if err != nil || secret.Immutable == nil || !*secret.Immutable || string(secret.UID) != item.SecretUID ||
+			secret.ResourceVersion != item.SecretResourceVersion {
+			return nil, errors.New("runtime Secret projection is unavailable")
+		}
+		value, present := secret.Data[item.SecretKey]
+		digest := sha256.Sum256(value)
+		if !present || len(value) > 8<<10 || !utf8.Valid(value) || bytesContainNUL(value) ||
+			hex.EncodeToString(digest[:]) != item.ContentSHA256 {
+			return nil, errors.New("runtime Secret projection digest is invalid")
+		}
+		totalBytes += len(item.Name) + len(value)
+		result[environmentProjectionKey(item.Name)] = append([]byte(nil), value...)
+	}
+	if totalBytes > runtimecontract.MaximumRuntimeEnvironmentBytes {
+		return nil, errors.New("runtime Secret projection byte limit exceeded")
+	}
+	return result, nil
+}
+
+func environmentProjectionMatches(input runtimecontract.RunnerInput, data map[string][]byte) bool {
+	for _, item := range input.SecretProjections {
+		value, present := data[environmentProjectionKey(item.Name)]
+		digest := sha256.Sum256(value)
+		if !present || hex.EncodeToString(digest[:]) != item.ContentSHA256 {
+			return false
+		}
+	}
+	return true
+}
+
+func environmentProjectionKey(name string) string {
+	return "environment-" + shortHash(name)
+}
+
+func bytesContainNUL(value []byte) bool {
+	return bytes.IndexByte(value, 0) >= 0
 }
 
 func podReady(pod *corev1.Pod) bool {

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	RunnerInputSchemaV5       = "kodex.agent-runner-input.v5"
+	RunnerInputSchemaV6       = "kodex.agent-runner-input.v6"
 	RunnerModeTurn            = "TURN"
 	RunnerModeWarm            = "WARM"
 	MaximumRunnerInputBytes   = 2 << 20
@@ -87,56 +87,74 @@ type RunnerInputArtifact struct {
 // RunnerInput — immutable contract одного turn либо always-hot system runtime.
 // В нём нет actor/organization authority и secret values.
 type RunnerInput struct {
-	Schema                      string                   `json:"schema"`
-	Mode                        string                   `json:"mode"`
-	WorkloadInstance            string                   `json:"workload_instance"`
-	RunRef                      string                   `json:"run_ref,omitempty"`
-	ProjectRef                  string                   `json:"project_ref,omitempty"`
-	NodeRef                     string                   `json:"node_ref,omitempty"`
-	SessionRef                  string                   `json:"session_ref"`
-	TurnRef                     string                   `json:"turn_ref,omitempty"`
-	AgentRef                    string                   `json:"agent_ref"`
-	Attempt                     int32                    `json:"attempt,omitempty"`
-	LeaseRef                    string                   `json:"lease_ref,omitempty"`
-	LeaseFence                  string                   `json:"lease_fence,omitempty"`
-	LeaseGeneration             int64                    `json:"lease_generation,omitempty"`
-	RuntimeRevisionRef          string                   `json:"runtime_revision_ref"`
-	RuntimeRevisionVersion      int64                    `json:"runtime_revision_version"`
-	RuntimeRevisionDigest       string                   `json:"runtime_revision_digest"`
-	ImageReference              string                   `json:"image_reference"`
-	ImageManifestDigest         string                   `json:"image_manifest_digest"`
-	RoleRuntimeContractRevision uint64                   `json:"role_runtime_contract_revision"`
-	RoleRuntimeContractSHA256   string                   `json:"role_runtime_contract_sha256"`
-	SystemAssistant             bool                     `json:"system_assistant"`
-	Instructions                string                   `json:"instructions"`
-	Task                        string                   `json:"task,omitempty"`
-	BoundedInput                map[string]any           `json:"bounded_input,omitempty"`
-	SessionContext              []RunnerSessionMessage   `json:"session_context,omitempty"`
-	DelegationTargets           []RunnerDelegationTarget `json:"delegation_targets,omitempty"`
-	IntegrationGrants           []RunnerIntegrationGrant `json:"integration_grants,omitempty"`
-	InputArtifacts              []RunnerInputArtifact    `json:"input_artifacts,omitempty"`
-	Capabilities                []string                 `json:"capabilities,omitempty"`
-	Provider                    string                   `json:"provider"`
-	Model                       string                   `json:"model"`
-	ProviderAccountRef          string                   `json:"provider_account_ref"`
-	ProviderCredentialRef       string                   `json:"provider_credential_revision_ref"`
-	ProviderCredentialRevision  int64                    `json:"provider_credential_revision"`
-	ProviderCredentialSHA256    string                   `json:"provider_credential_sha256"`
-	CodexSandbox                string                   `json:"codex_sandbox"`
-	CodexApprovalPolicy         string                   `json:"codex_approval_policy"`
-	CodexSessionID              string                   `json:"codex_session_id,omitempty"`
-	CallbackURL                 string                   `json:"callback_url"`
-	CallbackTLS                 RuntimeTLSBinding        `json:"callback_tls"`
-	ExecutionTicketFile         string                   `json:"execution_ticket_file"`
-	ProviderAuthFile            string                   `json:"provider_auth_file"`
-	ProviderAuthSHA256File      string                   `json:"provider_auth_sha256_file"`
-	WorkspaceRoot               string                   `json:"workspace_root"`
-	OutboxRoot                  string                   `json:"outbox_root"`
-	CodexHome                   string                   `json:"codex_home"`
+	Schema                      string                    `json:"schema"`
+	Mode                        string                    `json:"mode"`
+	WorkloadInstance            string                    `json:"workload_instance"`
+	RunRef                      string                    `json:"run_ref,omitempty"`
+	ProjectRef                  string                    `json:"project_ref,omitempty"`
+	NodeRef                     string                    `json:"node_ref,omitempty"`
+	SessionRef                  string                    `json:"session_ref"`
+	TurnRef                     string                    `json:"turn_ref,omitempty"`
+	AgentRef                    string                    `json:"agent_ref"`
+	Attempt                     int32                     `json:"attempt,omitempty"`
+	LeaseRef                    string                    `json:"lease_ref,omitempty"`
+	LeaseFence                  string                    `json:"lease_fence,omitempty"`
+	LeaseGeneration             int64                     `json:"lease_generation,omitempty"`
+	RuntimeRevisionRef          string                    `json:"runtime_revision_ref"`
+	RuntimeRevisionVersion      int64                     `json:"runtime_revision_version"`
+	RuntimeRevisionDigest       string                    `json:"runtime_revision_digest"`
+	ImageReference              string                    `json:"image_reference"`
+	ImageManifestDigest         string                    `json:"image_manifest_digest"`
+	RoleRuntimeContractRevision uint64                    `json:"role_runtime_contract_revision"`
+	RoleRuntimeContractSHA256   string                    `json:"role_runtime_contract_sha256"`
+	SystemAssistant             bool                      `json:"system_assistant"`
+	Instructions                string                    `json:"instructions"`
+	Task                        string                    `json:"task,omitempty"`
+	BoundedInput                map[string]any            `json:"bounded_input,omitempty"`
+	SessionContext              []RunnerSessionMessage    `json:"session_context,omitempty"`
+	DelegationTargets           []RunnerDelegationTarget  `json:"delegation_targets,omitempty"`
+	IntegrationGrants           []RunnerIntegrationGrant  `json:"integration_grants,omitempty"`
+	InputArtifacts              []RunnerInputArtifact     `json:"input_artifacts,omitempty"`
+	Capabilities                []string                  `json:"capabilities,omitempty"`
+	Provider                    string                    `json:"provider"`
+	Model                       string                    `json:"model"`
+	ProviderAccountRef          string                    `json:"provider_account_ref"`
+	ProviderCredentialRef       string                    `json:"provider_credential_revision_ref"`
+	ProviderCredentialRevision  int64                     `json:"provider_credential_revision"`
+	ProviderCredentialSHA256    string                    `json:"provider_credential_sha256"`
+	RuntimeConfigRef            string                    `json:"runtime_config_ref"`
+	RuntimeConfigVersion        int64                     `json:"runtime_config_version"`
+	RuntimeConfigDigest         string                    `json:"runtime_config_digest"`
+	ProviderPolicyRef           string                    `json:"provider_policy_ref"`
+	ProviderPolicyVersion       int64                     `json:"provider_policy_version"`
+	ProviderPolicyDigest        string                    `json:"provider_policy_digest"`
+	ConfigOverlayRef            string                    `json:"config_overlay_ref"`
+	ConfigOverlayVersion        int64                     `json:"config_overlay_version"`
+	ConfigOverlayDigest         string                    `json:"config_overlay_digest"`
+	ConfigOverlay               string                    `json:"config_overlay"`
+	RuntimeEnvironmentRef       string                    `json:"runtime_environment_ref"`
+	RuntimeEnvironmentVersion   int64                     `json:"runtime_environment_version"`
+	RuntimeEnvironmentDigest    string                    `json:"runtime_environment_digest"`
+	EnvironmentBindingRef       string                    `json:"environment_binding_ref"`
+	EnvironmentBindingVersion   int64                     `json:"environment_binding_version"`
+	EnvironmentBindingDigest    string                    `json:"environment_binding_digest"`
+	EnvironmentValues           []RuntimeEnvironmentValue `json:"environment_values,omitempty"`
+	SecretProjections           []RuntimeSecretProjection `json:"secret_projections,omitempty"`
+	CodexSandbox                string                    `json:"codex_sandbox"`
+	CodexApprovalPolicy         string                    `json:"codex_approval_policy"`
+	CodexSessionID              string                    `json:"codex_session_id,omitempty"`
+	CallbackURL                 string                    `json:"callback_url"`
+	CallbackTLS                 RuntimeTLSBinding         `json:"callback_tls"`
+	ExecutionTicketFile         string                    `json:"execution_ticket_file"`
+	ProviderAuthFile            string                    `json:"provider_auth_file"`
+	ProviderAuthSHA256File      string                    `json:"provider_auth_sha256_file"`
+	WorkspaceRoot               string                    `json:"workspace_root"`
+	OutboxRoot                  string                    `json:"outbox_root"`
+	CodexHome                   string                    `json:"codex_home"`
 }
 
 func (input RunnerInput) Validate() error {
-	if input.Schema != RunnerInputSchemaV5 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
+	if input.Schema != RunnerInputSchemaV6 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
 		input.WorkloadInstance == "" || len(input.WorkloadInstance) > 128 ||
 		!opaqueReferencePattern.MatchString(input.SessionRef) || !opaqueReferencePattern.MatchString(input.AgentRef) ||
 		!(opaqueReferencePattern.MatchString(input.RuntimeRevisionRef) || systemRuntimeRevisionPattern.MatchString(input.RuntimeRevisionRef)) || input.RuntimeRevisionVersion < 1 ||
@@ -147,6 +165,11 @@ func (input RunnerInput) Validate() error {
 		!opaqueReferencePattern.MatchString(input.ProviderAccountRef) ||
 		!opaqueReferencePattern.MatchString(input.ProviderCredentialRef) ||
 		input.ProviderCredentialRevision < 1 || !sha256Pattern.MatchString(input.ProviderCredentialSHA256) ||
+		!opaqueReferencePattern.MatchString(input.RuntimeConfigRef) || input.RuntimeConfigVersion < 1 || !sha256Pattern.MatchString(input.RuntimeConfigDigest) ||
+		!opaqueReferencePattern.MatchString(input.ProviderPolicyRef) || input.ProviderPolicyVersion < 1 || !sha256Pattern.MatchString(input.ProviderPolicyDigest) ||
+		!opaqueReferencePattern.MatchString(input.ConfigOverlayRef) || input.ConfigOverlayVersion < 1 || !sha256Pattern.MatchString(input.ConfigOverlayDigest) ||
+		!opaqueReferencePattern.MatchString(input.RuntimeEnvironmentRef) || input.RuntimeEnvironmentVersion < 1 || !sha256Pattern.MatchString(input.RuntimeEnvironmentDigest) ||
+		!opaqueReferencePattern.MatchString(input.EnvironmentBindingRef) || input.EnvironmentBindingVersion < 1 || !sha256Pattern.MatchString(input.EnvironmentBindingDigest) ||
 		(input.CodexSandbox != "read-only" && input.CodexSandbox != "workspace-write") ||
 		(input.CodexApprovalPolicy != "untrusted" && input.CodexApprovalPolicy != "on-request" && input.CodexApprovalPolicy != "never") ||
 		input.CallbackTLS.validate() != nil || !validCallbackURL(input.CallbackURL, input.CallbackTLS.ServerName) ||
@@ -154,9 +177,18 @@ func (input RunnerInput) Validate() error {
 		!validSecretFile(input.ProviderAuthSHA256File) || input.WorkspaceRoot != "/workspace" ||
 		input.OutboxRoot != "/workspace/.kodex/outbox" || input.CodexHome != "/workspace/.kodex/state/codex-home" ||
 		len(input.SessionContext) > 128 || len(input.DelegationTargets) > 128 || len(input.IntegrationGrants) > 256 ||
-		len(input.InputArtifacts) > MaximumInputArtifacts ||
-		len(input.Capabilities) > 256 {
+		len(input.InputArtifacts) > MaximumInputArtifacts || len(input.BoundedInput) > 256 || len(input.CodexSessionID) > 255 ||
+		!validSessionContext(input.SessionContext) || !validIntegrationGrants(input.IntegrationGrants) ||
+		!validCapabilities(input.Capabilities) || ValidateRuntimeEnvironment(input.EnvironmentValues, input.SecretProjections) != nil {
 		return errors.New("runner input is invalid")
+	}
+	canonicalOverlay, overlayDigest, err := CanonicalConfigOverlay(input.ConfigOverlay)
+	if err != nil || canonicalOverlay != input.ConfigOverlay || overlayDigest != input.ConfigOverlayDigest {
+		return errors.New("runner config overlay binding is invalid")
+	}
+	environmentDigest, err := RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections)
+	if err != nil || environmentDigest != input.RuntimeEnvironmentDigest {
+		return errors.New("runner environment binding is invalid")
 	}
 	if len(input.InputArtifacts) > 0 && !containsString(input.Capabilities, ArtifactCapability) {
 		return errors.New("runner artifact capability is missing")
@@ -213,6 +245,47 @@ func containsString(values []string, expected string) bool {
 	return false
 }
 
+func validSessionContext(messages []RunnerSessionMessage) bool {
+	for _, message := range messages {
+		if !containsString([]string{"USER", "ASSISTANT", "SYSTEM"}, message.Role) || len(message.Content) > 64<<10 {
+			return false
+		}
+	}
+	return true
+}
+
+func validIntegrationGrants(grants []RunnerIntegrationGrant) bool {
+	for _, grant := range grants {
+		if !opaqueReferencePattern.MatchString(grant.Ref) || !opaqueReferencePattern.MatchString(grant.ConnectionRef) ||
+			grant.DefinitionKey == "" || len(grant.DefinitionKey) > 128 ||
+			grant.ConnectionName == "" || len(grant.ConnectionName) > 160 ||
+			grant.CapabilityKey == "" || len(grant.CapabilityKey) > 255 ||
+			grant.CapabilityName == "" || len(grant.CapabilityName) > 160 ||
+			len(grant.CapabilityDescription) > 2000 ||
+			!containsString([]string{"LOW", "MEDIUM", "HIGH"}, grant.Risk) {
+			return false
+		}
+	}
+	return true
+}
+
+func validCapabilities(capabilities []string) bool {
+	if len(capabilities) > 256 {
+		return false
+	}
+	unique := make(map[string]struct{}, len(capabilities))
+	for _, capability := range capabilities {
+		if capability == "" || len(capability) > 255 {
+			return false
+		}
+		if _, exists := unique[capability]; exists {
+			return false
+		}
+		unique[capability] = struct{}{}
+	}
+	return true
+}
+
 func validArtifactFileName(value string) bool {
 	return value != "" && len(value) <= 255 && value != "." && value != ".." && !strings.ContainsAny(value, "/\\\x00\r\n")
 }
@@ -261,6 +334,24 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		CodexSandbox                string
 		CodexApprovalPolicy         string
 		Capabilities                []string
+		RuntimeConfigRef            string
+		RuntimeConfigVersion        int64
+		RuntimeConfigDigest         string
+		ProviderPolicyRef           string
+		ProviderPolicyVersion       int64
+		ProviderPolicyDigest        string
+		ConfigOverlayRef            string
+		ConfigOverlayVersion        int64
+		ConfigOverlayDigest         string
+		ConfigOverlay               string
+		RuntimeEnvironmentRef       string
+		RuntimeEnvironmentVersion   int64
+		RuntimeEnvironmentDigest    string
+		EnvironmentBindingRef       string
+		EnvironmentBindingVersion   int64
+		EnvironmentBindingDigest    string
+		EnvironmentValues           []RuntimeEnvironmentValue
+		SecretProjections           []RuntimeSecretProjection
 	}{
 		ImageReference: input.ImageReference, ImageManifestDigest: input.ImageManifestDigest,
 		RoleRuntimeContractRevision: input.RoleRuntimeContractRevision,
@@ -270,7 +361,13 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		ProviderCredentialRevision: input.ProviderCredentialRevision,
 		ProviderCredentialSHA256:   input.ProviderCredentialSHA256,
 		CodexSandbox:               input.CodexSandbox, CodexApprovalPolicy: input.CodexApprovalPolicy,
-		Capabilities: capabilities,
+		Capabilities:     capabilities,
+		RuntimeConfigRef: input.RuntimeConfigRef, RuntimeConfigVersion: input.RuntimeConfigVersion, RuntimeConfigDigest: input.RuntimeConfigDigest,
+		ProviderPolicyRef: input.ProviderPolicyRef, ProviderPolicyVersion: input.ProviderPolicyVersion, ProviderPolicyDigest: input.ProviderPolicyDigest,
+		ConfigOverlayRef: input.ConfigOverlayRef, ConfigOverlayVersion: input.ConfigOverlayVersion, ConfigOverlayDigest: input.ConfigOverlayDigest, ConfigOverlay: input.ConfigOverlay,
+		RuntimeEnvironmentRef: input.RuntimeEnvironmentRef, RuntimeEnvironmentVersion: input.RuntimeEnvironmentVersion, RuntimeEnvironmentDigest: input.RuntimeEnvironmentDigest,
+		EnvironmentBindingRef: input.EnvironmentBindingRef, EnvironmentBindingVersion: input.EnvironmentBindingVersion, EnvironmentBindingDigest: input.EnvironmentBindingDigest,
+		EnvironmentValues: input.EnvironmentValues, SecretProjections: input.SecretProjections,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -281,7 +378,8 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 }
 
 func (binding RuntimeTLSBinding) validate() error {
-	if binding.ServerName == "" || net.ParseIP(binding.ServerName) != nil || !strings.HasSuffix(binding.ServerName, ".svc.cluster.local") {
+	if binding.ServerName == "" || len(binding.ServerName) > 253 || net.ParseIP(binding.ServerName) != nil ||
+		!strings.HasSuffix(binding.ServerName, ".svc.cluster.local") {
 		return errors.New("runtime TLS server name is invalid")
 	}
 	for _, path := range []string{binding.CAFile, binding.CertificateFile, binding.PrivateKeyFile} {
@@ -295,17 +393,18 @@ func (binding RuntimeTLSBinding) validate() error {
 func validCallbackURL(raw, serverName string) bool {
 	parsed, err := url.Parse(raw)
 	host := parsed.Hostname()
-	return err == nil && parsed.Scheme == "https" && (host == serverName || net.ParseIP(host) != nil) && parsed.Port() != "" &&
+	return len(raw) <= 512 && err == nil && parsed.Scheme == "https" && (host == serverName || net.ParseIP(host) != nil) && parsed.Port() != "" &&
 		parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == "" && parsed.Path == ""
 }
 
 func validSecretFile(path string) bool {
-	return filepath.IsAbs(path) && filepath.Clean(path) == path &&
+	return len(path) <= 512 && !strings.ContainsAny(path, "\x00\r\n") && filepath.IsAbs(path) && filepath.Clean(path) == path &&
 		(strings.HasPrefix(path, "/var/run/secrets/") || strings.HasPrefix(path, "/run/secrets/"))
 }
 
 func validPinnedImage(reference, digest string) bool {
-	return imageDigestPattern.MatchString(digest) && strings.HasSuffix(reference, "@"+digest) &&
+	return len(reference) >= 73 && len(reference) <= 512 && !strings.ContainsAny(reference, " \t\r\n") &&
+		imageDigestPattern.MatchString(digest) && strings.HasSuffix(reference, "@"+digest) &&
 		!strings.Contains(reference, "$") && !strings.Contains(reference, "{") && !strings.Contains(reference, "}")
 }
 

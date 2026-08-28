@@ -4,8 +4,8 @@ title: Runtime-controller и role Pod
 type: architecture
 status: approved
 owner: architect
-version: 1.0.3
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-08-28
 ---
 
 # Runtime-controller и role Pod
@@ -21,6 +21,8 @@ Control-plane выдаёт immutable `RuntimeExecution` с exact:
 
 - organization/project/agent/session/turn/run/node/attempt refs;
 - RuntimeRevision version и SHA-256;
+- runtime configuration, provider policy, published overlay, runtime
+  environment и Agent binding refs/versions/SHA-256;
 - promoted role image `repository@sha256` и runtime ABI digest;
 - input/result bounds, capabilities и credential bindings;
 - claim generation, fence и expiry.
@@ -36,7 +38,7 @@ promoted role image. Role image содержит собственное окру
 step добавляет защищённые `kodex-init` и `kodex-agent-runner` из
 trusted base и подтверждает runtime ABI перед promotion.
 
-Pod использует отдельный ServiceAccount, immutable ConfigMap/input, bounded
+Pod использует отдельный ServiceAccount, immutable Secret input, bounded
 workspace и exact Secret projections. Он не получает namespace-wide access,
 control-plane database DSN, integration/provider master credentials, registry
 push/admin credential или external channel token.
@@ -48,6 +50,23 @@ execution-scoped opaque ticket в отдельном Secret и materialize-ит 
 progress, обслуживает разрешённые MCP servers/tools и завершает attempt через
 typed RPC. Provider process работает отдельным UID без Kubernetes token и
 authority credential.
+
+Wire contract `kodex.agent-runner-input.v6` содержит non-secret environment
+values и только Secret descriptors. Для каждого descriptor runtime-controller
+читает exact immutable source Secret, сверяет name/key, UID,
+`resourceVersion`, UTF-8/size и SHA-256, затем копирует проверенные байты в
+immutable execution ticket под непрозрачным ключом `environment-<hash>`.
+`runtime.json` сохраняет descriptor, но не value. Только `provider-runtime`
+получает `env.secretKeyRef` на exact execution ticket/key; `role-runtime` не
+получает Secret projection. Любой stale UID/resourceVersion, отсутствующий key
+или digest mismatch закрывает materialization до создания Pod.
+
+Agent-runner не объединяет TOML как текст. Он повторно разбирает published
+overlay strict parser-ом и кодирует один typed `config.toml`: model,
+approval/sandbox, permissions, auth store, MCP и shell boundary назначает
+сервер; overlay заполняет только закрытый non-authority allowlist; environment
+set управляет только разрешёнными process environment names. Ни overlay, ни
+environment set не могут переопределить server-owned поля.
 
 Terminal Pod не переиспользуется для следующего turn. Retry получает новую
 attempt, RuntimeRevision, claim, credentials и Pod; прежний execution остаётся
@@ -116,13 +135,18 @@ server policy. Controller cleanup не определяет terminal Run сам�
 Base deny-all. Role Pod получает DNS, exact provider egress proxy, exact MCP
 service и только разрешённый project access profile. Admission проверяет exact
 image digest, runtime ABI, container layout, ServiceAccount, volumes, commands,
-resources, immutable input binding и execution ticket Secret. Mutable image, extra container, broad token,
-host access и privileged fallback запрещены.
+resources, immutable input binding и execution ticket Secret. Admission также
+требует exact revision/config/environment digests, запрещает `stringData` и
+лишние ticket keys, а Secret projections разрешает только из этого ticket в
+`provider-runtime`. Mutable image, extra container, broad token, host access и
+privileged fallback запрещены.
 
 ## Критерии приёмки
 
 - разные роли действительно запускаются в своих Docker images;
 - новый turn создаёт новый Pod, а system assistant использует отдельный warm Pod;
 - stale claim/fence/revision не запускает workload;
+- stale Secret revision или digest не запускает workload, а runner input не
+  содержит Secret values;
 - Mattermost и любая optional integration не участвуют в materialization;
 - cancel/retry/restart не создают две активные attempt одного Turn.

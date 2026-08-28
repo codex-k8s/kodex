@@ -1,0 +1,171 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: runtime-execution-ticket-exact-projection
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [secrets]
+  matchConditions:
+    - name: managed-runtime-ticket
+      expression: >-
+        object.metadata.namespace == 'kodex-system' &&
+        has(object.metadata.labels) &&
+        'runtime.kodex.dev/managed' in object.metadata.labels &&
+        object.metadata.labels['runtime.kodex.dev/managed'] == 'true' &&
+        'runtime.kodex.dev/mode' in object.metadata.labels &&
+        object.metadata.labels['runtime.kodex.dev/mode'] in
+          ['turn', 'warm', 'warm-turn']
+  validations:
+    - expression: request.operation == 'CREATE'
+      message: runtime execution tickets are immutable and cannot be updated
+    - expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:kodex-system:runtime-controller'
+      message: only runtime-controller may create execution tickets
+    - expression: >-
+        object.metadata.name.startsWith('runtime-ticket-') &&
+        has(object.immutable) && object.immutable == true &&
+        object.type == 'Opaque' &&
+        !has(object.stringData)
+      message: runtime execution ticket identity or immutability is invalid
+    - expression: >-
+        has(object.data) &&
+        'runtime.json' in object.data &&
+        'token' in object.data &&
+        object.data.all(key,
+          key == 'runtime.json' || key == 'token' ||
+          key.matches('^environment-[a-f0-9]{16}$'))
+      message: runtime execution ticket contains an unsupported data key
+    - expression: >-
+        has(object.metadata.annotations) &&
+        'runtime.kodex.dev/revision-digest' in object.metadata.annotations &&
+        object.metadata.annotations['runtime.kodex.dev/revision-digest']
+          .matches('^[a-f0-9]{64}$') &&
+        'runtime.kodex.dev/config-digest' in object.metadata.annotations &&
+        object.metadata.annotations['runtime.kodex.dev/config-digest']
+          .matches('^[a-f0-9]{64}$') &&
+        'runtime.kodex.dev/environment-digest' in object.metadata.annotations &&
+        object.metadata.annotations['runtime.kodex.dev/environment-digest']
+          .matches('^[a-f0-9]{64}$') &&
+        'runtime.kodex.dev/controller-pod-uid' in object.metadata.annotations &&
+        size(object.metadata.annotations['runtime.kodex.dev/controller-pod-uid']) > 0 &&
+        'runtime.kodex.dev/pod-name' in object.metadata.annotations &&
+        size(object.metadata.annotations['runtime.kodex.dev/pod-name']) > 0
+      message: runtime execution ticket is not pinned to exact runtime revisions
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: runtime-execution-ticket-exact-projection
+spec:
+  policyName: runtime-execution-ticket-exact-projection
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kodex-system
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: runtime-role-pod-exact-secret-projection
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [pods]
+  matchConditions:
+    - name: managed-role-runtime
+      expression: >-
+        object.metadata.namespace == 'kodex-system' &&
+        has(object.metadata.labels) &&
+        'runtime.kodex.dev/managed' in object.metadata.labels &&
+        object.metadata.labels['runtime.kodex.dev/managed'] == 'true' &&
+        'app.kubernetes.io/component' in object.metadata.labels &&
+        object.metadata.labels['app.kubernetes.io/component'] == 'role-runtime'
+  variables:
+    - name: ticketVolumes
+      expression: >-
+        object.spec.volumes.filter(volume,
+          volume.name == 'runtime-input' && has(volume.secret))
+    - name: allContainers
+      expression: >-
+        object.spec.containers +
+        (has(object.spec.initContainers) ? object.spec.initContainers : [])
+    - name: providerContainers
+      expression: >-
+        object.spec.containers.filter(container,
+          container.name == 'provider-runtime')
+  validations:
+    - expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:kodex-system:runtime-controller'
+      message: only runtime-controller may create managed role Pods
+    - expression: >-
+        object.spec.serviceAccountName == 'agent-runner' &&
+        has(object.spec.automountServiceAccountToken) &&
+        object.spec.automountServiceAccountToken == false
+      message: managed role Pod service account boundary is invalid
+    - expression: >-
+        has(object.metadata.annotations) &&
+        'runtime.kodex.dev/revision-digest' in object.metadata.annotations &&
+        object.metadata.annotations['runtime.kodex.dev/revision-digest']
+          .matches('^[a-f0-9]{64}$') &&
+        'runtime.kodex.dev/config-digest' in object.metadata.annotations &&
+        object.metadata.annotations['runtime.kodex.dev/config-digest']
+          .matches('^[a-f0-9]{64}$') &&
+        'runtime.kodex.dev/environment-digest' in object.metadata.annotations &&
+        object.metadata.annotations['runtime.kodex.dev/environment-digest']
+          .matches('^[a-f0-9]{64}$')
+      message: managed role Pod is not pinned to exact runtime revisions
+    - expression: >-
+        size(variables.ticketVolumes) == 1 &&
+        variables.ticketVolumes[0].secret.secretName
+          .startsWith('runtime-ticket-')
+      message: managed role Pod must use one execution-scoped runtime ticket
+    - expression: >-
+        size(variables.providerContainers) == 1 &&
+        variables.providerContainers[0].env.all(item,
+          !(has(item.valueFrom) && has(item.valueFrom.secretKeyRef)) ||
+          (item.valueFrom.secretKeyRef.name ==
+             variables.ticketVolumes[0].secret.secretName &&
+           item.valueFrom.secretKeyRef.key
+             .matches('^environment-[a-f0-9]{16}$') &&
+           (!has(item.valueFrom.secretKeyRef.optional) ||
+            item.valueFrom.secretKeyRef.optional == false)))
+      message: provider runtime may project only exact execution ticket keys
+    - expression: >-
+        variables.allContainers.filter(container,
+          container.name != 'provider-runtime').all(container,
+            !has(container.env) || container.env.all(item,
+              !(has(item.valueFrom) && has(item.valueFrom.secretKeyRef))))
+      message: Secret environment projections are restricted to provider runtime
+    - expression: >-
+        variables.allContainers.all(container,
+          !has(container.volumeMounts) ||
+          container.volumeMounts.filter(mount,
+            mount.name == 'runtime-input').all(mount,
+              has(mount.subPath) &&
+              mount.subPath in ['runtime.json', 'token'] &&
+              has(mount.readOnly) && mount.readOnly == true))
+      message: runtime ticket files must use exact read-only subPath mounts
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: runtime-role-pod-exact-secret-projection
+spec:
+  policyName: runtime-role-pod-exact-secret-projection
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kodex-system

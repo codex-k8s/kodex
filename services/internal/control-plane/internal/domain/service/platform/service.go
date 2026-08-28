@@ -161,6 +161,48 @@ func (service *Service) GetAgent(ctx context.Context, p value.Principal, ref str
 	}
 	return service.repository.GetAgent(ctx, p, ref)
 }
+func (service *Service) GetAgentRuntimeConfiguration(ctx context.Context, p value.Principal, ref string) (entity.AgentRuntimeConfigurationView, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	return service.repository.GetAgentRuntimeConfiguration(ctx, p, ref)
+}
+func (service *Service) ListAgentRuntimeConfigurations(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.AgentRuntimeConfiguration, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListAgentRuntimeConfigurations(ctx, p, filter)
+}
+func (service *Service) ListRuntimeEnvironments(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.RuntimeEnvironmentSet, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListRuntimeEnvironments(ctx, p, filter)
+}
+func (service *Service) GetRuntimeEnvironment(ctx context.Context, p value.Principal, ref string) (entity.RuntimeEnvironmentSet, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.RuntimeEnvironmentSet{}, err
+	}
+	return service.repository.GetRuntimeEnvironment(ctx, p, ref)
+}
+func (service *Service) ListRuntimeEnvironmentVersions(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.RuntimeEnvironmentVersion, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListRuntimeEnvironmentVersions(ctx, p, filter)
+}
+func (service *Service) ListTemplateVariables(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.TemplateVariable, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListTemplateVariables(ctx, p, filter)
+}
 func (service *Service) ListAgentInstructionVersions(ctx context.Context, p value.Principal, ref string, page query.Page) ([]entity.InstructionVersion, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -509,7 +551,11 @@ func knownCommand(kind command.Kind) bool {
 		command.AddMembership, command.ChangeMembership, command.RemoveMembership,
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,
 		command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions,
-		command.RollbackInstructions, command.ChangeAgentCapability, command.ChangeAgentGrant,
+		command.RollbackInstructions, command.PublishAgentRuntimeConfig,
+		command.CreateConfigOverlayDraft, command.ValidateConfigOverlayDraft, command.PublishConfigOverlayDraft,
+		command.RollbackConfigOverlay, command.CreateRuntimeEnvironment, command.PublishRuntimeEnvironment,
+		command.RollbackRuntimeEnvironment, command.BindAgentRuntimeEnvironment,
+		command.ChangeAgentCapability, command.ChangeAgentGrant,
 		command.CreateWorkflow, command.UpdateWorkflow,
 		command.ValidateWorkflow, command.PublishWorkflow, command.ArchiveWorkflow,
 		command.LaunchRun, command.AddSessionTurn, command.CancelRun, command.RetryRun,

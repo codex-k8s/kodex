@@ -3,6 +3,8 @@ package workload
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -163,6 +165,126 @@ func TestEnsureTurnRejectsProviderCredentialOutsideRuntimeRevision(t *testing.T)
 	binding.ResourceVersion = "2"
 	if err := manager.EnsureTurn(context.Background(), input, binding); err == nil {
 		t.Fatal("EnsureTurn() accepted a provider Secret outside the immutable credential revision")
+	}
+}
+
+func TestEnsureTurnMaterializesExactEnvironmentSecretOutsideRunnerInput(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	immutable := true
+	secretValue := []byte("runtime-environment-secret-fixture")
+	digest := sha256.Sum256(secretValue)
+	digestHex := hex.EncodeToString(digest[:])
+	source := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "runtime-agent-environment-r1", Namespace: "kodex-system",
+			UID: "20000000-0000-4000-8000-000000000001", ResourceVersion: "7",
+		},
+		Immutable: &immutable,
+		Data:      map[string][]byte{"token": secretValue},
+	}
+	if _, err := client.CoreV1().Secrets("kodex-system").Create(context.Background(), source, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("create runtime environment Secret fixture: %v", err)
+	}
+
+	execution := testExecution(false)
+	execution.Revision.EnvironmentValues = []*controlplanev1.RuntimeEnvironmentValue{{Name: "FEATURE_FLAG", Value: "enabled"}}
+	execution.Revision.SecretProjections = []*controlplanev1.RuntimeSecretDescriptor{{
+		Name: "SERVICE_TOKEN", SecretName: source.Name, SecretKey: "token", SecretUid: string(source.UID),
+		SecretResourceVersion: source.ResourceVersion, ContentSha256: digestHex,
+	}}
+	values := []runtimecontract.RuntimeEnvironmentValue{{Name: "FEATURE_FLAG", Value: "enabled"}}
+	projections := []runtimecontract.RuntimeSecretProjection{{
+		Name: "SERVICE_TOKEN", SecretName: source.Name, SecretKey: "token", SecretUID: string(source.UID),
+		SecretResourceVersion: source.ResourceVersion, ContentSHA256: digestHex,
+	}}
+	environmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(values, projections)
+	if err != nil {
+		t.Fatalf("RuntimeEnvironmentDigest() error = %v", err)
+	}
+	execution.Revision.RuntimeEnvironmentDigest = environmentDigest
+	input, binding, err := manager.BuildTurnInput(execution)
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+		t.Fatalf("EnsureTurn() error = %v", err)
+	}
+
+	ticket, err := client.CoreV1().Secrets("kodex-system").Get(context.Background(), ticketName(input.LeaseRef), metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get(runtime ticket Secret) error = %v", err)
+	}
+	if bytes.Contains(ticket.Data[inputKey], secretValue) {
+		t.Fatal("runtime.json contains a Secret value")
+	}
+	projectionKey := environmentProjectionKey("SERVICE_TOKEN")
+	if !bytes.Equal(ticket.Data[projectionKey], secretValue) {
+		t.Fatal("execution ticket does not contain the exact verified Secret projection")
+	}
+	bound, err := runtimecontract.DecodeRunnerInput(ticket.Data[inputKey])
+	if err != nil || len(bound.SecretProjections) != 1 || bound.SecretProjections[0] != projections[0] {
+		t.Fatalf("runtime.json does not preserve the exact Secret descriptor: input=%#v err=%v", bound.SecretProjections, err)
+	}
+
+	pod, err := client.CoreV1().Pods("kodex-system").Get(context.Background(), turnPodName(input.LeaseRef), metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get(runtime Pod) error = %v", err)
+	}
+	role := containerByName(t, pod.Spec.Containers, "role-runtime")
+	provider := containerByName(t, pod.Spec.Containers, "provider-runtime")
+	for _, item := range role.Env {
+		if item.ValueFrom != nil && item.ValueFrom.SecretKeyRef != nil {
+			t.Fatalf("role runtime received a Secret projection: %#v", item)
+		}
+	}
+	var projected *corev1.SecretKeySelector
+	for _, item := range provider.Env {
+		if item.Name == "SERVICE_TOKEN" && item.ValueFrom != nil {
+			projected = item.ValueFrom.SecretKeyRef
+		}
+	}
+	if projected == nil || projected.Name != ticket.Name || projected.Key != projectionKey ||
+		projected.Optional == nil || *projected.Optional {
+		t.Fatalf("provider runtime Secret projection is not exact: %#v", projected)
+	}
+}
+
+func TestEnsureTurnRejectsStaleEnvironmentSecretRevision(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	immutable := true
+	secretValue := []byte("runtime-environment-secret-fixture")
+	digest := sha256.Sum256(secretValue)
+	if _, err := client.CoreV1().Secrets("kodex-system").Create(context.Background(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "runtime-agent-environment-r1", Namespace: "kodex-system",
+			UID: "20000000-0000-4000-8000-000000000001", ResourceVersion: "7"},
+		Immutable: &immutable, Data: map[string][]byte{"token": secretValue},
+	}, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("create runtime environment Secret fixture: %v", err)
+	}
+	execution := testExecution(false)
+	execution.Revision.SecretProjections = []*controlplanev1.RuntimeSecretDescriptor{{
+		Name: "SERVICE_TOKEN", SecretName: "runtime-agent-environment-r1", SecretKey: "token",
+		SecretUid: "20000000-0000-4000-8000-000000000001", SecretResourceVersion: "8",
+		ContentSha256: hex.EncodeToString(digest[:]),
+	}}
+	projections := []runtimecontract.RuntimeSecretProjection{{
+		Name: "SERVICE_TOKEN", SecretName: "runtime-agent-environment-r1", SecretKey: "token",
+		SecretUID: "20000000-0000-4000-8000-000000000001", SecretResourceVersion: "8",
+		ContentSHA256: hex.EncodeToString(digest[:]),
+	}}
+	environmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(nil, projections)
+	if err != nil {
+		t.Fatalf("RuntimeEnvironmentDigest() error = %v", err)
+	}
+	execution.Revision.RuntimeEnvironmentDigest = environmentDigest
+	input, binding, err := manager.BuildTurnInput(execution)
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	if err := manager.EnsureTurn(context.Background(), input, binding); err == nil {
+		t.Fatal("EnsureTurn() accepted a stale runtime Secret resourceVersion")
 	}
 }
 
@@ -496,6 +618,13 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 				SecretName: "runtime-provider-openai-default-r1", SecretUid: "10000000-0000-4000-8000-000000000001",
 				SecretResourceVersion: "1", ContentSha256: testProviderDigest,
 			},
+			RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigVersion: 1, RuntimeConfigDigest: strings.Repeat("1", 64),
+			ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyVersion: 1, ProviderPolicyDigest: strings.Repeat("2", 64),
+			ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 1,
+			ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
+			RuntimeEnvironmentDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			EnvironmentBindingRef:    "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
 		},
 		Lease: &controlplanev1.WorkLease{Ref: "lease_abcdefgh", Fence: "fence-1", Generation: 1}, Task: "Prepare the result.",
 	}
@@ -517,4 +646,15 @@ func hasEnv(container corev1.Container, name, value string) bool {
 		}
 	}
 	return false
+}
+
+func containerByName(t *testing.T, containers []corev1.Container, name string) corev1.Container {
+	t.Helper()
+	for _, container := range containers {
+		if container.Name == name {
+			return container
+		}
+	}
+	t.Fatalf("container %q is absent", name)
+	return corev1.Container{}
 }

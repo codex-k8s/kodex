@@ -1,0 +1,21 @@
+-- name: runtime_configuration__list_environment_versions :many
+SELECT version.ref,
+       version.version_number,
+       version.non_secret_values,
+       version.secret_descriptors,
+       version.digest,
+       version.created_at
+FROM control_plane.runtime_environment_sets environment
+JOIN control_plane.runtime_environment_versions version ON version.environment_set_id = environment.id
+WHERE environment.organization_id = @organization_id::uuid
+  AND environment.ref = @environment_ref
+  AND (@before_version::bigint = 0 OR version.version_number < @before_version::bigint)
+  AND (@platform_role IN ('OWNER', 'ADMINISTRATOR') OR EXISTS (
+      SELECT 1 FROM control_plane.memberships membership
+      WHERE membership.project_id = environment.project_id
+        AND membership.subject_id = @actor_id::uuid
+        AND membership.active
+        AND 'VIEW' = ANY(membership.permissions)
+  ))
+ORDER BY version.version_number DESC
+LIMIT @page_size;

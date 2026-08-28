@@ -12,8 +12,8 @@ SELECT n.id::text,
        a.ref,
        a.runtime_key,
        rp.runtime_revision,
-       rp.provider,
-       rp.model,
+       runtime_config.provider,
+       runtime_config.model,
        pa.id::text,
        pa.ref,
        pcr.id::text,
@@ -209,7 +209,31 @@ SELECT n.id::text,
        COALESCE(role_image.promoted_reference, $3),
        COALESCE(role_image.manifest_digest, $4),
        COALESCE(role_image.role_runtime_contract_revision, $5),
-       COALESCE(role_image.role_runtime_contract_sha256, $6)
+       COALESCE(role_image.role_runtime_contract_sha256, $6),
+       runtime_config.id::text,
+       runtime_config.ref,
+       runtime_config.version_number,
+       runtime_config.digest,
+       provider_policy.id::text,
+       provider_policy.ref,
+       provider_policy.version_number,
+       provider_policy.digest,
+       provider_policy.mode,
+       config_overlay.id::text,
+       config_overlay.ref,
+       config_overlay.version_number,
+       config_overlay.digest,
+       config_overlay.content,
+       environment_binding.id::text,
+       environment_binding.ref,
+       environment_binding.version,
+       environment_binding.digest,
+       runtime_environment.id::text,
+       environment_set.ref,
+       runtime_environment.version_number,
+       runtime_environment.digest,
+       runtime_environment.non_secret_values,
+       runtime_environment.secret_descriptors
 FROM control_plane.run_nodes n
 JOIN control_plane.runs r ON r.id = n.run_id
 JOIN control_plane.runs root ON root.id = r.root_run_id
@@ -224,8 +248,17 @@ JOIN control_plane.provider_credential_revisions pcr
   ON pcr.id = pa.current_credential_revision_id
  AND pcr.organization_id = r.organization_id
 JOIN control_plane.agents a ON a.id = n.agent_id
+JOIN control_plane.agent_runtime_config_versions runtime_config ON runtime_config.id = a.current_runtime_config_id
+JOIN control_plane.provider_account_policy_versions provider_policy ON provider_policy.id = runtime_config.provider_account_policy_id
+JOIN control_plane.agent_config_overlay_versions config_overlay ON config_overlay.id = a.current_config_overlay_id AND config_overlay.state = 'PUBLISHED'
+JOIN control_plane.agent_runtime_environment_bindings environment_binding ON environment_binding.agent_id = a.id
+JOIN control_plane.runtime_environment_sets environment_set ON environment_set.id = environment_binding.environment_set_id AND environment_set.state = 'ACTIVE'
+JOIN control_plane.runtime_environment_versions runtime_environment ON runtime_environment.id = environment_set.current_version_id
 JOIN control_plane.role_definitions rd ON rd.id = a.role_definition_id
-JOIN control_plane.runtime_profiles rp ON rp.stable_key = a.runtime_key
+JOIN control_plane.runtime_profiles rp ON rp.stable_key = runtime_config.runtime_profile_key
+  AND rp.provider = runtime_config.provider
+JOIN control_plane.provider_definitions runtime_provider_definition ON runtime_provider_definition.stable_key = runtime_config.provider
+  AND runtime_provider_definition.stable_key = pa.definition_key
 LEFT JOIN control_plane.workflow_versions workflow_version
   ON workflow_version.id = root.workflow_version_id
 JOIN LATERAL (

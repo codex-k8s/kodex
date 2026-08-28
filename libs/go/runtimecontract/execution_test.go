@@ -58,6 +58,38 @@ func TestWarmCompatibilityDigestIgnoresTurnIdentityAndRejectsRuntimeDrift(t *tes
 	}
 }
 
+func TestRunnerInputNestedCatalogMatchesV6SchemaBoundary(t *testing.T) {
+	valid := validRunnerInputFixture()
+	valid.SessionContext = []RunnerSessionMessage{{Role: "USER", Content: "bounded context"}}
+	valid.IntegrationGrants = []RunnerIntegrationGrant{{
+		Ref: "grant_abcdefgh", ConnectionRef: "conn_abcdefgh", DefinitionKey: "crm",
+		ConnectionName: "CRM", CapabilityKey: "crm.read", CapabilityName: "Read CRM",
+		CapabilityDescription: "Read bounded CRM records.", Risk: "LOW",
+	}}
+	valid.Capabilities = []string{"crm.read"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid nested runner catalog rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*RunnerInput){
+		"session role": func(input *RunnerInput) { input.SessionContext[0].Role = "OWNER" },
+		"grant risk":   func(input *RunnerInput) { input.IntegrationGrants[0].Risk = "CRITICAL" },
+		"duplicate capability": func(input *RunnerInput) {
+			input.Capabilities = append(input.Capabilities, input.Capabilities[0])
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := valid
+			input.SessionContext = append([]RunnerSessionMessage(nil), valid.SessionContext...)
+			input.IntegrationGrants = append([]RunnerIntegrationGrant(nil), valid.IntegrationGrants...)
+			input.Capabilities = append([]string(nil), valid.Capabilities...)
+			mutate(&input)
+			if input.Validate() == nil {
+				t.Fatalf("invalid nested runner catalog accepted: %#v", input)
+			}
+		})
+	}
+}
+
 func TestTokenUsageValidationRejectsInconsistentCounters(t *testing.T) {
 	valid := TokenUsage{TotalTokens: 120, InputTokens: 100, CachedInputTokens: 40,
 		CacheWriteInputTokens: 10, OutputTokens: 20, ReasoningOutputTokens: 5, ModelContextWindow: 200000}
@@ -83,7 +115,7 @@ func TestTokenUsageValidationRejectsInconsistentCounters(t *testing.T) {
 func validRunnerInputFixture() RunnerInput {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
 	return RunnerInput{
-		Schema: RunnerInputSchemaV5, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
+		Schema: RunnerInputSchemaV6, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
 		RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh", SessionRef: "session_abcdefgh",
 		TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,
 		LeaseRef: "lease_abcdefgh", LeaseFence: "fence-1", LeaseGeneration: 1,
@@ -94,6 +126,13 @@ func validRunnerInputFixture() RunnerInput {
 		Task: "Prepare the customer response.", Provider: "openai", Model: "codex",
 		ProviderAccountRef: "pacc_abcdefgh", ProviderCredentialRef: "pcr_abcdefgh",
 		ProviderCredentialRevision: 1, ProviderCredentialSHA256: strings.Repeat("e", 64),
+		RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigVersion: 1, RuntimeConfigDigest: strings.Repeat("1", 64),
+		ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyVersion: 1, ProviderPolicyDigest: strings.Repeat("2", 64),
+		ConfigOverlayRef: "cov_abcdefgh", ConfigOverlayVersion: 1,
+		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
+		RuntimeEnvironmentDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		EnvironmentBindingRef:    "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
 		CodexSandbox: "read-only", CodexApprovalPolicy: "never",
 		CallbackURL: "https://10.0.0.10:8444", CallbackTLS: RuntimeTLSBinding{
 			ServerName:      "runtime-controller-callback.kodex-system.svc.cluster.local",

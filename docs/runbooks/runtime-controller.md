@@ -4,8 +4,8 @@ title: Диагностика runtime-controller
 type: runbook
 status: approved
 owner: sre
-version: 2.0.0
-updated: 2026-08-23
+version: 2.1.0
+updated: 2026-08-28
 ---
 
 # Диагностика runtime-controller
@@ -18,9 +18,24 @@ fence/generation, image `repository@sha256`, runtime ABI, ServiceAccount,
 resources, PVC и callback ticket. Display role name, prompt или caller-supplied
 Kubernetes locator не являются authority.
 
-`kodex.agent-runner-input.v4` должен пройти schema validation. Mutable
+`kodex.agent-runner-input.v6` должен пройти schema validation. Mutable
 tag, image вне promoted repository, ABI mismatch, stale fence, extra container,
 broad ServiceAccount или host access закрыто отклоняются admission.
+
+Проверять runtime ticket можно только по metadata: `immutable=true`, labels,
+owner Pod и annotations exact RuntimeRevision/runtime config/environment
+digests. Не выводить `.data`, `stringData`, decoded `runtime.json` или process
+environment. Ticket должен содержать только `runtime.json`, execution token и
+ключи `environment-<16 hex>`; наличие Secret value в control-plane response,
+runner input, логах или audit является инцидентом.
+
+Для Secret projection сверить descriptor из авторитетной environment version с
+metadata source Secret: name, UID и `resourceVersion`; content digest проверяет
+только controller во время materialization. Pod `provider-runtime` должен
+ссылаться на execution ticket и непрозрачный projection key, а не на source
+Secret. У `role-runtime` не должно быть `env.secretKeyRef`. Несовпадение любого
+из этих инвариантов требует остановить новые materializations; обход через
+новый mutable Secret или ручную правку ticket запрещён.
 
 ## Always-hot assistant
 
@@ -54,4 +69,6 @@ PVC следует отдельной retention policy.
 ```bash
 cd services/internal/runtime-controller
 GOWORK=off go test ./...
+cd ../../..
+make test-web-only-release
 ```

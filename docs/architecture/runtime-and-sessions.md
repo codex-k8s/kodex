@@ -4,8 +4,8 @@ title: Runtime, сессии и запуски
 type: architecture
 status: approved
 owner: architect
-version: 1.1.0
-updated: 2026-08-23
+version: 1.2.0
+updated: 2026-08-28
 ---
 
 # Runtime, сессии и запуски
@@ -37,7 +37,12 @@ Frontend получает готовые nodes/edges/state/nextActions от cont
 Перед каждым turn/retry/continuation control-plane atomically pin-ит:
 
 - exact Agent/Workflow/instruction versions;
-- model/provider policy и session affinity;
+- runtime configuration ref/version/digest с model и runtime profile;
+- provider policy ref/version/digest, выбранный provider account и exact
+  credential revision UID/resourceVersion/content digest;
+- published `config.toml` overlay ref/version/digest и canonical content;
+- runtime environment ref/version/digest, Agent binding ref/version/digest,
+  non-secret values и Secret descriptors без values;
 - promoted role image digest/runtime ABI;
 - capability и integration grant revisions;
 - knowledge/artifact versions;
@@ -46,6 +51,13 @@ Frontend получает готовые nodes/edges/state/nextActions от cont
 
 Mutation любой зависимости влияет только на следующий RuntimeRevision и не
 изменяет уже выполняемую attempt.
+
+RuntimeRevision создаётся заново перед каждым turn, retry и continuation после
+авторитетного чтения текущих published versions. Она не содержит «latest»
+ссылок: runtime-controller получает точные refs, versions и digests всех
+перечисленных зависимостей. Provider account фиксируется в Session и остаётся
+неизменным между turns; новая credential revision указывается явно и не
+подменяет account affinity.
 
 ## Delegation и callback
 

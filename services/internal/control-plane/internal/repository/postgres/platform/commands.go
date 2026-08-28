@@ -141,6 +141,10 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeAgent(ctx, tx, scope, input)
 	case command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions, command.RollbackInstructions:
 		return repository.changeInstructions(ctx, tx, scope, input)
+	case command.PublishAgentRuntimeConfig, command.CreateConfigOverlayDraft, command.ValidateConfigOverlayDraft,
+		command.PublishConfigOverlayDraft, command.RollbackConfigOverlay, command.CreateRuntimeEnvironment,
+		command.PublishRuntimeEnvironment, command.RollbackRuntimeEnvironment, command.BindAgentRuntimeEnvironment:
+		return repository.changeRuntimeConfiguration(ctx, tx, scope, input)
 	case command.ChangeAgentCapability, command.ChangeAgentGrant:
 		return repository.changeAgentBinding(ctx, tx, scope, input)
 	case command.CreateWorkflow, command.UpdateWorkflow, command.ValidateWorkflow, command.PublishWorkflow, command.ArchiveWorkflow:
@@ -581,6 +585,9 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
+	if err := repository.bootstrapAgentRuntime(ctx, tx, scope.organizationID, agentID, projectID, runtime, scope.actorID); err != nil {
+		return commandOutcome{}, fmt.Errorf("bootstrap agent runtime configuration: %v: %w", err, errs.ErrUnavailable)
+	}
 	instructionRef, _ := newRef("ins")
 	digest := sha256.Sum256([]byte(input.Instructions))
 	publishedAt := time.Now().UTC()
@@ -644,8 +651,12 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 	switch input.Kind {
 	case command.UpdateAgent:
 		if payload.RuntimeRef != "" {
-			if _, err := resolveEnabledRuntime(ctx, tx, payload.RuntimeRef); err != nil {
-				return commandOutcome{}, err
+			locked, lockErr := repository.lockRuntimeAgent(ctx, tx, scope, payload.Ref)
+			if lockErr != nil {
+				return commandOutcome{}, lockErr
+			}
+			if payload.RuntimeRef != locked.runtimeProfileRef {
+				return commandOutcome{}, errs.ErrInvalid
 			}
 		}
 		err := tx.QueryRow(ctx, queryCommandsChangeagentUpdateAgentsNamePurposeRoleDescription, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Purpose, payload.RoleDescription, payload.AvatarURL, payload.RuntimeRef, payload.RoleDefinitionRef).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
@@ -1216,7 +1227,7 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	var sessionID string
 	if sessionRef == "" {
 		sessionRef, _ = newRef("ses")
-		providerAccountID, err := defaultProviderAccountID(ctx, tx, scope.organizationID)
+		providerAccountID, err := repository.selectProviderAccountForAgent(ctx, tx, scope.organizationID, targetAgentRefs[0])
 		if err != nil {
 			return commandOutcome{}, err
 		}

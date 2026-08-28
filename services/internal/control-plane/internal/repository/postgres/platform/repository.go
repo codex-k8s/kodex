@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -279,6 +280,13 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertAgentsRefSystemKeyPurpose,
 		agentRef, organizationID, systemRoleID, defaultRuntimeKey).Scan(&agentID); err != nil {
 		return errors.New("create system assistant")
+	}
+	defaultRuntime, err := resolveEnabledRuntime(ctx, tx, defaultRuntimeKey)
+	if err != nil {
+		return errors.New("resolve system assistant runtime")
+	}
+	if err := repository.bootstrapAgentRuntime(ctx, tx, organizationID, agentID, "", defaultRuntime, systemSubjectID); err != nil {
+		return fmt.Errorf("create system assistant runtime configuration: %w", err)
 	}
 	promptRef, err := newRef("ins")
 	if err != nil {

@@ -70,6 +70,61 @@ yq -e 'select(.kind == "ValidatingAdmissionPolicy" and
   "$render" >/dev/null ||
   fail 'restore evidence policy does not preserve active protection and namespace teardown'
 
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  map(select(.kind != null)) as $resources |
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "runtime-execution-ticket-exact-projection" and
+    .spec.failurePolicy == "Fail" and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "system:serviceaccount:kodex-system:runtime-controller")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "!has(object.stringData)")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "^environment-[a-f0-9]{16}$")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime.kodex.dev/environment-digest"))) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "runtime-execution-ticket-exact-projection" and
+    .spec.policyName == "runtime-execution-ticket-exact-projection" and
+    .spec.validationActions == ["Deny"]) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "runtime-role-pod-exact-secret-projection" and
+    .spec.failurePolicy == "Fail" and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "object.spec.serviceAccountName == '\''agent-runner'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "item.valueFrom.secretKeyRef.name")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "container.name != '\''provider-runtime'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "mount.subPath in ['\''runtime.json'\'', '\''token'\'']"))) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "runtime-role-pod-exact-secret-projection" and
+    .spec.policyName == "runtime-role-pod-exact-secret-projection" and
+    .spec.validationActions == ["Deny"]) and
+  any($resources[];
+    .kind == "Role" and .metadata.name == "runtime-controller" and
+    any(.rules[];
+      .apiGroups == [""] and .resources == ["secrets"] and
+      ((.verbs | sort) == (["create", "delete", "get"] | sort)))) and
+  any($resources[];
+    .kind == "ServiceAccount" and .metadata.name == "agent-runner" and
+    .automountServiceAccountToken == false)
+' >/dev/null ||
+  fail 'runtime Secret materialization admission boundary is incomplete'
+if yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "Secret" and
+    ((.data // {}) | keys | any(. == "runtime.json" or
+      test("^environment-[a-f0-9]{16}$"))))
+' >/dev/null; then
+  fail 'release render embeds a runtime input or environment Secret projection'
+fi
+
 secret_references="$temporary_directory/secret-references"
 secret_producers="$temporary_directory/secret-producers"
 {

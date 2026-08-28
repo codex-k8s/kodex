@@ -45,6 +45,81 @@ type RuntimeSelection struct {
 	Ready                                       bool
 }
 
+type ProviderAccountCandidate struct {
+	AccountRef string `json:"accountRef"`
+	Weight     int32  `json:"weight"`
+}
+
+type ProviderAccountPolicyVersion struct {
+	Ref, Mode, Digest string
+	Version           int64
+	AccountCandidates []ProviderAccountCandidate
+	CreatedAt         time.Time
+}
+
+type AgentRuntimeConfiguration struct {
+	Ref, AgentRef, RuntimeProfileRef, Provider, Model, Digest string
+	Version                                                   int64
+	ProviderPolicy                                            ProviderAccountPolicyVersion
+	CreatedAt                                                 time.Time
+}
+
+type ConfigOverlayVersion struct {
+	Ref, State, Content, Digest string
+	Version, Revision           int64
+	ValidationMessages          []string
+	CreatedAt                   time.Time
+	PublishedAt                 *time.Time
+}
+
+type RuntimeEnvironmentValue struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type RuntimeSecretDescriptor struct {
+	Name                  string `json:"name"`
+	SecretName            string `json:"secret_name"`
+	SecretKey             string `json:"secret_key"`
+	SecretUID             string `json:"secret_uid"`
+	SecretResourceVersion string `json:"secret_resource_version"`
+	ContentSHA256         string `json:"content_sha256"`
+}
+
+type RuntimeEnvironmentVersion struct {
+	Ref, Digest       string
+	Version, Revision int64
+	Values            []RuntimeEnvironmentValue
+	SecretDescriptors []RuntimeSecretDescriptor
+	CreatedAt         time.Time
+}
+
+type RuntimeEnvironmentSet struct {
+	Ref, ProjectRef, Name, Description, State string
+	Version                                   int64
+	CurrentVersion                            RuntimeEnvironmentVersion
+	UpdatedAt                                 time.Time
+}
+
+type AgentRuntimeEnvironmentBinding struct {
+	Ref, AgentRef, EnvironmentRef, Digest string
+	Version                               int64
+}
+
+type AgentRuntimeConfigurationView struct {
+	Configuration       AgentRuntimeConfiguration
+	PublishedOverlay    ConfigOverlayVersion
+	DraftOverlay        *ConfigOverlayVersion
+	EnvironmentBinding  AgentRuntimeEnvironmentBinding
+	Environment         RuntimeEnvironmentSet
+	SafeEffectiveConfig string
+	AgentVersion        int64
+}
+
+type TemplateVariable struct {
+	Name, Type, Description, Example, Source string
+}
+
 type Agent struct {
 	Ref, ProjectRef, RoleDefinitionRef, RoleDefinitionName, SystemKey string
 	Name, Purpose, RoleDescription, AvatarURL                         string

@@ -1,0 +1,48 @@
+package platform
+
+import _ "embed"
+
+var (
+	//go:embed sql/runtime_configuration__get_agent_view.sql
+	queryRuntimeConfigurationGetAgentView string
+	//go:embed sql/runtime_configuration__list_agent_versions.sql
+	queryRuntimeConfigurationListAgentVersions string
+	//go:embed sql/runtime_configuration__list_environments.sql
+	queryRuntimeConfigurationListEnvironments string
+	//go:embed sql/runtime_configuration__get_environment.sql
+	queryRuntimeConfigurationGetEnvironment string
+	//go:embed sql/runtime_configuration__list_environment_versions.sql
+	queryRuntimeConfigurationListEnvironmentVersions string
+	//go:embed sql/runtime_configuration__lock_agent.sql
+	queryRuntimeConfigurationLockAgent string
+	//go:embed sql/runtime_configuration__validate_accounts.sql
+	queryRuntimeConfigurationValidateAccounts string
+	//go:embed sql/runtime_configuration__publish.sql
+	queryRuntimeConfigurationPublish string
+	//go:embed sql/runtime_configuration__create_overlay_draft.sql
+	queryRuntimeConfigurationCreateOverlayDraft string
+	//go:embed sql/runtime_configuration__get_overlay_draft.sql
+	queryRuntimeConfigurationGetOverlayDraft string
+	//go:embed sql/runtime_configuration__validate_overlay.sql
+	queryRuntimeConfigurationValidateOverlay string
+	//go:embed sql/runtime_configuration__publish_overlay.sql
+	queryRuntimeConfigurationPublishOverlay string
+	//go:embed sql/runtime_configuration__rollback_overlay.sql
+	queryRuntimeConfigurationRollbackOverlay string
+	//go:embed sql/runtime_configuration__create_environment.sql
+	queryRuntimeConfigurationCreateEnvironment string
+	//go:embed sql/runtime_configuration__lock_environment.sql
+	queryRuntimeConfigurationLockEnvironment string
+	//go:embed sql/runtime_configuration__publish_environment.sql
+	queryRuntimeConfigurationPublishEnvironment string
+	//go:embed sql/runtime_configuration__rollback_environment.sql
+	queryRuntimeConfigurationRollbackEnvironment string
+	//go:embed sql/runtime_configuration__bind_environment.sql
+	queryRuntimeConfigurationBindEnvironment string
+	//go:embed sql/runtime_configuration__bootstrap_agent.sql
+	queryRuntimeConfigurationBootstrapAgent string
+	//go:embed sql/runtime_configuration__activate_environment.sql
+	queryRuntimeConfigurationActivateEnvironment string
+	//go:embed sql/runtime_configuration__select_provider_account.sql
+	queryRuntimeConfigurationSelectProviderAccount string
+)
