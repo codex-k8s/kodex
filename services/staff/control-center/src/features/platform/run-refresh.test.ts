@@ -19,6 +19,8 @@ function run(state: Run["state"], lastEventSequence: number): Run {
       version: 1,
     },
     title: "Проверка обновления",
+    titleSource: "USER_EDITED",
+    activitySummary: "Проверяется актуальное состояние запуска",
     source: "CONTROL_CENTER",
     initiator: { ref: "usr_refresh01", displayName: "Владелец" },
     state,

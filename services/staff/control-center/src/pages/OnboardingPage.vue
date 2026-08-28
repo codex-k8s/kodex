@@ -3,15 +3,14 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { openAssistantWorkspace } from "@/features/assistant/events";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
-import { useContextualAssistant } from "@/features/assistant/contextual-assistant";
 
 const platform = usePlatformStore();
-const contextualAssistant = useContextualAssistant();
 const router = useRouter();
 const busy = ref(false);
 const problem = ref<AppProblem>();
@@ -75,8 +74,7 @@ onMounted(async () => {
           <button
             class="button button--primary button--large"
             type="button"
-            :disabled="!assistantReady"
-            @click="contextualAssistant.show"
+            @click="openAssistantWorkspace"
           >
             {{ $t("onboarding.startAssistant") }}
           </button>

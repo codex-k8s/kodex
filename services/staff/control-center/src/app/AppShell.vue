@@ -28,8 +28,9 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import { buildBreadcrumbs, type BreadcrumbLabels } from "@/app/breadcrumbs";
-import ContextualAssistant from "@/features/assistant/ContextualAssistant.vue";
-import { useContextualAssistant } from "@/features/assistant/contextual-assistant";
+import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
+import { resolveAssistantContext } from "@/features/assistant/context";
+import { openAssistantWorkspace } from "@/features/assistant/events";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { useRuntimeStore } from "@/features/runtime/store";
@@ -58,7 +59,6 @@ const search = ref("");
 const searchInput = ref<HTMLInputElement>();
 const searchOpen = ref(false);
 const mobileSearchOpen = ref(false);
-const contextualAssistant = useContextualAssistant();
 const searchRoot = ref<HTMLElement>();
 let disposed = false;
 
@@ -139,26 +139,32 @@ const breadcrumbs = computed(() => {
     labels,
   );
 });
-const screenTitle = computed(
-  () => breadcrumbs.value.at(-1)?.label ?? t("nav.home"),
+const assistantContext = computed(() =>
+  resolveAssistantContext(route, {
+    projects: platform.projects,
+    agents: platform.agents,
+    workflows: platform.workflows,
+    runs: platform.runs,
+  }),
 );
-const assistantContext = computed(() => {
-  const parts = [screenTitle.value];
-  if (project.value) parts.push(`${t("app.project")}: ${project.value.name}`);
-  if (typeof route.params.agentRef === "string") {
-    const agent = platform.agents[route.params.agentRef];
-    if (agent) parts.push(`${t("nav.agent")}: ${agent.name}`);
-  }
-  if (typeof route.params.workflowRef === "string") {
-    const workflow = platform.workflows[route.params.workflowRef];
-    if (workflow) parts.push(`${t("nav.workflow")}: ${workflow.name}`);
-  }
-  if (typeof route.params.runRef === "string") {
-    const run = platform.runs[route.params.runRef];
-    if (run) parts.push(`${t("nav.run")}: ${run.title}`);
-  }
-  return parts.join(" · ");
+const assistantRunEvents = computed(() => {
+  if (assistantContext.value.descriptor.entityKind !== "RUN") return [];
+  const runRef = assistantContext.value.descriptor.entityRef;
+  return Object.values(platform.events[runRef] ?? {}).sort(
+    (a, b) => a.sequence - b.sequence,
+  );
 });
+const assistantRefreshRevision = computed(() =>
+  [
+    platform.assistant?.version ?? 0,
+    ...Object.values(platform.conversations)
+      .sort((a, b) => a.ref.localeCompare(b.ref))
+      .map(
+        (item) =>
+          `${item.ref}:${String(item.version)}:${String(item.turns.length)}`,
+      ),
+  ].join("|"),
+);
 
 const globalLinks = computed(() => [
   { name: "home", label: t("nav.home"), path: "/", icon: Home },
@@ -292,9 +298,9 @@ function setOnline(): void {
 }
 
 function openAssistant(): void {
-  contextualAssistant.show();
   mobileOpen.value = false;
   closeSearch();
+  openAssistantWorkspace();
 }
 
 watch(
@@ -618,21 +624,12 @@ onBeforeUnmount(() => {
         }}</span></RouterLink
       >
     </nav>
-    <button
-      class="kodex-fab"
-      type="button"
-      :aria-label="$t('assistant.openForContext', { context: screenTitle })"
-      :title="$t('assistant.openForContext', { context: screenTitle })"
-      @click="openAssistant"
-    >
-      <Bot :size="22" aria-hidden="true" />
-    </button>
-    <ContextualAssistant
-      :open="contextualAssistant.open.value"
-      :screen-title="screenTitle"
-      :context-summary="assistantContext"
-      :project-ref="projectRef"
-      @close="contextualAssistant.hide"
+    <AssistantWorkspace
+      :context="assistantContext.descriptor"
+      :project-ref="assistantContext.projectRef"
+      :live="realtime.platformState.state === 'live'"
+      :run-events="assistantRunEvents"
+      :refresh-revision="assistantRefreshRevision"
     />
   </div>
 </template>

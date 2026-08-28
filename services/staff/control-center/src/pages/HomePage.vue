@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 
+import { openAssistantWorkspace } from "@/features/assistant/events";
 import { usePlatformStore } from "@/features/platform/store";
 import ArtifactList from "@/features/workboard/components/ArtifactList.vue";
 import AttentionList from "@/features/workboard/components/AttentionList.vue";
@@ -254,9 +255,14 @@ async function chooseProject(projectRef: string): Promise<void> {
       </div>
       <div v-else class="home-empty-action">
         <p>{{ $t("home.noEligibleProject") }}</p>
-        <RouterLink class="button button--primary" to="/projects?create=1">{{
-          $t("projects.new")
-        }}</RouterLink>
+        <div class="home-empty-actions">
+          <RouterLink class="button button--primary" to="/projects?create=1">
+            {{ $t("projects.new") }}
+          </RouterLink>
+          <button class="button" type="button" @click="openAssistantWorkspace">
+            {{ $t("onboarding.startAssistant") }}
+          </button>
+        </div>
       </div>
     </ModalDialog>
   </PageFrame>
@@ -332,6 +338,12 @@ async function chooseProject(projectRef: string): Promise<void> {
 .home-empty-action {
   padding: 18px 0 4px;
   text-align: center;
+}
+.home-empty-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 @media (max-width: 980px) {
   .home-workboard {

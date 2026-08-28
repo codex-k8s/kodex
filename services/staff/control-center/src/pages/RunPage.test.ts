@@ -119,6 +119,8 @@ describe("RunPage runtime presentation", () => {
         version: 1,
       },
       title: "Проверка отчёта",
+      titleSource: "USER_EDITED",
+      activitySummary: "Отчёт подготовлен",
       state: "SUCCEEDED",
       source: "CONTROL_CENTER",
       initiator: { ref: "usr_public_example", displayName: "Владелец" },

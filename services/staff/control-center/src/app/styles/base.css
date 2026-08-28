@@ -498,7 +498,6 @@ p {
   background: var(--accent-soft);
 }
 .nav-link:active,
-.assistant-entry:active,
 .decision-link:active,
 .button:active:not(:disabled),
 .icon-button:active:not(:disabled) {
@@ -1399,33 +1398,6 @@ time,
   .mobile-tabs a.router-link-active {
     color: var(--accent);
     background: var(--accent-soft);
-  }
-}
-
-.kodex-fab {
-  position: fixed;
-  z-index: 45;
-  right: 24px;
-  bottom: 24px;
-  display: inline-grid;
-  width: 52px;
-  height: 52px;
-  place-items: center;
-  color: #fff;
-  border: 0;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 12px 30px rgb(20 97 174 / 0.3);
-  cursor: pointer;
-}
-.kodex-fab:hover,
-.kodex-fab:focus-visible {
-  background: var(--accent-strong);
-}
-@media (max-width: 900px) {
-  .kodex-fab {
-    right: 14px;
-    bottom: 74px;
   }
 }
 
