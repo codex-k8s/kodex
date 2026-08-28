@@ -25,6 +25,7 @@ tags:
   - name: Integrations
   - name: Assistant
   - name: Administration
+  - name: Access
 
 paths:
   /api/v1/session:
@@ -1495,6 +1496,258 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AdministrationState' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/administration/access/permissions:
+    get:
+      tags: [Access]
+      operationId: listPermissionRegistry
+      responses:
+        '200':
+          description: Закрытый versioned registry прикладных полномочий
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PermissionDefinitionPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/administration/access/subjects:
+    get:
+      tags: [Access]
+      operationId: listAccessSubjects
+      parameters:
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+        - name: kind
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/AccessSubjectKind' }
+      responses:
+        '200':
+          description: Доступные для binding пользователи, OIDC-группы и service subjects
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessSubjectPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/administration/access/oidc-groups:
+    get:
+      tags: [Access]
+      operationId: listOIDCGroups
+      parameters: [{ $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Read model групп из проверенных OIDC token snapshots
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OIDCGroupPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/administration/access/roles:
+    get:
+      tags: [Access]
+      operationId: listAccessRoles
+      parameters:
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+        - name: includeArchived
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Системные и пользовательские application roles
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessRolePage' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [Access]
+      operationId: createAccessRole
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccessRoleInput' }
+      responses:
+        '201':
+          description: Пользовательская роль и immutable v1 созданы атомарно
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessRole' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/administration/access/roles/{roleRef}/versions:
+    parameters: [{ $ref: '#/components/parameters/AccessRoleRef' }]
+    get:
+      tags: [Access]
+      operationId: listAccessRoleVersions
+      parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Immutable история версий роли
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessRoleVersionPage' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [Access]
+      operationId: createAccessRoleVersion
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccessRoleInput' }
+      responses:
+        '201':
+          description: Новая immutable версия роли создана, прежние bindings не перепривязаны
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessRole' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/administration/access/roles/{roleRef}/archive:
+    parameters: [{ $ref: '#/components/parameters/AccessRoleRef' }]
+    post:
+      tags: [Access]
+      operationId: archiveAccessRole
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Роль архивирована; уже созданные bindings остаются pinned к своей версии
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessRole' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/administration/access/bindings:
+    get:
+      tags: [Access]
+      operationId: listAccessBindings
+      parameters:
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+        - name: subjectKind
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/AccessSubjectKind' }
+        - name: subjectRef
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/OpaqueRef' }
+        - name: roleRef
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/OpaqueRef' }
+        - name: projectRef
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/OpaqueRef' }
+        - name: includeRevoked
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Version-pinned bindings и их bounded scopes
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessBindingPage' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [Access]
+      operationId: createAccessBinding
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccessBindingInput' }
+      responses:
+        '201':
+          description: Binding создан
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessBinding' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/administration/access/bindings/{bindingRef}:
+    parameters: [{ $ref: '#/components/parameters/AccessBindingRef' }]
+    patch:
+      tags: [Access]
+      operationId: changeAccessBinding
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccessBindingChangeInput' }
+      responses:
+        '200':
+          description: Binding изменён по OCC
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessBinding' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [Access]
+      operationId: revokeAccessBinding
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Binding отозван
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessBinding' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/administration/access/effective-access/query:
+    post:
+      tags: [Access]
+      operationId: queryEffectiveAccess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EffectiveAccessQuery' }
+      responses:
+        '200':
+          description: Эффективные allow-only решения, рассчитанные control-plane
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EffectiveAccessPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/administration/access/effective-access/explain:
+    post:
+      tags: [Access]
+      operationId: explainAccess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExplainAccessInput' }
+      responses:
+        '200':
+          description: Безопасное объяснение одного решения
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExplainAccessResult' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/administration/access/effective-access/simulate:
+    post:
+      tags: [Access]
+      operationId: simulateAccess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SimulateAccessInput' }
+      responses:
+        '200':
+          description: Read-only сравнение текущего и предлагаемого решения
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SimulateAccessResult' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /api/v1/audit-events:
     get:
       tags: [Administration]
@@ -1558,6 +1811,16 @@ components:
       schema: { $ref: '#/components/schemas/OpaqueRef' }
     MembershipRef:
       name: membershipRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    AccessRoleRef:
+      name: roleRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    AccessBindingRef:
+      name: bindingRef
       in: path
       required: true
       schema: { $ref: '#/components/schemas/OpaqueRef' }
@@ -1661,6 +1924,284 @@ components:
     Timestamp:
       type: string
       format: date-time
+    PermissionRisk:
+      type: string
+      enum: [READ, WRITE, APPROVE, ADMIN]
+    AccessSubjectKind:
+      type: string
+      enum: [USER, OIDC_GROUP, SERVICE]
+    AccessScopeKind:
+      type: string
+      enum: [ORGANIZATION, PROJECT, RESOURCE_KIND, RESOURCE_INSTANCE]
+    AccessResourceKind:
+      type: string
+      enum: [ORGANIZATION, PROJECT, AGENT, WORKFLOW, RUN, OWNER_GATE, ARTIFACT, SCHEDULE, INTEGRATION]
+    AccessRoleKind:
+      type: string
+      enum: [SYSTEM, CUSTOM]
+    AccessRoleState:
+      type: string
+      enum: [ACTIVE, ARCHIVED]
+    AccessBindingState:
+      type: string
+      enum: [ACTIVE, REVOKED]
+    OIDCGroupState:
+      type: string
+      enum: [ACTIVE, STALE]
+    AccessDecision:
+      type: string
+      enum: [ALLOWED, DENIED]
+    PermissionDefinition:
+      type: object
+      additionalProperties: false
+      required: [key, nameKey, descriptionKey, risk, allowedScopes, resourceKinds, ownerConditionSupported]
+      properties:
+        key: { type: string, pattern: '^[a-z][a-z0-9_.-]{2,95}$' }
+        nameKey: { type: string, maxLength: 160 }
+        descriptionKey: { type: string, maxLength: 240 }
+        risk: { $ref: '#/components/schemas/PermissionRisk' }
+        allowedScopes: { type: array, minItems: 1, maxItems: 4, uniqueItems: true, items: { $ref: '#/components/schemas/AccessScopeKind' } }
+        resourceKinds: { type: array, minItems: 1, maxItems: 9, uniqueItems: true, items: { $ref: '#/components/schemas/AccessResourceKind' } }
+        ownerConditionSupported: { type: boolean }
+    PermissionDefinitionPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/PermissionDefinition' } }
+    AccessSubject:
+      type: object
+      additionalProperties: false
+      required: [ref, kind, displayName, active, oidcGroupRefs]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        kind: { $ref: '#/components/schemas/AccessSubjectKind' }
+        displayName: { type: string, maxLength: 160 }
+        active: { type: boolean }
+        oidcGroupRefs: { type: array, maxItems: 100, uniqueItems: true, items: { $ref: '#/components/schemas/OpaqueRef' } }
+    AccessSubjectPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AccessSubject' } }
+        nextPageToken: { type: string, maxLength: 512 }
+    OIDCGroup:
+      type: object
+      additionalProperties: false
+      required: [ref, displayName, state, memberCount, bindingCount, lastSeenAt, syncedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        displayName: { type: string, maxLength: 200 }
+        state: { $ref: '#/components/schemas/OIDCGroupState' }
+        memberCount: { type: integer, minimum: 0 }
+        bindingCount: { type: integer, minimum: 0 }
+        lastSeenAt: { $ref: '#/components/schemas/Timestamp' }
+        syncedAt: { $ref: '#/components/schemas/Timestamp' }
+    OIDCGroupPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/OIDCGroup' } }
+        nextPageToken: { type: string, maxLength: 512 }
+    AccessRoleVersion:
+      type: object
+      additionalProperties: false
+      required: [ref, roleRef, revision, name, description, permissionKeys, allowedScopes, changeComment, createdAt, createdBy]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        roleRef: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        permissionKeys: { type: array, minItems: 1, maxItems: 100, uniqueItems: true, items: { type: string, pattern: '^[a-z][a-z0-9_.-]{2,95}$' } }
+        allowedScopes: { type: array, minItems: 1, maxItems: 4, uniqueItems: true, items: { $ref: '#/components/schemas/AccessScopeKind' } }
+        changeComment: { type: string, maxLength: 500 }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        createdBy: { $ref: '#/components/schemas/UserSummary' }
+    AccessRole:
+      type: object
+      additionalProperties: false
+      required: [ref, version, kind, state, currentVersion, bindingCount, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1 }
+        kind: { $ref: '#/components/schemas/AccessRoleKind' }
+        state: { $ref: '#/components/schemas/AccessRoleState' }
+        currentVersion: { $ref: '#/components/schemas/AccessRoleVersion' }
+        bindingCount: { type: integer, minimum: 0 }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    AccessRolePage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AccessRole' } }
+        nextPageToken: { type: string, maxLength: 512 }
+    AccessRoleVersionPage:
+      type: object
+      additionalProperties: false
+      required: [role, items]
+      properties:
+        role: { $ref: '#/components/schemas/AccessRole' }
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AccessRoleVersion' } }
+        nextPageToken: { type: string, maxLength: 512 }
+    AccessScope:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: { $ref: '#/components/schemas/AccessScopeKind' }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        resourceKind: { $ref: '#/components/schemas/AccessResourceKind' }
+        resourceRef: { $ref: '#/components/schemas/OpaqueRef' }
+    AccessConditions:
+      type: object
+      additionalProperties: false
+      required: [requireOwner]
+      properties:
+        validFrom: { $ref: '#/components/schemas/Timestamp' }
+        validUntil: { $ref: '#/components/schemas/Timestamp' }
+        requireOwner: { type: boolean }
+    AccessBinding:
+      type: object
+      additionalProperties: false
+      required: [ref, version, state, subject, roleVersion, scope, conditions, createdAt, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1 }
+        state: { $ref: '#/components/schemas/AccessBindingState' }
+        subject: { $ref: '#/components/schemas/AccessSubject' }
+        roleVersion: { $ref: '#/components/schemas/AccessRoleVersion' }
+        scope: { $ref: '#/components/schemas/AccessScope' }
+        conditions: { $ref: '#/components/schemas/AccessConditions' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    AccessBindingPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AccessBinding' } }
+        nextPageToken: { type: string, maxLength: 512 }
+    AccessExplanationStep:
+      type: object
+      additionalProperties: false
+      required: [code, sourceKind]
+      properties:
+        code: { type: string, enum: [DIRECT_BINDING, OIDC_GROUP_BINDING, SERVICE_BINDING, ROLE_PERMISSION, SCOPE_MATCH, CONDITION_MATCH, NO_ALLOW_BINDING] }
+        bindingRef: { $ref: '#/components/schemas/OpaqueRef' }
+        roleRef: { $ref: '#/components/schemas/OpaqueRef' }
+        roleVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        sourceKind: { $ref: '#/components/schemas/AccessSubjectKind' }
+        sourceRef: { $ref: '#/components/schemas/OpaqueRef' }
+        scope: { $ref: '#/components/schemas/AccessScope' }
+    EffectiveAccessDecision:
+      type: object
+      additionalProperties: false
+      required: [permissionKey, decision, target, explanation]
+      properties:
+        permissionKey: { type: string, pattern: '^[a-z][a-z0-9_.-]{2,95}$' }
+        decision: { $ref: '#/components/schemas/AccessDecision' }
+        target: { $ref: '#/components/schemas/AccessScope' }
+        explanation: { type: array, minItems: 1, maxItems: 100, items: { $ref: '#/components/schemas/AccessExplanationStep' } }
+    AccessRoleInput:
+      type: object
+      additionalProperties: false
+      required: [name, description, permissionKeys, allowedScopes, changeComment]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        permissionKeys: { type: array, minItems: 1, maxItems: 100, uniqueItems: true, items: { type: string, pattern: '^[a-z][a-z0-9_.-]{2,95}$' } }
+        allowedScopes: { type: array, minItems: 1, maxItems: 4, uniqueItems: true, items: { $ref: '#/components/schemas/AccessScopeKind' } }
+        changeComment: { type: string, maxLength: 500 }
+    AccessBindingInput:
+      type: object
+      additionalProperties: false
+      required: [subjectKind, subjectRef, roleVersionRef, scope, conditions]
+      properties:
+        subjectKind: { $ref: '#/components/schemas/AccessSubjectKind' }
+        subjectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        roleVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        scope: { $ref: '#/components/schemas/AccessScope' }
+        conditions: { $ref: '#/components/schemas/AccessConditions' }
+    AccessBindingChangeInput:
+      type: object
+      additionalProperties: false
+      required: [roleVersionRef, scope, conditions]
+      properties:
+        roleVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        scope: { $ref: '#/components/schemas/AccessScope' }
+        conditions: { $ref: '#/components/schemas/AccessConditions' }
+    EffectiveAccessQuery:
+      type: object
+      additionalProperties: false
+      required: [target, permissionKeys]
+      properties:
+        subjectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        target: { $ref: '#/components/schemas/AccessScope' }
+        permissionKeys: { type: array, maxItems: 100, uniqueItems: true, items: { type: string, pattern: '^[a-z][a-z0-9_.-]{2,95}$' } }
+    EffectiveAccessPage:
+      type: object
+      additionalProperties: false
+      required: [subject, items, evaluatedAt]
+      properties:
+        subject: { $ref: '#/components/schemas/AccessSubject' }
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/EffectiveAccessDecision' } }
+        evaluatedAt: { $ref: '#/components/schemas/Timestamp' }
+    ExplainAccessInput:
+      type: object
+      additionalProperties: false
+      required: [permissionKey, target]
+      properties:
+        subjectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        permissionKey: { type: string, pattern: '^[a-z][a-z0-9_.-]{2,95}$' }
+        target: { $ref: '#/components/schemas/AccessScope' }
+    ExplainAccessResult:
+      type: object
+      additionalProperties: false
+      required: [subject, result, evaluatedAt]
+      properties:
+        subject: { $ref: '#/components/schemas/AccessSubject' }
+        result: { $ref: '#/components/schemas/EffectiveAccessDecision' }
+        evaluatedAt: { $ref: '#/components/schemas/Timestamp' }
+    AccessRoleDraft:
+      type: object
+      additionalProperties: false
+      required: [permissionKeys, allowedScopes]
+      properties:
+        permissionKeys: { type: array, minItems: 1, maxItems: 100, uniqueItems: true, items: { type: string, pattern: '^[a-z][a-z0-9_.-]{2,95}$' } }
+        allowedScopes: { type: array, minItems: 1, maxItems: 4, uniqueItems: true, items: { $ref: '#/components/schemas/AccessScopeKind' } }
+    AccessBindingDraft:
+      type: object
+      additionalProperties: false
+      required: [subjectKind, subjectRef, scope, conditions]
+      properties:
+        subjectKind: { $ref: '#/components/schemas/AccessSubjectKind' }
+        subjectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        scope: { $ref: '#/components/schemas/AccessScope' }
+        conditions: { $ref: '#/components/schemas/AccessConditions' }
+    SimulateAccessInput:
+      type: object
+      additionalProperties: false
+      required: [subjectRef, permissionKey, target, role, binding]
+      properties:
+        subjectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        permissionKey: { type: string, pattern: '^[a-z][a-z0-9_.-]{2,95}$' }
+        target: { $ref: '#/components/schemas/AccessScope' }
+        role: { $ref: '#/components/schemas/AccessRoleDraft' }
+        binding: { $ref: '#/components/schemas/AccessBindingDraft' }
+        evaluatedAt: { $ref: '#/components/schemas/Timestamp' }
+    SimulateAccessResult:
+      type: object
+      additionalProperties: false
+      required: [subject, current, simulated, evaluatedAt]
+      properties:
+        subject: { $ref: '#/components/schemas/AccessSubject' }
+        current: { $ref: '#/components/schemas/EffectiveAccessDecision' }
+        simulated: { $ref: '#/components/schemas/EffectiveAccessDecision' }
+        evaluatedAt: { $ref: '#/components/schemas/Timestamp' }
     NextAction:
       type: string
       enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT, MANAGE_CAPABILITIES, MANAGE_GRANTS, CREATE_PROJECT, CREATE_CONNECTION, CREATE_CONVERSATION, COMPLETE_ONBOARDING]

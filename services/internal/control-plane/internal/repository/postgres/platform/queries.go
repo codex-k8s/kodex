@@ -782,7 +782,9 @@ func (repository *Repository) applyResultActionPermissions(
 		return nil
 	}
 	permissions, err := repository.projectActionPermissions(ctx, runner, scope, projectRef)
-	if err != nil {
+	if errors.Is(err, errs.ErrNotFound) {
+		permissions = actorActionPermissions{}
+	} else if err != nil {
 		return err
 	}
 	if result.Agent != nil {

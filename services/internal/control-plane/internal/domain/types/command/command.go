@@ -78,6 +78,12 @@ const (
 	CompleteIntegrationInvocation Kind = "COMPLETE_INTEGRATION_INVOCATION"
 	CompleteInteractionDelivery   Kind = "COMPLETE_INTERACTION_DELIVERY"
 	AcceptInteractionMessage      Kind = "ACCEPT_INTERACTION_MESSAGE"
+	CreateAccessRole              Kind = "CREATE_ACCESS_ROLE"
+	CreateAccessRoleVersion       Kind = "CREATE_ACCESS_ROLE_VERSION"
+	ArchiveAccessRole             Kind = "ARCHIVE_ACCESS_ROLE"
+	CreateAccessBinding           Kind = "CREATE_ACCESS_BINDING"
+	ChangeAccessBinding           Kind = "CHANGE_ACCESS_BINDING"
+	RevokeAccessBinding           Kind = "REVOKE_ACCESS_BINDING"
 )
 
 type Command struct {
@@ -254,4 +260,6 @@ type Result struct {
 	Duplicate            bool
 	Runtime              map[string]any
 	RuntimeItems         []map[string]any
+	AccessRole           *entity.AccessRole
+	AccessBinding        *entity.AccessBinding
 }

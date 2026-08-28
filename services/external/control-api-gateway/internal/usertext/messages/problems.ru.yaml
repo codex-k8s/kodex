@@ -400,3 +400,129 @@ RUNTIME_ENVIRONMENT_CREATED:
   other: Runtime-окружение создано
 RUNTIME_ENVIRONMENT_PUBLISHED:
   other: Runtime-окружение опубликовано
+ACCESS_ROLE_CHANGED:
+  other: Роль доступа обновлена
+ACCESS_BINDING_CHANGED:
+  other: Назначение доступа обновлено
+SYSTEM_ROLE_BOOTSTRAP:
+  other: Начальная версия системной роли
+SYSTEM_ROLE_OWNER:
+  other: Владелец
+SYSTEM_ROLE_OWNER_DESCRIPTION:
+  other: Полные полномочия прикладной политики
+SYSTEM_ROLE_ADMINISTRATOR:
+  other: Администратор
+SYSTEM_ROLE_ADMINISTRATOR_DESCRIPTION:
+  other: Полные полномочия администрирования приложения
+SYSTEM_ROLE_OPERATOR:
+  other: Оператор
+SYSTEM_ROLE_OPERATOR_DESCRIPTION:
+  other: Управляет назначенными проектами и ресурсами
+SYSTEM_ROLE_MEMBER:
+  other: Участник
+SYSTEM_ROLE_MEMBER_DESCRIPTION:
+  other: Использует назначенные проекты и ресурсы
+SYSTEM_ROLE_AUDITOR:
+  other: Аудитор
+SYSTEM_ROLE_AUDITOR_DESCRIPTION:
+  other: Читает назначенные ресурсы, политику доступа и аудит
+PERMISSION_ORGANIZATION_VIEW_NAME:
+  other: Просмотр организации
+PERMISSION_ORGANIZATION_VIEW_DESCRIPTION:
+  other: Чтение сведений об организации
+PERMISSION_ORGANIZATION_MANAGE_NAME:
+  other: Управление организацией
+PERMISSION_ORGANIZATION_MANAGE_DESCRIPTION:
+  other: Изменение настроек организации
+PERMISSION_ACCESS_VIEW_NAME:
+  other: Просмотр политики доступа
+PERMISSION_ACCESS_VIEW_DESCRIPTION:
+  other: Чтение ролей, назначений, субъектов и эффективного доступа
+PERMISSION_ACCESS_MANAGE_NAME:
+  other: Управление политикой доступа
+PERMISSION_ACCESS_MANAGE_DESCRIPTION:
+  other: Создание версий ролей и изменение назначений
+PERMISSION_PROJECT_CREATE_NAME:
+  other: Создание проектов
+PERMISSION_PROJECT_CREATE_DESCRIPTION:
+  other: Создание проекта в организации
+PERMISSION_PROJECT_VIEW_NAME:
+  other: Просмотр проектов
+PERMISSION_PROJECT_VIEW_DESCRIPTION:
+  other: Чтение назначенных проектов
+PERMISSION_PROJECT_MANAGE_NAME:
+  other: Управление проектами
+PERMISSION_PROJECT_MANAGE_DESCRIPTION:
+  other: Изменение назначенных проектов
+PERMISSION_AGENT_VIEW_NAME:
+  other: Просмотр ИИ-сотрудников
+PERMISSION_AGENT_VIEW_DESCRIPTION:
+  other: Чтение назначенных ИИ-сотрудников
+PERMISSION_AGENT_MANAGE_NAME:
+  other: Управление ИИ-сотрудниками
+PERMISSION_AGENT_MANAGE_DESCRIPTION:
+  other: Изменение назначенных ИИ-сотрудников
+PERMISSION_AGENT_LAUNCH_NAME:
+  other: Запуск ИИ-сотрудников
+PERMISSION_AGENT_LAUNCH_DESCRIPTION:
+  other: Запуск задач назначенных ИИ-сотрудников
+PERMISSION_WORKFLOW_VIEW_NAME:
+  other: Просмотр workflow
+PERMISSION_WORKFLOW_VIEW_DESCRIPTION:
+  other: Чтение назначенных workflow
+PERMISSION_WORKFLOW_MANAGE_NAME:
+  other: Управление workflow
+PERMISSION_WORKFLOW_MANAGE_DESCRIPTION:
+  other: Изменение назначенных workflow
+PERMISSION_WORKFLOW_LAUNCH_NAME:
+  other: Запуск workflow
+PERMISSION_WORKFLOW_LAUNCH_DESCRIPTION:
+  other: Запуск задач назначенных workflow
+PERMISSION_RUN_VIEW_NAME:
+  other: Просмотр запусков
+PERMISSION_RUN_VIEW_DESCRIPTION:
+  other: Чтение назначенных запусков
+PERMISSION_RUN_CANCEL_OWN_NAME:
+  other: Отмена своих запусков
+PERMISSION_RUN_CANCEL_OWN_DESCRIPTION:
+  other: Отмена запусков, созданных тем же субъектом
+PERMISSION_RUN_CANCEL_ANY_NAME:
+  other: Отмена любого назначенного запуска
+PERMISSION_RUN_CANCEL_ANY_DESCRIPTION:
+  other: Отмена любого запуска в назначенной области
+PERMISSION_GATE_RESOLVE_NAME:
+  other: Решение owner gate
+PERMISSION_GATE_RESOLVE_DESCRIPTION:
+  other: Отправка решения для назначенного owner gate
+PERMISSION_ARTIFACT_VIEW_NAME:
+  other: Просмотр артефактов
+PERMISSION_ARTIFACT_VIEW_DESCRIPTION:
+  other: Чтение метаданных назначенных артефактов
+PERMISSION_ARTIFACT_DOWNLOAD_NAME:
+  other: Скачивание артефактов
+PERMISSION_ARTIFACT_DOWNLOAD_DESCRIPTION:
+  other: Скачивание назначенных артефактов
+PERMISSION_ARTIFACT_MANAGE_NAME:
+  other: Управление артефактами
+PERMISSION_ARTIFACT_MANAGE_DESCRIPTION:
+  other: Изменение назначений артефактов
+PERMISSION_SCHEDULE_VIEW_NAME:
+  other: Просмотр расписаний
+PERMISSION_SCHEDULE_VIEW_DESCRIPTION:
+  other: Чтение назначенных расписаний
+PERMISSION_SCHEDULE_MANAGE_NAME:
+  other: Управление расписаниями
+PERMISSION_SCHEDULE_MANAGE_DESCRIPTION:
+  other: Изменение назначенных расписаний
+PERMISSION_INTEGRATION_VIEW_NAME:
+  other: Просмотр интеграций
+PERMISSION_INTEGRATION_VIEW_DESCRIPTION:
+  other: Чтение назначенных подключений интеграций
+PERMISSION_INTEGRATION_MANAGE_NAME:
+  other: Управление интеграциями
+PERMISSION_INTEGRATION_MANAGE_DESCRIPTION:
+  other: Изменение назначенных подключений интеграций
+PERMISSION_AUDIT_VIEW_NAME:
+  other: Просмотр аудита
+PERMISSION_AUDIT_VIEW_DESCRIPTION:
+  other: Чтение событий аудита в назначенной области

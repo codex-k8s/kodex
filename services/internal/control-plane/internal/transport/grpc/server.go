@@ -27,6 +27,7 @@ type Server struct {
 	controlplanev1.UnimplementedRuntimeWorkServiceServer
 	controlplanev1.UnimplementedSessionArchiveWorkServiceServer
 	controlplanev1.UnimplementedInteractionWorkServiceServer
+	controlplanev1.UnimplementedAccessServiceServer
 	service *platformservice.Service
 }
 

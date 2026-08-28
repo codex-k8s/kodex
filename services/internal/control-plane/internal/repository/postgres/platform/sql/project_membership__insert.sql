@@ -16,34 +16,24 @@ WITH target_subject AS (
       AND subject.ref = @user_ref
       AND subject.active
       AND subject.issuer = 'verified-oidc-subject'
-      AND NOT EXISTS (
-          SELECT 1
-          FROM control_plane.memberships project_membership
-          WHERE project_membership.organization_id = subject.organization_id
-            AND project_membership.project_id = @project_id::uuid
-            AND project_membership.subject_id = subject.id
-      )
-), inserted AS (
-    INSERT INTO control_plane.memberships
-        (ref, organization_id, project_id, subject_id, role, permissions, active)
-    SELECT @membership_ref,
-           @organization_id::uuid,
-           @project_id::uuid,
-           target_subject.id,
-           'MEMBER',
-           @permissions::text[],
-           true
-    FROM target_subject
-    RETURNING ref, subject_id, permissions, active, version
+), created AS (
+    SELECT *
+    FROM control_plane.create_project_membership(
+        @membership_ref,
+        @organization_id::uuid,
+        @project_id::uuid,
+        (SELECT id FROM target_subject),
+        @actor_id::uuid,
+        @permissions::text[]
+    )
 )
-SELECT inserted.ref,
+SELECT created.binding_ref,
        target_subject.ref,
        target_subject.display_name,
        target_subject.email_masked,
        target_subject.active,
        target_subject.platform_role,
-       inserted.permissions,
-       inserted.active,
-       inserted.version
-FROM inserted
-JOIN target_subject ON target_subject.id = inserted.subject_id;
+       @permissions::text[],
+       created.binding_state = 'ACTIVE',
+       created.binding_version
+FROM created CROSS JOIN target_subject;

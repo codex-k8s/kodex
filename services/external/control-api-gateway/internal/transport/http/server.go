@@ -220,6 +220,11 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 		if coreReady, ok := value["coreReady"].(bool); ok {
 			output["coreReady"] = coreReady
 		}
+		for _, key := range []string{"subject", "evaluatedAt", "role"} {
+			if preserved, ok := value[key]; ok {
+				output[key] = preserved
+			}
+		}
 		value = output
 	}
 	if localizer, ok := writer.(interface{ Localize(string) string }); ok {

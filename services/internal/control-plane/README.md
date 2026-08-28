@@ -18,7 +18,8 @@ updated: 2026-08-28
 
 Сервис хранит и изменяет:
 
-- Organization, Subject, Membership и Project;
+- Organization, Subject, Project, permission registry, versioned application
+  role, user/OIDC-group/service binding и effective access;
 - Agent, RoleDefinition и immutable published Instruction;
 - Workflow и его версии;
 - Session, FIFO Turn, Run, RunNode, RunEdge и RunEvent;
@@ -42,7 +43,8 @@ boundary — `control-api-gateway`.
 
 ## Контракты
 
-- Proto: `contracts/proto/controlplane/v1/control_plane.proto`;
+- Proto: `contracts/proto/controlplane/v1/control_plane.proto` и
+  `contracts/proto/controlplane/v1/access.proto`;
 - generated Go API: `libs/go/controlplaneapi/gen/controlplane/v1`;
 - generated client composition: `libs/go/controlplaneclient`;
 - domain events: `contracts/asyncapi/control-plane/v1/asyncapi.yaml`;
@@ -55,7 +57,8 @@ boundary — `control-api-gateway`.
 Browser request не является источником actor, organization, permission,
 root lineage или ownership. `control-api-gateway` предъявляет OIDC credential
 по exact mTLS в `AuthorityProofResolverService`; `control-plane` разрешает
-Subject, Organization, Membership и Project по PostgreSQL state и выпускает
+Subject, Organization и Project по PostgreSQL state, синхронизирует bounded
+OIDC groups как identity read model и выпускает
 короткоживущее proof. Рабочий RPC проходит local issuer/verifier и exact
 operation binding из generated policy. Для worker используется отдельный
 bounded application grant и server-owned high-watermark.
@@ -70,13 +73,24 @@ data key; повтор с другим значением закрыто отк�
 ## PostgreSQL
 
 Fresh install последовательно использует baseline и forward-only расширения
-lifecycle расписаний и типизированных интеграций:
+для object storage, lifecycle расписаний, session archive, runtime configuration
+и типизированных интеграций:
 
 ```text
 cmd/cli/migrations/20260822000100_web_first_baseline.sql
+cmd/cli/migrations/20260828000100_s3_artifact_content.sql
 cmd/cli/migrations/20260828000110_schedule_archive_lifecycle.sql
+cmd/cli/migrations/20260828000200_session_archive.sql
+cmd/cli/migrations/20260828099500_runtime_environments.sql
 cmd/cli/migrations/20260828099600_integration_backend_unit.sql
 ```
+
+Canonical authority хранится только в `permission_registry`,
+`application_roles`, immutable `application_role_versions` и
+`access_bindings`. Объект `control_plane.memberships` является read-only SQL
+view для старого presentation contract. Legacy membership-команды изменяют
+canonical role/binding; exact resource binding в широкую project projection не
+попадает.
 
 Production SQL отсутствует в Go literals. Каждый запрос находится в отдельном
 `internal/repository/postgres/platform/sql/*.sql` и встраивается отдельной
@@ -117,7 +131,8 @@ Application startup после успешной migration выполняет о�
 bootstrap transaction. Она создаёт:
 
 - Organization и `installation-owner` claim contract;
-- системный Subject и membership для внутренних worker operations;
+- permission registry, пять immutable system role и OWNER binding системного
+  Subject для внутренних worker operations;
 - platform capabilities и safe default runtime profile;
 - shipped IntegrationDefinition для synthetic HTTP и GitHub, а также
   совместимое определение Mattermost для существующего `interaction-gateway`;

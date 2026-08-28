@@ -400,3 +400,129 @@ RUNTIME_ENVIRONMENT_CREATED:
   other: Runtime environment created
 RUNTIME_ENVIRONMENT_PUBLISHED:
   other: Runtime environment published
+ACCESS_ROLE_CHANGED:
+  other: Access role updated
+ACCESS_BINDING_CHANGED:
+  other: Access binding updated
+SYSTEM_ROLE_BOOTSTRAP:
+  other: Initial system role version
+SYSTEM_ROLE_OWNER:
+  other: Owner
+SYSTEM_ROLE_OWNER_DESCRIPTION:
+  other: Full application policy authority
+SYSTEM_ROLE_ADMINISTRATOR:
+  other: Administrator
+SYSTEM_ROLE_ADMINISTRATOR_DESCRIPTION:
+  other: Full application administration authority
+SYSTEM_ROLE_OPERATOR:
+  other: Operator
+SYSTEM_ROLE_OPERATOR_DESCRIPTION:
+  other: Operates assigned projects and resources
+SYSTEM_ROLE_MEMBER:
+  other: Member
+SYSTEM_ROLE_MEMBER_DESCRIPTION:
+  other: Uses assigned projects and resources
+SYSTEM_ROLE_AUDITOR:
+  other: Auditor
+SYSTEM_ROLE_AUDITOR_DESCRIPTION:
+  other: Reads assigned resources, access policy, and audit events
+PERMISSION_ORGANIZATION_VIEW_NAME:
+  other: View organization
+PERMISSION_ORGANIZATION_VIEW_DESCRIPTION:
+  other: Read organization details
+PERMISSION_ORGANIZATION_MANAGE_NAME:
+  other: Manage organization
+PERMISSION_ORGANIZATION_MANAGE_DESCRIPTION:
+  other: Change organization settings
+PERMISSION_ACCESS_VIEW_NAME:
+  other: View access policy
+PERMISSION_ACCESS_VIEW_DESCRIPTION:
+  other: Read roles, bindings, subjects, and effective access
+PERMISSION_ACCESS_MANAGE_NAME:
+  other: Manage access policy
+PERMISSION_ACCESS_MANAGE_DESCRIPTION:
+  other: Create role versions and change bindings
+PERMISSION_PROJECT_CREATE_NAME:
+  other: Create projects
+PERMISSION_PROJECT_CREATE_DESCRIPTION:
+  other: Create a project in the organization
+PERMISSION_PROJECT_VIEW_NAME:
+  other: View projects
+PERMISSION_PROJECT_VIEW_DESCRIPTION:
+  other: Read assigned projects
+PERMISSION_PROJECT_MANAGE_NAME:
+  other: Manage projects
+PERMISSION_PROJECT_MANAGE_DESCRIPTION:
+  other: Change assigned projects
+PERMISSION_AGENT_VIEW_NAME:
+  other: View AI employees
+PERMISSION_AGENT_VIEW_DESCRIPTION:
+  other: Read assigned AI employees
+PERMISSION_AGENT_MANAGE_NAME:
+  other: Manage AI employees
+PERMISSION_AGENT_MANAGE_DESCRIPTION:
+  other: Change assigned AI employees
+PERMISSION_AGENT_LAUNCH_NAME:
+  other: Launch AI employees
+PERMISSION_AGENT_LAUNCH_DESCRIPTION:
+  other: Start runs for assigned AI employees
+PERMISSION_WORKFLOW_VIEW_NAME:
+  other: View workflows
+PERMISSION_WORKFLOW_VIEW_DESCRIPTION:
+  other: Read assigned workflows
+PERMISSION_WORKFLOW_MANAGE_NAME:
+  other: Manage workflows
+PERMISSION_WORKFLOW_MANAGE_DESCRIPTION:
+  other: Change assigned workflows
+PERMISSION_WORKFLOW_LAUNCH_NAME:
+  other: Launch workflows
+PERMISSION_WORKFLOW_LAUNCH_DESCRIPTION:
+  other: Start runs for assigned workflows
+PERMISSION_RUN_VIEW_NAME:
+  other: View runs
+PERMISSION_RUN_VIEW_DESCRIPTION:
+  other: Read assigned runs
+PERMISSION_RUN_CANCEL_OWN_NAME:
+  other: Cancel own runs
+PERMISSION_RUN_CANCEL_OWN_DESCRIPTION:
+  other: Cancel runs initiated by the same subject
+PERMISSION_RUN_CANCEL_ANY_NAME:
+  other: Cancel any assigned run
+PERMISSION_RUN_CANCEL_ANY_DESCRIPTION:
+  other: Cancel any run in the assigned scope
+PERMISSION_GATE_RESOLVE_NAME:
+  other: Resolve owner gates
+PERMISSION_GATE_RESOLVE_DESCRIPTION:
+  other: Submit decisions for assigned owner gates
+PERMISSION_ARTIFACT_VIEW_NAME:
+  other: View artifacts
+PERMISSION_ARTIFACT_VIEW_DESCRIPTION:
+  other: Read assigned artifact metadata
+PERMISSION_ARTIFACT_DOWNLOAD_NAME:
+  other: Download artifacts
+PERMISSION_ARTIFACT_DOWNLOAD_DESCRIPTION:
+  other: Download assigned artifacts
+PERMISSION_ARTIFACT_MANAGE_NAME:
+  other: Manage artifacts
+PERMISSION_ARTIFACT_MANAGE_DESCRIPTION:
+  other: Change assigned artifact bindings
+PERMISSION_SCHEDULE_VIEW_NAME:
+  other: View schedules
+PERMISSION_SCHEDULE_VIEW_DESCRIPTION:
+  other: Read assigned schedules
+PERMISSION_SCHEDULE_MANAGE_NAME:
+  other: Manage schedules
+PERMISSION_SCHEDULE_MANAGE_DESCRIPTION:
+  other: Change assigned schedules
+PERMISSION_INTEGRATION_VIEW_NAME:
+  other: View integrations
+PERMISSION_INTEGRATION_VIEW_DESCRIPTION:
+  other: Read assigned integration connections
+PERMISSION_INTEGRATION_MANAGE_NAME:
+  other: Manage integrations
+PERMISSION_INTEGRATION_MANAGE_DESCRIPTION:
+  other: Change assigned integration connections
+PERMISSION_AUDIT_VIEW_NAME:
+  other: View audit events
+PERMISSION_AUDIT_VIEW_DESCRIPTION:
+  other: Read audit events in the assigned scope

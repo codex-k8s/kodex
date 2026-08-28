@@ -21,6 +21,195 @@ const (
 	SessionCookieScopes sessionCookieContextKey = "sessionCookie.Scopes"
 )
 
+// Defines values for AccessBindingState.
+const (
+	AccessBindingStateACTIVE  AccessBindingState = "ACTIVE"
+	AccessBindingStateREVOKED AccessBindingState = "REVOKED"
+)
+
+// Valid indicates whether the value is a known member of the AccessBindingState enum.
+func (e AccessBindingState) Valid() bool {
+	switch e {
+	case AccessBindingStateACTIVE:
+		return true
+	case AccessBindingStateREVOKED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccessDecision.
+const (
+	ALLOWED AccessDecision = "ALLOWED"
+	DENIED  AccessDecision = "DENIED"
+)
+
+// Valid indicates whether the value is a known member of the AccessDecision enum.
+func (e AccessDecision) Valid() bool {
+	switch e {
+	case ALLOWED:
+		return true
+	case DENIED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccessExplanationStepCode.
+const (
+	CONDITIONMATCH   AccessExplanationStepCode = "CONDITION_MATCH"
+	DIRECTBINDING    AccessExplanationStepCode = "DIRECT_BINDING"
+	NOALLOWBINDING   AccessExplanationStepCode = "NO_ALLOW_BINDING"
+	OIDCGROUPBINDING AccessExplanationStepCode = "OIDC_GROUP_BINDING"
+	ROLEPERMISSION   AccessExplanationStepCode = "ROLE_PERMISSION"
+	SCOPEMATCH       AccessExplanationStepCode = "SCOPE_MATCH"
+	SERVICEBINDING   AccessExplanationStepCode = "SERVICE_BINDING"
+)
+
+// Valid indicates whether the value is a known member of the AccessExplanationStepCode enum.
+func (e AccessExplanationStepCode) Valid() bool {
+	switch e {
+	case CONDITIONMATCH:
+		return true
+	case DIRECTBINDING:
+		return true
+	case NOALLOWBINDING:
+		return true
+	case OIDCGROUPBINDING:
+		return true
+	case ROLEPERMISSION:
+		return true
+	case SCOPEMATCH:
+		return true
+	case SERVICEBINDING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccessResourceKind.
+const (
+	AccessResourceKindAGENT        AccessResourceKind = "AGENT"
+	AccessResourceKindARTIFACT     AccessResourceKind = "ARTIFACT"
+	AccessResourceKindINTEGRATION  AccessResourceKind = "INTEGRATION"
+	AccessResourceKindORGANIZATION AccessResourceKind = "ORGANIZATION"
+	AccessResourceKindOWNERGATE    AccessResourceKind = "OWNER_GATE"
+	AccessResourceKindPROJECT      AccessResourceKind = "PROJECT"
+	AccessResourceKindRUN          AccessResourceKind = "RUN"
+	AccessResourceKindSCHEDULE     AccessResourceKind = "SCHEDULE"
+	AccessResourceKindWORKFLOW     AccessResourceKind = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the AccessResourceKind enum.
+func (e AccessResourceKind) Valid() bool {
+	switch e {
+	case AccessResourceKindAGENT:
+		return true
+	case AccessResourceKindARTIFACT:
+		return true
+	case AccessResourceKindINTEGRATION:
+		return true
+	case AccessResourceKindORGANIZATION:
+		return true
+	case AccessResourceKindOWNERGATE:
+		return true
+	case AccessResourceKindPROJECT:
+		return true
+	case AccessResourceKindRUN:
+		return true
+	case AccessResourceKindSCHEDULE:
+		return true
+	case AccessResourceKindWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccessRoleKind.
+const (
+	CUSTOM AccessRoleKind = "CUSTOM"
+	SYSTEM AccessRoleKind = "SYSTEM"
+)
+
+// Valid indicates whether the value is a known member of the AccessRoleKind enum.
+func (e AccessRoleKind) Valid() bool {
+	switch e {
+	case CUSTOM:
+		return true
+	case SYSTEM:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccessRoleState.
+const (
+	AccessRoleStateACTIVE   AccessRoleState = "ACTIVE"
+	AccessRoleStateARCHIVED AccessRoleState = "ARCHIVED"
+)
+
+// Valid indicates whether the value is a known member of the AccessRoleState enum.
+func (e AccessRoleState) Valid() bool {
+	switch e {
+	case AccessRoleStateACTIVE:
+		return true
+	case AccessRoleStateARCHIVED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccessScopeKind.
+const (
+	AccessScopeKindORGANIZATION     AccessScopeKind = "ORGANIZATION"
+	AccessScopeKindPROJECT          AccessScopeKind = "PROJECT"
+	AccessScopeKindRESOURCEINSTANCE AccessScopeKind = "RESOURCE_INSTANCE"
+	AccessScopeKindRESOURCEKIND     AccessScopeKind = "RESOURCE_KIND"
+)
+
+// Valid indicates whether the value is a known member of the AccessScopeKind enum.
+func (e AccessScopeKind) Valid() bool {
+	switch e {
+	case AccessScopeKindORGANIZATION:
+		return true
+	case AccessScopeKindPROJECT:
+		return true
+	case AccessScopeKindRESOURCEINSTANCE:
+		return true
+	case AccessScopeKindRESOURCEKIND:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccessSubjectKind.
+const (
+	AccessSubjectKindOIDCGROUP AccessSubjectKind = "OIDC_GROUP"
+	AccessSubjectKindSERVICE   AccessSubjectKind = "SERVICE"
+	AccessSubjectKindUSER      AccessSubjectKind = "USER"
+)
+
+// Valid indicates whether the value is a known member of the AccessSubjectKind enum.
+func (e AccessSubjectKind) Valid() bool {
+	switch e {
+	case AccessSubjectKindOIDCGROUP:
+		return true
+	case AccessSubjectKindSERVICE:
+		return true
+	case AccessSubjectKindUSER:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdministrationStateProfile.
 const (
 	WEBONLY                 AdministrationStateProfile = "WEB_ONLY"
@@ -215,19 +404,19 @@ func (e AssistantPlanOperationType) Valid() bool {
 
 // Defines values for AssistantTurnRole.
 const (
-	ASSISTANT     AssistantTurnRole = "ASSISTANT"
-	SYSTEMRECEIPT AssistantTurnRole = "SYSTEM_RECEIPT"
-	USER          AssistantTurnRole = "USER"
+	AssistantTurnRoleASSISTANT     AssistantTurnRole = "ASSISTANT"
+	AssistantTurnRoleSYSTEMRECEIPT AssistantTurnRole = "SYSTEM_RECEIPT"
+	AssistantTurnRoleUSER          AssistantTurnRole = "USER"
 )
 
 // Valid indicates whether the value is a known member of the AssistantTurnRole enum.
 func (e AssistantTurnRole) Valid() bool {
 	switch e {
-	case ASSISTANT:
+	case AssistantTurnRoleASSISTANT:
 		return true
-	case SYSTEMRECEIPT:
+	case AssistantTurnRoleSYSTEMRECEIPT:
 		return true
-	case USER:
+	case AssistantTurnRoleUSER:
 		return true
 	default:
 		return false
@@ -843,6 +1032,24 @@ func (e NextAction) Valid() bool {
 	}
 }
 
+// Defines values for OIDCGroupState.
+const (
+	OIDCGroupStateACTIVE OIDCGroupState = "ACTIVE"
+	OIDCGroupStateSTALE  OIDCGroupState = "STALE"
+)
+
+// Valid indicates whether the value is a known member of the OIDCGroupState enum.
+func (e OIDCGroupState) Valid() bool {
+	switch e {
+	case OIDCGroupStateACTIVE:
+		return true
+	case OIDCGroupStateSTALE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OwnerGateAllowedDecisions.
 const (
 	OwnerGateAllowedDecisionsAPPROVE        OwnerGateAllowedDecisions = "APPROVE"
@@ -915,6 +1122,30 @@ func (e OwnerGateState) Valid() bool {
 	case OwnerGateStateOPEN:
 		return true
 	case OwnerGateStateREJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PermissionRisk.
+const (
+	PermissionRiskADMIN   PermissionRisk = "ADMIN"
+	PermissionRiskAPPROVE PermissionRisk = "APPROVE"
+	PermissionRiskREAD    PermissionRisk = "READ"
+	PermissionRiskWRITE   PermissionRisk = "WRITE"
+)
+
+// Valid indicates whether the value is a known member of the PermissionRisk enum.
+func (e PermissionRisk) Valid() bool {
+	switch e {
+	case PermissionRiskADMIN:
+		return true
+	case PermissionRiskAPPROVE:
+		return true
+	case PermissionRiskREAD:
+		return true
+	case PermissionRiskWRITE:
 		return true
 	default:
 		return false
@@ -1703,22 +1934,22 @@ func (e ScheduleSessionPolicy) Valid() bool {
 
 // Defines values for ScheduleState.
 const (
-	ACTIVE         ScheduleState = "ACTIVE"
-	ARCHIVED       ScheduleState = "ARCHIVED"
-	NEEDSATTENTION ScheduleState = "NEEDS_ATTENTION"
-	PAUSED         ScheduleState = "PAUSED"
+	ScheduleStateACTIVE         ScheduleState = "ACTIVE"
+	ScheduleStateARCHIVED       ScheduleState = "ARCHIVED"
+	ScheduleStateNEEDSATTENTION ScheduleState = "NEEDS_ATTENTION"
+	ScheduleStatePAUSED         ScheduleState = "PAUSED"
 )
 
 // Valid indicates whether the value is a known member of the ScheduleState enum.
 func (e ScheduleState) Valid() bool {
 	switch e {
-	case ACTIVE:
+	case ScheduleStateACTIVE:
 		return true
-	case ARCHIVED:
+	case ScheduleStateARCHIVED:
 		return true
-	case NEEDSATTENTION:
+	case ScheduleStateNEEDSATTENTION:
 		return true
-	case PAUSED:
+	case ScheduleStatePAUSED:
 		return true
 	default:
 		return false
@@ -2069,22 +2300,22 @@ func (e WorkflowStepGateDecisions) Valid() bool {
 
 // Defines values for WorkflowStepInputGateDecisions.
 const (
-	WorkflowStepInputGateDecisionsAPPROVE        WorkflowStepInputGateDecisions = "APPROVE"
-	WorkflowStepInputGateDecisionsCANCEL         WorkflowStepInputGateDecisions = "CANCEL"
-	WorkflowStepInputGateDecisionsREJECT         WorkflowStepInputGateDecisions = "REJECT"
-	WorkflowStepInputGateDecisionsREQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
+	APPROVE        WorkflowStepInputGateDecisions = "APPROVE"
+	CANCEL         WorkflowStepInputGateDecisions = "CANCEL"
+	REJECT         WorkflowStepInputGateDecisions = "REJECT"
+	REQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
 )
 
 // Valid indicates whether the value is a known member of the WorkflowStepInputGateDecisions enum.
 func (e WorkflowStepInputGateDecisions) Valid() bool {
 	switch e {
-	case WorkflowStepInputGateDecisionsAPPROVE:
+	case APPROVE:
 		return true
-	case WorkflowStepInputGateDecisionsCANCEL:
+	case CANCEL:
 		return true
-	case WorkflowStepInputGateDecisionsREJECT:
+	case REJECT:
 		return true
-	case WorkflowStepInputGateDecisionsREQUESTCHANGES:
+	case REQUESTCHANGES:
 		return true
 	default:
 		return false
@@ -2122,6 +2353,167 @@ func (e CommandSystemAssistantJSONBodyAction) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// AccessBinding defines model for AccessBinding.
+type AccessBinding struct {
+	Conditions  AccessConditions   `json:"conditions"`
+	CreatedAt   Timestamp          `json:"createdAt"`
+	Ref         OpaqueRef          `json:"ref"`
+	RoleVersion AccessRoleVersion  `json:"roleVersion"`
+	Scope       AccessScope        `json:"scope"`
+	State       AccessBindingState `json:"state"`
+	Subject     AccessSubject      `json:"subject"`
+	UpdatedAt   Timestamp          `json:"updatedAt"`
+	Version     int64              `json:"version"`
+}
+
+// AccessBindingChangeInput defines model for AccessBindingChangeInput.
+type AccessBindingChangeInput struct {
+	Conditions     AccessConditions `json:"conditions"`
+	RoleVersionRef OpaqueRef        `json:"roleVersionRef"`
+	Scope          AccessScope      `json:"scope"`
+}
+
+// AccessBindingDraft defines model for AccessBindingDraft.
+type AccessBindingDraft struct {
+	Conditions  AccessConditions  `json:"conditions"`
+	Scope       AccessScope       `json:"scope"`
+	SubjectKind AccessSubjectKind `json:"subjectKind"`
+	SubjectRef  OpaqueRef         `json:"subjectRef"`
+}
+
+// AccessBindingInput defines model for AccessBindingInput.
+type AccessBindingInput struct {
+	Conditions     AccessConditions  `json:"conditions"`
+	RoleVersionRef OpaqueRef         `json:"roleVersionRef"`
+	Scope          AccessScope       `json:"scope"`
+	SubjectKind    AccessSubjectKind `json:"subjectKind"`
+	SubjectRef     OpaqueRef         `json:"subjectRef"`
+}
+
+// AccessBindingPage defines model for AccessBindingPage.
+type AccessBindingPage struct {
+	Items         []AccessBinding `json:"items"`
+	NextPageToken *string         `json:"nextPageToken,omitempty"`
+}
+
+// AccessBindingState defines model for AccessBindingState.
+type AccessBindingState string
+
+// AccessConditions defines model for AccessConditions.
+type AccessConditions struct {
+	RequireOwner bool       `json:"requireOwner"`
+	ValidFrom    *Timestamp `json:"validFrom,omitempty"`
+	ValidUntil   *Timestamp `json:"validUntil,omitempty"`
+}
+
+// AccessDecision defines model for AccessDecision.
+type AccessDecision string
+
+// AccessExplanationStep defines model for AccessExplanationStep.
+type AccessExplanationStep struct {
+	BindingRef     *OpaqueRef                `json:"bindingRef,omitempty"`
+	Code           AccessExplanationStepCode `json:"code"`
+	RoleRef        *OpaqueRef                `json:"roleRef,omitempty"`
+	RoleVersionRef *OpaqueRef                `json:"roleVersionRef,omitempty"`
+	Scope          *AccessScope              `json:"scope,omitempty"`
+	SourceKind     AccessSubjectKind         `json:"sourceKind"`
+	SourceRef      *OpaqueRef                `json:"sourceRef,omitempty"`
+}
+
+// AccessExplanationStepCode defines model for AccessExplanationStep.Code.
+type AccessExplanationStepCode string
+
+// AccessResourceKind defines model for AccessResourceKind.
+type AccessResourceKind string
+
+// AccessRole defines model for AccessRole.
+type AccessRole struct {
+	BindingCount   int               `json:"bindingCount"`
+	CurrentVersion AccessRoleVersion `json:"currentVersion"`
+	Kind           AccessRoleKind    `json:"kind"`
+	Ref            OpaqueRef         `json:"ref"`
+	State          AccessRoleState   `json:"state"`
+	UpdatedAt      Timestamp         `json:"updatedAt"`
+	Version        int64             `json:"version"`
+}
+
+// AccessRoleDraft defines model for AccessRoleDraft.
+type AccessRoleDraft struct {
+	AllowedScopes  []AccessScopeKind `json:"allowedScopes"`
+	PermissionKeys []string          `json:"permissionKeys"`
+}
+
+// AccessRoleInput defines model for AccessRoleInput.
+type AccessRoleInput struct {
+	AllowedScopes  []AccessScopeKind `json:"allowedScopes"`
+	ChangeComment  string            `json:"changeComment"`
+	Description    string            `json:"description"`
+	Name           string            `json:"name"`
+	PermissionKeys []string          `json:"permissionKeys"`
+}
+
+// AccessRoleKind defines model for AccessRoleKind.
+type AccessRoleKind string
+
+// AccessRolePage defines model for AccessRolePage.
+type AccessRolePage struct {
+	Items         []AccessRole `json:"items"`
+	NextPageToken *string      `json:"nextPageToken,omitempty"`
+}
+
+// AccessRoleState defines model for AccessRoleState.
+type AccessRoleState string
+
+// AccessRoleVersion defines model for AccessRoleVersion.
+type AccessRoleVersion struct {
+	AllowedScopes  []AccessScopeKind `json:"allowedScopes"`
+	ChangeComment  string            `json:"changeComment"`
+	CreatedAt      Timestamp         `json:"createdAt"`
+	CreatedBy      UserSummary       `json:"createdBy"`
+	Description    string            `json:"description"`
+	Name           string            `json:"name"`
+	PermissionKeys []string          `json:"permissionKeys"`
+	Ref            OpaqueRef         `json:"ref"`
+	Revision       int64             `json:"revision"`
+	RoleRef        OpaqueRef         `json:"roleRef"`
+}
+
+// AccessRoleVersionPage defines model for AccessRoleVersionPage.
+type AccessRoleVersionPage struct {
+	Items         []AccessRoleVersion `json:"items"`
+	NextPageToken *string             `json:"nextPageToken,omitempty"`
+	Role          AccessRole          `json:"role"`
+}
+
+// AccessScope defines model for AccessScope.
+type AccessScope struct {
+	Kind         AccessScopeKind     `json:"kind"`
+	ProjectRef   *OpaqueRef          `json:"projectRef,omitempty"`
+	ResourceKind *AccessResourceKind `json:"resourceKind,omitempty"`
+	ResourceRef  *OpaqueRef          `json:"resourceRef,omitempty"`
+}
+
+// AccessScopeKind defines model for AccessScopeKind.
+type AccessScopeKind string
+
+// AccessSubject defines model for AccessSubject.
+type AccessSubject struct {
+	Active        bool              `json:"active"`
+	DisplayName   string            `json:"displayName"`
+	Kind          AccessSubjectKind `json:"kind"`
+	OidcGroupRefs []OpaqueRef       `json:"oidcGroupRefs"`
+	Ref           OpaqueRef         `json:"ref"`
+}
+
+// AccessSubjectKind defines model for AccessSubjectKind.
+type AccessSubjectKind string
+
+// AccessSubjectPage defines model for AccessSubjectPage.
+type AccessSubjectPage struct {
+	Items         []AccessSubject `json:"items"`
+	NextPageToken *string         `json:"nextPageToken,omitempty"`
 }
 
 // AdministrationState defines model for AdministrationState.
@@ -2406,6 +2798,42 @@ type ConfigOverlayVersion struct {
 	Version            int64      `json:"version"`
 }
 
+// EffectiveAccessDecision defines model for EffectiveAccessDecision.
+type EffectiveAccessDecision struct {
+	Decision      AccessDecision          `json:"decision"`
+	Explanation   []AccessExplanationStep `json:"explanation"`
+	PermissionKey string                  `json:"permissionKey"`
+	Target        AccessScope             `json:"target"`
+}
+
+// EffectiveAccessPage defines model for EffectiveAccessPage.
+type EffectiveAccessPage struct {
+	EvaluatedAt Timestamp                 `json:"evaluatedAt"`
+	Items       []EffectiveAccessDecision `json:"items"`
+	Subject     AccessSubject             `json:"subject"`
+}
+
+// EffectiveAccessQuery defines model for EffectiveAccessQuery.
+type EffectiveAccessQuery struct {
+	PermissionKeys []string    `json:"permissionKeys"`
+	SubjectRef     *OpaqueRef  `json:"subjectRef,omitempty"`
+	Target         AccessScope `json:"target"`
+}
+
+// ExplainAccessInput defines model for ExplainAccessInput.
+type ExplainAccessInput struct {
+	PermissionKey string      `json:"permissionKey"`
+	SubjectRef    *OpaqueRef  `json:"subjectRef,omitempty"`
+	Target        AccessScope `json:"target"`
+}
+
+// ExplainAccessResult defines model for ExplainAccessResult.
+type ExplainAccessResult struct {
+	EvaluatedAt Timestamp               `json:"evaluatedAt"`
+	Result      EffectiveAccessDecision `json:"result"`
+	Subject     AccessSubject           `json:"subject"`
+}
+
 // GateResolution defines model for GateResolution.
 type GateResolution struct {
 	Comment  *string                `json:"comment,omitempty"`
@@ -2632,6 +3060,26 @@ type MembershipPlatformRole string
 // NextAction defines model for NextAction.
 type NextAction string
 
+// OIDCGroup defines model for OIDCGroup.
+type OIDCGroup struct {
+	BindingCount int            `json:"bindingCount"`
+	DisplayName  string         `json:"displayName"`
+	LastSeenAt   Timestamp      `json:"lastSeenAt"`
+	MemberCount  int            `json:"memberCount"`
+	Ref          OpaqueRef      `json:"ref"`
+	State        OIDCGroupState `json:"state"`
+	SyncedAt     Timestamp      `json:"syncedAt"`
+}
+
+// OIDCGroupPage defines model for OIDCGroupPage.
+type OIDCGroupPage struct {
+	Items         []OIDCGroup `json:"items"`
+	NextPageToken *string     `json:"nextPageToken,omitempty"`
+}
+
+// OIDCGroupState defines model for OIDCGroupState.
+type OIDCGroupState string
+
 // OpaqueRef defines model for OpaqueRef.
 type OpaqueRef = string
 
@@ -2677,6 +3125,25 @@ type OwnerGateDecision string
 
 // OwnerGateState defines model for OwnerGate.State.
 type OwnerGateState string
+
+// PermissionDefinition defines model for PermissionDefinition.
+type PermissionDefinition struct {
+	AllowedScopes           []AccessScopeKind    `json:"allowedScopes"`
+	DescriptionKey          string               `json:"descriptionKey"`
+	Key                     string               `json:"key"`
+	NameKey                 string               `json:"nameKey"`
+	OwnerConditionSupported bool                 `json:"ownerConditionSupported"`
+	ResourceKinds           []AccessResourceKind `json:"resourceKinds"`
+	Risk                    PermissionRisk       `json:"risk"`
+}
+
+// PermissionDefinitionPage defines model for PermissionDefinitionPage.
+type PermissionDefinitionPage struct {
+	Items []PermissionDefinition `json:"items"`
+}
+
+// PermissionRisk defines model for PermissionRisk.
+type PermissionRisk string
 
 // PlatformCapability defines model for PlatformCapability.
 type PlatformCapability struct {
@@ -3281,6 +3748,24 @@ type SearchResultPage struct {
 	Items []SearchResult `json:"items"`
 }
 
+// SimulateAccessInput defines model for SimulateAccessInput.
+type SimulateAccessInput struct {
+	Binding       AccessBindingDraft `json:"binding"`
+	EvaluatedAt   *Timestamp         `json:"evaluatedAt,omitempty"`
+	PermissionKey string             `json:"permissionKey"`
+	Role          AccessRoleDraft    `json:"role"`
+	SubjectRef    OpaqueRef          `json:"subjectRef"`
+	Target        AccessScope        `json:"target"`
+}
+
+// SimulateAccessResult defines model for SimulateAccessResult.
+type SimulateAccessResult struct {
+	Current     EffectiveAccessDecision `json:"current"`
+	EvaluatedAt Timestamp               `json:"evaluatedAt"`
+	Simulated   EffectiveAccessDecision `json:"simulated"`
+	Subject     AccessSubject           `json:"subject"`
+}
+
 // SystemAssistant defines model for SystemAssistant.
 type SystemAssistant struct {
 	CorePromptRevision        string                      `json:"corePromptRevision"`
@@ -3464,6 +3949,12 @@ type WorkflowStepInput struct {
 // WorkflowStepInputGateDecisions defines model for WorkflowStepInput.GateDecisions.
 type WorkflowStepInputGateDecisions string
 
+// AccessBindingRef defines model for AccessBindingRef.
+type AccessBindingRef = OpaqueRef
+
+// AccessRoleRef defines model for AccessRoleRef.
+type AccessRoleRef = OpaqueRef
+
 // AgentRef defines model for AgentRef.
 type AgentRef = OpaqueRef
 
@@ -3538,6 +4029,85 @@ type oidcBearerContextKey string
 
 // sessionCookieContextKey is the context key for sessionCookie security scheme
 type sessionCookieContextKey string
+
+// ListAccessBindingsParams defines parameters for ListAccessBindings.
+type ListAccessBindingsParams struct {
+	PageSize       *PageSize          `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken      *PageToken         `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	SubjectKind    *AccessSubjectKind `form:"subjectKind,omitempty" json:"subjectKind,omitempty"`
+	SubjectRef     *OpaqueRef         `form:"subjectRef,omitempty" json:"subjectRef,omitempty"`
+	RoleRef        *OpaqueRef         `form:"roleRef,omitempty" json:"roleRef,omitempty"`
+	ProjectRef     *OpaqueRef         `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	IncludeRevoked *bool              `form:"includeRevoked,omitempty" json:"includeRevoked,omitempty"`
+}
+
+// CreateAccessBindingParams defines parameters for CreateAccessBinding.
+type CreateAccessBindingParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// RevokeAccessBindingParams defines parameters for RevokeAccessBinding.
+type RevokeAccessBindingParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ChangeAccessBindingParams defines parameters for ChangeAccessBinding.
+type ChangeAccessBindingParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListOIDCGroupsParams defines parameters for ListOIDCGroups.
+type ListOIDCGroupsParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ListAccessRolesParams defines parameters for ListAccessRoles.
+type ListAccessRolesParams struct {
+	PageSize        *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken       *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	IncludeArchived *bool      `form:"includeArchived,omitempty" json:"includeArchived,omitempty"`
+}
+
+// CreateAccessRoleParams defines parameters for CreateAccessRole.
+type CreateAccessRoleParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ArchiveAccessRoleParams defines parameters for ArchiveAccessRole.
+type ArchiveAccessRoleParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListAccessRoleVersionsParams defines parameters for ListAccessRoleVersions.
+type ListAccessRoleVersionsParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// CreateAccessRoleVersionParams defines parameters for CreateAccessRoleVersion.
+type CreateAccessRoleVersionParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListAccessSubjectsParams defines parameters for ListAccessSubjects.
+type ListAccessSubjectsParams struct {
+	Query     *Query             `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize          `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken         `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	Kind      *AccessSubjectKind `form:"kind,omitempty" json:"kind,omitempty"`
+}
 
 // ListPlatformMembershipsParams defines parameters for ListPlatformMemberships.
 type ListPlatformMembershipsParams struct {
@@ -4048,6 +4618,27 @@ type CommandWorkflowParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// CreateAccessBindingJSONRequestBody defines body for CreateAccessBinding for application/json ContentType.
+type CreateAccessBindingJSONRequestBody = AccessBindingInput
+
+// ChangeAccessBindingJSONRequestBody defines body for ChangeAccessBinding for application/json ContentType.
+type ChangeAccessBindingJSONRequestBody = AccessBindingChangeInput
+
+// ExplainAccessJSONRequestBody defines body for ExplainAccess for application/json ContentType.
+type ExplainAccessJSONRequestBody = ExplainAccessInput
+
+// QueryEffectiveAccessJSONRequestBody defines body for QueryEffectiveAccess for application/json ContentType.
+type QueryEffectiveAccessJSONRequestBody = EffectiveAccessQuery
+
+// SimulateAccessJSONRequestBody defines body for SimulateAccess for application/json ContentType.
+type SimulateAccessJSONRequestBody = SimulateAccessInput
+
+// CreateAccessRoleJSONRequestBody defines body for CreateAccessRole for application/json ContentType.
+type CreateAccessRoleJSONRequestBody = AccessRoleInput
+
+// CreateAccessRoleVersionJSONRequestBody defines body for CreateAccessRoleVersion for application/json ContentType.
+type CreateAccessRoleVersionJSONRequestBody = AccessRoleInput
+
 // AddPlatformMembershipJSONRequestBody defines body for AddPlatformMembership for application/json ContentType.
 type AddPlatformMembershipJSONRequestBody = PlatformMembershipCreateInput
 
@@ -4173,6 +4764,51 @@ type ServerInterface interface {
 
 	// (GET /api/v1/administration)
 	GetAdministration(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/administration/access/bindings)
+	ListAccessBindings(w http.ResponseWriter, r *http.Request, params ListAccessBindingsParams)
+
+	// (POST /api/v1/administration/access/bindings)
+	CreateAccessBinding(w http.ResponseWriter, r *http.Request, params CreateAccessBindingParams)
+
+	// (DELETE /api/v1/administration/access/bindings/{bindingRef})
+	RevokeAccessBinding(w http.ResponseWriter, r *http.Request, bindingRef AccessBindingRef, params RevokeAccessBindingParams)
+
+	// (PATCH /api/v1/administration/access/bindings/{bindingRef})
+	ChangeAccessBinding(w http.ResponseWriter, r *http.Request, bindingRef AccessBindingRef, params ChangeAccessBindingParams)
+
+	// (POST /api/v1/administration/access/effective-access/explain)
+	ExplainAccess(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/administration/access/effective-access/query)
+	QueryEffectiveAccess(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/administration/access/effective-access/simulate)
+	SimulateAccess(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/administration/access/oidc-groups)
+	ListOIDCGroups(w http.ResponseWriter, r *http.Request, params ListOIDCGroupsParams)
+
+	// (GET /api/v1/administration/access/permissions)
+	ListPermissionRegistry(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/administration/access/roles)
+	ListAccessRoles(w http.ResponseWriter, r *http.Request, params ListAccessRolesParams)
+
+	// (POST /api/v1/administration/access/roles)
+	CreateAccessRole(w http.ResponseWriter, r *http.Request, params CreateAccessRoleParams)
+
+	// (POST /api/v1/administration/access/roles/{roleRef}/archive)
+	ArchiveAccessRole(w http.ResponseWriter, r *http.Request, roleRef AccessRoleRef, params ArchiveAccessRoleParams)
+
+	// (GET /api/v1/administration/access/roles/{roleRef}/versions)
+	ListAccessRoleVersions(w http.ResponseWriter, r *http.Request, roleRef AccessRoleRef, params ListAccessRoleVersionsParams)
+
+	// (POST /api/v1/administration/access/roles/{roleRef}/versions)
+	CreateAccessRoleVersion(w http.ResponseWriter, r *http.Request, roleRef AccessRoleRef, params CreateAccessRoleVersionParams)
+
+	// (GET /api/v1/administration/access/subjects)
+	ListAccessSubjects(w http.ResponseWriter, r *http.Request, params ListAccessSubjectsParams)
 
 	// (GET /api/v1/administration/members)
 	ListPlatformMemberships(w http.ResponseWriter, r *http.Request, params ListPlatformMembershipsParams)
@@ -4471,6 +5107,1044 @@ func (siw *ServerInterfaceWrapper) GetAdministration(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAdministration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAccessBindings operation middleware
+func (siw *ServerInterfaceWrapper) ListAccessBindings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAccessBindingsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "subjectKind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "subjectKind", r.URL.Query(), &params.SubjectKind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subjectKind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subjectKind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "subjectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "subjectRef", r.URL.Query(), &params.SubjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subjectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subjectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "roleRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "roleRef", r.URL.Query(), &params.RoleRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "roleRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roleRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "includeRevoked" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "includeRevoked", r.URL.Query(), &params.IncludeRevoked, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "includeRevoked"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "includeRevoked", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAccessBindings(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAccessBinding operation middleware
+func (siw *ServerInterfaceWrapper) CreateAccessBinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateAccessBindingParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAccessBinding(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeAccessBinding operation middleware
+func (siw *ServerInterfaceWrapper) RevokeAccessBinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bindingRef" -------------
+	var bindingRef AccessBindingRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bindingRef", r.PathValue("bindingRef"), &bindingRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bindingRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeAccessBindingParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeAccessBinding(w, r, bindingRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeAccessBinding operation middleware
+func (siw *ServerInterfaceWrapper) ChangeAccessBinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bindingRef" -------------
+	var bindingRef AccessBindingRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bindingRef", r.PathValue("bindingRef"), &bindingRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bindingRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangeAccessBindingParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeAccessBinding(w, r, bindingRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExplainAccess operation middleware
+func (siw *ServerInterfaceWrapper) ExplainAccess(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExplainAccess(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// QueryEffectiveAccess operation middleware
+func (siw *ServerInterfaceWrapper) QueryEffectiveAccess(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.QueryEffectiveAccess(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SimulateAccess operation middleware
+func (siw *ServerInterfaceWrapper) SimulateAccess(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SimulateAccess(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOIDCGroups operation middleware
+func (siw *ServerInterfaceWrapper) ListOIDCGroups(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOIDCGroupsParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOIDCGroups(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPermissionRegistry operation middleware
+func (siw *ServerInterfaceWrapper) ListPermissionRegistry(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPermissionRegistry(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAccessRoles operation middleware
+func (siw *ServerInterfaceWrapper) ListAccessRoles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAccessRolesParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "includeArchived" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "includeArchived", r.URL.Query(), &params.IncludeArchived, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "includeArchived"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "includeArchived", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAccessRoles(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAccessRole operation middleware
+func (siw *ServerInterfaceWrapper) CreateAccessRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateAccessRoleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAccessRole(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveAccessRole operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveAccessRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "roleRef" -------------
+	var roleRef AccessRoleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "roleRef", r.PathValue("roleRef"), &roleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ArchiveAccessRoleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveAccessRole(w, r, roleRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAccessRoleVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListAccessRoleVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "roleRef" -------------
+	var roleRef AccessRoleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "roleRef", r.PathValue("roleRef"), &roleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAccessRoleVersionsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAccessRoleVersions(w, r, roleRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAccessRoleVersion operation middleware
+func (siw *ServerInterfaceWrapper) CreateAccessRoleVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "roleRef" -------------
+	var roleRef AccessRoleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "roleRef", r.PathValue("roleRef"), &roleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateAccessRoleVersionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAccessRoleVersion(w, r, roleRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAccessSubjects operation middleware
+func (siw *ServerInterfaceWrapper) ListAccessSubjects(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAccessSubjectsParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAccessSubjects(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11409,6 +13083,21 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/administration", wrapper.GetAdministration)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/administration/access/bindings", wrapper.ListAccessBindings)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/administration/access/bindings", wrapper.CreateAccessBinding)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/administration/access/bindings/{bindingRef}", wrapper.RevokeAccessBinding)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/administration/access/bindings/{bindingRef}", wrapper.ChangeAccessBinding)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/administration/access/effective-access/explain", wrapper.ExplainAccess)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/administration/access/effective-access/query", wrapper.QueryEffectiveAccess)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/administration/access/effective-access/simulate", wrapper.SimulateAccess)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/administration/access/oidc-groups", wrapper.ListOIDCGroups)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/administration/access/permissions", wrapper.ListPermissionRegistry)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/administration/access/roles", wrapper.ListAccessRoles)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/administration/access/roles", wrapper.CreateAccessRole)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/administration/access/roles/{roleRef}/archive", wrapper.ArchiveAccessRole)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/administration/access/roles/{roleRef}/versions", wrapper.ListAccessRoleVersions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/administration/access/roles/{roleRef}/versions", wrapper.CreateAccessRoleVersion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/administration/access/subjects", wrapper.ListAccessSubjects)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/administration/members", wrapper.ListPlatformMemberships)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/administration/members", wrapper.AddPlatformMembership)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/administration/members/{membershipRef}", wrapper.RemovePlatformMembership)

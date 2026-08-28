@@ -12,6 +12,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -447,6 +448,70 @@ func (service *Service) ListAuditEvents(ctx context.Context, p value.Principal, 
 	return service.repository.ListAuditEvents(ctx, p, filter)
 }
 
+func (service *Service) ListPermissionRegistry(ctx context.Context, p value.Principal) ([]entity.PermissionDefinition, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return service.repository.ListPermissionRegistry(ctx, p)
+}
+
+func (service *Service) ListAccessSubjects(ctx context.Context, p value.Principal, filter query.Filter, kind string) ([]entity.AccessSubject, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListAccessSubjects(ctx, p, filter, kind)
+}
+
+func (service *Service) ListOIDCGroups(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.OIDCGroup, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListOIDCGroups(ctx, p, filter)
+}
+
+func (service *Service) ListAccessRoles(ctx context.Context, p value.Principal, page query.Page, includeArchived bool) ([]entity.AccessRole, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListAccessRoles(ctx, p, page, includeArchived)
+}
+
+func (service *Service) ListAccessRoleVersions(ctx context.Context, p value.Principal, roleRef string, page query.Page) (entity.AccessRole, []entity.AccessRoleVersion, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.AccessRole{}, nil, "", err
+	}
+	return service.repository.ListAccessRoleVersions(ctx, p, roleRef, page)
+}
+
+func (service *Service) ListAccessBindings(ctx context.Context, p value.Principal, filter query.AccessBindingFilter) ([]entity.AccessBinding, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListAccessBindings(ctx, p, filter)
+}
+
+func (service *Service) QueryEffectiveAccess(ctx context.Context, p value.Principal, subjectRef string, target entity.AccessScope, permissionKeys []string, evaluatedAt time.Time) (entity.EffectiveAccess, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.EffectiveAccess{}, err
+	}
+	return service.repository.QueryEffectiveAccess(ctx, p, subjectRef, target, permissionKeys, evaluatedAt)
+}
+
+func (service *Service) SimulateAccess(ctx context.Context, p value.Principal, input command.AccessSimulationInput) (entity.AccessSimulation, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.AccessSimulation{}, err
+	}
+	return service.repository.SimulateAccess(ctx, p, input)
+}
+
 func (service *Service) Execute(ctx context.Context, input command.Command) (command.Result, error) {
 	principal, err := service.principal(ctx, input.Principal)
 	if err != nil {
@@ -630,7 +695,9 @@ func knownCommand(kind command.Kind) bool {
 		command.FailSessionArchiveTask,
 		command.MaterializeOccurrence, command.CompleteConnectionTest,
 		command.CompleteIntegrationInvocation, command.CompleteInteractionDelivery,
-		command.AcceptInteractionMessage:
+		command.AcceptInteractionMessage, command.CreateAccessRole,
+		command.CreateAccessRoleVersion, command.ArchiveAccessRole,
+		command.CreateAccessBinding, command.ChangeAccessBinding, command.RevokeAccessBinding:
 		return true
 	default:
 		return false
