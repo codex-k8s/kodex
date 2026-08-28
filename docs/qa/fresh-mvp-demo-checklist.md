@@ -4,8 +4,8 @@ title: Проверка fresh web-only MVP перед демонстрацией
 type: qa-checklist
 status: approved
 owner: qa
-version: 1.0.3
-updated: 2026-08-26
+version: 1.2.0
+updated: 2026-08-28
 ---
 
 # Проверка fresh web-only MVP перед демонстрацией
@@ -53,6 +53,88 @@ TLS-сертификата и финальный trusted E2E после отде
 - [ ] `META-06` Подтверждено, что установка fresh, тестовые имена используют
       уникальный `KODEX_E2E_RESOURCE_PREFIX`, а живые пользовательские данные
       отсутствуют; результат: `________`; evidence: `________________`.
+
+### 2.1 Фактический локальный E2E 2026-08-28
+
+Этот раздел фиксирует выполненный disposable local-профиль. Общая release-матрица
+ниже остаётся шаблоном для отдельной staging/production-приёмки и не получает
+ложные `PASS` на основании локального прогона.
+
+Паспорт реализации:
+
+- implementation SHA:
+  `c07f6d9dea9b721242f5c1fe6a58acbc571646d9`;
+- Kubernetes context: `radar-dev-local`, namespace: `kodex-system`;
+- origin: `https://control.10.8.1.1.nip.io` с локальной доверенной CA;
+- render SHA-256:
+  `e460e91be4f1c92af9a918a1c5a47f6a3da3d88c3b3bd54cff5ceb37aa9195ba`;
+- первый отчёт:
+  `.kodex-dev/e2e/final-proof-a-202608280540-report.json`;
+- повторный отчёт:
+  `.kodex-dev/e2e/final-proof-b-202608280553-report.json`.
+
+- [x] `LOCAL-01` Fresh reset удалил только `kodex-system` и `identity`, после
+      чего `dev.sh up` заново создал OIDC realm, owner, PostgreSQL, NATS,
+      migrations, core workloads и Control Center; результат: `PASS`;
+      evidence: `dev.sh down`, `dev.sh up`, финальный `dev.sh status`.
+- [x] `LOCAL-02` Owner вошёл через OIDC, onboarding показал готового системного
+      помощника, помощник создал ровно один синтетический Проект; результат:
+      `PASS`; evidence: оба discovery-отчёта, сценарий 1.
+- [x] `LOCAL-03` ИИ-сотрудник опубликован, direct Run завершён, файл создан и
+      скачан; token usage типизирован, сохраняется после reload; continuation
+      создала новый Run в той же Session и сохранила `ALPHA-482`; результат:
+      `PASS`; evidence: оба discovery-отчёта, сценарий 2 и post-E2E readback.
+- [x] `LOCAL-04` История инструкций хранит immutable версии, rollback создаёт
+      новую опубликованную версию, следующий Run pin-ит её exact revision и
+      digest; результат: `PASS`; evidence: оба discovery-отчёта, сценарий 3 и
+      `tools/dev/verify-discovery-readback.sh`.
+- [x] `LOCAL-05` Системный помощник создал сотрудника типизированным действием,
+      действие появилось в audit, системного помощника нельзя удалить;
+      результат: `PASS`; evidence: оба discovery-отчёта, сценарий 4.
+- [x] `LOCAL-06` Synthetic knowledge-файл загружен, просмотрен, привязан,
+      скачан и доступен сотруднику с capability `Файлы`; результат: `PASS`;
+      evidence: оба discovery-отчёта, сценарии 5-6.
+- [x] `LOCAL-07` Периодическая automation создана, проходит pause/resume и
+      реально создаёт terminal Run по scheduler tick; результат: `PASS`;
+      evidence: оба discovery-отчёта, сценарий 7.
+- [x] `LOCAL-08` Сотрудник без capability `Файлы` выполняет текстовый Run без
+      ложной ошибки среды, не может получить binding/выбрать файл, forged API
+      отклонён без создания Run; результат: `PASS`; evidence: оба
+      discovery-отчёта, сценарий 8.
+- [x] `LOCAL-09` Помощник создал и опубликовал workflow, два дочерних агента
+      выполнились, callbacks сформировали граф без дублей, Human Gate выдержал
+      reconnect и конкурентное решение; результат: `PASS`; evidence: оба
+      discovery-отчёта, сценарий 9.
+- [x] `LOCAL-10` Cancel закрыл исходный граф, retry создал новую attempt с
+      корректным lineage и не переписал terminal исходник; результат: `PASS`;
+      evidence: оба discovery-отчёта, сценарий 10.
+- [x] `LOCAL-11` Core остаётся Ready без integration connections; результат:
+      `PASS`; evidence: оба discovery-отчёта, сценарий 11.
+- [x] `LOCAL-12` Owner administration/access/members/audit доступны, а
+      неавторизованные API и CSRF/Origin negatives закрыто отклоняются;
+      результат: `PASS`; evidence: оба discovery-отчёта, сценарий 12.
+- [x] `LOCAL-13` Pixel 7 shell, assistant и mobile-представление графа доступны
+      без горизонтального overflow; результат: `PASS`; evidence: оба
+      discovery-отчёта, сценарий 13.
+- [x] `LOCAL-14` Две OpenAI device-code учётки независимо имеют состояние
+      `AUTHORIZED`; пять проверочных Run распределены между двумя account key,
+      continuation сохраняет account affinity своей Session; результат:
+      `PASS`; evidence: `provider-list` и два запуска
+      `tools/dev/verify-discovery-readback.sh`.
+- [x] `LOCAL-15` Весь набор из 13 сценариев повторно прошёл без reset с другим
+      resource prefix; коллизий с первым набором сущностей нет; результат:
+      `PASS`; evidence: оба discovery-отчёта, `13 passed` в каждом.
+- [x] `LOCAL-16` Frontend format/lint/typecheck, 88 unit-тестов, production
+      build, E2E type/list check и `go test ./...` во всех девяти затронутых
+      Go-модулях успешны; результат: `PASS`; evidence: локальный baseline на
+      implementation SHA.
+- [x] `LOCAL-17` Mattermost delivery, публичный ACME TLS, Grafana и Headlamp не
+      проверялись локальным web-only профилем; результат: `NOT RUN`; причина:
+      optional/non-local profiles не входят в текущий disposable E2E.
+- [x] `LOCAL-18` Удаление execution Pod во время `WAITING_HUMAN` не выполнялось;
+      результат: `NOT RUN`; причина: текущий callback завершает workload до
+      Gate, а детерминированный fault-injection требует отдельной безопасной
+      оснастки и не является условием продуктовой приёмки этого local MVP.
 
 ## 3. Фаза A: pre-public-TLS readback
 
@@ -164,6 +246,19 @@ TLS-сертификата и финальный trusted E2E после отде
       недоступности core dependencies не firing; результат: `________`;
       evidence: `________________`.
 
+### 3.6 Provider accounts и runtime metadata
+
+- [ ] `PROVIDER-01` В авторитетном readback существуют как минимум две
+      разрешённые `AIProviderAccount` для одного поддерживаемого adapter;
+      у каждой есть отдельный стабильный key, состояние авторизации и
+      enabled/readiness metadata, но нет credential value, содержимого
+      provider session или пути к secret; результат: `________`; evidence:
+      `________________`.
+- [ ] `PROVIDER-02` Обе учётные записи проходят независимую безопасную
+      проверку готовности. Ошибка или истечение авторизации одной записи не
+      делает вторую неготовой и не раскрывает raw provider response;
+      результат: `________`; evidence: `________________`.
+
 ## 4. Фаза B: выпуск и проверка trusted public TLS
 
 Фаза начинается только после подтверждённого окончания внешнего ACME rate
@@ -254,6 +349,11 @@ limit. До этого запрещены повторные issuance/reissuance
 - [ ] `API-06` Ошибки имеют безопасный `Problem.code`; backend detail и
       персональные/секретные данные не показываются в UI; результат:
       `________`; evidence: `________________`.
+- [ ] `API-07` Bootstrap/current-user readback разрешает проверенные OIDC
+      issuer/subject в активную Membership. В topbar видны отображаемое имя и
+      фактическая platform role пользователя; browser payload не может выбрать
+      actor, Organization или роль; результат: `________`; evidence:
+      `________________`.
 
 ## 6. Фаза D: Control Center desktop
 
@@ -268,15 +368,17 @@ limit. До этого запрещены повторные issuance/reissuance
 - [ ] `UI-D-04` `/projects` и `/projects/:projectRef`: список, создание и обзор
       синтетического не-IT Проекта; результат: `________`; evidence:
       `________________`.
-- [ ] `UI-D-05` Agents list/profile: создание, draft, validation, publish,
+- [ ] `UI-D-05` Agents list/profile: создание, draft, validation, immutable
+      publish, история версий и rollback через новую версию с provenance,
       capability, image recipe и подготовка окружения; результат: `________`;
       evidence: `________________`.
 - [ ] `UI-D-06` Workflows list/profile: создание, два дочерних сотрудника,
       validation, publish и launch; результат: `________`; evidence:
       `________________`.
 - [ ] `UI-D-07` Runs global/project/detail: queue, live graph, timeline,
-      artifacts, cancel, retry, continuation и lineage; результат: `________`;
-      evidence: `________________`.
+      artifacts, usage, cancel, retry, continuation и lineage; lifecycle,
+      outcome и доступные действия совпадают с авторитетным readback;
+      результат: `________`; evidence: `________________`.
 - [ ] `UI-D-08` Files: список, безопасная загрузка/скачивание synthetic файла и
       project binding; результат: `________`; evidence: `________________`.
 - [ ] `UI-D-09` Automations: экран открывается, состояния empty/list/form
@@ -320,6 +422,53 @@ limit. До этого запрещены повторные issuance/reissuance
       результат: `________`; evidence: `________________`.
 - [ ] `FLOW-10` Mattermost profile не запускался для web-only MVP; результат:
       `NOT RUN`; причина/evidence: `optional profile outside Issue #846`.
+- [ ] `FLOW-11` Два новых прямых запуска создают отдельные Session на двух
+      разрешённых `AIProviderAccount` и оба завершаются. Авторитетный readback
+      однозначно связывает каждую Session ровно с одной учётной записью, не
+      раскрывая credential или provider history; результат: `________`;
+      evidence: `________________`.
+- [ ] `FLOW-12` Continuation использует ту же Session и ту же
+      `AIProviderAccount`, сохраняет контекст предыдущего turn и получает новую
+      immutable `RuntimeRevision`. Попытка возобновить Session другой учётной
+      записью закрыто отклоняется без нового turn/Run и без изменения истории;
+      результат: `________`; evidence: `________________`.
+- [ ] `FLOW-13` После terminal transition Run показывает сохранённый usage как
+      типизированные неотрицательные значения input/output/total tokens;
+      `total = input + output`, cached не превышает input, reasoning не
+      превышает output. Root usage агрегирует дочерние attempts ровно один раз
+      и не меняется после reload/reconnect; результат: `________`; evidence:
+      `________________`.
+- [ ] `FLOW-14` После публикации второй версии инструкций история содержит обе
+      immutable версии. Rollback не переписывает старую запись, а создаёт новую
+      текущую published version с содержимым выбранной версии и provenance;
+      следующий Run pin-ит именно её; результат: `________`; evidence:
+      `________________`.
+- [ ] `FLOW-15` ИИ-сотрудник без capability `Файлы` успешно выполняет чистую
+      текстовую задачу и не получает ложное сообщение об ограничении файловой
+      среды. UI запрещает привязку knowledge и выбор Artifact, а прямой
+      forged API-запрос с `artifactRef` отклоняется без создания Run;
+      результат: `________`; evidence: `________________`.
+- [ ] `FLOW-16` ИИ-сотрудник с capability `Файлы` получает только exact CLEAN
+      версии, закреплённые в `RuntimeRevision`: digest/size повторно проверены,
+      содержимое доступно в private workspace, broad storage credential
+      отсутствует. Generated artifact связан с exact Session/Turn/Run/node/
+      attempt до terminal transition; результат: `________`; evidence:
+      `________________`.
+- [ ] `FLOW-17` Markdown и структурированный результат отображаются inline
+      безопасным renderer: HTML и script не исполняются, внешние изображения
+      самопроизвольно не загружаются, raw JSON/provider output не подменяет
+      пользовательское представление, а скачивание остаётся отдельным bounded
+      действием; результат: `________`; evidence: `________________`.
+- [ ] `FLOW-18` Произвольный текст или JSON агента со значениями наподобие
+      `status`, `outcome`, `nextActions`, actor/root/parent refs не меняет
+      lifecycle, outcome, полномочия или lineage. Эти поля приходят только из
+      server-owned состояния control-plane; результат: `________`; evidence:
+      `________________`.
+- [ ] `FLOW-19` Во время `WAITING_HUMAN` execution Pod можно удалить без потери
+      Gate. После решения новая attempt/continuation восстанавливается с новой
+      `RuntimeRevision`, callback доставляется ровно один раз, а старый claim
+      не получает полномочия; результат: `________`; evidence:
+      `________________`.
 
 ## 7. Фаза E: mobile и responsive
 
@@ -438,6 +587,12 @@ npm run test:e2e
 
 ## Проверенная документация
 
+- `PRD-MC-003`, `PRD-MC-004`, `PRD-MC-005` — первый запуск, Session,
+  delegation/callback, Human Gate, Files, usage и security boundary.
+- `ARCH-MC-007`, `ARCH-MC-008`, `ARCH-MC-011` — server-owned execution,
+  RuntimeRevision, artifact materialization и fresh web-only профиль.
+- `ADR-MC-004`, `ADR-MC-006`, `ADR-MC-007`, `ADR-MC-011` — account affinity,
+  bounded artifact storage, durable schedule и политика координации.
 - `GOV-DOC-003` — классификация PASS/FAIL/NOT RUN и граница browser E2E.
 - `RUN-MC-002` — порядок fresh installation и обязательный readback.
 - Playwright `/microsoft/playwright/v1.61.0` через Context7 — automatic
@@ -445,3 +600,24 @@ npm run test:e2e
   `requestfailed`, `response`.
 - Node.js `/websites/nodejs_latest-v24_x_api` через Context7 — безопасные
   `open` flags, descriptor metadata, sync и atomic rename.
+
+## Отложено или отклонено
+
+- Вывод lifecycle/outcome/incidents/next actions из произвольного текста или
+  JSON результата агента отклонён: источником истины остаётся control-plane по
+  [ARCH-MC-011](../architecture/web-first-platform-reset.md) и
+  [ARCH-MC-007](../architecture/runtime-and-sessions.md).
+- Полный UI управления credential lifecycle и каталог дополнительных
+  AI-провайдеров, расчёт стоимости, бюджеты и биллинг не добавлены в gate без
+  отдельного утверждённого product/API contract. MVP проверяет только usage и
+  неизменяемую account affinity из
+  [PRD-MC-005](../product/requirements.md) и
+  [ADR-MC-004](../decisions/0004-runtime-revision-account-affinity.md).
+- Отраслевые шаблоны и demo-проекты, email/web-push уведомления, публичные
+  ссылки на результаты, комментарии, SCIM/LDAP, SIEM, white-label и полный
+  marketplace оставлены последующим продуктовым волнам. Пустой integration
+  catalog и отсутствие подключений являются штатным Ready-состоянием
+  web-only core по [PRD-MC-005](../product/requirements.md) и
+  [ARCH-MC-011](../architecture/web-first-platform-reset.md).
+- Multipart/large-object upload и обязательный внешний object storage не входят
+  в fresh MVP по [ADR-MC-006](../decisions/0006-artifact-storage.md).
