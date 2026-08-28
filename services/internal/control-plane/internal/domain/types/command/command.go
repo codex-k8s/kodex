@@ -118,6 +118,7 @@ type ScheduleInput struct {
 type ConnectionInput struct {
 	Ref, DefinitionKey, Name string
 	PublicConfiguration      map[string]any
+	CredentialRevision       *entity.IntegrationCredentialRevision
 	Enabled                  bool
 }
 type IntegrationGrantInput struct {
@@ -165,9 +166,10 @@ type OccurrenceInput struct {
 	Generation                     int64
 }
 type IntegrationInvocationInput struct {
-	InvocationRef, LeaseRef, Fence, ResultSummary, SafeErrorCode string
-	Generation                                                   int64
-	Success                                                      bool
+	InvocationRef, LeaseRef, Fence, ResultSummary, SafeErrorCode          string
+	ReceiptRef, EffectKey, InputDigest, ProviderEffectRef, ResponseDigest string
+	Generation                                                            int64
+	Success                                                               bool
 }
 type IntegrationConnectionTestInput struct {
 	TestRef, LeaseRef, Fence, ResultSummary, SafeErrorCode string

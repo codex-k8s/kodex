@@ -1848,12 +1848,13 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	var gateID, nodeID, rootRunID, projectID, projectRef, gateNodeRef string
-	var predecessorNodeID, predecessorNodeRef, predecessorRunID, sessionID string
+	var predecessorNodeID, predecessorNodeRef, predecessorRunID, sessionID, integrationInvocationID string
 	var version int64
 	var allowed []string
 	err := tx.QueryRow(ctx, queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState, scope.organizationID, payload.GateRef).Scan(
 		&gateID, &nodeID, &rootRunID, &projectID, &projectRef, &version, &allowed, &gateNodeRef,
 		&predecessorNodeID, &predecessorNodeRef, &predecessorRunID, &sessionID,
+		&integrationInvocationID,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrAlreadyResolved
@@ -1866,6 +1867,23 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	}
 	if !contains(allowed, payload.Decision) {
 		return commandOutcome{}, errs.ErrForbidden
+	}
+	if integrationInvocationID != "" {
+		invocationState, safeErrorCode := "READY", ""
+		if payload.Decision == "REJECT" {
+			invocationState, safeErrorCode = "REJECTED", "INTEGRATION_REJECTED_BY_OWNER"
+		} else if payload.Decision == "CANCEL" {
+			invocationState, safeErrorCode = "CANCELLED", "INTEGRATION_CANCELLED_BY_OWNER"
+		}
+		tag, err := tx.Exec(ctx, queryCommandsResolvegateUpdateIntegrationInvocation,
+			integrationInvocationID, invocationState, safeErrorCode,
+		)
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if tag.RowsAffected() != 1 {
+			return commandOutcome{}, errs.ErrConflict
+		}
 	}
 	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateOwnerGatesStateDecisionDecisionComment, gateID, nextState, payload.Decision, truncate(payload.Comment, 2000), scope.actorID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable

@@ -4,8 +4,8 @@ title: Карта интеграций
 type: architecture
 status: approved
 owner: architect
-version: 1.3.0
-updated: 2026-08-25
+version: 1.4.0
+updated: 2026-08-28
 ---
 
 # Карта интеграций
@@ -69,22 +69,38 @@ MCP, версии capabilities/grants и bounded policy. Provider adapter обя
 Версионируемый пакет YAML содержит:
 
 ```yaml
-apiVersion: kodex.io/v1alpha1
-kind: IntegrationDefinition
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
 metadata:
-  name: example-crm
+  key: synthetic
+  version: 1.0.0
+  origin: SHIPPED
 spec:
-  connectionSchema: {}
-  capabilities: []
-  runtime:
-    mode: managed-mcp
-  tools: []
-  riskPolicies: []
-  promptDocumentation: "..."
-  healthCheck: {}
+  name: Synthetic HTTP
+  description: Детерминированный HTTP journal для проверки lifecycle.
+  category: testing
+  adapter: SYNTHETIC_HTTP
+  configurationFields:
+    - key: journal
+      type: STRING
+      required: true
+      maximumLength: 120
+  capabilities:
+    - key: synthetic.journal.read
+      operation: synthetic.journal.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope:
+        kind: SYNTHETIC_JOURNAL
+        connectionFields: [journal]
+      inputFields: []
 ```
 
-Пакет не содержит значений секретов. Поля проходят проверку JSON Schema.
+Канонический контракт находится в
+`contracts/integrations/v1/integration-package.schema.json`; новые adapter и
+resource kind добавляются только вместе с закрытой реализацией loader/gateway.
+Пакет не содержит значений секретов. Поля проходят строгую проверку schema и
+семантических инвариантов, а canonical representation получает SHA-256 digest.
 Декларативные MCP definitions дополняются разделением организаций,
 авторизацией, typed grants, аудитом и server-owned Human Gates, доступными в
 Control Center независимо от interaction adapters.

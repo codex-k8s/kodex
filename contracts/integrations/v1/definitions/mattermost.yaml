@@ -1,0 +1,59 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: mattermost
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: Mattermost
+  description: Существующее подключение каналов, принадлежащее interaction-gateway.
+  category: communications
+  adapter: MATTERMOST_INTERACTION
+  credential:
+    secretKey: token
+  configurationFields:
+    - key: base_url
+      type: STRING
+      required: true
+      maximumLength: 2048
+    - key: team_name
+      type: STRING
+      required: true
+      maximumLength: 100
+    - key: channel_name
+      type: STRING
+      required: true
+      maximumLength: 100
+  capabilities:
+    - key: mattermost.inbound
+      operation: mattermost.inbound
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope:
+        kind: MATTERMOST_CHANNEL
+        connectionFields: [base_url, team_name, channel_name]
+      inputFields: []
+    - key: mattermost.notifications
+      operation: mattermost.notifications
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope:
+        kind: MATTERMOST_CHANNEL
+        connectionFields: [base_url, team_name, channel_name]
+      inputFields: []
+    - key: mattermost.result_mirror
+      operation: mattermost.result_mirror
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope:
+        kind: MATTERMOST_CHANNEL
+        connectionFields: [base_url, team_name, channel_name]
+      inputFields: []
+    - key: mattermost.gate_decisions
+      operation: mattermost.gate_decisions
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope:
+        kind: MATTERMOST_CHANNEL
+        connectionFields: [base_url, team_name, channel_name]
+      inputFields: []

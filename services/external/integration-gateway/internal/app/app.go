@@ -56,7 +56,10 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 			control.Close(),
 		)
 	}
-	adapter, err := integration.New(integration.Config{CredentialDirectory: config.CredentialDirectory, ProxyURL: config.EgressProxyURL, AllowedHosts: config.AllowedIntegrationHosts, Timeout: config.OperationTimeout})
+	adapter, err := integration.New(integration.Config{
+		CredentialDirectory: config.CredentialDirectory, ProxyURL: config.EgressProxyURL,
+		SyntheticBaseURL: config.SyntheticBaseURL, Timeout: config.OperationTimeout,
+	})
 	if err != nil {
 		return err
 	}
@@ -188,13 +191,25 @@ func completeTest(ctx context.Context, control *controlplaneclient.Client, claim
 	return err
 }
 
-func completeInvocation(ctx context.Context, control *controlplaneclient.Client, claim *controlplanev1.IntegrationInvocationClaim, result string, operationErr error) error {
+func completeInvocation(ctx context.Context, control *controlplaneclient.Client, claim *controlplanev1.IntegrationInvocationClaim, result integration.Result, operationErr error) error {
 	lease := claim.GetLease()
 	if lease == nil {
 		return errors.New("integration invocation lease is missing")
 	}
 	success, code := integration.Outcome(operationErr)
-	_, err := control.Runtime.CompleteIntegrationInvocation(ctx, &controlplanev1.CompleteIntegrationInvocationRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(claim.GetInvocationRef(), "complete")}, InvocationRef: claim.GetInvocationRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(), Success: success, ResultSummary: result, SafeErrorCode: code})
+	request := &controlplanev1.CompleteIntegrationInvocationRequest{
+		Mutation:      &controlplanev1.MutationContext{IdempotencyKey: stableKey(claim.GetInvocationRef(), "complete")},
+		InvocationRef: claim.GetInvocationRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(),
+		Generation: lease.GetGeneration(), Success: success, ResultSummary: result.Summary, SafeErrorCode: code,
+	}
+	if success {
+		request.EffectReceipt = &controlplanev1.IntegrationEffectReceipt{
+			EffectKey: result.Receipt.EffectKey, InputDigest: result.Receipt.InputDigest,
+			ProviderEffectRef: result.Receipt.ProviderEffectRef, ResponseDigest: result.Receipt.ResponseDigest,
+			ResultSummary: result.Summary,
+		}
+	}
+	_, err := control.Runtime.CompleteIntegrationInvocation(ctx, request)
 	return err
 }
 

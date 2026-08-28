@@ -39,6 +39,10 @@ var (
 	queryRepositoryBootstrapInsertRoleDefinitionsRefStableKeyName string
 	//go:embed sql/repository_bootstrap_insert_integration_definitions_stable_key_description_capabilities.sql
 	queryRepositoryBootstrapInsertIntegrationDefinitionsStableKeyDescriptionCapabilities string
+	//go:embed sql/repository_reconcile_integration_definition.sql
+	queryRepositoryReconcileIntegrationDefinition string
+	//go:embed sql/repository_disable_unshipped_integration_definitions.sql
+	queryRepositoryDisableUnshippedIntegrationDefinitions string
 	//go:embed sql/repository_bootstrap_insert_agents_ref_system_key_purpose.sql
 	queryRepositoryBootstrapInsertAgentsRefSystemKeyPurpose string
 	//go:embed sql/repository_bootstrap_insert_instruction_versions_ref_agent_id_state.sql

@@ -1191,7 +1191,11 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 	for rows.Next() {
 		var item entity.IntegrationDefinition
 		var capabilities, schema []byte
-		if err := rows.Scan(&item.Key, &item.Name, &item.Description, &item.Category, &item.Optional, &item.Enabled, &capabilities, &schema); err != nil {
+		if err := rows.Scan(
+			&item.Key, &item.Name, &item.Description, &item.Category, &item.Optional, &item.Enabled,
+			&capabilities, &schema, &item.SchemaVersion, &item.DefinitionVersion, &item.Origin,
+			&item.Digest, &item.Adapter, &item.CredentialSecretKey,
+		); err != nil {
 			return nil, nil, errs.ErrUnavailable
 		}
 		if json.Unmarshal(capabilities, &item.Capabilities) != nil || json.Unmarshal(schema, &item.ConfigurationFields) != nil {
@@ -1256,7 +1260,16 @@ func (repository *Repository) ListIntegrationConnections(ctx context.Context, pr
 func scanConnection(row rowScanner) (entity.IntegrationConnection, error) {
 	var item entity.IntegrationConnection
 	var configuration, capabilities []byte
-	if err := row.Scan(&item.Ref, &item.DefinitionKey, &item.DefinitionName, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &configuration, &capabilities, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	var credential entity.IntegrationCredentialRevision
+	var credentialCreatedAt *time.Time
+	if err := row.Scan(
+		&item.Ref, &item.DefinitionKey, &item.DefinitionName, &item.Name, &item.State,
+		&item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version,
+		&configuration, &capabilities, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt,
+		&item.DefinitionVersion, &item.DefinitionDigest, &credential.Ref, &credential.Revision,
+		&credential.SecretRef, &credential.SecretUID, &credential.SecretResourceVersion,
+		&credential.ContentSHA256, &credentialCreatedAt,
+	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.IntegrationConnection{}, errs.ErrNotFound
 		}
@@ -1264,6 +1277,10 @@ func scanConnection(row rowScanner) (entity.IntegrationConnection, error) {
 	}
 	if json.Unmarshal(configuration, &item.PublicConfiguration) != nil || json.Unmarshal(capabilities, &item.Capabilities) != nil {
 		return entity.IntegrationConnection{}, errs.ErrUnavailable
+	}
+	if credential.Ref != "" && credentialCreatedAt != nil {
+		credential.CreatedAt = *credentialCreatedAt
+		item.CredentialRevision = &credential
 	}
 	item.NextActions = []string{"OPEN"}
 	return item, nil
@@ -1316,8 +1333,16 @@ func attachConnection(ctx context.Context, querier connectionQuerier, scope scop
 	defer rows.Close()
 	for rows.Next() {
 		var grant entity.IntegrationGrant
-		if err := rows.Scan(&grant.Ref, &grant.CapabilityKey, &grant.TargetType, &grant.TargetRef, &grant.TargetName, &grant.Enabled, &grant.ApprovalPolicy, &grant.Version); err != nil {
+		var resourceScope []byte
+		if err := rows.Scan(
+			&grant.Ref, &grant.CapabilityKey, &grant.TargetType, &grant.TargetRef, &grant.TargetName,
+			&grant.Enabled, &grant.ApprovalPolicy, &grant.Version, &grant.Risk, &grant.ResourceKind,
+			&resourceScope, &grant.ResourceScopeDigest,
+		); err != nil {
 			return err
+		}
+		if json.Unmarshal(resourceScope, &grant.ResourceScope) != nil {
+			return errors.New("decode integration grant resource scope")
 		}
 		item.Grants = append(item.Grants, grant)
 	}

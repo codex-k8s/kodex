@@ -4,7 +4,7 @@ title: Kodex
 type: repository-readme
 status: approved
 owner: manager
-version: 1.1.0
+version: 1.2.0
 updated: 2026-08-24
 ---
 
@@ -32,6 +32,9 @@ Kodex — web-first платформа управления ИИ-сотрудн�
   BuildKit, supply chain проверяет SBOM/provenance/signature и promotion;
 - защищённый `agent-runner` внутри role image запускает model provider и
   разрешённые типизированные MCP-инструменты;
+- `integration-gateway` выполняет только поставляемые typed capabilities,
+  получает Secret revision metadata из `control-plane` и отделяет Human Gate
+  от claim любого внешнего изменения;
 - системный помощник использует отдельный always-hot runtime;
 - Mattermost — optional interaction adapter, а GitHub, GitLab, Kubernetes,
   CRM/ERP/email/storage — равноправные необязательные integrations.

@@ -1,0 +1,72 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: github
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: GitHub
+  description: Метаданные репозитория и управляемые операции с issue в одном точно ограниченном репозитории.
+  category: source-control
+  adapter: GITHUB
+  credential:
+    secretKey: token
+  configurationFields:
+    - key: owner
+      type: STRING
+      required: true
+      maximumLength: 100
+    - key: repository
+      type: STRING
+      required: true
+      maximumLength: 100
+  capabilities:
+    - key: github.repository.metadata.read
+      operation: github.repository.metadata.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields: []
+    - key: github.issue.create
+      operation: github.issue.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - key: title
+          type: STRING
+          required: true
+          maximumLength: 256
+        - key: body
+          type: STRING
+          required: false
+          maximumLength: 65536
+    - key: github.issue.update
+      operation: github.issue.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - key: issue_number
+          type: INTEGER
+          required: true
+          minimum: 1
+          maximum: 2147483647
+        - key: title
+          type: STRING
+          required: false
+          maximumLength: 256
+        - key: body
+          type: STRING
+          required: false
+          maximumLength: 65536
+        - key: state
+          type: STRING
+          required: false
+          maximumLength: 16

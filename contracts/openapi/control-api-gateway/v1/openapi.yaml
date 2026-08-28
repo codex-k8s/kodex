@@ -2206,13 +2206,17 @@ components:
     IntegrationCapability:
       type: object
       additionalProperties: false
-      required: [key, name, description, risk, approvalRequired]
+      required: [key, name, description, risk, approvalRequired, operation, approvalPolicy, resourceKind, inputFields]
       properties:
         key: { type: string, maxLength: 100 }
         name: { type: string, maxLength: 160 }
         description: { type: string, maxLength: 500 }
         risk: { type: string, enum: [READ, WRITE, SENSITIVE, DESTRUCTIVE] }
         approvalRequired: { type: boolean }
+        operation: { type: string, minLength: 1, maxLength: 120 }
+        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
+        resourceKind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL] }
+        inputFields: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/IntegrationConfigurationField' } }
     IntegrationConfigurationField:
       type: object
       additionalProperties: false
@@ -2227,7 +2231,7 @@ components:
     IntegrationDefinition:
       type: object
       additionalProperties: false
-      required: [key, name, description, category, builtIn, available, capabilities, configurationFields]
+      required: [key, name, description, category, builtIn, available, capabilities, configurationFields, schemaVersion, definitionVersion, origin, digest, adapter]
       properties:
         key: { type: string, maxLength: 100 }
         name: { type: string, maxLength: 160 }
@@ -2237,10 +2241,48 @@ components:
         available: { type: boolean }
         capabilities: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/IntegrationCapability' } }
         configurationFields: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/IntegrationConfigurationField' } }
+        schemaVersion: { type: string, minLength: 1, maxLength: 64 }
+        definitionVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+\.[0-9]+$', maxLength: 32 }
+        origin: { type: string, enum: [SHIPPED] }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        adapter: { type: string, enum: [SYNTHETIC_HTTP, GITHUB, MATTERMOST_INTERACTION] }
+        credentialSecretKey: { type: string, maxLength: 120 }
+    IntegrationResourceScope:
+      type: object
+      additionalProperties: false
+      required: [kind, values, digest]
+      properties:
+        kind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL] }
+        values:
+          type: object
+          maxProperties: 8
+          additionalProperties: { type: string, maxLength: 2048 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    IntegrationCredentialRevision:
+      type: object
+      additionalProperties: false
+      required: [ref, revision, secretRef, secretUid, secretResourceVersion, contentSha256]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1 }
+        secretRef: { type: string, minLength: 1, maxLength: 253 }
+        secretUid: { type: string, format: uuid }
+        secretResourceVersion: { type: string, minLength: 1, maxLength: 128 }
+        contentSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    IntegrationCredentialRevisionInput:
+      type: object
+      additionalProperties: false
+      required: [secretRef, secretUid, secretResourceVersion, contentSha256]
+      properties:
+        secretRef: { type: string, minLength: 1, maxLength: 253 }
+        secretUid: { type: string, format: uuid }
+        secretResourceVersion: { type: string, minLength: 1, maxLength: 128 }
+        contentSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
     IntegrationGrant:
       type: object
       additionalProperties: false
-      required: [ref, version, capabilityKey, targetName, enabled]
+      required: [ref, version, capabilityKey, targetName, enabled, risk, approvalPolicy, resourceScope]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -2249,10 +2291,13 @@ components:
         workflowRef: { $ref: '#/components/schemas/OpaqueRef' }
         targetName: { type: string, maxLength: 160 }
         enabled: { type: boolean }
+        risk: { type: string, enum: [READ, WRITE, SENSITIVE, DESTRUCTIVE] }
+        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
+        resourceScope: { $ref: '#/components/schemas/IntegrationResourceScope' }
     IntegrationConnection:
       type: object
       additionalProperties: false
-      required: [ref, version, definitionKey, name, state, credentialsConfigured, credentialsHint, capabilities, grants, nextActions]
+      required: [ref, version, definitionKey, name, state, credentialsConfigured, credentialsHint, capabilities, grants, nextActions, definitionVersion, definitionDigest, publicConfiguration]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -2266,6 +2311,10 @@ components:
         capabilities: { type: array, items: { $ref: '#/components/schemas/IntegrationCapability' } }
         grants: { type: array, items: { $ref: '#/components/schemas/IntegrationGrant' } }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+        definitionVersion: { type: string, minLength: 1, maxLength: 32 }
+        definitionDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        publicConfiguration: { type: object, maxProperties: 50, additionalProperties: true }
+        credentialRevision: { $ref: '#/components/schemas/IntegrationCredentialRevisionInput' }
     IntegrationConnectionInput:
       type: object
       additionalProperties: false
@@ -2274,6 +2323,7 @@ components:
         definitionKey: { type: string, minLength: 1, maxLength: 100 }
         name: { type: string, minLength: 1, maxLength: 160 }
         publicConfiguration: { type: object, maxProperties: 50, additionalProperties: true }
+        credentialRevision: { $ref: '#/components/schemas/IntegrationCredentialRevision' }
     IntegrationConnectionCommand:
       type: object
       additionalProperties: false

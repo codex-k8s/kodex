@@ -200,7 +200,10 @@ type Schedule struct {
 	NextActions                                                                   []string
 }
 
-type IntegrationCapability struct{ Key, Name, Description, Risk string }
+type IntegrationCapability struct {
+	Key, Name, Description, Operation, Risk, ApprovalPolicy, ResourceKind string
+	InputFields                                                           []IntegrationConfigurationField
+}
 
 type IntegrationConfigurationField struct {
 	Key         string `json:"key"`
@@ -212,24 +215,35 @@ type IntegrationConfigurationField struct {
 }
 
 type IntegrationDefinition struct {
-	Key, Name, Description, Category string
-	Optional, Enabled                bool
-	Capabilities                     []IntegrationCapability
-	ConfigurationFields              []IntegrationConfigurationField
+	Key, Name, Description, Category, SchemaVersion, DefinitionVersion string
+	Origin, Digest, Adapter, CredentialSecretKey                       string
+	Optional, Enabled                                                  bool
+	Capabilities                                                       []IntegrationCapability
+	ConfigurationFields                                                []IntegrationConfigurationField
+}
+
+type IntegrationCredentialRevision struct {
+	Ref, SecretRef, SecretUID, SecretResourceVersion, ContentSHA256 string
+	Revision                                                        int64
+	CreatedAt                                                       time.Time
 }
 
 type IntegrationGrant struct {
 	Ref, CapabilityKey, TargetType, TargetRef, TargetName, ApprovalPolicy string
+	Risk, ResourceKind, ResourceScopeDigest                               string
+	ResourceScope                                                         map[string]string
 	Enabled                                                               bool
 	Version                                                               int64
 }
 
 type IntegrationConnection struct {
 	Ref, DefinitionKey, DefinitionName, Name, State, MaskedCredentialsState string
+	DefinitionVersion, DefinitionDigest                                     string
 	LastTestSummary                                                         string
 	Enabled                                                                 bool
 	Version                                                                 int64
 	PublicConfiguration                                                     map[string]any
+	CredentialRevision                                                      *IntegrationCredentialRevision
 	Capabilities                                                            []IntegrationCapability
 	Grants                                                                  []IntegrationGrant
 	LastTestedAt                                                            *time.Time

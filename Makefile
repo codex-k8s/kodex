@@ -11,7 +11,7 @@ GRPC_GO_PLUGIN_LOCAL_VERSION := 1.6.2
 CONTROL_API_GATEWAY_ASYNCAPI_PARSER_VERSION := 3.6.3
 OAPI_CODEGEN_VERSION := v2.7.1
 
-.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-openapi-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-service-infrastructure-bootstrap test-management-surfaces test-install-contract test-authority-policy-codegen test-control-plane-postgres test-internal-rpc-authority-postgres test-go test-go-all tidy-go govulncheck gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
+.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-openapi-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-service-infrastructure-bootstrap test-management-surfaces test-install-contract test-authority-policy-codegen test-control-plane-postgres test-internal-rpc-authority-postgres test-go test-go-all tidy-go govulncheck gen-integration-packages check-integration-package-codegen gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -71,6 +71,17 @@ tidy-go: check-go-toolchain
 govulncheck: check-go-toolchain
 	$(if $(filter file,$(origin GOVULNCHECK_VERSION)),,$(error GOVULNCHECK_VERSION нельзя переопределять))
 	@GOVULNCHECK_VERSION='$(GOVULNCHECK_VERSION)' ./scripts/govulncheck-go-modules.sh
+
+gen-integration-packages: check-go-toolchain
+	@cd libs/go/integrationpackage && env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/packagegen \
+		-contracts ../../../contracts/integrations/v1/definitions -output shipped_gen.go
+	@gofmt -w libs/go/integrationpackage/shipped_gen.go
+
+check-integration-package-codegen: check-go-toolchain
+	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
+		cd libs/go/integrationpackage && env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/packagegen \
+		-contracts ../../../contracts/integrations/v1/definitions -output "$$tmp"; \
+		gofmt -w "$$tmp"; cmp -s shipped_gen.go "$$tmp" || { echo 'integration package generated code is stale' >&2; exit 1; }
 
 gen-openapi: gen-openapi-go gen-openapi-ts
 

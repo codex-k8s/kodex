@@ -3,7 +3,7 @@
   "kind": "EgressGatewayPolicy",
   "metadata": {
     "name": "egress-gateway",
-    "revision": "2026-08-07.1"
+    "revision": "2026-08-28.1"
   },
   "spec": {
     "dns": {
@@ -32,6 +32,7 @@
       {"hostname": "api.openai.com", "port": 443},
       {"hostname": "auth.openai.com", "port": 443},
       {"hostname": "chatgpt.com", "port": 443},
+      {"hostname": "api.github.com", "port": 443},
       {"hostname": "github.com", "port": 443}
     ]
   }

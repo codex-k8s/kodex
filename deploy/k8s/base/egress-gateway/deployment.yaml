@@ -44,8 +44,8 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - {name: EGRESS_GATEWAY_POLICY_FILE, value: /var/run/config/kodex/egress-gateway/policy.json}
-            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_REVISION, value: 2026-08-07.1}
-            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST, value: a32b8c5aa305640eaee494b65019804f668466b9dd82a1d5cc84af7f77747d4f}
+            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_REVISION, value: 2026-08-28.1}
+            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST, value: 68820472113d636607336da46d1481c73126c6ab55ec8e0c59de4077dfc2ad89}
             - {name: EGRESS_GATEWAY_CONNECT_LISTEN, value: ":8080"}
             - {name: EGRESS_GATEWAY_TECHNICAL_LISTEN, value: ":9090"}
             - {name: EGRESS_GATEWAY_RESOLV_CONF, value: /etc/resolv.conf}

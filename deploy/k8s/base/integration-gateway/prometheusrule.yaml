@@ -8,27 +8,27 @@ spec:
   groups:
     - name: integration-gateway
       rules:
-        - alert: AutomationSchedulerCycleFailures
+        - alert: IntegrationGatewayCycleFailures
           expr: increase(kodex_integration_gateway_cycles_total{outcome="error"}[10m]) > 2
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: Automation scheduler reconciliation is failing
+            summary: Integration gateway reconciliation is failing
             runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/integration-gateway.md
-        - alert: AutomationSchedulerClaimBacklog
+        - alert: IntegrationGatewayClaimBacklog
           expr: kodex_integration_gateway_tracked_claims > 200
           for: 10m
           labels:
             severity: warning
           annotations:
-            summary: Automation scheduler transient claim tracking is near its bound
+            summary: Integration gateway transient claim tracking is near its bound
             runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/integration-gateway.md
-        - alert: AutomationSchedulerProtectedPathUnavailable
+        - alert: IntegrationGatewayProtectedPathUnavailable
           expr: kodex_integration_gateway_readiness{ready="false"} == 1
           for: 5m
           labels:
             severity: critical
           annotations:
-            summary: Automation scheduler protected control-plane path is unavailable
+            summary: Integration gateway protected control-plane path is unavailable
             runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/integration-gateway.md

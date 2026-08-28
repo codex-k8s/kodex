@@ -1,0 +1,37 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: synthetic
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: Synthetic HTTP
+  description: Детерминированная HTTP-интеграция для проверки read/write lifecycle без внешнего провайдера.
+  category: testing
+  adapter: SYNTHETIC_HTTP
+  configurationFields:
+    - key: journal
+      type: STRING
+      required: true
+      maximumLength: 120
+  capabilities:
+    - key: synthetic.journal.read
+      operation: synthetic.journal.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope:
+        kind: SYNTHETIC_JOURNAL
+        connectionFields: [journal]
+      inputFields: []
+    - key: synthetic.journal.write
+      operation: synthetic.journal.write
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope:
+        kind: SYNTHETIC_JOURNAL
+        connectionFields: [journal]
+      inputFields:
+        - key: value
+          type: STRING
+          required: true
+          maximumLength: 4096

@@ -333,14 +333,22 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 		return nil, errs.ErrUnavailable
 	}
 	type candidate struct {
-		id, ref, connectionRef, definitionKey, credentialRef string
-		generation                                           int64
-		configuration                                        []byte
+		id, ref, connectionRef, definitionKey, definitionVersion, definitionDigest string
+		generation                                                                 int64
+		configuration                                                              []byte
+		credential                                                                 entity.IntegrationCredentialRevision
+		credentialCreatedAt                                                        *time.Time
 	}
 	candidates := make([]candidate, 0, limit)
 	for rows.Next() {
 		var item candidate
-		if err := rows.Scan(&item.id, &item.ref, &item.generation, &item.connectionRef, &item.definitionKey, &item.credentialRef, &item.configuration); err != nil {
+		if err := rows.Scan(
+			&item.id, &item.ref, &item.generation, &item.connectionRef, &item.definitionKey,
+			&item.configuration, &item.definitionVersion, &item.definitionDigest,
+			&item.credential.Ref, &item.credential.Revision, &item.credential.SecretRef,
+			&item.credential.SecretUID, &item.credential.SecretResourceVersion,
+			&item.credential.ContentSHA256, &item.credentialCreatedAt,
+		); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
 		}
@@ -363,7 +371,17 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 		}
 		configuration := map[string]any{}
 		_ = json.Unmarshal(item.configuration, &configuration)
-		result = append(result, map[string]any{"testRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey, "credentialRef": item.credentialRef, "configuration": configuration, "leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt})
+		claim := map[string]any{
+			"testRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey,
+			"definitionVersion": item.definitionVersion, "definitionDigest": item.definitionDigest,
+			"configuration": configuration, "leaseRef": leaseRef, "fence": fence,
+			"generation": generation, "expiresAt": expiresAt,
+		}
+		if item.credential.Ref != "" && item.credentialCreatedAt != nil {
+			item.credential.CreatedAt = *item.credentialCreatedAt
+			claim["credential"] = item.credential
+		}
+		result = append(result, claim)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, errs.ErrConflict
@@ -423,25 +441,103 @@ func (repository *Repository) ResolveIntegrationInvocation(ctx context.Context, 
 	if err != nil || len(encodedInput) > 64<<10 {
 		return nil, errs.ErrInvalid
 	}
-	var runID, nodeID, connectionID, grantID, projectID string
-	err = tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationSelectRunsIdOrganizationIdRef, scope.organizationID, input["run_ref"], input["node_ref"], input["connection_ref"], input["capability_key"]).Scan(&runID, &nodeID, &connectionID, &grantID, &projectID)
+	var runID, nodeID, connectionID, grantID, grantRef, projectID, rootRunID string
+	var definitionKey, definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, resourceScopeDigest string
+	var encodedScope []byte
+	err = tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationSelectRunsIdOrganizationIdRef,
+		scope.organizationID, input["run_ref"], input["node_ref"], input["connection_ref"], input["capability_key"],
+	).Scan(
+		&runID, &nodeID, &connectionID, &grantID, &grantRef, &projectID, &rootRunID,
+		&definitionKey, &definitionVersion, &definitionDigest, &risk, &approvalPolicy,
+		&resourceKind, &encodedScope, &resourceScopeDigest,
+	)
 	if err != nil {
 		return nil, errs.ErrForbidden
 	}
+	definition, exists := repository.integrationDefinitions[definitionKey]
+	capability, capabilityExists := definition.Capability(input["capability_key"])
+	if !exists || !capabilityExists || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest ||
+		capability.Risk != risk || capability.ApprovalPolicy != approvalPolicy || capability.ResourceScope.Kind != resourceKind {
+		return nil, errs.ErrForbidden
+	}
+	canonicalInput, err := capability.ValidateInput(encodedInput)
+	if err != nil {
+		return nil, errs.ErrInvalid
+	}
+	var resourceScope map[string]string
+	if json.Unmarshal(encodedScope, &resourceScope) != nil {
+		return nil, errs.ErrUnavailable
+	}
 	invocationRef, _ := newRef("inv")
-	inputDigest := sha256.Sum256(encodedInput)
-	intentDigest := sha256.Sum256([]byte(strings.Join([]string{input["connection_ref"], input["capability_key"], hex.EncodeToString(inputDigest[:])}, "\x00")))
-	var resolvedRef string
-	if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertIntegrationInvocationsRefRunIdConnectionId, invocationRef, scope.organizationID, runID, nodeID, connectionID, grantID, input["capability_key"], input["idempotency_key"], hex.EncodeToString(intentDigest[:]), hex.EncodeToString(inputDigest[:]), encodedInput).Scan(&resolvedRef); err != nil {
+	inputDigest := sha256.Sum256(canonicalInput)
+	inputDigestHex := hex.EncodeToString(inputDigest[:])
+	intentDigest := sha256.Sum256([]byte(strings.Join([]string{
+		input["node_ref"], input["idempotency_key"], input["connection_ref"], input["capability_key"],
+		inputDigestHex, definitionDigest, resourceScopeDigest,
+	}, "\x00")))
+	intentDigestHex := hex.EncodeToString(intentDigest[:])
+	effectKey := "eff_" + intentDigestHex[:32]
+	state := "READY"
+	if risk != "READ" {
+		state = "WAITING_APPROVAL"
+	}
+	var invocationID, resolvedRef, resolvedState string
+	if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertIntegrationInvocationsRefRunIdConnectionId,
+		invocationRef, scope.organizationID, runID, nodeID, connectionID, grantID, input["capability_key"],
+		capability.Operation, input["idempotency_key"], intentDigestHex, inputDigestHex, canonicalInput, state,
+		definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, encodedScope, resourceScopeDigest, effectKey,
+	).Scan(&invocationID, &resolvedRef, &resolvedState); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errs.ErrIdempotencyReuse
 		}
 		return nil, mapWriteError(err)
 	}
+	gateRef := ""
+	if resolvedState == "WAITING_APPROVAL" {
+		err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationSelectGate, invocationID).Scan(&gateRef)
+		if errors.Is(err, pgx.ErrNoRows) {
+			gateNodeRef, _ := newRef("nod")
+			var gateNodeID string
+			if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertGateNode,
+				gateNodeRef, scope.organizationID, rootRunID, runID, nodeID,
+			).Scan(&gateNodeID); err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			edgeRef, _ := newRef("edg")
+			if _, err := tx.Exec(ctx, queryWorkersResolveintegrationinvocationInsertGateEdge,
+				edgeRef, scope.organizationID, rootRunID, nodeID, gateNodeID,
+			); err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			gateRef, _ = newRef("gat")
+			var gateID string
+			if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertOwnerGate,
+				gateRef, scope.organizationID, projectID, rootRunID, gateNodeID,
+				truncate(input["capability_key"]+" "+string(encodedScope), 1000), invocationID,
+			).Scan(&gateID); err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			if _, err := tx.Exec(ctx, queryWorkersResolveintegrationinvocationUpdateRunWaitingHuman, rootRunID); err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, gateRef,
+				"OWNER_GATE_OPENED", gateNodeRef, edgeRef, gateRef, "", "i18n:INTEGRATION_EFFECT_OWNER_DECISION_REQUIRED",
+				"WAITING_HUMAN", "WAITING",
+			); err != nil {
+				return nil, err
+			}
+		} else if err != nil {
+			return nil, errs.ErrUnavailable
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, errs.ErrConflict
 	}
-	return map[string]any{"invocationRef": resolvedRef, "grantRef": grantID, "operation": input["capability_key"], "projectID": projectID}, nil
+	return map[string]any{
+		"invocationRef": resolvedRef, "grantRef": grantRef, "operation": capability.Operation,
+		"state": resolvedState, "gateRef": gateRef, "risk": risk, "resourceKind": resourceKind,
+		"resourceScope": resourceScope, "resourceScopeDigest": resourceScopeDigest, "projectID": projectID,
+	}, nil
 }
 
 func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {
@@ -462,14 +558,26 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		return nil, errs.ErrUnavailable
 	}
 	type candidate struct {
-		id, ref, connectionRef, definitionKey, credentialRef, capabilityKey string
-		generation                                                          int64
-		configuration, boundedInput                                         []byte
+		id, ref, connectionRef, definitionKey, capabilityKey                 string
+		definitionVersion, definitionDigest, operation, risk, approvalPolicy string
+		resourceKind, resourceScopeDigest, effectKey, inputDigest            string
+		generation                                                           int64
+		configuration, boundedInput, resourceScope                           []byte
+		credential                                                           entity.IntegrationCredentialRevision
+		credentialCreatedAt                                                  *time.Time
 	}
 	candidates := make([]candidate, 0, limit)
 	for rows.Next() {
 		var item candidate
-		if err := rows.Scan(&item.id, &item.ref, &item.generation, &item.connectionRef, &item.definitionKey, &item.credentialRef, &item.configuration, &item.capabilityKey, &item.boundedInput); err != nil {
+		if err := rows.Scan(
+			&item.id, &item.ref, &item.generation, &item.connectionRef, &item.definitionKey,
+			&item.configuration, &item.capabilityKey, &item.boundedInput, &item.definitionVersion,
+			&item.definitionDigest, &item.operation, &item.risk, &item.approvalPolicy,
+			&item.resourceKind, &item.resourceScope, &item.resourceScopeDigest, &item.effectKey,
+			&item.inputDigest, &item.credential.Ref, &item.credential.Revision, &item.credential.SecretRef,
+			&item.credential.SecretUID, &item.credential.SecretResourceVersion, &item.credential.ContentSHA256,
+			&item.credentialCreatedAt,
+		); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
 		}
@@ -491,9 +599,24 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 			return nil, errs.ErrConflict
 		}
 		configuration, bounded := map[string]any{}, map[string]any{}
+		resourceScope := map[string]string{}
 		_ = json.Unmarshal(item.configuration, &configuration)
 		_ = json.Unmarshal(item.boundedInput, &bounded)
-		result = append(result, map[string]any{"invocationRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey, "credentialRef": item.credentialRef, "capabilityKey": item.capabilityKey, "configuration": configuration, "boundedInput": bounded, "leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt})
+		_ = json.Unmarshal(item.resourceScope, &resourceScope)
+		claim := map[string]any{
+			"invocationRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey,
+			"capabilityKey": item.capabilityKey, "configuration": configuration, "boundedInput": bounded,
+			"definitionVersion": item.definitionVersion, "definitionDigest": item.definitionDigest,
+			"operation": item.operation, "risk": item.risk, "approvalPolicy": item.approvalPolicy,
+			"resourceKind": item.resourceKind, "resourceScope": resourceScope,
+			"resourceScopeDigest": item.resourceScopeDigest, "effectKey": item.effectKey, "inputDigest": item.inputDigest,
+			"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt,
+		}
+		if item.credential.Ref != "" && item.credentialCreatedAt != nil {
+			item.credential.CreatedAt = *item.credentialCreatedAt
+			claim["credential"] = item.credential
+		}
+		result = append(result, claim)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, errs.ErrConflict
@@ -506,14 +629,14 @@ func (repository *Repository) GetIntegrationInvocation(ctx context.Context, prin
 	if err != nil {
 		return nil, err
 	}
-	var state, resultSummary, safeErrorCode string
-	if err := repository.pool.QueryRow(ctx, queryWorkersGetintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, ref).Scan(&state, &resultSummary, &safeErrorCode); err != nil {
+	var state, resultSummary, safeErrorCode, gateRef, receiptRef string
+	if err := repository.pool.QueryRow(ctx, queryWorkersGetintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, ref).Scan(&state, &resultSummary, &safeErrorCode, &gateRef, &receiptRef); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errs.ErrNotFound
 		}
 		return nil, errs.ErrUnavailable
 	}
-	return map[string]any{"state": state, "resultSummary": resultSummary, "safeErrorCode": safeErrorCode}, nil
+	return map[string]any{"state": state, "resultSummary": resultSummary, "safeErrorCode": safeErrorCode, "gateRef": gateRef, "effectReceiptRef": receiptRef}, nil
 }
 
 func (repository *Repository) completeIntegrationInvocation(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -521,25 +644,68 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 	if !ok {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	if payload.Success && payload.SafeErrorCode != "" || !payload.Success && !safeIntegrationErrorCode(payload.SafeErrorCode) {
+	if payload.Success && (payload.SafeErrorCode != "" || payload.EffectKey == "" || payload.InputDigest == "" ||
+		payload.ProviderEffectRef == "" || len(payload.ResponseDigest) != sha256.Size*2 || payload.ResultSummary == "") ||
+		!payload.Success && (!safeIntegrationErrorCode(payload.SafeErrorCode) || payload.EffectKey != "" ||
+			payload.InputDigest != "" || payload.ProviderEffectRef != "" || payload.ResponseDigest != "") {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	var invocationID, runID, rootRunID, projectID, projectRef, nodeRef, storedDigest, state, leaseRef string
+	var effectKey, inputDigest, receiptRef, receiptEffectKey, receiptInputDigest string
+	var receiptProviderRef, receiptResponseDigest, receiptResult string
 	var generation int64
-	var expiresAt time.Time
-	err := tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, payload.InvocationRef).Scan(&invocationID, &runID, &rootRunID, &projectID, &projectRef, &nodeRef, &storedDigest, &generation, &state, &leaseRef, &expiresAt)
+	var expiresAt *time.Time
+	err := tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, payload.InvocationRef).Scan(
+		&invocationID, &runID, &rootRunID, &projectID, &projectRef, &nodeRef, &storedDigest,
+		&generation, &state, &leaseRef, &expiresAt, &effectKey, &inputDigest, &receiptRef,
+		&receiptEffectKey, &receiptInputDigest, &receiptProviderRef, &receiptResponseDigest, &receiptResult,
+	)
 	if err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
+	if state == "SUCCEEDED" && payload.Success && receiptRef != "" &&
+		receiptEffectKey == payload.EffectKey && receiptInputDigest == payload.InputDigest &&
+		receiptProviderRef == payload.ProviderEffectRef && receiptResponseDigest == payload.ResponseDigest &&
+		receiptResult == truncate(payload.ResultSummary, 2000) {
+		runRef, runErr := mustRunRef(ctx, tx, runID)
+		if runErr != nil {
+			return commandOutcome{}, runErr
+		}
+		run, graph, readErr := repository.readRunGraphTx(ctx, tx, scope, runRef)
+		if readErr != nil {
+			return commandOutcome{}, readErr
+		}
+		return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Duplicate: true}, projectID: projectID, projectRef: projectRef, resourceKind: "INTEGRATION_INVOCATION", resourceRef: payload.InvocationRef, summary: "i18n:INTEGRATION_INVOCATION_COMPLETED"}, nil
+	}
 	digest := sha256.Sum256([]byte(payload.Fence))
-	if storedDigest != hex.EncodeToString(digest[:]) || state != "RUNNING" || leaseRef != payload.LeaseRef || generation != payload.Generation || time.Now().After(expiresAt) {
+	if storedDigest != hex.EncodeToString(digest[:]) || state != "RUNNING" || leaseRef != payload.LeaseRef ||
+		generation != payload.Generation || expiresAt == nil || time.Now().After(*expiresAt) ||
+		payload.Success && (effectKey != payload.EffectKey || inputDigest != payload.InputDigest) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
 	next := "SUCCEEDED"
 	if !payload.Success {
 		next = "FAILED"
 	}
-	if _, err := tx.Exec(ctx, queryWorkersCompleteintegrationinvocationUpdateIntegrationInvocationsStateResultSummarySafeErrorCode, invocationID, next, truncate(payload.ResultSummary, 2000), truncate(payload.SafeErrorCode, 100)); err != nil {
+	var receiptID any
+	if payload.Success {
+		generatedReceiptRef, _ := newRef("erc")
+		var storedReceiptRef string
+		var storedReceiptID string
+		if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocationInsertEffectReceipt,
+			generatedReceiptRef, scope.organizationID, invocationID, payload.EffectKey, payload.InputDigest,
+			truncate(payload.ProviderEffectRef, 256), payload.ResponseDigest, truncate(payload.ResultSummary, 2000),
+		).Scan(&storedReceiptID, &storedReceiptRef); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		receiptID = storedReceiptID
+	}
+	if _, err := tx.Exec(ctx, queryWorkersCompleteintegrationinvocationUpdateIntegrationInvocationsStateResultSummarySafeErrorCode,
+		invocationID, next, truncate(payload.ResultSummary, 2000), truncate(payload.SafeErrorCode, 100), receiptID,
+	); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.InvocationRef, "TURN_PROGRESS", nodeRef, "", "", "", "i18n:INTEGRATION_ACTION_COMPLETED", "RUNNING", "RUNNING")

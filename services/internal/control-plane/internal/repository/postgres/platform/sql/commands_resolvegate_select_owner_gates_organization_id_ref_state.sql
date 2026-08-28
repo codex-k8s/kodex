@@ -10,7 +10,8 @@ SELECT g.id::text,
        predecessor.id::text,
        predecessor.ref,
        predecessor.run_id::text,
-       run.session_id::text
+       run.session_id::text,
+       COALESCE(g.integration_invocation_id::text,'')
 FROM control_plane.owner_gates g
 JOIN control_plane.projects project ON project.id=g.project_id
 JOIN control_plane.run_nodes gate_node ON gate_node.id=g.node_id

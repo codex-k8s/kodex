@@ -4,101 +4,59 @@ package integration
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
-	"regexp"
-	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/credentialfs"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"github.com/google/go-github/v74/github"
+	"github.com/google/uuid"
 )
 
-const maximumResponseBytes = 64 << 10
-
-var dnsLabelPattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`)
+const (
+	maximumResponseBytes        = 64 << 10
+	githubAPIBaseURL            = "https://api.github.com/"
+	syntheticServiceHost        = "integration-synthetic.kodex-system.svc.cluster.local"
+	exactCredentialSecretPrefix = "kodex-system/kodex-integration-credentials#"
+)
 
 type Config struct {
-	CredentialDirectory, ProxyURL, AllowedHosts string
-	Timeout                                     time.Duration
+	CredentialDirectory, ProxyURL, SyntheticBaseURL string
+	Timeout                                         time.Duration
+}
+
+type CredentialRevision struct {
+	Ref, SecretRef, SecretUID, SecretResourceVersion, ContentSHA256 string
+	Revision                                                        int64
 }
 
 type Request struct {
-	DefinitionKey, ConnectionRef, CredentialRef, CapabilityKey string
-	Configuration, Input                                       map[string]any
+	DefinitionKey, DefinitionVersion, DefinitionDigest, ConnectionRef string
+	CapabilityKey, Operation, Risk, ApprovalPolicy                    string
+	ResourceKind, ResourceScopeDigest, EffectKey, InputDigest         string
+	Configuration, Input                                              map[string]any
+	ResourceScope                                                     map[string]string
+	Credential                                                        *CredentialRevision
 }
 
-type githubContentResponse struct {
-	Type     string `json:"type"`
-	Name     string `json:"name"`
-	Path     string `json:"path"`
-	SHA      string `json:"sha"`
-	Size     int64  `json:"size"`
-	Encoding string `json:"encoding"`
-	Content  string `json:"content"`
+type Receipt struct {
+	EffectKey, InputDigest, ProviderEffectRef, ResponseDigest string
 }
 
-type githubContentProjection struct {
-	Type    string `json:"type"`
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	SHA     string `json:"sha"`
-	Size    int64  `json:"size"`
-	Content string `json:"content_base64,omitempty"`
-}
-
-type kubernetesWorkloadResponse struct {
-	APIVersion string `json:"apiVersion"`
-	Kind       string `json:"kind"`
-	Metadata   struct {
-		Name       string            `json:"name"`
-		Namespace  string            `json:"namespace"`
-		Generation int64             `json:"generation"`
-		Labels     map[string]string `json:"labels"`
-	} `json:"metadata"`
-	Status struct {
-		Phase              string `json:"phase"`
-		ObservedGeneration int64  `json:"observedGeneration"`
-		Replicas           int32  `json:"replicas"`
-		ReadyReplicas      int32  `json:"readyReplicas"`
-		AvailableReplicas  int32  `json:"availableReplicas"`
-		Succeeded          int32  `json:"succeeded"`
-		Failed             int32  `json:"failed"`
-		Conditions         []struct {
-			Type   string `json:"type"`
-			Status string `json:"status"`
-			Reason string `json:"reason"`
-		} `json:"conditions"`
-	} `json:"status"`
-}
-
-type kubernetesConditionProjection struct {
-	Type   string `json:"type"`
-	Status string `json:"status"`
-	Reason string `json:"reason,omitempty"`
-}
-
-type kubernetesWorkloadProjection struct {
-	APIVersion         string                          `json:"api_version"`
-	Kind               string                          `json:"kind"`
-	Name               string                          `json:"name"`
-	Namespace          string                          `json:"namespace"`
-	Generation         int64                           `json:"generation"`
-	ObservedGeneration int64                           `json:"observed_generation"`
-	Phase              string                          `json:"phase,omitempty"`
-	Replicas           int32                           `json:"replicas,omitempty"`
-	ReadyReplicas      int32                           `json:"ready_replicas,omitempty"`
-	AvailableReplicas  int32                           `json:"available_replicas,omitempty"`
-	Succeeded          int32                           `json:"succeeded,omitempty"`
-	Failed             int32                           `json:"failed,omitempty"`
-	Conditions         []kubernetesConditionProjection `json:"conditions,omitempty"`
+type Result struct {
+	Summary string
+	Receipt Receipt
 }
 
 type SafeError struct{ Code string }
@@ -106,33 +64,55 @@ type SafeError struct{ Code string }
 func (err *SafeError) Error() string { return err.Code }
 
 type Adapter struct {
-	credentials  *credentialfs.Store
-	proxyURL     *url.URL
-	allowedHosts map[string]struct{}
-	timeout      time.Duration
+	credentials      *credentialfs.Store
+	definitions      map[string]integrationpackage.Package
+	githubHTTPClient *http.Client
+	githubBaseURL    *url.URL
+	syntheticClient  *http.Client
+	syntheticBaseURL *url.URL
+	timeout          time.Duration
 }
 
 func New(config Config) (*Adapter, error) {
 	proxy, err := url.Parse(config.ProxyURL)
-	if err != nil || proxy.Scheme != "http" || proxy.Host == "" {
+	if err != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.kodex-system.svc.cluster.local:8080" ||
+		proxy.Path != "" || proxy.RawQuery != "" || proxy.User != nil {
 		return nil, errors.New("integration adapter proxy is invalid")
+	}
+	syntheticBase, err := url.Parse(config.SyntheticBaseURL)
+	if err != nil || syntheticBase.Scheme != "http" || syntheticBase.Hostname() != syntheticServiceHost ||
+		syntheticBase.Port() != "8080" || syntheticBase.Path != "" || syntheticBase.RawQuery != "" || syntheticBase.User != nil {
+		return nil, errors.New("synthetic integration endpoint is invalid")
 	}
 	credentials, err := credentialfs.New(config.CredentialDirectory)
 	if err != nil || config.Timeout < time.Second || config.Timeout > 2*time.Minute {
 		return nil, errors.New("integration adapter configuration is invalid")
 	}
-	hosts := map[string]struct{}{"api.github.com": {}}
-	for _, item := range strings.Split(config.AllowedHosts, ",") {
-		host := strings.ToLower(strings.TrimSpace(item))
-		if host == "" {
-			continue
-		}
-		if parsed := net.ParseIP(host); parsed != nil || !validHostname(host) {
-			return nil, errors.New("integration host allowlist is invalid")
-		}
-		hosts[host] = struct{}{}
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		return nil, errors.New("load shipped integration definitions")
 	}
-	return &Adapter{credentials: credentials, proxyURL: proxy, allowedHosts: hosts, timeout: config.Timeout}, nil
+	githubTransport := &http.Transport{
+		Proxy: http.ProxyURL(proxy), ForceAttemptHTTP2: true,
+		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS13, ServerName: "api.github.com"},
+		MaxIdleConns:          4,
+		MaxIdleConnsPerHost:   2,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ResponseHeaderTimeout: config.Timeout,
+	}
+	return &Adapter{
+		credentials: credentials, definitions: definitions,
+		githubHTTPClient: &http.Client{Transport: githubTransport, Timeout: config.Timeout},
+		githubBaseURL:    mustURL(githubAPIBaseURL),
+		syntheticClient: &http.Client{
+			Timeout: config.Timeout,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return errors.New("synthetic integration redirect is forbidden")
+			},
+		},
+		syntheticBaseURL: syntheticBase, timeout: config.Timeout,
+	}, nil
 }
 
 func RequestFromTest(claim *controlplanev1.IntegrationConnectionTestClaim) Request {
@@ -140,7 +120,11 @@ func RequestFromTest(claim *controlplanev1.IntegrationConnectionTestClaim) Reque
 	if claim.GetPublicConfiguration() != nil {
 		configuration = claim.GetPublicConfiguration().AsMap()
 	}
-	return Request{DefinitionKey: claim.GetDefinitionKey(), ConnectionRef: claim.GetConnectionRef(), CredentialRef: claim.GetCredentialMaterializationRef(), Configuration: configuration}
+	return Request{
+		DefinitionKey: claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
+		DefinitionDigest: claim.GetDefinitionDigest(), ConnectionRef: claim.GetConnectionRef(),
+		Configuration: configuration, Credential: credentialFromProto(claim.GetCredentialRevision()),
+	}
 }
 
 func RequestFromInvocation(claim *controlplanev1.IntegrationInvocationClaim) Request {
@@ -151,7 +135,34 @@ func RequestFromInvocation(claim *controlplanev1.IntegrationInvocationClaim) Req
 	if claim.GetBoundedInput() != nil {
 		input = claim.GetBoundedInput().AsMap()
 	}
-	return Request{DefinitionKey: claim.GetDefinitionKey(), ConnectionRef: claim.GetConnectionRef(), CredentialRef: claim.GetCredentialMaterializationRef(), CapabilityKey: claim.GetCapabilityKey(), Configuration: configuration, Input: input}
+	resourceScope := map[string]string{}
+	resourceKind, resourceScopeDigest := "", ""
+	if scope := claim.GetResourceScope(); scope != nil {
+		resourceScope = scope.GetValues()
+		resourceKind = strings.TrimPrefix(scope.GetKind().String(), "INTEGRATION_RESOURCE_KIND_")
+		resourceScopeDigest = scope.GetDigest()
+	}
+	return Request{
+		DefinitionKey: claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
+		DefinitionDigest: claim.GetDefinitionDigest(), ConnectionRef: claim.GetConnectionRef(),
+		CapabilityKey: claim.GetCapabilityKey(), Operation: claim.GetOperation(),
+		Risk:           strings.TrimPrefix(claim.GetRisk().String(), "INTEGRATION_RISK_"),
+		ApprovalPolicy: strings.TrimPrefix(claim.GetApprovalPolicy().String(), "INTEGRATION_APPROVAL_POLICY_"),
+		ResourceKind:   resourceKind, ResourceScope: resourceScope, ResourceScopeDigest: resourceScopeDigest,
+		EffectKey: claim.GetEffectKey(), InputDigest: claim.GetInputDigest(), Configuration: configuration,
+		Input: input, Credential: credentialFromProto(claim.GetCredentialRevision()),
+	}
+}
+
+func credentialFromProto(value *controlplanev1.IntegrationCredentialRevision) *CredentialRevision {
+	if value == nil {
+		return nil
+	}
+	return &CredentialRevision{
+		Ref: value.GetRef(), Revision: value.GetRevision(), SecretRef: value.GetSecretRef(),
+		SecretUID: value.GetSecretUid(), SecretResourceVersion: value.GetSecretResourceVersion(),
+		ContentSHA256: value.GetContentSha256(),
+	}
 }
 
 func Outcome(err error) (bool, string) {
@@ -166,170 +177,322 @@ func Outcome(err error) (bool, string) {
 }
 
 func (adapter *Adapter) Test(ctx context.Context, request Request) (string, error) {
-	switch request.DefinitionKey {
-	case "github":
-		_, err := adapter.call(ctx, request, http.MethodGet, "https://api.github.com/user", nil, nil)
-		return "i18n:INTEGRATION_TEST_SUCCEEDED", err
-	case "kubernetes":
-		base, err := adapter.configuredBaseURL(request, "server_url")
-		if err != nil {
-			return "", err
+	definition, err := adapter.validateDefinition(request)
+	if err != nil {
+		return "", err
+	}
+	configuration, err := normalizeStringMap(request.Configuration)
+	if err != nil || definition.ValidateConfiguration(configuration) != nil {
+		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+	}
+	switch definition.Spec.Adapter {
+	case "SYNTHETIC_HTTP":
+		_, err = adapter.callSynthetic(ctx, http.MethodGet, "/v1/journals/"+url.PathEscape(configuration["journal"]), "", nil)
+	case "GITHUB":
+		client, cleanup, clientErr := adapter.githubClient(request.Credential)
+		if clientErr != nil {
+			return "", clientErr
 		}
-		roots, err := adapter.loadCA(request.CredentialRef)
-		if err != nil {
-			return "", err
-		}
-		_, err = adapter.call(ctx, request, http.MethodGet, base+"/version", nil, roots)
-		return "i18n:INTEGRATION_TEST_SUCCEEDED", err
-	case "mattermost":
-		base, err := adapter.configuredBaseURL(request, "base_url")
-		if err != nil {
-			return "", err
-		}
-		_, err = adapter.call(ctx, request, http.MethodGet, base+"/api/v4/system/ping", nil, nil)
-		return "i18n:INTEGRATION_TEST_SUCCEEDED", err
+		defer cleanup()
+		_, response, providerErr := client.Repositories.Get(ctx, configuration["owner"], configuration["repository"])
+		err = githubError(response, providerErr)
 	default:
-		return "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
+	return "i18n:INTEGRATION_TEST_SUCCEEDED", err
 }
 
-func (adapter *Adapter) Execute(ctx context.Context, request Request) (string, error) {
-	switch request.CapabilityKey {
-	case "github.repository.read":
-		return adapter.readGitHubRepository(ctx, request)
-	case "kubernetes.workload.read":
-		return adapter.readKubernetesWorkload(ctx, request)
+func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, error) {
+	definition, capability, canonicalInput, configuration, err := adapter.validateInvocation(request)
+	if err != nil {
+		return Result{}, err
+	}
+	var result Result
+	switch definition.Spec.Adapter {
+	case "SYNTHETIC_HTTP":
+		result, err = adapter.executeSynthetic(ctx, request, configuration, canonicalInput)
+	case "GITHUB":
+		result, err = adapter.executeGitHub(ctx, request, configuration, canonicalInput)
 	default:
-		return "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
+	if err != nil {
+		return Result{}, err
+	}
+	if capability.Operation != request.Operation || result.Receipt.EffectKey != request.EffectKey ||
+		result.Receipt.InputDigest != request.InputDigest || result.Receipt.ProviderEffectRef == "" ||
+		len(result.Receipt.ResponseDigest) != sha256.Size*2 || result.Summary == "" || len(result.Summary) > 2000 {
+		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	return result, nil
 }
 
-func (adapter *Adapter) readGitHubRepository(ctx context.Context, request Request) (string, error) {
-	owner, ownerOK := boundedString(request.Configuration, "owner", 100)
-	repository, repositoryOK := boundedString(request.Configuration, "repository", 100)
-	pathValue, pathOK := boundedString(request.Input, "path", 1024)
-	ref, refOK := boundedString(request.Input, "ref", 128)
-	if !ownerOK || !repositoryOK || !pathOK || !refOK || !safeRepositoryPath(pathValue) {
-		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+func (adapter *Adapter) validateDefinition(request Request) (integrationpackage.Package, error) {
+	definition, exists := adapter.definitions[request.DefinitionKey]
+	if !exists || definition.Metadata.Version != request.DefinitionVersion || definition.Digest != request.DefinitionDigest {
+		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
-	segments := strings.Split(pathValue, "/")
-	for index := range segments {
-		segments[index] = url.PathEscape(segments[index])
+	if (definition.Spec.Credential == nil) != (request.Credential == nil) {
+		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
 	}
-	endpoint := "https://api.github.com/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repository) + "/contents/" + strings.Join(segments, "/") + "?ref=" + url.QueryEscape(ref)
-	body, err := adapter.call(ctx, request, http.MethodGet, endpoint, nil, nil)
-	if err != nil {
-		return "", err
-	}
-	return projectGitHubContent(body, pathValue)
+	return definition, nil
 }
 
-func (adapter *Adapter) readKubernetesWorkload(ctx context.Context, request Request) (string, error) {
-	base, err := adapter.configuredBaseURL(request, "server_url")
+func (adapter *Adapter) validateInvocation(request Request) (
+	integrationpackage.Package,
+	integrationpackage.Capability,
+	[]byte,
+	map[string]string,
+	error,
+) {
+	definition, err := adapter.validateDefinition(request)
 	if err != nil {
-		return "", err
+		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, err
 	}
-	resource, resourceOK := boundedString(request.Input, "resource", 32)
-	namespace, namespaceOK := boundedString(request.Input, "namespace", 63)
-	name, nameOK := boundedString(request.Input, "name", 253)
-	if !resourceOK || !namespaceOK || !nameOK || !dnsLabelPattern.MatchString(namespace) || !dnsLabelPattern.MatchString(name) || !allowedNamespace(request.Configuration, namespace) {
-		return "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	capability, exists := definition.Capability(request.CapabilityKey)
+	if !exists || capability.Operation != request.Operation || capability.Risk != request.Risk ||
+		capability.ApprovalPolicy != request.ApprovalPolicy || capability.ResourceScope.Kind != request.ResourceKind ||
+		request.EffectKey == "" || len(request.InputDigest) != sha256.Size*2 {
+		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
-	apiPrefix := map[string]string{"pods": "/api/v1", "deployments": "/apis/apps/v1", "statefulsets": "/apis/apps/v1", "jobs": "/apis/batch/v1"}[resource]
-	if apiPrefix == "" {
-		return "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+	configuration, err := normalizeStringMap(request.Configuration)
+	if err != nil || definition.ValidateConfiguration(configuration) != nil {
+		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
-	endpoint := base + apiPrefix + "/namespaces/" + url.PathEscape(namespace) + "/" + resource + "/" + url.PathEscape(name)
-	roots, err := adapter.loadCA(request.CredentialRef)
+	expectedScope, err := capability.ResourceScopeValues(configuration)
+	encodedScope, encodeScopeErr := json.Marshal(expectedScope)
+	scopeDigest := sha256.Sum256(encodedScope)
+	if err != nil || encodeScopeErr != nil || !equalStringMap(expectedScope, request.ResourceScope) ||
+		hex.EncodeToString(scopeDigest[:]) != request.ResourceScopeDigest {
+		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	encodedInput, err := json.Marshal(request.Input)
 	if err != nil {
-		return "", err
+		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
-	body, err := adapter.call(ctx, request, http.MethodGet, endpoint, nil, roots)
-	if err != nil {
-		return "", err
+	canonicalInput, err := capability.ValidateInput(encodedInput)
+	inputDigest := sha256.Sum256(canonicalInput)
+	if err != nil || hex.EncodeToString(inputDigest[:]) != request.InputDigest {
+		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
-	return projectKubernetesWorkload(body, namespace, name)
+	return definition, capability, canonicalInput, configuration, nil
 }
 
-func (adapter *Adapter) configuredBaseURL(request Request, key string) (string, error) {
-	raw, ok := boundedString(request.Configuration, key, 2048)
-	if !ok {
-		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+func (adapter *Adapter) executeSynthetic(ctx context.Context, request Request, configuration map[string]string, canonicalInput []byte) (Result, error) {
+	journal := configuration["journal"]
+	path := "/v1/journals/" + url.PathEscape(journal)
+	method, effectKey, body := http.MethodGet, request.EffectKey, []byte(nil)
+	if request.Operation == "synthetic.journal.write" {
+		method, path, body = http.MethodPost, path+"/entries", canonicalInput
 	}
-	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "" && parsed.Path != "/" {
-		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+	response, err := adapter.callSynthetic(ctx, method, path, effectKey, body)
+	if err != nil {
+		return Result{}, err
 	}
-	host := strings.ToLower(parsed.Hostname())
-	if _, allowed := adapter.allowedHosts[host]; !allowed {
-		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+	var projection struct {
+		Journal   string `json:"journal"`
+		EffectKey string `json:"effect_key"`
+		Sequence  int64  `json:"sequence"`
+		Value     string `json:"value"`
+		Count     int64  `json:"count"`
 	}
-	parsed.Path = ""
-	return strings.TrimSuffix(parsed.String(), "/"), nil
+	decoder := json.NewDecoder(bytes.NewReader(response))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&projection) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
+		projection.Journal != journal || request.Operation == "synthetic.journal.write" && projection.EffectKey != request.EffectKey {
+		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	summary, err := json.Marshal(projection)
+	if err != nil {
+		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	providerRef := "synthetic-journal:" + journal
+	if projection.Sequence > 0 {
+		providerRef += ":" + strconv.FormatInt(projection.Sequence, 10)
+	}
+	return successfulResult(string(summary), request, providerRef), nil
 }
 
-func (adapter *Adapter) call(ctx context.Context, request Request, method, endpoint string, body []byte, roots *x509.CertPool) ([]byte, error) {
-	credential, err := adapter.readCredential(request.CredentialRef, "token")
+func (adapter *Adapter) callSynthetic(ctx context.Context, method, path, effectKey string, body []byte) ([]byte, error) {
+	endpoint := *adapter.syntheticBaseURL
+	endpoint.Path = path
+	request, err := http.NewRequestWithContext(ctx, method, endpoint.String(), bytes.NewReader(body))
 	if err != nil {
-		return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
-	}
-	defer clear(credential)
-	parsed, err := url.Parse(endpoint)
-	if err != nil || parsed.Scheme != "https" {
 		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
-	if _, allowed := adapter.allowedHosts[strings.ToLower(parsed.Hostname())]; !allowed {
-		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+	request.Header.Set("Accept", "application/json")
+	if effectKey != "" {
+		request.Header.Set("Idempotency-Key", effectKey)
 	}
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS13, ServerName: parsed.Hostname(), RootCAs: roots}
-	transport := &http.Transport{Proxy: http.ProxyURL(adapter.proxyURL), ForceAttemptHTTP2: true, TLSClientConfig: tlsConfig, MaxIdleConns: 2, MaxIdleConnsPerHost: 1, IdleConnTimeout: 30 * time.Second, TLSHandshakeTimeout: 5 * time.Second, ResponseHeaderTimeout: adapter.timeout}
-	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, Timeout: adapter.timeout}
-	httpRequest, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
-	}
-	httpRequest.Header.Set("Authorization", "Bearer "+string(credential))
-	httpRequest.Header.Set("Accept", "application/json")
-	httpRequest.Header.Set("User-Agent", "Kodex/integration-gateway")
 	if len(body) > 0 {
-		httpRequest.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Content-Type", "application/json")
 	}
-	response, err := client.Do(httpRequest)
+	response, err := adapter.syntheticClient.Do(request)
 	if err != nil {
 		return nil, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
 	}
 	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return nil, statusError(response.StatusCode)
 	}
-	limited := io.LimitReader(response.Body, maximumResponseBytes+1)
-	responseBody, err := io.ReadAll(limited)
-	if err != nil || len(responseBody) > maximumResponseBytes {
-		return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-	}
-	return responseBody, nil
+	return readBoundedResponse(response.Body)
 }
 
-func (adapter *Adapter) loadCA(ref string) (*x509.CertPool, error) {
-	raw, err := adapter.readCredential(ref, "ca.pem")
+func (adapter *Adapter) executeGitHub(ctx context.Context, request Request, configuration map[string]string, canonicalInput []byte) (Result, error) {
+	client, cleanup, err := adapter.githubClient(request.Credential)
+	if err != nil {
+		return Result{}, err
+	}
+	defer cleanup()
+	owner, repository := configuration["owner"], configuration["repository"]
+	switch request.Operation {
+	case "github.repository.metadata.read":
+		provider, response, err := client.Repositories.Get(ctx, owner, repository)
+		if err := githubError(response, err); err != nil {
+			return Result{}, err
+		}
+		projection := struct {
+			Name, FullName, DefaultBranch, Visibility string
+			Private, Archived                         bool
+		}{provider.GetName(), provider.GetFullName(), provider.GetDefaultBranch(), provider.GetVisibility(), provider.GetPrivate(), provider.GetArchived()}
+		summary, marshalErr := json.Marshal(projection)
+		if marshalErr != nil || provider.GetID() == 0 || provider.GetFullName() != owner+"/"+repository {
+			return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		}
+		return successfulResult(string(summary), request, "github-repository:"+strconv.FormatInt(provider.GetID(), 10)), nil
+	case "github.issue.create":
+		return adapter.createGitHubIssue(ctx, client, owner, repository, request, canonicalInput)
+	case "github.issue.update":
+		return adapter.updateGitHubIssue(ctx, client, owner, repository, request, canonicalInput)
+	default:
+		return Result{}, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+	}
+}
+
+func (adapter *Adapter) createGitHubIssue(ctx context.Context, client *github.Client, owner, repository string, request Request, canonicalInput []byte) (Result, error) {
+	var input struct{ Title, Body string }
+	if json.Unmarshal(canonicalInput, &input) != nil {
+		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	marker := "<!-- kodex-effect:" + request.EffectKey + " -->"
+	for page := 1; page <= 10; page++ {
+		issues, response, err := client.Issues.ListByRepo(ctx, owner, repository, &github.IssueListByRepoOptions{
+			State: "all", ListOptions: github.ListOptions{Page: page, PerPage: 100},
+		})
+		if err := githubError(response, err); err != nil {
+			return Result{}, err
+		}
+		for _, issue := range issues {
+			if !issue.IsPullRequest() && strings.Contains(issue.GetBody(), marker) {
+				return githubIssueResult(issue, request)
+			}
+		}
+		if response == nil || response.NextPage == 0 {
+			break
+		}
+	}
+	body := strings.TrimSpace(input.Body)
+	if body != "" {
+		body += "\n\n"
+	}
+	body += marker
+	issue, response, err := client.Issues.Create(ctx, owner, repository, &github.IssueRequest{Title: github.Ptr(input.Title), Body: github.Ptr(body)})
+	if err := githubError(response, err); err != nil {
+		return Result{}, err
+	}
+	return githubIssueResult(issue, request)
+}
+
+func (adapter *Adapter) updateGitHubIssue(ctx context.Context, client *github.Client, owner, repository string, request Request, canonicalInput []byte) (Result, error) {
+	var input struct {
+		IssueNumber int64  `json:"issue_number"`
+		Title       string `json:"title"`
+		Body        string `json:"body"`
+		State       string `json:"state"`
+	}
+	if json.Unmarshal(canonicalInput, &input) != nil || input.IssueNumber < 1 || input.IssueNumber > int64(^uint(0)>>1) ||
+		input.Title == "" && input.Body == "" && input.State == "" || input.State != "" && input.State != "open" && input.State != "closed" {
+		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	requestBody := &github.IssueRequest{}
+	if input.Title != "" {
+		requestBody.Title = github.Ptr(input.Title)
+	}
+	if input.Body != "" {
+		requestBody.Body = github.Ptr(input.Body)
+	}
+	if input.State != "" {
+		requestBody.State = github.Ptr(input.State)
+	}
+	issue, response, err := client.Issues.Edit(ctx, owner, repository, int(input.IssueNumber), requestBody)
+	if err := githubError(response, err); err != nil {
+		return Result{}, err
+	}
+	return githubIssueResult(issue, request)
+}
+
+func githubIssueResult(issue *github.Issue, request Request) (Result, error) {
+	if issue == nil || issue.GetNumber() < 1 || issue.GetID() == 0 {
+		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	projection := struct {
+		Number int    `json:"number"`
+		Title  string `json:"title"`
+		State  string `json:"state"`
+	}{issue.GetNumber(), issue.GetTitle(), issue.GetState()}
+	summary, err := json.Marshal(projection)
+	if err != nil {
+		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	return successfulResult(string(summary), request, "github-issue:"+strconv.Itoa(issue.GetNumber())), nil
+}
+
+func (adapter *Adapter) githubClient(credential *CredentialRevision) (*github.Client, func(), error) {
+	value, err := adapter.readCredential(credential)
+	if err != nil {
+		return nil, func() {}, err
+	}
+	client := github.NewClient(adapter.githubHTTPClient).WithAuthToken(string(value))
+	client.BaseURL = adapter.githubBaseURL
+	return client, func() { clear(value) }, nil
+}
+
+func (adapter *Adapter) readCredential(credential *CredentialRevision) ([]byte, error) {
+	if credential == nil || credential.Ref == "" || credential.Revision < 1 || uuid.Validate(credential.SecretUID) != nil ||
+		credential.SecretResourceVersion == "" || len(credential.SecretResourceVersion) > 128 ||
+		len(credential.ContentSHA256) != sha256.Size*2 || !strings.HasPrefix(credential.SecretRef, exactCredentialSecretPrefix) {
+		return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
+	}
+	key := strings.TrimPrefix(credential.SecretRef, exactCredentialSecretPrefix)
+	value, err := adapter.credentials.ReadKey(key)
 	if err != nil {
 		return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
 	}
-	defer clear(raw)
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(raw) {
+	value = bytes.TrimSpace(value)
+	digest := sha256.Sum256(value)
+	if len(value) == 0 || hex.EncodeToString(digest[:]) != credential.ContentSHA256 {
+		clear(value)
 		return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
 	}
-	return roots, nil
+	return value, nil
 }
 
-func (adapter *Adapter) readCredential(ref, name string) ([]byte, error) {
-	raw, err := adapter.credentials.Read(ref, name)
-	if err != nil {
-		return nil, err
+func successfulResult(summary string, request Request, providerRef string) Result {
+	digest := sha256.Sum256([]byte(summary))
+	return Result{Summary: summary, Receipt: Receipt{
+		EffectKey: request.EffectKey, InputDigest: request.InputDigest, ProviderEffectRef: providerRef,
+		ResponseDigest: hex.EncodeToString(digest[:]),
+	}}
+}
+
+func githubError(response *github.Response, err error) error {
+	if err == nil {
+		return nil
 	}
-	return bytes.TrimSpace(raw), nil
+	if response == nil {
+		return &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
+	}
+	return statusError(response.StatusCode)
 }
 
 func statusError(code int) error {
@@ -345,86 +508,42 @@ func statusError(code int) error {
 	}
 }
 
-func boundedString(values map[string]any, key string, maximum int) (string, bool) {
-	value, ok := values[key].(string)
-	value = strings.TrimSpace(value)
-	return value, ok && value != "" && len(value) <= maximum
+func readBoundedResponse(reader io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(reader, maximumResponseBytes+1))
+	if err != nil || len(body) > maximumResponseBytes {
+		return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	return body, nil
 }
 
-func safeRepositoryPath(value string) bool {
-	if strings.HasPrefix(value, "/") || strings.HasSuffix(value, "/") {
+func normalizeStringMap(values map[string]any) (map[string]string, error) {
+	result := make(map[string]string, len(values))
+	for key, raw := range values {
+		value, ok := raw.(string)
+		if !ok {
+			return nil, errors.New("configuration value is not a string")
+		}
+		result[key] = value
+	}
+	return result, nil
+}
+
+func equalStringMap(left, right map[string]string) bool {
+	if len(left) != len(right) {
 		return false
 	}
-	for _, segment := range strings.Split(value, "/") {
-		if segment == "" || segment == "." || segment == ".." {
+	for key, value := range left {
+		if right[key] != value {
 			return false
 		}
 	}
 	return true
 }
 
-func allowedNamespace(configuration map[string]any, namespace string) bool {
-	raw, ok := configuration["allowed_namespaces"].([]any)
-	if !ok || len(raw) == 0 || len(raw) > 64 {
-		return false
+func mustURL(raw string) *url.URL {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		panic(fmt.Sprintf("parse static URL: %v", err))
 	}
-	values := make([]string, 0, len(raw))
-	for _, item := range raw {
-		value, ok := item.(string)
-		if !ok || !dnsLabelPattern.MatchString(value) {
-			return false
-		}
-		values = append(values, value)
-	}
-	sort.Strings(values)
-	index := sort.SearchStrings(values, namespace)
-	return index < len(values) && values[index] == namespace
-}
-
-func validHostname(value string) bool {
-	if len(value) > 253 || strings.HasPrefix(value, ".") || strings.HasSuffix(value, ".") {
-		return false
-	}
-	for _, label := range strings.Split(value, ".") {
-		if len(label) < 1 || len(label) > 63 || !dnsLabelPattern.MatchString(label) {
-			return false
-		}
-	}
-	return true
-}
-
-func projectGitHubContent(body []byte, expectedPath string) (string, error) {
-	var provider githubContentResponse
-	if json.Unmarshal(body, &provider) != nil || provider.Type != "file" || provider.Name == "" || provider.Path != expectedPath || provider.SHA == "" || provider.Size < 0 || provider.Size > maximumResponseBytes || provider.Encoding != "base64" || len(provider.Content) > maximumResponseBytes {
-		return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-	}
-	projected, err := json.Marshal(githubContentProjection{Type: provider.Type, Name: provider.Name, Path: provider.Path, SHA: provider.SHA, Size: provider.Size, Content: provider.Content})
-	if err != nil || len(projected) > maximumResponseBytes {
-		return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-	}
-	return string(projected), nil
-}
-
-func projectKubernetesWorkload(body []byte, namespace, name string) (string, error) {
-	var provider kubernetesWorkloadResponse
-	if json.Unmarshal(body, &provider) != nil || provider.APIVersion == "" || provider.Kind == "" || provider.Metadata.Name != name || provider.Metadata.Namespace != namespace || len(provider.Status.Conditions) > 32 {
-		return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-	}
-	projection := kubernetesWorkloadProjection{
-		APIVersion: provider.APIVersion, Kind: provider.Kind, Name: provider.Metadata.Name, Namespace: provider.Metadata.Namespace,
-		Generation: provider.Metadata.Generation, ObservedGeneration: provider.Status.ObservedGeneration, Phase: provider.Status.Phase,
-		Replicas: provider.Status.Replicas, ReadyReplicas: provider.Status.ReadyReplicas, AvailableReplicas: provider.Status.AvailableReplicas,
-		Succeeded: provider.Status.Succeeded, Failed: provider.Status.Failed,
-	}
-	for _, condition := range provider.Status.Conditions {
-		if len(condition.Type) > 128 || len(condition.Status) > 32 || len(condition.Reason) > 256 {
-			return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-		}
-		projection.Conditions = append(projection.Conditions, kubernetesConditionProjection{Type: condition.Type, Status: condition.Status, Reason: condition.Reason})
-	}
-	projected, err := json.Marshal(projection)
-	if err != nil || len(projected) > maximumResponseBytes {
-		return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-	}
-	return string(projected), nil
+	return parsed
 }
