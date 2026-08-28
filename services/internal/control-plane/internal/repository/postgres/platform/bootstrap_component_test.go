@@ -63,6 +63,8 @@ var (
 	bootstrapComponentInstructionDraftReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_effect_receipt_count.sql
 	bootstrapComponentEffectReceiptCountQuery string
+	//go:embed testdata/sql/bootstrap_component_integration_invocation_effect_key.sql
+	bootstrapComponentIntegrationInvocationEffectKeyQuery string
 )
 
 func TestBootstrapComponent(t *testing.T) {
@@ -151,7 +153,7 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("integration configuration and grants", func(t *testing.T) {
 		testIntegrationConfigurationAndGrants(t, ctx, repository, pool)
 	})
-	t.Run("integration write waits for Human Gate and records one effect receipt", func(t *testing.T) {
+	t.Run("integration read and Human Gate decisions preserve effect cardinality", func(t *testing.T) {
 		testIntegrationEffectLifecycle(t, ctx, repository, pool)
 	})
 	t.Run("optional interaction failure is a separate live incident", func(t *testing.T) {
@@ -570,34 +572,133 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 		t.Fatalf("create effect project: project=%#v err=%v", project.Project, err)
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "integration-effect-agent", "Integration operator")
+	readGranted, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeIntegrationGrant, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-effect-read-grant", ExpectedVersion: &connectedVersion},
+		Payload:  command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: true},
+	})
+	if err != nil || readGranted.Connection == nil || len(readGranted.Connection.Grants) != 1 ||
+		readGranted.Connection.Grants[0].Risk != "READ" || readGranted.Connection.Grants[0].ApprovalPolicy != "NONE" {
+		t.Fatalf("create read grant: connection=%#v err=%v", readGranted.Connection, err)
+	}
 	granted, err := service.Execute(ctx, command.Command{
 		Kind: command.ChangeIntegrationGrant, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "integration-effect-grant", ExpectedVersion: &connectedVersion},
+		Mutation: value.Mutation{IdempotencyKey: "integration-effect-write-grant", ExpectedVersion: &readGranted.Connection.Version},
 		Payload:  command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.write", AgentRef: agent.Ref, Enabled: true},
 	})
-	if err != nil || granted.Connection == nil || len(granted.Connection.Grants) != 1 ||
-		granted.Connection.Grants[0].Risk != "WRITE" || granted.Connection.Grants[0].ApprovalPolicy != "HUMAN_EACH_EFFECT" {
+	var writeGrant *entity.IntegrationGrant
+	if granted.Connection != nil {
+		for index := range granted.Connection.Grants {
+			if granted.Connection.Grants[index].CapabilityKey == "synthetic.journal.write" {
+				writeGrant = &granted.Connection.Grants[index]
+				break
+			}
+		}
+	}
+	if err != nil || granted.Connection == nil || len(granted.Connection.Grants) != 2 || writeGrant == nil ||
+		writeGrant.Risk != "WRITE" || writeGrant.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
 		t.Fatalf("create write grant: connection=%#v err=%v", granted.Connection, err)
 	}
-	launched, err := service.Execute(ctx, command.Command{
+	rejectedRun, err := service.Execute(ctx, command.Command{
 		Kind: command.LaunchRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-effect-run"},
-		Payload: command.LaunchRunInput{ProjectRef: project.Project.Ref, Title: "Write journal", Task: "Write one bounded journal entry.", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}},
+		Payload: command.LaunchRunInput{ProjectRef: project.Project.Ref, Title: "Read and reject journal write", Task: "Read the journal and request one rejected write.", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}},
 	})
-	if err != nil || launched.Run == nil {
-		t.Fatalf("launch effect run: run=%#v err=%v", launched.Run, err)
+	if err != nil || rejectedRun.Run == nil {
+		t.Fatalf("launch rejected effect run: run=%#v err=%v", rejectedRun.Run, err)
 	}
-	claimedExecution, err := service.Execute(ctx, command.Command{
+	rejectedExecutionResult, err := service.Execute(ctx, command.Command{
 		Kind: command.ClaimExecution, Principal: runtimeWorker, Mutation: value.Mutation{IdempotencyKey: "integration-effect-runtime-claim"},
 		Payload: command.LeaseInput{WorkloadInstance: "runtime-integration-effect", Limit: 1},
 	})
-	if err != nil || len(claimedExecution.RuntimeItems) != 1 {
-		t.Fatalf("claim effect runtime: claims=%d err=%v", len(claimedExecution.RuntimeItems), err)
+	if err != nil || len(rejectedExecutionResult.RuntimeItems) != 1 {
+		t.Fatalf("claim rejected effect runtime: claims=%d err=%v", len(rejectedExecutionResult.RuntimeItems), err)
 	}
-	execution := claimedExecution.RuntimeItems[0]
+	rejectedExecution := rejectedExecutionResult.RuntimeItems[0]
+	readResolved, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, map[string]string{
+		"run_ref": stringMap(rejectedExecution, "runRef"), "node_ref": stringMap(rejectedExecution, "nodeRef"),
+		"connection_ref": created.Connection.Ref, "capability_key": "synthetic.journal.read",
+		"idempotency_key": "integration-effect-read-invocation",
+	}, map[string]any{})
+	if err != nil || stringMap(readResolved, "state") != "READY" || stringMap(readResolved, "gateRef") != "" {
+		t.Fatalf("resolve read invocation without gate: result=%#v err=%v", readResolved, err)
+	}
+	readClaims, err := service.ClaimIntegrationInvocations(ctx, gateway, "integration-gateway-component", 1)
+	if err != nil || len(readClaims) != 1 || stringMap(readClaims[0], "capabilityKey") != "synthetic.journal.read" {
+		t.Fatalf("claim read invocation without gate: claims=%#v err=%v", readClaims, err)
+	}
+	readClaim := readClaims[0]
+	readSummary := `{"journal":"effect-main","effect_key":"` + stringMap(readClaim, "effectKey") + `","sequence":0,"value":"","count":0}`
+	readResponseDigest := sha256.Sum256([]byte(readSummary))
+	if completedRead, err := service.Execute(ctx, command.Command{
+		Kind: command.CompleteIntegrationInvocation, Principal: gateway,
+		Mutation: value.Mutation{IdempotencyKey: "integration-effect-read-complete"},
+		Payload: command.IntegrationInvocationInput{
+			InvocationRef: stringMap(readClaim, "invocationRef"), LeaseRef: stringMap(readClaim, "leaseRef"),
+			Fence: stringMap(readClaim, "fence"), Generation: readClaim["generation"].(int64), Success: true,
+			ResultSummary: readSummary, EffectKey: stringMap(readClaim, "effectKey"), InputDigest: stringMap(readClaim, "inputDigest"),
+			ProviderEffectRef: "synthetic-journal:effect-main", ResponseDigest: hex.EncodeToString(readResponseDigest[:]),
+		},
+	}); err != nil || completedRead.Run == nil {
+		t.Fatalf("complete read invocation: result=%#v err=%v", completedRead.Run, err)
+	}
+	rejected, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, map[string]string{
+		"run_ref": stringMap(rejectedExecution, "runRef"), "node_ref": stringMap(rejectedExecution, "nodeRef"),
+		"connection_ref": created.Connection.Ref, "capability_key": "synthetic.journal.write",
+		"idempotency_key": "integration-effect-rejected-invocation",
+	}, map[string]any{"value": "rejected-value"})
+	if err != nil || stringMap(rejected, "state") != "WAITING_APPROVAL" || stringMap(rejected, "gateRef") == "" {
+		t.Fatalf("resolve rejected invocation: result=%#v err=%v", rejected, err)
+	}
+	beforeRejection, err := service.ClaimIntegrationInvocations(ctx, gateway, "integration-gateway-component", 1)
+	if err != nil || len(beforeRejection) != 0 {
+		t.Fatalf("claim write before rejected Human Gate: claims=%#v err=%v", beforeRejection, err)
+	}
+	gateVersion := int64(1)
+	rejection, err := service.Execute(ctx, command.Command{
+		Kind: command.ResolveOwnerGate, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-effect-reject", ExpectedVersion: &gateVersion},
+		Payload:  command.GateResolutionInput{GateRef: stringMap(rejected, "gateRef"), Decision: "REJECT", Comment: "Reject exact journal write"},
+	})
+	if err != nil || rejection.Gate == nil || rejection.Gate.State != "REJECTED" || rejection.Run == nil || rejection.Run.State != "FAILED" {
+		t.Fatalf("reject integration effect: gate=%#v run=%#v err=%v", rejection.Gate, rejection.Run, err)
+	}
+	afterRejection, err := service.ClaimIntegrationInvocations(ctx, gateway, "integration-gateway-component", 1)
+	if err != nil || len(afterRejection) != 0 {
+		t.Fatalf("claim rejected effect: claims=%#v err=%v", afterRejection, err)
+	}
+	rejectedReadback, err := service.GetIntegrationInvocation(ctx, runtimeWorker, stringMap(rejected, "invocationRef"))
+	if err != nil || stringMap(rejectedReadback, "state") != "REJECTED" ||
+		stringMap(rejectedReadback, "safeErrorCode") != "INTEGRATION_REJECTED_BY_OWNER" || stringMap(rejectedReadback, "effectReceiptRef") != "" {
+		t.Fatalf("read rejected invocation without effect: result=%#v err=%v", rejectedReadback, err)
+	}
+	var rejectedReceiptCount int
+	var rejectedEffectKey string
+	if err := pool.QueryRow(ctx, bootstrapComponentIntegrationInvocationEffectKeyQuery, stringMap(rejected, "invocationRef")).Scan(&rejectedEffectKey); err != nil {
+		t.Fatalf("read rejected effect key: %v", err)
+	}
+	if err := pool.QueryRow(ctx, bootstrapComponentEffectReceiptCountQuery, rejectedEffectKey).Scan(&rejectedReceiptCount); err != nil || rejectedReceiptCount != 0 {
+		t.Fatalf("rejected effect receipt count=%d err=%v", rejectedReceiptCount, err)
+	}
+
+	launched, err := service.Execute(ctx, command.Command{
+		Kind: command.LaunchRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-effect-approved-run"},
+		Payload: command.LaunchRunInput{ProjectRef: project.Project.Ref, Title: "Approve journal write", Task: "Write one bounded journal entry after approval.", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}},
+	})
+	if err != nil || launched.Run == nil {
+		t.Fatalf("launch approved effect run: run=%#v err=%v", launched.Run, err)
+	}
+	approvedExecutionResult, err := service.Execute(ctx, command.Command{
+		Kind: command.ClaimExecution, Principal: runtimeWorker, Mutation: value.Mutation{IdempotencyKey: "integration-effect-approved-runtime-claim"},
+		Payload: command.LeaseInput{WorkloadInstance: "runtime-integration-effect", Limit: 1},
+	})
+	if err != nil || len(approvedExecutionResult.RuntimeItems) != 1 {
+		t.Fatalf("claim approved effect runtime: claims=%d err=%v", len(approvedExecutionResult.RuntimeItems), err)
+	}
+	execution := approvedExecutionResult.RuntimeItems[0]
 	resolved, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, map[string]string{
 		"run_ref": stringMap(execution, "runRef"), "node_ref": stringMap(execution, "nodeRef"),
 		"connection_ref": created.Connection.Ref, "capability_key": "synthetic.journal.write",
-		"idempotency_key": "integration-effect-invocation",
+		"idempotency_key": "integration-effect-approved-invocation",
 	}, map[string]any{"value": "approved-value"})
 	if err != nil || stringMap(resolved, "state") != "WAITING_APPROVAL" || stringMap(resolved, "gateRef") == "" {
 		t.Fatalf("resolve protected invocation: result=%#v err=%v", resolved, err)
@@ -606,7 +707,6 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	if err != nil || len(beforeApproval) != 0 {
 		t.Fatalf("claim before Human Gate: claims=%#v err=%v", beforeApproval, err)
 	}
-	gateVersion := int64(1)
 	approved, err := service.Execute(ctx, command.Command{
 		Kind: command.ResolveOwnerGate, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "integration-effect-approve", ExpectedVersion: &gateVersion},
@@ -620,7 +720,7 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 		t.Fatalf("claim approved effect: claims=%#v err=%v", claims, err)
 	}
 	claim := claims[0]
-	resultSummary := `{"journal":"effect-main","effect_key":"` + stringMap(claim, "effectKey") + `","sequence":1,"value":"approved-value"}`
+	resultSummary := `{"journal":"effect-main","effect_key":"` + stringMap(claim, "effectKey") + `","sequence":1,"value":"approved-value","count":1}`
 	responseDigest := sha256.Sum256([]byte(resultSummary))
 	completion := command.IntegrationInvocationInput{
 		InvocationRef: stringMap(claim, "invocationRef"), LeaseRef: stringMap(claim, "leaseRef"),
@@ -653,6 +753,10 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	var receiptCount int
 	if err := pool.QueryRow(ctx, bootstrapComponentEffectReceiptCountQuery, stringMap(claim, "effectKey")).Scan(&receiptCount); err != nil || receiptCount != 1 {
 		t.Fatalf("effect receipt count=%d err=%v", receiptCount, err)
+	}
+	afterCompletion, err := service.ClaimIntegrationInvocations(ctx, gateway, "integration-gateway-component", 1)
+	if err != nil || len(afterCompletion) != 0 {
+		t.Fatalf("claim completed effect retry: claims=%#v err=%v", afterCompletion, err)
 	}
 	run, err := service.GetRun(ctx, owner, launched.Run.Ref)
 	if err != nil {

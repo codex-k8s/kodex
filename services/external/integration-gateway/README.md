@@ -4,7 +4,7 @@ title: Integration gateway
 type: service
 status: approved
 owner: backend
-version: 2.0.0
+version: 2.1.0
 updated: 2026-08-28
 ---
 
@@ -42,3 +42,29 @@ effect key, input digest, provider effect ref и response digest; повторн
 `/healthz` отражает жизнь процесса, `/readyz` читает локальный снимок sidecar
 authority. Доступность control-plane и внешних систем наблюдается отдельным
 рабочим/diagnostic контуром и не меняет Kubernetes readiness pod.
+
+## Disposable synthetic fixture
+
+Бинарь `cmd/integration-synthetic` является только локальной E2E-оснасткой и
+не входит в `web-only`, `web-with-mattermost`, staging или production render.
+`tools/dev/render-local.sh` добавляет его отдельным overlay в `kodex-system` и
+запускает через общий hot-reload runner.
+
+Fixture поддерживает только закрытый контракт:
+
+- `GET /healthz` и `GET /readyz`;
+- `GET /v1/journals/{journal}` без изменения состояния;
+- `POST /v1/journals/{journal}/entries` со строгим JSON `{"value":"..."}` и
+  обязательным `Idempotency-Key`.
+
+Journal ограничен 120 байтами, value — 4096 байтами, body — 8 KiB. Неизвестные,
+повторяющиеся или дополнительные JSON fields отклоняются. Один ключ и тот же
+request возвращают сохранённый provider readback; тот же ключ с другим journal
+или value получает `409` без эффекта. Состояние ограничено, потокобезопасно и
+существует только в течение жизни одного disposable процесса.
+
+`make test-integration-synthetic` выполняет race-тесты fixture и synthetic
+adapter, проверяет exact local NetworkPolicy и доказывает отсутствие Deployment
+в release profiles. PostgreSQL component test `TestBootstrapComponent` содержит
+lifecycle-сценарии READ без gate, WRITE до Human Gate без claim, REJECT без
+effect receipt, APPROVE с одной receipt и exact retry/readback без нового claim.
