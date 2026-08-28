@@ -32,6 +32,7 @@ done
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'Kubernetes context mismatch'
 
 namespace=kodex-system
+object_storage_secret_name=""
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
@@ -149,7 +150,8 @@ ensure_seed_secrets() {
 
 readback_local_object_storage_secret() {
   local state
-  state=$(kubectl -n "$namespace" get secret/kodex-external-s3 -o json 2>/dev/null) ||
+  [[ -n "$object_storage_secret_name" ]] || fail 'local object storage Secret name is absent'
+  state=$(kubectl -n "$namespace" get "secret/$object_storage_secret_name" -o json 2>/dev/null) ||
     fail 'local object storage Secret is absent'
   jq -e '
     .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
@@ -236,66 +238,77 @@ readback_session_archive() {
 }
 
 ensure_local_object_storage_secret() {
-  local secret_directory="$temporary_directory/object-storage-secret" state
-  state=$(kubectl -n "$namespace" get secret/kodex-external-s3 -o json 2>/dev/null || true)
-  if [[ -n "$state" ]]; then
-    if jq -e '
+  local secret_directory="$temporary_directory/object-storage-secret" state manifest digest current_digest
+  state=$(kubectl -n "$namespace" get secrets \
+    -l 'kodex.dev/local-credential=object-storage' -o json | jq -c '
+      [.items[] | select(
+        .immutable == true and
+        ((.data["access-key"] | @base64d) | length == 32 and test("^[a-f0-9]+$")) and
+        ((.data["secret-key"] | @base64d) | length == 64 and test("^[a-f0-9]+$"))
+      )] |
+      if length > 1 then error("multiple local object storage credentials")
+      elif length == 1 then .[0] else empty end
+    ')
+  if [[ -z "$state" ]]; then
+    state=$(kubectl -n "$namespace" get secret/kodex-external-s3 -o json 2>/dev/null || true)
+    if [[ -n "$state" ]] && ! jq -e '
+      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+      .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
+    ' <<<"$state" >/dev/null; then
+      fail 'legacy object storage Secret is not owned by the local Kodex profile'
+    fi
+    if [[ -z "$state" ]] || ! jq -e '
       ((.data["access-key"] | @base64d) | length == 32 and test("^[a-f0-9]+$")) and
       ((.data["secret-key"] | @base64d) | length == 64 and test("^[a-f0-9]+$"))
     ' <<<"$state" >/dev/null 2>&1; then
-      readback_local_object_storage_secret
-      return
+      install -d -m 0700 "$secret_directory"
+      printf '%s' "$(openssl rand -hex 16)" >"$secret_directory/access-key"
+      printf '%s' "$(openssl rand -hex 32)" >"$secret_directory/secret-key"
+      printf '%s' 'http://seaweedfs-s3.kodex-system.svc.cluster.local:8333' >"$secret_directory/endpoint"
+      printf '%s' 'us-east-1' >"$secret_directory/region"
+      printf '%s' 'kodex-artifacts' >"$secret_directory/bucket"
+      jq -n --rawfile access_key "$secret_directory/access-key" \
+        --rawfile secret_key "$secret_directory/secret-key" '
+          {identities:[{name:"control-plane",credentials:[{
+            accessKey:$access_key,secretKey:$secret_key
+          }],actions:["Admin","Read","List","Tagging","Write"]}]}
+        ' >"$secret_directory/s3.json"
+      chmod 0600 "$secret_directory"/*
+      state=$(kubectl -n "$namespace" create secret generic object-storage-candidate \
+        --from-file=access-key="$secret_directory/access-key" \
+        --from-file=secret-key="$secret_directory/secret-key" \
+        --from-file=endpoint="$secret_directory/endpoint" \
+        --from-file=region="$secret_directory/region" \
+        --from-file=bucket="$secret_directory/bucket" \
+        --from-file=s3.json="$secret_directory/s3.json" \
+        --dry-run=client -o json)
     fi
-    jq -e '
-      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
-      .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
-    ' <<<"$state" >/dev/null ||
-      fail 'malformed object storage Secret is not owned by the local Kodex profile'
-    kubectl -n "$namespace" delete secret/kodex-external-s3 --wait=true --timeout=2m >/dev/null
-    kubectl -n "$namespace" delete pod/seaweedfs-0 --ignore-not-found \
-      --wait=true --timeout=3m >/dev/null
-  fi
-
-  install -d -m 0700 "$secret_directory"
-  printf '%s' "$(openssl rand -hex 16)" >"$secret_directory/access-key"
-  printf '%s' "$(openssl rand -hex 32)" >"$secret_directory/secret-key"
-  printf '%s' 'http://seaweedfs-s3.kodex-system.svc.cluster.local:8333' >"$secret_directory/endpoint"
-  printf '%s' 'us-east-1' >"$secret_directory/region"
-  printf '%s' 'kodex-artifacts' >"$secret_directory/bucket"
-  jq -n --rawfile access_key "$secret_directory/access-key" \
-    --rawfile secret_key "$secret_directory/secret-key" '
-      {
-        identities: [{
-          name: "control-plane",
-          credentials: [{
-            accessKey: $access_key,
-            secretKey: $secret_key
-          }],
-          actions: ["Admin","Read","List","Tagging","Write"]
-        }]
-      }
-    ' >"$secret_directory/s3.json"
-  chmod 0600 "$secret_directory"/*
-
-  kubectl -n "$namespace" create secret generic kodex-external-s3 \
-    --from-file=access-key="$secret_directory/access-key" \
-    --from-file=secret-key="$secret_directory/secret-key" \
-    --from-file=endpoint="$secret_directory/endpoint" \
-    --from-file=region="$secret_directory/region" \
-    --from-file=bucket="$secret_directory/bucket" \
-    --from-file=s3.json="$secret_directory/s3.json" \
-    --dry-run=client -o yaml |
-    yq '
-      .immutable = true |
-      .metadata.labels = {
+    digest=$(jq -Sc '.data' <<<"$state" | sha256sum | awk '{print $1}')
+    object_storage_secret_name="kodex-external-s3-local-${digest:0:16}"
+    manifest=$(jq --arg name "$object_storage_secret_name" '
+      .metadata = {name:$name,namespace:"kodex-system",labels:{
         "app.kubernetes.io/part-of":"kodex",
         "app.kubernetes.io/name":"seaweedfs",
         "app.kubernetes.io/component":"object-storage",
         "app.kubernetes.io/managed-by":"tools-dev",
-        "kodex.dev/local-profile":"hot-reload"
-      }
-    ' |
-    kubectl apply --server-side --field-manager=kodex-local-dev -f - >/dev/null
+        "kodex.dev/local-profile":"hot-reload",
+        "kodex.dev/local-credential":"object-storage"
+      }} | .immutable = true | del(.status)
+    ' <<<"$state")
+    if kubectl -n "$namespace" get "secret/$object_storage_secret_name" >/dev/null 2>&1; then
+      current_digest=$(kubectl -n "$namespace" get "secret/$object_storage_secret_name" -o json |
+        jq -Sc '.data' | sha256sum | awk '{print $1}')
+      [[ "$current_digest" == "$digest" ]] || fail 'content-addressed object storage Secret differs'
+    else
+      kubectl create --field-manager=kodex-local-dev -f - <<<"$manifest" >/dev/null
+    fi
+  else
+    object_storage_secret_name=$(jq -r '.metadata.name' <<<"$state")
+  fi
+  OBJECT_STORAGE_SECRET_NAME="$object_storage_secret_name" yq -i '
+    (.. | select(tag == "!!str")) |=
+      sub("^kodex-external-s3$"; strenv(OBJECT_STORAGE_SECRET_NAME))
+  ' "$render"
   readback_local_object_storage_secret
 }
 
@@ -304,7 +317,7 @@ write_local_backup_controller_credentials() {
   local s3_state="$temporary_directory/backup-controller-s3.json"
   local postgresql_state="$temporary_directory/backup-controller-postgresql.json"
 
-  kubectl -n "$namespace" get secret/kodex-external-s3 -o json >"$s3_state" ||
+  kubectl -n "$namespace" get "secret/$object_storage_secret_name" -o json >"$s3_state" ||
     fail 'local object storage Secret is unavailable for backup-controller'
   kubectl -n "$namespace" get secret/kodex-postgresql-runtime-credentials -o json \
     >"$postgresql_state" ||
