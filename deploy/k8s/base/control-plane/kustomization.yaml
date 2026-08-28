@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: kodex-system
 resources:
   - serviceaccount.yaml
+  - credential-rbac.yaml
   - deployment.yaml
   - service.yaml
   - poddisruptionbudget.yaml

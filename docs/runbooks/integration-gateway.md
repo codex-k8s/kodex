@@ -4,7 +4,7 @@ title: Диагностика integration-gateway
 type: runbook
 status: approved
 owner: sre
-version: 3.0.0
+version: 3.1.0
 updated: 2026-08-28
 ---
 
@@ -54,11 +54,16 @@ receipt тот же invocation не исполняется повторно. Exa
 ## Credential revision
 
 Connection хранит только `secret_ref`, Secret UID, `resourceVersion`, revision
-и SHA-256 содержимого. Для shipped GitHub package допустим только ref вида
-`kodex-system/kodex-integration-credentials#token`. Gateway сверяет все поля,
-читает ровно key `token` из root-mounted Secret и проверяет digest перед
-созданием provider client. В connection config, Proto, PostgreSQL, логах и
-документации token value отсутствует.
+и SHA-256 содержимого. Control Center сначала создаёт Connection без credential,
+а затем отдельной OCC-командой передаёт значение в `control-plane`.
+`control-plane` имеет `get`/`update` только на Secret
+`kodex-integration-credentials`, создаёт детерминированный data key и немедленно
+очищает копию значения в памяти. Browser не назначает Secret UID,
+`resourceVersion`, ref или digest. Для shipped GitHub package допустим только
+ref вида `kodex-system/kodex-integration-credentials#integration-<digest>`.
+Gateway сверяет все metadata, читает ровно указанный key из root-mounted Secret
+и проверяет digest перед созданием provider client. В connection config,
+публичном readback, PostgreSQL, логах и документации token value отсутствует.
 
 ## Exact egress
 
@@ -85,7 +90,7 @@ KODEX_GITHUB_BOT_PAT=<Kubernetes Secret source only>
 
 Repository private; `kodex-agent` имеет pull/push без admin. Значение
 `KODEX_GITHUB_BOT_PAT` не включается в package, Connection, manifest, command
-line или отчёт. Secret controller создаёт/обновляет
+line или отчёт. Двухфазная команда Control Center создаёт/обновляет data key в
 `kodex-integration-credentials`, после чего Connection получает только
 authoritative Secret metadata и content digest. В production fixture owner и
 repository не имеют default и всегда задаются Connection config.
@@ -106,6 +111,6 @@ repository не имеют default и всегда задаются Connection c
 Secret values, provider bodies и MCP bearer не печатаются. Ошибка возвращает
 stable key; локализованный пользовательский текст находится в YAML i18n.
 
-Frontend и browser E2E не входят в backend unit Issue #999 и остаются явно
-зафиксированной проверкой parent. Локальная реализация не создаёт GitHub
-repository и не обращается к cluster.
+Frontend и browser E2E проверяются parent-волной #992. Локальная проверка
+использует отдельный private fixture repository и bot token с минимальными
+правами; production repository и credentials в этот контур не входят.

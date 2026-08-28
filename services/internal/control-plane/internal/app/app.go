@@ -24,6 +24,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/credentialmaterializer"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/authorityproof"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
@@ -93,7 +94,15 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	}); err != nil {
 		return fmt.Errorf("configure role image lifecycle: %w", err)
 	}
-	service, err := platformservice.New(repository)
+	credentialMaterializer, err := credentialmaterializer.InCluster(
+		config.IntegrationCredentialNamespace,
+		config.IntegrationCredentialSecretName,
+		config.KubernetesAPITimeout,
+	)
+	if err != nil {
+		return fmt.Errorf("construct integration credential materializer: %w", err)
+	}
+	service, err := platformservice.New(repository, platformservice.WithCredentialMaterializer(credentialMaterializer))
 	if err != nil {
 		return fmt.Errorf("construct platform service: %w", err)
 	}

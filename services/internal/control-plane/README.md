@@ -32,9 +32,13 @@ updated: 2026-08-28
 - role image recipe/build/admission/promotion metadata.
 
 Сервис не хранит provider и integration secret values, не создаёт Kubernetes
-Pod и не выполняет внешние эффекты. Runtime materialization принадлежит
-`runtime-controller`, секреты и внешние вызовы интеграций —
-`integration-gateway`, browser boundary — `control-api-gateway`.
+Pod и не выполняет внешние эффекты. Для credential интеграции он выполняет
+только узкую server-owned материализацию одного data key в Secret
+`kodex-system/kodex-integration-credentials`: значение находится в памяти лишь
+на время запроса, а в PostgreSQL остаются UID, `resourceVersion`, digest и
+immutable revision. Runtime materialization принадлежит `runtime-controller`,
+чтение credential и внешние вызовы интеграций — `integration-gateway`, browser
+boundary — `control-api-gateway`.
 
 ## Контракты
 
@@ -55,6 +59,13 @@ Subject, Organization, Membership и Project по PostgreSQL state и выпус
 короткоживущее proof. Рабочий RPC проходит local issuer/verifier и exact
 operation binding из generated policy. Для worker используется отдельный
 bounded application grant и server-owned high-watermark.
+
+Credential connection настраивается двумя отдельными командами. Первая создаёт
+Connection в `NOT_CONFIGURED` без secret metadata. Вторая после повторной
+проверки authority и OCC материализует значение через exact Kubernetes RBAC,
+создаёт immutable `IntegrationCredentialRevision` и переводит Connection в
+`CONFIGURED`. Один idempotency key всегда соответствует одному детерминированному
+data key; повтор с другим значением закрыто отклоняется.
 
 ## PostgreSQL
 

@@ -53,6 +53,7 @@ const (
 	SetScheduleEnabled            Kind = "SET_SCHEDULE_ENABLED"
 	ArchiveSchedule               Kind = "ARCHIVE_SCHEDULE"
 	CreateConnection              Kind = "CREATE_INTEGRATION_CONNECTION"
+	ConfigureConnectionCredential Kind = "CONFIGURE_INTEGRATION_CONNECTION_CREDENTIAL"
 	TestConnection                Kind = "TEST_INTEGRATION_CONNECTION"
 	SetConnectionEnabled          Kind = "SET_INTEGRATION_CONNECTION_ENABLED"
 	ChangeIntegrationGrant        Kind = "CHANGE_INTEGRATION_GRANT"
@@ -141,10 +142,10 @@ type ScheduleInput struct {
 	Enabled                                                                                                          bool
 }
 type ConnectionInput struct {
-	Ref, DefinitionKey, Name string
-	PublicConfiguration      map[string]any
-	CredentialRevision       *entity.IntegrationCredentialRevision
-	Enabled                  bool
+	Ref, DefinitionKey, Name, MaterializationRef string
+	PublicConfiguration                          map[string]any
+	CredentialRevision                           *entity.IntegrationCredentialRevision
+	Enabled                                      bool
 }
 type IntegrationGrantInput struct {
 	ConnectionRef, CapabilityKey, AgentRef, WorkflowRef string

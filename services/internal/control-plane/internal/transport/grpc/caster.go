@@ -415,9 +415,6 @@ func castConnection(value entity.IntegrationConnection) *controlplanev1.Integrat
 		CredentialsHint: credentialsHint, LastTestedAt: optionalTimestamp(value.LastTestedAt), LastTestOutcome: value.LastTestSummary,
 		PublicConfiguration: structure(value.PublicConfiguration), NextActions: nextActions(value.NextActions),
 	}
-	if credential := value.CredentialRevision; credential != nil {
-		result.CredentialRevision = castIntegrationCredential(*credential)
-	}
 	for _, capability := range value.Capabilities {
 		result.Capabilities = append(result.Capabilities, castIntegrationCapability(capability))
 	}

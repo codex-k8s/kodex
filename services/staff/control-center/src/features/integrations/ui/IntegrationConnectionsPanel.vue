@@ -1,7 +1,14 @@
 <script setup lang="ts">
-import { FlaskConical, Power, PowerOff, ShieldCheck } from "@lucide/vue";
+import {
+  FlaskConical,
+  KeyRound,
+  Power,
+  PowerOff,
+  ShieldCheck,
+} from "@lucide/vue";
 import { useI18n } from "vue-i18n";
 
+import { canConfigureCredential } from "@/features/integrations/connection-setup";
 import { connectionAllows } from "@/features/integrations/ui/model";
 import type {
   IntegrationConnection,
@@ -20,6 +27,7 @@ const emit = defineEmits<{
     connection: IntegrationConnection,
     action: "TEST" | "ENABLE" | "DISABLE",
   ];
+  credential: [connection: IntegrationConnection];
   grants: [connection: IntegrationConnection];
 }>();
 
@@ -59,8 +67,20 @@ const { t } = useI18n();
               definitions[connection.definitionKey]?.name ??
               connection.definitionKey
             }}
-            · {{ connection.credentialsHint }}
           </p>
+          <div class="credential-state">
+            <StatusBadge
+              :state="
+                connection.credentialsConfigured ? 'READY' : 'NEEDS_ATTENTION'
+              "
+              :label="
+                connection.credentialsConfigured
+                  ? t('integrations.credentialsConfigured')
+                  : t('integrations.credentialsNotConfigured')
+              "
+            />
+            <span>{{ connection.credentialsHint }}</span>
+          </div>
           <p v-if="connection.lastTestOutcome" class="last-test">
             {{ t("integrations.lastTest") }}: {{ connection.lastTestOutcome }}
           </p>
@@ -90,6 +110,21 @@ const { t } = useI18n();
         </div>
 
         <div class="connection-actions">
+          <button
+            v-if="
+              canConfigureCredential(
+                definitions[connection.definitionKey],
+                connection,
+              )
+            "
+            class="button button--primary"
+            type="button"
+            :disabled="busyRef === connection.ref"
+            @click="emit('credential', connection)"
+          >
+            <KeyRound :size="15" aria-hidden="true" />
+            {{ t("integrations.configureCredential") }}
+          </button>
           <button
             v-if="connectionAllows(connection, 'TEST')"
             class="button"
@@ -150,7 +185,8 @@ const { t } = useI18n();
 .connection-title,
 .connection-actions,
 .connection-facts,
-.connection-capabilities {
+.connection-capabilities,
+.credential-state {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -207,6 +243,11 @@ const { t } = useI18n();
   overflow-wrap: anywhere;
 }
 .last-test {
+  font-size: 0.8rem;
+}
+.credential-state {
+  flex-wrap: wrap;
+  color: var(--muted);
   font-size: 0.8rem;
 }
 .connection-capabilities {

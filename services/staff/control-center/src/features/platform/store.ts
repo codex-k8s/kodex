@@ -20,6 +20,7 @@ import {
   changePlatformMembership,
   changeProjectMembership,
   completeOnboarding,
+  configureIntegrationConnectionCredential,
   createAgent,
   createAssistantConversation,
   createInstructionDraft,
@@ -122,7 +123,12 @@ import type {
   WorkflowCommand,
   WorkflowInput,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate, type MutationHeaders } from "@/shared/api/mutation";
+import {
+  csrfToken,
+  etag,
+  mutate,
+  type MutationHeaders,
+} from "@/shared/api/mutation";
 import {
   asProblem,
   type AppProblem,
@@ -1413,6 +1419,31 @@ export const usePlatformStore = defineStore("platform", () => {
     return readback.data;
   }
 
+  async function configureConnectionCredential(
+    connection: Pick<IntegrationConnection, "ref" | "version">,
+    credentialValue: string,
+    requestIdempotencyKey: string,
+  ): Promise<IntegrationConnection> {
+    try {
+      const result = await unwrap(
+        configureIntegrationConnectionCredential({
+          path: { connectionRef: connection.ref },
+          body: { value: credentialValue },
+          headers: {
+            "If-Match": etag(connection.version),
+            "Idempotency-Key": requestIdempotencyKey,
+            "X-CSRF-Token": csrfToken(),
+          },
+          signal: requestSignal(),
+        }),
+      );
+      connections[result.data.ref] = result.data;
+      return result.data;
+    } catch (error) {
+      throw asProblem(error);
+    }
+  }
+
   async function changeConnection(
     connection: IntegrationConnection,
     action: IntegrationConnectionCommand["action"],
@@ -1724,6 +1755,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loadSchedules,
     loadIntegrations,
     loadConnection,
+    readConnection,
     loadAssistant,
     loadMembers,
     loadMembershipCandidates,
@@ -1754,6 +1786,7 @@ export const usePlatformStore = defineStore("platform", () => {
     saveSchedule,
     changeSchedule,
     connectIntegration,
+    configureConnectionCredential,
     changeConnection,
     changeConnectionGrant,
     newConversation,

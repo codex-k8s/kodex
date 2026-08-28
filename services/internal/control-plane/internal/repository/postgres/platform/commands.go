@@ -170,7 +170,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeArtifactBinding(ctx, tx, scope, input)
 	case command.CreateSchedule, command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule:
 		return repository.changeSchedule(ctx, tx, scope, input)
-	case command.CreateConnection, command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
+	case command.CreateConnection, command.ConfigureConnectionCredential, command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
 		return repository.changeConnection(ctx, tx, scope, input)
 	case command.CreateAssistantConversation, command.AddAssistantTurn, command.ApplyAssistantPlan, command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return repository.changeAssistant(ctx, tx, scope, input)

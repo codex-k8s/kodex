@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { PackageOpen } from "@lucide/vue";
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 
+import {
+  canConfigureCredential,
+  definitionRequiresCredential,
+  executeConnectionSetup,
+  type PendingCredentialSetup,
+} from "@/features/integrations/connection-setup";
 import IntegrationApprovalPanel from "@/features/integrations/ui/IntegrationApprovalPanel.vue";
 import IntegrationCatalogPanel from "@/features/integrations/ui/IntegrationCatalogPanel.vue";
 import IntegrationConnectionsPanel from "@/features/integrations/ui/IntegrationConnectionsPanel.vue";
@@ -21,6 +27,7 @@ import type {
   IntegrationConnection,
   IntegrationConfigurationField,
 } from "@/shared/api/generated/openapi/types.gen";
+import { idempotencyKey } from "@/shared/api/mutation";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
@@ -31,8 +38,13 @@ const activeSection = ref<IntegrationsSection>("CONNECTIONS");
 const catalogSearch = ref("");
 const catalogCategory = ref("");
 const dialog = ref(false);
+const dialogMode = ref<"CREATE" | "CREDENTIAL">("CREATE");
 const busy = ref(false);
 const problem = ref<AppProblem>();
+const credentialStepFailed = ref(false);
+const credentialRequired = ref(false);
+const credentialValue = ref("");
+const pendingCredential = ref<PendingCredentialSetup>();
 const commandRef = ref("");
 const grantConnectionRef = ref("");
 const targetsLoading = ref(false);
@@ -80,6 +92,25 @@ const visibleGrants = computed(() =>
 const selectedDefinition = computed(
   () => platform.definitions[form.definitionKey],
 );
+const requiresCredential = computed(() =>
+  definitionRequiresCredential(selectedDefinition.value),
+);
+const credentialProblemKey = computed(() => {
+  switch (problem.value?.kind) {
+    case "unauthorized":
+      return "integrations.credentialErrors.unauthorized";
+    case "forbidden":
+      return "integrations.credentialErrors.forbidden";
+    case "not-found":
+      return "integrations.credentialErrors.notFound";
+    case "conflict":
+      return "integrations.credentialErrors.conflict";
+    case "unavailable":
+      return "integrations.credentialErrors.unavailable";
+    default:
+      return "integrations.credentialErrors.default";
+  }
+});
 const grantConnection = computed(() =>
   grantConnectionRef.value
     ? platform.connections[grantConnectionRef.value]
@@ -103,13 +134,73 @@ function selectSection(section: IntegrationsSection): void {
 function openConnection(definitionKey: string): void {
   const definition = platform.definitions[definitionKey];
   if (!canCreateConnection.value || !definition?.available) return;
+  dialogMode.value = "CREATE";
   form.definitionKey = definition.key;
   form.name = definition.name;
   form.configuration = Object.fromEntries(
     definition.configurationFields.map((field) => [field.key, ""]),
   );
+  credentialValue.value = "";
+  pendingCredential.value = undefined;
+  credentialStepFailed.value = false;
+  credentialRequired.value = false;
   problem.value = undefined;
   dialog.value = true;
+}
+
+function closeConnectionDialog(force = false): void {
+  if (busy.value && !force) return;
+  dialog.value = false;
+  dialogMode.value = "CREATE";
+  credentialValue.value = "";
+  pendingCredential.value = undefined;
+  credentialStepFailed.value = false;
+  credentialRequired.value = false;
+  problem.value = undefined;
+  form.definitionKey = "";
+  form.name = "";
+  form.configuration = {};
+}
+
+function credentialChanged(): void {
+  credentialRequired.value = false;
+  if (!credentialStepFailed.value || !pendingCredential.value) return;
+  pendingCredential.value = {
+    ...pendingCredential.value,
+    idempotencyKey: idempotencyKey(),
+  };
+  credentialStepFailed.value = false;
+  problem.value = undefined;
+}
+
+async function openCredential(
+  connection: IntegrationConnection,
+): Promise<void> {
+  const definition = platform.definitions[connection.definitionKey];
+  if (!canConfigureCredential(definition, connection)) return;
+  commandRef.value = connection.ref;
+  problem.value = undefined;
+  try {
+    const current = await platform.readConnection(connection.ref);
+    if (!canConfigureCredential(definition, current)) return;
+    dialogMode.value = "CREDENTIAL";
+    form.definitionKey = current.definitionKey;
+    form.name = current.name;
+    form.configuration = {};
+    credentialValue.value = "";
+    pendingCredential.value = {
+      connectionRef: current.ref,
+      version: current.version,
+      idempotencyKey: idempotencyKey(),
+    };
+    credentialStepFailed.value = false;
+    credentialRequired.value = false;
+    dialog.value = true;
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    commandRef.value = "";
+  }
 }
 
 function configurationValue(field: IntegrationConfigurationField): unknown {
@@ -123,27 +214,67 @@ function configurationValue(field: IntegrationConfigurationField): unknown {
 
 async function submit(): Promise<void> {
   const definition = selectedDefinition.value;
-  if (!canCreateConnection.value || !definition?.available) return;
+  if (
+    !definition?.available ||
+    (dialogMode.value === "CREATE" && !canCreateConnection.value)
+  )
+    return;
+  if (requiresCredential.value && !credentialValue.value.trim()) {
+    credentialRequired.value = true;
+    return;
+  }
   busy.value = true;
   problem.value = undefined;
+  credentialStepFailed.value = false;
+  credentialRequired.value = false;
   try {
     const publicConfiguration: Record<string, unknown> = {};
-    for (const field of definition.configurationFields) {
-      const value = configurationValue(field);
-      if (
-        (typeof value === "string" && value !== "") ||
-        (Array.isArray(value) && value.length > 0)
-      ) {
-        publicConfiguration[field.key] = value;
+    if (dialogMode.value === "CREATE") {
+      for (const field of definition.configurationFields) {
+        const value = configurationValue(field);
+        if (
+          (typeof value === "string" && value !== "") ||
+          (Array.isArray(value) && value.length > 0)
+        ) {
+          publicConfiguration[field.key] = value;
+        }
       }
     }
-    await platform.connectIntegration({
-      definitionKey: form.definitionKey,
-      name: form.name,
-      publicConfiguration,
-    });
-    dialog.value = false;
+    const outcome = await executeConnectionSetup(
+      {
+        connection: {
+          definitionKey: form.definitionKey,
+          name: form.name,
+          ...(Object.keys(publicConfiguration).length
+            ? { publicConfiguration }
+            : {}),
+        },
+        credentialValue: credentialValue.value,
+        requiresCredential: requiresCredential.value,
+        ...(pendingCredential.value
+          ? { pending: pendingCredential.value }
+          : {}),
+      },
+      {
+        create: (input) => platform.connectIntegration(input),
+        configure: (target, value, requestKey) =>
+          platform.configureConnectionCredential(
+            { ref: target.connectionRef, version: target.version },
+            value,
+            requestKey,
+          ),
+        createIdempotencyKey: idempotencyKey,
+      },
+    );
+    if (outcome.status === "CREDENTIAL_FAILED") {
+      dialogMode.value = "CREDENTIAL";
+      pendingCredential.value = outcome.pending;
+      credentialStepFailed.value = true;
+      problem.value = asProblem(outcome.error);
+      return;
+    }
     activeSection.value = "CONNECTIONS";
+    closeConnectionDialog(true);
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -251,6 +382,10 @@ onMounted(() => {
   void platform.loadIntegrations();
   void platform.loadProjects();
 });
+
+onBeforeUnmount(() => {
+  credentialValue.value = "";
+});
 </script>
 
 <template>
@@ -293,6 +428,7 @@ onMounted(() => {
           :definitions="platform.definitions"
           :busy-ref="commandRef"
           @command="command"
+          @credential="openCredential"
           @grants="openGrants"
         />
 
@@ -338,18 +474,25 @@ onMounted(() => {
     <ModalDialog
       v-if="dialog && selectedDefinition"
       :title="
-        $t('integrations.connectNamed', { name: selectedDefinition.name })
+        $t(
+          dialogMode === 'CREATE'
+            ? 'integrations.connectNamed'
+            : 'integrations.configureCredentialNamed',
+          { name: form.name },
+        )
       "
       :busy="busy"
-      @close="dialog = false"
+      @close="closeConnectionDialog"
     >
       <form id="integration-form" class="form-grid" @submit.prevent="submit">
-        <label class="field field--wide">
+        <label v-if="dialogMode === 'CREATE'" class="field field--wide">
           <span>{{ $t("common.name") }}</span>
           <input v-model.trim="form.name" required maxlength="160" autofocus />
         </label>
         <label
-          v-for="field in selectedDefinition.configurationFields"
+          v-for="field in dialogMode === 'CREATE'
+            ? selectedDefinition.configurationFields
+            : []"
           :key="field.key"
           class="field field--wide"
         >
@@ -364,13 +507,56 @@ onMounted(() => {
           />
           <small>{{ field.help }}</small>
         </label>
-        <section class="field field--wide card credential-boundary">
+        <section
+          v-if="dialogMode === 'CREDENTIAL'"
+          class="field field--wide card credential-summary"
+        >
+          <strong>{{ form.name }}</strong>
+          <p>{{ $t("integrations.metadataAlreadyCreated") }}</p>
+        </section>
+        <label
+          v-if="requiresCredential"
+          class="field field--wide card credential-boundary"
+        >
           <strong>{{ $t("integrations.credentials") }}</strong>
-          <p>{{ $t("integrations.credentialSetup") }}</p>
-          <small>{{ $t("integrations.masked") }}</small>
+          <span>{{ $t("integrations.credentialValue") }}</span>
+          <input
+            v-model="credentialValue"
+            type="password"
+            required
+            maxlength="16384"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+            :aria-invalid="credentialRequired"
+            aria-describedby="credential-help"
+            @input="credentialChanged"
+          />
+          <small id="credential-help">
+            {{ $t("integrations.credentialValueHelp") }}
+          </small>
+          <small v-if="credentialRequired" class="field-error">
+            {{ $t("integrations.credentialRequired") }}
+          </small>
+        </label>
+        <section v-else class="field field--wide card credential-boundary">
+          <strong>{{ $t("integrations.credentials") }}</strong>
+          <p>{{ $t("integrations.credentialsNotRequired") }}</p>
+        </section>
+        <section
+          v-if="credentialStepFailed && problem"
+          class="field field--wide credential-failure"
+          role="alert"
+        >
+          <strong>{{ $t("integrations.credentialFailedTitle") }}</strong>
+          <p>{{ $t(credentialProblemKey) }}</p>
+          <p>{{ $t("integrations.metadataPreserved") }}</p>
+          <small v-if="problem.correlationId">{{
+            problem.correlationId
+          }}</small>
         </section>
         <ProblemNotice
-          v-if="problem"
+          v-if="problem && !credentialStepFailed"
           class="field--wide"
           :problem="problem"
           compact
@@ -381,7 +567,7 @@ onMounted(() => {
           class="button"
           type="button"
           :disabled="busy"
-          @click="dialog = false"
+          @click="closeConnectionDialog()"
         >
           {{ $t("common.cancel") }}
         </button>
@@ -391,7 +577,11 @@ onMounted(() => {
           type="submit"
           :disabled="busy"
         >
-          {{ $t("integrations.connect") }}
+          {{
+            pendingCredential
+              ? $t("integrations.retryCredential")
+              : $t("integrations.connect")
+          }}
         </button>
       </template>
     </ModalDialog>
@@ -414,5 +604,20 @@ onMounted(() => {
 }
 .credential-boundary p {
   margin-bottom: 0;
+}
+.credential-summary,
+.credential-failure {
+  margin: 0;
+}
+.credential-failure {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--warning-soft);
+}
+.credential-failure p {
+  margin: 0;
 }
 </style>
