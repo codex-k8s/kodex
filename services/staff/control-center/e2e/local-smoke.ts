@@ -42,10 +42,12 @@ test("локальный OIDC, API и основные экраны доступ
     { mode: "local" },
   );
   expect((await session).status()).toBe(204);
-  await page.locator("details.current-user-menu > summary").click();
-  await expect(
-    page.getByRole("button", { name: "Выйти", exact: true }),
-  ).toBeVisible();
+  const currentUserMenu = page.locator("button[aria-haspopup='menu']");
+  const logout = page.getByRole("button", { name: "Выйти", exact: true });
+  await currentUserMenu.click();
+  await expect(logout).toBeVisible();
+  await page.locator("main").click({ position: { x: 1, y: 1 } });
+  await expect(logout).toBeHidden();
 
   const projectsStatus = await page.evaluate(async () =>
     fetch("/api/v1/projects?pageSize=1").then((response) => response.status),
@@ -67,9 +69,7 @@ test("локальный OIDC, API и основные экраны доступ
     ).toBeVisible();
   }
   await page.getByRole("button", { name: "Открыть Kodex" }).click();
-  await expect(
-    page.getByRole("dialog", { name: "Помощник Kodex" }),
-  ).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
   expect(browserFailures).toEqual([]);
   await writeStorageState(
     environment.outputStorageState,

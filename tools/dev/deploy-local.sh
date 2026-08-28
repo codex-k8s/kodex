@@ -180,6 +180,24 @@ readback_local_object_storage_secret() {
   ' <<<"$state" >/dev/null || fail 'local object storage Secret readback failed'
 }
 
+discover_local_object_storage_secret() {
+  local state
+  state=$(kubectl -n "$namespace" get secrets \
+    -l 'kodex.dev/local-credential=object-storage' -o json) ||
+    fail 'local object storage Secret discovery failed'
+  object_storage_secret_name=$(jq -er '
+    [.items[] | select(
+      .immutable == true and
+      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+      .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
+    )] |
+    if length == 1 then .[0].metadata.name
+    elif length == 0 then error("local object storage Secret is absent")
+    else error("multiple local object storage Secrets are present") end
+  ' <<<"$state") || fail 'local object storage Secret discovery is ambiguous'
+  readback_local_object_storage_secret
+}
+
 readback_session_archive() {
   local deployment expected_image endpoint_slices target_registry
   expected_image=$(yq -N -r '
@@ -552,6 +570,8 @@ if [[ "$mode" == apply ]]; then
   apply_render application-workloads '
     select(.kind == "Deployment" and .metadata.name != "internal-rpc-authority-publisher")
   '
+else
+  discover_local_object_storage_secret
 fi
 
 wait_certificates

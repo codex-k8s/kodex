@@ -237,7 +237,7 @@ OIDC_HOST="$oidc_host" yq -i '
     .data.oidcTlsServerName = strenv(OIDC_HOST)
   ) |
   with(select(.kind == "NetworkPolicy" and .metadata.name == "control-plane-exact-runtime-paths");
-    (.spec.egress[].ports[] | select(.port == "__KODEX_OIDC_TARGET_PORT__").port) = 443
+    (.spec.egress[].ports[] | select(.port == "__KODEX_OIDC_TARGET_PORT__").port) = 8443
   ) |
   with(select(.kind == "NetworkPolicy");
     (.spec.egress[]? |

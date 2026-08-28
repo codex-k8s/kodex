@@ -4,6 +4,7 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 statefulset="$root/deploy/k8s/base/local-object-storage/statefulset.yaml"
 bootstrap="$root/deploy/k8s/base/local-object-storage/bucket-bootstrap-job.yaml"
+deployer="$root/tools/dev/deploy-local.sh"
 
 fail() {
   printf 'Local object storage capacity contract failed: %s\n' "$*" >&2
@@ -34,5 +35,10 @@ for marker in 'put-object --bucket "$bucket"' 'get-object --bucket "$bucket"' \
   'delete-object --bucket "$bucket"' 'list-object-versions --bucket "$bucket"'; do
   grep -Fq "$marker" "$bootstrap" || fail "bootstrap has no required write-path check: $marker"
 done
+
+grep -Fq 'discover_local_object_storage_secret' "$deployer" ||
+  fail 'readback mode cannot discover the content-addressed object storage Secret'
+grep -Fq 'multiple local object storage Secrets are present' "$deployer" ||
+  fail 'readback mode does not reject ambiguous object storage credentials'
 
 printf 'Local object storage capacity contract passed.\n'
