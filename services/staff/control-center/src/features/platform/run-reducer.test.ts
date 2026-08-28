@@ -30,6 +30,8 @@ function rootRun(): Run {
       version: 1,
     },
     title: "Обработка обращения",
+    titleSource: "USER_EDITED",
+    activitySummary: "Координатор обрабатывает обращение",
     state: "RUNNING",
     source: "CONTROL_CENTER",
     initiator: { ref: "user_owner01", displayName: "Владелец" },

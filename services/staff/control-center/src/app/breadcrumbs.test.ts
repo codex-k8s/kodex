@@ -5,7 +5,6 @@ import { buildBreadcrumbs, type BreadcrumbLabels } from "@/app/breadcrumbs";
 const labels: BreadcrumbLabels = {
   home: "Главная",
   onboarding: "Первичная настройка",
-  assistant: "Помощник Kodex",
   projects: "Проекты",
   project: "Проект",
   agents: "ИИ-сотрудники",

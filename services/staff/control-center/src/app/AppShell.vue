@@ -12,7 +12,6 @@ import {
   PlugZap,
   Search,
   Settings,
-  Sparkles,
   UsersRound,
   Workflow,
 } from "@lucide/vue";
@@ -28,6 +27,8 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import { buildBreadcrumbs, type BreadcrumbLabels } from "@/app/breadcrumbs";
+import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
+import { resolveAssistantContext } from "@/features/assistant/context";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { useSessionStore } from "@/features/session/store";
@@ -85,7 +86,6 @@ const breadcrumbs = computed(() => {
   const labels: BreadcrumbLabels = {
     home: t("nav.home"),
     onboarding: t("nav.onboarding"),
-    assistant: t("nav.assistant"),
     projects: t("nav.projects"),
     project: t("app.project"),
     agents: t("nav.agents"),
@@ -122,6 +122,32 @@ const breadcrumbs = computed(() => {
     labels,
   );
 });
+const assistantContext = computed(() =>
+  resolveAssistantContext(route, {
+    projects: platform.projects,
+    agents: platform.agents,
+    workflows: platform.workflows,
+    runs: platform.runs,
+  }),
+);
+const assistantRunEvents = computed(() => {
+  if (assistantContext.value.descriptor.entityKind !== "RUN") return [];
+  const runRef = assistantContext.value.descriptor.entityRef;
+  return Object.values(platform.events[runRef] ?? {}).sort(
+    (a, b) => a.sequence - b.sequence,
+  );
+});
+const assistantRefreshRevision = computed(() =>
+  [
+    platform.assistant?.version ?? 0,
+    ...Object.values(platform.conversations)
+      .sort((a, b) => a.ref.localeCompare(b.ref))
+      .map(
+        (item) =>
+          `${item.ref}:${String(item.version)}:${String(item.turns.length)}`,
+      ),
+  ].join("|"),
+);
 
 const globalLinks = computed(() => [
   { name: "home", label: t("nav.home"), path: "/", icon: Home },
@@ -447,22 +473,6 @@ onBeforeUnmount(() => {
       class="sidebar"
       :class="{ 'sidebar--open': mobileOpen }"
     >
-      <RouterLink
-        class="assistant-entry"
-        :to="{ path: '/assistant', query: projectRef ? { projectRef } : {} }"
-      >
-        <span class="assistant-entry__mark" aria-hidden="true"
-          ><Sparkles :size="21"
-        /></span>
-        <span
-          ><strong>{{ $t("app.assistantShort") }}</strong
-          ><small>{{ $t("assistant.system") }}</small></span
-        >
-        <StatusBadge
-          v-if="platform.assistant"
-          :state="platform.assistant.runtimeState"
-        />
-      </RouterLink>
       <nav :aria-label="$t('app.navigation')">
         <RouterLink
           v-for="link in globalLinks"
@@ -557,9 +567,9 @@ onBeforeUnmount(() => {
           $t("nav.projects")
         }}</span></RouterLink
       >
-      <RouterLink to="/assistant"
-        ><Sparkles :size="18" aria-hidden="true" /><span>{{
-          $t("app.assistantShort")
+      <RouterLink to="/integrations"
+        ><PlugZap :size="18" aria-hidden="true" /><span>{{
+          $t("nav.integrations")
         }}</span></RouterLink
       >
       <RouterLink to="/runs"
@@ -573,5 +583,12 @@ onBeforeUnmount(() => {
         }}</span></RouterLink
       >
     </nav>
+    <AssistantWorkspace
+      :context="assistantContext.descriptor"
+      :project-ref="assistantContext.projectRef"
+      :live="realtime.platformState.state === 'live'"
+      :run-events="assistantRunEvents"
+      :refresh-revision="assistantRefreshRevision"
+    />
   </div>
 </template>

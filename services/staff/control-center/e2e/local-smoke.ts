@@ -7,7 +7,6 @@ import { withoutKodexAPICookies, writeStorageState } from "./storage-state";
 
 const environment = loadE2EAuthEnvironment();
 const topLevelRoutes = [
-  ["/assistant", "Помощник Kodex"],
   ["/projects", "Проекты"],
   ["/runs", "Запуски"],
   ["/integrations", "Интеграции"],
@@ -67,6 +66,10 @@ test("локальный OIDC, API и основные экраны доступ
       page.getByRole("heading", { level: 1, name: heading }),
     ).toBeVisible();
   }
+  await page.getByRole("button", { name: "Открыть Kodex" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Помощник Kodex" }),
+  ).toBeVisible();
   expect(browserFailures).toEqual([]);
   await writeStorageState(
     environment.outputStorageState,

@@ -114,6 +114,8 @@ function run(sequence: number): Run {
       version: 1,
     },
     title: "Согласованный запуск",
+    titleSource: "USER_EDITED",
+    activitySummary: "Выполняется согласованный запуск",
     source: "CONTROL_CENTER",
     initiator: { ref: "user_owner", displayName: "Владелец" },
     state: sequence >= 2 ? "WAITING_HUMAN" : "RUNNING",

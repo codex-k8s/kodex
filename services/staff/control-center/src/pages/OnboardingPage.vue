@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { openAssistantWorkspace } from "@/features/assistant/events";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -70,11 +71,13 @@ onMounted(async () => {
         </ol>
         <ProblemNotice v-if="problem" :problem="problem" compact />
         <div class="onboarding-actions">
-          <RouterLink
+          <button
             class="button button--primary button--large"
-            to="/assistant"
-            >{{ $t("onboarding.startAssistant") }}</RouterLink
+            type="button"
+            @click="openAssistantWorkspace"
           >
+            {{ $t("onboarding.startAssistant") }}
+          </button>
           <button
             v-if="canFinish"
             class="button button--secondary button--large"

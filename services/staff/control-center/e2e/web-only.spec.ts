@@ -54,6 +54,48 @@ let publishedInstructionRef = initialRefs.publishedInstructionRef ?? "";
 let scheduledRunRef = initialRefs.scheduledRunRef ?? "";
 let workflowRunRef = initialRefs.workflowRunRef ?? "";
 
+async function openKodex(page: Page, newConversation = false): Promise<void> {
+  await page.getByRole("button", { name: "Открыть Kodex" }).click();
+  const dialog = page.getByRole("dialog", { name: "Помощник Kodex" });
+  await expect(dialog).toBeVisible();
+  if (!newConversation) return;
+  await dialog.getByRole("button", { name: "История диалогов" }).click();
+  await dialog
+    .getByRole("button", { name: "Новый диалог", exact: true })
+    .click();
+}
+
+async function applyLatestKodexPlan(
+  page: Page,
+  expectedText: string,
+): Promise<void> {
+  const dialog = page.getByRole("dialog", { name: "Помощник Kodex" });
+  const planCard = dialog.locator(".assistant-plan-card").last();
+  await expect(planCard).toContainText(expectedText, { timeout: 120_000 });
+  await planCard.getByRole("button", { name: "Открыть план" }).click();
+  const validate = dialog.getByRole("button", { name: "Проверить ревизию" });
+  if ((await validate.count()) > 0) {
+    const validation = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().includes("/api/v1/assistant-plans/") &&
+        response.url().endsWith("/validation"),
+    );
+    await validate.click();
+    expect((await validation).status()).toBe(200);
+  }
+  const apply = dialog.getByRole("button", { name: "Применить атомарно" });
+  const application = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().includes("/api/v1/assistant-plans/") &&
+      response.url().endsWith("/application"),
+  );
+  await apply.click();
+  expect((await application).status()).toBe(200);
+  await expect(apply).toHaveCount(0);
+}
+
 test.describe("web-only fresh installation", () => {
   test.describe.configure({ mode: discoveryMode ? "default" : "serial" });
 
@@ -70,10 +112,9 @@ test.describe("web-only fresh installation", () => {
       page.locator("#main-content").getByText("Готов", { exact: true }),
     ).toBeVisible();
 
-    await page.getByRole("link", { name: "Начать с помощником" }).click();
-    await expectPageHeading(page, "Помощник Kodex");
+    await page.getByRole("button", { name: "Начать с помощником" }).click();
     await expect(
-      page.locator("#main-content").getByText(/Системный.*неудаляемый/),
+      page.getByRole("dialog", { name: "Помощник Kodex" }),
     ).toBeVisible();
 
     if (discoveryMode && projectRef) {
@@ -96,16 +137,10 @@ test.describe("web-only fresh installation", () => {
       "Не создавай другие объекты.",
     ].join(" ");
     await page
-      .getByLabel("Опишите, что нужно настроить или запустить")
+      .getByPlaceholder("Опишите, что нужно настроить или запустить")
       .fill(prompt);
     await page.getByRole("button", { name: "Отправить помощнику" }).click();
-    const plan = page.locator(".assistant-plan").last();
-    await expect(plan).toContainText(projectName, { timeout: 120_000 });
-    const applyPlan = plan.getByRole("button", {
-      name: "Применить разрешённые изменения",
-    });
-    await applyPlan.click();
-    await expect(applyPlan).toHaveCount(0);
+    await applyLatestKodexPlan(page, projectName);
 
     await gotoWithRetry(page, "/projects");
     const projectLink = page.getByRole("link", {
@@ -409,13 +444,8 @@ test.describe("web-only fresh installation", () => {
     requireRefs("projectRef");
     const createdByAssistant = !discoveryMode || !analystRef;
     if (createdByAssistant) {
-      await gotoWithRetry(
-        page,
-        `/assistant?projectRef=${encodeURIComponent(projectRef)}`,
-      );
-      await page
-        .getByRole("button", { name: "Новый диалог", exact: true })
-        .click();
+      await gotoWithRetry(page, `/projects/${projectRef}`);
+      await openKodex(page, true);
       const prompt = [
         `В текущем Проекте создай одного ИИ-сотрудника с точным именем «${analystName}».`,
         "Назначение: анализировать качество лидов.",
@@ -424,16 +454,10 @@ test.describe("web-only fresh installation", () => {
         "Не запускай его и не меняй другие объекты.",
       ].join(" ");
       await page
-        .getByLabel("Опишите, что нужно настроить или запустить")
+        .getByPlaceholder("Опишите, что нужно настроить или запустить")
         .fill(prompt);
       await page.getByRole("button", { name: "Отправить помощнику" }).click();
-      const plan = page.locator(".assistant-plan").last();
-      await expect(plan).toContainText(analystName, { timeout: 120_000 });
-      const applyPlan = plan.getByRole("button", {
-        name: "Применить разрешённые изменения",
-      });
-      await applyPlan.click();
-      await expect(applyPlan).toHaveCount(0);
+      await applyLatestKodexPlan(page, analystName);
 
       await gotoWithRetry(page, `/projects/${projectRef}/agents`);
       const analystLink = page.getByRole("link", {
@@ -461,9 +485,10 @@ test.describe("web-only fresh installation", () => {
       await expect(page.getByRole("table")).toContainText(analystName);
     }
 
-    await gotoWithRetry(page, "/assistant");
+    await gotoWithRetry(page, "/");
+    await openKodex(page);
     await expect(
-      page.locator("#main-content").getByText(/Системный.*неудаляемый/),
+      page.getByRole("dialog", { name: "Помощник Kodex" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Удалить|Архивировать|Отключить/ }),
@@ -854,13 +879,8 @@ test.describe("web-only fresh installation", () => {
         `/projects/${projectRef}/workflows/${workflowRef}`,
       );
     } else {
-      await gotoWithRetry(
-        page,
-        `/assistant?projectRef=${encodeURIComponent(projectRef)}`,
-      );
-      await page
-        .getByRole("button", { name: "Новый диалог", exact: true })
-        .click();
+      await gotoWithRetry(page, `/projects/${projectRef}`);
+      await openKodex(page, true);
       const prompt = [
         `В текущем Проекте создай ровно один Процесс с точным названием «${workflowName}».`,
         `Назначение: параллельно оценить лид и подготовить предложение с решением владельца. Координатор — существующий сотрудник «${coordinatorName}».`,
@@ -869,25 +889,10 @@ test.describe("web-only fresh installation", () => {
         "Не создавай и не меняй сотрудников, не запускай Процесс и не создавай другие объекты.",
       ].join(" ");
       await page
-        .getByLabel("Опишите, что нужно настроить или запустить")
+        .getByPlaceholder("Опишите, что нужно настроить или запустить")
         .fill(prompt);
       await page.getByRole("button", { name: "Отправить помощнику" }).click();
-      const workflowPlan = page.locator(".assistant-plan").last();
-      await expect(workflowPlan).toContainText(workflowName, {
-        timeout: 120_000,
-      });
-      const applyWorkflowPlan = workflowPlan.getByRole("button", {
-        name: "Применить разрешённые изменения",
-      });
-      const applyWorkflowPlanResponse = page.waitForResponse(
-        (response) =>
-          response.request().method() === "POST" &&
-          response.url().includes("/api/v1/assistant-plans/") &&
-          response.url().endsWith("/application"),
-      );
-      await applyWorkflowPlan.click();
-      expect((await applyWorkflowPlanResponse).status()).toBe(200);
-      await expect(applyWorkflowPlan).toHaveCount(0);
+      await applyLatestKodexPlan(page, workflowName);
 
       await gotoWithRetry(page, `/projects/${projectRef}/workflows`);
       const workflowLink = page.getByRole("link", {

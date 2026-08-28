@@ -16,11 +16,6 @@ export const router = createRouter({
       component: lazyPage(() => import("@/pages/OnboardingPage.vue")),
     },
     {
-      path: "/assistant",
-      name: "assistant",
-      component: lazyPage(() => import("@/pages/AssistantPage.vue")),
-    },
-    {
       path: "/projects",
       name: "projects",
       component: lazyPage(() => import("@/pages/ProjectsPage.vue")),

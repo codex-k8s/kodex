@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { openAssistantWorkspace } from "@/features/assistant/events";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
@@ -96,9 +97,9 @@ onMounted(() => void load());
           <RouterLink class="button button--primary" to="/projects?create=1">
             {{ $t("projects.new") }}
           </RouterLink>
-          <RouterLink class="button" to="/assistant">
+          <button class="button" type="button" @click="openAssistantWorkspace">
             {{ $t("onboarding.startAssistant") }}
-          </RouterLink>
+          </button>
         </div>
       </template>
 

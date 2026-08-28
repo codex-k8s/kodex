@@ -3,11 +3,9 @@ import { computed, reactive, ref } from "vue";
 
 import { requestSignal } from "@/shared/api/client";
 import {
-  addAssistantTurn,
   addPlatformMembership,
   addProjectMembership,
   addSessionTurn,
-  applyAssistantPlan,
   commandAgent,
   commandAgentInstructions,
   commandIntegrationConnection,
@@ -21,7 +19,6 @@ import {
   changeProjectMembership,
   completeOnboarding,
   createAgent,
-  createAssistantConversation,
   createInstructionDraft,
   createIntegrationConnection,
   createProject,
@@ -1447,61 +1444,6 @@ export const usePlatformStore = defineStore("platform", () => {
     return readConnection(connection.ref);
   }
 
-  async function newConversation(
-    title: string,
-    projectRef?: string,
-  ): Promise<AssistantConversation> {
-    const result = await mutate((headers) =>
-      createAssistantConversation({
-        body: { title, ...(projectRef ? { projectRef } : {}) },
-        headers: mutationHeaders(headers),
-        signal: requestSignal(),
-      }),
-    );
-    conversations[result.data.ref] = result.data;
-    return result.data;
-  }
-
-  async function sendAssistantTurn(
-    conversationRef: string,
-    content: string,
-  ): Promise<AssistantConversation> {
-    const previous = conversations[conversationRef];
-    const result = await mutate((headers) =>
-      addAssistantTurn({
-        path: { conversationRef },
-        body: { content },
-        headers: mutationHeaders(headers),
-        signal: requestSignal(),
-      }),
-    );
-    const updated = {
-      ...result.data,
-      turns: [...(previous?.turns ?? []), ...result.data.turns],
-    };
-    conversations[result.data.ref] = updated;
-    return updated;
-  }
-
-  async function applyPlan(
-    planRef: string,
-    version: number,
-  ): Promise<AssistantConversation> {
-    const result = await mutate(
-      (headers) =>
-        applyAssistantPlan({
-          path: { planRef },
-          headers: versionedHeaders(headers),
-          signal: requestSignal(),
-        }),
-      version,
-    );
-    await loadAssistant();
-    return (
-      conversations[result.data.conversation.ref] ?? result.data.conversation
-    );
-  }
-
   async function updateAssistantInstructions(
     value: string,
   ): Promise<SystemAssistant> {
@@ -1756,9 +1698,6 @@ export const usePlatformStore = defineStore("platform", () => {
     connectIntegration,
     changeConnection,
     changeConnectionGrant,
-    newConversation,
-    sendAssistantTurn,
-    applyPlan,
     updateAssistantInstructions,
     applyRunSnapshot,
     applyRunEvent,
