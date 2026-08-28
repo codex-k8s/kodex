@@ -15,6 +15,7 @@ spec:
                 operator: In
                 values:
                   - automation-scheduler
+                  - backup-controller
                   - session-archive
                   - control-api-gateway
                   - control-plane

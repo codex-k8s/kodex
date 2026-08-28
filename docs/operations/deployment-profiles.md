@@ -4,7 +4,7 @@ title: Профили развертывания
 type: operations
 status: approved
 owner: sre
-version: 1.1.1
+version: 1.2.0
 updated: 2026-08-24
 ---
 
@@ -22,7 +22,9 @@ updated: 2026-08-24
 - `runtime-controller`, `agent-runner` ABI и always-hot system assistant;
 - `role-image-builder` и image admission/supply chain;
 - `integration-gateway`, готовый при нуле connections и credentials;
-- `automation-scheduler`, OIDC, internal RPC authority и platform egress.
+- `automation-scheduler`, OIDC, internal RPC authority и platform egress;
+- `backup-controller` с owner-created credentials, PostgreSQL CA bundle,
+  retention и отдельным owner-gated restore drill.
 
 Mattermost, Git providers и внешние business systems отсутствуют и не входят в
 startup/readiness. Kubernetes является средой выполнения самой платформы и

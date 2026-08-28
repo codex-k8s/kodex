@@ -4,7 +4,7 @@ title: Резервное копирование и восстановление
 type: operations
 status: approved
 owner: sre
-version: 2.1.0
+version: 2.2.0
 updated: 2026-08-28
 ---
 
@@ -12,11 +12,17 @@ updated: 2026-08-28
 
 ## Текущий статус
 
-Artifact bodies уже находятся в обязательном S3-compatible storage, но
-согласованный backup controller, retention и restore drill ещё не реализованы.
-Их самостоятельный deployable unit ведётся в
-[#1003](https://github.com/codex-k8s/kodex/issues/1003). До его завершения нельзя
-заявлять поддерживаемый полный backup/restore fresh MVP.
+`backup-controller` реализован отдельным deployable unit и включён в основной
+`web-only` профиль. Controller выполняет согласованный logical backup
+PostgreSQL, инвентаризацию immutable artifact bodies, независимую проверку,
+защищённый retention и owner-gated restore drill по
+[#1003](https://github.com/codex-k8s/kodex/issues/1003).
+
+Production использует заранее подготовленный `backup-controller-credentials`
+и exact external egress policy. Local hot-reload автоматически материализует
+тот же schema-v1 Secret из существующих локальных PostgreSQL credentials и
+`kodex-external-s3`, хранит backup в отдельном versioned bucket
+`kodex-backups` и принимает readback только после появления verified backup.
 
 ## Авторитетные данные
 

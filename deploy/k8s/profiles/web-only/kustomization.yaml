@@ -14,6 +14,7 @@ resources:
   - ../../overlays/production/integration-gateway
   - ../../overlays/production/automation-scheduler
   - ../../overlays/production/session-archive
+  - ../../overlays/production/backup-controller
   - ../../overlays/production/control-api-gateway
   - ../../overlays/production/staff-control-center
 transformers:

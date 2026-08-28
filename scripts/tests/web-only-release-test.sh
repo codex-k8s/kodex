@@ -170,7 +170,7 @@ rg -Fq 'create secret generic kodex-external-s3' "$repository_root/install.sh" |
   printf '%s\n' \
     internal-rpc-authority-bootstrap-roots \
     internal-rpc-authority-sentry \
-    kodex-external-s3 \
+    backup-controller-credentials \
     kodex-installation-ca \
     kodex-external-s3 \
     kodex-integration-credentials \
@@ -185,6 +185,35 @@ rg -Fq 'create secret generic kodex-external-s3' "$repository_root/install.sh" |
 missing_secrets=$(comm -23 "$secret_references" "$secret_producers")
 [[ -z "$missing_secrets" ]] ||
   fail "release references Kubernetes Secrets without a producer: ${missing_secrets//$'\n'/,}"
+yq -e '
+  select(.kind == "Deployment" and .metadata.name == "backup-controller") |
+  (.spec.strategy.type == "Recreate") and
+  (.spec.template.spec.automountServiceAccountToken == false)
+' "$render" >/dev/null || fail 'backup-controller release workload contract is incomplete'
+yq -e '
+  select(.kind == "Deployment" and .metadata.name == "backup-controller") |
+  .spec.template.spec.containers[] |
+  select(.name == "backup-controller") |
+  .image | test("/backup-controller@sha256:[a-f0-9]{64}$")
+' "$render" >/dev/null || fail 'backup-controller release image reference is invalid'
+yq -e '
+  select(.kind == "Deployment" and .metadata.name == "backup-controller") |
+  .spec.template.spec.volumes[] |
+  select(.name == "credentials") |
+  .secret.secretName == "backup-controller-credentials"
+' "$render" >/dev/null || fail 'backup-controller credential projection is invalid'
+yq -e '
+  select(.kind == "Deployment" and .metadata.name == "backup-controller") |
+  .spec.template.spec.volumes[] |
+  select(.name == "tls") |
+  .configMap.name == "backup-controller-postgresql-ca"
+' "$render" >/dev/null || fail 'backup-controller PostgreSQL CA projection is invalid'
+jq -e '
+  any(.images[];
+    .component == "backup-controller" and
+    .dockerfile == "services/jobs/backup-controller/Dockerfile")
+' "$repository_root/tools/release/images.json" >/dev/null ||
+  fail 'backup-controller image contract is absent'
 if yq -e 'select(.kind == "ServiceAccount" and
   ((.imagePullSecrets // []) | length > 0))' "$render" >/dev/null 2>&1; then
   fail 'ServiceAccount bypasses the canonical node registry credential path'

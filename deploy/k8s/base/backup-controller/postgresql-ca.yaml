@@ -1,0 +1,17 @@
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: backup-controller-postgresql-ca
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  sources:
+    - secret:
+        name: kodex-installation-ca
+        key: tls.crt
+  target:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kodex-system
+    configMap:
+      key: ca.pem

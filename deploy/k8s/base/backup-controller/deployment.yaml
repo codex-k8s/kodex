@@ -101,9 +101,12 @@ spec:
               - key: credentials.json
                 path: credentials.json
         - name: tls
-          secret:
-            secretName: backup-controller-tls
+          configMap:
+            name: backup-controller-postgresql-ca
             defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: ca.pem
         - name: work
           emptyDir:
             sizeLimit: 160Gi

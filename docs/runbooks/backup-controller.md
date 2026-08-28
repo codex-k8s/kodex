@@ -4,7 +4,7 @@ title: Backup, retention и restore drill
 type: runbook
 status: approved
 owner: sre
-version: 1.0.0
+version: 1.1.0
 updated: 2026-08-28
 ---
 
@@ -44,6 +44,13 @@ Base NetworkPolicy разрешает только cluster-local PostgreSQL и S
 fixture. Production overlay обязан материализовать
 `external-egress-networkpolicy.template.yaml` с exact destination CIDR для S3
 и, при необходимости, отдельной restore database; wildcard egress запрещён.
+
+Основной `web-only` профиль включает production overlay controller. Для
+локального hot-reload `dev.sh up` собирает exact OCI image из штатного
+Dockerfile, материализует `backup-controller-credentials` без вывода значений и
+использует `kodex-artifacts` как source и `kodex-backups` как repository.
+`tools/dev/deploy-local.sh` проверяет точное содержимое Secret по digest,
+rollout Deployment и появление verified backup через `/status`.
 
 ## Read-only проверка
 

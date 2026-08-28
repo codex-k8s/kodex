@@ -12,7 +12,8 @@ usage() {
     '  --public-host <dns> --oidc-host <dns> --kubernetes-service-cidr <cidr>' \
     '  --kubernetes-endpoint-cidr <cidr> --kubernetes-endpoint-port <port>' \
     '  --runner-image <repository@sha256:digest>' \
-    '  --session-archive-image <repository@sha256:digest>' >&2
+    '  --session-archive-image <repository@sha256:digest>' \
+    '  --backup-controller-image <repository@sha256:digest>' >&2
 }
 
 source_root=""
@@ -25,6 +26,7 @@ kubernetes_endpoint_cidr=""
 kubernetes_endpoint_port=""
 runner_image=""
 session_archive_image=""
+backup_controller_image=""
 while (($# > 0)); do
   case "$1" in
     --source-root) source_root=${2:-}; shift 2 ;;
@@ -37,6 +39,7 @@ while (($# > 0)); do
     --kubernetes-endpoint-port) kubernetes_endpoint_port=${2:-}; shift 2 ;;
     --runner-image) runner_image=${2:-}; shift 2 ;;
     --session-archive-image) session_archive_image=${2:-}; shift 2 ;;
+    --backup-controller-image) backup_controller_image=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -58,6 +61,8 @@ done
   fail 'local runner image must use an exact manifest digest'
 [[ "$session_archive_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
   fail 'local session archive image must use an exact manifest digest'
+[[ "$backup_controller_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
+  fail 'local backup-controller image must use an exact manifest digest'
 for command_name in git jq kubectl sha256sum yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -145,7 +150,7 @@ SEAWEEDFS_IMAGE="$seaweedfs_image" yq -i '
 yq -i '
   select(
     (.kind != "NetworkPolicy" or
-      (.metadata.name | test("^(control-plane|seaweedfs|integration-gateway|integration-synthetic|session-archive)"))) and
+      (.metadata.name | test("^(backup-controller|control-plane|seaweedfs|integration-gateway|integration-synthetic|session-archive)"))) and
     .kind != "PodDisruptionBudget" and
     .kind != "ServiceMonitor" and
     .kind != "PodMonitor" and
@@ -161,6 +166,7 @@ yq -i '
       .metadata.name == "control-api-gateway" or .metadata.name == "egress-gateway" or
       .metadata.name == "runtime-controller" or .metadata.name == "integration-gateway" or
       .metadata.name == "integration-synthetic" or
+      .metadata.name == "backup-controller" or
       .metadata.name == "automation-scheduler" or .metadata.name == "staff-control-center" or
       .metadata.name == "session-archive" or
       .metadata.name == "internal-rpc-authority-publisher" or
@@ -171,6 +177,18 @@ yq -i '
       .metadata.name == "internal-rpc-authority-migrate" or
       .metadata.name == "kodex-postgresql-runtime-credentials" or
       .metadata.name == "seaweedfs-bucket-bootstrap")
+  )
+' "$render"
+
+BACKUP_CONTROLLER_IMAGE="$backup_controller_image" yq -i '
+  with(select(.kind == "Deployment" and .metadata.name == "backup-controller");
+    (.spec.template.spec.containers[] | select(.name == "backup-controller")) |= (
+      .image = strenv(BACKUP_CONTROLLER_IMAGE) |
+      .imagePullPolicy = "IfNotPresent"
+    ) |
+    (.spec.template.spec.containers[] | select(.name == "backup-controller") |
+      .env[] | select(.name == "BACKUP_CONTROLLER_RELEASE_REVISION").value) =
+        (strenv(BACKUP_CONTROLLER_IMAGE) | split("@")[1])
   )
 ' "$render"
 
@@ -627,6 +645,17 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
         .podSelector.matchLabels["session-archive.kodex.dev/managed"] == "true") and
       any(.ports[]?; .protocol == "TCP" and .port == 8333)))
 ' >/dev/null || fail 'session-archive local object storage network path is absent'
+BACKUP_CONTROLLER_IMAGE="$backup_controller_image" yq -e '
+  select(.kind == "Deployment" and .metadata.name == "backup-controller") |
+  .spec.template.spec.containers[] | select(.name == "backup-controller") |
+  .image == strenv(BACKUP_CONTROLLER_IMAGE)
+' "$output" >/dev/null || fail 'backup-controller exact local image is invalid'
+BACKUP_CONTROLLER_REVISION="${backup_controller_image#*@}" yq -e '
+  select(.kind == "Deployment" and .metadata.name == "backup-controller") |
+  .spec.template.spec.containers[] | select(.name == "backup-controller") |
+  .env[] | select(.name == "BACKUP_CONTROLLER_RELEASE_REVISION") |
+  .value == strenv(BACKUP_CONTROLLER_REVISION)
+' "$output" >/dev/null || fail 'backup-controller local release revision is invalid'
 yq -o=json -I=0 '.' "$output" | jq -s -e '
   any(.[];
     .kind == "Deployment" and .metadata.name == "integration-synthetic" and

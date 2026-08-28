@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: kodex-system
 resources:
   - serviceaccount.yaml
+  - postgresql-ca.yaml
   - configmap.yaml
   - deployment.yaml
   - service.yaml

@@ -26,7 +26,7 @@ done
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
 [[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
-for command_name in jq kubectl openssl yq; do
+for command_name in jq kubectl openssl sha256sum yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'Kubernetes context mismatch'
@@ -241,6 +241,146 @@ ensure_local_object_storage_secret() {
   readback_local_object_storage_secret
 }
 
+write_local_backup_controller_credentials() {
+  local output=$1
+  local s3_state="$temporary_directory/backup-controller-s3.json"
+  local postgresql_state="$temporary_directory/backup-controller-postgresql.json"
+
+  kubectl -n "$namespace" get secret/kodex-external-s3 -o json >"$s3_state" ||
+    fail 'local object storage Secret is unavailable for backup-controller'
+  kubectl -n "$namespace" get secret/kodex-postgresql-runtime-credentials -o json \
+    >"$postgresql_state" ||
+    fail 'local PostgreSQL credentials are unavailable for backup-controller'
+  chmod 0600 "$s3_state" "$postgresql_state"
+
+  jq -n --slurpfile s3 "$s3_state" --slurpfile postgresql "$postgresql_state" '
+    def secret($document; $key):
+      ($document.data[$key] // error("required Secret key is absent")) |
+      @base64d | rtrimstr("\n");
+    ($s3[0]) as $storage |
+    ($postgresql[0]) as $database |
+    (secret($storage; "endpoint")) as $endpoint |
+    (secret($storage; "region")) as $region |
+    (secret($storage; "access-key")) as $accessKey |
+    (secret($storage; "secret-key")) as $secretKey |
+    (secret($storage; "bucket")) as $artifactBucket |
+    if $endpoint != "http://seaweedfs-s3.kodex-system.svc.cluster.local:8333" or
+      $region != "us-east-1" or $artifactBucket != "kodex-artifacts" or
+      ($accessKey | length) == 0 or ($secretKey | length) == 0
+    then error("local object storage contract is invalid")
+    else {
+      schemaVersion: 1,
+      destination: {
+        name: "backup-repository",
+        endpoint: $endpoint,
+        region: $region,
+        bucket: "kodex-backups",
+        accessKeyId: $accessKey,
+        secretAccessKey: $secretKey,
+        usePathStyle: true,
+        allowInsecureLocal: true
+      },
+      databases: [
+        {
+          name: "control-plane",
+          host: "kodex-postgresql.kodex-system.svc.cluster.local",
+          port: 5432,
+          database: "control_plane",
+          user: "control_plane_migrator",
+          password: secret($database; "control_plane_migrator"),
+          tlsMode: "verify-full",
+          tlsServerName: "kodex-postgresql.kodex-system.svc.cluster.local",
+          caFile: "/var/run/secrets/kodex/backup-controller/tls/ca.pem",
+          schemaKind: "goose"
+        },
+        {
+          name: "internal-rpc-authority",
+          host: "kodex-postgresql.kodex-system.svc.cluster.local",
+          port: 5432,
+          database: "internal_rpc_authority",
+          user: "internal_rpc_authority_migrator",
+          password: secret($database; "internal_rpc_authority_migrator"),
+          tlsMode: "verify-full",
+          tlsServerName: "kodex-postgresql.kodex-system.svc.cluster.local",
+          caFile: "/var/run/secrets/kodex/backup-controller/tls/ca.pem",
+          schemaKind: "goose"
+        }
+      ],
+      objectStores: [{
+        name: "artifacts",
+        endpoint: $endpoint,
+        region: $region,
+        bucket: $artifactBucket,
+        prefix: "organizations",
+        accessKeyId: $accessKey,
+        secretAccessKey: $secretKey,
+        usePathStyle: true,
+        allowInsecureLocal: true
+      }]
+    } end
+  ' >"$output" || fail 'build local backup-controller credentials'
+  chmod 0600 "$output"
+}
+
+readback_local_backup_controller_secret() {
+  local expected=$1 state actual expected_digest actual_digest
+  state=$(kubectl -n "$namespace" get secret/backup-controller-credentials -o json 2>/dev/null) ||
+    fail 'local backup-controller credentials Secret is absent'
+  jq -e '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["app.kubernetes.io/name"] == "backup-controller" and
+    .metadata.labels["app.kubernetes.io/managed-by"] == "tools-dev" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    ((.data | keys) == ["credentials.json"])
+  ' <<<"$state" >/dev/null || fail 'local backup-controller Secret metadata is invalid'
+  actual="$temporary_directory/backup-controller-credentials-readback.json"
+  jq -er '.data["credentials.json"] | @base64d' <<<"$state" >"$actual" ||
+    fail 'local backup-controller Secret payload is unavailable'
+  chmod 0600 "$actual"
+  expected_digest=$(jq -Sc '.' "$expected" | sha256sum | awk '{print $1}')
+  actual_digest=$(jq -Sc '.' "$actual" | sha256sum | awk '{print $1}')
+  [[ "$actual_digest" == "$expected_digest" ]] ||
+    fail 'local backup-controller Secret content readback failed'
+}
+
+ensure_local_backup_controller_secret() {
+  local credentials="$temporary_directory/backup-controller-credentials.json"
+  write_local_backup_controller_credentials "$credentials"
+  kubectl -n "$namespace" create secret generic backup-controller-credentials \
+    --from-file=credentials.json="$credentials" \
+    --dry-run=client -o yaml |
+    yq '
+      .metadata.labels = {
+        "app.kubernetes.io/part-of":"kodex",
+        "app.kubernetes.io/name":"backup-controller",
+        "app.kubernetes.io/component":"backup-job",
+        "app.kubernetes.io/managed-by":"tools-dev",
+        "kodex.dev/local-profile":"hot-reload"
+      }
+    ' |
+    kubectl apply --server-side --force-conflicts --field-manager=kodex-local-dev -f - >/dev/null
+  readback_local_backup_controller_secret "$credentials"
+}
+
+verify_local_backup_controller() {
+  local deadline=$((SECONDS + 900)) status
+  while ((SECONDS < deadline)); do
+    status=$(kubectl -n "$namespace" exec deployment/backup-controller \
+      -c backup-controller -- wget -qO- http://127.0.0.1:9090/status 2>/dev/null || true)
+    if jq -e '
+      .state == "idle" and
+      (.lastVerifiedBackup | type == "string" and length > 0) and
+      (.lastSuccessAt | type == "string" and length > 0)
+    ' <<<"$status" >/dev/null 2>&1; then
+      return
+    fi
+    sleep 3
+  done
+  kubectl -n "$namespace" logs deployment/backup-controller \
+    -c backup-controller --tail=200 >&2 || true
+  fail 'local backup-controller did not produce a verified backup'
+}
+
 wait_warm_runtime() {
   local pod=system-assistant-warm deadline=$((SECONDS + 300))
   while ((SECONDS < deadline)); do
@@ -295,6 +435,7 @@ wait_stable_workloads() {
 
 if [[ "$mode" == apply ]]; then
   ensure_local_object_storage_secret
+  ensure_local_backup_controller_secret
   ensure_seed_secrets
   apply_render foundation '
     select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "Job" and
@@ -324,6 +465,9 @@ fi
 
 wait_certificates
 readback_local_object_storage_secret
+expected_backup_credentials="$temporary_directory/backup-controller-credentials-expected.json"
+write_local_backup_controller_credentials "$expected_backup_credentials"
+readback_local_backup_controller_secret "$expected_backup_credentials"
 for workload in kodex-postgresql kodex-nats seaweedfs; do
   kubectl -n "$namespace" rollout status "statefulset/$workload" --timeout=10m >/dev/null ||
     fail "local StatefulSet is unavailable: $workload"
@@ -355,6 +499,7 @@ readback_session_archive
 
 wait_warm_runtime
 wait_stable_workloads
+verify_local_backup_controller
 
 failing=$(kubectl -n "$namespace" get pods -o json | jq -r '
   [.items[] | select(any(.status.containerStatuses[]?;
