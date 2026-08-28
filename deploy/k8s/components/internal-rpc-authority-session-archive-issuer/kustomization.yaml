@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - path: issuer-patch.yaml
+    target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: session-archive
+resources: null

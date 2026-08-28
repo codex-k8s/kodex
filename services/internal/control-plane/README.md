@@ -74,7 +74,7 @@ lifecycle расписаний и типизированных интеграц�
 
 ```text
 cmd/cli/migrations/20260822000100_web_first_baseline.sql
-cmd/cli/migrations/20260828000100_schedule_archive_lifecycle.sql
+cmd/cli/migrations/20260828000110_schedule_archive_lifecycle.sql
 cmd/cli/migrations/20260828099600_integration_backend_unit.sql
 ```
 

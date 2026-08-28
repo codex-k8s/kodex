@@ -1,0 +1,30 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata: {name: session-archive, labels: {app.kubernetes.io/name: session-archive}}
+spec:
+  selector: {matchLabels: {app.kubernetes.io/name: session-archive}}
+  endpoints:
+    - {port: metrics, path: /metrics, interval: 30s, scrapeTimeout: 5s}
+    - {port: auth-metrics, path: /metrics, interval: 30s, scrapeTimeout: 5s}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata: {name: session-archive, labels: {app.kubernetes.io/name: session-archive}}
+spec:
+  groups:
+    - name: session-archive
+      rules:
+        - alert: SessionArchiveTaskFailures
+          expr: increase(kodex_session_archive_tasks_total{outcome="error"}[10m]) > 2
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: Session archive tasks are failing
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/session-archive.md
+        - alert: SessionArchiveUnavailable
+          expr: kodex_session_archive_readiness{ready="false"} == 1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: Session archive controller is unavailable
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/session-archive.md

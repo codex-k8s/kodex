@@ -21,6 +21,7 @@ updated: 2026-08-25
 - `integration-gateway.md` — managed typed MCP integrations;
 - `interaction-gateway.md` — optional Mattermost adapter;
 - `automation-scheduler.md` — schedule occurrence worker;
+- `session-archive.md` — snapshot/restore session JSONL, guarded PVC cleanup и GC;
 - `internal-rpc-authority.md` и `egress-gateway.md` — security boundaries.
 
 Runbooks не разрешают merge, deployment, reset или доступ к live credentials.

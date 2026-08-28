@@ -23,7 +23,7 @@ canonical="$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/aut
 cmp -s "$generated" "$canonical" || fail 'generated policy differs from the canonical file'
 jq -e '
   .v == 1 and .policy.default_decision == "DENY" and
-  (.policy.authority_proof_producers | length) == 8 and
+  (.policy.authority_proof_producers | length) == 9 and
   ((.policy.operation_bindings | map(.operation_id) | unique | length) ==
    (.policy.operation_bindings | length)) and
   all(.policy.operation_bindings[];

@@ -25,6 +25,7 @@ const (
 	MaximumInputArtifactTotal = 256 << 20
 	MaximumCompletionBytes    = 16 << 20
 	MaximumCompletionFiles    = 32
+	MaximumSessionSourceBytes = 64 << 20
 	MaximumProgressTextBytes  = 2 << 10
 	ArtifactCapability        = "platform.artifact.manage"
 )
@@ -172,6 +173,7 @@ func (input RunnerInput) Validate() error {
 		!opaqueReferencePattern.MatchString(input.EnvironmentBindingRef) || input.EnvironmentBindingVersion < 1 || !sha256Pattern.MatchString(input.EnvironmentBindingDigest) ||
 		(input.CodexSandbox != "read-only" && input.CodexSandbox != "workspace-write") ||
 		(input.CodexApprovalPolicy != "untrusted" && input.CodexApprovalPolicy != "on-request" && input.CodexApprovalPolicy != "never") ||
+		(input.CodexSessionID != "" && !uuidPattern.MatchString(input.CodexSessionID)) ||
 		input.CallbackTLS.validate() != nil || !validCallbackURL(input.CallbackURL, input.CallbackTLS.ServerName) ||
 		!validSecretFile(input.ExecutionTicketFile) || !validSecretFile(input.ProviderAuthFile) ||
 		!validSecretFile(input.ProviderAuthSHA256File) || input.WorkspaceRoot != "/workspace" ||
@@ -451,6 +453,10 @@ type RunnerCompletionRequest struct {
 	SafeErrorCode         string           `json:"safe_error_code,omitempty"`
 	Usage                 TokenUsage       `json:"usage"`
 	Artifacts             []RunnerArtifact `json:"artifacts,omitempty"`
+	CodexSessionID        string           `json:"codex_session_id,omitempty"`
+	ArchiveRelativePath   string           `json:"archive_relative_path,omitempty"`
+	ArchiveSHA256         string           `json:"archive_sha256,omitempty"`
+	ArchiveSizeBytes      int64            `json:"archive_size_bytes,omitempty"`
 }
 
 func (request RunnerCompletionRequest) Validate() error {
@@ -459,6 +465,13 @@ func (request RunnerCompletionRequest) Validate() error {
 		(request.Success && strings.TrimSpace(request.ResultSummary) == "") || (!request.Success && request.SafeErrorCode == "") ||
 		request.Usage.Validate() != nil {
 		return errors.New("runner completion is invalid")
+	}
+	hasArchiveBinding := request.CodexSessionID != "" || request.ArchiveRelativePath != "" || request.ArchiveSHA256 != "" || request.ArchiveSizeBytes != 0
+	if hasArchiveBinding && (!uuidPattern.MatchString(request.CodexSessionID) ||
+		!validArchiveRelativePath(request.ArchiveRelativePath) || !sha256Pattern.MatchString(request.ArchiveSHA256) ||
+		!strings.HasSuffix(request.ArchiveRelativePath, "rollout-"+request.CodexSessionID+".jsonl") ||
+		request.ArchiveSizeBytes <= 0 || request.ArchiveSizeBytes > MaximumSessionSourceBytes) {
+		return errors.New("runner completion archive binding is invalid")
 	}
 	total := 0
 	for _, artifact := range request.Artifacts {
@@ -474,6 +487,16 @@ func (request RunnerCompletionRequest) Validate() error {
 		return errors.New("runner completion budget exceeded")
 	}
 	return nil
+}
+
+// SessionPVCName является единственным каноническим преобразованием opaque
+// Session ref в имя принадлежащего runtime PVC.
+func SessionPVCName(sessionRef string) (string, error) {
+	if !opaqueReferencePattern.MatchString(sessionRef) {
+		return "", errors.New("session reference is invalid")
+	}
+	digest := sha256.Sum256([]byte(sessionRef))
+	return "runtime-session-" + hex.EncodeToString(digest[:8]), nil
 }
 
 func sha256Sum(value []byte) string {

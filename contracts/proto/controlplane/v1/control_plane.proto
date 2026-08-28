@@ -140,6 +140,19 @@ service RuntimeWorkService {
   rpc CompleteIntegrationInvocation(CompleteIntegrationInvocationRequest) returns (CompleteIntegrationInvocationResponse);
 }
 
+// SessionArchiveWorkService обслуживает только fenced lifecycle долговечного
+// состояния Codex session. Workload не выбирает tenant, session, PVC или
+// object key: все координаты назначает control-plane.
+service SessionArchiveWorkService {
+  rpc ClaimSessionArchiveTasks(ClaimSessionArchiveTasksRequest) returns (ClaimSessionArchiveTasksResponse);
+  rpc RenewSessionArchiveTask(RenewSessionArchiveTaskRequest) returns (RenewSessionArchiveTaskResponse);
+  rpc CompleteSessionSnapshot(CompleteSessionSnapshotRequest) returns (CompleteSessionSnapshotResponse);
+  rpc CompleteSessionRestore(CompleteSessionRestoreRequest) returns (CompleteSessionRestoreResponse);
+  rpc CompleteSessionPVCDeletion(CompleteSessionPVCDeletionRequest) returns (CompleteSessionPVCDeletionResponse);
+  rpc CompleteSessionObjectDeletion(CompleteSessionObjectDeletionRequest) returns (CompleteSessionObjectDeletionResponse);
+  rpc FailSessionArchiveTask(FailSessionArchiveTaskRequest) returns (FailSessionArchiveTaskResponse);
+}
+
 // InteractionWorkService обслуживает только необязательные каналы общения.
 // Внешние channel/user/post ID являются locator metadata и никогда не
 // определяют organization, Project, target или право Human Gate.
@@ -1799,6 +1812,9 @@ message RuntimeRevisionSnapshot {
   string environment_binding_digest = 44;
   repeated RuntimeEnvironmentValue environment_values = 45;
   repeated RuntimeSecretDescriptor secret_projections = 46;
+  // Provider thread ID назначен Codex app-server и сохранён control-plane из
+  // terminal handoff предыдущего turn.
+  string codex_session_id = 47;
 }
 
 message ProviderCredentialBinding {
@@ -1894,10 +1910,173 @@ message CompleteExecutionRequest {
   string safe_error_code = 7;
   repeated CompletedArtifactInput artifacts = 8;
   TokenUsage usage = 9;
+  string codex_session_id = 10;
+  string codex_archive_relative_path = 11;
+  string codex_archive_sha256 = 12;
+  int64 codex_archive_size_bytes = 13;
 }
 message CompleteExecutionResponse {
   Run run = 1;
   RunGraph graph = 2;
+}
+
+enum SessionArchiveTaskKind {
+  SESSION_ARCHIVE_TASK_KIND_UNSPECIFIED = 0;
+  SESSION_ARCHIVE_TASK_KIND_SNAPSHOT = 1;
+  SESSION_ARCHIVE_TASK_KIND_RESTORE = 2;
+  SESSION_ARCHIVE_TASK_KIND_DELETE_PVC = 3;
+  SESSION_ARCHIVE_TASK_KIND_DELETE_OBJECT = 4;
+}
+
+message SessionArchiveBinding {
+  string archive_ref = 1;
+  uint32 format_version = 2;
+  string object_key = 3;
+  string object_version = 4;
+  string object_etag = 5;
+  string object_digest = 6;
+  int64 object_size_bytes = 7;
+  string source_relative_path = 8;
+  string source_sha256 = 9;
+  int64 source_size_bytes = 10;
+}
+
+message SessionArchiveTask {
+  string task_ref = 1;
+  SessionArchiveTaskKind kind = 2;
+  string organization_ref = 3;
+  string project_ref = 4;
+  string session_ref = 5;
+  string provider_account_ref = 6;
+  string runtime_revision_ref = 7;
+  int64 runtime_revision_version = 8;
+  string runtime_revision_digest = 9;
+  string codex_session_id = 10;
+  int64 content_generation = 11;
+  string pvc_name = 12;
+  SessionArchiveBinding archive = 13;
+  WorkLease lease = 14;
+  string input_digest = 15;
+  string source_relative_path = 16;
+  string source_sha256 = 17;
+  int64 source_size_bytes = 18;
+  string target_object_key = 19;
+  string target_object_version = 20;
+  int32 attempt = 21;
+}
+
+message ClaimSessionArchiveTasksRequest {
+  string workload_instance = 1;
+  int32 limit = 2;
+}
+
+message ClaimSessionArchiveTasksResponse {
+  repeated SessionArchiveTask tasks = 1;
+}
+
+message RenewSessionArchiveTaskRequest {
+  string task_ref = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+}
+
+message RenewSessionArchiveTaskResponse {
+  WorkLease lease = 1;
+}
+
+message CompleteSessionSnapshotRequest {
+  MutationContext mutation = 1;
+  string task_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  uint32 format_version = 6;
+  string object_key = 7;
+  string object_version = 8;
+  string object_etag = 9;
+  string object_digest = 10;
+  int64 object_size_bytes = 11;
+  int64 source_size_bytes = 12;
+}
+
+message CompleteSessionRestoreRequest {
+  MutationContext mutation = 1;
+  string task_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  uint32 format_version = 6;
+  string object_key = 7;
+  string object_version = 8;
+  string object_etag = 9;
+  string object_digest = 10;
+  int64 object_size_bytes = 11;
+  string restored_source_sha256 = 12;
+  int64 restored_source_size_bytes = 13;
+}
+
+message CompleteSessionPVCDeletionRequest {
+  MutationContext mutation = 1;
+  string task_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  string pvc_name = 6;
+}
+
+message CompleteSessionObjectDeletionRequest {
+  MutationContext mutation = 1;
+  string task_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  string object_key = 6;
+  string object_version = 7;
+}
+
+message FailSessionArchiveTaskRequest {
+  MutationContext mutation = 1;
+  string task_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  string safe_error_code = 6;
+}
+
+message CompleteSessionSnapshotResponse {
+  string task_ref = 1;
+  string state = 2;
+  string archive_ref = 3;
+  bool retry_scheduled = 4;
+}
+
+message CompleteSessionRestoreResponse {
+  string task_ref = 1;
+  string state = 2;
+  string archive_ref = 3;
+  bool retry_scheduled = 4;
+}
+
+message CompleteSessionPVCDeletionResponse {
+  string task_ref = 1;
+  string state = 2;
+  string archive_ref = 3;
+  bool retry_scheduled = 4;
+}
+
+message CompleteSessionObjectDeletionResponse {
+  string task_ref = 1;
+  string state = 2;
+  string archive_ref = 3;
+  bool retry_scheduled = 4;
+}
+
+message FailSessionArchiveTaskResponse {
+  string task_ref = 1;
+  string state = 2;
+  string archive_ref = 3;
+  bool retry_scheduled = 4;
 }
 message DelegateExecutionRequest {
   MutationContext mutation = 1;

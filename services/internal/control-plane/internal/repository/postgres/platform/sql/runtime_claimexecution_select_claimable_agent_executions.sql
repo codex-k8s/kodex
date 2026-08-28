@@ -233,12 +233,14 @@ SELECT n.id::text,
        runtime_environment.version_number,
        runtime_environment.digest,
        runtime_environment.non_secret_values,
-       runtime_environment.secret_descriptors
+       runtime_environment.secret_descriptors,
+       COALESCE(session_storage.codex_session_id::text, '')
 FROM control_plane.run_nodes n
 JOIN control_plane.runs r ON r.id = n.run_id
 JOIN control_plane.runs root ON root.id = r.root_run_id
 LEFT JOIN control_plane.projects p ON p.id = r.project_id
 JOIN control_plane.sessions s ON s.id = r.session_id
+LEFT JOIN control_plane.session_storage session_storage ON session_storage.session_id = s.id
 JOIN control_plane.provider_accounts pa
   ON pa.id = s.provider_account_id
  AND pa.organization_id = r.organization_id
@@ -295,6 +297,7 @@ WHERE n.organization_id = $1::uuid
   AND n.type = 'AGENT_EXECUTION'
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
+  AND COALESCE(session_storage.state, 'LIVE') = 'LIVE'
   AND cardinality(root.input_artifact_refs) = (
       SELECT count(DISTINCT input_artifact.ref)
       FROM control_plane.artifacts AS input_artifact

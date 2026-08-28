@@ -133,6 +133,21 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
+  name: internal-rpc-authority-session-archive-workload
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-session-archive-workload-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [session-archive, session-archive.kodex-system.svc, session-archive.kodex-system.svc.cluster.local]
+  uris: [spiffe://kodex.local/ns/kodex-system/sa/session-archive]
+  usages: [server auth, client auth]
+  issuerRef: {name: kodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
   name: internal-rpc-authority-control-api-gateway-workload
   annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:

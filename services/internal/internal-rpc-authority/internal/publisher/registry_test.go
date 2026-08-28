@@ -22,7 +22,7 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 	}{
 		{
 			relative:             "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
-			wantStartupReadbacks: 7,
+			wantStartupReadbacks: 8,
 		},
 		{
 			relative:             "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",

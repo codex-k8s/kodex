@@ -60,6 +60,9 @@ CREATE ROLE ira_interaction_gateway_issuer_g1
 CREATE ROLE ira_runtime_controller_issuer_g1
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
+CREATE ROLE ira_session_archive_issuer_g1
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+    NOREPLICATION NOBYPASSRLS;
 
 GRANT internal_rpc_authority_publisher TO ira_publisher_g4
     WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
@@ -75,7 +78,8 @@ GRANT internal_rpc_authority_issuer
        ira_control_api_gateway_issuer_g1,
        ira_integration_gateway_issuer_g1,
        ira_interaction_gateway_issuer_g1,
-       ira_runtime_controller_issuer_g1
+       ira_runtime_controller_issuer_g1,
+       ira_session_archive_issuer_g1
     WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
 GRANT internal_rpc_authority_verifier TO ira_control_plane_verifier_g1
     WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
@@ -96,7 +100,8 @@ GRANT CONNECT ON DATABASE internal_rpc_authority
        ira_control_plane_resolver_g1,
        ira_integration_gateway_issuer_g1,
        ira_interaction_gateway_issuer_g1,
-       ira_runtime_controller_issuer_g1;
+       ira_runtime_controller_issuer_g1,
+       ira_session_archive_issuer_g1;
 RESET ROLE;
 --
 -- PostgreSQL database dump

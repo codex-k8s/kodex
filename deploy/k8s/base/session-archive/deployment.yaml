@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: session-archive
+  labels: {app.kubernetes.io/name: session-archive, app.kubernetes.io/component: archive-controller}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: session-archive, app.kubernetes.io/component: archive-controller}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: session-archive, app.kubernetes.io/component: archive-controller}
+    spec:
+      serviceAccountName: session-archive
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 35
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: session-archive
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/session-archive@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          args: [controller]
+          envFrom: [{configMapRef: {name: session-archive-runtime}}]
+          env:
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['kodex.dev/environment']"}}
+            - name: SESSION_ARCHIVE_ENVIRONMENT
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['kodex.dev/environment']"}}
+            - name: SESSION_ARCHIVE_INSTANCE_ID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+            - name: SESSION_ARCHIVE_WORKER_IMAGE
+              value: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/session-archive@sha256:0000000000000000000000000000000000000000000000000000000000000000
+            - name: SESSION_ARCHIVE_CONTROL_PLANE_CA_FILE
+              value: /var/run/config/kodex/session-archive/control-plane/ca.pem
+            - name: SESSION_ARCHIVE_CONTROL_PLANE_CERTIFICATE_FILE
+              value: /var/run/secrets/kodex/session-archive/workload-tls/tls.crt
+            - name: SESSION_ARCHIVE_CONTROL_PLANE_PRIVATE_KEY_FILE
+              value: /var/run/secrets/kodex/session-archive/workload-tls/tls.key
+            - name: SESSION_ARCHIVE_APPLICATION_GRANT_FILE
+              value: /var/run/secrets/kodex/session-archive/application-grant/application-grant.jws
+            - name: SESSION_ARCHIVE_OBJECT_STORAGE_ENDPOINT
+              valueFrom: {secretKeyRef: {name: kodex-external-s3, key: endpoint}}
+            - name: SESSION_ARCHIVE_OBJECT_STORAGE_REGION
+              valueFrom: {secretKeyRef: {name: kodex-external-s3, key: region}}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: otel-collector.observability.svc:4317
+            - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
+              value: otel-collector.observability.svc.cluster.local
+            - name: OTEL_EXPORTER_OTLP_CA_FILE
+              value: /var/run/config/kodex/session-archive/observability/otel-ca.pem
+            - name: SENTRY_DSN_FILE
+              value: /var/run/secrets/kodex/session-archive/observability/sentry-dsn
+            - name: SENTRY_EXPECTED_HOST
+              value: sentry-relay.observability.svc:8443
+          ports: [{name: metrics, containerPort: 9090, protocol: TCP}]
+          startupProbe: {httpGet: {path: /healthz, port: metrics}, timeoutSeconds: 2, periodSeconds: 2, failureThreshold: 30}
+          readinessProbe: {httpGet: {path: /readyz, port: metrics}, timeoutSeconds: 2, periodSeconds: 5, failureThreshold: 2}
+          livenessProbe: {httpGet: {path: /healthz, port: metrics}, timeoutSeconds: 2, periodSeconds: 10, failureThreshold: 3}
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: "1", memory: 256Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: workload-tls, mountPath: /var/run/secrets/kodex/session-archive/workload-tls, readOnly: true}
+            - {name: control-plane-ca, mountPath: /var/run/config/kodex/session-archive/control-plane, readOnly: true}
+            - {name: application-grant, mountPath: /var/run/secrets/kodex/session-archive/application-grant, readOnly: true}
+            - {name: otel-ca, mountPath: /var/run/config/kodex/session-archive/observability, readOnly: true}
+            - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/session-archive/observability, readOnly: true}
+      volumes:
+        - {name: workload-tls, secret: {secretName: internal-rpc-authority-session-archive-workload-tls, defaultMode: 288}}
+        - {name: control-plane-ca, configMap: {name: kodex-internal-ca, defaultMode: 288}}
+        - {name: application-grant, emptyDir: {sizeLimit: 1Mi}}
+        - {name: otel-ca, configMap: {name: kodex-otel-ca, defaultMode: 288}}
+        - {name: sentry-dsn, secret: {secretName: kodex-sentry, defaultMode: 288}}

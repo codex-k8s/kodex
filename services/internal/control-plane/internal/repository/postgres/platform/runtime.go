@@ -19,6 +19,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -101,6 +102,7 @@ type claimableExecution struct {
 	configOverlayID, configOverlayRef, configOverlayDigest, configOverlay          string
 	environmentBindingID, environmentBindingRef, environmentBindingDigest          string
 	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest          string
+	codexSessionID                                                                 string
 	providerCredentialRevisionNumber, generation, roleRuntimeContractRevision      int64
 	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion              int64
 	environmentBindingVersion, runtimeEnvironmentVersion                           int64
@@ -152,7 +154,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.configOverlayID, &candidate.configOverlayRef, &candidate.configOverlayVersion, &candidate.configOverlayDigest, &candidate.configOverlay,
 			&candidate.environmentBindingID, &candidate.environmentBindingRef, &candidate.environmentBindingVersion, &candidate.environmentBindingDigest,
 			&candidate.runtimeEnvironmentID, &candidate.runtimeEnvironmentRef, &candidate.runtimeEnvironmentVersion, &candidate.runtimeEnvironmentDigest,
-			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections); err != nil {
+			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections,
+			&candidate.codexSessionID); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
 		claimable = append(claimable, candidate)
@@ -193,6 +196,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		configOverlayID, configOverlayRef, configOverlayVersion, configOverlayDigest, configOverlay := candidate.configOverlayID, candidate.configOverlayRef, candidate.configOverlayVersion, candidate.configOverlayDigest, candidate.configOverlay
 		environmentBindingID, environmentBindingRef, environmentBindingVersion, environmentBindingDigest := candidate.environmentBindingID, candidate.environmentBindingRef, candidate.environmentBindingVersion, candidate.environmentBindingDigest
 		runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentVersion, runtimeEnvironmentDigest := candidate.runtimeEnvironmentID, candidate.runtimeEnvironmentRef, candidate.runtimeEnvironmentVersion, candidate.runtimeEnvironmentDigest
+		codexSessionID := candidate.codexSessionID
 		fence, err := newRef("fnc")
 		if err != nil {
 			return commandOutcome{}, err
@@ -240,6 +244,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			configOverlayRef, strconv.FormatInt(configOverlayVersion, 10), configOverlayDigest,
 			runtimeEnvironmentRef, strconv.FormatInt(runtimeEnvironmentVersion, 10), runtimeEnvironmentDigest,
 			environmentBindingRef, strconv.FormatInt(environmentBindingVersion, 10), environmentBindingDigest,
+			codexSessionID,
 		}, "\x00")))
 		revisionDigestHex := hex.EncodeToString(revisionDigest[:])
 		revisionRef, err := newRef("rrev")
@@ -277,6 +282,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"runtimeEnvironmentRef": runtimeEnvironmentRef, "runtimeEnvironmentVersion": runtimeEnvironmentVersion, "runtimeEnvironmentDigest": runtimeEnvironmentDigest,
 			"environmentBindingRef": environmentBindingRef, "environmentBindingVersion": environmentBindingVersion, "environmentBindingDigest": environmentBindingDigest,
 			"environmentValues": environmentValues, "secretProjections": secretProjections,
+			"codexSessionID": codexSessionID,
 		}
 		rawSnapshot, err := json.Marshal(snapshot)
 		if err != nil || len(rawSnapshot) > 256<<10 {
@@ -342,10 +348,10 @@ func (repository *Repository) lease(ctx context.Context, tx pgx.Tx, scope scope,
 	if lock {
 		leaseQuery = queryRuntimeLeaseForUpdateSelectRuntimeLeasesOrganizationIdRef
 	}
-	var leaseID, runID, nodeID, rootRunID, projectID, projectRef, runRef, nodeRef, storedDigest, state, turnRef string
+	var leaseID, runID, nodeID, rootRunID, projectID, projectRef, runRef, nodeRef, storedDigest, state, turnRef, runtimeRevisionID string
 	var generation int64
 	var expiresAt time.Time
-	err := tx.QueryRow(ctx, leaseQuery, scope.organizationID, payload.LeaseRef).Scan(&leaseID, &runID, &nodeID, &rootRunID, &projectID, &projectRef, &runRef, &nodeRef, &storedDigest, &generation, &state, &expiresAt, &turnRef)
+	err := tx.QueryRow(ctx, leaseQuery, scope.organizationID, payload.LeaseRef).Scan(&leaseID, &runID, &nodeID, &rootRunID, &projectID, &projectRef, &runRef, &nodeRef, &storedDigest, &generation, &state, &expiresAt, &turnRef, &runtimeRevisionID)
 	if err != nil {
 		return nil, errs.ErrNotFound
 	}
@@ -353,7 +359,7 @@ func (repository *Repository) lease(ctx context.Context, tx pgx.Tx, scope scope,
 	if storedDigest != hex.EncodeToString(digest[:]) || generation != payload.Generation || state != "CLAIMED" || time.Now().After(expiresAt) {
 		return nil, errs.ErrForbidden
 	}
-	return map[string]any{"leaseID": leaseID, "runID": runID, "nodeID": nodeID, "rootRunID": rootRunID, "projectID": projectID, "projectRef": projectRef, "runRef": runRef, "nodeRef": nodeRef, "turnRef": turnRef, "generation": generation}, nil
+	return map[string]any{"leaseID": leaseID, "runID": runID, "nodeID": nodeID, "rootRunID": rootRunID, "projectID": projectID, "projectRef": projectRef, "runRef": runRef, "nodeRef": nodeRef, "turnRef": turnRef, "runtimeRevisionID": runtimeRevisionID, "generation": generation}, nil
 }
 
 func (repository *Repository) renewExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -406,6 +412,14 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if !ok || !payload.Usage.Valid() || payload.Success && payload.SafeErrorCode != "" || !payload.Success && !runtimeSafeErrorCode(payload.SafeErrorCode) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	hasArchiveBinding := payload.CodexSessionID != "" || payload.ArchiveRelativePath != "" || payload.ArchiveSHA256 != "" || payload.ArchiveSizeBytes != 0
+	if hasArchiveBinding && (uuid.Validate(payload.CodexSessionID) != nil ||
+		!strings.HasSuffix(payload.ArchiveRelativePath, "rollout-"+payload.CodexSessionID+".jsonl") ||
+		!strings.HasPrefix(payload.ArchiveRelativePath, ".kodex/state/codex-home/sessions/") ||
+		strings.Contains(payload.ArchiveRelativePath, "..") || len(payload.ArchiveSHA256) != 64 ||
+		payload.ArchiveSizeBytes < 1 || payload.ArchiveSizeBytes > runtimecontract.MaximumSessionSourceBytes) {
+		return commandOutcome{}, errs.ErrInvalid
+	}
 	lease, err := repository.lease(ctx, tx, scope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
 	if err != nil {
 		return commandOutcome{}, err
@@ -442,6 +456,20 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	}
 	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunsId, lease["runID"]).Scan(&sessionID, &targetType); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if hasArchiveBinding && targetType != "SYSTEM_ASSISTANT" {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpsertSessionStorage, pgx.StrictNamedArgs{
+			"organization_id":      scope.organizationID,
+			"session_id":           sessionID,
+			"runtime_revision_id":  lease["runtimeRevisionID"],
+			"codex_session_id":     payload.CodexSessionID,
+			"source_relative_path": payload.ArchiveRelativePath,
+			"source_sha256":        payload.ArchiveSHA256,
+			"source_size_bytes":    payload.ArchiveSizeBytes,
+			"retention_seconds":    int64((30 * 24 * time.Hour) / time.Second),
+		}); err != nil {
+			return commandOutcome{}, fmt.Errorf("record session storage binding: %w", errs.ErrUnavailable)
+		}
 	}
 	artifactRefs := []string{}
 	var artifactBytes int64

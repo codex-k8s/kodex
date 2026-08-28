@@ -39,9 +39,9 @@ spec:
                 [ "$SECONDS" -lt "$deadline" ] || { printf 'SeaweedFS master readiness timed out\n' >&2; exit 1; }
                 sleep 2
               done
-              output="$(printf 's3.bucket.create -name kodex-artifacts\ns3.bucket.create -name kodex-backups\ns3.bucket.create -name kodex-restore-fixture\ns3.bucket.list\n' |
+              output="$(printf 's3.bucket.create -name kodex-artifacts\ns3.bucket.create -name kodex-backups\ns3.bucket.create -name kodex-restore-fixture\ns3.bucket.create -name kodex-session-archives\ns3.bucket.list\n' |
                 weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888 2>/dev/null)"
-              for bucket in kodex-artifacts kodex-backups kodex-restore-fixture; do
+              for bucket in kodex-artifacts kodex-backups kodex-restore-fixture kodex-session-archives; do
                 printf '%s\n' "$output" | grep -Eq "(^|[[:space:]])${bucket}($|[[:space:]])" || {
                   printf 'SeaweedFS bucket readback failed\n' >&2
                   exit 1

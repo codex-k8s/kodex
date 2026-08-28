@@ -113,6 +113,7 @@ func main() {
 		},
 		worker("runtime-controller", "control-plane.runtime-controller", controlplaneclient.RuntimeOperations()),
 		worker("automation-scheduler", "control-plane.automation", controlplaneclient.AutomationSchedulerOperations()),
+		worker("session-archive", "control-plane.session-archive", controlplaneclient.SessionArchiveOperations()),
 		worker("integration-gateway", "control-plane.integration-gateway", controlplaneclient.IntegrationGatewayOperations()),
 		worker("interaction-gateway", "control-plane.interaction-gateway", controlplaneclient.InteractionGatewayOperations()),
 		worker("role-image-builder", "control-plane.role-image-builder", controlplaneclient.RoleImageBuilderOperations()),
