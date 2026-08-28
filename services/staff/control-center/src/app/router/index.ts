@@ -123,7 +123,7 @@ export const router = createRouter({
       component: lazyPage(() => import("@/pages/DecisionsPage.vue")),
     },
     {
-      path: "/administration/access",
+      path: "/administration/access/:section?",
       name: "access",
       component: lazyPage(() => import("@/pages/AccessPage.vue")),
     },
