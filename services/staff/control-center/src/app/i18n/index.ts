@@ -529,6 +529,321 @@ const ru = {
   access: {
     title: "Участники и доступ",
     subtitle: "Роли и типизированные полномочия в Проекте",
+    workspaceTitle: "Участники и доступ",
+    workspaceSubtitle:
+      "OIDC определяет личность и группы, Kodex — прикладные роли, области и эффективный доступ",
+    workspaceProjectSubtitle:
+      "Доступ в контексте выбранного Проекта без расширения полномочий организации",
+    loadMore: "Показать ещё",
+    sections: {
+      label: "Разделы управления доступом",
+      participants: "Участники",
+      groups: "Группы OIDC",
+      roles: "Роли",
+      bindings: "Привязки",
+      effective: "Эффективный доступ",
+    },
+    participants: {
+      title: "Участники",
+      subtitle: "Пользователи и служебные субъекты с прикладными привязками",
+      search: "Поиск участников",
+      searchPlaceholder: "Имя участника",
+      participant: "Участник",
+      identity: "Identity и группы",
+      bindings: "Привязки",
+      directIdentity: "Прямая identity",
+      assignRole: "Назначить роль",
+      empty: "Участники не найдены",
+      emptyHint:
+        "Пользователь появится после первого входа через OIDC; до выдачи binding доступ закрыт.",
+    },
+    groups: {
+      title: "Группы OIDC",
+      subtitle: "Проверенный read model групп провайдера identity",
+      search: "Поиск групп OIDC",
+      searchPlaceholder: "Название группы",
+      authorityTitle: "Группа не является ролью Kodex",
+      authorityHint:
+        "OIDC сообщает членство, а прикладные полномочия появляются только после явной привязки к versioned-роли.",
+      oidcSource: "Источник: OIDC token snapshot",
+      members: "Участники",
+      bindings: "Привязки",
+      lastSeen: "Последний вход",
+      empty: "Группы OIDC пока не обнаружены",
+      emptyHint:
+        "Группа появится после проверенного входа её участника; отсутствие группы не расширяет доступ.",
+    },
+    rolesWorkspace: {
+      title: "Системные и пользовательские роли",
+      subtitle:
+        "Роль хранит закрытый набор полномочий; изменение создаёт новую неизменяемую версию",
+      create: "Создать роль",
+      empty: "Роли не найдены",
+      emptyHint: "Создайте пользовательскую роль из полномочий реестра.",
+      bindingsShort: "привязок",
+      permissionCount: "Полномочий: {count}",
+      systemImmutable: "Системная роль",
+      archiveConfirm:
+        "Архивировать роль «{name}»? Существующие version-pinned привязки останутся действовать до явного изменения.",
+    },
+    roleEditor: {
+      createTitle: "Новая пользовательская роль",
+      editTitle: "Новая версия роли",
+      description: "Понятное назначение",
+      descriptionPlaceholder:
+        "Какие действия и в каких рабочих сценариях разрешает эта роль",
+      permissions: "Полномочия",
+      permissionsHint:
+        "Выберите только необходимые действия. Риск и смысл каждого полномочия заданы серверным реестром.",
+      scopes: "Допустимые области",
+      scopesHint:
+        "Binding сможет использовать только области, разрешённые одновременно всеми выбранными полномочиями.",
+      changeComment: "Причина изменения",
+      changeCommentPlaceholder: "Что изменилось и зачем",
+      create: "Создать роль v1",
+      publishVersion: "Опубликовать новую версию",
+      newVersion: "Будет создана новая immutable-версия",
+      newVersionHint:
+        "Действующие bindings останутся закреплены за прежней версией до явного переназначения.",
+      history: "История версий ({count})",
+      revision: "Ревизия {revision}",
+      noComment: "Причина не указана",
+    },
+    bindingsWorkspace: {
+      title: "Привязки ролей",
+      subtitle:
+        "Кому, какая версия роли и в какой точной области разрешает действия",
+      filter: "Фильтр состояния привязок",
+      create: "Создать привязку",
+      empty: "Привязки не найдены",
+      emptyHint:
+        "Создайте allow-binding для пользователя, OIDC-группы или служебного субъекта.",
+      wholeOrganization: "Вся организация",
+      ownerOnly: "Только свои ресурсы",
+      until: "До {date}",
+      noConditions: "Без дополнительных условий",
+      revokeConfirm:
+        "Отозвать эту привязку? Действие будет зафиксировано в аудите.",
+    },
+    bindingEditor: {
+      createTitle: "Новая привязка роли",
+      editTitle: "Изменить привязку",
+      modelTitle: "Allow-only модель",
+      modelHint:
+        "Доступ появляется только при совпадении субъекта, закреплённой версии роли, полномочия, области и условий.",
+      subjectKind: "Тип субъекта",
+      subject: "Субъект",
+      chooseSubject: "Выберите участника или группу",
+      role: "Версия роли",
+      chooseRole: "Выберите активную роль",
+      pinnedVersion:
+        "Привязка закрепляется за этой immutable-версией и не меняется при выпуске следующей.",
+      scope: "Область действия",
+      scopeHint:
+        "Для точечного запуска выберите конкретного ИИ-сотрудника в конкретном Проекте.",
+      conditions: "Дополнительные условия",
+      validFrom: "Действует с",
+      validUntil: "Действует до",
+      ownerOnly: "Только ресурсы, созданные самим субъектом",
+      ownerOnlyHint:
+        "Условие доступно только полномочиям, для которых его разрешает серверный реестр.",
+      invalidWindow: "Дата окончания должна быть позже даты начала.",
+      create: "Создать привязку",
+    },
+    effective: {
+      title: "Эффективный доступ",
+      subtitle:
+        "Проверка, объяснение и безопасная симуляция решения авторитетного permission engine",
+      mode: "Режим проверки доступа",
+      modes: {
+        QUERY: "Проверить",
+        EXPLAIN: "Объяснить",
+        SIMULATE: "Симулировать",
+      },
+      subject: "Субъект",
+      chooseSubject: "Выберите пользователя, группу или сервис",
+      permission: "Действие",
+      choosePermission: "Выберите полномочие",
+      role: "Предлагаемая роль",
+      chooseRole: "Выберите роль для read-only симуляции",
+      actions: {
+        QUERY: "Проверить доступ",
+        EXPLAIN: "Объяснить решение",
+        SIMULATE: "Сравнить без сохранения",
+      },
+      result: "Авторитетное решение",
+      simulationTitle: "Сравнение доступа",
+      current: "Сейчас",
+      after: "После предлагаемой привязки",
+      readOnlySimulation:
+        "Симуляция ничего не сохраняет и не выдаёт полномочия.",
+      noResult: "Заполните параметры проверки",
+      noResultHint:
+        "Результат и цепочка источников появятся после ответа control-plane.",
+    },
+    subjectKinds: {
+      USER: "Пользователь",
+      OIDC_GROUP: "Группа OIDC",
+      SERVICE: "Служебный субъект",
+    },
+    roleKinds: {
+      SYSTEM: "Системные роли",
+      CUSTOM: "Пользовательские роли",
+    },
+    risk: {
+      READ: "Чтение",
+      WRITE: "Изменение",
+      APPROVE: "Решение",
+      ADMIN: "Администрирование",
+    },
+    scope: {
+      kind: "Тип области",
+      project: "Проект",
+      chooseProject: "Выберите Проект",
+      resourceKind: "Тип ресурса",
+      agent: "ИИ-сотрудник",
+      chooseAgent: "Выберите конкретного ИИ-сотрудника",
+      agentHint:
+        "Такой binding не разрешает запуск других сотрудников даже в том же Проекте.",
+      resourceRef: "Экземпляр ресурса",
+      resourceRefPlaceholder: "Выберите или укажите авторитетный ref",
+      resourceRefHint:
+        "Для типов без отдельного picker используется непрозрачная ссылка, полученная из интерфейса Kodex.",
+      values: {
+        ORGANIZATION: "Организация",
+        PROJECT: "Проект",
+        RESOURCE_KIND: "Тип ресурсов",
+        RESOURCE_INSTANCE: "Конкретный ресурс",
+      },
+      hints: {
+        ORGANIZATION: "Все допустимые ресурсы организации",
+        PROJECT: "Все допустимые ресурсы одного Проекта",
+        RESOURCE_KIND: "Один тип ресурсов внутри Проекта",
+        RESOURCE_INSTANCE: "Один выбранный экземпляр ресурса",
+      },
+    },
+    resourceKinds: {
+      ORGANIZATION: "Организация",
+      PROJECT: "Проект",
+      AGENT: "ИИ-сотрудник",
+      WORKFLOW: "Процесс",
+      RUN: "Запуск",
+      OWNER_GATE: "Human Gate",
+      ARTIFACT: "Файл",
+      SCHEDULE: "Автоматизация",
+      INTEGRATION: "Интеграция",
+    },
+    explanation: {
+      DIRECT_BINDING: "Найдена прямая привязка субъекта",
+      OIDC_GROUP_BINDING: "Найдена привязка проверенной OIDC-группы",
+      SERVICE_BINDING: "Найдена привязка служебного субъекта",
+      ROLE_PERMISSION: "Закреплённая версия роли содержит полномочие",
+      SCOPE_MATCH: "Область привязки совпадает с целевым ресурсом",
+      CONDITION_MATCH: "Дополнительные условия выполнены",
+      NO_ALLOW_BINDING: "Подходящая разрешающая привязка отсутствует",
+    },
+    permissionsRegistry: {
+      "organization.view": {
+        name: "Просматривать организацию",
+        description: "Читать профиль и доступные ресурсы организации.",
+      },
+      "organization.manage": {
+        name: "Управлять организацией",
+        description: "Изменять настройки и жизненный цикл организации.",
+      },
+      "access.view": {
+        name: "Просматривать доступ",
+        description: "Читать роли, привязки и эффективные решения доступа.",
+      },
+      "access.manage": {
+        name: "Управлять доступом",
+        description: "Создавать роли и изменять прикладные привязки.",
+      },
+      "project.create": {
+        name: "Создавать Проекты",
+        description: "Создавать новые рабочие Проекты организации.",
+      },
+      "project.view": {
+        name: "Просматривать Проект",
+        description: "Читать профиль и доступные ресурсы Проекта.",
+      },
+      "project.manage": {
+        name: "Управлять Проектом",
+        description: "Изменять настройки и жизненный цикл Проекта.",
+      },
+      "agent.view": {
+        name: "Просматривать ИИ-сотрудников",
+        description: "Читать профиль и состояние разрешённых ИИ-сотрудников.",
+      },
+      "agent.manage": {
+        name: "Управлять ИИ-сотрудниками",
+        description: "Создавать и изменять разрешённых ИИ-сотрудников.",
+      },
+      "agent.launch": {
+        name: "Запускать ИИ-сотрудников",
+        description: "Создавать запуски разрешённых ИИ-сотрудников.",
+      },
+      "workflow.view": {
+        name: "Просматривать Процессы",
+        description: "Читать разрешённые Процессы и их версии.",
+      },
+      "workflow.manage": {
+        name: "Управлять Процессами",
+        description: "Создавать и изменять разрешённые Процессы.",
+      },
+      "workflow.launch": {
+        name: "Запускать Процессы",
+        description: "Создавать запуски разрешённых Процессов.",
+      },
+      "run.view": {
+        name: "Просматривать запуски",
+        description: "Читать состояние и результаты разрешённых запусков.",
+      },
+      "run.cancel.own": {
+        name: "Отменять свои запуски",
+        description: "Отменять только запуски, инициированные субъектом.",
+      },
+      "run.cancel.any": {
+        name: "Отменять любые запуски",
+        description: "Отменять разрешённые запуски независимо от инициатора.",
+      },
+      "gate.resolve": {
+        name: "Принимать решения Human Gate",
+        description: "Одобрять, отклонять или запрашивать изменения.",
+      },
+      "artifact.view": {
+        name: "Просматривать файлы",
+        description: "Читать метаданные разрешённых файлов.",
+      },
+      "artifact.download": {
+        name: "Скачивать файлы",
+        description: "Получать содержимое разрешённых проверенных файлов.",
+      },
+      "artifact.manage": {
+        name: "Управлять файлами",
+        description: "Загружать, связывать и изменять разрешённые файлы.",
+      },
+      "schedule.view": {
+        name: "Просматривать автоматизации",
+        description: "Читать расписания и состояние автоматизаций.",
+      },
+      "schedule.manage": {
+        name: "Управлять автоматизациями",
+        description: "Создавать, изменять и приостанавливать автоматизации.",
+      },
+      "integration.view": {
+        name: "Просматривать интеграции",
+        description: "Читать доступные подключения и их состояние.",
+      },
+      "integration.manage": {
+        name: "Управлять интеграциями",
+        description: "Создавать подключения и выдавать ограниченные grants.",
+      },
+      "audit.view": {
+        name: "Просматривать аудит",
+        description: "Читать безопасный журнал действий и решений.",
+      },
+    },
     organizationTitle: "Участники организации",
     organizationSubtitle:
       "Платформенные роли определяют базовый доступ, а разрешения Проекта назначаются отдельно",
@@ -699,6 +1014,9 @@ const ru = {
     AVAILABLE: "Доступно",
     UNAVAILABLE: "Недоступно",
     REVOKED: "Отозвано",
+    ALLOWED: "Разрешено",
+    DENIED: "Запрещено",
+    STALE: "Требует обновления",
     PAUSED: "Приостановлено",
     NEEDS_ATTENTION: "Требует внимания",
     CLEAN: "Проверен",
@@ -1285,8 +1603,309 @@ const en = {
     openRun: "Open run",
   },
   access: {
+    ...ru.access,
     title: "Members and access",
     subtitle: "Roles and typed permissions in a Project",
+    workspaceTitle: "Members and access",
+    workspaceSubtitle:
+      "OIDC provides identities and groups; Kodex owns application roles, scopes and effective access",
+    workspaceProjectSubtitle:
+      "Access in the selected Project without broadening organization permissions",
+    loadMore: "Load more",
+    sections: {
+      label: "Access management sections",
+      participants: "Participants",
+      groups: "OIDC groups",
+      roles: "Roles",
+      bindings: "Bindings",
+      effective: "Effective access",
+    },
+    participants: {
+      title: "Participants",
+      subtitle: "Users and service subjects with application bindings",
+      search: "Search participants",
+      searchPlaceholder: "Participant name",
+      participant: "Participant",
+      identity: "Identity and groups",
+      bindings: "Bindings",
+      directIdentity: "Direct identity",
+      assignRole: "Assign role",
+      empty: "No participants found",
+      emptyHint:
+        "A user appears after the first OIDC sign-in; access remains denied until a binding is assigned.",
+    },
+    groups: {
+      title: "OIDC groups",
+      subtitle: "Verified group read model from the identity provider",
+      search: "Search OIDC groups",
+      searchPlaceholder: "Group name",
+      authorityTitle: "An OIDC group is not a Kodex role",
+      authorityHint:
+        "OIDC reports membership, while application permissions require an explicit binding to a versioned role.",
+      oidcSource: "Source: OIDC token snapshot",
+      members: "Members",
+      bindings: "Bindings",
+      lastSeen: "Last sign-in",
+      empty: "No OIDC groups discovered",
+      emptyHint:
+        "A group appears after a verified member sign-in; an absent group never broadens access.",
+    },
+    rolesWorkspace: {
+      title: "System and custom roles",
+      subtitle:
+        "A role contains a closed permission set; each change creates a new immutable version",
+      create: "Create role",
+      empty: "No roles found",
+      emptyHint: "Create a custom role from registry permissions.",
+      bindingsShort: "bindings",
+      permissionCount: "Permissions: {count}",
+      systemImmutable: "System role",
+      archiveConfirm:
+        "Archive role “{name}”? Existing version-pinned bindings remain active until explicitly changed.",
+    },
+    roleEditor: {
+      createTitle: "New custom role",
+      editTitle: "New role version",
+      description: "Purpose",
+      descriptionPlaceholder:
+        "Which actions and work scenarios this role permits",
+      permissions: "Permissions",
+      permissionsHint:
+        "Select only necessary actions. Risk and meaning come from the server registry.",
+      scopes: "Allowed scopes",
+      scopesHint:
+        "A binding can use only scopes supported by every selected permission.",
+      changeComment: "Change reason",
+      changeCommentPlaceholder: "What changed and why",
+      create: "Create role v1",
+      publishVersion: "Publish new version",
+      newVersion: "A new immutable version will be created",
+      newVersionHint:
+        "Existing bindings remain pinned to the previous version until explicitly reassigned.",
+      history: "Version history ({count})",
+      revision: "Revision {revision}",
+      noComment: "No change reason",
+    },
+    bindingsWorkspace: {
+      title: "Role bindings",
+      subtitle: "Who may use which role version and within which exact scope",
+      filter: "Binding state filter",
+      create: "Create binding",
+      empty: "No bindings found",
+      emptyHint:
+        "Create an allow-binding for a user, OIDC group or service subject.",
+      wholeOrganization: "Entire organization",
+      ownerOnly: "Owned resources only",
+      until: "Until {date}",
+      noConditions: "No additional conditions",
+      revokeConfirm: "Revoke this binding? The action will be audited.",
+    },
+    bindingEditor: {
+      createTitle: "New role binding",
+      editTitle: "Edit binding",
+      modelTitle: "Allow-only model",
+      modelHint:
+        "Access requires matching subject, pinned role version, permission, scope and conditions.",
+      subjectKind: "Subject kind",
+      subject: "Subject",
+      chooseSubject: "Choose a participant or group",
+      role: "Role version",
+      chooseRole: "Choose an active role",
+      pinnedVersion:
+        "The binding is pinned to this immutable version and does not follow newer versions.",
+      scope: "Scope",
+      scopeHint:
+        "For exact launch permission, choose one AI employee in one Project.",
+      conditions: "Additional conditions",
+      validFrom: "Valid from",
+      validUntil: "Valid until",
+      ownerOnly: "Only resources created by this subject",
+      ownerOnlyHint:
+        "This condition works only for permissions that support it in the server registry.",
+      invalidWindow: "The end date must be later than the start date.",
+      create: "Create binding",
+    },
+    effective: {
+      title: "Effective access",
+      subtitle:
+        "Query, explanation and safe simulation from the authoritative permission engine",
+      mode: "Access verification mode",
+      modes: { QUERY: "Check", EXPLAIN: "Explain", SIMULATE: "Simulate" },
+      subject: "Subject",
+      chooseSubject: "Choose a user, group or service",
+      permission: "Action",
+      choosePermission: "Choose a permission",
+      role: "Proposed role",
+      chooseRole: "Choose a role for read-only simulation",
+      actions: {
+        QUERY: "Check access",
+        EXPLAIN: "Explain decision",
+        SIMULATE: "Compare without saving",
+      },
+      result: "Authoritative decision",
+      simulationTitle: "Access comparison",
+      current: "Current",
+      after: "After proposed binding",
+      readOnlySimulation: "Simulation does not persist or grant permissions.",
+      noResult: "Fill in the query parameters",
+      noResultHint:
+        "The result and source chain appear after a control-plane response.",
+    },
+    subjectKinds: {
+      USER: "User",
+      OIDC_GROUP: "OIDC group",
+      SERVICE: "Service subject",
+    },
+    roleKinds: { SYSTEM: "System roles", CUSTOM: "Custom roles" },
+    risk: { READ: "Read", WRITE: "Write", APPROVE: "Approve", ADMIN: "Admin" },
+    scope: {
+      kind: "Scope kind",
+      project: "Project",
+      chooseProject: "Choose a Project",
+      resourceKind: "Resource kind",
+      agent: "AI employee",
+      chooseAgent: "Choose one AI employee",
+      agentHint:
+        "This binding does not permit launching any other employee in the same Project.",
+      resourceRef: "Resource instance",
+      resourceRefPlaceholder: "Choose or enter an authoritative ref",
+      resourceRefHint:
+        "Kinds without a dedicated picker use an opaque reference obtained from the Kodex UI.",
+      values: {
+        ORGANIZATION: "Organization",
+        PROJECT: "Project",
+        RESOURCE_KIND: "Resource kind",
+        RESOURCE_INSTANCE: "Specific resource",
+      },
+      hints: {
+        ORGANIZATION: "All eligible resources in the organization",
+        PROJECT: "All eligible resources in one Project",
+        RESOURCE_KIND: "One resource kind within a Project",
+        RESOURCE_INSTANCE: "One selected resource instance",
+      },
+    },
+    resourceKinds: {
+      ORGANIZATION: "Organization",
+      PROJECT: "Project",
+      AGENT: "AI employee",
+      WORKFLOW: "Workflow",
+      RUN: "Run",
+      OWNER_GATE: "Human Gate",
+      ARTIFACT: "File",
+      SCHEDULE: "Automation",
+      INTEGRATION: "Integration",
+    },
+    explanation: {
+      DIRECT_BINDING: "A direct subject binding matched",
+      OIDC_GROUP_BINDING: "A verified OIDC group binding matched",
+      SERVICE_BINDING: "A service subject binding matched",
+      ROLE_PERMISSION: "The pinned role version contains the permission",
+      SCOPE_MATCH: "The binding scope matches the target resource",
+      CONDITION_MATCH: "Additional conditions matched",
+      NO_ALLOW_BINDING: "No matching allow-binding exists",
+    },
+    permissionsRegistry: {
+      "organization.view": {
+        name: "View organization",
+        description: "Read the organization profile and eligible resources.",
+      },
+      "organization.manage": {
+        name: "Manage organization",
+        description: "Change organization settings and lifecycle.",
+      },
+      "access.view": {
+        name: "View access",
+        description: "Read roles, bindings and effective access decisions.",
+      },
+      "access.manage": {
+        name: "Manage access",
+        description: "Create roles and change application bindings.",
+      },
+      "project.create": {
+        name: "Create Projects",
+        description: "Create new organization Projects.",
+      },
+      "project.view": {
+        name: "View Project",
+        description: "Read a Project profile and eligible resources.",
+      },
+      "project.manage": {
+        name: "Manage Project",
+        description: "Change Project settings and lifecycle.",
+      },
+      "agent.view": {
+        name: "View AI employees",
+        description: "Read eligible AI employee profiles and state.",
+      },
+      "agent.manage": {
+        name: "Manage AI employees",
+        description: "Create and change eligible AI employees.",
+      },
+      "agent.launch": {
+        name: "Launch AI employees",
+        description: "Create runs for eligible AI employees.",
+      },
+      "workflow.view": {
+        name: "View Workflows",
+        description: "Read eligible Workflows and versions.",
+      },
+      "workflow.manage": {
+        name: "Manage Workflows",
+        description: "Create and change eligible Workflows.",
+      },
+      "workflow.launch": {
+        name: "Launch Workflows",
+        description: "Create runs for eligible Workflows.",
+      },
+      "run.view": {
+        name: "View runs",
+        description: "Read state and results of eligible runs.",
+      },
+      "run.cancel.own": {
+        name: "Cancel own runs",
+        description: "Cancel only runs initiated by the subject.",
+      },
+      "run.cancel.any": {
+        name: "Cancel any run",
+        description: "Cancel eligible runs regardless of initiator.",
+      },
+      "gate.resolve": {
+        name: "Resolve Human Gates",
+        description: "Approve, reject or request changes.",
+      },
+      "artifact.view": {
+        name: "View files",
+        description: "Read metadata of eligible files.",
+      },
+      "artifact.download": {
+        name: "Download files",
+        description: "Read content of eligible verified files.",
+      },
+      "artifact.manage": {
+        name: "Manage files",
+        description: "Upload, bind and change eligible files.",
+      },
+      "schedule.view": {
+        name: "View automations",
+        description: "Read schedules and automation state.",
+      },
+      "schedule.manage": {
+        name: "Manage automations",
+        description: "Create, change and pause automations.",
+      },
+      "integration.view": {
+        name: "View integrations",
+        description: "Read eligible connections and state.",
+      },
+      "integration.manage": {
+        name: "Manage integrations",
+        description: "Create connections and grant bounded capabilities.",
+      },
+      "audit.view": {
+        name: "View audit",
+        description: "Read the safe action and decision journal.",
+      },
+    },
     organizationTitle: "Organization members",
     organizationSubtitle:
       "Platform roles define base access, while Project permissions are assigned separately",
@@ -1458,6 +2077,9 @@ const en = {
     AVAILABLE: "Available",
     UNAVAILABLE: "Unavailable",
     REVOKED: "Revoked",
+    ALLOWED: "Allowed",
+    DENIED: "Denied",
+    STALE: "Needs refresh",
     PAUSED: "Paused",
     NEEDS_ATTENTION: "Needs attention",
     CLEAN: "Clean",

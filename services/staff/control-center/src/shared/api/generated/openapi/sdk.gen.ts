@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddAssistantTurnData, AddAssistantTurnErrors, AddAssistantTurnResponses, AddPlatformMembershipData, AddPlatformMembershipErrors, AddPlatformMembershipResponses, AddProjectMembershipData, AddProjectMembershipErrors, AddProjectMembershipResponses, AddSessionTurnData, AddSessionTurnErrors, AddSessionTurnResponses, ApplyAssistantPlanData, ApplyAssistantPlanErrors, ApplyAssistantPlanResponses, ChangeArtifactBindingData, ChangeArtifactBindingErrors, ChangeArtifactBindingResponses, ChangeIntegrationGrantData, ChangeIntegrationGrantErrors, ChangeIntegrationGrantResponses, ChangePlatformMembershipData, ChangePlatformMembershipErrors, ChangePlatformMembershipResponses, ChangeProjectMembershipData, ChangeProjectMembershipErrors, ChangeProjectMembershipResponses, CommandAgentData, CommandAgentErrors, CommandAgentInstructionsData, CommandAgentInstructionsErrors, CommandAgentInstructionsResponses, CommandAgentResponses, CommandIntegrationConnectionData, CommandIntegrationConnectionErrors, CommandIntegrationConnectionResponses, CommandRoleImageRecipeData, CommandRoleImageRecipeErrors, CommandRoleImageRecipeResponses, CommandRunData, CommandRunErrors, CommandRunResponses, CommandScheduleData, CommandScheduleErrors, CommandScheduleResponses, CommandSystemAssistantData, CommandSystemAssistantErrors, CommandSystemAssistantResponses, CommandWorkflowData, CommandWorkflowErrors, CommandWorkflowResponses, CompleteOnboardingData, CompleteOnboardingErrors, CompleteOnboardingResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAssistantConversationData, CreateAssistantConversationErrors, CreateAssistantConversationResponses, CreateInstructionDraftData, CreateInstructionDraftErrors, CreateInstructionDraftResponses, CreateIntegrationConnectionData, CreateIntegrationConnectionErrors, CreateIntegrationConnectionResponses, CreateOwnerSessionData, CreateOwnerSessionErrors, CreateOwnerSessionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateRoleImageRecipeData, CreateRoleImageRecipeErrors, CreateRoleImageRecipeResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateScheduleData, CreateScheduleErrors, CreateScheduleResponses, CreateWorkflowData, CreateWorkflowErrors, CreateWorkflowResponses, DeleteOwnerSessionData, DeleteOwnerSessionErrors, DeleteOwnerSessionResponses, DownloadArtifactData, DownloadArtifactErrors, DownloadArtifactResponses, GetAdministrationData, GetAdministrationErrors, GetAdministrationResponses, GetAgentData, GetAgentErrors, GetAgentResponses, GetArtifactData, GetArtifactErrors, GetArtifactResponses, GetBootstrapStateData, GetBootstrapStateErrors, GetBootstrapStateResponses, GetIntegrationConnectionData, GetIntegrationConnectionErrors, GetIntegrationConnectionResponses, GetOverviewData, GetOverviewErrors, GetOverviewResponses, GetOwnerGateData, GetOwnerGateErrors, GetOwnerGateResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetRoleImageRecipeData, GetRoleImageRecipeErrors, GetRoleImageRecipeResponses, GetRunData, GetRunErrors, GetRunGraphData, GetRunGraphErrors, GetRunGraphResponses, GetRunResponses, GetSystemAssistantData, GetSystemAssistantErrors, GetSystemAssistantResponses, GetWorkflowData, GetWorkflowErrors, GetWorkflowResponses, ListAgentInstructionVersionsData, ListAgentInstructionVersionsErrors, ListAgentInstructionVersionsResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListArtifactsData, ListArtifactsErrors, ListArtifactsResponses, ListAssistantConversationsData, ListAssistantConversationsErrors, ListAssistantConversationsResponses, ListAuditEventsData, ListAuditEventsErrors, ListAuditEventsResponses, ListIntegrationConnectionsData, ListIntegrationConnectionsErrors, ListIntegrationConnectionsResponses, ListIntegrationDefinitionsData, ListIntegrationDefinitionsErrors, ListIntegrationDefinitionsResponses, ListOwnerGatesData, ListOwnerGatesErrors, ListOwnerGatesResponses, ListPlatformCapabilitiesData, ListPlatformCapabilitiesErrors, ListPlatformCapabilitiesResponses, ListPlatformMembershipCandidatesData, ListPlatformMembershipCandidatesErrors, ListPlatformMembershipCandidatesResponses, ListPlatformMembershipsData, ListPlatformMembershipsErrors, ListPlatformMembershipsResponses, ListProjectMembershipCandidatesData, ListProjectMembershipCandidatesErrors, ListProjectMembershipCandidatesResponses, ListProjectMembershipsData, ListProjectMembershipsErrors, ListProjectMembershipsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRoleEnvironmentsData, ListRoleEnvironmentsErrors, ListRoleEnvironmentsResponses, ListRoleImageRecipesData, ListRoleImageRecipesErrors, ListRoleImageRecipesResponses, ListRunEventsData, ListRunEventsErrors, ListRunEventsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListRuntimeSelectionsData, ListRuntimeSelectionsErrors, ListRuntimeSelectionsResponses, ListSchedulesData, ListSchedulesErrors, ListSchedulesResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, RemovePlatformMembershipData, RemovePlatformMembershipErrors, RemovePlatformMembershipResponses, RemoveProjectMembershipData, RemoveProjectMembershipErrors, RemoveProjectMembershipResponses, RenewOwnerSessionData, RenewOwnerSessionErrors, RenewOwnerSessionResponses, ResolveOwnerGateData, ResolveOwnerGateErrors, ResolveOwnerGateResponses, SearchPlatformData, SearchPlatformErrors, SearchPlatformResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleImageRecipeData, UpdateRoleImageRecipeErrors, UpdateRoleImageRecipeResponses, UpdateScheduleData, UpdateScheduleErrors, UpdateScheduleResponses, UpdateSystemAssistantOwnerInstructionsData, UpdateSystemAssistantOwnerInstructionsErrors, UpdateSystemAssistantOwnerInstructionsResponses, UpdateWorkflowDraftData, UpdateWorkflowDraftErrors, UpdateWorkflowDraftResponses, UploadArtifactData, UploadArtifactErrors, UploadArtifactResponses } from './types.gen';
+import type { AddAssistantTurnData, AddAssistantTurnErrors, AddAssistantTurnResponses, AddPlatformMembershipData, AddPlatformMembershipErrors, AddPlatformMembershipResponses, AddProjectMembershipData, AddProjectMembershipErrors, AddProjectMembershipResponses, AddSessionTurnData, AddSessionTurnErrors, AddSessionTurnResponses, ApplyAssistantPlanData, ApplyAssistantPlanErrors, ApplyAssistantPlanResponses, ArchiveAccessRoleData, ArchiveAccessRoleErrors, ArchiveAccessRoleResponses, ChangeAccessBindingData, ChangeAccessBindingErrors, ChangeAccessBindingResponses, ChangeArtifactBindingData, ChangeArtifactBindingErrors, ChangeArtifactBindingResponses, ChangeIntegrationGrantData, ChangeIntegrationGrantErrors, ChangeIntegrationGrantResponses, ChangePlatformMembershipData, ChangePlatformMembershipErrors, ChangePlatformMembershipResponses, ChangeProjectMembershipData, ChangeProjectMembershipErrors, ChangeProjectMembershipResponses, CommandAgentData, CommandAgentErrors, CommandAgentInstructionsData, CommandAgentInstructionsErrors, CommandAgentInstructionsResponses, CommandAgentResponses, CommandIntegrationConnectionData, CommandIntegrationConnectionErrors, CommandIntegrationConnectionResponses, CommandRoleImageRecipeData, CommandRoleImageRecipeErrors, CommandRoleImageRecipeResponses, CommandRunData, CommandRunErrors, CommandRunResponses, CommandScheduleData, CommandScheduleErrors, CommandScheduleResponses, CommandSystemAssistantData, CommandSystemAssistantErrors, CommandSystemAssistantResponses, CommandWorkflowData, CommandWorkflowErrors, CommandWorkflowResponses, CompleteOnboardingData, CompleteOnboardingErrors, CompleteOnboardingResponses, CreateAccessBindingData, CreateAccessBindingErrors, CreateAccessBindingResponses, CreateAccessRoleData, CreateAccessRoleErrors, CreateAccessRoleResponses, CreateAccessRoleVersionData, CreateAccessRoleVersionErrors, CreateAccessRoleVersionResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAssistantConversationData, CreateAssistantConversationErrors, CreateAssistantConversationResponses, CreateInstructionDraftData, CreateInstructionDraftErrors, CreateInstructionDraftResponses, CreateIntegrationConnectionData, CreateIntegrationConnectionErrors, CreateIntegrationConnectionResponses, CreateOwnerSessionData, CreateOwnerSessionErrors, CreateOwnerSessionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateRoleImageRecipeData, CreateRoleImageRecipeErrors, CreateRoleImageRecipeResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateScheduleData, CreateScheduleErrors, CreateScheduleResponses, CreateWorkflowData, CreateWorkflowErrors, CreateWorkflowResponses, DeleteOwnerSessionData, DeleteOwnerSessionErrors, DeleteOwnerSessionResponses, DownloadArtifactData, DownloadArtifactErrors, DownloadArtifactResponses, ExplainAccessData, ExplainAccessErrors, ExplainAccessResponses, GetAdministrationData, GetAdministrationErrors, GetAdministrationResponses, GetAgentData, GetAgentErrors, GetAgentResponses, GetArtifactData, GetArtifactErrors, GetArtifactResponses, GetBootstrapStateData, GetBootstrapStateErrors, GetBootstrapStateResponses, GetIntegrationConnectionData, GetIntegrationConnectionErrors, GetIntegrationConnectionResponses, GetOverviewData, GetOverviewErrors, GetOverviewResponses, GetOwnerGateData, GetOwnerGateErrors, GetOwnerGateResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetRoleImageRecipeData, GetRoleImageRecipeErrors, GetRoleImageRecipeResponses, GetRunData, GetRunErrors, GetRunGraphData, GetRunGraphErrors, GetRunGraphResponses, GetRunResponses, GetSystemAssistantData, GetSystemAssistantErrors, GetSystemAssistantResponses, GetWorkflowData, GetWorkflowErrors, GetWorkflowResponses, ListAccessBindingsData, ListAccessBindingsErrors, ListAccessBindingsResponses, ListAccessRolesData, ListAccessRolesErrors, ListAccessRolesResponses, ListAccessRoleVersionsData, ListAccessRoleVersionsErrors, ListAccessRoleVersionsResponses, ListAccessSubjectsData, ListAccessSubjectsErrors, ListAccessSubjectsResponses, ListAgentInstructionVersionsData, ListAgentInstructionVersionsErrors, ListAgentInstructionVersionsResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListArtifactsData, ListArtifactsErrors, ListArtifactsResponses, ListAssistantConversationsData, ListAssistantConversationsErrors, ListAssistantConversationsResponses, ListAuditEventsData, ListAuditEventsErrors, ListAuditEventsResponses, ListIntegrationConnectionsData, ListIntegrationConnectionsErrors, ListIntegrationConnectionsResponses, ListIntegrationDefinitionsData, ListIntegrationDefinitionsErrors, ListIntegrationDefinitionsResponses, ListOidcGroupsData, ListOidcGroupsErrors, ListOidcGroupsResponses, ListOwnerGatesData, ListOwnerGatesErrors, ListOwnerGatesResponses, ListPermissionRegistryData, ListPermissionRegistryErrors, ListPermissionRegistryResponses, ListPlatformCapabilitiesData, ListPlatformCapabilitiesErrors, ListPlatformCapabilitiesResponses, ListPlatformMembershipCandidatesData, ListPlatformMembershipCandidatesErrors, ListPlatformMembershipCandidatesResponses, ListPlatformMembershipsData, ListPlatformMembershipsErrors, ListPlatformMembershipsResponses, ListProjectMembershipCandidatesData, ListProjectMembershipCandidatesErrors, ListProjectMembershipCandidatesResponses, ListProjectMembershipsData, ListProjectMembershipsErrors, ListProjectMembershipsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRoleEnvironmentsData, ListRoleEnvironmentsErrors, ListRoleEnvironmentsResponses, ListRoleImageRecipesData, ListRoleImageRecipesErrors, ListRoleImageRecipesResponses, ListRunEventsData, ListRunEventsErrors, ListRunEventsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListRuntimeSelectionsData, ListRuntimeSelectionsErrors, ListRuntimeSelectionsResponses, ListSchedulesData, ListSchedulesErrors, ListSchedulesResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, QueryEffectiveAccessData, QueryEffectiveAccessErrors, QueryEffectiveAccessResponses, RemovePlatformMembershipData, RemovePlatformMembershipErrors, RemovePlatformMembershipResponses, RemoveProjectMembershipData, RemoveProjectMembershipErrors, RemoveProjectMembershipResponses, RenewOwnerSessionData, RenewOwnerSessionErrors, RenewOwnerSessionResponses, ResolveOwnerGateData, ResolveOwnerGateErrors, ResolveOwnerGateResponses, RevokeAccessBindingData, RevokeAccessBindingErrors, RevokeAccessBindingResponses, SearchPlatformData, SearchPlatformErrors, SearchPlatformResponses, SimulateAccessData, SimulateAccessErrors, SimulateAccessResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleImageRecipeData, UpdateRoleImageRecipeErrors, UpdateRoleImageRecipeResponses, UpdateScheduleData, UpdateScheduleErrors, UpdateScheduleResponses, UpdateSystemAssistantOwnerInstructionsData, UpdateSystemAssistantOwnerInstructionsErrors, UpdateSystemAssistantOwnerInstructionsResponses, UpdateWorkflowDraftData, UpdateWorkflowDraftErrors, UpdateWorkflowDraftResponses, UploadArtifactData, UploadArtifactErrors, UploadArtifactResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -895,6 +895,184 @@ export const getAdministration = <ThrowOnError extends boolean = false>(options?
         }],
     url: '/api/v1/administration',
     ...options
+});
+
+export const listPermissionRegistry = <ThrowOnError extends boolean = false>(options?: Options<ListPermissionRegistryData, ThrowOnError>): RequestResult<ListPermissionRegistryResponses, ListPermissionRegistryErrors, ThrowOnError> => (options?.client ?? client).get<ListPermissionRegistryResponses, ListPermissionRegistryErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/permissions',
+    ...options
+});
+
+export const listAccessSubjects = <ThrowOnError extends boolean = false>(options?: Options<ListAccessSubjectsData, ThrowOnError>): RequestResult<ListAccessSubjectsResponses, ListAccessSubjectsErrors, ThrowOnError> => (options?.client ?? client).get<ListAccessSubjectsResponses, ListAccessSubjectsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/subjects',
+    ...options
+});
+
+export const listOidcGroups = <ThrowOnError extends boolean = false>(options?: Options<ListOidcGroupsData, ThrowOnError>): RequestResult<ListOidcGroupsResponses, ListOidcGroupsErrors, ThrowOnError> => (options?.client ?? client).get<ListOidcGroupsResponses, ListOidcGroupsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/oidc-groups',
+    ...options
+});
+
+export const listAccessRoles = <ThrowOnError extends boolean = false>(options?: Options<ListAccessRolesData, ThrowOnError>): RequestResult<ListAccessRolesResponses, ListAccessRolesErrors, ThrowOnError> => (options?.client ?? client).get<ListAccessRolesResponses, ListAccessRolesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/roles',
+    ...options
+});
+
+export const createAccessRole = <ThrowOnError extends boolean = false>(options: Options<CreateAccessRoleData, ThrowOnError>): RequestResult<CreateAccessRoleResponses, CreateAccessRoleErrors, ThrowOnError> => (options.client ?? client).post<CreateAccessRoleResponses, CreateAccessRoleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/roles',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listAccessRoleVersions = <ThrowOnError extends boolean = false>(options: Options<ListAccessRoleVersionsData, ThrowOnError>): RequestResult<ListAccessRoleVersionsResponses, ListAccessRoleVersionsErrors, ThrowOnError> => (options.client ?? client).get<ListAccessRoleVersionsResponses, ListAccessRoleVersionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/roles/{roleRef}/versions',
+    ...options
+});
+
+export const createAccessRoleVersion = <ThrowOnError extends boolean = false>(options: Options<CreateAccessRoleVersionData, ThrowOnError>): RequestResult<CreateAccessRoleVersionResponses, CreateAccessRoleVersionErrors, ThrowOnError> => (options.client ?? client).post<CreateAccessRoleVersionResponses, CreateAccessRoleVersionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/roles/{roleRef}/versions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const archiveAccessRole = <ThrowOnError extends boolean = false>(options: Options<ArchiveAccessRoleData, ThrowOnError>): RequestResult<ArchiveAccessRoleResponses, ArchiveAccessRoleErrors, ThrowOnError> => (options.client ?? client).post<ArchiveAccessRoleResponses, ArchiveAccessRoleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/roles/{roleRef}/archive',
+    ...options
+});
+
+export const listAccessBindings = <ThrowOnError extends boolean = false>(options?: Options<ListAccessBindingsData, ThrowOnError>): RequestResult<ListAccessBindingsResponses, ListAccessBindingsErrors, ThrowOnError> => (options?.client ?? client).get<ListAccessBindingsResponses, ListAccessBindingsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/bindings',
+    ...options
+});
+
+export const createAccessBinding = <ThrowOnError extends boolean = false>(options: Options<CreateAccessBindingData, ThrowOnError>): RequestResult<CreateAccessBindingResponses, CreateAccessBindingErrors, ThrowOnError> => (options.client ?? client).post<CreateAccessBindingResponses, CreateAccessBindingErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/bindings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const revokeAccessBinding = <ThrowOnError extends boolean = false>(options: Options<RevokeAccessBindingData, ThrowOnError>): RequestResult<RevokeAccessBindingResponses, RevokeAccessBindingErrors, ThrowOnError> => (options.client ?? client).delete<RevokeAccessBindingResponses, RevokeAccessBindingErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/bindings/{bindingRef}',
+    ...options
+});
+
+export const changeAccessBinding = <ThrowOnError extends boolean = false>(options: Options<ChangeAccessBindingData, ThrowOnError>): RequestResult<ChangeAccessBindingResponses, ChangeAccessBindingErrors, ThrowOnError> => (options.client ?? client).patch<ChangeAccessBindingResponses, ChangeAccessBindingErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/bindings/{bindingRef}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const queryEffectiveAccess = <ThrowOnError extends boolean = false>(options: Options<QueryEffectiveAccessData, ThrowOnError>): RequestResult<QueryEffectiveAccessResponses, QueryEffectiveAccessErrors, ThrowOnError> => (options.client ?? client).post<QueryEffectiveAccessResponses, QueryEffectiveAccessErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/effective-access/query',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const explainAccess = <ThrowOnError extends boolean = false>(options: Options<ExplainAccessData, ThrowOnError>): RequestResult<ExplainAccessResponses, ExplainAccessErrors, ThrowOnError> => (options.client ?? client).post<ExplainAccessResponses, ExplainAccessErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/effective-access/explain',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const simulateAccess = <ThrowOnError extends boolean = false>(options: Options<SimulateAccessData, ThrowOnError>): RequestResult<SimulateAccessResponses, SimulateAccessErrors, ThrowOnError> => (options.client ?? client).post<SimulateAccessResponses, SimulateAccessErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/effective-access/simulate',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 export const listAuditEvents = <ThrowOnError extends boolean = false>(options?: Options<ListAuditEventsData, ThrowOnError>): RequestResult<ListAuditEventsResponses, ListAuditEventsErrors, ThrowOnError> => (options?.client ?? client).get<ListAuditEventsResponses, ListAuditEventsErrors, ThrowOnError>({

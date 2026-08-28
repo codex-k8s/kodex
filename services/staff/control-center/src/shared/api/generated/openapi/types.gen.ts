@@ -8,6 +8,221 @@ export type OpaqueRef = string;
 
 export type Timestamp = string;
 
+export type PermissionRisk = 'READ' | 'WRITE' | 'APPROVE' | 'ADMIN';
+
+export type AccessSubjectKind = 'USER' | 'OIDC_GROUP' | 'SERVICE';
+
+export type AccessScopeKind = 'ORGANIZATION' | 'PROJECT' | 'RESOURCE_KIND' | 'RESOURCE_INSTANCE';
+
+export type AccessResourceKind = 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN' | 'OWNER_GATE' | 'ARTIFACT' | 'SCHEDULE' | 'INTEGRATION';
+
+export type AccessRoleKind = 'SYSTEM' | 'CUSTOM';
+
+export type AccessRoleState = 'ACTIVE' | 'ARCHIVED';
+
+export type AccessBindingState = 'ACTIVE' | 'REVOKED';
+
+export type OidcGroupState = 'ACTIVE' | 'STALE';
+
+export type AccessDecision = 'ALLOWED' | 'DENIED';
+
+export type PermissionDefinition = {
+    key: string;
+    nameKey: string;
+    descriptionKey: string;
+    risk: PermissionRisk;
+    allowedScopes: Array<AccessScopeKind>;
+    resourceKinds: Array<AccessResourceKind>;
+    ownerConditionSupported: boolean;
+};
+
+export type PermissionDefinitionPage = {
+    items: Array<PermissionDefinition>;
+};
+
+export type AccessSubject = {
+    ref: OpaqueRef;
+    kind: AccessSubjectKind;
+    displayName: string;
+    active: boolean;
+    oidcGroupRefs: Array<OpaqueRef>;
+};
+
+export type AccessSubjectPage = {
+    items: Array<AccessSubject>;
+    nextPageToken?: string;
+};
+
+export type OidcGroup = {
+    ref: OpaqueRef;
+    displayName: string;
+    state: OidcGroupState;
+    memberCount: number;
+    bindingCount: number;
+    lastSeenAt: Timestamp;
+    syncedAt: Timestamp;
+};
+
+export type OidcGroupPage = {
+    items: Array<OidcGroup>;
+    nextPageToken?: string;
+};
+
+export type AccessRoleVersion = {
+    ref: OpaqueRef;
+    roleRef: OpaqueRef;
+    revision: number;
+    name: string;
+    description: string;
+    permissionKeys: Array<string>;
+    allowedScopes: Array<AccessScopeKind>;
+    changeComment: string;
+    createdAt: Timestamp;
+    createdBy: UserSummary;
+};
+
+export type AccessRole = {
+    ref: OpaqueRef;
+    version: number;
+    kind: AccessRoleKind;
+    state: AccessRoleState;
+    currentVersion: AccessRoleVersion;
+    bindingCount: number;
+    updatedAt: Timestamp;
+};
+
+export type AccessRolePage = {
+    items: Array<AccessRole>;
+    nextPageToken?: string;
+};
+
+export type AccessRoleVersionPage = {
+    role: AccessRole;
+    items: Array<AccessRoleVersion>;
+    nextPageToken?: string;
+};
+
+export type AccessScope = {
+    kind: AccessScopeKind;
+    projectRef?: OpaqueRef;
+    resourceKind?: AccessResourceKind;
+    resourceRef?: OpaqueRef;
+};
+
+export type AccessConditions = {
+    validFrom?: Timestamp;
+    validUntil?: Timestamp;
+    requireOwner: boolean;
+};
+
+export type AccessBinding = {
+    ref: OpaqueRef;
+    version: number;
+    state: AccessBindingState;
+    subject: AccessSubject;
+    roleVersion: AccessRoleVersion;
+    scope: AccessScope;
+    conditions: AccessConditions;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+};
+
+export type AccessBindingPage = {
+    items: Array<AccessBinding>;
+    nextPageToken?: string;
+};
+
+export type AccessExplanationStep = {
+    code: 'DIRECT_BINDING' | 'OIDC_GROUP_BINDING' | 'SERVICE_BINDING' | 'ROLE_PERMISSION' | 'SCOPE_MATCH' | 'CONDITION_MATCH' | 'NO_ALLOW_BINDING';
+    bindingRef?: OpaqueRef;
+    roleRef?: OpaqueRef;
+    roleVersionRef?: OpaqueRef;
+    sourceKind: AccessSubjectKind;
+    sourceRef?: OpaqueRef;
+    scope?: AccessScope;
+};
+
+export type EffectiveAccessDecision = {
+    permissionKey: string;
+    decision: AccessDecision;
+    target: AccessScope;
+    explanation: Array<AccessExplanationStep>;
+};
+
+export type AccessRoleInput = {
+    name: string;
+    description: string;
+    permissionKeys: Array<string>;
+    allowedScopes: Array<AccessScopeKind>;
+    changeComment: string;
+};
+
+export type AccessBindingInput = {
+    subjectKind: AccessSubjectKind;
+    subjectRef: OpaqueRef;
+    roleVersionRef: OpaqueRef;
+    scope: AccessScope;
+    conditions: AccessConditions;
+};
+
+export type AccessBindingChangeInput = {
+    roleVersionRef: OpaqueRef;
+    scope: AccessScope;
+    conditions: AccessConditions;
+};
+
+export type EffectiveAccessQuery = {
+    subjectRef?: OpaqueRef;
+    target: AccessScope;
+    permissionKeys: Array<string>;
+};
+
+export type EffectiveAccessPage = {
+    subject: AccessSubject;
+    items: Array<EffectiveAccessDecision>;
+    evaluatedAt: Timestamp;
+};
+
+export type ExplainAccessInput = {
+    subjectRef?: OpaqueRef;
+    permissionKey: string;
+    target: AccessScope;
+};
+
+export type ExplainAccessResult = {
+    subject: AccessSubject;
+    result: EffectiveAccessDecision;
+    evaluatedAt: Timestamp;
+};
+
+export type AccessRoleDraft = {
+    permissionKeys: Array<string>;
+    allowedScopes: Array<AccessScopeKind>;
+};
+
+export type AccessBindingDraft = {
+    subjectKind: AccessSubjectKind;
+    subjectRef: OpaqueRef;
+    scope: AccessScope;
+    conditions: AccessConditions;
+};
+
+export type SimulateAccessInput = {
+    subjectRef: OpaqueRef;
+    permissionKey: string;
+    target: AccessScope;
+    role: AccessRoleDraft;
+    binding: AccessBindingDraft;
+    evaluatedAt?: Timestamp;
+};
+
+export type SimulateAccessResult = {
+    subject: AccessSubject;
+    current: EffectiveAccessDecision;
+    simulated: EffectiveAccessDecision;
+    evaluatedAt: Timestamp;
+};
+
 export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING';
 
 export type Problem = {
@@ -853,6 +1068,10 @@ export type ProjectRef = OpaqueRef;
 export type ProjectRefQuery = OpaqueRef;
 
 export type MembershipRef = OpaqueRef;
+
+export type AccessRoleRef = OpaqueRef;
+
+export type AccessBindingRef = OpaqueRef;
 
 export type AgentRef = OpaqueRef;
 
@@ -3153,6 +3372,443 @@ export type GetAdministrationResponses = {
 };
 
 export type GetAdministrationResponse = GetAdministrationResponses[keyof GetAdministrationResponses];
+
+export type ListPermissionRegistryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/access/permissions';
+};
+
+export type ListPermissionRegistryErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListPermissionRegistryError = ListPermissionRegistryErrors[keyof ListPermissionRegistryErrors];
+
+export type ListPermissionRegistryResponses = {
+    /**
+     * Закрытый versioned registry прикладных полномочий
+     */
+    200: PermissionDefinitionPage;
+};
+
+export type ListPermissionRegistryResponse = ListPermissionRegistryResponses[keyof ListPermissionRegistryResponses];
+
+export type ListAccessSubjectsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+        kind?: AccessSubjectKind;
+    };
+    url: '/api/v1/administration/access/subjects';
+};
+
+export type ListAccessSubjectsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListAccessSubjectsError = ListAccessSubjectsErrors[keyof ListAccessSubjectsErrors];
+
+export type ListAccessSubjectsResponses = {
+    /**
+     * Доступные для binding пользователи, OIDC-группы и service subjects
+     */
+    200: AccessSubjectPage;
+};
+
+export type ListAccessSubjectsResponse = ListAccessSubjectsResponses[keyof ListAccessSubjectsResponses];
+
+export type ListOidcGroupsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/administration/access/oidc-groups';
+};
+
+export type ListOidcGroupsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOidcGroupsError = ListOidcGroupsErrors[keyof ListOidcGroupsErrors];
+
+export type ListOidcGroupsResponses = {
+    /**
+     * Read model групп из проверенных OIDC token snapshots
+     */
+    200: OidcGroupPage;
+};
+
+export type ListOidcGroupsResponse = ListOidcGroupsResponses[keyof ListOidcGroupsResponses];
+
+export type ListAccessRolesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+        includeArchived?: boolean;
+    };
+    url: '/api/v1/administration/access/roles';
+};
+
+export type ListAccessRolesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListAccessRolesError = ListAccessRolesErrors[keyof ListAccessRolesErrors];
+
+export type ListAccessRolesResponses = {
+    /**
+     * Системные и пользовательские application roles
+     */
+    200: AccessRolePage;
+};
+
+export type ListAccessRolesResponse = ListAccessRolesResponses[keyof ListAccessRolesResponses];
+
+export type CreateAccessRoleData = {
+    body: AccessRoleInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/access/roles';
+};
+
+export type CreateAccessRoleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateAccessRoleError = CreateAccessRoleErrors[keyof CreateAccessRoleErrors];
+
+export type CreateAccessRoleResponses = {
+    /**
+     * Пользовательская роль и immutable v1 созданы атомарно
+     */
+    201: AccessRole;
+};
+
+export type CreateAccessRoleResponse = CreateAccessRoleResponses[keyof CreateAccessRoleResponses];
+
+export type ListAccessRoleVersionsData = {
+    body?: never;
+    path: {
+        roleRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/administration/access/roles/{roleRef}/versions';
+};
+
+export type ListAccessRoleVersionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListAccessRoleVersionsError = ListAccessRoleVersionsErrors[keyof ListAccessRoleVersionsErrors];
+
+export type ListAccessRoleVersionsResponses = {
+    /**
+     * Immutable история версий роли
+     */
+    200: AccessRoleVersionPage;
+};
+
+export type ListAccessRoleVersionsResponse = ListAccessRoleVersionsResponses[keyof ListAccessRoleVersionsResponses];
+
+export type CreateAccessRoleVersionData = {
+    body: AccessRoleInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        roleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/administration/access/roles/{roleRef}/versions';
+};
+
+export type CreateAccessRoleVersionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateAccessRoleVersionError = CreateAccessRoleVersionErrors[keyof CreateAccessRoleVersionErrors];
+
+export type CreateAccessRoleVersionResponses = {
+    /**
+     * Новая immutable версия роли создана, прежние bindings не перепривязаны
+     */
+    201: AccessRole;
+};
+
+export type CreateAccessRoleVersionResponse = CreateAccessRoleVersionResponses[keyof CreateAccessRoleVersionResponses];
+
+export type ArchiveAccessRoleData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        roleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/administration/access/roles/{roleRef}/archive';
+};
+
+export type ArchiveAccessRoleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ArchiveAccessRoleError = ArchiveAccessRoleErrors[keyof ArchiveAccessRoleErrors];
+
+export type ArchiveAccessRoleResponses = {
+    /**
+     * Роль архивирована; уже созданные bindings остаются pinned к своей версии
+     */
+    200: AccessRole;
+};
+
+export type ArchiveAccessRoleResponse = ArchiveAccessRoleResponses[keyof ArchiveAccessRoleResponses];
+
+export type ListAccessBindingsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+        subjectKind?: AccessSubjectKind;
+        subjectRef?: OpaqueRef;
+        roleRef?: OpaqueRef;
+        projectRef?: OpaqueRef;
+        includeRevoked?: boolean;
+    };
+    url: '/api/v1/administration/access/bindings';
+};
+
+export type ListAccessBindingsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListAccessBindingsError = ListAccessBindingsErrors[keyof ListAccessBindingsErrors];
+
+export type ListAccessBindingsResponses = {
+    /**
+     * Version-pinned bindings и их bounded scopes
+     */
+    200: AccessBindingPage;
+};
+
+export type ListAccessBindingsResponse = ListAccessBindingsResponses[keyof ListAccessBindingsResponses];
+
+export type CreateAccessBindingData = {
+    body: AccessBindingInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/access/bindings';
+};
+
+export type CreateAccessBindingErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateAccessBindingError = CreateAccessBindingErrors[keyof CreateAccessBindingErrors];
+
+export type CreateAccessBindingResponses = {
+    /**
+     * Binding создан
+     */
+    201: AccessBinding;
+};
+
+export type CreateAccessBindingResponse = CreateAccessBindingResponses[keyof CreateAccessBindingResponses];
+
+export type RevokeAccessBindingData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        bindingRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/administration/access/bindings/{bindingRef}';
+};
+
+export type RevokeAccessBindingErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevokeAccessBindingError = RevokeAccessBindingErrors[keyof RevokeAccessBindingErrors];
+
+export type RevokeAccessBindingResponses = {
+    /**
+     * Binding отозван
+     */
+    200: AccessBinding;
+};
+
+export type RevokeAccessBindingResponse = RevokeAccessBindingResponses[keyof RevokeAccessBindingResponses];
+
+export type ChangeAccessBindingData = {
+    body: AccessBindingChangeInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        bindingRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/administration/access/bindings/{bindingRef}';
+};
+
+export type ChangeAccessBindingErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ChangeAccessBindingError = ChangeAccessBindingErrors[keyof ChangeAccessBindingErrors];
+
+export type ChangeAccessBindingResponses = {
+    /**
+     * Binding изменён по OCC
+     */
+    200: AccessBinding;
+};
+
+export type ChangeAccessBindingResponse = ChangeAccessBindingResponses[keyof ChangeAccessBindingResponses];
+
+export type QueryEffectiveAccessData = {
+    body: EffectiveAccessQuery;
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/access/effective-access/query';
+};
+
+export type QueryEffectiveAccessErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type QueryEffectiveAccessError = QueryEffectiveAccessErrors[keyof QueryEffectiveAccessErrors];
+
+export type QueryEffectiveAccessResponses = {
+    /**
+     * Эффективные allow-only решения, рассчитанные control-plane
+     */
+    200: EffectiveAccessPage;
+};
+
+export type QueryEffectiveAccessResponse = QueryEffectiveAccessResponses[keyof QueryEffectiveAccessResponses];
+
+export type ExplainAccessData = {
+    body: ExplainAccessInput;
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/access/effective-access/explain';
+};
+
+export type ExplainAccessErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ExplainAccessError = ExplainAccessErrors[keyof ExplainAccessErrors];
+
+export type ExplainAccessResponses = {
+    /**
+     * Безопасное объяснение одного решения
+     */
+    200: ExplainAccessResult;
+};
+
+export type ExplainAccessResponse = ExplainAccessResponses[keyof ExplainAccessResponses];
+
+export type SimulateAccessData = {
+    body: SimulateAccessInput;
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/access/effective-access/simulate';
+};
+
+export type SimulateAccessErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SimulateAccessError = SimulateAccessErrors[keyof SimulateAccessErrors];
+
+export type SimulateAccessResponses = {
+    /**
+     * Read-only сравнение текущего и предлагаемого решения
+     */
+    200: SimulateAccessResult;
+};
+
+export type SimulateAccessResponse = SimulateAccessResponses[keyof SimulateAccessResponses];
 
 export type ListAuditEventsData = {
     body?: never;

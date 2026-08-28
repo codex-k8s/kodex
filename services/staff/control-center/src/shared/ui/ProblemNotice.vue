@@ -7,6 +7,15 @@ import type { AppProblem } from "@/shared/api/problem";
 const props = defineProps<{ problem?: AppProblem; compact?: boolean }>();
 const emit = defineEmits<{ retry: [] }>();
 const translator = useI18n();
+const heading = computed(() => {
+  if (props.problem?.kind === "forbidden")
+    return translator.t("common.forbidden");
+  if (props.problem?.kind === "conflict")
+    return translator.t("common.conflict");
+  if (props.problem?.kind === "unavailable")
+    return translator.t("common.unavailable");
+  return translator.t("common.error");
+});
 const message = computed(() => {
   if (props.problem?.title) return props.problem.title;
   const key = `errors.${props.problem?.code ?? "default"}`;
@@ -19,7 +28,7 @@ const message = computed(() => {
 <template>
   <section class="problem-notice" role="alert">
     <div>
-      <strong>{{ $t("common.error") }}</strong>
+      <strong>{{ heading }}</strong>
       <p>{{ message }}</p>
       <small v-if="problem?.correlationId">{{ problem.correlationId }}</small>
     </div>
