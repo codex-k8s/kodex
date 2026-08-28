@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -160,7 +161,7 @@ func (client *Client) post(ctx context.Context, path string, payload any) error 
 	defer response.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 16<<10))
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return errors.New("runtime callback rejected request")
+		return errors.New("runtime callback rejected request with status " + strconv.Itoa(response.StatusCode))
 	}
 	return nil
 }

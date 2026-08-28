@@ -47,6 +47,25 @@ func TestNextWarmAcceptsTurnWithCompatibleRuntime(t *testing.T) {
 	}
 }
 
+func TestPostReportsOnlySafeHTTPStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		http.Error(writer, "sensitive internal diagnostic", http.StatusConflict)
+	}))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket"}
+	err = client.post(context.Background(), "/complete", map[string]string{"result": "bounded"})
+	if err == nil || err.Error() != "runtime callback rejected request with status 409" {
+		t.Fatalf("post() error = %v", err)
+	}
+	if strings.Contains(err.Error(), "sensitive") {
+		t.Fatal("runtime callback response body escaped the provider boundary")
+	}
+}
+
 func validWarmTurnFixture() runtimecontract.RunnerInput {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
 	return runtimecontract.RunnerInput{
