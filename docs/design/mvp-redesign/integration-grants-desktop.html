@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Интеграции · Разрешения подключения</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-gr .pkg-icon { width: 40px; height: 40px; border-radius: var(--r-2); border: 1px solid var(--line); background: var(--bg-field); color: var(--sec); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .p-gr .pkg-icon .ic { width: 20px; height: 20px; }
+  .p-gr .who { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .p-gr .who__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .p-gr .who__name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-gr .who__sub { font-size: 11px; color: var(--mut); }
+  .p-gr .cap-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-2); overflow: hidden; }
+  .p-gr .cap-list .check { padding: 8px 10px; border-top: 1px solid var(--line-hair); min-height: 40px; align-items: center; }
+  .p-gr .cap-list .check:first-child { border-top: 0; }
+  .p-gr .cap-list .check__text { flex: 1 1 auto; flex-direction: row; align-items: center; gap: 8px; }
+  .p-gr .cap-list .check__text .risk { margin-left: auto; }
+  .p-gr .cap-list .check.is-locked { background: var(--bg-subtle); }
+  .p-gr .recipient-btn { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 40px; padding: 5px 10px; border-radius: var(--r-2); border: 1px solid var(--line); background: var(--bg); text-align: left; }
+  .p-gr .recipient-btn:hover { border-color: var(--line-strong); }
+  .p-gr .table td { vertical-align: top; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Интеграции · Разрешения (grants) подключения GitHub · desktop 1440×1024 · маршрут <code>/integrations/connections/github-main/grants</code></p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page p-gr" id="page" aria-labelledby="page-title">
+    <div class="page-head page-head--tabs">
+      <div class="crumbs"><a href="#">Интеграции</a><span>/</span><a href="#">Подключения</a><span>/</span><span>GitHub · Основная организация</span></div>
+      <div class="page-title-row">
+        <div class="row gap-12 row--top">
+          <span class="pkg-icon"><svg class="ic"><use href="#i-branch"/></svg></span>
+          <div>
+            <div class="page-title"><h1 id="page-title">GitHub · Основная организация</h1><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Работает · проверка 12:04</span><label class="switch" style="margin-left:6px"><input type="checkbox" checked aria-label="Подключение включено"><span class="switch__track"></span><span class="sm">Включено</span></label></div>
+            <div class="page-meta"><span>Пакет <b>GitHub v1.2.0</b></span><span class="dot"></span><span>OAuth от имени пользователя · owner <b>a.volkova</b></span><span class="dot"></span><span>токен ****7f2a · истекает через 84 дня</span><span class="dot"></span><span>ресурсы: <b>3 репозитория</b></span></div>
+          </div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn--lg" type="button"><svg class="ic"><use href="#i-refresh"/></svg>Проверить</button>
+          <button class="btn btn--lg btn--icon" type="button" aria-label="Другие действия" data-menu="#menu-conn" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+          <div class="menu" id="menu-conn" data-align="right">
+            <button class="menu__item"><svg class="ic"><use href="#i-key"/></svg><span>Обновить учётные данные</span></button>
+            <button class="menu__item"><svg class="ic"><use href="#i-audit"/></svg><span>Аудит подключения</span></button>
+            <div class="menu__sep"></div>
+            <button class="menu__item menu__item--danger"><svg class="ic"><use href="#i-x-circle"/></svg><span>Отключить подключение</span></button>
+          </div>
+          <button class="btn btn--primary btn--lg" type="button" data-drawer="#grant-drawer"><svg class="ic"><use href="#i-plus"/></svg>Выдать разрешение</button>
+        </div>
+      </div>
+      <div class="tabs tabs--inline" role="tablist" data-tabs style="margin-top:10px">
+        <button class="tab" role="tab" id="tab-ov" aria-controls="panel-ov" aria-selected="false" type="button">Обзор</button>
+        <button class="tab" role="tab" id="tab-grants" aria-controls="panel-grants" aria-selected="true" type="button">Разрешения <span class="tab__count">5</span></button>
+        <button class="tab" role="tab" id="tab-res" aria-controls="panel-res" aria-selected="false" type="button">Ресурсы <span class="tab__count">3</span></button>
+        <button class="tab" role="tab" id="tab-calls" aria-controls="panel-calls" aria-selected="false" type="button">Вызовы и аудит</button>
+      </div>
+    </div>
+
+    <div class="page-body col gap-14">
+      <div class="tabpanel" id="panel-ov" role="tabpanel" aria-labelledby="tab-ov" hidden><div class="notice"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Обзор подключения: health, ресурсы и последняя проверка.</span></div></div>
+      <div class="tabpanel col gap-14" id="panel-grants" role="tabpanel" aria-labelledby="tab-grants">
+        <div class="notice notice--info"><svg class="ic"><use href="#i-shield"/></svg><span class="notice__text"><b>Модель доступа.</b> Чтение может использовать resource-scoped service connection; изменения требуют делегированной учётной записи пользователя или отдельно одобренной service identity. Разрешение выдаётся ИИ-сотруднику или опубликованной версии Процесса и ограничено ресурсами подключения.</span></div>
+        <div class="toolbar">
+          <label class="search" style="width:280px"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Найти по получателю или capability" aria-label="Поиск разрешений"><button class="search__clear" type="button" aria-label="Очистить"><svg class="ic ic-12"><use href="#i-x"/></svg></button></label>
+          <button class="chip chip--filter" type="button" data-menu="#menu-f-state" aria-haspopup="menu" aria-expanded="false">Состояние: все<svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+          <div class="menu" id="menu-f-state"><button class="menu__item" role="menuitemradio" aria-checked="true">Все</button><button class="menu__item" role="menuitemradio" aria-checked="false">Активно</button><button class="menu__item" role="menuitemradio" aria-checked="false">Истекает</button><button class="menu__item" role="menuitemradio" aria-checked="false">Отозвано</button></div>
+          <button class="chip chip--filter" type="button" data-menu="#menu-f-risk" aria-haspopup="menu" aria-expanded="false">Риск: любой<svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+          <div class="menu" id="menu-f-risk"><button class="menu__item" role="menuitemradio" aria-checked="true">Любой</button><button class="menu__item" role="menuitemradio" aria-checked="false">read</button><button class="menu__item" role="menuitemradio" aria-checked="false">write</button><button class="menu__item" role="menuitemradio" aria-checked="false">code_change</button></div>
+          <span class="toolbar__spacer"></span><span class="toolbar__count">5 разрешений</span>
+        </div>
+        <section class="card">
+          <div class="card__scroll">
+            <table class="table table--hover">
+              <thead><tr><th style="width:22%">Кому</th><th>Возможность</th><th>Область ресурсов</th><th>Режим учётной записи</th><th>Human Gate</th><th>Выдано</th><th>Состояние</th><th aria-label="Действия"></th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><div class="who"><span class="avatar avatar--32 avatar--ok">АП</span><span class="who__text"><span class="who__name">Аналитик продаж</span><span class="who__sub">ИИ-сотрудник · Корпоративные продажи</span></span></div></td>
+                  <td><div class="cell-title">Чтение репозитория</div><div class="cell-sub mono">github.repository.read</div><div class="mt-4"><span class="risk">read</span></div></td>
+                  <td class="xs">org/docs-web · все ветки</td>
+                  <td><span class="tag">service connection · scoped</span></td>
+                  <td><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-minus"/></svg>Не нужен</span></td>
+                  <td class="xs">Анна Волкова<br><span class="mut">20 авг</span></td>
+                  <td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активно</span></td>
+                  <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-row" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+                </tr>
+                <tr>
+                  <td><div class="who"><span class="avatar avatar--32 avatar--acc">ИР</span><span class="who__text"><span class="who__name">Инженер релизов</span><span class="who__sub">ИИ-сотрудник · Разработка платформы</span></span></div></td>
+                  <td><div class="cell-title">Создание Pull Request</div><div class="cell-sub mono">github.pull-request.create</div><div class="mt-4"><span class="risk risk--code">code_change</span></div></td>
+                  <td class="xs">org/billing-service · release/*</td>
+                  <td><span class="tag tag--acc">user-delegated</span></td>
+                  <td><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Обязателен</span></td>
+                  <td class="xs">Анна Волкова<br><span class="mut">22 авг</span></td>
+                  <td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активно</span></td>
+                  <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-row" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+                </tr>
+                <tr>
+                  <td><div class="who"><span class="list-row__lead" style="width:32px;height:32px"><svg class="ic"><use href="#i-wf"/></svg></span><span class="who__text"><span class="who__name">Проверка релиза v2</span><span class="who__sub">Опубликованная версия Процесса · Разработка платформы</span></span></div></td>
+                  <td><div class="cell-title">Чтение Pull Request</div><div class="cell-sub mono">github.pull-request.read</div><div class="mt-4"><span class="risk">read</span></div></td>
+                  <td class="xs">org/billing-service, org/auth-api</td>
+                  <td><span class="tag">service connection · scoped</span></td>
+                  <td><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-minus"/></svg>Не нужен</span></td>
+                  <td class="xs">Михаил Орлов<br><span class="mut">22 авг</span></td>
+                  <td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активно</span></td>
+                  <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-row" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+                </tr>
+                <tr>
+                  <td><div class="who"><span class="list-row__lead" style="width:32px;height:32px"><svg class="ic"><use href="#i-wf"/></svg></span><span class="who__text"><span class="who__name">Проверка релиза v2</span><span class="who__sub">Опубликованная версия Процесса</span></span></div></td>
+                  <td><div class="cell-title">Комментарий к Issue или PR</div><div class="cell-sub mono">github.comment.create</div><div class="mt-4"><span class="risk risk--write">write</span></div></td>
+                  <td class="xs">org/billing-service</td>
+                  <td><span class="tag tag--warn">service identity · одобрена 21 авг</span></td>
+                  <td><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>По политике</span></td>
+                  <td class="xs">Михаил Орлов<br><span class="mut">22 авг</span></td>
+                  <td><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>Истекает через 6 дн.</span></td>
+                  <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-row" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+                </tr>
+                <tr style="opacity:.7">
+                  <td><div class="who"><span class="avatar avatar--32">АД</span><span class="who__text"><span class="who__name">Автор документации</span><span class="who__sub">ИИ-сотрудник · Разработка платформы</span></span></div></td>
+                  <td><div class="cell-title">Создание ветки</div><div class="cell-sub mono">github.branch.create</div><div class="mt-4"><span class="risk risk--code">code_change</span></div></td>
+                  <td class="xs">org/docs-web · main</td>
+                  <td><span class="tag tag--acc">user-delegated</span></td>
+                  <td><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Обязателен</span></td>
+                  <td class="xs">Анна Волкова<br><span class="mut">14 авг</span></td>
+                  <td><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-x-circle"/></svg>Отозвано 25 авг</span></td>
+                  <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-row" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card__foot"><svg class="ic"><use href="#i-info"/></svg><span>Отзыв разрешения действует на следующий ход сотрудника: выполняемая попытка сохраняет свою RuntimeRevision.</span></div>
+        </section>
+        <div class="menu" id="menu-row" data-align="right">
+          <button class="menu__item"><svg class="ic"><use href="#i-edit"/></svg><span>Изменить область или срок</span></button>
+          <button class="menu__item"><svg class="ic"><use href="#i-audit"/></svg><span>Вызовы по разрешению</span></button>
+          <div class="menu__sep"></div>
+          <button class="menu__item menu__item--danger"><svg class="ic"><use href="#i-x-circle"/></svg><span>Отозвать</span></button>
+        </div>
+      </div>
+      <div class="tabpanel" id="panel-res" role="tabpanel" aria-labelledby="tab-res" hidden><div class="notice"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Ресурсы подключения: org/billing-service, org/auth-api, org/docs-web.</span></div></div>
+      <div class="tabpanel" id="panel-calls" role="tabpanel" aria-labelledby="tab-calls" hidden><div class="notice"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Журнал вызовов инструментов и аудит подключения.</span></div></div>
+    </div>
+  </main>
+
+  <!-- Drawer: выдать разрешение -->
+  <div class="drawer drawer--wide p-gr" id="grant-drawer" role="dialog" aria-labelledby="grant-title" data-modal-drawer>
+    <div class="drawer__head">
+      <div class="drawer__head-text"><div class="drawer__title" id="grant-title">Выдать разрешение</div><div class="drawer__sub">GitHub · Основная организация · только в пределах ресурсов подключения</div></div>
+      <button class="close-btn" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="drawer__body col gap-14">
+      <div class="field">
+        <span class="field__label">Получатель <span class="req" aria-hidden="true">*</span></span>
+        <button class="recipient-btn" type="button" id="recipient-btn"><span class="avatar avatar--24 avatar--acc">ИР</span><span class="who__text grow"><span class="who__name">Инженер релизов</span><span class="who__sub">ИИ-сотрудник · Разработка платформы</span></span><svg class="ic ic-14 mut"><use href="#i-chev"/></svg></button>
+        <div class="field__hint">ИИ-сотрудник или опубликованная версия Процесса. Список запрашивается у сервера с поиском.</div>
+      </div>
+      <div class="field">
+        <span class="field__label">Возможности <span class="req" aria-hidden="true">*</span></span>
+        <div class="cap-list" role="group" aria-label="Возможности">
+          <label class="check"><input type="checkbox" checked><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text"><span>Чтение репозитория</span><span class="risk">read</span></span></label>
+          <label class="check"><input type="checkbox" checked><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text"><span>Чтение Pull Request</span><span class="risk">read</span></span></label>
+          <label class="check"><input type="checkbox"><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text"><span>Комментарий к Issue или PR</span><span class="risk risk--write">write · Human Gate по политике</span></span></label>
+          <label class="check"><input type="checkbox" checked><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text"><span>Создание Pull Request</span><span class="risk risk--code">code_change · Human Gate обязателен</span></span></label>
+          <label class="check is-locked"><input type="checkbox" disabled><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text"><span>Слияние Pull Request</span><span class="risk risk--destructive">destructive · недоступно этому подключению</span></span></label>
+        </div>
+      </div>
+      <div class="field">
+        <span class="field__label">Область ресурсов <span class="req" aria-hidden="true">*</span></span>
+        <div class="row gap-6 row--wrap"><span class="chip is-active">org/billing-service<button class="chip__x" type="button" aria-label="Убрать"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span><span class="chip is-active">ветка release/*<button class="chip__x" type="button" aria-label="Убрать"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span><button class="chip" type="button" id="scope-btn"><svg class="ic"><use href="#i-plus"/></svg>Добавить ресурс</button></div>
+        <div class="field__hint">Только из 3 ресурсов подключения. Уже область подключения — нельзя, шире — нельзя.</div>
+      </div>
+      <div class="field">
+        <span class="field__label">Режим учётной записи для изменений</span>
+        <div class="col gap-8" role="radiogroup">
+          <label class="radio-card is-checked"><input type="radio" name="cred" checked><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Делегированная учётная запись пользователя</span><span class="radio-card__sub">Изменение выполняется с правами инициатора запуска, не шире его прав в GitHub.</span></span></label>
+          <label class="radio-card"><input type="radio" name="cred"><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Service identity подключения</span><span class="radio-card__sub">Требует отдельного одобрения администратора; до одобрения разрешение остаётся в состоянии «ожидает».</span></span></label>
+        </div>
+        <div class="notice notice--warn notice--sm"><svg class="ic"><use href="#i-warning"/></svg><span class="notice__text">Чтение (read) использует resource-scoped service connection в любом режиме. Для capabilities класса code_change Human Gate обязателен и не отключается.</span></div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><span class="field__label">Срок действия</span><button class="select select--block" type="button" data-menu="#menu-ttl" aria-haspopup="menu" aria-expanded="false"><span class="select__value" id="ttl-value">90 дней</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+          <div class="menu" id="menu-ttl"><button class="menu__item" role="menuitemradio" aria-checked="false">30 дней</button><button class="menu__item" role="menuitemradio" aria-checked="true">90 дней</button><button class="menu__item" role="menuitemradio" aria-checked="false">180 дней</button><button class="menu__item" role="menuitemradio" aria-checked="false">До отзыва</button></div>
+        </div>
+        <div class="field"><span class="field__label">Комментарий для аудита</span><input class="input" type="text" placeholder="Зачем выдаётся разрешение" aria-label="Комментарий для аудита"></div>
+      </div>
+    </div>
+    <div class="drawer__foot">
+      <button class="btn btn--primary btn--lg" type="button" id="btn-grant">Выдать разрешение</button>
+      <button class="btn btn--lg" type="button" data-close>Отмена</button>
+      <span class="xs mut right">Будет записано: Анна Волкова</span>
+    </div>
+  </div>
+</div>
+<p class="stage-note">Grants — отдельная сущность: таблица показывает получателя (ИИ-сотрудник или опубликованная версия Процесса), capability с риском, область ресурсов, режим учётной записи (service connection для чтения, user-delegated или отдельно одобренная service identity для изменений), Human Gate, кто выдал и состояние. Drawer выдачи с async picker получателя, checkbox-списком capabilities, chips ресурсов, radio-card режима credential и сроком.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  const frame = document.getElementById('frame');
+  const recipients = Kodex.gen.agents(300, 12).map((a) => ({ ...a, kind: 'agent' })).concat([
+    { id: 'wf1', name: 'Проверка релиза v2', kind: 'wf', project: 'Разработка платформы' }, { id: 'wf2', name: 'Обработка нового лида v3', kind: 'wf', project: 'Корпоративные продажи' }, { id: 'wf3', name: 'Проверка договора v1', kind: 'wf', project: 'Юридический отдел' },
+  ]);
+  const rbtn = document.getElementById('recipient-btn');
+  Kodex.asyncPicker({
+    trigger: rbtn, items: recipients, width: 460, placeholder: 'Найти сотрудника или Процесс',
+    match: (it, q) => it.name.toLowerCase().includes(q) || (it.project || '').toLowerCase().includes(q),
+    render: (it) => `${it.kind === 'wf' ? '<span class="list-row__lead" style="width:28px;height:28px"><svg class="ic ic-14"><use href="#i-wf"/></svg></span>' : Kodex.avatar(it.initials, 28, it.tone)}<span class="picker__text"><span class="picker__title">${Kodex.esc(it.name)}</span><span class="picker__sub"><span>${it.kind === 'wf' ? 'Опубликованная версия Процесса' : 'ИИ-сотрудник'}</span><span>·</span><span>${Kodex.esc(it.project)}</span></span></span>`,
+    onSelect: (it) => { rbtn.innerHTML = `${it.kind === 'wf' ? '<span class="list-row__lead" style="width:24px;height:24px"><svg class="ic ic-12"><use href="#i-wf"/></svg></span>' : Kodex.avatar(it.initials, 24, it.tone)}<span class="who__text grow"><span class="who__name">${Kodex.esc(it.name)}</span><span class="who__sub">${it.kind === 'wf' ? 'Опубликованная версия Процесса' : 'ИИ-сотрудник'} · ${Kodex.esc(it.project)}</span></span><svg class="ic ic-14 mut"><use href="#i-chev"/></svg>`; },
+  });
+  const resources = [{ id: 'r1', name: 'org/billing-service' }, { id: 'r2', name: 'org/auth-api' }, { id: 'r3', name: 'org/docs-web' }];
+  Kodex.asyncPicker({ trigger: document.getElementById('scope-btn'), items: resources, width: 360, placeholder: 'Ресурс подключения', render: (it) => `<span class="picker__text"><span class="picker__title mono">${Kodex.esc(it.name)}</span><span class="picker__sub">репозиторий подключения</span></span>`, onSelect: (it) => Kodex.toast(frame, 'Добавлен ресурс ' + it.name) });
+  document.querySelector('#menu-ttl').addEventListener('click', (e) => { const b = e.target.closest('.menu__item'); if (b) document.getElementById('ttl-value').textContent = b.textContent; });
+  document.getElementById('btn-grant').addEventListener('click', () => { Kodex.closeOverlay(document.getElementById('grant-drawer')); Kodex.toast(frame, 'Разрешение выдано и записано в аудит'); });
+  Kodex.mount({
+    nav: 'integrations', project: null, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Интеграции · Подключение GitHub', object: 'Разрешения', can: ['подготовить план выдачи разрешения', 'объяснить, почему capability недоступна', 'показать вызовы по разрешению'] },
+  });
+  Kodex.openOverlay(document.getElementById('grant-drawer'), true, document.querySelector('[data-drawer="#grant-drawer"]'));
+</script>
+</body>
+</html>

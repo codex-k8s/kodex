@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Окружения · Реестр и детали</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-env__body { flex-direction: row; }
+  .p-env__main { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  .p-env__toolbar { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 12px 24px; border-bottom: 1px solid var(--line); background: var(--bg); min-height: 57px; }
+  .p-env__scroll { flex: 1 1 auto; min-height: 0; overflow: auto; background: var(--bg); }
+  .p-env table col.c-base { width: 150px; } .p-env table col.c-tools { width: 176px; } .p-env table col.c-rev { width: 60px; } .p-env table col.c-build { width: 150px; } .p-env table col.c-agents { width: 92px; } .p-env table col.c-menu { width: 44px; }
+  .p-env .table td { padding-top: 9px; padding-bottom: 9px; }
+  .p-env .table tbody tr { cursor: pointer; }
+  .p-env__icon { width: 30px; height: 30px; border-radius: var(--r-2); background: var(--bg-field); border: 1px solid var(--line); color: var(--sec); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .p-env__tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .p-env__tags .tag { height: 20px; font-size: 10.5px; padding: 0 6px; }
+  .p-env__aside { flex: 0 0 400px; border-left: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+  .p-env__aside-head { flex: 0 0 auto; padding: 14px 16px 12px; border-bottom: 1px solid var(--line); }
+  .p-env__aside-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px 16px 16px; }
+  .p-env__aside-foot { flex: 0 0 auto; padding: 12px 16px 14px; border-top: 1px solid var(--line); display: flex; gap: 8px; }
+  .p-env__check { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-hair); font-size: 12.5px; }
+  .p-env__check:first-child { border-top: 0; }
+  .p-env__check .pill { margin-left: auto; }
+  .p-env__rev { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line-hair); font-size: 12.5px; }
+  .p-env__rev:first-child { border-top: 0; }
+  .p-env__foot { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 8px 24px; border-top: 1px solid var(--line); background: var(--bg-subtle); font-size: 11.5px; color: var(--sec); }
+  .p-env .menu [data-tip] { display: block; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Окружения (RoleImageRecipe) · реестр с панелью деталей · desktop 1440×1024 · маршрут <code>/projects/:projectRef/environments</code></p>
+<div class="frame frame--desktop p-env" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><span>Окружения</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Рабочие окружения</h1><span class="tag">10 рецептов</span></div>
+          <div class="page-sub">Рецепты образов роли: ПО и инструменты, доступные сотруднику внутри его Pod. Наличие инструмента не даёт доступа к внешним системам — для этого нужны интеграции и права.</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn--primary btn--lg" type="button"><svg class="ic"><use href="#i-plus"/></svg>Новый рецепт</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body page-body--flush p-env__body">
+      <div class="p-env__main">
+        <div class="p-env__toolbar">
+          <label class="search" style="width:250px;flex:0 0 250px"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Поиск по названию и инструментам" aria-label="Поиск окружений"></label>
+          <button class="chip chip--filter" type="button" data-menu="#menu-scope" aria-haspopup="menu" aria-expanded="false" aria-pressed="true"><svg class="ic"><use href="#i-folder"/></svg><span>Область: Проект и общие</span><svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+          <button class="chip chip--filter" type="button" data-menu="#menu-build" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-cpu"/></svg><span>Сборка: все</span><svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+          <span class="toolbar__spacer"></span>
+          <span class="refresh is-refreshing" data-tip="Состояние сборок приходит в реальном времени" data-tip-pos="left"><span class="refresh__dot"></span><span class="refresh__text">сборка идёт</span></span>
+        </div>
+        <div class="p-env__scroll">
+          <table class="table table--hover table--fixed" aria-label="Рабочие окружения">
+            <colgroup><col><col class="c-base"><col class="c-tools"><col class="c-rev"><col class="c-build"><col class="c-agents"><col class="c-menu"></colgroup>
+            <thead><tr><th>Окружение</th><th>Базовый образ</th><th>Инструменты</th><th>Ревизия</th><th>Сборка и допуск</th><th>Сотрудники</th><th><span class="sr-only">Действия</span></th></tr></thead>
+            <tbody data-select-group id="env-body">
+              <tr data-select-row tabindex="0">
+                <td><div class="row gap-10"><span class="p-env__icon"><svg class="ic"><use href="#i-box"/></svg></span><div><div class="cell-title">Стандартное окружение</div><div class="cell-sub">Общие задачи без специальных инструментов · общее для организации</div></div></div></td>
+                <td><div>Ubuntu 24.04</div><div class="cell-sub">платформенный базовый</div></td>
+                <td><div class="p-env__tags"><span class="tag">bash</span><span class="tag">jq</span><span class="tag">curl</span><span class="tag">git</span></div></td>
+                <td class="mono">rev 6</td>
+                <td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Допущено</span><div class="cell-sub">runtime ABI v2</div></td>
+                <td><div class="row gap-6"><span class="avatar-stack"><span class="avatar avatar--20 avatar--acc">МП</span><span class="avatar avatar--20">КО</span><span class="avatar avatar--20 avatar--warn">АП</span></span><span class="xs mut">3</span></div></td>
+                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-shared" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+              <tr class="is-selected" data-select-row tabindex="0">
+                <td><div class="row gap-10"><span class="p-env__icon"><svg class="ic"><use href="#i-file-text"/></svg></span><div><div class="cell-title">Офисные документы и PDF</div><div class="cell-sub">Работа с офисными файлами и отчётами</div></div></div></td>
+                <td><div>Ubuntu 24.04</div><div class="cell-sub">платформенный базовый</div></td>
+                <td><div class="p-env__tags"><span class="tag">LibreOffice</span><span class="tag">pdftotext</span><span class="tag">pandoc</span><span class="tag">+2</span></div></td>
+                <td class="mono">rev 4</td>
+                <td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Допущено</span><div class="cell-sub">runtime ABI v2</div></td>
+                <td><div class="row gap-6"><span class="avatar-stack"><span class="avatar avatar--20 avatar--ok">АП</span><span class="avatar avatar--20 avatar--acc">РП</span><span class="avatar avatar--20">КК</span></span><span class="xs mut">3</span></div></td>
+                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-env" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+              <tr data-select-row tabindex="0">
+                <td><div class="row gap-10"><span class="p-env__icon"><svg class="ic"><use href="#i-eye"/></svg></span><div><div class="cell-title">Юридические документы (OCR)</div><div class="cell-sub">Разбор сканов, распознавание и сверка договоров</div></div></div></td>
+                <td><div>Debian 12 slim</div><div class="cell-sub">платформенный базовый</div></td>
+                <td><div class="p-env__tags"><span class="tag">tesseract</span><span class="tag">ocrmypdf</span><span class="tag">pdftk</span></div></td>
+                <td class="mono">rev 3</td>
+                <td><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Собирается</span><div class="progress mt-4" style="width:110px" aria-label="Сборка 62%"><span class="progress__bar" style="width:62%"></span></div><div class="cell-sub">62% · установка ПО</div></td>
+                <td><div class="row gap-6"><span class="avatar-stack"><span class="avatar avatar--20">ЮК</span></span><span class="xs mut">1</span></div></td>
+                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-env" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+              <tr data-select-row tabindex="0">
+                <td><div class="row gap-10"><span class="p-env__icon"><svg class="ic"><use href="#i-activity"/></svg></span><div><div class="cell-title">Аналитика данных (Python)</div><div class="cell-sub">Расчёты, таблицы и графики</div></div></div></td>
+                <td><div>Ubuntu 24.04</div><div class="cell-sub">платформенный базовый</div></td>
+                <td><div class="p-env__tags"><span class="tag">python 3.12</span><span class="tag">pandas</span><span class="tag">openpyxl</span></div></td>
+                <td class="mono">rev 2</td>
+                <td><span class="pill pill--err pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Ошибка сборки</span><div class="cell-sub">шаг «Установка» · <a href="#">журнал</a></div></td>
+                <td><div class="row gap-6"><span class="avatar-stack"><span class="avatar avatar--20 avatar--ok">ИР</span></span><span class="xs mut">1 · rev 1</span></div></td>
+                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-env" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+              <tr data-select-row tabindex="0">
+                <td><div class="row gap-10"><span class="p-env__icon"><svg class="ic"><use href="#i-globe"/></svg></span><div><div class="cell-title">Веб-исследование (браузер)</div><div class="cell-sub">Публичные источники без учётных данных</div></div></div></td>
+                <td><div>Ubuntu 24.04</div><div class="cell-sub">платформенный базовый</div></td>
+                <td><div class="p-env__tags"><span class="tag">chromium</span><span class="tag">curl</span></div></td>
+                <td class="mono">rev 5</td>
+                <td><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Ждёт допуска</span><div class="cell-sub">проверка уязвимостей</div></td>
+                <td><div class="row gap-6"><span class="avatar-stack"><span class="avatar avatar--20 avatar--ok">ИР</span><span class="avatar avatar--20 avatar--ok">АП</span></span><span class="xs mut">2 · rev 4</span></div></td>
+                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-env" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+              <tr data-select-row tabindex="0">
+                <td><div class="row gap-10"><span class="p-env__icon"><svg class="ic"><use href="#i-columns"/></svg></span><div><div class="cell-title">Таблицы и финансовые отчёты</div><div class="cell-sub">Сверки и отчётность</div></div></div></td>
+                <td><div>Ubuntu 24.04</div><div class="cell-sub">платформенный базовый</div></td>
+                <td><div class="p-env__tags"><span class="tag">LibreOffice</span><span class="tag">python 3.12</span><span class="tag">openpyxl</span></div></td>
+                <td class="mono">rev 1</td>
+                <td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Допущено</span><div class="cell-sub">runtime ABI v2</div></td>
+                <td><span class="xs mut">никто</span></td>
+                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-env-unused" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+              <tr data-select-row tabindex="0">
+                <td><div class="row gap-10"><span class="p-env__icon"><svg class="ic"><use href="#i-image"/></svg></span><div><div class="cell-title">Медиа и изображения</div><div class="cell-sub">Обработка изображений и презентаций</div></div></div></td>
+                <td><div>Debian 12 slim</div><div class="cell-sub">платформенный базовый</div></td>
+                <td><div class="p-env__tags"><span class="tag">imagemagick</span><span class="tag">ffmpeg</span></div></td>
+                <td class="mono">rev 2</td>
+                <td><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-minus"/></svg>Несовместимо</span><div class="cell-sub">требует runtime ABI v2</div></td>
+                <td><span class="xs mut">никто</span></td>
+                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-env-unused" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+              <tr data-select-row tabindex="0">
+                <td><div class="row gap-10"><span class="p-env__icon"><svg class="ic"><use href="#i-language"/></svg></span><div><div class="cell-title">Переводы и локализация</div><div class="cell-sub">Многоязычные документы</div></div></div></td>
+                <td><div>Ubuntu 24.04</div><div class="cell-sub">платформенный базовый</div></td>
+                <td><div class="p-env__tags"><span class="tag">pandoc</span><span class="tag">hunspell</span></div></td>
+                <td class="mono">rev 1</td>
+                <td><span class="pill pill--info pill--sm"><svg class="ic"><use href="#i-edit"/></svg>Черновик</span><div class="cell-sub">сборка не запускалась</div></td>
+                <td><span class="xs mut">никто</span></td>
+                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-env-draft" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="list-more"><span>Показано 8 из 10 · ещё 2 общих окружения организации</span></div>
+        </div>
+        <div class="p-env__foot">
+          <svg class="ic ic-14"><use href="#i-shield-check"/></svg>
+          <span>Сотрудник запускается только из допущенной ревизии: provenance, SBOM, уязвимости и подпись проверяются платформой. Учётные данные реестра образов сотрудникам и в интерфейс не выдаются.</span>
+        </div>
+      </div>
+
+      <aside class="p-env__aside" aria-labelledby="aside-title">
+        <div class="p-env__aside-head">
+          <div class="row row--top gap-10">
+            <span class="p-env__icon" style="width:36px;height:36px"><svg class="ic ic-18"><use href="#i-file-text"/></svg></span>
+            <div class="grow">
+              <h2 class="h2" id="aside-title">Офисные документы и PDF</h2>
+              <div class="row gap-6 mt-6"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Допущено</span><span class="tag tag--mono">rev 4 · активная</span></div>
+            </div>
+            <button class="btn btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-env" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+          </div>
+        </div>
+        <div class="p-env__aside-scroll">
+          <div class="kv">
+            <div class="kv__row"><span class="kv__k">Назначение</span><span class="kv__v">Работа с офисными файлами, PDF и отчётами</span></div>
+            <div class="kv__row"><span class="kv__k">Область</span><span class="kv__v">Проект «Корпоративные продажи»</span></div>
+            <div class="kv__row"><span class="kv__k">Базовый образ</span><span class="kv__v">Ubuntu 24.04 (платформенный базовый) · обновлён 20 августа</span></div>
+            <div class="kv__row"><span class="kv__k">Пакеты</span><span class="kv__v">libreoffice, poppler-utils, pandoc, fonts-dejavu, python3-docx</span></div>
+            <div class="kv__row"><span class="kv__k">Инструменты</span><span class="kv__v p-env__tags"><span class="tag">LibreOffice</span><span class="tag">pdftotext</span><span class="tag">pandoc</span><span class="tag">python 3.12</span><span class="tag">docx</span></span></div>
+            <div class="kv__row"><span class="kv__k">Совместимость</span><span class="kv__v">runtime ABI v2 · защищённый runtime добавлен после установки</span></div>
+            <div class="kv__row"><span class="kv__k">Размер образа</span><span class="kv__v mono">1,9 ГБ</span></div>
+            <div class="kv__row"><span class="kv__k">Собрано</span><span class="kv__v">24 августа, 14:10 · 5 мин 40 с · Михаил Орлов</span></div>
+          </div>
+
+          <div class="sec-title mt-16">Проверки перед допуском</div>
+          <div class="mt-4">
+            <div class="p-env__check"><svg class="ic ic-14 ok-text"><use href="#i-check-circle"/></svg><span>Происхождение сборки (provenance)</span><span class="pill pill--ok pill--sm">Подтверждено</span></div>
+            <div class="p-env__check"><svg class="ic ic-14 ok-text"><use href="#i-check-circle"/></svg><span>Состав ПО (SBOM)</span><span class="pill pill--ok pill--sm">184 компонента</span></div>
+            <div class="p-env__check"><svg class="ic ic-14 ok-text"><use href="#i-check-circle"/></svg><span>Уязвимости</span><span class="pill pill--ok pill--sm">0 критичных · 2 средних</span></div>
+            <div class="p-env__check"><svg class="ic ic-14 ok-text"><use href="#i-check-circle"/></svg><span>Подпись образа</span><span class="pill pill--ok pill--sm">Проверена</span></div>
+            <div class="p-env__check"><svg class="ic ic-14 ok-text"><use href="#i-check-circle"/></svg><span>Неизменяемый digest</span><span class="pill pill--ok pill--sm">Закреплён</span></div>
+          </div>
+          <div class="xs mut mt-6">Значение digest и адрес реестра не показываются: сотрудник получает образ по закреплённому digest через платформу.</div>
+
+          <div class="sec-title mt-16">Ревизии</div>
+          <div class="mt-4">
+            <div class="p-env__rev"><span class="mono b ok-text">rev 4</span><span class="grow">Активная · 24 августа · добавлен python3-docx</span></div>
+            <div class="p-env__rev"><span class="mono b mut">rev 3</span><span class="grow sec">20 августа · обновлён базовый образ</span><a class="xs" href="#">Сравнить</a></div>
+            <div class="p-env__rev"><span class="mono b mut">rev 2</span><span class="grow sec">12 августа</span><a class="xs" href="#">Сравнить</a></div>
+          </div>
+          <div class="xs mut mt-6">Сотрудники переключаются на новую ревизию со следующего запуска; текущие запуски продолжают работу в своей ревизии.</div>
+
+          <div class="row row--between mt-16"><div class="sec-title">Связанные сотрудники</div><span class="xs mut">3</span></div>
+          <div class="col gap-6 mt-8">
+            <div class="row gap-8"><span class="avatar avatar--24 avatar--ok">АП</span><span class="grow sm">Аналитик продаж</span><span class="xs mut">rev 4</span></div>
+            <div class="row gap-8"><span class="avatar avatar--24 avatar--acc">РП</span><span class="grow sm">Редактор предложений</span><span class="xs mut">rev 4</span></div>
+            <div class="row gap-8"><span class="avatar avatar--24">КК</span><span class="grow sm">Контролёр качества</span><span class="xs warn-text">rev 3 · обновится при следующем запуске</span></div>
+          </div>
+        </div>
+        <div class="p-env__aside-foot">
+          <a class="btn btn--primary btn--lg grow" href="environment-editor-desktop.html"><svg class="ic"><use href="#i-plus"/></svg>Новая ревизия</a>
+          <button class="btn btn--lg" type="button" data-tip="Пересобрать rev 4 с тем же рецептом" data-tip-pos="top"><svg class="ic"><use href="#i-refresh"/></svg>Пересобрать</button>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <div class="menu" id="menu-scope"><div class="menu__title">Область</div><button class="menu__item" role="menuitemradio" aria-checked="true">Проект и общие организации</button><button class="menu__item" role="menuitemradio" aria-checked="false">Только этот Проект</button><button class="menu__item" role="menuitemradio" aria-checked="false">Только общие</button></div>
+  <div class="menu" id="menu-build"><div class="menu__title">Сборка</div><button class="menu__item" role="menuitemradio" aria-checked="true">Все</button><button class="menu__item" role="menuitemradio" aria-checked="false">Допущено</button><button class="menu__item" role="menuitemradio" aria-checked="false">Собирается</button><button class="menu__item" role="menuitemradio" aria-checked="false">Ждёт допуска</button><button class="menu__item" role="menuitemradio" aria-checked="false">Ошибка сборки</button><button class="menu__item" role="menuitemradio" aria-checked="false">Черновики</button></div>
+  <div class="menu" id="menu-env" data-align="right">
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-plus"/></svg>Новая ревизия</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-refresh"/></svg>Пересобрать</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-copy"/></svg>Создать копию</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-audit"/></svg>Журнал сборки и допуска</button>
+    <div class="menu__sep"></div>
+    <div data-tip="Окружение используют сотрудники: сначала переключите их" data-tip-pos="left" class="tip-wide"><button class="menu__item" role="menuitem" disabled><svg class="ic"><use href="#i-archive"/></svg>Архивировать</button></div>
+  </div>
+  <div class="menu" id="menu-env-unused" data-align="right">
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-plus"/></svg>Новая ревизия</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-copy"/></svg>Создать копию</button>
+    <div class="menu__sep"></div>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-archive"/></svg>Архивировать</button>
+  </div>
+  <div class="menu" id="menu-env-draft" data-align="right">
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-edit"/></svg>Изменить черновик</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-cpu"/></svg>Собрать</button>
+    <div class="menu__sep"></div>
+    <button class="menu__item menu__item--danger" role="menuitem"><svg class="ic"><use href="#i-trash"/></svg>Удалить черновик</button>
+  </div>
+  <div class="menu" id="menu-shared" data-align="right">
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-copy"/></svg>Создать копию в Проекте</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-audit"/></svg>Журнал сборки и допуска</button>
+    <div class="menu__sep"></div>
+    <div data-tip="Общее окружение организации изменяется в Администрировании" data-tip-pos="left" class="tip-wide"><button class="menu__item" role="menuitem" disabled><svg class="ic"><use href="#i-edit"/></svg>Изменить</button></div>
+  </div>
+</div>
+<p class="stage-note">Окружения — реестр рецептов образов роли (RoleImageRecipe) в области Проекта плюс общие окружения организации (их правка — только в Администрировании). Для каждого рецепта видны назначение, базовый образ человеческим именем, инструменты, ревизия, состояние сборки и допуска (готово, собирается с прогрессом, ждёт допуска, ошибка, несовместимо, черновик) и связанные сотрудники. Панель деталей показывает чек-лист проверок цепочки поставки (provenance, SBOM, уязвимости, подпись, закреплённый digest) без значений digest и адресов реестра, ревизии со сравнением и кто когда перейдёт на новую ревизию.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'project.environments', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Окружения', object: 'Офисные документы и PDF · rev 4', can: ['объяснить ошибку сборки', 'подготовить новую ревизию как план изменений', 'подсказать, какое окружение подходит сотруднику'] },
+  });
+  (function () {
+    const { $, $$ } = Kodex;
+    $('#frame').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-select-row]')) { e.preventDefault(); e.target.click(); } });
+    $$('[data-select-row]').forEach((tr) => tr.addEventListener('click', (e) => { if (e.target.closest('button,a')) return; $('#aside-title').textContent = $('.cell-title', tr).textContent.trim(); }));
+    // симуляция прогресса сборки без перерисовки таблицы
+    let p = 62; const bar = $('.progress__bar', $('#env-body')); const sub = bar && bar.closest('td').querySelector('.cell-sub');
+    if (bar) setInterval(() => { if (p >= 96) return; p += 1; bar.style.width = p + '%'; bar.parentElement.setAttribute('aria-label', `Сборка ${p}%`); sub.textContent = `${p}% · ${p < 80 ? 'установка ПО' : 'защищённый runtime'}`; }, 2500);
+  })();
+</script>
+</body>
+</html>

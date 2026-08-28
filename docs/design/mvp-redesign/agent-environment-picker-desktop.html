@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · ИИ-сотрудник · Выбор рабочего окружения</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-env .env-current { display: flex; align-items: flex-start; gap: 14px; }
+  .p-env .env-current__icon { width: 44px; height: 44px; border-radius: var(--r-3); background: var(--acc-tint); border: 1px solid var(--acc-line); color: var(--acc-dark); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .p-env .env-current__tools { display: flex; flex-wrap: wrap; gap: 5px; }
+  #frame .picker-modal .modal__body--flush { min-height: 0; }
+  #frame .picker--inline { border: 0; border-radius: 0; height: 100%; }
+  #frame .picker--inline .picker__list { max-height: none; flex: 1 1 auto; }
+  #frame .env-item { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; }
+  #frame .picker__item { padding: 10px 14px; align-items: center; }
+  #frame .env-item__icon { width: 32px; height: 32px; border-radius: var(--r-2); background: var(--bg-field); border: 1px solid var(--line); color: var(--sec); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+  #frame .env-item__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+  #frame .env-item__main > span { display: flex; }
+  #frame .env-item__meta > span:first-child { color: var(--sec); }
+  #frame .env-item__name { font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  #frame .env-item__name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  #frame .env-item__meta { font-size: 11px; color: var(--mut); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  #frame .env-item__tools { display: flex; gap: 4px; flex-wrap: wrap; }
+  #frame .env-item__tools .tag { height: 20px; font-size: 10.5px; padding: 0 6px; }
+  #frame .env-item__aside { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; min-width: 190px; }
+  #frame .picker__item[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+  #frame .picker__item[aria-disabled="true"]:hover { background: transparent; }
+  #frame .picker__item.is-current { box-shadow: inset 2px 0 0 var(--acc); }
+  #frame .picker-filters { display: flex; gap: 6px; padding: 0 8px 8px; border-bottom: 1px solid var(--line-hair); }
+  #frame .picker-filters .chip { height: 26px; font-size: 11.5px; }
+  #frame .modal--xl { height: 760px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">ИИ-сотрудник · вкладка «Окружение» с открытым async picker каталога окружений (180 элементов, серверный поиск, cursor infinite scroll) · desktop 1440×1024</p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page p-env" id="page" aria-labelledby="page-title">
+    <div class="page-head page-head--tabs">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><a href="#">ИИ-сотрудники</a><span>/</span><span>Аналитик продаж</span></div>
+      <div class="page-title-row">
+        <div class="row gap-12">
+          <span class="avatar avatar--44 avatar--ok" aria-hidden="true">АП</span>
+          <div>
+            <div class="page-title"><h1 id="page-title">Аналитик продаж</h1><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Готов</span><span class="tag tag--ok"><svg class="ic"><use href="#i-tag"/></svg>Инструкции v3 опубликованы</span></div>
+            <div class="page-sub">Исследование клиентов и подготовка фактов · Проект «Корпоративные продажи»</div>
+          </div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn--lg" type="button">Изменить</button>
+          <a class="btn btn--primary btn--lg" href="#"><svg class="ic"><use href="#i-run"/></svg>Запустить</a>
+          <button class="btn btn--lg btn--icon" type="button" aria-label="Ещё действия"><svg class="ic"><use href="#i-dots"/></svg></button>
+        </div>
+      </div>
+      <div class="tabs tabs--inline" role="tablist" data-tabs aria-label="Разделы сотрудника" style="margin-top:10px">
+        <button class="tab" role="tab" id="tab-profile" aria-controls="panel-profile" aria-selected="false">Профиль</button>
+        <button class="tab" role="tab" id="tab-instr" aria-controls="panel-instr" aria-selected="false">Инструкции<span class="tab__count">v3</span></button>
+        <button class="tab" role="tab" id="tab-runtime" aria-controls="panel-runtime" aria-selected="false">Runtime</button>
+        <button class="tab" role="tab" id="tab-env" aria-controls="panel-env" aria-selected="true">Окружение</button>
+        <button class="tab" role="tab" id="tab-access" aria-controls="panel-access" aria-selected="false">Доступы и знания</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="tabpanel" id="panel-profile" role="tabpanel" aria-labelledby="tab-profile" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Профиль» — см. <code>agent-profile-desktop.html</code>.</span></div></div>
+      <div class="tabpanel" id="panel-instr" role="tabpanel" aria-labelledby="tab-instr" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Инструкции» — см. <code>agent-instructions-desktop.html</code>.</span></div></div>
+      <div class="tabpanel" id="panel-runtime" role="tabpanel" aria-labelledby="tab-runtime" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Runtime» — см. <code>agent-runtime-desktop.html</code>.</span></div></div>
+      <div class="tabpanel" id="panel-env" role="tabpanel" aria-labelledby="tab-env">
+        <div class="split split--main-aside">
+          <section class="card" aria-labelledby="sec-env-current">
+            <div class="card__head card__head--line"><h2 class="sec-title" id="sec-env-current">Текущее окружение</h2><span class="tag tag--acc">применяется к каждому новому ходу</span></div>
+            <div class="card__body card__body--pad col gap-14">
+              <div class="env-current">
+                <span class="env-current__icon"><svg class="ic ic-20"><use href="#i-layers"/></svg></span>
+                <div class="col gap-6 grow">
+                  <div class="row gap-8"><span class="h2">Офисные документы и PDF</span><span class="tag tag--mono">rev 4</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Образ готов</span><span class="tag tag--ok"><svg class="ic"><use href="#i-check"/></svg>Совместимо с runtime 2.1</span></div>
+                  <div class="sm sec">Работа с офисными файлами, извлечение текста из PDF, конвертация форматов. Используют 4 сотрудника Проекта.</div>
+                  <div class="env-current__tools"><span class="tag">LibreOffice 24.2</span><span class="tag">pdftotext</span><span class="tag">pandoc 3.1</span><span class="tag">python 3.12</span><span class="tag">openpyxl</span></div>
+                </div>
+              </div>
+              <div class="kv kv--wide">
+                <div class="kv__row"><span class="kv__k">Базовый образ</span><span class="kv__v">Kodex role base · runtime ABI 2.1</span></div>
+                <div class="kv__row"><span class="kv__k">Ревизия 4 собрана</span><span class="kv__v">22 августа, 09:12 · проверки цепочки поставки пройдены</span></div>
+                <div class="kv__row"><span class="kv__k">Изменил</span><span class="kv__v">Михаил Орлов · «добавлен pandoc для экспорта в DOCX»</span></div>
+                <div class="kv__row"><span class="kv__k">Следующий ход</span><span class="kv__v">будет запущен в отдельном Pod из этой ревизии</span></div>
+              </div>
+              <div class="row gap-8">
+                <button class="btn btn--primary" type="button" data-modal="#env-picker-modal"><svg class="ic"><use href="#i-layers"/></svg>Выбрать другое окружение</button>
+                <a class="btn" href="#"><svg class="ic"><use href="#i-external"/></svg>Открыть в разделе «Окружения»</a>
+              </div>
+            </div>
+          </section>
+          <aside class="col gap-16">
+            <section class="card" aria-labelledby="sec-env-hist">
+              <div class="card__head card__head--line"><h2 class="sec-title" id="sec-env-hist">История смены окружения</h2></div>
+              <div>
+                <div class="list-row"><div class="list-row__main"><div class="list-row__title"><span>Офисные документы и PDF · rev 4</span></div><div class="list-row__sub"><span>с 22 августа</span><span>·</span><span>Михаил Орлов</span></div></div><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Текущее</span></div>
+                <div class="list-row"><div class="list-row__main"><div class="list-row__title"><span>Офисные документы и PDF · rev 3</span></div><div class="list-row__sub"><span>9–22 августа</span><span>·</span><span>автообновление ревизии</span></div></div></div>
+                <div class="list-row"><div class="list-row__main"><div class="list-row__title"><span>Стандартное окружение · rev 6</span></div><div class="list-row__sub"><span>до 9 августа</span><span>·</span><span>Kodex по запросу Анны Волковой</span></div></div></div>
+              </div>
+            </section>
+            <div class="notice notice--info notice--sm"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Наличие инструмента в окружении не даёт доступа к внешним системам: для этого нужны интеграционные grants на вкладке «Доступы и знания».</span></div>
+          </aside>
+        </div>
+      </div>
+      <div class="tabpanel" id="panel-access" role="tabpanel" aria-labelledby="tab-access" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Доступы и знания» — возможности, grants и проверенные источники знаний.</span></div></div>
+    </div>
+
+    <!-- Picker окружений -->
+    <div class="modal-wrap picker-modal" id="env-picker-modal" role="dialog" aria-modal="true" aria-labelledby="env-picker-title" hidden>
+      <div class="modal modal--xl" style="width:920px">
+        <div class="modal__head">
+          <div class="grow"><div class="modal__title" id="env-picker-title">Выбор рабочего окружения</div><div class="modal__sub">Каталог организации · 180 окружений · поиск выполняется на сервере</div></div>
+          <button class="close-btn" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="modal__body modal__body--flush" id="env-picker-host"></div>
+        <div class="modal__foot">
+          <span class="sm sec grow" id="env-picker-selected">Выбрано: <b class="ink2">Офисные документы и PDF · rev 4</b> (текущее)</span>
+          <button class="btn" type="button" data-close>Отмена</button>
+          <button class="btn btn--primary" type="button" id="env-picker-apply" disabled>Выбрать</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Окружение выбирается через async picker, рассчитанный на десятки и сотни рецептов: серверный поиск с debounce, состояния loading / empty / error (запрос «ошибка»), cursor-пагинация с infinite scroll и footer «Показано N из M». В каждой строке — иконка, назначение, инструменты, ревизия, состояние сборки образа и совместимость с runtime; несовместимые и несобранные окружения отключены с подсказкой. Текущее окружение выделено, кнопка «Выбрать» активна только при изменении выбора.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  const cfg = {
+    nav: 'project.agents', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'ИИ-сотрудник · Окружение', object: 'Аналитик продаж', can: ['подобрать окружение по нужным инструментам', 'объяснить, почему окружение несовместимо', 'подготовить новую ревизию окружения'] },
+  };
+  Kodex.mount(cfg);
+  const frame = document.getElementById('frame');
+  const modal = document.getElementById('env-picker-modal');
+  const envs = Kodex.gen.envs(180, 5);
+  envs[1].current = true; envs[1].build = 'ready'; envs[1].compatible = true; envs[1].rev = 4;
+  const BUILD = { ready: ['ok', 'check', 'Готово'], building: ['run', 'spin', 'Собирается'], failed: ['err', 'alert', 'Ошибка сборки'] };
+  function renderEnv(e) {
+    const [bm, bi, bl] = BUILD[e.build];
+    const disabled = !e.compatible || e.build !== 'ready';
+    const why = !e.compatible ? 'Требует runtime ≥ 2.2 — у сотрудника runtime 2.1' : e.build === 'building' ? 'Образ ещё собирается' : e.build === 'failed' ? 'Последняя сборка завершилась ошибкой' : '';
+    return `<span class="env-item${disabled ? '' : ''}" ${why ? `data-tip="${Kodex.esc(why)}" data-tip-pos="top"` : ''}>
+      <span class="env-item__icon"><svg class="ic"><use href="#i-layers"/></svg></span>
+      <span class="env-item__main">
+        <span class="env-item__name"><span>${Kodex.esc(e.name)}</span>${e.current ? '<span class="tag tag--acc">Текущее</span>' : ''}</span>
+        <span class="env-item__meta"><span>${Kodex.esc(e.purpose)}</span><span>·</span><span class="mono">rev ${e.rev}</span><span>·</span><span>${e.agents ? 'используют ' + e.agents + ' сотр.' : 'не используется'}</span></span>
+        <span class="env-item__tools">${e.tools.slice(0, 3).map((t) => `<span class="tag">${Kodex.esc(t)}</span>`).join('')}${e.tools.length > 3 ? `<span class="tag">+${e.tools.length - 3}</span>` : ''}</span>
+      </span>
+      <span class="env-item__aside">
+        <span class="pill pill--${bm} pill--sm"><svg class="ic${bm === 'run' ? ' ic-spin' : ''}"><use href="#i-${bi}"/></svg>${bl}</span>
+        ${e.compatible ? '<span class="tag tag--ok"><svg class="ic"><use href="#i-check"/></svg>Совместимо с runtime</span>' : '<span class="tag tag--warn"><svg class="ic"><use href="#i-alert"/></svg>Требует runtime ≥ 2.2</span>'}
+      </span>
+    </span>`;
+  }
+  const host = document.getElementById('env-picker-host');
+  const selectedLabel = document.getElementById('env-picker-selected');
+  const applyBtn = document.getElementById('env-picker-apply');
+  const picker = Kodex.asyncPicker({
+    trigger: applyBtn, host, inline: true, items: envs, placeholder: 'Найти окружение по названию, назначению или инструменту', pageSize: 25,
+    selected: [envs[1]],
+    match: (it, q) => (it.name + ' ' + it.purpose + ' ' + it.tools.join(' ')).toLowerCase().includes(q),
+    render: renderEnv,
+    onSelect: (it) => { selectedLabel.innerHTML = `Выбрано: <b class="ink2">${Kodex.esc(it.name)} · rev ${it.rev}</b>${it.current ? ' (текущее)' : ''}`; applyBtn.disabled = !!it.current; },
+  });
+  // Фильтры каталога над списком
+  const filters = Kodex.el(`<div class="picker-filters" role="group" aria-label="Фильтры каталога" data-chip-group><button class="chip" type="button" aria-pressed="true">Все</button><button class="chip" type="button" aria-pressed="false"><svg class="ic"><use href="#i-check"/></svg>Только совместимые</button><button class="chip" type="button" aria-pressed="false">Готовые образы</button><button class="chip" type="button" aria-pressed="false">Используются в Проекте</button></div>`);
+  picker.picker.querySelector('.picker__search').after(filters);
+  // Несовместимые / несобранные — disabled, клик не выбирает
+  const list = picker.picker.querySelector('.picker__list');
+  const markDisabled = () => list.querySelectorAll('.picker__item').forEach((b) => { const e = envs.find((x) => x.id === b.dataset.id); if (e && (!e.compatible || e.build !== 'ready')) { b.setAttribute('aria-disabled', 'true'); } if (e && e.current) b.classList.add('is-current'); });
+  new MutationObserver(markDisabled).observe(list, { childList: true });
+  list.addEventListener('click', (e) => { const b = e.target.closest('.picker__item'); if (b && b.getAttribute('aria-disabled') === 'true') { e.stopPropagation(); e.preventDefault(); Kodex.toast(frame, 'Это окружение нельзя выбрать: ' + (b.querySelector('[data-tip]')?.dataset.tip || 'недоступно'), 'alert'); } }, true);
+  applyBtn.addEventListener('click', () => { Kodex.closeOverlay(modal); Kodex.toast(frame, 'Окружение будет применено к следующему ходу (новая RuntimeRevision)'); });
+  Kodex.openOverlay(modal, true, document.querySelector('[data-modal="#env-picker-modal"]'));
+</script>
+</body>
+</html>

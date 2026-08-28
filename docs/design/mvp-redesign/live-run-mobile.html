@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Запуск · Live Run (mobile)</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-runm.m-body { overflow: hidden; }
+  .p-runm-frame .m-top { min-height: 68px; }
+  .p-runm-frame .m-top__title h1,
+  .p-runm-frame .m-top__sub { white-space: normal; text-overflow: clip; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+  .p-runm__state { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--line-hair); background: var(--bg); font-size: 12px; color: var(--sec); white-space: nowrap; overflow: hidden; }
+  .p-runm__tabs { flex: 0 0 auto; padding: 0 8px; }
+  .p-runm__tabs .tab { flex: 1 1 0; justify-content: center; }
+  .p-runm__graph { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .p-runm__graph .canvas { flex: 1 1 auto; min-height: 0; }
+  .p-runm__graph .canvas__toolbar .btn:not(.btn--icon) { display: none; }
+  .p-runm__graph .canvas__toolbar .btn, .p-runm__graph .canvas__zoom { min-height: 36px; }
+  .p-runm__hint { flex: 0 0 auto; padding: 6px 14px; font-size: 11px; color: var(--mut); background: var(--bg-subtle); border-top: 1px solid var(--line-hair); display: flex; gap: 8px; align-items: center; }
+  .p-runm__feed { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 14px 16px; background: var(--bg); }
+  .p-runm__feed .act__head b { font-size: 13px; }
+  .p-runm__feed .act__text { font-size: 13.5px; }
+  .p-runm__feed .act__block-head { flex-wrap: wrap; row-gap: 4px; }
+  .p-runm__feed .act__block-head .pill { margin-left: auto; }
+  .p-runm__graph[hidden], .p-runm__feed[hidden] { display: none !important; }
+  .p-runm__actions { flex: 0 0 auto; display: flex; gap: 8px; padding: 10px 14px 14px; border-top: 1px solid var(--line); background: var(--bg); }
+  .p-runm__actions .btn { flex: 1 1 0; }
+  .p-runm__sheet { max-height: 56%; }
+  .p-runm__sheet .sheet__head { align-items: flex-start; padding-top: 8px; }
+  .p-runm__sheet .sheet__title { display: flex; flex-direction: column; gap: 4px; }
+  .p-runm__sheet .sheet__title .row { font-weight: 400; }
+  .p-runm__sheet .kv__k { flex-basis: 108px; }
+  .p-runm__status { border: 1px solid var(--acc-soft-line); background: var(--acc-soft); border-radius: var(--r-3); padding: 10px 12px; font-size: 13px; color: var(--ink-2); display: flex; flex-direction: column; gap: 8px; }
+  .p-runm__status-row { display: flex; align-items: flex-start; gap: 8px; }
+  .p-runm__status-row .ic { flex: 0 0 auto; margin-top: 2px; color: var(--acc); }
+  .p-runm__sheet .sheet__foot .btn { flex: 1 1 0; }
+  .p-feed__plan { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .p-feed__plan li { display: flex; align-items: center; gap: 8px; }
+  .p-feed__plan li .ic { width: 14px; height: 14px; }
+  .p-feed__plan li.is-done { color: var(--ok); }
+  .p-feed__plan li.is-current { color: var(--acc-dark); font-weight: 500; }
+  .p-feed__plan li.is-todo { color: var(--mut); }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Запуск · Live Run Workspace · mobile 390×844 · маршрут <code>/runs/:runRef</code> · вкладки «Граф / Ход работы», inspector как bottom sheet</p>
+<div class="frame frame--mobile p-runm-frame" id="frame">
+  <main class="page m-body--flush p-runm" id="page" aria-label="Запуск">
+    <div class="p-runm__state">
+      <span class="pill pill--run"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span>
+      <span class="source" tabindex="0" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span>
+      <span>·</span><span class="truncate">Анна Волкова</span>
+    </div>
+    <div class="tabs tabs--inline p-runm__tabs" role="tablist" data-tabs aria-label="Разделы запуска">
+      <button class="tab" role="tab" id="tab-graph-btn" aria-selected="true" aria-controls="tab-graph" type="button"><svg class="ic"><use href="#i-graph"/></svg>Граф</button>
+      <button class="tab" role="tab" id="tab-feed-btn" aria-selected="false" aria-controls="tab-feed" type="button"><svg class="ic"><use href="#i-activity"/></svg>Ход работы <span class="tab__count">184</span></button>
+    </div>
+
+    <section class="tabpanel p-runm__graph" id="tab-graph" role="tabpanel" aria-labelledby="tab-graph-btn">
+      <div class="canvas" id="graph"></div>
+      <div class="p-runm__hint"><span class="conn" data-state="online" id="rt-conn"><span class="conn__dot"></span><span class="conn__text">В сети</span></span><span id="rt-text">События до <span class="mono">№184</span> · касание узла открывает карточку, перетаскивание — перемещение, щипок — масштаб</span></div>
+    </section>
+
+    <section class="tabpanel p-runm__feed" id="tab-feed" role="tabpanel" aria-labelledby="tab-feed-btn" hidden>
+      <div class="act act--user">
+        <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-user"/></svg></span></div>
+        <div class="act__main">
+          <div class="act__head"><b>Анна Волкова</b><span class="act__time">12:04</span></div>
+          <div class="act__text">Подготовить коммерческое предложение для компании Север к встрече 27 августа: пилот на 50 сотрудников.</div>
+        </div>
+      </div>
+      <div class="act act--agent">
+        <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-bot"/></svg></span></div>
+        <div class="act__main">
+          <div class="act__head"><b>Менеджер продаж</b><span class="tag">промежуточное</span><span class="act__time">12:05</span></div>
+          <div class="act__text">Принял входные данные. Передаю исследование клиента Аналитику продаж.</div>
+          <div class="act__block act__block--plan">
+            <div class="act__block-head"><svg class="ic ic-14"><use href="#i-flag"/></svg><span>План координатора</span></div>
+            <div class="act__block-body"><ul class="p-feed__plan">
+              <li class="is-done"><svg class="ic"><use href="#i-check-circle"/></svg>Исследовать компанию Север</li>
+              <li class="is-current"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Подготовить документ предложения</li>
+              <li class="is-todo"><svg class="ic"><use href="#i-clock"/></svg>Проверить условия и риски</li>
+              <li class="is-todo"><svg class="ic"><use href="#i-clock"/></svg>Согласование владельцем Проекта</li>
+            </ul></div>
+          </div>
+        </div>
+      </div>
+      <div class="act act--tool">
+        <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-tool"/></svg></span></div>
+        <div class="act__main">
+          <div class="act__head"><b>Аналитик продаж</b><span>инструмент</span><span class="act__time">12:07</span></div>
+          <div class="act__block">
+            <div class="act__block-head"><svg class="ic ic-14"><use href="#i-search"/></svg><span class="mono">Поиск по файлам Проекта</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>1,1 с</span></div>
+            <div class="act__block-body">Найдено 6 фрагментов в 2 файлах.</div>
+          </div>
+        </div>
+      </div>
+      <div class="act act--done">
+        <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-check"/></svg></span></div>
+        <div class="act__main">
+          <div class="act__head"><b>Аналитик продаж</b><span class="tag tag--ok">итог</span><span class="act__time">12:12</span></div>
+          <div class="act__text">Исследование готово: 7 подтверждённых фактов, 2 предположения, 3 вопроса.</div>
+          <div class="act__block act__block--file">
+            <div class="act__block-head"><svg class="ic ic-14"><use href="#i-file-text"/></svg><span>Факты о компании Север.md</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></div>
+            <div class="act__block-body"><a href="#/artifacts/facts-north">Открыть Artifact</a></div>
+          </div>
+        </div>
+      </div>
+      <div class="act act--tool">
+        <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-file"/></svg></span></div>
+        <div class="act__main">
+          <div class="act__head"><b>Редактор предложений</b><span>файл</span><span class="act__time">12:15</span></div>
+          <div class="act__block act__block--file">
+            <div class="act__block-head"><svg class="ic ic-14"><use href="#i-file"/></svg><span>Изменён: Коммерческое предложение — Север.docx</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></div>
+            <div class="act__block-body">+2 раздела · v1 черновик · <a href="#/artifacts/offer-north">Открыть Artifact</a></div>
+          </div>
+        </div>
+      </div>
+      <div class="act__sep">Соединение восстановлено · догружены события 171–184</div>
+      <div class="act act--agent">
+        <div class="act__rail"><span class="act__icon"><svg class="ic ic-spin"><use href="#i-spin"/></svg></span></div>
+        <div class="act__main">
+          <div class="act__head"><b>Редактор предложений</b><span class="tag tag--acc">выполняется</span><span class="act__time">12:16</span></div>
+          <div class="act__text">Собираю итоговую структуру документа · шаг 3 из 4.</div>
+        </div>
+      </div>
+      <div class="act__more">Показаны события с №1 по №184. Секреты, полный stdout и ответы провайдера не отображаются.</div>
+    </section>
+
+    <div class="p-runm__actions">
+      <button class="btn btn--lg" type="button" id="btn-feed"><svg class="ic"><use href="#i-activity"/></svg>Ход работы</button>
+      <button class="btn btn--lg btn--danger" type="button" id="btn-cancel">Отменить запуск</button>
+    </div>
+  </main>
+
+  <div class="layer">
+    <div class="menu" id="m-more" data-align="right">
+      <button class="menu__item" role="menuitem" aria-disabled="true" data-tip="Доступно после завершения попытки" data-tip-pos="left"><svg class="ic"><use href="#i-refresh"/></svg><span>Повторить попытку</span></button>
+      <a class="menu__item" role="menuitem" href="#/sessions/sales-north"><svg class="ic"><use href="#i-history"/></svg><span>Открыть сессию</span></a>
+      <button class="menu__item" role="menuitem" id="menu-copy"><svg class="ic"><use href="#i-link"/></svg><span>Скопировать ссылку</span></button>
+      <a class="menu__item" role="menuitem" href="#/audit?run=sales-north"><svg class="ic"><use href="#i-audit"/></svg><span>Аудит запуска</span></a>
+    </div>
+    <!-- inspector узла: немодальный bottom sheet, граф остаётся доступен -->
+    <div class="sheet p-runm__sheet" id="node-sheet" role="dialog" aria-labelledby="sheet-title" data-nonmodal>
+      <div class="sheet__grip"></div>
+      <div class="sheet__head" id="sheet-head"></div>
+      <div class="sheet__body" id="sheet-body"></div>
+      <div class="sheet__foot" id="sheet-foot"></div>
+    </div>
+  </div>
+</div>
+<p class="stage-note">Mobile-версия рабочей области запуска: граф и «Ход работы» переключаются вкладками; граф занимает всю доступную высоту, поддерживает перетаскивание и масштаб (колесо/щипок), кнопки масштаба увеличены до 36 px. Касание узла открывает компактный inspector как bottom sheet — немодальный, чтобы граф оставался виден; закрывается свайпом-крестиком или Escape. Внизу закреплены действия: «Ход работы» и «Отменить запуск» (destructive не является primary). Лента хода работы — те же типы блоков, что на desktop, в одну колонку без горизонтальной прокрутки. FAB Kodex закреплён над панелью действий.</p>
+<script src="assets/kodex.js"></script>
+<script>
+(function () {
+  const K = window.Kodex; const $ = K.$, $$ = K.$$, esc = K.esc, ic = K.ic;
+  const project = K.data.projects[0];
+  const frame = K.mount({ title: 'Подготовить предложение для компании Север', sub: 'Выполняется · 12 мин · попытка 1 · Процесс «Обработка нового лида v3»', back: true, nav: 'project.runs', project, decisions: 2, tabs: false, moreMenu: '#m-more',
+    kodexContext: { screen: 'Запуск', object: 'Подготовить предложение для компании Север', can: ['объяснить состояние узла', 'подготовить уточнение для сессии'] } });
+
+  const NODES = [
+    { id: 'root', kind: 'Процесс', title: 'Обработка нового лида', state: 'running', meta: '12:04 · попытка 1', x: 16, y: 236, root: true },
+    { id: 'coord', kind: 'Координатор', title: 'Менеджер продаж', initials: 'МП', tone: 'acc', state: 'running', phrase: 'Ожидает результаты параллельных ветвей', meta: '12 мин · ход 2 · попытка 1', x: 224, y: 222 },
+    { id: 'analyst', kind: 'ИИ-сотрудник', title: 'Аналитик продаж', initials: 'АП', tone: 'ok', state: 'done', phrase: 'Исследование клиента готово', meta: '6 мин · попытка 1', x: 464, y: 40 },
+    { id: 'editor', kind: 'ИИ-сотрудник', title: 'Редактор предложений', initials: 'РП', tone: 'acc', state: 'running', phrase: 'Собираю итоговую структуру документа', progress: 62, meta: '4 мин · ход 1 · попытка 1', x: 464, y: 200 },
+    { id: 'legal', kind: 'ИИ-сотрудник', title: 'Юридический консультант', initials: 'ЮК', tone: '', state: 'waiting', stateText: 'Ожидает входных данных', meta: 'не начат · попытка 0', x: 464, y: 390 },
+    { id: 'gate', kind: 'Решение человека', title: 'Согласовать предложение', state: 'pending', stateText: 'Предстоит', meta: 'решает владелец Проекта', x: 728, y: 236 },
+  ];
+  const EDGES = [
+    { from: 'root', to: 'coord', label: 'запуск', live: true },
+    { from: 'coord', to: 'analyst', label: 'передано', muted: true },
+    { from: 'coord', to: 'editor', label: 'передано', live: true },
+    { from: 'coord', to: 'legal', label: 'ожидает', dashed: true, muted: true },
+    { from: 'editor', to: 'gate', label: 'затем', dashed: true },
+    { from: 'legal', to: 'gate', dashed: true, muted: true },
+  ];
+  const GROUPS = [{ x: 444, y: 10, w: 216, h: 500, label: 'Параллельная ветка · до 2' }];
+  const STATE_PILL = { running: ['run', 'Выполняется'], done: ['ok', 'Завершён'], gate: ['gate', 'Ждёт решения'], error: ['err', 'Ошибка'], cancelled: ['cancel', 'Отменён'], pending: ['off', 'Не начат'], waiting: ['wait', 'Ожидает'] };
+  const DETAILS = {
+    root: { sub: 'Процесс · корневой Run', kv: [['Что запущено', 'Процесс «Обработка нового лида» v3'], ['Способ запуска', 'Вручную из Control Center · Анна Волкова'], ['Состав', '3 сотрудника · 1 решение человека'], ['Попытка', '1 · ход 1'], ['Время', 'начат 12:04 · идёт']], status: 'Выполняется: 1 из 3 ветвей завершена, документ готовится.', actions: [['Отменить запуск', 'btn--danger']] },
+    coord: { sub: 'Координатор Процесса', kv: [['Способ запуска', 'Координатор Процесса · запуск из Control Center'], ['Родитель', 'Корневой Run (этот экран)'], ['Задача', 'Провести лид «Север» по этапам Процесса.'], ['Попытка', '1 · ход 2'], ['Время', 'начат 12:05 · 12 мин'], ['Модель', 'gpt-5.1 · Стандартный runtime'], ['Дочерние Run', '<a href="#/runs/child-analyst">Аналитик продаж</a> · <a href="#/runs/child-editor">Редактор предложений</a>']], status: 'Ожидает результаты параллельных ветвей · получен 1 из 2.', actions: [['Ход работы узла', ''], ['Открыть сессию', '']] },
+    analyst: { sub: 'ИИ-сотрудник · дочерний Run', kv: [['Способ запуска', 'Делегирование от Менеджера продаж'], ['Родитель', 'Менеджер продаж · координатор'], ['Этот узел', '<a href="#/runs/child-analyst">Открыть дочерний Run</a>'], ['Задача', 'Исследовать компанию Север: факты, потребности, риски.'], ['Попытка', '1 · ход 1'], ['Время', '12:06 → 12:12 · 6 мин'], ['Окружение', 'Офисные документы и PDF · rev 4']], status: 'Завершён. Результат передан координатору одним обратным вызовом.', actions: [['Ход работы узла', ''], ['Открыть сессию', '']] },
+    editor: { sub: 'ИИ-сотрудник · дочерний Run', kv: [['Способ запуска', 'Делегирование от Менеджера продаж · типизированный инструмент'], ['Родитель', 'Менеджер продаж · координатор'], ['Этот узел', '<a href="#/runs/child-editor">Открыть дочерний Run</a>'], ['Задача', 'Подготовить коммерческое предложение для компании Север: структура, состав работ, сроки, стоимость пилота.'], ['Попытка', '1 · ход 1'], ['Время', 'начат 12:13 · 4 мин'], ['Модель', 'gpt-5.1 · Стандартный runtime'], ['Окружение', 'Офисные документы и PDF · rev 4']], status: 'Собираю итоговую структуру документа · шаг 3 из 4', progress: 62, actions: [['Ход работы узла', ''], ['Отменить ветку', 'btn--danger']] },
+    legal: { sub: 'ИИ-сотрудник · этап Процесса', kv: [['Способ запуска', 'Делегирование от координатора · этап «Проверить условия»'], ['Этот узел', 'Дочерний Run ещё не создан'], ['Попытка', '0 · этап не начат'], ['Время', 'после черновика документа'], ['Окружение', 'Юридические документы (OCR) · rev 2']], status: 'Этап ещё не начат: приглушённый узел — план Процесса, а не выполнение.', actions: [] },
+    gate: { sub: 'Решение человека', kv: [['Кто решает', 'Владелец Проекта или участники с правом «Принимать решения»'], ['Запросит', 'Менеджер продаж · шаг «Согласование»'], ['Откроется', 'после завершения ветвей'], ['Последствия', 'Утвердить — продолжит Процесс · Изменения — новый ход · Отклонить — остановит путь']], status: 'Предстоит. Появится в «Решениях» и на главной, когда ветви завершатся.', actions: [] },
+  };
+  const sheet = $('#node-sheet', frame);
+  function renderSheet(id) {
+    const n = NODES.find((x) => x.id === id); const d = DETAILS[id]; const [pk, pt] = STATE_PILL[n.state] || STATE_PILL.pending;
+    $('#sheet-head', frame).innerHTML = `${n.initials ? K.avatar(n.initials, 36, n.tone) : `<span class="avatar avatar--36 avatar--sq ${id === 'gate' ? 'avatar--warn' : ''}">${ic(id === 'gate' ? 'shield' : 'wf', 18)}</span>`}<div class="sheet__title" id="sheet-title"><div>${esc(n.title)}</div><div class="row gap-8 row--wrap"><span class="xs mut">${d.sub}</span>${K.pill(pk, n.stateText || pt, true)}</div></div><button class="m-icon" type="button" aria-label="Закрыть карточку узла" data-close>${ic('x')}</button>`;
+    $('#sheet-body', frame).innerHTML = `<div class="p-runm__status"><div class="p-runm__status-row">${ic('activity', 14)}<span>${esc(d.status)}</span></div>${d.progress != null ? `<div class="row gap-8"><span class="progress"><span class="progress__bar" style="width:${d.progress}%"></span></span><span class="xs mut mono nowrap">${d.progress} %</span></div>` : ''}</div><div class="kv mt-10">${d.kv.map(([k, v]) => `<div class="kv__row"><span class="kv__k">${k}</span><span class="kv__v">${v}</span></div>`).join('')}</div>`;
+    $('#sheet-foot', frame).innerHTML = d.actions.length ? d.actions.map(([t, c]) => `<button class="btn btn--lg ${c}" type="button" ${t === 'Ход работы узла' ? 'data-open-feed' : ''}>${t === 'Ход работы узла' ? ic('activity') : ''}${esc(t)}</button>`).join('') : '<span class="xs mut" style="padding:6px 0">Действия появятся, когда этап начнётся.</span>';
+  }
+  let g;
+  const graphRoot = $('#graph', frame);
+  // Пока открыт sheet, граф вписывается в видимую часть canvas над ним; после закрытия — «по размеру» целиком.
+  function fitVisible() {
+    if (!g) return;
+    const open = sheet.classList.contains('is-open');
+    const cr = graphRoot.getBoundingClientRect(); const sr = sheet.getBoundingClientRect();
+    const overlap = open ? Math.max(0, cr.bottom - sr.top) : 0;
+    if (!overlap) { g.fit(); return; }
+    const pad = 12, W = graphRoot.clientWidth, H = graphRoot.clientHeight - overlap;
+    let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    $$('.node', g.stage).forEach((el) => { const n = NODES.find((x) => x.id === el.dataset.node); minX = Math.min(minX, n.x); minY = Math.min(minY, n.y); maxX = Math.max(maxX, n.x + 176); maxY = Math.max(maxY, n.y + el.offsetHeight); });
+    GROUPS.forEach((gr) => { minX = Math.min(minX, gr.x); minY = Math.min(minY, gr.y); maxX = Math.max(maxX, gr.x + gr.w); maxY = Math.max(maxY, gr.y + gr.h); });
+    const scale = Math.min(1.1, Math.max(0.25, Math.min((W - pad * 2) / (maxX - minX), (H - pad * 2) / (maxY - minY))));
+    g.setView({ scale, tx: (W - (maxX - minX) * scale) / 2 - minX * scale, ty: (H - (maxY - minY) * scale) / 2 - minY * scale });
+  }
+  requestAnimationFrame(() => {
+    g = K.canvas({ root: graphRoot, nodes: NODES, edges: EDGES, groups: GROUPS, selected: 'editor', minimap: false, legend: false, fitPadding: 16, onSelect: (n) => { renderSheet(n.id); if (!sheet.classList.contains('is-open')) { K.openOverlay(sheet, false); setTimeout(fitVisible, 230); } } });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { g.redraw(); fitVisible(); });
+    renderSheet('editor'); K.openOverlay(sheet, true);
+    requestAnimationFrame(() => requestAnimationFrame(fitVisible));
+  });
+  sheet.addEventListener('kodex:close', () => { if (!$('#tab-graph', frame).hidden) setTimeout(() => g && g.fit(), 220); });
+  frame.addEventListener('kodex:tab', (e) => { if (e.detail.controls === 'tab-graph' && g) requestAnimationFrame(fitVisible); });
+  frame.addEventListener('click', (e) => {
+    if (e.target.closest('#btn-feed') || e.target.closest('[data-open-feed]')) { if (sheet.classList.contains('is-open')) K.closeOverlay(sheet); K.selectTab($('#tab-feed-btn', frame)); return; }
+    if (e.target.closest('#menu-copy')) K.toast(frame, 'Ссылка на запуск скопирована', 'link');
+    if (e.target.closest('#btn-cancel')) K.toast(frame, 'Отмена запуска требует подтверждения', 'alert');
+  });
+  window.__runPage = { get graph() { return g; }, sheet };
+})();
+</script>
+</body>
+</html>

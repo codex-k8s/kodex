@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · ИИ-сотрудники · Сетка карточек</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-agents .agent-card { padding: 14px 16px; gap: 10px; min-height: 196px; }
+  .p-agents .agent-card__head { display: flex; align-items: flex-start; gap: 12px; }
+  .p-agents .agent-card__name { font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+  .p-agents .agent-card__purpose { font-size: 12px; color: var(--sec); line-height: 1.4; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 34px; }
+  .p-agents .agent-card__tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .p-agents .agent-card__activity { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; color: var(--ink-2); line-height: 1.4; padding: 8px 10px; border-radius: var(--r-2); background: var(--bg-subtle); border: 1px solid var(--line-hair); min-height: 38px; }
+  .p-agents .agent-card__activity .ic { flex: 0 0 auto; margin-top: 1px; color: var(--mut); }
+  .p-agents .agent-card__activity.is-idle { color: var(--mut); }
+  .p-agents .agent-card__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 4px; }
+  .p-agents .agent-card__menu { margin: -4px -6px 0 0; }
+  .p-agents .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 14px; }
+  .p-agents .toolbar .search { width: 320px; }
+  .p-agents .avatar-wrap { position: relative; flex: 0 0 auto; }
+  .p-agents .avatar-wrap__gen { position: absolute; right: -3px; bottom: -3px; width: 16px; height: 16px; border-radius: 8px; background: var(--acc); color: #fff; border: 2px solid var(--bg); display: inline-flex; align-items: center; justify-content: center; }
+  .p-agents .avatar-wrap__gen .ic { width: 9px; height: 9px; stroke-width: 2.6; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">ИИ-сотрудники · сетка карточек (вид по умолчанию) · desktop 1440×1024 · маршрут <code>/projects/:projectRef/agents</code></p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page p-agents" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><span>ИИ-сотрудники</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">ИИ-сотрудники</h1><span class="tab__count">8 в Проекте</span></div>
+          <div class="page-sub">Команда Проекта «Корпоративные продажи»: назначение, состояние и текущая работа каждого сотрудника</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn--lg" type="button" id="btn-create-kodex"><svg class="ic"><use href="#i-bot"/></svg>Создать с Kodex</button>
+          <a class="btn btn--primary btn--lg" href="#"><svg class="ic"><use href="#i-plus"/></svg>Создать сотрудника</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body col gap-14">
+      <div class="toolbar" id="agents-toolbar">
+        <label class="search"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Найти сотрудника по имени или назначению" aria-label="Поиск сотрудников"><button class="search__clear" type="button" aria-label="Очистить"><svg class="ic ic-12"><use href="#i-x"/></svg></button></label>
+        <button class="chip chip--filter" type="button" data-menu="#menu-filter-state" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-filter"/></svg>Состояние: все<svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+        <div class="menu" id="menu-filter-state">
+          <button class="menu__item" role="menuitemradio" aria-checked="true">Все состояния</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-check"/></svg>Готов</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-spin"/></svg>Выполняет</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-shield"/></svg>Ждёт решения</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-alert"/></svg>Ошибка</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-minus"/></svg>Отключён</button>
+        </div>
+        <button class="chip chip--filter" type="button" data-menu="#menu-filter-role" aria-haspopup="menu" aria-expanded="false">Роль: все<svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+        <div class="menu" id="menu-filter-role">
+          <button class="menu__item" role="menuitemradio" aria-checked="true">Все роли</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false">Аналитик</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false">Редактор</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false">Консультант</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false">Координатор</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false">Классификатор</button>
+        </div>
+        <span class="toolbar__spacer"></span>
+        <span class="toolbar__count">8 из 8</span>
+        <div class="seg" data-seg data-view-target="#agents-view" role="group" aria-label="Вид списка">
+          <button class="seg__btn seg__btn--icon" type="button" data-view="grid" aria-pressed="true" aria-label="Сетка карточек" data-tip="Сетка карточек" data-tip-pos="bottom"><svg class="ic"><use href="#i-grid"/></svg></button>
+          <button class="seg__btn seg__btn--icon" type="button" data-view="list" aria-pressed="false" aria-label="Плотная таблица" data-tip="Плотная таблица" data-tip-pos="bottom"><svg class="ic"><use href="#i-list"/></svg></button>
+        </div>
+      </div>
+
+      <div id="agents-view" class="agent-grid is-grid" data-view="grid" role="list" aria-label="Сотрудники Проекта"></div>
+
+      <div class="menu" id="menu-agent-more" data-align="right">
+        <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-run"/></svg>Запустить</button>
+        <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-edit"/></svg>Изменить профиль</button>
+        <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-copy"/></svg>Дублировать</button>
+        <div class="menu__sep"></div>
+        <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-pause"/></svg>Отключить</button>
+        <button class="menu__item menu__item--danger" role="menuitem"><svg class="ic"><use href="#i-archive"/></svg>Архивировать</button>
+      </div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Список сотрудников по умолчанию — адаптивная сетка карточек одного размера: аватар (сгенерированный Kodex, загруженный или инициалы-fallback), имя, назначение, роль, состояние текстом и иконкой, model/runtime и текущая активность. Переключатель «сетка / таблица» сохраняется в настройках пользователя (в макете — localStorage) и не меняет размеры toolbar. Поиск и фильтры выполняются на сервере. Две точки создания: обычная форма и «Создать с Kodex» — открывает контекстный drawer помощника, который предложит план.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  const cfg = {
+    nav: 'project.agents', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'ИИ-сотрудники', object: 'Проект «Корпоративные продажи»', can: ['создать сотрудника по описанию задачи', 'объяснить, чем сейчас занят сотрудник', 'предложить аватар и инструкции'] },
+  };
+  Kodex.mount(cfg);
+
+  const ACT = {
+    a1: { text: 'Свободен · последний запуск 2 ч назад', idle: true },
+    a2: { text: 'Собираю итоговую структуру документа · запуск «Предложение для компании Север»' },
+    a3: { text: 'Ждёт решения: «Согласовать условия для компании Восток»' },
+    a4: { text: 'Координирует Процесс «Обработка нового лида» · 2 ветви' },
+    a5: { text: 'Отключён · не участвует в запусках', idle: true },
+    a6: { text: 'Свободен · последний запуск вчера', idle: true },
+    a7: { text: 'Ошибка на последнем ходе · требует внимания' },
+    a8: { text: 'Свободен · проверок сегодня: 3', idle: true },
+  };
+  const STATE = { ok: ['ok', 'check', 'Готов'], run: ['run', 'spin', 'Выполняет'], gate: ['gate', 'shield', 'Ждёт решения'], err: ['err', 'alert', 'Ошибка'], off: ['off', 'minus', 'Отключён'] };
+  const GENERATED = new Set(['a2', 'a6']);
+  const UPLOADED_SVG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#E3E9F0"/><circle cx="32" cy="24" r="11" fill="#34445A"/><path d="M10 58c2-13 11-20 22-20s20 7 22 20Z" fill="#34445A"/></svg>');
+  function avatarFor(a) {
+    if (a.ref === 'a4') return `<span class="avatar avatar--44" aria-hidden="true"><img src="${UPLOADED_SVG}" alt=""></span>`;
+    if (GENERATED.has(a.ref)) return `<span class="avatar-wrap" data-tip="Аватар создан Kodex" data-tip-pos="bottom" tabindex="0" aria-label="Аватар создан Kodex"><span class="avatar avatar--44 avatar--gen" aria-hidden="true">${a.initials}</span><span class="avatar-wrap__gen" aria-hidden="true"><svg class="ic"><use href="#i-sparkle"/></svg></span></span>`;
+    return Kodex.avatar(a.initials, 44, a.tone);
+  }
+  function card(a) {
+    const [mod, icon, label] = STATE[a.state];
+    const act = ACT[a.ref];
+    return `<article class="card agent-card" role="listitem" aria-label="${Kodex.esc(a.name)}">
+      <div class="agent-card__head">
+        ${avatarFor(a)}
+        <div class="grow">
+          <div class="agent-card__name"><a href="#" style="color:inherit">${Kodex.esc(a.name)}</a></div>
+          <div class="agent-card__purpose">${Kodex.esc(a.purpose)}</div>
+        </div>
+        <button class="btn btn--icon btn--ghost btn--sm agent-card__menu" type="button" aria-label="Ещё действия: ${Kodex.esc(a.name)}" data-menu="#menu-agent-more" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+      </div>
+      <div class="agent-card__tags">
+        <span class="tag">${Kodex.esc(a.role)}</span>
+        <span class="tag tag--mono">${Kodex.esc(a.model)}</span>
+        <span class="tag">${Kodex.esc(a.runtime)} runtime</span>
+      </div>
+      <div class="agent-card__activity${act.idle ? ' is-idle' : ''}"><svg class="ic ic-14"><use href="#i-${act.idle ? 'clock' : 'activity'}"/></svg><span>${Kodex.esc(act.text)}</span></div>
+      <div class="agent-card__foot">
+        <span class="pill pill--${mod} pill--sm"><svg class="ic${mod === 'run' ? ' ic-spin' : ''}"><use href="#i-${icon}"/></svg>${label}</span>
+        <a class="btn btn--sm" href="#">${a.state === 'off' ? 'Включить' : 'Открыть'}</a>
+      </div>
+    </article>`;
+  }
+  const view = document.getElementById('agents-view');
+  view.innerHTML = Kodex.data.agents.map(card).join('');
+  // Сохранение выбранного вида (пользовательская настройка); при значении list — переход на табличный экран
+  try { localStorage.setItem('kodex.agents.view', 'grid'); } catch (e) {}
+  document.querySelector('[data-seg]').addEventListener('kodex:seg', (e) => {
+    try { localStorage.setItem('kodex.agents.view', e.detail.value); } catch (err) {}
+    if (e.detail.value === 'list') Kodex.toast(document.getElementById('frame'), 'Вид «Таблица» сохранён — см. agents-table-desktop.html', 'list');
+  });
+  document.getElementById('btn-create-kodex').addEventListener('click', () => Kodex.openKodex(document.getElementById('frame'), cfg));
+</script>
+</body>
+</html>

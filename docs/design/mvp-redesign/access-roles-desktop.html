@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Доступ · Роли</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-access .page-head .tabs { border-bottom: 0; padding: 0; margin-top: 8px; }
+  .p-access .page-head .tab { height: 38px; }
+  .p-access__wrap { flex: 1 1 auto; min-width: 0; width: 100%; display: flex; gap: 16px; min-height: 0; padding: 14px 24px 20px; }
+  .p-access .modal-wrap:not(.is-open) { display: none; }
+  .p-access .kv--narrow .kv__k { flex-basis: 108px; }
+  .p-access__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
+  .p-access__aside { flex: 0 0 340px; display: flex; flex-direction: column; min-height: 0; padding-bottom: 60px; }
+  .p-access__aside > .card { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  .p-access__aside .card__scroll { padding: 12px 16px 16px; }
+  .p-access .table { table-layout: fixed; width: 100%; }
+  .p-access .table th { white-space: normal; line-height: 1.25; padding: 8px 8px; }
+  .p-access .table td { vertical-align: middle; padding: 10px 8px; }
+  .p-access .table th:first-child, .p-access .table td:first-child { padding-left: 14px; }
+  .p-access .table tbody tr { cursor: pointer; }
+  .p-access .perm { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line-hair); }
+  .p-access .perm:first-child { border-top: 0; }
+  .p-access .perm__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .p-access .perm__name { font-size: 12.5px; font-weight: 500; }
+  .p-access .perm__desc { font-size: 11.5px; color: var(--mut); line-height: 1.4; }
+  .p-access .perm__meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--sec); margin-top: 2px; }
+  .p-access .ver { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line-hair); font-size: 12px; }
+  .p-access .ver:first-child { border-top: 0; }
+  .frame--tablet .p-access__aside { display: none; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Участники и доступ · «Роли» · desktop 1440×1024 · маршрут <code>/administration/access/roles</code></p>
+<div class="frame frame--desktop p-access" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head page-head--tabs">
+      <div class="crumbs"><a href="#">Администрирование</a><span>/</span><span>Участники и доступ</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Участники и доступ</h1></div>
+          <div class="page-sub">Identity и группы управляет Keycloak (OIDC); прикладные полномочия — Kodex</div>
+        </div>
+        <div class="page-actions">
+          <div class="seg" data-seg role="group" aria-label="Область доступа">
+            <button class="seg__btn" type="button" aria-pressed="true">Организация</button>
+            <button class="seg__btn" type="button" aria-pressed="false">Проект «Корпоративные продажи»</button>
+          </div>
+          <button class="btn btn--lg" type="button" data-menu="#menu-presets" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-sparkle"/></svg>Из preset<svg class="ic"><use href="#i-chev"/></svg></button>
+          <a class="btn btn--primary btn--lg" href="access-role-editor-desktop.html"><svg class="ic"><use href="#i-plus"/></svg>Создать роль</a>
+        </div>
+      </div>
+      <div class="tabs tabs--inline" role="tablist" aria-label="Разделы доступа">
+        <a class="tab" role="tab" aria-selected="false" tabindex="-1" href="access-members-desktop.html">Участники <span class="tab__count">640</span></a>
+        <a class="tab" role="tab" aria-selected="false" tabindex="-1" href="access-groups-desktop.html">Группы OIDC <span class="tab__count">10</span></a>
+        <a class="tab" role="tab" aria-selected="true" href="access-roles-desktop.html">Роли <span class="tab__count">8</span></a>
+        <a class="tab" role="tab" aria-selected="false" tabindex="-1" href="access-effective-desktop.html">Эффективный доступ</a>
+      </div>
+    </div>
+
+    <div class="page-body page-body--flush">
+      <div class="p-access__wrap">
+        <div class="p-access__main">
+          <section class="card" aria-labelledby="sec-system">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-system">Системные роли <span class="tab__count">5</span></h2>
+              <span class="tag" data-tip="Определены платформой; состав полномочий не редактируется" data-tip-pos="left"><svg class="ic ic-12"><use href="#i-lock"/></svg>Неизменяемы</span>
+            </div>
+            <table class="table" aria-label="Системные роли">
+              <thead><tr><th style="width:22%">Роль</th><th style="width:44%">Что даёт</th><th style="width:12%">Область</th><th style="width:11%" class="num">Участников</th><th style="width:11%"></th></tr></thead>
+              <tbody>
+                <tr><td><div class="row gap-8"><span class="cell-title">Владелец</span><span class="tag">Системная</span></div></td><td class="sm">Полное управление организацией, участниками и платформой. Последний Владелец защищён от удаления.</td><td class="sm">Организация</td><td class="num">1</td><td class="num"><a class="btn btn--sm" href="#">Посмотреть</a></td></tr>
+                <tr><td><div class="row gap-8"><span class="cell-title">Администратор</span><span class="tag">Системная</span></div></td><td class="sm">Настройка платформы, интеграций, окружений и доступа без права удалить Владельца.</td><td class="sm">Организация</td><td class="num">14</td><td class="num"><a class="btn btn--sm" href="#">Посмотреть</a></td></tr>
+                <tr><td><div class="row gap-8"><span class="cell-title">Оператор</span><span class="tag">Системная</span></div></td><td class="sm">Запуск работы, принятие решений и настройка сотрудников в разрешённых Проектах.</td><td class="sm">Организация · Проект</td><td class="num">62</td><td class="num"><a class="btn btn--sm" href="#">Посмотреть</a></td></tr>
+                <tr><td><div class="row gap-8"><span class="cell-title">Участник</span><span class="tag">Системная</span></div></td><td class="sm">Запуск работы и просмотр результатов там, где выдан доступ внутри Проекта.</td><td class="sm">Организация · Проект</td><td class="num">551</td><td class="num"><a class="btn btn--sm" href="#">Посмотреть</a></td></tr>
+                <tr><td><div class="row gap-8"><span class="cell-title">Аудитор</span><span class="tag">Системная</span></div></td><td class="sm">Только просмотр аудита и результатов, без изменений.</td><td class="sm">Организация</td><td class="num">12</td><td class="num"><a class="btn btn--sm" href="#">Посмотреть</a></td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section class="card" aria-labelledby="sec-custom">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-custom">Пользовательские роли <span class="tab__count">3</span></h2>
+              <span class="xs mut">Каждое изменение создаёт новую версию; привязки ссылаются на конкретную версию</span>
+            </div>
+            <table class="table table--hover" aria-label="Пользовательские роли">
+              <thead><tr><th style="width:24%">Роль</th><th style="width:30%">Описание</th><th style="width:15%">Область</th><th style="width:11%">Привязок</th><th style="width:14%">Изменена</th><th style="width:44px"></th></tr></thead>
+              <tbody id="custom-body" data-select-group>
+                <tr data-id="r-launch" class="is-selected" aria-selected="true"><td><div class="row gap-8"><span class="cell-title truncate">Запуск выбранных сотрудников</span><span class="tag tag--mono">v2</span></div></td><td class="sm">Видеть один Проект и запускать только перечисленных ИИ-сотрудников</td><td class="sm">Проект + сотрудники</td><td class="num" style="text-align:left">2</td><td><span class="sm">сегодня, 10:20</span><div class="cell-sub">Анна Волкова</div></td><td class="num"><button class="btn btn--sm btn--icon btn--ghost" type="button" data-menu="#menu-role-actions" aria-haspopup="menu" aria-expanded="false" aria-label="Действия с ролью"><svg class="ic"><use href="#i-dots"/></svg></button></td></tr>
+                <tr data-id="r-approver" aria-selected="false"><td><div class="row gap-8"><span class="cell-title truncate">Согласующий по продажам</span><span class="tag tag--mono">v1</span></div></td><td class="sm">Принимать решения Human Gate в Проекте без права запускать работу</td><td class="sm">Проект</td><td class="num" style="text-align:left">1</td><td><span class="sm">22 августа</span><div class="cell-sub">Михаил Орлов</div></td><td class="num"><button class="btn btn--sm btn--icon btn--ghost" type="button" data-menu="#menu-role-actions" aria-haspopup="menu" aria-expanded="false" aria-label="Действия с ролью"><svg class="ic"><use href="#i-dots"/></svg></button></td></tr>
+                <tr data-id="r-audit" aria-selected="false"><td><div class="row gap-8"><span class="cell-title truncate">Только просмотр аудита</span><span class="tag tag--mono">v3</span></div></td><td class="sm">Чтение журнала действий и результатов без доступа к настройкам</td><td class="sm">Организация</td><td class="num" style="text-align:left">1</td><td><span class="sm">18 августа</span><div class="cell-sub">Дмитрий Соловьёв</div></td><td class="num"><button class="btn btn--sm btn--icon btn--ghost" type="button" data-menu="#menu-role-actions" aria-haspopup="menu" aria-expanded="false" aria-label="Действия с ролью"><svg class="ic"><use href="#i-dots"/></svg></button></td></tr>
+              </tbody>
+            </table>
+            <div class="card__foot"><svg class="ic"><use href="#i-archive"/></svg><span>Архивные версии и роли доступны по ссылке «История» и продолжают действовать в старых привязках до переназначения.</span><a class="xs right" href="#">История</a></div>
+          </section>
+        </div>
+
+        <aside class="p-access__aside" aria-label="Выбранная роль">
+          <div class="card" id="role-panel"></div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <div class="menu menu--wide" id="menu-presets">
+    <div class="menu__title">Готовые preset</div>
+    <a class="menu__item" href="access-role-editor-desktop.html"><svg class="ic"><use href="#i-bot"/></svg><span class="menu__text"><span>Один Проект · запуск двух сотрудников</span><small>Видеть Проект и запускать только выбранных ИИ-сотрудников</small></span></a>
+    <a class="menu__item" href="#"><svg class="ic"><use href="#i-decision"/></svg><span class="menu__text"><span>Согласующий</span><small>Принимать решения Human Gate без запуска работы</small></span></a>
+    <a class="menu__item" href="#"><svg class="ic"><use href="#i-eye"/></svg><span class="menu__text"><span>Наблюдатель Проекта</span><small>Просмотр запусков и результатов одного Проекта</small></span></a>
+  </div>
+  <div class="menu" id="menu-role-actions">
+    <a class="menu__item" href="access-role-editor-desktop.html"><svg class="ic"><use href="#i-edit"/></svg><span class="menu__text"><span>Изменить</span><small>Создаст новую версию роли</small></span></a>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-copy"/></svg>Дублировать</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-history"/></svg>История версий</button>
+    <div class="menu__sep"></div>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-archive"/></svg>Архивировать</button>
+  </div>
+</div>
+<p class="stage-note">Роли разделены на системные (видимы, неизменяемы, с числом участников) и пользовательские (версионируются: «Изменить» создаёт новую версию, привязки ссылаются на конкретную версию). Панель роли перечисляет полномочия с русским названием, описанием действия, риском и типом области. Создание — из чистого листа или из preset; preset «Один Проект · запуск двух сотрудников» ведёт в редактор.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'admin', project: null, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Участники и доступ', object: 'Роли', can: ['собрать роль из описания словами и показать план', 'сравнить версии роли', 'объяснить, где используется роль'] },
+  });
+  (function () {
+    const esc = Kodex.esc;
+    const RISK = { read: ['risk', 'Чтение'], write: ['risk risk--write', 'Изменение'], approve: ['risk risk--external', 'Решение'], admin: ['risk risk--admin', 'Администрирование'] };
+    const risk = (r) => `<span class="${RISK[r][0]}">${RISK[r][1]}</span>`;
+    const PERMS = {
+      'project.view': ['Просмотр Проекта', 'Видеть обзор, сотрудников, Процессы и запуски', 'read', 'Проект'],
+      'agent.view': ['Просмотр ИИ-сотрудника', 'Открывать профиль, инструкции и runtime без изменений', 'read', 'ИИ-сотрудник'],
+      'agent.launch': ['Запуск ИИ-сотрудника', 'Создавать запуск и продолжать сессии выбранных сотрудников', 'write', 'ИИ-сотрудник'],
+      'run.view': ['Просмотр запусков', 'Видеть граф, ход работы и результаты', 'read', 'Проект'],
+      'run.cancel.own': ['Отмена своих запусков', 'Останавливать запуски, начатые самим участником', 'write', 'Запуск'],
+      'artifact.download': ['Скачивание результатов', 'Получать файлы результатов по одноразовой ссылке', 'read', 'Файл'],
+      'gate.resolve': ['Принятие решений', 'Утверждать, отклонять и возвращать на доработку Human Gate', 'approve', 'Решение'],
+      'audit.view': ['Просмотр аудита', 'Читать журнал действий', 'read', 'Организация'],
+    };
+    const ROLES = {
+      'r-launch': { name: 'Запуск выбранных сотрудников', ver: 'v2', scope: 'Проект + конкретные ИИ-сотрудники', desc: 'Видеть один Проект и запускать только перечисленных ИИ-сотрудников. Сотрудники задаются в привязке.', perms: ['project.view', 'agent.view', 'agent.launch', 'run.view', 'run.cancel.own', 'artifact.download'], used: ['OIDC-группа sales-all · Проект «Корпоративные продажи» · Аналитик продаж, Редактор предложений', 'Прямая привязка · Елена Крылова · Проект «Корпоративные продажи»'], versions: [['v2', 'активна', 'сегодня, 10:20 · Анна Волкова'], ['v1', 'архив', '15 августа · Анна Волкова']] },
+      'r-approver': { name: 'Согласующий по продажам', ver: 'v1', scope: 'Проект', desc: 'Принимать решения Human Gate в Проекте без права запускать работу.', perms: ['project.view', 'run.view', 'gate.resolve'], used: ['OIDC-группа sales-managers · Проект «Корпоративные продажи»'], versions: [['v1', 'активна', '22 августа · Михаил Орлов']] },
+      'r-audit': { name: 'Только просмотр аудита', ver: 'v3', scope: 'Организация', desc: 'Чтение журнала действий и результатов без доступа к настройкам.', perms: ['audit.view', 'run.view'], used: ['OIDC-группа auditors · Организация'], versions: [['v3', 'активна', '18 августа · Дмитрий Соловьёв'], ['v2', 'архив', '3 августа'], ['v1', 'архив', '20 июля']] },
+    };
+    function renderPanel(id) {
+      const r = ROLES[id];
+      document.getElementById('role-panel').innerHTML = `
+        <div class="card__head card__head--line">
+          <div class="col gap-2 grow" style="min-width:0"><div class="h3">${esc(r.name)}</div><div class="row gap-6"><span class="tag tag--mono">${esc(r.ver)}</span><span class="tag tag--acc">Пользовательская</span></div></div>
+        </div>
+        <div class="card__scroll">
+          <div class="sm ink2" style="line-height:1.5">${esc(r.desc)}</div>
+          <div class="kv kv--narrow mt-10">
+            <div class="kv__row"><span class="kv__k">Тип области</span><span class="kv__v">${esc(r.scope)}</span></div>
+            <div class="kv__row"><span class="kv__k">Запреты</span><span class="kv__v">нет — только разрешения</span></div>
+          </div>
+          <div class="row row--between mt-14"><div class="sec-title">Полномочия</div><span class="tab__count">${r.perms.length}</span></div>
+          <div class="mt-4">${r.perms.map((k) => { const [n, d, rk, sc] = PERMS[k]; return `<div class="perm"><div class="perm__text"><span class="perm__name">${esc(n)}</span><span class="perm__desc">${esc(d)}</span><span class="perm__meta">${risk(rk)}<span>·</span><span>область: ${esc(sc)}</span></span></div></div>`; }).join('')}</div>
+          <div class="row row--between mt-14"><div class="sec-title">Где используется</div><span class="tab__count">${r.used.length}</span></div>
+          <div class="mt-4 col gap-6">${r.used.map((u) => `<div class="sm ink2" style="line-height:1.45">${esc(u)}</div>`).join('')}</div>
+          <div class="sec-title mt-14">Версии</div>
+          <div class="mt-4">${r.versions.map(([v, st, meta]) => `<div class="ver"><span class="mono b" style="width:26px">${v}</span>${st === 'активна' ? '<span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активна</span>' : '<span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-archive"/></svg>Архив</span>'}<span class="xs mut right">${esc(meta)}</span></div>`).join('')}</div>
+        </div>
+        <div class="card__foot card__foot--actions"><button class="btn" type="button"><svg class="ic"><use href="#i-copy"/></svg>Дублировать</button><a class="btn btn--primary" href="access-role-editor-desktop.html"><svg class="ic"><use href="#i-edit"/></svg>Изменить → ${esc('v' + (parseInt(r.ver.slice(1), 10) + 1))}</a></div>`;
+    }
+    const body = document.getElementById('custom-body');
+    body.addEventListener('click', (e) => { if (e.target.closest('button')) return; const tr = e.target.closest('tr[data-id]'); if (!tr) return; body.querySelectorAll('tr').forEach((r) => { const on = r === tr; r.classList.toggle('is-selected', on); r.setAttribute('aria-selected', on); }); renderPanel(tr.dataset.id); });
+    renderPanel('r-launch');
+  })();
+</script>
+</body>
+</html>

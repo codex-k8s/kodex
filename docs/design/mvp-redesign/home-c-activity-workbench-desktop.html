@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Главная · C. Лента активности</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-homec .page-body { display: flex; flex-direction: column; gap: 14px; padding: 14px 24px 0; }
+  .p-homec .alert-strip { display: flex; gap: 10px; flex: 0 0 auto; }
+  .p-homec .alert-strip__item { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 12px; border: 1px solid var(--line); border-radius: var(--r-3); background: var(--bg); }
+  .p-homec .alert-strip__item--gate { border-color: var(--warn-line); background: var(--warn-soft); }
+  .p-homec .alert-strip__item--err { border-color: var(--err-line); background: var(--err-soft); }
+  .p-homec .alert-strip__item .ic { flex: 0 0 auto; color: var(--sec); }
+  .p-homec .alert-strip__item--gate .ic { color: var(--warn); }
+  .p-homec .alert-strip__item--err .ic { color: var(--err); }
+  .p-homec .alert-strip__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .p-homec .alert-strip__title { font-size: 12.5px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .p-homec .alert-strip__sub { font-size: 11px; color: var(--mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-homec .workbench { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; padding-bottom: 20px; }
+  .p-homec .feed { display: flex; flex-direction: column; min-height: 0; }
+  .p-homec .feed__filters { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line-hair); }
+  .p-homec .feed__filters-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .p-homec .feed__filters-label { font-size: 11px; color: var(--mut); width: 64px; flex: 0 0 64px; }
+  .p-homec .feed__scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 16px 0; }
+  .p-homec .feed__list .act { padding: 10px 0; }
+  .p-homec .act__actions { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 2px; }
+  .p-homec .act__text .file { display: inline-flex; align-items: center; gap: 5px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg-subtle); font-size: 11.5px; }
+  .p-homec .aside { display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow: auto; }
+  .p-homec .list-row__sub .source .ic { width: 13px; height: 13px; }
+  .frame--tablet.p-homec .workbench { grid-template-columns: minmax(0, 1fr); }
+  .frame--tablet.p-homec .aside { display: none; }
+  .frame--tablet.p-homec .alert-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Главная · вариант C «Лента активности» · desktop 1440×1024 · маршрут <code>/</code></p>
+<div class="frame frame--desktop p-homec" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><span>Главная</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Добрый день, Анна</h1></div>
+          <div class="page-sub">Что произошло с вашими ИИ-сотрудниками и что требует ответа</div>
+        </div>
+        <div class="page-actions">
+          <a class="btn btn--primary btn--lg" href="#"><svg class="ic"><use href="#i-run"/></svg>Новый запуск</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <!-- Критичное: компактная полоса -->
+      <section class="alert-strip" aria-label="Критичные события">
+        <div class="alert-strip__item alert-strip__item--gate">
+          <svg class="ic"><use href="#i-shield"/></svg>
+          <span class="alert-strip__text"><span class="alert-strip__title">Согласовать предложение</span><span class="alert-strip__sub">Решение · до 18:00</span></span>
+          <a class="btn btn--warn btn--sm" href="#">Рассмотреть</a>
+        </div>
+        <div class="alert-strip__item alert-strip__item--err">
+          <svg class="ic"><use href="#i-alert"/></svg>
+          <span class="alert-strip__text"><span class="alert-strip__title">Ошибка на шаге «Автор писем»</span><span class="alert-strip__sub">Инцидент · Поддержка</span></span>
+          <a class="btn btn--sm" href="#">Открыть</a>
+        </div>
+        <div class="alert-strip__item">
+          <svg class="ic"><use href="#i-stop"/></svg>
+          <span class="alert-strip__text"><span class="alert-strip__title">Запуск остановлен</span><span class="alert-strip__sub">Юридический отдел · 1 ч</span></span>
+          <a class="btn btn--sm" href="#">Повторить</a>
+        </div>
+        <div class="alert-strip__item alert-strip__item--gate">
+          <svg class="ic"><use href="#i-key"/></svg>
+          <span class="alert-strip__text"><span class="alert-strip__title">Истекает авторизация</span><span class="alert-strip__sub">«OpenAI · пул продаж» · 2 дня</span></span>
+          <a class="btn btn--sm" href="#">Обновить</a>
+        </div>
+      </section>
+
+      <div class="workbench">
+        <!-- Лента -->
+        <section class="card feed" aria-labelledby="sec-feed">
+          <div class="card__head card__head--line">
+            <h2 class="sec-title" id="sec-feed">Лента событий</h2>
+            <div class="row gap-10">
+              <span class="refresh" data-tip="Новые события появляются сверху без перезагрузки" data-tip-pos="left"><span class="refresh__dot"></span><span class="refresh__text">обновлено 12:04</span></span>
+              <span class="toolbar__count" id="feed-count"></span>
+            </div>
+          </div>
+          <div class="feed__filters">
+            <div class="feed__filters-row" data-chip-group="single" role="group" aria-label="Проект">
+              <span class="feed__filters-label">Проект</span>
+              <button class="chip" type="button" aria-pressed="true" data-f="project" data-v="">Все</button>
+              <button class="chip" type="button" aria-pressed="false" data-f="project" data-v="Корпоративные продажи">Корпоративные продажи</button>
+              <button class="chip" type="button" aria-pressed="false" data-f="project" data-v="Клиентская поддержка">Клиентская поддержка</button>
+              <button class="chip" type="button" aria-pressed="false" data-f="project" data-v="Юридический отдел">Юридический отдел</button>
+              <button class="chip chip--filter" type="button" data-menu="#menu-more-projects" aria-haspopup="menu" aria-expanded="false">Ещё 4<svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+              <div class="menu" id="menu-more-projects">
+                <button class="menu__item" role="menuitem" data-f="project" data-v="Маркетинг и контент">Маркетинг и контент</button>
+                <button class="menu__item" role="menuitem" data-f="project" data-v="Бухгалтерия">Бухгалтерия</button>
+                <button class="menu__item" role="menuitem" data-f="project" data-v="Кадровая служба">Кадровая служба</button>
+                <button class="menu__item" role="menuitem" data-f="project" data-v="Разработка платформы">Разработка платформы</button>
+              </div>
+            </div>
+            <div class="feed__filters-row" data-chip-group="single" role="group" aria-label="Состояние">
+              <span class="feed__filters-label">Состояние</span>
+              <button class="chip" type="button" aria-pressed="true" data-f="state" data-v="">Все</button>
+              <button class="chip" type="button" aria-pressed="false" data-f="state" data-v="gate"><svg class="ic"><use href="#i-shield"/></svg>Ждут решения</button>
+              <button class="chip" type="button" aria-pressed="false" data-f="state" data-v="done"><svg class="ic"><use href="#i-check"/></svg>Завершены</button>
+              <button class="chip" type="button" aria-pressed="false" data-f="state" data-v="error"><svg class="ic"><use href="#i-alert"/></svg>С ошибкой</button>
+            </div>
+            <div class="feed__filters-row" data-chip-group="single" role="group" aria-label="Тип действия">
+              <span class="feed__filters-label">Действие</span>
+              <button class="chip" type="button" aria-pressed="true" data-f="kind" data-v="">Все</button>
+              <button class="chip" type="button" aria-pressed="false" data-f="kind" data-v="run">Запуски</button>
+              <button class="chip" type="button" aria-pressed="false" data-f="kind" data-v="result">Результаты</button>
+              <button class="chip" type="button" aria-pressed="false" data-f="kind" data-v="config">Настройка</button>
+              <button class="chip" type="button" aria-pressed="false" data-f="kind" data-v="access">Доступ</button>
+            </div>
+          </div>
+          <div class="feed__scroll" id="feed-scroll">
+            <div class="feed__list" id="feed-list"></div>
+            <div class="list-more" id="feed-more"></div>
+          </div>
+        </section>
+
+        <!-- Узкая правая колонка -->
+        <div class="aside">
+          <section class="card" aria-labelledby="sec-active">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-active">Выполняется сейчас <span class="tab__count">3</span></h2>
+              <span class="refresh is-refreshing"><span class="refresh__dot"></span><span class="refresh__text">обновляется</span></span>
+            </div>
+            <div>
+              <a class="list-row" href="#">
+                <span class="avatar avatar--32 avatar--acc" aria-hidden="true">РП</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Подготовить предложение для компании Север</span></div>
+                  <div class="list-row__sub"><span>Редактор предложений</span><span>·</span><span>Анна Волкова</span><span>·</span><span class="source" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-monitor"/></svg></span></div>
+                </div>
+                <span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>12 мин</span>
+              </a>
+              <a class="list-row" href="#">
+                <span class="avatar avatar--32" aria-hidden="true">КО</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Разобрать обращения за неделю</span></div>
+                  <div class="list-row__sub"><span>Классификатор обращений</span><span>·</span><span>Михаил Орлов</span><span>·</span><span class="source" data-tip="Запущено через помощника Kodex от имени пользователя" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-bot"/></svg></span></div>
+                </div>
+                <span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>Очередь</span>
+              </a>
+              <a class="list-row" href="#">
+                <span class="avatar avatar--32 avatar--ok" aria-hidden="true">АП</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Ежедневная сводка по лидам</span></div>
+                  <div class="list-row__sub"><span>Аналитик продаж</span><span>·</span><span>расписание 09:00</span><span>·</span><span class="source" data-tip="Запущено по расписанию автоматизации" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-automation"/></svg></span></div>
+                </div>
+                <span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>3 мин</span>
+              </a>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="sec-projects">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-projects">Проекты <span class="tab__count">7</span></h2>
+              <a class="sm" href="#">Все Проекты</a>
+            </div>
+            <div>
+              <a class="list-row" href="#"><div class="list-row__main"><div class="list-row__title"><span>Корпоративные продажи</span></div><div class="list-row__sub"><span class="row gap-4"><span class="dot-state dot-state--run"></span>2 работают</span><span>·</span><span class="warn-text">1 решение</span></div></div><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+              <a class="list-row" href="#"><div class="list-row__main"><div class="list-row__title"><span>Клиентская поддержка</span></div><div class="list-row__sub"><span class="row gap-4"><span class="dot-state dot-state--err"></span>1 инцидент</span><span>·</span><span>1 в очереди</span></div></div><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+              <a class="list-row" href="#"><div class="list-row__main"><div class="list-row__title"><span>Юридический отдел</span></div><div class="list-row__sub"><span class="row gap-4"><span class="dot-state"></span>Остановлен запуск</span></div></div><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+              <a class="list-row" href="#"><div class="list-row__main"><div class="list-row__title"><span>Маркетинг и контент</span></div><div class="list-row__sub"><span class="row gap-4"><span class="dot-state dot-state--ok"></span>Спокойно</span></div></div><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+              <div class="list-more"><span>Показаны 4 из 7 · остальные без событий</span></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Вариант C отвечает на вопрос «что произошло и на что ответить». Основа — персональная лента значимых событий (решение запрошено, результат готов, инцидент, автоматизация отработала, инструкции опубликованы, участник добавлен) — каждое событие написано языком пользователя, имеет исполнителя, источник и действие; это не поток технических логов. Фильтры-чипы по Проекту, состоянию и типу действия выполняются на сервере: лента перезапрашивается, элементы догружаются cursor-страницами при прокрутке (Kodex.infiniteList) с футером «Показано N из M». Критичное — компактная полоса сверху; справа узкая колонка «Выполняется сейчас» и Проекты. Тот же AppShell и те же данные, что в A и B.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  const frame = Kodex.mount({
+    nav: 'home', project: null, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Главная · лента активности', object: '', can: ['объяснить любое событие ленты', 'запустить работу в выбранном Проекте', 'найти запуск, сотрудника или файл'] },
+  });
+
+  // ---- Синтетическая лента: 72 события, понятные человеку ----
+  const ic = Kodex.ic, esc = Kodex.esc;
+  const projects = Kodex.data.projects.map((p) => p.name);
+  const agents = Kodex.data.agents;
+  const companies = Kodex.data.companies;
+  const people = Kodex.data.people;
+  const r = Kodex.gen.rng(42);
+  const pick = (a) => Kodex.gen.pick(r, a);
+  const KINDS = [
+    { kind: 'run', state: 'gate', mod: 'gate', icon: 'shield', who: 'agent', title: (c) => `${c.agent.name} запросил решение в запуске «Подготовить предложение для компании ${c.company}»`, text: (c) => 'Нужно согласовать коммерческое предложение до отправки клиенту. Работа приостановлена до вашего ответа.', actions: ['Рассмотреть', 'Открыть запуск'], primary: 'warn' },
+    { kind: 'result', state: 'done', mod: 'done', icon: 'check', who: 'agent', title: (c) => `${c.agent.name} завершил запуск «Собрать факты о компании ${c.company}»`, text: (c) => `Готов результат: <span class="file">${ic('file', 12)}Факты о компании ${esc(c.company)}.md</span> · 1 ход · ${8 + Math.floor(r() * 20)} мин`, actions: ['Открыть результат', 'Продолжить сессию'] },
+    { kind: 'run', state: 'error', mod: 'error', icon: 'alert', who: 'agent', title: (c) => `Ошибка на шаге «${c.agent.name}» в запуске «Классифицировать входящие письма»`, text: () => 'Шаг не завершился: превышено время ожидания ответа. Остальные ветви Процесса завершены, результат частичный.', actions: ['Открыть запуск', 'Повторить шаг'] },
+    { kind: 'run', state: 'done', mod: 'done', icon: 'automation', who: 'auto', title: (c) => `Автоматизация «Ежедневная сводка по лидам» отработала`, text: (c) => `${c.agent.name} подготовил сводку по расписанию «По будням, 09:00» · <span class="file">${ic('file', 12)}Сводка по лидам — ${esc(c.company)}.xlsx</span>`, actions: ['Открыть результат'] },
+    { kind: 'config', state: 'done', mod: 'agent', icon: 'book', who: 'user', title: (c) => `${c.person} опубликовал(а) инструкции v${2 + Math.floor(r() * 4)} для сотрудника «${c.agent.name}»`, text: () => 'Проверка структуры пройдена, секретные значения не обнаружены. Следующий запуск использует новую версию.', actions: ['Открыть сотрудника', 'Сравнить версии'] },
+    { kind: 'access', state: 'done', mod: 'user', icon: 'users', who: 'user', title: (c) => `${c.person} добавлен(а) в Проект «${c.project}»`, text: (c) => `Роль: ${pick(['Оператор', 'Участник', 'Аудитор'])} · может запускать ${pick(['всех сотрудников Проекта', 'двух выбранных сотрудников', 'только Процессы'])}`, actions: ['Открыть участников'] },
+    { kind: 'run', state: 'done', mod: 'agent', icon: 'run', who: 'user', title: (c) => `${c.person} запустил(а) «Проверить договор с поставщиком ${c.company}»`, text: (c) => `Исполнитель: ${esc(c.agent.name)} · продолжение существующей сессии`, actions: ['Открыть запуск'], src: 'cc' },
+    { kind: 'run', state: 'done', mod: 'agent', icon: 'bot', who: 'kodex', title: (c) => `Kodex запустил «Разобрать обращения за неделю» по запросу ${c.person}`, text: (c) => `Исполнитель: ${esc(c.agent.name)} · план запуска был подтверждён пользователем`, actions: ['Открыть запуск'], src: 'kodex' },
+    { kind: 'config', state: 'done', mod: 'tool', icon: 'plug', who: 'user', title: (c) => `${c.person} подключил(а) интеграцию ${pick(['GitHub', 'Jira', 'Confluence', 'Электронная почта'])}`, text: () => 'Проверка подключения прошла успешно. Права сотрудникам пока не выданы.', actions: ['Открыть интеграцию'] },
+    { kind: 'run', state: 'done', mod: 'tool', icon: 'x-circle', who: 'user', title: (c) => `${c.person} отменил(а) запуск «Сравнить условия конкурентов для ${c.company}»`, text: () => 'Все активные шаги остановлены согласованно. Промежуточный результат сохранён.', actions: ['Открыть запуск', 'Повторить'] },
+  ];
+  const TIMES_TODAY = ['12:01', '11:52', '11:30', '11:04', '10:40', '10:18', '09:55', '09:31', '09:02', '08:47'];
+  const items = [];
+  for (let i = 0; i < 72; i++) {
+    const k = KINDS[i === 0 ? 0 : i === 1 ? 1 : i === 2 ? 2 : i === 3 ? 3 : i === 4 ? 4 : i === 5 ? 5 : Math.floor(r() * KINDS.length)];
+    // Первые события совпадают с блоком внимания вариантов A и B (общий набор данных)
+    const FIXED = [
+      { agent: agents[3], company: 'Север', person: 'Анна Волкова', project: 'Корпоративные продажи' },
+      { agent: agents[5], company: 'Меридиан', person: 'Анна Волкова', project: 'Корпоративные продажи' },
+      { agent: agents[6], company: 'Прибой', person: 'Михаил Орлов', project: 'Клиентская поддержка' },
+      { agent: agents[0], company: 'Ладога', person: 'Анна Волкова', project: 'Корпоративные продажи' },
+      { agent: agents[4], company: 'Онега', person: 'Михаил Орлов', project: 'Клиентская поддержка' },
+      { agent: agents[2], company: 'Восток', person: 'Дмитрий Соловьёв', project: 'Юридический отдел' },
+    ];
+    const c = i < FIXED.length ? FIXED[i] : { agent: pick(agents), company: pick(companies), person: pick(people), project: pick(projects) };
+    const day = i < 10 ? 'today' : i < 26 ? 'yesterday' : 'earlier';
+    const time = day === 'today' ? TIMES_TODAY[i] : day === 'yesterday' ? `вчера, ${9 + Math.floor(r() * 10)}:${String(Math.floor(r() * 6))}0` : `${Math.max(1, 26 - Math.floor((i - 26) / 3)) - 0} авг`;
+    items.push({ id: 'ev' + i, day, time, kind: k.kind, state: k.state, mod: k.mod, icon: k.icon, project: c.project, title: k.title(c), text: k.text(c), actions: k.actions, primary: k.primary, src: k.src, agent: c.agent });
+  }
+  const DAY_LABEL = { today: 'Сегодня', yesterday: 'Вчера', earlier: 'Ранее' };
+  let lastDay = null;
+  function renderItem(it) {
+    let sep = '';
+    if (it.day !== lastDay) { sep = `<div class="act__sep">${DAY_LABEL[it.day]}</div>`; lastDay = it.day; }
+    const srcHtml = it.src ? ` · ${Kodex.source(it.src)}` : '';
+    return `${sep}<article class="act act--${it.mod}" data-id="${it.id}">
+      <div class="act__rail"><span class="act__icon">${ic(it.icon)}</span></div>
+      <div class="act__main">
+        <div class="act__head"><b>${it.title}</b></div>
+        <div class="act__head"><span>${esc(it.project)}</span>${srcHtml}<span class="act__time">${esc(it.time)}</span></div>
+        <div class="act__text">${it.text}</div>
+        <div class="act__actions">${it.actions.map((a, i) => `<a class="btn btn--sm${i === 0 && it.primary === 'warn' ? ' btn--warn' : ''}" href="#">${esc(a)}</a>`).join('')}</div>
+      </div>
+    </article>`;
+  }
+  const filters = { project: '', state: '', kind: '' };
+  const scroll = document.getElementById('feed-scroll'), list = document.getElementById('feed-list'), more = document.getElementById('feed-more'), count = document.getElementById('feed-count');
+  const feed = Kodex.infiniteList({
+    scroll, list, items, footer: more, pageSize: 12,
+    render: renderItem,
+    match: (it) => (!filters.project || it.project === filters.project) && (!filters.state || it.state === filters.state) && (!filters.kind || it.kind === filters.kind),
+    onChange: ({ shown, total }) => { count.textContent = `${shown} из ${total}`; },
+    empty: `<div class="empty"><span class="empty__icon">${ic('filter', 18)}</span><div class="empty__title">По этим фильтрам событий нет</div><div class="empty__text">Снимите один из фильтров или выберите другой Проект.</div></div>`,
+  });
+  function applyFilters() { lastDay = null; feed.reset('фильтр'); }
+  // infiniteList.reset(q) фильтрует через match(it, q): здесь q только триггер, реальные условия — в filters
+  frame.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-f]'); if (!b) return;
+    filters[b.dataset.f] = b.dataset.v;
+    if (b.classList.contains('menu__item')) {
+      // выбранный Проект из меню «Ещё» становится активным чипом
+      const group = document.querySelector('[aria-label="Проект"]');
+      group.querySelectorAll('.chip[data-f]').forEach((c) => c.setAttribute('aria-pressed', 'false'));
+      const moreBtn = group.querySelector('[data-menu]'); moreBtn.innerHTML = `${esc(b.dataset.v)}${ic('chev', null, 'ic-chev')}`; moreBtn.dataset.f = 'project'; moreBtn.dataset.v = b.dataset.v; moreBtn.setAttribute('aria-pressed', 'true');
+    }
+    applyFilters();
+  });
+  scroll.addEventListener('scroll', () => { lastDay = lastDay; });
+</script>
+</body>
+</html>

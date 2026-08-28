@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Интеграции · Mobile</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-mi .pkg-icon { width: 40px; height: 40px; border-radius: var(--r-2); border: 1px solid var(--line); background: var(--bg-field); color: var(--sec); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .p-mi .pkg-icon .ic { width: 20px; height: 20px; }
+  .p-mi .m-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line-hair); min-height: 64px; }
+  .p-mi .m-row:first-child { border-top: 0; }
+  .p-mi .m-row__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .p-mi .m-row__title { font-size: 14px; font-weight: 500; }
+  .p-mi .m-row__sub { font-size: 12px; color: var(--mut); line-height: 1.4; }
+  .p-mi .m-row .btn { min-width: 108px; }
+  .p-mi .tabs { position: sticky; top: 0; z-index: 2; margin: -12px -14px 0; padding: 0 14px; }
+  .p-mi .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .p-mi .fact__k { font-size: 11px; color: var(--mut); text-transform: uppercase; letter-spacing: 0.04em; }
+  .p-mi .fact__v { font-size: 13px; color: var(--ink-2); margin-top: 2px; line-height: 1.4; }
+  .p-mi .effect__row { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line-hair); font-size: 13px; }
+  .p-mi .effect__k { font-size: 11.5px; color: var(--mut); }
+  .p-mi .sheet__foot { flex-direction: column; gap: 8px; }
+  .p-mi .sheet__foot .btn { min-height: 46px; width: 100%; }
+  .p-mi .sheet__body .sec-title { margin-bottom: 4px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Интеграции · mobile 390×844 · маршрут <code>/integrations</code> + sheet решения <code>/decisions/:gateRef</code></p>
+<div class="frame frame--mobile" id="frame">
+  <main class="page p-mi" id="page" aria-label="Интеграции">
+    <div class="tabs" role="tablist" data-tabs>
+      <button class="tab" role="tab" id="mt-conn" aria-controls="mp-conn" aria-selected="true" type="button">Подключения <span class="tab__count">2</span></button>
+      <button class="tab" role="tab" id="mt-cat" aria-controls="mp-cat" aria-selected="false" type="button">Каталог <span class="tab__count">6</span></button>
+      <button class="tab" role="tab" id="mt-wait" aria-controls="mp-wait" aria-selected="false" type="button">Решения <span class="badge-count">1</span></button>
+    </div>
+
+    <div class="tabpanel col gap-12" id="mp-conn" role="tabpanel" aria-labelledby="mt-conn">
+      <div class="notice notice--warn notice--sm"><svg class="ic"><use href="#i-key"/></svg><span class="notice__text"><b>Jira</b> требует повторной авторизации. Запуски без Jira продолжают работать.</span><span class="notice__actions"><button class="btn btn--sm" type="button">Открыть</button></span></div>
+      <section class="card">
+        <div class="card__head"><h2 class="sec-title">Подключения</h2><span class="refresh"><span class="refresh__dot"></span><span class="refresh__text">health 12:04</span></span></div>
+        <div>
+          <a class="m-row" href="#">
+            <span class="pkg-icon"><svg class="ic"><use href="#i-branch"/></svg></span>
+            <span class="m-row__main"><span class="m-row__title">GitHub · Основная организация</span><span class="m-row__sub">OAuth от имени пользователя · токен ****7f2a · 84 дня</span><span class="pill pill--ok pill--sm" style="align-self:flex-start;margin-top:2px"><svg class="ic"><use href="#i-check"/></svg>Работает</span></span>
+            <svg class="ic mut"><use href="#i-chev-r"/></svg>
+          </a>
+          <a class="m-row" href="#">
+            <span class="pkg-icon"><svg class="ic"><use href="#i-ticket"/></svg></span>
+            <span class="m-row__main"><span class="m-row__title">Jira · Корпоративный трекер</span><span class="m-row__sub">Сервисная · только чтение · проекты SALES, SUP</span><span class="pill pill--wait pill--sm" style="align-self:flex-start;margin-top:2px"><svg class="ic"><use href="#i-key"/></svg>Требует авторизации</span></span>
+            <svg class="ic mut"><use href="#i-chev-r"/></svg>
+          </a>
+        </div>
+      </section>
+      <div class="notice notice--ok notice--sm"><svg class="ic"><use href="#i-check-circle"/></svg><span class="notice__text">Платформа готова к работе и с нулём подключений.</span></div>
+    </div>
+
+    <div class="tabpanel col gap-12" id="mp-cat" role="tabpanel" aria-labelledby="mt-cat" hidden>
+      <label class="search"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Найти пакет" aria-label="Найти пакет"></label>
+      <section class="card">
+        <div class="card__head"><h2 class="sec-title">Пакеты платформы</h2></div>
+        <div>
+          <div class="m-row"><span class="pkg-icon"><svg class="ic"><use href="#i-branch"/></svg></span><span class="m-row__main"><span class="m-row__title">GitHub</span><span class="m-row__sub">v1.2.0 · подключено 1</span></span><a class="btn btn--sm" href="#">Открыть</a></div>
+          <div class="m-row"><span class="pkg-icon"><svg class="ic"><use href="#i-branch"/></svg></span><span class="m-row__main"><span class="m-row__title">GitLab</span><span class="m-row__sub">v1.1.0 · не подключено</span></span><a class="btn btn--sm" href="#">Подключить</a></div>
+          <div class="m-row"><span class="pkg-icon"><svg class="ic"><use href="#i-ticket"/></svg></span><span class="m-row__main"><span class="m-row__title">Jira</span><span class="m-row__sub">v1.0.3 · подключено 1</span></span><a class="btn btn--sm" href="#">Открыть</a></div>
+          <div class="m-row"><span class="pkg-icon"><svg class="ic"><use href="#i-book"/></svg></span><span class="m-row__main"><span class="m-row__title">Confluence</span><span class="m-row__sub">v1.0.1 · не подключено</span></span><a class="btn btn--sm" href="#">Подключить</a></div>
+          <div class="m-row"><span class="pkg-icon"><svg class="ic"><use href="#i-mail"/></svg></span><span class="m-row__main"><span class="m-row__title">Электронная почта</span><span class="m-row__sub">v1.3.0 · не подключено</span></span><a class="btn btn--sm" href="#">Подключить</a></div>
+        </div>
+      </section>
+      <section class="card">
+        <div class="card__head"><h2 class="sec-title">Свои пакеты (YAML)</h2></div>
+        <div>
+          <div class="m-row"><span class="pkg-icon"><svg class="ic"><use href="#i-package"/></svg></span><span class="m-row__main"><span class="m-row__title">Корпоративный CRM</span><span class="m-row__sub">v0.3.0 · импортирован · не подключено</span></span><a class="btn btn--sm" href="#">Подключить</a></div>
+        </div>
+      </section>
+      <div class="xs mut" style="padding:0 2px">Импорт пакета YAML доступен на desktop.</div>
+    </div>
+
+    <div class="tabpanel col gap-12" id="mp-wait" role="tabpanel" aria-labelledby="mt-wait" hidden>
+      <section class="card">
+        <div class="card__head"><h2 class="sec-title">Ожидают решения</h2></div>
+        <div>
+          <button class="m-row" type="button" data-sheet="#gate-sheet" style="width:100%;border:0;background:transparent;text-align:left;color:inherit">
+            <span class="list-row__lead" style="background:var(--warn-tint);color:var(--warn);border:1px solid var(--warn-line);width:40px;height:40px"><svg class="ic"><use href="#i-shield"/></svg></span>
+            <span class="m-row__main"><span class="m-row__title">Создать pull request в org/billing-service</span><span class="m-row__sub">GitHub · Инженер релизов · истекает через 22 ч</span></span>
+            <svg class="ic mut"><use href="#i-chev-r"/></svg>
+          </button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Bottom sheet: решение Human Gate -->
+  <div class="sheet sheet--full p-mi" id="gate-sheet" role="dialog" aria-labelledby="gate-sheet-title" data-modal-drawer>
+    <div class="sheet__grip"></div>
+    <div class="sheet__head">
+      <div class="sheet__title col gap-2"><span id="gate-sheet-title">Создать pull request</span><span class="xs mut" style="font-weight:400">org/billing-service · GitHub · Основная организация</span></div>
+      <button class="m-icon" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="sheet__body col gap-14">
+      <div class="row gap-8 row--wrap"><span class="pill pill--gate"><svg class="ic"><use href="#i-shield"/></svg>Ожидает решения</span><span class="pill pill--wait"><svg class="ic"><use href="#i-clock"/></svg>Истекает через 22 ч</span><span class="risk risk--code">code_change</span></div>
+      <div class="facts">
+        <div><div class="fact__k">Исполнитель</div><div class="fact__v row gap-6"><span class="avatar avatar--24 avatar--acc">ИР</span>Инженер релизов</div></div>
+        <div><div class="fact__k">Инициатор</div><div class="fact__v row gap-6"><span class="avatar avatar--24">АВ</span>Анна Волкова</div></div>
+        <div><div class="fact__k">Запуск</div><div class="fact__v"><a href="#">Проверка релиза 2.4</a></div></div>
+        <div><div class="fact__k">Учётная запись</div><div class="fact__v"><span class="tag tag--acc">user-delegated</span></div></div>
+        <div style="grid-column:span 2"><div class="fact__k">Область ресурсов</div><div class="fact__v mono">org/billing-service · ветка release/2.4</div></div>
+      </div>
+      <div>
+        <h3 class="sec-title">Что изменится</h3>
+        <div class="effect__row"><span class="effect__k">Ветки</span><span><span class="mono">release/2.4</span> ← <span class="mono">fix/invoice-rounding</span> (новая)</span></div>
+        <div class="effect__row"><span class="effect__k">Заголовок PR</span><span>Исправить округление в счетах при частичной оплате</span></div>
+        <div class="effect__row"><span class="effect__k">Файлы (3)</span><span class="mono xs">internal/invoice/rounding.go · rounding_test.go · CHANGELOG.md</span></div>
+        <div class="effect__row"><span class="effect__k">Ограничения</span><span class="xs">Слияние не входит в намерение. Намерение зафиксировано 12:31 и неизменяемо.</span></div>
+      </div>
+      <div class="field"><label class="field__label" for="m-comment">Комментарий</label><textarea class="textarea" id="m-comment" rows="2" placeholder="Необязательно, попадёт в аудит"></textarea></div>
+      <div class="notice notice--sm"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Если решение уже принял другой участник, вы увидите фактический результат вместо формы.</span></div>
+    </div>
+    <div class="sheet__foot">
+      <button class="btn btn--primary btn--lg" type="button"><svg class="ic"><use href="#i-check"/></svg>Одобрить</button>
+      <button class="btn btn--lg" type="button"><svg class="ic"><use href="#i-edit"/></svg>Запросить изменения</button>
+      <button class="btn btn--lg btn--danger" type="button"><svg class="ic"><use href="#i-x-circle"/></svg>Отклонить</button>
+    </div>
+  </div>
+</div>
+<p class="stage-note">Mobile: вкладки Подключения / Каталог / Решения, строки с иконкой пакета, состоянием и кнопкой ≥44px. Решение Human Gate открывается как полноэкранный bottom sheet: effect preview, actor и инициатор раздельно, срок, область ресурсов; primary «Одобрить», destructive «Отклонить» не primary; кнопки ≥44px.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({ title: 'Интеграции', sub: '2 подключения · 1 решение ожидает', nav: 'integrations', decisions: 2 });
+  Kodex.openOverlay(document.getElementById('gate-sheet'), true, document.querySelector('[data-sheet="#gate-sheet"]'));
+</script>
+</body>
+</html>

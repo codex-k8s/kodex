@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Интеграции · Пакет GitHub</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-pkg .pkg-icon { width: 40px; height: 40px; border-radius: var(--r-2); border: 1px solid var(--line); background: var(--bg-field); color: var(--sec); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .p-pkg .pkg-icon .ic { width: 20px; height: 20px; }
+  .p-pkg .split--main-aside-wide { grid-template-columns: minmax(0, 1fr) 440px; align-items: start; }
+  .p-pkg .table th, .p-pkg .table td { padding-left: 10px; padding-right: 10px; }
+  .p-pkg .table td { vertical-align: top; }
+  .p-pkg .scopes { display: flex; flex-wrap: wrap; gap: 4px; }
+  .p-pkg .scopes .tag { height: 20px; font-size: 10.5px; }
+  .p-pkg .code { max-height: 720px; }
+  .p-pkg .code__body { max-height: 640px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Интеграции · Пакет GitHub · desktop 1440×1024 · маршрут <code>/integrations/packages/github</code></p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page p-pkg" id="page" aria-labelledby="page-title">
+    <div class="page-head page-head--tabs">
+      <div class="crumbs"><a href="#">Интеграции</a><span>/</span><a href="#">Каталог</a><span>/</span><span>GitHub</span></div>
+      <div class="page-title-row">
+        <div class="row gap-12 row--top">
+          <span class="pkg-icon"><svg class="ic"><use href="#i-branch"/></svg></span>
+          <div>
+            <div class="page-title"><h1 id="page-title">GitHub</h1><span class="tag tag--mono">v1.2.0</span><span class="tag tag--acc">first-party</span><span class="pill pill--ok"><svg class="ic"><use href="#i-shield-check"/></svg>Проверен платформой</span></div>
+            <div class="page-sub">Типизированные инструменты для репозиториев, Issues и Pull Requests. Режим выполнения: managed-http через integration-gateway.</div>
+            <div class="page-meta"><span>Опубликован: <b>поставка Kodex 2026.08</b></span><span class="dot"></span><span>Подключений: <b>1</b></span><span class="dot"></span><span>Разрешений: <b>4</b></span><span class="dot"></span><span>Предыдущие версии: <b>v1.1.0, v1.0.2</b></span></div>
+          </div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn--lg" type="button" data-menu="#menu-pkg" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg>Ещё</button>
+          <div class="menu" id="menu-pkg" data-align="right">
+            <button class="menu__item"><svg class="ic"><use href="#i-download"/></svg><span>Скачать описание YAML</span></button>
+            <button class="menu__item"><svg class="ic"><use href="#i-history"/></svg><span>История версий</span></button>
+            <div class="menu__sep"></div>
+            <button class="menu__item" disabled><svg class="ic"><use href="#i-edit"/></svg><span>Изменить</span><span class="menu__hint">версия неизменяема</span></button>
+          </div>
+          <a class="btn btn--primary btn--lg" href="#"><svg class="ic"><use href="#i-plus"/></svg>Новое подключение</a>
+        </div>
+      </div>
+      <div class="tabs tabs--inline" role="tablist" data-tabs style="margin-top:10px">
+        <button class="tab" role="tab" id="tab-caps" aria-controls="panel-caps" aria-selected="true" type="button">Возможности <span class="tab__count">7</span></button>
+        <button class="tab" role="tab" id="tab-yaml" aria-controls="panel-yaml" aria-selected="false" type="button">Описание YAML</button>
+        <button class="tab" role="tab" id="tab-conns" aria-controls="panel-conns" aria-selected="false" type="button">Подключения <span class="tab__count">1</span></button>
+        <button class="tab" role="tab" id="tab-vers" aria-controls="panel-vers" aria-selected="false" type="button">Версии <span class="tab__count">3</span></button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="tabpanel" id="panel-caps" role="tabpanel" aria-labelledby="tab-caps">
+        <div class="split split--main-aside-wide">
+          <section class="card">
+            <div class="card__head card__head--line"><h2 class="sec-title">Возможности пакета</h2><span class="xs mut">Каждая capability — закрытая типизированная операция с bounded result</span></div>
+            <div class="card__scroll">
+              <table class="table table--hover">
+                <thead><tr><th style="width:36%">Возможность</th><th>Риск и режим</th><th>Human Gate</th><th>Результат</th><th>Resource scopes</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td><div class="cell-title">Чтение репозитория</div><div class="cell-sub mono">github.repository.read</div><div class="cell-sub">Содержимое файлов, ветки, коммиты выбранного репозитория</div></td>
+                    <td><div class="col gap-4"><span class="risk">read</span><span class="tag" style="width:max-content">чтение</span></div></td><td><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-minus"/></svg>Не нужен</span></td>
+                    <td class="xs">до 1 МБ, JSON</td><td><div class="scopes"><span class="tag">организация</span><span class="tag">репозиторий</span><span class="tag">ветка</span></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="cell-title">Чтение Issues</div><div class="cell-sub mono">github.issue.read</div><div class="cell-sub">Список и содержимое Issues с фильтрами</div></td>
+                    <td><div class="col gap-4"><span class="risk">read</span><span class="tag" style="width:max-content">чтение</span></div></td><td><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-minus"/></svg>Не нужен</span></td>
+                    <td class="xs">до 200 элементов, JSON</td><td><div class="scopes"><span class="tag">организация</span><span class="tag">репозиторий</span></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="cell-title">Чтение Pull Request</div><div class="cell-sub mono">github.pull-request.read</div><div class="cell-sub">Описание, diff и статусы проверок PR</div></td>
+                    <td><div class="col gap-4"><span class="risk">read</span><span class="tag" style="width:max-content">чтение</span></div></td><td><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-minus"/></svg>Не нужен</span></td>
+                    <td class="xs">до 2 МБ, JSON + diff</td><td><div class="scopes"><span class="tag">репозиторий</span></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="cell-title">Комментарий к Issue или PR</div><div class="cell-sub mono">github.comment.create</div><div class="cell-sub">Один структурированный комментарий от делегированной учётной записи</div></td>
+                    <td><div class="col gap-4"><span class="risk risk--write">write</span><span class="tag tag--acc" style="width:max-content">запись</span></div></td><td><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>По политике</span></td>
+                    <td class="xs">ссылка на комментарий</td><td><div class="scopes"><span class="tag">репозиторий</span></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="cell-title">Создание ветки</div><div class="cell-sub mono">github.branch.create</div><div class="cell-sub">Новая ветка от разрешённой базовой ветки</div></td>
+                    <td><div class="col gap-4"><span class="risk risk--code">code_change</span><span class="tag tag--acc" style="width:max-content">запись</span></div></td><td><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Обязателен</span></td>
+                    <td class="xs">имя ветки, ссылка</td><td><div class="scopes"><span class="tag">репозиторий</span><span class="tag">ветка</span></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="cell-title">Создание Pull Request</div><div class="cell-sub mono">github.pull-request.create</div><div class="cell-sub">PR из подготовленных изменений с ограниченным числом файлов</div></td>
+                    <td><div class="col gap-4"><span class="risk risk--code">code_change</span><span class="tag tag--acc" style="width:max-content">запись</span></div></td><td><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Обязателен</span></td>
+                    <td class="xs">номер PR, ссылка; до 50 файлов</td><td><div class="scopes"><span class="tag">репозиторий</span><span class="tag">ветка</span></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="cell-title">Слияние Pull Request</div><div class="cell-sub mono">github.pull-request.merge</div><div class="cell-sub">Слияние только при зелёных проверках; force push пакетом не описан</div></td>
+                    <td><div class="col gap-4"><span class="risk risk--destructive">destructive</span><span class="tag tag--err" style="width:max-content">запись</span></div></td><td><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Обязателен</span></td>
+                    <td class="xs">sha слияния, ссылка</td><td><div class="scopes"><span class="tag">репозиторий</span><span class="tag">защищённая ветка</span></div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card__foot"><svg class="ic"><use href="#i-info"/></svg><span>Human Gate «По политике» означает, что требование задаёт политика Проекта или Организации; «Обязателен» нельзя отключить в разрешении.</span></div>
+          </section>
+
+          <aside class="col gap-12">
+            <div class="notice notice--info"><svg class="ic"><use href="#i-lock"/></svg><span class="notice__text"><b>Пакет описывает типизированные инструменты.</b> Произвольные shell-команды недопустимы; версия неизменяема, изменения публикуются новой версией. Секреты в пакете отсутствуют — только схема подключения и ссылки на credential.</span></div>
+            <div class="code code--readonly" id="pkg-yaml">
+              <div class="code__bar"><span class="mono">github/package.yaml</span><span class="tag">v1.2.0</span><span class="tag">read-only</span><span class="right row gap-6"><button class="btn btn--sm btn--icon" type="button" aria-label="Скопировать" data-tip="Скопировать" data-tip-pos="bottom"><svg class="ic"><use href="#i-copy"/></svg></button><button class="btn btn--sm btn--icon" type="button" aria-label="Скачать" data-tip="Скачать" data-tip-pos="bottom"><svg class="ic"><use href="#i-download"/></svg></button></span></div>
+              <div class="code__foot"><span>Проверка JSON Schema: <span class="ok-text">пройдена</span></span><span>·</span><span>Политики риска: 7 capabilities</span><span>·</span><span>Сеть: 1 разрешённый хост</span></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div class="tabpanel" id="panel-yaml" role="tabpanel" aria-labelledby="tab-yaml" hidden>
+        <div class="notice notice--info"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Полное описание пакета доступно во вкладке «Возможности» справа; здесь оно будет показано во всю ширину.</span></div>
+      </div>
+      <div class="tabpanel" id="panel-conns" role="tabpanel" aria-labelledby="tab-conns" hidden>
+        <section class="card"><div class="card__head"><h2 class="sec-title">Подключения этого пакета</h2></div><div>
+          <a class="list-row" href="#"><span class="pkg-icon" style="width:32px;height:32px"><svg class="ic"><use href="#i-branch"/></svg></span><div class="list-row__main"><div class="list-row__title"><span>GitHub · Основная организация</span></div><div class="list-row__sub"><span>OAuth от имени пользователя</span><span>·</span><span>owner: a.volkova</span><span>·</span><span>токен ****7f2a · истекает через 84 дня</span></div></div><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Работает · проверка 12:04</span></a>
+        </div></section>
+      </div>
+      <div class="tabpanel" id="panel-vers" role="tabpanel" aria-labelledby="tab-vers" hidden>
+        <section class="card"><div class="card__head"><h2 class="sec-title">Версии пакета</h2></div><div>
+          <div class="list-row"><span class="tag tag--mono tag--acc">v1.2.0</span><div class="list-row__main"><div class="list-row__title"><span>Текущая</span></div><div class="list-row__sub"><span>Добавлена возможность «Слияние PR» (destructive · Human Gate обязателен)</span><span>·</span><span>поставка 2026.08</span></div></div></div>
+          <div class="list-row"><span class="tag tag--mono">v1.1.0</span><div class="list-row__main"><div class="list-row__title"><span>Архивная</span></div><div class="list-row__sub"><span>Ограничение результата diff до 2 МБ</span><span>·</span><span>поставка 2026.06</span></div></div></div>
+          <div class="list-row"><span class="tag tag--mono">v1.0.2</span><div class="list-row__main"><div class="list-row__title"><span>Архивная</span></div><div class="list-row__sub"><span>Первая публикация</span><span>·</span><span>поставка 2026.04</span></div></div></div>
+        </div></section>
+      </div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Пакет показан как управляемое описание возможностей: таблица capabilities раскрывает назначение, класс риска (цвет + текст), режим чтение/запись, требование Human Gate, bounded result и доступные resource scopes. Справа — read-only YAML без секретов; версия неизменяема, действие «Изменить» отключено с пояснением. Подключения и версии вынесены во вкладки.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  const yaml = `apiVersion: integrations.kodex.io/v1alpha1
+kind: IntegrationDefinition
+metadata:
+  name: github
+  version: 1.2.0
+  origin: first-party
+spec:
+  runtime:
+    mode: managed-http
+  connectionSchema:
+    auth:
+      type: oauth-user
+      credentialRefOnly: true
+    fallback:
+      type: service-account
+      scope: read-only
+  network:
+    allowedHosts:
+      - api.github.com
+    allowedPorts: [443]
+  capabilities:
+    - key: github.repository.read
+      risk: read
+    - key: github.issue.read
+      risk: read
+    - key: github.pull-request.read
+      risk: read
+    - key: github.comment.create
+      risk: write
+      humanGate: policy
+    - key: github.branch.create
+      risk: code_change
+      humanGate: required
+    - key: github.pull-request.create
+      risk: code_change
+      humanGate: required
+    - key: github.pull-request.merge
+      risk: destructive
+      humanGate: required
+  tools:
+    - name: github_get_pull_request
+      capability: github.pull-request.read
+      inputSchema:
+        type: object
+        additionalProperties: false
+        required: [owner, repo, number]
+        properties:
+          owner: {type: string}
+          repo: {type: string}
+          number: {type: integer, minimum: 1}
+      request:
+        method: GET
+        path: /repos/{{owner}}/{{repo}}/pulls/{{number}}
+      response:
+        maxBytes: 2097152
+        contentType: application/json
+  healthCheck:
+    request: {method: GET, path: /rate_limit}
+    intervalSeconds: 900`;
+  // Локальная безопасная подсветка YAML: токены экранируются до оборачивания в span
+  const esc = Kodex.esc;
+  const yamlVal = (t) => { let v = esc(t); v = v.replace(/&quot;([^&]*)&quot;/g, '<span class="hl-str">&quot;$1&quot;</span>'); v = v.replace(/\b(true|false|required|policy|read|write|code_change|destructive|managed-http|oauth-user|service-account|read-only|first-party)\b/g, '<span class="hl-num">$1</span>'); v = v.replace(/\b(\d+(?:\.\d+)*)\b/g, '<span class="hl-num">$1</span>'); return v; };
+  const hlYamlSafe = (src) => src.split('\n').map((line) => {
+    if (/^\s*#/.test(line)) return `<span class="code__line hl-cm">${esc(line)}</span>`;
+    const m = line.match(/^(\s*-?\s*)([\w.\-]+)(:)(.*)$/);
+    if (m) return `<span class="code__line">${esc(m[1])}<span class="hl-kw">${esc(m[2])}</span>${m[3]}${yamlVal(m[4])}</span>`;
+    return `<span class="code__line">${yamlVal(line) || ' '}</span>`;
+  }).join('');
+  const lines = yaml.split('\n');
+  const gutter = lines.map((_, i) => `<span>${i + 1}</span>`).join('\n');
+  const box = document.getElementById('pkg-yaml');
+  box.querySelector('.code__bar').insertAdjacentHTML('afterend', `<div class="code__body"><pre class="code__gutter" aria-hidden="true">${gutter}</pre><pre class="code__text" aria-label="Описание пакета GitHub">${hlYamlSafe(yaml)}</pre></div>`);
+  Kodex.mount({
+    nav: 'integrations', project: null, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Интеграции · Пакет GitHub', object: 'v1.2.0', can: ['объяснить любую capability и её риск', 'подготовить план нового подключения', 'предложить набор разрешений для сотрудника'] },
+  });
+</script>
+</body>
+</html>

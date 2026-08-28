@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Главная · Mobile (вариант A)</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-homem .m-body { padding: 12px 14px 90px; }
+  .p-homem .att { border: 1px solid var(--line); border-radius: var(--r-3); background: var(--bg); display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 12px; min-height: 60px; }
+  .p-homem .att--gate { border-color: var(--warn-line); background: var(--warn-soft); }
+  .p-homem .att--err { border-color: var(--err-line); background: var(--err-soft); }
+  .p-homem .att__icon { width: 32px; height: 32px; flex: 0 0 32px; border-radius: var(--r-2); border: 1px solid var(--line); background: var(--bg-field); color: var(--sec); display: inline-flex; align-items: center; justify-content: center; }
+  .p-homem .att--gate .att__icon { border-color: var(--warn-line); background: var(--warn-tint); color: var(--warn); }
+  .p-homem .att--err .att__icon { border-color: var(--err-line); background: var(--err-tint); color: var(--err); }
+  .p-homem .att__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .p-homem .att__title { font-size: 13.5px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .p-homem .att__sub { font-size: 11.5px; color: var(--mut); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .p-homem .att .btn { min-height: 44px; min-width: 44px; padding: 0 12px; flex: 0 0 auto; }
+  .p-homem .m-list { border: 1px solid var(--line); border-radius: var(--r-4); background: var(--bg); overflow: hidden; }
+  .p-homem .m-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-height: 56px; border-top: 1px solid var(--line-hair); color: inherit; text-decoration: none; }
+  .p-homem .m-row:first-child { border-top: 0; }
+  .p-homem .m-row__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .p-homem .m-row__title { font-size: 13.5px; font-weight: 500; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .p-homem .m-row__sub { font-size: 11.5px; color: var(--mut); display: flex; align-items: center; gap: 5px; flex-wrap: wrap; line-height: 1.35; }
+  .p-homem .m-row__sub b { font-weight: 500; color: var(--sec); }
+  .p-homem .m-row__phrase { font-size: 12px; color: var(--ink-2); }
+  .p-homem .m-row .pill { flex: 0 0 auto; }
+  .p-homem .m-row .btn { min-height: 44px; }
+  .p-homem .m-primary { position: absolute; left: 0; right: 0; bottom: 64px; z-index: 20; padding: 10px 78px 10px 14px; background: var(--bg); border-top: 1px solid var(--line); }
+  .p-homem .m-primary .btn { height: 48px; border-radius: 12px; font-size: 15px; }
+  .p-homem .m-list .list-more { min-height: 44px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Главная · рекомендуемый вариант A · mobile 390×844 · маршрут <code>/</code></p>
+<div class="frame frame--mobile p-homem" id="frame">
+  <main class="page" id="page" aria-label="Главная">
+
+    <!-- 1. Требует внимания: первым, без прокрутки -->
+    <section aria-labelledby="m-sec-att" class="col gap-8">
+      <div class="m-section-title">
+        <h2 class="sec-title" id="m-sec-att">Требует внимания <span class="badge-count" aria-label="4 элемента">4</span></h2>
+        <span class="refresh"><span class="refresh__dot"></span><span class="refresh__text">12:04</span></span>
+      </div>
+      <div class="att att--gate">
+        <span class="att__icon"><svg class="ic"><use href="#i-shield"/></svg></span>
+        <span class="att__text"><span class="att__title">Согласовать коммерческое предложение</span><span class="att__sub">Решение человека · до 18:00 · Корпоративные продажи</span></span>
+        <a class="btn btn--warn" href="#">Рассмотреть</a>
+      </div>
+      <div class="att att--err">
+        <span class="att__icon"><svg class="ic"><use href="#i-alert"/></svg></span>
+        <span class="att__text"><span class="att__title">Ошибка на шаге «Автор писем»</span><span class="att__sub">Инцидент · Клиентская поддержка · 14 мин назад</span></span>
+        <a class="btn" href="#">Открыть</a>
+      </div>
+      <div class="att">
+        <span class="att__icon"><svg class="ic"><use href="#i-stop"/></svg></span>
+        <span class="att__text"><span class="att__title">Запуск остановлен по таймауту</span><span class="att__sub">Юридический отдел · 1 ч назад · попытка сохранена</span></span>
+        <a class="btn" href="#">Повторить</a>
+      </div>
+      <div class="att att--gate">
+        <span class="att__icon"><svg class="ic"><use href="#i-key"/></svg></span>
+        <span class="att__text"><span class="att__title">Истекает авторизация провайдера</span><span class="att__sub">«OpenAI · пул продаж» · через 2 дня · 4 сотрудника</span></span>
+        <a class="btn" href="#">Обновить</a>
+      </div>
+    </section>
+
+    <!-- 2. Выполняется сейчас -->
+    <section aria-labelledby="m-sec-active" class="col gap-8">
+      <div class="m-section-title">
+        <h2 class="sec-title" id="m-sec-active">Выполняется сейчас <span class="tab__count">3</span></h2>
+        <a class="sm" href="#">Все запуски</a>
+      </div>
+      <div class="m-list">
+        <a class="m-row" href="#">
+          <span class="avatar avatar--36 avatar--acc" aria-hidden="true">РП</span>
+          <span class="m-row__main">
+            <span class="m-row__title">Подготовить предложение для компании Север</span>
+            <span class="m-row__sub"><b>Редактор предложений</b><span>·</span><span>Анна Волкова</span><span>·</span><span class="source" data-tip="Control Center" data-tip-pos="bottom"><svg class="ic"><use href="#i-monitor"/></svg></span><span>·</span><span class="mono">12 мин</span></span>
+            <span class="m-row__phrase">Собираю итоговую структуру документа</span>
+          </span>
+          <span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Идёт</span>
+        </a>
+        <a class="m-row" href="#">
+          <span class="avatar avatar--36" aria-hidden="true">КО</span>
+          <span class="m-row__main">
+            <span class="m-row__title">Разобрать обращения за неделю</span>
+            <span class="m-row__sub"><b>Классификатор обращений</b><span>·</span><span>Михаил Орлов</span><span>·</span><span class="source" data-tip="Kodex" data-tip-pos="bottom"><svg class="ic"><use href="#i-bot"/></svg></span></span>
+          </span>
+          <span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>Очередь</span>
+        </a>
+        <a class="m-row" href="#">
+          <span class="avatar avatar--36 avatar--ok" aria-hidden="true">АП</span>
+          <span class="m-row__main">
+            <span class="m-row__title">Ежедневная сводка по лидам</span>
+            <span class="m-row__sub"><b>Аналитик продаж</b><span>·</span><span>по расписанию</span><span>·</span><span class="source" data-tip="Автоматизация" data-tip-pos="bottom"><svg class="ic"><use href="#i-automation"/></svg></span><span>·</span><span class="mono">3 мин</span></span>
+          </span>
+          <span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Идёт</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- 3. Продолжить работу -->
+    <section aria-labelledby="m-sec-sessions" class="col gap-8">
+      <div class="m-section-title">
+        <h2 class="sec-title" id="m-sec-sessions">Продолжить работу</h2>
+        <a class="sm" href="#">Все сессии</a>
+      </div>
+      <div class="m-list">
+        <div class="m-row">
+          <span class="avatar avatar--36" aria-hidden="true">ЮК</span>
+          <span class="m-row__main">
+            <span class="m-row__title">Проверить договор с поставщиком Восток</span>
+            <span class="m-row__sub"><b>Юридический консультант</b><span>·</span><span>вчера, 17:40</span></span>
+          </span>
+          <a class="btn btn--sm" href="#">Продолжить</a>
+        </div>
+        <div class="m-row">
+          <span class="avatar avatar--36 avatar--ok" aria-hidden="true">ИР</span>
+          <span class="m-row__main">
+            <span class="m-row__title">Собрать факты о компании Меридиан</span>
+            <span class="m-row__sub"><b>Исследователь рынка</b><span>·</span><span>вчера, 12:05</span></span>
+          </span>
+          <a class="btn btn--sm" href="#">Продолжить</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Проекты компактно -->
+    <section aria-labelledby="m-sec-projects" class="col gap-8">
+      <div class="m-section-title">
+        <h2 class="sec-title" id="m-sec-projects">Проекты <span class="tab__count">7</span></h2>
+        <a class="sm" href="#">Все</a>
+      </div>
+      <div class="m-list">
+        <a class="m-row" href="#"><span class="m-row__main"><span class="m-row__title">Корпоративные продажи</span><span class="m-row__sub"><span class="row gap-4"><span class="dot-state dot-state--run"></span>2 работают</span><span>·</span><span class="warn-text">1 решение</span></span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+        <a class="m-row" href="#"><span class="m-row__main"><span class="m-row__title">Клиентская поддержка</span><span class="m-row__sub"><span class="row gap-4"><span class="dot-state dot-state--err"></span>1 инцидент</span><span>·</span><span>1 в очереди</span></span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+        <a class="m-row" href="#"><span class="m-row__main"><span class="m-row__title">Юридический отдел</span><span class="m-row__sub"><span class="row gap-4"><span class="dot-state"></span>Остановлен запуск</span></span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+        <div class="list-more"><span>Показаны 3 из 7 · остальные спокойны</span></div>
+      </div>
+    </section>
+
+    <!-- 5. Результаты -->
+    <section aria-labelledby="m-sec-results" class="col gap-8">
+      <div class="m-section-title">
+        <h2 class="sec-title" id="m-sec-results">Последние результаты</h2>
+        <a class="sm" href="#">Все файлы</a>
+      </div>
+      <div class="m-list">
+        <a class="m-row" href="#"><span class="mime mime--pdf">pdf</span><span class="m-row__main"><span class="m-row__title">Коммерческое предложение — Север.pdf</span><span class="m-row__sub"><span>Редактор предложений</span><span>·</span><span>сегодня, 11:52</span></span></span><svg class="ic mut"><use href="#i-download"/></svg></a>
+        <a class="m-row" href="#"><span class="mime mime--md">md</span><span class="m-row__main"><span class="m-row__title">Факты о компании Меридиан.md</span><span class="m-row__sub"><span>Исследователь рынка</span><span>·</span><span>вчера, 12:05</span></span></span><svg class="ic mut"><use href="#i-download"/></svg></a>
+        <a class="m-row" href="#"><span class="mime mime--xls">xlsx</span><span class="m-row__main"><span class="m-row__title">Отчёт по обращениям — неделя 34.xlsx</span><span class="m-row__sub"><span>Классификатор обращений</span><span>·</span><span>вчера, 18:20</span></span></span><svg class="ic mut"><use href="#i-download"/></svg></a>
+      </div>
+    </section>
+  </main>
+  <!-- Primary action: нижняя action bar над tab bar; FAB стоит в её правой части -->
+  <div class="m-primary"><a class="btn btn--primary btn--block" href="#"><svg class="ic"><use href="#i-run"/></svg>Новый запуск</a></div>
+</div>
+<p class="stage-note">Mobile-версия рекомендуемого варианта A. Блок «Требует внимания» идёт первым и полностью виден без прокрутки: четыре компактные строки высотой ≥60 px с действием-кнопкой ≥44×44. Ниже — активные работы (исполнитель, инициатор, источник иконкой, статус), продолжение сессий, Проекты и результаты в виде списков, а не таблиц. Primary action «Новый запуск» закреплена над нижней tab bar слева от FAB Kodex; контент имеет нижний отступ, поэтому ни кнопка, ни FAB его не перекрывают. Меню навигации и поиск открываются из верхней панели как drawer/sheet.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    title: 'Главная', sub: 'Анна Волкова · Владелец', nav: 'home', project: null, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Главная', object: '', can: ['объяснить событие из блока внимания', 'запустить работу в Проекте'] },
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Решения · Human Gate интеграции</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-ap .page-body { padding-bottom: 84px; }
+  .p-ap .split--aside-main { grid-template-columns: 400px minmax(0, 1fr); align-items: start; }
+  .p-ap .gate-row { display: block; padding: 12px 16px; border-top: 1px solid var(--line-hair); color: inherit; text-decoration: none; }
+  .p-ap .gate-row:first-child { border-top: 0; }
+  .p-ap .gate-row:hover { background: var(--bg-hover); text-decoration: none; }
+  .p-ap .gate-row.is-selected { background: var(--acc-tint); box-shadow: inset 2px 0 0 var(--acc); }
+  .p-ap .gate-row__title { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 500; line-height: 1.35; }
+  .p-ap .gate-row__sub { font-size: 11.5px; color: var(--mut); margin-top: 4px; line-height: 1.45; }
+  .p-ap .effect { border: 1px solid var(--line); border-radius: var(--r-3); overflow: hidden; }
+  .p-ap .effect__row { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line-hair); font-size: 12.5px; }
+  .p-ap .effect__row:first-child { border-top: 0; }
+  .p-ap .effect__k { color: var(--mut); font-size: 12px; }
+  .p-ap .effect__files { display: flex; flex-direction: column; gap: 3px; font-family: var(--font-mono); font-size: 11.5px; }
+  .p-ap .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 16px; }
+  .p-ap .fact { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .p-ap .fact__k { font-size: 11px; color: var(--mut); text-transform: uppercase; letter-spacing: 0.04em; }
+  .p-ap .fact__v { font-size: 12.5px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; min-width: 0; line-height: 1.4; }
+  .p-ap .receipt { border: 1px solid var(--ok-line); background: var(--ok-soft); border-radius: var(--r-3); padding: 10px 12px; display: flex; align-items: flex-start; gap: 10px; font-size: 12.5px; }
+  .p-ap .receipt .ic { color: var(--ok); margin-top: 2px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Решения · Human Gate опасной операции интеграции · desktop 1440×1024 · маршрут <code>/decisions/:gateRef</code></p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page p-ap" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><span>Решения</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Решения</h1><span class="badge-count" aria-label="2 ожидают">2</span></div>
+          <div class="page-sub">Вопросы, без вашего ответа работа не продолжится. Решение принимается один раз и записывается на ваше имя.</div>
+        </div>
+        <div class="page-actions">
+          <div class="seg" data-seg role="group" aria-label="Фильтр решений"><button class="seg__btn" type="button" aria-pressed="true">Ожидают меня</button><button class="seg__btn" type="button" aria-pressed="false">Все открытые</button><button class="seg__btn" type="button" aria-pressed="false">История</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="split split--aside-main">
+        <section class="card" aria-label="Список решений">
+          <div class="card__head"><h2 class="sec-title">Ожидают</h2><span class="refresh"><span class="refresh__dot"></span><span class="refresh__text">обновлено 12:33</span></span></div>
+          <div data-select-group>
+            <a class="gate-row is-selected" href="#" data-select-row>
+              <div class="gate-row__title"><span>Создать pull request в org/billing-service</span><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Ожидает вас</span></div>
+              <div class="gate-row__sub">GitHub · Основная организация · риск: изменение кода<br>Разработка платформы · запуск «Проверка релиза 2.4» · истекает через 22 ч</div>
+            </a>
+            <a class="gate-row" href="#" data-select-row>
+              <div class="gate-row__title"><span>Согласовать коммерческое предложение</span><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Ожидает вас</span></div>
+              <div class="gate-row__sub">Решение Процесса · без внешнего эффекта<br>Корпоративные продажи · запуск «Подготовить предложение для компании Север» · срок сегодня, 18:00</div>
+            </a>
+            <a class="gate-row" href="#" data-select-row>
+              <div class="gate-row__title"><span>Отправить письмо клиенту компании Восток</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Решение принято</span></div>
+              <div class="gate-row__sub">Электронная почта · риск: внешняя коммуникация<br>Одобрил Михаил Орлов, 12:12 · выполнено 12:13</div>
+            </a>
+          </div>
+          <div class="card__foot"><svg class="ic"><use href="#i-info"/></svg><span>Если решение уже принял другой участник, вы увидите фактический результат, а не форму (stale readback).</span></div>
+        </section>
+
+        <section class="card" aria-labelledby="gate-title">
+          <div class="card__head card__head--line" style="align-items:flex-start">
+            <div class="col gap-4 grow">
+              <div class="xs mut"><a href="#">Запуск «Проверка релиза 2.4»</a> · узел «Инженер релизов» · ход 2</div>
+              <div class="row gap-10 row--wrap"><h2 class="h2" id="gate-title">Создать pull request в org/billing-service</h2><span class="pill pill--gate"><svg class="ic"><use href="#i-shield"/></svg>Ожидает решения · WAITING_APPROVAL</span></div>
+              <div class="xs mut">Намерение зафиксировано 12:31 · неизменяемо: изменение аргументов после решения создаст новый запрос. Запуск переведён в «Ждёт человека», Pod исполнителя освобождён.</div>
+            </div>
+            <span class="pill pill--wait" data-tip="Срок ожидания задан политикой риска" data-tip-pos="left"><svg class="ic"><use href="#i-clock"/></svg>Истекает через 22 ч</span>
+          </div>
+          <div class="card__body card__body--pad col gap-14">
+            <div class="facts">
+              <div class="fact"><span class="fact__k">Исполнитель (actor)</span><span class="fact__v"><span class="avatar avatar--24 avatar--acc">ИР</span>Инженер релизов</span></div>
+              <div class="fact"><span class="fact__k">Инициатор (root)</span><span class="fact__v"><span class="avatar avatar--24">АВ</span>Анна Волкова · запуск «Проверка релиза 2.4»</span></div>
+              <div class="fact"><span class="fact__k">Источник запуска</span><span class="fact__v"><span class="source" tabindex="0" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></span></div>
+              <div class="fact"><span class="fact__k">Подключение</span><span class="fact__v"><svg class="ic ic-14 mut"><use href="#i-branch"/></svg>GitHub · Основная организация · <span class="tag tag--acc">user-delegated</span></span></div>
+              <div class="fact"><span class="fact__k">Область ресурсов</span><span class="fact__v mono xs">org/billing-service · ветка release/2.4</span></div>
+              <div class="fact"><span class="fact__k">Возможность и риск</span><span class="fact__v"><span class="mono xs">github.pull-request.create</span><span class="risk risk--code">code_change</span></span></div>
+            </div>
+
+            <div>
+              <h3 class="sec-title mb-8">Что изменится (effect preview)</h3>
+              <div class="effect">
+                <div class="effect__row"><span class="effect__k">Репозиторий</span><span class="mono">org/billing-service</span></div>
+                <div class="effect__row"><span class="effect__k">Ветки</span><span><span class="mono">release/2.4</span> ← <span class="mono">fix/invoice-rounding</span> (новая, 1 коммит)</span></div>
+                <div class="effect__row"><span class="effect__k">Заголовок PR</span><span>Исправить округление в счетах при частичной оплате</span></div>
+                <div class="effect__row"><span class="effect__k">Файлы (3)</span><span class="effect__files"><span>internal/invoice/rounding.go <span class="ok-text">+18</span> <span class="err-text">−4</span></span><span>internal/invoice/rounding_test.go <span class="ok-text">+42</span></span><span>CHANGELOG.md <span class="ok-text">+2</span></span></span></div>
+                <div class="effect__row"><span class="effect__k">Ограничения</span><span class="xs">Слияние не входит в это намерение · до 50 файлов · результат: номер PR и ссылка</span></div>
+              </div>
+            </div>
+
+            <div class="split split--equal">
+              <div>
+                <h3 class="sec-title mb-8">Последствия решения</h3>
+                <div class="col gap-6 sm ink2">
+                  <span class="row gap-8 row--top"><svg class="ic ic-14 ok-text"><use href="#i-check"/></svg><span><b>Одобрить</b> — integration-gateway выполнит операцию делегированной учётной записью; сотрудник получит результат и продолжит ту же сессию.</span></span>
+                  <span class="row gap-8 row--top"><svg class="ic ic-14 warn-text"><use href="#i-edit"/></svg><span><b>Запросить изменения</b> — сотрудник получит ваш комментарий следующим ходом и подготовит новое намерение.</span></span>
+                  <span class="row gap-8 row--top"><svg class="ic ic-14 err-text"><use href="#i-x-circle"/></svg><span><b>Отклонить</b> — операция не выполнится; сотрудник завершит ход без внешнего эффекта.</span></span>
+                </div>
+              </div>
+              <div class="field">
+                <label class="field__label" for="gate-comment">Комментарий</label>
+                <textarea class="textarea" id="gate-comment" rows="4" placeholder="Необязательно. Будет сохранён в аудите вместе с решением."></textarea>
+              </div>
+            </div>
+
+            <div>
+              <h3 class="sec-title mb-8">После выполнения · пример receipt</h3>
+              <div class="receipt"><svg class="ic"><use href="#i-check-circle"/></svg><span class="grow"><b>Выполнено 12:40</b> · PR <a href="#">#142</a> создан в org/billing-service · идемпотентная квитанция сохранена, повтор не создаст второй PR.</span><a class="btn btn--sm" href="#"><svg class="ic"><use href="#i-audit"/></svg>Открыть аудит</a></div>
+            </div>
+          </div>
+          <div class="card__foot card__foot--actions" style="justify-content:flex-start;gap:10px">
+            <button class="btn btn--primary btn--lg" type="button" id="btn-approve"><svg class="ic"><use href="#i-check"/></svg>Одобрить</button>
+            <button class="btn btn--lg" type="button"><svg class="ic"><use href="#i-edit"/></svg>Запросить изменения</button>
+            <button class="btn btn--lg btn--danger" type="button"><svg class="ic"><use href="#i-x-circle"/></svg>Отклонить</button>
+            <span class="xs mut right">Решение будет записано на имя Анны Волковой · один победитель (OCC)</span>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Human Gate опасной операции: слева — список решений с состояниями (ожидает / принято другим участником), справа — карточка намерения с effect preview (ветки, файлы, заголовок PR как bounded список), actor и root initiator раздельно, источник запуска, подключение и режим учётной записи, область ресурсов, класс риска и срок. Намерение неизменяемо и показано без UUID. Три исхода с описанием последствий; destructive не primary. Внизу — пример безопасного receipt с внешней ссылкой на PR и ссылкой на аудит.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  const frame = document.getElementById('frame');
+  document.getElementById('btn-approve').addEventListener('click', (e) => {
+    const b = e.currentTarget; b.classList.add('is-loading'); b.disabled = true;
+    setTimeout(() => { b.classList.remove('is-loading'); b.disabled = false; Kodex.toast(frame, 'Решение принято: одобрено. Операция выполняется в integration-gateway'); }, 900);
+  });
+  Kodex.mount({
+    nav: 'decisions', project: null, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Решения', object: 'Создать pull request в org/billing-service', can: ['объяснить эффект и риск операции', 'показать историю сессии сотрудника', 'подготовить комментарий к решению — само решение принимаете только вы'] },
+  });
+</script>
+</body>
+</html>

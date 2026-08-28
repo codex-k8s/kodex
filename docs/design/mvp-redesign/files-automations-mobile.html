@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Файлы и автоматизации · Mobile</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .stage-row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .m-files__chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .m-files__chips::-webkit-scrollbar { display: none; }
+  .m-files__chips .chip { flex: 0 0 auto; }
+  .m-files .list-row { padding: 10px 12px; }
+  .m-files .list-row__title > span:first-child { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14px; }
+  .m-files .list-row__sub { font-size: 12px; }
+  .m-files .list-row__aside .pill { height: 26px; }
+  .m-sheet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .m-sheet-actions .btn { min-height: 44px; }
+  .m-sheet-actions .btn--block { grid-column: 1 / -1; }
+  .m-kv .kv__k { flex-basis: 96px; }
+  .m-auto .list-row { padding: 12px; align-items: flex-start; }
+  .m-auto .list-row__title > span:first-child { white-space: normal; font-size: 14px; }
+  .m-auto__meta { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--sec); margin-top: 4px; }
+  .m-auto__meta b { font-weight: 500; color: var(--ink-2); }
+  .m-auto .m-icon { width: 44px; height: 44px; margin: -8px -8px 0 0; }
+  .frame--mobile .menu__item { min-height: 44px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Файлы и автоматизации · mobile 390×844 · два artboard: <code>/projects/:projectRef/files</code> и <code>/projects/:projectRef/automations</code></p>
+<div class="stage-row">
+
+  <!-- Artboard 1: Файлы -->
+  <div class="frame frame--mobile m-files" id="frame-files">
+    <main class="page" aria-label="Файлы Проекта">
+      <label class="search search--bg"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Поиск файлов" aria-label="Серверный поиск файлов"></label>
+      <div class="m-files__chips" data-chip-group="single" role="group" aria-label="Фильтр по состоянию">
+        <button class="chip" type="button" aria-pressed="true">Все · 1 248</button>
+        <button class="chip" type="button" aria-pressed="false"><svg class="ic"><use href="#i-check"/></svg>Проверены</button>
+        <button class="chip" type="button" aria-pressed="false"><svg class="ic"><use href="#i-bot"/></svg>Назначены</button>
+        <button class="chip" type="button" aria-pressed="false"><svg class="ic"><use href="#i-run"/></svg>Результаты</button>
+        <button class="chip" type="button" aria-pressed="false"><svg class="ic"><use href="#i-alert"/></svg>Изолированы</button>
+      </div>
+      <div class="row row--between"><span class="xs mut mono">Показано 12 из 1 248</span><button class="btn btn--sm" type="button" data-menu="#m-menu-sort" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-sort"/></svg>Сначала новые</button></div>
+      <div class="card" id="m-files-list">
+        <button class="list-row list-row--clickable w-100" type="button" data-sheet="#m-sheet-file" style="text-align:left;border:0;background:none;border-top:0">
+          <span class="mime mime--pdf">pdf</span>
+          <span class="list-row__main"><span class="list-row__title"><span>Описание продукта — Север.pdf</span></span><span class="list-row__sub"><span class="mono">4,2 МБ</span><span>·</span><span class="mono">v2</span><span>·</span><span>сегодня, 09:41</span></span></span>
+          <span class="list-row__aside"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></span>
+        </button>
+        <button class="list-row list-row--clickable w-100" type="button" style="text-align:left;border-left:0;border-right:0;border-bottom:0;background:none">
+          <span class="mime mime--doc">docx</span>
+          <span class="list-row__main"><span class="list-row__title"><span>Сценарии продаж.docx</span></span><span class="list-row__sub"><span class="mono">820 КБ</span><span>·</span><span class="mono">v1</span><span>·</span><span>Проект · папка Шаблоны</span></span></span>
+          <span class="list-row__aside"><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Проверяется</span></span>
+        </button>
+        <button class="list-row list-row--clickable w-100" type="button" style="text-align:left;border-left:0;border-right:0;border-bottom:0;background:none">
+          <span class="mime mime--pdf">pdf</span>
+          <span class="list-row__main"><span class="list-row__title"><span>Коммерческое предложение — Север.pdf</span></span><span class="list-row__sub"><span class="mono">1,4 МБ</span><span>·</span><span class="mono">v1</span><span>·</span><span>Результат запуска</span></span></span>
+          <span class="list-row__aside"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></span>
+        </button>
+        <button class="list-row list-row--clickable w-100" type="button" style="text-align:left;border-left:0;border-right:0;border-bottom:0;background:none">
+          <span class="mime mime--xls">xlsx</span>
+          <span class="list-row__main"><span class="list-row__title"><span>Прайс-лист 2026.xlsx</span></span><span class="list-row__sub"><span class="mono">260 КБ</span><span>·</span><span class="mono">v1</span><span>·</span><span>Загрузил Михаил Орлов</span></span></span>
+          <span class="list-row__aside"><span class="pill pill--err pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Изолирован</span></span>
+        </button>
+        <button class="list-row list-row--clickable w-100" type="button" style="text-align:left;border-left:0;border-right:0;border-bottom:0;background:none">
+          <span class="mime mime--md">md</span>
+          <span class="list-row__main"><span class="list-row__title"><span>Факты о компании Меридиан.md</span></span><span class="list-row__sub"><span class="mono">38 КБ</span><span>·</span><span class="mono">v1</span><span>·</span><span>Результат запуска</span></span></span>
+          <span class="list-row__aside"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></span>
+        </button>
+        <button class="list-row list-row--clickable w-100" type="button" style="text-align:left;border-left:0;border-right:0;border-bottom:0;background:none">
+          <span class="mime mime--pdf">pdf</span>
+          <span class="list-row__main"><span class="list-row__title"><span>Описание продукта — Восток.pdf</span></span><span class="list-row__sub"><span class="mono">3,9 МБ</span><span>·</span><span class="mono">v1</span><span>·</span><span>Проект · папка Клиенты/Восток</span></span></span>
+          <span class="list-row__aside"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></span>
+        </button>
+        <button class="list-row list-row--clickable w-100" type="button" style="text-align:left;border-left:0;border-right:0;border-bottom:0;background:none">
+          <span class="mime mime--img">png</span>
+          <span class="list-row__main"><span class="list-row__title"><span>Схема процесса продаж.png</span></span><span class="list-row__sub"><span class="mono">1,1 МБ</span><span>·</span><span class="mono">v3</span><span>·</span><span>Загрузила Анна Волкова</span></span></span>
+          <span class="list-row__aside"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></span>
+        </button>
+        <div class="list-more"><span class="spinner spinner--sm"></span><span>Загружаем ещё…</span></div>
+      </div>
+      <div class="xs mut" style="padding:0 2px">Хранилище: S3-совместимое, bucket платформы. Ключи и внутренние идентификаторы не показываются.</div>
+    </main>
+
+    <div class="menu" id="m-menu-sort"><button class="menu__item" role="menuitemradio" aria-checked="true">Сначала новые</button><button class="menu__item" role="menuitemradio" aria-checked="false">Сначала старые</button><button class="menu__item" role="menuitemradio" aria-checked="false">По имени</button><button class="menu__item" role="menuitemradio" aria-checked="false">По размеру</button></div>
+
+    <!-- Sheet деталей файла -->
+    <div class="sheet" id="m-sheet-file" role="dialog" aria-labelledby="m-sheet-title" data-modal-drawer>
+      <div class="sheet__grip"></div>
+      <div class="sheet__head">
+        <span class="mime mime--pdf mime--lg">pdf</span>
+        <div class="grow" style="min-width:0"><div class="sheet__title" id="m-sheet-title" style="font-size:14.5px;line-height:1.3">Описание продукта — Север.pdf</div><div class="row gap-6 mt-4"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span><span class="tag tag--mono">v2</span></div></div>
+        <button class="m-icon" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="sheet__body">
+        <div class="doc-preview" style="height:110px" aria-label="Безопасный предпросмотр первой страницы"><span class="t"></span><span style="width:92%"></span><span style="width:88%"></span><span style="width:74%"></span><span class="xs mut" style="margin-top:auto;height:auto;background:none">Первая страница · безопасный предпросмотр</span></div>
+        <div class="kv m-kv mt-12">
+          <div class="kv__row"><span class="kv__k">Размер</span><span class="kv__v mono">4,2 МБ · 12 страниц</span></div>
+          <div class="kv__row"><span class="kv__k">Версия</span><span class="kv__v">v2 · сегодня, 09:41 · Анна Волкова</span></div>
+          <div class="kv__row"><span class="kv__k">Папка</span><span class="kv__v">Клиенты / Север</span></div>
+          <div class="kv__row"><span class="kv__k">Назначен</span><span class="kv__v">Аналитик продаж <span class="mono mut">v2</span>, Редактор предложений <span class="mono mut">v1</span></span></div>
+          <div class="kv__row"><span class="kv__k">Запуски</span><span class="kv__v"><a href="#">Подготовить предложение для компании Север</a></span></div>
+        </div>
+      </div>
+      <div class="sheet__foot" style="flex-direction:column">
+        <div class="m-sheet-actions">
+          <button class="btn btn--primary btn--block" type="button"><svg class="ic"><use href="#i-eye"/></svg>Открыть предпросмотр</button>
+          <button class="btn" type="button"><svg class="ic"><use href="#i-bot"/></svg>Назначить</button>
+          <button class="btn" type="button"><svg class="ic"><use href="#i-download"/></svg>Скачать</button>
+          <button class="btn btn--ghost btn--block" type="button" data-menu="#m-menu-file" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg>Ещё действия</button>
+        </div>
+      </div>
+      <div class="menu" id="m-menu-file" data-align="top"><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-run"/></svg>Использовать в запуске</button><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-upload"/></svg>Загрузить новую версию</button><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-history"/></svg>Версии и происхождение</button><div class="menu__sep"></div><button class="menu__item menu__item--danger" role="menuitem"><svg class="ic"><use href="#i-trash"/></svg>Удалить</button></div>
+    </div>
+  </div>
+
+  <!-- Artboard 2: Автоматизации -->
+  <div class="frame frame--mobile m-auto" id="frame-auto">
+    <main class="page" aria-label="Автоматизации Проекта">
+      <div class="row row--between">
+        <button class="chip chip--filter" type="button" data-menu="#m-menu-state" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-filter"/></svg>Состояние: все<svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+        <span class="refresh"><span class="refresh__dot"></span><span class="refresh__text">обновлено 12:04</span></span>
+      </div>
+      <div class="card">
+        <div class="list-row">
+          <div class="list-row__main">
+            <div class="list-row__title"><span>Ежедневная сводка по лидам</span></div>
+            <div class="m-auto__meta">
+              <span><svg class="ic ic-14 mut"><use href="#i-calendar"/></svg> По будням в 09:00 · Europe/Saratov</span>
+              <span><svg class="ic ic-14 mut"><use href="#i-bot"/></svg> <b>Аналитик продаж</b> · сотрудник · <span class="mono">v3</span></span>
+              <span><svg class="ic ic-14 mut"><use href="#i-chev-r"/></svg> Следующий: <b>Пн, 31 авг, 09:00</b></span>
+            </div>
+            <div class="row gap-6 mt-6"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активно</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Последний: успешно</span></div>
+          </div>
+          <button class="m-icon" type="button" aria-label="Действия" data-menu="#m-menu-active" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+        </div>
+        <div class="list-row">
+          <div class="list-row__main">
+            <div class="list-row__title"><span>Недельное предложение руководителю</span></div>
+            <div class="m-auto__meta">
+              <span><svg class="ic ic-14 mut"><use href="#i-calendar"/></svg> Каждую пятницу в 16:00 · Europe/Saratov</span>
+              <span><svg class="ic ic-14 mut"><use href="#i-wf"/></svg> <b>Подготовка сводки</b> · Процесс · <span class="mono">v1</span></span>
+              <span><svg class="ic ic-14 mut"><use href="#i-chev-r"/></svg> Следующий: <b>Сегодня, 16:00</b></span>
+            </div>
+            <div class="row gap-6 mt-6"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активно</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Последний: успешно</span></div>
+          </div>
+          <button class="m-icon" type="button" aria-label="Действия" data-menu="#m-menu-active" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+        </div>
+        <div class="list-row">
+          <div class="list-row__main">
+            <div class="list-row__title"><span>Проверка новых договоров</span></div>
+            <div class="m-auto__meta">
+              <span><svg class="ic ic-14 mut"><use href="#i-calendar"/></svg> Ежедневно в 07:30 · Europe/Saratov</span>
+              <span><svg class="ic ic-14 mut"><use href="#i-bot"/></svg> <b>Юридический консультант</b> · сотрудник · <span class="mono">v2</span></span>
+              <span><svg class="ic ic-14 mut"><use href="#i-chev-r"/></svg> Следующий: после возобновления</span>
+            </div>
+            <div class="row gap-6 mt-6"><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-pause"/></svg>Приостановлено</span><span class="pill pill--err pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Последний: ошибка</span></div>
+          </div>
+          <button class="m-icon" type="button" aria-label="Действия" data-menu="#m-menu-paused" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+        </div>
+        <div class="list-row">
+          <div class="list-row__main">
+            <div class="list-row__title"><span>Классификация входящих писем</span></div>
+            <div class="m-auto__meta">
+              <span><svg class="ic ic-14 mut"><use href="#i-calendar"/></svg> Каждый час, 08:00–20:00 · Europe/Saratov</span>
+              <span><svg class="ic ic-14 mut"><use href="#i-bot"/></svg> <b>Классификатор обращений</b> · сотрудник · <span class="mono">v5</span></span>
+              <span><svg class="ic ic-14 mut"><use href="#i-chev-r"/></svg> Следующий: <b>Сегодня, 13:00</b></span>
+            </div>
+            <div class="row gap-6 mt-6"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активно</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Последний: успешно</span></div>
+          </div>
+          <button class="m-icon" type="button" aria-label="Действия" data-menu="#m-menu-active" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+        </div>
+        <div class="list-row">
+          <div class="list-row__main">
+            <div class="list-row__title"><span>Пробный отчёт по рынку</span></div>
+            <div class="m-auto__meta">
+              <span><svg class="ic ic-14 mut"><use href="#i-calendar"/></svg> Понедельник в 10:00 · Europe/Saratov</span>
+              <span><svg class="ic ic-14 mut"><use href="#i-bot"/></svg> <b>Исследователь рынка</b> · сотрудник · <span class="mono">v1</span></span>
+            </div>
+            <div class="row gap-6 mt-6"><span class="pill pill--info pill--sm"><svg class="ic"><use href="#i-edit"/></svg>Черновик</span></div>
+          </div>
+          <button class="m-icon" type="button" aria-label="Действия" data-menu="#m-menu-draft" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+        </div>
+      </div>
+      <div class="notice notice--sm"><svg class="ic"><use href="#i-alert"/></svg><span class="notice__text">Уведомление о запуске 25 августа не доставлено во внешний канал. На результаты запусков это не влияет.</span></div>
+    </main>
+    <div class="menu" id="m-menu-state"><button class="menu__item" role="menuitemradio" aria-checked="true">Все</button><button class="menu__item" role="menuitemradio" aria-checked="false">Активные</button><button class="menu__item" role="menuitemradio" aria-checked="false">Приостановленные</button><button class="menu__item" role="menuitemradio" aria-checked="false">Черновики</button><button class="menu__item" role="menuitemradio" aria-checked="false">Архив</button></div>
+    <div class="menu" id="m-menu-active" data-align="right"><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-eye"/></svg>Открыть</button><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-run"/></svg>Запустить сейчас</button><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-pause"/></svg>Приостановить</button><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-archive"/></svg>Архивировать</button></div>
+    <div class="menu" id="m-menu-paused" data-align="right"><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-eye"/></svg>Открыть</button><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-play"/></svg>Возобновить</button><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-archive"/></svg>Архивировать</button></div>
+    <div class="menu" id="m-menu-draft" data-align="right"><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-edit"/></svg>Изменить черновик</button><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-check"/></svg>Активировать</button><div class="menu__sep"></div><button class="menu__item menu__item--danger" role="menuitem"><svg class="ic"><use href="#i-trash"/></svg>Удалить черновик</button></div>
+  </div>
+</div>
+<p class="stage-note">Mobile: таблицы превращены в списки с MIME-иконкой, состоянием и контекстом для одинаковых имён; фильтры — прокручиваемые chips, сортировка — меню. Детали файла открываются нижней панелью (bottom sheet) с безопасным предпросмотром и действиями не меньше 44 px; первая кнопка — просмотр, деструктивное «Удалить» спрятано в «Ещё действия». Автоматизации на mobile показывают расписание, цель, версию, следующий запуск и результат в одной карточке-строке; меню строки даёт паузу/возобновление/архив, удаление — только черновику. Нижняя навигация и FAB Kodex не перекрывают содержимое.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({ frame: '#frame-files', title: 'Файлы', sub: 'Корпоративные продажи', nav: 'project.files', project: Kodex.data.projects[0], decisions: 2, connection: 'online', kodexContext: { screen: 'Файлы', object: 'Проект «Корпоративные продажи»', can: ['найти файл', 'назначить файл сотруднику'] } });
+  Kodex.mount({ frame: '#frame-auto', title: 'Автоматизации', sub: 'Корпоративные продажи', nav: 'project.automations', project: Kodex.data.projects[0], decisions: 2, connection: 'online', moreMenu: '#m-menu-page', kodexContext: { screen: 'Автоматизации', object: 'Проект «Корпоративные продажи»', can: ['создать автоматизацию словами', 'объяснить пропуск запуска'] } });
+  document.querySelector('#frame-auto').insertAdjacentHTML('beforeend', '<div class="menu" id="m-menu-page" data-align="right"><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-plus"/></svg>Создать автоматизацию</button><button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-history"/></svg>История всех запусков</button></div>');
+  Kodex.openOverlay(document.querySelector('#m-sheet-file'), true);
+</script>
+</body>
+</html>

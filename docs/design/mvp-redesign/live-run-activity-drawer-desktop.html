@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Запуск · Ход работы (drawer)</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .stage-toolbar { display: flex; align-items: center; gap: 10px; margin: -14px 0 -8px; font-size: 12px; color: #4E5A68; }
+  .stage-toolbar .seg { background: #fff; }
+  .p-run__body { display: flex; flex: 1 1 auto; min-height: 0; }
+  .p-run__graph { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--bg); }
+  .p-run__bar { flex: 0 0 46px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid var(--line-hair); background: var(--bg); }
+  .p-run__bar .sec-title, .p-run__bar .refresh, #graph-count { white-space: nowrap; }
+  .frame--tablet .p-run__aside { flex-basis: 320px; }
+  .frame--tablet #graph-count, .frame--tablet .p-run__bar .refresh { display: none; }
+  .frame--tablet .p-feed__list .act__block-head { flex-wrap: wrap; row-gap: 4px; }
+  .p-feed__list .act__block-head .mono { white-space: nowrap; }
+  .p-run__stage { flex: 1 1 auto; min-height: 0; position: relative; display: flex; }
+  .p-run__stage .canvas { flex: 1 1 auto; min-height: 0; }
+  .p-run__outline { flex: 1 1 auto; min-height: 0; overflow: auto; background: var(--bg); }
+  .p-run__outline .list-row--sub { padding-left: 44px; }
+  .p-run__rt { flex: 0 0 34px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-top: 1px solid var(--line-hair); font-size: 11.5px; color: var(--sec); background: var(--bg-subtle); }
+  .p-run__rt .mono { font-size: 11px; }
+  .p-run__aside { flex: 0 0 380px; display: flex; flex-direction: column; min-height: 0; overflow: auto; background: var(--bg-subtle); padding-bottom: 72px; }
+  .p-run .project-switch__hint, #frame .project-switch__hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-run__aside .inspector__head { position: sticky; top: 0; background: var(--bg); z-index: 2; }
+  .p-run__aside .inspector__body { overflow: visible; flex: 0 0 auto; }
+  .p-run__section { padding: 12px 14px 14px; border-top: 1px solid var(--line); }
+  .p-run__section .list-row { padding: 8px 0; min-height: 40px; }
+  .p-run__status { border: 1px solid var(--acc-soft-line); background: var(--acc-soft); border-radius: var(--r-3); padding: 9px 11px; font-size: 12.5px; color: var(--ink-2); display: flex; flex-direction: column; gap: 7px; }
+  .p-run__status-row { display: flex; align-items: flex-start; gap: 8px; line-height: 1.45; }
+  .p-run__status-row .ic { flex: 0 0 auto; margin-top: 2px; color: var(--sec); }
+  .p-run__status--err .p-run__status-row .ic { color: var(--err); }
+  .p-run__status--gate .p-run__status-row .ic { color: var(--warn); }
+  .p-run__status--ok .p-run__status-row .ic { color: var(--ok); }
+  .p-run__status--info .p-run__status-row .ic { color: var(--acc); }
+  .p-run__status--err { border-color: var(--err-line); background: var(--err-tint); }
+  .p-run__status--gate { border-color: var(--warn-line); background: var(--warn-tint); }
+  .p-run__status--off { border-color: var(--line); background: var(--bg-field); }
+  .p-run__status--ok { border-color: var(--ok-line); background: var(--ok-soft); }
+  .p-run__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .p-run__meta-tags { display: flex; gap: 6px; align-items: center; }
+  .menu__item[aria-disabled="true"] { color: var(--faint); cursor: not-allowed; }
+  .menu__item[aria-disabled="true"]:hover { background: none; }
+  /* drawer «Ход работы» */
+  .p-feed__tools { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--line-hair); background: var(--bg-subtle); flex: 0 0 auto; }
+  .p-feed__tools .select { min-width: 200px; }
+  .p-feed__tools[hidden], .p-detail[hidden], .p-run__stage > [hidden] { display: none !important; }
+  .p-feed__list { padding: 4px 16px 12px; }
+  .p-feed__list .act__block-head .btn--sm { height: 22px; padding: 0 7px; font-size: 11px; }
+  .p-feed__list .act__block-head .pill { margin-left: auto; }
+  .p-feed__list .act__block-head .btn { margin-left: 0; }
+  .p-feed__plan { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .p-feed__plan li { display: flex; align-items: center; gap: 8px; }
+  .p-feed__plan li .ic { width: 14px; height: 14px; }
+  .p-feed__plan li.is-done { color: var(--ok); }
+  .p-feed__plan li.is-current { color: var(--acc-dark); font-weight: 500; }
+  .p-feed__plan li.is-todo { color: var(--mut); }
+  .p-feed__foot-text { flex: 1 1 auto; font-size: 11.5px; color: var(--mut); }
+  .p-detail { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .p-detail__back { align-self: flex-start; }
+  .p-detail__result { font-family: var(--font-mono); font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg-subtle); color: var(--ink-2); }
+  .p-detail .kv__k { flex-basis: 132px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Запуск · Live Run Workspace · desktop 1440×1024 · маршрут <code>/runs/:runRef</code> · открыт правый drawer «Ход работы»</p>
+<div class="stage-toolbar" id="scenario-bar" aria-label="Демонстрация состояний макета">
+  <span>Демо-состояния (вне продукта):</span>
+  <div class="seg" role="group">
+    <button class="seg__btn" type="button" data-scenario="active" aria-pressed="true">Активный</button>
+    <button class="seg__btn" type="button" data-scenario="gate" aria-pressed="false">Human Gate</button>
+    <button class="seg__btn" type="button" data-scenario="error" aria-pressed="false">Ошибка узла</button>
+    <button class="seg__btn" type="button" data-scenario="gate-error" aria-pressed="false">Gate + ошибка</button>
+    <button class="seg__btn" type="button" data-scenario="cancelled" aria-pressed="false">Отменён</button>
+  </div>
+  <button class="btn btn--sm" type="button" data-scenario="reconnect"><svg class="ic"><use href="#i-wifi"/></svg>Reconnect</button>
+</div>
+<div class="frame frame--desktop" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Корпоративные продажи</a><span>/</span><a href="#">Запуски</a><span>/</span><span>Подготовить предложение для компании Север</span></div>
+      <div class="page-title-row">
+        <div style="min-width:0">
+          <div class="page-title"><h1 id="page-title">Подготовить предложение для компании Север</h1><span id="run-pill"></span><span id="run-tags" class="p-run__meta-tags"></span></div>
+          <div class="page-meta" id="run-meta"></div>
+        </div>
+        <div class="page-actions">
+          <button class="btn" type="button" data-drawer="#activity-drawer"><svg class="ic"><use href="#i-activity"/></svg>Ход работы</button>
+          <button class="btn btn--danger" type="button" id="btn-cancel">Отменить запуск</button>
+          <button class="btn btn--icon" type="button" aria-label="Ещё действия" data-menu="#menu-more" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+          <div class="menu" id="menu-more" data-align="right">
+            <button class="menu__item" role="menuitem" id="menu-retry" aria-disabled="true" data-tip="Доступно после завершения попытки" data-tip-pos="left"><svg class="ic"><use href="#i-refresh"/></svg><span>Повторить попытку</span></button>
+            <a class="menu__item" role="menuitem" href="#/sessions/sales-north"><svg class="ic"><use href="#i-history"/></svg><span>Открыть сессию</span></a>
+            <button class="menu__item" role="menuitem" id="menu-copy"><svg class="ic"><use href="#i-link"/></svg><span>Скопировать ссылку</span></button>
+            <div class="menu__sep"></div>
+            <a class="menu__item" role="menuitem" href="#/audit?run=sales-north"><svg class="ic"><use href="#i-audit"/></svg><span>Аудит запуска</span></a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body page-body--flush p-run__body">
+      <section class="p-run__graph" aria-labelledby="graph-title">
+        <div class="p-run__bar">
+          <h2 class="sec-title" id="graph-title">Граф выполнения</h2>
+          <span class="refresh" id="graph-refresh"><span class="refresh__dot"></span><span class="refresh__text">обновлено 12:16</span></span>
+          <span class="toolbar__spacer"></span>
+          <span class="xs mut" id="graph-count">7 узлов · 6 связей</span>
+          <div class="seg" data-seg data-view-target="#graph-wrap" role="group" aria-label="Вид графа">
+            <button class="seg__btn" type="button" data-view="graph" aria-pressed="true"><svg class="ic ic-14"><use href="#i-graph"/></svg>Граф</button>
+            <button class="seg__btn" type="button" data-view="list" aria-pressed="false"><svg class="ic ic-14"><use href="#i-list"/></svg>Списком</button>
+          </div>
+        </div>
+        <div class="p-run__stage" id="graph-wrap">
+          <div class="canvas" id="graph"></div>
+          <div class="p-run__outline" id="outline" hidden></div>
+        </div>
+        <div class="p-run__rt" id="rt-strip" role="status" aria-live="polite">
+          <span class="conn" data-state="online" id="rt-conn"><span class="conn__dot"></span><span class="conn__text">В сети</span></span>
+          <span id="rt-text">События до <span class="mono">№184</span> получены · порядок и пропуски проверяются по sequence</span>
+        </div>
+      </section>
+
+      <aside class="p-run__aside" id="inspector" aria-label="Выбранный узел"></aside>
+    </div>
+  </main>
+
+  <div class="layer">
+    <!-- Ход работы: правый drawer, не модальный — граф остаётся виден и интерактивен -->
+    <div class="drawer drawer--xl" id="activity-drawer" role="dialog" aria-labelledby="activity-title" data-nonmodal>
+      <div class="drawer__head">
+        <div class="drawer__head-text">
+          <div class="drawer__title" id="activity-title">Ход работы</div>
+          <div class="drawer__sub" id="activity-sub">Запуск · все узлы · 184 события</div>
+        </div>
+        <button class="close-btn" type="button" aria-label="Закрыть ход работы" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="p-feed__tools" id="feed-tools">
+        <button class="select" type="button" data-menu="#menu-node-filter" aria-haspopup="menu" aria-expanded="false" aria-label="Фильтр по узлу"><span class="select__value" id="node-filter-value">Все узлы</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+        <div class="menu" id="menu-node-filter">
+          <button class="menu__item" role="menuitemradio" aria-checked="true" data-node-filter="all">Все узлы</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false" data-node-filter="coord">Менеджер продаж (координатор)</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false" data-node-filter="analyst">Аналитик продаж</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false" data-node-filter="editor">Редактор предложений</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false" data-node-filter="legal">Юридический консультант</button>
+          <button class="menu__item" role="menuitemradio" aria-checked="false" data-node-filter="gate">Решение человека</button>
+        </div>
+        <div class="seg" role="group" aria-label="Подробность" id="feed-level">
+          <button class="seg__btn" type="button" data-level="important" aria-pressed="false">Только важное</button>
+          <button class="seg__btn" type="button" data-level="all" aria-pressed="true">Всё</button>
+        </div>
+        <span class="toolbar__spacer"></span>
+        <span class="xs mut" id="feed-count"></span>
+      </div>
+      <div class="drawer__body drawer__body--flush">
+        <div class="p-feed__list" id="feed">
+          <div class="act act--user" data-node="root" data-seq="1">
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-user"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Анна Волкова</b><span>запуск из Control Center</span><span class="act__time">12:04 · №1</span></div>
+              <div class="act__text">Подготовить коммерческое предложение для компании Север к встрече 27 августа: пилот на 50 сотрудников. Входные файлы: brief.pdf, Описание продукта.pdf.</div>
+            </div>
+          </div>
+          <div class="act act--agent" data-node="coord" data-seq="4">
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-bot"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Менеджер продаж</b><span class="tag">промежуточное</span><span class="act__time">12:05 · №4</span></div>
+              <div class="act__text">Принял входные данные. Разбиваю работу на этапы и передаю исследование клиента Аналитику продаж.</div>
+              <div class="act__block act__block--plan">
+                <div class="act__block-head"><svg class="ic ic-14"><use href="#i-flag"/></svg><span>План координатора</span><span class="mut">· обновлён 12:13</span></div>
+                <div class="act__block-body"><ul class="p-feed__plan">
+                  <li class="is-done"><svg class="ic"><use href="#i-check-circle"/></svg>Исследовать компанию Север</li>
+                  <li class="is-current"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Подготовить документ предложения</li>
+                  <li class="is-todo"><svg class="ic"><use href="#i-clock"/></svg>Проверить условия и риски</li>
+                  <li class="is-todo"><svg class="ic"><use href="#i-clock"/></svg>Передать на согласование владельцу Проекта</li>
+                </ul></div>
+              </div>
+            </div>
+          </div>
+          <div class="act act--tool" data-node="coord" data-seq="9" data-minor>
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-branch"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Менеджер продаж</b><span>вызов инструмента платформы</span><span class="act__time">12:06 · №9</span></div>
+              <div class="act__block">
+                <div class="act__block-head"><svg class="ic ic-14"><use href="#i-branch"/></svg><span class="mono">Делегировать работу сотруднику</span><span class="mut">· Аналитик продаж</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Завершено · 0,8 с</span><button class="btn btn--sm btn--ghost" type="button" data-detail="ev-9">Подробнее</button></div>
+                <div class="act__block-body">Создан дочерний Run «Исследовать компанию Север» · <a href="#/runs/child-analyst">Открыть дочерний Run</a>. Связь назначена сервером; имя сотрудника в тексте задачи полномочий не даёт.</div>
+              </div>
+            </div>
+          </div>
+          <div class="act act--agent" data-node="analyst" data-seq="12">
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-bot"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Аналитик продаж</b><span class="tag">промежуточное</span><span class="act__time">12:06 · №12</span></div>
+              <div class="act__text">Начинаю исследование. Использую загруженные файлы и разрешённые источники; предположения буду отделять от подтверждённых фактов.</div>
+            </div>
+          </div>
+          <div class="act act--tool" data-node="analyst" data-seq="31" data-minor>
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-tool"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Аналитик продаж</b><span>вызов инструмента</span><span class="act__time">12:07 · №31</span></div>
+              <div class="act__block">
+                <div class="act__block-head"><svg class="ic ic-14"><use href="#i-search"/></svg><span class="mono">Поиск по файлам Проекта</span><span class="mut">· запрос «Север», 2 файла</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Завершено · 1,1 с</span><button class="btn btn--sm btn--ghost" type="button" data-detail="ev-31">Подробнее</button></div>
+                <div class="act__block-body">Найдено 6 фрагментов в 2 файлах: brief.pdf (4), Описание продукта.pdf (2).</div>
+              </div>
+            </div>
+          </div>
+          <div class="act act--tool" data-node="analyst" data-seq="44" data-minor>
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-plug"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Аналитик продаж</b><span>вызов интеграции</span><span class="act__time">12:08 · №44</span></div>
+              <div class="act__block">
+                <div class="act__block-head"><svg class="ic ic-14"><use href="#i-mail"/></svg><span class="mono">Прочитать переписку с клиентом</span><span class="mut">· Электронная почта · чтение</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Завершено · 4,2 с</span><button class="btn btn--sm btn--ghost" type="button" data-detail="ev-44">Подробнее</button></div>
+                <div class="act__block-body">Найдено 3 письма за 30 дней по запросу «Север». Полный результат сохранён как Artifact · <a href="#/artifacts/mail-north">Открыть Artifact (проверен)</a>.</div>
+              </div>
+            </div>
+          </div>
+          <div class="act act--tool" data-node="analyst" data-seq="58" data-minor>
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-terminal"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Аналитик продаж</b><span>команда в окружении</span><span class="act__time">12:09 · №58</span></div>
+              <div class="act__block">
+                <div class="act__block-head"><svg class="ic ic-14"><use href="#i-terminal"/></svg><span class="mono">pdftotext brief.pdf</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Завершено · 2,3 с</span><button class="btn btn--sm btn--ghost" type="button" data-detail="ev-58">Подробнее</button></div>
+                <div class="act__block-body">Извлечено 14 страниц · 0 ошибок, 2 предупреждения. Полный вывод не показывается: сохранён как Artifact «pdftotext.log» · <a href="#/artifacts/pdftotext-log">открыть</a>.</div>
+              </div>
+            </div>
+          </div>
+          <div class="act act--done" data-node="analyst" data-seq="97">
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-check"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Аналитик продаж</b><span class="tag tag--ok">итог</span><span class="act__time">12:12 · №97</span></div>
+              <div class="act__text">Исследование готово: подтверждённых фактов — 7, предположений — 2, вопросов для уточнения — 3. Ключевое: компания расширяет отдел продаж, интересует пилот на 50 сотрудников до конца квартала.</div>
+              <div class="act__block act__block--file">
+                <div class="act__block-head"><svg class="ic ic-14"><use href="#i-file-text"/></svg><span>Создан: Факты о компании Север.md</span><span class="mut">· 4 КБ · v1</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></div>
+                <div class="act__block-body"><a href="#/artifacts/facts-north">Открыть Artifact (проверен)</a> · привязан как результат узла и вход для Редактора предложений.</div>
+              </div>
+            </div>
+          </div>
+          <div class="act act--tool" data-node="analyst" data-seq="101" data-minor>
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-arrow-l"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Аналитик продаж</b><span>обратный вызов</span><span class="act__time">12:12 · №101</span></div>
+              <div class="act__block">
+                <div class="act__block-head"><svg class="ic ic-14"><use href="#i-arrow-l"/></svg><span class="mono">Вернуть результат координатору</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Доставлен один раз</span></div>
+                <div class="act__block-body">Дочерний Run завершён; координатор получил новый ход продолжения в своей сессии.</div>
+              </div>
+            </div>
+          </div>
+          <div class="act act--agent" data-node="coord" data-seq="104">
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-bot"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Менеджер продаж</b><span class="tag">промежуточное</span><span class="act__time">12:13 · №104</span></div>
+              <div class="act__text">Получил результат исследования. Передаю подготовку документа Редактору предложений; проверку условий начну после черновика.</div>
+            </div>
+          </div>
+          <div class="act act--tool" data-node="coord" data-seq="108" data-minor>
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-branch"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Менеджер продаж</b><span>вызов инструмента платформы</span><span class="act__time">12:13 · №108</span></div>
+              <div class="act__block">
+                <div class="act__block-head"><svg class="ic ic-14"><use href="#i-branch"/></svg><span class="mono">Делегировать работу сотруднику</span><span class="mut">· Редактор предложений</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Завершено · 0,7 с</span><button class="btn btn--sm btn--ghost" type="button" data-detail="ev-108">Подробнее</button></div>
+                <div class="act__block-body">Создан дочерний Run «Подготовить документ предложения» · <a href="#/runs/child-editor">Открыть дочерний Run</a>.</div>
+              </div>
+            </div>
+          </div>
+          <div class="act act--agent" data-node="editor" data-seq="113">
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-bot"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Редактор предложений</b><span class="tag">промежуточное</span><span class="act__time">12:13 · №113</span></div>
+              <div class="act__text">Начал подготовку документа. Структура: резюме, состав работ, сроки внедрения, стоимость пилотного периода.</div>
+            </div>
+          </div>
+          <div class="act act--tool" data-node="editor" data-seq="166" data-minor>
+            <div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-file"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Редактор предложений</b><span>изменение файла</span><span class="act__time">12:15 · №166</span></div>
+              <div class="act__block act__block--file">
+                <div class="act__block-head"><svg class="ic ic-14"><use href="#i-file"/></svg><span>Изменён: Коммерческое предложение — Север.docx</span><span class="mut">· +2 раздела · v1 черновик</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></div>
+                <div class="act__block-body"><a href="#/artifacts/offer-north">Открыть Artifact (проверен)</a> · предпросмотр без скачивания и без исполнения активного содержимого.</div>
+              </div>
+            </div>
+          </div>
+          <div class="act__sep" data-node="root" data-sep>Соединение восстановлено · догружены события 171–184 · порядок сохранён</div>
+          <div class="act act--agent" data-node="editor" data-seq="184">
+            <div class="act__rail"><span class="act__icon"><svg class="ic ic-spin"><use href="#i-spin"/></svg></span></div>
+            <div class="act__main">
+              <div class="act__head"><b>Редактор предложений</b><span class="tag tag--acc">выполняется</span><span class="act__time">12:16 · №184</span></div>
+              <div class="act__text">Собираю итоговую структуру документа · шаг 3 из 4. Промежуточные сообщения объединяются, чтобы не перегружать ленту.</div>
+            </div>
+          </div>
+          <div class="act__more" id="feed-more">Показаны важные и подробные события с №1 по №184. Более ранних событий нет.</div>
+        </div>
+        <div class="p-detail" id="tool-detail" hidden></div>
+      </div>
+      <div class="drawer__foot">
+        <span class="p-feed__foot-text">Raw reasoning, переменные окружения, секреты, полный stdout и ответы провайдера в ход работы не попадают.</span>
+        <button class="btn btn--sm" type="button" id="btn-reconnect"><svg class="ic"><use href="#i-wifi"/></svg>Симулировать переподключение</button>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="stage-note" id="stage-note">«Ход работы» открывается правым drawer поверх inspector и не занимает постоянную колонку: граф остаётся виден и интерактивен (drawer не модальный, закрывается по Escape и крестику с возвратом фокуса на кнопку, viewport графа при открытии и закрытии не меняется). Лента объединяет сообщения пользователя и вызывающего сотрудника, промежуточные и итоговые сообщения ИИ-сотрудников и отдельные блоки: вызов инструмента, вызов интеграции, команда в окружении, изменение файла и обновление плана — со статусом, длительностью и ограниченным результатом. Большие результаты представлены ссылкой на проверенный Artifact. Фильтр по узлу и переключатель «Только важное / Всё» работают без перезагрузки ленты. Raw reasoning, переменные окружения, секреты, полный stdout и JSON провайдера не показываются. Разделитель «Соединение восстановлено · догружены события 171–184» фиксирует reconnect; кнопка «Симулировать переподключение» меняет только индикаторы связи и дозаписывает события — viewport графа и выбранный узел не сбрасываются.</p>
+<script src="assets/kodex.js"></script>
+<script>
+(function () {
+  const PAGE = { scenario: 'active', drawerOpen: true, drawerMode: 'feed', detail: 'ev-44', selected: 'editor' };
+  const K = window.Kodex; const $ = K.$, $$ = K.$$, esc = K.esc, ic = K.ic;
+  const project = K.data.projects[0];
+  const frame = K.mount({
+    nav: 'project.runs', project, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Запуск', object: 'Подготовить предложение для компании Север', can: ['объяснить, почему узел ждёт или завершился ошибкой', 'подготовить уточнение для сессии', 'найти файлы результата'] },
+  });
+
+  /* ---------- данные графа ---------- */
+  const BASE = [
+    { id: 'root', kind: 'Процесс', title: 'Обработка нового лида', state: 'running', stateText: '', phrase: '', progress: null, meta: '12:04 · попытка 1', x: 16, y: 236, root: true },
+    { id: 'coord', kind: 'Координатор', title: 'Менеджер продаж', initials: 'МП', tone: 'acc', state: 'running', stateText: '', phrase: 'Ожидает результаты параллельных ветвей', progress: null, meta: '12 мин · ход 2 · попытка 1', x: 224, y: 222 },
+    { id: 'analyst', kind: 'ИИ-сотрудник', title: 'Аналитик продаж', initials: 'АП', tone: 'ok', state: 'done', stateText: '', phrase: 'Исследование клиента готово', progress: null, meta: '6 мин · попытка 1', x: 464, y: 40 },
+    { id: 'editor', kind: 'ИИ-сотрудник', title: 'Редактор предложений', initials: 'РП', tone: 'acc', state: 'running', stateText: '', phrase: 'Собираю итоговую структуру документа', progress: 62, meta: '4 мин · ход 1 · попытка 1', x: 464, y: 200 },
+    { id: 'legal', kind: 'ИИ-сотрудник', title: 'Юридический консультант', initials: 'ЮК', tone: '', state: 'waiting', stateText: 'Ожидает входных данных', phrase: '', progress: null, meta: 'не начат · попытка 0', x: 464, y: 390 },
+    { id: 'gate', kind: 'Решение человека', title: 'Согласовать предложение', state: 'pending', stateText: 'Предстоит', phrase: '', progress: null, meta: 'решает владелец Проекта', x: 728, y: 236 },
+  ];
+  const EDGES = [
+    { from: 'root', to: 'coord', label: 'запуск', live: true },
+    { from: 'coord', to: 'analyst', label: 'передано', muted: true },
+    { from: 'coord', to: 'editor', label: 'передано', live: true },
+    { from: 'coord', to: 'legal', label: 'ожидает', dashed: true, muted: true },
+    { from: 'editor', to: 'gate', label: 'затем', dashed: true },
+    { from: 'legal', to: 'gate', dashed: true, muted: true },
+  ];
+  const GROUPS = [{ x: 444, y: 10, w: 216, h: 500, label: 'Параллельная ветка · до 2 исполнений' }];
+  const NODES = BASE.map((n) => ({ ...n }));
+
+  const SCENARIOS = {
+    active: { pill: ['run', 'Выполняется'], tags: [], selected: 'editor', meta: 'active', nodes: {}, edges: {} },
+    gate: {
+      pill: ['gate', 'Ждёт решения'], tags: [], selected: 'gate', meta: 'gate',
+      nodes: { root: { state: 'gate', stateText: 'Ждёт решения человека' }, coord: { state: 'waiting', stateText: 'Ожидает решения', phrase: 'Ветви завершены · вопрос передан владельцу Проекта', meta: '16 мин · ход 3 · попытка 1' }, editor: { state: 'done', phrase: 'Документ подготовлен', progress: null, meta: '7 мин · попытка 1' }, legal: { state: 'done', stateText: '', phrase: 'Замечаний к условиям нет', meta: '3 мин · попытка 1' }, gate: { state: 'gate', stateText: 'Ждёт решения', meta: 'открыт 12:20 · срок сегодня, 18:00' } },
+      edges: { 0: { live: false }, 2: { live: false, muted: true }, 3: { dashed: false, muted: true, label: 'передано' }, 4: { dashed: false, live: true, label: 'передано' }, 5: { dashed: false, muted: true } },
+    },
+    error: {
+      pill: ['run', 'Выполняется'], tags: [['err', 'alert', '1 инцидент']], selected: 'legal', meta: 'error',
+      nodes: { legal: { state: 'error', stateText: 'Ошибка инструмента', phrase: 'Разбор PDF: файл не прошёл проверку', meta: 'попытка 1 · 12:19' }, coord: { phrase: 'Ветка «Юридический консультант» остановлена ошибкой · остальные продолжают' } },
+      edges: { 3: { dashed: false, muted: false, label: 'передано' } },
+    },
+    'gate-error': {
+      pill: ['gate', 'Ждёт решения'], tags: [['err', 'alert', '1 инцидент']], selected: 'gate', meta: 'gate',
+      nodes: { root: { state: 'gate', stateText: 'Ждёт решения человека' }, coord: { state: 'waiting', stateText: 'Ожидает решения', phrase: 'Документ готов · условия не проверены из-за ошибки ветки', meta: '16 мин · ход 3 · попытка 1' }, editor: { state: 'done', phrase: 'Документ подготовлен', progress: null, meta: '7 мин · попытка 1' }, legal: { state: 'error', stateText: 'Ошибка инструмента', phrase: 'Разбор PDF: файл не прошёл проверку', meta: 'попытка 1 · 12:19' }, gate: { state: 'gate', stateText: 'Ждёт решения', meta: 'открыт 12:20 · срок сегодня, 18:00' } },
+      edges: { 0: { live: false }, 2: { live: false, muted: true }, 3: { dashed: false, muted: false, label: 'передано' }, 4: { dashed: false, live: true, label: 'передано' }, 5: { dashed: true, muted: true } },
+    },
+    cancelled: {
+      pill: ['cancel', 'Отменён'], tags: [], selected: 'editor', meta: 'cancelled',
+      nodes: { root: { state: 'cancelled', stateText: 'Отменён', meta: '12:04 → 12:18 · попытка 1' }, coord: { state: 'cancelled', phrase: 'Остановлен по запросу пользователя', meta: '14 мин · ход 2 · попытка 1' }, editor: { state: 'cancelled', phrase: 'Остановлен по запросу пользователя · черновик сохранён', progress: null, meta: '5 мин · попытка 1' }, legal: { state: 'cancelled', stateText: 'Отменён до запуска', meta: 'попытка 0' }, gate: { state: 'cancelled', stateText: 'Отменено', meta: 'решение не потребовалось' } },
+      edges: { 0: { live: false, muted: true }, 2: { live: false, muted: true }, 4: { muted: true } },
+    },
+  };
+  const META = {
+    active: `<span><b class="mono">12 мин</b></span><span class="dot"></span><span>Инициатор: <b>Анна Волкова</b></span><span class="dot"></span>${K.source('cc')}<span class="dot"></span><span>Процесс <b>Обработка нового лида v3</b></span><span class="dot"></span><span>попытка <b class="mono">1</b></span><span class="dot"></span><span>исполнитель: <b>Менеджер продаж</b> (координатор)</span>`,
+    gate: `<span><b class="mono">16 мин</b></span><span class="dot"></span><span>Инициатор: <b>Анна Волкова</b></span><span class="dot"></span>${K.source('cc')}<span class="dot"></span><span>Процесс <b>Обработка нового лида v3</b></span><span class="dot"></span><span>попытка <b class="mono">1</b></span><span class="dot"></span><span class="warn-text">решение ожидается до <b class="mono">18:00</b></span>`,
+    error: `<span><b class="mono">15 мин</b></span><span class="dot"></span><span>Инициатор: <b>Анна Волкова</b></span><span class="dot"></span>${K.source('cc')}<span class="dot"></span><span>Процесс <b>Обработка нового лида v3</b></span><span class="dot"></span><span>попытка <b class="mono">1</b></span><span class="dot"></span><span class="err-text">1 ветка завершилась ошибкой · остальные работают</span>`,
+    cancelled: `<span><b class="mono">14 мин</b></span><span class="dot"></span><span>Инициатор: <b>Анна Волкова</b></span><span class="dot"></span>${K.source('cc')}<span class="dot"></span><span>Процесс <b>Обработка нового лида v3</b></span><span class="dot"></span><span>попытка <b class="mono">1</b></span><span class="dot"></span><span>Отменила <b>Анна Волкова</b> · 12:18 · история первой попытки сохранена</span>`,
+  };
+
+  /* ---------- inspector ---------- */
+  const STATE_PILL = { running: ['run', 'Выполняется'], done: ['ok', 'Завершён'], gate: ['gate', 'Ждёт решения'], error: ['err', 'Ошибка'], cancelled: ['cancel', 'Отменён'], pending: ['off', 'Не начат'], waiting: ['wait', 'Ожидает'], queued: ['wait', 'В очереди'] };
+  const kv = (k, v) => `<div class="kv__row"><span class="kv__k">${k}</span><span class="kv__v">${v}</span></div>`;
+  const fileRow = (mime, name, meta, href) => `<a class="list-row" href="${href}"><span class="mime mime--${mime}">${mime}</span><span class="list-row__main"><span class="list-row__title"><span>${esc(name)}</span></span><span class="list-row__sub"><span>${meta}</span></span></span><span class="pill pill--ok pill--sm">${ic('check')}Проверен</span></a>`;
+  const childLink = (title, state, href) => `<a class="row gap-6 sm" href="${href}">${ic('external', 14)}${esc(title)}</a><span class="xs mut">${state}</span>`;
+
+  function detail(n) {
+    const st = n.state;
+    const common = { model: 'gpt-5.1 · Стандартный runtime · учётная запись «пул продаж»' };
+    const D = {
+      root: {
+        sub: 'Процесс · корневой Run', kv: [
+          ['Что запущено', 'Процесс <b>Обработка нового лида</b> v3 (версия закреплена при запуске)'],
+          ['Способ запуска', `Вручную из Control Center · инициатор Анна Волкова`],
+          ['Координатор', '<a href="#" data-select-node="coord">Менеджер продаж</a>'],
+          ['Состав', '3 ИИ-сотрудника · 1 решение человека · параллельность до 2'],
+          ['Попытка', '1 · ход 1'],
+          ['Время', st === 'cancelled' ? 'начат 12:04 · отменён 12:18' : 'начат 12:04 · идёт'],
+        ],
+        status: st === 'cancelled' ? ['off', 'Отменён пользователем. Все активные ветви, claims и открытые решения закрыты одной транзакцией; результаты завершённых ветвей сохранены.'] : st === 'gate' ? ['gate', 'Процесс приостановлен до решения владельца Проекта. Исполнитель не удерживается: Pod может быть освобождён, сессия восстановится после решения.'] : ['info', 'Процесс выполняется: 1 из 3 ветвей завершена, документ готовится.'],
+        children: [['Аналитик продаж — завершён', '#/runs/child-analyst'], ['Редактор предложений — ' + (n.state === 'cancelled' ? 'отменён' : 'выполняется'), '#/runs/child-editor']],
+        files: [['md', 'Факты о компании Север.md', 'результат ветки · 4 КБ · v1', '#/artifacts/facts-north']],
+        actions: st === 'cancelled' ? [['Повторить попытку', 'btn--primary', 'Новая попытка с связью RETRY_OF · история первой попытки не изменится'], ['Открыть сессию', '', '']] : [['Отменить запуск', 'btn--danger', '']],
+      },
+      coord: {
+        sub: 'Координатор Процесса · сессия координатора', kv: [
+          ['Способ запуска', 'Координатор Процесса «Обработка нового лида» v3 · запуск из Control Center'],
+          ['Родитель', '<a href="#" data-select-node="root">Корневой Run</a> (этот экран)'],
+          ['Задача', 'Провести лид «Север» по этапам Процесса: исследование, документ, проверка условий, согласование.'],
+          ['Попытка', '1 · ход 2 · следующий ход создастся после последнего обратного вызова'],
+          ['Время', 'начат 12:05 · ' + (st === 'cancelled' ? 'остановлен 12:18' : '12 мин')],
+          ['Модель и runtime', common.model],
+          ['Окружение', 'Стандартное окружение · rev 7'],
+        ],
+        status: st === 'cancelled' ? ['off', n.phrase] : st === 'waiting' ? ['gate', n.phrase] : ['info', n.phrase + ' · получен 1 из 2 результатов'],
+        children: [['Аналитик продаж — завершён', '#/runs/child-analyst'], ['Редактор предложений — ' + (n.state === 'cancelled' ? 'отменён' : 'выполняется'), '#/runs/child-editor']],
+        files: [],
+        actions: st === 'cancelled' ? [['Открыть сессию', '', '']] : [['Ход работы узла', '', 'feed'], ['Открыть сессию', '', ''], ['Отменить запуск', 'btn--danger', '']],
+      },
+      analyst: {
+        sub: 'ИИ-сотрудник · дочерний Run', kv: [
+          ['Способ запуска', 'Делегирование от «Менеджер продаж» через типизированный инструмент платформы'],
+          ['Родитель', '<a href="#" data-select-node="coord">Менеджер продаж · координатор</a>'],
+          ['Этот узел', '<a href="#/runs/child-analyst">Открыть дочерний Run отдельно</a>'],
+          ['Задача', 'Исследовать компанию Север: подтверждённые факты, потребности, риски и вопросы для уточнения.'],
+          ['Попытка', '1 · ход 1'],
+          ['Время', 'начат 12:06 · завершён 12:12 · 6 мин'],
+          ['Модель и runtime', common.model],
+          ['Окружение', 'Офисные документы и PDF · rev 4'],
+        ],
+        status: ['ok', 'Завершён. Результат передан координатору одним обратным вызовом.'],
+        children: [], files: [['md', 'Факты о компании Север.md', 'результат · 4 КБ · v1', '#/artifacts/facts-north'], ['txt', 'pdftotext.log', 'вывод команды · 2 КБ', '#/artifacts/pdftotext-log']],
+        actions: [['Ход работы узла', '', 'feed'], ['Открыть сессию', '', ''], ['Продолжить сессию с уточнением', '', '']],
+      },
+      editor: {
+        sub: 'ИИ-сотрудник · дочерний Run', kv: [
+          ['Способ запуска', 'Делегирование от «Менеджер продаж» через типизированный инструмент платформы'],
+          ['Родитель', '<a href="#" data-select-node="coord">Менеджер продаж · координатор</a> · Run «Обработка нового лида» (этот экран)'],
+          ['Этот узел', '<a href="#/runs/child-editor">Открыть дочерний Run отдельно</a>'],
+          ['Задача', 'Подготовить коммерческое предложение для компании Север: структура, состав работ, сроки и стоимость пилота на 50 сотрудников. Использовать факты из исследования.'],
+          ['Попытка', '1 · ход 1 · очередь ходов пуста'],
+          ['Время', st === 'done' ? 'начат 12:13 · завершён 12:20 · 7 мин' : st === 'cancelled' ? 'начат 12:13 · остановлен 12:18' : 'начат 12:13 · 4 мин'],
+          ['Модель и runtime', common.model],
+          ['Окружение', 'Офисные документы и PDF · rev 4'],
+        ],
+        status: st === 'done' ? ['ok', 'Документ подготовлен и передан координатору.'] : st === 'cancelled' ? ['off', 'Отменён пользователем 12:18. Результат ветви не сформирован, черновик файла доступен.'] : ['info', n.phrase + ' · шаг 3 из 4', n.progress],
+        children: [],
+        files: [['doc', 'Коммерческое предложение — Север.docx', (st === 'done' ? 'результат' : 'черновик') + ' · v1 · изменён 12:15', '#/artifacts/offer-north'], ['md', 'Факты о компании Север.md', 'вход · от Аналитика продаж', '#/artifacts/facts-north']],
+        actions: st === 'cancelled' ? [['Повторить попытку', 'btn--primary', 'Новая попытка с связью RETRY_OF'], ['Открыть сессию', '', '']] : st === 'done' ? [['Ход работы узла', '', 'feed'], ['Открыть сессию', '', '']] : [['Ход работы узла', '', 'feed'], ['Открыть сессию', '', ''], ['Добавить уточнение в сессию', '', ''], ['Отменить ветку', 'btn--danger', '']],
+        disabled: st === 'running' ? [['Повторить узел', 'Доступно после завершения попытки']] : [],
+      },
+      legal: {
+        sub: 'ИИ-сотрудник · этап Процесса', kv: [
+          ['Способ запуска', 'Делегирование от координатора · этап «Проверить условия и риски»'],
+          ['Родитель', '<a href="#" data-select-node="coord">Менеджер продаж · координатор</a>'],
+          ['Этот узел', st === 'waiting' || st === 'cancelled' ? 'Дочерний Run ещё не создан' : '<a href="#/runs/child-legal">Открыть дочерний Run отдельно</a>'],
+          ['Задача', 'Проверить условия предложения: сроки, ответственность, риски договора; подготовить замечания.'],
+          ['Попытка', st === 'waiting' || st === 'cancelled' ? '0 · этап не начат' : '1 · ход 1'],
+          ['Время', st === 'waiting' ? 'начнётся после черновика документа' : st === 'error' ? 'начат 12:17 · ошибка 12:19' : st === 'done' ? 'начат 12:17 · завершён 12:20' : 'не начат'],
+          ['Модель и runtime', 'gpt-5.1-mini · Стандартный runtime · учётная запись «пул продаж»'],
+          ['Окружение', 'Юридические документы (OCR) · rev 2'],
+        ],
+        status: st === 'error' ? ['err', 'Инструмент «Разбор PDF» завершился ошибкой: входной файл не прошёл проверку и изолирован. Остальные ветви продолжают работу. Подробности — в ходе работы узла.'] : st === 'done' ? ['ok', 'Замечаний к условиям нет.'] : st === 'cancelled' ? ['off', 'Этап отменён вместе с запуском до начала работы.'] : ['off', 'Этап ещё не начат: координатор передаст входные данные после черновика документа. Приглушённый узел — план Процесса, а не выполнение.'],
+        children: [], files: [],
+        actions: st === 'error' ? [['Повторить узел', 'btn--primary', 'Создаст новую попытку и свежую revision; первая попытка останется в истории'], ['Ход работы узла', '', 'feed'], ['Отменить ветку', 'btn--danger', '']] : st === 'done' ? [['Ход работы узла', '', 'feed'], ['Открыть сессию', '', '']] : [],
+        empty: st === 'waiting' ? 'Действия появятся после запуска этапа.' : st === 'cancelled' ? 'Действий нет: запуск отменён.' : '',
+      },
+      gate: {
+        sub: 'Решение человека · долговечное состояние', kv: [
+          ['Кто решает', 'Владелец Проекта (Анна Волкова) или участники с правом «Принимать решения»'],
+          ['Запросил', '<a href="#" data-select-node="coord">Менеджер продаж</a> · шаг Процесса «Согласование»'],
+          ['Что согласовать', st === 'gate' ? '<a href="#/artifacts/offer-north">Коммерческое предложение — Север.docx</a> · v1' : 'Итоговый документ после подготовки и проверки условий'],
+          ['Открыт', st === 'gate' ? '12:20 · срок сегодня, 18:00' : 'откроется после завершения ветвей'],
+          ['Последствия', '«Утвердить» продолжит Процесс · «Запросить изменения» создаст новый ход · «Отклонить» остановит этот путь'],
+          ['Гарантии', 'Решение принимается один раз: если его уже принял другой участник, вы увидите фактический результат, а не повтор'],
+        ],
+        status: st === 'gate' ? ['gate', 'Ждёт решения. Исполнитель не удерживается: Pod освобождён, сессия продолжится после решения ровно один раз.'] : st === 'cancelled' ? ['off', 'Решение не потребовалось: запуск отменён.'] : ['off', 'Предстоит. Появится в «Решениях» и на главной, когда ветви завершатся.'],
+        children: [], files: st === 'gate' ? [['doc', 'Коммерческое предложение — Север.docx', 'на согласование · v1', '#/artifacts/offer-north']] : [],
+        actions: st === 'gate' ? [['Рассмотреть решение', 'btn--warn', ''], ['Открыть файл', '', '']] : [],
+        empty: st === 'gate' ? '' : st === 'cancelled' ? 'Действий нет.' : 'Действия появятся, когда решение будет открыто.',
+      },
+    };
+    return D[n.id];
+  }
+
+  function renderInspector(id) {
+    const n = NODES.find((x) => x.id === id); const d = detail(n);
+    const [pk, pt] = STATE_PILL[n.state] || STATE_PILL.pending;
+    const head = `<div class="inspector__head">${n.initials ? K.avatar(n.initials, 36, n.tone) : `<span class="avatar avatar--36 avatar--sq ${n.id === 'gate' ? 'avatar--warn' : ''}">${ic(n.id === 'gate' ? 'shield' : 'wf', 18)}</span>`}<div class="grow"><div class="inspector__title">${esc(n.title)}</div><div class="xs mut">${d.sub}</div></div>${K.pill(pk, n.stateText || pt, true)}</div>`;
+    const [sk, stext, prog] = d.status;
+    const status = `<div class="p-run__status p-run__status--${sk}"><div class="p-run__status-row">${ic(sk === 'err' ? 'alert' : sk === 'gate' ? 'shield' : sk === 'ok' ? 'check-circle' : sk === 'off' ? 'info' : 'activity', 14)}<span>${esc(stext)}</span></div>${prog != null ? `<div class="row gap-8"><span class="progress"><span class="progress__bar" style="width:${prog}%"></span></span><span class="xs mut mono nowrap">${prog} %</span></div>` : ''}</div>`;
+    const kvs = `<div class="kv kv--narrow">${d.kv.map(([k, v]) => kv(k, v)).join('')}${d.children.length ? kv('Дочерние Run', d.children.map(([t, h]) => `<span class="row gap-6">${childLink(t.split(' — ')[0], t.split(' — ')[1], h)}</span>`).join('')) : ''}</div>`;
+    const acts = `<div class="p-run__actions mt-12">${d.actions.map(([t, cls, tip]) => `<button class="btn btn--sm ${cls}" type="button" ${tip === 'feed' ? `data-drawer="#activity-drawer" data-node-filter="${n.id}"` : tip ? `data-tip="${esc(tip)}" data-tip-pos="bottom"` : ''}>${t === 'Ход работы узла' ? ic('activity') : ''}${esc(t)}</button>`).join('')}${(d.disabled || []).map(([t, tip]) => `<button class="btn btn--sm" type="button" aria-disabled="true" disabled data-tip="${esc(tip)}" data-tip-pos="bottom">${esc(t)}</button>`).join('')}${d.empty ? `<span class="xs mut">${esc(d.empty)}</span>` : ''}</div>`;
+    const files = `<section class="p-run__section"><h3 class="sec-title">Итоги и файлы</h3>${d.files.length ? `<div class="mt-6">${d.files.map((f) => fileRow(...f)).join('')}</div>` : '<div class="xs mut mt-8">Файлов у этого узла пока нет.</div>'}</section>`;
+    const next = `<section class="p-run__section"><h3 class="sec-title">Следующие действия</h3><div class="xs mut mt-4">Набор действий определяет сервер по состоянию узла и вашим правам.</div>${acts}</section>`;
+    $('#inspector', frame).innerHTML = `<div class="inspector">${head}<div class="inspector__body col gap-12">${status}${kvs}</div>${files}${next}</div>`;
+  }
+
+  /* ---------- canvas ---------- */
+  const graphRoot = $('#graph', frame);
+  let g = null;
+  function renderOutline() {
+    const order = ['root', 'coord', 'analyst', 'editor', 'legal', 'gate'];
+    $('#outline', frame).innerHTML = order.map((id) => { const n = NODES.find((x) => x.id === id); const [pk, pt] = STATE_PILL[n.state] || STATE_PILL.pending; const sub = id !== 'root' && id !== 'coord'; return `<button class="list-row list-row--clickable w-100 ${sub ? 'list-row--sub' : ''}" type="button" style="text-align:left;border-left:0;border-right:0;border-top-width:1px;background:none" data-select-node="${id}">${n.initials ? K.avatar(n.initials, 28, n.tone) : `<span class="list-row__lead">${ic(id === 'gate' ? 'shield' : 'wf')}</span>`}<span class="list-row__main"><span class="list-row__title"><span>${esc(n.title)}</span><span class="xs mut">${esc(n.kind)}</span></span><span class="list-row__sub"><span>${esc(n.phrase || n.stateText || pt)}</span><span>·</span><span class="mono">${esc(n.meta)}</span></span></span>${K.pill(pk, n.stateText || pt, true)}</button>`; }).join('');
+  }
+  function initCanvas() {
+    g = K.canvas({ root: graphRoot, nodes: NODES, edges: EDGES, groups: GROUPS, selected: PAGE.selected, fitPadding: 28, onSelect: (n) => { PAGE.selected = n.id; renderInspector(n.id); } });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { g.redraw(); g.fit(); });
+  }
+
+  /* ---------- сценарии ---------- */
+  function setPill([kind, text], tags) {
+    $('#run-pill', frame).innerHTML = K.pill(kind, text);
+    $('#run-tags', frame).innerHTML = tags.map(([k, i, t]) => `<span class="tag tag--${k}">${ic(i, 12)}${esc(t)}</span>`).join('');
+  }
+  function applyScenario(name) {
+    if (name === 'reconnect') { doReconnect(); return; }
+    const sc = SCENARIOS[name]; if (!sc) return;
+    PAGE.scenario = name;
+    BASE.forEach((b) => { const patch = sc.nodes[b.id] || {}; const fresh = { ...b, ...patch }; const live = NODES.find((x) => x.id === b.id); Object.assign(live, fresh); if (g) g.update(b.id, fresh); });
+    EDGES.forEach((e, i) => { const base = BASE_EDGES[i]; Object.keys(e).forEach((k) => { if (!(k in base)) delete e[k]; }); Object.assign(e, base, sc.edges[i] || {}); });
+    if (g) g.redraw();
+    setPill(sc.pill, sc.tags);
+    $('#run-meta', frame).innerHTML = META[sc.meta];
+    const cancelBtn = $('#btn-cancel', frame); const retry = $('#menu-retry', frame);
+    const terminal = name === 'cancelled';
+    cancelBtn.disabled = terminal; cancelBtn.textContent = terminal ? 'Запуск отменён' : 'Отменить запуск';
+    retry.setAttribute('aria-disabled', terminal ? 'false' : 'true'); retry.dataset.tip = terminal ? 'Создаст новую попытку с связью RETRY_OF' : 'Доступно после завершения попытки';
+    PAGE.selected = sc.selected; if (g) g.select(sc.selected, true); renderInspector(sc.selected); renderOutline();
+    $$('#scenario-bar [data-scenario]', document).forEach((b) => { if (b.hasAttribute('aria-pressed')) b.setAttribute('aria-pressed', String(b.dataset.scenario === name)); });
+  }
+  const BASE_EDGES = EDGES.map((e) => ({ ...e }));
+  let reconnects = 0;
+  function doReconnect() {
+    const view = g ? g.getView() : null;
+    const conn = $('#rt-conn', frame); const text = $('#rt-text', frame);
+    conn.dataset.state = 'reconnecting'; $('.conn__text', conn).textContent = 'Переподключение…';
+    text.innerHTML = 'Показан подтверждённый снимок до <span class="mono">№184</span> · граф и inspector не сбрасываются';
+    $('#graph-refresh', frame).classList.add('is-refreshing');
+    K.simulateReconnect(frame, () => {
+      reconnects++; const from = 185 + (reconnects - 1) * 3, to = from + 2;
+      conn.dataset.state = 'online'; $('.conn__text', conn).textContent = 'В сети';
+      text.innerHTML = `События до <span class="mono">№${to}</span> получены · догружены <span class="mono">№${from}–${to}</span> по sequence, дубликаты отброшены`;
+      $('#graph-refresh', frame).classList.remove('is-refreshing'); $('#graph-refresh .refresh__text', frame).textContent = 'обновлено только что';
+      const sep = K.el(`<div class="act__sep" data-node="root" data-sep>Соединение восстановлено · догружены события ${from}–${to} · viewport графа сохранён</div>`);
+      $('#feed-more', frame).before(sep);
+      if (g && view) g.setView(view);
+    });
+  }
+
+  /* ---------- drawer «Ход работы» ---------- */
+  const feedState = { node: 'all', level: 'all' };
+  const NODE_NAMES = { all: 'Все узлы', root: 'Процесс', coord: 'Менеджер продаж', analyst: 'Аналитик продаж', editor: 'Редактор предложений', legal: 'Юридический консультант', gate: 'Решение человека' };
+  function applyFeed() {
+    let shown = 0;
+    $$('#feed .act, #feed .act__sep', frame).forEach((a) => {
+      const okNode = feedState.node === 'all' || a.dataset.node === feedState.node || a.hasAttribute('data-sep');
+      const okLevel = feedState.level === 'all' || !a.hasAttribute('data-minor');
+      const vis = okNode && okLevel; a.hidden = !vis; if (vis && !a.hasAttribute('data-sep')) shown++;
+    });
+    $('#node-filter-value', frame).textContent = NODE_NAMES[feedState.node];
+    $$('#menu-node-filter [data-node-filter]', frame).forEach((b) => b.setAttribute('aria-checked', String(b.dataset.nodeFilter === feedState.node)));
+    $('#feed-count', frame).textContent = `показано ${shown} · всего 184`;
+    $('#activity-sub', frame).textContent = `Запуск · ${feedState.node === 'all' ? 'все узлы' : NODE_NAMES[feedState.node]} · ${feedState.level === 'all' ? 'все события' : 'только важное'}`;
+  }
+  const DETAILS = {
+    'ev-44': { title: 'Прочитать переписку с клиентом', icon: 'mail', kind: 'Вызов интеграции', node: 'Аналитик продаж · 12:08 · №44', kv: [
+      ['Capability', 'Электронная почта · чтение сообщений <span class="risk">read</span>'],
+      ['Подключение', 'Электронная почта · общий ящик продаж <span class="tag tag--mono">connection: ref · метаданные скрыты</span>'],
+      ['Grant', 'Аналитик продаж · только чтение · выдан 20 авг Анной Волковой · область: один ящик'],
+      ['Учётные данные', '<span class="tag tag--mono">credential: ref · значение скрыто</span> · остаются в integration-gateway, в Pod не передаются'],
+      ['Human Gate', 'Не требуется: класс риска read'],
+      ['Параметры', 'запрос «Север» · период 30 дней · не более 20 писем · без вложений'],
+      ['Статус', `${K.pill('ok', 'Завершено', true)} · 4,2 с · идемпотентный ключ вызова назначен сервером`],
+      ['Аудит', '<a href="#/audit?invocation=44">Запись аудита вызова</a> · инициатор Анна Волкова · исполнитель Аналитик продаж'],
+    ], result: 'Найдено 3 письма:\n1. 18 авг · «Север — запрос коммерческого предложения» · от директора по продажам\n2. 21 авг · «Re: параметры пилота на 50 сотрудников»\n3. 25 авг · «Встреча 27 августа, 16:00» · подтверждение\n…', artifact: '#/artifacts/mail-north' },
+    'ev-31': { title: 'Поиск по файлам Проекта', icon: 'search', kind: 'Инструмент платформы', node: 'Аналитик продаж · 12:07 · №31', kv: [
+      ['Capability', 'Файлы Проекта · чтение <span class="risk">read</span>'],
+      ['Область', 'Проект «Корпоративные продажи» · только проверенные файлы (CLEAN)'],
+      ['Grant', 'Аналитик продаж · возможность «Работа с файлами»'],
+      ['Параметры', 'запрос «Север» · файлы: brief.pdf, Описание продукта.pdf'],
+      ['Статус', `${K.pill('ok', 'Завершено', true)} · 1,1 с`],
+      ['Аудит', '<a href="#/audit?invocation=31">Запись аудита вызова</a>'],
+    ], result: 'brief.pdf · стр. 2: «…расширение отдела продаж до 50 сотрудников…»\nbrief.pdf · стр. 3: «…пилот до конца квартала…»\nОписание продукта.pdf · стр. 1: «…поддержка команд продаж…»\n…', artifact: '#/artifacts/search-north' },
+    'ev-58': { title: 'pdftotext brief.pdf', icon: 'terminal', kind: 'Команда в окружении роли', node: 'Аналитик продаж · 12:09 · №58', kv: [
+      ['Окружение', 'Офисные документы и PDF · rev 4 · инструмент pdftotext'],
+      ['Полномочия', 'Локальная команда без внешних учётных данных · сетевого доступа нет'],
+      ['Статус', `${K.pill('ok', 'Завершено', true)} · код 0 · 2,3 с`],
+      ['Итог', '14 страниц извлечено · 0 ошибок · 2 предупреждения о шрифтах'],
+      ['Аудит', '<a href="#/audit?invocation=58">Запись аудита команды</a>'],
+    ], result: 'Первые строки вывода:\nSyntax Warning: Invalid Font Weight\nSyntax Warning: Invalid Font Weight\n…\nПолный stdout не показывается: сохранён как Artifact.', artifact: '#/artifacts/pdftotext-log' },
+    'ev-9': { title: 'Делегировать работу сотруднику', icon: 'branch', kind: 'Инструмент платформы', node: 'Менеджер продаж · 12:06 · №9', kv: [
+      ['Цель', 'Аналитик продаж · выбран из каталога разрешённых сотрудников Процесса'],
+      ['Проверки сервера', 'активная попытка родителя · политика связи · допустимый шаг версии Процесса'],
+      ['Результат', 'Дочерний Run и Session созданы сервером · <a href="#/runs/child-analyst">Открыть дочерний Run</a>'],
+      ['Статус', `${K.pill('ok', 'Завершено', true)} · 0,8 с`],
+      ['Аудит', '<a href="#/audit?invocation=9">Запись аудита делегирования</a>'],
+    ], result: 'delegation: принято · родитель и корень назначены сервером · обратный вызов ожидается один раз', artifact: '' },
+  };
+  DETAILS['ev-108'] = { ...DETAILS['ev-9'], node: 'Менеджер продаж · 12:13 · №108', kv: DETAILS['ev-9'].kv.map(([k, v]) => [k, v.replace('Аналитик продаж', 'Редактор предложений').replace('child-analyst', 'child-editor')]) };
+  function showDetail(id) {
+    const d = DETAILS[id]; if (!d) return;
+    const box = $('#tool-detail', frame);
+    box.innerHTML = `<button class="btn btn--sm btn--ghost p-detail__back" type="button" data-back>${ic('arrow-l')}К ленте</button>
+      <div class="row gap-10"><span class="list-row__lead">${ic(d.icon)}</span><div class="grow"><div class="h3 mono">${esc(d.title)}</div><div class="xs mut">${esc(d.kind)} · ${esc(d.node)}</div></div></div>
+      <div class="kv">${d.kv.map(([k, v]) => kv(k, v)).join('')}</div>
+      <div><div class="sec-title">Результат (ограниченный)</div><div class="p-detail__result mt-6">${esc(d.result)}</div>${d.artifact ? `<div class="mt-8 sm">Полный результат сохранён как Artifact · <a href="${d.artifact}">открыть (проверен)</a></div>` : ''}</div>
+      <div class="notice notice--sm">${ic('lock')}<span class="notice__text">Секретные значения, заголовки авторизации и сырой ответ провайдера не сохраняются в ходе работы и не отображаются.</span></div>`;
+    $('#feed', frame).hidden = true; $('#feed-tools', frame).hidden = true; box.hidden = false; PAGE.drawerMode = 'detail';
+    $('#activity-title', frame).textContent = 'Подробности вызова'; $('#activity-sub', frame).textContent = d.title;
+    $('[data-back]', box).addEventListener('click', showFeed);
+  }
+  function showFeed() {
+    $('#tool-detail', frame).hidden = true; $('#feed', frame).hidden = false; $('#feed-tools', frame).hidden = false; PAGE.drawerMode = 'feed';
+    $('#activity-title', frame).textContent = 'Ход работы'; applyFeed();
+  }
+
+  /* ---------- события ---------- */
+  frame.addEventListener('click', (e) => {
+    const sel = e.target.closest('[data-select-node]'); if (sel) { e.preventDefault(); const id = sel.dataset.selectNode; PAGE.selected = id; if (g) g.select(id, true); renderInspector(id); return; }
+    const nf = e.target.closest('[data-node-filter]');
+    if (nf) { feedState.node = nf.dataset.nodeFilter; if (PAGE.drawerMode === 'detail') showFeed(); applyFeed(); }
+    const lvl = e.target.closest('#feed-level [data-level]');
+    if (lvl) { feedState.level = lvl.dataset.level; $$('#feed-level .seg__btn', frame).forEach((b) => b.setAttribute('aria-pressed', String(b === lvl))); applyFeed(); return; }
+    const det = e.target.closest('[data-detail]'); if (det) { showDetail(det.dataset.detail); return; }
+    if (e.target.closest('#btn-reconnect')) { doReconnect(); return; }
+    if (e.target.closest('#menu-copy')) { K.toast(frame, 'Ссылка на запуск скопирована', 'link'); return; }
+    if (e.target.closest('#btn-cancel') && !$('#btn-cancel', frame).disabled) { applyScenario('cancelled'); K.toast(frame, 'Запуск отменён: активные ветви и открытые решения закрыты', 'x-circle'); }
+  });
+  frame.addEventListener('kodex:seg', (e) => {
+    if (!e.target.closest('[data-view-target="#graph-wrap"]')) return;
+    const list = e.detail.value === 'list';
+    $('#graph', frame).hidden = list; $('#outline', frame).hidden = !list; if (!list && g) requestAnimationFrame(() => g.fit());
+  });
+  document.getElementById('scenario-bar').addEventListener('click', (e) => { const b = e.target.closest('[data-scenario]'); if (b) applyScenario(b.dataset.scenario); });
+
+  /* ---------- старт ---------- */
+  applyScenario(PAGE.scenario);
+  requestAnimationFrame(() => { initCanvas(); });
+  applyFeed();
+  if (PAGE.drawerOpen) {
+    if (PAGE.drawerMode === 'detail') showDetail(PAGE.detail);
+    K.openOverlay($('#activity-drawer', frame), true);
+    // Начальный вид: если выбранный узел скрыт под drawer, сдвинуть viewport один раз при загрузке.
+    // Открытие/закрытие drawer в дальнейшем viewport не меняет.
+    const ensureVisible = () => {
+      if (!g) return; const v = g.getView(); const n = NODES.find((x) => x.id === PAGE.selected);
+      const visibleW = graphRoot.clientWidth - Math.max(0, $('#activity-drawer', frame).offsetWidth - $('#inspector', frame).offsetWidth);
+      const right = (n.x + 176) * v.scale + v.tx;
+      if (right > visibleW - 24) g.setView({ ...v, tx: v.tx - (right - (visibleW - 24)) });
+    };
+    requestAnimationFrame(() => requestAnimationFrame(ensureVisible));
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => setTimeout(ensureVisible, 30));
+  }
+  window.__runPage = { get graph() { return g; }, applyScenario, feedState, PAGE, doReconnect };
+})();
+</script>
+</body>
+</html>

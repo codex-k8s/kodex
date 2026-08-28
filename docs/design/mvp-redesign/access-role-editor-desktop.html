@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Доступ · Редактор роли</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-access .modal-wrap:not(.is-open) { display: none; }
+  .p-access .split--main-aside { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
+  .p-access__sticky { position: sticky; top: 0; }
+  .p-access .perm-group { border-top: 1px solid var(--line-hair); padding: 10px 0 4px; }
+  .p-access .perm-group:first-child { border-top: 0; padding-top: 0; }
+  .p-access .perm-group__title { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mut); margin-bottom: 4px; }
+  .p-access .perm { display: grid; grid-template-columns: 24px minmax(0, 1fr) 130px 120px; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line-hair); }
+  .p-access .perm:first-of-type { border-top: 0; }
+  .p-access .perm__name { font-size: 12.5px; font-weight: 500; }
+  .p-access .perm__desc { font-size: 11.5px; color: var(--mut); line-height: 1.4; }
+  .p-access .perm__scope { font-size: 11.5px; color: var(--sec); padding-top: 2px; }
+  .p-access .perm .risk { padding-top: 2px; }
+  .p-access .picker--inline .picker__list { max-height: 220px; }
+  .p-access .picker--inline { max-height: none; }
+  .p-access .preview-line { display: flex; align-items: flex-start; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line-hair); font-size: 12.5px; line-height: 1.45; }
+  .p-access .preview-line:first-child { border-top: 0; }
+  .p-access .preview-line .ic { flex: 0 0 auto; margin-top: 2px; }
+  .p-access .preview-line--ok .ic { color: var(--ok); }
+  .p-access .preview-line--no .ic { color: var(--mut); }
+  .p-access .preview-line--no { color: var(--sec); }
+  .p-access .scope-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .p-access .sub-scope { margin-top: 10px; padding: 12px; border: 1px dashed var(--line-strong); border-radius: var(--r-3); background: var(--bg-subtle); }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Участники и доступ · редактор пользовательской роли · desktop 1440×1024 · маршрут <code>/administration/access/roles/:roleRef/edit</code></p>
+<div class="frame frame--desktop p-access" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Администрирование</a><span>/</span><a href="access-members-desktop.html">Участники и доступ</a><span>/</span><a href="access-roles-desktop.html">Роли</a><span>/</span><span>Запуск выбранных сотрудников</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Запуск выбранных сотрудников</h1><span class="tag tag--mono">v2</span><span class="tag tag--acc" data-tip="Сохранение не меняет v2: создаётся новая версия, старые привязки продолжают ссылаться на v2" data-tip-pos="bottom"><svg class="ic ic-12"><use href="#i-tag"/></svg>При сохранении → v3</span></div>
+          <div class="page-sub">Пользовательская роль · применён preset «Один Проект · запуск двух выбранных сотрудников»</div>
+        </div>
+        <div class="page-actions">
+          <a class="btn btn--lg" href="access-roles-desktop.html">Отмена</a>
+          <button class="btn btn--primary btn--lg" type="button" id="btn-save"><svg class="ic"><use href="#i-check"/></svg>Сохранить как v3</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="split split--main-aside">
+        <div class="col gap-14">
+          <section class="card" aria-labelledby="sec-basic">
+            <div class="card__head"><h2 class="sec-title" id="sec-basic">Основное</h2></div>
+            <div class="card__body col gap-12">
+              <div class="form-grid">
+                <label class="field"><span class="field__label">Название <span class="req" aria-hidden="true">*</span></span><input class="input" type="text" value="Запуск выбранных сотрудников"><span class="field__hint">Показывается в привязках, аудите и explain-access</span></label>
+                <label class="field"><span class="field__label">Комментарий к версии</span><input class="input" type="text" placeholder="Что изменилось в v3" value="Добавлена отмена своих запусков"></label>
+              </div>
+              <label class="field"><span class="field__label">Описание</span><textarea class="textarea" rows="2">Видеть один Проект и запускать только перечисленных ИИ-сотрудников. Список сотрудников задаётся в привязке и не расширяет доступ к другим Проектам.</textarea></label>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="sec-scope">
+            <div class="card__head"><h2 class="sec-title" id="sec-scope">Область действия</h2><span class="xs mut">Роль применяется только внутри выбранной области</span></div>
+            <div class="card__body">
+              <div class="scope-grid" role="radiogroup" aria-label="Тип области">
+                <label class="radio-card"><input type="radio" name="scope" value="org"><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Organization</span><span class="radio-card__sub">Вся организация и все Проекты</span></span></label>
+                <label class="radio-card"><input type="radio" name="scope" value="project" checked><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Project</span><span class="radio-card__sub">Один Проект; сущности можно ограничить ниже</span></span></label>
+                <label class="radio-card"><input type="radio" name="scope" value="type"><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Тип сущности</span><span class="radio-card__sub">Например, все Процессы или все подключения интеграций</span></span></label>
+                <label class="radio-card"><input type="radio" name="scope" value="entity"><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Конкретная сущность</span><span class="radio-card__sub">ИИ-сотрудник, Workflow или Integration Connection</span></span></label>
+              </div>
+              <div class="sub-scope">
+                <div class="form-grid">
+                  <div class="field">
+                    <span class="field__label">Проект</span>
+                    <button class="combobox" type="button" id="project-combo"><svg class="ic"><use href="#i-folder"/></svg><span class="combobox__text"><span class="combobox__title">Корпоративные продажи</span><span class="combobox__sub">Предложения и аналитика клиентов · 4 ИИ-сотрудника</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
+                    <span class="field__hint">Проект задаётся при привязке; здесь — для предпросмотра</span>
+                  </div>
+                  <div class="field">
+                    <span class="field__label">Ограничение сущностей</span>
+                    <label class="switch"><input type="checkbox" checked id="limit-agents"><span class="switch__track"></span><span>Только выбранные ИИ-сотрудники</span></label>
+                    <span class="field__hint">Без ограничения роль действует на всех сотрудников Проекта</span>
+                  </div>
+                </div>
+                <div class="field mt-12">
+                  <span class="field__label">ИИ-сотрудники, которых можно запускать <span class="tab__count" id="picked-count">2</span></span>
+                  <div id="agent-picker-host"></div>
+                  <span class="field__hint">Серверный поиск по имени и назначению; список подгружается по мере прокрутки. Выбор влияет на предпросмотр справа.</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="sec-perms">
+            <div class="card__head"><h2 class="sec-title" id="sec-perms">Полномочия <span class="tab__count" id="perm-count">6</span></h2><span class="xs mut">Только разрешения; порядок и риск заданы платформой</span></div>
+            <div class="card__body" id="perm-list"></div>
+            <div class="card__foot"><svg class="ic"><use href="#i-info"/></svg><span>В MVP используются только разрешающие привязки; явного запрета нет. Всё, что не отмечено, остаётся недоступным.</span></div>
+          </section>
+        </div>
+
+        <aside class="p-access__sticky col gap-12" aria-label="Предпросмотр эффективного доступа">
+          <div class="card">
+            <div class="card__head card__head--line"><h2 class="sec-title">Предпросмотр эффективного доступа</h2><span class="refresh"><span class="refresh__dot"></span><span class="refresh__text">пересчитан</span></span></div>
+            <div class="card__body card__body--pad">
+              <div class="xs mut">Участник с ролью v3 в Проекте «Корпоративные продажи»:</div>
+              <div class="mt-8" id="preview"></div>
+            </div>
+            <div class="card__foot"><svg class="ic"><use href="#i-shield-check"/></svg><span>Итог проверяется сервером при каждом действии; предпросмотр только показывает, что даст роль.</span></div>
+          </div>
+          <div class="notice notice--sm"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Роль не редактирует сырой список permissions: набор действий фиксирован платформой, каждое действие имеет название, описание и риск.</span></div>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Редактор пользовательской роли: сохранение создаёт v3, а v2 остаётся у существующих привязок. Область — radio-cards четырёх типов (Organization / Project / тип сущности / конкретная сущность); preset «Один Проект · запуск двух выбранных сотрудников» уже применён: Project + ограничение выбранными ИИ-сотрудниками через inline async picker (серверный поиск, cursor-подгрузка, tray выбранных). Полномочия — группированный чек-лист с русским названием, описанием, риском и областью; только allow. Справа — предпросмотр эффективного доступа, обновляющийся при изменении выбора и чек-листа.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'admin', project: null, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Редактор роли', object: 'Запуск выбранных сотрудников · v2', can: ['предложить набор полномочий по описанию задачи', 'проверить, кого затронет новая версия', 'сравнить v2 и черновик v3'] },
+  });
+  (function () {
+    const esc = Kodex.esc;
+    const RISK = { read: ['risk', 'Чтение'], write: ['risk risk--write', 'Изменение'], approve: ['risk risk--external', 'Решение'], admin: ['risk risk--admin', 'Администрирование'] };
+    const risk = (r) => `<span class="${RISK[r][0]}" data-tip="Класс риска задан платформой" data-tip-pos="left">${RISK[r][1]}</span>`;
+    const GROUPS = [
+      ['Проект', [['project.view', 'Просмотр Проекта', 'Видеть обзор, сотрудников, Процессы и запуски Проекта', 'read', 'Проект', true, 'Видит Проект «Корпоративные продажи»']]],
+      ['ИИ-сотрудники', [
+        ['agent.view', 'Просмотр ИИ-сотрудника', 'Открывать профиль, инструкции и runtime без изменений', 'read', 'ИИ-сотрудник', true, 'Видит профили выбранных сотрудников'],
+        ['agent.launch', 'Запуск ИИ-сотрудника', 'Создавать запуск и продолжать сессии выбранных сотрудников', 'write', 'ИИ-сотрудник', true, 'Может запускать только: {agents}'],
+        ['agent.manage', 'Настройка ИИ-сотрудника', 'Изменять профиль, инструкции, runtime и окружение', 'write', 'ИИ-сотрудник', false, 'Может настраивать сотрудников'],
+      ]],
+      ['Запуски', [
+        ['run.view', 'Просмотр запусков', 'Видеть граф, ход работы и результаты запусков Проекта', 'read', 'Проект', true, 'Видит запуски Проекта и их результаты'],
+        ['run.cancel.own', 'Отмена своих запусков', 'Останавливать запуски, начатые самим участником', 'write', 'Запуск', true, 'Может отменять свои запуски'],
+      ]],
+      ['Файлы', [['artifact.download', 'Скачивание результатов', 'Получать файлы результатов по одноразовой ссылке', 'read', 'Файл', true, 'Скачивает результаты своих и видимых запусков']]],
+      ['Решения', [['gate.resolve', 'Принятие решений', 'Утверждать, отклонять и возвращать на доработку Human Gate', 'approve', 'Решение', false, 'Принимает решения Human Gate в Проекте']]],
+    ];
+    const listEl = document.getElementById('perm-list');
+    listEl.innerHTML = GROUPS.map(([title, perms]) => `<div class="perm-group"><div class="perm-group__title">${esc(title)}</div>${perms.map(([k, n, d, rk, sc, on]) => `<div class="perm"><label class="check" style="margin-top:2px"><input type="checkbox" data-perm="${k}" ${on ? 'checked' : ''} aria-label="${esc(n)}"><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span></label><div><div class="perm__name">${esc(n)}</div><div class="perm__desc">${esc(d)}</div></div>${risk(rk)}<div class="perm__scope">область: ${esc(sc)}</div></div>`).join('')}</div>`).join('');
+
+    const agents = Kodex.gen.agents(300, 9);
+    let picked = agents.slice(0, 2);
+    const picker = Kodex.asyncPicker({
+      trigger: document.getElementById('agent-picker-host'), host: document.getElementById('agent-picker-host'), inline: true, multi: true,
+      items: agents, placeholder: 'Имя или назначение сотрудника', selected: picked,
+      render: (a) => `${Kodex.avatar(a.initials, 24, a.tone)}<span class="picker__text"><span class="picker__title">${esc(a.name)}</span><span class="picker__sub"><span>${esc(a.purpose)}</span><span>·</span><span>${esc(a.project)}</span></span></span>`,
+      match: (a, q) => (a.name + ' ' + a.purpose).toLowerCase().includes(q),
+      onSelect: (list) => { picked = list; render(); },
+    });
+    function render() {
+      const on = new Set(Array.from(listEl.querySelectorAll('input[data-perm]:checked')).map((i) => i.dataset.perm));
+      document.getElementById('perm-count').textContent = on.size;
+      document.getElementById('picked-count').textContent = picked.length;
+      const limit = document.getElementById('limit-agents').checked;
+      const names = picked.map((a) => a.name);
+      const lines = [];
+      GROUPS.forEach(([, perms]) => perms.forEach(([k, , , , , , text]) => {
+        if (!on.has(k)) return;
+        let t = text;
+        if (k === 'agent.launch') t = limit ? (names.length ? 'Может запускать только: ' + names.join(', ') : 'Может запускать: никого — выберите сотрудников') : 'Может запускать всех сотрудников Проекта';
+        if (k === 'agent.view' && !limit) t = 'Видит профили всех сотрудников Проекта';
+        lines.push(['ok', t]);
+      }));
+      lines.push(['no', 'Не видит другие Проекты организации']);
+      if (!on.has('agent.manage')) lines.push(['no', 'Не может менять инструкции и runtime сотрудников']);
+      if (!on.has('gate.resolve')) lines.push(['no', 'Не принимает решения Human Gate']);
+      document.getElementById('preview').innerHTML = lines.map(([kind, t]) => `<div class="preview-line preview-line--${kind}"><svg class="ic ic-14"><use href="#i-${kind === 'ok' ? 'check' : 'minus'}"/></svg><span>${esc(t)}</span></div>`).join('');
+    }
+    listEl.addEventListener('change', render);
+    document.getElementById('limit-agents').addEventListener('change', render);
+    document.getElementById('btn-save').addEventListener('click', (e) => { const b = e.currentTarget; b.classList.add('is-loading'); setTimeout(() => { b.classList.remove('is-loading'); Kodex.toast(document.getElementById('frame'), 'Создана версия v3 · привязки v2 не изменены'); }, 900); });
+    render();
+    window.__editor = { picker, render };
+  })();
+</script>
+</body>
+</html>

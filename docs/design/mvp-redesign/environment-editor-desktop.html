@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Окружения · Новая ревизия</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-ee .form-section { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+  .p-ee .form-section + .form-section { border-top: 1px solid var(--line-hair); }
+  .p-ee .form-section__title { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .p-ee .form-section__hint { font-size: 11.5px; color: var(--mut); }
+  .p-ee__tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 32px; }
+  .p-ee__tags .chip { height: 28px; }
+  .p-ee__tags .input { width: 200px; min-height: 28px; font-size: 12px; }
+  .p-ee__tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; }
+  .p-ee__tools .check { padding: 6px 0; }
+  .p-ee .code { min-height: 240px; }
+  .p-ee .code__body { max-height: 260px; }
+  .p-ee__actions { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--bg); position: sticky; bottom: 0; }
+  .p-ee__sticky { position: sticky; top: 0; }
+  .p-ee .diff { border: 1px solid var(--line); border-radius: var(--r-2); overflow: hidden; background: var(--bg-subtle); padding: 6px 0; }
+  .p-ee .steps { flex-wrap: wrap; gap: 6px 0; }
+  .p-ee .step__line { width: 18px; margin: 0 6px; }
+  .hl-sh-kw { color: var(--code-kw); font-weight: 500; }
+  .hl-sh-cm { color: var(--code-cm); font-style: italic; }
+  .hl-sh-str { color: var(--code-str); }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Окружения · редактор новой ревизии (rev 5) · desktop 1440×1024 · маршрут <code>/projects/:projectRef/environments/:recipeRef/revisions/new</code></p>
+<div class="frame frame--desktop p-ee" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><a href="environments-desktop.html">Окружения</a><span>/</span><span>Офисные документы и PDF</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Новая ревизия окружения</h1><span class="tag tag--mono">rev 4 → rev 5</span><span class="pill pill--info pill--sm"><svg class="ic"><use href="#i-edit"/></svg>Черновик</span></div>
+          <div class="page-sub">Ревизия становится доступной сотрудникам только после сборки и допуска цепочкой поставки. rev 4 продолжает работать до переключения.</div>
+        </div>
+        <div class="page-actions"><span class="xs mut">Черновик сохраняется автоматически · 12:05</span></div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="split split--main-aside-wide">
+        <form class="card" novalidate aria-label="Рецепт окружения">
+          <div class="form-section">
+            <div class="form-section__title"><h2 class="sec-title">Назначение и основа</h2></div>
+            <div class="form-grid">
+              <div class="field">
+                <label class="field__label" for="f-name">Название <span class="req">*</span></label>
+                <input class="input" id="f-name" value="Офисные документы и PDF">
+              </div>
+              <div class="field">
+                <label class="field__label" id="lbl-base">Базовый образ</label>
+                <button class="select select--block" type="button" data-menu="#menu-base" aria-haspopup="menu" aria-expanded="false" aria-labelledby="lbl-base"><span class="select__value">Ubuntu 24.04 (платформенный базовый)</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+                <div class="field__hint">Только платформенные базовые образы, допущенные цепочкой поставки. Адрес реестра и digest управляются платформой.</div>
+              </div>
+            </div>
+            <div class="field">
+              <label class="field__label" for="f-purpose">Назначение</label>
+              <textarea class="textarea" id="f-purpose" rows="2" data-autosize>Работа с офисными файлами, PDF и отчётами: конвертация, извлечение текста, сборка документов из шаблонов.</textarea>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section__title"><h2 class="sec-title">Пакеты и инструменты</h2><span class="form-section__hint">пакеты устанавливаются из корпоративного зеркала; версии фиксируются при сборке</span></div>
+            <div class="field">
+              <span class="field__label" id="lbl-pk">Системные пакеты</span>
+              <div class="p-ee__tags" role="group" aria-labelledby="lbl-pk" id="pk-tags">
+                <span class="chip is-active">libreoffice<button class="chip__x" type="button" aria-label="Убрать libreoffice"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span>
+                <span class="chip is-active">poppler-utils<button class="chip__x" type="button" aria-label="Убрать poppler-utils"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span>
+                <span class="chip is-active">pandoc<button class="chip__x" type="button" aria-label="Убрать pandoc"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span>
+                <span class="chip is-active">fonts-dejavu<button class="chip__x" type="button" aria-label="Убрать fonts-dejavu"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span>
+                <span class="chip is-active">python3-docx<button class="chip__x" type="button" aria-label="Убрать python3-docx"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span>
+                <span class="chip is-active" style="border-color:var(--ok-line);background:var(--ok-tint);color:var(--ok)">python3-openpyxl <span class="xs">новый</span><button class="chip__x" type="button" aria-label="Убрать python3-openpyxl"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span>
+                <input class="input" id="pk-input" placeholder="Добавить пакет и нажать Enter" aria-label="Добавить пакет">
+              </div>
+            </div>
+            <div class="field">
+              <span class="field__label" id="lbl-tools">Инструменты, видимые сотруднику</span>
+              <div class="p-ee__tools" role="group" aria-labelledby="lbl-tools">
+                <label class="check"><input type="checkbox" checked><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text">LibreOffice<small>конвертация docx/xlsx/pptx</small></span></label>
+                <label class="check"><input type="checkbox" checked><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text">pdftotext<small>извлечение текста из PDF</small></span></label>
+                <label class="check"><input type="checkbox" checked><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text">pandoc<small>преобразование форматов</small></span></label>
+                <label class="check"><input type="checkbox" checked><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text">python 3.12<small>скрипты обработки</small></span></label>
+                <label class="check"><input type="checkbox" checked><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text">openpyxl<small>таблицы · новый</small></span></label>
+                <label class="check"><input type="checkbox"><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text">tesseract<small>OCR сканов</small></span></label>
+                <label class="check"><input type="checkbox"><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text">chromium<small>публичный веб без учётных данных</small></span></label>
+                <label class="check"><input type="checkbox"><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text">imagemagick<small>изображения</small></span></label>
+                <label class="check"><input type="checkbox" disabled><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text">git<small>недоступно: не входит в базовый образ</small></span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section__title"><h2 class="sec-title">Блок установки</h2><span class="form-section__hint">выполняется недоверенным шагом сборки в изолированном BuildKit; защищённый runtime добавляется после и не редактируется</span></div>
+            <div class="code" id="install-code">
+              <div class="code__bar">
+                <span>Shell · выполняется от непривилегированного пользователя сборки</span>
+                <span class="toolbar__spacer"></span>
+                <button class="btn btn--sm" type="button"><svg class="ic"><use href="#i-search"/></svg>Найти</button>
+                <button class="btn btn--sm" type="button"><svg class="ic"><use href="#i-check"/></svg>Проверить</button>
+              </div>
+              <div class="code__body" id="install-body"></div>
+              <div class="code__foot"><span>14 строк</span><span class="ok-text row gap-4"><svg class="ic ic-12"><use href="#i-check"/></svg>Синтаксис корректен</span><span class="right">Сеть на этапе установки: только корпоративное зеркало пакетов</span></div>
+            </div>
+            <div class="notice notice--sm"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Секреты, токены и учётные данные реестра в блок установки не передаются. Внешние хосты, кроме разрешённого зеркала, недоступны.</span></div>
+          </div>
+
+          <div class="p-ee__actions">
+            <button class="btn btn--primary btn--lg" type="button" id="build-btn"><svg class="ic"><use href="#i-cpu"/></svg>Собрать rev 5</button>
+            <button class="btn btn--lg" type="button">Сохранить черновик</button>
+            <a class="btn btn--lg" href="environments-desktop.html">Отмена</a>
+            <span class="toolbar__spacer"></span>
+            <span class="xs mut">Сборка ≈ 6 мин · проверки цепочки поставки обязательны</span>
+          </div>
+        </form>
+
+        <aside class="col gap-14 p-ee__sticky" aria-label="Предпросмотр ревизии">
+          <div class="card">
+            <div class="card__head"><h2 class="sec-title">Предпросмотр ревизии rev 5</h2><span class="tag tag--mono">относительно rev 4</span></div>
+            <div class="card__body">
+              <div class="diff" aria-label="Изменения рецепта">
+                <div class="diff__line diff__line--ctx"><span class="diff__sign"> </span>базовый образ: Ubuntu 24.04 (платформенный базовый)</div>
+                <div class="diff__line diff__line--ctx"><span class="diff__sign"> </span>пакеты: libreoffice, poppler-utils, pandoc, fonts-dejavu</div>
+                <div class="diff__line diff__line--add"><span class="diff__sign">+</span>пакет: python3-openpyxl</div>
+                <div class="diff__line diff__line--add"><span class="diff__sign">+</span>инструмент: openpyxl (таблицы)</div>
+                <div class="diff__line diff__line--del"><span class="diff__sign">−</span>установка: pip install docx2txt</div>
+                <div class="diff__line diff__line--add"><span class="diff__sign">+</span>установка: pip install docx2txt openpyxl==3.1.5</div>
+                <div class="diff__line diff__line--ctx"><span class="diff__sign"> </span>runtime ABI: v2 · без изменений</div>
+              </div>
+              <div class="kv kv--narrow mt-10">
+                <div class="kv__row"><span class="kv__k">Ожидаемая сборка</span><span class="kv__v">≈ 6 мин · слой пакетов кэшируется</span></div>
+                <div class="kv__row"><span class="kv__k">Проверки</span><span class="kv__v">provenance, SBOM, уязвимости, подпись — обязательны перед допуском</span></div>
+                <div class="kv__row"><span class="kv__k">Переключение</span><span class="kv__v">3 сотрудника перейдут на rev 5 со следующего запуска после допуска</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card__head"><h2 class="sec-title">Как пройдёт сборка</h2></div>
+            <div class="card__body">
+              <div class="steps" aria-label="Этапы сборки">
+                <span class="step is-active"><span class="step__n">1</span>Базовый образ</span><span class="step__line"></span>
+                <span class="step"><span class="step__n">2</span>Установка</span><span class="step__line"></span>
+                <span class="step"><span class="step__n">3</span>Защищённый runtime</span><span class="step__line"></span>
+                <span class="step"><span class="step__n">4</span>Проверки</span><span class="step__line"></span>
+                <span class="step"><span class="step__n">5</span>Допуск</span>
+              </div>
+              <div class="xs mut mt-10">Статус сборки виден в реестре окружений и в карточке сотрудника. Ошибка на любом этапе оставляет rev 4 активной.</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card__head"><h2 class="sec-title">Текущая ревизия rev 4</h2><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Допущено</span></div>
+            <div class="card__body">
+              <div class="row gap-8"><span class="avatar-stack"><span class="avatar avatar--24 avatar--ok">АП</span><span class="avatar avatar--24 avatar--acc">РП</span><span class="avatar avatar--24">КК</span></span><span class="sm">3 сотрудника · последний запуск сегодня, 11:52</span></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <div class="menu menu--wide" id="menu-base"><div class="menu__title">Платформенные базовые образы</div><button class="menu__item" role="menuitemradio" aria-checked="true"><span class="menu__text"><span>Ubuntu 24.04 (платформенный базовый)</span><small>обновлён 20 августа · допущен</small></span></button><button class="menu__item" role="menuitemradio" aria-checked="false"><span class="menu__text"><span>Debian 12 slim (платформенный базовый)</span><small>обновлён 18 августа · допущен</small></span></button><button class="menu__item" role="menuitemradio" aria-checked="false" disabled><span class="menu__text"><span>Ubuntu 22.04 (платформенный базовый)</span><small>снят с поддержки · только существующие ревизии</small></span></button></div>
+</div>
+<p class="stage-note">Редактор новой ревизии окружения: назначение, базовый образ только из платформенных допущенных, пакеты как tags с добавлением, инструменты чек-листом (недоступные объяснены), блок установки в code-editor shell с подсветкой и проверкой синтаксиса. Справа — предпросмотр изменений относительно rev 4 как diff, ожидаемое время сборки, обязательные проверки цепочки поставки, этапы сборки и кто переключится на новую ревизию. Учётные данные реестра, digest и адреса не показываются и не вводятся.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'project.environments', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Новая ревизия окружения', object: 'Офисные документы и PDF · rev 5', can: ['подобрать пакеты под задачу', 'объяснить, что изменится для сотрудников', 'проверить блок установки на типичные ошибки'] },
+  });
+  (function () {
+    const { $, esc, el } = Kodex;
+    const src = `# Установка ПО для работы с офисными документами
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y --no-install-recommends \\
+  libreoffice poppler-utils pandoc fonts-dejavu \\
+  python3-docx python3-openpyxl
+
+# Дополнительные Python-пакеты из корпоративного зеркала
+pip install --index-url "$KODEX_PYPI_MIRROR" docx2txt openpyxl==3.1.5
+
+# Очистка кэша пакетов, чтобы уменьшить образ
+apt-get clean && rm -rf /var/lib/apt/lists/*`;
+    function hlSh(line) {
+      let s = esc(line);
+      if (/^\s*#/.test(line)) return `<span class="hl-sh-cm">${s}</span>`;
+      s = s.replace(/&quot;([^&]*)&quot;/g, '<span class="hl-sh-str">&quot;$1&quot;</span>');
+      s = s.replace(/^(\s*)(set|export|apt-get|pip|rm)\b/, '$1<span class="hl-sh-kw">$2</span>');
+      s = s.replace(/&amp;&amp;\s*(rm)\b/, '&amp;&amp; <span class="hl-sh-kw">$1</span>');
+      return s;
+    }
+    const lines = src.split('\n');
+    $('#install-body').innerHTML = `<pre class="code__gutter" aria-hidden="true">${lines.map((_, i) => i + 1).join('\n')}</pre><pre class="code__text" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="Блок установки">${lines.map((l) => `<span class="code__line">${hlSh(l) || ' '}</span>`).join('')}</pre>`;
+    // добавление пакета tag'ом
+    $('#pk-input').addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return; e.preventDefault();
+      const v = e.target.value.trim(); if (!v) return;
+      const chip = el(`<span class="chip is-active" style="border-color:var(--ok-line);background:var(--ok-tint);color:var(--ok)">${esc(v)} <span class="xs">новый</span><button class="chip__x" type="button" aria-label="Убрать ${esc(v)}"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span>`);
+      e.target.before(chip); e.target.value = '';
+    });
+    $('#pk-tags').addEventListener('click', (e) => { const x = e.target.closest('.chip__x'); if (x) x.closest('.chip').remove(); });
+    $('#build-btn').addEventListener('click', (e) => { e.currentTarget.classList.add('is-loading'); setTimeout(() => { e.currentTarget.classList.remove('is-loading'); Kodex.toast($('#frame'), 'Сборка rev 5 поставлена в очередь · rev 4 остаётся активной до допуска', 'cpu'); }, 900); });
+  })();
+</script>
+</body>
+</html>

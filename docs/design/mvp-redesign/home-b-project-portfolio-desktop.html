@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Главная · B. Портфель Проектов</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-homeb .alert-strip { display: flex; gap: 10px; }
+  .p-homeb .alert-strip__item { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-3); background: var(--bg); }
+  .p-homeb .alert-strip__item--gate { border-color: var(--warn-line); background: var(--warn-soft); }
+  .p-homeb .alert-strip__item--err { border-color: var(--err-line); background: var(--err-soft); }
+  .p-homeb .alert-strip__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .p-homeb .alert-strip__title { font-size: 12.5px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .p-homeb .alert-strip__sub { font-size: 11px; color: var(--mut); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .p-homeb .alert-strip__item { align-items: flex-start; }
+  .p-homeb .alert-strip__item .btn { align-self: center; }
+  .p-homeb .alert-strip__icon { width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--r-2); display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--bg-field); color: var(--sec); }
+  .p-homeb .alert-strip__item--gate .alert-strip__icon { background: var(--warn-tint); border-color: var(--warn-line); color: var(--warn); }
+  .p-homeb .alert-strip__item--err .alert-strip__icon { background: var(--err-tint); border-color: var(--err-line); color: var(--err); }
+  .p-homeb .card--table { overflow: hidden; }
+  .p-homeb .table { table-layout: fixed; }
+  .p-homeb .table td { vertical-align: top; }
+  .p-homeb .table th, .p-homeb .table td { overflow: hidden; }
+  .p-homeb .proj-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .p-homeb .proj-name a { font-weight: 600; color: var(--ink); }
+  .p-homeb .proj-name small { font-size: 11px; color: var(--mut); }
+  .p-homeb .cnt { font-family: var(--font-mono); font-size: 12.5px; }
+  .p-homeb .cnt--zero { color: var(--faint); }
+  .p-homeb .cell-result { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .p-homeb .cell-result .mime { width: 24px; height: 24px; font-size: 8px; }
+  .p-homeb .cell-result__text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .p-homeb .cell-result__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-homeb .cell-result__time { font-size: 11px; color: var(--mut); }
+  .p-homeb .state-cell { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+  .p-homeb .active-cell { display: flex; flex-direction: column; gap: 3px; font-size: 12px; min-width: 0; }
+  .p-homeb .active-cell span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-homeb .active-cell b { font-weight: 500; }
+  .frame--tablet.p-homeb .alert-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .frame--tablet.p-homeb .table th:nth-child(5), .frame--tablet.p-homeb .table td:nth-child(5) { display: none; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Главная · вариант B «Портфель Проектов» · desktop 1440×1024 · маршрут <code>/</code></p>
+<div class="frame frame--desktop p-homeb" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><span>Главная</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Добрый день, Анна</h1></div>
+          <div class="page-sub">Состояние всех Проектов организации на одном экране</div>
+        </div>
+        <div class="page-actions">
+          <a class="btn btn--primary btn--lg" href="#"><svg class="ic"><use href="#i-run"/></svg>Новый запуск</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body col gap-16">
+
+      <!-- Критичные события: компактная полоса -->
+      <section aria-label="Критичные события">
+        <div class="alert-strip">
+          <div class="alert-strip__item alert-strip__item--gate">
+            <span class="alert-strip__icon"><svg class="ic"><use href="#i-shield"/></svg></span>
+            <span class="alert-strip__text"><span class="alert-strip__title">Согласовать предложение</span><span class="alert-strip__sub">Решение · Продажи · до 18:00</span></span>
+            <a class="btn btn--warn btn--sm" href="#">Рассмотреть</a>
+          </div>
+          <div class="alert-strip__item alert-strip__item--err">
+            <span class="alert-strip__icon"><svg class="ic"><use href="#i-alert"/></svg></span>
+            <span class="alert-strip__text"><span class="alert-strip__title">Ошибка на шаге «Автор писем»</span><span class="alert-strip__sub">Инцидент · Поддержка · 14 мин назад</span></span>
+            <a class="btn btn--sm" href="#">Открыть</a>
+          </div>
+          <div class="alert-strip__item">
+            <span class="alert-strip__icon"><svg class="ic"><use href="#i-stop"/></svg></span>
+            <span class="alert-strip__text"><span class="alert-strip__title">Запуск остановлен</span><span class="alert-strip__sub">Остановлен · Юридический отдел · 1 ч</span></span>
+            <a class="btn btn--sm" href="#">Повторить</a>
+          </div>
+          <div class="alert-strip__item alert-strip__item--gate">
+            <span class="alert-strip__icon"><svg class="ic"><use href="#i-key"/></svg></span>
+            <span class="alert-strip__text"><span class="alert-strip__title">Истекает авторизация</span><span class="alert-strip__sub">«OpenAI · пул продаж» · через 2 дня</span></span>
+            <a class="btn btn--sm" href="#">Обновить</a>
+          </div>
+        </div>
+      </section>
+
+      <div class="split split--main-aside">
+        <!-- Матрица Проектов -->
+        <section class="card card--table" aria-labelledby="sec-projects">
+          <div class="card__head card__head--line">
+            <h2 class="sec-title" id="sec-projects">Проекты <span class="tab__count">7</span></h2>
+            <div class="row gap-10">
+              <span class="refresh" data-tip="Состояние обновляется в реальном времени" data-tip-pos="left"><span class="refresh__dot"></span><span class="refresh__text">обновлено 12:04</span></span>
+              <div class="seg" data-seg role="group" aria-label="Сортировка">
+                <button class="seg__btn" type="button" aria-pressed="true">Сначала внимание</button>
+                <button class="seg__btn" type="button" aria-pressed="false">По названию</button>
+              </div>
+            </div>
+          </div>
+          <div class="card__scroll">
+            <table class="table table--hover">
+              <thead>
+                <tr>
+                  <th style="width:172px">Проект</th>
+                  <th style="width:104px">Состояние</th>
+                  <th>Активные работы</th>
+                  <th style="width:74px" class="num">Решения</th>
+                  <th style="width:186px">Результат</th>
+                  <th style="width:36px"><span class="sr-only">Открыть</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><div class="proj-name"><a href="#">Корпоративные продажи</a><small>4 сотрудника, 2 Процесса</small></div></td>
+                  <td><span class="state-cell acc-text"><svg class="ic ic-14 ic-spin"><use href="#i-spin"/></svg>Работает</span></td>
+                  <td><div class="active-cell"><span><b>Предложение для компании Север</b> · Редактор предложений · 12 мин</span><span><b>Сводка по лидам</b> · Аналитик продаж · 3 мин · <span class="source"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</span></span></div></td>
+                  <td class="num"><span class="cnt warn-text">1</span></td>
+                  <td><div class="cell-result"><span class="mime mime--pdf">pdf</span><div class="cell-result__text"><span class="cell-result__name">Коммерческое предложение — Север.pdf</span><span class="cell-result__time">сегодня, 11:52</span></div></div></td>
+                  <td><a class="btn btn--icon btn--sm btn--ghost" href="#" aria-label="Открыть Проект «Корпоративные продажи»"><svg class="ic"><use href="#i-chev-r"/></svg></a></td>
+                </tr>
+                <tr>
+                  <td><div class="proj-name"><a href="#">Клиентская поддержка</a><small>2 сотрудника, 1 Процесс</small></div></td>
+                  <td><span class="state-cell err-text"><svg class="ic ic-14"><use href="#i-alert"/></svg>Инцидент</span></td>
+                  <td><div class="active-cell"><span><b>Обращения за неделю</b> · в очереди · <span class="source"><svg class="ic"><use href="#i-bot"/></svg>Kodex</span></span><span class="err-text">Ошибка «Автор писем» · ветви завершены</span></div></td>
+                  <td class="num"><span class="cnt cnt--zero">0</span></td>
+                  <td><div class="cell-result"><span class="mime mime--xls">xlsx</span><div class="cell-result__text"><span class="cell-result__name">Отчёт по обращениям — неделя 34.xlsx</span><span class="cell-result__time">вчера, 18:20</span></div></div></td>
+                  <td><a class="btn btn--icon btn--sm btn--ghost" href="#" aria-label="Открыть Проект «Клиентская поддержка»"><svg class="ic"><use href="#i-chev-r"/></svg></a></td>
+                </tr>
+                <tr>
+                  <td><div class="proj-name"><a href="#">Юридический отдел</a><small>1 сотрудник, 1 Процесс</small></div></td>
+                  <td><span class="state-cell sec"><svg class="ic ic-14"><use href="#i-stop"/></svg>Остановлен</span></td>
+                  <td><div class="active-cell"><span class="mut">Нет активных работ</span><span class="mut">Остановлен по таймауту · «Договор Восток»</span></div></td>
+                  <td class="num"><span class="cnt cnt--zero">0</span></td>
+                  <td><div class="cell-result"><span class="mime mime--md">md</span><div class="cell-result__text"><span class="cell-result__name">Выводы по договору — Восток.md</span><span class="cell-result__time">вчера, 17:40</span></div></div></td>
+                  <td><a class="btn btn--icon btn--sm btn--ghost" href="#" aria-label="Открыть Проект «Юридический отдел»"><svg class="ic"><use href="#i-chev-r"/></svg></a></td>
+                </tr>
+                <tr>
+                  <td><div class="proj-name"><a href="#">Маркетинг и контент</a><small>3 сотрудника, 2 Процесса</small></div></td>
+                  <td><span class="state-cell ok-text"><svg class="ic ic-14"><use href="#i-check"/></svg>Спокойно</span></td>
+                  <td><div class="active-cell"><span class="mut">Нет активных работ</span><span class="mut">Автоматизация в пятницу, 16:00</span></div></td>
+                  <td class="num"><span class="cnt cnt--zero">0</span></td>
+                  <td><div class="cell-result"><span class="mime mime--doc">docx</span><div class="cell-result__text"><span class="cell-result__name">Черновик статьи — Пилот на 50 сотрудников.docx</span><span class="cell-result__time">22 авг</span></div></div></td>
+                  <td><a class="btn btn--icon btn--sm btn--ghost" href="#" aria-label="Открыть Проект «Маркетинг и контент»"><svg class="ic"><use href="#i-chev-r"/></svg></a></td>
+                </tr>
+                <tr>
+                  <td><div class="proj-name"><a href="#">Бухгалтерия</a><small>2 сотрудника, 1 Процесс</small></div></td>
+                  <td><span class="state-cell ok-text"><svg class="ic ic-14"><use href="#i-check"/></svg>Спокойно</span></td>
+                  <td><div class="active-cell"><span class="mut">Нет активных работ</span></div></td>
+                  <td class="num"><span class="cnt cnt--zero">0</span></td>
+                  <td><div class="cell-result"><span class="mime mime--xls">xlsx</span><div class="cell-result__text"><span class="cell-result__name">Сверка с поставщиками — июль.xlsx</span><span class="cell-result__time">19 авг</span></div></div></td>
+                  <td><a class="btn btn--icon btn--sm btn--ghost" href="#" aria-label="Открыть Проект «Бухгалтерия»"><svg class="ic"><use href="#i-chev-r"/></svg></a></td>
+                </tr>
+                <tr>
+                  <td><div class="proj-name"><a href="#">Кадровая служба</a><small>1 сотрудник, без Процессов</small></div></td>
+                  <td><span class="state-cell ok-text"><svg class="ic ic-14"><use href="#i-check"/></svg>Спокойно</span></td>
+                  <td><div class="active-cell"><span class="mut">Нет активных работ</span></div></td>
+                  <td class="num"><span class="cnt cnt--zero">0</span></td>
+                  <td><div class="cell-result"><span class="mime mime--doc">docx</span><div class="cell-result__text"><span class="cell-result__name">Памятка для новых сотрудников.docx</span><span class="cell-result__time">15 авг</span></div></div></td>
+                  <td><a class="btn btn--icon btn--sm btn--ghost" href="#" aria-label="Открыть Проект «Кадровая служба»"><svg class="ic"><use href="#i-chev-r"/></svg></a></td>
+                </tr>
+                <tr>
+                  <td><div class="proj-name"><a href="#">Разработка платформы</a><small>2 сотрудника, 1 Процесс</small></div></td>
+                  <td><span class="state-cell ok-text"><svg class="ic ic-14"><use href="#i-check"/></svg>Спокойно</span></td>
+                  <td><div class="active-cell"><span class="mut">Нет активных работ</span><span class="mut">Подключён GitHub</span></div></td>
+                  <td class="num"><span class="cnt cnt--zero">0</span></td>
+                  <td><div class="cell-result"><span class="mime mime--md">md</span><div class="cell-result__text"><span class="cell-result__name">Отчёт о проверке релиза 2.4.md</span><span class="cell-result__time">12 авг</span></div></div></td>
+                  <td><a class="btn btn--icon btn--sm btn--ghost" href="#" aria-label="Открыть Проект «Разработка платформы»"><svg class="ic"><use href="#i-chev-r"/></svg></a></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card__foot">Показаны все 7 Проектов, доступных вам. Порядок: сначала Проекты с решениями и инцидентами.</div>
+        </section>
+
+        <div class="col gap-16">
+          <!-- Выполняется сейчас (компактно) -->
+          <section class="card" aria-labelledby="sec-active">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-active">Выполняется сейчас <span class="tab__count">3</span></h2>
+              <div class="row gap-10"><span class="refresh is-refreshing"><span class="refresh__dot"></span><span class="refresh__text">обновляется</span></span><a class="sm" href="#">Все запуски</a></div>
+            </div>
+            <div>
+              <a class="list-row" href="#">
+                <span class="avatar avatar--32 avatar--acc" aria-hidden="true">РП</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Подготовить предложение для компании Север</span></div>
+                  <div class="list-row__sub"><span>Редактор предложений</span><span>·</span><span>Анна Волкова</span><span>·</span><span class="source" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-monitor"/></svg></span><span>·</span><span class="mono">12 мин</span></div>
+                </div>
+                <span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span>
+              </a>
+              <a class="list-row" href="#">
+                <span class="avatar avatar--32" aria-hidden="true">КО</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Разобрать обращения за неделю</span></div>
+                  <div class="list-row__sub"><span>Классификатор обращений</span><span>·</span><span>Михаил Орлов</span><span>·</span><span class="source" data-tip="Запущено через помощника Kodex от имени пользователя" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-bot"/></svg></span></div>
+                </div>
+                <span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>В очереди</span>
+              </a>
+              <a class="list-row" href="#">
+                <span class="avatar avatar--32 avatar--ok" aria-hidden="true">АП</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Ежедневная сводка по лидам</span></div>
+                  <div class="list-row__sub"><span>Аналитик продаж</span><span>·</span><span>расписание 09:00</span><span>·</span><span class="source" data-tip="Запущено по расписанию автоматизации" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-automation"/></svg></span><span>·</span><span class="mono">3 мин</span></div>
+                </div>
+                <span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span>
+              </a>
+            </div>
+          </section>
+
+          <!-- Последние результаты: partial section failure -->
+          <section class="card" aria-labelledby="sec-results">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-results">Последние результаты</h2>
+              <a class="sm" href="#">Все файлы</a>
+            </div>
+            <div class="card__body">
+              <div class="state-block state-block--err" role="alert">
+                <svg class="ic"><use href="#i-alert"/></svg>
+                <div class="col gap-6 grow">
+                  <span><b>Не удалось загрузить последние результаты.</b> Остальные разделы экрана работают, данные по Проектам актуальны.</span>
+                  <div class="row gap-8"><button class="btn btn--sm" type="button" id="retry-results"><svg class="ic"><use href="#i-refresh"/></svg>Повторить</button><span class="xs mut">Последняя попытка: 12:04</span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Продолжить недавнюю работу -->
+          <section class="card" aria-labelledby="sec-sessions">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-sessions">Продолжить недавнюю работу</h2>
+              <a class="sm" href="#">Все сессии</a>
+            </div>
+            <div>
+              <div class="list-row">
+                <span class="avatar avatar--32" aria-hidden="true">ЮК</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Проверить договор с поставщиком Восток</span></div>
+                  <div class="list-row__sub"><span>Юридический консультант</span><span>·</span><span>вчера, 17:40</span></div>
+                </div>
+                <a class="btn btn--sm" href="#">Продолжить</a>
+              </div>
+              <div class="list-row">
+                <span class="avatar avatar--32 avatar--ok" aria-hidden="true">ИР</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Собрать факты о компании Меридиан</span></div>
+                  <div class="list-row__sub"><span>Исследователь рынка</span><span>·</span><span>вчера, 12:05</span></div>
+                </div>
+                <a class="btn btn--sm" href="#">Продолжить</a>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Вариант B отвечает на вопрос «как дела в каждом Проекте». Основа — плотная таблица Проектов: состояние (текст + иконка), активные работы с исполнителем и источником, число ожидающих решений и последний результат; сортировка «сначала внимание». Общие критичные события — компактная полоса сверху, а не большие карточки. Справа — активные работы, результаты и продолжение сессий. Секция «Последние результаты» показывает partial failure: ошибка одной секции не скрывает остальные и предлагает повтор на месте. Один AppShell и те же данные, что в вариантах A и C.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  const frame = Kodex.mount({
+    nav: 'home', project: null, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Главная · портфель Проектов', object: '', can: ['объяснить состояние любого Проекта', 'запустить работу в выбранном Проекте', 'найти запуск или сотрудника'] },
+  });
+  // Повтор загрузки секции: контент появляется на месте ошибки без перерисовки остальных секций
+  document.getElementById('retry-results').addEventListener('click', (e) => {
+    const btn = e.currentTarget; btn.classList.add('is-loading');
+    setTimeout(() => {
+      const body = btn.closest('.card__body');
+      body.classList.remove('card__body');
+      body.innerHTML = `
+        <a class="list-row" href="#"><span class="mime mime--pdf">pdf</span><div class="list-row__main"><div class="list-row__title"><span>Коммерческое предложение — Север.pdf</span></div><div class="list-row__sub"><span>Редактор предложений</span><span>·</span><span>сегодня, 11:52</span></div></div><svg class="ic mut"><use href="#i-download"/></svg></a>
+        <a class="list-row" href="#"><span class="mime mime--md">md</span><div class="list-row__main"><div class="list-row__title"><span>Факты о компании Меридиан.md</span></div><div class="list-row__sub"><span>Исследователь рынка</span><span>·</span><span>вчера, 12:05</span></div></div><svg class="ic mut"><use href="#i-download"/></svg></a>
+        <a class="list-row" href="#"><span class="mime mime--xls">xlsx</span><div class="list-row__main"><div class="list-row__title"><span>Отчёт по обращениям — неделя 34.xlsx</span></div><div class="list-row__sub"><span>Классификатор обращений</span><span>·</span><span>вчера, 18:20</span></div></div><svg class="ic mut"><use href="#i-download"/></svg></a>`;
+      Kodex.toast(frame, 'Результаты загружены');
+    }, 900);
+  });
+</script>
+</body>
+</html>

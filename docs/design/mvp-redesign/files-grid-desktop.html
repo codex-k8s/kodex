@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Файлы · Сетка и детали</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-files__body { flex-direction: row; }
+  .p-files__main { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  .p-files__aside { flex: 0 0 380px; border-left: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+  .p-files__aside-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 14px 16px; }
+  .p-files__aside-foot { flex: 0 0 auto; padding: 12px 16px 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  .p-files__toolbar { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 12px 24px; border-bottom: 1px solid var(--line); background: var(--bg); min-height: 57px; }
+  .p-files__toolbar[data-mode="bulk"] .p-files__normal { display: none; }
+  .p-files__toolbar:not([data-mode="bulk"]) .p-files__bulk { display: none; }
+  .p-files__normal, .p-files__bulk { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; }
+  .p-files__bulk-count { font-size: 12.5px; font-weight: 600; margin-right: 6px; white-space: nowrap; }
+  .p-files__view { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .p-files__scroll { flex: 1 1 auto; min-height: 0; overflow: auto; background: var(--bg-subtle); }
+  .p-files__scroll--table { background: var(--bg); }
+  .p-files__view.is-grid .p-files__scroll--table, .p-files__view.is-list .p-files__scroll--grid { display: none; }
+  .p-files__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 12px; padding: 14px 24px 8px; }
+  .p-files__foot { flex: 0 0 auto; display: flex; align-items: center; gap: 16px; padding: 8px 24px; border-top: 1px solid var(--line); background: var(--bg-subtle); font-size: 11.5px; color: var(--mut); }
+  .p-files__foot .ic { width: 13px; height: 13px; }
+  .p-files table col.c-cb { width: 44px; } .p-files table col.c-size { width: 88px; } .p-files table col.c-ver { width: 60px; } .p-files table col.c-state { width: 132px; } .p-files table col.c-when { width: 108px; } .p-files table col.c-menu { width: 48px; }
+  .p-files .table td { padding-top: 8px; padding-bottom: 8px; }
+  .p-files .check { min-height: 20px; } .p-files .check__box { margin-top: 0; }
+  .p-files .file-tile__check .check__box { background: var(--bg); }
+  .p-files .file-tile { background: var(--bg); }
+  .p-files .file-tile.is-current { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc-tint); }
+  .p-files .file-tile.is-selected .file-tile__preview { border-color: var(--acc-line); }
+  .p-files__ver { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line-hair); font-size: 12.5px; }
+  .p-files__ver:first-child { border-top: 0; }
+  .p-files__ver .mono { font-size: 11.5px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Файлы · вид «сетка» с панелью деталей · desktop 1440×1024 · маршрут <code>/projects/:projectRef/files?view=grid</code></p>
+<div class="frame frame--desktop p-files" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><span>Файлы</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Файлы</h1><span class="tag">1 248 файлов</span></div>
+          <div class="page-sub">Материалы для ИИ-сотрудников и результаты их работы. Выбор вида (список/сетка) сохраняется для пользователя.</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn--lg" type="button"><svg class="ic"><use href="#i-folder"/></svg>Новая папка</button>
+          <button class="btn btn--primary btn--lg" type="button"><svg class="ic"><use href="#i-upload"/></svg>Загрузить файл</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body page-body--flush p-files__body">
+      <div class="p-files__main">
+        <div class="p-files__toolbar" id="toolbar" data-mode="normal">
+          <div class="p-files__normal">
+            <label class="search" style="width:210px;flex:0 0 210px"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" id="files-search" placeholder="Поиск файлов" aria-label="Серверный поиск файлов"><button class="search__clear" type="button" aria-label="Очистить"><svg class="ic ic-12"><use href="#i-x"/></svg></button></label>
+            <button class="chip chip--filter" type="button" data-menu="#menu-f-type" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-file"/></svg><span data-filter-label>Тип: все</span><svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+            <button class="chip chip--filter" type="button" data-menu="#menu-f-scan" aria-haspopup="menu" aria-expanded="false" aria-pressed="true"><svg class="ic"><use href="#i-shield-check"/></svg><span data-filter-label>Проверка: проверен</span><svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+            <button class="chip chip--filter" type="button" data-menu="#menu-f-src" aria-haspopup="menu" aria-expanded="false" aria-label="Ещё фильтры" data-tip="Источник и другие фильтры" data-tip-pos="bottom"><svg class="ic"><use href="#i-filter"/></svg><span data-filter-label>Ещё</span><svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+            <span class="toolbar__spacer"></span>
+            <span class="toolbar__count nowrap" id="files-count" aria-live="polite">Показано 0 из 1 248</span>
+            <div class="seg" data-seg data-view-target="#files-view" role="group" aria-label="Вид списка">
+              <button class="seg__btn seg__btn--icon" type="button" aria-pressed="false" data-view="list" aria-label="Список" data-tip="Список" data-tip-pos="bottom"><svg class="ic"><use href="#i-list"/></svg></button>
+              <button class="seg__btn seg__btn--icon" type="button" aria-pressed="true" data-view="grid" aria-label="Сетка" data-tip="Сетка" data-tip-pos="bottom"><svg class="ic"><use href="#i-grid"/></svg></button>
+            </div>
+          </div>
+          <div class="p-files__bulk" role="region" aria-label="Пакетные действия">
+            <label class="check" aria-label="Снять выделение"><input type="checkbox" checked id="bulk-all"><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span></label>
+            <span class="p-files__bulk-count" id="bulk-count">Выбрано 0</span>
+            <button class="btn" type="button" id="bulk-assign"><svg class="ic"><use href="#i-bot"/></svg>Назначить сотрудникам</button>
+            <button class="btn" type="button"><svg class="ic"><use href="#i-run"/></svg>Использовать в запуске</button>
+            <button class="btn" type="button"><svg class="ic"><use href="#i-download"/></svg>Скачать</button>
+            <button class="btn btn--danger" type="button"><svg class="ic"><use href="#i-trash"/></svg>Удалить</button>
+            <span class="toolbar__spacer"></span>
+            <button class="btn btn--ghost" type="button" id="bulk-clear">Отменить выбор</button>
+          </div>
+        </div>
+
+        <div class="p-files__view is-grid" id="files-view" data-view="grid">
+          <div class="p-files__scroll p-files__scroll--grid" id="scroll-grid">
+            <div class="p-files__grid" id="files-grid" role="list"></div>
+            <div class="list-more" id="files-grid-more"></div>
+          </div>
+          <div class="p-files__scroll p-files__scroll--table" id="scroll-table">
+            <table class="table table--hover table--fixed" aria-label="Файлы Проекта">
+              <colgroup><col class="c-cb"><col><col class="c-size"><col class="c-ver"><col class="c-state"><col class="c-when"><col class="c-menu"></colgroup>
+              <thead><tr><th><span class="sr-only">Выбор</span></th><th>Файл</th><th class="num">Размер</th><th>Версия</th><th>Проверка</th><th>Изменён</th><th><span class="sr-only">Действия</span></th></tr></thead>
+              <tbody id="files-body"></tbody>
+            </table>
+            <div class="list-more" id="files-more"></div>
+          </div>
+        </div>
+
+        <div class="p-files__foot">
+          <span class="row gap-6"><svg class="ic"><use href="#i-box"/></svg>Хранилище: S3-совместимое, bucket платформы · ключи и внутренние идентификаторы объектов не показываются</span>
+          <span class="row gap-6"><svg class="ic"><use href="#i-eye"/></svg>Предпросмотр безопасный: содержимое не скачивается и не исполняется</span>
+        </div>
+      </div>
+
+      <!-- Панель деталей выбранного файла -->
+      <aside class="p-files__aside" aria-labelledby="aside-title">
+        <div class="p-files__aside-scroll">
+          <div class="doc-preview" style="height:150px" aria-label="Безопасный предпросмотр первой страницы">
+            <span class="t"></span><span style="width:92%"></span><span style="width:88%"></span><span style="width:74%"></span><span style="width:90%;margin-top:8px"></span><span style="width:66%"></span><span style="width:81%"></span>
+            <span class="xs mut" style="margin-top:auto;height:auto;background:none;border-radius:0">Первая страница · безопасный предпросмотр</span>
+          </div>
+          <div class="row row--top gap-10 mt-14">
+            <span class="mime mime--pdf mime--lg">pdf</span>
+            <div class="grow">
+              <h2 class="h3" id="aside-title" style="line-height:1.35">Описание продукта — Север.pdf</h2>
+              <div class="row gap-6 mt-6"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span><span class="tag tag--mono">v2</span></div>
+            </div>
+            <button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия с файлом" data-menu="#menu-row" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+          </div>
+          <div class="kv kv--narrow mt-12">
+            <div class="kv__row"><span class="kv__k">Тип</span><span class="kv__v">PDF · 12 страниц</span></div>
+            <div class="kv__row"><span class="kv__k">Размер</span><span class="kv__v mono">4,2 МБ</span></div>
+            <div class="kv__row"><span class="kv__k">Версия</span><span class="kv__v">v2 · загружена сегодня, 09:41</span></div>
+            <div class="kv__row"><span class="kv__k">Источник</span><span class="kv__v">Загрузила <b class="m">Анна Волкова</b> через Control Center</span></div>
+            <div class="kv__row"><span class="kv__k">Папка</span><span class="kv__v">Клиенты / Север</span></div>
+            <div class="kv__row"><span class="kv__k">Проверка</span><span class="kv__v">Пройдена сегодня, 09:42 · целостность подтверждена</span></div>
+            <div class="kv__row"><span class="kv__k">Хранение</span><span class="kv__v">до 28 августа 2027 · политика Проекта</span></div>
+          </div>
+
+          <div class="sec-title mt-16">Назначен сотрудникам</div>
+          <div class="col gap-6 mt-8">
+            <div class="row gap-8"><span class="avatar avatar--24 avatar--ok">АП</span><span class="grow sm">Аналитик продаж</span><span class="xs mut">v2 · актуальная</span></div>
+            <div class="row gap-8"><span class="avatar avatar--24 avatar--acc">РП</span><span class="grow sm">Редактор предложений</span><span class="xs warn-text">использует v1</span></div>
+          </div>
+          <div class="notice notice--sm mt-8"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Сотрудник получает точную назначенную версию. Переключение на v2 для Редактора предложений применится к его следующему запуску.</span></div>
+
+          <div class="sec-title mt-16">Версии</div>
+          <div class="mt-4">
+            <div class="p-files__ver"><span class="mono b ok-text">v2</span><span class="grow">Текущая · сегодня, 09:41 · Анна Волкова</span><a class="xs" href="#">Сравнить</a></div>
+            <div class="p-files__ver"><span class="mono b mut">v1</span><span class="grow sec">22 августа · Михаил Орлов</span><a class="xs" href="#">Открыть</a></div>
+          </div>
+
+          <div class="sec-title mt-16">Использован в запусках</div>
+          <div class="col gap-4 mt-8 sm">
+            <a href="#" class="row gap-6"><svg class="ic ic-14 mut"><use href="#i-run"/></svg><span class="truncate">Подготовить предложение для компании Север</span><span class="xs mut right nowrap">сегодня</span></a>
+            <a href="#" class="row gap-6"><svg class="ic ic-14 mut"><use href="#i-run"/></svg><span class="truncate">Собрать факты о компании Север</span><span class="xs mut right nowrap">21 авг</span></a>
+          </div>
+        </div>
+        <div class="p-files__aside-foot">
+          <button class="btn btn--primary btn--lg btn--block" type="button" id="assign-one"><svg class="ic"><use href="#i-bot"/></svg>Назначить сотрудникам</button>
+          <div class="row gap-8">
+            <button class="btn grow" type="button"><svg class="ic"><use href="#i-run"/></svg>Использовать в запуске</button>
+            <button class="btn" type="button" data-tip="Одноразовая ссылка на скачивание" data-tip-pos="top"><svg class="ic"><use href="#i-download"/></svg>Скачать</button>
+          </div>
+          <button class="btn btn--ghost btn--block" type="button"><svg class="ic"><use href="#i-upload"/></svg>Загрузить новую версию</button>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <div class="menu" id="menu-f-type" data-filter-menu="Тип">
+    <div class="menu__title">Тип файла</div>
+    <button class="menu__item" role="menuitemradio" aria-checked="true">Все типы</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">PDF</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Документы</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Таблицы</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Изображения</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Архивы</button>
+  </div>
+  <div class="menu" id="menu-f-scan" data-filter-menu="Проверка">
+    <div class="menu__title">Состояние проверки</div>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Все состояния</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="true"><svg class="ic"><use href="#i-check"/></svg>Проверен</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-spin"/></svg>Проверяется</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-alert"/></svg>Изолирован</button>
+  </div>
+  <div class="menu" id="menu-f-src" data-filter-menu="Источник">
+    <div class="menu__title">Источник</div>
+    <button class="menu__item" role="menuitemradio" aria-checked="true">Любой источник</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-upload"/></svg>Загружен пользователем</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-run"/></svg>Результат запуска</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-plug"/></svg>Получен из интеграции</button>
+  </div>
+  <div class="menu" id="menu-row" data-align="right">
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-eye"/></svg>Открыть предпросмотр</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-download"/></svg>Скачать<span class="menu__hint">одноразовая ссылка</span></button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-bot"/></svg>Назначить сотрудникам</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-run"/></svg>Использовать в запуске</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-upload"/></svg>Загрузить новую версию</button>
+    <div class="menu__sep"></div>
+    <button class="menu__item menu__item--danger" role="menuitem"><svg class="ic"><use href="#i-trash"/></svg>Удалить</button>
+  </div>
+</div>
+<p class="stage-note">Вид «сетка»: плитки с MIME-иконкой вместо превью-картинки, чекбоксом, именем в две строки и состоянием проверки; infinite scroll подгружает плитки без скачка. Текущий файл открыт в правой панели: безопасный предпросмотр первой страницы, метаданные без digest и внутренних идентификаторов, назначения сотрудникам с точной версией, история версий и использование в запусках. Панель не дублирует действия toolbar: пакетные действия остаются в toolbar, а действия с одним файлом — в панели и меню.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'project.files', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Файлы', object: 'Описание продукта — Север.pdf', can: ['назначить файл сотруднику', 'объяснить, кто и когда использовал файл', 'подготовить запуск с этим файлом'] },
+  });
+
+  (function () {
+    const { $, $$, esc, ic } = Kodex;
+    const frame = $('#frame');
+    const files = Kodex.gen.files(1248, 7);
+    files[2].scan = 'run'; files[6].scan = 'err'; files[6].bound = '';
+    files[0].name = 'Описание продукта — Север.pdf'; files[0].ext = 'pdf'; files[0].mime = 'pdf'; files[0].sizeKb = 4300; files[0].ver = 2; files[0].scan = 'ok'; files[0].when = 'сегодня, 09:41';
+    const counts = {}; files.forEach((f) => { counts[f.name] = (counts[f.name] || 0) + 1; });
+    const FOLDERS = ['папка Клиенты/Север', 'папка Клиенты/Восток', 'папка Входящие', 'папка Шаблоны', 'папка Результаты запусков'];
+    const ctx = (f) => /^Результат/.test(f.source) ? `Результат запуска · ${f.source.replace('Результат запуска ', '')}` : `Проект «Корпоративные продажи» · ${FOLDERS[parseInt(f.id.slice(1), 10) % FOLDERS.length]}`;
+    const selected = new Set();
+    let current = 'f0';
+    const SCAN = { ok: ['ok', 'check', 'Проверен', ''], run: ['run', 'spin', 'Проверяется', 'ic-spin'], err: ['err', 'alert', 'Изолирован', ''] };
+    const scanPill = (s) => { const [m, i, t, x] = SCAN[s]; return `<span class="pill pill--${m} pill--sm">${ic(i, null, x)}${t}</span>`; };
+    const checkbox = (f) => `<label class="check" aria-label="Выбрать ${esc(f.name)}"><input type="checkbox" data-select="${f.id}" ${selected.has(f.id) ? 'checked' : ''}><span class="check__box">${ic('check')}</span></label>`;
+    function tileHtml(f) {
+      const dup = counts[f.name] > 1;
+      return `<div class="file-tile${selected.has(f.id) ? ' is-selected' : ''}${current === f.id ? ' is-current' : ''}" role="listitem" data-id="${f.id}" tabindex="0" aria-label="${esc(f.name)}">
+        <span class="file-tile__check">${checkbox(f)}</span>
+        <div class="file-tile__preview"><span class="mime mime--${f.mime} mime--lg">${f.ext}</span></div>
+        <div class="file-tile__name" title="${esc(f.name)}">${esc(f.name)}</div>
+        ${dup ? `<div class="xs mut truncate" title="${esc(ctx(f))}">${esc(ctx(f))}</div>` : ''}
+        <div class="file-tile__meta"><span class="mono">${Kodex.fmtKb(f.sizeKb)}</span><span>·</span><span class="mono">v${f.ver}</span><span class="right">${scanPill(f.scan)}</span></div>
+      </div>`;
+    }
+    function rowHtml(f) {
+      const dup = counts[f.name] > 1;
+      return `<tr class="${selected.has(f.id) ? 'is-selected' : ''}" data-id="${f.id}"><td>${checkbox(f)}</td>
+        <td><div class="row gap-10"><span class="mime mime--${f.mime}">${f.ext}</span><div class="grow" style="min-width:0"><span class="cell-title truncate" style="display:block" title="${esc(f.name)}">${esc(f.name)}</span>${dup ? `<div class="cell-sub truncate">${esc(ctx(f))}</div>` : ''}</div></div></td>
+        <td class="num">${Kodex.fmtKb(f.sizeKb)}</td><td class="mono">v${f.ver}</td><td>${scanPill(f.scan)}</td><td class="mono mut nowrap">${esc(f.when)}</td>
+        <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия с файлом" data-menu="#menu-row" aria-haspopup="menu" aria-expanded="false">${ic('dots')}</button></td></tr>`;
+    }
+    const match = (f, q) => f.name.toLowerCase().includes(q) || f.source.toLowerCase().includes(q);
+    const countEl = $('#files-count');
+    const onChange = ({ shown, total }) => { countEl.textContent = `Показано ${shown} из ${total.toLocaleString('ru-RU')}`; };
+    const grid = Kodex.infiniteList({ scroll: $('#scroll-grid'), list: $('#files-grid'), items: files, render: tileHtml, pageSize: 40, footer: $('#files-grid-more'), total: files.length, match, onChange });
+    const table = Kodex.infiniteList({ scroll: $('#scroll-table'), list: $('#files-body'), items: files, render: rowHtml, pageSize: 40, footer: $('#files-more'), total: files.length, match, onChange });
+    $('#files-search').addEventListener('input', Kodex.debounce((e) => { grid.reset(e.target.value); table.reset(e.target.value); }, 250));
+
+    const toolbar = $('#toolbar'), bulkCount = $('#bulk-count');
+    function syncBulk() { toolbar.dataset.mode = selected.size ? 'bulk' : 'normal'; bulkCount.textContent = `Выбрано ${selected.size}`; }
+    frame.addEventListener('change', (e) => {
+      const cb = e.target.closest('[data-select]'); if (!cb) return;
+      if (cb.checked) selected.add(cb.dataset.select); else selected.delete(cb.dataset.select);
+      $$(`[data-id="${cb.dataset.select}"]`, frame).forEach((n) => { n.classList.toggle('is-selected', cb.checked); const o = $('[data-select]', n); if (o) o.checked = cb.checked; });
+      syncBulk();
+    });
+    $('#bulk-clear').addEventListener('click', () => { selected.clear(); $$('[data-select]', frame).forEach((c) => { c.checked = false; c.closest('[data-id]').classList.remove('is-selected'); }); syncBulk(); });
+    $('#bulk-all').addEventListener('change', (e) => { if (!e.target.checked) $('#bulk-clear').click(); else e.target.checked = true; });
+    // выбор текущего файла плиткой (клик вне чекбокса)
+    $('#files-grid').addEventListener('click', (e) => { if (e.target.closest('.check')) return; const t = e.target.closest('.file-tile'); if (!t) return; current = t.dataset.id; $$('.file-tile', frame).forEach((x) => x.classList.toggle('is-current', x === t)); const f = files.find((x) => x.id === current); $('#aside-title').textContent = f.name; });
+    $('#files-grid').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.file-tile')) { e.preventDefault(); e.target.click(); } });
+    frame.addEventListener('click', (e) => {
+      const item = e.target.closest('[data-filter-menu] .menu__item[role="menuitemradio"]'); if (!item) return;
+      const menu = item.closest('[data-filter-menu]'); const chip = $(`[data-menu="#${menu.id}"]`, frame);
+      const label = item.textContent.trim(); const short = /^(все|любой)/i.test(label) ? 'все' : label.toLowerCase();
+      if (menu.id !== 'menu-f-src') $('[data-filter-label]', chip).textContent = `${menu.dataset.filterMenu}: ${short}`; chip.setAttribute('aria-pressed', short !== 'все');
+    });
+    const agents = Kodex.gen.agents(300, 9);
+    const renderAgent = (a) => `${Kodex.avatar(a.initials, 24, a.tone)}<span class="picker__text"><span class="picker__title">${esc(a.name)}</span><span class="picker__sub"><span>${esc(a.purpose)}</span><span>·</span><span>${esc(a.project)}</span></span></span>`;
+    Kodex.asyncPicker({ trigger: $('#bulk-assign'), items: agents, multi: true, placeholder: 'Найти сотрудника', width: 420, render: renderAgent, match: (a, q) => a.name.toLowerCase().includes(q), renderSelected: (a) => a.name });
+    Kodex.asyncPicker({ trigger: $('#assign-one'), items: agents, multi: true, placeholder: 'Найти сотрудника', width: 348, render: renderAgent, match: (a, q) => a.name.toLowerCase().includes(q), renderSelected: (a) => a.name, selected: [agents[0], agents[1]] });
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · ИИ-сотрудник · Инструкции</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-instr .page-body { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .p-instr .editor-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; flex: 1 1 auto; min-height: 0; }
+  .p-instr .editor-col { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .p-instr .code { flex: 1 1 auto; min-height: 0; }
+  .p-instr .code__body { position: relative; }
+  .p-instr .code__bar .search { width: 220px; min-height: 26px; height: 26px; }
+  .p-instr .code__bar .search input { height: 24px; font-size: 12px; }
+  .p-instr .autocomplete { position: absolute; left: 236px; top: 232px; z-index: 5; min-width: 300px; }
+  .p-instr .autocomplete .menu__item { min-height: 30px; padding: 4px 10px; font-family: var(--font-mono); font-size: 12px; }
+  .p-instr .autocomplete .menu__item .menu__hint { font-family: var(--font-sans); }
+  .p-instr .aside-col { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
+  .p-instr .var-table td { padding: 7px 10px; font-size: 12px; vertical-align: top; }
+  .p-instr .var-table th { padding: 7px 10px; }
+  .p-instr .var-table td:first-child, .p-instr .var-table th:first-child { padding-left: 14px; }
+  .p-instr .var-name { font-family: var(--font-mono); font-size: 11.5px; color: var(--code-var); background: var(--acc-soft); padding: 1px 4px; border-radius: 3px; white-space: nowrap; cursor: pointer; }
+  .p-instr .var-type { font-family: var(--font-mono); font-size: 10.5px; color: var(--mut); }
+  .p-instr .var-ex { font-family: var(--font-mono); font-size: 11px; color: var(--sec); }
+  .p-instr .rev-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-top: 1px solid var(--line-hair); font-size: 12.5px; min-height: 40px; }
+  .p-instr .rev-row:first-child { border-top: 0; }
+  .p-instr .rev-row__ver { font-family: var(--font-mono); font-size: 12px; font-weight: 600; width: 28px; }
+  .p-instr .rev-row__meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .p-instr .rev-row__meta small { font-size: 11px; color: var(--mut); }
+  .p-instr .rev-row .btn--sm { padding: 0 8px; }
+  .p-instr .preview-pane { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px 18px; font-size: 13.5px; line-height: 1.65; color: var(--ink); }
+  .p-instr .preview-pane h3 { font-size: 14px; font-weight: 600; margin: 12px 0 4px; }
+  .p-instr .preview-pane ul { margin: 4px 0 0; padding-left: 18px; }
+  .p-instr .editor-actions { display: flex; align-items: center; gap: 8px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">ИИ-сотрудник · вкладка «Инструкции»: Markdown-редактор, каталог переменных и история версий · desktop 1440×1024 · маршрут <code>/projects/:projectRef/agents/:agentRef</code></p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page p-instr" id="page" aria-labelledby="page-title">
+    <div class="page-head page-head--tabs">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><a href="#">ИИ-сотрудники</a><span>/</span><span>Аналитик продаж</span></div>
+      <div class="page-title-row">
+        <div class="row gap-12">
+          <span class="avatar avatar--44 avatar--ok" aria-hidden="true">АП</span>
+          <div>
+            <div class="page-title"><h1 id="page-title">Аналитик продаж</h1><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Готов</span><span class="tag tag--warn"><svg class="ic"><use href="#i-edit"/></svg>Черновик v4 не опубликован</span></div>
+            <div class="page-sub">Исследование клиентов и подготовка фактов · Проект «Корпоративные продажи»</div>
+          </div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn--lg" type="button">Изменить</button>
+          <a class="btn btn--primary btn--lg" href="#"><svg class="ic"><use href="#i-run"/></svg>Запустить</a>
+          <button class="btn btn--lg btn--icon" type="button" aria-label="Ещё действия" data-menu="#menu-agent-more" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+          <div class="menu" id="menu-agent-more" data-align="right">
+            <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-copy"/></svg>Дублировать</button>
+            <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-audit"/></svg>Открыть аудит</button>
+            <div class="menu__sep"></div>
+            <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-pause"/></svg>Отключить</button>
+          </div>
+        </div>
+      </div>
+      <div class="tabs tabs--inline" role="tablist" data-tabs aria-label="Разделы сотрудника" style="margin-top:10px">
+        <button class="tab" role="tab" id="tab-profile" aria-controls="panel-profile" aria-selected="false">Профиль</button>
+        <button class="tab" role="tab" id="tab-instr" aria-controls="panel-instr" aria-selected="true">Инструкции<span class="tab__count">v4 черновик</span></button>
+        <button class="tab" role="tab" id="tab-runtime" aria-controls="panel-runtime" aria-selected="false">Runtime</button>
+        <button class="tab" role="tab" id="tab-env" aria-controls="panel-env" aria-selected="false">Окружение</button>
+        <button class="tab" role="tab" id="tab-access" aria-controls="panel-access" aria-selected="false">Доступы и знания</button>
+      </div>
+    </div>
+
+    <div class="page-body page-body--tight">
+      <div class="tabpanel hide" id="panel-profile" role="tabpanel" aria-labelledby="tab-profile" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Профиль» — см. <code>agent-profile-desktop.html</code>.</span></div></div>
+      <div class="tabpanel editor-layout" id="panel-instr" role="tabpanel" aria-labelledby="tab-instr">
+        <div class="editor-col">
+          <div class="row row--between">
+            <div class="row gap-10">
+              <h2 class="h2">Черновик v4</h2>
+              <span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Есть неопубликованные изменения</span>
+              <span class="xs mut">автосохранение · 2 мин назад</span>
+            </div>
+            <div class="seg" data-seg role="group" aria-label="Режим">
+              <button class="seg__btn" type="button" data-view="edit" aria-pressed="true"><svg class="ic ic-14"><use href="#i-code"/></svg>Редактор</button>
+              <button class="seg__btn" type="button" data-view="preview" aria-pressed="false"><svg class="ic ic-14"><use href="#i-eye"/></svg>Предпросмотр</button>
+            </div>
+          </div>
+
+          <div class="code" id="instr-editor">
+            <div class="code__bar">
+              <span><b class="ink2">Инструкции сотрудника</b> · Markdown</span>
+              <span class="tag tag--warn">Черновик v4 · не опубликован</span>
+              <span class="toolbar__spacer"></span>
+              <label class="search search--bg"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Поиск в тексте" aria-label="Поиск в тексте" value="источник"><span class="xs mut nowrap">2 из 3</span></label>
+              <button class="btn btn--sm" type="button" id="btn-validate"><svg class="ic"><use href="#i-shield-check"/></svg>Проверить</button>
+            </div>
+            <div id="code-mount"></div>
+            <div class="menu is-open autocomplete" id="autocomplete" role="listbox" aria-label="Подсказка переменных">
+              <div class="menu__title">Переменные · начато с «{{client.»</div>
+              <button class="menu__item" role="option" aria-selected="true" aria-checked="true">{{client.name}}<span class="menu__hint">строка · название компании</span></button>
+              <button class="menu__item" role="option">{{client.industry}}<span class="menu__hint">строка · отрасль</span></button>
+              <button class="menu__item" role="option">{{client.contact}}<span class="menu__hint">строка · контактное лицо</span></button>
+              <button class="menu__item" role="option">{{client.meeting_at}}<span class="menu__hint">дата-время</span></button>
+            </div>
+            <div class="code__foot">
+              <span class="mono">строка 12, колонка 4</span>
+              <span class="is-err"><svg class="ic ic-12"><use href="#i-alert"/></svg> 1 ошибка: неизвестная переменная <span class="mono">{{client.phone}}</span> — нет в каталоге</span>
+              <span class="toolbar__spacer"></span>
+              <span>Только каталожные переменные; произвольные шаблоны и код не исполняются</span>
+            </div>
+          </div>
+
+          <div class="editor-actions">
+            <button class="btn btn--ghost" type="button">Отменить черновик</button>
+            <button class="btn" type="button"><svg class="ic"><use href="#i-shield-check"/></svg>Проверить</button>
+            <span class="toolbar__spacer"></span>
+            <span class="xs mut">Публикация создаст неизменяемую v4; v3 останется в истории и сможет быть возвращена</span>
+            <button class="btn btn--primary" type="button" disabled data-tip="Сначала исправьте ошибку проверки" data-tip-pos="top">Опубликовать v4</button>
+          </div>
+        </div>
+
+        <aside class="aside-col" aria-label="Переменные и история версий">
+          <section class="card" aria-labelledby="sec-vars">
+            <div class="card__head card__head--line"><h2 class="sec-title" id="sec-vars">Переменные</h2><span class="xs mut">разрешённые в этом Проекте</span></div>
+            <div class="card__scroll" style="max-height:330px">
+              <table class="table table--compact var-table" aria-label="Каталог переменных">
+                <thead><tr><th>Имя</th><th>Тип</th><th>Описание · пример</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="var-name" role="button" tabindex="0" title="Вставить в текст">{{client.name}}</span></td><td><span class="var-type">строка</span></td><td>Название компании-клиента<div class="var-ex">«Север»</div></td></tr>
+                  <tr><td><span class="var-name" role="button" tabindex="0">{{client.industry}}</span></td><td><span class="var-type">строка</span></td><td>Отрасль из карточки клиента<div class="var-ex">«Логистика»</div></td></tr>
+                  <tr><td><span class="var-name" role="button" tabindex="0">{{client.contact}}</span></td><td><span class="var-type">строка</span></td><td>Контактное лицо<div class="var-ex">«Мария Соколова»</div></td></tr>
+                  <tr><td><span class="var-name" role="button" tabindex="0">{{client.meeting_at}}</span></td><td><span class="var-type">дата-время</span></td><td>Дата и время встречи<div class="var-ex">27 августа, 16:00</div></td></tr>
+                  <tr><td><span class="var-name" role="button" tabindex="0">{{run.task}}</span></td><td><span class="var-type">текст</span></td><td>Задача, введённая при запуске<div class="var-ex">«Подготовить предложение…»</div></td></tr>
+                  <tr><td><span class="var-name" role="button" tabindex="0">{{run.input_files}}</span></td><td><span class="var-type">список файлов</span></td><td>Имена входных файлов<div class="var-ex">brief.pdf, прайс.xlsx</div></td></tr>
+                  <tr><td><span class="var-name" role="button" tabindex="0">{{project.name}}</span></td><td><span class="var-type">строка</span></td><td>Название Проекта<div class="var-ex">«Корпоративные продажи»</div></td></tr>
+                  <tr><td><span class="var-name" role="button" tabindex="0">{{user.display_name}}</span></td><td><span class="var-type">строка</span></td><td>Имя инициатора запуска<div class="var-ex">«Анна Волкова»</div></td></tr>
+                  <tr><td><span class="var-name" role="button" tabindex="0">{{today}}</span></td><td><span class="var-type">дата</span></td><td>Текущая дата в часовом поясе Проекта<div class="var-ex">28 августа 2026</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card__foot">Клик вставляет переменную в позицию курсора. Значения подставляет платформа перед ходом; секреты и учётные данные переменными не бывают.</div>
+          </section>
+
+          <section class="card" aria-labelledby="sec-revs">
+            <div class="card__head card__head--line"><h2 class="sec-title" id="sec-revs">История версий</h2><span class="xs mut">неизменяемые</span></div>
+            <div>
+              <div class="rev-row">
+                <span class="rev-row__ver warn-text">v4</span>
+                <div class="rev-row__meta"><span>Черновик</span><small>Анна Волкова · сегодня, 10:24 · 1 ошибка проверки</small></div>
+                <span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-edit"/></svg>Черновик</span>
+              </div>
+              <div class="rev-row">
+                <span class="rev-row__ver ok-text">v3</span>
+                <div class="rev-row__meta"><span>Опубликована · используется в запусках</span><small>Анна Волкова · 22 августа, 14:10</small></div>
+                <button class="btn btn--sm" type="button">Сравнить</button>
+              </div>
+              <div class="rev-row">
+                <span class="rev-row__ver mut">v2</span>
+                <div class="rev-row__meta"><span class="sec">Архивная</span><small>Михаил Орлов · 15 августа</small></div>
+                <button class="btn btn--sm" type="button">Сравнить</button>
+                <button class="btn btn--sm" type="button" data-tip="Создаст новый черновик v5 от v2" data-tip-pos="left"><svg class="ic"><use href="#i-undo"/></svg>Вернуть</button>
+              </div>
+              <div class="rev-row">
+                <span class="rev-row__ver mut">v1</span>
+                <div class="rev-row__meta"><span class="sec">Архивная</span><small>Kodex по запросу Анны Волковой · 9 августа</small></div>
+                <button class="btn btn--sm" type="button">Сравнить</button>
+                <button class="btn btn--sm" type="button" data-tip="Создаст новый черновик v5 от v1" data-tip-pos="left"><svg class="ic"><use href="#i-undo"/></svg>Вернуть</button>
+              </div>
+            </div>
+            <div class="card__foot">Возврат создаёт новый черновик от выбранной версии и не переписывает историю. Runtime получает только опубликованную версию.</div>
+          </section>
+        </aside>
+      </div>
+      <div class="tabpanel" id="panel-runtime" role="tabpanel" aria-labelledby="tab-runtime" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Runtime» — см. <code>agent-runtime-desktop.html</code>.</span></div></div>
+      <div class="tabpanel" id="panel-env" role="tabpanel" aria-labelledby="tab-env" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Окружение» — см. <code>agent-environment-picker-desktop.html</code>.</span></div></div>
+      <div class="tabpanel" id="panel-access" role="tabpanel" aria-labelledby="tab-access" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Доступы и знания» — управление возможностями, grants и проверенными источниками знаний.</span></div></div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Инструкции редактируются в CodeMirror-подобном Markdown-редакторе: подсветка, поиск по тексту, строка с ошибкой валидации подчёркнута и отмечена в gutter, autocomplete предлагает только каталожные переменные. Справа — каталог разрешённых <code>{{variables}}</code> (имя, тип, описание, пример; клик вставляет) и история неизменяемых версий с «Сравнить» и «Вернуть» (создаёт новый черновик). Публикация недоступна, пока проверка не пройдена. Произвольные исполняемые шаблоны не поддерживаются.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  const cfg = {
+    nav: 'project.agents', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'ИИ-сотрудник · Инструкции', object: 'Аналитик продаж · черновик v4', can: ['переписать раздел инструкций по описанию', 'объяснить ошибку проверки', 'сравнить v3 и v4 простыми словами'] },
+  };
+  Kodex.mount(cfg);
+  const SRC = `# Роль
+Ты — аналитик продаж Проекта {{project.name}}. Твоя задача — исследовать клиента {{client.name}} и подготовить факты для встречи {{client.meeting_at}}.
+
+## Что делать
+1. Изучи входные файлы: {{run.input_files}}.
+2. Отдели подтверждённые факты от предположений — помечай источник каждого факта.
+3. Подготовь краткое резюме: потребности, риски, открытые вопросы.
+
+## Ограничения
+- Не отправляй данные во внешние системы без явного разрешения.
+- Не придумывай контактные данные; используй только {{client.contact}}.
+- Не звони по номеру {{client.phone}} и не запрашивай его.
+
+## Формат результата
+Файл **research-summary.md** с разделами «Факты», «Предположения», «Вопросы к {{client.contact}}».
+Подпись: подготовлено для {{user.display_name}}, {{today}}.`;
+  document.getElementById('code-mount').outerHTML = Kodex.codeBlock(SRC, 'md', { editable: true, errLines: [12], label: 'Инструкции сотрудника, Markdown' });
+  const lines = document.querySelectorAll('#instr-editor .code__line');
+  if (lines[11]) lines[11].classList.add('is-err');
+  if (lines[6]) lines[6].classList.add('is-active');
+  // Переключение режимов
+  let previewEl = null;
+  document.querySelector('[data-seg]').addEventListener('kodex:seg', (e) => {
+    const editor = document.getElementById('instr-editor');
+    if (e.detail.value === 'preview') {
+      if (!previewEl) {
+        previewEl = Kodex.el(`<div class="code" id="instr-preview"><div class="code__bar"><span><b class="ink2">Предпросмотр</b> · как увидит сотрудник с подставленными примерами</span></div><div class="preview-pane">
+          <h3>Роль</h3><p>Ты — аналитик продаж Проекта Корпоративные продажи. Твоя задача — исследовать клиента Север и подготовить факты для встречи 27 августа, 16:00.</p>
+          <h3>Что делать</h3><ol><li>Изучи входные файлы: brief.pdf, прайс.xlsx.</li><li>Отдели подтверждённые факты от предположений — помечай источник каждого факта.</li><li>Подготовь краткое резюме: потребности, риски, открытые вопросы.</li></ol>
+          <h3>Ограничения</h3><ul><li>Не отправляй данные во внешние системы без явного разрешения.</li><li>Не придумывай контактные данные; используй только Мария Соколова.</li><li class="err-text">Не звони по номеру <span class="mono">{{client.phone}}</span> — переменная не определена и будет отклонена проверкой.</li></ul>
+          <h3>Формат результата</h3><p>Файл <b>research-summary.md</b> с разделами «Факты», «Предположения», «Вопросы к Мария Соколова».<br>Подпись: подготовлено для Анна Волкова, 28 августа 2026.</p></div></div>`);
+        editor.after(previewEl);
+      }
+      editor.classList.add('hide'); previewEl.classList.remove('hide');
+    } else { editor.classList.remove('hide'); if (previewEl) previewEl.classList.add('hide'); }
+  });
+  document.getElementById('btn-validate').addEventListener('click', (e) => { const b = e.currentTarget; b.classList.add('is-loading'); setTimeout(() => { b.classList.remove('is-loading'); Kodex.toast(document.getElementById('frame'), 'Проверка: 1 ошибка — неизвестная переменная {{client.phone}} в строке 12', 'alert'); }, 700); });
+  document.querySelectorAll('.var-name').forEach((v) => v.addEventListener('click', () => Kodex.toast(document.getElementById('frame'), `Вставлено ${v.textContent} в позицию курсора`, 'code')));
+</script>
+</body>
+</html>
