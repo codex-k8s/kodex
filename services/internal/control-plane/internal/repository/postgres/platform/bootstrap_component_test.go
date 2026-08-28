@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -71,7 +72,7 @@ func TestBootstrapComponent(t *testing.T) {
 		t.Fatalf("open disposable PostgreSQL: %v", err)
 	}
 	defer pool.Close()
-	repository, err := New(pool, "openai-codex", "gpt-5")
+	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
 	if err != nil {
 		t.Fatalf("construct repository: %v", err)
 	}

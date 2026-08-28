@@ -21,6 +21,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/grpcserver"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/authorityproof"
@@ -48,7 +49,26 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		return err
 	}
 	defer pool.Close()
-	repository, err := platformrepository.New(pool, config.DefaultRuntimeProvider, config.DefaultRuntimeModel)
+	accessKey, err := readBoundedFile(config.ObjectStorageAccessKeyFile)
+	if err != nil {
+		return fmt.Errorf("read object storage access key: %w", err)
+	}
+	secretKey, err := readBoundedFile(config.ObjectStorageSecretKeyFile)
+	if err != nil {
+		return fmt.Errorf("read object storage secret key: %w", err)
+	}
+	objects, err := s3store.New(startup, s3store.Config{
+		Endpoint: config.ObjectStorageEndpoint, Region: config.ObjectStorageRegion, Bucket: config.ObjectStorageBucket,
+		AccessKeyID: strings.TrimSpace(string(accessKey)), SecretKey: strings.TrimSpace(string(secretKey)),
+		UsePathStyle: config.ObjectStorageUsePathStyle,
+	})
+	if err != nil {
+		return fmt.Errorf("construct object storage: %w", err)
+	}
+	if err := objects.Check(startup); err != nil {
+		return fmt.Errorf("verify object storage: %w", err)
+	}
+	repository, err := platformrepository.New(pool, config.DefaultRuntimeProvider, config.DefaultRuntimeModel, objects)
 	if err != nil {
 		return fmt.Errorf("construct platform repository: %w", err)
 	}

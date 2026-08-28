@@ -13,7 +13,11 @@ SELECT artifact.ref,
        artifact.revision,
        artifact.version,
        artifact.created_at,
-       content.body
+       content.object_key,
+       content.object_version,
+       content.object_etag,
+       content.digest,
+       content.size_bytes
 FROM control_plane.runtime_leases AS lease
 JOIN control_plane.runs AS run
   ON run.id = lease.run_id

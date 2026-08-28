@@ -15,7 +15,6 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -29,7 +28,8 @@ func (repository *Repository) ReadExecutionArtifact(ctx context.Context, princip
 	}
 	fenceDigest := sha256.Sum256([]byte(fence))
 	item := entity.Artifact{}
-	var body []byte
+	var objectKey, objectVersion, objectETag, objectDigest string
+	var objectSize int64
 	err = repository.pool.QueryRow(ctx, queryRuntimeReadexecutionartifactSelectArtifactContent, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"lease_ref":       leaseRef,
@@ -39,7 +39,8 @@ func (repository *Repository) ReadExecutionArtifact(ctx context.Context, princip
 	}).Scan(
 		&item.Ref, &item.ProjectRef, &item.RunRef, &item.SessionRef, &item.FileName,
 		&item.MediaType, &item.Digest, &item.ScanState, &item.PreviewState, &item.Source,
-		&item.SizeBytes, &item.Revision, &item.Version, &item.CreatedAt, &body,
+		&item.SizeBytes, &item.Revision, &item.Version, &item.CreatedAt,
+		&objectKey, &objectVersion, &objectETag, &objectDigest, &objectSize,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return platformrepo.ArtifactDownload{}, errs.ErrNotFound
@@ -47,10 +48,21 @@ func (repository *Repository) ReadExecutionArtifact(ctx context.Context, princip
 	if err != nil {
 		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
 	}
-	if int64(len(body)) != item.SizeBytes || item.SizeBytes < 0 || item.SizeBytes > platformrepo.MaximumArtifactBytes {
+	if objectKey == "" || objectDigest != item.Digest || objectSize != item.SizeBytes ||
+		item.SizeBytes < 0 || item.SizeBytes > platformrepo.MaximumArtifactBytes {
 		return platformrepo.ArtifactDownload{}, errs.ErrConflict
 	}
-	return platformrepo.ArtifactDownload{Artifact: item, Reader: io.NopCloser(bytes.NewReader(body))}, nil
+	object, err := repository.objects.Get(ctx, objectKey, objectVersion)
+	if err != nil {
+		return platformrepo.ArtifactDownload{}, mapObjectStorageError(err)
+	}
+	if object.Digest != objectDigest || object.SizeBytes != objectSize ||
+		(objectVersion != "" && object.VersionID != objectVersion) ||
+		(objectETag != "" && object.ETag != objectETag) {
+		_ = object.Body.Close()
+		return platformrepo.ArtifactDownload{}, errs.ErrConflict
+	}
+	return platformrepo.ArtifactDownload{Artifact: item, Reader: object.Body}, nil
 }
 
 func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -376,38 +388,39 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	var artifactBytes int64
 	for _, artifact := range payload.Artifacts {
 		projectID := stringMap(lease, "projectID")
-		if projectID == "" || len(payload.Artifacts) > 16 || artifact.FileName == "" || safeFileName(artifact.FileName) != artifact.FileName || artifact.SizeBytes != int64(len(artifact.Content)) || artifact.SizeBytes < 0 || artifact.SizeBytes > 1<<20 {
+		prepared, preparedErr := preparedArtifact(artifact)
+		if preparedErr != nil || projectID == "" || len(payload.Artifacts) > 16 ||
+			artifact.FileName == "" || safeFileName(artifact.FileName) != artifact.FileName ||
+			artifact.SizeBytes < 0 || artifact.SizeBytes > 1<<20 {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		artifactBytes += artifact.SizeBytes
 		if artifactBytes > maximumArtifactBytes {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		digest := sha256.Sum256(artifact.Content)
-		digestHex := hex.EncodeToString(digest[:])
-		if !strings.EqualFold(strings.TrimSpace(artifact.SHA256), digestHex) {
+		if prepared.ObjectKey != artifactObjectKey(scope.organizationRef, stringMap(lease, "projectRef"), prepared.Ref, prepared.Digest) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		verdict := artifactpolicy.Inspect(artifact.FileName, artifact.MediaType, artifact.Content)
-		if verdict.ScanState != artifactpolicy.ScanClean {
-			return commandOutcome{}, errs.ErrInvalid
-		}
-		ref, _ := newRef("art")
 		receiptRef, _ := newRef("obj")
 		var artifactID string
-		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionInsertArtifactsRefProjectIdNodeId, ref, scope.organizationID, projectID, lease["runID"], lease["nodeID"], artifact.FileName, verdict.MediaType, artifact.SizeBytes, "sha256:"+digestHex, verdict.ScanState, receiptRef, verdict.PreviewState, scope.actorID).Scan(&artifactID); err != nil {
+		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionInsertArtifactsRefProjectIdNodeId,
+			prepared.Ref, scope.organizationID, projectID, lease["runID"], lease["nodeID"],
+			artifact.FileName, prepared.MediaType, artifact.SizeBytes, prepared.Digest,
+			prepared.ScanState, receiptRef, prepared.PreviewState, scope.actorID).Scan(&artifactID); err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertArtifactContentArtifactId, artifactID, artifact.Content); err != nil {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertArtifactContentArtifactId,
+			artifactID, prepared.ObjectKey, prepared.ObjectVersion, prepared.ObjectETag,
+			prepared.Digest, prepared.SizeBytes); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertArtifactBindingsArtifactIdTargetRef, artifactID, stringMap(lease, "runRef"), scope.actorID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, stringMap(lease, "rootRunID"), ref, "ARTIFACT_AVAILABLE", stringMap(lease, "nodeRef"), "", "", ref, "i18n:RESULT_ARTIFACT_AVAILABLE", runState, nodeState); err != nil {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, stringMap(lease, "rootRunID"), prepared.Ref, "ARTIFACT_AVAILABLE", stringMap(lease, "nodeRef"), "", "", prepared.Ref, "i18n:RESULT_ARTIFACT_AVAILABLE", runState, nodeState); err != nil {
 			return commandOutcome{}, err
 		}
-		artifactRefs = append(artifactRefs, ref)
+		artifactRefs = append(artifactRefs, prepared.Ref)
 	}
 	usage, err := json.Marshal(payload.Usage)
 	if err != nil {
