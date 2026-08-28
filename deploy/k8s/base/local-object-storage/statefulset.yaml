@@ -35,6 +35,22 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: initialize-data-directories
+          image: __KODEX_SEAWEEDFS_IMAGE__
+          imagePullPolicy: IfNotPresent
+          command: [/bin/sh, -ec]
+          args: [mkdir -p /data/master /data/volume]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10000
+            runAsGroup: 10000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - {name: data, mountPath: /data}
       containers:
         - name: seaweedfs
           image: __KODEX_SEAWEEDFS_IMAGE__

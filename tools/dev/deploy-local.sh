@@ -49,6 +49,48 @@ apply_render() {
   kubectl apply --server-side --force-conflicts --field-manager=kodex-local-dev -f "$output" >/dev/null
 }
 
+reconcile_local_mutable_configmaps() {
+  local name current
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    current=$(kubectl -n "$namespace" get "configmap/$name" -o json 2>/dev/null || true)
+    [[ -n "$current" ]] || continue
+    jq -e '.immutable == true' <<<"$current" >/dev/null 2>&1 || continue
+    jq -e '
+      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+      .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
+    ' <<<"$current" >/dev/null ||
+      fail "immutable ConfigMap is not owned by the local Kodex profile: $name"
+    kubectl -n "$namespace" delete "configmap/$name" --wait=true --timeout=2m >/dev/null
+  done < <(yq -N -r '
+    select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+      .immutable != true and
+      .metadata.labels."app.kubernetes.io/part-of" == "kodex" and
+      .metadata.labels."kodex.dev/local-profile" == "hot-reload") |
+    .metadata.name
+  ' "$render" | sort -u)
+}
+
+reconcile_local_statefulset_rollout() {
+  local workload state current_revision update_revision pod
+  for workload in "$@"; do
+    state=$(kubectl -n "$namespace" get "statefulset/$workload" -o json)
+    current_revision=$(jq -r '.status.currentRevision // ""' <<<"$state")
+    update_revision=$(jq -r '.status.updateRevision // ""' <<<"$state")
+    [[ -n "$current_revision" && -n "$update_revision" &&
+      "$current_revision" != "$update_revision" ]] || continue
+    while IFS= read -r pod; do
+      [[ -n "$pod" ]] || continue
+      kubectl -n "$namespace" delete "pod/$pod" --wait=true --timeout=3m >/dev/null
+    done < <(kubectl -n "$namespace" get pods -o json | jq -r --arg workload "$workload" '
+      .items[] |
+      select(any(.metadata.ownerReferences[]?;
+        .kind == "StatefulSet" and .name == $workload)) |
+      .metadata.name
+    ')
+  done
+}
+
 wait_job() {
   local name=$1 deadline=$((SECONDS + 900)) state
   while ((SECONDS < deadline)); do
@@ -437,12 +479,14 @@ if [[ "$mode" == apply ]]; then
   ensure_local_object_storage_secret
   ensure_local_backup_controller_secret
   ensure_seed_secrets
+  reconcile_local_mutable_configmaps
   apply_render foundation '
     select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "Job" and
       .kind != "Secret")
   '
   wait_certificates
   apply_render statefulsets 'select(.kind == "StatefulSet")'
+  reconcile_local_statefulset_rollout kodex-postgresql kodex-nats seaweedfs
   for workload in kodex-postgresql kodex-nats seaweedfs; do
     kubectl -n "$namespace" rollout status "statefulset/$workload" --timeout=10m >/dev/null ||
       fail "local StatefulSet is unavailable: $workload"
