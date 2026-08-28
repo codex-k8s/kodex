@@ -112,8 +112,21 @@ func (repository *Repository) changeSessionArchive(ctx context.Context, tx pgx.T
 	return commandOutcome{
 		result:    command.Result{Runtime: map[string]any{"taskRef": locked.ref, "state": state, "archiveRef": archiveRef, "retryScheduled": retryScheduled}},
 		projectID: locked.projectID, resourceKind: "SESSION_ARCHIVE_TASK", resourceRef: locked.ref,
-		summary: "i18n:SESSION_ARCHIVE_TASK_" + state,
+		summary: sessionArchiveTaskSummary(state),
 	}, nil
+}
+
+func sessionArchiveTaskSummary(state string) string {
+	switch state {
+	case "SUCCEEDED":
+		return "i18n:SESSION_ARCHIVE_TASK_SUCCEEDED"
+	case "READY":
+		return "i18n:SESSION_ARCHIVE_TASK_READY"
+	case "DEAD_LETTER":
+		return "i18n:SESSION_ARCHIVE_TASK_DEAD_LETTER"
+	default:
+		return "i18n:SESSION_ARCHIVE_TASK_DEAD_LETTER"
+	}
 }
 
 func (repository *Repository) lockSessionArchiveTask(ctx context.Context, tx pgx.Tx, scope scope, payload command.SessionArchiveTaskInput) (lockedSessionArchiveTask, error) {

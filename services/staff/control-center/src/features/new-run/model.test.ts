@@ -23,6 +23,8 @@ function run(overrides: Partial<Run> = {}): Run {
       version: 2,
     },
     title: "Проверить договор",
+    titleSource: "USER_EDITED",
+    activitySummary: "Проверка договора завершена",
     state: "SUCCEEDED",
     source: "CONTROL_CENTER",
     initiator: { ref: "user_1", displayName: "Анна" },

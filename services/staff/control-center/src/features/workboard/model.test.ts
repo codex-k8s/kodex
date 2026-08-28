@@ -9,6 +9,16 @@ import {
 import type { OwnerGate, Run } from "@/shared/api/generated/openapi/types.gen";
 import { runPath } from "@/shared/routes";
 
+const activitySummaryByState: Record<Run["state"], string> = {
+  QUEUED: "Ожидает запуска",
+  RUNNING: "Выполняется аналитиком продаж",
+  WAITING_HUMAN: "Ожидает решения владельца",
+  CANCELLING: "Отменяется по запросу владельца",
+  SUCCEEDED: "Успешно завершён",
+  FAILED: "Завершён с ошибкой",
+  CANCELLED: "Отменён",
+};
+
 function run(
   ref: string,
   state: Run["state"],
@@ -27,6 +37,8 @@ function run(
       version: 1,
     },
     title: `Запуск ${ref}`,
+    titleSource: "SERVER_DEFAULT",
+    activitySummary: activitySummaryByState[state],
     state,
     source: "CONTROL_CENTER",
     initiator: { ref: "user_owner", displayName: "Владелец" },

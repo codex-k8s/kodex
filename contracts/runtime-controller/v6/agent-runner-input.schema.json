@@ -100,6 +100,7 @@
       "maxItems": 256,
       "items": {"$ref": "#/$defs/integration_grant"}
     },
+    "assistant_context": {"$ref": "#/$defs/assistant_context"},
     "input_artifacts": {
       "type": "array",
       "maxItems": 128,
@@ -284,6 +285,35 @@
         "capability_description": {"type": "string", "maxLength": 2000},
         "risk": {"enum": ["LOW", "MEDIUM", "HIGH"]}
       }
+    },
+    "assistant_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "entity_kind", "entity_ref", "entity_name", "allowed_operations"],
+      "properties": {
+        "route": {"type": "string", "maxLength": 500},
+        "entity_kind": {"type": "string", "maxLength": 80},
+        "entity_ref": {"type": "string", "maxLength": 96},
+        "entity_name": {"type": "string", "maxLength": 300},
+        "entity_version": {"type": "integer", "minimum": 1},
+        "allowed_operations": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 80}
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {"entity_kind": {"const": ""}, "entity_ref": {"const": ""}}
+        },
+        {
+          "properties": {
+            "entity_kind": {"type": "string", "minLength": 1},
+            "entity_ref": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
     },
     "input_artifact": {
       "type": "object",

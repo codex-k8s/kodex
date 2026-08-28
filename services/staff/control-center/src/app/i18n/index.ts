@@ -1305,9 +1305,9 @@ const ru = {
     newConversation: "Новый диалог",
     message: "Опишите, что нужно настроить или запустить",
     send: "Отправить помощнику",
-    context: "Контекст работы",
+    workContext: "Контекст работы",
     contextReady: "Готов помочь на этом экране",
-    contextHelp:
+    outcomeHelp:
       "Опишите результат. Kodex учтёт текущий экран, Проект и открытый объект.",
     contextConversation: "{context}: новый диалог",
     contextPrefix: "Контекст текущего экрана: {context}",
@@ -1390,7 +1390,7 @@ const ru = {
     REVOKED: "Отозвано",
     ALLOWED: "Разрешено",
     DENIED: "Запрещено",
-    STALE: "Требует обновления",
+    RBAC_STALE: "Требует обновления",
     PAUSED: "Приостановлено",
     NEEDS_ATTENTION: "Требует внимания",
     CLEAN: "Проверен",
@@ -2745,9 +2745,9 @@ const en = {
     newConversation: "New conversation",
     message: "Describe what to configure or launch",
     send: "Send to assistant",
-    context: "Work context",
+    workContext: "Work context",
     contextReady: "Ready to help on this screen",
-    contextHelp:
+    outcomeHelp:
       "Describe the outcome. Kodex will use the current screen, Project and open resource.",
     contextConversation: "{context}: new conversation",
     contextPrefix: "Current screen context: {context}",
@@ -2830,7 +2830,7 @@ const en = {
     REVOKED: "Revoked",
     ALLOWED: "Allowed",
     DENIED: "Denied",
-    STALE: "Needs refresh",
+    RBAC_STALE: "Needs refresh",
     PAUSED: "Paused",
     NEEDS_ATTENTION: "Needs attention",
     CLEAN: "Clean",

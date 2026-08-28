@@ -540,3 +540,9 @@ PERMISSION_AUDIT_VIEW_NAME:
   other: Просмотр аудита
 PERMISSION_AUDIT_VIEW_DESCRIPTION:
   other: Чтение событий аудита в назначенной области
+SESSION_ARCHIVE_TASK_SUCCEEDED:
+  other: Задача архива сессии выполнена
+SESSION_ARCHIVE_TASK_READY:
+  other: Задача архива сессии запланирована для повтора
+SESSION_ARCHIVE_TASK_DEAD_LETTER:
+  other: Задача архива сессии остановлена после исчерпания попыток

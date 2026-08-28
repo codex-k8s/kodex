@@ -174,7 +174,7 @@ function isOption(
 ): value is AsyncEntityOption {
   return "ref" in value && "title" in value;
 }
-function selected(item: PickerEntry): boolean {
+function isSelected(item: PickerEntry): boolean {
   return selectedIds.value.includes(item.id);
 }
 function chooseInline(item: PickerEntry): void {
@@ -184,7 +184,7 @@ function chooseInline(item: PickerEntry): void {
     if (selection.has(item.id)) selection.delete(item.id);
     else selection.add(item.id);
     emit("update:modelValue", [...selection]);
-  } else emit("update:modelValue", selected(item) ? null : item.id);
+  } else emit("update:modelValue", isSelected(item) ? null : item.id);
   emit("select", item.source as S);
 }
 function chooseDropdown(item: PickerEntry): void {
@@ -365,10 +365,10 @@ onBeforeUnmount(() => {
           class="async-picker__option"
           :class="{
             'async-picker__option--active': index === activeIndex,
-            'async-picker__option--selected': selected(item),
+            'async-picker__option--selected': isSelected(item),
           }"
           role="option"
-          :aria-selected="selected(item)"
+          :aria-selected="isSelected(item)"
           :disabled="disabled || item.disabled"
           @mouseenter="activeIndex = index"
           @click="chooseInline(item)"
@@ -376,14 +376,14 @@ onBeforeUnmount(() => {
           <slot
             name="option"
             :item="item.source as T"
-            :selected="selected(item)"
+            :selected="isSelected(item)"
             ><span class="async-picker__option-copy"
               ><strong>{{ item.label }}</strong
               ><small v-if="item.description">{{
                 item.description
               }}</small></span
             ></slot
-          ><Check v-if="selected(item)" :size="17" aria-hidden="true" />
+          ><Check v-if="isSelected(item)" :size="17" aria-hidden="true" />
         </button>
         <div ref="sentinel" class="async-picker__sentinel" aria-hidden="true" />
         <div

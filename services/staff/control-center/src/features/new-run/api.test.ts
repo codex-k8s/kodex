@@ -57,6 +57,8 @@ function run(overrides: Partial<Run> = {}): Run {
       version: 1,
     },
     title: "Итоговый запуск",
+    titleSource: "USER_EDITED",
+    activitySummary: "Итоговый запуск успешно завершён",
     state: "SUCCEEDED",
     source: "CONTROL_CENTER",
     initiator: { ref: "user_1", displayName: "Анна" },

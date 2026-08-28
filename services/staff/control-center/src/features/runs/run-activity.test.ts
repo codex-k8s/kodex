@@ -19,6 +19,8 @@ const run: Run = {
     version: 1,
   },
   title: "Подготовить отчёт",
+  titleSource: "USER_EDITED",
+  activitySummary: "Аналитик собирает подтверждённые факты",
   state: "RUNNING",
   source: "CONTROL_CENTER",
   initiator: { ref: "usr_example", displayName: "Владелец" },

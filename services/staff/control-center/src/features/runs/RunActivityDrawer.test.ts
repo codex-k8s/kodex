@@ -20,6 +20,8 @@ const run: Run = {
     version: 1,
   },
   title: "Подготовить отчёт",
+  titleSource: "USER_EDITED",
+  activitySummary: "Аналитик собирает данные для отчёта",
   inputSummary: "Проверь квартальный отчёт",
   state: "RUNNING",
   source: "CONTROL_CENTER",
