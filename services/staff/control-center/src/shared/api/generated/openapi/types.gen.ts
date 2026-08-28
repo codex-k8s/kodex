@@ -671,7 +671,7 @@ export type ScheduleInput = {
 };
 
 export type ScheduleCommand = {
-    action: 'ENABLE' | 'PAUSE';
+    action: 'ENABLE' | 'PAUSE' | 'ARCHIVE';
 };
 
 export type IntegrationCapability = {
@@ -2670,6 +2670,33 @@ export type CreateScheduleResponses = {
 };
 
 export type CreateScheduleResponse = CreateScheduleResponses[keyof CreateScheduleResponses];
+
+export type GetScheduleData = {
+    body?: never;
+    path: {
+        scheduleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/schedules/{scheduleRef}';
+};
+
+export type GetScheduleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetScheduleError = GetScheduleErrors[keyof GetScheduleErrors];
+
+export type GetScheduleResponses = {
+    /**
+     * Расписание, включая read-only историю после архивации
+     */
+    200: Schedule;
+};
+
+export type GetScheduleResponse = GetScheduleResponses[keyof GetScheduleResponses];
 
 export type UpdateScheduleData = {
     body: ScheduleInput;
