@@ -72,6 +72,17 @@ type RunnerIntegrationGrant struct {
 	Risk                  string `json:"risk"`
 }
 
+// RunnerAssistantContext — безопасный route/resource snapshot, который
+// определяет доступный набор plan operations для одного assistant turn.
+type RunnerAssistantContext struct {
+	Route             string   `json:"route"`
+	EntityKind        string   `json:"entity_kind"`
+	EntityRef         string   `json:"entity_ref"`
+	EntityName        string   `json:"entity_name"`
+	EntityVersion     *int64   `json:"entity_version,omitempty"`
+	AllowedOperations []string `json:"allowed_operations"`
+}
+
 // RunnerInputArtifact описывает exact версию входного либо knowledge artifact.
 // Байты передаются отдельно через execution-scoped callback и сверяются runner.
 type RunnerInputArtifact struct {
@@ -114,6 +125,7 @@ type RunnerInput struct {
 	SessionContext              []RunnerSessionMessage   `json:"session_context,omitempty"`
 	DelegationTargets           []RunnerDelegationTarget `json:"delegation_targets,omitempty"`
 	IntegrationGrants           []RunnerIntegrationGrant `json:"integration_grants,omitempty"`
+	AssistantContext            *RunnerAssistantContext  `json:"assistant_context,omitempty"`
 	InputArtifacts              []RunnerInputArtifact    `json:"input_artifacts,omitempty"`
 	Capabilities                []string                 `json:"capabilities,omitempty"`
 	Provider                    string                   `json:"provider"`
@@ -181,6 +193,24 @@ func (input RunnerInput) Validate() error {
 			len(target.Instructions) > 1000 || len(target.ExpectedResult) > 1000 ||
 			(target.WorkflowStepKey != "" && !workflowStepKeyPattern.MatchString(target.WorkflowStepKey)) {
 			return errors.New("runner delegation catalog is invalid")
+		}
+	}
+	if input.AssistantContext != nil {
+		context := input.AssistantContext
+		if !input.SystemAssistant || len(context.Route) > 500 || len(context.EntityKind) > 80 ||
+			len(context.EntityRef) > 96 || len(context.EntityName) > 300 || len(context.AllowedOperations) > 32 ||
+			(context.EntityKind == "") != (context.EntityRef == "") || context.EntityVersion != nil && *context.EntityVersion < 1 {
+			return errors.New("runner assistant context is invalid")
+		}
+		seen := make(map[string]struct{}, len(context.AllowedOperations))
+		for _, operation := range context.AllowedOperations {
+			if operation == "" || len(operation) > 80 {
+				return errors.New("runner assistant context is invalid")
+			}
+			if _, duplicate := seen[operation]; duplicate {
+				return errors.New("runner assistant context is invalid")
+			}
+			seen[operation] = struct{}{}
 		}
 	}
 	artifactRefs := make(map[string]struct{}, len(input.InputArtifacts))

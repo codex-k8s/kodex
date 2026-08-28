@@ -114,7 +114,7 @@ func (usage TokenUsage) Valid() bool {
 type Run struct {
 	Ref, ProjectRef, SessionRef, RootRunRef, ParentRunRef, RetryOfRunRef string
 	Title, Task, State, Source, ResultSummary, SafeErrorCode             string
-	SafeErrorMessage, InitiatorName                                      string
+	SafeErrorMessage, InitiatorName, TitleSource, ActivitySummary        string
 	Target                                                               RunTarget
 	Attempt                                                              int32
 	GraphRevision, EventSequence, Version                                int64
@@ -129,7 +129,7 @@ type Run struct {
 type RunNode struct {
 	Ref, RunRef, ParentNodeRef, Type, State, DisplayName, Role, AgentRef string
 	TurnRef, InputSummary, ProgressSummary, CallbackSummary              string
-	SafeErrorCode, SafeErrorMessage                                      string
+	SafeErrorCode, SafeErrorMessage, MaterializationState                string
 	Attempt                                                              int32
 	IntegrationNames, ArtifactRefs, ChildRunRefs, NextActions            []string
 	CreatedAt                                                            time.Time
@@ -155,12 +155,30 @@ type RunEventDelta struct {
 	Incident *Incident
 }
 
+type RunEventActor struct {
+	Kind, Ref, Name string
+}
+
+type RunToolCall struct {
+	Ref            string         `json:"ref"`
+	Tool           string         `json:"tool"`
+	SafeParameters map[string]any `json:"safeParameters"`
+	CapabilityRef  string         `json:"capabilityRef,omitempty"`
+	GrantRef       string         `json:"grantRef,omitempty"`
+	State          string         `json:"state"`
+	DurationMS     int64          `json:"durationMs"`
+	SafeResult     string         `json:"safeResult"`
+	AuditRef       string         `json:"auditRef"`
+}
+
 type RunEvent struct {
 	Ref, RunRef, Type, NodeRef, EdgeRef, GateRef, ArtifactRef, IncidentRef string
-	Summary, Progress, RunState, NodeState                                 string
+	Summary, Progress, RunState, NodeState, MessageKind                    string
 	Sequence, GraphRevision                                                int64
 	OccurredAt                                                             time.Time
 	Delta                                                                  RunEventDelta
+	Actor                                                                  RunEventActor
+	ToolCall                                                               *RunToolCall
 }
 
 type RunGraph struct {
@@ -237,17 +255,67 @@ type IntegrationConnection struct {
 	NextActions                                                             []string
 }
 
+type AssistantContextDescriptor struct {
+	Route                             string
+	EntityKind, EntityRef, EntityName string
+	EntityVersion                     *int64
+	AllowedOperations                 []string
+}
+
+type AssistantPlanTarget struct {
+	Kind    string `json:"kind"`
+	Ref     string `json:"ref,omitempty"`
+	Name    string `json:"name"`
+	Version *int64 `json:"version,omitempty"`
+}
+
 type AssistantPlanOperation struct {
-	Key, Type, Summary, TargetKind, TargetRef string
-	Input                                     map[string]any
+	Key                string              `json:"ref"`
+	Type               string              `json:"type"`
+	Action             string              `json:"action"`
+	Title              string              `json:"title"`
+	Summary            string              `json:"summary"`
+	Target             AssistantPlanTarget `json:"target"`
+	Parameters         map[string]any      `json:"parameters"`
+	Before             map[string]any      `json:"before"`
+	After              map[string]any      `json:"after"`
+	ExpectedVersion    *int64              `json:"expectedVersion,omitempty"`
+	Selected           bool                `json:"selected"`
+	Permitted          bool                `json:"permitted"`
+	UnavailableReason  string              `json:"unavailableReason,omitempty"`
+	ValidationProblems []string            `json:"validationProblems"`
+	// Input и плоские target-поля оставлены только для внутреннего перехода
+	// существующих специализированных command adapters на explicit projection.
+	Input                 map[string]any `json:"-"`
+	TargetKind, TargetRef string         `json:"-"`
 }
 
 type AssistantPlan struct {
-	Ref, Summary, State string
-	Version             int64
-	Operations          []AssistantPlanOperation
-	CreatedAt           time.Time
-	AppliedAt           *time.Time
+	Ref, ConversationRef, ProjectRef, Summary, State, ContentDigest string
+	Version, Revision                                               int64
+	ValidatedRevision                                               *int64
+	Operations                                                      []AssistantPlanOperation
+	ValidationProblems                                              []string
+	CreatedAt                                                       time.Time
+	ValidatedAt, AppliedAt                                          *time.Time
+}
+
+type AssistantPlanOperationReceipt struct {
+	OperationRef, ResourceRef, Outcome, AuditRef string
+}
+
+type AssistantPlanConflict struct {
+	OperationRef, TargetRef, Field string
+	Expected, Actual               any
+}
+
+type AssistantPlanReceipt struct {
+	Ref, PlanRef, Outcome          string
+	PlanRevision                   int64
+	Operations                     []AssistantPlanOperationReceipt
+	Conflicts                      []AssistantPlanConflict
+	AuditRefs, CreatedResourceRefs []string
+	CreatedAt                      time.Time
 }
 
 type AssistantTurn struct {
@@ -259,7 +327,9 @@ type AssistantTurn struct {
 
 type AssistantConversation struct {
 	Ref, Title, ProjectRef, SessionRef, State string
-	Version                                   int64
+	TitleSource                               string
+	Version, TitleRevision                    int64
+	Context                                   AssistantContextDescriptor
 	Turns                                     []AssistantTurn
 	LatestPlan                                *AssistantPlan
 	CreatedAt, UpdatedAt                      time.Time

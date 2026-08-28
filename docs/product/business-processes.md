@@ -4,8 +4,8 @@ title: Бизнес-процессы web-first Kodex
 type: product
 status: approved
 owner: product
-version: 1.0.1
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-08-28
 ---
 
 # Бизнес-процессы web-first Kodex
@@ -54,19 +54,43 @@ updated: 2026-08-23
 
 ## BP-ASSISTANT-001. Конфигурация через системного помощника
 
-1. Пользователь формулирует цель обычным языком.
-2. Warm assistant runtime анализирует доступные каталоги и предлагает безопасный
-   план с точными изменениями, но ничего не меняет напрямую.
-3. После явного действия пользователя помощник вызывает закрытый типизированный
-   MCP-инструмент той же специализированной команды, что использует web-форма.
-4. Команда повторно проверяет полномочия пользователя и сохраняет двойную
-   атрибуцию user + system assistant.
-5. План может создать Project, Agent, Workflow, metadata подключения, поставить
-   проверку подключения, изменить capability/grant, создать Schedule или
-   запустить работу. Секрет подключения помощнику не передаётся: он открывает
-   обычную защищённую форму Control Center.
-6. Подтверждённое изменение сразу появляется в обычном интерфейсе через domain
-   event.
+1. Control-plane создаёт диалог с server-owned title и источником
+   `SERVER_DEFAULT`. Warm assistant может безопасно предложить новый title через
+   специализированный tool, но не перезаписывает `USER_EDITED`; ручное изменение
+   использует `If-Match` и повышает title revision.
+2. При создании диалога control-plane разрешает contextual descriptor: route,
+   entity kind/ref/name/version и закрытый список допустимых операций. Имя,
+   версия, Project и allowed operations читаются из доменного состояния, а не
+   принимаются как полномочия из browser или model payload.
+3. Пользователь формулирует цель обычным языком. Warm assistant читает только
+   выданный каталог и предлагает plan revision с явными операциями. Каждая
+   операция содержит action, target, parameters, expected version, before,
+   after и признак выбора; неуказанное изменение запрещено.
+4. Новый план имеет state `DRAFT`. Редактирование создаёт следующую immutable
+   revision, не меняя содержимое прежней. Validation проверяет точную revision,
+   разрешённый тип команды, полномочия пользователя и актуальную target version,
+   после чего фиксирует `VALID` либо `INVALID` с безопасными причинами.
+5. Apply принимает только точную `VALID` revision с совпавшими `If-Match` и
+   idempotency intent. Все выбранные specialized commands, operation audit,
+   domain events и immutable receipt фиксируются атомарно; OCC conflict не
+   оставляет частичных эффектов, переводит план в `STALE` и возвращает bounded
+   conflict diff.
+6. Reject закрывает точную revision в `REJECTED` и создаёт immutable receipt без
+   конфигурационного эффекта. Exact retry возвращает сохранённый результат;
+   повторное использование idempotency key для другого intent отклоняется.
+7. План может создавать, изменять, архивировать или запускать только типы из
+   закрытого реестра #997. Секрет подключения помощнику не передаётся, а внешний
+   integration effect остаётся специализированному adapter lifecycle.
+8. Применённое изменение появляется в обычном read path через domain event и
+   сохраняет двойную атрибуцию user + system assistant.
+
+| Текущее состояние                 | Допустимая операция                | Результат                                   |
+| --------------------------------- | ---------------------------------- | ------------------------------------------- |
+| `DRAFT`/`INVALID`/`STALE`         | edit exact version                 | новая `DRAFT` revision                      |
+| `DRAFT`                           | validate exact revision            | `VALID` или `INVALID`                       |
+| `VALID`                           | apply exact validated revision     | `APPLIED` либо `STALE` с receipt            |
+| `DRAFT`/`VALID`/`INVALID`/`STALE` | reject exact revision              | `REJECTED` с receipt                        |
+| `APPLIED`/`REJECTED`              | любая повторная lifecycle mutation | сохранённый exact retry либо закрытый отказ |
 
 ## BP-GATE-001. Решение человека
 

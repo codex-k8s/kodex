@@ -134,6 +134,9 @@ components:
             - OWNER_GATE_RESOLVED
             - ARTIFACT_AVAILABLE
             - INCIDENT_LINKED
+            - RUN_METADATA_UPDATED
+            - TOOL_CALL_RECORDED
+            - PLAN_UPDATED
         eventVersion: { type: integer, const: 1 }
         occurredAt: { $ref: '#/components/schemas/Timestamp' }
         organizationRef: { $ref: '#/components/schemas/OpaqueRef' }
@@ -154,7 +157,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [RUN, NODE, EDGE, TURN, DELEGATION, CALLBACK, OWNER_GATE, ARTIFACT, INCIDENT]
+          enum: [RUN, NODE, EDGE, TURN, DELEGATION, CALLBACK, OWNER_GATE, ARTIFACT, INCIDENT, TOOL_CALL, PLAN]
         runRef: { $ref: '#/components/schemas/OpaqueRef' }
         nodeRef: { $ref: '#/components/schemas/OpaqueRef' }
         edgeRef: { $ref: '#/components/schemas/OpaqueRef' }
@@ -163,6 +166,9 @@ components:
         gateRef: { $ref: '#/components/schemas/OpaqueRef' }
         artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
         incidentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        actor: { $ref: '#/components/schemas/RunEventActor' }
+        messageKind: { $ref: '#/components/schemas/RunEventMessageKind' }
+        toolCall: { $ref: '#/components/schemas/RunToolCall' }
         state:
           type: string
           enum: [QUEUED, RUNNING, WAITING_OWNER, WAITING_EXTERNAL, SUCCEEDED, FAILED, CANCELLED]
@@ -174,6 +180,37 @@ components:
           maxItems: 12
           uniqueItems: true
           items: { type: string, enum: [CANCEL, RETRY, CONTINUE_SESSION, RESOLVE_GATE, DOWNLOAD_ARTIFACT] }
+    RunEventActor:
+      type: object
+      additionalProperties: false
+      required: [kind, ref, name]
+      properties:
+        kind: { $ref: '#/components/schemas/RunEventActorKind' }
+        ref: { type: string, maxLength: 96 }
+        name: { type: string, maxLength: 300 }
+    RunEventActorKind:
+      type: string
+      enum: [USER, AGENT, SYSTEM_ASSISTANT, PLATFORM, INTEGRATION]
+    RunEventMessageKind:
+      type: string
+      enum: [STATE, USER_MESSAGE, ASSISTANT_MESSAGE, INTERMEDIATE_MESSAGE, FINAL_MESSAGE, TOOL_CALL, PLAN_UPDATE, ARTIFACT, INCIDENT, OWNER_GATE]
+    RunToolCall:
+      type: object
+      additionalProperties: false
+      required: [ref, tool, safeParameters, state, durationMs, safeResult, auditRef]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        tool: { type: string, maxLength: 120 }
+        safeParameters: { type: object, maxProperties: 32, additionalProperties: true }
+        capabilityRef: { type: string, maxLength: 160 }
+        grantRef: { $ref: '#/components/schemas/OpaqueRef' }
+        state: { $ref: '#/components/schemas/RunToolCallState' }
+        durationMs: { type: integer, format: int64, minimum: 0, maximum: 86400000 }
+        safeResult: { type: string, maxLength: 2000 }
+        auditRef: { $ref: '#/components/schemas/OpaqueRef' }
+    RunToolCallState:
+      type: string
+      enum: [SUCCEEDED, FAILED]
     PlatformEventEnvelope:
       type: object
       additionalProperties: false

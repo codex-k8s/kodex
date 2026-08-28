@@ -26,6 +26,7 @@ LEFT JOIN LATERAL (
             FROM control_plane.run_nodes delegated
             WHERE delegated.root_run_id = root.id
               AND delegated.workflow_step_key = step.value ->> 'Key'
+              AND delegated.materialization_state = 'MATERIALIZED'
         )
     ) AS missing_steps
     FROM jsonb_array_elements(COALESCE(workflow_version.spec -> 'Steps', '[]'::jsonb)) step(value)

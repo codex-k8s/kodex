@@ -159,9 +159,13 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeSchedule(ctx, tx, scope, input)
 	case command.CreateConnection, command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
 		return repository.changeConnection(ctx, tx, scope, input)
-	case command.CreateAssistantConversation, command.AddAssistantTurn, command.ApplyAssistantPlan, command.UpdateAssistantInstructions, command.RecoverAssistant:
+	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.AddAssistantTurn,
+		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
+		command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return repository.changeAssistant(ctx, tx, scope, input)
-	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution, command.DelegateExecution, command.ProposeAssistantPlan:
+	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
+		command.DelegateExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
+		command.ProposeRunMetadata, command.RecordRunToolCall:
 		return repository.changeExecution(ctx, tx, scope, input)
 	case command.MaterializeOccurrence:
 		return repository.changeOccurrence(ctx, tx, scope, input)
@@ -1299,6 +1303,9 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunNodesWorkflowStepKeyHumanGateAfter, nodeID, "workflow.coordinator.initial", initialGate); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		if err := repository.insertPlannedWorkflowNodes(ctx, tx, scope, projectID, runID, nodeID, workflowVersion); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsStateStartedAtVersion, runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("start launched run: %w", errs.ErrUnavailable)
@@ -1311,6 +1318,54 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		return commandOutcome{}, fmt.Errorf("read launched run graph: %w", err)
 	}
 	return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "RUN", resourceRef: runRef, summary: "i18n:RUN_CREATED"}, nil
+}
+
+func (repository *Repository) insertPlannedWorkflowNodes(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, coordinatorNodeID string, workflow entity.WorkflowVersion) error {
+	nodeIDs := make(map[string]string, len(workflow.Steps))
+	for _, step := range workflow.Steps {
+		nodeRef, err := newRef("nod")
+		if err != nil {
+			return err
+		}
+		var nodeID string
+		if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertPlannedWorkflowNode, pgx.StrictNamedArgs{
+			"node_ref": nodeRef, "organization_id": scope.organizationID, "project_id": projectID,
+			"root_run_id": rootRunID, "parent_node_id": coordinatorNodeID, "workflow_step_key": step.Key,
+			"agent_ref": step.AgentRef, "human_gate_after": step.HumanGateAfter,
+			"input_summary": truncate(step.Instructions, 1000),
+		}).Scan(&nodeID); err != nil {
+			return fmt.Errorf("insert planned workflow node: %w", errs.ErrUnavailable)
+		}
+		nodeIDs[step.Key] = nodeID
+	}
+	for _, step := range workflow.Steps {
+		sources := step.DependsOn
+		if len(sources) == 0 {
+			sources = []string{""}
+		}
+		for _, dependency := range sources {
+			sourceNodeID := coordinatorNodeID
+			edgeType := "DELEGATED_TO"
+			if dependency != "" {
+				sourceNodeID = nodeIDs[dependency]
+				edgeType = "WAITING_FOR"
+				if sourceNodeID == "" {
+					return errs.ErrConflict
+				}
+			}
+			edgeRef, err := newRef("edg")
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, queryCommandsLaunchrunInsertPlannedWorkflowEdge, pgx.StrictNamedArgs{
+				"edge_ref": edgeRef, "organization_id": scope.organizationID, "root_run_id": rootRunID,
+				"source_node_id": sourceNodeID, "target_node_id": nodeIDs[step.Key], "edge_type": edgeType, "label": step.Key,
+			}); err != nil {
+				return fmt.Errorf("insert planned workflow edge: %w", errs.ErrUnavailable)
+			}
+		}
+	}
+	return nil
 }
 
 func workflowCoordinatorTask(task, versionRef, versionDigest string, version entity.WorkflowVersion) string {
@@ -1440,11 +1495,13 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 		incidentRef = incident.Ref
 	}
 	safeSummary := truncate(summary, 2000)
-	event := entity.RunEvent{Ref: ref, RunRef: rootRef, Sequence: sequence, GraphRevision: delta.Run.GraphRevision, Type: eventType, NodeRef: nodeRef, EdgeRef: edgeRef, GateRef: gateRef, ArtifactRef: artifactRef, IncidentRef: incidentRef, Summary: safeSummary, RunState: runState, NodeState: nodeState, OccurredAt: time.Now().UTC(), Delta: delta}
-	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertRunEventsEventIdOrganizationIdRootRunId, eventID, ref, scope.organizationID, projectValue, rootRunID, aggregateRef, version, sequence, eventType, nodeRef, edgeRef, gateRef, artifactRef, safeSummary, runState, nodeState, asJSON(delta), scope.actorRef, event.OccurredAt); err != nil {
+	actor, messageKind := runEventPresentation(scope, eventType, delta)
+	event := entity.RunEvent{Ref: ref, RunRef: rootRef, Sequence: sequence, GraphRevision: delta.Run.GraphRevision, Type: eventType, NodeRef: nodeRef, EdgeRef: edgeRef, GateRef: gateRef, ArtifactRef: artifactRef, IncidentRef: incidentRef, Summary: safeSummary, RunState: runState, NodeState: nodeState, MessageKind: messageKind, Actor: actor, OccurredAt: time.Now().UTC(), Delta: delta}
+	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertRunEventsEventIdOrganizationIdRootRunId, eventID, ref, scope.organizationID, projectValue, rootRunID, aggregateRef, version, sequence, eventType, nodeRef, edgeRef, gateRef, artifactRef, safeSummary, runState, nodeState, asJSON(delta), scope.actorRef, event.OccurredAt, actor.Kind, actor.Ref, actor.Name, messageKind, nil); err != nil {
 		return entity.RunEvent{}, errs.ErrUnavailable
 	}
-	data := map[string]any{"kind": eventKind(eventType), "runRef": rootRef, "safeSummary": safeSummary}
+	data := map[string]any{"kind": eventKind(eventType), "runRef": rootRef, "safeSummary": safeSummary,
+		"actor": map[string]string{"kind": actor.Kind, "ref": actor.Ref, "name": actor.Name}, "messageKind": messageKind}
 	for key, value := range map[string]string{"nodeRef": nodeRef, "edgeRef": edgeRef, "gateRef": gateRef, "artifactRef": artifactRef} {
 		if value != "" {
 			data[key] = value
@@ -1465,6 +1522,35 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 		return entity.RunEvent{}, errs.ErrUnavailable
 	}
 	return event, nil
+}
+
+func runEventPresentation(scope scope, eventType string, delta entity.RunEventDelta) (entity.RunEventActor, string) {
+	actor := entity.RunEventActor{Kind: "PLATFORM", Ref: "platform", Name: "Kodex"}
+	if delta.Node != nil && delta.Node.AgentRef != "" {
+		actor = entity.RunEventActor{Kind: "AGENT", Ref: delta.Node.AgentRef, Name: delta.Node.DisplayName}
+	} else if scope.actorRef != "" && scope.actorName != "" {
+		actor = entity.RunEventActor{Kind: "USER", Ref: scope.actorRef, Name: scope.actorName}
+	}
+	switch eventType {
+	case "TURN_QUEUED":
+		return actor, "USER_MESSAGE"
+	case "TURN_PROGRESS":
+		return actor, "INTERMEDIATE_MESSAGE"
+	case "TURN_COMPLETED", "CALLBACK_DELIVERED":
+		return actor, "FINAL_MESSAGE"
+	case "OWNER_GATE_OPENED", "OWNER_GATE_RESOLVED":
+		return actor, "OWNER_GATE"
+	case "ARTIFACT_AVAILABLE":
+		return actor, "ARTIFACT"
+	case "INCIDENT_LINKED":
+		return actor, "INCIDENT"
+	case "PLAN_UPDATED":
+		return actor, "PLAN_UPDATE"
+	case "TOOL_CALL_RECORDED":
+		return actor, "TOOL_CALL"
+	default:
+		return actor, "STATE"
+	}
 }
 
 func (repository *Repository) readRunEventDelta(ctx context.Context, tx pgx.Tx, organizationID, rootRunID, nodeRef, edgeRef, gateRef, artifactRef string) (entity.RunEventDelta, error) {
@@ -1606,6 +1692,10 @@ func eventKind(eventType string) string {
 		return "ARTIFACT"
 	case "INCIDENT_LINKED":
 		return "INCIDENT"
+	case "TOOL_CALL_RECORDED":
+		return "TOOL_CALL"
+	case "PLAN_UPDATED":
+		return "PLAN"
 	default:
 		return "RUN"
 	}
@@ -1623,7 +1713,7 @@ func (repository *Repository) readRunGraphTx(ctx context.Context, tx pgx.Tx, sco
 	}
 	for rows.Next() {
 		var n entity.RunNode
-		if err := rows.Scan(&n.Ref, &n.RunRef, &n.ParentNodeRef, &n.Type, &n.State, &n.DisplayName, &n.Role, &n.AgentRef, &n.TurnRef, &n.Attempt, &n.InputSummary, &n.ProgressSummary, &n.IntegrationNames, &n.CallbackSummary, &n.SafeErrorCode, &n.SafeErrorMessage, &n.NextActions, &n.CreatedAt, &n.StartedAt, &n.FinishedAt, &n.ArtifactRefs, &n.ChildRunRefs); err != nil {
+		if err := rows.Scan(&n.Ref, &n.RunRef, &n.ParentNodeRef, &n.Type, &n.State, &n.DisplayName, &n.Role, &n.AgentRef, &n.TurnRef, &n.Attempt, &n.InputSummary, &n.ProgressSummary, &n.IntegrationNames, &n.CallbackSummary, &n.SafeErrorCode, &n.SafeErrorMessage, &n.NextActions, &n.MaterializationState, &n.CreatedAt, &n.StartedAt, &n.FinishedAt, &n.ArtifactRefs, &n.ChildRunRefs); err != nil {
 			rows.Close()
 			return entity.Run{}, entity.RunGraph{}, fmt.Errorf("scan run graph node: %w", errs.ErrUnavailable)
 		}

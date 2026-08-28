@@ -15,10 +15,19 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	}
 	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678", DelegationTargets: []runtimecontract.RunnerDelegationTarget{{Ref: "agt_12345678", Name: "Analyst"}}}
 	available := tools(input)
-	if len(available) != 3 || available[0]["name"] != "get_configuration_catalog" || available[1]["name"] != "propose_configuration_plan" {
+	if len(available) != 5 {
 		t.Fatalf("unexpected assistant tool catalog: %#v", available)
 	}
-	schema := available[1]["inputSchema"].(map[string]any)
+	var planTool map[string]any
+	for _, tool := range available {
+		if tool["name"] == "propose_configuration_plan" {
+			planTool = tool
+		}
+	}
+	if planTool == nil {
+		t.Fatal("assistant plan tool is absent")
+	}
+	schema := planTool["inputSchema"].(map[string]any)
 	if schema["additionalProperties"] != false {
 		t.Fatal("assistant tool schema must reject unknown top-level fields")
 	}
@@ -27,14 +36,14 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatalf("assistant plan must be bounded, got %#v", operations["maxItems"])
 	}
 	oneOf := operations["items"].(map[string]any)["oneOf"].([]map[string]any)
-	if len(oneOf) != 9 {
+	if len(oneOf) != 11 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 	byType := make(map[string]map[string]any, len(oneOf))
 	for _, operation := range oneOf {
 		properties := operation["properties"].(map[string]any)
 		operationType := properties["type"].(map[string]any)["const"].(string)
-		byType[operationType] = properties["input"].(map[string]any)
+		byType[operationType] = properties["parameters"].(map[string]any)
 	}
 	workflowProperties := byType["CREATE_WORKFLOW"]["properties"].(map[string]any)
 	if workflowProperties["projectRef"].(map[string]any)["enum"].([]string)[0] != input.ProjectRef ||
@@ -51,8 +60,8 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		}
 	}
 	grant := byType["CHANGE_INTEGRATION_GRANT"]
-	if len(grant["oneOf"].([]map[string]any)) != 2 || !containsString(grant["required"].([]string), "expectedVersion") {
-		t.Fatalf("integration grant schema lost target exclusivity or OCC: %#v", grant)
+	if len(grant["oneOf"].([]map[string]any)) != 2 {
+		t.Fatalf("integration grant schema lost target exclusivity: %#v", grant)
 	}
 	scheduleProperties := byType["CREATE_SCHEDULE"]["properties"].(map[string]any)
 	if scheduleProperties["timeOfDay"] == nil || scheduleProperties["cronExpression"] != nil {

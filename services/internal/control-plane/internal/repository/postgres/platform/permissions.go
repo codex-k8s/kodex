@@ -19,7 +19,8 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, s
 		command.CreateConnection, command.TestConnection, command.SetConnectionEnabled, command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return errs.ErrForbidden
 	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
-		command.DelegateExecution, command.ProposeAssistantPlan, command.MaterializeOccurrence,
+		command.DelegateExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
+		command.ProposeRunMetadata, command.RecordRunToolCall, command.MaterializeOccurrence,
 		command.CompleteConnectionTest, command.CompleteIntegrationInvocation,
 		command.CompleteInteractionDelivery, command.AcceptInteractionMessage:
 		return nil
@@ -96,7 +97,11 @@ func (repository *Repository) commandProjectPermission(ctx context.Context, tx p
 		ref, table, permission = payload.ProjectRef, "projects", "VIEW"
 	case command.AssistantTurnInput:
 		ref, table, permission = payload.ConversationRef, "assistant_conversations", "VIEW"
+	case command.AssistantConversationTitleInput:
+		ref, table, permission = payload.ConversationRef, "assistant_conversations", "VIEW"
 	case command.AssistantPlanInput:
+		return "", "", nil
+	case command.AssistantPlanDraftInput:
 		return "", "", nil
 	default:
 		return "", "", nil

@@ -5,5 +5,5 @@ SET state = 'CANCELLED',
     finished_at = clock_timestamp(),
     version = version + 1
 WHERE root_run_id = $1::uuid
-  AND state IN ('QUEUED', 'RUNNING', 'WAITING')
+  AND state IN ('PLANNED', 'QUEUED', 'RUNNING', 'WAITING')
 RETURNING ref

@@ -1758,7 +1758,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("non-heartbeat operation reported warm runtime: %v", err)
 	}
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-conversation-1"}, Payload: command.AssistantConversationInput{Title: "Configure sales team"}})
+		Mutation: value.Mutation{IdempotencyKey: "assistant-conversation-1"}, Payload: command.AssistantConversationInput{}})
 	if err != nil {
 		t.Fatalf("create assistant conversation: %v", err)
 	}
@@ -1796,10 +1796,12 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	planResult, err := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-plan-1"}, Payload: command.ProposeAssistantPlanInput{
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
-			Summary: "Create project Sales", Operations: []entity.AssistantPlanOperation{{Key: "operation-001", Type: "CREATE_PROJECT", Summary: "Create sales project",
-				Input: map[string]any{"name": "Sales", "purpose": "Qualify and convert leads", "language": "en"}}},
+			Summary: "Create project Sales", Operations: []entity.AssistantPlanOperation{{Key: "operation-001", Type: "CREATE_PROJECT", Action: "CREATE",
+				Title: "Sales", Summary: "Create sales project", Target: entity.AssistantPlanTarget{Kind: "PROJECT", Name: "Sales"},
+				Parameters: map[string]any{"name": "Sales", "purpose": "Qualify and convert leads", "language": "en"},
+				Before:     map[string]any{}, After: map[string]any{"name": "Sales", "purpose": "Qualify and convert leads", "language": "en"}, Selected: true}},
 		}})
-	if err != nil || planResult.Plan == nil || planResult.Plan.State != "PROPOSED" {
+	if err != nil || planResult.Plan == nil || planResult.Plan.State != "DRAFT" {
 		t.Fatalf("propose assistant plan: result=%#v err=%v", planResult.Plan, err)
 	}
 	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
@@ -1811,10 +1813,17 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("complete direct assistant execution: run=%#v err=%v", completed.Run, err)
 	}
 	expectedPlanVersion := int64(1)
+	validated, err := service.Execute(ctx, command.Command{Kind: command.ValidateAssistantPlan, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-validate-1", ExpectedVersion: &expectedPlanVersion},
+		Payload:  command.AssistantPlanInput{PlanRef: planResult.Plan.Ref, Revision: planResult.Plan.Revision}})
+	if err != nil || validated.Plan == nil || validated.Plan.State != "VALID" {
+		t.Fatalf("validate assistant plan: result=%#v err=%v", validated.Plan, err)
+	}
+	expectedPlanVersion = validated.Plan.Version
 	applied, err := service.Execute(ctx, command.Command{Kind: command.ApplyAssistantPlan, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-apply-1", ExpectedVersion: &expectedPlanVersion},
-		Payload:  command.AssistantPlanInput{PlanRef: planResult.Plan.Ref}})
-	if err != nil || applied.Plan == nil || applied.Plan.State != "APPLIED" || len(applied.CreatedRefs) != 1 {
+		Payload:  command.AssistantPlanInput{PlanRef: planResult.Plan.Ref, Revision: planResult.Plan.Revision}})
+	if err != nil || applied.Plan == nil || applied.Plan.State != "APPLIED" || applied.PlanReceipt == nil || len(applied.CreatedRefs) != 1 {
 		t.Fatalf("apply assistant plan: result=%#v refs=%v err=%v", applied.Plan, applied.CreatedRefs, err)
 	}
 }

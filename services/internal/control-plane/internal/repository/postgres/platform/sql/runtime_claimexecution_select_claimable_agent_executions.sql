@@ -171,6 +171,7 @@ SELECT n.id::text,
                              FROM control_plane.run_nodes delegated
                              WHERE delegated.root_run_id = root.id
                                AND delegated.workflow_step_key = step.value ->> 'Key'
+                               AND delegated.materialization_state = 'MATERIALIZED'
                          )
                    ) target
                ), '[]'::jsonb)

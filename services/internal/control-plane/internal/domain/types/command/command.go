@@ -47,8 +47,12 @@ const (
 	SetConnectionEnabled          Kind = "SET_INTEGRATION_CONNECTION_ENABLED"
 	ChangeIntegrationGrant        Kind = "CHANGE_INTEGRATION_GRANT"
 	CreateAssistantConversation   Kind = "CREATE_ASSISTANT_CONVERSATION"
+	UpdateAssistantConversation   Kind = "UPDATE_ASSISTANT_CONVERSATION_TITLE"
 	AddAssistantTurn              Kind = "ADD_ASSISTANT_TURN"
+	UpdateAssistantPlan           Kind = "UPDATE_ASSISTANT_PLAN_DRAFT"
+	ValidateAssistantPlan         Kind = "VALIDATE_ASSISTANT_PLAN"
 	ApplyAssistantPlan            Kind = "APPLY_ASSISTANT_PLAN"
+	RejectAssistantPlan           Kind = "REJECT_ASSISTANT_PLAN"
 	UpdateAssistantInstructions   Kind = "UPDATE_ASSISTANT_OWNER_INSTRUCTIONS"
 	RecoverAssistant              Kind = "RECOVER_SYSTEM_ASSISTANT"
 	ClaimExecution                Kind = "CLAIM_EXECUTION"
@@ -57,6 +61,9 @@ const (
 	CompleteExecution             Kind = "COMPLETE_EXECUTION"
 	DelegateExecution             Kind = "DELEGATE_EXECUTION"
 	ProposeAssistantPlan          Kind = "PROPOSE_ASSISTANT_PLAN"
+	ProposeAssistantMetadata      Kind = "PROPOSE_ASSISTANT_METADATA"
+	ProposeRunMetadata            Kind = "PROPOSE_RUN_METADATA"
+	RecordRunToolCall             Kind = "RECORD_RUN_TOOL_CALL"
 	MaterializeOccurrence         Kind = "MATERIALIZE_SCHEDULE_OCCURRENCE"
 	CompleteConnectionTest        Kind = "COMPLETE_INTEGRATION_CONNECTION_TEST"
 	CompleteIntegrationInvocation Kind = "COMPLETE_INTEGRATION_INVOCATION"
@@ -124,12 +131,23 @@ type IntegrationGrantInput struct {
 	ConnectionRef, CapabilityKey, AgentRef, WorkflowRef string
 	Enabled                                             bool
 }
-type AssistantConversationInput struct{ Title, ProjectRef string }
+type AssistantConversationInput struct {
+	ProjectRef string
+	Context    entity.AssistantContextDescriptor
+}
+type AssistantConversationTitleInput struct{ ConversationRef, Title string }
 type AssistantTurnInput struct {
 	ConversationRef, Content string
 	ArtifactRefs             []string
 }
-type AssistantPlanInput struct{ PlanRef string }
+type AssistantPlanInput struct {
+	PlanRef  string
+	Revision int64
+}
+type AssistantPlanDraftInput struct {
+	PlanRef, Summary string
+	Operations       []entity.AssistantPlanOperation
+}
 type AssistantInstructionsInput struct{ Instructions string }
 type LeaseInput struct {
 	WorkloadInstance, LeaseRef, Fence string
@@ -158,6 +176,19 @@ type ProposeAssistantPlanInput struct {
 	LeaseRef, Fence, Summary string
 	Generation               int64
 	Operations               []entity.AssistantPlanOperation
+}
+type ProposeAssistantMetadataInput struct {
+	LeaseRef, Fence, Title string
+	Generation             int64
+}
+type ProposeRunMetadataInput struct {
+	LeaseRef, Fence, Title, ActivitySummary string
+	Generation                              int64
+}
+type RunToolCallInput struct {
+	LeaseRef, Fence, CallRef, Tool, CapabilityRef, GrantRef, State, SafeResult string
+	Generation, DurationMS                                                     int64
+	SafeParameters                                                             map[string]any
 }
 type WarmRuntimeInput struct{ WorkloadInstance, RuntimeRevision, State, SafeErrorCode string }
 type OccurrenceInput struct {
@@ -197,6 +228,7 @@ type Result struct {
 	Connection   *entity.IntegrationConnection
 	Conversation *entity.AssistantConversation
 	Plan         *entity.AssistantPlan
+	PlanReceipt  *entity.AssistantPlanReceipt
 	Assistant    *entity.SystemAssistant
 	Event        *entity.RunEvent
 	CreatedRefs  []string

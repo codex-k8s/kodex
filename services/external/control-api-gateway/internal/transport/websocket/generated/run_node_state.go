@@ -5,6 +5,7 @@ package generated
 type RunNodeState string
 
 const (
+	RunNodeStatePlanned   RunNodeState = "PLANNED"
 	RunNodeStateQueued    RunNodeState = "QUEUED"
 	RunNodeStateRunning   RunNodeState = "RUNNING"
 	RunNodeStateWaiting   RunNodeState = "WAITING"

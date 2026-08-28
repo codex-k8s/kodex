@@ -4,8 +4,8 @@ title: Диагностика control-api-gateway
 type: runbook
 status: approved
 owner: sre
-version: 2.2.0
-updated: 2026-08-26
+version: 2.3.0
+updated: 2026-08-28
 ---
 
 # Диагностика control-api-gateway
@@ -90,9 +90,24 @@ gRPC/provider diagnostics не возвращаются.
 6. duplicate event не применяется дважды;
 7. slow client получает bounded backpressure/close и может reconnect.
 
+RunEvent readback обязан сохранять server-resolved `actor`, `messageKind` и
+bounded `toolCall`. Для planned workflow node state `PLANNED` допустим до
+materialization; gateway не заменяет его локальным `QUEUED` и не скрывает из
+snapshot.
+
 WebSocket не передаёт raw stdout/stderr, Codex JSONL, provider response,
 arbitrary tool payload, secret или file body. Artifact скачивается отдельным
 HTTP path после owner authorization.
+
+## Assistant HTTP lifecycle
+
+- создание conversation не принимает авторитетный title; context entity и
+  allowed operations разрешает control-plane;
+- ручной title update требует `If-Match`, `Idempotency-Key` и CSRF;
+- draft edit создаёт новую revision, validation работает с точной revision;
+- apply принимает только validated revision, reject создаёт receipt без effect;
+- `409` не преобразуется в локальное исправление payload: клиент повторно читает
+  plan/version/receipt и показывает server-owned state.
 
 ## Частые причины
 

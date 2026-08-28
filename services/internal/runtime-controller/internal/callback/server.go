@@ -393,9 +393,9 @@ func (server *Server) mcp(writer http.ResponseWriter, request *http.Request, lea
 }
 
 func tools(input runtimecontract.RunnerInput) []map[string]any {
-	result := []map[string]any{}
+	result := []map[string]any{runMetadataTool()}
 	if input.SystemAssistant {
-		result = append(result, configurationCatalogTool(), assistantPlanTool(input))
+		result = append(result, configurationCatalogTool(), assistantPlanTool(input), assistantMetadataTool())
 	}
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, delegationTool(input.DelegationTargets))
@@ -441,12 +441,17 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	var result any
+	startedAt := time.Now()
 	err = nil
 	switch params.Name {
 	case "get_configuration_catalog":
 		result, err = configurationCatalog(input, params.Arguments)
 	case "propose_configuration_plan":
 		result, err = server.proposeAssistantPlan(request.Context(), input, params.Arguments, rpc.ID)
+	case "propose_assistant_metadata":
+		result, err = server.proposeAssistantMetadata(request.Context(), input, params.Arguments, rpc.ID)
+	case "propose_run_metadata":
+		result, err = server.proposeRunMetadata(request.Context(), input, params.Arguments, rpc.ID)
 	case "delegate_agent":
 		result, err = server.delegate(request.Context(), input, params.Arguments, rpc.ID)
 	case "invoke_integration":
@@ -454,11 +459,17 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	default:
 		err = errors.New("tool is not available")
 	}
-	encoded, _ := json.Marshal(result)
-	if err != nil {
-		encoded, _ = json.Marshal(map[string]string{"error_code": "TOOL_UNAVAILABLE"})
+	projectionErr := server.recordToolCall(request.Context(), input, params.Name, params.Arguments, result, err, rpc.ID, time.Since(startedAt))
+	if projectionErr != nil {
+		err = errors.Join(err, projectionErr)
 	}
-	server.writeMCPResult(writer, rpc.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "isError": err != nil})
+	encoded, _ := json.Marshal(result)
+	structured := result
+	if err != nil {
+		structured = map[string]string{"error_code": "TOOL_UNAVAILABLE"}
+		encoded, _ = json.Marshal(structured)
+	}
+	server.writeMCPResult(writer, rpc.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "structuredContent": structured, "isError": err != nil})
 }
 
 func decodeMCPToolCallParams(raw json.RawMessage) (mcpToolCallParams, error) {
@@ -490,22 +501,46 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 	operations := make([]*controlplanev1.AssistantPlanOperation, 0, len(rawOperations))
 	for index, raw := range rawOperations {
 		operation, ok := raw.(map[string]any)
-		if !ok || !onlyKeys(operation, "type", "summary", "input") {
+		if !ok || !onlyKeys(operation, "type", "action", "title", "summary", "target", "parameters", "expectedVersion", "before", "after", "selected") {
 			return nil, errors.New("assistant plan operation is invalid")
 		}
 		kind, _ := operation["type"].(string)
+		action, _ := operation["action"].(string)
+		title, _ := operation["title"].(string)
 		operationSummary, _ := operation["summary"].(string)
-		bounded, _ := operation["input"].(map[string]any)
+		parameters, _ := operation["parameters"].(map[string]any)
+		before, beforeOK := operation["before"].(map[string]any)
+		after, afterOK := operation["after"].(map[string]any)
+		target, targetOK := operation["target"].(map[string]any)
+		selected, selectedOK := operation["selected"].(bool)
 		typeValue, exists := controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+kind]
-		if !exists || typeValue == 0 || strings.TrimSpace(operationSummary) == "" || len(operationSummary) > 500 || bounded == nil {
+		actionValue, actionExists := controlplanev1.AssistantPlanOperation_Action_value["ACTION_"+action]
+		if !exists || typeValue == 0 || !actionExists || actionValue == 0 || strings.TrimSpace(title) == "" || len(title) > 200 ||
+			strings.TrimSpace(operationSummary) == "" || len(operationSummary) > 500 || parameters == nil || !beforeOK || !afterOK || !targetOK || !selectedOK || !selected {
 			return nil, errors.New("assistant plan operation is invalid")
 		}
-		structure, err := structpb.NewStruct(bounded)
-		if err != nil {
+		parameterStruct, parameterErr := structpb.NewStruct(parameters)
+		beforeStruct, beforeErr := structpb.NewStruct(before)
+		afterStruct, afterErr := structpb.NewStruct(after)
+		if parameterErr != nil || beforeErr != nil || afterErr != nil {
 			return nil, errors.New("assistant plan operation input is invalid")
 		}
+		targetKind, _ := target["kind"].(string)
+		targetRef, _ := target["ref"].(string)
+		targetName, _ := target["name"].(string)
+		expectedVersion, expectedOK := exactJSONInt64(operation["expectedVersion"])
+		targetVersion, targetVersionOK := exactJSONInt64(target["version"])
+		if expectedOK != targetVersionOK || expectedOK && expectedVersion != targetVersion || targetKind == "" || targetName == "" {
+			return nil, errors.New("assistant plan target is invalid")
+		}
+		var expected *int64
+		if expectedOK {
+			expected = &expectedVersion
+		}
 		operations = append(operations, &controlplanev1.AssistantPlanOperation{Ref: fmt.Sprintf("operation-%03d", index+1),
-			Type: controlplanev1.AssistantPlanOperation_Type(typeValue), Summary: strings.TrimSpace(operationSummary), BoundedInput: structure})
+			Type: controlplanev1.AssistantPlanOperation_Type(typeValue), Action: controlplanev1.AssistantPlanOperation_Action(actionValue),
+			Title: strings.TrimSpace(title), Summary: strings.TrimSpace(operationSummary), TargetKind: targetKind, TargetRef: targetRef,
+			TargetName: targetName, ExpectedVersion: expected, Parameters: parameterStruct, Before: beforeStruct, After: afterStruct, Selected: true})
 	}
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
@@ -517,8 +552,58 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 	if err != nil || response.GetPlan().GetRef() == "" || response.GetConversation().GetRef() == "" {
 		return nil, errors.New("propose assistant plan")
 	}
-	return map[string]any{"ok": true, "plan_ref": response.GetPlan().GetRef(), "plan_version": response.GetPlan().GetVersion(),
+	return map[string]any{"ok": true, "plan_ref": response.GetPlan().GetRef(), "plan_version": response.GetPlan().GetVersion(), "plan_revision": response.GetPlan().GetRevision(),
 		"conversation_ref": response.GetConversation().GetRef()}, nil
+}
+
+func exactJSONInt64(value any) (int64, bool) {
+	number, ok := value.(float64)
+	if !ok || number < 1 || number > 9007199254740991 || number != float64(int64(number)) {
+		return 0, false
+	}
+	return int64(number), true
+}
+
+func (server *Server) proposeAssistantMetadata(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
+	if !input.SystemAssistant || !onlyKeys(arguments, "title") {
+		return nil, errors.New("assistant metadata tool is not available")
+	}
+	title, _ := arguments["title"].(string)
+	if strings.TrimSpace(title) == "" || len([]rune(title)) > 160 {
+		return nil, errors.New("assistant metadata is invalid")
+	}
+	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
+	defer cancel()
+	response, err := server.control.Runtime.ProposeAssistantMetadata(requestContext, &controlplanev1.ProposeAssistantMetadataRequest{
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID))},
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Title: strings.TrimSpace(title),
+	})
+	if err != nil || response.GetConversation().GetRef() == "" {
+		return nil, errors.New("propose assistant metadata")
+	}
+	return map[string]any{"ok": true, "conversation_ref": response.GetConversation().GetRef(), "title_revision": response.GetConversation().GetTitleRevision()}, nil
+}
+
+func (server *Server) proposeRunMetadata(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
+	if !onlyKeys(arguments, "title", "activity_summary") {
+		return nil, errors.New("run metadata is invalid")
+	}
+	title, _ := arguments["title"].(string)
+	activity, _ := arguments["activity_summary"].(string)
+	if strings.TrimSpace(title) == "" && strings.TrimSpace(activity) == "" || len([]rune(title)) > 240 || len([]rune(activity)) > 500 {
+		return nil, errors.New("run metadata is invalid")
+	}
+	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
+	defer cancel()
+	response, err := server.control.Runtime.ProposeRunMetadata(requestContext, &controlplanev1.ProposeRunMetadataRequest{
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID))},
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
+		Title: strings.TrimSpace(title), ActivitySummary: strings.TrimSpace(activity),
+	})
+	if err != nil || response.GetRun().GetRef() == "" {
+		return nil, errors.New("propose run metadata")
+	}
+	return map[string]any{"ok": true, "run_ref": response.GetRun().GetRef()}, nil
 }
 
 func onlyKeys(values map[string]any, allowed ...string) bool {
@@ -532,6 +617,88 @@ func onlyKeys(values map[string]any, allowed ...string) bool {
 		}
 	}
 	return true
+}
+
+func (server *Server) recordToolCall(ctx context.Context, input runtimecontract.RunnerInput, tool string, arguments map[string]any,
+	result any, toolErr error, callID json.RawMessage, duration time.Duration,
+) error {
+	parameters, capabilityRef, grantRef, ok := safeToolCallParameters(input, tool, arguments)
+	if !ok {
+		return errors.New("record tool call projection")
+	}
+	structure, err := structpb.NewStruct(parameters)
+	if err != nil {
+		return errors.New("record tool call projection")
+	}
+	state := controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_SUCCEEDED
+	if toolErr != nil {
+		state = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED
+	}
+	digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, string(callID))))
+	callRef := "tcl_" + hex.EncodeToString(digest[:16])
+	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
+	defer cancel()
+	response, err := server.control.Runtime.RecordRunToolCall(requestContext, &controlplanev1.RecordRunToolCallRequest{
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID)+":activity")},
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
+		CallRef: callRef, Tool: tool, SafeParameters: structure, CapabilityRef: capabilityRef, GrantRef: grantRef,
+		State: state, DurationMs: duration.Milliseconds(), SafeResult: safeToolCallResult(tool, result, toolErr),
+	})
+	if err != nil || response.GetEvent().GetRef() == "" {
+		return errors.New("record tool call projection")
+	}
+	return nil
+}
+
+func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, arguments map[string]any) (map[string]any, string, string, bool) {
+	switch tool {
+	case "get_configuration_catalog":
+		return map[string]any{}, "platform.configuration.read", "", input.SystemAssistant
+	case "propose_configuration_plan":
+		operations, _ := arguments["operations"].([]any)
+		return map[string]any{"operation_count": len(operations)}, "platform.configuration.plan", "", input.SystemAssistant
+	case "propose_assistant_metadata":
+		title, _ := arguments["title"].(string)
+		return map[string]any{"title": truncateRunes(title, 160)}, "platform.presentation.propose", "", input.SystemAssistant
+	case "propose_run_metadata":
+		title, _ := arguments["title"].(string)
+		activity, _ := arguments["activity_summary"].(string)
+		return map[string]any{"title": truncateRunes(title, 240), "activity_summary": truncateRunes(activity, 500)}, "platform.presentation.propose", "", true
+	case "delegate_agent":
+		target, _ := arguments["target_agent_ref"].(string)
+		step, _ := arguments["workflow_step_key"].(string)
+		return map[string]any{"target_agent_ref": target, "workflow_step_key": step}, "platform.run.delegate", "", true
+	case "invoke_integration":
+		connection, _ := arguments["connection_ref"].(string)
+		capability, _ := arguments["capability_key"].(string)
+		for _, grant := range input.IntegrationGrants {
+			if grant.ConnectionRef == connection && grant.CapabilityKey == capability {
+				return map[string]any{"connection_ref": connection, "capability_key": capability}, capability, grant.Ref, true
+			}
+		}
+	}
+	return nil, "", "", false
+}
+
+func safeToolCallResult(tool string, result any, toolErr error) string {
+	if toolErr != nil {
+		return "TOOL_UNAVAILABLE"
+	}
+	values, _ := result.(map[string]any)
+	for _, key := range []string{"plan_ref", "conversation_ref", "child_run_ref", "run_ref"} {
+		if value, ok := values[key].(string); ok && value != "" {
+			return tool + ":" + value
+		}
+	}
+	return tool + ":completed"
+}
+
+func truncateRunes(value string, maximum int) string {
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) <= maximum {
+		return string(runes)
+	}
+	return string(runes[:maximum])
 }
 
 func (server *Server) delegate(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {

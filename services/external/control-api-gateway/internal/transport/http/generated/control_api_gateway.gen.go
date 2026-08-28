@@ -153,8 +153,130 @@ func (e ArtifactSource) Valid() bool {
 	}
 }
 
+// Defines values for AssistantContextDescriptorAllowedOperations.
+const (
+	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
+	AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW             AssistantContextDescriptorAllowedOperations = "ARCHIVE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY            AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
+	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT      AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
+	AssistantContextDescriptorAllowedOperationsCREATEAGENT                 AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECT               AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE              AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
+	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW              AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                   AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
+	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION   AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
+)
+
+// Valid indicates whether the value is a known member of the AssistantContextDescriptorAllowedOperations enum.
+func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
+	switch e {
+	case AssistantContextDescriptorAllowedOperationsARCHIVEAGENT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATEAGENT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATEPROJECT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATESCHEDULE:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW:
+		return true
+	case AssistantContextDescriptorAllowedOperationsLAUNCHRUN:
+		return true
+	case AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AssistantConversationTitleSource.
+const (
+	AssistantConversationTitleSourceAGENTPROPOSED AssistantConversationTitleSource = "AGENT_PROPOSED"
+	AssistantConversationTitleSourceSERVERDEFAULT AssistantConversationTitleSource = "SERVER_DEFAULT"
+	AssistantConversationTitleSourceUSEREDITED    AssistantConversationTitleSource = "USER_EDITED"
+)
+
+// Valid indicates whether the value is a known member of the AssistantConversationTitleSource enum.
+func (e AssistantConversationTitleSource) Valid() bool {
+	switch e {
+	case AssistantConversationTitleSourceAGENTPROPOSED:
+		return true
+	case AssistantConversationTitleSourceSERVERDEFAULT:
+		return true
+	case AssistantConversationTitleSourceUSEREDITED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AssistantPlanState.
+const (
+	AssistantPlanStateAPPLIED  AssistantPlanState = "APPLIED"
+	AssistantPlanStateDRAFT    AssistantPlanState = "DRAFT"
+	AssistantPlanStateINVALID  AssistantPlanState = "INVALID"
+	AssistantPlanStateREJECTED AssistantPlanState = "REJECTED"
+	AssistantPlanStateSTALE    AssistantPlanState = "STALE"
+	AssistantPlanStateVALID    AssistantPlanState = "VALID"
+)
+
+// Valid indicates whether the value is a known member of the AssistantPlanState enum.
+func (e AssistantPlanState) Valid() bool {
+	switch e {
+	case AssistantPlanStateAPPLIED:
+		return true
+	case AssistantPlanStateDRAFT:
+		return true
+	case AssistantPlanStateINVALID:
+		return true
+	case AssistantPlanStateREJECTED:
+		return true
+	case AssistantPlanStateSTALE:
+		return true
+	case AssistantPlanStateVALID:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AssistantPlanOperationAction.
+const (
+	AssistantPlanOperationActionARCHIVE AssistantPlanOperationAction = "ARCHIVE"
+	AssistantPlanOperationActionCREATE  AssistantPlanOperationAction = "CREATE"
+	AssistantPlanOperationActionEXECUTE AssistantPlanOperationAction = "EXECUTE"
+	AssistantPlanOperationActionUPDATE  AssistantPlanOperationAction = "UPDATE"
+)
+
+// Valid indicates whether the value is a known member of the AssistantPlanOperationAction enum.
+func (e AssistantPlanOperationAction) Valid() bool {
+	switch e {
+	case AssistantPlanOperationActionARCHIVE:
+		return true
+	case AssistantPlanOperationActionCREATE:
+		return true
+	case AssistantPlanOperationActionEXECUTE:
+		return true
+	case AssistantPlanOperationActionUPDATE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AssistantPlanOperationType.
 const (
+	AssistantPlanOperationTypeARCHIVEAGENT                AssistantPlanOperationType = "ARCHIVE_AGENT"
+	AssistantPlanOperationTypeARCHIVEWORKFLOW             AssistantPlanOperationType = "ARCHIVE_WORKFLOW"
 	AssistantPlanOperationTypeCHANGECAPABILITY            AssistantPlanOperationType = "CHANGE_CAPABILITY"
 	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT      AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
 	AssistantPlanOperationTypeCREATEAGENT                 AssistantPlanOperationType = "CREATE_AGENT"
@@ -169,6 +291,10 @@ const (
 // Valid indicates whether the value is a known member of the AssistantPlanOperationType enum.
 func (e AssistantPlanOperationType) Valid() bool {
 	switch e {
+	case AssistantPlanOperationTypeARCHIVEAGENT:
+		return true
+	case AssistantPlanOperationTypeARCHIVEWORKFLOW:
+		return true
 	case AssistantPlanOperationTypeCHANGECAPABILITY:
 		return true
 	case AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT:
@@ -192,21 +318,57 @@ func (e AssistantPlanOperationType) Valid() bool {
 	}
 }
 
+// Defines values for AssistantPlanReceiptOperationReceiptsOutcome.
+const (
+	AssistantPlanReceiptOperationReceiptsOutcomeAPPLIED AssistantPlanReceiptOperationReceiptsOutcome = "APPLIED"
+)
+
+// Valid indicates whether the value is a known member of the AssistantPlanReceiptOperationReceiptsOutcome enum.
+func (e AssistantPlanReceiptOperationReceiptsOutcome) Valid() bool {
+	switch e {
+	case AssistantPlanReceiptOperationReceiptsOutcomeAPPLIED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AssistantPlanReceiptOutcome.
+const (
+	AssistantPlanReceiptOutcomeAPPLIED  AssistantPlanReceiptOutcome = "APPLIED"
+	AssistantPlanReceiptOutcomeCONFLICT AssistantPlanReceiptOutcome = "CONFLICT"
+	AssistantPlanReceiptOutcomeREJECTED AssistantPlanReceiptOutcome = "REJECTED"
+)
+
+// Valid indicates whether the value is a known member of the AssistantPlanReceiptOutcome enum.
+func (e AssistantPlanReceiptOutcome) Valid() bool {
+	switch e {
+	case AssistantPlanReceiptOutcomeAPPLIED:
+		return true
+	case AssistantPlanReceiptOutcomeCONFLICT:
+		return true
+	case AssistantPlanReceiptOutcomeREJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AssistantTurnRole.
 const (
-	ASSISTANT     AssistantTurnRole = "ASSISTANT"
-	SYSTEMRECEIPT AssistantTurnRole = "SYSTEM_RECEIPT"
-	USER          AssistantTurnRole = "USER"
+	AssistantTurnRoleASSISTANT     AssistantTurnRole = "ASSISTANT"
+	AssistantTurnRoleSYSTEMRECEIPT AssistantTurnRole = "SYSTEM_RECEIPT"
+	AssistantTurnRoleUSER          AssistantTurnRole = "USER"
 )
 
 // Valid indicates whether the value is a known member of the AssistantTurnRole enum.
 func (e AssistantTurnRole) Valid() bool {
 	switch e {
-	case ASSISTANT:
+	case AssistantTurnRoleASSISTANT:
 		return true
-	case SYSTEMRECEIPT:
+	case AssistantTurnRoleSYSTEMRECEIPT:
 		return true
-	case USER:
+	case AssistantTurnRoleUSER:
 		return true
 	default:
 		return false
@@ -1155,6 +1317,27 @@ func (e RunState) Valid() bool {
 	}
 }
 
+// Defines values for RunTitleSource.
+const (
+	RunTitleSourceAGENTPROPOSED RunTitleSource = "AGENT_PROPOSED"
+	RunTitleSourceSERVERDEFAULT RunTitleSource = "SERVER_DEFAULT"
+	RunTitleSourceUSEREDITED    RunTitleSource = "USER_EDITED"
+)
+
+// Valid indicates whether the value is a known member of the RunTitleSource enum.
+func (e RunTitleSource) Valid() bool {
+	switch e {
+	case RunTitleSourceAGENTPROPOSED:
+		return true
+	case RunTitleSourceSERVERDEFAULT:
+		return true
+	case RunTitleSourceUSEREDITED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunCommandAction.
 const (
 	RunCommandActionCANCEL RunCommandAction = "CANCEL"
@@ -1233,10 +1416,53 @@ func (e RunEdgeType) Valid() bool {
 	}
 }
 
+// Defines values for RunEventMessageKind.
+const (
+	ARTIFACT            RunEventMessageKind = "ARTIFACT"
+	ASSISTANTMESSAGE    RunEventMessageKind = "ASSISTANT_MESSAGE"
+	FINALMESSAGE        RunEventMessageKind = "FINAL_MESSAGE"
+	INCIDENT            RunEventMessageKind = "INCIDENT"
+	INTERMEDIATEMESSAGE RunEventMessageKind = "INTERMEDIATE_MESSAGE"
+	OWNERGATE           RunEventMessageKind = "OWNER_GATE"
+	PLANUPDATE          RunEventMessageKind = "PLAN_UPDATE"
+	STATE               RunEventMessageKind = "STATE"
+	TOOLCALL            RunEventMessageKind = "TOOL_CALL"
+	USERMESSAGE         RunEventMessageKind = "USER_MESSAGE"
+)
+
+// Valid indicates whether the value is a known member of the RunEventMessageKind enum.
+func (e RunEventMessageKind) Valid() bool {
+	switch e {
+	case ARTIFACT:
+		return true
+	case ASSISTANTMESSAGE:
+		return true
+	case FINALMESSAGE:
+		return true
+	case INCIDENT:
+		return true
+	case INTERMEDIATEMESSAGE:
+		return true
+	case OWNERGATE:
+		return true
+	case PLANUPDATE:
+		return true
+	case STATE:
+		return true
+	case TOOLCALL:
+		return true
+	case USERMESSAGE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunEventNodeState.
 const (
 	RunEventNodeStateCANCELLED RunEventNodeState = "CANCELLED"
 	RunEventNodeStateFAILED    RunEventNodeState = "FAILED"
+	RunEventNodeStatePLANNED   RunEventNodeState = "PLANNED"
 	RunEventNodeStateQUEUED    RunEventNodeState = "QUEUED"
 	RunEventNodeStateRUNNING   RunEventNodeState = "RUNNING"
 	RunEventNodeStateSKIPPED   RunEventNodeState = "SKIPPED"
@@ -1250,6 +1476,8 @@ func (e RunEventNodeState) Valid() bool {
 	case RunEventNodeStateCANCELLED:
 		return true
 	case RunEventNodeStateFAILED:
+		return true
+	case RunEventNodeStatePLANNED:
 		return true
 	case RunEventNodeStateQUEUED:
 		return true
@@ -1301,21 +1529,24 @@ func (e RunEventRunState) Valid() bool {
 
 // Defines values for RunEventType.
 const (
-	ARTIFACTAVAILABLE RunEventType = "ARTIFACT_AVAILABLE"
-	CALLBACKDELIVERED RunEventType = "CALLBACK_DELIVERED"
-	DELEGATIONCREATED RunEventType = "DELEGATION_CREATED"
-	EDGEADDED         RunEventType = "EDGE_ADDED"
-	INCIDENTLINKED    RunEventType = "INCIDENT_LINKED"
-	NODEADDED         RunEventType = "NODE_ADDED"
-	NODESTATECHANGED  RunEventType = "NODE_STATE_CHANGED"
-	OWNERGATEOPENED   RunEventType = "OWNER_GATE_OPENED"
-	OWNERGATERESOLVED RunEventType = "OWNER_GATE_RESOLVED"
-	RUNCREATED        RunEventType = "RUN_CREATED"
-	RUNSTATECHANGED   RunEventType = "RUN_STATE_CHANGED"
-	TURNCOMPLETED     RunEventType = "TURN_COMPLETED"
-	TURNPROGRESS      RunEventType = "TURN_PROGRESS"
-	TURNQUEUED        RunEventType = "TURN_QUEUED"
-	TURNSTARTED       RunEventType = "TURN_STARTED"
+	ARTIFACTAVAILABLE  RunEventType = "ARTIFACT_AVAILABLE"
+	CALLBACKDELIVERED  RunEventType = "CALLBACK_DELIVERED"
+	DELEGATIONCREATED  RunEventType = "DELEGATION_CREATED"
+	EDGEADDED          RunEventType = "EDGE_ADDED"
+	INCIDENTLINKED     RunEventType = "INCIDENT_LINKED"
+	NODEADDED          RunEventType = "NODE_ADDED"
+	NODESTATECHANGED   RunEventType = "NODE_STATE_CHANGED"
+	OWNERGATEOPENED    RunEventType = "OWNER_GATE_OPENED"
+	OWNERGATERESOLVED  RunEventType = "OWNER_GATE_RESOLVED"
+	PLANUPDATED        RunEventType = "PLAN_UPDATED"
+	RUNCREATED         RunEventType = "RUN_CREATED"
+	RUNMETADATAUPDATED RunEventType = "RUN_METADATA_UPDATED"
+	RUNSTATECHANGED    RunEventType = "RUN_STATE_CHANGED"
+	TOOLCALLRECORDED   RunEventType = "TOOL_CALL_RECORDED"
+	TURNCOMPLETED      RunEventType = "TURN_COMPLETED"
+	TURNPROGRESS       RunEventType = "TURN_PROGRESS"
+	TURNQUEUED         RunEventType = "TURN_QUEUED"
+	TURNSTARTED        RunEventType = "TURN_STARTED"
 )
 
 // Valid indicates whether the value is a known member of the RunEventType enum.
@@ -1339,9 +1570,15 @@ func (e RunEventType) Valid() bool {
 		return true
 	case OWNERGATERESOLVED:
 		return true
+	case PLANUPDATED:
+		return true
 	case RUNCREATED:
 		return true
+	case RUNMETADATAUPDATED:
+		return true
 	case RUNSTATECHANGED:
+		return true
+	case TOOLCALLRECORDED:
 		return true
 	case TURNCOMPLETED:
 		return true
@@ -1350,6 +1587,33 @@ func (e RunEventType) Valid() bool {
 	case TURNQUEUED:
 		return true
 	case TURNSTARTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunEventActorKind.
+const (
+	RunEventActorKindAGENT           RunEventActorKind = "AGENT"
+	RunEventActorKindINTEGRATION     RunEventActorKind = "INTEGRATION"
+	RunEventActorKindPLATFORM        RunEventActorKind = "PLATFORM"
+	RunEventActorKindSYSTEMASSISTANT RunEventActorKind = "SYSTEM_ASSISTANT"
+	RunEventActorKindUSER            RunEventActorKind = "USER"
+)
+
+// Valid indicates whether the value is a known member of the RunEventActorKind enum.
+func (e RunEventActorKind) Valid() bool {
+	switch e {
+	case RunEventActorKindAGENT:
+		return true
+	case RunEventActorKindINTEGRATION:
+		return true
+	case RunEventActorKindPLATFORM:
+		return true
+	case RunEventActorKindSYSTEMASSISTANT:
+		return true
+	case RunEventActorKindUSER:
 		return true
 	default:
 		return false
@@ -1378,6 +1642,7 @@ func (e RunInputTargetType) Valid() bool {
 const (
 	RunNodeStateCANCELLED RunNodeState = "CANCELLED"
 	RunNodeStateFAILED    RunNodeState = "FAILED"
+	RunNodeStatePLANNED   RunNodeState = "PLANNED"
 	RunNodeStateQUEUED    RunNodeState = "QUEUED"
 	RunNodeStateRUNNING   RunNodeState = "RUNNING"
 	RunNodeStateSKIPPED   RunNodeState = "SKIPPED"
@@ -1391,6 +1656,8 @@ func (e RunNodeState) Valid() bool {
 	case RunNodeStateCANCELLED:
 		return true
 	case RunNodeStateFAILED:
+		return true
+	case RunNodeStatePLANNED:
 		return true
 	case RunNodeStateQUEUED:
 		return true
@@ -1443,6 +1710,24 @@ func (e RunTargetType) Valid() bool {
 	case RunTargetTypeAGENT:
 		return true
 	case RunTargetTypeWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunToolCallState.
+const (
+	FAILED    RunToolCallState = "FAILED"
+	SUCCEEDED RunToolCallState = "SUCCEEDED"
+)
+
+// Valid indicates whether the value is a known member of the RunToolCallState enum.
+func (e RunToolCallState) Valid() bool {
+	switch e {
+	case FAILED:
+		return true
+	case SUCCEEDED:
 		return true
 	default:
 		return false
@@ -1547,16 +1832,16 @@ func (e ScheduleState) Valid() bool {
 
 // Defines values for ScheduleCommandAction.
 const (
-	ENABLE ScheduleCommandAction = "ENABLE"
-	PAUSE  ScheduleCommandAction = "PAUSE"
+	ScheduleCommandActionENABLE ScheduleCommandAction = "ENABLE"
+	ScheduleCommandActionPAUSE  ScheduleCommandAction = "PAUSE"
 )
 
 // Valid indicates whether the value is a known member of the ScheduleCommandAction enum.
 func (e ScheduleCommandAction) Valid() bool {
 	switch e {
-	case ENABLE:
+	case ScheduleCommandActionENABLE:
 		return true
-	case PAUSE:
+	case ScheduleCommandActionPAUSE:
 		return true
 	default:
 		return false
@@ -1715,25 +2000,25 @@ func (e SystemAssistantRemovable) Valid() bool {
 
 // Defines values for SystemAssistantRuntimeState.
 const (
-	BUSY         SystemAssistantRuntimeState = "BUSY"
-	FAILED       SystemAssistantRuntimeState = "FAILED"
-	PROVISIONING SystemAssistantRuntimeState = "PROVISIONING"
-	READY        SystemAssistantRuntimeState = "READY"
-	RECOVERING   SystemAssistantRuntimeState = "RECOVERING"
+	SystemAssistantRuntimeStateBUSY         SystemAssistantRuntimeState = "BUSY"
+	SystemAssistantRuntimeStateFAILED       SystemAssistantRuntimeState = "FAILED"
+	SystemAssistantRuntimeStatePROVISIONING SystemAssistantRuntimeState = "PROVISIONING"
+	SystemAssistantRuntimeStateREADY        SystemAssistantRuntimeState = "READY"
+	SystemAssistantRuntimeStateRECOVERING   SystemAssistantRuntimeState = "RECOVERING"
 )
 
 // Valid indicates whether the value is a known member of the SystemAssistantRuntimeState enum.
 func (e SystemAssistantRuntimeState) Valid() bool {
 	switch e {
-	case BUSY:
+	case SystemAssistantRuntimeStateBUSY:
 		return true
-	case FAILED:
+	case SystemAssistantRuntimeStateFAILED:
 		return true
-	case PROVISIONING:
+	case SystemAssistantRuntimeStatePROVISIONING:
 		return true
-	case READY:
+	case SystemAssistantRuntimeStateREADY:
 		return true
-	case RECOVERING:
+	case SystemAssistantRuntimeStateRECOVERING:
 		return true
 	default:
 		return false
@@ -1886,22 +2171,22 @@ func (e WorkflowStepGateDecisions) Valid() bool {
 
 // Defines values for WorkflowStepInputGateDecisions.
 const (
-	WorkflowStepInputGateDecisionsAPPROVE        WorkflowStepInputGateDecisions = "APPROVE"
-	WorkflowStepInputGateDecisionsCANCEL         WorkflowStepInputGateDecisions = "CANCEL"
-	WorkflowStepInputGateDecisionsREJECT         WorkflowStepInputGateDecisions = "REJECT"
-	WorkflowStepInputGateDecisionsREQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
+	APPROVE        WorkflowStepInputGateDecisions = "APPROVE"
+	CANCEL         WorkflowStepInputGateDecisions = "CANCEL"
+	REJECT         WorkflowStepInputGateDecisions = "REJECT"
+	REQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
 )
 
 // Valid indicates whether the value is a known member of the WorkflowStepInputGateDecisions enum.
 func (e WorkflowStepInputGateDecisions) Valid() bool {
 	switch e {
-	case WorkflowStepInputGateDecisionsAPPROVE:
+	case APPROVE:
 		return true
-	case WorkflowStepInputGateDecisionsCANCEL:
+	case CANCEL:
 		return true
-	case WorkflowStepInputGateDecisionsREJECT:
+	case REJECT:
 		return true
-	case WorkflowStepInputGateDecisionsREQUESTCHANGES:
+	case REQUESTCHANGES:
 		return true
 	default:
 		return false
@@ -2057,46 +2342,134 @@ type ArtifactPage struct {
 	NextPageToken *string    `json:"nextPageToken,omitempty"`
 }
 
+// AssistantContextDescriptor defines model for AssistantContextDescriptor.
+type AssistantContextDescriptor struct {
+	AllowedOperations []AssistantContextDescriptorAllowedOperations `json:"allowedOperations"`
+	EntityKind        string                                        `json:"entityKind"`
+	EntityName        string                                        `json:"entityName"`
+	EntityRef         string                                        `json:"entityRef"`
+	EntityVersion     *int64                                        `json:"entityVersion,omitempty"`
+	Route             string                                        `json:"route"`
+}
+
+// AssistantContextDescriptorAllowedOperations defines model for AssistantContextDescriptor.AllowedOperations.
+type AssistantContextDescriptorAllowedOperations string
+
 // AssistantConversation defines model for AssistantConversation.
 type AssistantConversation struct {
-	ProjectRef *OpaqueRef      `json:"projectRef,omitempty"`
-	Ref        OpaqueRef       `json:"ref"`
-	Title      string          `json:"title"`
-	Turns      []AssistantTurn `json:"turns"`
-	UpdatedAt  Timestamp       `json:"updatedAt"`
-	Version    int64           `json:"version"`
+	Context       AssistantContextDescriptor       `json:"context"`
+	ProjectRef    *OpaqueRef                       `json:"projectRef,omitempty"`
+	Ref           OpaqueRef                        `json:"ref"`
+	Title         string                           `json:"title"`
+	TitleRevision int64                            `json:"titleRevision"`
+	TitleSource   AssistantConversationTitleSource `json:"titleSource"`
+	Turns         []AssistantTurn                  `json:"turns"`
+	UpdatedAt     Timestamp                        `json:"updatedAt"`
+	Version       int64                            `json:"version"`
 }
+
+// AssistantConversationTitleSource defines model for AssistantConversation.TitleSource.
+type AssistantConversationTitleSource string
 
 // AssistantPlan defines model for AssistantPlan.
 type AssistantPlan struct {
-	Applied         bool                     `json:"applied"`
-	AuditSummary    string                   `json:"auditSummary"`
-	ConversationRef OpaqueRef                `json:"conversationRef"`
-	NextActions     []NextAction             `json:"nextActions"`
-	Operations      []AssistantPlanOperation `json:"operations"`
-	ProjectRef      *OpaqueRef               `json:"projectRef,omitempty"`
-	Ref             OpaqueRef                `json:"ref"`
-	Version         int64                    `json:"version"`
+	Applied            bool                     `json:"applied"`
+	AppliedAt          *Timestamp               `json:"appliedAt,omitempty"`
+	AuditSummary       string                   `json:"auditSummary"`
+	ContentDigest      string                   `json:"contentDigest"`
+	ConversationRef    OpaqueRef                `json:"conversationRef"`
+	NextActions        []NextAction             `json:"nextActions"`
+	Operations         []AssistantPlanOperation `json:"operations"`
+	ProjectRef         *OpaqueRef               `json:"projectRef,omitempty"`
+	Ref                OpaqueRef                `json:"ref"`
+	Revision           int64                    `json:"revision"`
+	State              AssistantPlanState       `json:"state"`
+	ValidatedAt        *Timestamp               `json:"validatedAt,omitempty"`
+	ValidatedRevision  *int64                   `json:"validatedRevision,omitempty"`
+	ValidationProblems []string                 `json:"validationProblems"`
+	Version            int64                    `json:"version"`
+}
+
+// AssistantPlanState defines model for AssistantPlan.State.
+type AssistantPlanState string
+
+// AssistantPlanApplicationResponse defines model for AssistantPlanApplicationResponse.
+type AssistantPlanApplicationResponse struct {
+	Conversation        AssistantConversation `json:"conversation"`
+	CreatedResourceRefs []OpaqueRef           `json:"createdResourceRefs"`
+	Plan                AssistantPlan         `json:"plan"`
+	Receipt             AssistantPlanReceipt  `json:"receipt"`
+}
+
+// AssistantPlanDecisionResponse defines model for AssistantPlanDecisionResponse.
+type AssistantPlanDecisionResponse struct {
+	Plan    AssistantPlan        `json:"plan"`
+	Receipt AssistantPlanReceipt `json:"receipt"`
 }
 
 // AssistantPlanOperation defines model for AssistantPlanOperation.
 type AssistantPlanOperation struct {
-	Permitted         bool                       `json:"permitted"`
-	Ref               OpaqueRef                  `json:"ref"`
-	Summary           string                     `json:"summary"`
-	Title             string                     `json:"title"`
-	Type              AssistantPlanOperationType `json:"type"`
-	UnavailableReason *string                    `json:"unavailableReason,omitempty"`
+	Action             AssistantPlanOperationAction `json:"action"`
+	After              map[string]interface{}       `json:"after"`
+	Before             map[string]interface{}       `json:"before"`
+	ExpectedVersion    *int64                       `json:"expectedVersion,omitempty"`
+	Parameters         map[string]interface{}       `json:"parameters"`
+	Permitted          bool                         `json:"permitted"`
+	Ref                OpaqueRef                    `json:"ref"`
+	Selected           bool                         `json:"selected"`
+	Summary            string                       `json:"summary"`
+	Target             AssistantPlanTarget          `json:"target"`
+	Title              string                       `json:"title"`
+	Type               AssistantPlanOperationType   `json:"type"`
+	UnavailableReason  *string                      `json:"unavailableReason,omitempty"`
+	ValidationProblems []string                     `json:"validationProblems"`
 }
+
+// AssistantPlanOperationAction defines model for AssistantPlanOperation.Action.
+type AssistantPlanOperationAction string
 
 // AssistantPlanOperationType defines model for AssistantPlanOperation.Type.
 type AssistantPlanOperationType string
 
+// AssistantPlanOperationInput defines model for AssistantPlanOperationInput.
+type AssistantPlanOperationInput = AssistantPlanOperation
+
 // AssistantPlanReceipt defines model for AssistantPlanReceipt.
 type AssistantPlanReceipt struct {
-	Conversation        AssistantConversation `json:"conversation"`
-	CreatedResourceRefs []OpaqueRef           `json:"createdResourceRefs"`
-	Plan                AssistantPlan         `json:"plan"`
+	AuditRefs []OpaqueRef `json:"auditRefs"`
+	Conflicts []struct {
+		Actual       interface{} `json:"actual"`
+		Expected     interface{} `json:"expected"`
+		Field        string      `json:"field"`
+		OperationRef OpaqueRef   `json:"operationRef"`
+		TargetRef    string      `json:"targetRef"`
+	} `json:"conflicts"`
+	CreatedAt           Timestamp   `json:"createdAt"`
+	CreatedResourceRefs []OpaqueRef `json:"createdResourceRefs"`
+	OperationReceipts   []struct {
+		AuditRef     OpaqueRef                                    `json:"auditRef"`
+		OperationRef OpaqueRef                                    `json:"operationRef"`
+		Outcome      AssistantPlanReceiptOperationReceiptsOutcome `json:"outcome"`
+		ResourceRef  OpaqueRef                                    `json:"resourceRef"`
+	} `json:"operationReceipts"`
+	Outcome      AssistantPlanReceiptOutcome `json:"outcome"`
+	PlanRef      OpaqueRef                   `json:"planRef"`
+	PlanRevision int64                       `json:"planRevision"`
+	Ref          OpaqueRef                   `json:"ref"`
+}
+
+// AssistantPlanReceiptOperationReceiptsOutcome defines model for AssistantPlanReceipt.OperationReceipts.Outcome.
+type AssistantPlanReceiptOperationReceiptsOutcome string
+
+// AssistantPlanReceiptOutcome defines model for AssistantPlanReceipt.Outcome.
+type AssistantPlanReceiptOutcome string
+
+// AssistantPlanTarget defines model for AssistantPlanTarget.
+type AssistantPlanTarget struct {
+	Kind    string     `json:"kind"`
+	Name    string     `json:"name"`
+	Ref     *OpaqueRef `json:"ref,omitempty"`
+	Version *int64     `json:"version,omitempty"`
 }
 
 // AssistantTurn defines model for AssistantTurn.
@@ -2590,35 +2963,37 @@ type RoleImageRecipeUpdateInput struct {
 
 // Run defines model for Run.
 type Run struct {
-	ArtifactRefs      []OpaqueRef  `json:"artifactRefs"`
-	Attempt           int          `json:"attempt"`
-	CreatedAt         Timestamp    `json:"createdAt"`
-	CurrentActivity   *string      `json:"currentActivity,omitempty"`
-	FinishedAt        *Timestamp   `json:"finishedAt,omitempty"`
-	GateRefs          []OpaqueRef  `json:"gateRefs"`
-	GraphRevision     int64        `json:"graphRevision"`
-	Incidents         *[]Incident  `json:"incidents,omitempty"`
-	Initiator         UserSummary  `json:"initiator"`
-	InputArtifactRefs []OpaqueRef  `json:"inputArtifactRefs"`
-	InputSummary      *string      `json:"inputSummary,omitempty"`
-	LastEventSequence int64        `json:"lastEventSequence"`
-	NextActions       []NextAction `json:"nextActions"`
-	ParentRunRef      *OpaqueRef   `json:"parentRunRef,omitempty"`
-	ProjectRef        OpaqueRef    `json:"projectRef"`
-	Ref               OpaqueRef    `json:"ref"`
-	ResultSummary     *string      `json:"resultSummary,omitempty"`
-	RetryOfRunRef     *OpaqueRef   `json:"retryOfRunRef,omitempty"`
-	RootRunRef        OpaqueRef    `json:"rootRunRef"`
-	SafeErrorCode     *string      `json:"safeErrorCode,omitempty"`
-	SafeErrorMessage  *string      `json:"safeErrorMessage,omitempty"`
-	SessionRef        OpaqueRef    `json:"sessionRef"`
-	Source            RunSource    `json:"source"`
-	StartedAt         *Timestamp   `json:"startedAt,omitempty"`
-	State             RunState     `json:"state"`
-	Target            RunTarget    `json:"target"`
-	Title             string       `json:"title"`
-	Usage             TokenUsage   `json:"usage"`
-	Version           int64        `json:"version"`
+	ActivitySummary   string         `json:"activitySummary"`
+	ArtifactRefs      []OpaqueRef    `json:"artifactRefs"`
+	Attempt           int            `json:"attempt"`
+	CreatedAt         Timestamp      `json:"createdAt"`
+	CurrentActivity   *string        `json:"currentActivity,omitempty"`
+	FinishedAt        *Timestamp     `json:"finishedAt,omitempty"`
+	GateRefs          []OpaqueRef    `json:"gateRefs"`
+	GraphRevision     int64          `json:"graphRevision"`
+	Incidents         *[]Incident    `json:"incidents,omitempty"`
+	Initiator         UserSummary    `json:"initiator"`
+	InputArtifactRefs []OpaqueRef    `json:"inputArtifactRefs"`
+	InputSummary      *string        `json:"inputSummary,omitempty"`
+	LastEventSequence int64          `json:"lastEventSequence"`
+	NextActions       []NextAction   `json:"nextActions"`
+	ParentRunRef      *OpaqueRef     `json:"parentRunRef,omitempty"`
+	ProjectRef        OpaqueRef      `json:"projectRef"`
+	Ref               OpaqueRef      `json:"ref"`
+	ResultSummary     *string        `json:"resultSummary,omitempty"`
+	RetryOfRunRef     *OpaqueRef     `json:"retryOfRunRef,omitempty"`
+	RootRunRef        OpaqueRef      `json:"rootRunRef"`
+	SafeErrorCode     *string        `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage  *string        `json:"safeErrorMessage,omitempty"`
+	SessionRef        OpaqueRef      `json:"sessionRef"`
+	Source            RunSource      `json:"source"`
+	StartedAt         *Timestamp     `json:"startedAt,omitempty"`
+	State             RunState       `json:"state"`
+	Target            RunTarget      `json:"target"`
+	Title             string         `json:"title"`
+	TitleSource       RunTitleSource `json:"titleSource"`
+	Usage             TokenUsage     `json:"usage"`
+	Version           int64          `json:"version"`
 }
 
 // RunSource defines model for Run.Source.
@@ -2626,6 +3001,9 @@ type RunSource string
 
 // RunState defines model for Run.State.
 type RunState string
+
+// RunTitleSource defines model for Run.TitleSource.
+type RunTitleSource string
 
 // RunCommand defines model for RunCommand.
 type RunCommand struct {
@@ -2672,27 +3050,33 @@ type RunEdgeType string
 
 // RunEvent defines model for RunEvent.
 type RunEvent struct {
-	Artifact      *Artifact          `json:"artifact,omitempty"`
-	ArtifactRef   *OpaqueRef         `json:"artifactRef,omitempty"`
-	Edge          *RunEdge           `json:"edge,omitempty"`
-	EdgeRef       *OpaqueRef         `json:"edgeRef,omitempty"`
-	Gate          *OwnerGate         `json:"gate,omitempty"`
-	GateRef       *OpaqueRef         `json:"gateRef,omitempty"`
-	GraphRevision int64              `json:"graphRevision"`
-	Incident      *Incident          `json:"incident,omitempty"`
-	Node          *RunNode           `json:"node,omitempty"`
-	NodeRef       *OpaqueRef         `json:"nodeRef,omitempty"`
-	NodeState     *RunEventNodeState `json:"nodeState,omitempty"`
-	OccurredAt    Timestamp          `json:"occurredAt"`
-	Progress      *string            `json:"progress,omitempty"`
-	Ref           OpaqueRef          `json:"ref"`
-	Run           RunDelta           `json:"run"`
-	RunRef        OpaqueRef          `json:"runRef"`
-	RunState      *RunEventRunState  `json:"runState,omitempty"`
-	Sequence      int64              `json:"sequence"`
-	Summary       string             `json:"summary"`
-	Type          RunEventType       `json:"type"`
+	Actor         *RunEventActor       `json:"actor,omitempty"`
+	Artifact      *Artifact            `json:"artifact,omitempty"`
+	ArtifactRef   *OpaqueRef           `json:"artifactRef,omitempty"`
+	Edge          *RunEdge             `json:"edge,omitempty"`
+	EdgeRef       *OpaqueRef           `json:"edgeRef,omitempty"`
+	Gate          *OwnerGate           `json:"gate,omitempty"`
+	GateRef       *OpaqueRef           `json:"gateRef,omitempty"`
+	GraphRevision int64                `json:"graphRevision"`
+	Incident      *Incident            `json:"incident,omitempty"`
+	MessageKind   *RunEventMessageKind `json:"messageKind,omitempty"`
+	Node          *RunNode             `json:"node,omitempty"`
+	NodeRef       *OpaqueRef           `json:"nodeRef,omitempty"`
+	NodeState     *RunEventNodeState   `json:"nodeState,omitempty"`
+	OccurredAt    Timestamp            `json:"occurredAt"`
+	Progress      *string              `json:"progress,omitempty"`
+	Ref           OpaqueRef            `json:"ref"`
+	Run           RunDelta             `json:"run"`
+	RunRef        OpaqueRef            `json:"runRef"`
+	RunState      *RunEventRunState    `json:"runState,omitempty"`
+	Sequence      int64                `json:"sequence"`
+	Summary       string               `json:"summary"`
+	ToolCall      *RunToolCall         `json:"toolCall,omitempty"`
+	Type          RunEventType         `json:"type"`
 }
+
+// RunEventMessageKind defines model for RunEvent.MessageKind.
+type RunEventMessageKind string
 
 // RunEventNodeState defines model for RunEvent.NodeState.
 type RunEventNodeState string
@@ -2702,6 +3086,16 @@ type RunEventRunState string
 
 // RunEventType defines model for RunEvent.Type.
 type RunEventType string
+
+// RunEventActor defines model for RunEventActor.
+type RunEventActor struct {
+	Kind RunEventActorKind `json:"kind"`
+	Name string            `json:"name"`
+	Ref  string            `json:"ref"`
+}
+
+// RunEventActorKind defines model for RunEventActor.Kind.
+type RunEventActorKind string
 
 // RunEventPage defines model for RunEventPage.
 type RunEventPage struct {
@@ -2748,6 +3142,7 @@ type RunNode struct {
 	IntegrationNames *[]string    `json:"integrationNames,omitempty"`
 	NextActions      []NextAction `json:"nextActions"`
 	ParentNodeRef    *OpaqueRef   `json:"parentNodeRef,omitempty"`
+	Planned          *bool        `json:"planned,omitempty"`
 	ProgressSummary  *string      `json:"progressSummary,omitempty"`
 	Ref              OpaqueRef    `json:"ref"`
 	Role             *string      `json:"role,omitempty"`
@@ -2782,6 +3177,22 @@ type RunTarget struct {
 
 // RunTargetType defines model for RunTarget.Type.
 type RunTargetType string
+
+// RunToolCall defines model for RunToolCall.
+type RunToolCall struct {
+	AuditRef       OpaqueRef              `json:"auditRef"`
+	CapabilityRef  *string                `json:"capabilityRef,omitempty"`
+	DurationMs     int64                  `json:"durationMs"`
+	GrantRef       *OpaqueRef             `json:"grantRef,omitempty"`
+	Ref            OpaqueRef              `json:"ref"`
+	SafeParameters map[string]interface{} `json:"safeParameters"`
+	SafeResult     string                 `json:"safeResult"`
+	State          RunToolCallState       `json:"state"`
+	Tool           string                 `json:"tool"`
+}
+
+// RunToolCallState defines model for RunToolCall.State.
+type RunToolCallState string
 
 // RunWorkspace defines model for RunWorkspace.
 type RunWorkspace struct {
@@ -3222,12 +3633,24 @@ type ListAssistantConversationsParams struct {
 
 // CreateAssistantConversationJSONBody defines parameters for CreateAssistantConversation.
 type CreateAssistantConversationJSONBody struct {
-	ProjectRef *OpaqueRef `json:"projectRef,omitempty"`
-	Title      string     `json:"title"`
+	Context    *AssistantContextDescriptor `json:"context,omitempty"`
+	ProjectRef *OpaqueRef                  `json:"projectRef,omitempty"`
 }
 
 // CreateAssistantConversationParams defines parameters for CreateAssistantConversation.
 type CreateAssistantConversationParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// UpdateAssistantConversationTitleJSONBody defines parameters for UpdateAssistantConversationTitle.
+type UpdateAssistantConversationTitleJSONBody struct {
+	Title string `json:"title"`
+}
+
+// UpdateAssistantConversationTitleParams defines parameters for UpdateAssistantConversationTitle.
+type UpdateAssistantConversationTitleParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
@@ -3244,8 +3667,50 @@ type AddAssistantTurnParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ApplyAssistantPlanJSONBody defines parameters for ApplyAssistantPlan.
+type ApplyAssistantPlanJSONBody struct {
+	Revision int64 `json:"revision"`
+}
+
 // ApplyAssistantPlanParams defines parameters for ApplyAssistantPlan.
 type ApplyAssistantPlanParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// UpdateAssistantPlanDraftJSONBody defines parameters for UpdateAssistantPlanDraft.
+type UpdateAssistantPlanDraftJSONBody struct {
+	Operations []AssistantPlanOperationInput `json:"operations"`
+	Summary    string                        `json:"summary"`
+}
+
+// UpdateAssistantPlanDraftParams defines parameters for UpdateAssistantPlanDraft.
+type UpdateAssistantPlanDraftParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// RejectAssistantPlanJSONBody defines parameters for RejectAssistantPlan.
+type RejectAssistantPlanJSONBody struct {
+	Revision int64 `json:"revision"`
+}
+
+// RejectAssistantPlanParams defines parameters for RejectAssistantPlan.
+type RejectAssistantPlanParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ValidateAssistantPlanJSONBody defines parameters for ValidateAssistantPlan.
+type ValidateAssistantPlanJSONBody struct {
+	Revision int64 `json:"revision"`
+}
+
+// ValidateAssistantPlanParams defines parameters for ValidateAssistantPlan.
+type ValidateAssistantPlanParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
@@ -3566,8 +4031,23 @@ type ChangeArtifactBindingJSONRequestBody = ArtifactBindingInput
 // CreateAssistantConversationJSONRequestBody defines body for CreateAssistantConversation for application/json ContentType.
 type CreateAssistantConversationJSONRequestBody CreateAssistantConversationJSONBody
 
+// UpdateAssistantConversationTitleJSONRequestBody defines body for UpdateAssistantConversationTitle for application/json ContentType.
+type UpdateAssistantConversationTitleJSONRequestBody UpdateAssistantConversationTitleJSONBody
+
 // AddAssistantTurnJSONRequestBody defines body for AddAssistantTurn for application/json ContentType.
 type AddAssistantTurnJSONRequestBody AddAssistantTurnJSONBody
+
+// ApplyAssistantPlanJSONRequestBody defines body for ApplyAssistantPlan for application/json ContentType.
+type ApplyAssistantPlanJSONRequestBody ApplyAssistantPlanJSONBody
+
+// UpdateAssistantPlanDraftJSONRequestBody defines body for UpdateAssistantPlanDraft for application/json ContentType.
+type UpdateAssistantPlanDraftJSONRequestBody UpdateAssistantPlanDraftJSONBody
+
+// RejectAssistantPlanJSONRequestBody defines body for RejectAssistantPlan for application/json ContentType.
+type RejectAssistantPlanJSONRequestBody RejectAssistantPlanJSONBody
+
+// ValidateAssistantPlanJSONRequestBody defines body for ValidateAssistantPlan for application/json ContentType.
+type ValidateAssistantPlanJSONRequestBody ValidateAssistantPlanJSONBody
 
 // CreateIntegrationConnectionJSONRequestBody defines body for CreateIntegrationConnection for application/json ContentType.
 type CreateIntegrationConnectionJSONRequestBody = IntegrationConnectionInput
@@ -3692,11 +4172,23 @@ type ServerInterface interface {
 	// (POST /api/v1/assistant-conversations)
 	CreateAssistantConversation(w http.ResponseWriter, r *http.Request, params CreateAssistantConversationParams)
 
+	// (PUT /api/v1/assistant-conversations/{conversationRef}/title)
+	UpdateAssistantConversationTitle(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params UpdateAssistantConversationTitleParams)
+
 	// (POST /api/v1/assistant-conversations/{conversationRef}/turns)
 	AddAssistantTurn(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params AddAssistantTurnParams)
 
 	// (POST /api/v1/assistant-plans/{planRef}/application)
 	ApplyAssistantPlan(w http.ResponseWriter, r *http.Request, planRef PlanRef, params ApplyAssistantPlanParams)
+
+	// (PUT /api/v1/assistant-plans/{planRef}/draft)
+	UpdateAssistantPlanDraft(w http.ResponseWriter, r *http.Request, planRef PlanRef, params UpdateAssistantPlanDraftParams)
+
+	// (POST /api/v1/assistant-plans/{planRef}/rejection)
+	RejectAssistantPlan(w http.ResponseWriter, r *http.Request, planRef PlanRef, params RejectAssistantPlanParams)
+
+	// (POST /api/v1/assistant-plans/{planRef}/validation)
+	ValidateAssistantPlan(w http.ResponseWriter, r *http.Request, planRef PlanRef, params ValidateAssistantPlanParams)
 
 	// (GET /api/v1/audit-events)
 	ListAuditEvents(w http.ResponseWriter, r *http.Request, params ListAuditEventsParams)
@@ -5118,6 +5610,112 @@ func (siw *ServerInterfaceWrapper) CreateAssistantConversation(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// UpdateAssistantConversationTitle operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAssistantConversationTitle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationRef" -------------
+	var conversationRef ConversationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationRef", r.PathValue("conversationRef"), &conversationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateAssistantConversationTitleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAssistantConversationTitle(w, r, conversationRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AddAssistantTurn operation middleware
 func (siw *ServerInterfaceWrapper) AddAssistantTurn(w http.ResponseWriter, r *http.Request) {
 
@@ -5298,6 +5896,324 @@ func (siw *ServerInterfaceWrapper) ApplyAssistantPlan(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ApplyAssistantPlan(w, r, planRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAssistantPlanDraft operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAssistantPlanDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "planRef" -------------
+	var planRef PlanRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "planRef", r.PathValue("planRef"), &planRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateAssistantPlanDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAssistantPlanDraft(w, r, planRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RejectAssistantPlan operation middleware
+func (siw *ServerInterfaceWrapper) RejectAssistantPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "planRef" -------------
+	var planRef PlanRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "planRef", r.PathValue("planRef"), &planRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RejectAssistantPlanParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RejectAssistantPlan(w, r, planRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ValidateAssistantPlan operation middleware
+func (siw *ServerInterfaceWrapper) ValidateAssistantPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "planRef" -------------
+	var planRef PlanRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "planRef", r.PathValue("planRef"), &planRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ValidateAssistantPlanParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ValidateAssistantPlan(w, r, planRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9441,8 +10357,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/content", wrapper.DownloadArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.ListAssistantConversations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.CreateAssistantConversation)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/title", wrapper.UpdateAssistantConversationTitle)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/turns", wrapper.AddAssistantTurn)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-plans/{planRef}/application", wrapper.ApplyAssistantPlan)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/assistant-plans/{planRef}/draft", wrapper.UpdateAssistantPlanDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-plans/{planRef}/rejection", wrapper.RejectAssistantPlan)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-plans/{planRef}/validation", wrapper.ValidateAssistantPlan)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/audit-events", wrapper.ListAuditEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/bootstrap", wrapper.GetBootstrapState)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections", wrapper.ListIntegrationConnections)

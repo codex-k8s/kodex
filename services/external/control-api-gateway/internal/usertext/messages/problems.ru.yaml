@@ -186,6 +186,8 @@ NEW_ASSISTANT_CONVERSATION:
   other: Новый разговор
 ASSISTANT_CONVERSATION_CREATED:
   other: Разговор с помощником создан
+ASSISTANT_CONVERSATION_TITLE_UPDATED:
+  other: Название разговора обновлено
 ASSISTANT_TURN_QUEUED:
   other: Команда помощнику поставлена в очередь
 ASSISTANT_TURN_ACCEPTED:
@@ -194,6 +196,18 @@ ASSISTANT_PLAN_APPLIED:
   other: План помощника применён
 ASSISTANT_PLAN_PROPOSED:
   other: Помощник подготовил план изменений
+ASSISTANT_PLAN_DRAFT_UPDATED:
+  other: Черновик плана обновлён
+ASSISTANT_PLAN_VALIDATED:
+  other: План проверен
+ASSISTANT_PLAN_REJECTED:
+  other: План отклонён
+ASSISTANT_PLAN_CONFLICT:
+  other: План устарел из-за изменения ресурсов
+RUN_METADATA_UPDATED:
+  other: Сведения о запуске обновлены
+RUNTIME_TOOL_CALL_RECORDED:
+  other: Вызов инструмента записан
 ASSISTANT_INSTRUCTIONS_UPDATED:
   other: Дополнение к инструкциям помощника обновлено
 ASSISTANT_RECOVERY_REQUESTED:
