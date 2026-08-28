@@ -77,6 +77,23 @@ describe("session renewal lifecycle", () => {
     expect(api.renewOwnerSession).toHaveBeenCalledTimes(2);
   });
 
+  test("повторяет retryable session probe и сохраняет авторизацию", async () => {
+    api.getBootstrapState
+      .mockRejectedValueOnce({
+        kind: "unavailable",
+        retryable: true,
+      })
+      .mockResolvedValueOnce({ data: {} });
+    const session = useSessionStore();
+
+    const probing = session.probe();
+    await vi.advanceTimersByTimeAsync(250);
+    await probing;
+
+    expect(api.getBootstrapState).toHaveBeenCalledTimes(2);
+    expect(session.phase).toBe("authenticated");
+  });
+
   test("отменяет renewal и ждёт его завершения перед logout", async () => {
     let renewalAborted = false;
     api.renewOwnerSession.mockImplementationOnce(

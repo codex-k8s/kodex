@@ -215,6 +215,22 @@ func (server *Server) GetAgent(ctx context.Context, request *controlplanev1.GetA
 	return &controlplanev1.GetAgentResponse{Agent: castAgent(item)}, nil
 }
 
+func (server *Server) ListAgentInstructionVersions(ctx context.Context, request *controlplanev1.ListAgentInstructionVersionsRequest) (*controlplanev1.ListAgentInstructionVersionsResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListAgentInstructionVersions_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, next, err := server.service.ListAgentInstructionVersions(ctx, p, request.GetAgentRef(), page(request.GetPage()))
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListAgentInstructionVersionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	for index := range items {
+		response.InstructionVersions = append(response.InstructionVersions, castInstruction(&items[index]))
+	}
+	return response, nil
+}
+
 func (server *Server) ListWorkflows(ctx context.Context, request *controlplanev1.ListWorkflowsRequest) (*controlplanev1.ListWorkflowsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListWorkflows_FullMethodName)
 	if err != nil {

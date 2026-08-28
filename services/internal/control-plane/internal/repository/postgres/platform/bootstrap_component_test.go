@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -54,6 +55,8 @@ var (
 	bootstrapComponentWarmHeartbeatCountsQuery string
 	//go:embed testdata/sql/bootstrap_component_provider_credential_readback.sql
 	bootstrapComponentProviderCredentialReadbackQuery string
+	//go:embed testdata/sql/bootstrap_component_instruction_draft_readback.sql
+	bootstrapComponentInstructionDraftReadbackQuery string
 )
 
 func TestBootstrapComponent(t *testing.T) {
@@ -115,6 +118,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("OIDC candidate receives project membership without internal identifiers", func(t *testing.T) {
 		testProjectMembershipCandidate(t, ctx, repository)
 	})
+	t.Run("instruction draft save replaces the mutable draft", func(t *testing.T) {
+		testInstructionDraftSave(t, ctx, repository)
+	})
 	t.Run("system assistant proposes and applies typed plan", func(t *testing.T) {
 		testSystemAssistantTypedPlan(t, ctx, repository)
 	})
@@ -142,6 +148,50 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("system assistant core prompt upgrades forward only", func(t *testing.T) {
 		testSystemAssistantCorePromptUpgrade(t, ctx, repository, pool)
 	})
+}
+
+func testInstructionDraftSave(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.instructions.create-draft",
+	}, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct instruction service: %v", err)
+	}
+	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "instruction-save-project"}, Payload: command.ProjectInput{
+			Name: "Instruction drafts", Purpose: "Verify mutable instruction draft saves", Language: "en",
+		}})
+	if err != nil || project.Project == nil {
+		t.Fatalf("create instruction project: result=%#v err=%v", project.Project, err)
+	}
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "instruction-save-agent", "Instruction editor")
+	firstVersion := agent.Version
+	first, err := service.Execute(ctx, command.Command{Kind: command.CreateInstructions, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "instruction-save-first", ExpectedVersion: &firstVersion},
+		Payload:  command.AgentInput{Ref: agent.Ref, Instructions: "First mutable instruction draft with enough content."},
+	})
+	if err != nil || first.Agent == nil {
+		t.Fatalf("create instruction draft: result=%#v err=%v", first.Agent, err)
+	}
+	secondVersion := first.Agent.Version
+	second, err := service.Execute(ctx, command.Command{Kind: command.CreateInstructions, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "instruction-save-second", ExpectedVersion: &secondVersion},
+		Payload:  command.AgentInput{Ref: agent.Ref, Instructions: "Second mutable instruction draft replaces the first content."},
+	})
+	if err != nil || second.Agent == nil || second.Agent.Version != secondVersion+1 {
+		t.Fatalf("replace instruction draft: result=%#v err=%v", second.Agent, err)
+	}
+	var count int
+	var state, content string
+	if err := repository.pool.QueryRow(ctx, bootstrapComponentInstructionDraftReadbackQuery, agent.Ref).Scan(&count, &state, &content); err != nil {
+		t.Fatalf("read instruction draft: %v", err)
+	}
+	if count != 1 || state != "DRAFT" || content != "Second mutable instruction draft replaces the first content." {
+		t.Fatalf("unexpected instruction draft readback: count=%d state=%s content=%q", count, state, content)
+	}
 }
 
 func testProviderCredentialLegacyRepair(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
@@ -467,6 +517,24 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 		CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
 	}
 	owner := resolvedTestPrincipal(t, ctx, repository, ownerInput, "control-api-gateway")
+	lockTx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin unrelated organization update: %v", err)
+	}
+	defer func() { _ = lockTx.Rollback(ctx) }()
+	var lockedOrganizationID string
+	if err := lockTx.QueryRow(ctx, `SELECT id::text FROM control_plane.organizations LIMIT 1 FOR UPDATE`).Scan(&lockedOrganizationID); err != nil {
+		t.Fatalf("lock organization fixture: %v", err)
+	}
+	fastPathContext, cancelFastPath := context.WithTimeout(ctx, time.Second)
+	if _, err := repository.ResolveProofAuthority(fastPathContext, ownerInput); err != nil {
+		cancelFastPath()
+		t.Fatalf("resolve existing owner while organization is being updated: %v", err)
+	}
+	cancelFastPath()
+	if err := lockTx.Rollback(ctx); err != nil {
+		t.Fatalf("release organization fixture lock: %v", err)
+	}
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatalf("construct membership service: %v", err)
@@ -1084,8 +1152,8 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		Mutation: value.Mutation{IdempotencyKey: "gate-resolve-replay", ExpectedVersion: &gateVersion},
 		Payload:  command.GateResolutionInput{GateRef: gateRef, Decision: "APPROVE", Comment: "Replay"},
 	})
-	if err == nil {
-		t.Fatal("replayed owner gate resolution was accepted")
+	if !errors.Is(err, domainerrs.ErrAlreadyResolved) {
+		t.Fatalf("replayed owner gate resolution error = %v, want already resolved", err)
 	}
 	changeRun, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "gate-change-run-launch"}, Payload: command.LaunchRunInput{
@@ -1208,6 +1276,21 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	if err != nil || publishedWorkflow.Workflow == nil || publishedWorkflow.Workflow.State != "PUBLISHED" {
 		t.Fatalf("publish delegation workflow: result=%#v err=%v", publishedWorkflow.Workflow, err)
 	}
+	workflowArtifact, err := service.UploadArtifact(ctx, owner, value.Mutation{IdempotencyKey: "delegation-artifact-upload"}, platformrepo.ArtifactUpload{
+		ProjectRef: project.Project.Ref, FileName: "campaign-brief.md", MediaType: "text/markdown",
+		SizeBytes: int64(len("# Campaign brief\n")), Reader: strings.NewReader("# Campaign brief\n"),
+	})
+	if err != nil {
+		t.Fatalf("upload delegation artifact: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-launch-without-files"}, Payload: command.LaunchRunInput{
+			ProjectRef: project.Project.Ref, Title: "Prepare campaign with artifact", Task: "Coordinate the attached campaign brief.",
+			Target: entity.RunTarget{Type: "WORKFLOW", Ref: publishedWorkflow.Workflow.Ref}, Input: map[string]any{"campaign": "Autumn"},
+			ArtifactRefs: []string{workflowArtifact.Ref},
+		}}); !errors.Is(err, domainerrs.ErrCapabilityRequired) {
+		t.Fatalf("launch workflow with artifact without Files capability: %v", err)
+	}
 	launched, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "delegation-launch-1"}, Payload: command.LaunchRunInput{
 			ProjectRef: project.Project.Ref, Title: "Prepare campaign brief", Task: "Coordinate research and editing.",
@@ -1265,11 +1348,14 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("parallel children did not receive distinct sessions: %#v", childSessions)
 	}
 	for index, lease := range claimedChildren.RuntimeItems {
-		completeClaimedExecution(t, ctx, service, worker, lease, "delegation-child-"+leftPad(index+1, 2), false)
+		child := completeClaimedExecution(t, ctx, service, worker, lease, "delegation-child-"+leftPad(index+1, 2), false)
+		if child.Run == nil || child.Run.Usage != turnUsageFixture() {
+			t.Fatalf("child completion %d usage = %#v", index+1, child.Run)
+		}
 	}
 	for index, lease := range claimedChildren.RuntimeItems {
 		replayed := completeClaimedExecution(t, ctx, service, worker, lease, "delegation-child-"+leftPad(index+1, 2), false)
-		if replayed.Run == nil || replayed.Graph == nil {
+		if replayed.Run == nil || replayed.Graph == nil || replayed.Run.Usage != turnUsageFixture() {
 			t.Fatalf("replay child completion %d lost authoritative result: %#v", index+1, replayed)
 		}
 	}
@@ -1306,6 +1392,14 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || completed.Graph == nil || len(completed.Graph.Nodes) < 5 || graphNodeState(completed.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
 		t.Fatalf("complete delegation root after callback continuation: run=%#v graph=%#v", completed.Run, completed.Graph)
 	}
+	wantUsage := entity.TokenUsage{
+		TotalTokens: 480, InputTokens: 400, CachedInputTokens: 160,
+		CacheWriteInputTokens: 40, OutputTokens: 80, ReasoningOutputTokens: 20,
+		ModelContextWindow: 200000,
+	}
+	if completed.Run.Usage != wantUsage {
+		t.Fatalf("root run token usage = %#v, want %#v", completed.Run.Usage, wantUsage)
+	}
 	callbackEdges := 0
 	continuationEdges := 0
 	for _, edge := range completed.Graph.Edges {
@@ -1318,6 +1412,21 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	}
 	if callbackEdges != 2 || continuationEdges != 1 {
 		t.Fatalf("delegation graph lost callback edges: edges=%#v", completed.Graph.Edges)
+	}
+	events, _, _, err := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: completed.Run.Ref, Limit: 100})
+	if err != nil {
+		t.Fatalf("list delegation events: %v", err)
+	}
+	for _, event := range events {
+		if event.Delta.Run == nil || event.RunState != event.Delta.Run.State {
+			t.Fatalf("event %s run state %q differs from authoritative delta %#v", event.Ref, event.RunState, event.Delta.Run)
+		}
+		if event.Delta.Node != nil && event.NodeState != event.Delta.Node.State {
+			t.Fatalf("event %s node state %q differs from authoritative delta %q", event.Ref, event.NodeState, event.Delta.Node.State)
+		}
+		if event.Delta.Node == nil && event.NodeState != "" {
+			t.Fatalf("event %s exposes node state %q without node delta", event.Ref, event.NodeState)
+		}
 	}
 }
 
@@ -1383,6 +1492,13 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || uploaded.ScanState != "CLEAN" || uploaded.MediaType != "text/markdown" || uploaded.Revision != 1 || uploaded.Source != "CONTROL_CENTER" {
 		t.Fatalf("upload knowledge artifact: artifact=%#v err=%v", uploaded, err)
 	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "lifecycle-launch-without-files"}, Payload: command.LaunchRunInput{
+			ProjectRef: project.Project.Ref, Title: "Answer with attachment", Task: "Use the attached support policy.",
+			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Agent.Ref}, ArtifactRefs: []string{uploaded.Ref},
+		}}); !errors.Is(err, domainerrs.ErrCapabilityRequired) {
+		t.Fatalf("launch agent with artifact without Files capability: %v", err)
+	}
 	preview, err := service.DownloadArtifact(ctx, owner, uploaded.Ref, "PREVIEW")
 	if err != nil || preview.GrantRef == "" {
 		t.Fatalf("open safe artifact preview: grant=%q err=%v", preview.GrantRef, err)
@@ -1403,6 +1519,21 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		t.Fatalf("download quarantined artifact must be forbidden: %v", err)
 	}
 	uploadedVersion := uploaded.Version
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeArtifactBinding, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "artifact-binding-without-capability", ExpectedVersion: &uploadedVersion},
+		Payload:  command.ArtifactBindingInput{ArtifactRef: uploaded.Ref, AgentRef: agent.Agent.Ref, Enabled: true},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("bind knowledge artifact without Files capability: %v", err)
+	}
+	agentVersion := agent.Agent.Version
+	filesCapability, err := service.Execute(ctx, command.Command{Kind: command.ChangeAgentCapability, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "lifecycle-agent-files-capability", ExpectedVersion: &agentVersion},
+		Payload:  command.AgentBindingInput{AgentRef: agent.Agent.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true},
+	})
+	if err != nil || filesCapability.Agent == nil || !contains(filesCapability.Agent.Capabilities, runtimecontract.ArtifactCapability) {
+		t.Fatalf("grant Files capability: agent=%#v err=%v", filesCapability.Agent, err)
+	}
+	agent.Agent = filesCapability.Agent
 	bound, err := service.Execute(ctx, command.Command{Kind: command.ChangeArtifactBinding, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "artifact-binding-1", ExpectedVersion: &uploadedVersion},
 		Payload:  command.ArtifactBindingInput{ArtifactRef: uploaded.Ref, AgentRef: agent.Agent.Ref, Enabled: true},
@@ -1470,7 +1601,7 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		t.Fatalf("runtime artifact accepted a stale fence: %v", err)
 	}
 	completed := completeClaimedExecution(t, ctx, service, worker, lease, "lifecycle-first", true)
-	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || len(completed.CreatedRefs) != 1 {
+	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || len(completed.CreatedRefs) != 1 || completed.Run.Usage != turnUsageFixture() {
 		t.Fatalf("complete direct run: run=%#v artifacts=%v", completed.Run, completed.CreatedRefs)
 	}
 	if completed.Graph == nil || graphNodeState(completed.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
@@ -1561,11 +1692,20 @@ func completeClaimedExecution(t *testing.T, ctx context.Context, service *platfo
 		Mutation: value.Mutation{IdempotencyKey: key + "-complete"}, Payload: command.CompleteExecutionInput{
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
 			Success: true, ResultSummary: "Customer response prepared", Artifacts: artifacts,
+			Usage: turnUsageFixture(),
 		}})
 	if err != nil {
 		t.Fatalf("complete %s execution: %v", key, err)
 	}
 	return completed
+}
+
+func turnUsageFixture() entity.TokenUsage {
+	return entity.TokenUsage{
+		TotalTokens: 120, InputTokens: 100, CachedInputTokens: 40,
+		CacheWriteInputTokens: 10, OutputTokens: 20, ReasoningOutputTokens: 5,
+		ModelContextWindow: 200000,
+	}
 }
 
 func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository *Repository) {
@@ -1650,6 +1790,9 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("claim assistant execution: claims=%d err=%v", len(claimed.RuntimeItems), err)
 	}
 	lease := claimed.RuntimeItems[0]
+	if stringMap(lease, "projectRef") != projectRef {
+		t.Fatalf("assistant runtime lost project binding: got=%q want=%q", stringMap(lease, "projectRef"), projectRef)
+	}
 	planResult, err := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-plan-1"}, Payload: command.ProposeAssistantPlanInput{
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
@@ -1658,6 +1801,14 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		}})
 	if err != nil || planResult.Plan == nil || planResult.Plan.State != "PROPOSED" {
 		t.Fatalf("propose assistant plan: result=%#v err=%v", planResult.Plan, err)
+	}
+	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-complete-1"}, Payload: command.CompleteExecutionInput{
+			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
+			Success: true, ResultSummary: "The configuration plan is ready for review.",
+		}})
+	if err != nil || completed.Run == nil || completed.Run.State != "SUCCEEDED" {
+		t.Fatalf("complete direct assistant execution: run=%#v err=%v", completed.Run, err)
 	}
 	expectedPlanVersion := int64(1)
 	applied, err := service.Execute(ctx, command.Command{Kind: command.ApplyAssistantPlan, Principal: owner,

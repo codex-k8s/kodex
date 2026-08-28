@@ -9,6 +9,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcverifier v0.0.0
+	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
@@ -75,6 +76,8 @@ replace github.com/codex-k8s/kodex/libs/go/observability => ../../../libs/go/obs
 replace github.com/codex-k8s/kodex/libs/go/oidcidentity => ../../../libs/go/oidcidentity
 
 replace github.com/codex-k8s/kodex/libs/go/oidcverifier => ../../../libs/go/oidcverifier
+
+replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../../../libs/go/runtimecontract
 
 replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
 

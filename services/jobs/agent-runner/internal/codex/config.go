@@ -78,11 +78,9 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		History: historyConfig{Persistence: "save-all"},
 		Permissions: map[string]permissionProfile{permissionProfileName: {Extends: permissionBase,
 			Filesystem: map[string]string{
-				input.CodexHome: "deny", filepath.Join(input.CodexHome, "**"): "deny",
-				"/var/run/secrets": "deny", "/var/run/secrets/**": "deny",
-				"/run/kodex/internal-rpc-authority":    "deny",
-				"/run/kodex/internal-rpc-authority/**": "deny",
-				"/proc": "deny", "/proc/**": "deny",
+				filepath.Join(input.CodexHome, "auth.json"): "deny",
+				"/run/secrets": "deny",
+				"/proc":        "deny",
 			}}},
 		ShellEnvironmentPolicy: shellEnvironmentPolicy{Inherit: "none", Set: map[string]string{
 			"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp",
@@ -99,7 +97,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		!decoded.MCPServers["kodex"].Required ||
 		decoded.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
 		decoded.DefaultPermissions != permissionProfileName || decoded.Permissions[permissionProfileName].Extends != permissionBase ||
-		decoded.Permissions[permissionProfileName].Filesystem[input.CodexHome] != "deny" {
+		decoded.Permissions[permissionProfileName].Filesystem[filepath.Join(input.CodexHome, "auth.json")] != "deny" {
 		return errors.New("validate Codex configuration")
 	}
 	return replacePrivateFile(filepath.Join(input.CodexHome, "config.toml"), raw.Bytes())

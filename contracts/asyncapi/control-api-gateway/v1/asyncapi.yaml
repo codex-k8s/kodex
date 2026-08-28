@@ -380,10 +380,22 @@ components:
     RunEdgeType:
       type: string
       enum: [DELEGATED_TO, CALLBACK_TO, RETRY_OF, CONTINUES, WAITING_FOR]
+    TokenUsage:
+      type: object
+      additionalProperties: false
+      required: [totalTokens, inputTokens, cachedInputTokens, cacheWriteInputTokens, outputTokens, reasoningOutputTokens, modelContextWindow]
+      properties:
+        totalTokens: { type: integer, format: int64, minimum: 0 }
+        inputTokens: { type: integer, format: int64, minimum: 0 }
+        cachedInputTokens: { type: integer, format: int64, minimum: 0 }
+        cacheWriteInputTokens: { type: integer, format: int64, minimum: 0 }
+        outputTokens: { type: integer, format: int64, minimum: 0 }
+        reasoningOutputTokens: { type: integer, format: int64, minimum: 0 }
+        modelContextWindow: { type: integer, format: int64, minimum: 0 }
     RunDelta:
       type: object
       additionalProperties: false
-      required: [ref, version, state, graphRevision, lastEventSequence, artifactRefs, gateRefs, nextActions]
+      required: [ref, version, state, graphRevision, lastEventSequence, usage, artifactRefs, gateRefs, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -393,6 +405,7 @@ components:
         resultSummary: { type: string, maxLength: 4000 }
         safeErrorCode: { type: string, maxLength: 80 }
         safeErrorMessage: { type: string, maxLength: 500 }
+        usage: { $ref: '#/components/schemas/TokenUsage' }
         artifactRefs:
           type: array
           maxItems: 200

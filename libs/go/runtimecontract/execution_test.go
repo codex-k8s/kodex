@@ -7,6 +7,7 @@ import (
 
 func TestRunnerInputArtifactCatalogIsVersionBoundedAndUnique(t *testing.T) {
 	input := validRunnerInputFixture()
+	input.Capabilities = []string{ArtifactCapability}
 	input.InputArtifacts = []RunnerInputArtifact{{
 		Ref: "artifact_abcdefgh", FileName: "customer-brief.txt", MediaType: "text/plain",
 		Digest: "sha256:" + strings.Repeat("c", 64), SizeBytes: 128, Revision: 1, Version: 2,
@@ -25,10 +26,64 @@ func TestRunnerInputArtifactCatalogIsVersionBoundedAndUnique(t *testing.T) {
 	}
 }
 
+func TestWarmCompatibilityDigestIgnoresTurnIdentityAndRejectsRuntimeDrift(t *testing.T) {
+	turn := validRunnerInputFixture()
+	turn.SystemAssistant = true
+	warm := turn
+	warm.Mode = RunnerModeWarm
+	warm.RunRef, warm.NodeRef, warm.TurnRef = "", "", ""
+	warm.Attempt, warm.LeaseRef, warm.LeaseFence, warm.LeaseGeneration = 0, "", "", 0
+	warm.Task = ""
+	warm.RuntimeRevisionDigest = strings.Repeat("f", 64)
+
+	warmDigest, err := WarmCompatibilityDigest(warm)
+	if err != nil {
+		t.Fatalf("WarmCompatibilityDigest(warm) error = %v", err)
+	}
+	turnDigest, err := WarmCompatibilityDigest(turn)
+	if err != nil {
+		t.Fatalf("WarmCompatibilityDigest(turn) error = %v", err)
+	}
+	if warmDigest != turnDigest {
+		t.Fatalf("compatible warm and turn digests differ: %s != %s", warmDigest, turnDigest)
+	}
+
+	turn.Model = "different-model"
+	driftedDigest, err := WarmCompatibilityDigest(turn)
+	if err != nil {
+		t.Fatalf("WarmCompatibilityDigest(drifted turn) error = %v", err)
+	}
+	if driftedDigest == warmDigest {
+		t.Fatal("runtime drift retained the warm compatibility digest")
+	}
+}
+
+func TestTokenUsageValidationRejectsInconsistentCounters(t *testing.T) {
+	valid := TokenUsage{TotalTokens: 120, InputTokens: 100, CachedInputTokens: 40,
+		CacheWriteInputTokens: 10, OutputTokens: 20, ReasoningOutputTokens: 5, ModelContextWindow: 200000}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid usage rejected: %v", err)
+	}
+	for name, usage := range map[string]TokenUsage{
+		"negative":          {TotalTokens: -1},
+		"total mismatch":    {TotalTokens: 121, InputTokens: 100, OutputTokens: 20},
+		"cached over input": {TotalTokens: 120, InputTokens: 100, CachedInputTokens: 101, OutputTokens: 20},
+		"reasoning over output": {
+			TotalTokens: 120, InputTokens: 100, OutputTokens: 20, ReasoningOutputTokens: 21,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if usage.Validate() == nil {
+				t.Fatalf("invalid usage accepted: %#v", usage)
+			}
+		})
+	}
+}
+
 func validRunnerInputFixture() RunnerInput {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
 	return RunnerInput{
-		Schema: RunnerInputSchemaV4, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
+		Schema: RunnerInputSchemaV5, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
 		RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh", SessionRef: "session_abcdefgh",
 		TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,
 		LeaseRef: "lease_abcdefgh", LeaseFence: "fence-1", LeaseGeneration: 1,
@@ -47,8 +102,8 @@ func validRunnerInputFixture() RunnerInput {
 			PrivateKeyFile:  "/var/run/secrets/kodex/runtime/callback-client/tls.key",
 		},
 		ExecutionTicketFile:    "/var/run/secrets/kodex/runtime/ticket/token",
-		ProviderAuthFile:       "/var/run/secrets/kodex/runtime/provider/auth.json",
-		ProviderAuthSHA256File: "/var/run/secrets/kodex/runtime/provider/auth.sha256",
-		WorkspaceRoot:          "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/tmp/codex-home",
+		ProviderAuthFile:       "/run/secrets/kodex/runtime/provider/auth.json",
+		ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
+		WorkspaceRoot:          "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
 	}
 }

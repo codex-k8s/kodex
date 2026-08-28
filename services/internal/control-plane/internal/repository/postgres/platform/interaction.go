@@ -406,6 +406,9 @@ func (repository *Repository) enqueueGateInteractionDeliveries(ctx context.Conte
 }
 
 func (repository *Repository) enqueueTerminalInteractionDeliveries(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID string) error {
+	if projectID == "" {
+		return nil
+	}
 	if _, err := tx.Exec(ctx, queryInteractionEnqueueTerminalDeliveries, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"project_id":      projectID,

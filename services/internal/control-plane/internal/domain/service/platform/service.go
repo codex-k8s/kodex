@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -159,6 +160,48 @@ func (service *Service) GetAgent(ctx context.Context, p value.Principal, ref str
 		return entity.Agent{}, err
 	}
 	return service.repository.GetAgent(ctx, p, ref)
+}
+func (service *Service) ListAgentInstructionVersions(ctx context.Context, p value.Principal, ref string, page query.Page) ([]entity.InstructionVersion, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	agent, err := service.repository.GetAgent(ctx, p, ref)
+	if err != nil {
+		return nil, "", err
+	}
+	return pagePublishedInstructionVersions(agent.PublishedInstructionVersions, page)
+}
+
+func pagePublishedInstructionVersions(versions []entity.InstructionVersion, page query.Page) ([]entity.InstructionVersion, string, error) {
+	limit := int(page.Size)
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	cursor := int64(0)
+	if page.Token != "" {
+		parsed, err := strconv.ParseInt(page.Token, 10, 32)
+		if err != nil || parsed < 1 {
+			return nil, "", errs.ErrInvalid
+		}
+		cursor = parsed
+	}
+	start := 0
+	if cursor > 0 {
+		for start < len(versions) && int64(versions[start].VersionNumber) >= cursor {
+			start++
+		}
+	}
+	end := min(start+limit, len(versions))
+	items := append([]entity.InstructionVersion(nil), versions[start:end]...)
+	next := ""
+	if end < len(versions) && len(items) > 0 {
+		next = strconv.FormatInt(int64(items[len(items)-1].VersionNumber), 10)
+	}
+	return items, next, nil
 }
 func (service *Service) ListWorkflows(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Workflow, string, error) {
 	p, err := service.principal(ctx, p)

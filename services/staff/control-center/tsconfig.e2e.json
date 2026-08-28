@@ -7,7 +7,9 @@
   },
   "include": [
     "playwright.config.ts",
+    "playwright.discovery.config.ts",
     "playwright.auth.config.ts",
+    "playwright.local.config.ts",
     "e2e/**/*.ts"
   ]
 }

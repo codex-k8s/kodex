@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
@@ -196,7 +197,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, err
 		}
 		snapshot := map[string]any{
-			"runRef": runRef, "nodeRef": nodeRef, "sessionRef": sessionRef,
+			"runRef": runRef, "projectRef": projectRef, "nodeRef": nodeRef, "sessionRef": sessionRef,
 			"turnRef": turnRef, "attempt": attempt, "task": task,
 			"agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey,
 			"runtimeRevision": runtimeRevision, "runtimeProvider": provider,
@@ -260,11 +261,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			firstProjectID, firstProjectRef, firstRunRef = projectID, projectRef, runRef
 		}
 	}
-	resourceRef := firstRunRef
-	if resourceRef == "" {
-		resourceRef = payload.WorkloadInstance
-	}
-	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: resourceRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED"}, nil
+	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: firstRunRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED"}, nil
 }
 
 func jsonUnmarshal(raw []byte, target any) error { return json.Unmarshal(raw, target) }
@@ -274,10 +271,10 @@ func (repository *Repository) lease(ctx context.Context, tx pgx.Tx, scope scope,
 	if lock {
 		leaseQuery = queryRuntimeLeaseForUpdateSelectRuntimeLeasesOrganizationIdRef
 	}
-	var leaseID, runID, nodeID, rootRunID, projectID, projectRef, runRef, nodeRef, storedDigest, state string
+	var leaseID, runID, nodeID, rootRunID, projectID, projectRef, runRef, nodeRef, storedDigest, state, turnRef string
 	var generation int64
 	var expiresAt time.Time
-	err := tx.QueryRow(ctx, leaseQuery, scope.organizationID, payload.LeaseRef).Scan(&leaseID, &runID, &nodeID, &rootRunID, &projectID, &projectRef, &runRef, &nodeRef, &storedDigest, &generation, &state, &expiresAt)
+	err := tx.QueryRow(ctx, leaseQuery, scope.organizationID, payload.LeaseRef).Scan(&leaseID, &runID, &nodeID, &rootRunID, &projectID, &projectRef, &runRef, &nodeRef, &storedDigest, &generation, &state, &expiresAt, &turnRef)
 	if err != nil {
 		return nil, errs.ErrNotFound
 	}
@@ -285,7 +282,7 @@ func (repository *Repository) lease(ctx context.Context, tx pgx.Tx, scope scope,
 	if storedDigest != hex.EncodeToString(digest[:]) || generation != payload.Generation || state != "CLAIMED" || time.Now().After(expiresAt) {
 		return nil, errs.ErrForbidden
 	}
-	return map[string]any{"leaseID": leaseID, "runID": runID, "nodeID": nodeID, "rootRunID": rootRunID, "projectID": projectID, "projectRef": projectRef, "runRef": runRef, "nodeRef": nodeRef, "generation": generation}, nil
+	return map[string]any{"leaseID": leaseID, "runID": runID, "nodeID": nodeID, "rootRunID": rootRunID, "projectID": projectID, "projectRef": projectRef, "runRef": runRef, "nodeRef": nodeRef, "turnRef": turnRef, "generation": generation}, nil
 }
 
 func (repository *Repository) renewExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -335,12 +332,25 @@ func stringMap(values map[string]any, key string) string {
 
 func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.CompleteExecutionInput)
-	if !ok || payload.Success && payload.SafeErrorCode != "" || !payload.Success && !runtimeSafeErrorCode(payload.SafeErrorCode) {
+	if !ok || !payload.Usage.Valid() || payload.Success && payload.SafeErrorCode != "" || !payload.Success && !runtimeSafeErrorCode(payload.SafeErrorCode) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	lease, err := repository.lease(ctx, tx, scope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
 	if err != nil {
 		return commandOutcome{}, err
+	}
+	var lockedRootID string
+	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionLockRootRun, lease["rootRunID"]).Scan(&lockedRootID); err != nil || lockedRootID != stringMap(lease, "rootRunID") {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if len(payload.Artifacts) > 0 {
+		var allowed bool
+		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectAgentCapability, scope.organizationID, runtimecontract.ArtifactCapability, lease["nodeID"]).Scan(&allowed); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if !allowed {
+			return commandOutcome{}, errs.ErrForbidden
+		}
 	}
 	nodeState, runState := "SUCCEEDED", "RUNNING"
 	if !payload.Success {
@@ -398,6 +408,20 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			return commandOutcome{}, err
 		}
 		artifactRefs = append(artifactRefs, ref)
+	}
+	usage, err := json.Marshal(payload.Usage)
+	if err != nil {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	turnRef := stringMap(lease, "turnRef")
+	if turnRef == "" {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunUsage, lease["runID"], turnRef, usage); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRootUsage, lease["rootRunID"]); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateCurrentRunOutcome, lease["runID"], map[bool]string{true: "SUCCEEDED", false: "FAILED"}[payload.Success], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), ""); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -475,7 +499,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionFailRootRun, lease["rootRunID"], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), ""); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateFinishedAtVersion, lease["rootRunID"], "FAILED").Scan(&terminalRootNodeRef); err != nil {
+		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateFinishedAtVersion, lease["rootRunID"], "FAILED").Scan(&terminalRootNodeRef); err != nil && !directRootWithoutProcessNode(err, lease) {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	} else if !humanGateAfter {
@@ -488,7 +512,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunsStateResultSummaryFinishedAt, lease["rootRunID"], truncate(payload.ResultSummary, 4000)); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
-			if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateFinishedAtVersion, lease["rootRunID"], "SUCCEEDED").Scan(&terminalRootNodeRef); err != nil {
+			if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateFinishedAtVersion, lease["rootRunID"], "SUCCEEDED").Scan(&terminalRootNodeRef); err != nil && !directRootWithoutProcessNode(err, lease) {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
 		}
@@ -521,6 +545,32 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, err
 	}
 	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event, CreatedRefs: artifactRefs}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN_NODE", resourceRef: stringMap(lease, "nodeRef"), summary: "i18n:RUNTIME_EXECUTION_COMPLETED"}, nil
+}
+
+type storedRunUsage struct {
+	entity.TokenUsage
+	Turns map[string]entity.TokenUsage `json:"turns,omitempty"`
+}
+
+func decodeRunUsage(raw []byte) (entity.TokenUsage, error) {
+	var stored storedRunUsage
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&stored) != nil || decoder.Decode(&struct{}{}) != io.EOF || !stored.TokenUsage.Valid() {
+		return entity.TokenUsage{}, errs.ErrUnavailable
+	}
+	for ref, usage := range stored.Turns {
+		if ref == "" || !usage.Valid() {
+			return entity.TokenUsage{}, errs.ErrUnavailable
+		}
+	}
+	return stored.TokenUsage, nil
+}
+
+func directRootWithoutProcessNode(err error, lease map[string]any) bool {
+	return errors.Is(err, pgx.ErrNoRows) &&
+		stringMap(lease, "runID") != "" &&
+		stringMap(lease, "runID") == stringMap(lease, "rootRunID")
 }
 
 func nonEmptyResult(payload command.CompleteExecutionInput) string {

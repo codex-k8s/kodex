@@ -145,6 +145,7 @@ func ServeProviderBroker(ctx context.Context) error {
 			return errors.New("accept isolated Codex provider request")
 		}
 		if err := serveBrokerRequest(ctx, connection); err != nil {
+			log.Printf("Codex provider request failed: %v", err)
 			_ = connection.Close()
 			continue
 		}
@@ -205,6 +206,9 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	result, err := executeLocal(ctx, request.Input, request.Prompt, request.MCPProxyToken)
 	if err != nil {
 		return err
+	}
+	if result.Outcome != "SUCCEEDED" {
+		log.Printf("Codex provider turn completed with safe failure code: %s", result.FailureCode)
 	}
 	return json.NewEncoder(connection).Encode(brokerResponse{Result: result, OK: true})
 }

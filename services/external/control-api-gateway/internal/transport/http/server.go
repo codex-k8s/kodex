@@ -18,6 +18,7 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const maximumJSONBody = 1 << 20
@@ -242,8 +243,112 @@ func messageMap(message proto.Message) (map[string]any, error) {
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return nil, err
 	}
+	if err := normalizeProtoIntegers(value, message.ProtoReflect().Descriptor()); err != nil {
+		return nil, err
+	}
 	normalize(value)
 	return value, nil
+}
+
+const maximumSafeJSONInteger = int64(1<<53 - 1)
+
+func normalizeProtoIntegers(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
+	fields := descriptor.Fields()
+	for index := 0; index < fields.Len(); index++ {
+		field := fields.Get(index)
+		current, exists := value[field.JSONName()]
+		if !exists {
+			if field.IsList() {
+				value[field.JSONName()] = []any{}
+			} else if field.IsMap() {
+				value[field.JSONName()] = map[string]any{}
+			} else if descriptor.FullName() == "controlplane.v1.TokenUsage" && isProto64BitInteger(field.Kind()) {
+				// OpenAPI/AsyncAPI требуют полный TokenUsage даже до появления
+				// первого provider counter. Для остальных сообщений proto3 zero
+				// не материализуется: пустая строка может означать optional поле.
+				value[field.JSONName()] = float64(0)
+			}
+			continue
+		}
+		if field.IsList() {
+			items, ok := current.([]any)
+			if !ok {
+				return errors.New("public protobuf list shape is invalid")
+			}
+			for itemIndex := range items {
+				normalized, err := normalizeProtoField(items[itemIndex], field)
+				if err != nil {
+					return err
+				}
+				items[itemIndex] = normalized
+			}
+			continue
+		}
+		normalized, err := normalizeProtoField(current, field)
+		if err != nil {
+			return err
+		}
+		value[field.JSONName()] = normalized
+	}
+	return nil
+}
+
+func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, error) {
+	if field.IsMap() {
+		items, ok := value.(map[string]any)
+		if !ok {
+			return nil, errors.New("public protobuf map shape is invalid")
+		}
+		for key, item := range items {
+			normalized, err := normalizeProtoField(item, field.MapValue())
+			if err != nil {
+				return nil, err
+			}
+			items[key] = normalized
+		}
+		return items, nil
+	}
+	if field.Kind() == protoreflect.MessageKind || field.Kind() == protoreflect.GroupKind {
+		item, ok := value.(map[string]any)
+		if !ok {
+			return value, nil
+		}
+		return item, normalizeProtoIntegers(item, field.Message())
+	}
+	switch field.Kind() {
+	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+		text, ok := value.(string)
+		if !ok {
+			return nil, errors.New("public protobuf int64 shape is invalid")
+		}
+		parsed, err := strconv.ParseInt(text, 10, 64)
+		if err != nil || parsed < -maximumSafeJSONInteger || parsed > maximumSafeJSONInteger {
+			return nil, errors.New("public protobuf int64 exceeds JSON safe range")
+		}
+		return float64(parsed), nil
+	case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+		text, ok := value.(string)
+		if !ok {
+			return nil, errors.New("public protobuf uint64 shape is invalid")
+		}
+		parsed, err := strconv.ParseUint(text, 10, 64)
+		if err != nil || parsed > uint64(maximumSafeJSONInteger) {
+			return nil, errors.New("public protobuf uint64 exceeds JSON safe range")
+		}
+		return float64(parsed), nil
+	default:
+		return value, nil
+	}
+}
+
+func isProto64BitInteger(kind protoreflect.Kind) bool {
+	switch kind {
+	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind,
+		protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+		return true
+	default:
+		return false
+	}
 }
 
 // ProtoMap используется realtime transport для того же публичного enum и
@@ -389,13 +494,26 @@ func requiredCollectionKeys(value map[string]any) []string {
 }
 
 func target(value map[string]any) (string, any, bool) {
-	if ref, ok := value["agentRef"]; ok {
+	// RunTarget является закрытым oneof с двумя собственными scalar-полями.
+	// RunNode, WorkflowStep и grant тоже имеют agentRef, поэтому неизвестный
+	// ключ закрыто исключает такую map из target-нормализации.
+	for key := range value {
+		switch key {
+		case "agentRef", "workflowRef", "displayName", "targetVersion":
+		default:
+			return "", nil, false
+		}
+	}
+	agentRef, hasAgent := value["agentRef"]
+	workflowRef, hasWorkflow := value["workflowRef"]
+	if hasAgent == hasWorkflow {
+		return "", nil, false
+	}
+	if hasAgent {
+		ref := agentRef
 		return "AGENT", ref, true
 	}
-	if ref, ok := value["workflowRef"]; ok {
-		return "WORKFLOW", ref, true
-	}
-	return "", nil, false
+	return "WORKFLOW", workflowRef, true
 }
 
 func flattenWorkflow(value map[string]any) {

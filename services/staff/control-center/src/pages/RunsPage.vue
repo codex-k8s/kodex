@@ -4,6 +4,7 @@ import { useRoute } from "vue-router";
 import { usePlatformStore } from "@/features/platform/store";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
+import SafeSummary from "@/shared/ui/SafeSummary.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const platform = usePlatformStore();
 const route = useRoute();
@@ -83,13 +84,10 @@ onMounted(
           class="entity-row"
           ><div>
             <h3>{{ run.title }}</h3>
-            <p>
-              {{
-                run.currentActivity ??
-                run.resultSummary ??
-                run.target.displayName
-              }}
-            </p>
+            <SafeSummary
+              :content="run.currentActivity ?? run.resultSummary"
+              :fallback="run.target.displayName"
+            />
           </div>
           <StatusBadge :state="run.state" />
           <div class="run-meta">

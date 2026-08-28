@@ -53,6 +53,7 @@ type Agent struct {
 	Version                                                           int64
 	Capabilities, IntegrationGrantRefs, KnowledgeArtifactRefs         []string
 	DraftInstructions, PublishedInstructions                          *InstructionVersion
+	PublishedInstructionVersions                                      []InstructionVersion
 	CreatedAt, UpdatedAt                                              time.Time
 	NextActions                                                       []string
 }
@@ -92,6 +93,24 @@ type Workflow struct {
 
 type RunTarget struct{ Type, Ref, Name string }
 
+type TokenUsage struct {
+	TotalTokens           int64 `json:"total_tokens"`
+	InputTokens           int64 `json:"input_tokens"`
+	CachedInputTokens     int64 `json:"cached_input_tokens"`
+	CacheWriteInputTokens int64 `json:"cache_write_input_tokens"`
+	OutputTokens          int64 `json:"output_tokens"`
+	ReasoningOutputTokens int64 `json:"reasoning_output_tokens"`
+	ModelContextWindow    int64 `json:"model_context_window"`
+}
+
+func (usage TokenUsage) Valid() bool {
+	return usage.TotalTokens >= 0 && usage.InputTokens >= 0 && usage.CachedInputTokens >= 0 &&
+		usage.CacheWriteInputTokens >= 0 && usage.OutputTokens >= 0 && usage.ReasoningOutputTokens >= 0 &&
+		usage.ModelContextWindow >= 0 && usage.TotalTokens == usage.InputTokens+usage.OutputTokens &&
+		usage.CachedInputTokens <= usage.InputTokens && usage.CacheWriteInputTokens <= usage.InputTokens &&
+		usage.ReasoningOutputTokens <= usage.OutputTokens
+}
+
 type Run struct {
 	Ref, ProjectRef, SessionRef, RootRunRef, ParentRunRef, RetryOfRunRef string
 	Title, Task, State, Source, ResultSummary, SafeErrorCode             string
@@ -100,6 +119,7 @@ type Run struct {
 	Attempt                                                              int32
 	GraphRevision, EventSequence, Version                                int64
 	Input                                                                map[string]any
+	Usage                                                                TokenUsage
 	InputArtifactRefs, ArtifactRefs, GateRefs, NextActions               []string
 	Incidents                                                            []Incident
 	CreatedAt                                                            time.Time
@@ -121,6 +141,7 @@ type RunEdge struct{ Ref, RunRef, SourceNodeRef, TargetNodeRef, Type, Label stri
 type RunDelta struct {
 	Ref, State, ResultSummary, SafeErrorCode, SafeErrorMessage string
 	Version, GraphRevision, EventSequence                      int64
+	Usage                                                      TokenUsage
 	ArtifactRefs, GateRefs, NextActions                        []string
 	StartedAt, FinishedAt                                      *time.Time
 }

@@ -31,14 +31,16 @@ SELECT n.id::text,
            ELSE ''
        END,
        a.capabilities,
+       CASE WHEN 'platform.artifact.manage'=ANY(a.capabilities) THEN
        COALESCE((SELECT array_agg(knowledge_artifact.ref ORDER BY knowledge_binding.created_at)
                  FROM control_plane.artifact_bindings knowledge_binding
                  JOIN control_plane.artifacts knowledge_artifact ON knowledge_artifact.id=knowledge_binding.artifact_id
                  WHERE knowledge_binding.target_kind='KNOWLEDGE'
                    AND knowledge_binding.target_ref=a.ref
-                   AND knowledge_artifact.scan_state='CLEAN'),'{}'),
+                   AND knowledge_artifact.scan_state='CLEAN'),'{}')
+       ELSE '{}'::text[] END,
        r.input,
-       COALESCE((
+       CASE WHEN 'platform.artifact.manage'=ANY(a.capabilities) THEN COALESCE((
            SELECT jsonb_agg(jsonb_build_object(
                'ref', runtime_artifact.ref,
                'fileName', runtime_artifact.file_name,
@@ -65,7 +67,7 @@ SELECT n.id::text,
                    AND runtime_binding.target_ref = a.ref
                )
              )
-       ), '[]'::jsonb),
+       ), '[]'::jsonb) ELSE '[]'::jsonb END,
        n.attempt,
        COALESCE((
            SELECT max(lease.generation)
@@ -104,7 +106,8 @@ SELECT n.id::text,
              AND connection.state = 'CONNECTED'
            ), '[]'::jsonb),
            CASE
-               WHEN 'platform.run.delegate' <> ALL(a.capabilities) THEN '[]'::jsonb
+               WHEN a.system_key <> 'system-assistant'
+                AND 'platform.run.delegate' <> ALL(a.capabilities) THEN '[]'::jsonb
                ELSE COALESCE((
                    SELECT jsonb_agg(jsonb_build_object(
                        'ref', target.ref,

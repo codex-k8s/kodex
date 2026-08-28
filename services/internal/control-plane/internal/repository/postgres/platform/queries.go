@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ func (repository *Repository) GetBootstrapState(ctx context.Context, principal v
 	state.OrganizationRef = scope.organizationRef
 	state.Assistant = assistant
 	state.Actor = entity.User{Ref: scope.actorRef, DisplayName: scope.actorName, Active: true}
+	state.PlatformRole = scope.role
 	if !state.OnboardingCompleted && (scope.role == "OWNER" || scope.role == "ADMINISTRATOR") {
 		state.NextActions = []string{"COMPLETE_ONBOARDING"}
 	}
@@ -406,8 +408,13 @@ func (repository *Repository) ListAgents(ctx context.Context, principal value.Pr
 		result = append(result, item)
 	}
 	for index := range result {
-		_ = repository.attachInstructions(ctx, scope, &result[index])
-		_ = repository.attachAgentGrants(ctx, scope, &result[index])
+		if err := repository.attachInstructions(ctx, scope, &result[index]); err != nil {
+			return nil, "", errs.ErrUnavailable
+		}
+		result[index].NextActions = agentActions(result[index], canManageAgent(result[index].NextActions), canLaunchAgent(result[index].NextActions))
+		if err := repository.attachAgentGrants(ctx, scope, &result[index]); err != nil {
+			return nil, "", errs.ErrUnavailable
+		}
 	}
 	return result, "", rows.Err()
 }
@@ -429,8 +436,13 @@ func (repository *Repository) GetAgent(ctx context.Context, principal value.Prin
 	}
 	item.System = item.SystemKey != ""
 	item.NextActions = agentActions(item, canManage, canLaunch)
-	_ = repository.attachInstructions(ctx, scope, &item)
-	_ = repository.attachAgentGrants(ctx, scope, &item)
+	if err := repository.attachInstructions(ctx, scope, &item); err != nil {
+		return entity.Agent{}, errs.ErrUnavailable
+	}
+	item.NextActions = agentActions(item, canManage, canLaunch)
+	if err := repository.attachAgentGrants(ctx, scope, &item); err != nil {
+		return entity.Agent{}, errs.ErrUnavailable
+	}
 	return item, nil
 }
 
@@ -460,8 +472,25 @@ func agentActions(agent entity.Agent, canManage, canLaunch bool) []string {
 	}
 	if canManage {
 		actions = append(actions, "ARCHIVE")
+		switch {
+		case agent.DraftInstructions != nil && agent.DraftInstructions.State == "VALID":
+			actions = append(actions, "PUBLISH")
+		case agent.DraftInstructions != nil:
+			actions = append(actions, "VALIDATE")
+		}
+		if len(agent.PublishedInstructionVersions) > 1 {
+			actions = append(actions, "ROLLBACK")
+		}
 	}
 	return actions
+}
+
+func canManageAgent(actions []string) bool {
+	return slices.Contains(actions, "EDIT")
+}
+
+func canLaunchAgent(actions []string) bool {
+	return slices.Contains(actions, "LAUNCH")
 }
 
 func (repository *Repository) attachInstructions(ctx context.Context, scope scope, agent *entity.Agent) error {
@@ -480,7 +509,10 @@ func (repository *Repository) attachInstructions(ctx context.Context, scope scop
 		if item.State == "PUBLISHED" && agent.PublishedInstructions == nil {
 			copy := item
 			agent.PublishedInstructions = &copy
-		} else if item.State != "PUBLISHED" && agent.DraftInstructions == nil {
+		}
+		if item.State == "PUBLISHED" {
+			agent.PublishedInstructionVersions = append(agent.PublishedInstructionVersions, item)
+		} else if agent.DraftInstructions == nil {
 			copy := item
 			agent.DraftInstructions = &copy
 		}
@@ -566,8 +598,15 @@ func scanWorkflow(row rowScanner, actorScoped bool) (entity.Workflow, error) {
 
 func workflowActions(item entity.Workflow, canManage, canLaunch bool) []string {
 	actions := []string{"OPEN"}
-	if canManage && item.State != "ARCHIVED" {
-		actions = append(actions, "EDIT")
+	if canManage {
+		switch item.State {
+		case "DRAFT":
+			actions = append(actions, "EDIT", "VALIDATE", "ARCHIVE")
+		case "VALID":
+			actions = append(actions, "EDIT", "PUBLISH", "ARCHIVE")
+		case "PUBLISHED":
+			actions = append(actions, "EDIT", "ARCHIVE")
+		}
 	}
 	if canLaunch && item.State == "PUBLISHED" {
 		actions = append(actions, "LAUNCH")
@@ -609,9 +648,9 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 
 func scanRun(row rowScanner, actorScoped bool) (entity.Run, error) {
 	var item entity.Run
-	var input []byte
+	var input, usage []byte
 	var canCancel, canLaunch bool
-	destinations := []any{&item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputArtifactRefs, &item.ArtifactRefs, &item.GateRefs, &item.CreatedAt, &item.StartedAt, &item.FinishedAt}
+	destinations := []any{&item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputArtifactRefs, &item.ArtifactRefs, &item.GateRefs, &usage, &item.CreatedAt, &item.StartedAt, &item.FinishedAt}
 	if actorScoped {
 		destinations = append(destinations, &canCancel, &canLaunch)
 	} else {
@@ -623,7 +662,14 @@ func scanRun(row rowScanner, actorScoped bool) (entity.Run, error) {
 		}
 		return entity.Run{}, errs.ErrUnavailable
 	}
-	_ = json.Unmarshal(input, &item.Input)
+	if json.Unmarshal(input, &item.Input) != nil {
+		return entity.Run{}, errs.ErrUnavailable
+	}
+	decodedUsage, err := decodeRunUsage(usage)
+	if err != nil {
+		return entity.Run{}, err
+	}
+	item.Usage = decodedUsage
 	item.NextActions = runActions(item.State, canCancel, canLaunch)
 	return item, nil
 }

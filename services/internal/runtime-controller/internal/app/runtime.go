@@ -17,16 +17,16 @@ import (
 )
 
 type runtime struct {
-	control      *controlplaneclient.Client
-	manager      *workload.Manager
-	coordinator  *callback.Coordinator
-	config       Config
-	assistant    *serviceruntime.Readiness
-	logger       *slog.Logger
-	capacity     chan struct{}
-	warmMu       sync.RWMutex
-	warmRevision string
-	warmTicket   string
+	control           *controlplaneclient.Client
+	manager           *workload.Manager
+	coordinator       *callback.Coordinator
+	config            Config
+	assistant         *serviceruntime.Readiness
+	logger            *slog.Logger
+	capacity          chan struct{}
+	warmMu            sync.RWMutex
+	warmCompatibility string
+	warmTicket        string
 }
 
 func newRuntime(control *controlplaneclient.Client, manager *workload.Manager, coordinator *callback.Coordinator, config Config, assistant *serviceruntime.Readiness, logger *slog.Logger) *runtime {
@@ -37,9 +37,12 @@ func (runtime *runtime) Run(ctx context.Context) error {
 	if err := runtime.manager.CleanupStaleTurns(ctx); err != nil {
 		return err
 	}
-	_ = runtime.reconcileWarm(ctx)
-	poll := time.NewTicker(runtime.config.PollInterval)
+	if err := runtime.reconcileWarm(ctx); err != nil {
+		runtime.logger.WarnContext(ctx, "system assistant warm runtime reconciliation failed", "error", err)
+	}
+	poll := time.NewTimer(runtime.config.PollInterval)
 	defer poll.Stop()
+	idleBackoff := serviceruntime.NewIdleBackoff(runtime.config.PollInterval, 5*time.Second)
 	warm := time.NewTicker(runtime.config.InfrastructureCheckInterval)
 	defer warm.Stop()
 	claimDegraded := false
@@ -49,13 +52,15 @@ func (runtime *runtime) Run(ctx context.Context) error {
 			return ctx.Err()
 		case <-warm.C:
 			if err := runtime.reconcileWarm(ctx); err != nil {
+				runtime.logger.WarnContext(ctx, "system assistant warm runtime reconciliation failed", "error", err)
 				runtime.setAssistantUnavailable(ctx)
 			}
 		case <-poll.C:
 			if len(runtime.capacity) >= cap(runtime.capacity) {
+				poll.Reset(idleBackoff.Next(true))
 				continue
 			}
-			err := runtime.claim(ctx)
+			claimed, err := runtime.claim(ctx)
 			if err != nil && !errors.Is(err, context.Canceled) && !claimDegraded {
 				claimDegraded = true
 				runtime.logger.WarnContext(ctx, "runtime claim delivery degraded", "error_class", "control_plane")
@@ -63,6 +68,7 @@ func (runtime *runtime) Run(ctx context.Context) error {
 				claimDegraded = false
 				runtime.logger.InfoContext(ctx, "runtime claim delivery restored")
 			}
+			poll.Reset(idleBackoff.Next(err == nil && claimed > 0))
 		}
 	}
 }
@@ -78,6 +84,10 @@ func (runtime *runtime) reconcileWarm(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	compatibilityDigest, err := runtimecontract.WarmCompatibilityDigest(input)
+	if err != nil {
+		return err
+	}
 	ready, err := runtime.manager.EnsureWarm(request, input, providerBinding)
 	if err != nil {
 		return err
@@ -90,12 +100,12 @@ func (runtime *runtime) reconcileWarm(ctx context.Context) error {
 		return err
 	}
 	if ready {
-		ticket, ticketErr := runtime.manager.WarmTicket(request, input.RuntimeRevisionRef)
+		ticket, ticketErr := runtime.manager.WarmTicket(request, input.RuntimeRevisionRef, input.RuntimeRevisionDigest)
 		if ticketErr != nil {
 			return ticketErr
 		}
 		runtime.warmMu.Lock()
-		runtime.warmRevision = input.RuntimeRevisionDigest
+		runtime.warmCompatibility = compatibilityDigest
 		runtime.warmTicket = ticket
 		runtime.warmMu.Unlock()
 		if runtime.assistant.Set(true, "ready") {
@@ -120,19 +130,19 @@ func (runtime *runtime) setAssistantUnavailable(ctx context.Context) {
 	}
 }
 
-func (runtime *runtime) claim(ctx context.Context) error {
+func (runtime *runtime) claim(ctx context.Context) (int, error) {
 	limit := cap(runtime.capacity) - len(runtime.capacity)
 	if limit > 8 {
 		limit = 8
 	}
 	if limit < 1 {
-		return nil
+		return 0, nil
 	}
 	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
 	response, err := runtime.control.Runtime.ClaimExecution(request, &controlplanev1.ClaimExecutionRequest{WorkloadInstance: runtime.config.PodUID, Limit: int32(limit)})
 	cancel()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	for _, execution := range response.GetExecutions() {
 		input, providerBinding, buildErr := runtime.manager.BuildTurnInput(execution)
@@ -142,32 +152,35 @@ func (runtime *runtime) claim(ctx context.Context) error {
 		}
 		runtime.capacity <- struct{}{}
 		done := runtime.coordinator.Register(input)
+		warmExecution := false
 		if input.SystemAssistant {
 			runtime.warmMu.RLock()
-			warmRevision, warmTicket := runtime.warmRevision, runtime.warmTicket
+			warmCompatibility, warmTicket := runtime.warmCompatibility, runtime.warmTicket
 			runtime.warmMu.RUnlock()
-			if warmRevision != input.RuntimeRevisionDigest || warmTicket == "" {
-				<-runtime.capacity
-				runtime.failClaim(ctx, input, execution, "SYSTEM_ASSISTANT_RUNTIME_UNAVAILABLE")
-				continue
+			turnCompatibility, compatibilityErr := runtimecontract.WarmCompatibilityDigest(input)
+			if compatibilityErr == nil && warmCompatibility == turnCompatibility && warmTicket != "" {
+				if err := runtime.manager.RegisterWarmTurn(ctx, input, warmTicket); err != nil || runtime.coordinator.EnqueueWarm(input, turnCompatibility) != nil {
+					<-runtime.capacity
+					runtime.failClaim(ctx, input, execution, "SYSTEM_ASSISTANT_DISPATCH_FAILED")
+					continue
+				}
+				warmExecution = true
+				_ = runtime.reportWarm(ctx, input.RuntimeRevisionRef, controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_BUSY, "")
 			}
-			if err := runtime.manager.RegisterWarmTurn(ctx, input, warmTicket); err != nil || runtime.coordinator.EnqueueWarm(input) != nil {
-				<-runtime.capacity
-				runtime.failClaim(ctx, input, execution, "SYSTEM_ASSISTANT_DISPATCH_FAILED")
-				continue
-			}
-			_ = runtime.reportWarm(ctx, input.RuntimeRevisionRef, controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_BUSY, "")
-		} else if err := runtime.manager.EnsureTurn(ctx, input, providerBinding); err != nil {
-			<-runtime.capacity
-			runtime.failClaim(ctx, input, execution, "RUNTIME_MATERIALIZATION_FAILED")
-			continue
 		}
-		go runtime.track(ctx, input, done)
+		if !warmExecution {
+			if err := runtime.manager.EnsureTurn(ctx, input, providerBinding); err != nil {
+				<-runtime.capacity
+				runtime.failClaim(ctx, input, execution, "RUNTIME_MATERIALIZATION_FAILED")
+				continue
+			}
+		}
+		go runtime.track(ctx, input, done, warmExecution)
 	}
-	return nil
+	return len(response.GetExecutions()), nil
 }
 
-func (runtime *runtime) track(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}) {
+func (runtime *runtime) track(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}, warmExecution bool) {
 	defer func() { <-runtime.capacity }()
 	execution, cancel := context.WithTimeout(parent, runtime.config.ExecutionTimeout)
 	defer cancel()
@@ -179,7 +192,7 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 	for {
 		select {
 		case <-done:
-			if input.SystemAssistant {
+			if warmExecution {
 				_ = runtime.reportWarm(parent, input.RuntimeRevisionRef, controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_READY, "")
 			}
 			return
@@ -197,7 +210,7 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 			}
 		case <-inspect.C:
 			request, cancelRequest := context.WithTimeout(execution, runtime.config.RequestTimeout)
-			state, err := runtime.manager.TurnPodState(request, input)
+			state, err := runtime.manager.TurnPodState(request, input, warmExecution)
 			cancelRequest()
 			if err == nil && (state == "FAILED" || state == "SUCCEEDED" || state == "MISSING" || state == "CONFLICT") {
 				runtime.completeFailure(context.WithoutCancel(parent), input, "RUNTIME_WORKLOAD_EXITED")

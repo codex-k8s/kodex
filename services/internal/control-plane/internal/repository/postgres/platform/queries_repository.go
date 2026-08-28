@@ -61,6 +61,8 @@ var (
 	queryResolveVerifiedPrincipal string
 	//go:embed sql/proof_owner_lock_installation.sql
 	queryLockInstallationOwnerClaim string
+	//go:embed sql/proof_owner_resolve_claimed_subject.sql
+	queryResolveClaimedOwnerSubject string
 	//go:embed sql/proof_owner_find_subject.sql
 	queryFindInstallationOwnerSubject string
 	//go:embed sql/proof_owner_create_subject.sql

@@ -1,5 +1,28 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+export async function gotoWithRetry(
+  page: Page,
+  url: string,
+  options?: Parameters<Page["goto"]>[1],
+): Promise<void> {
+  const retryDelays = [0, 200, 600];
+  for (const [index, delay] of retryDelays.entries()) {
+    if (delay > 0) await page.waitForTimeout(delay);
+    try {
+      await page.goto(url, options);
+      return;
+    } catch (error) {
+      if (
+        index === retryDelays.length - 1 ||
+        !(error instanceof Error) ||
+        !error.message.includes("net::ERR_NETWORK_CHANGED")
+      ) {
+        throw error;
+      }
+    }
+  }
+}
+
 export function routeRef(page: Page, segment: string): string {
   const parts = new URL(page.url()).pathname.split("/").filter(Boolean);
   const index = parts.indexOf(segment);
@@ -27,6 +50,14 @@ export async function expectRunState(
   await expect(runStatus(page)).toHaveText(state, { timeout });
 }
 
+export async function waitForConnected(
+  page: Page,
+  timeout = 30_000,
+): Promise<void> {
+  const connection = page.locator('.connection-badge[data-state="CONNECTED"]');
+  await expect(connection).toBeVisible({ timeout });
+}
+
 export async function createAgent(
   page: Page,
   projectRef: string,
@@ -37,7 +68,7 @@ export async function createAgent(
     instructions: string;
   },
 ): Promise<string> {
-  await page.goto(`/projects/${projectRef}/agents`);
+  await gotoWithRetry(page, `/projects/${projectRef}/agents`);
   await page.getByRole("button", { name: "Новый сотрудник" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Новый сотрудник" });
   await dialog.getByLabel("Название").fill(input.name);
@@ -49,24 +80,43 @@ export async function createAgent(
   return routeRef(page, "agents");
 }
 
-export async function publishAndPrepareAgent(page: Page): Promise<void> {
+export async function publishAgent(page: Page): Promise<void> {
   const validate = page.getByRole("button", { name: "Проверить инструкции" });
-  if (await validate.isEnabled()) await validate.click();
+  if ((await validate.count()) > 0) {
+    await expect(validate).toBeEnabled();
+    await validate.click();
+  }
 
   const publish = page.getByRole("button", { name: "Опубликовать инструкции" });
-  await expect(publish).toBeEnabled();
-  await publish.click();
+  if ((await publish.count()) > 0) {
+    await expect(publish).toBeEnabled();
+    await publish.click();
+  }
   await expect(
     page.locator(".panel").filter({ hasText: "Инструкции" }),
   ).toContainText("Опубликован");
+}
 
-  const environment = page.locator(".role-environment-panel");
-  const recommended = environment.getByRole("radio").first();
-  if (!(await recommended.isChecked())) await recommended.check();
-  await environment
-    .getByRole("button", { name: "Сохранить и подготовить окружение" })
-    .click();
-  await expect(environment).toContainText("Готово", { timeout: 600_000 });
+export async function ensureAgentCapability(
+  page: Page,
+  projectRef: string,
+  agentRef: string,
+  capabilityName: string | RegExp,
+): Promise<void> {
+  await gotoWithRetry(page, `/projects/${projectRef}/agents/${agentRef}`);
+  const capability = page.getByRole("checkbox", { name: capabilityName });
+  await expect(capability).toBeVisible();
+  if (!(await capability.isChecked())) {
+    const response = page.waitForResponse(
+      (candidate) =>
+        candidate.request().method() === "POST" &&
+        candidate.url().includes(`/api/v1/agents/${agentRef}/commands`),
+    );
+    await capability.check();
+    expect((await response).ok()).toBe(true);
+    await expect(page.getByText("Сохраняем возможность…")).toHaveCount(0);
+  }
+  await expect(capability).toBeChecked();
 }
 
 export async function launchAgent(page: Page, task: string): Promise<string> {
@@ -78,7 +128,21 @@ export async function launchAgent(page: Page, task: string): Promise<string> {
 }
 
 export async function waitForTerminalSuccess(page: Page): Promise<void> {
-  await expectRunState(page, "Завершён");
+  await page.waitForFunction(
+    () => {
+      const state = document
+        .querySelector(".page-header__actions .status-badge")
+        ?.getAttribute("data-state");
+      return ["SUCCEEDED", "FAILED", "CANCELLED"].includes(state ?? "");
+    },
+    undefined,
+    { timeout: 600_000 },
+  );
+  const state = await runStatus(page).getAttribute("data-state");
+  expect(
+    state,
+    `Run reached unexpected terminal state ${state ?? "UNKNOWN"}`,
+  ).toBe("SUCCEEDED");
 }
 
 export async function assertNoDuplicateGraphNodes(page: Page): Promise<void> {

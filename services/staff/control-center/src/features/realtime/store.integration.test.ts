@@ -101,6 +101,15 @@ function gapEvent(): RunEvent {
       state: "RUNNING",
       graphRevision: 3,
       lastEventSequence: 3,
+      usage: {
+        totalTokens: 0,
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        cacheWriteInputTokens: 0,
+        outputTokens: 0,
+        reasoningOutputTokens: 0,
+        modelContextWindow: 0,
+      },
       artifactRefs: [],
       gateRefs: [],
       nextActions: ["OPEN", "CANCEL"],
@@ -182,7 +191,7 @@ describe("realtime store", () => {
       event: gapEvent(),
     });
 
-    expect(first?.closeCode).toBe(1012);
+    expect(first?.closeCode).toBe(4000);
     expect(first?.closeReason).toBe("GAP_DETECTED");
     expect(store.state.run_realtime01).toMatchObject({
       state: "offline",
@@ -222,6 +231,45 @@ describe("realtime store", () => {
       problemCode: "PLATFORM_UNAVAILABLE",
       problemTitle: "Обновления платформы временно недоступны",
     });
+    store.closeAll();
+  });
+
+  it("восстанавливает platform stream после временного disconnect", async () => {
+    const store = useRealtimeStore();
+    store.openPlatform();
+    const first = FakeWebSocket.instances[0];
+
+    expect(store.platformState.state).toBe("connecting");
+    first?.open();
+    expect(store.platformState.state).toBe("recovering");
+    first?.message({
+      type: "PLATFORM_STREAM_READY",
+      latestSequence: 0,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(store.platformState).toMatchObject({ state: "live", attempt: 0 });
+
+    first?.close(1006, "CONNECTION_LOST");
+    expect(store.platformState).toMatchObject({ state: "offline", attempt: 1 });
+    reconnectCallbacks[0]?.();
+    const second = FakeWebSocket.instances[1];
+    expect(store.platformState).toMatchObject({
+      state: "connecting",
+      attempt: 1,
+    });
+    second?.open();
+    expect(store.platformState).toMatchObject({
+      state: "recovering",
+      attempt: 1,
+    });
+    second?.message({
+      type: "PLATFORM_STREAM_READY",
+      latestSequence: 0,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(store.platformState).toMatchObject({ state: "live", attempt: 0 });
     store.closeAll();
   });
 });

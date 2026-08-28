@@ -258,6 +258,33 @@ func (e AuditEventOutcome) Valid() bool {
 	}
 }
 
+// Defines values for BootstrapStatePlatformRole.
+const (
+	BootstrapStatePlatformRoleADMINISTRATOR BootstrapStatePlatformRole = "ADMINISTRATOR"
+	BootstrapStatePlatformRoleAUDITOR       BootstrapStatePlatformRole = "AUDITOR"
+	BootstrapStatePlatformRoleMEMBER        BootstrapStatePlatformRole = "MEMBER"
+	BootstrapStatePlatformRoleOPERATOR      BootstrapStatePlatformRole = "OPERATOR"
+	BootstrapStatePlatformRoleOWNER         BootstrapStatePlatformRole = "OWNER"
+)
+
+// Valid indicates whether the value is a known member of the BootstrapStatePlatformRole enum.
+func (e BootstrapStatePlatformRole) Valid() bool {
+	switch e {
+	case BootstrapStatePlatformRoleADMINISTRATOR:
+		return true
+	case BootstrapStatePlatformRoleAUDITOR:
+		return true
+	case BootstrapStatePlatformRoleMEMBER:
+		return true
+	case BootstrapStatePlatformRoleOPERATOR:
+		return true
+	case BootstrapStatePlatformRoleOWNER:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GateResolutionDecision.
 const (
 	GateResolutionDecisionAPPROVE        GateResolutionDecision = "APPROVE"
@@ -764,25 +791,25 @@ func (e PlatformMembershipChangeInputPlatformRole) Valid() bool {
 
 // Defines values for PlatformMembershipCreateInputPlatformRole.
 const (
-	ADMINISTRATOR PlatformMembershipCreateInputPlatformRole = "ADMINISTRATOR"
-	AUDITOR       PlatformMembershipCreateInputPlatformRole = "AUDITOR"
-	MEMBER        PlatformMembershipCreateInputPlatformRole = "MEMBER"
-	OPERATOR      PlatformMembershipCreateInputPlatformRole = "OPERATOR"
-	OWNER         PlatformMembershipCreateInputPlatformRole = "OWNER"
+	PlatformMembershipCreateInputPlatformRoleADMINISTRATOR PlatformMembershipCreateInputPlatformRole = "ADMINISTRATOR"
+	PlatformMembershipCreateInputPlatformRoleAUDITOR       PlatformMembershipCreateInputPlatformRole = "AUDITOR"
+	PlatformMembershipCreateInputPlatformRoleMEMBER        PlatformMembershipCreateInputPlatformRole = "MEMBER"
+	PlatformMembershipCreateInputPlatformRoleOPERATOR      PlatformMembershipCreateInputPlatformRole = "OPERATOR"
+	PlatformMembershipCreateInputPlatformRoleOWNER         PlatformMembershipCreateInputPlatformRole = "OWNER"
 )
 
 // Valid indicates whether the value is a known member of the PlatformMembershipCreateInputPlatformRole enum.
 func (e PlatformMembershipCreateInputPlatformRole) Valid() bool {
 	switch e {
-	case ADMINISTRATOR:
+	case PlatformMembershipCreateInputPlatformRoleADMINISTRATOR:
 		return true
-	case AUDITOR:
+	case PlatformMembershipCreateInputPlatformRoleAUDITOR:
 		return true
-	case MEMBER:
+	case PlatformMembershipCreateInputPlatformRoleMEMBER:
 		return true
-	case OPERATOR:
+	case PlatformMembershipCreateInputPlatformRoleOPERATOR:
 		return true
-	case OWNER:
+	case PlatformMembershipCreateInputPlatformRoleOWNER:
 		return true
 	default:
 		return false
@@ -2111,13 +2138,17 @@ type AuditEventOutcome string
 
 // BootstrapState defines model for BootstrapState.
 type BootstrapState struct {
-	Assistant          SystemAssistant `json:"assistant"`
-	CurrentUser        UserSummary     `json:"currentUser"`
-	Initialized        bool            `json:"initialized"`
-	NextActions        []NextAction    `json:"nextActions"`
-	OnboardingComplete bool            `json:"onboardingComplete"`
-	WebOnlyReady       bool            `json:"webOnlyReady"`
+	Assistant          SystemAssistant            `json:"assistant"`
+	CurrentUser        UserSummary                `json:"currentUser"`
+	Initialized        bool                       `json:"initialized"`
+	NextActions        []NextAction               `json:"nextActions"`
+	OnboardingComplete bool                       `json:"onboardingComplete"`
+	PlatformRole       BootstrapStatePlatformRole `json:"platformRole"`
+	WebOnlyReady       bool                       `json:"webOnlyReady"`
 }
+
+// BootstrapStatePlatformRole defines model for BootstrapState.PlatformRole.
+type BootstrapStatePlatformRole string
 
 // GateResolution defines model for GateResolution.
 type GateResolution struct {
@@ -2178,6 +2209,12 @@ type InstructionVersion struct {
 
 // InstructionVersionState defines model for InstructionVersion.State.
 type InstructionVersionState string
+
+// InstructionVersionPage defines model for InstructionVersionPage.
+type InstructionVersionPage struct {
+	Items         []InstructionVersion `json:"items"`
+	NextPageToken *string              `json:"nextPageToken,omitempty"`
+}
 
 // IntegrationCapability defines model for IntegrationCapability.
 type IntegrationCapability struct {
@@ -2553,13 +2590,16 @@ type RoleImageRecipeUpdateInput struct {
 
 // Run defines model for Run.
 type Run struct {
+	ArtifactRefs      []OpaqueRef  `json:"artifactRefs"`
 	Attempt           int          `json:"attempt"`
 	CreatedAt         Timestamp    `json:"createdAt"`
 	CurrentActivity   *string      `json:"currentActivity,omitempty"`
 	FinishedAt        *Timestamp   `json:"finishedAt,omitempty"`
+	GateRefs          []OpaqueRef  `json:"gateRefs"`
 	GraphRevision     int64        `json:"graphRevision"`
 	Incidents         *[]Incident  `json:"incidents,omitempty"`
 	Initiator         UserSummary  `json:"initiator"`
+	InputArtifactRefs []OpaqueRef  `json:"inputArtifactRefs"`
 	InputSummary      *string      `json:"inputSummary,omitempty"`
 	LastEventSequence int64        `json:"lastEventSequence"`
 	NextActions       []NextAction `json:"nextActions"`
@@ -2577,6 +2617,7 @@ type Run struct {
 	State             RunState     `json:"state"`
 	Target            RunTarget    `json:"target"`
 	Title             string       `json:"title"`
+	Usage             TokenUsage   `json:"usage"`
 	Version           int64        `json:"version"`
 }
 
@@ -2609,6 +2650,7 @@ type RunDelta struct {
 	SafeErrorMessage  *string       `json:"safeErrorMessage,omitempty"`
 	StartedAt         *Timestamp    `json:"startedAt,omitempty"`
 	State             RunDeltaState `json:"state"`
+	Usage             TokenUsage    `json:"usage"`
 	Version           int64         `json:"version"`
 }
 
@@ -2876,6 +2918,17 @@ type SystemAssistantSystem bool
 // Timestamp defines model for Timestamp.
 type Timestamp = time.Time
 
+// TokenUsage defines model for TokenUsage.
+type TokenUsage struct {
+	CacheWriteInputTokens int64 `json:"cacheWriteInputTokens"`
+	CachedInputTokens     int64 `json:"cachedInputTokens"`
+	InputTokens           int64 `json:"inputTokens"`
+	ModelContextWindow    int64 `json:"modelContextWindow"`
+	OutputTokens          int64 `json:"outputTokens"`
+	ReasoningOutputTokens int64 `json:"reasoningOutputTokens"`
+	TotalTokens           int64 `json:"totalTokens"`
+}
+
 // TurnInput defines model for TurnInput.
 type TurnInput struct {
 	ArtifactRefs *[]OpaqueRef `json:"artifactRefs,omitempty"`
@@ -3027,9 +3080,6 @@ type IdempotencyKey = string
 // IfMatch defines model for IfMatch.
 type IfMatch = string
 
-// IfMatchOptional defines model for IfMatchOptional.
-type IfMatchOptional = string
-
 // MembershipRef defines model for MembershipRef.
 type MembershipRef = OpaqueRef
 
@@ -3139,9 +3189,15 @@ type CreateInstructionDraftJSONBody struct {
 
 // CreateInstructionDraftParams defines parameters for CreateInstructionDraft.
 type CreateInstructionDraftParams struct {
-	IfMatch        *IfMatchOptional `json:"If-Match,omitempty"`
-	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
-	XCSRFToken     CsrfToken        `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListAgentInstructionVersionsParams defines parameters for ListAgentInstructionVersions.
+type ListAgentInstructionVersionsParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ChangeArtifactBindingParams defines parameters for ChangeArtifactBinding.
@@ -3617,6 +3673,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/agents/{agentRef}/instruction-drafts)
 	CreateInstructionDraft(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params CreateInstructionDraftParams)
+
+	// (GET /api/v1/agents/{agentRef}/instruction-versions)
+	ListAgentInstructionVersions(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params ListAgentInstructionVersionsParams)
 
 	// (GET /api/v1/artifacts/{artifactRef})
 	GetArtifact(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef)
@@ -4619,23 +4678,27 @@ func (siw *ServerInterfaceWrapper) CreateInstructionDraft(w http.ResponseWriter,
 
 	headers := r.Header
 
-	// ------------- Optional header parameter "If-Match" -------------
+	// ------------- Required header parameter "If-Match" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatchOptional
+		var IfMatch IfMatch
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
 			return
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
 		if err != nil {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
 			return
 		}
 
-		params.IfMatch = &IfMatch
+		params.IfMatch = IfMatch
 
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
 	}
 
 	// ------------- Required header parameter "Idempotency-Key" -------------
@@ -4686,6 +4749,67 @@ func (siw *ServerInterfaceWrapper) CreateInstructionDraft(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateInstructionDraft(w, r, agentRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAgentInstructionVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListAgentInstructionVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAgentInstructionVersionsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgentInstructionVersions(w, r, agentRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9311,6 +9435,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/commands", wrapper.CommandAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-commands", wrapper.CommandAgentInstructions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-drafts", wrapper.CreateInstructionDraft)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-versions", wrapper.ListAgentInstructionVersions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}", wrapper.GetArtifact)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/bindings", wrapper.ChangeArtifactBinding)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/content", wrapper.DownloadArtifact)

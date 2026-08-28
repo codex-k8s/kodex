@@ -151,24 +151,43 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 	}
 	if result.Outcome != "SUCCEEDED" {
 		_, message, _ := codex.TerminalPresentation(result.FailureCode)
-		return completeFailureWithSummary(ctx, input, client, result.FailureCode, message)
+		return completeFailureWithSummaryAndUsage(ctx, input, client, result.FailureCode, message, result.Usage)
 	}
 	if strings.TrimSpace(result.FinalMessage) == "" || len(result.FinalMessage) > 1<<20 || !utf8.ValidString(result.FinalMessage) {
 		return completeFailure(ctx, input, client, "RUNTIME_RESULT_INVALID")
 	}
-	artifacts, err := collectArtifacts(input, result.FinalMessage)
+	artifacts, err := completionArtifacts(input, result.FinalMessage)
 	if err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_ARTIFACT_INVALID")
 	}
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: result.FinalMessage, Artifacts: artifacts}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts}
 	return client.Complete(ctx, input, payload)
+}
+
+func completionArtifacts(input model.Input, finalMessage string) ([]runtimecontract.RunnerArtifact, error) {
+	if input.SystemAssistant || !hasCapability(input, runtimecontract.ArtifactCapability) {
+		return nil, nil
+	}
+	return collectArtifacts(input, finalMessage)
+}
+
+func hasCapability(input model.Input, expected string) bool {
+	for _, capability := range input.Capabilities {
+		if capability == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func completeFailure(ctx context.Context, input model.Input, client *callback.Client, code string) error {
 	return completeFailureWithSummary(ctx, input, client, code, "i18n:"+code)
 }
 func completeFailureWithSummary(ctx context.Context, input model.Input, client *callback.Client, code, summary string) error {
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code)}
+	return completeFailureWithSummaryAndUsage(ctx, input, client, code, summary, runtimecontract.TokenUsage{})
+}
+func completeFailureWithSummaryAndUsage(ctx context.Context, input model.Input, client *callback.Client, code, summary string, usage runtimecontract.TokenUsage) error {
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: usage}
 	if err := client.Complete(context.WithoutCancel(ctx), input, payload); err != nil {
 		return err
 	}
@@ -183,11 +202,17 @@ func safeFailureCode(code string) string {
 		return "PROVIDER_RATE_LIMITED"
 	case "server_overloaded", "RUNTIME_PROVIDER_UNAVAILABLE":
 		return "PROVIDER_UNAVAILABLE"
+	case "provider_internal_error", "provider_transport_failure":
+		return "PROVIDER_UNAVAILABLE"
 	case "cyber_policy", "policy_denied":
+		return "PROVIDER_REQUEST_REJECTED"
+	case "provider_bad_request", "provider_sandbox_error":
 		return "PROVIDER_REQUEST_REJECTED"
 	case "invalid_configuration", "stale_grant", "RUNTIME_CONFIGURATION_STALE":
 		return "RUNTIME_PROFILE_UNSUPPORTED"
-	case "provider_error_info_invalid", "provider_interrupted", "RUNTIME_RESULT_INVALID", "RUNTIME_ARTIFACT_INVALID":
+	case "context_window_exceeded", "session_budget_exceeded", "thread_rollback_failed", "active_turn_not_steerable":
+		return "RUNTIME_PROFILE_UNSUPPORTED"
+	case "provider_error_info_invalid", "provider_interrupted", "provider_other_error", "RUNTIME_RESULT_INVALID", "RUNTIME_ARTIFACT_INVALID":
 		return "PROVIDER_RESPONSE_INVALID"
 	case "RUNTIME_INPUT_INVALID", "RUNTIME_WORKSPACE_INVALID":
 		return "RUNTIME_INPUT_INVALID"
@@ -197,7 +222,7 @@ func safeFailureCode(code string) string {
 }
 
 func materializeWorkspace(input model.Input) error {
-	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", "input"} {
+	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input"} {
 		if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
 			return err
 		}
@@ -243,18 +268,23 @@ func buildPrompt(input model.Input) ([]byte, error) {
 		builder.Write(raw)
 		builder.WriteString("\n```\n")
 	}
-	if len(input.InputArtifacts) != 0 {
-		builder.WriteString("\n# Input files\n")
-		for index, artifact := range input.InputArtifacts {
-			builder.WriteString("\n- `")
-			builder.WriteString(artifactWorkspacePath(index, artifact))
-			builder.WriteString("` — ")
-			builder.WriteString(fmt.Sprintf("%q", artifact.FileName))
-			builder.WriteString(" (")
-			builder.WriteString(artifact.MediaType)
-			builder.WriteString(")")
+	if hasCapability(input, runtimecontract.ArtifactCapability) {
+		builder.WriteString("\n# File access\n")
+		if len(input.InputArtifacts) != 0 {
+			builder.WriteString("\nInput files are read-only at the paths listed below:\n")
+			for index, artifact := range input.InputArtifacts {
+				builder.WriteString("\n- `/workspace/")
+				builder.WriteString(filepath.ToSlash(artifactWorkspacePath(index, artifact)))
+				builder.WriteString("` — ")
+				builder.WriteString(fmt.Sprintf("%q", artifact.FileName))
+				builder.WriteString(" (")
+				builder.WriteString(artifact.MediaType)
+				builder.WriteString(")")
+			}
+			builder.WriteString("\n")
 		}
-		builder.WriteString("\n")
+		builder.WriteString("\nWrite every output file directly to `/workspace/.kodex/outbox/<safe-name>`. ")
+		builder.WriteString("The workspace root and all other paths are read-only; do not write output files to `/workspace` itself.\n")
 	}
 	result := []byte(builder.String())
 	if len(result) == 0 || len(result) > 1<<20 || !utf8.Valid(result) {

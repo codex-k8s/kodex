@@ -69,6 +69,8 @@ var (
 	queryCommandsChangeinstructionsSelectAgentsOrganizationIdRef string
 	//go:embed sql/commands_changeinstructions_select_next_draft_version.sql
 	queryCommandsChangeinstructionsSelectNextDraftVersion string
+	//go:embed sql/commands_changeinstructions_update_current_draft.sql
+	queryCommandsChangeinstructionsUpdateCurrentDraft string
 	//go:embed sql/commands_changeinstructions_insert_draft_version.sql
 	queryCommandsChangeinstructionsInsertDraftVersion string
 	//go:embed sql/commands_changeinstructions_select_current_draft.sql

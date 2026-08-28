@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { useRealtimeStore } from "@/features/realtime/store";
 import type {
   Run,
   WorkflowInputField,
@@ -14,6 +15,7 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
 const platform = usePlatformStore();
+const realtime = useRealtimeStore();
 const route = useRoute();
 const router = useRouter();
 const { locale } = useI18n();
@@ -21,6 +23,9 @@ const projectRef = computed(() => String(route.params.projectRef));
 const project = computed(() => platform.projects[projectRef.value]);
 const canLaunch = computed(() =>
   project.value?.nextActions.includes("CREATE_RUN"),
+);
+const canSubmit = computed(
+  () => Boolean(canLaunch.value) && realtime.platformState.state === "live",
 );
 const busy = ref(false);
 const problem = ref<AppProblem>();
@@ -64,6 +69,28 @@ const selectedWorkflow = computed(() =>
     ? platform.workflows[form.targetRef]
     : undefined,
 );
+const artifactCapability = "platform.artifact.manage";
+const targetSupportsFiles = computed(() => {
+  if (form.targetType === "AGENT") {
+    return platform.agents[form.targetRef]?.capabilities.some(
+      (capability) => capability.key === artifactCapability,
+    );
+  }
+  const refs = new Set<string>();
+  if (selectedWorkflow.value?.coordinatorAgentRef)
+    refs.add(selectedWorkflow.value.coordinatorAgentRef);
+  for (const step of selectedWorkflow.value?.steps ?? []) {
+    if (step.agentRef) refs.add(step.agentRef);
+  }
+  return (
+    refs.size > 0 &&
+    [...refs].every((ref) =>
+      platform.agents[ref]?.capabilities.some(
+        (capability) => capability.key === artifactCapability,
+      ),
+    )
+  );
+});
 const availableArtifacts = computed(() =>
   Object.values(platform.artifacts)
     .filter(
@@ -131,7 +158,7 @@ function workflowInput(): Record<string, string | number | boolean> {
 }
 
 async function submit(): Promise<void> {
-  if (!canLaunch.value || busy.value || !selectedTarget.value) return;
+  if (!canSubmit.value || busy.value || !selectedTarget.value) return;
   if (sessionMode.value === "CONTINUE" && !form.sessionRef) return;
   busy.value = true;
   problem.value = undefined;
@@ -324,7 +351,13 @@ onMounted(() => void load());
           <section class="panel">
             <header class="section-heading">
               <h2>{{ $t("runs.inputFiles") }}</h2>
-              <p>{{ $t("runs.inputFilesHint") }}</p>
+              <p>
+                {{
+                  selectedTarget && !targetSupportsFiles
+                    ? $t("runs.filesCapabilityRequired")
+                    : $t("runs.inputFilesHint")
+                }}
+              </p>
             </header>
             <div v-if="availableArtifacts.length" class="file-options">
               <label
@@ -337,8 +370,9 @@ onMounted(() => void load());
                   type="checkbox"
                   :value="artifact.ref"
                   :disabled="
-                    selectedArtifacts.length >= 50 &&
-                    !selectedArtifacts.includes(artifact.ref)
+                    !targetSupportsFiles ||
+                    (selectedArtifacts.length >= 50 &&
+                      !selectedArtifacts.includes(artifact.ref))
                   "
                 />
                 <span>
@@ -429,7 +463,7 @@ onMounted(() => void load());
           <button
             class="button button--primary button--large"
             type="submit"
-            :disabled="busy || !selectedTarget"
+            :disabled="busy || !selectedTarget || !canSubmit"
           >
             {{ busy ? $t("common.loading") : $t("common.launch") }}
           </button>

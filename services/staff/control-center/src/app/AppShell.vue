@@ -1,5 +1,22 @@
 <script setup lang="ts">
 import {
+  Activity,
+  Bot,
+  Clock3,
+  FileStack,
+  FolderKanban,
+  Gauge,
+  Home,
+  KeyRound,
+  Menu,
+  PlugZap,
+  Search,
+  Settings,
+  Sparkles,
+  UsersRound,
+  Workflow,
+} from "@lucide/vue";
+import {
   computed,
   nextTick,
   onBeforeUnmount,
@@ -21,6 +38,7 @@ import {
   type SupportedLocale,
 } from "@/shared/locale";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import CurrentUserSummary from "@/shared/ui/CurrentUserSummary.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -46,6 +64,13 @@ const project = computed(() =>
 const pendingCount = computed(
   () => platform.gateList.filter((item) => item.state === "OPEN").length,
 );
+const connectionState = computed(() => {
+  if (!online.value || realtime.platformState.state === "offline")
+    return "DEGRADED";
+  if (realtime.platformState.state === "live") return "CONNECTED";
+  if (realtime.platformState.state === "recovering") return "RECOVERING";
+  return "CONNECTING";
+});
 const breadcrumbs = computed(() => {
   const agentRef =
     typeof route.params.agentRef === "string"
@@ -99,44 +124,78 @@ const breadcrumbs = computed(() => {
 });
 
 const globalLinks = computed(() => [
-  { name: "home", label: t("nav.home"), path: "/" },
-  { name: "projects", label: t("nav.projects"), path: "/projects" },
-  { name: "runs", label: t("nav.runs"), path: "/runs" },
+  { name: "home", label: t("nav.home"), path: "/", icon: Home },
+  {
+    name: "projects",
+    label: t("nav.projects"),
+    path: "/projects",
+    icon: FolderKanban,
+  },
+  { name: "runs", label: t("nav.runs"), path: "/runs", icon: Activity },
   {
     name: "decisions",
     label: t("nav.decisions"),
     path: "/decisions",
     count: pendingCount.value,
+    icon: KeyRound,
   },
-  { name: "integrations", label: t("nav.integrations"), path: "/integrations" },
   {
-    name: "administration",
-    label: t("nav.administration"),
-    path: "/administration",
+    name: "integrations",
+    label: t("nav.integrations"),
+    path: "/integrations",
+    icon: PlugZap,
   },
 ]);
+const administrationLink = computed(() => ({
+  label: t("nav.administration"),
+  path: "/administration",
+  icon: Settings,
+}));
 const projectLinks = computed(() => {
   if (!projectRef.value) return [];
   const prefix = `/projects/${encodeURIComponent(projectRef.value)}`;
   return [
-    { name: "project", label: t("nav.overview"), path: prefix },
-    { name: "agents", label: t("nav.agents"), path: `${prefix}/agents` },
+    {
+      name: "project",
+      label: t("nav.overview"),
+      path: prefix,
+      icon: Gauge,
+    },
+    {
+      name: "agents",
+      label: t("nav.agents"),
+      path: `${prefix}/agents`,
+      icon: Bot,
+    },
     {
       name: "workflows",
       label: t("nav.workflows"),
       path: `${prefix}/workflows`,
+      icon: Workflow,
     },
-    { name: "project-runs", label: t("nav.runs"), path: `${prefix}/runs` },
-    { name: "files", label: t("nav.files"), path: `${prefix}/files` },
+    {
+      name: "project-runs",
+      label: t("nav.runs"),
+      path: `${prefix}/runs`,
+      icon: Activity,
+    },
+    {
+      name: "files",
+      label: t("nav.files"),
+      path: `${prefix}/files`,
+      icon: FileStack,
+    },
     {
       name: "automations",
       label: t("nav.automations"),
       path: `${prefix}/automations`,
+      icon: Clock3,
     },
     {
       name: "project-access",
       label: t("nav.members"),
       path: `${prefix}/members`,
+      icon: UsersRound,
     },
   ];
 });
@@ -154,7 +213,6 @@ async function submitSearch(): Promise<void> {
   }
   searchOpen.value = true;
   mobileOpen.value = false;
-  mobileSearchOpen.value = false;
   await platform.search(search.value);
 }
 
@@ -181,8 +239,7 @@ function searchResultPath(result: {
   return `/projects/${project}/${resource}/${encodeURIComponent(result.ref)}`;
 }
 
-function changeLocale(event: Event): void {
-  const value = (event.target as HTMLSelectElement).value as SupportedLocale;
+function changeLocale(value: SupportedLocale): void {
   persistLocale(value);
   locale.value = value;
 }
@@ -206,7 +263,6 @@ watch(
     closeSearch();
   },
 );
-
 onMounted(() => {
   locale.value = currentLocale();
   document.documentElement.lang = locale.value;
@@ -230,7 +286,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" @keydown.esc="mobileOpen = false">
     <a class="skip-link" href="#main-content">{{
       $t("common.skipToContent")
     }}</a>
@@ -240,16 +296,37 @@ onBeforeUnmount(() => {
         type="button"
         :aria-label="$t('app.menu')"
         :aria-expanded="mobileOpen"
+        aria-controls="primary-navigation"
         @click="mobileOpen = !mobileOpen"
       >
-        ☰
+        <Menu :size="20" aria-hidden="true" />
       </button>
       <RouterLink class="brand" to="/" aria-label="Kodex">
         <span class="brand-mark" aria-hidden="true">
-          <img src="/logo.png" alt="" />
-        </span
+          <img src="/logo.png" alt="" /> </span
         ><span>Kodex</span>
       </RouterLink>
+      <div class="topbar-project-switcher desktop-only">
+        <label class="sr-only" for="topbar-project-switcher">{{
+          $t("app.project")
+        }}</label>
+        <FolderKanban :size="17" aria-hidden="true" />
+        <select
+          id="topbar-project-switcher"
+          :value="projectRef ?? ''"
+          :title="project?.name ?? $t('app.chooseProject')"
+          @change="changeProject"
+        >
+          <option value="">{{ $t("app.chooseProject") }}</option>
+          <option
+            v-for="item in platform.projectList"
+            :key="item.ref"
+            :value="item.ref"
+          >
+            {{ item.name }}
+          </option>
+        </select>
+      </div>
       <form
         class="global-search"
         :class="{ 'global-search--open': mobileSearchOpen }"
@@ -274,7 +351,7 @@ onBeforeUnmount(() => {
         :aria-expanded="mobileSearchOpen"
         @click="openMobileSearch"
       >
-        ⌕
+        <Search :size="19" aria-hidden="true" />
       </button>
       <section
         v-if="searchOpen"
@@ -327,28 +404,24 @@ onBeforeUnmount(() => {
         </div>
       </section>
       <RouterLink class="decision-link" to="/decisions">
-        {{ $t("nav.decisions")
-        }}<span v-if="pendingCount" class="count-badge">{{
-          pendingCount
-        }}</span>
+        <KeyRound :size="17" aria-hidden="true" />
+        <span class="decision-link__label">{{ $t("nav.decisions") }}</span>
+        <span v-if="pendingCount" class="count-badge">{{ pendingCount }}</span>
       </RouterLink>
-      <select
-        class="locale-select"
-        :value="locale"
-        :aria-label="$t('common.language')"
-        @change="changeLocale"
-      >
-        <option value="ru">RU</option>
-        <option value="en">EN</option>
-      </select>
-      <button
-        v-if="session.canLogout"
-        class="button button--ghost desktop-only"
-        type="button"
-        @click="session.logout"
-      >
-        {{ $t("auth.logout") }}
-      </button>
+      <StatusBadge
+        class="connection-badge"
+        :state="connectionState"
+        aria-live="polite"
+      />
+      <CurrentUserSummary
+        v-if="platform.bootstrap"
+        :user="platform.bootstrap.currentUser"
+        :platform-role="platform.bootstrap.platformRole"
+        :locale="locale as SupportedLocale"
+        :can-logout="session.canLogout"
+        @change-locale="changeLocale"
+        @logout="session.logout"
+      />
     </header>
 
     <div v-if="!online" class="offline-banner" role="status">
@@ -362,12 +435,25 @@ onBeforeUnmount(() => {
       {{ realtime.platformState.problemTitle }}
     </div>
 
-    <aside class="sidebar" :class="{ 'sidebar--open': mobileOpen }">
+    <button
+      v-if="mobileOpen"
+      class="sidebar-backdrop mobile-only"
+      type="button"
+      :aria-label="$t('common.close')"
+      @click="mobileOpen = false"
+    />
+    <aside
+      id="primary-navigation"
+      class="sidebar"
+      :class="{ 'sidebar--open': mobileOpen }"
+    >
       <RouterLink
         class="assistant-entry"
         :to="{ path: '/assistant', query: projectRef ? { projectRef } : {} }"
       >
-        <span class="assistant-entry__mark" aria-hidden="true">✦</span>
+        <span class="assistant-entry__mark" aria-hidden="true"
+          ><Sparkles :size="21"
+        /></span>
         <span
           ><strong>{{ $t("app.assistantShort") }}</strong
           ><small>{{ $t("assistant.system") }}</small></span
@@ -384,15 +470,18 @@ onBeforeUnmount(() => {
           :to="link.path"
           class="nav-link"
         >
-          <span>{{ link.label }}</span
+          <span class="nav-link__label"
+            ><component :is="link.icon" :size="17" aria-hidden="true" />
+            <span>{{ link.label }}</span></span
           ><span v-if="link.count" class="count-badge">{{ link.count }}</span>
         </RouterLink>
       </nav>
-      <div class="project-switcher">
-        <label for="project-switcher">{{ $t("app.project") }}</label>
+      <div class="project-switcher project-switcher--sidebar mobile-only">
+        <label for="sidebar-project-switcher">{{ $t("app.project") }}</label>
         <select
-          id="project-switcher"
+          id="sidebar-project-switcher"
           :value="projectRef ?? ''"
+          :title="project?.name ?? $t('app.chooseProject')"
           @change="changeProject"
         >
           <option value="">{{ $t("app.chooseProject") }}</option>
@@ -410,25 +499,47 @@ onBeforeUnmount(() => {
         class="project-nav"
         :aria-label="$t('app.projectNavigation')"
       >
-        <p>{{ project?.name ?? $t("app.project") }}</p>
+        <p :title="project?.name ?? $t('app.project')">
+          {{ project?.name ?? $t("app.project") }}
+        </p>
         <RouterLink
           v-for="link in projectLinks"
           :key="link.name"
           :to="link.path"
           class="nav-link nav-link--project"
-          >{{ link.label }}</RouterLink
+          ><span class="nav-link__label"
+            ><component :is="link.icon" :size="16" aria-hidden="true" />
+            <span>{{ link.label }}</span></span
+          ></RouterLink
         >
       </nav>
+      <div class="sidebar-footer">
+        <RouterLink
+          :to="administrationLink.path"
+          class="nav-link nav-link--administration"
+        >
+          <span class="nav-link__label"
+            ><component
+              :is="administrationLink.icon"
+              :size="17"
+              aria-hidden="true"
+            />
+            <span>{{ administrationLink.label }}</span></span
+          >
+        </RouterLink>
+      </div>
     </aside>
 
     <div id="main-content" class="app-content">
       <nav class="breadcrumbs" :aria-label="$t('app.breadcrumbs')">
         <ol>
           <li v-for="item in breadcrumbs" :key="`${item.path}:${item.label}`">
-            <RouterLink v-if="item.path" :to="item.path">{{
+            <RouterLink v-if="item.path" :to="item.path" :title="item.label">{{
               item.label
             }}</RouterLink>
-            <span v-else aria-current="page">{{ item.label }}</span>
+            <span v-else :title="item.label" aria-current="page">{{
+              item.label
+            }}</span>
           </li>
         </ol>
       </nav>
@@ -436,11 +547,31 @@ onBeforeUnmount(() => {
     </div>
 
     <nav class="mobile-tabs" :aria-label="$t('app.navigation')">
-      <RouterLink to="/">{{ $t("nav.home") }}</RouterLink>
-      <RouterLink to="/projects">{{ $t("nav.projects") }}</RouterLink>
-      <RouterLink to="/assistant">{{ $t("app.assistantShort") }}</RouterLink>
-      <RouterLink to="/runs">{{ $t("nav.runs") }}</RouterLink>
-      <RouterLink to="/decisions">{{ $t("nav.decisions") }}</RouterLink>
+      <RouterLink to="/"
+        ><Home :size="18" aria-hidden="true" /><span>{{
+          $t("nav.home")
+        }}</span></RouterLink
+      >
+      <RouterLink to="/projects"
+        ><FolderKanban :size="18" aria-hidden="true" /><span>{{
+          $t("nav.projects")
+        }}</span></RouterLink
+      >
+      <RouterLink to="/assistant"
+        ><Sparkles :size="18" aria-hidden="true" /><span>{{
+          $t("app.assistantShort")
+        }}</span></RouterLink
+      >
+      <RouterLink to="/runs"
+        ><Activity :size="18" aria-hidden="true" /><span>{{
+          $t("nav.runs")
+        }}</span></RouterLink
+      >
+      <RouterLink to="/decisions"
+        ><KeyRound :size="18" aria-hidden="true" /><span>{{
+          $t("nav.decisions")
+        }}</span></RouterLink
+      >
     </nav>
   </div>
 </template>

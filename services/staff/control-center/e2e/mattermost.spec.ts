@@ -14,8 +14,9 @@ import { expect, test } from "./fixtures";
 import {
   createAgent,
   expectRunState,
+  gotoWithRetry,
   launchAgent,
-  publishAndPrepareAgent,
+  publishAgent,
   routeRef,
   waitForTerminalSuccess,
 } from "./helpers";
@@ -55,7 +56,7 @@ test("необязательная Mattermost-доставка зеркалир�
     instructions:
       "Работай только с заданием, отвечай по-русски и создавай безопасный текстовый файл с итогом.",
   });
-  await publishAndPrepareAgent(page);
+  await publishAgent(page);
 
   await grantCapability(
     page,
@@ -79,7 +80,7 @@ test("необязательная Mattermost-доставка зеркалир�
     "Уведомления",
   );
 
-  await page.goto(`/projects/${projectRef}/agents/${agentRef}`);
+  await gotoWithRetry(page, `/projects/${projectRef}/agents/${agentRef}`);
   const runRef = await launchAgent(
     page,
     `Подготовь итог с точным заголовком «${runTitle}» и создай файл customer-result.txt.`,
@@ -113,7 +114,7 @@ test("необязательная Mattermost-доставка зеркалир�
 });
 
 async function createProject(page: Page): Promise<string> {
-  await page.goto("/projects");
+  await gotoWithRetry(page, "/projects");
   await page.getByRole("button", { name: "Новый Проект" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Новый Проект" });
   await dialog.getByLabel("Название").fill(projectName);
@@ -132,7 +133,7 @@ async function grantCapability(
   agent: string,
   capability: string,
 ): Promise<void> {
-  await page.goto("/integrations");
+  await gotoWithRetry(page, "/integrations");
   const card = page
     .locator(".connection-card")
     .filter({ hasText: connectionName });

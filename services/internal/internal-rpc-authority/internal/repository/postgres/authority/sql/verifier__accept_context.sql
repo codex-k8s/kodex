@@ -1,5 +1,23 @@
 -- name: verifier__accept_context :one
-WITH accepted_snapshot AS (
+WITH exact_snapshot AS MATERIALIZED (
+    SELECT true AS accepted
+    FROM internal_rpc_authority.authority_snapshot_watermarks AS current
+    WHERE current.target_workload_id = @target_workload_id
+      AND current.source_revision = @source_revision
+      AND current.source_digest_sha256 = @source_digest_sha256
+      AND current.key_set_revision = @key_set_revision
+      AND current.policy_revision = @policy_revision
+      AND current.signer_generation = @signer_generation
+      AND current.readback_attestation_receipt_id = @attestation_receipt_id
+      AND internal_rpc_authority.runtime_restore_fence_allows_work()
+      AND internal_rpc_authority.validate_snapshot_attestation_receipt(
+          @attestation_receipt_id,
+          @target_workload_id,
+          @source_revision,
+          @source_digest_sha256
+      )
+),
+advanced_snapshot AS (
     INSERT INTO internal_rpc_authority.authority_snapshot_watermarks (
         target_workload_id,
         source_revision,
@@ -19,7 +37,8 @@ WITH accepted_snapshot AS (
         @signer_generation,
         @attestation_receipt_id,
         clock_timestamp()
-    WHERE internal_rpc_authority.runtime_restore_fence_allows_work()
+    WHERE NOT EXISTS (SELECT 1 FROM exact_snapshot)
+      AND internal_rpc_authority.runtime_restore_fence_allows_work()
       AND internal_rpc_authority.validate_snapshot_attestation_receipt(
           @attestation_receipt_id,
           @target_workload_id,
@@ -113,7 +132,20 @@ WITH accepted_snapshot AS (
           )
           OR internal_rpc_authority.authority_snapshot_watermarks.source_digest_sha256 = EXCLUDED.source_digest_sha256
       )
-    RETURNING true
+      AND (
+          internal_rpc_authority.authority_snapshot_watermarks.source_revision < EXCLUDED.source_revision
+          OR internal_rpc_authority.authority_snapshot_watermarks.key_set_revision < EXCLUDED.key_set_revision
+          OR internal_rpc_authority.authority_snapshot_watermarks.policy_revision < EXCLUDED.policy_revision
+          OR internal_rpc_authority.authority_snapshot_watermarks.signer_generation < EXCLUDED.signer_generation
+          OR internal_rpc_authority.authority_snapshot_watermarks.readback_attestation_receipt_id
+              IS DISTINCT FROM EXCLUDED.readback_attestation_receipt_id
+      )
+    RETURNING true AS accepted
+),
+accepted_snapshot AS (
+    SELECT accepted FROM exact_snapshot
+    UNION ALL
+    SELECT accepted FROM advanced_snapshot
 ),
 reserved AS (
     INSERT INTO internal_rpc_authority.authority_replay_reservations (

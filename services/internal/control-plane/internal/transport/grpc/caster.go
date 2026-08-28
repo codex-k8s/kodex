@@ -11,6 +11,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+const maximumAssistantPlanOperationTitleRunes = 160
+
 func timestamp(value time.Time) *timestamppb.Timestamp {
 	if value.IsZero() {
 		return nil
@@ -117,6 +119,12 @@ func artifactSource(value string) controlplanev1.ArtifactSource {
 	raw := controlplanev1.ArtifactSource_value["ARTIFACT_SOURCE_"+value]
 	return controlplanev1.ArtifactSource(raw)
 }
+func scheduleState(enabled bool) controlplanev1.ScheduleState {
+	if enabled {
+		return controlplanev1.ScheduleState_SCHEDULE_STATE_ACTIVE
+	}
+	return controlplanev1.ScheduleState_SCHEDULE_STATE_PAUSED
+}
 func connectionState(value string) controlplanev1.ConnectionState {
 	if value == "TESTING" {
 		value = "CONNECTING"
@@ -207,8 +215,17 @@ func castRunTarget(value entity.RunTarget) *controlplanev1.RunTarget {
 	}
 	return target
 }
+func castTokenUsage(value entity.TokenUsage) *controlplanev1.TokenUsage {
+	return &controlplanev1.TokenUsage{TotalTokens: value.TotalTokens, InputTokens: value.InputTokens, CachedInputTokens: value.CachedInputTokens, CacheWriteInputTokens: value.CacheWriteInputTokens, OutputTokens: value.OutputTokens, ReasoningOutputTokens: value.ReasoningOutputTokens, ModelContextWindow: value.ModelContextWindow}
+}
+func usageFromProto(value *controlplanev1.TokenUsage) entity.TokenUsage {
+	if value == nil {
+		return entity.TokenUsage{}
+	}
+	return entity.TokenUsage{TotalTokens: value.GetTotalTokens(), InputTokens: value.GetInputTokens(), CachedInputTokens: value.GetCachedInputTokens(), CacheWriteInputTokens: value.GetCacheWriteInputTokens(), OutputTokens: value.GetOutputTokens(), ReasoningOutputTokens: value.GetReasoningOutputTokens(), ModelContextWindow: value.GetModelContextWindow()}
+}
 func castRun(value entity.Run) *controlplanev1.Run {
-	result := &controlplanev1.Run{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, SessionRef: value.SessionRef, RootRunRef: value.RootRunRef, ParentRunRef: value.ParentRunRef, RetryOfRunRef: value.RetryOfRunRef, Target: castRunTarget(value.Target), Title: value.Title, InputSummary: value.Task, State: runState(value.State), Source: runSource(value.Source), Initiator: &controlplanev1.UserSummary{DisplayName: value.InitiatorName}, Attempt: value.Attempt, GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, CreatedAt: timestamp(value.CreatedAt), StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
+	result := &controlplanev1.Run{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, SessionRef: value.SessionRef, RootRunRef: value.RootRunRef, ParentRunRef: value.ParentRunRef, RetryOfRunRef: value.RetryOfRunRef, Target: castRunTarget(value.Target), Title: value.Title, InputSummary: value.Task, State: runState(value.State), Source: runSource(value.Source), Initiator: &controlplanev1.UserSummary{DisplayName: value.InitiatorName}, Attempt: value.Attempt, GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, Usage: castTokenUsage(value.Usage), InputArtifactRefs: value.InputArtifactRefs, ArtifactRefs: value.ArtifactRefs, GateRefs: value.GateRefs, CreatedAt: timestamp(value.CreatedAt), StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
 	for _, incident := range value.Incidents {
 		result.Incidents = append(result.Incidents, castIncident(incident))
 	}
@@ -224,7 +241,7 @@ func castRunDelta(value *entity.RunDelta) *controlplanev1.RunDelta {
 	if value == nil {
 		return nil
 	}
-	return &controlplanev1.RunDelta{Ref: value.Ref, Version: value.Version, State: runState(value.State), GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, ArtifactRefs: value.ArtifactRefs, GateRefs: value.GateRefs, StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.RunDelta{Ref: value.Ref, Version: value.Version, State: runState(value.State), GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, Usage: castTokenUsage(value.Usage), ArtifactRefs: value.ArtifactRefs, GateRefs: value.GateRefs, StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
 }
 func castEvent(value entity.RunEvent) *controlplanev1.RunEvent {
 	event := &controlplanev1.RunEvent{Ref: value.Ref, RunRef: value.RunRef, Sequence: value.Sequence, Type: eventType(value.Type), NodeRef: value.NodeRef, EdgeRef: value.EdgeRef, GateRef: value.GateRef, ArtifactRef: value.ArtifactRef, Summary: value.Summary, Progress: value.Progress, RunState: runState(value.RunState), NodeState: nodeState(value.NodeState), OccurredAt: timestamp(value.OccurredAt), GraphRevision: value.GraphRevision, Run: castRunDelta(value.Delta.Run)}
@@ -266,12 +283,7 @@ func castArtifact(value entity.Artifact) *controlplanev1.Artifact {
 	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, SessionRef: value.SessionRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: artifactSource(value.Source), Revision: int32(value.Revision), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions), Digest: value.Digest}
 }
 func castSchedule(value entity.Schedule) *controlplanev1.Schedule {
-	state := "DISABLED"
-	if value.Enabled {
-		state = "ENABLED"
-	}
-	raw := controlplanev1.ScheduleState_value["SCHEDULE_STATE_"+state]
-	return &controlplanev1.Schedule{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Target: castRunTarget(value.Target), State: controlplanev1.ScheduleState(raw), Preset: value.Preset, CronExpression: value.CronExpression, Timezone: value.Timezone, Input: structure(value.Input), SessionPolicy: value.SessionPolicy, NotificationPolicy: value.NotificationPolicy, NextRunAt: optionalTimestamp(value.NextRunAt), NextActions: nextActions(value.NextActions), TimeOfDay: value.TimeOfDay, DayOfWeek: value.DayOfWeek}
+	return &controlplanev1.Schedule{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Target: castRunTarget(value.Target), State: scheduleState(value.Enabled), Preset: value.Preset, CronExpression: value.CronExpression, Timezone: value.Timezone, Input: structure(value.Input), SessionPolicy: value.SessionPolicy, NotificationPolicy: value.NotificationPolicy, NextRunAt: optionalTimestamp(value.NextRunAt), NextActions: nextActions(value.NextActions), TimeOfDay: value.TimeOfDay, DayOfWeek: value.DayOfWeek}
 }
 func castDefinition(value entity.IntegrationDefinition) *controlplanev1.IntegrationDefinition {
 	result := &controlplanev1.IntegrationDefinition{Key: value.Key, Name: value.Name, Description: value.Description, Category: value.Category, BuiltIn: true, Available: value.Enabled}
@@ -315,12 +327,39 @@ func castPlan(value *entity.AssistantPlan) *controlplanev1.AssistantPlan {
 	result := &controlplanev1.AssistantPlan{Ref: value.Ref, Version: value.Version, AuditSummary: value.Summary, Applied: value.State == "APPLIED"}
 	for _, operation := range value.Operations {
 		raw := controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+operation.Type]
-		result.Operations = append(result.Operations, &controlplanev1.AssistantPlanOperation{Ref: operation.Key, Type: controlplanev1.AssistantPlanOperation_Type(raw), Title: operation.Summary, Summary: operation.Summary, BoundedInput: structure(operation.Input), Permitted: true})
+		result.Operations = append(result.Operations, &controlplanev1.AssistantPlanOperation{Ref: operation.Key, Type: controlplanev1.AssistantPlanOperation_Type(raw), Title: assistantPlanOperationTitle(operation), Summary: operation.Summary, BoundedInput: structure(operation.Input), Permitted: true})
 	}
 	if value.State == "PROPOSED" {
 		result.NextActions = []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_APPLY_PLAN}
 	}
 	return result
+}
+
+func assistantPlanOperationTitle(operation entity.AssistantPlanOperation) string {
+	field := ""
+	switch operation.Type {
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_INTEGRATION_CONNECTION":
+		field = "name"
+	case "LAUNCH_RUN":
+		field = "title"
+	}
+
+	title := ""
+	if field != "" {
+		title, _ = operation.Input[field].(string)
+	}
+	if strings.TrimSpace(title) == "" {
+		title = operation.Summary
+	}
+	return boundedAssistantPlanOperationTitle(title)
+}
+
+func boundedAssistantPlanOperationTitle(value string) string {
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) <= maximumAssistantPlanOperationTitleRunes {
+		return string(runes)
+	}
+	return string(runes[:maximumAssistantPlanOperationTitleRunes-1]) + "…"
 }
 func castConversation(value entity.AssistantConversation) *controlplanev1.AssistantConversation {
 	result := &controlplanev1.AssistantConversation{Ref: value.Ref, Version: value.Version, Title: value.Title, ProjectRef: value.ProjectRef, UpdatedAt: timestamp(value.UpdatedAt)}
@@ -349,7 +388,7 @@ func castIncident(value entity.Incident) *controlplanev1.Incident {
 }
 
 func castBootstrap(value repository.BootstrapState) *controlplanev1.BootstrapState {
-	return &controlplanev1.BootstrapState{Initialized: value.Bootstrapped, OnboardingComplete: value.OnboardingCompleted, WebOnlyReady: value.Assistant.Ready, Assistant: castAssistant(value.Assistant), CurrentUser: castUser(value.Actor), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.BootstrapState{Initialized: value.Bootstrapped, OnboardingComplete: value.OnboardingCompleted, WebOnlyReady: value.Assistant.Ready, Assistant: castAssistant(value.Assistant), CurrentUser: castUser(value.Actor), PlatformRole: platformRole(value.PlatformRole), NextActions: nextActions(value.NextActions)}
 }
 
 func castOverview(value repository.Overview) *controlplanev1.Overview {

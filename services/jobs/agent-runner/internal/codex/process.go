@@ -91,6 +91,9 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err := state.bindThread(raw, input.Model, input.WorkspaceRoot, input.CodexApprovalPolicy); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
+	if err := state.captureUsageBaseline(); err != nil {
+		return Result{}, server.abort(ctx, state, err)
+	}
 	turnParams := map[string]any{"threadId": state.threadID, "cwd": input.WorkspaceRoot, "model": input.Model,
 		"approvalPolicy": input.CodexApprovalPolicy, "input": []map[string]any{{"type": "text", "text": string(prompt)}}}
 	raw, err = server.call(ctx, state, "turn/start", turnParams)
@@ -130,8 +133,7 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error) {
 	command := exec.Command("/usr/local/bin/codex", "app-server", "--strict-config", "--listen", "stdio://")
 	command.Dir = input.WorkspaceRoot
-	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + input.CodexHome,
-		"CODEX_HOME=" + input.CodexHome, "KODEX_MCP_PROXY_TOKEN=" + mcpProxyToken}
+	command.Env = appServerEnvironment(input, mcpProxyToken)
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
 	stdin, err := command.StdinPipe()
 	if err != nil {
@@ -162,6 +164,17 @@ func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error)
 	wait := make(chan error, 1)
 	go func() { wait <- command.Wait() }()
 	return &appServer{command: command, stdin: stdin, messages: messages, wait: wait, diagnostics: diagnostics}, nil
+}
+
+func appServerEnvironment(input model.Input, mcpProxyToken string) []string {
+	environment := []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + input.CodexHome,
+		"CODEX_HOME=" + input.CodexHome, "KODEX_MCP_PROXY_TOKEN=" + mcpProxyToken}
+	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"} {
+		if value, ok := os.LookupEnv(name); ok && value != "" {
+			environment = append(environment, name+"="+value)
+		}
+	}
+	return environment
 }
 
 func readAppServerMessages(reader io.Reader, events chan<- streamEvent) {
@@ -210,7 +223,9 @@ func (server *appServer) call(ctx context.Context, state *protocolState, method 
 					return nil, err
 				}
 			case messageRequest:
-				return nil, server.rejectRequest(event.message)
+				if err := server.handleRequest(state, event.message); err != nil {
+					return nil, err
+				}
 			case messageResponse, messageError:
 				responseID, err := numericRequestID(event.message.id)
 				if err != nil || responseID != id {
@@ -245,7 +260,9 @@ func (server *appServer) waitTerminal(ctx context.Context, state *protocolState)
 					return err
 				}
 			case messageRequest:
-				return server.rejectRequest(event.message)
+				if err := server.handleRequest(state, event.message); err != nil {
+					return err
+				}
 			default:
 				return errors.New("Codex app-server emitted an uncorrelated response")
 			}
@@ -264,7 +281,49 @@ func (server *appServer) rejectRequest(message wireMessage) error {
 	}
 	_ = server.write(map[string]any{"id": message.id, "error": map[string]any{
 		"code": int64(-32000), "message": "Server requests are not authorized in agent-runner"}})
-	return errors.New("Codex app-server requested authority that agent-runner does not hold")
+	return errors.New("Codex app-server requested authority that agent-runner does not hold: " + message.method)
+}
+
+func (server *appServer) handleRequest(state *protocolState, message wireMessage) error {
+	if message.method != "mcpServer/elicitation/request" {
+		return server.rejectRequest(message)
+	}
+	response, err := trustedMCPToolApproval(state, message.payload)
+	if err != nil {
+		return server.rejectRequest(message)
+	}
+	return server.write(map[string]any{"id": message.id, "result": response})
+}
+
+func trustedMCPToolApproval(state *protocolState, raw json.RawMessage) (map[string]any, error) {
+	var request struct {
+		ThreadID        string  `json:"threadId"`
+		TurnID          *string `json:"turnId"`
+		ServerName      string  `json:"serverName"`
+		Mode            string  `json:"mode"`
+		Message         string  `json:"message"`
+		RequestedSchema struct {
+			Type       string                     `json:"type"`
+			Properties map[string]json.RawMessage `json:"properties"`
+		} `json:"requestedSchema"`
+		Metadata map[string]json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(raw, &request); err != nil {
+		return nil, errors.New("decode MCP tool approval request")
+	}
+	if request.ThreadID != state.threadID || request.ServerName != "kodex" || request.Mode != "form" ||
+		request.Message == "" || len(request.Message) > 4096 || request.RequestedSchema.Type != "object" ||
+		request.RequestedSchema.Properties == nil || len(request.RequestedSchema.Properties) != 0 {
+		return nil, errors.New("MCP tool approval request is outside runtime authority")
+	}
+	if request.TurnID != nil && *request.TurnID != state.turnID {
+		return nil, errors.New("MCP tool approval turn does not match runtime authority")
+	}
+	var approvalKind string
+	if err := json.Unmarshal(request.Metadata["codex_approval_kind"], &approvalKind); err != nil || approvalKind != "mcp_tool_call" {
+		return nil, errors.New("MCP elicitation is not a tool approval")
+	}
+	return map[string]any{"action": "accept", "content": map[string]any{}}, nil
 }
 
 func (server *appServer) write(message any) error {
@@ -300,7 +359,9 @@ func (server *appServer) stop(state *protocolState) error {
 					return server.terminate(err)
 				}
 			} else if event.message.kind == messageRequest {
-				return server.terminate(server.rejectRequest(event.message))
+				if err := server.handleRequest(state, event.message); err != nil {
+					return server.terminate(err)
+				}
 			} else {
 				return server.terminate(errors.New("Codex app-server emitted a late response"))
 			}
@@ -482,7 +543,7 @@ func ReadCredential(path string) (string, error) {
 
 var suppressedNotificationMethods = []string{
 	"thread/status/changed", "skills/changed", "thread/name/updated", "thread/goal/updated", "thread/goal/cleared",
-	"thread/settings/updated", "thread/tokenUsage/updated", "hook/started", "hook/completed", "turn/diff/updated",
+	"thread/settings/updated", "hook/started", "hook/completed", "turn/diff/updated",
 	"turn/plan/updated", "item/autoApprovalReview/started", "item/autoApprovalReview/completed", "item/agentMessage/delta",
 	"item/plan/delta", "command/exec/outputDelta", "process/outputDelta", "process/exited",
 	"item/commandExecution/outputDelta", "item/commandExecution/terminalInteraction", "item/fileChange/outputDelta",

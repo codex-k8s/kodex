@@ -30,6 +30,7 @@ const ru = {
     projectNavigation: "Навигация Проекта",
     breadcrumbs: "Навигационная цепочка",
     menu: "Меню",
+    currentUser: "{name}, роль: {role}",
   },
   nav: {
     home: "Главная",
@@ -82,6 +83,8 @@ const ru = {
     name: "Название",
     purpose: "Назначение",
     status: "Состояние",
+    unknownStatus: "Статус недоступен",
+    structuredResult: "Структурированный результат",
     actions: "Действия",
     result: "Результат",
     details: "Подробнее",
@@ -188,6 +191,13 @@ const ru = {
     validate: "Проверить инструкции",
     publish: "Опубликовать инструкции",
     rollback: "Вернуть опубликованную версию",
+    history: "История публикаций",
+    historyHelp:
+      "Опубликованные версии неизменяемы; возврат создаёт новую версию.",
+    historyEmpty: "Опубликованных версий пока нет.",
+    revision: "Ревизия {revision}",
+    currentRevision: "Текущая",
+    rollbackConfirm: "Вернуть инструкции к ревизии {revision}?",
   },
   roleEnvironments: {
     title: "Рабочее окружение",
@@ -288,6 +298,8 @@ const ru = {
       "Набор полей задан опубликованной версией Процесса и проверяется сервером.",
     inputFiles: "Входные файлы",
     inputFilesHint: "Доступны только проверенные файлы из текущего Проекта.",
+    filesCapabilityRequired:
+      "Сначала выдайте всем выбранным ИИ-сотрудникам возможность «Файлы».",
     fileReady: "Проверен и готов",
     noInputFiles: "В Проекте пока нет проверенных файлов.",
     manageFiles: "Открыть файлы Проекта",
@@ -331,6 +343,15 @@ const ru = {
     finishedAt: "Завершение",
     nodeConversation: "Работа ИИ-сотрудника",
     noNodeActivity: "Сообщения появятся после начала работы этого узла.",
+    usage: {
+      title: "Использование токенов",
+      total: "Всего",
+      input: "Вход",
+      cached: "Из кэша",
+      output: "Выход",
+      reasoning: "Рассуждение",
+      contextWindow: "Контекст",
+    },
     source: {
       CONTROL_CENTER: "Control Center",
       SYSTEM_ASSISTANT: "Помощник Kodex",
@@ -406,6 +427,8 @@ const ru = {
     binding: "Доступ сотрудников",
     bindingHint:
       "Выберите сотрудников, которым этот проверенный файл будет доступен как источник знаний.",
+    agentFilesCapabilityRequired:
+      "Сначала выдайте сотруднику возможность «Файлы» в его карточке.",
     noAgents: "Сначала создайте ИИ-сотрудника в этом Проекте.",
   },
   automations: {
@@ -650,6 +673,7 @@ const ru = {
     VALID: "Проверен",
     INVALID: "Есть ошибки",
     PUBLISHED: "Опубликован",
+    APPLIED: "Применён",
     ARCHIVED: "Архивирован",
     ENABLED: "Включён",
     DISABLED: "Отключён",
@@ -693,9 +717,15 @@ const ru = {
     STAGING_PUSH: "Образ сохраняется для проверки",
     PROVENANCE: "Формируются доказательства сборки",
     COMPLETED: "Готово",
+    OUTCOME_SUCCEEDED: "Успешно",
+    OUTCOME_FAILED: "Неуспешно",
+    OUTCOME_CANCELLED: "Отменён",
+    OUTCOME_NEEDS_ATTENTION: "Требует внимания",
     DEAD_LETTER: "Требуется вмешательство",
   },
   errors: {
+    REALTIME_OFFLINE:
+      "Соединение с платформой восстанавливается. Изменения временно недоступны.",
     default: "Не удалось выполнить действие. Повторите попытку.",
     UNAUTHENTICATED: "Сессия завершена. Войдите снова.",
     FORBIDDEN: "У вас нет полномочий для этого действия.",
@@ -747,6 +777,7 @@ const en = {
     projectNavigation: "Project navigation",
     breadcrumbs: "Breadcrumbs",
     menu: "Menu",
+    currentUser: "{name}, role: {role}",
   },
   nav: {
     home: "Home",
@@ -800,6 +831,8 @@ const en = {
     name: "Name",
     purpose: "Purpose",
     status: "Status",
+    unknownStatus: "Status unavailable",
+    structuredResult: "Structured result",
     actions: "Actions",
     result: "Result",
     details: "Details",
@@ -911,6 +944,13 @@ const en = {
     validate: "Validate instructions",
     publish: "Publish instructions",
     rollback: "Restore published version",
+    history: "Publication history",
+    historyHelp:
+      "Published versions are immutable; rollback creates a new version.",
+    historyEmpty: "No published versions yet.",
+    revision: "Revision {revision}",
+    currentRevision: "Current",
+    rollbackConfirm: "Restore instructions from revision {revision}?",
   },
   roleEnvironments: {
     title: "Work environment",
@@ -1014,6 +1054,8 @@ const en = {
     inputFiles: "Input files",
     inputFilesHint:
       "Only validated files from the current Project are available.",
+    filesCapabilityRequired:
+      "Grant the Files capability to every selected AI employee first.",
     fileReady: "Validated and ready",
     noInputFiles: "This Project has no validated files yet.",
     manageFiles: "Open Project files",
@@ -1057,6 +1099,15 @@ const en = {
     finishedAt: "Finished",
     nodeConversation: "AI employee activity",
     noNodeActivity: "Messages will appear after this node starts working.",
+    usage: {
+      title: "Token usage",
+      total: "Total",
+      input: "Input",
+      cached: "Cached",
+      output: "Output",
+      reasoning: "Reasoning",
+      contextWindow: "Context",
+    },
     source: {
       CONTROL_CENTER: "Control Center",
       SYSTEM_ASSISTANT: "Kodex Assistant",
@@ -1133,6 +1184,8 @@ const en = {
     binding: "Employee access",
     bindingHint:
       "Choose the employees who can use this validated file as a knowledge source.",
+    agentFilesCapabilityRequired:
+      "Grant the Files capability in the employee card first.",
     noAgents: "Create an AI employee in this Project first.",
   },
   automations: {
@@ -1379,6 +1432,7 @@ const en = {
     VALID: "Valid",
     INVALID: "Invalid",
     PUBLISHED: "Published",
+    APPLIED: "Applied",
     ARCHIVED: "Archived",
     ENABLED: "Enabled",
     DISABLED: "Disabled",
@@ -1422,9 +1476,15 @@ const en = {
     STAGING_PUSH: "Storing image for verification",
     PROVENANCE: "Producing build evidence",
     COMPLETED: "Ready",
+    OUTCOME_SUCCEEDED: "Successful",
+    OUTCOME_FAILED: "Unsuccessful",
+    OUTCOME_CANCELLED: "Cancelled",
+    OUTCOME_NEEDS_ATTENTION: "Needs attention",
     DEAD_LETTER: "Needs intervention",
   },
   errors: {
+    REALTIME_OFFLINE:
+      "The platform connection is recovering. Changes are temporarily unavailable.",
     default: "The action could not be completed. Try again.",
     UNAUTHENTICATED: "Your session ended. Sign in again.",
     FORBIDDEN: "You do not have permission for this action.",

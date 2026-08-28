@@ -230,11 +230,7 @@ func (server *Server) CreateInstructionDraft(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	etag := ""
-	if p.IfMatch != nil {
-		etag = *p.IfMatch
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, etag)
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}

@@ -141,6 +141,7 @@ type CompleteExecutionInput struct {
 	LeaseRef, Fence, ResultSummary, SafeErrorCode string
 	Generation                                    int64
 	Success                                       bool
+	Usage                                         entity.TokenUsage
 	Artifacts                                     []CompletedArtifact
 }
 type CompletedArtifact struct {

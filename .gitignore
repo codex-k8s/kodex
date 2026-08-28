@@ -1,4 +1,6 @@
 /.idea/
 /.env
 /.kodex-env
+/.kodex-dev/
+/.kodex-dev-env
 /.kodex-material/

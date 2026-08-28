@@ -129,12 +129,11 @@ func monitorLocalReadiness(control *controlplaneclient.Client, readiness *servic
 
 func runScheduleLoop(control *controlplaneclient.Client, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
-		ticker := time.NewTicker(config.PollInterval)
-		defer ticker.Stop()
+		idleBackoff := serviceruntime.NewIdleBackoff(config.PollInterval, 5*time.Second)
 		degraded := false
 		for {
 			cycle, cancel := context.WithTimeout(ctx, config.RPCDeadline)
-			err := materializeDue(cycle, control, config)
+			processed, err := materializeDue(cycle, control, config)
 			cancel()
 			if err != nil && !degraded {
 				degraded = true
@@ -143,32 +142,38 @@ func runScheduleLoop(control *controlplaneclient.Client, logger *slog.Logger, co
 				degraded = false
 				logger.InfoContext(ctx, "schedule materialization restored")
 			}
+			timer := time.NewTimer(idleBackoff.Next(err == nil && processed > 0))
 			select {
 			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
 				return ctx.Err()
-			case <-ticker.C:
+			case <-timer.C:
 			}
 		}
 	}
 }
 
-func materializeDue(ctx context.Context, control *controlplaneclient.Client, config Config) error {
+func materializeDue(ctx context.Context, control *controlplaneclient.Client, config Config) (int, error) {
 	claimed, err := control.Runtime.ClaimDueSchedules(ctx, &controlplanev1.ClaimDueSchedulesRequest{WorkloadInstance: config.InstanceID, Limit: int32(config.DueLimit)})
 	if err != nil {
-		return err
+		return 0, err
 	}
+	processed := 0
 	for _, claim := range claimed.GetClaims() {
 		lease := claim.GetLease()
 		if claim.GetOccurrenceRef() == "" || lease == nil {
-			return errors.New("schedule claim is incomplete")
+			return processed, errors.New("schedule claim is incomplete")
 		}
 		_, err := control.Runtime.MaterializeScheduleOccurrence(ctx, &controlplanev1.MaterializeScheduleOccurrenceRequest{
 			Mutation:      &controlplanev1.MutationContext{IdempotencyKey: uuid.NewSHA1(uuid.NameSpaceOID, []byte(claim.GetOccurrenceRef()+"\x00materialize")).String()},
 			OccurrenceRef: claim.GetOccurrenceRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(),
 		})
 		if err != nil {
-			return err
+			return processed, err
 		}
+		processed++
 	}
-	return nil
+	return processed, nil
 }

@@ -299,7 +299,8 @@ if [[ "$mode" == apply ]]; then
     jq -r --arg username "$admin_username" '[.[] | select(.username == $username)] | length')
   if [[ "$admin_count" == 0 ]]; then
     admin_initial_password=$(read_initial_password admin-initial-password 'permanent administrator initial password')
-    keycloak_request create users -r master -s "username=$admin_username" -s enabled=true >/dev/null
+    keycloak_request create users -r master -s "username=$admin_username" -s enabled=true \
+      -s "firstName=$admin_username" -s lastName=Administrator -s 'requiredActions=[]' >/dev/null
     printf '%s\n%s\n%s\n' "$admin_client_id" "$admin_client_secret" "$admin_initial_password" |
       kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
         IFS= read -r client_id
@@ -316,6 +317,10 @@ if [[ "$mode" == apply ]]; then
   elif [[ "$admin_count" != 1 ]]; then
     fail 'Keycloak administrator identity is ambiguous'
   fi
+  keycloak_request update "users/$(keycloak_request get users -r master -q "username=$admin_username" |
+    jq -er --arg username "$admin_username" '.[] | select(.username == $username) | .id')" \
+    -r master -s enabled=true -s "firstName=$admin_username" -s lastName=Administrator \
+    -s 'requiredActions=[]' >/dev/null
   keycloak_request add-roles -r master --uusername "$admin_username" --rolename admin >/dev/null
 
   bootstrap_count=$(keycloak_request get users -r master -q "username=$bootstrap_admin_username" |
@@ -412,7 +417,8 @@ if [[ "$mode" == apply ]]; then
   if [[ "$owner_count" == 0 ]]; then
     owner_password=$(read_initial_password owner-initial-password 'owner initial password')
     keycloak_request create users -r "$realm" -s "username=$owner_username" -s enabled=true \
-      -s "email=$owner_email" -s emailVerified=true >/dev/null
+      -s "email=$owner_email" -s emailVerified=true -s "firstName=$owner_username" \
+      -s lastName=Owner -s 'requiredActions=[]' >/dev/null
     printf '%s\n%s\n%s\n' "$admin_client_id" "$admin_client_secret" "$owner_password" |
       kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
         IFS= read -r client_id
@@ -431,7 +437,8 @@ if [[ "$mode" == apply ]]; then
   fi
   keycloak_request update "users/$(keycloak_request get users -r "$realm" -q "username=$owner_username" |
     jq -er --arg username "$owner_username" '.[] | select(.username == $username) | .id')" \
-    -r "$realm" -s enabled=true -s "email=$owner_email" -s emailVerified=true >/dev/null
+    -r "$realm" -s enabled=true -s "email=$owner_email" -s emailVerified=true \
+    -s "firstName=$owner_username" -s lastName=Owner -s 'requiredActions=[]' >/dev/null
   keycloak_request add-roles -r "$realm" --uusername "$owner_username" \
     --rolename kodex-owner >/dev/null
 
@@ -468,7 +475,9 @@ jq -e --arg organization_id "$organization_id" '
 
 owner_id=$(keycloak_request get users -r "$realm" -q "username=$owner_username" |
   jq -er --arg username "$owner_username" '
-    [ .[] | select(.username == $username and .enabled == true) ] |
+    [ .[] | select(.username == $username and .enabled == true and
+      (.firstName | length) > 0 and (.lastName | length) > 0 and
+      ((.requiredActions // []) | length) == 0) ] |
     if length == 1 then .[0].id else error("owner identity readback failed") end
   ')
 keycloak_request get "users/$owner_id/role-mappings/realm" -r "$realm" |
@@ -480,7 +489,9 @@ readback_confidential_client kodex-headlamp-proxy "$headlamp_origin" "$headlamp_
 
 administrator_id=$(keycloak_request get users -r master -q "username=$admin_username" |
   jq -er --arg username "$admin_username" '
-    [.[] | select(.username == $username and .enabled == true)] |
+    [.[] | select(.username == $username and .enabled == true and
+      (.firstName | length) > 0 and (.lastName | length) > 0 and
+      ((.requiredActions // []) | length) == 0)] |
     if length == 1 then .[0].id else error("Keycloak administrator readback failed") end
   ')
 keycloak_request get "users/$administrator_id/role-mappings/realm" -r master |

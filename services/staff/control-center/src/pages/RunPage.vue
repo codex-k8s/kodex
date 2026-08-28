@@ -1,23 +1,31 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
+import {
+  authoritativeRunRefreshKey,
+  createRunRefreshScheduler,
+} from "@/features/platform/run-refresh";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import type {
   Artifact,
   OwnerGate,
+  RunEvent,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
-import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { AppProblem, asProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const platform = usePlatformStore();
 const realtime = useRealtimeStore();
 const route = useRoute();
 const router = useRouter();
+const translator = useI18n();
 const runRef = computed(() => String(route.params.runRef));
 const run = computed(() => platform.runs[runRef.value]);
 const graph = computed(
@@ -28,10 +36,119 @@ const graph = computed(
 const streamState = computed(
   () => realtime.state[graph.value?.runRef ?? runRef.value],
 );
-const eventList = computed(() =>
-  Object.values(
-    platform.events[graph.value?.runRef ?? runRef.value] ?? {},
-  ).sort((a, b) => b.sequence - a.sequence),
+const opaqueRefPattern =
+  /`?(?:agt|art|bld|cap|cnv|con|edg|evt|gat|inc|int|job|mbr|msg|nod|pln|prj|rev|rol|rti|run|sch|ses|trn|usr|wfl)_[A-Za-z0-9_-]{8,}`?/g;
+const technicalTokenPattern = /`?\b[A-Z][A-Z\d]*(?:_[A-Z\d]+)+\b`?/g;
+
+function safeRuntimeText(value?: string): string | undefined {
+  const source = value?.trim();
+  if (!source) return undefined;
+  if (source.startsWith("{") || source.startsWith("[")) {
+    try {
+      JSON.parse(source);
+      return undefined;
+    } catch {
+      // A user-facing sentence may legitimately start with a bracket.
+    }
+  }
+  const visible = source
+    .replace(/`?i18n:[A-Z\d_]+`?/g, "")
+    .replace(opaqueRefPattern, "")
+    .replace(technicalTokenPattern, "")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/([,.;:])\s*([,.;:])/g, "$1")
+    .replace(/^\s*[-–—:;,]+\s*|\s*[-–—:;,]+\s*$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return /[\p{L}\p{N}]/u.test(visible) ? visible : undefined;
+}
+
+const runSubtitle = computed(
+  () =>
+    safeRuntimeText(run.value?.currentActivity) ??
+    run.value?.target.displayName,
+);
+
+const presentedGraph = computed(() =>
+  graph.value
+    ? {
+        ...graph.value,
+        nodes: graph.value.nodes.map((node) => ({
+          ...node,
+          role:
+            safeRuntimeText(node.role) ??
+            translator.t(`runs.nodeTypes.${node.type}`),
+          inputSummary: safeRuntimeText(node.inputSummary),
+          progressSummary: safeRuntimeText(node.progressSummary),
+        })),
+        edges: graph.value.edges.map((edge) => ({
+          ...edge,
+          label: safeRuntimeText(edge.label) ?? "",
+        })),
+      }
+    : undefined,
+);
+
+function stateLabel(state?: string): string | undefined {
+  return state && translator.te(`states.${state}`)
+    ? translator.t(`states.${state}`)
+    : undefined;
+}
+
+function eventFallback(event: RunEvent): string {
+  switch (event.type) {
+    case "RUN_CREATED":
+    case "TURN_QUEUED":
+      return translator.t("runs.queued");
+    case "RUN_STATE_CHANGED":
+      return stateLabel(event.runState) ?? translator.t("runs.activity");
+    case "NODE_ADDED":
+      return event.node?.displayName ?? translator.t("runs.context");
+    case "NODE_STATE_CHANGED":
+      return (
+        stateLabel(event.nodeState) ??
+        event.node?.displayName ??
+        translator.t("runs.activity")
+      );
+    case "EDGE_ADDED":
+      return (
+        safeRuntimeText(event.edge?.label) ?? translator.t("runs.connections")
+      );
+    case "TURN_STARTED":
+    case "TURN_PROGRESS":
+      return translator.t("states.RUNNING");
+    case "TURN_COMPLETED":
+      return translator.t("states.SUCCEEDED");
+    case "DELEGATION_CREATED":
+      return translator.t("runs.source.AGENT_DELEGATION");
+    case "CALLBACK_DELIVERED":
+      return translator.t("runs.callback");
+    case "OWNER_GATE_OPENED":
+      return translator.t("states.WAITING_HUMAN");
+    case "OWNER_GATE_RESOLVED":
+      return stateLabel(event.gate?.state) ?? translator.t("runs.activity");
+    case "ARTIFACT_AVAILABLE":
+      return translator.t("runs.artifacts");
+    case "INCIDENT_LINKED":
+      return translator.t("runs.incidents");
+    default:
+      return translator.t("runs.activity");
+  }
+}
+
+type PresentedEvent = RunEvent & {
+  displaySummary: string;
+  displayProgress?: string;
+};
+
+const eventList = computed<PresentedEvent[]>(() =>
+  Object.values(platform.events[graph.value?.runRef ?? runRef.value] ?? {})
+    .sort((a, b) => a.sequence - b.sequence)
+    .map((event) => ({
+      ...event,
+      displaySummary: safeRuntimeText(event.summary) ?? eventFallback(event),
+      displayProgress: safeRuntimeText(event.progress),
+    })),
 );
 const gateList = computed(() =>
   Object.values(platform.gates).filter(
@@ -55,21 +172,94 @@ const selectedNode = computed(
 const selectedNodeEvents = computed(() =>
   eventList.value
     .filter((event) => event.nodeRef === selectedNode.value?.ref)
-    .slice(0, 20)
-    .reverse(),
+    .slice(-20),
+);
+const lifecycleState = computed(() => run.value?.state);
+const usageItems = computed(() => {
+  const usage = run.value?.usage;
+  if (!usage || (usage.totalTokens === 0 && usage.modelContextWindow === 0))
+    return [];
+  return [
+    ["total", usage.totalTokens],
+    ["input", usage.inputTokens],
+    ["cached", usage.cachedInputTokens],
+    ["output", usage.outputTokens],
+    ["reasoning", usage.reasoningOutputTokens],
+    ["contextWindow", usage.modelContextWindow],
+  ] as const;
+});
+function formatTokenCount(value: number): string {
+  return new Intl.NumberFormat(translator.locale.value).format(value);
+}
+
+const resultOutcomeState = computed(() => {
+  if (!run.value) return undefined;
+  if (run.value.state === "FAILED") return "OUTCOME_FAILED";
+  if (run.value.state === "CANCELLED") return "OUTCOME_CANCELLED";
+  if (
+    run.value.safeErrorCode ||
+    incidentList.value.some((incident) => incident.coreAffected)
+  )
+    return "OUTCOME_NEEDS_ATTENTION";
+  return run.value.state === "SUCCEEDED" ? "OUTCOME_SUCCEEDED" : undefined;
+});
+
+const selectedNodeRole = computed(() => {
+  const role = safeRuntimeText(selectedNode.value?.role);
+  return (
+    role ??
+    (selectedNode.value
+      ? translator.t(`runs.nodeTypes.${selectedNode.value.type}`)
+      : undefined)
+  );
+});
+const selectedNodeProgress = computed(() =>
+  safeRuntimeText(selectedNode.value?.progressSummary),
 );
 const turn = ref("");
 const comment = ref("");
 const busy = ref(false);
 const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
-async function load() {
-  await platform.loadRun(runRef.value);
-  if (run.value)
-    await Promise.all([
-      platform.loadGates(run.value.projectRef, run.value.rootRunRef),
-      platform.loadArtifacts(run.value.projectRef),
-    ]);
+const hasAuthoritativeSnapshot = computed(() =>
+  Boolean(run.value && graph.value),
+);
+const fatalLoadProblem = computed(() =>
+  hasAuthoritativeSnapshot.value ? undefined : platform.problems.run,
+);
+const refreshProblem = computed(() =>
+  hasAuthoritativeSnapshot.value
+    ? (platform.problems.run ??
+      platform.problems.gates ??
+      platform.problems.artifacts)
+    : undefined,
+);
+const refreshKey = computed(() => {
+  const rootRef = graph.value?.runRef ?? run.value?.rootRunRef ?? runRef.value;
+  return authoritativeRunRefreshKey(run.value, platform.events[rootRef] ?? {});
+});
+
+async function refreshAuthoritativeState(ref: string): Promise<void> {
+  await platform.loadRun(ref);
+  if (runRef.value !== ref) return;
+  if (platform.problems.run) throw platform.problems.run;
+  const snapshot = platform.runs[ref];
+  if (!snapshot) return;
+  await Promise.all([
+    platform.loadGates(snapshot.projectRef, snapshot.rootRunRef),
+    platform.loadArtifacts(snapshot.projectRef),
+  ]);
+  if (runRef.value !== ref) return;
+  const relatedProblem = platform.problems.gates ?? platform.problems.artifacts;
+  if (relatedProblem) throw relatedProblem;
+}
+const refreshScheduler = createRunRefreshScheduler(refreshAuthoritativeState, {
+  shouldRetry: (error) => error instanceof AppProblem && error.retryable,
+});
+let lastRefreshKey: string | undefined;
+
+async function load(ref = runRef.value): Promise<void> {
+  await refreshScheduler.request(ref);
 }
 async function command(action: "CANCEL" | "RETRY") {
   if (!run.value?.nextActions.includes(action)) return;
@@ -161,26 +351,43 @@ function openCurrentStream(): void {
   realtime.openRun(ref);
   openedStreamRef.value = ref;
 }
-watch(runRef, async (_next, previous) => {
+watch(refreshKey, (next) => {
+  if (!next || next === lastRefreshKey) return;
+  lastRefreshKey = next;
+  void refreshScheduler.request(runRef.value);
+});
+watch(runRef, async (next, previous) => {
+  refreshScheduler.cancel();
   if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
   else realtime.closeRun(previous);
-  await load();
-  openCurrentStream();
+  lastRefreshKey = undefined;
+  await load(next);
+  if (runRef.value === next) openCurrentStream();
 });
 onMounted(async () => {
-  await load();
-  openCurrentStream();
+  const initialRef = runRef.value;
+  await load(initialRef);
+  if (runRef.value === initialRef) openCurrentStream();
 });
 onBeforeUnmount(() => {
+  refreshScheduler.dispose();
   if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
 });
 </script>
 <template>
-  <PageFrame
-    :title="run?.title ?? $t('runs.title')"
-    :subtitle="run?.currentActivity ?? run?.target.displayName"
+  <PageFrame :title="run?.title ?? $t('runs.title')" :subtitle="runSubtitle"
     ><template #actions
-      ><StatusBadge v-if="run" :state="run.state" /><button
+      ><div v-if="run" class="run-statuses">
+        <span>
+          <small>{{ $t("common.status") }}</small>
+          <StatusBadge v-if="lifecycleState" :state="lifecycleState" />
+        </span>
+        <span v-if="resultOutcomeState">
+          <small>{{ $t("common.result") }}</small>
+          <StatusBadge :state="resultOutcomeState" />
+        </span>
+      </div>
+      <button
         v-if="run?.nextActions.includes('CANCEL')"
         class="button button--danger"
         type="button"
@@ -198,8 +405,8 @@ onBeforeUnmount(() => {
         {{ $t("runs.retry") }}
       </button></template
     ><AsyncState
-      :loading="platform.loading.run"
-      :problem="platform.problems.run"
+      :loading="platform.loading.run && !hasAuthoritativeSnapshot"
+      :problem="fatalLoadProblem"
       @retry="load"
       ><div v-if="run && graph" class="run-summary">
         <span>{{ run.target.displayName }}</span
@@ -224,6 +431,17 @@ onBeforeUnmount(() => {
       >
         {{ streamState.problemTitle }}
       </div>
+      <ProblemNotice v-if="refreshProblem" :problem="refreshProblem" compact />
+      <dl
+        v-if="usageItems.length"
+        class="token-usage"
+        :aria-label="$t('runs.usage.title')"
+      >
+        <div v-for="item in usageItems" :key="item[0]">
+          <dt>{{ $t(`runs.usage.${item[0]}`) }}</dt>
+          <dd>{{ formatTokenCount(item[1]) }}</dd>
+        </div>
+      </dl>
       <ProblemNotice v-if="problem" :problem="problem" compact />
       <section
         v-if="gateList.some((g) => g.state === 'OPEN')"
@@ -280,15 +498,15 @@ onBeforeUnmount(() => {
           </div>
         </article>
       </section>
-      <div v-if="run && graph" class="run-workspace">
+      <div v-if="run && presentedGraph" class="run-workspace">
         <section class="graph-panel">
           <div class="workspace-heading">
             <h2>{{ $t("runs.graph") }}</h2>
-            <span>{{ graph.nodes.length }}</span>
+            <span>{{ presentedGraph.nodes.length }}</span>
           </div>
           <RunGraphCanvas
-            :nodes="graph.nodes"
-            :edges="graph.edges"
+            :nodes="presentedGraph.nodes"
+            :edges="presentedGraph.edges"
             :selected-ref="selectedNode?.ref"
             @select="select"
           />
@@ -301,8 +519,11 @@ onBeforeUnmount(() => {
             <li v-for="event in eventList" :key="event.sequence">
               <span class="timeline__marker" aria-hidden="true" />
               <div>
-                <strong>{{ event.summary }}</strong>
-                <p v-if="event.progress">{{ event.progress }}</p>
+                <SafeMarkdown :content="event.displaySummary" />
+                <SafeMarkdown
+                  v-if="event.displayProgress"
+                  :content="event.displayProgress"
+                />
                 <small>{{
                   new Date(event.occurredAt).toLocaleTimeString()
                 }}</small>
@@ -320,8 +541,14 @@ onBeforeUnmount(() => {
           <template v-if="selectedNode"
             ><StatusBadge :state="selectedNode.state" />
             <h3>{{ selectedNode.displayName }}</h3>
-            <p>{{ selectedNode.inputSummary }}</p>
-            <p>{{ selectedNode.progressSummary }}</p>
+            <SafeMarkdown
+              v-if="selectedNode.inputSummary"
+              :content="selectedNode.inputSummary"
+            />
+            <SafeMarkdown
+              v-if="selectedNodeProgress"
+              :content="selectedNodeProgress"
+            />
             <ProblemNotice
               v-if="selectedNode.safeErrorCode"
               :problem="
@@ -339,7 +566,7 @@ onBeforeUnmount(() => {
                 <dt>
                   {{ $t("runs.attempt", { attempt: selectedNode.attempt }) }}
                 </dt>
-                <dd>{{ selectedNode.role }}</dd>
+                <dd>{{ selectedNodeRole }}</dd>
               </div>
             </dl>
             <div v-if="selectedNode.integrationNames?.length" class="chip-list">
@@ -350,7 +577,9 @@ onBeforeUnmount(() => {
             <dl class="node-relations">
               <div v-if="selectedNode.callbackSummary">
                 <dt>{{ $t("runs.callback") }}</dt>
-                <dd>{{ selectedNode.callbackSummary }}</dd>
+                <dd>
+                  <SafeMarkdown :content="selectedNode.callbackSummary" />
+                </dd>
               </div>
               <div v-if="selectedNode.artifactRefs.length">
                 <dt>{{ $t("runs.artifacts") }}</dt>
@@ -383,8 +612,11 @@ onBeforeUnmount(() => {
               <h3>{{ $t("runs.nodeConversation") }}</h3>
               <ol v-if="selectedNodeEvents.length">
                 <li v-for="event in selectedNodeEvents" :key="event.sequence">
-                  <span>{{ event.summary }}</span>
-                  <p v-if="event.progress">{{ event.progress }}</p>
+                  <SafeMarkdown :content="event.displaySummary" />
+                  <SafeMarkdown
+                    v-if="event.displayProgress"
+                    :content="event.displayProgress"
+                  />
                   <time :datetime="event.occurredAt">
                     {{ new Date(event.occurredAt).toLocaleTimeString() }}
                   </time>
@@ -396,6 +628,16 @@ onBeforeUnmount(() => {
         </aside>
       </div>
       <section v-if="run" class="run-bottom">
+        <article v-if="run.resultSummary" class="panel run-result">
+          <div class="workspace-heading">
+            <h2>{{ $t("common.result") }}</h2>
+            <StatusBadge
+              v-if="resultOutcomeState"
+              :state="resultOutcomeState"
+            />
+          </div>
+          <SafeMarkdown :content="run.resultSummary" />
+        </article>
         <article class="panel run-incidents" aria-live="polite">
           <h2>{{ $t("runs.incidents") }}</h2>
           <div v-if="incidentList.length" class="incident-list">
@@ -465,6 +707,43 @@ onBeforeUnmount(() => {
   margin: -10px 0 16px;
   color: var(--muted);
   font-size: 0.86rem;
+}
+.run-statuses,
+.run-statuses > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.run-statuses {
+  flex-wrap: wrap;
+}
+.run-statuses small {
+  color: var(--subtle);
+}
+.token-usage {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 1px;
+  margin: 0 0 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--border);
+}
+.token-usage > div {
+  min-width: 0;
+  padding: 9px 11px;
+  background: var(--surface);
+}
+.token-usage dt {
+  color: var(--subtle);
+  font-size: 0.74rem;
+}
+.token-usage dd {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  font-weight: 600;
 }
 .incident-list {
   display: grid;
@@ -582,6 +861,10 @@ onBeforeUnmount(() => {
 .timeline p {
   margin: 4px 0;
 }
+.timeline :deep(.safe-markdown > p),
+.node-conversation :deep(.safe-markdown > p) {
+  margin: 0;
+}
 .timeline small {
   color: var(--subtle);
 }
@@ -647,6 +930,9 @@ onBeforeUnmount(() => {
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   margin-top: 16px;
+}
+.run-result {
+  grid-column: 1 / -1;
 }
 .artifact-list {
   display: grid;

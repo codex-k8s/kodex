@@ -1,6 +1,6 @@
 import { loadE2EEnvironment } from "./environment";
 import { expect, test } from "./fixtures";
-import { routeRef } from "./helpers";
+import { gotoWithRetry, routeRef } from "./helpers";
 
 const environment = loadE2EEnvironment();
 const projectName = `${environment.resourcePrefix} — отдел продаж`;
@@ -8,11 +8,12 @@ const projectName = `${environment.resourcePrefix} — отдел продаж`;
 test("mobile shell, помощник и граф доступны без горизонтального переполнения", async ({
   page,
 }) => {
-  await page.goto("/projects");
+  await gotoWithRetry(page, "/projects");
 
   const project = page.getByRole("link", { name: new RegExp(projectName) });
   await expect(project).toBeVisible();
   await project.click();
+  await expect(page).toHaveURL(/\/projects\/[^/]+$/);
   const projectRef = routeRef(page, "projects");
 
   const menu = page.getByRole("button", { name: "Меню" });
@@ -34,13 +35,14 @@ test("mobile shell, помощник и граф доступны без гор�
     page.getByLabel("Опишите, что нужно настроить или запустить"),
   ).toBeVisible();
 
-  await page.goto(`/projects/${projectRef}/runs`);
+  await gotoWithRetry(page, `/projects/${projectRef}/runs`);
   const run = page.locator(".entity-row").first();
   await expect(run).toBeVisible();
   await run.click();
-  await expect(page.locator(".graph-mobile-list")).toBeVisible();
+  const graph = page.getByRole("tree", { name: "Связи графа" });
+  await expect(graph).toBeVisible();
   await expect(page.locator(".graph-viewport")).toBeHidden();
-  await expect(page.locator(".graph-mobile-node").first()).toBeVisible();
+  await expect(graph.getByRole("treeitem").first()).toBeVisible();
 
   const overflow = await page.evaluate(
     () =>

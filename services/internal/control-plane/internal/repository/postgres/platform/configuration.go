@@ -482,12 +482,6 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectSessionsId, sessionID).Scan(&turnNumber); err != nil {
 		return commandOutcome{}, fmt.Errorf("lock system assistant session: %w", errs.ErrUnavailable)
 	}
-	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandInsertSessionTurnsRefSessionIdActorKind, turnRef, scope.organizationID, sessionID, turnNumber, scope.actorRef, payload.Content, artifactRefs); err != nil {
-		return commandOutcome{}, fmt.Errorf("insert system assistant user turn: %w", errs.ErrUnavailable)
-	}
-	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
-		return commandOutcome{}, fmt.Errorf("advance system assistant session: %w", errs.ErrUnavailable)
-	}
 	runRef, _ := newRef("run")
 	var runID string
 	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertRunsRefProjectIdTargetType, runRef, scope.organizationID, projectID, sessionID, payload.Content, scope.actorID).Scan(&runID); err != nil {
@@ -496,17 +490,38 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateRunsRootRunIdStartedAt, runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("start system assistant root run: %w", errs.ErrUnavailable)
 	}
+	var turnID string
+	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertSessionTurnsRefSessionIdActorKind,
+		turnRef, scope.organizationID, sessionID, runID, turnNumber, scope.actorRef, payload.Content, artifactRefs,
+	).Scan(&turnID); err != nil {
+		return commandOutcome{}, fmt.Errorf("insert system assistant user turn: %w", errs.ErrUnavailable)
+	}
+	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
+		return commandOutcome{}, fmt.Errorf("advance system assistant session: %w", errs.ErrUnavailable)
+	}
 	nodeRef, _ := newRef("nod")
-	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandInsertRunNodesRefRootRunIdType, nodeRef, scope.organizationID, runID, truncate(payload.Content, 1000)); err != nil {
+	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandInsertRunNodesRefRootRunIdType, nodeRef, scope.organizationID, runID, turnID, truncate(payload.Content, 1000)); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert system assistant execution node: %w", errs.ErrUnavailable)
 	}
-	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateAssistantConversationsVersionUpdatedAt, conversationID); err != nil {
+	conversation := entity.AssistantConversation{
+		Ref: payload.ConversationRef, ProjectRef: projectRef, SessionRef: sessionRef,
+	}
+	if err := tx.QueryRow(
+		ctx,
+		queryConfigurationAddassistantturncommandUpdateAssistantConversationsVersionUpdatedAt,
+		conversationID,
+	).Scan(
+		&conversation.Title,
+		&conversation.State,
+		&conversation.Version,
+		&conversation.CreatedAt,
+		&conversation.UpdatedAt,
+	); err != nil {
 		return commandOutcome{}, fmt.Errorf("advance system assistant conversation: %w", errs.ErrUnavailable)
 	}
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, runID, runRef, "TURN_QUEUED", nodeRef, "", "", "", "i18n:ASSISTANT_TURN_QUEUED", "RUNNING", "QUEUED"); err != nil {
 		return commandOutcome{}, err
 	}
-	conversation := entity.AssistantConversation{Ref: payload.ConversationRef, ProjectRef: projectRef, SessionRef: sessionRef, State: "ACTIVE", Version: version + 1}
 	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, ArtifactRefs: artifactRefs, State: "COMPLETED", CreatedAt: time.Now().UTC()}}
 	assistant, err := repository.getAssistantTx(ctx, tx, scope)
 	if err != nil {
@@ -520,10 +535,10 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	if !ok || payload.PlanRef == "" || input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	var planID, conversationRef string
+	var planID, conversationRef, conversationProjectRef string
 	var raw []byte
 	var version int64
-	if err := tx.QueryRow(ctx, queryConfigurationApplyassistantplancommandSelectAssistantPlansOrganizationIdRefState, scope.organizationID, payload.PlanRef).Scan(&planID, &conversationRef, &raw, &version); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationApplyassistantplancommandSelectAssistantPlansOrganizationIdRefState, scope.organizationID, payload.PlanRef).Scan(&planID, &conversationRef, &raw, &version, &conversationProjectRef); err != nil {
 		return commandOutcome{}, errs.ErrConflict
 	}
 	if version != *input.Mutation.ExpectedVersion {
@@ -535,7 +550,12 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	}
 	created := []string{}
 	var projectID, projectRef string
-	for _, operation := range operations {
+	for index, operation := range operations {
+		operation, err := bindAssistantOperationProject(operation, conversationProjectRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		operations[index] = operation
 		planned, err := assistantOperationCommand(operation)
 		if err != nil {
 			return commandOutcome{}, err

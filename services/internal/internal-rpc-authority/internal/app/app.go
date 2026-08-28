@@ -312,12 +312,13 @@ func Run(
 		_ context.Context,
 		method string,
 		code codes.Code,
-		_ error,
+		err error,
 	) {
 		logger.Error(
 			"unexpected gRPC failure",
 			"method", normalizedMethod(mode, method),
 			"code", code.String(),
+			"grpc_message", status.Convert(err).Message(),
 		)
 	})
 	grpcRuntime := grpc.NewServer(

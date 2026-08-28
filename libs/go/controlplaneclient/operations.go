@@ -19,6 +19,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.membership-candidates.list":              controlplanev1.PlatformQueryService_ListProjectMembershipCandidates_FullMethodName,
 		"platform.query.agents.list":                             controlplanev1.PlatformQueryService_ListAgents_FullMethodName,
 		"platform.query.agents.get":                              controlplanev1.PlatformQueryService_GetAgent_FullMethodName,
+		"platform.query.agent-instruction-versions.list":         controlplanev1.PlatformQueryService_ListAgentInstructionVersions_FullMethodName,
 		"platform.query.workflows.list":                          controlplanev1.PlatformQueryService_ListWorkflows_FullMethodName,
 		"platform.query.workflows.get":                           controlplanev1.PlatformQueryService_GetWorkflow_FullMethodName,
 		"platform.query.runs.list":                               controlplanev1.PlatformQueryService_ListRuns_FullMethodName,

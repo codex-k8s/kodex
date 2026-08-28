@@ -60,9 +60,35 @@ func TestProjectResourceActionsArePermissionAware(t *testing.T) {
 	if got := agentActions(agent, false, true); !reflect.DeepEqual(got, []string{"OPEN", "LAUNCH"}) {
 		t.Fatalf("launcher received unexpected agent actions: %v", got)
 	}
+	managedDraft := entity.Agent{
+		State: "READY", Enabled: true,
+		DraftInstructions:            &entity.InstructionVersion{State: "DRAFT"},
+		PublishedInstructionVersions: []entity.InstructionVersion{{VersionNumber: 2}, {VersionNumber: 1}},
+	}
+	if got := agentActions(managedDraft, true, false); !reflect.DeepEqual(got, []string{"OPEN", "EDIT", "MANAGE_CAPABILITIES", "DISABLE", "ARCHIVE", "VALIDATE", "ROLLBACK"}) {
+		t.Fatalf("instruction draft actions are incorrect: %v", got)
+	}
+	managedDraft.DraftInstructions.State = "VALID"
+	if got := agentActions(managedDraft, true, false); !reflect.DeepEqual(got, []string{"OPEN", "EDIT", "MANAGE_CAPABILITIES", "DISABLE", "ARCHIVE", "PUBLISH", "ROLLBACK"}) {
+		t.Fatalf("validated instruction actions are incorrect: %v", got)
+	}
 	workflow := entity.Workflow{State: "PUBLISHED"}
 	if got := workflowActions(workflow, false, true); !reflect.DeepEqual(got, []string{"OPEN", "LAUNCH"}) {
 		t.Fatalf("launcher received unexpected workflow actions: %v", got)
+	}
+	workflowCases := []struct {
+		state string
+		want  []string
+	}{
+		{state: "DRAFT", want: []string{"OPEN", "EDIT", "VALIDATE", "ARCHIVE"}},
+		{state: "VALID", want: []string{"OPEN", "EDIT", "PUBLISH", "ARCHIVE"}},
+		{state: "PUBLISHED", want: []string{"OPEN", "EDIT", "ARCHIVE", "LAUNCH"}},
+		{state: "ARCHIVED", want: []string{"OPEN"}},
+	}
+	for _, test := range workflowCases {
+		if got := workflowActions(entity.Workflow{State: test.state}, true, true); !reflect.DeepEqual(got, test.want) {
+			t.Fatalf("workflowActions(%q)=%v, want %v", test.state, got, test.want)
+		}
 	}
 	if got := runActions("RUNNING", false, true); !reflect.DeepEqual(got, []string{"OPEN"}) {
 		t.Fatalf("launcher without cancel permission received cancel: %v", got)

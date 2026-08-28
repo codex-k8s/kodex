@@ -494,12 +494,35 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 	if utf8.RuneCountInString(displayName) > 160 || len(input.ExternalEmailHint) > 200 || strings.TrimSpace(input.ExternalEmailHint) != input.ExternalEmailHint || strings.ContainsAny(displayName+input.ExternalEmailHint, "\r\n\x00") {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
+	actorDigest := sha256.Sum256([]byte(input.ExternalTenantID + "\x00" + input.ExternalActorID))
+	authority, found, err := repository.resolveClaimedProofAuthority(
+		ctx,
+		input,
+		hex.EncodeToString(actorDigest[:]),
+	)
+	if err != nil {
+		return platformrepo.ProofAuthority{}, err
+	}
+	if found {
+		if _, err := repository.pool.Exec(
+			ctx,
+			queryUpdateOIDCSubjectProfile,
+			authority.OrganizationID,
+			authority.ActorID,
+			displayName,
+			input.ExternalEmailHint,
+		); err != nil {
+			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
+		}
+		authority.ActorVersion = 1
+		return authority, nil
+	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var authority platformrepo.ProofAuthority
+	authority = platformrepo.ProofAuthority{}
 	var authorityTenant, claimState string
 	if err := tx.QueryRow(ctx, queryLockInstallationOwnerClaim).Scan(
 		&authority.OrganizationID, &authority.OrganizationVersion, &authorityTenant, &claimState,
@@ -509,7 +532,6 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 	if authorityTenant != "" && authorityTenant != input.ExternalTenantID {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
-	actorDigest := sha256.Sum256([]byte(input.ExternalTenantID + "\x00" + input.ExternalActorID))
 	err = tx.QueryRow(ctx, queryFindInstallationOwnerSubject, authority.OrganizationID, hex.EncodeToString(actorDigest[:])).Scan(&authority.ActorID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		actorRef, refErr := newRef("usr")
@@ -564,6 +586,58 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 	}
 	authority.ActorVersion = 1
 	return authority, nil
+}
+
+func (repository *Repository) resolveClaimedProofAuthority(
+	ctx context.Context,
+	input platformrepo.ProofPrincipalInput,
+	actorDigest string,
+) (platformrepo.ProofAuthority, bool, error) {
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel:   pgx.RepeatableRead,
+		AccessMode: pgx.ReadOnly,
+	})
+	if err != nil {
+		return platformrepo.ProofAuthority{}, false, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var authority platformrepo.ProofAuthority
+	if err := tx.QueryRow(
+		ctx,
+		queryResolveClaimedOwnerSubject,
+		input.ExternalTenantID,
+		actorDigest,
+	).Scan(
+		&authority.OrganizationID,
+		&authority.OrganizationVersion,
+		&authority.ActorID,
+	); errors.Is(err, pgx.ErrNoRows) {
+		return platformrepo.ProofAuthority{}, false, nil
+	} else if err != nil {
+		return platformrepo.ProofAuthority{}, false, errs.ErrUnavailable
+	}
+
+	if input.ProjectRef != "" {
+		if err := tx.QueryRow(
+			ctx,
+			queryAuthorizeProjectMembership,
+			input.ProjectRef,
+			authority.OrganizationID,
+			authority.ActorID,
+		).Scan(
+			&authority.ProjectID,
+			&authority.ProjectVersion,
+		); errors.Is(err, pgx.ErrNoRows) {
+			return platformrepo.ProofAuthority{}, false, errs.ErrForbidden
+		} else if err != nil {
+			return platformrepo.ProofAuthority{}, false, errs.ErrUnavailable
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return platformrepo.ProofAuthority{}, false, errs.ErrConflict
+	}
+	return authority, true, nil
 }
 
 func (repository *Repository) NextAuthorityProofRevision(ctx context.Context) (uint64, error) {

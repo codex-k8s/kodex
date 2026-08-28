@@ -6,6 +6,7 @@ import { usePlatformStore } from "@/features/platform/store";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
+import SafeSummary from "@/shared/ui/SafeSummary.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 type ProjectAction = "RUN" | "AGENT" | "WORKFLOW" | "FILE";
@@ -136,7 +137,10 @@ onMounted(() => void load());
               >
                 <div>
                   <h3>{{ run.title }}</h3>
-                  <p>{{ run.currentActivity ?? run.target.displayName }}</p>
+                  <SafeSummary
+                    :content="run.currentActivity"
+                    :fallback="run.target.displayName"
+                  />
                 </div>
                 <StatusBadge :state="run.state" />
                 <span>{{ run.target.displayName }}</span>
@@ -188,7 +192,7 @@ onMounted(() => void load());
               >
                 <div>
                   <h3>{{ gate.title }}</h3>
-                  <p>{{ gate.contextSummary }}</p>
+                  <SafeSummary :content="gate.contextSummary" />
                 </div>
                 <StatusBadge :state="gate.state" />
               </RouterLink>

@@ -125,12 +125,11 @@ func monitorLocalReadiness(control *controlplaneclient.Client, readiness *servic
 
 func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration.Adapter, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
-		ticker := time.NewTicker(config.PollInterval)
-		defer ticker.Stop()
+		idleBackoff := serviceruntime.NewIdleBackoff(config.PollInterval, 5*time.Second)
 		degraded := false
 		for {
 			cycle, cancel := context.WithTimeout(ctx, config.OperationTimeout)
-			err := processIntegrationWork(cycle, control, adapter, config)
+			processed, err := processIntegrationWork(cycle, control, adapter, config)
 			cancel()
 			if err != nil && !degraded {
 				degraded = true
@@ -139,37 +138,44 @@ func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration
 				degraded = false
 				logger.InfoContext(ctx, "integration work delivery restored")
 			}
+			timer := time.NewTimer(idleBackoff.Next(err == nil && processed > 0))
 			select {
 			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
 				return ctx.Err()
-			case <-ticker.C:
+			case <-timer.C:
 			}
 		}
 	}
 }
 
-func processIntegrationWork(ctx context.Context, control *controlplaneclient.Client, adapter *integration.Adapter, config Config) error {
+func processIntegrationWork(ctx context.Context, control *controlplaneclient.Client, adapter *integration.Adapter, config Config) (int, error) {
 	tests, err := control.Runtime.ClaimIntegrationConnectionTests(ctx, &controlplanev1.ClaimIntegrationConnectionTestsRequest{WorkloadInstance: config.InstanceID, Limit: config.ClaimLimit})
 	if err != nil {
-		return err
+		return 0, err
 	}
+	processed := 0
 	for _, claim := range tests.GetClaims() {
 		result, operationErr := adapter.Test(ctx, integration.RequestFromTest(claim))
 		if err := completeTest(ctx, control, claim, result, operationErr); err != nil {
-			return err
+			return processed, err
 		}
+		processed++
 	}
 	invocations, err := control.Runtime.ClaimIntegrationInvocations(ctx, &controlplanev1.ClaimIntegrationInvocationsRequest{WorkloadInstance: config.InstanceID, Limit: config.ClaimLimit})
 	if err != nil {
-		return err
+		return processed, err
 	}
 	for _, claim := range invocations.GetClaims() {
 		result, operationErr := adapter.Execute(ctx, integration.RequestFromInvocation(claim))
 		if err := completeInvocation(ctx, control, claim, result, operationErr); err != nil {
-			return err
+			return processed, err
 		}
+		processed++
 	}
-	return nil
+	return processed, nil
 }
 
 func completeTest(ctx context.Context, control *controlplaneclient.Client, claim *controlplanev1.IntegrationConnectionTestClaim, result string, operationErr error) error {

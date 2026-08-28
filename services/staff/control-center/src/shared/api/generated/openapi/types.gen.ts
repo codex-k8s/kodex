@@ -58,6 +58,7 @@ export type BootstrapState = {
     webOnlyReady: boolean;
     assistant: SystemAssistant;
     currentUser: UserSummary;
+    platformRole: 'OWNER' | 'ADMINISTRATOR' | 'OPERATOR' | 'MEMBER' | 'AUDITOR';
     nextActions: Array<NextAction>;
 };
 
@@ -143,6 +144,11 @@ export type InstructionVersion = {
     validationMessages: Array<string>;
     createdAt: Timestamp;
     publishedAt?: Timestamp;
+};
+
+export type InstructionVersionPage = {
+    items: Array<InstructionVersion>;
+    nextPageToken?: string;
 };
 
 export type Agent = {
@@ -400,6 +406,16 @@ export type RunTarget = {
     version: number;
 };
 
+export type TokenUsage = {
+    totalTokens: number;
+    inputTokens: number;
+    cachedInputTokens: number;
+    cacheWriteInputTokens: number;
+    outputTokens: number;
+    reasoningOutputTokens: number;
+    modelContextWindow: number;
+};
+
 export type Run = {
     ref: OpaqueRef;
     version: number;
@@ -421,6 +437,10 @@ export type Run = {
     resultSummary?: string;
     safeErrorCode?: string;
     safeErrorMessage?: string;
+    usage: TokenUsage;
+    inputArtifactRefs: Array<OpaqueRef>;
+    artifactRefs: Array<OpaqueRef>;
+    gateRefs: Array<OpaqueRef>;
     createdAt: Timestamp;
     startedAt?: Timestamp;
     finishedAt?: Timestamp;
@@ -471,6 +491,7 @@ export type RunDelta = {
     resultSummary?: string;
     safeErrorCode?: string;
     safeErrorMessage?: string;
+    usage: TokenUsage;
     artifactRefs: Array<OpaqueRef>;
     gateRefs: Array<OpaqueRef>;
     startedAt?: Timestamp;
@@ -1670,6 +1691,36 @@ export type UpdateAgentResponses = {
 
 export type UpdateAgentResponse = UpdateAgentResponses[keyof UpdateAgentResponses];
 
+export type ListAgentInstructionVersionsData = {
+    body?: never;
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/agents/{agentRef}/instruction-versions';
+};
+
+export type ListAgentInstructionVersionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListAgentInstructionVersionsError = ListAgentInstructionVersionsErrors[keyof ListAgentInstructionVersionsErrors];
+
+export type ListAgentInstructionVersionsResponses = {
+    /**
+     * История опубликованных версий инструкций
+     */
+    200: InstructionVersionPage;
+};
+
+export type ListAgentInstructionVersionsResponse = ListAgentInstructionVersionsResponses[keyof ListAgentInstructionVersionsResponses];
+
 export type CommandAgentData = {
     body: AgentCommand;
     headers: {
@@ -1707,7 +1758,7 @@ export type CreateInstructionDraftData = {
         content: string;
     };
     headers: {
-        'If-Match'?: string;
+        'If-Match': string;
         'Idempotency-Key': string;
         'X-CSRF-Token': string;
     };

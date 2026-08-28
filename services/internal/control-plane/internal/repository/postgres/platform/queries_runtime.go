@@ -31,6 +31,14 @@ var (
 	queryRuntimeCompleteexecutionUpdateSessionTurnsStateCompletedAt string
 	//go:embed sql/runtime_completeexecution_select_runs_id.sql
 	queryRuntimeCompleteexecutionSelectRunsId string
+	//go:embed sql/runtime_completeexecution_select_agent_capability.sql
+	queryRuntimeCompleteexecutionSelectAgentCapability string
+	//go:embed sql/runtime_completeexecution_lock_root_run.sql
+	queryRuntimeCompleteexecutionLockRootRun string
+	//go:embed sql/runtime_completeexecution_update_run_usage.sql
+	queryRuntimeCompleteexecutionUpdateRunUsage string
+	//go:embed sql/runtime_completeexecution_update_root_usage.sql
+	queryRuntimeCompleteexecutionUpdateRootUsage string
 	//go:embed sql/runtime_completeexecution_insert_artifacts_ref_project_id_node_id.sql
 	queryRuntimeCompleteexecutionInsertArtifactsRefProjectIdNodeId string
 	//go:embed sql/runtime_completeexecution_insert_artifact_content_artifact_id.sql

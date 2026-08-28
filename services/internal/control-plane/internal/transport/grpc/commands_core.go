@@ -153,7 +153,7 @@ func (server *Server) PublishInstructionDraft(ctx context.Context, request *cont
 }
 
 func (server *Server) RollbackInstructions(ctx context.Context, request *controlplanev1.RollbackInstructionsRequest) (*controlplanev1.RollbackInstructionsResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RollbackInstructions_FullMethodName, command.RollbackInstructions, request.GetMutation(), command.AgentBindingInput{AgentRef: request.GetAgentRef(), BindingRef: request.GetPublishedInstructionRef(), Enabled: true})
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RollbackInstructions_FullMethodName, command.RollbackInstructions, request.GetMutation(), command.AgentInput{Ref: request.GetAgentRef(), Instructions: request.GetPublishedInstructionRef()})
 	if err != nil {
 		return nil, err
 	}

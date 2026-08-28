@@ -37,11 +37,11 @@ import {
   getOverview,
   getProject,
   getRoleImageRecipe,
-  getRun,
   getRunGraph,
   getSystemAssistant,
   getWorkflow,
   listAgents,
+  listAgentInstructionVersions,
   listArtifacts,
   listAssistantConversations,
   listAuditEvents,
@@ -88,6 +88,7 @@ import type {
   IntegrationConnectionInput,
   IntegrationGrantInput,
   IntegrationDefinition,
+  InstructionVersion,
   Membership,
   NextAction,
   Overview,
@@ -129,9 +130,11 @@ import {
   unwrap,
 } from "@/shared/api/problem";
 import {
+  mergeRunGraph,
   reduceRunEvent,
   type RunEventOutcome,
 } from "@/features/platform/run-reducer";
+import { instructionCommandInput } from "@/features/platform/instruction-command";
 import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 
 type QueryKey =
@@ -141,6 +144,7 @@ type QueryKey =
   | "project"
   | "agents"
   | "agent"
+  | "instructionVersions"
   | "capabilities"
   | "roleEnvironments"
   | "roleImages"
@@ -190,6 +194,9 @@ export const usePlatformStore = defineStore("platform", () => {
   const searchResults = ref<SearchResult[]>([]);
   const projects = reactive<Record<string, Project>>({});
   const agents = reactive<Record<string, Agent>>({});
+  const instructionVersions = reactive<Record<string, InstructionVersion[]>>(
+    {},
+  );
   const roleEnvironments = reactive<Record<string, RoleEnvironment>>({});
   const roleImageRecipes = reactive<Record<string, RoleImageRecipe>>({});
   const roleImageBuilds = reactive<Record<string, RoleImageBuild>>({});
@@ -413,6 +420,31 @@ export const usePlatformStore = defineStore("platform", () => {
     );
   }
 
+  async function loadInstructionVersions(agentRef: string): Promise<void> {
+    await query(
+      "instructionVersions",
+      async () => {
+        const versions: InstructionVersion[] = [];
+        let pageToken: string | undefined;
+        do {
+          const response = await unwrap(
+            listAgentInstructionVersions({
+              path: { agentRef },
+              query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+              signal: requestSignal(),
+            }),
+          );
+          versions.push(...response.data.items);
+          pageToken = response.data.nextPageToken;
+        } while (pageToken);
+        return versions;
+      },
+      (versions) => {
+        instructionVersions[agentRef] = versions;
+      },
+    );
+  }
+
   async function loadRoleEnvironments(): Promise<void> {
     await query(
       "roleEnvironments",
@@ -534,38 +566,45 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   async function loadRun(ref: string): Promise<void> {
-    await query(
-      "run",
-      async () => {
-        const [runReadback, graphReadback, eventPage] = await Promise.all([
-          unwrap(getRun({ path: { runRef: ref }, signal: requestSignal() })),
-          unwrap(
-            getRunGraph({ path: { runRef: ref }, signal: requestSignal() }),
-          ),
-          unwrap(
-            listRunEvents({
-              path: { runRef: ref },
-              query: { afterSequence: 0, limit: 200 },
-              signal: requestSignal(),
-            }),
-          ),
-        ]);
-        return {
-          run: runReadback.data,
-          workspace: graphReadback.data,
-          eventPage: eventPage.data,
-        };
-      },
-      ({ run, workspace, eventPage }) => {
-        upsert(runs, [run]);
-        const current = graphs[workspace.graph.runRef];
-        if (!current || workspace.graph.sequence >= current.sequence)
-          graphs[workspace.graph.runRef] = workspace.graph;
-        const bucket = events[workspace.graph.runRef] ?? {};
-        for (const event of eventPage.items) bucket[event.sequence] = event;
-        events[workspace.graph.runRef] = bucket;
-      },
-    );
+    const current = (generation.get("run") ?? 0) + 1;
+    generation.set("run", current);
+    loading.run = true;
+    Reflect.deleteProperty(problems, "run");
+    try {
+      const graphReadback = await unwrap(
+        getRunGraph({ path: { runRef: ref }, signal: requestSignal() }),
+      );
+      if (generation.get("run") !== current) return;
+
+      const workspace = graphReadback.data;
+      upsert(runs, [workspace.run]);
+      graphs[workspace.graph.runRef] = mergeRunGraph(
+        graphs[workspace.graph.runRef],
+        workspace.graph,
+      );
+
+      // Event catch-up improves the timeline, but it must not make an already
+      // authoritative run/graph snapshot unusable when the request is
+      // transiently interrupted.
+      const eventPage = await unwrap(
+        listRunEvents({
+          path: { runRef: ref },
+          query: { afterSequence: 0, limit: 200 },
+          signal: requestSignal(),
+        }),
+      );
+      if (generation.get("run") !== current) return;
+      const bucket = events[workspace.graph.runRef] ?? {};
+      for (const event of eventPage.data.items) {
+        if (event.sequence <= workspace.graph.sequence)
+          bucket[event.sequence] = event;
+      }
+      events[workspace.graph.runRef] = bucket;
+    } catch (error) {
+      if (generation.get("run") === current) problems.run = asProblem(error);
+    } finally {
+      if (generation.get("run") === current) loading.run = false;
+    }
   }
 
   async function loadGates(
@@ -666,15 +705,32 @@ export const usePlatformStore = defineStore("platform", () => {
     artifactRef: string,
     purpose: "DOWNLOAD" | "PREVIEW",
   ): Promise<Blob> {
-    const result = await unwrap(
-      downloadArtifact({
-        path: { artifactRef },
-        query: { purpose },
-        parseAs: "blob",
-        signal: requestSignal(),
-      }),
-    );
-    if (result.data instanceof Blob) return result.data;
+    for (const delayMs of [0, 200, 600]) {
+      if (delayMs > 0) {
+        await new Promise<void>((resolve) =>
+          globalThis.setTimeout(resolve, delayMs),
+        );
+      }
+      try {
+        const result = await unwrap(
+          downloadArtifact({
+            path: { artifactRef },
+            query: { purpose },
+            parseAs: "blob",
+            signal: requestSignal(),
+          }),
+        );
+        if (result.data instanceof Blob) return result.data;
+        throw normalizeProblem({
+          status: 502,
+          code: "ARTIFACT_CONTENT_UNAVAILABLE",
+          retryable: true,
+        });
+      } catch (error) {
+        const problem = asProblem(error);
+        if (!problem.retryable || delayMs === 600) throw problem;
+      }
+    }
     throw normalizeProblem({
       status: 502,
       code: "ARTIFACT_CONTENT_UNAVAILABLE",
@@ -1146,10 +1202,7 @@ export const usePlatformStore = defineStore("platform", () => {
         createInstructionDraft({
           path: { agentRef: agent.ref },
           body: { content },
-          headers: {
-            ...mutationHeaders(headers),
-            "If-Match": headers["If-Match"],
-          },
+          headers: versionedHeaders(headers),
           signal: requestSignal(),
         }),
       agent.version,
@@ -1160,12 +1213,13 @@ export const usePlatformStore = defineStore("platform", () => {
   async function instructionCommand(
     agent: Agent,
     action: "VALIDATE" | "PUBLISH" | "ROLLBACK",
+    publishedInstructionRef?: string,
   ): Promise<Agent> {
     await mutate(
       (headers) =>
         commandAgentInstructions({
           path: { agentRef: agent.ref },
-          body: { action },
+          body: instructionCommandInput(action, publishedInstructionRef),
           headers: versionedHeaders(headers),
           signal: requestSignal(),
         }),
@@ -1412,6 +1466,7 @@ export const usePlatformStore = defineStore("platform", () => {
     conversationRef: string,
     content: string,
   ): Promise<AssistantConversation> {
+    const previous = conversations[conversationRef];
     const result = await mutate((headers) =>
       addAssistantTurn({
         path: { conversationRef },
@@ -1420,8 +1475,12 @@ export const usePlatformStore = defineStore("platform", () => {
         signal: requestSignal(),
       }),
     );
-    conversations[result.data.ref] = result.data;
-    return result.data;
+    const updated = {
+      ...result.data,
+      turns: [...(previous?.turns ?? []), ...result.data.turns],
+    };
+    conversations[result.data.ref] = updated;
+    return updated;
   }
 
   async function applyPlan(
@@ -1437,8 +1496,10 @@ export const usePlatformStore = defineStore("platform", () => {
         }),
       version,
     );
-    conversations[result.data.conversation.ref] = result.data.conversation;
-    return result.data.conversation;
+    await loadAssistant();
+    return (
+      conversations[result.data.conversation.ref] ?? result.data.conversation
+    );
   }
 
   async function updateAssistantInstructions(
@@ -1459,9 +1520,7 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   function applyRunSnapshot(graph: RunGraph): void {
-    const current = graphs[graph.runRef];
-    if (current && current.sequence > graph.sequence) return;
-    graphs[graph.runRef] = graph;
+    graphs[graph.runRef] = mergeRunGraph(graphs[graph.runRef], graph);
   }
 
   function applyRunEvent(event: RunEvent): RunEventOutcome {
@@ -1560,6 +1619,7 @@ export const usePlatformStore = defineStore("platform", () => {
       runtimes,
       projects,
       agents,
+      instructionVersions,
       roleEnvironments,
       roleImageRecipes,
       roleImageBuilds,
@@ -1612,6 +1672,7 @@ export const usePlatformStore = defineStore("platform", () => {
     searchResults,
     projects,
     agents,
+    instructionVersions,
     roleEnvironments,
     roleImageRecipes,
     roleImageBuilds,
@@ -1647,6 +1708,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loadProject,
     loadAgents,
     loadAgent,
+    loadInstructionVersions,
     loadRoleEnvironments,
     loadRoleImageRecipes,
     loadRoleImageRecipe,
