@@ -170,6 +170,10 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeAssistant(ctx, tx, scope, input)
 	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution, command.DelegateExecution, command.ProposeAssistantPlan:
 		return repository.changeExecution(ctx, tx, scope, input)
+	case command.CompleteSessionSnapshot, command.CompleteSessionRestore,
+		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
+		command.FailSessionArchiveTask:
+		return repository.changeSessionArchive(ctx, tx, scope, input)
 	case command.MaterializeOccurrence:
 		return repository.changeOccurrence(ctx, tx, scope, input)
 	case command.CompleteConnectionTest:

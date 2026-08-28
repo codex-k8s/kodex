@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: session-archive-default-deny}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: session-archive}}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: session-archive-exact-paths}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: session-archive, app.kubernetes.io/component: archive-controller}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
+      ports: [{protocol: TCP, port: 9090}, {protocol: TCP, port: 9091}]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}
+      ports: [{protocol: TCP, port: 8443}]
+    - to:
+        - ipBlock: {cidr: 10.96.0.1/32}
+      ports: [{protocol: TCP, port: 443}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: session-archive-worker-object-storage}
+spec:
+  podSelector: {matchLabels: {session-archive.kodex.dev/managed: "true"}}
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: seaweedfs}}
+      ports: [{protocol: TCP, port: 8333}]

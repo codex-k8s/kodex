@@ -1,0 +1,6 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: session-archive}
+spec:
+  minAvailable: 0
+  selector: {matchLabels: {app.kubernetes.io/name: session-archive, app.kubernetes.io/component: archive-controller}}

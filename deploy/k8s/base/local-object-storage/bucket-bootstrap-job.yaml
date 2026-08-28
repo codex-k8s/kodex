@@ -39,10 +39,14 @@ spec:
                 [ "$SECONDS" -lt "$deadline" ] || { printf 'SeaweedFS master readiness timed out\n' >&2; exit 1; }
                 sleep 2
               done
-              output="$(printf 's3.bucket.create -name kodex-artifacts\ns3.bucket.list\n' |
+              output="$(printf 's3.bucket.create -name kodex-artifacts\ns3.bucket.create -name kodex-session-archives\ns3.bucket.list\n' |
                 weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888 2>/dev/null)"
               printf '%s\n' "$output" | grep -Eq '(^|[[:space:]])kodex-artifacts($|[[:space:]])' || {
-                printf 'SeaweedFS bucket readback failed\n' >&2
+                printf 'SeaweedFS artifact bucket readback failed\n' >&2
+                exit 1
+              }
+              printf '%s\n' "$output" | grep -Eq '(^|[[:space:]])kodex-session-archives($|[[:space:]])' || {
+                printf 'SeaweedFS session archive bucket readback failed\n' >&2
                 exit 1
               }
           resources:

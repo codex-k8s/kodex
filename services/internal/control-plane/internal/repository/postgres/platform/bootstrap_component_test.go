@@ -128,6 +128,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("direct run continuation cancel and retry", func(t *testing.T) {
 		testDirectRunLifecycle(t, ctx, repository)
 	})
+	t.Run("session archive snapshot restore and GC", func(t *testing.T) {
+		testSessionArchiveLifecycle(t, ctx, repository, pool)
+	})
 	t.Run("provider neutral nested delegation", func(t *testing.T) {
 		testNestedDelegation(t, ctx, repository)
 	})

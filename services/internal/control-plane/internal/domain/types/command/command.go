@@ -57,6 +57,11 @@ const (
 	CompleteExecution             Kind = "COMPLETE_EXECUTION"
 	DelegateExecution             Kind = "DELEGATE_EXECUTION"
 	ProposeAssistantPlan          Kind = "PROPOSE_ASSISTANT_PLAN"
+	CompleteSessionSnapshot       Kind = "COMPLETE_SESSION_SNAPSHOT"
+	CompleteSessionRestore        Kind = "COMPLETE_SESSION_RESTORE"
+	CompleteSessionPVCDeletion    Kind = "COMPLETE_SESSION_PVC_DELETION"
+	CompleteSessionObjectDeletion Kind = "COMPLETE_SESSION_OBJECT_DELETION"
+	FailSessionArchiveTask        Kind = "FAIL_SESSION_ARCHIVE_TASK"
 	MaterializeOccurrence         Kind = "MATERIALIZE_SCHEDULE_OCCURRENCE"
 	CompleteConnectionTest        Kind = "COMPLETE_INTEGRATION_CONNECTION_TEST"
 	CompleteIntegrationInvocation Kind = "COMPLETE_INTEGRATION_INVOCATION"
@@ -139,6 +144,9 @@ type LeaseInput struct {
 }
 type CompleteExecutionInput struct {
 	LeaseRef, Fence, ResultSummary, SafeErrorCode string
+	CodexSessionID, ArchiveRelativePath           string
+	ArchiveSHA256                                 string
+	ArchiveSizeBytes                              int64
 	Generation                                    int64
 	Success                                       bool
 	Usage                                         entity.TokenUsage
@@ -163,6 +171,14 @@ type ProposeAssistantPlanInput struct {
 	LeaseRef, Fence, Summary string
 	Generation               int64
 	Operations               []entity.AssistantPlanOperation
+}
+
+type SessionArchiveTaskInput struct {
+	TaskRef, LeaseRef, Fence, SafeErrorCode            string
+	ObjectKey, ObjectVersion, ObjectETag, ObjectDigest string
+	RestoredSourceSHA256, PVCName                      string
+	Generation, ObjectSizeBytes, SourceSizeBytes       int64
+	FormatVersion                                      uint32
 }
 type WarmRuntimeInput struct{ WorkloadInstance, RuntimeRevision, State, SafeErrorCode string }
 type OccurrenceInput struct {

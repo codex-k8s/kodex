@@ -432,6 +432,29 @@ func (service *Service) ReportWarmRuntime(ctx context.Context, p value.Principal
 	}
 	return service.repository.ReportWarmRuntime(ctx, p, input)
 }
+
+func (service *Service) ClaimSessionArchiveTasks(ctx context.Context, p value.Principal, instance string, limit int32) ([]map[string]any, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	if p.CallerWorkload != "session-archive" || p.Permission != "platform.session-archive.tasks.claim" ||
+		strings.TrimSpace(instance) == "" || limit < 1 || limit > 16 {
+		return nil, errs.ErrForbidden
+	}
+	return service.repository.ClaimSessionArchiveTasks(ctx, p, instance, limit)
+}
+
+func (service *Service) RenewSessionArchiveTask(ctx context.Context, p value.Principal, input command.SessionArchiveTaskInput) (map[string]any, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	if p.CallerWorkload != "session-archive" || p.Permission != "platform.session-archive.tasks.renew" {
+		return nil, errs.ErrForbidden
+	}
+	return service.repository.RenewSessionArchiveTask(ctx, p, input)
+}
 func (service *Service) ClaimDueSchedules(ctx context.Context, p value.Principal, instance string, limit int32) ([]map[string]any, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -520,6 +543,9 @@ func knownCommand(kind command.Kind) bool {
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,
 		command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
 		command.DelegateExecution, command.ProposeAssistantPlan,
+		command.CompleteSessionSnapshot, command.CompleteSessionRestore,
+		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
+		command.FailSessionArchiveTask,
 		command.MaterializeOccurrence, command.CompleteConnectionTest,
 		command.CompleteIntegrationInvocation, command.CompleteInteractionDelivery,
 		command.AcceptInteractionMessage:

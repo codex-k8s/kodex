@@ -145,6 +145,20 @@ func AutomationSchedulerOperations() map[string]string {
 	}
 }
 
+// SessionArchiveOperations возвращает только fenced lifecycle snapshot,
+// restore, удаления PVC и object GC.
+func SessionArchiveOperations() map[string]string {
+	return map[string]string{
+		"platform.session-archive.tasks.claim":            controlplanev1.SessionArchiveWorkService_ClaimSessionArchiveTasks_FullMethodName,
+		"platform.session-archive.tasks.renew":            controlplanev1.SessionArchiveWorkService_RenewSessionArchiveTask_FullMethodName,
+		"platform.session-archive.snapshot.complete":      controlplanev1.SessionArchiveWorkService_CompleteSessionSnapshot_FullMethodName,
+		"platform.session-archive.restore.complete":       controlplanev1.SessionArchiveWorkService_CompleteSessionRestore_FullMethodName,
+		"platform.session-archive.pvc-delete.complete":    controlplanev1.SessionArchiveWorkService_CompleteSessionPVCDeletion_FullMethodName,
+		"platform.session-archive.object-delete.complete": controlplanev1.SessionArchiveWorkService_CompleteSessionObjectDeletion_FullMethodName,
+		"platform.session-archive.tasks.fail":             controlplanev1.SessionArchiveWorkService_FailSessionArchiveTask_FullMethodName,
+	}
+}
+
 func IntegrationGatewayOperations() map[string]string {
 	return map[string]string{
 		"platform.runtime.integration-tests.claim":    controlplanev1.RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName,

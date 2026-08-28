@@ -208,6 +208,7 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		ImageReference: revision.GetImageReference(), ImageManifestDigest: revision.GetImageManifestDigest(),
 		RoleRuntimeContractRevision: revision.GetRoleRuntimeContractRevision(), RoleRuntimeContractSHA256: revision.GetRoleRuntimeContractSha256(),
 		SystemAssistant: revision.GetSystemAssistant(), Instructions: revision.GetInstructions(), Provider: revision.GetRuntime().GetProvider(), Model: revision.GetRuntime().GetModel(),
+		CodexSessionID:             revision.GetCodexSessionId(),
 		ProviderAccountRef:         revision.GetProviderCredential().GetAccountRef(),
 		ProviderCredentialRef:      revision.GetProviderCredential().GetCredentialRevisionRef(),
 		ProviderCredentialRevision: revision.GetProviderCredential().GetCredentialRevision(),
@@ -492,8 +493,11 @@ func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode st
 }
 
 func (manager *Manager) ensureSessionPVC(ctx context.Context, sessionRef string) error {
-	name := sessionPVCName(sessionRef)
-	_, err := manager.client.CoreV1().PersistentVolumeClaims(manager.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	name, err := runtimecontract.SessionPVCName(sessionRef)
+	if err != nil {
+		return err
+	}
+	_, err = manager.client.CoreV1().PersistentVolumeClaims(manager.config.Namespace).Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
 		return nil
 	}
@@ -520,8 +524,9 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 	if mode == "warm" {
 		roleArgs = []string{"runtime-warm"}
 	}
+	sessionVolumeName, _ := runtimecontract.SessionPVCName(input.SessionRef)
 	volumes := []corev1.Volume{
-		{Name: "session", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: sessionPVCName(input.SessionRef)}}},
+		{Name: "session", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: sessionVolumeName}}},
 		{Name: "runtime-input", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: ticketSecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "callback-ca", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientCASecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "callback-client", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientTLSSecret, DefaultMode: int32Pointer(0o440)}}},
@@ -655,7 +660,6 @@ func (manager *Manager) warmTicketName(revisionRef, revisionDigest string) strin
 }
 func ticketName(value string) string                             { return "runtime-ticket-" + shortHash(value) }
 func turnPodName(value string) string                            { return "runtime-turn-" + shortHash(value) }
-func sessionPVCName(value string) string                         { return "runtime-session-" + shortHash(value) }
 func int64Pointer(value int64) *int64                            { return &value }
 func int32Pointer(value int32) *int32                            { return &value }
 func boolPointer(value bool) *bool                               { return &value }

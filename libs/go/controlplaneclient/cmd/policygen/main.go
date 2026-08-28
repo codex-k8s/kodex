@@ -113,13 +113,14 @@ func main() {
 		},
 		worker("runtime-controller", "control-plane.runtime-controller", controlplaneclient.RuntimeOperations()),
 		worker("automation-scheduler", "control-plane.automation", controlplaneclient.AutomationSchedulerOperations()),
+		worker("session-archive", "control-plane.session-archive", controlplaneclient.SessionArchiveOperations()),
 		worker("integration-gateway", "control-plane.integration-gateway", controlplaneclient.IntegrationGatewayOperations()),
 		worker("interaction-gateway", "control-plane.interaction-gateway", controlplaneclient.InteractionGatewayOperations()),
 		worker("role-image-builder", "control-plane.role-image-builder", controlplaneclient.RoleImageBuilderOperations()),
 		worker("image-admission", "control-plane.image-admission", controlplaneclient.ImageAdmissionOperations()),
 		worker("image-promotion", "control-plane.image-promotion", controlplaneclient.ImagePromotionOperations()),
 	}
-	value := document{Version: 1, PolicyRevision: 37, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 38, Policy: policy{
 		TrustDomain: "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
 	}}

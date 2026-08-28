@@ -3856,6 +3856,345 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	SessionArchiveWorkService_ClaimSessionArchiveTasks_FullMethodName      = "/controlplane.v1.SessionArchiveWorkService/ClaimSessionArchiveTasks"
+	SessionArchiveWorkService_RenewSessionArchiveTask_FullMethodName       = "/controlplane.v1.SessionArchiveWorkService/RenewSessionArchiveTask"
+	SessionArchiveWorkService_CompleteSessionSnapshot_FullMethodName       = "/controlplane.v1.SessionArchiveWorkService/CompleteSessionSnapshot"
+	SessionArchiveWorkService_CompleteSessionRestore_FullMethodName        = "/controlplane.v1.SessionArchiveWorkService/CompleteSessionRestore"
+	SessionArchiveWorkService_CompleteSessionPVCDeletion_FullMethodName    = "/controlplane.v1.SessionArchiveWorkService/CompleteSessionPVCDeletion"
+	SessionArchiveWorkService_CompleteSessionObjectDeletion_FullMethodName = "/controlplane.v1.SessionArchiveWorkService/CompleteSessionObjectDeletion"
+	SessionArchiveWorkService_FailSessionArchiveTask_FullMethodName        = "/controlplane.v1.SessionArchiveWorkService/FailSessionArchiveTask"
+)
+
+// SessionArchiveWorkServiceClient is the client API for SessionArchiveWorkService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// SessionArchiveWorkService обслуживает только fenced lifecycle долговечного
+// состояния Codex session. Workload не выбирает tenant, session, PVC или
+// object key: все координаты назначает control-plane.
+type SessionArchiveWorkServiceClient interface {
+	ClaimSessionArchiveTasks(ctx context.Context, in *ClaimSessionArchiveTasksRequest, opts ...grpc.CallOption) (*ClaimSessionArchiveTasksResponse, error)
+	RenewSessionArchiveTask(ctx context.Context, in *RenewSessionArchiveTaskRequest, opts ...grpc.CallOption) (*RenewSessionArchiveTaskResponse, error)
+	CompleteSessionSnapshot(ctx context.Context, in *CompleteSessionSnapshotRequest, opts ...grpc.CallOption) (*CompleteSessionSnapshotResponse, error)
+	CompleteSessionRestore(ctx context.Context, in *CompleteSessionRestoreRequest, opts ...grpc.CallOption) (*CompleteSessionRestoreResponse, error)
+	CompleteSessionPVCDeletion(ctx context.Context, in *CompleteSessionPVCDeletionRequest, opts ...grpc.CallOption) (*CompleteSessionPVCDeletionResponse, error)
+	CompleteSessionObjectDeletion(ctx context.Context, in *CompleteSessionObjectDeletionRequest, opts ...grpc.CallOption) (*CompleteSessionObjectDeletionResponse, error)
+	FailSessionArchiveTask(ctx context.Context, in *FailSessionArchiveTaskRequest, opts ...grpc.CallOption) (*FailSessionArchiveTaskResponse, error)
+}
+
+type sessionArchiveWorkServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewSessionArchiveWorkServiceClient(cc grpc.ClientConnInterface) SessionArchiveWorkServiceClient {
+	return &sessionArchiveWorkServiceClient{cc}
+}
+
+func (c *sessionArchiveWorkServiceClient) ClaimSessionArchiveTasks(ctx context.Context, in *ClaimSessionArchiveTasksRequest, opts ...grpc.CallOption) (*ClaimSessionArchiveTasksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimSessionArchiveTasksResponse)
+	err := c.cc.Invoke(ctx, SessionArchiveWorkService_ClaimSessionArchiveTasks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sessionArchiveWorkServiceClient) RenewSessionArchiveTask(ctx context.Context, in *RenewSessionArchiveTaskRequest, opts ...grpc.CallOption) (*RenewSessionArchiveTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewSessionArchiveTaskResponse)
+	err := c.cc.Invoke(ctx, SessionArchiveWorkService_RenewSessionArchiveTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sessionArchiveWorkServiceClient) CompleteSessionSnapshot(ctx context.Context, in *CompleteSessionSnapshotRequest, opts ...grpc.CallOption) (*CompleteSessionSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteSessionSnapshotResponse)
+	err := c.cc.Invoke(ctx, SessionArchiveWorkService_CompleteSessionSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sessionArchiveWorkServiceClient) CompleteSessionRestore(ctx context.Context, in *CompleteSessionRestoreRequest, opts ...grpc.CallOption) (*CompleteSessionRestoreResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteSessionRestoreResponse)
+	err := c.cc.Invoke(ctx, SessionArchiveWorkService_CompleteSessionRestore_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sessionArchiveWorkServiceClient) CompleteSessionPVCDeletion(ctx context.Context, in *CompleteSessionPVCDeletionRequest, opts ...grpc.CallOption) (*CompleteSessionPVCDeletionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteSessionPVCDeletionResponse)
+	err := c.cc.Invoke(ctx, SessionArchiveWorkService_CompleteSessionPVCDeletion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sessionArchiveWorkServiceClient) CompleteSessionObjectDeletion(ctx context.Context, in *CompleteSessionObjectDeletionRequest, opts ...grpc.CallOption) (*CompleteSessionObjectDeletionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteSessionObjectDeletionResponse)
+	err := c.cc.Invoke(ctx, SessionArchiveWorkService_CompleteSessionObjectDeletion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sessionArchiveWorkServiceClient) FailSessionArchiveTask(ctx context.Context, in *FailSessionArchiveTaskRequest, opts ...grpc.CallOption) (*FailSessionArchiveTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailSessionArchiveTaskResponse)
+	err := c.cc.Invoke(ctx, SessionArchiveWorkService_FailSessionArchiveTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// SessionArchiveWorkServiceServer is the server API for SessionArchiveWorkService service.
+// All implementations must embed UnimplementedSessionArchiveWorkServiceServer
+// for forward compatibility.
+//
+// SessionArchiveWorkService обслуживает только fenced lifecycle долговечного
+// состояния Codex session. Workload не выбирает tenant, session, PVC или
+// object key: все координаты назначает control-plane.
+type SessionArchiveWorkServiceServer interface {
+	ClaimSessionArchiveTasks(context.Context, *ClaimSessionArchiveTasksRequest) (*ClaimSessionArchiveTasksResponse, error)
+	RenewSessionArchiveTask(context.Context, *RenewSessionArchiveTaskRequest) (*RenewSessionArchiveTaskResponse, error)
+	CompleteSessionSnapshot(context.Context, *CompleteSessionSnapshotRequest) (*CompleteSessionSnapshotResponse, error)
+	CompleteSessionRestore(context.Context, *CompleteSessionRestoreRequest) (*CompleteSessionRestoreResponse, error)
+	CompleteSessionPVCDeletion(context.Context, *CompleteSessionPVCDeletionRequest) (*CompleteSessionPVCDeletionResponse, error)
+	CompleteSessionObjectDeletion(context.Context, *CompleteSessionObjectDeletionRequest) (*CompleteSessionObjectDeletionResponse, error)
+	FailSessionArchiveTask(context.Context, *FailSessionArchiveTaskRequest) (*FailSessionArchiveTaskResponse, error)
+	mustEmbedUnimplementedSessionArchiveWorkServiceServer()
+}
+
+// UnimplementedSessionArchiveWorkServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedSessionArchiveWorkServiceServer struct{}
+
+func (UnimplementedSessionArchiveWorkServiceServer) ClaimSessionArchiveTasks(context.Context, *ClaimSessionArchiveTasksRequest) (*ClaimSessionArchiveTasksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimSessionArchiveTasks not implemented")
+}
+func (UnimplementedSessionArchiveWorkServiceServer) RenewSessionArchiveTask(context.Context, *RenewSessionArchiveTaskRequest) (*RenewSessionArchiveTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewSessionArchiveTask not implemented")
+}
+func (UnimplementedSessionArchiveWorkServiceServer) CompleteSessionSnapshot(context.Context, *CompleteSessionSnapshotRequest) (*CompleteSessionSnapshotResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteSessionSnapshot not implemented")
+}
+func (UnimplementedSessionArchiveWorkServiceServer) CompleteSessionRestore(context.Context, *CompleteSessionRestoreRequest) (*CompleteSessionRestoreResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteSessionRestore not implemented")
+}
+func (UnimplementedSessionArchiveWorkServiceServer) CompleteSessionPVCDeletion(context.Context, *CompleteSessionPVCDeletionRequest) (*CompleteSessionPVCDeletionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteSessionPVCDeletion not implemented")
+}
+func (UnimplementedSessionArchiveWorkServiceServer) CompleteSessionObjectDeletion(context.Context, *CompleteSessionObjectDeletionRequest) (*CompleteSessionObjectDeletionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteSessionObjectDeletion not implemented")
+}
+func (UnimplementedSessionArchiveWorkServiceServer) FailSessionArchiveTask(context.Context, *FailSessionArchiveTaskRequest) (*FailSessionArchiveTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FailSessionArchiveTask not implemented")
+}
+func (UnimplementedSessionArchiveWorkServiceServer) mustEmbedUnimplementedSessionArchiveWorkServiceServer() {
+}
+func (UnimplementedSessionArchiveWorkServiceServer) testEmbeddedByValue() {}
+
+// UnsafeSessionArchiveWorkServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to SessionArchiveWorkServiceServer will
+// result in compilation errors.
+type UnsafeSessionArchiveWorkServiceServer interface {
+	mustEmbedUnimplementedSessionArchiveWorkServiceServer()
+}
+
+func RegisterSessionArchiveWorkServiceServer(s grpc.ServiceRegistrar, srv SessionArchiveWorkServiceServer) {
+	// If the following call panics, it indicates UnimplementedSessionArchiveWorkServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&SessionArchiveWorkService_ServiceDesc, srv)
+}
+
+func _SessionArchiveWorkService_ClaimSessionArchiveTasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimSessionArchiveTasksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionArchiveWorkServiceServer).ClaimSessionArchiveTasks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionArchiveWorkService_ClaimSessionArchiveTasks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionArchiveWorkServiceServer).ClaimSessionArchiveTasks(ctx, req.(*ClaimSessionArchiveTasksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SessionArchiveWorkService_RenewSessionArchiveTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewSessionArchiveTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionArchiveWorkServiceServer).RenewSessionArchiveTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionArchiveWorkService_RenewSessionArchiveTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionArchiveWorkServiceServer).RenewSessionArchiveTask(ctx, req.(*RenewSessionArchiveTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SessionArchiveWorkService_CompleteSessionSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteSessionSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionArchiveWorkServiceServer).CompleteSessionSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionArchiveWorkService_CompleteSessionSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionArchiveWorkServiceServer).CompleteSessionSnapshot(ctx, req.(*CompleteSessionSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SessionArchiveWorkService_CompleteSessionRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteSessionRestoreRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionArchiveWorkServiceServer).CompleteSessionRestore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionArchiveWorkService_CompleteSessionRestore_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionArchiveWorkServiceServer).CompleteSessionRestore(ctx, req.(*CompleteSessionRestoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SessionArchiveWorkService_CompleteSessionPVCDeletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteSessionPVCDeletionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionArchiveWorkServiceServer).CompleteSessionPVCDeletion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionArchiveWorkService_CompleteSessionPVCDeletion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionArchiveWorkServiceServer).CompleteSessionPVCDeletion(ctx, req.(*CompleteSessionPVCDeletionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SessionArchiveWorkService_CompleteSessionObjectDeletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteSessionObjectDeletionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionArchiveWorkServiceServer).CompleteSessionObjectDeletion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionArchiveWorkService_CompleteSessionObjectDeletion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionArchiveWorkServiceServer).CompleteSessionObjectDeletion(ctx, req.(*CompleteSessionObjectDeletionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SessionArchiveWorkService_FailSessionArchiveTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FailSessionArchiveTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionArchiveWorkServiceServer).FailSessionArchiveTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionArchiveWorkService_FailSessionArchiveTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionArchiveWorkServiceServer).FailSessionArchiveTask(ctx, req.(*FailSessionArchiveTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// SessionArchiveWorkService_ServiceDesc is the grpc.ServiceDesc for SessionArchiveWorkService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var SessionArchiveWorkService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.SessionArchiveWorkService",
+	HandlerType: (*SessionArchiveWorkServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ClaimSessionArchiveTasks",
+			Handler:    _SessionArchiveWorkService_ClaimSessionArchiveTasks_Handler,
+		},
+		{
+			MethodName: "RenewSessionArchiveTask",
+			Handler:    _SessionArchiveWorkService_RenewSessionArchiveTask_Handler,
+		},
+		{
+			MethodName: "CompleteSessionSnapshot",
+			Handler:    _SessionArchiveWorkService_CompleteSessionSnapshot_Handler,
+		},
+		{
+			MethodName: "CompleteSessionRestore",
+			Handler:    _SessionArchiveWorkService_CompleteSessionRestore_Handler,
+		},
+		{
+			MethodName: "CompleteSessionPVCDeletion",
+			Handler:    _SessionArchiveWorkService_CompleteSessionPVCDeletion_Handler,
+		},
+		{
+			MethodName: "CompleteSessionObjectDeletion",
+			Handler:    _SessionArchiveWorkService_CompleteSessionObjectDeletion_Handler,
+		},
+		{
+			MethodName: "FailSessionArchiveTask",
+			Handler:    _SessionArchiveWorkService_FailSessionArchiveTask_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "controlplane/v1/control_plane.proto",
+}
+
+const (
 	InteractionWorkService_ListInteractionSources_FullMethodName      = "/controlplane.v1.InteractionWorkService/ListInteractionSources"
 	InteractionWorkService_ClaimInteractionDeliveries_FullMethodName  = "/controlplane.v1.InteractionWorkService/ClaimInteractionDeliveries"
 	InteractionWorkService_CompleteInteractionDelivery_FullMethodName = "/controlplane.v1.InteractionWorkService/CompleteInteractionDelivery"

@@ -142,6 +142,8 @@ spec:
               valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleRuntimeContractSHA256}}
             - name: CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE
               value: /var/run/config/kodex/control-plane/application-grants/role-image-builder.platform-worker.public.jwk
+            - name: CONTROL_PLANE_SESSION_ARCHIVE_GRANT_TRUST_FILE
+              value: /var/run/config/kodex/control-plane/application-grants/session-archive.platform-worker.public.jwk
             - name: CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE
               value: /var/run/config/kodex/control-plane/application-grants/image-admission.platform-worker.public.jwk
             - name: CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE

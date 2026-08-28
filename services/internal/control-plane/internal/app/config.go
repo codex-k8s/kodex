@@ -53,6 +53,7 @@ type Config struct {
 	ProofSignerFile                 string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_SIGNER_FILE"`
 	ProofSignerTrustFile            string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_TRUST_FILE"`
 	AutomationGrantTrustFile        string        `env:"CONTROL_PLANE_AUTOMATION_GRANT_TRUST_FILE"`
+	SessionArchiveGrantTrustFile    string        `env:"CONTROL_PLANE_SESSION_ARCHIVE_GRANT_TRUST_FILE"`
 	IntegrationGrantTrustFile       string        `env:"CONTROL_PLANE_INTEGRATION_GRANT_TRUST_FILE"`
 	InteractionGrantTrustFile       string        `env:"CONTROL_PLANE_INTERACTION_GRANT_TRUST_FILE"`
 	RuntimeGrantTrustFile           string        `env:"CONTROL_PLANE_RUNTIME_GRANT_TRUST_FILE"`
@@ -127,6 +128,7 @@ func loadConfig() (Config, error) {
 		ProofSignerFile:                "/var/run/secrets/kodex/internal-rpc-authority/proof-signer/private.jwk",
 		ProofSignerTrustFile:           "/var/run/config/kodex/internal-rpc-authority/authority-proof-trust/jwks.json",
 		AutomationGrantTrustFile:       "/var/run/config/kodex/control-plane/application-grants/automation-scheduler.platform-worker.public.jwk",
+		SessionArchiveGrantTrustFile:   "/var/run/config/kodex/control-plane/application-grants/session-archive.platform-worker.public.jwk",
 		IntegrationGrantTrustFile:      "/var/run/config/kodex/control-plane/application-grants/integration-gateway.platform-worker.public.jwk",
 		InteractionGrantTrustFile:      "",
 		RuntimeGrantTrustFile:          "/var/run/config/kodex/control-plane/application-grants/runtime-controller.platform-worker.public.jwk",
@@ -161,7 +163,7 @@ func (config Config) validate() error {
 			return errors.New("control-plane listen address is invalid")
 		}
 	}
-	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.ObjectStorageAccessKeyFile, config.ObjectStorageSecretKeyFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
+	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.ObjectStorageAccessKeyFile, config.ObjectStorageSecretKeyFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.SessionArchiveGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("control-plane file path is invalid")
 		}

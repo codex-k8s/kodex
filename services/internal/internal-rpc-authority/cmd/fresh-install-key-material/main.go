@@ -23,6 +23,7 @@ func main() {
 		{"publisher/manifest-signer", "ira-publisher-manifest-g1"},
 		{"restore/pitr-evidence", "ira-restore-pitr-evidence-g1"},
 		{"platform-worker/automation-scheduler", "automation-scheduler-platform-worker-g1"},
+		{"platform-worker/session-archive", "session-archive-platform-worker-g1"},
 		{"platform-worker/integration-gateway", "integration-gateway-platform-worker-g1"},
 		{"platform-worker/interaction-gateway", "interaction-gateway-platform-worker-g1"},
 		{"platform-worker/runtime-controller", "runtime-controller-platform-worker-g1"},

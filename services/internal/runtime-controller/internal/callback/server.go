@@ -340,7 +340,7 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(request.Context()), server.config.RequestTimeout)
 	defer cancel()
 	usage := &controlplanev1.TokenUsage{TotalTokens: payload.Usage.TotalTokens, InputTokens: payload.Usage.InputTokens, CachedInputTokens: payload.Usage.CachedInputTokens, CacheWriteInputTokens: payload.Usage.CacheWriteInputTokens, OutputTokens: payload.Usage.OutputTokens, ReasoningOutputTokens: payload.Usage.ReasoningOutputTokens, ModelContextWindow: payload.Usage.ModelContextWindow}
-	_, err := server.control.Runtime.CompleteExecution(ctx, &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "complete")}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: payload.Success, ResultSummary: payload.ResultSummary, SafeErrorCode: payload.SafeErrorCode, Artifacts: artifacts, Usage: usage})
+	_, err := server.control.Runtime.CompleteExecution(ctx, &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "complete")}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: payload.Success, ResultSummary: payload.ResultSummary, SafeErrorCode: payload.SafeErrorCode, Artifacts: artifacts, Usage: usage, CodexSessionId: payload.CodexSessionID, CodexArchiveRelativePath: payload.ArchiveRelativePath, CodexArchiveSha256: payload.ArchiveSHA256, CodexArchiveSizeBytes: payload.ArchiveSizeBytes})
 	if err != nil && status.Code(err) != codes.AlreadyExists {
 		writeControlError(writer, err)
 		return

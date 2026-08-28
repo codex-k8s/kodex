@@ -120,13 +120,14 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err != nil {
 		return Result{}, err
 	}
-	archivePath, relativePath, digest, err := captureRollout(input, state.threadPath)
+	archivePath, relativePath, digest, sizeBytes, err := captureRollout(input, state.threadPath)
 	if err != nil {
 		return Result{}, err
 	}
 	result.ArchivePath = archivePath
 	result.ArchiveRelativePath = relativePath
 	result.ArchiveSHA256 = digest
+	result.ArchiveSizeBytes = sizeBytes
 	return result, nil
 }
 
@@ -441,31 +442,31 @@ func verifyRestoreArchive(input model.Input) error {
 	return nil
 }
 
-func captureRollout(input model.Input, returnedPath string) (string, string, string, error) {
+func captureRollout(input model.Input, returnedPath string) (string, string, string, int64, error) {
 	if !filepath.IsAbs(returnedPath) || filepath.Clean(returnedPath) != returnedPath ||
 		!strings.HasPrefix(returnedPath, input.CodexHome+string(os.PathSeparator)) {
-		return "", "", "", errors.New("Codex app-server returned an unsafe rollout path")
+		return "", "", "", 0, errors.New("Codex app-server returned an unsafe rollout path")
 	}
 	relativePath, err := filepath.Rel(input.WorkspaceRoot, returnedPath)
 	if err != nil {
-		return "", "", "", errors.New("resolve Codex rollout path")
+		return "", "", "", 0, errors.New("resolve Codex rollout path")
 	}
 	relativePath = filepath.ToSlash(relativePath)
 	if !validRolloutRelativePath(relativePath) {
-		return "", "", "", errors.New("Codex app-server rollout identity changed")
+		return "", "", "", 0, errors.New("Codex app-server rollout identity changed")
 	}
 	file, info, err := openProtectedFile(input.WorkspaceRoot, returnedPath)
 	if err != nil {
-		return "", "", "", errors.New("open Codex app-server rollout")
+		return "", "", "", 0, errors.New("open Codex app-server rollout")
 	}
 	digest, hashErr := digestArchive(file, info)
 	groupErr := file.Chown(-1, 29000)
 	modeErr := file.Chmod(0o640)
 	closeErr := file.Close()
 	if hashErr != nil || groupErr != nil || modeErr != nil || closeErr != nil {
-		return "", "", "", errors.New("verify Codex app-server rollout")
+		return "", "", "", 0, errors.New("verify Codex app-server rollout")
 	}
-	return returnedPath, relativePath, digest, nil
+	return returnedPath, relativePath, digest, info.Size(), nil
 }
 
 func validRolloutRelativePath(value string) bool {

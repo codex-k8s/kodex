@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 37,
+  "policy_revision": 38,
   "policy": {
     "trust_domain": "kodex.local",
     "default_decision": "DENY",
@@ -416,6 +416,51 @@
           "platform.runtime.integration.resolve",
           "platform.runtime.warm.reconcile",
           "platform.runtime.warm.report"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "ownership",
+          "provenance"
+        ]
+      },
+      {
+        "producer_id": "control-plane.session-archive",
+        "caller_workload_id": "session-archive",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "owner_workload_id": "control-plane",
+        "owner_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "kodex-internal-ca-g1",
+        "application_credential": "PLATFORM_WORKER_GRANT",
+        "application_credential_metadata": "authorization",
+        "application_credential_issuer": "https://control-plane.kodex-system.svc.cluster.local/authority/platform-worker/session-archive",
+        "application_credential_audience": "urn:kodex:platform-worker:session-archive",
+        "application_credential_trust_bundle_id": "session-archive-platform-worker-grants-g1",
+        "authority_proof_issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "authority_proof_audience": "urn:kodex:internal-rpc-authority-issuer:session-archive",
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_proof_max_age_seconds": 15,
+        "deadline_milliseconds": 2000,
+        "max_attempts": 2,
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "allowed_operation_ids": [
+          "platform.session-archive.object-delete.complete",
+          "platform.session-archive.pvc-delete.complete",
+          "platform.session-archive.restore.complete",
+          "platform.session-archive.snapshot.complete",
+          "platform.session-archive.tasks.claim",
+          "platform.session-archive.tasks.fail",
+          "platform.session-archive.tasks.renew"
         ],
         "server_resolved_fields": [
           "actor",
@@ -3629,6 +3674,202 @@
         "target_trust_bundle_id": "kodex-internal-ca-g1",
         "permission": "platform.runtime.warm.report",
         "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.session-archive.object-delete.complete",
+        "caller_workload_id": "session-archive",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.SessionArchiveWorkService/CompleteSessionObjectDeletion",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.session-archive.object-delete.complete",
+        "authority_proof_producer_id": "control-plane.session-archive",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.session-archive.pvc-delete.complete",
+        "caller_workload_id": "session-archive",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.SessionArchiveWorkService/CompleteSessionPVCDeletion",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.session-archive.pvc-delete.complete",
+        "authority_proof_producer_id": "control-plane.session-archive",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.session-archive.restore.complete",
+        "caller_workload_id": "session-archive",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.SessionArchiveWorkService/CompleteSessionRestore",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.session-archive.restore.complete",
+        "authority_proof_producer_id": "control-plane.session-archive",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.session-archive.snapshot.complete",
+        "caller_workload_id": "session-archive",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.SessionArchiveWorkService/CompleteSessionSnapshot",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.session-archive.snapshot.complete",
+        "authority_proof_producer_id": "control-plane.session-archive",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.session-archive.tasks.claim",
+        "caller_workload_id": "session-archive",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.SessionArchiveWorkService/ClaimSessionArchiveTasks",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.session-archive.tasks.claim",
+        "authority_proof_producer_id": "control-plane.session-archive",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.session-archive.tasks.fail",
+        "caller_workload_id": "session-archive",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.SessionArchiveWorkService/FailSessionArchiveTask",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.session-archive.tasks.fail",
+        "authority_proof_producer_id": "control-plane.session-archive",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.session-archive.tasks.renew",
+        "caller_workload_id": "session-archive",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.SessionArchiveWorkService/RenewSessionArchiveTask",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.session-archive.tasks.renew",
+        "authority_proof_producer_id": "control-plane.session-archive",
         "authority_sources": [
           "DOMAIN_STATE"
         ],

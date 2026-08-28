@@ -35,6 +35,9 @@ spec:
               app.kubernetes.io/name: automation-scheduler
         - podSelector:
             matchLabels:
+              app.kubernetes.io/name: session-archive
+        - podSelector:
+            matchLabels:
               app.kubernetes.io/name: role-image-builder
         - podSelector:
             matchExpressions:

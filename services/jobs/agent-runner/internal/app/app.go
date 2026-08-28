@@ -151,7 +151,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 	}
 	if result.Outcome != "SUCCEEDED" {
 		_, message, _ := codex.TerminalPresentation(result.FailureCode)
-		return completeFailureWithSummaryAndUsage(ctx, input, client, result.FailureCode, message, result.Usage)
+		return completeResultFailure(ctx, input, client, result, message)
 	}
 	if strings.TrimSpace(result.FinalMessage) == "" || len(result.FinalMessage) > 1<<20 || !utf8.ValidString(result.FinalMessage) {
 		return completeFailure(ctx, input, client, "RUNTIME_RESULT_INVALID")
@@ -160,8 +160,15 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 	if err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_ARTIFACT_INVALID")
 	}
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
 	return client.Complete(ctx, input, payload)
+}
+
+func completeResultFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, summary string) error {
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: false, ResultSummary: summary,
+		SafeErrorCode: safeFailureCode(result.FailureCode), Usage: result.Usage, CodexSessionID: result.SessionID,
+		ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
 
 func completionArtifacts(input model.Input, finalMessage string) ([]runtimecontract.RunnerArtifact, error) {

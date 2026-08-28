@@ -27,6 +27,7 @@ type Result struct {
 	ArchivePath         string
 	ArchiveRelativePath string
 	ArchiveSHA256       string
+	ArchiveSizeBytes    int64
 	Usage               runtimecontract.TokenUsage
 }
 

@@ -131,10 +131,14 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	if bytes.Contains(secret.Data[inputKey], []byte(binding.Name)) || bytes.Contains(secret.Data[inputKey], []byte(binding.UID)) {
 		t.Fatal("Kubernetes provider Secret locator leaked into role-visible runtime input")
 	}
-	if _, err := client.CoreV1().PersistentVolumeClaims("kodex-system").Get(context.Background(), sessionPVCName(input.SessionRef), metav1.GetOptions{}); err != nil {
+	sessionVolumeName, nameErr := runtimecontract.SessionPVCName(input.SessionRef)
+	if nameErr != nil {
+		t.Fatalf("derive session volume name: %v", nameErr)
+	}
+	if _, err := client.CoreV1().PersistentVolumeClaims("kodex-system").Get(context.Background(), sessionVolumeName, metav1.GetOptions{}); err != nil {
 		t.Fatalf("session volume was not materialized: %v", err)
 	}
-	pvc, err := client.CoreV1().PersistentVolumeClaims("kodex-system").Get(context.Background(), sessionPVCName(input.SessionRef), metav1.GetOptions{})
+	pvc, err := client.CoreV1().PersistentVolumeClaims("kodex-system").Get(context.Background(), sessionVolumeName, metav1.GetOptions{})
 	if err != nil || pvc.Spec.StorageClassName != nil {
 		t.Fatalf("session volume must use the cluster default StorageClass: storage_class=%v err=%v", pvc.Spec.StorageClassName, err)
 	}

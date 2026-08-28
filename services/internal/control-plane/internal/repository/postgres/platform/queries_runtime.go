@@ -31,6 +31,8 @@ var (
 	queryRuntimeCompleteexecutionUpdateSessionTurnsStateCompletedAt string
 	//go:embed sql/runtime_completeexecution_select_runs_id.sql
 	queryRuntimeCompleteexecutionSelectRunsId string
+	//go:embed sql/runtime_completeexecution_upsert_session_storage.sql
+	queryRuntimeCompleteexecutionUpsertSessionStorage string
 	//go:embed sql/runtime_completeexecution_select_agent_capability.sql
 	queryRuntimeCompleteexecutionSelectAgentCapability string
 	//go:embed sql/runtime_completeexecution_lock_root_run.sql

@@ -80,6 +80,34 @@ func TestTokenUsageValidationRejectsInconsistentCounters(t *testing.T) {
 	}
 }
 
+func TestRunnerCompletionArchiveBindingIsCompleteAndBounded(t *testing.T) {
+	request := RunnerCompletionRequest{RuntimeRevisionDigest: strings.Repeat("b", 64), Success: true,
+		ResultSummary: "done", CodexSessionID: "00000000-0000-4000-8000-000000000001",
+		ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000001.jsonl",
+		ArchiveSHA256:       strings.Repeat("c", 64), ArchiveSizeBytes: 1024}
+	if err := request.Validate(); err != nil {
+		t.Fatalf("valid archive binding rejected: %v", err)
+	}
+	request.ArchiveSizeBytes = 0
+	if err := request.Validate(); err == nil {
+		t.Fatal("incomplete archive binding accepted")
+	}
+}
+
+func TestSessionPVCNameIsStableAndRejectsInvalidReference(t *testing.T) {
+	first, err := SessionPVCName("ses_abcdefgh")
+	if err != nil {
+		t.Fatalf("SessionPVCName() error = %v", err)
+	}
+	second, _ := SessionPVCName("ses_abcdefgh")
+	if first != second || !strings.HasPrefix(first, "runtime-session-") || len(first) != len("runtime-session-")+16 {
+		t.Fatalf("SessionPVCName() = %q, %q", first, second)
+	}
+	if _, err := SessionPVCName("../session"); err == nil {
+		t.Fatal("SessionPVCName() accepted an invalid reference")
+	}
+}
+
 func validRunnerInputFixture() RunnerInput {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
 	return RunnerInput{

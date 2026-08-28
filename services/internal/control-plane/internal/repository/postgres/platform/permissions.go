@@ -20,6 +20,9 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, s
 		return errs.ErrForbidden
 	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
 		command.DelegateExecution, command.ProposeAssistantPlan, command.MaterializeOccurrence,
+		command.CompleteSessionSnapshot, command.CompleteSessionRestore,
+		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
+		command.FailSessionArchiveTask,
 		command.CompleteConnectionTest, command.CompleteIntegrationInvocation,
 		command.CompleteInteractionDelivery, command.AcceptInteractionMessage:
 		return nil
