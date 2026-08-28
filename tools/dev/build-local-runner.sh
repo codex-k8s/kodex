@@ -74,7 +74,8 @@ docker run --rm --user 0 \
   -v /run/k3s/containerd/containerd.sock:/run/k3s/containerd/containerd.sock \
   -v "$archive:/image.oci.tar:ro" \
   --entrypoint /bin/ctr docker.io/rancher/k3s:v1.36.1-k3s1 \
-  --address /run/k3s/containerd/containerd.sock -n k8s.io images import /image.oci.tar >/dev/null
+  --address /run/k3s/containerd/containerd.sock -n k8s.io images import \
+  --base-name "$repository" /image.oci.tar >/dev/null
 docker run --rm --user 0 \
   -v /run/k3s/containerd/containerd.sock:/run/k3s/containerd/containerd.sock \
   --entrypoint /bin/ctr docker.io/rancher/k3s:v1.36.1-k3s1 \

@@ -166,6 +166,7 @@ postgresql_bootstrap_password="$output_directory/postgresql/bootstrap-password"
 openssl rand -hex 32 >"$postgresql_bootstrap_password"
 for role in \
   control_plane_migrator control_plane_runtime_g1 internal_rpc_authority_migrator \
+  kodex_backup_reader \
   ira_restore_controller_g1 ira_publisher_g4 ira_readback_attestor_g4 \
   ira_role_image_builder_issuer_g1 ira_image_admission_issuer_g1 \
   ira_image_promotion_issuer_g1 ira_automation_scheduler_issuer_g1 \

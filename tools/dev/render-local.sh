@@ -229,7 +229,8 @@ BACKUP_CONTROLLER_IMAGE="$backup_controller_image" yq -i '
   )
 ' "$render"
 
-API_ENDPOINT_CIDR="$kubernetes_endpoint_cidr" API_ENDPOINT_PORT="$kubernetes_endpoint_port" \
+API_SERVICE_CIDR="$kubernetes_service_cidr" API_ENDPOINT_CIDR="$kubernetes_endpoint_cidr" \
+API_ENDPOINT_PORT="$kubernetes_endpoint_port" \
 OIDC_HOST="$oidc_host" yq -i '
   with(select(.kind == "ConfigMap" and .metadata.name == "kodex-platform-endpoints");
     .data.oidcConnectAddress = "sso.identity.svc.cluster.local:443" |
@@ -237,6 +238,15 @@ OIDC_HOST="$oidc_host" yq -i '
   ) |
   with(select(.kind == "NetworkPolicy" and .metadata.name == "control-plane-exact-runtime-paths");
     (.spec.egress[].ports[] | select(.port == "__KODEX_OIDC_TARGET_PORT__").port) = 443
+  ) |
+  with(select(.kind == "NetworkPolicy");
+    (.spec.egress[]? |
+      select(.to[]?.ipBlock.cidr == strenv(API_SERVICE_CIDR))) |= (
+        (.to[] | select(.ipBlock.cidr == strenv(API_SERVICE_CIDR)) |
+          .ipBlock.cidr) = strenv(API_ENDPOINT_CIDR) |
+        (.ports[] | select(.port == 443) | .port) =
+          (strenv(API_ENDPOINT_PORT) | tonumber)
+      )
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "control-api-gateway");
     (.spec.template.spec.containers[] | select(.name == "control-api-gateway") |
@@ -614,8 +624,8 @@ SESSION_ARCHIVE_IMAGE="$session_archive_image" yq -i '
   )
 ' "$render"
 
-# API endpoint egress policy was removed for hot reload. These values still
-# participate in deterministic render input and are checked by the installer.
+# Keep the exact local API endpoint in the deterministic render input for
+# diagnostics and readback.
 jq -n --arg endpoint "$kubernetes_endpoint_cidr" --arg port "$kubernetes_endpoint_port" \
   '{endpointCIDR:$endpoint,endpointPort:($port|tonumber)}' >"$temporary_directory/api.json"
 

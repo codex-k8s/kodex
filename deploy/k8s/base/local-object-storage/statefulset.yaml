@@ -60,8 +60,8 @@ spec:
             - -dir=/data/volume
             - -master.dir=/data/master
             - -master.telemetry=false
-            - -master.volumeSizeLimitMB=1024
-            - -volume.max=4
+            - -master.volumeSizeLimitMB=64
+            - -volume.max=64
             - -filer
             - -filer.disableDirListing=true
             - -s3

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -33,10 +34,44 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	var warmInstance, runtimeKey, profileRevision, provider, model, roleDefinitionRef string
 	var providerAccountRef, providerCredentialRef, providerSecretName string
 	var providerSecretUID, providerSecretResourceVersion, providerCredentialSHA256 string
-	var providerCredentialRevisionNumber int64
-	err = tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(&assistant.Ref, &assistant.StableKey, &assistant.Name, &assistant.Purpose, &assistant.CorePromptRevision, &ownerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &systemSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt, &promptRef, &promptDigest, &promptContent, &warmInstance, &runtimeKey, &profileRevision, &provider, &model, &roleDefinitionRef, &providerAccountRef, &providerCredentialRef, &providerCredentialRevisionNumber, &providerSecretName, &providerSecretUID, &providerSecretResourceVersion, &providerCredentialSHA256)
+	var runtimeConfigRef, runtimeConfigDigest, providerPolicyRef, providerPolicyDigest string
+	var configOverlayRef, configOverlayDigest, configOverlay string
+	var runtimeEnvironmentRef, runtimeEnvironmentDigest string
+	var environmentBindingRef, environmentBindingDigest string
+	var rawEnvironmentValues, rawSecretProjections []byte
+	var providerCredentialRevisionNumber, runtimeConfigVersion, providerPolicyVersion int64
+	var configOverlayVersion, runtimeEnvironmentVersion, environmentBindingVersion int64
+	err = tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(
+		&assistant.Ref, &assistant.StableKey, &assistant.Name, &assistant.Purpose,
+		&assistant.CorePromptRevision, &ownerInstructions, &assistant.RuntimeState,
+		&assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &systemSessionRef,
+		&limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt,
+		&promptRef, &promptDigest, &promptContent, &warmInstance, &runtimeKey,
+		&profileRevision, &provider, &model, &roleDefinitionRef, &providerAccountRef,
+		&providerCredentialRef, &providerCredentialRevisionNumber, &providerSecretName,
+		&providerSecretUID, &providerSecretResourceVersion, &providerCredentialSHA256,
+		&runtimeConfigRef, &runtimeConfigVersion, &runtimeConfigDigest,
+		&providerPolicyRef, &providerPolicyVersion, &providerPolicyDigest,
+		&configOverlayRef, &configOverlayVersion, &configOverlayDigest, &configOverlay,
+		&runtimeEnvironmentRef, &runtimeEnvironmentVersion, &runtimeEnvironmentDigest,
+		&environmentBindingRef, &environmentBindingVersion, &environmentBindingDigest,
+		&rawEnvironmentValues, &rawSecretProjections,
+	)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrUnavailable
+	}
+	canonicalOverlay, verifiedOverlayDigest, err := runtimecontract.CanonicalConfigOverlay(configOverlay)
+	if err != nil || canonicalOverlay != configOverlay || verifiedOverlayDigest != configOverlayDigest {
+		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+	}
+	var environmentValues []runtimecontract.RuntimeEnvironmentValue
+	var secretProjections []runtimecontract.RuntimeSecretProjection
+	if err := decodeStoredRuntimeEnvironment(rawEnvironmentValues, rawSecretProjections, &environmentValues, &secretProjections); err != nil {
+		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+	}
+	verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(environmentValues, secretProjections)
+	if err != nil || verifiedEnvironmentDigest != runtimeEnvironmentDigest {
+		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
 	_ = json.Unmarshal(limits, &assistant.ResourceLimits)
 	assistant.OwnerInstructions = ownerInstructions
@@ -62,6 +97,9 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		providerSecretResourceVersion, providerCredentialSHA256,
 		ownerInstructions, roleDefinitionRef, repository.roleImages.DefaultImageReference,
 		repository.roleImages.DefaultImageDigest, repository.roleImages.RoleRuntimeContractSHA256,
+		runtimeConfigRef, runtimeConfigDigest, providerPolicyRef, providerPolicyDigest,
+		configOverlayRef, configOverlayDigest, runtimeEnvironmentRef, runtimeEnvironmentDigest,
+		environmentBindingRef, environmentBindingDigest,
 	}, "\x00")))
 	snapshot := map[string]any{
 		"assistantRef": assistant.Ref, "agentRef": assistant.Ref,
@@ -85,6 +123,24 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"imageManifestDigest":         repository.roleImages.DefaultImageDigest,
 		"roleRuntimeContractRevision": repository.roleImages.RoleRuntimeContractRevision,
 		"roleRuntimeContractSHA256":   repository.roleImages.RoleRuntimeContractSHA256,
+		"runtimeConfigRef":            runtimeConfigRef,
+		"runtimeConfigVersion":        runtimeConfigVersion,
+		"runtimeConfigDigest":         runtimeConfigDigest,
+		"providerPolicyRef":           providerPolicyRef,
+		"providerPolicyVersion":       providerPolicyVersion,
+		"providerPolicyDigest":        providerPolicyDigest,
+		"configOverlayRef":            configOverlayRef,
+		"configOverlayVersion":        configOverlayVersion,
+		"configOverlayDigest":         configOverlayDigest,
+		"configOverlay":               configOverlay,
+		"runtimeEnvironmentRef":       runtimeEnvironmentRef,
+		"runtimeEnvironmentVersion":   runtimeEnvironmentVersion,
+		"runtimeEnvironmentDigest":    runtimeEnvironmentDigest,
+		"environmentBindingRef":       environmentBindingRef,
+		"environmentBindingVersion":   environmentBindingVersion,
+		"environmentBindingDigest":    environmentBindingDigest,
+		"environmentValues":           environmentValues,
+		"secretProjections":           secretProjections,
 		"revisionDigest":              hex.EncodeToString(revisionDigest[:]),
 	}
 	if err := tx.Commit(ctx); err != nil {

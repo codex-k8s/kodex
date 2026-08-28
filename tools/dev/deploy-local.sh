@@ -357,8 +357,8 @@ write_local_backup_controller_credentials() {
           host: "kodex-postgresql.kodex-system.svc.cluster.local",
           port: 5432,
           database: "control_plane",
-          user: "control_plane_migrator",
-          password: secret($database; "control_plane_migrator"),
+          user: "kodex_backup_reader",
+          password: secret($database; "kodex_backup_reader"),
           tlsMode: "verify-full",
           tlsServerName: "kodex-postgresql.kodex-system.svc.cluster.local",
           caFile: "/var/run/secrets/kodex/backup-controller/tls/ca.pem",
@@ -369,8 +369,8 @@ write_local_backup_controller_credentials() {
           host: "kodex-postgresql.kodex-system.svc.cluster.local",
           port: 5432,
           database: "internal_rpc_authority",
-          user: "internal_rpc_authority_migrator",
-          password: secret($database; "internal_rpc_authority_migrator"),
+          user: "kodex_backup_reader",
+          password: secret($database; "kodex_backup_reader"),
           tlsMode: "verify-full",
           tlsServerName: "kodex-postgresql.kodex-system.svc.cluster.local",
           caFile: "/var/run/secrets/kodex/backup-controller/tls/ca.pem",
@@ -415,8 +415,17 @@ readback_local_backup_controller_secret() {
 }
 
 ensure_local_backup_controller_secret() {
-  local credentials="$temporary_directory/backup-controller-credentials.json"
+  local credentials="$temporary_directory/backup-controller-credentials.json" credentials_digest
   write_local_backup_controller_credentials "$credentials"
+  credentials_digest=$(jq -Sc '.' "$credentials" | sha256sum | awk '{print $1}')
+  [[ "$credentials_digest" =~ ^[a-f0-9]{64}$ ]] ||
+    fail 'local backup-controller credentials digest is invalid'
+  BACKUP_CONTROLLER_CREDENTIALS_DIGEST="$credentials_digest" yq -i '
+    with(select(.kind == "Deployment" and .metadata.name == "backup-controller");
+      .spec.template.metadata.annotations["kodex.dev/backup-credentials-sha256"] =
+        strenv(BACKUP_CONTROLLER_CREDENTIALS_DIGEST)
+    )
+  ' "$render"
   kubectl -n "$namespace" create secret generic backup-controller-credentials \
     --from-file=credentials.json="$credentials" \
     --dry-run=client -o yaml |
@@ -475,15 +484,24 @@ wait_warm_runtime() {
 }
 
 wait_stable_workloads() {
-  local deadline=$((SECONDS + 300)) stable_since=0 snapshot
-  while ((SECONDS < deadline)); do
-    snapshot=$(kubectl -n "$namespace" get pods -o json)
-    if jq -e '
-      [.items[] |
-        select(
-          .metadata.name == "system-assistant-warm" or
-          any(.metadata.ownerReferences[]?; .kind == "ReplicaSet" or .kind == "StatefulSet")
-        )] as $workloads |
+	local deadline=$((SECONDS + 300)) stable_since=0 snapshot
+	while ((SECONDS < deadline)); do
+		snapshot=$(kubectl -n "$namespace" get pods,replicasets,statefulsets -o json)
+		if jq -e '
+			([.items[] |
+				select(.kind == "ReplicaSet" and (.spec.replicas // 0) > 0) |
+				.metadata.name]) as $activeReplicaSets |
+			([.items[] |
+				select(.kind == "StatefulSet" and (.spec.replicas // 0) > 0) |
+				.metadata.name]) as $activeStatefulSets |
+			[.items[] |
+				select(.kind == "Pod") |
+				select(
+					.metadata.name == "system-assistant-warm" or
+					any(.metadata.ownerReferences[]?;
+						(.kind == "ReplicaSet" and (.name as $name | $activeReplicaSets | index($name) != null)) or
+						(.kind == "StatefulSet" and (.name as $name | $activeStatefulSets | index($name) != null)))
+				)] as $workloads |
       ($workloads | length) > 0 and
       all($workloads[];
         .status.phase == "Running" and

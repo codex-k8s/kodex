@@ -75,6 +75,28 @@ spec:
                   printf 'SeaweedFS bucket versioning readback failed\n' >&2
                   exit 1
                 }
+                probe_key="_kodex-bootstrap/${HOSTNAME}-write-readback.txt"
+                printf 'kodex local object storage write probe\n' > /tmp/write-probe.txt
+                version_id=$(aws_s3api put-object --bucket "$bucket" --key "$probe_key" \
+                  --body /tmp/write-probe.txt --query VersionId --output text)
+                [ -n "$version_id" ] && [ "$version_id" != None ] || {
+                  printf 'SeaweedFS versioned write receipt is absent\n' >&2
+                  exit 1
+                }
+                aws_s3api get-object --bucket "$bucket" --key "$probe_key" \
+                  --version-id "$version_id" /tmp/write-readback.txt >/dev/null
+                [ "$(cat /tmp/write-readback.txt)" = 'kodex local object storage write probe' ] || {
+                  printf 'SeaweedFS object readback mismatches the written payload\n' >&2
+                  exit 1
+                }
+                aws_s3api delete-object --bucket "$bucket" --key "$probe_key" \
+                  --version-id "$version_id" >/dev/null
+                remaining=$(aws_s3api list-object-versions --bucket "$bucket" \
+                  --prefix "$probe_key" --query 'length(Versions || `[]`)' --output text)
+                [ "$remaining" = 0 ] || {
+                  printf 'SeaweedFS write probe cleanup readback failed\n' >&2
+                  exit 1
+                }
               done
           resources:
             requests: {cpu: 10m, memory: 32Mi}

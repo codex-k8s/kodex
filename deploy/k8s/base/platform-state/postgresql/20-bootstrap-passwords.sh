@@ -12,4 +12,4 @@ apply_password() {
 apply_password control_plane_migrator control_plane_migrator
 apply_password control_plane_runtime_g1 control_plane_runtime_g1
 apply_password internal_rpc_authority_migrator internal_rpc_authority_migrator
-
+apply_password kodex_backup_reader kodex_backup_reader
