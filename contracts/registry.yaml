@@ -60,10 +60,10 @@ packages:
       - role-image-builder
       - image-admission
       - image-promotion
-  - id: runtime-controller-agent-runner-input-v3
+  - id: runtime-controller-agent-runner-input-v6
     format: json-schema
     owner: runtime-controller
-    source: contracts/runtime-controller/v3/agent-runner-input.schema.json
+    source: contracts/runtime-controller/v6/agent-runner-input.schema.json
     consumers:
       - runtime-controller
       - agent-runner

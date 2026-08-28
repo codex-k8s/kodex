@@ -46,6 +46,12 @@ service PlatformQueryService {
   rpc GetIntegrationConnection(GetIntegrationConnectionRequest) returns (GetIntegrationConnectionResponse);
   rpc GetAdministration(GetAdministrationRequest) returns (GetAdministrationResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
+  rpc GetAgentRuntimeConfiguration(GetAgentRuntimeConfigurationRequest) returns (GetAgentRuntimeConfigurationResponse);
+  rpc ListAgentRuntimeConfigurationVersions(ListAgentRuntimeConfigurationVersionsRequest) returns (ListAgentRuntimeConfigurationVersionsResponse);
+  rpc ListRuntimeEnvironmentSets(ListRuntimeEnvironmentSetsRequest) returns (ListRuntimeEnvironmentSetsResponse);
+  rpc GetRuntimeEnvironmentSet(GetRuntimeEnvironmentSetRequest) returns (GetRuntimeEnvironmentSetResponse);
+  rpc ListRuntimeEnvironmentVersions(ListRuntimeEnvironmentVersionsRequest) returns (ListRuntimeEnvironmentVersionsResponse);
+  rpc ListTemplateVariables(ListTemplateVariablesRequest) returns (ListTemplateVariablesResponse);
 }
 
 service PlatformCommandService {
@@ -92,6 +98,15 @@ service PlatformCommandService {
   rpc TestIntegrationConnection(TestIntegrationConnectionRequest) returns (TestIntegrationConnectionResponse);
   rpc SetIntegrationConnectionEnabled(SetIntegrationConnectionEnabledRequest) returns (SetIntegrationConnectionEnabledResponse);
   rpc ChangeIntegrationGrant(ChangeIntegrationGrantRequest) returns (ChangeIntegrationGrantResponse);
+  rpc PublishAgentRuntimeConfiguration(PublishAgentRuntimeConfigurationRequest) returns (PublishAgentRuntimeConfigurationResponse);
+  rpc CreateConfigOverlayDraft(CreateConfigOverlayDraftRequest) returns (CreateConfigOverlayDraftResponse);
+  rpc ValidateConfigOverlayDraft(ValidateConfigOverlayDraftRequest) returns (ValidateConfigOverlayDraftResponse);
+  rpc PublishConfigOverlayDraft(PublishConfigOverlayDraftRequest) returns (PublishConfigOverlayDraftResponse);
+  rpc RollbackConfigOverlay(RollbackConfigOverlayRequest) returns (RollbackConfigOverlayResponse);
+  rpc CreateRuntimeEnvironmentSet(CreateRuntimeEnvironmentSetRequest) returns (CreateRuntimeEnvironmentSetResponse);
+  rpc PublishRuntimeEnvironmentVersion(PublishRuntimeEnvironmentVersionRequest) returns (PublishRuntimeEnvironmentVersionResponse);
+  rpc RollbackRuntimeEnvironment(RollbackRuntimeEnvironmentRequest) returns (RollbackRuntimeEnvironmentResponse);
+  rpc BindAgentRuntimeEnvironment(BindAgentRuntimeEnvironmentRequest) returns (BindAgentRuntimeEnvironmentResponse);
 }
 
 service SystemAssistantService {
@@ -1766,6 +1781,24 @@ message RuntimeRevisionSnapshot {
   // Внутренняя неизменяемая привязка credential revision. Она не входит в
   // browser/OpenAPI contracts и не содержит secret value.
   ProviderCredentialBinding provider_credential = 28;
+  string runtime_config_ref = 29;
+  int64 runtime_config_version = 30;
+  string runtime_config_digest = 31;
+  string provider_policy_ref = 32;
+  int64 provider_policy_version = 33;
+  string provider_policy_digest = 34;
+  string config_overlay_ref = 35;
+  int64 config_overlay_version = 36;
+  string config_overlay_digest = 37;
+  string config_overlay = 38;
+  string runtime_environment_ref = 39;
+  int64 runtime_environment_version = 40;
+  string runtime_environment_digest = 41;
+  string environment_binding_ref = 42;
+  int64 environment_binding_version = 43;
+  string environment_binding_digest = 44;
+  repeated RuntimeEnvironmentValue environment_values = 45;
+  repeated RuntimeSecretDescriptor secret_projections = 46;
 }
 
 message ProviderCredentialBinding {
@@ -2145,4 +2178,232 @@ message ArchiveScheduleRequest {
 }
 message ArchiveScheduleResponse {
   Schedule schedule = 1;
+}
+
+message GetAgentRuntimeConfigurationRequest {
+  string agent_ref = 1;
+}
+message GetAgentRuntimeConfigurationResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message ListAgentRuntimeConfigurationVersionsRequest {
+  string agent_ref = 1;
+  PageRequest page = 2;
+}
+message ListAgentRuntimeConfigurationVersionsResponse {
+  repeated AgentRuntimeConfiguration configurations = 1;
+  PageInfo page = 2;
+}
+message ListRuntimeEnvironmentSetsRequest {
+  string project_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message ListRuntimeEnvironmentSetsResponse {
+  repeated RuntimeEnvironmentSet environments = 1;
+  PageInfo page = 2;
+}
+message GetRuntimeEnvironmentSetRequest {
+  string environment_ref = 1;
+}
+message GetRuntimeEnvironmentSetResponse {
+  RuntimeEnvironmentSet environment = 1;
+}
+message ListRuntimeEnvironmentVersionsRequest {
+  string environment_ref = 1;
+  PageRequest page = 2;
+}
+message ListRuntimeEnvironmentVersionsResponse {
+  repeated RuntimeEnvironmentVersion versions = 1;
+  PageInfo page = 2;
+}
+message ListTemplateVariablesRequest {
+  string project_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message ListTemplateVariablesResponse {
+  repeated TemplateVariable variables = 1;
+  PageInfo page = 2;
+}
+
+message PublishAgentRuntimeConfigurationRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string runtime_profile_ref = 3;
+  string model = 4;
+  string provider_policy_mode = 5;
+  repeated ProviderAccountCandidate provider_accounts = 6;
+}
+message PublishAgentRuntimeConfigurationResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message CreateConfigOverlayDraftRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string content = 3;
+}
+message CreateConfigOverlayDraftResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message ValidateConfigOverlayDraftRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+}
+message ValidateConfigOverlayDraftResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message PublishConfigOverlayDraftRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+}
+message PublishConfigOverlayDraftResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message RollbackConfigOverlayRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string published_overlay_ref = 3;
+}
+message RollbackConfigOverlayResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message CreateRuntimeEnvironmentSetRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string name = 3;
+  string description = 4;
+  repeated RuntimeEnvironmentValue values = 5;
+  repeated RuntimeSecretDescriptor secret_descriptors = 6;
+}
+message CreateRuntimeEnvironmentSetResponse {
+  RuntimeEnvironmentSet environment = 1;
+}
+message PublishRuntimeEnvironmentVersionRequest {
+  MutationContext mutation = 1;
+  string environment_ref = 2;
+  string name = 3;
+  string description = 4;
+  repeated RuntimeEnvironmentValue values = 5;
+  repeated RuntimeSecretDescriptor secret_descriptors = 6;
+}
+message PublishRuntimeEnvironmentVersionResponse {
+  RuntimeEnvironmentSet environment = 1;
+}
+message RollbackRuntimeEnvironmentRequest {
+  MutationContext mutation = 1;
+  string environment_ref = 2;
+  string published_version_ref = 3;
+}
+message RollbackRuntimeEnvironmentResponse {
+  RuntimeEnvironmentSet environment = 1;
+}
+message BindAgentRuntimeEnvironmentRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string environment_ref = 3;
+}
+message BindAgentRuntimeEnvironmentResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+
+message ProviderAccountCandidate {
+  string account_ref = 1;
+  int32 weight = 2;
+}
+
+message ProviderAccountPolicyVersion {
+  string ref = 1;
+  int64 version = 2;
+  string mode = 3;
+  repeated ProviderAccountCandidate account_candidates = 4;
+  string digest = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message AgentRuntimeConfiguration {
+  string ref = 1;
+  int64 version = 2;
+  string agent_ref = 3;
+  string runtime_profile_ref = 4;
+  string provider = 5;
+  string model = 6;
+  ProviderAccountPolicyVersion provider_policy = 7;
+  string digest = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message ConfigOverlayVersion {
+  string ref = 1;
+  int64 version = 2;
+  int64 revision = 3;
+  string state = 4;
+  string content = 5;
+  string digest = 6;
+  repeated string validation_messages = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp published_at = 9;
+}
+
+message RuntimeEnvironmentValue {
+  string name = 1;
+  string value = 2;
+}
+
+// RuntimeSecretDescriptor содержит только immutable Secret identity и digest.
+// Secret values не входят ни в один control-plane wire contract.
+message RuntimeSecretDescriptor {
+  string name = 1;
+  string secret_name = 2;
+  string secret_key = 3;
+  string secret_uid = 4;
+  string secret_resource_version = 5;
+  string content_sha256 = 6;
+}
+
+message RuntimeEnvironmentVersion {
+  string ref = 1;
+  int64 version = 2;
+  int64 revision = 3;
+  repeated RuntimeEnvironmentValue values = 4;
+  repeated RuntimeSecretDescriptor secret_descriptors = 5;
+  string digest = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message RuntimeEnvironmentSet {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  string name = 4;
+  string description = 5;
+  string state = 6;
+  RuntimeEnvironmentVersion current_version = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message AgentRuntimeEnvironmentBinding {
+  string ref = 1;
+  int64 version = 2;
+  string agent_ref = 3;
+  string environment_ref = 4;
+  string digest = 5;
+}
+
+message AgentRuntimeConfigurationView {
+  AgentRuntimeConfiguration configuration = 1;
+  ConfigOverlayVersion published_overlay = 2;
+  ConfigOverlayVersion draft_overlay = 3;
+  AgentRuntimeEnvironmentBinding environment_binding = 4;
+  RuntimeEnvironmentSet environment = 5;
+  string safe_effective_config = 6;
+  int64 agent_version = 7;
+}
+
+message TemplateVariable {
+  string name = 1;
+  string value_type = 2;
+  string description = 3;
+  string example = 4;
+  string source = 5;
 }

@@ -229,6 +229,8 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 	writer.Header().Set("Cache-Control", "no-store")
 	if version, ok := value["version"].(float64); ok && version >= 1 {
 		writer.Header().Set("ETag", fmt.Sprintf("\"%.0f\"", version))
+	} else if version, ok := value["agentVersion"].(float64); ok && version >= 1 {
+		writer.Header().Set("ETag", fmt.Sprintf("\"%.0f\"", version))
 	}
 	writer.WriteHeader(statusCode)
 	_ = json.NewEncoder(writer).Encode(value)

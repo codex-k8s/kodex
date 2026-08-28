@@ -19,38 +19,44 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlatformQueryService_GetBootstrapState_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetBootstrapState"
-	PlatformQueryService_GetPlatformEventCursor_FullMethodName           = "/controlplane.v1.PlatformQueryService/GetPlatformEventCursor"
-	PlatformQueryService_GetOverview_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetOverview"
-	PlatformQueryService_ListPlatformCapabilities_FullMethodName         = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
-	PlatformQueryService_ListRuntimeSelections_FullMethodName            = "/controlplane.v1.PlatformQueryService/ListRuntimeSelections"
-	PlatformQueryService_SearchPlatform_FullMethodName                   = "/controlplane.v1.PlatformQueryService/SearchPlatform"
-	PlatformQueryService_ListProjects_FullMethodName                     = "/controlplane.v1.PlatformQueryService/ListProjects"
-	PlatformQueryService_GetProject_FullMethodName                       = "/controlplane.v1.PlatformQueryService/GetProject"
-	PlatformQueryService_ListPlatformMemberships_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListPlatformMemberships"
-	PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName = "/controlplane.v1.PlatformQueryService/ListPlatformMembershipCandidates"
-	PlatformQueryService_ListProjectMemberships_FullMethodName           = "/controlplane.v1.PlatformQueryService/ListProjectMemberships"
-	PlatformQueryService_ListProjectMembershipCandidates_FullMethodName  = "/controlplane.v1.PlatformQueryService/ListProjectMembershipCandidates"
-	PlatformQueryService_ListAgents_FullMethodName                       = "/controlplane.v1.PlatformQueryService/ListAgents"
-	PlatformQueryService_GetAgent_FullMethodName                         = "/controlplane.v1.PlatformQueryService/GetAgent"
-	PlatformQueryService_ListAgentInstructionVersions_FullMethodName     = "/controlplane.v1.PlatformQueryService/ListAgentInstructionVersions"
-	PlatformQueryService_ListWorkflows_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListWorkflows"
-	PlatformQueryService_GetWorkflow_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetWorkflow"
-	PlatformQueryService_ListRuns_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListRuns"
-	PlatformQueryService_GetRun_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetRun"
-	PlatformQueryService_GetRunGraph_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetRunGraph"
-	PlatformQueryService_ListRunEvents_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListRunEvents"
-	PlatformQueryService_ListOwnerGates_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListOwnerGates"
-	PlatformQueryService_GetOwnerGate_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetOwnerGate"
-	PlatformQueryService_ListArtifacts_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListArtifacts"
-	PlatformQueryService_GetArtifact_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetArtifact"
-	PlatformQueryService_ListSchedules_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListSchedules"
-	PlatformQueryService_GetSchedule_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetSchedule"
-	PlatformQueryService_ListIntegrationDefinitions_FullMethodName       = "/controlplane.v1.PlatformQueryService/ListIntegrationDefinitions"
-	PlatformQueryService_ListIntegrationConnections_FullMethodName       = "/controlplane.v1.PlatformQueryService/ListIntegrationConnections"
-	PlatformQueryService_GetIntegrationConnection_FullMethodName         = "/controlplane.v1.PlatformQueryService/GetIntegrationConnection"
-	PlatformQueryService_GetAdministration_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetAdministration"
-	PlatformQueryService_ListAuditEvents_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListAuditEvents"
+	PlatformQueryService_GetBootstrapState_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetBootstrapState"
+	PlatformQueryService_GetPlatformEventCursor_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetPlatformEventCursor"
+	PlatformQueryService_GetOverview_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetOverview"
+	PlatformQueryService_ListPlatformCapabilities_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
+	PlatformQueryService_ListRuntimeSelections_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListRuntimeSelections"
+	PlatformQueryService_SearchPlatform_FullMethodName                        = "/controlplane.v1.PlatformQueryService/SearchPlatform"
+	PlatformQueryService_ListProjects_FullMethodName                          = "/controlplane.v1.PlatformQueryService/ListProjects"
+	PlatformQueryService_GetProject_FullMethodName                            = "/controlplane.v1.PlatformQueryService/GetProject"
+	PlatformQueryService_ListPlatformMemberships_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListPlatformMemberships"
+	PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName      = "/controlplane.v1.PlatformQueryService/ListPlatformMembershipCandidates"
+	PlatformQueryService_ListProjectMemberships_FullMethodName                = "/controlplane.v1.PlatformQueryService/ListProjectMemberships"
+	PlatformQueryService_ListProjectMembershipCandidates_FullMethodName       = "/controlplane.v1.PlatformQueryService/ListProjectMembershipCandidates"
+	PlatformQueryService_ListAgents_FullMethodName                            = "/controlplane.v1.PlatformQueryService/ListAgents"
+	PlatformQueryService_GetAgent_FullMethodName                              = "/controlplane.v1.PlatformQueryService/GetAgent"
+	PlatformQueryService_ListAgentInstructionVersions_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListAgentInstructionVersions"
+	PlatformQueryService_ListWorkflows_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListWorkflows"
+	PlatformQueryService_GetWorkflow_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetWorkflow"
+	PlatformQueryService_ListRuns_FullMethodName                              = "/controlplane.v1.PlatformQueryService/ListRuns"
+	PlatformQueryService_GetRun_FullMethodName                                = "/controlplane.v1.PlatformQueryService/GetRun"
+	PlatformQueryService_GetRunGraph_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetRunGraph"
+	PlatformQueryService_ListRunEvents_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListRunEvents"
+	PlatformQueryService_ListOwnerGates_FullMethodName                        = "/controlplane.v1.PlatformQueryService/ListOwnerGates"
+	PlatformQueryService_GetOwnerGate_FullMethodName                          = "/controlplane.v1.PlatformQueryService/GetOwnerGate"
+	PlatformQueryService_ListArtifacts_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListArtifacts"
+	PlatformQueryService_GetArtifact_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetArtifact"
+	PlatformQueryService_ListSchedules_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListSchedules"
+	PlatformQueryService_GetSchedule_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetSchedule"
+	PlatformQueryService_ListIntegrationDefinitions_FullMethodName            = "/controlplane.v1.PlatformQueryService/ListIntegrationDefinitions"
+	PlatformQueryService_ListIntegrationConnections_FullMethodName            = "/controlplane.v1.PlatformQueryService/ListIntegrationConnections"
+	PlatformQueryService_GetIntegrationConnection_FullMethodName              = "/controlplane.v1.PlatformQueryService/GetIntegrationConnection"
+	PlatformQueryService_GetAdministration_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetAdministration"
+	PlatformQueryService_ListAuditEvents_FullMethodName                       = "/controlplane.v1.PlatformQueryService/ListAuditEvents"
+	PlatformQueryService_GetAgentRuntimeConfiguration_FullMethodName          = "/controlplane.v1.PlatformQueryService/GetAgentRuntimeConfiguration"
+	PlatformQueryService_ListAgentRuntimeConfigurationVersions_FullMethodName = "/controlplane.v1.PlatformQueryService/ListAgentRuntimeConfigurationVersions"
+	PlatformQueryService_ListRuntimeEnvironmentSets_FullMethodName            = "/controlplane.v1.PlatformQueryService/ListRuntimeEnvironmentSets"
+	PlatformQueryService_GetRuntimeEnvironmentSet_FullMethodName              = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentSet"
+	PlatformQueryService_ListRuntimeEnvironmentVersions_FullMethodName        = "/controlplane.v1.PlatformQueryService/ListRuntimeEnvironmentVersions"
+	PlatformQueryService_ListTemplateVariables_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListTemplateVariables"
 )
 
 // PlatformQueryServiceClient is the client API for PlatformQueryService service.
@@ -91,6 +97,12 @@ type PlatformQueryServiceClient interface {
 	GetIntegrationConnection(ctx context.Context, in *GetIntegrationConnectionRequest, opts ...grpc.CallOption) (*GetIntegrationConnectionResponse, error)
 	GetAdministration(ctx context.Context, in *GetAdministrationRequest, opts ...grpc.CallOption) (*GetAdministrationResponse, error)
 	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
+	GetAgentRuntimeConfiguration(ctx context.Context, in *GetAgentRuntimeConfigurationRequest, opts ...grpc.CallOption) (*GetAgentRuntimeConfigurationResponse, error)
+	ListAgentRuntimeConfigurationVersions(ctx context.Context, in *ListAgentRuntimeConfigurationVersionsRequest, opts ...grpc.CallOption) (*ListAgentRuntimeConfigurationVersionsResponse, error)
+	ListRuntimeEnvironmentSets(ctx context.Context, in *ListRuntimeEnvironmentSetsRequest, opts ...grpc.CallOption) (*ListRuntimeEnvironmentSetsResponse, error)
+	GetRuntimeEnvironmentSet(ctx context.Context, in *GetRuntimeEnvironmentSetRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentSetResponse, error)
+	ListRuntimeEnvironmentVersions(ctx context.Context, in *ListRuntimeEnvironmentVersionsRequest, opts ...grpc.CallOption) (*ListRuntimeEnvironmentVersionsResponse, error)
+	ListTemplateVariables(ctx context.Context, in *ListTemplateVariablesRequest, opts ...grpc.CallOption) (*ListTemplateVariablesResponse, error)
 }
 
 type platformQueryServiceClient struct {
@@ -421,6 +433,66 @@ func (c *platformQueryServiceClient) ListAuditEvents(ctx context.Context, in *Li
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) GetAgentRuntimeConfiguration(ctx context.Context, in *GetAgentRuntimeConfigurationRequest, opts ...grpc.CallOption) (*GetAgentRuntimeConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAgentRuntimeConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetAgentRuntimeConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListAgentRuntimeConfigurationVersions(ctx context.Context, in *ListAgentRuntimeConfigurationVersionsRequest, opts ...grpc.CallOption) (*ListAgentRuntimeConfigurationVersionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAgentRuntimeConfigurationVersionsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListAgentRuntimeConfigurationVersions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListRuntimeEnvironmentSets(ctx context.Context, in *ListRuntimeEnvironmentSetsRequest, opts ...grpc.CallOption) (*ListRuntimeEnvironmentSetsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRuntimeEnvironmentSetsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListRuntimeEnvironmentSets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetRuntimeEnvironmentSet(ctx context.Context, in *GetRuntimeEnvironmentSetRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentSetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeEnvironmentSetResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeEnvironmentSet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListRuntimeEnvironmentVersions(ctx context.Context, in *ListRuntimeEnvironmentVersionsRequest, opts ...grpc.CallOption) (*ListRuntimeEnvironmentVersionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRuntimeEnvironmentVersionsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListRuntimeEnvironmentVersions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListTemplateVariables(ctx context.Context, in *ListTemplateVariablesRequest, opts ...grpc.CallOption) (*ListTemplateVariablesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTemplateVariablesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListTemplateVariables_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformQueryServiceServer is the server API for PlatformQueryService service.
 // All implementations must embed UnimplementedPlatformQueryServiceServer
 // for forward compatibility.
@@ -459,6 +531,12 @@ type PlatformQueryServiceServer interface {
 	GetIntegrationConnection(context.Context, *GetIntegrationConnectionRequest) (*GetIntegrationConnectionResponse, error)
 	GetAdministration(context.Context, *GetAdministrationRequest) (*GetAdministrationResponse, error)
 	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
+	GetAgentRuntimeConfiguration(context.Context, *GetAgentRuntimeConfigurationRequest) (*GetAgentRuntimeConfigurationResponse, error)
+	ListAgentRuntimeConfigurationVersions(context.Context, *ListAgentRuntimeConfigurationVersionsRequest) (*ListAgentRuntimeConfigurationVersionsResponse, error)
+	ListRuntimeEnvironmentSets(context.Context, *ListRuntimeEnvironmentSetsRequest) (*ListRuntimeEnvironmentSetsResponse, error)
+	GetRuntimeEnvironmentSet(context.Context, *GetRuntimeEnvironmentSetRequest) (*GetRuntimeEnvironmentSetResponse, error)
+	ListRuntimeEnvironmentVersions(context.Context, *ListRuntimeEnvironmentVersionsRequest) (*ListRuntimeEnvironmentVersionsResponse, error)
+	ListTemplateVariables(context.Context, *ListTemplateVariablesRequest) (*ListTemplateVariablesResponse, error)
 	mustEmbedUnimplementedPlatformQueryServiceServer()
 }
 
@@ -564,6 +642,24 @@ func (UnimplementedPlatformQueryServiceServer) GetAdministration(context.Context
 }
 func (UnimplementedPlatformQueryServiceServer) ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAuditEvents not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetAgentRuntimeConfiguration(context.Context, *GetAgentRuntimeConfigurationRequest) (*GetAgentRuntimeConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAgentRuntimeConfiguration not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListAgentRuntimeConfigurationVersions(context.Context, *ListAgentRuntimeConfigurationVersionsRequest) (*ListAgentRuntimeConfigurationVersionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAgentRuntimeConfigurationVersions not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListRuntimeEnvironmentSets(context.Context, *ListRuntimeEnvironmentSetsRequest) (*ListRuntimeEnvironmentSetsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRuntimeEnvironmentSets not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeEnvironmentSet(context.Context, *GetRuntimeEnvironmentSetRequest) (*GetRuntimeEnvironmentSetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeEnvironmentSet not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListRuntimeEnvironmentVersions(context.Context, *ListRuntimeEnvironmentVersionsRequest) (*ListRuntimeEnvironmentVersionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRuntimeEnvironmentVersions not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListTemplateVariables(context.Context, *ListTemplateVariablesRequest) (*ListTemplateVariablesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTemplateVariables not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) mustEmbedUnimplementedPlatformQueryServiceServer() {}
 func (UnimplementedPlatformQueryServiceServer) testEmbeddedByValue()                              {}
@@ -1162,6 +1258,114 @@ func _PlatformQueryService_ListAuditEvents_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_GetAgentRuntimeConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentRuntimeConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetAgentRuntimeConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetAgentRuntimeConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetAgentRuntimeConfiguration(ctx, req.(*GetAgentRuntimeConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListAgentRuntimeConfigurationVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAgentRuntimeConfigurationVersionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListAgentRuntimeConfigurationVersions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListAgentRuntimeConfigurationVersions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListAgentRuntimeConfigurationVersions(ctx, req.(*ListAgentRuntimeConfigurationVersionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListRuntimeEnvironmentSets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRuntimeEnvironmentSetsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListRuntimeEnvironmentSets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListRuntimeEnvironmentSets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListRuntimeEnvironmentSets(ctx, req.(*ListRuntimeEnvironmentSetsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetRuntimeEnvironmentSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeEnvironmentSetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeEnvironmentSet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeEnvironmentSet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeEnvironmentSet(ctx, req.(*GetRuntimeEnvironmentSetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListRuntimeEnvironmentVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRuntimeEnvironmentVersionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListRuntimeEnvironmentVersions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListRuntimeEnvironmentVersions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListRuntimeEnvironmentVersions(ctx, req.(*ListRuntimeEnvironmentVersionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListTemplateVariables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTemplateVariablesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListTemplateVariables(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListTemplateVariables_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListTemplateVariables(ctx, req.(*ListTemplateVariablesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformQueryService_ServiceDesc is the grpc.ServiceDesc for PlatformQueryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1297,52 +1501,85 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ListAuditEvents",
 			Handler:    _PlatformQueryService_ListAuditEvents_Handler,
 		},
+		{
+			MethodName: "GetAgentRuntimeConfiguration",
+			Handler:    _PlatformQueryService_GetAgentRuntimeConfiguration_Handler,
+		},
+		{
+			MethodName: "ListAgentRuntimeConfigurationVersions",
+			Handler:    _PlatformQueryService_ListAgentRuntimeConfigurationVersions_Handler,
+		},
+		{
+			MethodName: "ListRuntimeEnvironmentSets",
+			Handler:    _PlatformQueryService_ListRuntimeEnvironmentSets_Handler,
+		},
+		{
+			MethodName: "GetRuntimeEnvironmentSet",
+			Handler:    _PlatformQueryService_GetRuntimeEnvironmentSet_Handler,
+		},
+		{
+			MethodName: "ListRuntimeEnvironmentVersions",
+			Handler:    _PlatformQueryService_ListRuntimeEnvironmentVersions_Handler,
+		},
+		{
+			MethodName: "ListTemplateVariables",
+			Handler:    _PlatformQueryService_ListTemplateVariables_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "controlplane/v1/control_plane.proto",
 }
 
 const (
-	PlatformCommandService_CompleteOnboarding_FullMethodName              = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
-	PlatformCommandService_CreateProject_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateProject"
-	PlatformCommandService_UpdateProject_FullMethodName                   = "/controlplane.v1.PlatformCommandService/UpdateProject"
-	PlatformCommandService_AddPlatformMembership_FullMethodName           = "/controlplane.v1.PlatformCommandService/AddPlatformMembership"
-	PlatformCommandService_ChangePlatformMembership_FullMethodName        = "/controlplane.v1.PlatformCommandService/ChangePlatformMembership"
-	PlatformCommandService_RemovePlatformMembership_FullMethodName        = "/controlplane.v1.PlatformCommandService/RemovePlatformMembership"
-	PlatformCommandService_AddProjectMembership_FullMethodName            = "/controlplane.v1.PlatformCommandService/AddProjectMembership"
-	PlatformCommandService_ChangeProjectMembership_FullMethodName         = "/controlplane.v1.PlatformCommandService/ChangeProjectMembership"
-	PlatformCommandService_RemoveProjectMembership_FullMethodName         = "/controlplane.v1.PlatformCommandService/RemoveProjectMembership"
-	PlatformCommandService_CreateAgent_FullMethodName                     = "/controlplane.v1.PlatformCommandService/CreateAgent"
-	PlatformCommandService_UpdateAgent_FullMethodName                     = "/controlplane.v1.PlatformCommandService/UpdateAgent"
-	PlatformCommandService_SetAgentEnabled_FullMethodName                 = "/controlplane.v1.PlatformCommandService/SetAgentEnabled"
-	PlatformCommandService_ArchiveAgent_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ArchiveAgent"
-	PlatformCommandService_CreateInstructionDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/CreateInstructionDraft"
-	PlatformCommandService_ValidateInstructionDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/ValidateInstructionDraft"
-	PlatformCommandService_PublishInstructionDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PublishInstructionDraft"
-	PlatformCommandService_RollbackInstructions_FullMethodName            = "/controlplane.v1.PlatformCommandService/RollbackInstructions"
-	PlatformCommandService_ChangeAgentCapability_FullMethodName           = "/controlplane.v1.PlatformCommandService/ChangeAgentCapability"
-	PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName     = "/controlplane.v1.PlatformCommandService/ChangeAgentIntegrationGrant"
-	PlatformCommandService_CreateWorkflow_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateWorkflow"
-	PlatformCommandService_UpdateWorkflowDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/UpdateWorkflowDraft"
-	PlatformCommandService_ValidateWorkflowDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/ValidateWorkflowDraft"
-	PlatformCommandService_PublishWorkflowDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/PublishWorkflowDraft"
-	PlatformCommandService_ArchiveWorkflow_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ArchiveWorkflow"
-	PlatformCommandService_LaunchRun_FullMethodName                       = "/controlplane.v1.PlatformCommandService/LaunchRun"
-	PlatformCommandService_AddSessionTurn_FullMethodName                  = "/controlplane.v1.PlatformCommandService/AddSessionTurn"
-	PlatformCommandService_CancelRun_FullMethodName                       = "/controlplane.v1.PlatformCommandService/CancelRun"
-	PlatformCommandService_RetryRun_FullMethodName                        = "/controlplane.v1.PlatformCommandService/RetryRun"
-	PlatformCommandService_ResolveOwnerGate_FullMethodName                = "/controlplane.v1.PlatformCommandService/ResolveOwnerGate"
-	PlatformCommandService_UploadArtifact_FullMethodName                  = "/controlplane.v1.PlatformCommandService/UploadArtifact"
-	PlatformCommandService_DownloadArtifact_FullMethodName                = "/controlplane.v1.PlatformCommandService/DownloadArtifact"
-	PlatformCommandService_ChangeArtifactBinding_FullMethodName           = "/controlplane.v1.PlatformCommandService/ChangeArtifactBinding"
-	PlatformCommandService_CreateSchedule_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateSchedule"
-	PlatformCommandService_UpdateSchedule_FullMethodName                  = "/controlplane.v1.PlatformCommandService/UpdateSchedule"
-	PlatformCommandService_SetScheduleEnabled_FullMethodName              = "/controlplane.v1.PlatformCommandService/SetScheduleEnabled"
-	PlatformCommandService_ArchiveSchedule_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ArchiveSchedule"
-	PlatformCommandService_CreateIntegrationConnection_FullMethodName     = "/controlplane.v1.PlatformCommandService/CreateIntegrationConnection"
-	PlatformCommandService_TestIntegrationConnection_FullMethodName       = "/controlplane.v1.PlatformCommandService/TestIntegrationConnection"
-	PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName = "/controlplane.v1.PlatformCommandService/SetIntegrationConnectionEnabled"
-	PlatformCommandService_ChangeIntegrationGrant_FullMethodName          = "/controlplane.v1.PlatformCommandService/ChangeIntegrationGrant"
+	PlatformCommandService_CompleteOnboarding_FullMethodName               = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
+	PlatformCommandService_CreateProject_FullMethodName                    = "/controlplane.v1.PlatformCommandService/CreateProject"
+	PlatformCommandService_UpdateProject_FullMethodName                    = "/controlplane.v1.PlatformCommandService/UpdateProject"
+	PlatformCommandService_AddPlatformMembership_FullMethodName            = "/controlplane.v1.PlatformCommandService/AddPlatformMembership"
+	PlatformCommandService_ChangePlatformMembership_FullMethodName         = "/controlplane.v1.PlatformCommandService/ChangePlatformMembership"
+	PlatformCommandService_RemovePlatformMembership_FullMethodName         = "/controlplane.v1.PlatformCommandService/RemovePlatformMembership"
+	PlatformCommandService_AddProjectMembership_FullMethodName             = "/controlplane.v1.PlatformCommandService/AddProjectMembership"
+	PlatformCommandService_ChangeProjectMembership_FullMethodName          = "/controlplane.v1.PlatformCommandService/ChangeProjectMembership"
+	PlatformCommandService_RemoveProjectMembership_FullMethodName          = "/controlplane.v1.PlatformCommandService/RemoveProjectMembership"
+	PlatformCommandService_CreateAgent_FullMethodName                      = "/controlplane.v1.PlatformCommandService/CreateAgent"
+	PlatformCommandService_UpdateAgent_FullMethodName                      = "/controlplane.v1.PlatformCommandService/UpdateAgent"
+	PlatformCommandService_SetAgentEnabled_FullMethodName                  = "/controlplane.v1.PlatformCommandService/SetAgentEnabled"
+	PlatformCommandService_ArchiveAgent_FullMethodName                     = "/controlplane.v1.PlatformCommandService/ArchiveAgent"
+	PlatformCommandService_CreateInstructionDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/CreateInstructionDraft"
+	PlatformCommandService_ValidateInstructionDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/ValidateInstructionDraft"
+	PlatformCommandService_PublishInstructionDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/PublishInstructionDraft"
+	PlatformCommandService_RollbackInstructions_FullMethodName             = "/controlplane.v1.PlatformCommandService/RollbackInstructions"
+	PlatformCommandService_ChangeAgentCapability_FullMethodName            = "/controlplane.v1.PlatformCommandService/ChangeAgentCapability"
+	PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName      = "/controlplane.v1.PlatformCommandService/ChangeAgentIntegrationGrant"
+	PlatformCommandService_CreateWorkflow_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateWorkflow"
+	PlatformCommandService_UpdateWorkflowDraft_FullMethodName              = "/controlplane.v1.PlatformCommandService/UpdateWorkflowDraft"
+	PlatformCommandService_ValidateWorkflowDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/ValidateWorkflowDraft"
+	PlatformCommandService_PublishWorkflowDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/PublishWorkflowDraft"
+	PlatformCommandService_ArchiveWorkflow_FullMethodName                  = "/controlplane.v1.PlatformCommandService/ArchiveWorkflow"
+	PlatformCommandService_LaunchRun_FullMethodName                        = "/controlplane.v1.PlatformCommandService/LaunchRun"
+	PlatformCommandService_AddSessionTurn_FullMethodName                   = "/controlplane.v1.PlatformCommandService/AddSessionTurn"
+	PlatformCommandService_CancelRun_FullMethodName                        = "/controlplane.v1.PlatformCommandService/CancelRun"
+	PlatformCommandService_RetryRun_FullMethodName                         = "/controlplane.v1.PlatformCommandService/RetryRun"
+	PlatformCommandService_ResolveOwnerGate_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ResolveOwnerGate"
+	PlatformCommandService_UploadArtifact_FullMethodName                   = "/controlplane.v1.PlatformCommandService/UploadArtifact"
+	PlatformCommandService_DownloadArtifact_FullMethodName                 = "/controlplane.v1.PlatformCommandService/DownloadArtifact"
+	PlatformCommandService_ChangeArtifactBinding_FullMethodName            = "/controlplane.v1.PlatformCommandService/ChangeArtifactBinding"
+	PlatformCommandService_CreateSchedule_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateSchedule"
+	PlatformCommandService_UpdateSchedule_FullMethodName                   = "/controlplane.v1.PlatformCommandService/UpdateSchedule"
+	PlatformCommandService_SetScheduleEnabled_FullMethodName               = "/controlplane.v1.PlatformCommandService/SetScheduleEnabled"
+	PlatformCommandService_ArchiveSchedule_FullMethodName                  = "/controlplane.v1.PlatformCommandService/ArchiveSchedule"
+	PlatformCommandService_CreateIntegrationConnection_FullMethodName      = "/controlplane.v1.PlatformCommandService/CreateIntegrationConnection"
+	PlatformCommandService_TestIntegrationConnection_FullMethodName        = "/controlplane.v1.PlatformCommandService/TestIntegrationConnection"
+	PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName  = "/controlplane.v1.PlatformCommandService/SetIntegrationConnectionEnabled"
+	PlatformCommandService_ChangeIntegrationGrant_FullMethodName           = "/controlplane.v1.PlatformCommandService/ChangeIntegrationGrant"
+	PlatformCommandService_PublishAgentRuntimeConfiguration_FullMethodName = "/controlplane.v1.PlatformCommandService/PublishAgentRuntimeConfiguration"
+	PlatformCommandService_CreateConfigOverlayDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/CreateConfigOverlayDraft"
+	PlatformCommandService_ValidateConfigOverlayDraft_FullMethodName       = "/controlplane.v1.PlatformCommandService/ValidateConfigOverlayDraft"
+	PlatformCommandService_PublishConfigOverlayDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/PublishConfigOverlayDraft"
+	PlatformCommandService_RollbackConfigOverlay_FullMethodName            = "/controlplane.v1.PlatformCommandService/RollbackConfigOverlay"
+	PlatformCommandService_CreateRuntimeEnvironmentSet_FullMethodName      = "/controlplane.v1.PlatformCommandService/CreateRuntimeEnvironmentSet"
+	PlatformCommandService_PublishRuntimeEnvironmentVersion_FullMethodName = "/controlplane.v1.PlatformCommandService/PublishRuntimeEnvironmentVersion"
+	PlatformCommandService_RollbackRuntimeEnvironment_FullMethodName       = "/controlplane.v1.PlatformCommandService/RollbackRuntimeEnvironment"
+	PlatformCommandService_BindAgentRuntimeEnvironment_FullMethodName      = "/controlplane.v1.PlatformCommandService/BindAgentRuntimeEnvironment"
 )
 
 // PlatformCommandServiceClient is the client API for PlatformCommandService service.
@@ -1392,6 +1629,15 @@ type PlatformCommandServiceClient interface {
 	TestIntegrationConnection(ctx context.Context, in *TestIntegrationConnectionRequest, opts ...grpc.CallOption) (*TestIntegrationConnectionResponse, error)
 	SetIntegrationConnectionEnabled(ctx context.Context, in *SetIntegrationConnectionEnabledRequest, opts ...grpc.CallOption) (*SetIntegrationConnectionEnabledResponse, error)
 	ChangeIntegrationGrant(ctx context.Context, in *ChangeIntegrationGrantRequest, opts ...grpc.CallOption) (*ChangeIntegrationGrantResponse, error)
+	PublishAgentRuntimeConfiguration(ctx context.Context, in *PublishAgentRuntimeConfigurationRequest, opts ...grpc.CallOption) (*PublishAgentRuntimeConfigurationResponse, error)
+	CreateConfigOverlayDraft(ctx context.Context, in *CreateConfigOverlayDraftRequest, opts ...grpc.CallOption) (*CreateConfigOverlayDraftResponse, error)
+	ValidateConfigOverlayDraft(ctx context.Context, in *ValidateConfigOverlayDraftRequest, opts ...grpc.CallOption) (*ValidateConfigOverlayDraftResponse, error)
+	PublishConfigOverlayDraft(ctx context.Context, in *PublishConfigOverlayDraftRequest, opts ...grpc.CallOption) (*PublishConfigOverlayDraftResponse, error)
+	RollbackConfigOverlay(ctx context.Context, in *RollbackConfigOverlayRequest, opts ...grpc.CallOption) (*RollbackConfigOverlayResponse, error)
+	CreateRuntimeEnvironmentSet(ctx context.Context, in *CreateRuntimeEnvironmentSetRequest, opts ...grpc.CallOption) (*CreateRuntimeEnvironmentSetResponse, error)
+	PublishRuntimeEnvironmentVersion(ctx context.Context, in *PublishRuntimeEnvironmentVersionRequest, opts ...grpc.CallOption) (*PublishRuntimeEnvironmentVersionResponse, error)
+	RollbackRuntimeEnvironment(ctx context.Context, in *RollbackRuntimeEnvironmentRequest, opts ...grpc.CallOption) (*RollbackRuntimeEnvironmentResponse, error)
+	BindAgentRuntimeEnvironment(ctx context.Context, in *BindAgentRuntimeEnvironmentRequest, opts ...grpc.CallOption) (*BindAgentRuntimeEnvironmentResponse, error)
 }
 
 type platformCommandServiceClient struct {
@@ -1814,6 +2060,96 @@ func (c *platformCommandServiceClient) ChangeIntegrationGrant(ctx context.Contex
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) PublishAgentRuntimeConfiguration(ctx context.Context, in *PublishAgentRuntimeConfigurationRequest, opts ...grpc.CallOption) (*PublishAgentRuntimeConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishAgentRuntimeConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishAgentRuntimeConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateConfigOverlayDraft(ctx context.Context, in *CreateConfigOverlayDraftRequest, opts ...grpc.CallOption) (*CreateConfigOverlayDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateConfigOverlayDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateConfigOverlayDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ValidateConfigOverlayDraft(ctx context.Context, in *ValidateConfigOverlayDraftRequest, opts ...grpc.CallOption) (*ValidateConfigOverlayDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateConfigOverlayDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ValidateConfigOverlayDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PublishConfigOverlayDraft(ctx context.Context, in *PublishConfigOverlayDraftRequest, opts ...grpc.CallOption) (*PublishConfigOverlayDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishConfigOverlayDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishConfigOverlayDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RollbackConfigOverlay(ctx context.Context, in *RollbackConfigOverlayRequest, opts ...grpc.CallOption) (*RollbackConfigOverlayResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RollbackConfigOverlayResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RollbackConfigOverlay_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateRuntimeEnvironmentSet(ctx context.Context, in *CreateRuntimeEnvironmentSetRequest, opts ...grpc.CallOption) (*CreateRuntimeEnvironmentSetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateRuntimeEnvironmentSetResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateRuntimeEnvironmentSet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PublishRuntimeEnvironmentVersion(ctx context.Context, in *PublishRuntimeEnvironmentVersionRequest, opts ...grpc.CallOption) (*PublishRuntimeEnvironmentVersionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishRuntimeEnvironmentVersionResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishRuntimeEnvironmentVersion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RollbackRuntimeEnvironment(ctx context.Context, in *RollbackRuntimeEnvironmentRequest, opts ...grpc.CallOption) (*RollbackRuntimeEnvironmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RollbackRuntimeEnvironmentResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RollbackRuntimeEnvironment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) BindAgentRuntimeEnvironment(ctx context.Context, in *BindAgentRuntimeEnvironmentRequest, opts ...grpc.CallOption) (*BindAgentRuntimeEnvironmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BindAgentRuntimeEnvironmentResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_BindAgentRuntimeEnvironment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformCommandServiceServer is the server API for PlatformCommandService service.
 // All implementations must embed UnimplementedPlatformCommandServiceServer
 // for forward compatibility.
@@ -1861,6 +2197,15 @@ type PlatformCommandServiceServer interface {
 	TestIntegrationConnection(context.Context, *TestIntegrationConnectionRequest) (*TestIntegrationConnectionResponse, error)
 	SetIntegrationConnectionEnabled(context.Context, *SetIntegrationConnectionEnabledRequest) (*SetIntegrationConnectionEnabledResponse, error)
 	ChangeIntegrationGrant(context.Context, *ChangeIntegrationGrantRequest) (*ChangeIntegrationGrantResponse, error)
+	PublishAgentRuntimeConfiguration(context.Context, *PublishAgentRuntimeConfigurationRequest) (*PublishAgentRuntimeConfigurationResponse, error)
+	CreateConfigOverlayDraft(context.Context, *CreateConfigOverlayDraftRequest) (*CreateConfigOverlayDraftResponse, error)
+	ValidateConfigOverlayDraft(context.Context, *ValidateConfigOverlayDraftRequest) (*ValidateConfigOverlayDraftResponse, error)
+	PublishConfigOverlayDraft(context.Context, *PublishConfigOverlayDraftRequest) (*PublishConfigOverlayDraftResponse, error)
+	RollbackConfigOverlay(context.Context, *RollbackConfigOverlayRequest) (*RollbackConfigOverlayResponse, error)
+	CreateRuntimeEnvironmentSet(context.Context, *CreateRuntimeEnvironmentSetRequest) (*CreateRuntimeEnvironmentSetResponse, error)
+	PublishRuntimeEnvironmentVersion(context.Context, *PublishRuntimeEnvironmentVersionRequest) (*PublishRuntimeEnvironmentVersionResponse, error)
+	RollbackRuntimeEnvironment(context.Context, *RollbackRuntimeEnvironmentRequest) (*RollbackRuntimeEnvironmentResponse, error)
+	BindAgentRuntimeEnvironment(context.Context, *BindAgentRuntimeEnvironmentRequest) (*BindAgentRuntimeEnvironmentResponse, error)
 	mustEmbedUnimplementedPlatformCommandServiceServer()
 }
 
@@ -1990,6 +2335,33 @@ func (UnimplementedPlatformCommandServiceServer) SetIntegrationConnectionEnabled
 }
 func (UnimplementedPlatformCommandServiceServer) ChangeIntegrationGrant(context.Context, *ChangeIntegrationGrantRequest) (*ChangeIntegrationGrantResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ChangeIntegrationGrant not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishAgentRuntimeConfiguration(context.Context, *PublishAgentRuntimeConfigurationRequest) (*PublishAgentRuntimeConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishAgentRuntimeConfiguration not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateConfigOverlayDraft(context.Context, *CreateConfigOverlayDraftRequest) (*CreateConfigOverlayDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateConfigOverlayDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ValidateConfigOverlayDraft(context.Context, *ValidateConfigOverlayDraftRequest) (*ValidateConfigOverlayDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateConfigOverlayDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishConfigOverlayDraft(context.Context, *PublishConfigOverlayDraftRequest) (*PublishConfigOverlayDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishConfigOverlayDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RollbackConfigOverlay(context.Context, *RollbackConfigOverlayRequest) (*RollbackConfigOverlayResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RollbackConfigOverlay not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateRuntimeEnvironmentSet(context.Context, *CreateRuntimeEnvironmentSetRequest) (*CreateRuntimeEnvironmentSetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateRuntimeEnvironmentSet not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishRuntimeEnvironmentVersion(context.Context, *PublishRuntimeEnvironmentVersionRequest) (*PublishRuntimeEnvironmentVersionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishRuntimeEnvironmentVersion not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RollbackRuntimeEnvironment(context.Context, *RollbackRuntimeEnvironmentRequest) (*RollbackRuntimeEnvironmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RollbackRuntimeEnvironment not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) BindAgentRuntimeEnvironment(context.Context, *BindAgentRuntimeEnvironmentRequest) (*BindAgentRuntimeEnvironmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BindAgentRuntimeEnvironment not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) mustEmbedUnimplementedPlatformCommandServiceServer() {
 }
@@ -2715,6 +3087,168 @@ func _PlatformCommandService_ChangeIntegrationGrant_Handler(srv interface{}, ctx
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_PublishAgentRuntimeConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishAgentRuntimeConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PublishAgentRuntimeConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PublishAgentRuntimeConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PublishAgentRuntimeConfiguration(ctx, req.(*PublishAgentRuntimeConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CreateConfigOverlayDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateConfigOverlayDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateConfigOverlayDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateConfigOverlayDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateConfigOverlayDraft(ctx, req.(*CreateConfigOverlayDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ValidateConfigOverlayDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateConfigOverlayDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ValidateConfigOverlayDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ValidateConfigOverlayDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ValidateConfigOverlayDraft(ctx, req.(*ValidateConfigOverlayDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PublishConfigOverlayDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishConfigOverlayDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PublishConfigOverlayDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PublishConfigOverlayDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PublishConfigOverlayDraft(ctx, req.(*PublishConfigOverlayDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RollbackConfigOverlay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RollbackConfigOverlayRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RollbackConfigOverlay(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RollbackConfigOverlay_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RollbackConfigOverlay(ctx, req.(*RollbackConfigOverlayRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CreateRuntimeEnvironmentSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateRuntimeEnvironmentSetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateRuntimeEnvironmentSet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateRuntimeEnvironmentSet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateRuntimeEnvironmentSet(ctx, req.(*CreateRuntimeEnvironmentSetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PublishRuntimeEnvironmentVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishRuntimeEnvironmentVersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PublishRuntimeEnvironmentVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PublishRuntimeEnvironmentVersion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PublishRuntimeEnvironmentVersion(ctx, req.(*PublishRuntimeEnvironmentVersionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RollbackRuntimeEnvironment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RollbackRuntimeEnvironmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RollbackRuntimeEnvironment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RollbackRuntimeEnvironment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RollbackRuntimeEnvironment(ctx, req.(*RollbackRuntimeEnvironmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_BindAgentRuntimeEnvironment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindAgentRuntimeEnvironmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).BindAgentRuntimeEnvironment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_BindAgentRuntimeEnvironment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).BindAgentRuntimeEnvironment(ctx, req.(*BindAgentRuntimeEnvironmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformCommandService_ServiceDesc is the grpc.ServiceDesc for PlatformCommandService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2873,6 +3407,42 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ChangeIntegrationGrant",
 			Handler:    _PlatformCommandService_ChangeIntegrationGrant_Handler,
+		},
+		{
+			MethodName: "PublishAgentRuntimeConfiguration",
+			Handler:    _PlatformCommandService_PublishAgentRuntimeConfiguration_Handler,
+		},
+		{
+			MethodName: "CreateConfigOverlayDraft",
+			Handler:    _PlatformCommandService_CreateConfigOverlayDraft_Handler,
+		},
+		{
+			MethodName: "ValidateConfigOverlayDraft",
+			Handler:    _PlatformCommandService_ValidateConfigOverlayDraft_Handler,
+		},
+		{
+			MethodName: "PublishConfigOverlayDraft",
+			Handler:    _PlatformCommandService_PublishConfigOverlayDraft_Handler,
+		},
+		{
+			MethodName: "RollbackConfigOverlay",
+			Handler:    _PlatformCommandService_RollbackConfigOverlay_Handler,
+		},
+		{
+			MethodName: "CreateRuntimeEnvironmentSet",
+			Handler:    _PlatformCommandService_CreateRuntimeEnvironmentSet_Handler,
+		},
+		{
+			MethodName: "PublishRuntimeEnvironmentVersion",
+			Handler:    _PlatformCommandService_PublishRuntimeEnvironmentVersion_Handler,
+		},
+		{
+			MethodName: "RollbackRuntimeEnvironment",
+			Handler:    _PlatformCommandService_RollbackRuntimeEnvironment_Handler,
+		},
+		{
+			MethodName: "BindAgentRuntimeEnvironment",
+			Handler:    _PlatformCommandService_BindAgentRuntimeEnvironment_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -384,3 +384,19 @@ INTEGRATION_FIELD_CHANNEL_LABEL:
   other: Канал
 INTEGRATION_FIELD_CHANNEL_HELP:
   other: Системное имя канала без внутреннего ID
+AGENT_CONFIG_OVERLAY_CHANGED:
+  other: Конфигурация агента изменена
+AGENT_RUNTIME_CONFIGURATION_PUBLISHED:
+  other: Runtime-конфигурация агента опубликована
+AGENT_RUNTIME_ENVIRONMENT_BOUND:
+  other: Runtime-окружение агента привязано
+CONFIG_OVERLAY_INVALID_OR_PROTECTED:
+  other: Overlay содержит недопустимые или защищённые параметры
+DEFAULT_RUNTIME_ENVIRONMENT:
+  other: Окружение по умолчанию
+DEFAULT_RUNTIME_ENVIRONMENT_DESCRIPTION:
+  other: Безопасное runtime-окружение агента по умолчанию
+RUNTIME_ENVIRONMENT_CREATED:
+  other: Runtime-окружение создано
+RUNTIME_ENVIRONMENT_PUBLISHED:
+  other: Runtime-окружение опубликовано

@@ -169,6 +169,54 @@ func castCapability(value entity.IntegrationCapability) *controlplanev1.Platform
 func castRuntime(value entity.RuntimeSelection) *controlplanev1.RuntimeSelection {
 	return &controlplanev1.RuntimeSelection{Ref: value.Ref, Name: value.Name, Revision: value.RuntimeRevision, Ready: value.Ready, Provider: value.Provider, Model: value.Model}
 }
+func castProviderPolicy(value entity.ProviderAccountPolicyVersion) *controlplanev1.ProviderAccountPolicyVersion {
+	result := &controlplanev1.ProviderAccountPolicyVersion{Ref: value.Ref, Version: value.Version, Mode: value.Mode,
+		Digest: value.Digest, CreatedAt: timestamp(value.CreatedAt)}
+	for _, candidate := range value.AccountCandidates {
+		result.AccountCandidates = append(result.AccountCandidates, &controlplanev1.ProviderAccountCandidate{AccountRef: candidate.AccountRef, Weight: candidate.Weight})
+	}
+	return result
+}
+func castAgentRuntimeConfiguration(value entity.AgentRuntimeConfiguration) *controlplanev1.AgentRuntimeConfiguration {
+	return &controlplanev1.AgentRuntimeConfiguration{Ref: value.Ref, Version: value.Version, AgentRef: value.AgentRef,
+		RuntimeProfileRef: value.RuntimeProfileRef, Provider: value.Provider, Model: value.Model,
+		ProviderPolicy: castProviderPolicy(value.ProviderPolicy), Digest: value.Digest, CreatedAt: timestamp(value.CreatedAt)}
+}
+func castConfigOverlay(value *entity.ConfigOverlayVersion) *controlplanev1.ConfigOverlayVersion {
+	if value == nil {
+		return nil
+	}
+	return &controlplanev1.ConfigOverlayVersion{Ref: value.Ref, Version: value.Version, Revision: value.Revision,
+		State: value.State, Content: value.Content, Digest: value.Digest, ValidationMessages: value.ValidationMessages,
+		CreatedAt: timestamp(value.CreatedAt), PublishedAt: optionalTimestamp(value.PublishedAt)}
+}
+func castRuntimeEnvironmentVersion(value entity.RuntimeEnvironmentVersion) *controlplanev1.RuntimeEnvironmentVersion {
+	result := &controlplanev1.RuntimeEnvironmentVersion{Ref: value.Ref, Version: value.Version, Revision: value.Revision,
+		Digest: value.Digest, CreatedAt: timestamp(value.CreatedAt)}
+	for _, item := range value.Values {
+		result.Values = append(result.Values, &controlplanev1.RuntimeEnvironmentValue{Name: item.Name, Value: item.Value})
+	}
+	for _, item := range value.SecretDescriptors {
+		result.SecretDescriptors = append(result.SecretDescriptors, &controlplanev1.RuntimeSecretDescriptor{Name: item.Name,
+			SecretName: item.SecretName, SecretKey: item.SecretKey, SecretUid: item.SecretUID,
+			SecretResourceVersion: item.SecretResourceVersion, ContentSha256: item.ContentSHA256})
+	}
+	return result
+}
+func castRuntimeEnvironment(value entity.RuntimeEnvironmentSet) *controlplanev1.RuntimeEnvironmentSet {
+	return &controlplanev1.RuntimeEnvironmentSet{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef,
+		Name: value.Name, Description: value.Description, State: value.State,
+		CurrentVersion: castRuntimeEnvironmentVersion(value.CurrentVersion), UpdatedAt: timestamp(value.UpdatedAt)}
+}
+func castRuntimeConfigurationView(value entity.AgentRuntimeConfigurationView) *controlplanev1.AgentRuntimeConfigurationView {
+	return &controlplanev1.AgentRuntimeConfigurationView{Configuration: castAgentRuntimeConfiguration(value.Configuration),
+		PublishedOverlay: castConfigOverlay(&value.PublishedOverlay), DraftOverlay: castConfigOverlay(value.DraftOverlay),
+		EnvironmentBinding: &controlplanev1.AgentRuntimeEnvironmentBinding{Ref: value.EnvironmentBinding.Ref,
+			Version: value.EnvironmentBinding.Version, AgentRef: value.EnvironmentBinding.AgentRef,
+			EnvironmentRef: value.EnvironmentBinding.EnvironmentRef, Digest: value.EnvironmentBinding.Digest},
+		Environment: castRuntimeEnvironment(value.Environment), SafeEffectiveConfig: value.SafeEffectiveConfig,
+		AgentVersion: value.AgentVersion}
+}
 func castIntegrationCapability(value entity.IntegrationCapability) *controlplanev1.IntegrationCapability {
 	result := &controlplanev1.IntegrationCapability{
 		Key: value.Key, Name: value.Name, Description: value.Description, Operation: value.Operation,

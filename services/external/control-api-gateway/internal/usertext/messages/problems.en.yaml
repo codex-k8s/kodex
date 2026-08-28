@@ -384,3 +384,19 @@ INTEGRATION_FIELD_CHANNEL_LABEL:
   other: Channel
 INTEGRATION_FIELD_CHANNEL_HELP:
   other: Channel system name without an internal ID
+AGENT_CONFIG_OVERLAY_CHANGED:
+  other: Agent configuration changed
+AGENT_RUNTIME_CONFIGURATION_PUBLISHED:
+  other: Agent runtime configuration published
+AGENT_RUNTIME_ENVIRONMENT_BOUND:
+  other: Agent runtime environment bound
+CONFIG_OVERLAY_INVALID_OR_PROTECTED:
+  other: Overlay contains invalid or protected parameters
+DEFAULT_RUNTIME_ENVIRONMENT:
+  other: Default environment
+DEFAULT_RUNTIME_ENVIRONMENT_DESCRIPTION:
+  other: Default safe agent runtime environment
+RUNTIME_ENVIRONMENT_CREATED:
+  other: Runtime environment created
+RUNTIME_ENVIRONMENT_PUBLISHED:
+  other: Runtime environment published

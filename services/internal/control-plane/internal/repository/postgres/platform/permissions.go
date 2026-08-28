@@ -58,6 +58,19 @@ func (repository *Repository) commandProjectPermission(ctx context.Context, tx p
 		permission = "MANAGE_AGENTS"
 	case command.AgentBindingInput:
 		ref, table, permission = payload.AgentRef, "agents", "MANAGE_AGENTS"
+	case command.AgentRuntimeConfigurationInput:
+		ref, table, permission = payload.AgentRef, "agents", "MANAGE_AGENTS"
+	case command.ConfigOverlayInput:
+		ref, table, permission = payload.AgentRef, "agents", "MANAGE_AGENTS"
+	case command.RuntimeEnvironmentInput:
+		if payload.ProjectRef != "" {
+			ref, table = payload.ProjectRef, "projects"
+		} else {
+			ref, table = payload.Ref, "runtime_environment_sets"
+		}
+		permission = "MANAGE_AGENTS"
+	case command.RuntimeEnvironmentBindingInput:
+		ref, table, permission = payload.AgentRef, "agents", "MANAGE_AGENTS"
 	case command.WorkflowInput:
 		if payload.ProjectRef != "" {
 			ref, table = payload.ProjectRef, "projects"
@@ -127,15 +140,16 @@ func requireProjectPermission(ctx context.Context, tx pgx.Tx, scope scope, proje
 
 func projectIDByResource(ctx context.Context, tx pgx.Tx, organizationID, table, ref string) (string, error) {
 	queries := map[string]string{
-		"projects":                queryPermissionsProjectidbyresourceSelectProjectsOrganizationIdRef,
-		"agents":                  queryPermissionsProjectidbyresourceSelectAgentsOrganizationIdRef,
-		"workflows":               queryPermissionsProjectidbyresourceSelectWorkflowsOrganizationIdRef,
-		"sessions":                queryPermissionsProjectidbyresourceSelectSessionsOrganizationIdRef,
-		"runs":                    queryPermissionsProjectidbyresourceSelectRunsOrganizationIdRef,
-		"owner_gates":             queryPermissionsProjectidbyresourceSelectOwnerGatesOrganizationIdRef,
-		"artifacts":               queryPermissionsProjectidbyresourceSelectArtifactsOrganizationIdRef,
-		"schedules":               queryPermissionsProjectidbyresourceSelectSchedulesOrganizationIdRef,
-		"assistant_conversations": queryPermissionsProjectidbyresourceSelectAssistantConversationsOrganizationIdRef,
+		"projects":                 queryPermissionsProjectidbyresourceSelectProjectsOrganizationIdRef,
+		"agents":                   queryPermissionsProjectidbyresourceSelectAgentsOrganizationIdRef,
+		"workflows":                queryPermissionsProjectidbyresourceSelectWorkflowsOrganizationIdRef,
+		"sessions":                 queryPermissionsProjectidbyresourceSelectSessionsOrganizationIdRef,
+		"runs":                     queryPermissionsProjectidbyresourceSelectRunsOrganizationIdRef,
+		"owner_gates":              queryPermissionsProjectidbyresourceSelectOwnerGatesOrganizationIdRef,
+		"artifacts":                queryPermissionsProjectidbyresourceSelectArtifactsOrganizationIdRef,
+		"schedules":                queryPermissionsProjectidbyresourceSelectSchedulesOrganizationIdRef,
+		"assistant_conversations":  queryPermissionsProjectidbyresourceSelectAssistantConversationsOrganizationIdRef,
+		"runtime_environment_sets": queryPermissionsProjectidbyresourceSelectRuntimeEnvironmentSetsOrganizationIdRef,
 	}
 	query := queries[table]
 	if query == "" {

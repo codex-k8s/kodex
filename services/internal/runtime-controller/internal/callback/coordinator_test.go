@@ -40,7 +40,7 @@ func TestCoordinatorReturnsCompatibleWarmExecution(t *testing.T) {
 func validWarmExecutionInput() runtimecontract.RunnerInput {
 	digest := "sha256:" + strings.Repeat("a", 64)
 	return runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV5, Mode: runtimecontract.RunnerModeTurn,
+		Schema: runtimecontract.RunnerInputSchemaV6, Mode: runtimecontract.RunnerModeTurn,
 		WorkloadInstance: "runtime-controller", RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh",
 		SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,
 		LeaseRef: "lease_abcdefgh", LeaseFence: "fence", LeaseGeneration: 1,
@@ -51,6 +51,13 @@ func validWarmExecutionInput() runtimecontract.RunnerInput {
 		Instructions: "Complete the task.", Task: "Prepare the result.", Provider: "openai-codex", Model: "codex",
 		ProviderAccountRef: "pacc_abcdefgh", ProviderCredentialRef: "pcr_abcdefgh",
 		ProviderCredentialRevision: 1, ProviderCredentialSHA256: strings.Repeat("d", 64),
+		RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigVersion: 1, RuntimeConfigDigest: strings.Repeat("1", 64),
+		ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyVersion: 1, ProviderPolicyDigest: strings.Repeat("2", 64),
+		ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 1,
+		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
+		RuntimeEnvironmentDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		EnvironmentBindingRef:    "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
 		CodexSandbox: "read-only", CodexApprovalPolicy: "never",
 		CallbackURL: "https://10.0.0.10:8444", CallbackTLS: runtimecontract.RuntimeTLSBinding{
 			ServerName:      "runtime-controller-callback.kodex-system.svc.cluster.local",

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -95,11 +96,19 @@ type claimableExecution struct {
 	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef     string
 	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest string
 	roleRuntimeContractSHA256                                                      string
+	runtimeConfigID, runtimeConfigRef, runtimeConfigDigest                         string
+	providerPolicyID, providerPolicyRef, providerPolicyDigest, providerPolicyMode  string
+	configOverlayID, configOverlayRef, configOverlayDigest, configOverlay          string
+	environmentBindingID, environmentBindingRef, environmentBindingDigest          string
+	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest          string
 	providerCredentialRevisionNumber, generation, roleRuntimeContractRevision      int64
+	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion              int64
+	environmentBindingVersion, runtimeEnvironmentVersion                           int64
 	attempt                                                                        int32
 	capabilities, knowledge                                                        []string
 	rawInput, rawArtifacts, rawIntegrationGrants, rawDelegationTargets             []byte
 	rawSessionContext                                                              []byte
+	rawEnvironmentValues, rawSecretProjections                                     []byte
 }
 
 func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -115,7 +124,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		repository.roleImages.DefaultImageDigest, repository.roleImages.RoleRuntimeContractRevision,
 		repository.roleImages.RoleRuntimeContractSHA256)
 	if err != nil {
-		return commandOutcome{}, fmt.Errorf("select claimable executions: %w", errs.ErrUnavailable)
+		return commandOutcome{}, fmt.Errorf("select claimable executions: %v: %w", err, errs.ErrUnavailable)
 	}
 	defer rows.Close()
 	claimable := make([]claimableExecution, 0, payload.Limit)
@@ -137,13 +146,19 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.roleDefinitionID, &candidate.roleDefinitionRef, &candidate.roleImageRecipeID,
 			&candidate.roleImageRecipeRef, &candidate.roleImageArtifactID, &candidate.roleImageArtifactRef,
 			&candidate.imageReference, &candidate.imageManifestDigest,
-			&candidate.roleRuntimeContractRevision, &candidate.roleRuntimeContractSHA256); err != nil {
-			return commandOutcome{}, fmt.Errorf("scan claimable execution: %w", errs.ErrUnavailable)
+			&candidate.roleRuntimeContractRevision, &candidate.roleRuntimeContractSHA256,
+			&candidate.runtimeConfigID, &candidate.runtimeConfigRef, &candidate.runtimeConfigVersion, &candidate.runtimeConfigDigest,
+			&candidate.providerPolicyID, &candidate.providerPolicyRef, &candidate.providerPolicyVersion, &candidate.providerPolicyDigest, &candidate.providerPolicyMode,
+			&candidate.configOverlayID, &candidate.configOverlayRef, &candidate.configOverlayVersion, &candidate.configOverlayDigest, &candidate.configOverlay,
+			&candidate.environmentBindingID, &candidate.environmentBindingRef, &candidate.environmentBindingVersion, &candidate.environmentBindingDigest,
+			&candidate.runtimeEnvironmentID, &candidate.runtimeEnvironmentRef, &candidate.runtimeEnvironmentVersion, &candidate.runtimeEnvironmentDigest,
+			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections); err != nil {
+			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
 		claimable = append(claimable, candidate)
 	}
 	if err := rows.Err(); err != nil {
-		return commandOutcome{}, fmt.Errorf("iterate claimable executions: %w", errs.ErrUnavailable)
+		return commandOutcome{}, fmt.Errorf("iterate claimable executions: %v: %w", err, errs.ErrUnavailable)
 	}
 	rows.Close()
 
@@ -173,6 +188,11 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		imageReference, imageManifestDigest := candidate.imageReference, candidate.imageManifestDigest
 		roleRuntimeContractRevision := candidate.roleRuntimeContractRevision
 		roleRuntimeContractSHA256 := candidate.roleRuntimeContractSHA256
+		runtimeConfigID, runtimeConfigRef, runtimeConfigVersion, runtimeConfigDigest := candidate.runtimeConfigID, candidate.runtimeConfigRef, candidate.runtimeConfigVersion, candidate.runtimeConfigDigest
+		providerPolicyID, providerPolicyRef, providerPolicyVersion, providerPolicyDigest := candidate.providerPolicyID, candidate.providerPolicyRef, candidate.providerPolicyVersion, candidate.providerPolicyDigest
+		configOverlayID, configOverlayRef, configOverlayVersion, configOverlayDigest, configOverlay := candidate.configOverlayID, candidate.configOverlayRef, candidate.configOverlayVersion, candidate.configOverlayDigest, candidate.configOverlay
+		environmentBindingID, environmentBindingRef, environmentBindingVersion, environmentBindingDigest := candidate.environmentBindingID, candidate.environmentBindingRef, candidate.environmentBindingVersion, candidate.environmentBindingDigest
+		runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentVersion, runtimeEnvironmentDigest := candidate.runtimeEnvironmentID, candidate.runtimeEnvironmentRef, candidate.runtimeEnvironmentVersion, candidate.runtimeEnvironmentDigest
 		fence, err := newRef("fnc")
 		if err != nil {
 			return commandOutcome{}, err
@@ -190,6 +210,19 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		_ = jsonUnmarshal(rawArtifacts, &artifacts)
 		var sessionContext []map[string]string
 		_ = jsonUnmarshal(rawSessionContext, &sessionContext)
+		var environmentValues []runtimecontract.RuntimeEnvironmentValue
+		var secretProjections []runtimecontract.RuntimeSecretProjection
+		if err := decodeStoredRuntimeEnvironment(candidate.rawEnvironmentValues, candidate.rawSecretProjections, &environmentValues, &secretProjections); err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		canonicalOverlay, verifiedOverlayDigest, err := runtimecontract.CanonicalConfigOverlay(configOverlay)
+		if err != nil || canonicalOverlay != configOverlay || verifiedOverlayDigest != configOverlayDigest {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(environmentValues, secretProjections)
+		if err != nil || verifiedEnvironmentDigest != runtimeEnvironmentDigest {
+			return commandOutcome{}, errs.ErrConflict
+		}
 		resolvedInstructionsDigest := sha256.Sum256([]byte(instructions))
 		resolvedInstructionsDigestHex := hex.EncodeToString(resolvedInstructionsDigest[:])
 		integrationGrantsDigest := sha256.Sum256(rawIntegrationGrants)
@@ -202,6 +235,11 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			integrationGrantsDigestHex, string(rawArtifacts), string(rawDelegationTargets), string(rawSessionContext),
 			roleDefinitionRef, roleImageRecipeRef, roleImageArtifactRef, imageReference,
 			imageManifestDigest, roleRuntimeContractSHA256, hex.EncodeToString(inputDigest[:]),
+			runtimeConfigRef, strconv.FormatInt(runtimeConfigVersion, 10), runtimeConfigDigest,
+			providerPolicyRef, strconv.FormatInt(providerPolicyVersion, 10), providerPolicyDigest,
+			configOverlayRef, strconv.FormatInt(configOverlayVersion, 10), configOverlayDigest,
+			runtimeEnvironmentRef, strconv.FormatInt(runtimeEnvironmentVersion, 10), runtimeEnvironmentDigest,
+			environmentBindingRef, strconv.FormatInt(environmentBindingVersion, 10), environmentBindingDigest,
 		}, "\x00")))
 		revisionDigestHex := hex.EncodeToString(revisionDigest[:])
 		revisionRef, err := newRef("rrev")
@@ -232,6 +270,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"imageReference": imageReference, "imageManifestDigest": imageManifestDigest,
 			"roleRuntimeContractRevision": roleRuntimeContractRevision,
 			"roleRuntimeContractSHA256":   roleRuntimeContractSHA256,
+			"runtimeConfigRef":            runtimeConfigRef, "runtimeConfigVersion": runtimeConfigVersion, "runtimeConfigDigest": runtimeConfigDigest,
+			"providerPolicyRef": providerPolicyRef, "providerPolicyVersion": providerPolicyVersion, "providerPolicyDigest": providerPolicyDigest,
+			"providerPolicyMode": candidate.providerPolicyMode,
+			"configOverlayRef":   configOverlayRef, "configOverlayVersion": configOverlayVersion, "configOverlayDigest": configOverlayDigest, "configOverlay": configOverlay,
+			"runtimeEnvironmentRef": runtimeEnvironmentRef, "runtimeEnvironmentVersion": runtimeEnvironmentVersion, "runtimeEnvironmentDigest": runtimeEnvironmentDigest,
+			"environmentBindingRef": environmentBindingRef, "environmentBindingVersion": environmentBindingVersion, "environmentBindingDigest": environmentBindingDigest,
+			"environmentValues": environmentValues, "secretProjections": secretProjections,
 		}
 		rawSnapshot, err := json.Marshal(snapshot)
 		if err != nil || len(rawSnapshot) > 256<<10 {
@@ -248,7 +293,12 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			providerCredentialSHA256, instructionRef, resolvedInstructionsDigestHex,
 			hex.EncodeToString(inputDigest[:]), capabilities, integrationGrantsDigestHex,
 			imageReference, imageManifestDigest, roleRuntimeContractRevision,
-			roleRuntimeContractSHA256, revisionDigestHex, rawSnapshot).Scan(&runtimeRevisionID); err != nil {
+			roleRuntimeContractSHA256, runtimeConfigID, providerPolicyID, configOverlayID,
+			runtimeEnvironmentID, environmentBindingID, runtimeConfigRef, runtimeConfigVersion, runtimeConfigDigest,
+			providerPolicyRef, providerPolicyVersion, providerPolicyDigest, configOverlayRef, configOverlayVersion,
+			configOverlayDigest, runtimeEnvironmentRef, runtimeEnvironmentVersion, runtimeEnvironmentDigest,
+			environmentBindingRef, environmentBindingVersion, environmentBindingDigest,
+			revisionDigestHex, rawSnapshot).Scan(&runtimeRevisionID); err != nil {
 			return commandOutcome{}, fmt.Errorf("insert runtime revision: %w", errs.ErrConflict)
 		}
 		expiresAt := time.Now().UTC().Add(30 * time.Second)
@@ -277,6 +327,15 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 }
 
 func jsonUnmarshal(raw []byte, target any) error { return json.Unmarshal(raw, target) }
+
+func decodeStoredRuntimeEnvironment(rawValues, rawSecrets []byte, values *[]runtimecontract.RuntimeEnvironmentValue, secrets *[]runtimecontract.RuntimeSecretProjection) error {
+	decodedValues, decodedSecrets, err := runtimecontract.DecodeRuntimeEnvironment(rawValues, rawSecrets)
+	if err != nil {
+		return err
+	}
+	*values, *secrets = decodedValues, decodedSecrets
+	return nil
+}
 
 func (repository *Repository) lease(ctx context.Context, tx pgx.Tx, scope scope, payload command.LeaseInput, lock bool) (map[string]any, error) {
 	leaseQuery := queryRuntimeLeaseSelectRuntimeLeasesOrganizationIdRef
@@ -628,12 +687,16 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	childRef, _ := newRef("run")
-	var providerAccountID, initiatorID, parentRunID string
+	var initiatorID, parentRunID string
 	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectRunsId, pgx.StrictNamedArgs{
 		"parent_run_id":   lease["runID"],
 		"organization_id": scope.organizationID,
-	}).Scan(&providerAccountID, &initiatorID, &parentRunID); err != nil {
+	}).Scan(&initiatorID, &parentRunID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	providerAccountID, err := repository.selectProviderAccountForAgent(ctx, tx, scope.organizationID, payload.TargetAgentRef)
+	if err != nil {
+		return commandOutcome{}, err
 	}
 	childSessionRef, _ := newRef("ses")
 	var childSessionID string

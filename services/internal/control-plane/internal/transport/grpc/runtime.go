@@ -7,6 +7,7 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -94,6 +95,36 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 		SecretUid:             mapString(values, "providerSecretUID"),
 		SecretResourceVersion: mapString(values, "providerSecretResourceVersion"),
 		ContentSha256:         mapString(values, "providerCredentialSHA256"),
+	}
+	result.RuntimeConfigRef = mapString(values, "runtimeConfigRef")
+	result.RuntimeConfigVersion = mapInt64(values, "runtimeConfigVersion")
+	result.RuntimeConfigDigest = mapString(values, "runtimeConfigDigest")
+	result.ProviderPolicyRef = mapString(values, "providerPolicyRef")
+	result.ProviderPolicyVersion = mapInt64(values, "providerPolicyVersion")
+	result.ProviderPolicyDigest = mapString(values, "providerPolicyDigest")
+	result.ConfigOverlayRef = mapString(values, "configOverlayRef")
+	result.ConfigOverlayVersion = mapInt64(values, "configOverlayVersion")
+	result.ConfigOverlayDigest = mapString(values, "configOverlayDigest")
+	result.ConfigOverlay = mapString(values, "configOverlay")
+	result.RuntimeEnvironmentRef = mapString(values, "runtimeEnvironmentRef")
+	result.RuntimeEnvironmentVersion = mapInt64(values, "runtimeEnvironmentVersion")
+	result.RuntimeEnvironmentDigest = mapString(values, "runtimeEnvironmentDigest")
+	result.EnvironmentBindingRef = mapString(values, "environmentBindingRef")
+	result.EnvironmentBindingVersion = mapInt64(values, "environmentBindingVersion")
+	result.EnvironmentBindingDigest = mapString(values, "environmentBindingDigest")
+	if environmentValues, ok := values["environmentValues"].([]runtimecontract.RuntimeEnvironmentValue); ok {
+		for _, item := range environmentValues {
+			result.EnvironmentValues = append(result.EnvironmentValues, &controlplanev1.RuntimeEnvironmentValue{Name: item.Name, Value: item.Value})
+		}
+	}
+	if secretProjections, ok := values["secretProjections"].([]runtimecontract.RuntimeSecretProjection); ok {
+		for _, item := range secretProjections {
+			result.SecretProjections = append(result.SecretProjections, &controlplanev1.RuntimeSecretDescriptor{
+				Name: item.Name, SecretName: item.SecretName, SecretKey: item.SecretKey,
+				SecretUid: item.SecretUID, SecretResourceVersion: item.SecretResourceVersion,
+				ContentSha256: item.ContentSHA256,
+			})
+		}
 	}
 	profileRevision := mapString(values, "profileRevision")
 	if profileRevision == "" {

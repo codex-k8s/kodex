@@ -134,6 +134,9 @@ func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error)
 	command := exec.Command("/usr/local/bin/codex", "app-server", "--strict-config", "--listen", "stdio://")
 	command.Dir = input.WorkspaceRoot
 	command.Env = appServerEnvironment(input, mcpProxyToken)
+	if command.Env == nil {
+		return nil, errors.New("runtime Secret projection is unavailable")
+	}
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
 	stdin, err := command.StdinPipe()
 	if err != nil {
@@ -169,6 +172,16 @@ func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error)
 func appServerEnvironment(input model.Input, mcpProxyToken string) []string {
 	environment := []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + input.CodexHome,
 		"CODEX_HOME=" + input.CodexHome, "KODEX_MCP_PROXY_TOKEN=" + mcpProxyToken}
+	for _, item := range input.EnvironmentValues {
+		environment = append(environment, item.Name+"="+item.Value)
+	}
+	for _, item := range input.SecretProjections {
+		value, present := os.LookupEnv(item.Name)
+		if !present {
+			return nil
+		}
+		environment = append(environment, item.Name+"="+value)
+	}
 	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"} {
 		if value, ok := os.LookupEnv(name); ok && value != "" {
 			environment = append(environment, name+"="+value)

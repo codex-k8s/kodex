@@ -26,6 +26,15 @@ const (
 	ValidateInstructions          Kind = "VALIDATE_INSTRUCTION_DRAFT"
 	PublishInstructions           Kind = "PUBLISH_INSTRUCTION_DRAFT"
 	RollbackInstructions          Kind = "ROLLBACK_INSTRUCTIONS"
+	PublishAgentRuntimeConfig     Kind = "PUBLISH_AGENT_RUNTIME_CONFIGURATION"
+	CreateConfigOverlayDraft      Kind = "CREATE_CONFIG_OVERLAY_DRAFT"
+	ValidateConfigOverlayDraft    Kind = "VALIDATE_CONFIG_OVERLAY_DRAFT"
+	PublishConfigOverlayDraft     Kind = "PUBLISH_CONFIG_OVERLAY_DRAFT"
+	RollbackConfigOverlay         Kind = "ROLLBACK_CONFIG_OVERLAY"
+	CreateRuntimeEnvironment      Kind = "CREATE_RUNTIME_ENVIRONMENT_SET"
+	PublishRuntimeEnvironment     Kind = "PUBLISH_RUNTIME_ENVIRONMENT_VERSION"
+	RollbackRuntimeEnvironment    Kind = "ROLLBACK_RUNTIME_ENVIRONMENT"
+	BindAgentRuntimeEnvironment   Kind = "BIND_AGENT_RUNTIME_ENVIRONMENT"
 	ChangeAgentCapability         Kind = "CHANGE_AGENT_CAPABILITY"
 	ChangeAgentGrant              Kind = "CHANGE_AGENT_GRANT"
 	CreateWorkflow                Kind = "CREATE_WORKFLOW"
@@ -89,6 +98,21 @@ type AgentInput struct {
 type AgentBindingInput struct {
 	AgentRef, BindingRef string
 	Enabled              bool
+}
+type AgentRuntimeConfigurationInput struct {
+	AgentRef, RuntimeProfileRef, Model, ProviderPolicyMode string
+	ProviderAccounts                                       []entity.ProviderAccountCandidate
+}
+type ConfigOverlayInput struct {
+	AgentRef, Content, PublishedOverlayRef string
+}
+type RuntimeEnvironmentInput struct {
+	Ref, ProjectRef, Name, Description, PublishedVersionRef string
+	Values                                                  []entity.RuntimeEnvironmentValue
+	SecretDescriptors                                       []entity.RuntimeSecretDescriptor
+}
+type RuntimeEnvironmentBindingInput struct {
+	AgentRef, EnvironmentRef string
 }
 type WorkflowInput struct {
 	Ref, ProjectRef, Name, Purpose, CoordinatorAgentRef string
@@ -193,22 +217,24 @@ type InteractionMessageInput struct {
 }
 
 type Result struct {
-	Project      *entity.Project
-	Membership   *entity.Membership
-	Agent        *entity.Agent
-	Workflow     *entity.Workflow
-	Run          *entity.Run
-	Graph        *entity.RunGraph
-	Gate         *entity.OwnerGate
-	Artifact     *entity.Artifact
-	Schedule     *entity.Schedule
-	Connection   *entity.IntegrationConnection
-	Conversation *entity.AssistantConversation
-	Plan         *entity.AssistantPlan
-	Assistant    *entity.SystemAssistant
-	Event        *entity.RunEvent
-	CreatedRefs  []string
-	Duplicate    bool
-	Runtime      map[string]any
-	RuntimeItems []map[string]any
+	Project              *entity.Project
+	Membership           *entity.Membership
+	Agent                *entity.Agent
+	RuntimeConfiguration *entity.AgentRuntimeConfigurationView
+	RuntimeEnvironment   *entity.RuntimeEnvironmentSet
+	Workflow             *entity.Workflow
+	Run                  *entity.Run
+	Graph                *entity.RunGraph
+	Gate                 *entity.OwnerGate
+	Artifact             *entity.Artifact
+	Schedule             *entity.Schedule
+	Connection           *entity.IntegrationConnection
+	Conversation         *entity.AssistantConversation
+	Plan                 *entity.AssistantPlan
+	Assistant            *entity.SystemAssistant
+	Event                *entity.RunEvent
+	CreatedRefs          []string
+	Duplicate            bool
+	Runtime              map[string]any
+	RuntimeItems         []map[string]any
 }
