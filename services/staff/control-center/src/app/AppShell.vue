@@ -12,7 +12,6 @@ import {
   PlugZap,
   Search,
   Settings,
-  Sparkles,
   UsersRound,
   Workflow,
 } from "@lucide/vue";
@@ -28,6 +27,8 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import { buildBreadcrumbs, type BreadcrumbLabels } from "@/app/breadcrumbs";
+import ContextualAssistant from "@/features/assistant/ContextualAssistant.vue";
+import { useContextualAssistant } from "@/features/assistant/contextual-assistant";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { useSessionStore } from "@/features/session/store";
@@ -39,6 +40,8 @@ import {
 } from "@/shared/locale";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import CurrentUserSummary from "@/shared/ui/CurrentUserSummary.vue";
+import { useDismissibleLayer } from "@/shared/ui/useDismissibleLayer";
+import { runPath } from "@/shared/routes";
 
 const route = useRoute();
 const router = useRouter();
@@ -52,6 +55,8 @@ const search = ref("");
 const searchInput = ref<HTMLInputElement>();
 const searchOpen = ref(false);
 const mobileSearchOpen = ref(false);
+const contextualAssistant = useContextualAssistant();
+const searchRoot = ref<HTMLElement>();
 let disposed = false;
 
 const projectRef = computed(() => {
@@ -85,7 +90,6 @@ const breadcrumbs = computed(() => {
   const labels: BreadcrumbLabels = {
     home: t("nav.home"),
     onboarding: t("nav.onboarding"),
-    assistant: t("nav.assistant"),
     projects: t("nav.projects"),
     project: t("app.project"),
     agents: t("nav.agents"),
@@ -121,6 +125,26 @@ const breadcrumbs = computed(() => {
     },
     labels,
   );
+});
+const screenTitle = computed(
+  () => breadcrumbs.value.at(-1)?.label ?? t("nav.home"),
+);
+const assistantContext = computed(() => {
+  const parts = [screenTitle.value];
+  if (project.value) parts.push(`${t("app.project")}: ${project.value.name}`);
+  if (typeof route.params.agentRef === "string") {
+    const agent = platform.agents[route.params.agentRef];
+    if (agent) parts.push(`${t("nav.agent")}: ${agent.name}`);
+  }
+  if (typeof route.params.workflowRef === "string") {
+    const workflow = platform.workflows[route.params.workflowRef];
+    if (workflow) parts.push(`${t("nav.workflow")}: ${workflow.name}`);
+  }
+  if (typeof route.params.runRef === "string") {
+    const run = platform.runs[route.params.runRef];
+    if (run) parts.push(`${t("nav.run")}: ${run.title}`);
+  }
+  return parts.join(" · ");
 });
 
 const globalLinks = computed(() => [
@@ -233,7 +257,7 @@ function searchResultPath(result: {
   projectRef?: string;
 }): string {
   if (result.kind === "PROJECT") return `/projects/${result.ref}`;
-  if (result.kind === "RUN") return `/runs/${result.ref}`;
+  if (result.kind === "RUN") return runPath(result.ref, result.projectRef);
   const project = encodeURIComponent(result.projectRef ?? "");
   const resource = result.kind === "AGENT" ? "agents" : "workflows";
   return `/projects/${project}/${resource}/${encodeURIComponent(result.ref)}`;
@@ -246,6 +270,12 @@ function changeLocale(value: SupportedLocale): void {
 
 function setOnline(): void {
   online.value = navigator.onLine;
+}
+
+function openAssistant(): void {
+  contextualAssistant.show();
+  mobileOpen.value = false;
+  closeSearch();
 }
 
 watch(
@@ -263,6 +293,7 @@ watch(
     closeSearch();
   },
 );
+useDismissibleLayer(searchRoot, closeSearch);
 onMounted(() => {
   locale.value = currentLocale();
   document.documentElement.lang = locale.value;
@@ -327,23 +358,75 @@ onBeforeUnmount(() => {
           </option>
         </select>
       </div>
-      <form
-        class="global-search"
-        :class="{ 'global-search--open': mobileSearchOpen }"
-        role="search"
-        @submit.prevent="submitSearch"
-      >
-        <label class="sr-only" for="global-search">{{
-          $t("app.search")
-        }}</label>
-        <input
-          id="global-search"
-          ref="searchInput"
-          v-model="search"
-          type="search"
-          :placeholder="$t('app.search')"
-        />
-      </form>
+      <div ref="searchRoot" class="global-search-wrap">
+        <form
+          class="global-search"
+          :class="{ 'global-search--open': mobileSearchOpen }"
+          role="search"
+          @submit.prevent="submitSearch"
+        >
+          <label class="sr-only" for="global-search">{{
+            $t("app.search")
+          }}</label>
+          <input
+            id="global-search"
+            ref="searchInput"
+            v-model="search"
+            type="search"
+            :placeholder="$t('app.search')"
+          />
+        </form>
+        <section
+          v-if="searchOpen"
+          class="global-search-results"
+          :aria-label="$t('app.searchResults')"
+          aria-live="polite"
+          @keydown.esc="closeSearch"
+        >
+          <header>
+            <strong>{{ $t("app.searchResults") }}</strong>
+            <button
+              class="icon-button"
+              type="button"
+              :aria-label="$t('app.closeSearch')"
+              @click="closeSearch"
+            >
+              ×
+            </button>
+          </header>
+          <p v-if="search.trim().length < 2" class="muted">
+            {{ $t("app.searchHint") }}
+          </p>
+          <p v-else-if="platform.loading.search" class="muted" role="status">
+            {{ $t("common.loading") }}
+          </p>
+          <template v-else-if="platform.problems.search">
+            <p role="alert">{{ platform.problems.search.title }}</p>
+            <button class="button" type="button" @click="submitSearch">
+              {{ $t("common.retry") }}
+            </button>
+          </template>
+          <p v-else-if="platform.searchResults.length === 0" class="muted">
+            {{ $t("app.searchEmpty") }}
+          </p>
+          <div v-else class="search-results-list">
+            <RouterLink
+              v-for="result in platform.searchResults"
+              :key="`${result.kind}:${result.ref}`"
+              class="search-result"
+              :to="searchResultPath(result)"
+              @click="closeSearch"
+            >
+              <span>
+                <small>{{ $t(`app.searchKind.${result.kind}`) }}</small>
+                <strong>{{ result.title }}</strong>
+                <span>{{ result.subtitle }}</span>
+              </span>
+              <StatusBadge :state="result.state" />
+            </RouterLink>
+          </div>
+        </section>
+      </div>
       <button
         class="icon-button mobile-only"
         type="button"
@@ -353,56 +436,6 @@ onBeforeUnmount(() => {
       >
         <Search :size="19" aria-hidden="true" />
       </button>
-      <section
-        v-if="searchOpen"
-        class="global-search-results"
-        :aria-label="$t('app.searchResults')"
-        aria-live="polite"
-        @keydown.esc="closeSearch"
-      >
-        <header>
-          <strong>{{ $t("app.searchResults") }}</strong>
-          <button
-            class="icon-button"
-            type="button"
-            :aria-label="$t('app.closeSearch')"
-            @click="closeSearch"
-          >
-            ×
-          </button>
-        </header>
-        <p v-if="search.trim().length < 2" class="muted">
-          {{ $t("app.searchHint") }}
-        </p>
-        <p v-else-if="platform.loading.search" class="muted" role="status">
-          {{ $t("common.loading") }}
-        </p>
-        <template v-else-if="platform.problems.search">
-          <p role="alert">{{ platform.problems.search.title }}</p>
-          <button class="button" type="button" @click="submitSearch">
-            {{ $t("common.retry") }}
-          </button>
-        </template>
-        <p v-else-if="platform.searchResults.length === 0" class="muted">
-          {{ $t("app.searchEmpty") }}
-        </p>
-        <div v-else class="search-results-list">
-          <RouterLink
-            v-for="result in platform.searchResults"
-            :key="`${result.kind}:${result.ref}`"
-            class="search-result"
-            :to="searchResultPath(result)"
-            @click="closeSearch"
-          >
-            <span>
-              <small>{{ $t(`app.searchKind.${result.kind}`) }}</small>
-              <strong>{{ result.title }}</strong>
-              <span>{{ result.subtitle }}</span>
-            </span>
-            <StatusBadge :state="result.state" />
-          </RouterLink>
-        </div>
-      </section>
       <RouterLink class="decision-link" to="/decisions">
         <KeyRound :size="17" aria-hidden="true" />
         <span class="decision-link__label">{{ $t("nav.decisions") }}</span>
@@ -447,12 +480,9 @@ onBeforeUnmount(() => {
       class="sidebar"
       :class="{ 'sidebar--open': mobileOpen }"
     >
-      <RouterLink
-        class="assistant-entry"
-        :to="{ path: '/assistant', query: projectRef ? { projectRef } : {} }"
-      >
+      <button class="assistant-entry" type="button" @click="openAssistant">
         <span class="assistant-entry__mark" aria-hidden="true"
-          ><Sparkles :size="21"
+          ><Bot :size="21"
         /></span>
         <span
           ><strong>{{ $t("app.assistantShort") }}</strong
@@ -462,7 +492,7 @@ onBeforeUnmount(() => {
           v-if="platform.assistant"
           :state="platform.assistant.runtimeState"
         />
-      </RouterLink>
+      </button>
       <nav :aria-label="$t('app.navigation')">
         <RouterLink
           v-for="link in globalLinks"
@@ -557,11 +587,6 @@ onBeforeUnmount(() => {
           $t("nav.projects")
         }}</span></RouterLink
       >
-      <RouterLink to="/assistant"
-        ><Sparkles :size="18" aria-hidden="true" /><span>{{
-          $t("app.assistantShort")
-        }}</span></RouterLink
-      >
       <RouterLink to="/runs"
         ><Activity :size="18" aria-hidden="true" /><span>{{
           $t("nav.runs")
@@ -573,5 +598,21 @@ onBeforeUnmount(() => {
         }}</span></RouterLink
       >
     </nav>
+    <button
+      class="kodex-fab"
+      type="button"
+      :aria-label="$t('assistant.openForContext', { context: screenTitle })"
+      :title="$t('assistant.openForContext', { context: screenTitle })"
+      @click="openAssistant"
+    >
+      <Bot :size="22" aria-hidden="true" />
+    </button>
+    <ContextualAssistant
+      :open="contextualAssistant.open.value"
+      :screen-title="screenTitle"
+      :context-summary="assistantContext"
+      :project-ref="projectRef"
+      @close="contextualAssistant.hide"
+    />
   </div>
 </template>

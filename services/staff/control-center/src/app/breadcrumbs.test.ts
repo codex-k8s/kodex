@@ -5,7 +5,6 @@ import { buildBreadcrumbs, type BreadcrumbLabels } from "@/app/breadcrumbs";
 const labels: BreadcrumbLabels = {
   home: "Главная",
   onboarding: "Первичная настройка",
-  assistant: "Помощник Kodex",
   projects: "Проекты",
   project: "Проект",
   agents: "ИИ-сотрудники",
@@ -59,6 +58,27 @@ describe("breadcrumbs", () => {
     expect(buildBreadcrumbs({ routeName: "audit" }, labels)).toEqual([
       { label: "Администрирование", path: "/administration" },
       { label: "Аудит и диагностика" },
+    ]);
+  });
+
+  it("сохраняет контекст проекта в ссылке на запуск", () => {
+    expect(
+      buildBreadcrumbs(
+        {
+          routeName: "project-run",
+          project: { ref: "project_sales", name: "Корпоративные продажи" },
+          runName: "Квалификация лида",
+        },
+        labels,
+      ),
+    ).toEqual([
+      { label: "Проекты", path: "/projects" },
+      {
+        label: "Корпоративные продажи",
+        path: "/projects/project_sales",
+      },
+      { label: "Запуски", path: "/projects/project_sales/runs" },
+      { label: "Квалификация лида" },
     ]);
   });
 });

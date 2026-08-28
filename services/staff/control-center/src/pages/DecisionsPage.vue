@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from "vue";
 import { usePlatformStore } from "@/features/platform/store";
 import type { OwnerGate } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -62,7 +63,7 @@ onMounted(() => void platform.loadGates());
           <div class="card-heading">
             <div>
               <h2>{{ gate.title }}</h2>
-              <RouterLink :to="`/runs/${gate.runRef}`">{{
+              <RouterLink :to="runPath(gate.runRef, gate.projectRef)">{{
                 $t("decisions.openRun")
               }}</RouterLink>
             </div>

@@ -6,7 +6,6 @@ export interface Breadcrumb {
 export interface BreadcrumbLabels {
   home: string;
   onboarding: string;
-  assistant: string;
   projects: string;
   project: string;
   agents: string;
@@ -63,8 +62,6 @@ export function buildBreadcrumbs(
       return [current(labels.home)];
     case "onboarding":
       return [current(labels.onboarding)];
-    case "assistant":
-      return [current(labels.assistant)];
     case "projects":
       return [current(labels.projects)];
     case "project":
@@ -106,6 +103,17 @@ export function buildBreadcrumbs(
     case "run":
       return [
         { label: labels.runs, path: "/runs" },
+        current(context.runName ?? labels.run),
+      ];
+    case "project-run":
+      return [
+        ...project,
+        {
+          label: labels.runs,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/runs`
+            : "/runs",
+        },
         current(context.runName ?? labels.run),
       ];
     case "files":

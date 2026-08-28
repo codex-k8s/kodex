@@ -16,6 +16,7 @@ import type {
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem, asProblem } from "@/shared/api/problem";
+import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -27,6 +28,11 @@ const route = useRoute();
 const router = useRouter();
 const translator = useI18n();
 const runRef = computed(() => String(route.params.runRef));
+const routeProjectRef = computed(() =>
+  typeof route.params.projectRef === "string"
+    ? route.params.projectRef
+    : undefined,
+);
 const run = computed(() => platform.runs[runRef.value]);
 const graph = computed(
   () =>
@@ -268,7 +274,9 @@ async function command(action: "CANCEL" | "RETRY") {
   try {
     const next = await platform.changeRun(run.value, { action });
     if (action === "RETRY" && next.ref !== runRef.value)
-      await router.replace(`/runs/${next.ref}`);
+      await router.replace(
+        runPath(next.ref, routeProjectRef.value ?? next.projectRef),
+      );
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -287,7 +295,10 @@ async function continueRun() {
       task: turn.value.trim(),
     });
     turn.value = "";
-    if (next.ref !== runRef.value) await router.replace(`/runs/${next.ref}`);
+    if (next.ref !== runRef.value)
+      await router.replace(
+        runPath(next.ref, routeProjectRef.value ?? next.projectRef),
+      );
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -414,7 +425,7 @@ onBeforeUnmount(() => {
         ><span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span
         ><RouterLink
           v-if="run.retryOfRunRef"
-          :to="`/runs/${run.retryOfRunRef}`"
+          :to="runPath(run.retryOfRunRef, routeProjectRef ?? run.projectRef)"
           >{{ $t("runs.previousAttempt") }}</RouterLink
         >
         <span>{{ new Date(run.createdAt).toLocaleString() }}</span
@@ -591,7 +602,7 @@ onBeforeUnmount(() => {
                   <RouterLink
                     v-for="childRef in selectedNode.childRunRefs"
                     :key="childRef"
-                    :to="`/runs/${childRef}`"
+                    :to="runPath(childRef, routeProjectRef ?? run.projectRef)"
                   >
                     {{ $t("runs.openChildRun") }}
                   </RouterLink>

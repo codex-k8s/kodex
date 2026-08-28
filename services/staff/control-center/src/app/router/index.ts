@@ -16,11 +16,6 @@ export const router = createRouter({
       component: lazyPage(() => import("@/pages/OnboardingPage.vue")),
     },
     {
-      path: "/assistant",
-      name: "assistant",
-      component: lazyPage(() => import("@/pages/AssistantPage.vue")),
-    },
-    {
       path: "/projects",
       name: "projects",
       component: lazyPage(() => import("@/pages/ProjectsPage.vue")),
@@ -65,6 +60,12 @@ export const router = createRouter({
       path: "/projects/:projectRef/runs",
       name: "project-runs",
       component: lazyPage(() => import("@/pages/RunsPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/runs/:runRef",
+      name: "project-run",
+      component: lazyPage(() => import("@/pages/RunPage.vue")),
       meta: { projectScoped: true },
     },
     {

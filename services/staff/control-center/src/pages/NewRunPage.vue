@@ -10,6 +10,7 @@ import type {
   WorkflowInputField,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -175,7 +176,7 @@ async function submit(): Promise<void> {
         ? { sessionRef: form.sessionRef }
         : {}),
     });
-    await router.push(`/runs/${run.ref}`);
+    await router.push(runPath(run.ref, projectRef.value));
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
