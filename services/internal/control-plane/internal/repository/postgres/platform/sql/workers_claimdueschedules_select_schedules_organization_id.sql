@@ -12,6 +12,7 @@ SELECT s.id::text,
        s.input
 FROM control_plane.schedules s
 WHERE s.organization_id = $1::uuid
+  AND s.lifecycle_state = 'ACTIVE'
   AND s.enabled
   AND s.next_run_at <= clock_timestamp()
   AND NOT EXISTS(SELECT 1

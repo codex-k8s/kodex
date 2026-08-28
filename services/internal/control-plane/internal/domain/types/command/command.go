@@ -42,6 +42,7 @@ const (
 	CreateSchedule                Kind = "CREATE_SCHEDULE"
 	UpdateSchedule                Kind = "UPDATE_SCHEDULE"
 	SetScheduleEnabled            Kind = "SET_SCHEDULE_ENABLED"
+	ArchiveSchedule               Kind = "ARCHIVE_SCHEDULE"
 	CreateConnection              Kind = "CREATE_INTEGRATION_CONNECTION"
 	TestConnection                Kind = "TEST_INTEGRATION_CONNECTION"
 	SetConnectionEnabled          Kind = "SET_INTEGRATION_CONNECTION_ENABLED"

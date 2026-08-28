@@ -12,11 +12,17 @@ import (
 func TestCastScheduleUsesPublicLifecycleStates(t *testing.T) {
 	t.Parallel()
 
-	if got := castSchedule(entity.Schedule{Enabled: true}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_ACTIVE {
+	if got := castSchedule(entity.Schedule{State: "ACTIVE", Enabled: true}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_ACTIVE {
 		t.Fatalf("enabled schedule state = %s", got)
 	}
-	if got := castSchedule(entity.Schedule{Enabled: false}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_PAUSED {
+	if got := castSchedule(entity.Schedule{State: "ACTIVE", Enabled: false}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_PAUSED {
 		t.Fatalf("paused schedule state = %s", got)
+	}
+	if got := castSchedule(entity.Schedule{State: "ARCHIVED", Enabled: false}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_ARCHIVED {
+		t.Fatalf("archived schedule state = %s", got)
+	}
+	if got := castSchedule(entity.Schedule{State: "UNKNOWN", Enabled: true}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_UNSPECIFIED {
+		t.Fatalf("unknown schedule state = %s", got)
 	}
 }
 

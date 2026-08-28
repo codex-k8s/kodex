@@ -17,6 +17,8 @@ var (
 	queryConfigurationChangescheduleSelectWorkflowTarget string
 	//go:embed sql/configuration_changeschedule_cancel_claimed_occurrences.sql
 	queryConfigurationChangescheduleCancelClaimedOccurrences string
+	//go:embed sql/configuration_changeschedule_archive_schedule.sql
+	queryConfigurationChangescheduleArchiveSchedule string
 	//go:embed sql/configuration_changeconnection_insert_integration_connections_ref_definition_key_state.sql
 	queryConfigurationChangeconnectionInsertIntegrationConnectionsRefDefinitionKeyState string
 	//go:embed sql/configuration_changeconnection_select_integration_definitions_stable_key_enabled.sql

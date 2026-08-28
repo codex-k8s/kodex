@@ -144,6 +144,8 @@ SCHEDULE_CREATED:
   other: Schedule created
 SCHEDULE_UPDATED:
   other: Schedule updated
+SCHEDULE_ARCHIVED:
+  other: Schedule archived
 SCHEDULED_RUN_TASK:
   other: Scheduled run
 SCHEDULE_OCCURRENCE_MATERIALIZED:

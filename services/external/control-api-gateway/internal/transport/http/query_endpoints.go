@@ -258,6 +258,14 @@ func (server *Server) ListSchedules(w http.ResponseWriter, r *http.Request, ref 
 	}
 	writeMessage(w, http.StatusOK, response, "", "schedules")
 }
+func (server *Server) GetSchedule(w http.ResponseWriter, r *http.Request, ref generated.ScheduleRef) {
+	response, err := server.control.Query.GetSchedule(r.Context(), &controlplanev1.GetScheduleRequest{ScheduleRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "schedule", "")
+}
 func (server *Server) ListIntegrationDefinitions(w http.ResponseWriter, r *http.Request, p generated.ListIntegrationDefinitionsParams) {
 	response, err := server.control.Query.ListIntegrationDefinitions(r.Context(), &controlplanev1.ListIntegrationDefinitionsRequest{Category: stringValue(p.Category)})
 	if err != nil {

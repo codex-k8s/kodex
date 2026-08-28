@@ -1,5 +1,5 @@
 -- name: queries_listschedules_select_schedules_organization_id_ref_project_id :many
-SELECT s.ref,p.ref,s.name,s.target_type,s.target_ref,COALESCE(a.name,w.name,s.target_ref),s.preset,s.cron_expression,s.timezone,s.input,s.session_policy,s.notification_policy,s.enabled,s.version,s.next_run_at,s.last_run_at,s.created_at,s.updated_at,
+SELECT s.ref,p.ref,s.name,s.target_type,s.target_ref,COALESCE(a.name,w.name,s.target_ref),s.preset,s.cron_expression,s.timezone,s.input,s.session_policy,s.notification_policy,s.lifecycle_state,s.enabled,s.version,s.next_run_at,s.last_run_at,s.created_at,s.updated_at,
        ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=s.project_id AND m.subject_id=$4::uuid AND m.active AND 'MANAGE_SCHEDULES'=ANY(m.permissions)))
 FROM control_plane.schedules s
 JOIN control_plane.projects p ON p.id=s.project_id

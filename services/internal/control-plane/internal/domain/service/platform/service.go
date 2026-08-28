@@ -330,6 +330,16 @@ func (service *Service) ListSchedules(ctx context.Context, p value.Principal, fi
 	}
 	return service.repository.ListSchedules(ctx, p, filter)
 }
+func (service *Service) GetSchedule(ctx context.Context, p value.Principal, ref string) (entity.Schedule, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.Schedule{}, err
+	}
+	if strings.TrimSpace(ref) == "" {
+		return entity.Schedule{}, errs.ErrInvalid
+	}
+	return service.repository.GetSchedule(ctx, p, ref)
+}
 func (service *Service) ListIntegrationDefinitions(ctx context.Context, p value.Principal, category string) ([]entity.IntegrationDefinition, []string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -514,7 +524,7 @@ func knownCommand(kind command.Kind) bool {
 		command.ValidateWorkflow, command.PublishWorkflow, command.ArchiveWorkflow,
 		command.LaunchRun, command.AddSessionTurn, command.CancelRun, command.RetryRun,
 		command.ResolveOwnerGate, command.ChangeArtifactBinding, command.CreateSchedule,
-		command.UpdateSchedule, command.SetScheduleEnabled, command.CreateConnection,
+		command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.CreateConnection,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant,
 		command.CreateAssistantConversation, command.AddAssistantTurn, command.ApplyAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,

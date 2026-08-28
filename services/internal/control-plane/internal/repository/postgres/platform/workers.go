@@ -284,8 +284,11 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 	}
 	var schedule entity.Schedule
 	var scheduleInput []byte
-	if err := tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectSchedulesId, scheduleID).Scan(&schedule.Ref, &schedule.ProjectRef, &schedule.Name, &schedule.Target.Type, &schedule.Target.Ref, &schedule.Target.Name, &schedule.Preset, &schedule.CronExpression, &schedule.Timezone, &scheduleInput, &schedule.SessionPolicy, &schedule.NotificationPolicy, &schedule.Enabled, &schedule.Version, &schedule.NextRunAt, &schedule.LastRunAt, &schedule.CreatedAt, &schedule.UpdatedAt); err != nil {
+	if err := tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectSchedulesId, scheduleID).Scan(&schedule.Ref, &schedule.ProjectRef, &schedule.Name, &schedule.Target.Type, &schedule.Target.Ref, &schedule.Target.Name, &schedule.Preset, &schedule.CronExpression, &schedule.Timezone, &scheduleInput, &schedule.SessionPolicy, &schedule.NotificationPolicy, &schedule.State, &schedule.Enabled, &schedule.Version, &schedule.NextRunAt, &schedule.LastRunAt, &schedule.CreatedAt, &schedule.UpdatedAt); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if schedule.State != "ACTIVE" || !schedule.Enabled {
+		return commandOutcome{}, errs.ErrConflict
 	}
 	if json.Unmarshal(scheduleInput, &schedule.Input) != nil || attachScheduleDisplay(&schedule) != nil {
 		return commandOutcome{}, errs.ErrUnavailable

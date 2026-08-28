@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	scheduleActionEnable = "ENABLE"
-	scheduleActionPause  = "PAUSE"
+	scheduleActionEnable  = "ENABLE"
+	scheduleActionPause   = "PAUSE"
+	scheduleActionArchive = "ARCHIVE"
 )
 
 func (server *Server) CompleteOnboarding(w http.ResponseWriter, r *http.Request, p generated.CompleteOnboardingParams) {
@@ -492,12 +493,17 @@ func (server *Server) CommandSchedule(w http.ResponseWriter, r *http.Request, re
 	if !ok {
 		return
 	}
-	enabled := string(body.Action) == scheduleActionEnable
-	if string(body.Action) != scheduleActionEnable && string(body.Action) != scheduleActionPause {
+	var response proto.Message
+	var err error
+	switch string(body.Action) {
+	case scheduleActionEnable, scheduleActionPause:
+		response, err = server.control.Command.SetScheduleEnabled(r.Context(), &controlplanev1.SetScheduleEnabledRequest{Mutation: m, ScheduleRef: ref, Enabled: string(body.Action) == scheduleActionEnable})
+	case scheduleActionArchive:
+		response, err = server.control.Command.ArchiveSchedule(r.Context(), &controlplanev1.ArchiveScheduleRequest{Mutation: m, ScheduleRef: ref})
+	default:
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	response, err := server.control.Command.SetScheduleEnabled(r.Context(), &controlplanev1.SetScheduleEnabledRequest{Mutation: m, ScheduleRef: ref, Enabled: enabled})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

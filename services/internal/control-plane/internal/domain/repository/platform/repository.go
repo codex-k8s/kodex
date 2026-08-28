@@ -115,6 +115,7 @@ type Repository interface {
 	DownloadArtifact(context.Context, value.Principal, string, string) (ArtifactDownload, error)
 	ReadExecutionArtifact(context.Context, value.Principal, string, string, int64, string) (ArtifactDownload, error)
 	ListSchedules(context.Context, value.Principal, query.Filter) ([]entity.Schedule, string, error)
+	GetSchedule(context.Context, value.Principal, string) (entity.Schedule, error)
 	ListIntegrationDefinitions(context.Context, value.Principal, string) ([]entity.IntegrationDefinition, []string, error)
 	ListIntegrationConnections(context.Context, value.Principal, query.Filter) ([]entity.IntegrationConnection, string, error)
 	GetIntegrationConnection(context.Context, value.Principal, string) (entity.IntegrationConnection, error)

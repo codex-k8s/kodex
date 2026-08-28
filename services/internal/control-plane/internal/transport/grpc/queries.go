@@ -401,6 +401,18 @@ func (server *Server) ListSchedules(ctx context.Context, request *controlplanev1
 	return response, nil
 }
 
+func (server *Server) GetSchedule(ctx context.Context, request *controlplanev1.GetScheduleRequest) (*controlplanev1.GetScheduleResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetSchedule_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	item, err := server.service.GetSchedule(ctx, p, request.GetScheduleRef())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.GetScheduleResponse{Schedule: castSchedule(item)}, nil
+}
+
 func (server *Server) ListIntegrationDefinitions(ctx context.Context, request *controlplanev1.ListIntegrationDefinitionsRequest) (*controlplanev1.ListIntegrationDefinitionsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListIntegrationDefinitions_FullMethodName)
 	if err != nil {

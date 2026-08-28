@@ -8,4 +8,4 @@ SET state = 'CANCELLED',
     version = version + 1,
     updated_at = clock_timestamp()
 WHERE schedule_id = $1::uuid
-  AND state = 'CLAIMED'
+  AND state IN ('DUE', 'CLAIMED')

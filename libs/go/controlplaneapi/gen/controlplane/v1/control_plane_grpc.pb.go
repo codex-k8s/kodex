@@ -45,6 +45,7 @@ const (
 	PlatformQueryService_ListArtifacts_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListArtifacts"
 	PlatformQueryService_GetArtifact_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetArtifact"
 	PlatformQueryService_ListSchedules_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListSchedules"
+	PlatformQueryService_GetSchedule_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetSchedule"
 	PlatformQueryService_ListIntegrationDefinitions_FullMethodName       = "/controlplane.v1.PlatformQueryService/ListIntegrationDefinitions"
 	PlatformQueryService_ListIntegrationConnections_FullMethodName       = "/controlplane.v1.PlatformQueryService/ListIntegrationConnections"
 	PlatformQueryService_GetIntegrationConnection_FullMethodName         = "/controlplane.v1.PlatformQueryService/GetIntegrationConnection"
@@ -84,6 +85,7 @@ type PlatformQueryServiceClient interface {
 	ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error)
 	GetArtifact(ctx context.Context, in *GetArtifactRequest, opts ...grpc.CallOption) (*GetArtifactResponse, error)
 	ListSchedules(ctx context.Context, in *ListSchedulesRequest, opts ...grpc.CallOption) (*ListSchedulesResponse, error)
+	GetSchedule(ctx context.Context, in *GetScheduleRequest, opts ...grpc.CallOption) (*GetScheduleResponse, error)
 	ListIntegrationDefinitions(ctx context.Context, in *ListIntegrationDefinitionsRequest, opts ...grpc.CallOption) (*ListIntegrationDefinitionsResponse, error)
 	ListIntegrationConnections(ctx context.Context, in *ListIntegrationConnectionsRequest, opts ...grpc.CallOption) (*ListIntegrationConnectionsResponse, error)
 	GetIntegrationConnection(ctx context.Context, in *GetIntegrationConnectionRequest, opts ...grpc.CallOption) (*GetIntegrationConnectionResponse, error)
@@ -359,6 +361,16 @@ func (c *platformQueryServiceClient) ListSchedules(ctx context.Context, in *List
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) GetSchedule(ctx context.Context, in *GetScheduleRequest, opts ...grpc.CallOption) (*GetScheduleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetScheduleResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetSchedule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) ListIntegrationDefinitions(ctx context.Context, in *ListIntegrationDefinitionsRequest, opts ...grpc.CallOption) (*ListIntegrationDefinitionsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListIntegrationDefinitionsResponse)
@@ -441,6 +453,7 @@ type PlatformQueryServiceServer interface {
 	ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error)
 	GetArtifact(context.Context, *GetArtifactRequest) (*GetArtifactResponse, error)
 	ListSchedules(context.Context, *ListSchedulesRequest) (*ListSchedulesResponse, error)
+	GetSchedule(context.Context, *GetScheduleRequest) (*GetScheduleResponse, error)
 	ListIntegrationDefinitions(context.Context, *ListIntegrationDefinitionsRequest) (*ListIntegrationDefinitionsResponse, error)
 	ListIntegrationConnections(context.Context, *ListIntegrationConnectionsRequest) (*ListIntegrationConnectionsResponse, error)
 	GetIntegrationConnection(context.Context, *GetIntegrationConnectionRequest) (*GetIntegrationConnectionResponse, error)
@@ -533,6 +546,9 @@ func (UnimplementedPlatformQueryServiceServer) GetArtifact(context.Context, *Get
 }
 func (UnimplementedPlatformQueryServiceServer) ListSchedules(context.Context, *ListSchedulesRequest) (*ListSchedulesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSchedules not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetSchedule(context.Context, *GetScheduleRequest) (*GetScheduleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSchedule not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) ListIntegrationDefinitions(context.Context, *ListIntegrationDefinitionsRequest) (*ListIntegrationDefinitionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListIntegrationDefinitions not implemented")
@@ -1038,6 +1054,24 @@ func _PlatformQueryService_ListSchedules_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_GetSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetScheduleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetSchedule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetSchedule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetSchedule(ctx, req.(*GetScheduleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_ListIntegrationDefinitions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListIntegrationDefinitionsRequest)
 	if err := dec(in); err != nil {
@@ -1240,6 +1274,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_ListSchedules_Handler,
 		},
 		{
+			MethodName: "GetSchedule",
+			Handler:    _PlatformQueryService_GetSchedule_Handler,
+		},
+		{
 			MethodName: "ListIntegrationDefinitions",
 			Handler:    _PlatformQueryService_ListIntegrationDefinitions_Handler,
 		},
@@ -1300,6 +1338,7 @@ const (
 	PlatformCommandService_CreateSchedule_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateSchedule"
 	PlatformCommandService_UpdateSchedule_FullMethodName                  = "/controlplane.v1.PlatformCommandService/UpdateSchedule"
 	PlatformCommandService_SetScheduleEnabled_FullMethodName              = "/controlplane.v1.PlatformCommandService/SetScheduleEnabled"
+	PlatformCommandService_ArchiveSchedule_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ArchiveSchedule"
 	PlatformCommandService_CreateIntegrationConnection_FullMethodName     = "/controlplane.v1.PlatformCommandService/CreateIntegrationConnection"
 	PlatformCommandService_TestIntegrationConnection_FullMethodName       = "/controlplane.v1.PlatformCommandService/TestIntegrationConnection"
 	PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName = "/controlplane.v1.PlatformCommandService/SetIntegrationConnectionEnabled"
@@ -1348,6 +1387,7 @@ type PlatformCommandServiceClient interface {
 	CreateSchedule(ctx context.Context, in *CreateScheduleRequest, opts ...grpc.CallOption) (*CreateScheduleResponse, error)
 	UpdateSchedule(ctx context.Context, in *UpdateScheduleRequest, opts ...grpc.CallOption) (*UpdateScheduleResponse, error)
 	SetScheduleEnabled(ctx context.Context, in *SetScheduleEnabledRequest, opts ...grpc.CallOption) (*SetScheduleEnabledResponse, error)
+	ArchiveSchedule(ctx context.Context, in *ArchiveScheduleRequest, opts ...grpc.CallOption) (*ArchiveScheduleResponse, error)
 	CreateIntegrationConnection(ctx context.Context, in *CreateIntegrationConnectionRequest, opts ...grpc.CallOption) (*CreateIntegrationConnectionResponse, error)
 	TestIntegrationConnection(ctx context.Context, in *TestIntegrationConnectionRequest, opts ...grpc.CallOption) (*TestIntegrationConnectionResponse, error)
 	SetIntegrationConnectionEnabled(ctx context.Context, in *SetIntegrationConnectionEnabledRequest, opts ...grpc.CallOption) (*SetIntegrationConnectionEnabledResponse, error)
@@ -1724,6 +1764,16 @@ func (c *platformCommandServiceClient) SetScheduleEnabled(ctx context.Context, i
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) ArchiveSchedule(ctx context.Context, in *ArchiveScheduleRequest, opts ...grpc.CallOption) (*ArchiveScheduleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ArchiveScheduleResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ArchiveSchedule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformCommandServiceClient) CreateIntegrationConnection(ctx context.Context, in *CreateIntegrationConnectionRequest, opts ...grpc.CallOption) (*CreateIntegrationConnectionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateIntegrationConnectionResponse)
@@ -1806,6 +1856,7 @@ type PlatformCommandServiceServer interface {
 	CreateSchedule(context.Context, *CreateScheduleRequest) (*CreateScheduleResponse, error)
 	UpdateSchedule(context.Context, *UpdateScheduleRequest) (*UpdateScheduleResponse, error)
 	SetScheduleEnabled(context.Context, *SetScheduleEnabledRequest) (*SetScheduleEnabledResponse, error)
+	ArchiveSchedule(context.Context, *ArchiveScheduleRequest) (*ArchiveScheduleResponse, error)
 	CreateIntegrationConnection(context.Context, *CreateIntegrationConnectionRequest) (*CreateIntegrationConnectionResponse, error)
 	TestIntegrationConnection(context.Context, *TestIntegrationConnectionRequest) (*TestIntegrationConnectionResponse, error)
 	SetIntegrationConnectionEnabled(context.Context, *SetIntegrationConnectionEnabledRequest) (*SetIntegrationConnectionEnabledResponse, error)
@@ -1924,6 +1975,9 @@ func (UnimplementedPlatformCommandServiceServer) UpdateSchedule(context.Context,
 }
 func (UnimplementedPlatformCommandServiceServer) SetScheduleEnabled(context.Context, *SetScheduleEnabledRequest) (*SetScheduleEnabledResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetScheduleEnabled not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ArchiveSchedule(context.Context, *ArchiveScheduleRequest) (*ArchiveScheduleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ArchiveSchedule not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) CreateIntegrationConnection(context.Context, *CreateIntegrationConnectionRequest) (*CreateIntegrationConnectionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateIntegrationConnection not implemented")
@@ -2571,6 +2625,24 @@ func _PlatformCommandService_SetScheduleEnabled_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_ArchiveSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchiveScheduleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ArchiveSchedule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ArchiveSchedule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ArchiveSchedule(ctx, req.(*ArchiveScheduleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformCommandService_CreateIntegrationConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateIntegrationConnectionRequest)
 	if err := dec(in); err != nil {
@@ -2781,6 +2853,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetScheduleEnabled",
 			Handler:    _PlatformCommandService_SetScheduleEnabled_Handler,
+		},
+		{
+			MethodName: "ArchiveSchedule",
+			Handler:    _PlatformCommandService_ArchiveSchedule_Handler,
 		},
 		{
 			MethodName: "CreateIntegrationConnection",

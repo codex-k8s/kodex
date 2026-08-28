@@ -1149,28 +1149,46 @@ func (repository *Repository) ListSchedules(ctx context.Context, principal value
 	defer rows.Close()
 	var result []entity.Schedule
 	for rows.Next() {
-		var item entity.Schedule
-		var input []byte
-		var canManage bool
-		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.Name, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Preset, &item.CronExpression, &item.Timezone, &input, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt, &canManage); err != nil {
-			return nil, "", errs.ErrUnavailable
+		item, err := scanSchedule(rows)
+		if err != nil {
+			return nil, "", err
 		}
-		if err := attachScheduleDisplay(&item); err != nil {
-			return nil, "", errs.ErrUnavailable
-		}
-		_ = json.Unmarshal(input, &item.Input)
-		item.NextActions = scheduleActions(item, canManage)
 		result = append(result, item)
 	}
 	return result, "", rows.Err()
 }
 
+func (repository *Repository) GetSchedule(ctx context.Context, principal value.Principal, ref string) (entity.Schedule, error) {
+	scope, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return entity.Schedule{}, err
+	}
+	return scanSchedule(repository.pool.QueryRow(ctx, queryQueriesGetscheduleSelectSchedulesOrganizationIdRef, scope.organizationID, ref, scope.role, scope.actorID))
+}
+
+func scanSchedule(row rowScanner) (entity.Schedule, error) {
+	var item entity.Schedule
+	var input []byte
+	var canManage bool
+	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.Name, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Preset, &item.CronExpression, &item.Timezone, &input, &item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt, &canManage); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.Schedule{}, errs.ErrNotFound
+		}
+		return entity.Schedule{}, errs.ErrUnavailable
+	}
+	if err := attachScheduleDisplay(&item); err != nil || json.Unmarshal(input, &item.Input) != nil {
+		return entity.Schedule{}, errs.ErrUnavailable
+	}
+	item.NextActions = scheduleActions(item, canManage)
+	return item, nil
+}
+
 func scheduleActions(item entity.Schedule, canManage bool) []string {
 	actions := []string{"OPEN"}
-	if !canManage {
+	if !canManage || item.State == "ARCHIVED" {
 		return actions
 	}
-	actions = append(actions, "EDIT")
+	actions = append(actions, "EDIT", "ARCHIVE")
 	if item.Enabled {
 		return append(actions, "DISABLE")
 	}
