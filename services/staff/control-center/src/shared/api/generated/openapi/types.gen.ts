@@ -221,6 +221,158 @@ export type AgentPage = {
     nextPageToken?: string;
 };
 
+export type ProviderAccountCandidate = {
+    accountRef: OpaqueRef;
+    weight: number;
+};
+
+export type ProviderAccountPolicyVersion = {
+    ref: OpaqueRef;
+    version: number;
+    mode: 'FIXED' | 'LEAST_USED' | 'WEIGHTED';
+    accountCandidates: Array<ProviderAccountCandidate>;
+    digest: string;
+    createdAt: Timestamp;
+};
+
+export type AgentRuntimeConfiguration = {
+    ref: OpaqueRef;
+    version: number;
+    agentRef: OpaqueRef;
+    runtimeProfileRef: OpaqueRef;
+    provider: string;
+    model: string;
+    providerPolicy: ProviderAccountPolicyVersion;
+    digest: string;
+    createdAt: Timestamp;
+};
+
+export type AgentRuntimeConfigurationInput = {
+    runtimeProfileRef: OpaqueRef;
+    model: string;
+    providerPolicyMode: 'FIXED' | 'LEAST_USED' | 'WEIGHTED';
+    providerAccounts: Array<ProviderAccountCandidate>;
+};
+
+export type ConfigOverlayVersion = {
+    ref: OpaqueRef;
+    version: number;
+    revision: number;
+    state: string;
+    content: string;
+    digest: string;
+    validationMessages: Array<string>;
+    createdAt: Timestamp;
+    publishedAt?: Timestamp;
+};
+
+export type ConfigOverlayDraftInput = {
+    content: string;
+};
+
+export type ConfigOverlayRollbackInput = {
+    publishedOverlayRef: OpaqueRef;
+};
+
+export type RuntimeEnvironmentValue = {
+    name: string;
+    value: string;
+};
+
+/**
+ * Descriptor immutable Kubernetes Secret revision; значение Secret запрещено.
+ */
+export type RuntimeSecretDescriptor = {
+    name: string;
+    secretName: string;
+    secretKey: string;
+    secretUid: string;
+    secretResourceVersion: string;
+    contentSha256: string;
+};
+
+export type RuntimeEnvironmentVersion = {
+    ref: OpaqueRef;
+    version: number;
+    revision: number;
+    values: Array<RuntimeEnvironmentValue>;
+    secretDescriptors: Array<RuntimeSecretDescriptor>;
+    digest: string;
+    createdAt: Timestamp;
+};
+
+export type RuntimeEnvironmentSet = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef: OpaqueRef;
+    name: string;
+    description: string;
+    state: string;
+    currentVersion: RuntimeEnvironmentVersion;
+    updatedAt: Timestamp;
+};
+
+export type RuntimeEnvironmentInput = {
+    name: string;
+    description: string;
+    values: Array<RuntimeEnvironmentValue>;
+    secretDescriptors: Array<RuntimeSecretDescriptor>;
+};
+
+export type RuntimeEnvironmentRollbackInput = {
+    publishedVersionRef: OpaqueRef;
+};
+
+export type AgentRuntimeEnvironmentBinding = {
+    ref: OpaqueRef;
+    version: number;
+    agentRef: OpaqueRef;
+    environmentRef: OpaqueRef;
+    digest: string;
+};
+
+export type RuntimeEnvironmentBindingInput = {
+    environmentRef: OpaqueRef;
+};
+
+export type AgentRuntimeConfigurationView = {
+    configuration: AgentRuntimeConfiguration;
+    publishedOverlay: ConfigOverlayVersion;
+    draftOverlay?: ConfigOverlayVersion;
+    environmentBinding: AgentRuntimeEnvironmentBinding;
+    environment: RuntimeEnvironmentSet;
+    safeEffectiveConfig: string;
+    agentVersion: number;
+};
+
+export type AgentRuntimeConfigurationPage = {
+    items: Array<AgentRuntimeConfiguration>;
+    nextPageToken?: string;
+};
+
+export type RuntimeEnvironmentPage = {
+    items: Array<RuntimeEnvironmentSet>;
+    nextPageToken?: string;
+};
+
+export type RuntimeEnvironmentVersionPage = {
+    items: Array<RuntimeEnvironmentVersion>;
+    nextPageToken?: string;
+};
+
+export type TemplateVariable = {
+    name: string;
+    valueType: string;
+    description: string;
+    example: string;
+    source: string;
+};
+
+export type TemplateVariablePage = {
+    items: Array<TemplateVariable>;
+    nextPageToken?: string;
+};
+
 export type RoleEnvironmentPlatform = {
     os: 'linux';
     architecture: 'amd64' | 'arm64';
@@ -855,6 +1007,8 @@ export type ProjectRefQuery = OpaqueRef;
 export type MembershipRef = OpaqueRef;
 
 export type AgentRef = OpaqueRef;
+
+export type RuntimeEnvironmentRef = OpaqueRef;
 
 export type RecipeRef = OpaqueRef;
 
@@ -1818,6 +1972,469 @@ export type CommandAgentInstructionsResponses = {
 };
 
 export type CommandAgentInstructionsResponse = CommandAgentInstructionsResponses[keyof CommandAgentInstructionsResponses];
+
+export type GetAgentRuntimeConfigurationData = {
+    body?: never;
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/runtime-configuration';
+};
+
+export type GetAgentRuntimeConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetAgentRuntimeConfigurationError = GetAgentRuntimeConfigurationErrors[keyof GetAgentRuntimeConfigurationErrors];
+
+export type GetAgentRuntimeConfigurationResponses = {
+    /**
+     * Опубликованная runtime-конфигурация и безопасный effective readback
+     */
+    200: AgentRuntimeConfigurationView;
+};
+
+export type GetAgentRuntimeConfigurationResponse = GetAgentRuntimeConfigurationResponses[keyof GetAgentRuntimeConfigurationResponses];
+
+export type PublishAgentRuntimeConfigurationData = {
+    body: AgentRuntimeConfigurationInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/runtime-configuration';
+};
+
+export type PublishAgentRuntimeConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishAgentRuntimeConfigurationError = PublishAgentRuntimeConfigurationErrors[keyof PublishAgentRuntimeConfigurationErrors];
+
+export type PublishAgentRuntimeConfigurationResponses = {
+    /**
+     * Новая runtime-конфигурация опубликована
+     */
+    200: AgentRuntimeConfigurationView;
+};
+
+export type PublishAgentRuntimeConfigurationResponse = PublishAgentRuntimeConfigurationResponses[keyof PublishAgentRuntimeConfigurationResponses];
+
+export type ListAgentRuntimeConfigurationVersionsData = {
+    body?: never;
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/agents/{agentRef}/runtime-configuration/versions';
+};
+
+export type ListAgentRuntimeConfigurationVersionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListAgentRuntimeConfigurationVersionsError = ListAgentRuntimeConfigurationVersionsErrors[keyof ListAgentRuntimeConfigurationVersionsErrors];
+
+export type ListAgentRuntimeConfigurationVersionsResponses = {
+    /**
+     * История опубликованных runtime-конфигураций
+     */
+    200: AgentRuntimeConfigurationPage;
+};
+
+export type ListAgentRuntimeConfigurationVersionsResponse = ListAgentRuntimeConfigurationVersionsResponses[keyof ListAgentRuntimeConfigurationVersionsResponses];
+
+export type CreateConfigOverlayDraftData = {
+    body: ConfigOverlayDraftInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/config-overlay-drafts';
+};
+
+export type CreateConfigOverlayDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateConfigOverlayDraftError = CreateConfigOverlayDraftErrors[keyof CreateConfigOverlayDraftErrors];
+
+export type CreateConfigOverlayDraftResponses = {
+    /**
+     * Черновик config.toml overlay создан
+     */
+    201: AgentRuntimeConfigurationView;
+};
+
+export type CreateConfigOverlayDraftResponse = CreateConfigOverlayDraftResponses[keyof CreateConfigOverlayDraftResponses];
+
+export type ValidateConfigOverlayDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/config-overlay-drafts/validation';
+};
+
+export type ValidateConfigOverlayDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateConfigOverlayDraftError = ValidateConfigOverlayDraftErrors[keyof ValidateConfigOverlayDraftErrors];
+
+export type ValidateConfigOverlayDraftResponses = {
+    /**
+     * Черновик проверен строгим TOML parser и закрытым allowlist
+     */
+    200: AgentRuntimeConfigurationView;
+};
+
+export type ValidateConfigOverlayDraftResponse = ValidateConfigOverlayDraftResponses[keyof ValidateConfigOverlayDraftResponses];
+
+export type PublishConfigOverlayDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/config-overlay-drafts/publication';
+};
+
+export type PublishConfigOverlayDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishConfigOverlayDraftError = PublishConfigOverlayDraftErrors[keyof PublishConfigOverlayDraftErrors];
+
+export type PublishConfigOverlayDraftResponses = {
+    /**
+     * Проверенный overlay опубликован
+     */
+    200: AgentRuntimeConfigurationView;
+};
+
+export type PublishConfigOverlayDraftResponse = PublishConfigOverlayDraftResponses[keyof PublishConfigOverlayDraftResponses];
+
+export type RollbackConfigOverlayData = {
+    body: ConfigOverlayRollbackInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/config-overlay-rollbacks';
+};
+
+export type RollbackConfigOverlayErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RollbackConfigOverlayError = RollbackConfigOverlayErrors[keyof RollbackConfigOverlayErrors];
+
+export type RollbackConfigOverlayResponses = {
+    /**
+     * Выбранная опубликованная версия повторно опубликована
+     */
+    200: AgentRuntimeConfigurationView;
+};
+
+export type RollbackConfigOverlayResponse = RollbackConfigOverlayResponses[keyof RollbackConfigOverlayResponses];
+
+export type BindAgentRuntimeEnvironmentData = {
+    body: RuntimeEnvironmentBindingInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/runtime-environment-binding';
+};
+
+export type BindAgentRuntimeEnvironmentErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type BindAgentRuntimeEnvironmentError = BindAgentRuntimeEnvironmentErrors[keyof BindAgentRuntimeEnvironmentErrors];
+
+export type BindAgentRuntimeEnvironmentResponses = {
+    /**
+     * Агент привязан к опубликованному environment set
+     */
+    200: AgentRuntimeConfigurationView;
+};
+
+export type BindAgentRuntimeEnvironmentResponse = BindAgentRuntimeEnvironmentResponses[keyof BindAgentRuntimeEnvironmentResponses];
+
+export type ListRuntimeEnvironmentSetsData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/runtime-environments';
+};
+
+export type ListRuntimeEnvironmentSetsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRuntimeEnvironmentSetsError = ListRuntimeEnvironmentSetsErrors[keyof ListRuntimeEnvironmentSetsErrors];
+
+export type ListRuntimeEnvironmentSetsResponses = {
+    /**
+     * Поисковый cursor-каталог environment sets Проекта
+     */
+    200: RuntimeEnvironmentPage;
+};
+
+export type ListRuntimeEnvironmentSetsResponse = ListRuntimeEnvironmentSetsResponses[keyof ListRuntimeEnvironmentSetsResponses];
+
+export type CreateRuntimeEnvironmentSetData = {
+    body: RuntimeEnvironmentInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/runtime-environments';
+};
+
+export type CreateRuntimeEnvironmentSetErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateRuntimeEnvironmentSetError = CreateRuntimeEnvironmentSetErrors[keyof CreateRuntimeEnvironmentSetErrors];
+
+export type CreateRuntimeEnvironmentSetResponses = {
+    /**
+     * Versioned environment set создан
+     */
+    201: RuntimeEnvironmentSet;
+};
+
+export type CreateRuntimeEnvironmentSetResponse = CreateRuntimeEnvironmentSetResponses[keyof CreateRuntimeEnvironmentSetResponses];
+
+export type ListTemplateVariablesData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/template-variables';
+};
+
+export type ListTemplateVariablesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListTemplateVariablesError = ListTemplateVariablesErrors[keyof ListTemplateVariablesErrors];
+
+export type ListTemplateVariablesResponses = {
+    /**
+     * Server-owned cursor-каталог безопасных template variables
+     */
+    200: TemplateVariablePage;
+};
+
+export type ListTemplateVariablesResponse = ListTemplateVariablesResponses[keyof ListTemplateVariablesResponses];
+
+export type GetRuntimeEnvironmentSetData = {
+    body?: never;
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}';
+};
+
+export type GetRuntimeEnvironmentSetErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeEnvironmentSetError = GetRuntimeEnvironmentSetErrors[keyof GetRuntimeEnvironmentSetErrors];
+
+export type GetRuntimeEnvironmentSetResponses = {
+    /**
+     * Environment set без Secret values
+     */
+    200: RuntimeEnvironmentSet;
+};
+
+export type GetRuntimeEnvironmentSetResponse = GetRuntimeEnvironmentSetResponses[keyof GetRuntimeEnvironmentSetResponses];
+
+export type ListRuntimeEnvironmentVersionsData = {
+    body?: never;
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-environments/{environmentRef}/versions';
+};
+
+export type ListRuntimeEnvironmentVersionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRuntimeEnvironmentVersionsError = ListRuntimeEnvironmentVersionsErrors[keyof ListRuntimeEnvironmentVersionsErrors];
+
+export type ListRuntimeEnvironmentVersionsResponses = {
+    /**
+     * История environment revisions без Secret values
+     */
+    200: RuntimeEnvironmentVersionPage;
+};
+
+export type ListRuntimeEnvironmentVersionsResponse = ListRuntimeEnvironmentVersionsResponses[keyof ListRuntimeEnvironmentVersionsResponses];
+
+export type PublishRuntimeEnvironmentVersionData = {
+    body: RuntimeEnvironmentInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}/versions';
+};
+
+export type PublishRuntimeEnvironmentVersionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishRuntimeEnvironmentVersionError = PublishRuntimeEnvironmentVersionErrors[keyof PublishRuntimeEnvironmentVersionErrors];
+
+export type PublishRuntimeEnvironmentVersionResponses = {
+    /**
+     * Новая environment revision опубликована
+     */
+    200: RuntimeEnvironmentSet;
+};
+
+export type PublishRuntimeEnvironmentVersionResponse = PublishRuntimeEnvironmentVersionResponses[keyof PublishRuntimeEnvironmentVersionResponses];
+
+export type RollbackRuntimeEnvironmentData = {
+    body: RuntimeEnvironmentRollbackInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}/rollbacks';
+};
+
+export type RollbackRuntimeEnvironmentErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RollbackRuntimeEnvironmentError = RollbackRuntimeEnvironmentErrors[keyof RollbackRuntimeEnvironmentErrors];
+
+export type RollbackRuntimeEnvironmentResponses = {
+    /**
+     * Выбранная environment revision повторно опубликована
+     */
+    200: RuntimeEnvironmentSet;
+};
+
+export type RollbackRuntimeEnvironmentResponse = RollbackRuntimeEnvironmentResponses[keyof RollbackRuntimeEnvironmentResponses];
 
 export type ListRoleEnvironmentsData = {
     body?: never;

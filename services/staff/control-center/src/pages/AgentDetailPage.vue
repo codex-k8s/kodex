@@ -5,6 +5,7 @@ import { useRoute, useRouter } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
 import InstructionHistory from "@/features/agents/components/InstructionHistory.vue";
+import AgentRuntimePanel from "@/features/runtime/components/AgentRuntimePanel.vue";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
@@ -18,13 +19,12 @@ const router = useRouter();
 const agentRef = computed(() => String(route.params.agentRef));
 const projectRef = computed(() => String(route.params.projectRef));
 const agent = computed(() => platform.agents[agentRef.value]);
-const runtimes = computed(() =>
-  Object.values(platform.runtimes).filter((item) => item.ready),
-);
 const canManageCapabilities = computed(() =>
   agent.value?.nextActions.includes("MANAGE_CAPABILITIES"),
 );
-const canEdit = computed(() => agent.value?.nextActions.includes("EDIT"));
+const canEdit = computed(
+  () => agent.value?.nextActions.includes("EDIT") ?? false,
+);
 const capabilityCatalog = computed(() => {
   const values = [...platform.capabilities].sort(
     (left, right) =>
@@ -71,7 +71,6 @@ const profile = reactive({
   purpose: "",
   roleDescription: "",
   avatarUrl: "",
-  runtimeRef: "",
 });
 
 function syncProfile(): void {
@@ -80,7 +79,6 @@ function syncProfile(): void {
   profile.purpose = agent.value.purpose;
   profile.roleDescription = agent.value.roleDescription;
   profile.avatarUrl = agent.value.avatarUrl ?? "";
-  profile.runtimeRef = agent.value.runtimeRef;
 }
 
 function hasCapability(key: string): boolean {
@@ -91,7 +89,6 @@ async function load() {
   await Promise.all([
     platform.loadAgent(agentRef.value),
     platform.loadInstructionVersions(agentRef.value),
-    platform.loadRuntimes(),
     platform.loadCapabilities(),
   ]);
   syncProfile();
@@ -133,7 +130,6 @@ async function saveProfile(): Promise<void> {
         roleDescription: profile.roleDescription,
         roleDefinitionRef: agent.value.roleDefinitionRef,
         avatarUrl: profile.avatarUrl || undefined,
-        runtimeRef: profile.runtimeRef,
       },
       agent.value,
     );
@@ -358,18 +354,6 @@ onMounted(() => void load());
                 />
               </label>
               <label class="field"
-                ><span>{{ $t("agents.runtime") }}</span
-                ><select v-model="profile.runtimeRef" required>
-                  <option
-                    v-for="runtime in runtimes"
-                    :key="runtime.ref"
-                    :value="runtime.ref"
-                  >
-                    {{ runtime.name }}
-                  </option>
-                </select></label
-              >
-              <label class="field"
                 ><span>{{ $t("agents.avatar") }}</span
                 ><input
                   v-model.trim="profile.avatarUrl"
@@ -388,7 +372,7 @@ onMounted(() => void load());
                 <button
                   class="button button--primary"
                   type="submit"
-                  :disabled="busy || !profile.runtimeRef"
+                  :disabled="busy"
                 >
                   {{ $t("common.save") }}
                 </button>
@@ -409,23 +393,6 @@ onMounted(() => void load());
                   <dd>{{ new Date(agent.updatedAt).toLocaleString() }}</dd>
                 </div>
               </dl>
-              <details class="runtime-details">
-                <summary>{{ $t("common.advanced") }}</summary>
-                <dl class="metadata">
-                  <div>
-                    <dt>{{ $t("agents.provider") }}</dt>
-                    <dd>{{ agent.runtimeProvider }}</dd>
-                  </div>
-                  <div>
-                    <dt>{{ $t("agents.model") }}</dt>
-                    <dd>{{ agent.runtimeModel }}</dd>
-                  </div>
-                  <div>
-                    <dt>{{ $t("agents.runtimeRevision") }}</dt>
-                    <dd>{{ agent.runtimeRevision }}</dd>
-                  </div>
-                </dl>
-              </details>
             </template>
             <ProblemNotice
               v-if="platform.problems.runtimes"
@@ -433,6 +400,11 @@ onMounted(() => void load());
               compact
             />
           </article>
+          <AgentRuntimePanel
+            :agent="agent"
+            :project-ref="projectRef"
+            :can-edit="canEdit"
+          />
           <article class="panel">
             <div class="section-header">
               <h2>{{ $t("agents.instructions") }}</h2>

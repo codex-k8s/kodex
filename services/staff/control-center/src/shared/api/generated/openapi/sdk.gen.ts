@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddAssistantTurnData, AddAssistantTurnErrors, AddAssistantTurnResponses, AddPlatformMembershipData, AddPlatformMembershipErrors, AddPlatformMembershipResponses, AddProjectMembershipData, AddProjectMembershipErrors, AddProjectMembershipResponses, AddSessionTurnData, AddSessionTurnErrors, AddSessionTurnResponses, ApplyAssistantPlanData, ApplyAssistantPlanErrors, ApplyAssistantPlanResponses, ChangeArtifactBindingData, ChangeArtifactBindingErrors, ChangeArtifactBindingResponses, ChangeIntegrationGrantData, ChangeIntegrationGrantErrors, ChangeIntegrationGrantResponses, ChangePlatformMembershipData, ChangePlatformMembershipErrors, ChangePlatformMembershipResponses, ChangeProjectMembershipData, ChangeProjectMembershipErrors, ChangeProjectMembershipResponses, CommandAgentData, CommandAgentErrors, CommandAgentInstructionsData, CommandAgentInstructionsErrors, CommandAgentInstructionsResponses, CommandAgentResponses, CommandIntegrationConnectionData, CommandIntegrationConnectionErrors, CommandIntegrationConnectionResponses, CommandRoleImageRecipeData, CommandRoleImageRecipeErrors, CommandRoleImageRecipeResponses, CommandRunData, CommandRunErrors, CommandRunResponses, CommandScheduleData, CommandScheduleErrors, CommandScheduleResponses, CommandSystemAssistantData, CommandSystemAssistantErrors, CommandSystemAssistantResponses, CommandWorkflowData, CommandWorkflowErrors, CommandWorkflowResponses, CompleteOnboardingData, CompleteOnboardingErrors, CompleteOnboardingResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAssistantConversationData, CreateAssistantConversationErrors, CreateAssistantConversationResponses, CreateInstructionDraftData, CreateInstructionDraftErrors, CreateInstructionDraftResponses, CreateIntegrationConnectionData, CreateIntegrationConnectionErrors, CreateIntegrationConnectionResponses, CreateOwnerSessionData, CreateOwnerSessionErrors, CreateOwnerSessionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateRoleImageRecipeData, CreateRoleImageRecipeErrors, CreateRoleImageRecipeResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateScheduleData, CreateScheduleErrors, CreateScheduleResponses, CreateWorkflowData, CreateWorkflowErrors, CreateWorkflowResponses, DeleteOwnerSessionData, DeleteOwnerSessionErrors, DeleteOwnerSessionResponses, DownloadArtifactData, DownloadArtifactErrors, DownloadArtifactResponses, GetAdministrationData, GetAdministrationErrors, GetAdministrationResponses, GetAgentData, GetAgentErrors, GetAgentResponses, GetArtifactData, GetArtifactErrors, GetArtifactResponses, GetBootstrapStateData, GetBootstrapStateErrors, GetBootstrapStateResponses, GetIntegrationConnectionData, GetIntegrationConnectionErrors, GetIntegrationConnectionResponses, GetOverviewData, GetOverviewErrors, GetOverviewResponses, GetOwnerGateData, GetOwnerGateErrors, GetOwnerGateResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetRoleImageRecipeData, GetRoleImageRecipeErrors, GetRoleImageRecipeResponses, GetRunData, GetRunErrors, GetRunGraphData, GetRunGraphErrors, GetRunGraphResponses, GetRunResponses, GetSystemAssistantData, GetSystemAssistantErrors, GetSystemAssistantResponses, GetWorkflowData, GetWorkflowErrors, GetWorkflowResponses, ListAgentInstructionVersionsData, ListAgentInstructionVersionsErrors, ListAgentInstructionVersionsResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListArtifactsData, ListArtifactsErrors, ListArtifactsResponses, ListAssistantConversationsData, ListAssistantConversationsErrors, ListAssistantConversationsResponses, ListAuditEventsData, ListAuditEventsErrors, ListAuditEventsResponses, ListIntegrationConnectionsData, ListIntegrationConnectionsErrors, ListIntegrationConnectionsResponses, ListIntegrationDefinitionsData, ListIntegrationDefinitionsErrors, ListIntegrationDefinitionsResponses, ListOwnerGatesData, ListOwnerGatesErrors, ListOwnerGatesResponses, ListPlatformCapabilitiesData, ListPlatformCapabilitiesErrors, ListPlatformCapabilitiesResponses, ListPlatformMembershipCandidatesData, ListPlatformMembershipCandidatesErrors, ListPlatformMembershipCandidatesResponses, ListPlatformMembershipsData, ListPlatformMembershipsErrors, ListPlatformMembershipsResponses, ListProjectMembershipCandidatesData, ListProjectMembershipCandidatesErrors, ListProjectMembershipCandidatesResponses, ListProjectMembershipsData, ListProjectMembershipsErrors, ListProjectMembershipsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRoleEnvironmentsData, ListRoleEnvironmentsErrors, ListRoleEnvironmentsResponses, ListRoleImageRecipesData, ListRoleImageRecipesErrors, ListRoleImageRecipesResponses, ListRunEventsData, ListRunEventsErrors, ListRunEventsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListRuntimeSelectionsData, ListRuntimeSelectionsErrors, ListRuntimeSelectionsResponses, ListSchedulesData, ListSchedulesErrors, ListSchedulesResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, RemovePlatformMembershipData, RemovePlatformMembershipErrors, RemovePlatformMembershipResponses, RemoveProjectMembershipData, RemoveProjectMembershipErrors, RemoveProjectMembershipResponses, RenewOwnerSessionData, RenewOwnerSessionErrors, RenewOwnerSessionResponses, ResolveOwnerGateData, ResolveOwnerGateErrors, ResolveOwnerGateResponses, SearchPlatformData, SearchPlatformErrors, SearchPlatformResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleImageRecipeData, UpdateRoleImageRecipeErrors, UpdateRoleImageRecipeResponses, UpdateScheduleData, UpdateScheduleErrors, UpdateScheduleResponses, UpdateSystemAssistantOwnerInstructionsData, UpdateSystemAssistantOwnerInstructionsErrors, UpdateSystemAssistantOwnerInstructionsResponses, UpdateWorkflowDraftData, UpdateWorkflowDraftErrors, UpdateWorkflowDraftResponses, UploadArtifactData, UploadArtifactErrors, UploadArtifactResponses } from './types.gen';
+import type { AddAssistantTurnData, AddAssistantTurnErrors, AddAssistantTurnResponses, AddPlatformMembershipData, AddPlatformMembershipErrors, AddPlatformMembershipResponses, AddProjectMembershipData, AddProjectMembershipErrors, AddProjectMembershipResponses, AddSessionTurnData, AddSessionTurnErrors, AddSessionTurnResponses, ApplyAssistantPlanData, ApplyAssistantPlanErrors, ApplyAssistantPlanResponses, BindAgentRuntimeEnvironmentData, BindAgentRuntimeEnvironmentErrors, BindAgentRuntimeEnvironmentResponses, ChangeArtifactBindingData, ChangeArtifactBindingErrors, ChangeArtifactBindingResponses, ChangeIntegrationGrantData, ChangeIntegrationGrantErrors, ChangeIntegrationGrantResponses, ChangePlatformMembershipData, ChangePlatformMembershipErrors, ChangePlatformMembershipResponses, ChangeProjectMembershipData, ChangeProjectMembershipErrors, ChangeProjectMembershipResponses, CommandAgentData, CommandAgentErrors, CommandAgentInstructionsData, CommandAgentInstructionsErrors, CommandAgentInstructionsResponses, CommandAgentResponses, CommandIntegrationConnectionData, CommandIntegrationConnectionErrors, CommandIntegrationConnectionResponses, CommandRoleImageRecipeData, CommandRoleImageRecipeErrors, CommandRoleImageRecipeResponses, CommandRunData, CommandRunErrors, CommandRunResponses, CommandScheduleData, CommandScheduleErrors, CommandScheduleResponses, CommandSystemAssistantData, CommandSystemAssistantErrors, CommandSystemAssistantResponses, CommandWorkflowData, CommandWorkflowErrors, CommandWorkflowResponses, CompleteOnboardingData, CompleteOnboardingErrors, CompleteOnboardingResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAssistantConversationData, CreateAssistantConversationErrors, CreateAssistantConversationResponses, CreateConfigOverlayDraftData, CreateConfigOverlayDraftErrors, CreateConfigOverlayDraftResponses, CreateInstructionDraftData, CreateInstructionDraftErrors, CreateInstructionDraftResponses, CreateIntegrationConnectionData, CreateIntegrationConnectionErrors, CreateIntegrationConnectionResponses, CreateOwnerSessionData, CreateOwnerSessionErrors, CreateOwnerSessionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateRoleImageRecipeData, CreateRoleImageRecipeErrors, CreateRoleImageRecipeResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateRuntimeEnvironmentSetData, CreateRuntimeEnvironmentSetErrors, CreateRuntimeEnvironmentSetResponses, CreateScheduleData, CreateScheduleErrors, CreateScheduleResponses, CreateWorkflowData, CreateWorkflowErrors, CreateWorkflowResponses, DeleteOwnerSessionData, DeleteOwnerSessionErrors, DeleteOwnerSessionResponses, DownloadArtifactData, DownloadArtifactErrors, DownloadArtifactResponses, GetAdministrationData, GetAdministrationErrors, GetAdministrationResponses, GetAgentData, GetAgentErrors, GetAgentResponses, GetAgentRuntimeConfigurationData, GetAgentRuntimeConfigurationErrors, GetAgentRuntimeConfigurationResponses, GetArtifactData, GetArtifactErrors, GetArtifactResponses, GetBootstrapStateData, GetBootstrapStateErrors, GetBootstrapStateResponses, GetIntegrationConnectionData, GetIntegrationConnectionErrors, GetIntegrationConnectionResponses, GetOverviewData, GetOverviewErrors, GetOverviewResponses, GetOwnerGateData, GetOwnerGateErrors, GetOwnerGateResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetRoleImageRecipeData, GetRoleImageRecipeErrors, GetRoleImageRecipeResponses, GetRunData, GetRunErrors, GetRunGraphData, GetRunGraphErrors, GetRunGraphResponses, GetRunResponses, GetRuntimeEnvironmentSetData, GetRuntimeEnvironmentSetErrors, GetRuntimeEnvironmentSetResponses, GetSystemAssistantData, GetSystemAssistantErrors, GetSystemAssistantResponses, GetWorkflowData, GetWorkflowErrors, GetWorkflowResponses, ListAgentInstructionVersionsData, ListAgentInstructionVersionsErrors, ListAgentInstructionVersionsResponses, ListAgentRuntimeConfigurationVersionsData, ListAgentRuntimeConfigurationVersionsErrors, ListAgentRuntimeConfigurationVersionsResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListArtifactsData, ListArtifactsErrors, ListArtifactsResponses, ListAssistantConversationsData, ListAssistantConversationsErrors, ListAssistantConversationsResponses, ListAuditEventsData, ListAuditEventsErrors, ListAuditEventsResponses, ListIntegrationConnectionsData, ListIntegrationConnectionsErrors, ListIntegrationConnectionsResponses, ListIntegrationDefinitionsData, ListIntegrationDefinitionsErrors, ListIntegrationDefinitionsResponses, ListOwnerGatesData, ListOwnerGatesErrors, ListOwnerGatesResponses, ListPlatformCapabilitiesData, ListPlatformCapabilitiesErrors, ListPlatformCapabilitiesResponses, ListPlatformMembershipCandidatesData, ListPlatformMembershipCandidatesErrors, ListPlatformMembershipCandidatesResponses, ListPlatformMembershipsData, ListPlatformMembershipsErrors, ListPlatformMembershipsResponses, ListProjectMembershipCandidatesData, ListProjectMembershipCandidatesErrors, ListProjectMembershipCandidatesResponses, ListProjectMembershipsData, ListProjectMembershipsErrors, ListProjectMembershipsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRoleEnvironmentsData, ListRoleEnvironmentsErrors, ListRoleEnvironmentsResponses, ListRoleImageRecipesData, ListRoleImageRecipesErrors, ListRoleImageRecipesResponses, ListRunEventsData, ListRunEventsErrors, ListRunEventsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListRuntimeEnvironmentSetsData, ListRuntimeEnvironmentSetsErrors, ListRuntimeEnvironmentSetsResponses, ListRuntimeEnvironmentVersionsData, ListRuntimeEnvironmentVersionsErrors, ListRuntimeEnvironmentVersionsResponses, ListRuntimeSelectionsData, ListRuntimeSelectionsErrors, ListRuntimeSelectionsResponses, ListSchedulesData, ListSchedulesErrors, ListSchedulesResponses, ListTemplateVariablesData, ListTemplateVariablesErrors, ListTemplateVariablesResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, PublishAgentRuntimeConfigurationData, PublishAgentRuntimeConfigurationErrors, PublishAgentRuntimeConfigurationResponses, PublishConfigOverlayDraftData, PublishConfigOverlayDraftErrors, PublishConfigOverlayDraftResponses, PublishRuntimeEnvironmentVersionData, PublishRuntimeEnvironmentVersionErrors, PublishRuntimeEnvironmentVersionResponses, RemovePlatformMembershipData, RemovePlatformMembershipErrors, RemovePlatformMembershipResponses, RemoveProjectMembershipData, RemoveProjectMembershipErrors, RemoveProjectMembershipResponses, RenewOwnerSessionData, RenewOwnerSessionErrors, RenewOwnerSessionResponses, ResolveOwnerGateData, ResolveOwnerGateErrors, ResolveOwnerGateResponses, RollbackConfigOverlayData, RollbackConfigOverlayErrors, RollbackConfigOverlayResponses, RollbackRuntimeEnvironmentData, RollbackRuntimeEnvironmentErrors, RollbackRuntimeEnvironmentResponses, SearchPlatformData, SearchPlatformErrors, SearchPlatformResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleImageRecipeData, UpdateRoleImageRecipeErrors, UpdateRoleImageRecipeResponses, UpdateScheduleData, UpdateScheduleErrors, UpdateScheduleResponses, UpdateSystemAssistantOwnerInstructionsData, UpdateSystemAssistantOwnerInstructionsErrors, UpdateSystemAssistantOwnerInstructionsResponses, UpdateWorkflowDraftData, UpdateWorkflowDraftErrors, UpdateWorkflowDraftResponses, UploadArtifactData, UploadArtifactErrors, UploadArtifactResponses, ValidateConfigOverlayDraftData, ValidateConfigOverlayDraftErrors, ValidateConfigOverlayDraftResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -361,6 +361,184 @@ export const commandAgentInstructions = <ThrowOnError extends boolean = false>(o
             type: 'apiKey'
         }],
     url: '/api/v1/agents/{agentRef}/instruction-commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const getAgentRuntimeConfiguration = <ThrowOnError extends boolean = false>(options: Options<GetAgentRuntimeConfigurationData, ThrowOnError>): RequestResult<GetAgentRuntimeConfigurationResponses, GetAgentRuntimeConfigurationErrors, ThrowOnError> => (options.client ?? client).get<GetAgentRuntimeConfigurationResponses, GetAgentRuntimeConfigurationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/runtime-configuration',
+    ...options
+});
+
+export const publishAgentRuntimeConfiguration = <ThrowOnError extends boolean = false>(options: Options<PublishAgentRuntimeConfigurationData, ThrowOnError>): RequestResult<PublishAgentRuntimeConfigurationResponses, PublishAgentRuntimeConfigurationErrors, ThrowOnError> => (options.client ?? client).put<PublishAgentRuntimeConfigurationResponses, PublishAgentRuntimeConfigurationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/runtime-configuration',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listAgentRuntimeConfigurationVersions = <ThrowOnError extends boolean = false>(options: Options<ListAgentRuntimeConfigurationVersionsData, ThrowOnError>): RequestResult<ListAgentRuntimeConfigurationVersionsResponses, ListAgentRuntimeConfigurationVersionsErrors, ThrowOnError> => (options.client ?? client).get<ListAgentRuntimeConfigurationVersionsResponses, ListAgentRuntimeConfigurationVersionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/runtime-configuration/versions',
+    ...options
+});
+
+export const createConfigOverlayDraft = <ThrowOnError extends boolean = false>(options: Options<CreateConfigOverlayDraftData, ThrowOnError>): RequestResult<CreateConfigOverlayDraftResponses, CreateConfigOverlayDraftErrors, ThrowOnError> => (options.client ?? client).post<CreateConfigOverlayDraftResponses, CreateConfigOverlayDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/config-overlay-drafts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const validateConfigOverlayDraft = <ThrowOnError extends boolean = false>(options: Options<ValidateConfigOverlayDraftData, ThrowOnError>): RequestResult<ValidateConfigOverlayDraftResponses, ValidateConfigOverlayDraftErrors, ThrowOnError> => (options.client ?? client).post<ValidateConfigOverlayDraftResponses, ValidateConfigOverlayDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/config-overlay-drafts/validation',
+    ...options
+});
+
+export const publishConfigOverlayDraft = <ThrowOnError extends boolean = false>(options: Options<PublishConfigOverlayDraftData, ThrowOnError>): RequestResult<PublishConfigOverlayDraftResponses, PublishConfigOverlayDraftErrors, ThrowOnError> => (options.client ?? client).post<PublishConfigOverlayDraftResponses, PublishConfigOverlayDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/config-overlay-drafts/publication',
+    ...options
+});
+
+export const rollbackConfigOverlay = <ThrowOnError extends boolean = false>(options: Options<RollbackConfigOverlayData, ThrowOnError>): RequestResult<RollbackConfigOverlayResponses, RollbackConfigOverlayErrors, ThrowOnError> => (options.client ?? client).post<RollbackConfigOverlayResponses, RollbackConfigOverlayErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/config-overlay-rollbacks',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const bindAgentRuntimeEnvironment = <ThrowOnError extends boolean = false>(options: Options<BindAgentRuntimeEnvironmentData, ThrowOnError>): RequestResult<BindAgentRuntimeEnvironmentResponses, BindAgentRuntimeEnvironmentErrors, ThrowOnError> => (options.client ?? client).put<BindAgentRuntimeEnvironmentResponses, BindAgentRuntimeEnvironmentErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/runtime-environment-binding',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listRuntimeEnvironmentSets = <ThrowOnError extends boolean = false>(options: Options<ListRuntimeEnvironmentSetsData, ThrowOnError>): RequestResult<ListRuntimeEnvironmentSetsResponses, ListRuntimeEnvironmentSetsErrors, ThrowOnError> => (options.client ?? client).get<ListRuntimeEnvironmentSetsResponses, ListRuntimeEnvironmentSetsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/runtime-environments',
+    ...options
+});
+
+export const createRuntimeEnvironmentSet = <ThrowOnError extends boolean = false>(options: Options<CreateRuntimeEnvironmentSetData, ThrowOnError>): RequestResult<CreateRuntimeEnvironmentSetResponses, CreateRuntimeEnvironmentSetErrors, ThrowOnError> => (options.client ?? client).post<CreateRuntimeEnvironmentSetResponses, CreateRuntimeEnvironmentSetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/runtime-environments',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listTemplateVariables = <ThrowOnError extends boolean = false>(options: Options<ListTemplateVariablesData, ThrowOnError>): RequestResult<ListTemplateVariablesResponses, ListTemplateVariablesErrors, ThrowOnError> => (options.client ?? client).get<ListTemplateVariablesResponses, ListTemplateVariablesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/template-variables',
+    ...options
+});
+
+export const getRuntimeEnvironmentSet = <ThrowOnError extends boolean = false>(options: Options<GetRuntimeEnvironmentSetData, ThrowOnError>): RequestResult<GetRuntimeEnvironmentSetResponses, GetRuntimeEnvironmentSetErrors, ThrowOnError> => (options.client ?? client).get<GetRuntimeEnvironmentSetResponses, GetRuntimeEnvironmentSetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-environments/{environmentRef}',
+    ...options
+});
+
+export const listRuntimeEnvironmentVersions = <ThrowOnError extends boolean = false>(options: Options<ListRuntimeEnvironmentVersionsData, ThrowOnError>): RequestResult<ListRuntimeEnvironmentVersionsResponses, ListRuntimeEnvironmentVersionsErrors, ThrowOnError> => (options.client ?? client).get<ListRuntimeEnvironmentVersionsResponses, ListRuntimeEnvironmentVersionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-environments/{environmentRef}/versions',
+    ...options
+});
+
+export const publishRuntimeEnvironmentVersion = <ThrowOnError extends boolean = false>(options: Options<PublishRuntimeEnvironmentVersionData, ThrowOnError>): RequestResult<PublishRuntimeEnvironmentVersionResponses, PublishRuntimeEnvironmentVersionErrors, ThrowOnError> => (options.client ?? client).post<PublishRuntimeEnvironmentVersionResponses, PublishRuntimeEnvironmentVersionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-environments/{environmentRef}/versions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const rollbackRuntimeEnvironment = <ThrowOnError extends boolean = false>(options: Options<RollbackRuntimeEnvironmentData, ThrowOnError>): RequestResult<RollbackRuntimeEnvironmentResponses, RollbackRuntimeEnvironmentErrors, ThrowOnError> => (options.client ?? client).post<RollbackRuntimeEnvironmentResponses, RollbackRuntimeEnvironmentErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-environments/{environmentRef}/rollbacks',
     ...options,
     headers: {
         'Content-Type': 'application/json',

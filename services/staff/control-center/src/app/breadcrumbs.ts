@@ -18,6 +18,9 @@ export interface BreadcrumbLabels {
   run: string;
   files: string;
   automations: string;
+  environments: string;
+  environment: string;
+  newEnvironment: string;
   integrations: string;
   decisions: string;
   administration: string;
@@ -31,6 +34,7 @@ export interface BreadcrumbContext {
   agentName?: string;
   workflowName?: string;
   runName?: string;
+  environmentName?: string;
 }
 
 function current(label: string): Breadcrumb {
@@ -112,6 +116,30 @@ export function buildBreadcrumbs(
       return [...project, current(labels.files)];
     case "automations":
       return [...project, current(labels.automations)];
+    case "runtime-environments":
+      return [...project, current(labels.environments)];
+    case "runtime-environment-new":
+      return [
+        ...project,
+        {
+          label: labels.environments,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/environments`
+            : "/projects",
+        },
+        current(labels.newEnvironment),
+      ];
+    case "runtime-environment":
+      return [
+        ...project,
+        {
+          label: labels.environments,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/environments`
+            : "/projects",
+        },
+        current(context.environmentName ?? labels.environment),
+      ];
     case "integrations":
       return [current(labels.integrations)];
     case "decisions":
