@@ -491,6 +491,7 @@ SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" yq -i '
     .spec.rules[].http.paths[].backend.service.port.name = "http"
   ) |
   with(select(.kind == "ConfigMap" and (.metadata.name | test("^staff-control-center-runtime-")));
+    .immutable = false |
     .data."runtime-config.json" = ({
       "revision":strenv(SOURCE_DIGEST),
       "environment":"development",
