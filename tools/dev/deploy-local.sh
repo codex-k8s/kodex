@@ -134,6 +134,63 @@ readback_local_object_storage_secret() {
   ' <<<"$state" >/dev/null || fail 'local object storage Secret readback failed'
 }
 
+readback_session_archive() {
+  local deployment expected_image endpoint_slices target_registry
+  expected_image=$(yq -N -r '
+    select(.kind == "Deployment" and .metadata.name == "session-archive") |
+    .spec.template.spec.containers[] |
+    select(.name == "session-archive") |
+    .env[] |
+    select(.name == "SESSION_ARCHIVE_WORKER_IMAGE") |
+    .value
+  ' "$render")
+  [[ "$expected_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
+    fail 'rendered session archive worker image is invalid'
+
+  deployment=$(kubectl -n "$namespace" get deployment/session-archive -o json) ||
+    fail 'session archive Deployment is absent'
+  jq -e --arg image "$expected_image" '
+    .metadata.namespace == "kodex-system" and
+    .spec.replicas == 1 and .status.readyReplicas == 1 and
+    .spec.template.spec.serviceAccountName == "session-archive" and
+    ([.spec.template.spec.containers[].name] | sort) ==
+      (["internal-rpc-authority-issuer", "platform-worker-grant-agent", "session-archive"] | sort) and
+    any(.spec.template.spec.containers[];
+      .name == "session-archive" and
+      any(.env[];
+        .name == "SESSION_ARCHIVE_WORKER_IMAGE" and .value == $image))
+  ' <<<"$deployment" >/dev/null || fail 'session archive Deployment readback failed'
+
+  for resource in serviceaccount/session-archive serviceaccount/session-archive-worker \
+    role/session-archive-controller rolebinding/session-archive-controller \
+    networkpolicy/session-archive-default-deny \
+    networkpolicy/session-archive-exact-paths \
+    networkpolicy/session-archive-worker-object-storage \
+    networkpolicy/session-archive-internal-rpc-authority-exact-paths; do
+    kubectl -n "$namespace" get "$resource" >/dev/null 2>&1 ||
+      fail "session archive runtime resource is absent: $resource"
+  done
+
+  target_registry=$(kubectl -n "$namespace" get \
+    configmap/internal-rpc-authority-publisher-target-registry -o jsonpath='{.data.key-delivery-targets\.yaml}')
+  yq -e '
+    [.targets[] | select(
+      .workload_id == "session-archive" and
+      .service_account == "session-archive" and
+      .startup_readback_required == true
+    )] | length == 1
+  ' <<<"$target_registry" >/dev/null || fail 'session archive authority target readback failed'
+
+  endpoint_slices=$(kubectl -n "$namespace" get endpointslice \
+    -l kubernetes.io/service-name=session-archive -o json)
+  jq -e '
+    any(.items[];
+      any(.ports[]?; .name == "metrics" and .protocol == "TCP" and .port == 9090) and
+      any(.endpoints[]?; .conditions.ready == true and (.addresses | length) > 0)
+    )
+  ' <<<"$endpoint_slices" >/dev/null || fail 'session archive EndpointSlice readback failed'
+}
+
 ensure_local_object_storage_secret() {
   local secret_directory="$temporary_directory/object-storage-secret"
   if kubectl -n "$namespace" get secret/kodex-external-s3 >/dev/null 2>&1; then
@@ -293,6 +350,8 @@ kubectl -n "$namespace" get endpointslice \
       any(.endpoints[]?; .conditions.ready == true and (.addresses | length) > 0)
     )
   ' >/dev/null || fail 'SeaweedFS S3 EndpointSlice readback failed'
+
+readback_session_archive
 
 wait_warm_runtime
 wait_stable_workloads

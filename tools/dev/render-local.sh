@@ -11,7 +11,8 @@ usage() {
     "Usage: $0 --source-root <path> --cache-root <path> --output <path>" \
     '  --public-host <dns> --oidc-host <dns> --kubernetes-service-cidr <cidr>' \
     '  --kubernetes-endpoint-cidr <cidr> --kubernetes-endpoint-port <port>' \
-    '  --runner-image <repository@sha256:digest>' >&2
+    '  --runner-image <repository@sha256:digest>' \
+    '  --session-archive-image <repository@sha256:digest>' >&2
 }
 
 source_root=""
@@ -23,6 +24,7 @@ kubernetes_service_cidr=""
 kubernetes_endpoint_cidr=""
 kubernetes_endpoint_port=""
 runner_image=""
+session_archive_image=""
 while (($# > 0)); do
   case "$1" in
     --source-root) source_root=${2:-}; shift 2 ;;
@@ -34,6 +36,7 @@ while (($# > 0)); do
     --kubernetes-endpoint-cidr) kubernetes_endpoint_cidr=${2:-}; shift 2 ;;
     --kubernetes-endpoint-port) kubernetes_endpoint_port=${2:-}; shift 2 ;;
     --runner-image) runner_image=${2:-}; shift 2 ;;
+    --session-archive-image) session_archive_image=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -53,6 +56,8 @@ done
 [[ "$kubernetes_endpoint_port" =~ ^[1-9][0-9]{0,4}$ ]] || fail 'Kubernetes API port is invalid'
 [[ "$runner_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
   fail 'local runner image must use an exact manifest digest'
+[[ "$session_archive_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
+  fail 'local session archive image must use an exact manifest digest'
 for command_name in git jq kubectl sha256sum yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -140,7 +145,7 @@ SEAWEEDFS_IMAGE="$seaweedfs_image" yq -i '
 yq -i '
   select(
     (.kind != "NetworkPolicy" or
-      (.metadata.name | test("^(control-plane|seaweedfs|integration-gateway|integration-synthetic)"))) and
+      (.metadata.name | test("^(control-plane|seaweedfs|integration-gateway|integration-synthetic|session-archive)"))) and
     .kind != "PodDisruptionBudget" and
     .kind != "ServiceMonitor" and
     .kind != "PodMonitor" and
@@ -157,6 +162,7 @@ yq -i '
       .metadata.name == "runtime-controller" or .metadata.name == "integration-gateway" or
       .metadata.name == "integration-synthetic" or
       .metadata.name == "automation-scheduler" or .metadata.name == "staff-control-center" or
+      .metadata.name == "session-archive" or
       .metadata.name == "internal-rpc-authority-publisher" or
       .metadata.name == "internal-rpc-authority-readback-attestor" or
       .metadata.name == "internal-rpc-authority-restore-controller") and
@@ -228,9 +234,12 @@ add_development_volumes() {
 
 patch_go_container() {
   local kind=$1 workload=$2 container=$3 module=$4 package=$5
+  shift 5
+  local command_args
+  command_args=$(printf '%s\n' "$@" | jq -Rsc 'split("\n") | map(select(length > 0))')
   add_development_volumes "$kind" "$workload"
   KIND="$kind" WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
-  CACHE_KEY="$workload-$container" \
+  COMMAND_ARGS="$command_args" CACHE_KEY="$workload-$container" \
   GO_IMAGE='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83' \
   yq -i '
     with(select(.kind == strenv(KIND) and .metadata.name == strenv(WORKLOAD));
@@ -239,7 +248,8 @@ patch_go_container() {
         .image = strenv(GO_IMAGE) |
         .imagePullPolicy = "IfNotPresent" |
         .command = ["/workspace/tools/dev/run-go-hot-reload.sh"] |
-        .args = [strenv(MODULE),strenv(PACKAGE),strenv(CONTAINER)] |
+        .args = ([strenv(MODULE),strenv(PACKAGE),strenv(CONTAINER)] +
+          (strenv(COMMAND_ARGS) | from_json)) |
         .workingDir = ("/workspace/" + strenv(MODULE)) |
         .resources = {"requests":{"cpu":"50m","memory":"128Mi"}} |
         .securityContext.readOnlyRootFilesystem = false |
@@ -369,6 +379,9 @@ patch_go_container Deployment integration-synthetic integration-synthetic servic
 patch_go_container Deployment automation-scheduler automation-scheduler services/jobs/automation-scheduler ./cmd/automation-scheduler
 patch_go_container Deployment automation-scheduler internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment automation-scheduler platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
+patch_go_container Deployment session-archive session-archive services/jobs/session-archive ./cmd/session-archive controller
+patch_go_container Deployment session-archive internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
+patch_go_container Deployment session-archive platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
 patch_go_container Deployment internal-rpc-authority-publisher publisher services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-publisher
 patch_go_container Deployment internal-rpc-authority-readback-attestor readback-attestor services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-readback-attestor
 patch_go_container Deployment internal-rpc-authority-restore-controller restore-controller services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-restore-controller
@@ -386,7 +399,7 @@ yq -i '
   )
 ' "$render"
 
-for workload in control-plane control-api-gateway runtime-controller integration-gateway automation-scheduler; do
+for workload in control-plane control-api-gateway runtime-controller integration-gateway automation-scheduler session-archive; do
   patch_go_init_container "$workload" internal-rpc-authority-socket-init \
     services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-socket-init
 done
@@ -489,7 +502,8 @@ PUBLIC_HOST="$public_host" yq -i '
 
 # Dev workload не проходит production supply-chain admission, но значения
 # image policy остаются синтаксически валидными для Control Plane.
-SOURCE_DIGEST="$source_digest" SOURCE_REVISION="$source_revision" RUNNER_IMAGE="$runner_image" yq -i '
+SOURCE_DIGEST="$source_digest" SOURCE_REVISION="$source_revision" RUNNER_IMAGE="$runner_image" \
+SESSION_ARCHIVE_IMAGE="$session_archive_image" yq -i '
   with(select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy");
     .immutable = false |
     .data.orchestrationRevision = strenv(SOURCE_REVISION) |
@@ -528,10 +542,16 @@ SOURCE_DIGEST="$source_digest" SOURCE_REVISION="$source_revision" RUNNER_IMAGE="
         .workload_id == "control-api-gateway" or
         .workload_id == "control-plane" or
         .workload_id == "integration-gateway" or
+        .workload_id == "session-archive" or
         .workload_id == "runtime-controller"
       )) |
       to_yaml
     )
+  ) |
+  with(select(.kind == "Deployment" and .metadata.name == "session-archive");
+    (.spec.template.spec.containers[] | select(.name == "session-archive") |
+      .env[] | select(.name == "SESSION_ARCHIVE_WORKER_IMAGE").value) =
+      strenv(SESSION_ARCHIVE_IMAGE)
   )
 ' "$render"
 
@@ -580,6 +600,33 @@ yq -e 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$ou
   fail 'Control Plane development workload is absent'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "integration-synthetic")' "$output" >/dev/null ||
   fail 'integration-synthetic development workload is absent'
+yq -o=json -I=0 '.' "$output" | jq -s -e --arg image "$session_archive_image" '
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "session-archive" and
+    .metadata.namespace == "kodex-system" and
+    any(.spec.template.spec.containers[];
+      .name == "session-archive" and
+      any(.env[];
+        .name == "SESSION_ARCHIVE_WORKER_IMAGE" and .value == $image)) and
+    any(.spec.template.spec.containers[]; .name == "internal-rpc-authority-issuer") and
+    any(.spec.template.spec.containers[]; .name == "platform-worker-grant-agent"))
+' >/dev/null || fail 'session-archive local controller or exact worker image is absent'
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "session-archive-worker-object-storage" and
+    any(.spec.egress[];
+      any(.to[]?;
+        .podSelector.matchLabels["app.kubernetes.io/name"] == "seaweedfs") and
+      any(.ports[]?; .protocol == "TCP" and .port == 8333))) and
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "seaweedfs-exact-local-paths" and
+    any(.spec.ingress[];
+      any(.from[]?;
+        .podSelector.matchLabels["session-archive.kodex.dev/managed"] == "true") and
+      any(.ports[]?; .protocol == "TCP" and .port == 8333)))
+' >/dev/null || fail 'session-archive local object storage network path is absent'
 yq -o=json -I=0 '.' "$output" | jq -s -e '
   any(.[];
     .kind == "Deployment" and .metadata.name == "integration-synthetic" and

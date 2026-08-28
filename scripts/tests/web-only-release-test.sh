@@ -31,6 +31,28 @@ for workload in kodex-postgresql kodex-nats; do
     'select(.kind == "StatefulSet" and .metadata.name == strenv(WORKLOAD_NAME))' "$render" >/dev/null ||
     fail "stateful dependency is absent: $workload"
 done
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "session-archive" and
+    .metadata.namespace == "kodex-system" and
+    any(.spec.template.spec.containers[];
+      .name == "session-archive" and
+      .image == "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/session-archive@sha256:0000000000000000000000000000000000000000000000000000000000000000" and
+      (.image as $sessionImage |
+        any(.env[];
+          .name == "SESSION_ARCHIVE_WORKER_IMAGE" and .value == $sessionImage))) and
+    any(.spec.template.spec.containers[];
+      .name == "internal-rpc-authority-issuer") and
+    any(.spec.template.spec.containers[];
+      .name == "platform-worker-grant-agent")) and
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "session-archive-exact-paths" and
+    any(.spec.egress[];
+      any(.to[]?;
+        .ipBlock.cidr == "__KODEX_KUBERNETES_API_SERVICE_CIDR__") and
+      any(.ports[]?; .protocol == "TCP" and .port == 443)))
+' >/dev/null || fail 'session archive release wiring is incomplete'
 for job in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
   control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
   JOB_NAME="$job" yq -e 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
@@ -127,6 +149,8 @@ fi
 
 secret_references="$temporary_directory/secret-references"
 secret_producers="$temporary_directory/secret-producers"
+rg -Fq 'create secret generic kodex-external-s3' "$repository_root/install.sh" ||
+  fail 'external object storage Secret does not have an installer producer'
 {
   yq -N -r '.. | select(tag == "!!map" and has("secretName")) | .secretName' "$render"
   yq -N -r '.. | select(tag == "!!map" and has("secretKeyRef")) | .secretKeyRef.name' "$render"
@@ -148,6 +172,7 @@ secret_producers="$temporary_directory/secret-producers"
     internal-rpc-authority-sentry \
     kodex-external-s3 \
     kodex-installation-ca \
+    kodex-external-s3 \
     kodex-integration-credentials \
     kodex-nats-credentials \
     kodex-postgresql-bootstrap \
@@ -244,6 +269,7 @@ for policy in internal-rpc-authority-restore-controller-exact-paths \
 done
 for policy in kodex-image-admission-controller-exact-paths \
   runtime-controller-exact-paths \
+  session-archive-exact-paths \
   internal-rpc-authority-publisher-exact-paths \
   internal-rpc-authority-restore-controller-exact-paths \
   internal-rpc-authority-restore-jobs-exact-paths \

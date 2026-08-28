@@ -257,18 +257,20 @@ api_client_policy_count=$(yq -o=json '
   select(.kind == "NetworkPolicy" and (
     .metadata.name == "kodex-image-admission-controller-exact-paths" or
     .metadata.name == "runtime-controller-exact-paths" or
+    .metadata.name == "session-archive-exact-paths" or
     .metadata.name == "internal-rpc-authority-publisher-exact-paths" or
     .metadata.name == "internal-rpc-authority-restore-controller-exact-paths" or
     .metadata.name == "internal-rpc-authority-restore-jobs-exact-paths" or
     .metadata.name == "internal-rpc-authority-restore-pitr-telemetry"
   )) | .metadata.name
 ' "$rendered" | jq -s 'length')
-[[ "$api_client_policy_count" == "6" ]] ||
-  fail 'release profile must contain exactly six Kubernetes API client policies'
+[[ "$api_client_policy_count" == "7" ]] ||
+  fail 'release profile must contain exactly seven Kubernetes API client policies'
 KUBERNETES_API_ENDPOINT_RULE="$api_endpoint_rule" yq -i '
   with(select(.kind == "NetworkPolicy" and (
     .metadata.name == "kodex-image-admission-controller-exact-paths" or
     .metadata.name == "runtime-controller-exact-paths" or
+    .metadata.name == "session-archive-exact-paths" or
     .metadata.name == "internal-rpc-authority-publisher-exact-paths" or
     .metadata.name == "internal-rpc-authority-restore-controller-exact-paths" or
     .metadata.name == "internal-rpc-authority-restore-jobs-exact-paths" or

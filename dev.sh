@@ -246,6 +246,9 @@ fi
 "$repository_root/tools/dev/build-local-runner.sh" \
   --source-root "$repository_root" --state-directory "$state_directory"
 runner_image=$(<"$state_directory/agent-runner-image")
+"$repository_root/tools/dev/build-local-session-archive.sh" \
+  --source-root "$repository_root" --state-directory "$state_directory"
+session_archive_image=$(<"$state_directory/session-archive-image")
 
 api_service_ip=$(kubectl -n default get service kubernetes -o jsonpath='{.spec.clusterIP}')
 api_endpoint_slices=$(kubectl -n default get endpointslice \
@@ -273,7 +276,8 @@ api_endpoint_port=$(jq -er '
   --kubernetes-service-cidr "$api_service_ip/32" \
   --kubernetes-endpoint-cidr "$api_endpoint_ip/32" \
   --kubernetes-endpoint-port "$api_endpoint_port" \
-  --runner-image "$runner_image"
+  --runner-image "$runner_image" \
+  --session-archive-image "$session_archive_image"
 "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode apply \
   --render "$state_directory/render.yaml"
 

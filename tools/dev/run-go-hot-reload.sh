@@ -9,6 +9,7 @@ fail() {
 module=${1:-}
 package=${2:-}
 name=${3:-}
+shift 3 || true
 case "$module" in
   services/*) ;;
   *) fail 'module path is invalid' ;;
@@ -36,6 +37,11 @@ fi
 
 runtime_root="/tmp/kodex-dev-$name"
 config="$runtime_root/air.toml"
+entrypoint="\"$runtime_root/build/main\""
+for argument in "$@"; do
+  printf '%s' "$argument" | grep -Eq '^[A-Za-z0-9._:/=-]+$' || fail 'process argument is invalid'
+  entrypoint="$entrypoint, \"$argument\""
+done
 mkdir -p "$runtime_root"
 cat >"$config" <<EOF
 root = "$module_root"
@@ -43,7 +49,7 @@ tmp_dir = "$runtime_root/build"
 
 [build]
 cmd = "CGO_ENABLED=0 GOWORK=off go build -trimpath -buildvcs=false -o $runtime_root/build/main $package"
-entrypoint = ["$runtime_root/build/main"]
+entrypoint = [$entrypoint]
 include_ext = ["go", "json", "sql", "yaml", "yml", "toml"]
 exclude_dir = [".git", ".kodex-dev", "node_modules", "tmp", "vendor"]
 exclude_regex = ["_test[.]go$"]

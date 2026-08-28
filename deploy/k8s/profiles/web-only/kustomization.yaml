@@ -13,6 +13,7 @@ resources:
   - ../../overlays/production/runtime-controller
   - ../../overlays/production/integration-gateway
   - ../../overlays/production/automation-scheduler
+  - ../../overlays/production/session-archive
   - ../../overlays/production/control-api-gateway
   - ../../overlays/production/staff-control-center
 transformers:
