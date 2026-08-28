@@ -16,6 +16,9 @@ const labels: BreadcrumbLabels = {
   run: "Запуск",
   files: "Файлы и знания",
   automations: "Автоматизации",
+  environments: "Окружения",
+  environment: "Окружение",
+  newEnvironment: "Новое окружение",
   integrations: "Интеграции",
   decisions: "Решения",
   administration: "Администрирование",
@@ -79,6 +82,26 @@ describe("breadcrumbs", () => {
       },
       { label: "Запуски", path: "/projects/project_sales/runs" },
       { label: "Квалификация лида" },
+    ]);
+  });
+
+  it("сохраняет контекст проекта в маршруте редактора окружения", () => {
+    expect(
+      buildBreadcrumbs(
+        {
+          routeName: "runtime-environment-new",
+          project: { ref: "project_sales", name: "Продажи" },
+        },
+        labels,
+      ),
+    ).toEqual([
+      { label: "Проекты", path: "/projects" },
+      { label: "Продажи", path: "/projects/project_sales" },
+      {
+        label: "Окружения",
+        path: "/projects/project_sales/environments",
+      },
+      { label: "Новое окружение" },
     ]);
   });
 });

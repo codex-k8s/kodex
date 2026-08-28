@@ -11,7 +11,6 @@ import AgentApplyState from "@/features/agents/detail/AgentApplyState.vue";
 import AgentEnvironmentPanel from "@/features/agents/detail/AgentEnvironmentPanel.vue";
 import AgentInstructionsPanel from "@/features/agents/detail/AgentInstructionsPanel.vue";
 import AgentProfilePanel from "@/features/agents/detail/AgentProfilePanel.vue";
-import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
 import {
   sameProfileDraft,
   type AgentDetailTab,
@@ -19,6 +18,7 @@ import {
   type ApplyBoundary,
 } from "@/features/agents/detail/model";
 import { usePlatformStore } from "@/features/platform/store";
+import AgentRuntimePanel from "@/features/runtime/components/AgentRuntimePanel.vue";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
@@ -33,7 +33,6 @@ const router = useRouter();
 const agentRef = computed(() => String(route.params.agentRef));
 const projectRef = computed(() => String(route.params.projectRef));
 const agent = computed(() => platform.agents[agentRef.value]);
-const runtimes = computed(() => Object.values(platform.runtimes));
 const canEdit = computed(
   () => agent.value?.nextActions.includes("EDIT") ?? false,
 );
@@ -91,7 +90,6 @@ const profileDraft = ref<AgentProfileDraft>({
   roleDescription: "",
   avatarUrl: "",
 });
-const runtimeRef = ref("");
 const instructions = ref("");
 const selectedEnvironment = ref("");
 const task = ref("");
@@ -110,9 +108,6 @@ const currentProfile = computed<AgentProfileDraft>(() => ({
 }));
 const profileDirty = computed(
   () => !sameProfileDraft(profileDraft.value, currentProfile.value),
-);
-const runtimeDirty = computed(
-  () => Boolean(agent.value) && runtimeRef.value !== agent.value?.runtimeRef,
 );
 const authoritativeInstructions = computed(
   () =>
@@ -148,7 +143,6 @@ function tabBoundary(tab: AgentDetailTab): ApplyBoundary {
 
 function tabHasDraft(tab: AgentDetailTab): boolean {
   if (tab === "profile") return profileDirty.value;
-  if (tab === "runtime") return runtimeDirty.value;
   if (tab === "instructions") return instructionsDirty.value;
   if (tab === "environment")
     return (
@@ -201,10 +195,6 @@ function syncProfile(value = agent.value): void {
   };
 }
 
-function syncRuntime(value = agent.value): void {
-  if (value) runtimeRef.value = value.runtimeRef;
-}
-
 function syncInstructions(): void {
   instructions.value = authoritativeInstructions.value;
 }
@@ -213,11 +203,9 @@ async function load(): Promise<void> {
   await Promise.all([
     platform.loadAgent(agentRef.value),
     platform.loadInstructionVersions(agentRef.value),
-    platform.loadRuntimes(),
     platform.loadCapabilities(),
   ]);
   syncProfile();
-  syncRuntime();
   syncInstructions();
 
   await Promise.all([
@@ -248,13 +236,6 @@ function updateProfile(value: AgentProfileDraft): void {
   if (sameProfileDraft(value, currentProfile.value))
     markCurrent(tabScope("profile"), "next-run");
   else markDraft(tabScope("profile"), "next-run");
-}
-
-function updateRuntime(value: string): void {
-  runtimeRef.value = value;
-  if (value === agent.value?.runtimeRef)
-    markCurrent(tabScope("runtime"), "next-turn");
-  else markDraft(tabScope("runtime"), "next-turn");
 }
 
 function updateInstructions(value: string): void {
@@ -290,34 +271,6 @@ async function saveProfile(): Promise<void> {
       agent.value,
     );
     syncProfile(updated);
-    markApplied();
-  } catch (error) {
-    problem.value = asProblem(error);
-    markFailed();
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function saveRuntime(): Promise<void> {
-  if (!agent.value || !canEdit.value || !runtimeDirty.value) return;
-  busy.value = true;
-  problem.value = undefined;
-  markApplying(tabScope("runtime"), "next-turn");
-  try {
-    const updated = await platform.saveAgent(
-      projectRef.value,
-      {
-        name: agent.value.name,
-        purpose: agent.value.purpose,
-        roleDescription: agent.value.roleDescription,
-        roleDefinitionRef: agent.value.roleDefinitionRef,
-        avatarUrl: agent.value.avatarUrl,
-        runtimeRef: runtimeRef.value,
-      },
-      agent.value,
-    );
-    syncRuntime(updated);
     markApplied();
   } catch (error) {
     problem.value = asProblem(error);
@@ -689,13 +642,9 @@ onMounted(() => void load());
           aria-labelledby="agent-tab-runtime"
         >
           <AgentRuntimePanel
-            :model-value="runtimeRef"
-            :runtimes="runtimes"
+            :agent="agent"
+            :project-ref="projectRef"
             :can-edit="canEdit"
-            :busy="busy"
-            :dirty="runtimeDirty"
-            @update:model-value="updateRuntime"
-            @save="saveRuntime"
           />
           <ProblemNotice
             v-if="platform.problems.runtimes"

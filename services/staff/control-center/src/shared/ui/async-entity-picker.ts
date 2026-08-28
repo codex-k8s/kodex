@@ -267,3 +267,17 @@ export function useCursorInfiniteScroll(
     disconnect();
   });
 }
+
+export interface AsyncEntityOption {
+  ref: string;
+  title: string;
+  description?: string;
+  meta?: string;
+  disabled?: boolean;
+  disabledReason?: string;
+}
+
+export interface AsyncEntityOptionPage {
+  items: AsyncEntityOption[];
+  nextPageToken?: string;
+}

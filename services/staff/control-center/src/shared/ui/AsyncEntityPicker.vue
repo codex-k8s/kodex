@@ -1,18 +1,37 @@
-<script setup lang="ts" generic="T extends AsyncEntityPickerItem">
+<script
+  setup
+  lang="ts"
+  generic="
+    T extends AsyncEntityPickerItem = AsyncEntityPickerItem,
+    S extends T | AsyncEntityOption = T
+  "
+>
 import {
-  CircleAlert,
   Check,
+  ChevronDown,
+  CircleAlert,
   LoaderCircle,
   RefreshCw,
   Search,
 } from "@lucide/vue";
-import { computed, ref, useId, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useId,
+  watch,
+  type CSSProperties,
+} from "vue";
 
 import {
   nearScrollEnd,
   useAsyncEntityCollection,
   useCursorInfiniteScroll,
   type AsyncEntityLoader,
+  type AsyncEntityOption,
+  type AsyncEntityOptionPage,
   type AsyncEntityPickerItem,
 } from "@/shared/ui/async-entity-picker";
 
@@ -27,31 +46,71 @@ export interface AsyncEntityPickerLabels {
 }
 
 type PickerValue = string | null | readonly string[];
+interface PickerEntry extends AsyncEntityPickerItem {
+  source: AsyncEntityPickerItem | AsyncEntityOption;
+  meta?: string;
+  disabledReason?: string;
+}
 
-const props = withDefaults(
-  defineProps<{
-    modelValue: PickerValue;
-    loadItems: AsyncEntityLoader<T>;
-    labels: AsyncEntityPickerLabels;
-    multiple?: boolean;
-    disabled?: boolean;
-    debounceMs?: number;
-  }>(),
-  {
-    debounceMs: 250,
-    disabled: false,
-    multiple: false,
-  },
-);
+const props = defineProps<{
+  modelValue?: PickerValue;
+  loadItems?: AsyncEntityLoader<T>;
+  labels?: AsyncEntityPickerLabels;
+  multiple?: boolean;
+  disabled?: boolean;
+  debounceMs?: number;
+  selected?: S;
+  loadPage?: (query: string, cursor?: string) => Promise<AsyncEntityOptionPage>;
+  placeholder?: string;
+  searchPlaceholder?: string;
+}>();
 const emit = defineEmits<{
   "update:modelValue": [value: PickerValue];
-  select: [item: T];
+  select: [item: S];
 }>();
+defineSlots<{ option?(props: { item: T; selected: boolean }): unknown }>();
 
+const inline = props.loadItems !== undefined;
+const pickerId = `async-picker-${useId()}`;
+const triggerRoot = ref<HTMLElement>();
+const trigger = ref<HTMLButtonElement>();
+const searchInput = ref<HTMLInputElement>();
+const popover = ref<HTMLElement>();
 const list = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
+const open = ref(false);
 const activeIndex = ref(-1);
-const pickerId = `async-picker-${useId()}`;
+const popoverStyle = ref<CSSProperties>({});
+
+const loader: AsyncEntityLoader<PickerEntry> = async (request) => {
+  if (props.loadItems) {
+    const page = await props.loadItems(request);
+    return {
+      items: page.items.map((item) => ({
+        ...item,
+        id: item.id,
+        label: item.label,
+        source: item,
+      })),
+      nextCursor: page.nextCursor,
+    };
+  }
+  if (!props.loadPage) throw new Error("Async entity loader is required");
+  const page = await props.loadPage(request.query.trim(), request.cursor);
+  return {
+    items: page.items.map((item) => ({
+      id: item.ref,
+      label: item.title,
+      description: item.description,
+      disabled: item.disabled,
+      disabledReason: item.disabledReason,
+      meta: item.meta,
+      source: item,
+    })),
+    nextCursor: page.nextPageToken,
+  };
+};
+
 const {
   hasMore,
   initialLoading,
@@ -61,66 +120,99 @@ const {
   phase,
   query,
   refresh,
-} = useAsyncEntityCollection(props.loadItems, {
-  debounceMs: props.debounceMs,
+} = useAsyncEntityCollection(loader, {
+  debounceMs: props.debounceMs ?? (inline ? 250 : 300),
+  immediate: inline,
 });
 
+const copy = computed<AsyncEntityPickerLabels>(
+  () =>
+    props.labels ?? {
+      label: props.placeholder ?? "",
+      searchPlaceholder: props.searchPlaceholder ?? "",
+      loading: "",
+      loadingMore: "",
+      empty: "",
+      error: "",
+      retry: "",
+    },
+);
 const selectedIds = computed<readonly string[]>(() => {
   if (Array.isArray(props.modelValue))
     return props.modelValue.filter(
-      (identifier): identifier is string => typeof identifier === "string",
+      (id): id is string => typeof id === "string",
     );
   return typeof props.modelValue === "string" ? [props.modelValue] : [];
+});
+const selectedOption = computed(() => {
+  const entry = items.value.find((item) => item.id === props.modelValue);
+  if (entry && isOption(entry.source)) return entry.source;
+  return props.selected && isOption(props.selected)
+    ? props.selected
+    : undefined;
 });
 const activeDescendant = computed(() => {
   const item = items.value[activeIndex.value];
   return item ? `${pickerId}-option-${item.id}` : undefined;
 });
+const infiniteScrollEnabled = computed(
+  () => (inline || open.value) && hasMore.value,
+);
 
 watch(items, (nextItems) => {
   activeIndex.value = nextItems.findIndex((item) => !item.disabled);
 });
-
 useCursorInfiniteScroll({
   root: list,
   sentinel,
-  enabled: hasMore,
+  enabled: infiniteScrollEnabled,
   loadMore,
 });
 
-function selected(item: T): boolean {
+function isOption(
+  value: AsyncEntityPickerItem | AsyncEntityOption,
+): value is AsyncEntityOption {
+  return "ref" in value && "title" in value;
+}
+function selected(item: PickerEntry): boolean {
   return selectedIds.value.includes(item.id);
 }
-
-function select(item: T): void {
+function chooseInline(item: PickerEntry): void {
   if (props.disabled || item.disabled) return;
   if (props.multiple) {
     const selection = new Set(selectedIds.value);
     if (selection.has(item.id)) selection.delete(item.id);
     else selection.add(item.id);
     emit("update:modelValue", [...selection]);
-  } else {
-    emit("update:modelValue", selected(item) ? null : item.id);
-  }
-  emit("select", item);
+  } else emit("update:modelValue", selected(item) ? null : item.id);
+  emit("select", item.source as S);
 }
-
+function chooseDropdown(item: PickerEntry): void {
+  if (props.disabled || item.disabled || !isOption(item.source)) return;
+  emit("update:modelValue", item.source.ref);
+  emit("select", item.source as S);
+  close(true);
+}
 function moveActive(direction: 1 | -1): void {
-  if (items.value.length === 0) return;
+  if (!items.value.length) return;
   let index = activeIndex.value;
   for (let attempts = 0; attempts < items.value.length; attempts += 1) {
     index = (index + direction + items.value.length) % items.value.length;
     if (!items.value[index]?.disabled) {
       activeIndex.value = index;
-      document.getElementById(activeDescendant.value ?? "")?.scrollIntoView({
-        block: "nearest",
-      });
+      document
+        .getElementById(activeDescendant.value ?? "")
+        ?.scrollIntoView({ block: "nearest" });
       return;
     }
   }
 }
-
-function handleSearchKeydown(event: KeyboardEvent): void {
+function handleListKeydown(event: KeyboardEvent, dropdown: boolean): void {
+  if (event.key === "Escape" && dropdown) {
+    event.preventDefault();
+    close(true);
+    return;
+  }
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
     moveActive(event.key === "ArrowDown" ? 1 : -1);
@@ -130,41 +222,106 @@ function handleSearchKeydown(event: KeyboardEvent): void {
   const item = items.value[activeIndex.value];
   if (!item) return;
   event.preventDefault();
-  select(item);
+  if (dropdown) chooseDropdown(item);
+  else chooseInline(item);
 }
-
 function handleScroll(event: Event): void {
   const target = event.currentTarget;
   if (target instanceof HTMLElement && hasMore.value && nearScrollEnd(target))
     void loadMore();
 }
+function updatePopoverPosition(): void {
+  if (!open.value || !trigger.value) return;
+  const rect = trigger.value.getBoundingClientRect();
+  const gap = 12;
+  const width = Math.min(
+    Math.max(rect.width, 320),
+    window.innerWidth - gap * 2,
+  );
+  const left = Math.min(
+    Math.max(gap, rect.left),
+    window.innerWidth - width - gap,
+  );
+  const below = window.innerHeight - rect.bottom - gap;
+  const aboveRoom = rect.top - gap;
+  const above = below < 240 && aboveRoom > below;
+  const maxHeight = Math.max(180, Math.min(420, above ? aboveRoom : below));
+  popoverStyle.value = {
+    left: `${String(left)}px`,
+    maxHeight: `${String(maxHeight)}px`,
+    top: above
+      ? `${String(Math.max(gap, rect.top - maxHeight - 6))}px`
+      : `${String(rect.bottom + 6)}px`,
+    width: `${String(width)}px`,
+  };
+}
+function toggle(): void {
+  if (props.disabled) return;
+  if (open.value) return close(false);
+  open.value = true;
+  refresh();
+  void nextTick(() => {
+    updatePopoverPosition();
+    searchInput.value?.focus();
+  });
+}
+function close(restoreFocus: boolean): void {
+  open.value = false;
+  activeIndex.value = -1;
+  if (restoreFocus) void nextTick(() => trigger.value?.focus());
+}
+function handleTriggerKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") return close(true);
+  if (!open.value && ["Enter", " ", "ArrowDown"].includes(event.key)) {
+    event.preventDefault();
+    toggle();
+  }
+}
+function handleDocumentPointerDown(event: PointerEvent): void {
+  const target = event.target as Node;
+  if (!triggerRoot.value?.contains(target) && !popover.value?.contains(target))
+    close(false);
+}
+
+onMounted(() => {
+  if (inline) return;
+  document.addEventListener("pointerdown", handleDocumentPointerDown);
+  window.addEventListener("resize", updatePopoverPosition);
+  window.addEventListener("scroll", updatePopoverPosition, true);
+});
+onBeforeUnmount(() => {
+  if (inline) return;
+  document.removeEventListener("pointerdown", handleDocumentPointerDown);
+  window.removeEventListener("resize", updatePopoverPosition);
+  window.removeEventListener("scroll", updatePopoverPosition, true);
+});
 </script>
 
 <template>
   <section
-    class="async-picker"
-    :aria-label="labels.label"
+    v-if="inline"
+    class="async-picker async-picker--inline"
+    :aria-label="copy.label"
     :aria-busy="initialLoading || loadingMore"
   >
-    <label class="async-picker__search">
-      <Search :size="16" aria-hidden="true" />
-      <span class="sr-only">{{ labels.label }}</span>
-      <input
+    <label class="async-picker__search"
+      ><Search :size="16" aria-hidden="true" /><span class="sr-only">{{
+        copy.label
+      }}</span
+      ><input
         v-model="query"
         type="search"
-        :placeholder="labels.searchPlaceholder"
+        :placeholder="copy.searchPlaceholder"
         :disabled="disabled"
         :aria-controls="`${pickerId}-listbox`"
         :aria-activedescendant="activeDescendant"
         aria-autocomplete="list"
-        @keydown="handleSearchKeydown"
-      />
-    </label>
-
+        @keydown="handleListKeydown($event, false)"
+    /></label>
     <div
       :id="`${pickerId}-listbox`"
       ref="list"
-      class="async-picker__list"
+      class="async-picker__options"
       role="listbox"
       :aria-multiselectable="multiple || undefined"
       @scroll.passive="handleScroll"
@@ -178,32 +335,27 @@ function handleScroll(event: Event): void {
           class="async-picker__spin"
           :size="20"
           aria-hidden="true"
-        />
-        <span>{{ labels.loading }}</span>
+        />{{ copy.loading }}
       </div>
-
       <div
         v-else-if="phase === 'error'"
         class="async-picker__state async-picker__state--error"
         role="alert"
       >
-        <CircleAlert :size="20" aria-hidden="true" />
-        <span>{{ labels.error }}</span>
-        <button type="button" class="async-picker__retry" @click="refresh">
-          <RefreshCw :size="15" aria-hidden="true" />
-          {{ labels.retry }}
+        <CircleAlert :size="20" aria-hidden="true" /><span>{{
+          copy.error
+        }}</span
+        ><button type="button" class="async-picker__retry" @click="refresh">
+          <RefreshCw :size="15" aria-hidden="true" />{{ copy.retry }}
         </button>
       </div>
-
       <div
         v-else-if="phase === 'empty'"
         class="async-picker__state"
         role="status"
       >
-        <Search :size="20" aria-hidden="true" />
-        <span>{{ labels.empty }}</span>
+        <Search :size="20" aria-hidden="true" />{{ copy.empty }}
       </div>
-
       <template v-else>
         <button
           v-for="(item, index) in items"
@@ -219,45 +371,224 @@ function handleScroll(event: Event): void {
           :aria-selected="selected(item)"
           :disabled="disabled || item.disabled"
           @mouseenter="activeIndex = index"
-          @click="select(item)"
+          @click="chooseInline(item)"
         >
-          <slot name="option" :item="item" :selected="selected(item)">
-            <span class="async-picker__option-copy">
-              <strong>{{ item.label }}</strong>
-              <span v-if="item.description">{{ item.description }}</span>
-            </span>
-          </slot>
-          <Check
-            v-if="selected(item)"
-            class="async-picker__check"
-            :size="17"
-            aria-hidden="true"
-          />
+          <slot
+            name="option"
+            :item="item.source as T"
+            :selected="selected(item)"
+            ><span class="async-picker__option-copy"
+              ><strong>{{ item.label }}</strong
+              ><small v-if="item.description">{{
+                item.description
+              }}</small></span
+            ></slot
+          ><Check v-if="selected(item)" :size="17" aria-hidden="true" />
         </button>
         <div ref="sentinel" class="async-picker__sentinel" aria-hidden="true" />
-        <div v-if="loadingMore" class="async-picker__more" role="status">
+        <div
+          v-if="loadingMore"
+          class="async-picker__state async-picker__state--more"
+          role="status"
+        >
           <LoaderCircle
             class="async-picker__spin"
             :size="16"
             aria-hidden="true"
-          />
-          {{ labels.loadingMore }}
+          />{{ copy.loadingMore }}
         </div>
       </template>
     </div>
   </section>
+  <div
+    v-else
+    ref="triggerRoot"
+    class="async-picker"
+    @keydown="handleTriggerKeydown"
+  >
+    <button
+      ref="trigger"
+      class="async-picker__trigger"
+      type="button"
+      role="combobox"
+      aria-haspopup="listbox"
+      :aria-controls="`${pickerId}-listbox`"
+      :aria-expanded="open"
+      :disabled="disabled"
+      @click="toggle"
+    >
+      <span v-if="selectedOption" class="async-picker__selection"
+        ><strong>{{ selectedOption.title }}</strong
+        ><small v-if="selectedOption.description">{{
+          selectedOption.description
+        }}</small></span
+      ><span v-else class="async-picker__placeholder">{{ placeholder }}</span
+      ><ChevronDown :size="17" aria-hidden="true" />
+    </button>
+    <Teleport to="body">
+      <section
+        v-if="open"
+        ref="popover"
+        class="async-picker__popover"
+        :style="popoverStyle"
+        @keydown="handleListKeydown($event, true)"
+      >
+        <label class="async-picker__search"
+          ><Search :size="16" aria-hidden="true" /><span class="sr-only">{{
+            searchPlaceholder
+          }}</span
+          ><input
+            ref="searchInput"
+            v-model="query"
+            type="search"
+            :placeholder="searchPlaceholder"
+            :aria-controls="`${pickerId}-listbox`"
+            :aria-activedescendant="activeDescendant"
+        /></label>
+        <div
+          :id="`${pickerId}-listbox`"
+          ref="list"
+          class="async-picker__options"
+          role="listbox"
+          :aria-busy="initialLoading || loadingMore"
+          @scroll.passive="handleScroll"
+        >
+          <div
+            v-if="phase === 'initial-loading'"
+            class="async-picker__state"
+            role="status"
+          >
+            <LoaderCircle
+              class="async-picker__spin"
+              :size="18"
+              aria-hidden="true"
+            />{{ $t("common.loading") }}
+          </div>
+          <div
+            v-else-if="phase === 'error'"
+            class="async-picker__state async-picker__state--error"
+            role="alert"
+          >
+            <span>{{ $t("errors.default") }}</span
+            ><button class="button" type="button" @click="refresh">
+              {{ $t("common.retry") }}
+            </button>
+          </div>
+          <div v-else-if="phase === 'empty'" class="async-picker__state">
+            {{ $t("common.empty") }}
+          </div>
+          <template v-else>
+            <button
+              v-for="(item, index) in items"
+              :id="`${pickerId}-option-${item.id}`"
+              :key="item.id"
+              class="async-picker__option"
+              :class="{
+                'async-picker__option--active': index === activeIndex,
+                'async-picker__option--selected': item.id === modelValue,
+              }"
+              type="button"
+              role="option"
+              :aria-selected="item.id === modelValue"
+              :disabled="item.disabled"
+              :title="item.disabledReason"
+              @mouseenter="activeIndex = index"
+              @click="chooseDropdown(item)"
+            >
+              <span class="async-picker__option-copy"
+                ><strong>{{ item.label }}</strong
+                ><small v-if="item.description">{{
+                  item.description
+                }}</small></span
+              ><small v-if="item.meta">{{ item.meta }}</small
+              ><small v-if="item.disabledReason" class="async-picker__reason">{{
+                item.disabledReason
+              }}</small>
+            </button>
+            <div
+              ref="sentinel"
+              class="async-picker__sentinel"
+              aria-hidden="true"
+            />
+            <div
+              v-if="loadingMore"
+              class="async-picker__state async-picker__state--more"
+              role="status"
+            >
+              <LoaderCircle
+                class="async-picker__spin"
+                :size="17"
+                aria-hidden="true"
+              />{{ $t("common.loading") }}
+            </div>
+          </template>
+        </div>
+        <footer class="async-picker__footer">
+          {{ $t("runtime.pickerShown", { count: items.length })
+          }}<span v-if="hasMore">{{ $t("runtime.pickerScroll") }}</span>
+        </footer>
+      </section>
+    </Teleport>
+  </div>
 </template>
 
 <style scoped>
 .async-picker {
-  display: flex;
   min-width: 0;
+}
+.async-picker--inline {
+  display: flex;
   min-height: 220px;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+}
+.async-picker__trigger {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.async-picker__selection,
+.async-picker__option-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+.async-picker__selection strong,
+.async-picker__selection small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.async-picker__selection small,
+.async-picker__placeholder,
+.async-picker__footer,
+.async-picker__option small {
+  color: var(--text-secondary);
+}
+.async-picker__popover {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 18px 40px rgba(16, 22, 30, 0.18);
 }
 .async-picker__search {
   display: flex;
@@ -268,9 +599,6 @@ function handleScroll(event: Event): void {
   border-bottom: 1px solid var(--border);
   color: var(--muted);
 }
-.async-picker__search:focus-within {
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
-}
 .async-picker__search input {
   width: 100%;
   min-width: 0;
@@ -279,16 +607,19 @@ function handleScroll(event: Event): void {
   background: transparent;
   color: var(--text);
 }
-.async-picker__list {
+.async-picker__options {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.async-picker--inline .async-picker__options {
+  min-height: 170px;
+}
 .async-picker__option {
   display: flex;
   width: 100%;
-  min-height: 52px;
+  min-height: 54px;
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
@@ -304,45 +635,30 @@ function handleScroll(event: Event): void {
   background: var(--panel);
 }
 .async-picker__option--selected {
+  box-shadow: inset 3px 0 var(--accent);
   background: var(--accent-soft);
 }
 .async-picker__option:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.58;
 }
-.async-picker__option-copy {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 3px;
-}
-.async-picker__option-copy strong,
-.async-picker__option-copy span {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow-wrap: anywhere;
-}
-.async-picker__option-copy span {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-.async-picker__check {
-  flex: 0 0 auto;
-  color: var(--accent);
+.async-picker__reason {
+  color: var(--warning) !important;
 }
 .async-picker__state {
   display: flex;
-  min-height: 170px;
+  min-height: 110px;
   align-items: center;
   justify-content: center;
   flex-direction: column;
   gap: 10px;
-  padding: 24px;
+  padding: 16px;
   color: var(--text-secondary);
   text-align: center;
+}
+.async-picker__state--more {
+  min-height: 40px;
+  flex-direction: row;
 }
 .async-picker__state--error {
   color: var(--danger);
@@ -359,17 +675,16 @@ function handleScroll(event: Event): void {
   color: var(--text);
   cursor: pointer;
 }
+.async-picker__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+}
 .async-picker__sentinel {
   height: 1px;
-}
-.async-picker__more {
-  display: flex;
-  min-height: 40px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: var(--text-secondary);
-  font-size: 12px;
 }
 .async-picker__spin {
   animation: async-picker-spin 0.9s linear infinite;
@@ -382,12 +697,6 @@ function handleScroll(event: Event): void {
 @media (prefers-reduced-motion: reduce) {
   .async-picker__spin {
     animation: none;
-  }
-}
-@media (max-width: 760px) {
-  .async-picker__search,
-  .async-picker__option {
-    min-height: 48px;
   }
 }
 </style>

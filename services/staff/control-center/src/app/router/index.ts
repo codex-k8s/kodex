@@ -91,6 +91,28 @@ export const router = createRouter({
       meta: { projectScoped: true },
     },
     {
+      path: "/projects/:projectRef/environments",
+      name: "runtime-environments",
+      component: lazyPage(() => import("@/pages/RuntimeEnvironmentsPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/environments/new",
+      name: "runtime-environment-new",
+      component: lazyPage(
+        () => import("@/pages/RuntimeEnvironmentEditorPage.vue"),
+      ),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/environments/:environmentRef",
+      name: "runtime-environment",
+      component: lazyPage(
+        () => import("@/pages/RuntimeEnvironmentEditorPage.vue"),
+      ),
+      meta: { projectScoped: true },
+    },
+    {
       path: "/integrations",
       name: "integrations",
       component: lazyPage(() => import("@/pages/IntegrationsPage.vue")),

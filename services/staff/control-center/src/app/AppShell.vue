@@ -8,6 +8,7 @@ import {
   Gauge,
   Home,
   KeyRound,
+  Layers3,
   Menu,
   PlugZap,
   Search,
@@ -31,6 +32,7 @@ import ContextualAssistant from "@/features/assistant/ContextualAssistant.vue";
 import { useContextualAssistant } from "@/features/assistant/contextual-assistant";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import { useRuntimeStore } from "@/features/runtime/store";
 import { useSessionStore } from "@/features/session/store";
 import { selectProjectRef } from "@/shared/project-context";
 import {
@@ -47,6 +49,7 @@ const route = useRoute();
 const router = useRouter();
 const platform = usePlatformStore();
 const realtime = useRealtimeStore();
+const runtime = useRuntimeStore();
 const session = useSessionStore();
 const { locale, t } = useI18n();
 const mobileOpen = ref(false);
@@ -87,6 +90,10 @@ const breadcrumbs = computed(() => {
       : undefined;
   const runRef =
     typeof route.params.runRef === "string" ? route.params.runRef : undefined;
+  const environmentRef =
+    typeof route.params.environmentRef === "string"
+      ? route.params.environmentRef
+      : undefined;
   const labels: BreadcrumbLabels = {
     home: t("nav.home"),
     onboarding: t("nav.onboarding"),
@@ -101,6 +108,9 @@ const breadcrumbs = computed(() => {
     run: t("nav.run"),
     files: t("nav.files"),
     automations: t("nav.automations"),
+    environments: t("nav.environments"),
+    environment: t("nav.environment"),
+    newEnvironment: t("nav.newEnvironment"),
     integrations: t("nav.integrations"),
     decisions: t("nav.decisions"),
     administration: t("nav.administration"),
@@ -121,6 +131,9 @@ const breadcrumbs = computed(() => {
         : {}),
       ...(runRef && platform.runs[runRef]
         ? { runName: platform.runs[runRef].title }
+        : {}),
+      ...(environmentRef && runtime.environments[environmentRef]
+        ? { environmentName: runtime.environments[environmentRef].name }
         : {}),
     },
     labels,
@@ -214,6 +227,12 @@ const projectLinks = computed(() => {
       label: t("nav.automations"),
       path: `${prefix}/automations`,
       icon: Clock3,
+    },
+    {
+      name: "runtime-environments",
+      label: t("nav.environments"),
+      path: `${prefix}/environments`,
+      icon: Layers3,
     },
     {
       name: "project-access",
@@ -312,6 +331,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("online", setOnline);
   window.removeEventListener("offline", setOnline);
   realtime.closePlatform();
+  runtime.clear();
   platform.clearOwnerState();
 });
 </script>
