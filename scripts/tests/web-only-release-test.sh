@@ -146,6 +146,7 @@ secret_producers="$temporary_directory/secret-producers"
   printf '%s\n' \
     internal-rpc-authority-bootstrap-roots \
     internal-rpc-authority-sentry \
+    kodex-external-s3 \
     kodex-installation-ca \
     kodex-integration-credentials \
     kodex-nats-credentials \
