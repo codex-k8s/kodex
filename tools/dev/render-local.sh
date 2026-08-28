@@ -248,6 +248,9 @@ OIDC_HOST="$oidc_host" yq -i '
     (.spec.template.spec.containers[] | select(.name == "control-plane") |
       .env[] | select(.name == "CONTROL_PLANE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL").value) = "true"
   ) |
+  with(select(.kind == "ConfigMap" and .metadata.name == "session-archive-runtime");
+    .data.SESSION_ARCHIVE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL = "true"
+  ) |
   with(select(.kind == "StatefulSet" and .metadata.name == "kodex-postgresql");
     (.spec.template.spec.containers[] | select(.name == "postgresql") | .args) += [
       "-c", "fsync=off",
