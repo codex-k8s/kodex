@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -575,6 +576,50 @@ func TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime(t *testing.T) {
 	}
 	if runtimePodTerminal(pod) {
 		t.Fatalf("running warm Pod with a terminated runtime was not recreated: %#v", pod.Status.ContainerStatuses)
+	}
+}
+
+func TestEnsureWarmRotatesTerminalTicketAndDeletesStaleWarmTickets(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, binding, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	if err != nil {
+		t.Fatalf("BuildWarmInput() error = %v", err)
+	}
+	secretName := manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest)
+	oldToken := strings.Repeat("a", 64)
+	if err := manager.ensureTicket(context.Background(), secretName, "system-assistant-warm", "warm", input, oldToken, nil); err != nil {
+		t.Fatalf("ensureTicket() error = %v", err)
+	}
+	staleInput := input
+	staleInput.RuntimeRevisionRef = "runtime_revision_stale"
+	staleInput.RuntimeRevisionDigest = strings.Repeat("d", 64)
+	if err := manager.ensureTicket(context.Background(), manager.warmTicketName(staleInput.RuntimeRevisionRef, staleInput.RuntimeRevisionDigest), "system-assistant-warm", "warm", staleInput, strings.Repeat("b", 64), nil); err != nil {
+		t.Fatalf("ensure stale ticket error = %v", err)
+	}
+	terminal := manager.runtimePod(input, binding, secretName, "system-assistant-warm", "warm")
+	terminal.Status.Phase = corev1.PodFailed
+	if _, err := client.CoreV1().Pods("kodex-system").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create(terminal warm Pod) error = %v", err)
+	}
+	if _, err := manager.EnsureWarm(context.Background(), input, binding); err != nil {
+		t.Fatalf("EnsureWarm() error = %v", err)
+	}
+	current, err := client.CoreV1().Secrets("kodex-system").Get(context.Background(), secretName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get(current warm ticket) error = %v", err)
+	}
+	if bytes.Equal(current.Data[ticketKey], []byte(oldToken)) {
+		t.Fatal("terminal warm Pod reused its execution ticket")
+	}
+	items, err := client.CoreV1().Secrets("kodex-system").List(context.Background(), metav1.ListOptions{
+		LabelSelector: labels.Set{managedLabel: "true", modeLabel: "warm"}.AsSelector().String(),
+	})
+	if err != nil {
+		t.Fatalf("List(warm tickets) error = %v", err)
+	}
+	if len(items.Items) != 1 || items.Items[0].Name != secretName {
+		t.Fatalf("warm tickets after reconciliation = %#v", items.Items)
 	}
 }
 

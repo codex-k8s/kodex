@@ -395,8 +395,14 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		existing.Annotations[warmCompatibilityAnnotation] != compatibilityDigest ||
 		existing.Annotations[controllerAnnotation] != manager.config.ControllerPodUID ||
 		runtimePodTerminal(existing)) {
+		boundTicket := runtimeInputSecretName(existing)
 		if deleteErr := manager.client.CoreV1().Pods(manager.config.Namespace).Delete(ctx, podName, metav1.DeleteOptions{GracePeriodSeconds: int64Pointer(0)}); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
 			return false, errors.New("replace stale warm runtime pod")
+		}
+		if boundTicket != "" {
+			if deleteErr := manager.deleteOwnedWarmTicket(ctx, boundTicket); deleteErr != nil {
+				return false, deleteErr
+			}
 		}
 		err = apierrors.NewNotFound(corev1.Resource("pods"), podName)
 	}
@@ -413,13 +419,66 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		}
 		pod := manager.runtimePod(input, providerBinding, secretName, podName, "warm")
 		existing, err = manager.client.CoreV1().Pods(manager.config.Namespace).Create(ctx, pod, metav1.CreateOptions{})
-		if err != nil && !apierrors.IsAlreadyExists(err) {
+		if apierrors.IsAlreadyExists(err) {
+			existing, err = manager.client.CoreV1().Pods(manager.config.Namespace).Get(ctx, podName, metav1.GetOptions{})
+		}
+		if err != nil {
 			return false, errors.New("create warm runtime pod")
 		}
 	} else if err != nil {
 		return false, errors.New("read warm runtime pod")
 	}
+	if err := manager.cleanupStaleWarmTickets(ctx, secretName); err != nil {
+		return false, err
+	}
 	return podReady(existing), nil
+}
+
+func (manager *Manager) deleteOwnedWarmTicket(ctx context.Context, name string) error {
+	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return errors.New("read stale warm runtime ticket")
+	}
+	if secret.Labels[managedLabel] != "true" || secret.Labels[modeLabel] != "warm" {
+		return errors.New("stale warm runtime ticket ownership is invalid")
+	}
+	if err := manager.client.CoreV1().Secrets(manager.config.Namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		return errors.New("delete stale warm runtime ticket")
+	}
+	return nil
+}
+
+func (manager *Manager) cleanupStaleWarmTickets(ctx context.Context, current string) error {
+	selector := labels.Set{managedLabel: "true", modeLabel: "warm"}.AsSelector().String()
+	secrets, err := manager.client.CoreV1().Secrets(manager.config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: selector, Limit: 256})
+	if err != nil {
+		return errors.New("list stale warm runtime tickets")
+	}
+	var result error
+	for index := range secrets.Items {
+		if secrets.Items[index].Name == current {
+			continue
+		}
+		if err := manager.client.CoreV1().Secrets(manager.config.Namespace).Delete(ctx, secrets.Items[index].Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			result = errors.Join(result, errors.New("delete stale warm runtime ticket"))
+		}
+	}
+	return result
+}
+
+func runtimeInputSecretName(pod *corev1.Pod) string {
+	if pod == nil {
+		return ""
+	}
+	for _, volume := range pod.Spec.Volumes {
+		if volume.Name == "runtime-input" && volume.Secret != nil {
+			return volume.Secret.SecretName
+		}
+	}
+	return ""
 }
 
 func (manager *Manager) removeConflictingWarmTicket(ctx context.Context, secretName string, input runtimecontract.RunnerInput) error {
