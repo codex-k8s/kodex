@@ -403,6 +403,18 @@ function nodeSurface(node: RunNode): "session" | "control" {
     : "control";
 }
 
+function isFutureNode(node: RunNode): boolean {
+  return (
+    futureRefs.value.has(node.ref) ||
+    node.planned === true ||
+    node.state === "PLANNED"
+  );
+}
+
+function isActiveNode(node: RunNode): boolean {
+  return activeRefs.value.has(node.ref);
+}
+
 function nodeAccessibleLabel(node: RunNode): string {
   return [
     t(`runs.${nodeSurface(node)}Node`),
@@ -586,13 +598,13 @@ function compareNodes(left: RunNode, right: RunNode): number {
           :data-node-ref="item.node.ref"
           :data-node-type="item.node.type"
           :data-node-surface="nodeSurface(item.node)"
-          :data-node-future="futureRefs.has(item.node.ref) || undefined"
+          :data-node-future="isFutureNode(item.node) || undefined"
           :class="[
             'canvas-node--' + item.node.state.toLowerCase(),
             {
               'canvas-node--selected': item.node.ref === selectedRef,
-              'canvas-node--future': futureRefs.has(item.node.ref),
-              'canvas-node--active': activeRefs.has(item.node.ref),
+              'canvas-node--future': isFutureNode(item.node),
+              'canvas-node--active': isActiveNode(item.node),
               'canvas-node--session': nodeSurface(item.node) === 'session',
               'canvas-node--control': nodeSurface(item.node) === 'control',
             },
@@ -604,6 +616,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
             height: runGraphNodeHeight + 'px',
           }"
           :aria-pressed="item.node.ref === selectedRef"
+          :aria-busy="isActiveNode(item.node) || undefined"
           :aria-label="nodeAccessibleLabel(item.node)"
           @click="handleNodeClick($event, item.node)"
         >
@@ -614,11 +627,18 @@ function compareNodes(left: RunNode, right: RunNode): number {
               :size="16"
               aria-hidden="true"
             />
-            <strong :title="item.node.displayName">
-              {{ compactDisplayName(item.node.displayName) }}
-            </strong>
+            <span class="canvas-node__kind">
+              {{
+                nodeSurface(item.node) === "session"
+                  ? $t("runs.sessionNode")
+                  : $t("runs.controlNode")
+              }}
+            </span>
             <StatusBadge :state="item.node.state" />
           </span>
+          <strong class="canvas-node__title" :title="item.node.displayName">
+            {{ compactDisplayName(item.node.displayName) }}
+          </strong>
           <span class="canvas-node__role" :title="item.node.role">
             {{ item.node.role || $t("runs.nodeTypes." + item.node.type) }}
           </span>
@@ -631,6 +651,13 @@ function compareNodes(left: RunNode, right: RunNode): number {
               item.node.inputSummary ||
               $t("runs.waitingForActivity")
             }}
+          </span>
+          <span
+            v-if="isActiveNode(item.node)"
+            class="canvas-node__activity"
+            aria-hidden="true"
+          >
+            <i /><i /><i />
           </span>
         </button>
       </div>
@@ -653,8 +680,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
         :aria-selected="item.node.ref === selectedRef"
         :class="{
           'graph-outline-node--selected': item.node.ref === selectedRef,
-          'graph-outline-node--future': futureRefs.has(item.node.ref),
-          'graph-outline-node--active': activeRefs.has(item.node.ref),
+          'graph-outline-node--future': isFutureNode(item.node),
+          'graph-outline-node--active': isActiveNode(item.node),
         }"
         @keydown="moveOutlineFocus"
         @click="emit('select', item.node)"
@@ -853,8 +880,9 @@ function compareNodes(left: RunNode, right: RunNode): number {
 .canvas-node {
   position: absolute;
   display: grid;
-  align-content: start;
-  gap: 7px;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  align-content: stretch;
+  gap: 5px;
   padding: 12px;
   overflow: hidden;
   border: 1px solid var(--border-strong);
@@ -913,17 +941,25 @@ function compareNodes(left: RunNode, right: RunNode): number {
 .canvas-node__heading {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
+  align-items: center;
   gap: 7px;
 }
-.canvas-node__heading strong,
+.canvas-node__kind,
+.canvas-node__title,
 .canvas-node__role,
 .canvas-node__progress {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.canvas-node__heading strong {
+.canvas-node__kind {
+  color: var(--subtle);
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.canvas-node__title {
   display: -webkit-box;
   overflow: hidden;
   line-height: 1.25;
@@ -942,6 +978,29 @@ function compareNodes(left: RunNode, right: RunNode): number {
 }
 .canvas-node__progress {
   color: var(--text-secondary);
+}
+.canvas-node__activity {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  display: flex;
+  height: 10px;
+  align-items: end;
+  gap: 2px;
+}
+.canvas-node__activity i {
+  display: block;
+  width: 3px;
+  height: 4px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+  animation: run-node-activity 1.1s ease-in-out infinite;
+}
+.canvas-node__activity i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.canvas-node__activity i:nth-child(3) {
+  animation-delay: 0.32s;
 }
 .graph-outline {
   position: absolute;
@@ -1105,8 +1164,20 @@ function compareNodes(left: RunNode, right: RunNode): number {
     opacity: 1;
   }
 }
+@keyframes run-node-activity {
+  0%,
+  100% {
+    height: 3px;
+    opacity: 0.45;
+  }
+  50% {
+    height: 10px;
+    opacity: 1;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .canvas-node--active::after {
+  .canvas-node--active::after,
+  .canvas-node__activity i {
     animation: none;
     opacity: 0.75;
   }

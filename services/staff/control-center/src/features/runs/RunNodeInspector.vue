@@ -42,6 +42,10 @@ const nodeArtifacts = computed(() => {
   const refs = new Set(props.node.artifactRefs);
   return props.artifacts.filter((artifact) => refs.has(artifact.ref));
 });
+const sessionNode = computed(
+  () =>
+    props.node.type === "ROOT_PROCESS" || props.node.type === "AGENT_EXECUTION",
+);
 
 function nodeIcon(type: RunNode["type"]): Component {
   switch (type) {
@@ -69,7 +73,10 @@ function formatDate(value: string): string {
       </span>
       <div>
         <h2>{{ node.displayName }}</h2>
-        <p>{{ node.role || $t(`runs.nodeTypes.${node.type}`) }}</p>
+        <p>
+          {{ $t(sessionNode ? "runs.sessionNode" : "runs.controlNode") }} ·
+          {{ node.role || $t(`runs.nodeTypes.${node.type}`) }}
+        </p>
       </div>
       <StatusBadge :state="node.state" />
       <button
@@ -97,26 +104,16 @@ function formatDate(value: string): string {
         compact
       />
 
-      <div
-        v-if="node.progressSummary || node.inputSummary"
-        class="run-node-inspector__status"
-      >
+      <div class="run-node-inspector__status">
         <SafeMarkdown
-          :content="
-            node.progressSummary ||
-            node.inputSummary ||
-            $t('runs.waitingForActivity')
-          "
+          :content="node.progressSummary || $t('runs.waitingForActivity')"
         />
       </div>
-      <p v-else class="run-node-inspector__status run-node-inspector__muted">
-        {{ $t("runs.waitingForActivity") }}
-      </p>
 
       <dl class="run-node-inspector__metadata">
         <div>
           <dt>{{ $t("runs.attempt", { attempt: node.attempt }) }}</dt>
-          <dd>{{ node.role || $t(`runs.nodeTypes.${node.type}`) }}</dd>
+          <dd>{{ node.attempt }}</dd>
         </div>
         <div v-if="parentNode">
           <dt>{{ $t("common.source") }}</dt>
@@ -243,9 +240,9 @@ function formatDate(value: string): string {
 .run-node-inspector__body {
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 10px;
   min-height: 0;
-  padding: 14px 16px 20px;
+  padding: 12px 14px 16px;
   overflow: auto;
 }
 .run-node-inspector__status {
@@ -268,7 +265,7 @@ function formatDate(value: string): string {
   display: grid;
   grid-template-columns: minmax(105px, 0.36fr) minmax(0, 1fr);
   gap: 12px;
-  padding: 9px 0;
+  padding: 7px 0;
   border-bottom: 1px solid var(--border);
 }
 .run-node-inspector__metadata dt {
@@ -327,7 +324,7 @@ function formatDate(value: string): string {
   justify-content: flex-end;
   gap: 8px;
   margin-top: auto;
-  padding: 11px 16px;
+  padding: 9px 14px;
   border-top: 1px solid var(--border);
   background: var(--surface);
 }

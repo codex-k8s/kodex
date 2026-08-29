@@ -87,6 +87,37 @@ const event: PresentedRunEvent = {
   },
 };
 
+const userEvent: PresentedRunEvent = {
+  ...event,
+  ref: "evt_user",
+  sequence: 2,
+  type: "TURN_PROGRESS",
+  summary: "Добавь сравнение с прошлым кварталом",
+  displaySummary: "Добавь сравнение с прошлым кварталом",
+  actor: { kind: "USER", ref: "usr_example", name: "Владелец" },
+  occurredAt: "2026-08-29T08:00:04Z",
+};
+
+const toolEvent: PresentedRunEvent = {
+  ...event,
+  ref: "evt_tool",
+  sequence: 3,
+  type: "TOOL_CALL_RECORDED",
+  summary: "Проверен источник",
+  displaySummary: "Проверен источник",
+  messageKind: "TOOL_CALL",
+  toolCall: {
+    ref: "tool_example",
+    tool: "project_files.search",
+    safeParameters: { query: "квартальный отчёт" },
+    state: "SUCCEEDED",
+    durationMs: 180,
+    safeResult: "Найдено 4 подтверждённых фрагмента",
+    auditRef: "audit_example",
+  },
+  occurredAt: "2026-08-29T08:00:05Z",
+};
+
 describe("RunSessionDetailsDialog", () => {
   it("показывает доступные launch данные и честные runtime/prompt states", async () => {
     const app = createSSRApp({
@@ -95,7 +126,7 @@ describe("RunSessionDetailsDialog", () => {
           run,
           node,
           nodes: [node],
-          events: [event],
+          events: [toolEvent, userEvent, event],
           artifacts: [],
         }),
     });
@@ -140,7 +171,10 @@ describe("RunSessionDetailsDialog", () => {
               source: { CONTROL_CENTER: "Control Center" },
               nodeTypes: { AGENT_EXECUTION: "ИИ-сотрудник" },
             },
-            states: { RUNNING: "Выполняется" },
+            states: {
+              RUNNING: "Выполняется",
+              SUCCEEDED: "Завершено",
+            },
           },
         },
       }),
@@ -159,6 +193,18 @@ describe("RunSessionDetailsDialog", () => {
     );
     expect(html).toContain("Пусто");
     expect(html).toContain("Собираю подтверждённые факты");
+    expect(html).toContain("session-details__workspace");
+    expect(html).toContain("session-details__event--agent");
+    expect(html).toContain("session-details__event--user");
+    expect(html).toContain("session-details__event--tool");
+    expect(html).toContain("project_files.search");
+    expect(html).toContain("Найдено 4 подтверждённых фрагмента");
+    expect(html.indexOf("Собираю подтверждённые факты")).toBeLessThan(
+      html.indexOf("Добавь сравнение с прошлым кварталом"),
+    );
+    expect(html.indexOf("Добавь сравнение с прошлым кварталом")).toBeLessThan(
+      html.indexOf("Проверен источник"),
+    );
     expect(html).not.toContain("ses_example");
   });
 });

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bot, CircleDot, Wrench } from "@lucide/vue";
+import { Bot, CircleDot, UserRound, Wrench } from "@lucide/vue";
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -33,7 +33,9 @@ const parentNode = computed(() =>
   props.nodes.find((candidate) => candidate.ref === props.node.parentNodeRef),
 );
 const nodeEvents = computed(() =>
-  props.events.filter((event) => event.nodeRef === props.node.ref),
+  props.events
+    .filter((event) => event.nodeRef === props.node.ref)
+    .sort((left, right) => left.sequence - right.sequence),
 );
 const nodeArtifacts = computed(() => {
   const refs = new Set(props.node.artifactRefs);
@@ -47,6 +49,20 @@ const sessionNode = computed(
 function formatDate(value?: string): string {
   return value ? new Date(value).toLocaleString(locale.value) : "";
 }
+
+function eventKind(
+  event: PresentedRunEvent,
+): "user" | "agent" | "tool" | "system" {
+  if (event.toolCall) return "tool";
+  if (event.actor?.kind === "USER") return "user";
+  if (
+    event.actor?.kind === "AGENT" ||
+    event.actor?.kind === "SYSTEM_ASSISTANT"
+  ) {
+    return "agent";
+  }
+  return "system";
+}
 </script>
 
 <template>
@@ -54,13 +70,18 @@ function formatDate(value?: string): string {
     <div class="session-details">
       <header class="session-details__summary">
         <span class="session-details__avatar">
-          <Bot :size="22" aria-hidden="true" />
+          <img
+            v-if="agent?.avatarUrl"
+            :src="agent.avatarUrl"
+            :alt="agent.name"
+          />
+          <Bot v-else :size="22" aria-hidden="true" />
         </span>
         <div>
+          <small>{{
+            $t(sessionNode ? "runs.sessionNode" : "runs.controlNode")
+          }}</small>
           <strong>{{ node.role || $t(`runs.nodeTypes.${node.type}`) }}</strong>
-          <small>
-            {{ $t(sessionNode ? "runs.sessionNode" : "runs.controlNode") }}
-          </small>
           <p>
             {{
               node.progressSummary ||
@@ -72,149 +93,189 @@ function formatDate(value?: string): string {
         <StatusBadge :state="node.state" />
       </header>
 
-      <div class="session-details__grid">
-        <section class="session-details__section">
-          <h3>{{ $t("agents.profile") }}</h3>
-          <dl>
-            <div>
-              <dt>{{ $t("common.status") }}</dt>
-              <dd><StatusBadge :state="node.state" /></dd>
-            </div>
-            <div>
-              <dt>{{ $t("runs.attempt", { attempt: node.attempt }) }}</dt>
-              <dd>{{ node.attempt }}</dd>
-            </div>
-            <div>
-              <dt>{{ $t("agents.role") }}</dt>
-              <dd>{{ node.role || $t(`runs.nodeTypes.${node.type}`) }}</dd>
-            </div>
-            <div v-if="parentNode">
-              <dt>{{ $t("common.source") }}</dt>
-              <dd>{{ parentNode.displayName }}</dd>
-            </div>
-            <div>
-              <dt>{{ $t("runs.startedAt") }}</dt>
-              <dd>{{ formatDate(node.startedAt || node.createdAt) }}</dd>
-            </div>
-            <div>
-              <dt>{{ $t("runs.finishedAt") }}</dt>
-              <dd>{{ formatDate(node.finishedAt) || $t("common.noData") }}</dd>
-            </div>
-          </dl>
-        </section>
+      <div class="session-details__workspace">
+        <aside class="session-details__sidebar">
+          <section class="session-details__section">
+            <h3>{{ $t("agents.profile") }}</h3>
+            <dl>
+              <div>
+                <dt>{{ $t("common.status") }}</dt>
+                <dd><StatusBadge :state="node.state" /></dd>
+              </div>
+              <div>
+                <dt>{{ $t("runs.attempt", { attempt: node.attempt }) }}</dt>
+                <dd>{{ node.attempt }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("agents.role") }}</dt>
+                <dd>{{ node.role || $t(`runs.nodeTypes.${node.type}`) }}</dd>
+              </div>
+              <div v-if="parentNode">
+                <dt>{{ $t("common.source") }}</dt>
+                <dd>{{ parentNode.displayName }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("runs.startedAt") }}</dt>
+                <dd>{{ formatDate(node.startedAt || node.createdAt) }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("runs.finishedAt") }}</dt>
+                <dd>
+                  {{ formatDate(node.finishedAt) || $t("common.noData") }}
+                </dd>
+              </div>
+            </dl>
+          </section>
 
-        <section class="session-details__section">
-          <h3>{{ $t("runs.launchSummary") }}</h3>
-          <dl>
-            <div>
-              <dt>{{ $t("common.source") }}</dt>
-              <dd>{{ $t(`runs.source.${run.source}`) }}</dd>
+          <section class="session-details__section">
+            <h3>{{ $t("runs.launchSummary") }}</h3>
+            <dl>
+              <div>
+                <dt>{{ $t("common.source") }}</dt>
+                <dd>{{ $t(`runs.source.${run.source}`) }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("runs.runContext") }}</dt>
+                <dd>{{ run.title }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("common.input") }}</dt>
+                <dd>
+                  <SafeMarkdown
+                    v-if="node.inputSummary"
+                    :content="node.inputSummary"
+                  />
+                  <template v-else>{{ $t("common.noData") }}</template>
+                </dd>
+              </div>
+              <div v-if="node.integrationNames?.length">
+                <dt>{{ $t("agents.integrations") }}</dt>
+                <dd>{{ node.integrationNames.join(", ") }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="session-details__section">
+            <h3>{{ $t("agents.runtime") }}</h3>
+            <dl v-if="agent">
+              <div>
+                <dt>{{ $t("agents.provider") }}</dt>
+                <dd>{{ agent.runtimeProvider || $t("common.unavailable") }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("agents.model") }}</dt>
+                <dd>{{ agent.runtimeModel || $t("common.unavailable") }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("agents.runtimeRevision") }}</dt>
+                <dd>{{ agent.runtimeRevision || $t("common.unavailable") }}</dd>
+              </div>
+            </dl>
+            <p v-else class="session-details__unavailable">
+              {{ $t("common.unavailable") }}
+            </p>
+          </section>
+
+          <section class="session-details__section">
+            <h3>{{ $t("agents.instructions") }}</h3>
+            <p class="session-details__unavailable">
+              {{ $t("runs.renderedPromptUnavailable") }}
+            </p>
+          </section>
+
+          <section class="session-details__section">
+            <h3>{{ $t("runs.artifacts") }}</h3>
+            <div v-if="nodeArtifacts.length" class="session-details__files">
+              <div v-for="artifact in nodeArtifacts" :key="artifact.ref">
+                <span>{{ artifact.fileName }}</span>
+                <small
+                  >{{ artifact.mediaType }} · v{{ artifact.revision }}</small
+                >
+                <StatusBadge :state="artifact.scanState" />
+              </div>
             </div>
+            <p v-else class="session-details__unavailable">
+              {{ $t("common.empty") }}
+            </p>
+          </section>
+        </aside>
+
+        <section class="session-details__activity">
+          <header class="session-details__activity-heading">
             <div>
-              <dt>{{ $t("runs.runContext") }}</dt>
-              <dd>{{ run.title }}</dd>
+              <h3>{{ $t("runs.nodeConversation") }}</h3>
+              <small>{{ node.displayName }} · {{ nodeEvents.length }}</small>
             </div>
-            <div>
-              <dt>{{ $t("common.input") }}</dt>
-              <dd>
-                <SafeMarkdown
-                  v-if="node.inputSummary"
-                  :content="node.inputSummary"
+            <StatusBadge :state="node.state" />
+          </header>
+          <ol v-if="nodeEvents.length">
+            <li
+              v-for="event in nodeEvents"
+              :key="event.ref"
+              :class="`session-details__event--${eventKind(event)}`"
+            >
+              <span class="session-details__event-icon" aria-hidden="true">
+                <Wrench v-if="event.toolCall" :size="16" />
+                <UserRound
+                  v-else-if="event.actor?.kind === 'USER'"
+                  :size="16"
                 />
-                <template v-else>{{ $t("common.noData") }}</template>
-              </dd>
-            </div>
-            <div v-if="node.integrationNames?.length">
-              <dt>{{ $t("agents.integrations") }}</dt>
-              <dd>{{ node.integrationNames.join(", ") }}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section class="session-details__section">
-          <h3>{{ $t("agents.runtime") }}</h3>
-          <dl v-if="agent">
-            <div>
-              <dt>{{ $t("agents.provider") }}</dt>
-              <dd>{{ agent.runtimeProvider || $t("common.unavailable") }}</dd>
-            </div>
-            <div>
-              <dt>{{ $t("agents.model") }}</dt>
-              <dd>{{ agent.runtimeModel || $t("common.unavailable") }}</dd>
-            </div>
-            <div>
-              <dt>{{ $t("agents.runtimeRevision") }}</dt>
-              <dd>{{ agent.runtimeRevision || $t("common.unavailable") }}</dd>
-            </div>
-          </dl>
+                <Bot
+                  v-else-if="
+                    event.actor?.kind === 'AGENT' ||
+                    event.actor?.kind === 'SYSTEM_ASSISTANT'
+                  "
+                  :size="16"
+                />
+                <CircleDot v-else :size="15" />
+              </span>
+              <article>
+                <header>
+                  <strong>{{ event.actor?.name || node.displayName }}</strong>
+                  <StatusBadge
+                    v-if="
+                      event.toolCall?.state || event.nodeState || event.runState
+                    "
+                    :state="
+                      event.toolCall?.state ||
+                      event.nodeState ||
+                      event.runState ||
+                      ''
+                    "
+                  />
+                  <time :datetime="event.occurredAt">
+                    #{{ event.sequence }} · {{ formatDate(event.occurredAt) }}
+                  </time>
+                </header>
+                <SafeMarkdown :content="event.displaySummary" />
+                <SafeMarkdown
+                  v-if="event.displayProgress"
+                  class="session-details__event-progress"
+                  :content="event.displayProgress"
+                />
+                <section v-if="event.toolCall" class="session-details__tool">
+                  <strong>{{ event.toolCall.tool }}</strong>
+                  <details
+                    v-if="Object.keys(event.toolCall.safeParameters).length"
+                  >
+                    <summary>{{ $t("runs.toolParameters") }}</summary>
+                    <SafeStructuredData
+                      :value="event.toolCall.safeParameters"
+                    />
+                  </details>
+                  <details v-if="event.toolCall.safeResult">
+                    <summary>{{ $t("runs.toolResult") }}</summary>
+                    <SafeMarkdown :content="event.toolCall.safeResult" />
+                  </details>
+                </section>
+              </article>
+            </li>
+          </ol>
           <p v-else class="session-details__unavailable">
-            {{ $t("common.unavailable") }}
-          </p>
-        </section>
-
-        <section class="session-details__section">
-          <h3>{{ $t("agents.instructions") }}</h3>
-          <p class="session-details__unavailable">
-            {{ $t("runs.renderedPromptUnavailable") }}
-          </p>
-        </section>
-
-        <section class="session-details__section">
-          <h3>{{ $t("runs.artifacts") }}</h3>
-          <div v-if="nodeArtifacts.length" class="session-details__files">
-            <div v-for="artifact in nodeArtifacts" :key="artifact.ref">
-              <span>{{ artifact.fileName }}</span>
-              <small>{{ artifact.mediaType }} · v{{ artifact.revision }}</small>
-              <StatusBadge :state="artifact.scanState" />
-            </div>
-          </div>
-          <p v-else class="session-details__unavailable">
-            {{ $t("common.empty") }}
+            {{ $t("runs.noNodeActivity") }}
           </p>
         </section>
       </div>
-
-      <section class="session-details__activity">
-        <h3>{{ $t("runs.nodeConversation") }}</h3>
-        <ol v-if="nodeEvents.length">
-          <li v-for="event in nodeEvents" :key="event.ref">
-            <span class="session-details__event-icon" aria-hidden="true">
-              <Wrench v-if="event.toolCall" :size="16" />
-              <Bot v-else-if="event.actor?.kind === 'AGENT'" :size="16" />
-              <CircleDot v-else :size="15" />
-            </span>
-            <article>
-              <header>
-                <strong>{{ event.actor?.name || node.displayName }}</strong>
-                <time :datetime="event.occurredAt">
-                  {{ formatDate(event.occurredAt) }}
-                </time>
-              </header>
-              <SafeMarkdown :content="event.displaySummary" />
-              <SafeMarkdown
-                v-if="event.displayProgress"
-                :content="event.displayProgress"
-              />
-              <details
-                v-if="
-                  event.toolCall &&
-                  Object.keys(event.toolCall.safeParameters).length
-                "
-              >
-                <summary>{{ $t("runs.toolParameters") }}</summary>
-                <SafeStructuredData :value="event.toolCall.safeParameters" />
-              </details>
-              <details v-if="event.toolCall?.safeResult">
-                <summary>{{ $t("runs.toolResult") }}</summary>
-                <SafeMarkdown :content="event.toolCall.safeResult" />
-              </details>
-            </article>
-          </li>
-        </ol>
-        <p v-else class="session-details__unavailable">
-          {{ $t("runs.noNodeActivity") }}
-        </p>
-      </section>
     </div>
   </ModalDialog>
 </template>
@@ -222,7 +283,7 @@ function formatDate(value?: string): string {
 <style scoped>
 .session-details {
   display: grid;
-  gap: 18px;
+  gap: 14px;
   min-width: 0;
 }
 .session-details__summary {
@@ -240,6 +301,11 @@ function formatDate(value?: string): string {
   color: var(--muted);
   font-size: 0.84rem;
 }
+.session-details__summary > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
 .session-details__summary small {
   color: var(--subtle);
   font-size: 0.74rem;
@@ -256,18 +322,42 @@ function formatDate(value?: string): string {
   width: 42px;
   height: 42px;
   border-radius: 8px;
+  overflow: hidden;
 }
-.session-details__grid {
+.session-details__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.session-details__workspace {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(280px, 0.34fr) minmax(0, 1fr);
+  min-height: min(680px, calc(100dvh - 210px));
+  max-height: min(760px, calc(100dvh - 170px));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.session-details__sidebar {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
 }
 .session-details__section,
 .session-details__activity {
   min-width: 0;
   padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+}
+.session-details__section {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.session-details__section:last-child {
+  border-bottom: 0;
 }
 .session-details h3 {
   margin: 0 0 10px;
@@ -337,17 +427,58 @@ function formatDate(value?: string): string {
 }
 .session-details__activity ol {
   display: grid;
-  gap: 10px;
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
+.session-details__activity {
+  min-height: 0;
+  padding: 0;
+  overflow: auto;
+  background: var(--surface);
+}
+.session-details__activity-heading {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  backdrop-filter: blur(8px);
+}
+.session-details__activity-heading h3 {
+  margin: 0;
+}
+.session-details__activity-heading small {
+  display: block;
+  margin-top: 2px;
+  color: var(--subtle);
+  font-size: 0.72rem;
+}
 .session-details__activity li {
+  position: relative;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  gap: 9px;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 14px;
+}
+.session-details__activity li:not(:last-child)::before {
+  position: absolute;
+  left: 29px;
+  top: 44px;
+  bottom: -12px;
+  width: 1px;
+  background: var(--border);
+  content: "";
 }
 .session-details__event-icon {
+  z-index: 1;
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -358,16 +489,35 @@ function formatDate(value?: string): string {
   border: 1px solid var(--border);
   border-radius: 8px;
 }
+.session-details__event--user article {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  background: var(--accent-soft);
+}
+.session-details__event--agent article {
+  border-left: 3px solid var(--success);
+}
+.session-details__event--tool article {
+  border-left: 3px solid var(--warning);
+  background: color-mix(in srgb, var(--warning-soft) 55%, var(--surface));
+}
 .session-details__activity header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 7px;
   margin-bottom: 6px;
 }
+.session-details__activity header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .session-details__activity time {
+  margin-left: auto;
   color: var(--subtle);
+  font-family: var(--font-mono);
   font-size: 0.72rem;
+  white-space: nowrap;
 }
 .session-details__activity :deep(p) {
   margin: 0 0 5px;
@@ -375,13 +525,46 @@ function formatDate(value?: string): string {
 .session-details__activity details {
   margin-top: 8px;
 }
+.session-details__event-progress {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--accent);
+  background: var(--panel);
+  color: var(--muted);
+}
+.session-details__tool {
+  display: grid;
+  gap: 6px;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
 @media (max-width: 760px) {
-  .session-details__grid {
+  .session-details__workspace {
     grid-template-columns: 1fr;
+    max-height: none;
+    overflow: visible;
+    border: 0;
+  }
+  .session-details__sidebar {
+    max-height: none;
+    overflow: visible;
+    border-right: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .session-details__activity {
+    min-height: 420px;
+    margin-top: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
   }
   .session-details dl > div {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+  .session-details__activity time {
+    display: none;
   }
 }
 </style>

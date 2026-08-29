@@ -133,8 +133,10 @@ describe("RunGraphCanvas", () => {
 
     expect(html).toContain("canvas-node--future");
     expect(html).toContain("canvas-node--active");
+    expect(html).toContain("canvas-node__activity");
     expect(html).toContain('data-node-future="true"');
     expect(html).toContain('data-node-surface="session"');
+    expect(html).toContain('aria-busy="true"');
     expect(html).toContain("Сессия");
     expect(html).toContain("В очереди");
   });
