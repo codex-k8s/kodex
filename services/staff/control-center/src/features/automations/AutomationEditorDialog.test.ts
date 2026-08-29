@@ -80,9 +80,8 @@ describe("AutomationEditorDialog", () => {
     const app = createSSRApp({
       render: () =>
         h(AutomationEditorDialog, {
-          agents: [agent],
+          projectRef: "project_sales",
           schedule,
-          workflows: [],
         }),
     });
     app.use(
@@ -98,7 +97,7 @@ describe("AutomationEditorDialog", () => {
     expect(html).toContain("Изменить автоматизацию");
     expect(html).toContain('value="Ежедневная сводка"');
     expect(html).toContain("Подготовить сводку</textarea>");
-    expect(html).toMatch(/<option value="AGENT"[^>]*selected>/);
+    expect(html).toContain('<select value="AGENT"');
     expect(html).toMatch(/<option value="WEEKLY"[^>]*selected>/);
     expect(html).toMatch(/<option value="FRIDAY"[^>]*selected>/);
     expect(html).toMatch(/<option value="CONTINUE_ONE"[^>]*selected>/);
@@ -106,6 +105,8 @@ describe("AutomationEditorDialog", () => {
       /<option value="CONTROL_CENTER_AND_OPTIONAL_CHANNELS"[^>]*selected>/,
     );
     expect(html).toContain("версии 7");
+    expect(html).toContain("Аналитик продаж");
+    expect(html).not.toContain("agent_sales");
     expect(html).toContain("Сохранить");
   });
 });

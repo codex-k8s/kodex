@@ -33,14 +33,24 @@ import {
 } from "@/features/new-run/model";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import {
+  createExecutionTargetPickerLoader,
+  isEligibleAgent,
+  isEligibleWorkflow,
+  selectedExecutionTargetOption,
+  type ExecutionTargetPickerOption,
+} from "@/shared/api/execution-target-picker";
 import type {
+  Agent,
   Artifact,
   Run,
+  Workflow,
   WorkflowInputField,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
 import type {
   AttachmentComposerHandle,
@@ -78,6 +88,7 @@ const attachmentState = ref<AttachmentComposerState>({
 });
 const filePickerOpen = ref(false);
 const sessionPickerOpen = ref(false);
+const selectedTargetValue = ref<Agent | Workflow>();
 const inputValues = reactive<Record<string, string | number>>({});
 const booleanInputValues = reactive<Record<string, boolean>>({});
 const form = reactive({
@@ -88,32 +99,16 @@ const form = reactive({
   sessionRef: "",
 });
 
-const agents = computed(() =>
-  Object.values(platform.agents).filter(
-    (agent) =>
-      agent.projectRef === projectRef.value &&
-      agent.enabled &&
-      !agent.system &&
-      agent.nextActions.includes("LAUNCH"),
-  ),
+const targetLoader = computed(() =>
+  createExecutionTargetPickerLoader(projectRef.value, form.targetType),
 );
-const workflows = computed(() =>
-  Object.values(platform.workflows).filter(
-    (workflow) =>
-      workflow.projectRef === projectRef.value &&
-      workflow.state === "PUBLISHED" &&
-      workflow.nextActions.includes("LAUNCH"),
-  ),
-);
-const targets = computed(() =>
-  form.targetType === "AGENT" ? agents.value : workflows.value,
-);
-const selectedTarget = computed(() =>
-  targets.value.find((target) => target.ref === form.targetRef),
+const selectedTarget = computed(() => selectedTargetValue.value);
+const selectedTargetOption = computed(() =>
+  selectedExecutionTargetOption(form.targetType, selectedTarget.value),
 );
 const selectedWorkflow = computed(() =>
   form.targetType === "WORKFLOW"
-    ? platform.workflows[form.targetRef]
+    ? (selectedTarget.value as Workflow | undefined)
     : undefined,
 );
 const selectedArtifactRefs = computed(() =>
@@ -132,7 +127,7 @@ const artifactCapability = "platform.artifact.manage";
 const targetSupportsFiles = computed(() => {
   if (!selectedTarget.value) return false;
   if (form.targetType === "AGENT") {
-    return platform.agents[form.targetRef]?.capabilities.some(
+    return (selectedTarget.value as Agent).capabilities.some(
       (capability) => capability.key === artifactCapability,
     );
   }
@@ -261,6 +256,7 @@ function resetTargetContext(): void {
 function resetProjectForm(): void {
   form.targetType = "WORKFLOW";
   form.targetRef = "";
+  selectedTargetValue.value = undefined;
   form.title = "";
   form.task = "";
   resetTargetContext();
@@ -269,10 +265,32 @@ function resetProjectForm(): void {
 function selectTargetType(targetType: NewRunTargetType): void {
   if (form.targetType === targetType) return;
   form.targetType = targetType;
-  form.targetRef =
-    targetType === "WORKFLOW"
-      ? (workflows.value[0]?.ref ?? "")
-      : (agents.value[0]?.ref ?? "");
+  form.targetRef = "";
+  selectedTargetValue.value = undefined;
+}
+
+async function hydrateWorkflowAgents(workflow: Workflow): Promise<void> {
+  const references = new Set<string>();
+  if (workflow.coordinatorAgentRef)
+    references.add(workflow.coordinatorAgentRef);
+  for (const step of workflow.steps) {
+    if (step.agentRef) references.add(step.agentRef);
+  }
+  for (const reference of references) {
+    if (!platform.agents[reference]) await platform.loadAgent(reference);
+  }
+}
+
+function selectTarget(option: ExecutionTargetPickerOption): void {
+  if (
+    option.targetType !== form.targetType ||
+    option.target.projectRef !== projectRef.value
+  )
+    return;
+  selectedTargetValue.value = option.target;
+  form.targetRef = option.ref;
+  if (option.targetType === "WORKFLOW")
+    void hydrateWorkflowAgents(option.target as Workflow);
 }
 
 function setSessionMode(mode: "NEW" | "CONTINUE"): void {
@@ -355,28 +373,36 @@ let loadGeneration = 0;
 async function load(): Promise<void> {
   const generation = ++loadGeneration;
   resetProjectForm();
-  await Promise.all([
-    platform.loadAgents(projectRef.value),
-    platform.loadWorkflows(projectRef.value),
-    platform.loadProject(projectRef.value),
-  ]);
+  await platform.loadProject(projectRef.value);
   if (generation !== loadGeneration) return;
 
   const requestedType = route.query.targetType;
   const requestedRef = route.query.targetRef;
   if (requestedType === "AGENT" || requestedType === "WORKFLOW") {
     form.targetType = requestedType;
-  } else if (workflows.value.length === 0 && agents.value.length > 0) {
-    form.targetType = "AGENT";
   }
-  if (
-    typeof requestedRef === "string" &&
-    targets.value.some((target) => target.ref === requestedRef)
-  ) {
-    form.targetRef = requestedRef;
-  } else {
-    form.targetRef = targets.value[0]?.ref ?? "";
+  if (typeof requestedRef === "string") {
+    if (form.targetType === "AGENT") {
+      await platform.loadAgent(requestedRef);
+      const agent = platform.agents[requestedRef];
+      if (agent?.projectRef === projectRef.value && isEligibleAgent(agent)) {
+        selectedTargetValue.value = agent;
+        form.targetRef = agent.ref;
+      }
+    } else {
+      await platform.loadWorkflow(requestedRef);
+      const workflow = platform.workflows[requestedRef];
+      if (
+        workflow?.projectRef === projectRef.value &&
+        isEligibleWorkflow(workflow)
+      ) {
+        await hydrateWorkflowAgents(workflow);
+        selectedTargetValue.value = workflow;
+        form.targetRef = workflow.ref;
+      }
+    }
   }
+  if (generation !== loadGeneration) return;
   resetTargetContext();
 }
 
@@ -406,16 +432,8 @@ watch(
 <template>
   <PageFrame :title="$t('runs.new')" :subtitle="$t('runs.newRun.subtitle')">
     <AsyncState
-      :loading="
-        platform.loading.project ||
-        platform.loading.agents ||
-        platform.loading.workflows
-      "
-      :problem="
-        platform.problems.project ??
-        platform.problems.agents ??
-        platform.problems.workflows
-      "
+      :loading="platform.loading.project"
+      :problem="platform.problems.project"
       @retry="load"
     >
       <form v-if="canLaunch" class="new-run-layout" @submit.prevent="submit">
@@ -477,20 +495,17 @@ watch(
             </header>
 
             <div class="form-grid">
-              <label class="field field--wide">
+              <div class="field field--wide">
                 <span>{{ $t("common.target") }}</span>
-                <select v-model="form.targetRef" required>
-                  <option value="" disabled>
-                    {{ $t("runs.chooseTarget") }}
-                  </option>
-                  <option
-                    v-for="target in targets"
-                    :key="target.ref"
-                    :value="target.ref"
-                  >
-                    {{ target.name }}
-                  </option>
-                </select>
+                <AsyncEntityPicker
+                  :key="`${projectRef}:${form.targetType}`"
+                  v-model="form.targetRef"
+                  :load-page="targetLoader"
+                  :selected="selectedTargetOption"
+                  :placeholder="$t('runs.chooseTarget')"
+                  :search-placeholder="$t('runs.chooseTarget')"
+                  @select="selectTarget"
+                />
                 <small v-if="selectedWorkflow">
                   {{
                     $t("common.version", { version: selectedWorkflow.version })
@@ -506,7 +521,7 @@ watch(
                 >
                   {{ selectedTarget.purpose }}
                 </small>
-              </label>
+              </div>
 
               <label class="field">
                 <span>

@@ -60,7 +60,11 @@ const props = defineProps<{
   disabled?: boolean;
   debounceMs?: number;
   selected?: S;
-  loadPage?: (query: string, cursor?: string) => Promise<AsyncEntityOptionPage>;
+  loadPage?: (
+    query: string,
+    cursor: string | undefined,
+    signal: AbortSignal,
+  ) => Promise<AsyncEntityOptionPage>;
   placeholder?: string;
   searchPlaceholder?: string;
 }>();
@@ -96,7 +100,11 @@ const loader: AsyncEntityLoader<PickerEntry> = async (request) => {
     };
   }
   if (!props.loadPage) throw new Error("Async entity loader is required");
-  const page = await props.loadPage(request.query.trim(), request.cursor);
+  const page = await props.loadPage(
+    request.query.trim(),
+    request.cursor,
+    request.signal,
+  );
   return {
     items: page.items.map((item) => ({
       id: item.ref,

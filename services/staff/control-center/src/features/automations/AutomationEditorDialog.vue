@@ -1,25 +1,29 @@
 <script setup lang="ts">
 import { CalendarClock, Save } from "@lucide/vue";
-import { computed, reactive, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { scheduleInput } from "@/features/automations/model";
+import {
+  createExecutionTargetPickerLoader,
+  targetRefAfterTypeChange,
+  type ExecutionTargetPickerOption,
+} from "@/shared/api/execution-target-picker";
 import type {
-  Agent,
   Schedule,
   ScheduleInput,
-  Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
 import type { AppProblem } from "@/shared/api/problem";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
 const props = defineProps<{
-  agents: readonly Agent[];
   busy?: boolean;
   problem?: AppProblem;
+  projectRef: string;
   schedule?: Schedule;
-  workflows: readonly Workflow[];
 }>();
 const emit = defineEmits<{
   close: [];
@@ -28,6 +32,7 @@ const emit = defineEmits<{
 const { locale } = useI18n();
 const initial = props.schedule ? scheduleInput(props.schedule) : undefined;
 const baseInput = { ...(initial?.input ?? {}) };
+const selectedTarget = ref<ExecutionTargetPickerOption>();
 const form = reactive({
   name: initial?.name ?? "",
   targetType: initial?.targetType ?? ("AGENT" as "AGENT" | "WORKFLOW"),
@@ -88,17 +93,58 @@ const timezoneOptions = Array.from(
     "America/Los_Angeles",
   ]),
 );
-const targets = computed(() =>
-  form.targetType === "AGENT" ? props.agents : props.workflows,
+const targetLoader = computed(() =>
+  createExecutionTargetPickerLoader(props.projectRef, form.targetType),
 );
-const selectedTargetExists = computed(() =>
-  targets.value.some((target) => target.ref === form.targetRef),
-);
+const selectedTargetOption = computed<
+  ExecutionTargetPickerOption | AsyncEntityOption | undefined
+>(() => {
+  if (selectedTarget.value?.ref === form.targetRef) return selectedTarget.value;
+  if (
+    props.schedule?.target.type === form.targetType &&
+    props.schedule.target.ref === form.targetRef
+  ) {
+    return {
+      ref: props.schedule.target.ref,
+      title: props.schedule.target.displayName,
+      meta: `v${String(props.schedule.target.version)}`,
+    };
+  }
+  return undefined;
+});
+
+function selectTarget(
+  option: ExecutionTargetPickerOption | AsyncEntityOption,
+): void {
+  if (!("target" in option) || !("targetType" in option)) return;
+  if (option.targetType !== form.targetType) return;
+  selectedTarget.value = option;
+  form.targetRef = option.ref;
+}
+
+function selectTargetType(nextType: "AGENT" | "WORKFLOW"): void {
+  const nextRef = targetRefAfterTypeChange(
+    form.targetType,
+    nextType,
+    form.targetRef,
+  );
+  form.targetType = nextType;
+  form.targetRef = nextRef;
+  if (!nextRef) selectedTarget.value = undefined;
+}
+
+function handleTargetTypeChange(event: Event): void {
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement)) return;
+  if (target.value === "AGENT" || target.value === "WORKFLOW")
+    selectTargetType(target.value);
+}
 
 watch(
-  () => form.targetType,
+  () => props.projectRef,
   () => {
-    if (!selectedTargetExists.value) form.targetRef = "";
+    form.targetRef = "";
+    selectedTarget.value = undefined;
   },
 );
 
@@ -148,32 +194,23 @@ function submit(): void {
         <div class="automation-editor__target-grid">
           <label class="field">
             <span>{{ custom.targetType }}</span>
-            <select v-model="form.targetType">
+            <select :value="form.targetType" @change="handleTargetTypeChange">
               <option value="AGENT">{{ custom.agent }}</option>
               <option value="WORKFLOW">{{ custom.workflow }}</option>
             </select>
           </label>
-          <label class="field">
+          <div class="field">
             <span>{{ $t("common.target") }}</span>
-            <select v-model="form.targetRef" required>
-              <option value="" disabled>
-                {{ $t("automations.chooseTarget") }}
-              </option>
-              <option
-                v-if="schedule && !selectedTargetExists"
-                :value="schedule.target.ref"
-              >
-                {{ schedule.target.displayName }}
-              </option>
-              <option
-                v-for="target in targets"
-                :key="target.ref"
-                :value="target.ref"
-              >
-                {{ target.name }}
-              </option>
-            </select>
-          </label>
+            <AsyncEntityPicker
+              :key="`${projectRef}:${form.targetType}`"
+              v-model="form.targetRef"
+              :load-page="targetLoader"
+              :selected="selectedTargetOption"
+              :placeholder="$t('automations.chooseTarget')"
+              :search-placeholder="$t('automations.chooseTarget')"
+              @select="selectTarget"
+            />
+          </div>
         </div>
       </section>
 

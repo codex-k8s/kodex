@@ -84,23 +84,6 @@ const editorSchedule = computed(() =>
 const archiveSchedule = computed(() =>
   schedules.value.find((schedule) => schedule.ref === archiveScheduleRef.value),
 );
-const agents = computed(() =>
-  Object.values(platform.agents)
-    .filter(
-      (agent) =>
-        agent.projectRef === props.projectRef && agent.enabled && !agent.system,
-    )
-    .sort((left, right) => left.name.localeCompare(right.name, locale.value)),
-);
-const workflows = computed(() =>
-  Object.values(platform.workflows)
-    .filter(
-      (workflow) =>
-        workflow.projectRef === props.projectRef &&
-        workflow.state === "PUBLISHED",
-    )
-    .sort((left, right) => left.name.localeCompare(right.name, locale.value)),
-);
 const custom = computed(() =>
   locale.value.startsWith("en")
     ? {
@@ -272,8 +255,6 @@ onMounted(
   () =>
     void Promise.all([
       platform.loadSchedules(props.projectRef),
-      platform.loadAgents(props.projectRef),
-      platform.loadWorkflows(props.projectRef),
       platform.loadProject(props.projectRef),
     ]),
 );
@@ -307,7 +288,6 @@ onMounted(
         v-if="canCreate"
         class="button button--primary"
         type="button"
-        :disabled="agents.length + workflows.length === 0"
         @click="openCreate"
       >
         <Plus :size="16" aria-hidden="true" />
@@ -579,11 +559,10 @@ onMounted(
 
     <AutomationEditorDialog
       v-if="editorOpen"
-      :agents="agents"
       :busy="editorBusy"
       :problem="editorProblem"
+      :project-ref="projectRef"
       :schedule="editorSchedule"
-      :workflows="workflows"
       @close="editorOpen = false"
       @submit="submitEditor"
     />
