@@ -12,6 +12,8 @@ import {
   type OverlayCloseReason,
 } from "@/shared/ui/overlay-panel";
 
+defineOptions({ inheritAttrs: false });
+
 export type OverlayPanelMode = "modal" | "drawer" | "sheet" | "responsive";
 
 const props = withDefaults(
@@ -125,6 +127,7 @@ onBeforeUnmount(() => {
     >
       <section
         ref="panel"
+        v-bind="$attrs"
         class="overlay-panel"
         :class="`overlay-panel--${mode}`"
         role="dialog"

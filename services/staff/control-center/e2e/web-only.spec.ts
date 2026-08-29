@@ -958,7 +958,9 @@ test.describe("web-only fresh installation", () => {
       .getByRole("button");
     await expect(chooseFiles).toBeEnabled();
     await chooseFiles.click();
-    const filePicker = page.locator(".new-run-file-picker__overlay");
+    const filePicker = page.getByRole("dialog", {
+      name: "Выберите входные файлы",
+    });
     await expect(filePicker).toBeVisible();
     const viewToggle = filePicker.locator(".view-mode-toggle");
     const listView = viewToggle.getByRole("button").nth(0);

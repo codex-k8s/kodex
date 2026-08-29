@@ -60,6 +60,7 @@ describe("OverlayPanel markup", () => {
           {
             ariaLabel: "Контекстная панель",
             closeLabel: "Закрыть",
+            class: "context-panel",
             mode: "responsive",
             open: true,
           },
@@ -77,6 +78,7 @@ describe("OverlayPanel markup", () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-label="Контекстная панель"');
     expect(html).toContain("overlay-panel--responsive");
+    expect(html).toContain("context-panel");
     expect(html).toContain("Содержимое");
   });
 });
