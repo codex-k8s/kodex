@@ -991,6 +991,8 @@ message AssistantPlanOperation {
     TYPE_ARCHIVE_AGENT = 10;
     // Архивировать универсальный Процесс по exact version.
     TYPE_ARCHIVE_WORKFLOW = 11;
+    // Изменить Проект по exact version с авторитетным before/after snapshot.
+    TYPE_UPDATE_PROJECT = 12;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;

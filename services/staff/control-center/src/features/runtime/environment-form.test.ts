@@ -35,6 +35,7 @@ describe("runtime environment form", () => {
       values: [
         { name: "DUPLICATE", value: "one" },
         { name: "DUPLICATE", value: "two" },
+        { name: "KODEX_INTERNAL", value: "forbidden" },
       ],
       secretDescriptors: [descriptor],
     });
@@ -44,6 +45,7 @@ describe("runtime environment form", () => {
         "runtime.errors.nameRequired",
         "runtime.errors.duplicateVariable",
         "runtime.errors.variableName",
+        "runtime.errors.reservedVariableName",
         "runtime.errors.secretDescriptorRequired",
         "runtime.errors.sha256",
       ]),

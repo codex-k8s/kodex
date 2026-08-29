@@ -497,7 +497,11 @@ onMounted(() => void load());
       :problem="platform.problems.agent"
       @retry="load"
     >
-      <div v-if="agent" class="agent-detail-page">
+      <div
+        v-if="agent"
+        class="agent-detail-page"
+        :data-agent-version="agent.version"
+      >
         <AgentApplyState
           :state="applyState"
           :scope="applyScope"

@@ -508,6 +508,7 @@ onBeforeUnmount(() => {
                 v-model="message"
                 rows="2"
                 maxlength="32768"
+                :aria-label="$t('assistant.message')"
                 :placeholder="$t('assistant.message')"
                 :disabled="store.busy || !live"
                 @keydown="handleComposerKeydown"

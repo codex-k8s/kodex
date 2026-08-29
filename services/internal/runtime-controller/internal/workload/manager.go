@@ -360,7 +360,7 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 	if err == nil && (existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest ||
 		existing.Annotations[warmCompatibilityAnnotation] != compatibilityDigest ||
 		existing.Annotations[controllerAnnotation] != manager.config.ControllerPodUID ||
-		warmPodTerminal(existing)) {
+		runtimePodTerminal(existing)) {
 		if deleteErr := manager.client.CoreV1().Pods(manager.config.Namespace).Delete(ctx, podName, metav1.DeleteOptions{GracePeriodSeconds: int64Pointer(0)}); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
 			return false, errors.New("replace stale warm runtime pod")
 		}
@@ -505,6 +505,9 @@ func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.
 	case corev1.PodFailed:
 		return "FAILED", nil
 	case corev1.PodRunning:
+		if !warmExecution && runtimePodTerminal(pod, "role-runtime", "provider-runtime") {
+			return "FAILED", nil
+		}
 		if podReady(pod) {
 			return "READY", nil
 		}
@@ -745,12 +748,17 @@ func podReady(pod *corev1.Pod) bool {
 	return false
 }
 
-func warmPodTerminal(pod *corev1.Pod) bool {
+func runtimePodTerminal(pod *corev1.Pod, requiredContainers ...string) bool {
 	if pod == nil || pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
 		return true
 	}
+	required := make(map[string]struct{}, len(requiredContainers))
+	for _, name := range requiredContainers {
+		required[name] = struct{}{}
+	}
 	for _, status := range pod.Status.ContainerStatuses {
-		if status.State.Terminated != nil {
+		_, requiredContainer := required[status.Name]
+		if status.State.Terminated != nil && (len(required) == 0 || requiredContainer) {
 			return true
 		}
 	}

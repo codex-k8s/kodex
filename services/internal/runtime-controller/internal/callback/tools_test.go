@@ -37,16 +37,18 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatalf("assistant plan must be bounded, got %#v", operations["maxItems"])
 	}
 	oneOf := operations["items"].(map[string]any)["oneOf"].([]map[string]any)
-	if len(oneOf) != 11 {
+	if len(oneOf) != 12 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 	byType := make(map[string]map[string]any, len(oneOf))
 	operationByType := make(map[string]map[string]any, len(oneOf))
+	schemaByType := make(map[string]map[string]any, len(oneOf))
 	for _, operation := range oneOf {
 		properties := operation["properties"].(map[string]any)
 		operationType := properties["type"].(map[string]any)["const"].(string)
 		byType[operationType] = properties["parameters"].(map[string]any)
 		operationByType[operationType] = properties
+		schemaByType[operationType] = operation
 	}
 	createProject := operationByType["CREATE_PROJECT"]
 	createBefore := createProject["before"].(map[string]any)
@@ -54,6 +56,14 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	if createBefore["additionalProperties"] != false || createAfter["additionalProperties"] != false ||
 		!reflect.DeepEqual(createAfter["required"], byType["CREATE_PROJECT"]["required"]) {
 		t.Fatalf("create operation schema is not canonical: before=%#v after=%#v parameters=%#v", createBefore, createAfter, byType["CREATE_PROJECT"])
+	}
+	createRequired := schemaByType["CREATE_PROJECT"]["required"].([]string)
+	if !reflect.DeepEqual(createRequired, []string{"type", "title", "summary", "parameters"}) {
+		t.Fatalf("create operation must leave server-owned envelope optional: %#v", createRequired)
+	}
+	updateProject := operationByType["UPDATE_PROJECT"]
+	if updateProject == nil || !reflect.DeepEqual(schemaByType["UPDATE_PROJECT"]["required"].([]string), []string{"type", "title", "summary", "parameters"}) {
+		t.Fatalf("project update must leave authority fields to the server: %#v", updateProject)
 	}
 	workflowProperties := byType["CREATE_WORKFLOW"]["properties"].(map[string]any)
 	if workflowProperties["projectRef"].(map[string]any)["enum"].([]string)[0] != input.ProjectRef ||

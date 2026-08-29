@@ -5,6 +5,30 @@ import type {
 
 const variableName = /^[A-Z_][A-Z0-9_]{0,126}$/;
 const sha256 = /^[a-f0-9]{64}$/;
+const reservedVariablePrefixes = [
+  "KODEX_",
+  "CODEX_",
+  "OPENAI_",
+  "OTEL_",
+  "AWS_",
+  "AZURE_",
+  "GOOGLE_",
+  "KUBERNETES_",
+];
+const reservedVariableNames = new Set([
+  "HOME",
+  "PATH",
+  "PWD",
+  "SHELL",
+  "USER",
+  "LOGNAME",
+  "TMPDIR",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "NO_PROXY",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+]);
 
 export interface EnvironmentFormProblem {
   field: string;
@@ -23,6 +47,11 @@ export function validateEnvironmentInput(
       problems.push({
         field: `values.${String(index)}.name`,
         message: "runtime.errors.variableName",
+      });
+    else if (isReservedVariableName(item.name))
+      problems.push({
+        field: `values.${String(index)}.name`,
+        message: "runtime.errors.reservedVariableName",
       });
     if (names.has(item.name))
       problems.push({
@@ -49,6 +78,11 @@ function validateSecret(
       field: `secretDescriptors.${String(index)}.name`,
       message: "runtime.errors.variableName",
     });
+  else if (isReservedVariableName(item.name))
+    problems.push({
+      field: `secretDescriptors.${String(index)}.name`,
+      message: "runtime.errors.reservedVariableName",
+    });
   if (names.has(item.name))
     problems.push({
       field: `secretDescriptors.${String(index)}.name`,
@@ -71,6 +105,13 @@ function validateSecret(
       field: `secretDescriptors.${String(index)}.contentSha256`,
       message: "runtime.errors.sha256",
     });
+}
+
+function isReservedVariableName(name: string): boolean {
+  return (
+    reservedVariableNames.has(name) ||
+    reservedVariablePrefixes.some((prefix) => name.startsWith(prefix))
+  );
 }
 
 export function emptySecretDescriptor(): RuntimeSecretDescriptor {

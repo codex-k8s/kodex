@@ -362,6 +362,8 @@ const ru = {
     errors: {
       nameRequired: "Укажите название окружения.",
       variableName: "Имя переменной должно соответствовать формату VAR_NAME.",
+      reservedVariableName:
+        "Это имя зарезервировано платформой или средой выполнения.",
       duplicateVariable: "Имена переменных в окружении не должны повторяться.",
       secretDescriptorRequired:
         "Заполните все обязательные поля Secret descriptor.",
@@ -1809,6 +1811,8 @@ const en = {
     errors: {
       nameRequired: "Enter an environment name.",
       variableName: "Variable names must use the VAR_NAME format.",
+      reservedVariableName:
+        "This name is reserved by the platform or runtime environment.",
       duplicateVariable: "Variable names must be unique within an environment.",
       secretDescriptorRequired:
         "Complete all required Secret descriptor fields.",

@@ -64,11 +64,15 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 			repository.cleanupPreparedObjects(ctx, []objectstorage.Receipt{objectReceipt}, false)
 		}
 	}()
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID,
+		mutation.Operation, mutation.IdempotencyKey); err != nil {
+		return entity.Artifact{}, errs.ErrUnavailable
+	}
 	var storedDigest string
 	var stored []byte
 	err = tx.QueryRow(ctx, queryArtifactsUploadartifactSelectIdempotencyReceiptsOrganizationIdActorIdOperation, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey).Scan(&storedDigest, &stored)
@@ -93,6 +97,11 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	if err := requireProjectPermission(ctx, tx, scope, projectID, "MANAGE_ARTIFACTS"); err != nil {
 		return entity.Artifact{}, err
 	}
+	fileName := safeFileName(input.FileName)
+	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, projectID,
+		"artifact.upload.filename", fileName); err != nil {
+		return entity.Artifact{}, errs.ErrUnavailable
+	}
 	var runID any
 	var rootRunID, runRef, sessionRef string
 	if input.RunRef != "" {
@@ -106,7 +115,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	}
 	receiptRef, _ := newRef("obj")
 	var item entity.Artifact
-	err = tx.QueryRow(ctx, queryArtifactsUploadartifactInsertArtifactsRefProjectIdFileName, ref, scope.organizationID, projectID, runID, safeFileName(input.FileName), input.MediaType, input.SizeBytes, input.Digest, input.ScanState, receiptRef, input.PreviewState, scope.actorID).Scan(&item.Ref, &item.FileName, &item.MediaType, &item.SizeBytes, &item.Digest, &item.ScanState, &item.PreviewState, &item.Revision, &item.Version, &item.CreatedAt)
+	err = tx.QueryRow(ctx, queryArtifactsUploadartifactInsertArtifactsRefProjectIdFileName, ref, scope.organizationID, projectID, runID, fileName, input.MediaType, input.SizeBytes, input.Digest, input.ScanState, receiptRef, input.PreviewState, scope.actorID).Scan(&item.Ref, &item.FileName, &item.MediaType, &item.SizeBytes, &item.Digest, &item.ScanState, &item.PreviewState, &item.Revision, &item.Version, &item.CreatedAt)
 	if err != nil {
 		return entity.Artifact{}, mapWriteError(err)
 	}

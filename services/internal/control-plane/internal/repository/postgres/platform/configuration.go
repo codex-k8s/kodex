@@ -640,7 +640,7 @@ func (repository *Repository) resolveAssistantContext(ctx context.Context, tx pg
 	case "":
 		context.AllowedOperations = []string{"CREATE_PROJECT", "CREATE_INTEGRATION_CONNECTION"}
 	case "PROJECT":
-		context.AllowedOperations = []string{"CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "LAUNCH_RUN"}
+		context.AllowedOperations = []string{"UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "LAUNCH_RUN"}
 	case "AGENT":
 		context.AllowedOperations = []string{"CHANGE_CAPABILITY", "LAUNCH_RUN", "ARCHIVE_AGENT"}
 	case "WORKFLOW":

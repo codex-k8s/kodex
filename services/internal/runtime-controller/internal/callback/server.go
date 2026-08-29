@@ -531,14 +531,29 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 			return nil, errors.New("assistant plan operation is invalid")
 		}
 		kind, _ := operation["type"].(string)
+		serverHydrated := assistantServerHydratedOperation(kind)
 		action, _ := operation["action"].(string)
 		title, _ := operation["title"].(string)
 		operationSummary, _ := operation["summary"].(string)
 		parameters, _ := operation["parameters"].(map[string]any)
 		before, beforeOK := operation["before"].(map[string]any)
 		after, afterOK := operation["after"].(map[string]any)
+		if serverHydrated {
+			if !beforeOK {
+				before, beforeOK = map[string]any{}, true
+			}
+			if !afterOK {
+				after, afterOK = parameters, true
+			}
+		}
 		target, targetOK := operation["target"].(map[string]any)
 		selected, selectedOK := operation["selected"].(bool)
+		if serverHydrated {
+			action = assistantServerAction(kind)
+			target = assistantServerTarget(kind, parameters)
+			targetOK = target != nil
+			selected, selectedOK = true, true
+		}
 		typeValue, exists := controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+kind]
 		actionValue, actionExists := controlplanev1.AssistantPlanOperation_Action_value["ACTION_"+action]
 		if !exists || typeValue == 0 || !actionExists || actionValue == 0 || strings.TrimSpace(title) == "" || len(title) > 200 ||
@@ -585,6 +600,40 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 	}
 	return map[string]any{"ok": true, "plan_ref": response.GetPlan().GetRef(), "plan_version": response.GetPlan().GetVersion(), "plan_revision": response.GetPlan().GetRevision(),
 		"conversation_ref": response.GetConversation().GetRef()}, nil
+}
+
+func assistantServerHydratedOperation(kind string) bool {
+	switch kind {
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "UPDATE_PROJECT":
+		return true
+	default:
+		return false
+	}
+}
+
+func assistantServerAction(kind string) string {
+	if kind == "UPDATE_PROJECT" {
+		return "UPDATE"
+	}
+	return "CREATE"
+}
+
+func assistantServerTarget(kind string, parameters map[string]any) map[string]any {
+	if parameters == nil {
+		return nil
+	}
+	targetKind := strings.TrimPrefix(kind, "CREATE_")
+	if kind == "UPDATE_PROJECT" {
+		targetKind = "PROJECT"
+	}
+	name, _ := parameters["name"].(string)
+	if strings.TrimSpace(name) == "" {
+		name, _ = parameters["projectRef"].(string)
+	}
+	if targetKind == "" || strings.TrimSpace(name) == "" {
+		return nil
+	}
+	return map[string]any{"kind": targetKind, "name": strings.TrimSpace(name)}
 }
 
 func exactJSONInt64(value any) (int64, bool) {

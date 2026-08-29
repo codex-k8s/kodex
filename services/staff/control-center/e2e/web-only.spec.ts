@@ -57,6 +57,7 @@ const initialRefs = loadDiscoveryRefs(environment.resourcePrefix);
 let projectRef = initialRefs.projectRef ?? "";
 let coordinatorRef = initialRefs.coordinatorRef ?? "";
 let analystRef = initialRefs.analystRef ?? "";
+let automationRef = initialRefs.automationRef ?? "";
 let writerRef = initialRefs.writerRef ?? "";
 let workflowRef = initialRefs.workflowRef ?? "";
 let firstRunRef = initialRefs.firstRunRef ?? "";
@@ -66,6 +67,7 @@ let publishedInstructionRef = initialRefs.publishedInstructionRef ?? "";
 let runtimeEnvironmentRef = initialRefs.runtimeEnvironmentRef ?? "";
 let scheduledRunRef = initialRefs.scheduledRunRef ?? "";
 let workflowRunRef = initialRefs.workflowRunRef ?? "";
+let uploadedArtifactRef = initialRefs.uploadedArtifactRef ?? "";
 
 async function openKodex(page: Page, newConversation = false): Promise<void> {
   await page.getByRole("button", { name: "Открыть Kodex" }).click();
@@ -126,9 +128,7 @@ test.describe("web-only fresh installation", () => {
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Начать с помощником" }).click();
-    await expect(
-      page.getByRole("dialog", { name: "Kodex" }),
-    ).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
 
     if (discoveryMode && projectRef) {
       await gotoWithRetry(page, `/projects/${projectRef}`);
@@ -331,6 +331,7 @@ test.describe("web-only fresh installation", () => {
       `/projects/${projectRef}/agents/${coordinatorRef}`,
     );
     await waitForAgentVersionReadback(page, coordinatorRef);
+    await page.getByRole("tab", { name: "Инструкции" }).click();
     const instructionsPanel = page.locator("article.panel").filter({
       has: page.getByRole("heading", { name: "Инструкции", exact: true }),
     });
@@ -500,9 +501,7 @@ test.describe("web-only fresh installation", () => {
 
     await gotoWithRetry(page, "/");
     await openKodex(page);
-    await expect(
-      page.getByRole("dialog", { name: "Kodex" }),
-    ).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Удалить|Архивировать|Отключить/ }),
     ).toHaveCount(0);
@@ -576,7 +575,7 @@ test.describe("web-only fresh installation", () => {
         .getByLabel("Описание")
         .fill("Несекретное окружение для проверки следующей RuntimeRevision.");
       await page.getByRole("button", { name: "Добавить переменную" }).click();
-      await page.getByLabel("Имя переменной").fill("KODEX_E2E_MODE");
+      await page.getByLabel("Имя переменной").fill("E2E_MODE");
       await page.getByLabel("Несекретное значение").fill("redesign");
       const creation = page.waitForResponse(
         (response) =>
@@ -589,9 +588,7 @@ test.describe("web-only fresh installation", () => {
       await expect(page).toHaveURL(/\/environments\/[^/]+$/);
       runtimeEnvironmentRef = routeRef(page, "environments");
       persistRefs();
-      await expect(page.locator("#main-content")).toContainText(
-        "KODEX_E2E_MODE",
-      );
+      await expect(page.locator("#main-content")).toContainText("E2E_MODE");
     }
 
     await gotoWithRetry(
@@ -878,6 +875,14 @@ test.describe("web-only fresh installation", () => {
     }
     await expect(binding).toBeChecked();
 
+    uploadedArtifactRef = await resolveArtifactRef(
+      page,
+      projectRef,
+      uploadedFileName,
+    );
+    expect(uploadedArtifactRef).not.toBe("");
+    persistRefs();
+
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "Скачать", exact: true }).click();
     const download = await downloadPromise;
@@ -895,12 +900,15 @@ test.describe("web-only fresh installation", () => {
       "coordinatorRef",
       "firstRunRef",
       "continuationRunRef",
+      "uploadedArtifactRef",
     );
     await gotoWithRetry(page, `/projects/${projectRef}`);
     await expectPageHeading(page, projectName);
     const workboard = page.locator(".project-workboard");
     await expect(workboard).toBeVisible();
-    await expect(workboard).toContainText("Требует внимания");
+    await expect(
+      page.getByRole("heading", { name: "Требует внимания" }),
+    ).toBeVisible();
     await expect(workboard).toContainText("Выполняется сейчас");
     await expect(workboard).toContainText("Недавние результаты");
     await expect(workboard).toContainText("Ресурсы Проекта");
@@ -1008,7 +1016,7 @@ test.describe("web-only fresh installation", () => {
   test("привязанный knowledge-файл доступен ИИ-сотруднику", async ({
     page,
   }) => {
-    requireRefs("projectRef", "coordinatorRef");
+    requireRefs("projectRef", "coordinatorRef", "uploadedArtifactRef");
     await gotoWithRetry(
       page,
       `/projects/${projectRef}/agents/${coordinatorRef}`,
@@ -1047,7 +1055,7 @@ test.describe("web-only fresh installation", () => {
         .click();
       const dialog = page.getByRole("dialog", { name: "Новая автоматизация" });
       await dialog.getByLabel("Название").fill(automationName);
-      await dialog.getByLabel("Что запустить").selectOption("AGENT");
+      await dialog.getByLabel("Тип цели").selectOption("AGENT");
       await dialog.getByLabel("Цель").selectOption({ label: coordinatorName });
       const triggerAt = new Date(Date.now() + 75_000);
       const saratovHour = (triggerAt.getUTCHours() + 4) % 24;
@@ -1067,6 +1075,9 @@ test.describe("web-only fresh installation", () => {
       });
     }
     await expect(row).toHaveCount(1);
+    automationRef = await resolveScheduleRef(page, projectRef, automationName);
+    expect(automationRef).not.toBe("");
+    persistRefs();
     await row.click();
     const details = page.locator(".automation-details");
     await expect(details).toContainText(automationName);
@@ -1606,7 +1617,7 @@ test.describe("web-only fresh installation", () => {
     await expect(page.getByText("Попытка 2", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Открыть предыдущую попытку" }),
-    ).toHaveAttribute("href", `/runs/${cancelledRef}`);
+    ).toHaveAttribute("href", `/projects/${projectRef}/runs/${cancelledRef}`);
     await expect
       .poll(
         () =>
@@ -1909,7 +1920,7 @@ test.describe("web-only fresh installation", () => {
     browser,
     page,
   }) => {
-    requireRefs("projectRef");
+    requireRefs("projectRef", "automationRef", "uploadedArtifactRef");
     await gotoWithRetry(page, "/administration");
     await expectPageHeading(page, "Администрирование");
     await expect(page.locator("#main-content")).toContainText("Core-платформа");
@@ -2008,7 +2019,10 @@ test.describe("web-only fresh installation", () => {
     const currentUserMenu = currentUserMenuButton.locator("..");
     await expect(currentUserMenuButton).toBeVisible();
     await currentUserMenuButton.click();
-    await expect(currentUserMenuButton).toHaveAttribute("aria-expanded", "true");
+    await expect(currentUserMenuButton).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
     const logoutButton = currentUserMenu.getByRole("button", {
       name: "Выйти",
       exact: true,
@@ -2035,6 +2049,7 @@ function currentRefs(): DiscoveryRefs {
     projectRef,
     coordinatorRef,
     analystRef,
+    automationRef,
     writerRef,
     workflowRef,
     firstRunRef,
@@ -2044,6 +2059,7 @@ function currentRefs(): DiscoveryRefs {
     runtimeEnvironmentRef,
     scheduledRunRef,
     workflowRunRef,
+    uploadedArtifactRef,
   };
 }
 
@@ -2053,6 +2069,7 @@ function requireRefs(...required: ReadonlyArray<keyof DiscoveryRefs>): void {
   projectRef = persisted.projectRef ?? projectRef;
   coordinatorRef = persisted.coordinatorRef ?? coordinatorRef;
   analystRef = persisted.analystRef ?? analystRef;
+  automationRef = persisted.automationRef ?? automationRef;
   writerRef = persisted.writerRef ?? writerRef;
   workflowRef = persisted.workflowRef ?? workflowRef;
   firstRunRef = persisted.firstRunRef ?? firstRunRef;
@@ -2064,11 +2081,52 @@ function requireRefs(...required: ReadonlyArray<keyof DiscoveryRefs>): void {
     persisted.runtimeEnvironmentRef ?? runtimeEnvironmentRef;
   scheduledRunRef = persisted.scheduledRunRef ?? scheduledRunRef;
   workflowRunRef = persisted.workflowRunRef ?? workflowRunRef;
+  uploadedArtifactRef = persisted.uploadedArtifactRef ?? uploadedArtifactRef;
   const refs = currentRefs();
   const missing = required.filter((key) => !refs[key]);
   test.skip(
     missing.length > 0,
     `BLOCKED: отсутствуют prerequisite refs: ${missing.join(", ")}`,
+  );
+}
+
+async function resolveArtifactRef(
+  page: Page,
+  expectedProjectRef: string,
+  expectedFileName: string,
+): Promise<string> {
+  return page.evaluate(
+    async ({ projectRef: currentProjectRef, fileName }) => {
+      const response = await fetch(
+        `/api/v1/projects/${encodeURIComponent(currentProjectRef)}/artifacts?pageSize=100&query=${encodeURIComponent(fileName)}`,
+      );
+      if (!response.ok) throw new Error("artifact readback failed");
+      const body = (await response.json()) as {
+        items?: Array<{ ref: string; fileName: string }>;
+      };
+      return body.items?.find((item) => item.fileName === fileName)?.ref ?? "";
+    },
+    { projectRef: expectedProjectRef, fileName: expectedFileName },
+  );
+}
+
+async function resolveScheduleRef(
+  page: Page,
+  expectedProjectRef: string,
+  expectedName: string,
+): Promise<string> {
+  return page.evaluate(
+    async ({ projectRef: currentProjectRef, name }) => {
+      const response = await fetch(
+        `/api/v1/projects/${encodeURIComponent(currentProjectRef)}/schedules?pageSize=100`,
+      );
+      if (!response.ok) throw new Error("schedule readback failed");
+      const body = (await response.json()) as {
+        items?: Array<{ ref: string; name: string }>;
+      };
+      return body.items?.find((item) => item.name === name)?.ref ?? "";
+    },
+    { projectRef: expectedProjectRef, name: expectedName },
   );
 }
 
@@ -2260,13 +2318,9 @@ async function waitForAgentVersionReadback(
     .poll(
       async () => {
         const visibleVersion = Number.parseInt(
-          (
-            await page
-              .locator("article.panel")
-              .filter({ hasText: "Профиль сотрудника" })
-              .getByText(/Версия \d+/)
-              .textContent()
-          )?.match(/\d+/)?.[0] ?? "0",
+          (await page
+            .locator(".agent-detail-page")
+            .getAttribute("data-agent-version")) ?? "0",
         );
         const authoritativeVersion = await page.evaluate(async (ref) => {
           try {

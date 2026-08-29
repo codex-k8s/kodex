@@ -388,6 +388,74 @@ func TestTurnPodStateUsesColdPodForSystemAssistantFallback(t *testing.T) {
 	}
 }
 
+func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		statuses   []corev1.ContainerStatus
+		conditions []corev1.PodCondition
+		want       string
+	}{
+		{
+			name: "role terminated while provider is running",
+			statuses: []corev1.ContainerStatus{
+				{Name: "role-runtime", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 0}}},
+				{Name: "provider-runtime", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+			},
+			want: "FAILED",
+		},
+		{
+			name: "provider terminated while role is running",
+			statuses: []corev1.ContainerStatus{
+				{Name: "role-runtime", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+				{Name: "provider-runtime", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}}},
+			},
+			want: "FAILED",
+		},
+		{
+			name: "both running but pod is not ready",
+			statuses: []corev1.ContainerStatus{
+				{Name: "role-runtime", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+				{Name: "provider-runtime", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+			},
+			want: "STARTING",
+		},
+		{
+			name: "both running and pod is ready",
+			statuses: []corev1.ContainerStatus{
+				{Name: "role-runtime", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+				{Name: "provider-runtime", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+			},
+			conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}},
+			want:       "READY",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			client := fake.NewSimpleClientset()
+			manager := newTestManager(t, client)
+			input, binding, err := manager.BuildTurnInput(testExecution(false))
+			if err != nil {
+				t.Fatalf("BuildTurnInput() error = %v", err)
+			}
+			pod := manager.runtimePod(input, binding, ticketName(input.LeaseRef), turnPodName(input.LeaseRef), "turn")
+			pod.Status = corev1.PodStatus{Phase: corev1.PodRunning, ContainerStatuses: test.statuses, Conditions: test.conditions}
+			if _, err := client.CoreV1().Pods("kodex-system").Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
+				t.Fatalf("Create(cold runtime Pod) error = %v", err)
+			}
+			state, err := manager.TurnPodState(context.Background(), input, false)
+			if err != nil {
+				t.Fatalf("TurnPodState() error = %v", err)
+			}
+			if state != test.want {
+				t.Fatalf("TurnPodState() = %q, want %q", state, test.want)
+			}
+		})
+	}
+}
+
 func TestWarmCompatibilityIgnoresTurnIdentityButRejectsRuntimeDrift(t *testing.T) {
 	t.Parallel()
 	manager := newTestManager(t, fake.NewSimpleClientset())
@@ -479,7 +547,7 @@ func TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get(recreated warm Pod) error = %v", err)
 	}
-	if warmPodTerminal(pod) {
+	if runtimePodTerminal(pod) {
 		t.Fatalf("running warm Pod with a terminated runtime was not recreated: %#v", pod.Status.ContainerStatuses)
 	}
 }

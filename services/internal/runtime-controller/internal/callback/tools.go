@@ -103,6 +103,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_PROJECT", objectSchema([]string{"name", "purpose", "language"}, map[string]any{
 			"name": stringSchema(1, 160), "purpose": stringSchema(1, 2000), "language": enumSchema("ru", "en"),
 		})),
+		assistantOperationSchema("UPDATE_PROJECT", projectUpdateInputSchema(projectRef)),
 		assistantOperationSchema("CREATE_AGENT", objectSchema([]string{"projectRef", "name", "purpose", "roleDescription", "instructions"}, map[string]any{
 			"projectRef": projectRef, "roleDefinitionRef": opaqueRefSchema(), "name": stringSchema(1, 160),
 			"purpose": stringSchema(1, 2000), "roleDescription": stringSchema(1, 2000), "avatarUrl": stringSchema(0, 500),
@@ -142,6 +143,21 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	return filtered
 }
 
+func projectUpdateInputSchema(projectRef map[string]any) map[string]any {
+	schema := objectSchema([]string{"projectRef"}, map[string]any{
+		"projectRef": projectRef,
+		"name":       stringSchema(1, 160),
+		"purpose":    stringSchema(1, 2000),
+		"language":   enumSchema("ru", "en"),
+	})
+	schema["anyOf"] = []map[string]any{
+		{"required": []string{"name"}},
+		{"required": []string{"purpose"}},
+		{"required": []string{"language"}},
+	}
+	return schema
+}
+
 func integrationGrantInputSchema() map[string]any {
 	schema := objectSchema([]string{"connectionRef", "capabilityKey", "enabled"}, map[string]any{
 		"connectionRef": opaqueRefSchema(), "capabilityKey": capabilityKeySchema(), "agentRef": opaqueRefSchema(), "workflowRef": opaqueRefSchema(),
@@ -157,7 +173,7 @@ func integrationGrantInputSchema() map[string]any {
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
 	action := "CREATE"
 	requiresVersion := false
-	if kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
+	if kind == "UPDATE_PROJECT" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
 		action, requiresVersion = "UPDATE", true
 	} else if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
 		action, requiresVersion = "ARCHIVE", true
@@ -166,9 +182,14 @@ func assistantOperationSchema(kind string, parameters map[string]any) map[string
 		requiresVersion = kind == "TEST_INTEGRATION_CONNECTION"
 	}
 	targetRequired := []string{"kind", "name"}
-	required := []string{"type", "action", "title", "summary", "target", "parameters", "before", "after", "selected"}
+	targetProperties := map[string]any{
+		"kind": stringSchema(1, 80), "name": stringSchema(1, 300),
+	}
+	required := []string{"type", "action", "title", "summary", "target", "parameters", "selected"}
 	if requiresVersion {
 		targetRequired = append(targetRequired, "ref", "version")
+		targetProperties["ref"] = opaqueRefSchema()
+		targetProperties["version"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991}
 		required = append(required, "expectedVersion")
 	}
 	before := map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true}
@@ -177,14 +198,20 @@ func assistantOperationSchema(kind string, parameters map[string]any) map[string
 		before = objectSchema(nil, map[string]any{})
 		after = parameters
 	}
+	serverHydrated := action == "CREATE" || kind == "UPDATE_PROJECT"
+	if !serverHydrated {
+		required = append(required, "before", "after")
+	}
+	if serverHydrated {
+		required = []string{"type", "title", "summary", "parameters"}
+	}
 	properties := map[string]any{
 		"type": map[string]any{"const": kind}, "action": map[string]any{"const": action}, "title": stringSchema(1, 200),
-		"summary": stringSchema(1, 500), "target": objectSchema(targetRequired, map[string]any{
-			"kind": stringSchema(1, 80), "ref": opaqueRefSchema(), "name": stringSchema(1, 300),
-			"version": map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991},
-		}),
+		"summary": stringSchema(1, 500), "target": objectSchema(targetRequired, targetProperties),
 		"parameters": parameters, "before": before, "after": after, "selected": map[string]any{"const": true},
-		"expectedVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+	}
+	if requiresVersion {
+		properties["expectedVersion"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991}
 	}
 	return objectSchema(required, properties)
 }

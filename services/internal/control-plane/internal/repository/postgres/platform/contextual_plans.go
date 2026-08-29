@@ -200,6 +200,8 @@ func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx
 	}
 	var kind, ref string
 	switch operation.Type {
+	case "UPDATE_PROJECT":
+		kind, ref = "PROJECT", assistantString(operation.Input, "projectRef")
 	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		kind, ref = "AGENT", assistantString(operation.Input, "agentRef")
 		if operation.Type == "ARCHIVE_AGENT" {

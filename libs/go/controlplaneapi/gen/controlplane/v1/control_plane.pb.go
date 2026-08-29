@@ -2018,6 +2018,8 @@ const (
 	AssistantPlanOperation_TYPE_ARCHIVE_AGENT AssistantPlanOperation_Type = 10
 	// Архивировать универсальный Процесс по exact version.
 	AssistantPlanOperation_TYPE_ARCHIVE_WORKFLOW AssistantPlanOperation_Type = 11
+	// Изменить Проект по exact version с авторитетным before/after snapshot.
+	AssistantPlanOperation_TYPE_UPDATE_PROJECT AssistantPlanOperation_Type = 12
 )
 
 // Enum value maps for AssistantPlanOperation_Type.
@@ -2035,6 +2037,7 @@ var (
 		9:  "TYPE_TEST_INTEGRATION_CONNECTION",
 		10: "TYPE_ARCHIVE_AGENT",
 		11: "TYPE_ARCHIVE_WORKFLOW",
+		12: "TYPE_UPDATE_PROJECT",
 	}
 	AssistantPlanOperation_Type_value = map[string]int32{
 		"TYPE_UNSPECIFIED":                   0,
@@ -2049,6 +2052,7 @@ var (
 		"TYPE_TEST_INTEGRATION_CONNECTION":   9,
 		"TYPE_ARCHIVE_AGENT":                 10,
 		"TYPE_ARCHIVE_WORKFLOW":              11,
+		"TYPE_UPDATE_PROJECT":                12,
 	}
 )
 
@@ -26195,7 +26199,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12definition_version\x18\r \x01(\tR\x11definitionVersion\x12+\n" +
 	"\x11definition_digest\x18\x0e \x01(\tR\x10definitionDigest\x12J\n" +
 	"\x14public_configuration\x18\x0f \x01(\v2\x17.google.protobuf.StructR\x13publicConfiguration\x12_\n" +
-	"\x13credential_revision\x18\x10 \x01(\v2..controlplane.v1.IntegrationCredentialRevisionR\x12credentialRevision\"\xc7\t\n" +
+	"\x13credential_revision\x18\x10 \x01(\v2..controlplane.v1.IntegrationCredentialRevisionR\x12credentialRevision\"\xe0\t\n" +
 	"\x16AssistantPlanOperation\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12@\n" +
 	"\x04type\x18\x02 \x01(\x0e2,.controlplane.v1.AssistantPlanOperation.TypeR\x04type\x12\x14\n" +
@@ -26219,7 +26223,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x06before\x18\x0e \x01(\v2\x17.google.protobuf.StructR\x06before\x12-\n" +
 	"\x05after\x18\x0f \x01(\v2\x17.google.protobuf.StructR\x05after\x12\x1a\n" +
 	"\bselected\x18\x10 \x01(\bR\bselected\x12/\n" +
-	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\"\xd5\x02\n" +
+	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\"\xee\x02\n" +
 	"\x04Type\x12\x14\n" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13TYPE_CREATE_PROJECT\x10\x01\x12\x15\n" +
@@ -26233,7 +26237,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	" TYPE_TEST_INTEGRATION_CONNECTION\x10\t\x12\x16\n" +
 	"\x12TYPE_ARCHIVE_AGENT\x10\n" +
 	"\x12\x19\n" +
-	"\x15TYPE_ARCHIVE_WORKFLOW\x10\v\"n\n" +
+	"\x15TYPE_ARCHIVE_WORKFLOW\x10\v\x12\x17\n" +
+	"\x13TYPE_UPDATE_PROJECT\x10\f\"n\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rACTION_CREATE\x10\x01\x12\x11\n" +
