@@ -275,10 +275,11 @@ type OwnerGate struct {
 
 type Artifact struct {
 	Ref, ProjectRef, RunRef, SessionRef, NodeRef, FileName, MediaType, Digest string
-	ScanState, PreviewState, Source                                           string
+	ScanState, PreviewState, Source, LifecycleState                           string
 	SizeBytes, Revision, Version                                              int64
 	Bindings, NextActions                                                     []string
 	CreatedAt                                                                 time.Time
+	DeletedAt, PurgeAfter                                                     *time.Time
 }
 
 type Schedule struct {

@@ -1078,7 +1078,7 @@ paths:
     get:
       tags: [Artifacts]
       operationId: listArtifacts
-      parameters: [{ $ref: '#/components/parameters/RunRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters: [{ $ref: '#/components/parameters/RunRefQuery' }, { $ref: '#/components/parameters/ArtifactLifecycleStateQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
       responses:
         '200':
           description: Файлы и результаты
@@ -1123,6 +1123,41 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Artifact' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [Artifacts]
+      operationId: deleteArtifact
+      parameters: [{ $ref: '#/components/parameters/ArtifactRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Artifact перемещён в корзину на 30 дней и исключён из новых запусков
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Artifact' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/artifacts/{artifactRef}/restore:
+    post:
+      tags: [Artifacts]
+      operationId: restoreArtifact
+      parameters: [{ $ref: '#/components/parameters/ArtifactRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Artifact восстановлен до окончательной очистки
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Artifact' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/artifacts/{artifactRef}/purge:
+    delete:
+      tags: [Artifacts]
+      operationId: purgeArtifact
+      parameters: [{ $ref: '#/components/parameters/ArtifactRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Содержимое удалено из object storage, metadata сохранена как audit tombstone
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArtifactPurgeReceipt' }
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/artifacts/{artifactRef}/content:
     get:
@@ -1969,6 +2004,14 @@ components:
       in: path
       required: true
       schema: { $ref: '#/components/schemas/OpaqueRef' }
+    ArtifactLifecycleStateQuery:
+      name: lifecycleState
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [ACTIVE, DELETED, PURGE_PENDING, PURGED]
+        default: ACTIVE
     ScheduleRef:
       name: scheduleRef
       in: path
@@ -3246,7 +3289,7 @@ components:
     Artifact:
       type: object
       additionalProperties: false
-      required: [ref, version, projectRef, fileName, mediaType, sizeBytes, digest, scanState, source, revision, agentBindings, previewAvailable, createdAt, nextActions]
+      required: [ref, version, projectRef, fileName, mediaType, sizeBytes, digest, scanState, source, revision, lifecycleState, agentBindings, previewAvailable, createdAt, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -3260,6 +3303,9 @@ components:
         scanState: { type: string, enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED] }
         source: { type: string, enum: [CONTROL_CENTER, AGENT_RESULT, INTEGRATION_RESULT, KNOWLEDGE_SOURCE, INTERACTION_ATTACHMENT] }
         revision: { type: integer, minimum: 1 }
+        lifecycleState: { type: string, enum: [ACTIVE, DELETED, PURGE_PENDING, PURGED] }
+        deletedAt: { $ref: '#/components/schemas/Timestamp' }
+        purgeAfter: { $ref: '#/components/schemas/Timestamp' }
         agentBindings: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
         previewAvailable: { type: boolean }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
@@ -3278,6 +3324,13 @@ components:
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Artifact' } }
         nextPageToken: { type: string }
+    ArtifactPurgeReceipt:
+      type: object
+      additionalProperties: false
+      required: [artifactRef, lifecycleState]
+      properties:
+        artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
+        lifecycleState: { type: string, enum: [PURGED] }
     Schedule:
       type: object
       additionalProperties: false

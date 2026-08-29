@@ -1010,6 +1010,9 @@ export type Artifact = {
     scanState: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
     source: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
     revision: number;
+    lifecycleState: 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
+    deletedAt?: Timestamp;
+    purgeAfter?: Timestamp;
     agentBindings: Array<OpaqueRef>;
     previewAvailable: boolean;
     createdAt: Timestamp;
@@ -1024,6 +1027,11 @@ export type ArtifactBindingInput = {
 export type ArtifactPage = {
     items: Array<Artifact>;
     nextPageToken?: string;
+};
+
+export type ArtifactPurgeReceipt = {
+    artifactRef: OpaqueRef;
+    lifecycleState: 'PURGED';
 };
 
 export type Schedule = {
@@ -1371,6 +1379,8 @@ export type SessionRef = OpaqueRef;
 export type GateRef = OpaqueRef;
 
 export type ArtifactRef = OpaqueRef;
+
+export type ArtifactLifecycleStateQuery = 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
 
 export type ScheduleRef = OpaqueRef;
 
@@ -3427,6 +3437,7 @@ export type ListArtifactsData = {
     };
     query?: {
         runRef?: OpaqueRef;
+        lifecycleState?: 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
         query?: string;
         pageSize?: number;
         pageToken?: string;
@@ -3486,6 +3497,38 @@ export type UploadArtifactResponses = {
 
 export type UploadArtifactResponse = UploadArtifactResponses[keyof UploadArtifactResponses];
 
+export type DeleteArtifactData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        artifactRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/artifacts/{artifactRef}';
+};
+
+export type DeleteArtifactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DeleteArtifactError = DeleteArtifactErrors[keyof DeleteArtifactErrors];
+
+export type DeleteArtifactResponses = {
+    /**
+     * Artifact перемещён в корзину на 30 дней и исключён из новых запусков
+     */
+    200: Artifact;
+};
+
+export type DeleteArtifactResponse = DeleteArtifactResponses[keyof DeleteArtifactResponses];
+
 export type GetArtifactData = {
     body?: never;
     path: {
@@ -3512,6 +3555,70 @@ export type GetArtifactResponses = {
 };
 
 export type GetArtifactResponse = GetArtifactResponses[keyof GetArtifactResponses];
+
+export type RestoreArtifactData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        artifactRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/artifacts/{artifactRef}/restore';
+};
+
+export type RestoreArtifactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RestoreArtifactError = RestoreArtifactErrors[keyof RestoreArtifactErrors];
+
+export type RestoreArtifactResponses = {
+    /**
+     * Artifact восстановлен до окончательной очистки
+     */
+    200: Artifact;
+};
+
+export type RestoreArtifactResponse = RestoreArtifactResponses[keyof RestoreArtifactResponses];
+
+export type PurgeArtifactData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        artifactRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/artifacts/{artifactRef}/purge';
+};
+
+export type PurgeArtifactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PurgeArtifactError = PurgeArtifactErrors[keyof PurgeArtifactErrors];
+
+export type PurgeArtifactResponses = {
+    /**
+     * Содержимое удалено из object storage, metadata сохранена как audit tombstone
+     */
+    200: ArtifactPurgeReceipt;
+};
+
+export type PurgeArtifactResponse = PurgeArtifactResponses[keyof PurgeArtifactResponses];
 
 export type DownloadArtifactData = {
     body?: never;

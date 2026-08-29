@@ -805,7 +805,7 @@ func (repository *Repository) applyResultActionPermissions(
 		result.Gate.NextActions = gateActions(result.Gate.State, permissions.canResolveGates)
 	}
 	if result.Artifact != nil {
-		result.Artifact.NextActions = artifactActions(result.Artifact.ScanState, permissions.canManageArtifacts)
+		result.Artifact.NextActions = artifactActions(result.Artifact.ScanState, result.Artifact.LifecycleState, permissions.canManageArtifacts)
 	}
 	if result.Schedule != nil {
 		result.Schedule.NextActions = scheduleActions(*result.Schedule, permissions.canManageSchedules)
@@ -850,7 +850,7 @@ func applyEventActionPermissions(event *entity.RunEvent, permissions actorAction
 		event.Delta.Gate.NextActions = gateActions(event.Delta.Gate.State, permissions.canResolveGates)
 	}
 	if event.Delta.Artifact != nil {
-		event.Delta.Artifact.NextActions = artifactActions(event.Delta.Artifact.ScanState, permissions.canManageArtifacts)
+		event.Delta.Artifact.NextActions = artifactActions(event.Delta.Artifact.ScanState, event.Delta.Artifact.LifecycleState, permissions.canManageArtifacts)
 	}
 }
 
@@ -1095,7 +1095,14 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId, scope.organizationID, filter.ProjectRef, filter.ResourceRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), boundedPage(filter.Page))
+	lifecycleState := strings.TrimSpace(filter.State)
+	if lifecycleState == "" {
+		lifecycleState = "ACTIVE"
+	}
+	if !contains([]string{"ACTIVE", "DELETED", "PURGE_PENDING", "PURGED"}, lifecycleState) {
+		return nil, "", errs.ErrInvalid
+	}
+	rows, err := repository.pool.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId, scope.organizationID, filter.ProjectRef, filter.ResourceRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), lifecycleState, boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -1114,23 +1121,38 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 func scanArtifact(row rowScanner) (entity.Artifact, error) {
 	var item entity.Artifact
 	var canManage bool
-	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.RunRef, &item.SessionRef, &item.NodeRef, &item.FileName, &item.MediaType, &item.Digest, &item.ScanState, &item.PreviewState, &item.Source, &item.SizeBytes, &item.Revision, &item.Version, &item.CreatedAt, &item.Bindings, &canManage); err != nil {
+	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.RunRef, &item.SessionRef, &item.NodeRef, &item.FileName, &item.MediaType, &item.Digest, &item.ScanState, &item.PreviewState, &item.Source, &item.SizeBytes, &item.Revision, &item.Version, &item.LifecycleState, &item.CreatedAt, &item.DeletedAt, &item.PurgeAfter, &item.Bindings, &canManage); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Artifact{}, errs.ErrNotFound
 		}
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
-	item.NextActions = artifactActions(item.ScanState, canManage)
+	item.NextActions = artifactActions(item.ScanState, item.LifecycleState, canManage)
 	return item, nil
 }
 
-func artifactActions(scanState string, canManage bool) []string {
+func artifactActions(scanState, lifecycleState string, canManage bool) []string {
+	if lifecycleState == "" {
+		lifecycleState = "ACTIVE"
+	}
+	switch lifecycleState {
+	case "DELETED":
+		if canManage {
+			return []string{"RESTORE", "PURGE"}
+		}
+		return []string{}
+	case "PURGE_PENDING", "PURGED":
+		return []string{}
+	}
 	if scanState != "CLEAN" {
+		if canManage {
+			return []string{"DELETE"}
+		}
 		return []string{}
 	}
 	actions := []string{"DOWNLOAD"}
 	if canManage {
-		actions = append(actions, "BIND")
+		actions = append(actions, "BIND", "DELETE")
 	}
 	return actions
 }

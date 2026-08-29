@@ -106,6 +106,34 @@ func (server *Server) ChangeArtifactBinding(ctx context.Context, request *contro
 	return &controlplanev1.ChangeArtifactBindingResponse{Artifact: castArtifact(*result.Artifact)}, nil
 }
 
+func (server *Server) DeleteArtifact(ctx context.Context, request *controlplanev1.DeleteArtifactRequest) (*controlplanev1.DeleteArtifactResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DeleteArtifact_FullMethodName, command.DeleteArtifact, request.GetMutation(), command.ArtifactLifecycleInput{ArtifactRef: request.GetArtifactRef()})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.DeleteArtifactResponse{Artifact: castArtifact(*result.Artifact)}, nil
+}
+
+func (server *Server) RestoreArtifact(ctx context.Context, request *controlplanev1.RestoreArtifactRequest) (*controlplanev1.RestoreArtifactResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RestoreArtifact_FullMethodName, command.RestoreArtifact, request.GetMutation(), command.ArtifactLifecycleInput{ArtifactRef: request.GetArtifactRef()})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.RestoreArtifactResponse{Artifact: castArtifact(*result.Artifact)}, nil
+}
+
+func (server *Server) PurgeArtifact(ctx context.Context, request *controlplanev1.PurgeArtifactRequest) (*controlplanev1.PurgeArtifactResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformCommandService_PurgeArtifact_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	state, err := server.service.PurgeArtifact(ctx, p, mutation(request.GetMutation()), request.GetArtifactRef())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.PurgeArtifactResponse{ArtifactRef: request.GetArtifactRef(), LifecycleState: artifactLifecycleState(state)}, nil
+}
+
 func (server *Server) CreateSchedule(ctx context.Context, request *controlplanev1.CreateScheduleRequest) (*controlplanev1.CreateScheduleResponse, error) {
 	payload := command.ScheduleInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Target: runTarget(request.GetTarget()), Preset: request.GetPreset(), CronExpression: request.GetCronExpression(), TimeOfDay: request.GetTimeOfDay(), DayOfWeek: request.GetDayOfWeek(), Timezone: request.GetTimezone(), Input: asMap(request.GetInput()), SessionPolicy: request.GetSessionPolicy(), NotificationPolicy: request.GetNotificationPolicy(), Enabled: true}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateSchedule_FullMethodName, command.CreateSchedule, request.GetMutation(), payload)

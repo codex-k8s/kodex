@@ -362,7 +362,11 @@ func (server *Server) ListArtifacts(ctx context.Context, request *controlplanev1
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListArtifacts(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), ResourceRef: request.GetRunRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
+	lifecycleState := ""
+	if request.GetLifecycleState() != controlplanev1.ArtifactLifecycleState_ARTIFACT_LIFECYCLE_STATE_UNSPECIFIED {
+		lifecycleState = enumSuffix(request.GetLifecycleState(), "ARTIFACT_LIFECYCLE_STATE_")
+	}
+	items, next, err := server.service.ListArtifacts(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), ResourceRef: request.GetRunRef(), Query: request.GetQuery(), State: lifecycleState, Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}

@@ -90,6 +90,9 @@ service PlatformCommandService {
   rpc UploadArtifact(stream UploadArtifactRequest) returns (UploadArtifactResponse);
   rpc DownloadArtifact(DownloadArtifactRequest) returns (stream DownloadArtifactResponse);
   rpc ChangeArtifactBinding(ChangeArtifactBindingRequest) returns (ChangeArtifactBindingResponse);
+  rpc DeleteArtifact(DeleteArtifactRequest) returns (DeleteArtifactResponse);
+  rpc RestoreArtifact(RestoreArtifactRequest) returns (RestoreArtifactResponse);
+  rpc PurgeArtifact(PurgeArtifactRequest) returns (PurgeArtifactResponse);
   rpc CreateSchedule(CreateScheduleRequest) returns (CreateScheduleResponse);
   rpc UpdateSchedule(UpdateScheduleRequest) returns (UpdateScheduleResponse);
   rpc SetScheduleEnabled(SetScheduleEnabledRequest) returns (SetScheduleEnabledResponse);
@@ -413,6 +416,14 @@ enum ArtifactSource {
   ARTIFACT_SOURCE_INTEGRATION_RESULT = 3;
   ARTIFACT_SOURCE_KNOWLEDGE_SOURCE = 4;
   ARTIFACT_SOURCE_INTERACTION_ATTACHMENT = 5;
+}
+
+enum ArtifactLifecycleState {
+  ARTIFACT_LIFECYCLE_STATE_UNSPECIFIED = 0;
+  ARTIFACT_LIFECYCLE_STATE_ACTIVE = 1;
+  ARTIFACT_LIFECYCLE_STATE_DELETED = 2;
+  ARTIFACT_LIFECYCLE_STATE_PURGE_PENDING = 3;
+  ARTIFACT_LIFECYCLE_STATE_PURGED = 4;
 }
 
 enum ScheduleState {
@@ -847,6 +858,9 @@ message Artifact {
   google.protobuf.Timestamp created_at = 14;
   repeated NextAction next_actions = 15;
   string digest = 16;
+  ArtifactLifecycleState lifecycle_state = 17;
+  google.protobuf.Timestamp deleted_at = 18;
+  google.protobuf.Timestamp purge_after = 19;
 }
 
 message Schedule {
@@ -1662,6 +1676,7 @@ message ListArtifactsRequest {
   string run_ref = 2;
   PageRequest page = 3;
   string query = 4;
+  ArtifactLifecycleState lifecycle_state = 5;
 }
 message ListArtifactsResponse {
   repeated Artifact artifacts = 1;
@@ -1713,6 +1728,28 @@ message ChangeArtifactBindingRequest {
 }
 message ChangeArtifactBindingResponse {
   Artifact artifact = 1;
+}
+message DeleteArtifactRequest {
+  MutationContext mutation = 1;
+  string artifact_ref = 2;
+}
+message DeleteArtifactResponse {
+  Artifact artifact = 1;
+}
+message RestoreArtifactRequest {
+  MutationContext mutation = 1;
+  string artifact_ref = 2;
+}
+message RestoreArtifactResponse {
+  Artifact artifact = 1;
+}
+message PurgeArtifactRequest {
+  MutationContext mutation = 1;
+  string artifact_ref = 2;
+}
+message PurgeArtifactResponse {
+  string artifact_ref = 1;
+  ArtifactLifecycleState lifecycle_state = 2;
 }
 
 message ListSchedulesRequest {

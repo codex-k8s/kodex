@@ -105,6 +105,8 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		return repository.resolveCommandTarget(ctx, tx, current, "gate.resolve", "OWNER_GATE", payload.GateRef, "")
 	case command.ArtifactBindingInput:
 		return repository.resolveCommandTarget(ctx, tx, current, "artifact.manage", "ARTIFACT", payload.ArtifactRef, "")
+	case command.ArtifactLifecycleInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "artifact.manage", "ARTIFACT", payload.ArtifactRef, "")
 	case command.ScheduleInput:
 		if input.Kind == command.CreateSchedule {
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)

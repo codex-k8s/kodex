@@ -33,6 +33,7 @@ function artifact(overrides: Partial<Artifact> = {}): Artifact {
     sizeBytes: 1024,
     digest: "sha256:test",
     scanState: "CLEAN",
+    lifecycleState: "ACTIVE",
     source: "CONTROL_CENTER",
     revision: 2,
     agentBindings: [],

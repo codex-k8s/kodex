@@ -615,6 +615,42 @@ func (server *Server) ChangeArtifactBinding(w http.ResponseWriter, r *http.Reque
 	}
 	writeMessage(w, http.StatusOK, response, "artifact", "")
 }
+func (server *Server) DeleteArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.DeleteArtifactParams) {
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.DeleteArtifact(r.Context(), &controlplanev1.DeleteArtifactRequest{Mutation: m, ArtifactRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "artifact", "")
+}
+func (server *Server) RestoreArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.RestoreArtifactParams) {
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.RestoreArtifact(r.Context(), &controlplanev1.RestoreArtifactRequest{Mutation: m, ArtifactRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "artifact", "")
+}
+func (server *Server) PurgeArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.PurgeArtifactParams) {
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.PurgeArtifact(r.Context(), &controlplanev1.PurgeArtifactRequest{Mutation: m, ArtifactRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "")
+}
 func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.UploadArtifactParams) {
 	r, ok := withProjectReference(w, r, projectRef)
 	if !ok {

@@ -18,5 +18,6 @@ WHERE g.id = @grant_id::uuid
         AND ar.project_id = g.project_id
         AND ar.version = g.artifact_version
         AND ar.scan_state = 'CLEAN'
+        AND ar.lifecycle_state = 'ACTIVE'
   )
 RETURNING g.consumed_at;

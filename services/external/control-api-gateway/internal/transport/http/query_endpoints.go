@@ -231,7 +231,11 @@ func (server *Server) ListArtifacts(w http.ResponseWriter, r *http.Request, ref 
 	if !ok {
 		return
 	}
-	response, err := server.control.Query.ListArtifacts(r.Context(), &controlplanev1.ListArtifactsRequest{ProjectRef: ref, RunRef: stringValue(p.RunRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
+	lifecycleState := controlplanev1.ArtifactLifecycleState_ARTIFACT_LIFECYCLE_STATE_UNSPECIFIED
+	if p.LifecycleState != nil {
+		lifecycleState = controlplanev1.ArtifactLifecycleState(controlplanev1.ArtifactLifecycleState_value["ARTIFACT_LIFECYCLE_STATE_"+string(*p.LifecycleState)])
+	}
+	response, err := server.control.Query.ListArtifacts(r.Context(), &controlplanev1.ListArtifactsRequest{ProjectRef: ref, RunRef: stringValue(p.RunRef), LifecycleState: lifecycleState, Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

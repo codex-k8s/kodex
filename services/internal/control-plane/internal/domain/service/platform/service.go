@@ -360,6 +360,23 @@ func (service *Service) UploadArtifact(ctx context.Context, p value.Principal, m
 	}
 	return service.repository.UploadArtifact(ctx, p, mutation, input)
 }
+
+func (service *Service) PurgeArtifact(ctx context.Context, p value.Principal, mutation value.Mutation, artifactRef string) (string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return "", err
+	}
+	artifactRef = strings.TrimSpace(artifactRef)
+	if artifactRef == "" || mutation.ExpectedVersion == nil || strings.TrimSpace(mutation.IdempotencyKey) == "" {
+		return "", errs.ErrInvalid
+	}
+	mutation.Operation = "artifact.purge"
+	mutation.IntentDigest = digest(struct {
+		ArtifactRef     string
+		ExpectedVersion int64
+	}{ArtifactRef: artifactRef, ExpectedVersion: *mutation.ExpectedVersion})
+	return service.repository.PurgeArtifact(ctx, p, mutation, artifactRef)
+}
 func (service *Service) DownloadArtifact(ctx context.Context, p value.Principal, ref, purpose string) (repository.ArtifactDownload, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -682,7 +699,8 @@ func knownCommand(kind command.Kind) bool {
 		command.CreateWorkflow, command.UpdateWorkflow,
 		command.ValidateWorkflow, command.PublishWorkflow, command.ArchiveWorkflow,
 		command.LaunchRun, command.AddSessionTurn, command.CancelRun, command.RetryRun,
-		command.ResolveOwnerGate, command.ChangeArtifactBinding, command.CreateSchedule,
+		command.ResolveOwnerGate, command.ChangeArtifactBinding, command.DeleteArtifact,
+		command.RestoreArtifact, command.CreateSchedule,
 		command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.CreateConnection,
 		command.ConfigureConnectionCredential,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant,

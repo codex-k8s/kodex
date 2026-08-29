@@ -48,6 +48,9 @@ const (
 	RetryRun                      Kind = "RETRY_RUN"
 	ResolveOwnerGate              Kind = "RESOLVE_OWNER_GATE"
 	ChangeArtifactBinding         Kind = "CHANGE_ARTIFACT_BINDING"
+	DeleteArtifact                Kind = "DELETE_ARTIFACT"
+	RestoreArtifact               Kind = "RESTORE_ARTIFACT"
+	PurgeArtifact                 Kind = "PURGE_ARTIFACT"
 	CreateSchedule                Kind = "CREATE_SCHEDULE"
 	UpdateSchedule                Kind = "UPDATE_SCHEDULE"
 	SetScheduleEnabled            Kind = "SET_SCHEDULE_ENABLED"
@@ -153,6 +156,7 @@ type ArtifactBindingInput struct {
 	ArtifactRef, AgentRef string
 	Enabled               bool
 }
+type ArtifactLifecycleInput struct{ ArtifactRef string }
 type ScheduleInput struct {
 	Ref, ProjectRef, Name, Preset, CronExpression, TimeOfDay, DayOfWeek, Timezone, SessionPolicy, NotificationPolicy string
 	Target                                                                                                           entity.RunTarget

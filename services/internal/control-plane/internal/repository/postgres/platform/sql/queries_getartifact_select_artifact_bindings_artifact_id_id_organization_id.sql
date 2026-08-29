@@ -1,7 +1,7 @@
 -- name: queries_getartifact_select_artifact_bindings_artifact_id_id_organization_id :one
 SELECT ar.ref,p.ref,COALESCE(r.ref,''),COALESCE(s.ref,''),COALESCE(n.ref,''),ar.file_name,ar.media_type,ar.digest,ar.scan_state,ar.preview_state,
        ar.source,
-       ar.size_bytes,ar.revision,ar.version,ar.created_at,
+       ar.size_bytes,ar.revision,ar.version,ar.lifecycle_state,ar.created_at,ar.deleted_at,ar.purge_after,
        COALESCE((SELECT array_agg(b.target_ref ORDER BY b.created_at) FROM control_plane.artifact_bindings b WHERE b.artifact_id=ar.id AND b.target_kind='KNOWLEDGE'),'{}'),
        ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(
          SELECT 1 FROM control_plane.memberships manage_membership

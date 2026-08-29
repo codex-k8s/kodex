@@ -37,7 +37,8 @@ SELECT n.id::text,
                  JOIN control_plane.artifacts knowledge_artifact ON knowledge_artifact.id=knowledge_binding.artifact_id
                  WHERE knowledge_binding.target_kind='KNOWLEDGE'
                    AND knowledge_binding.target_ref=a.ref
-                   AND knowledge_artifact.scan_state='CLEAN'),'{}')
+                   AND knowledge_artifact.scan_state='CLEAN'
+                   AND knowledge_artifact.lifecycle_state='ACTIVE'),'{}')
        ELSE '{}'::text[] END,
        r.input,
        CASE WHEN 'platform.artifact.manage'=ANY(a.capabilities) THEN COALESCE((
@@ -57,6 +58,7 @@ SELECT n.id::text,
            WHERE runtime_artifact.organization_id = r.organization_id
              AND runtime_artifact.project_id = r.project_id
              AND runtime_artifact.scan_state = 'CLEAN'
+             AND runtime_artifact.lifecycle_state = 'ACTIVE'
              AND (
                runtime_artifact.ref = ANY(root.input_artifact_refs)
                OR EXISTS (
@@ -312,6 +314,7 @@ WHERE n.organization_id = $1::uuid
         AND input_artifact.project_id = r.project_id
         AND input_artifact.ref = ANY(root.input_artifact_refs)
         AND input_artifact.scan_state = 'CLEAN'
+        AND input_artifact.lifecycle_state = 'ACTIVE'
   )
   AND NOT EXISTS (
       SELECT 1

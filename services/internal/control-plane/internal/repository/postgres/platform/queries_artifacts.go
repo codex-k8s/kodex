@@ -37,4 +37,24 @@ var (
 	queryArtifactsChangeartifactbindingUpdateArtifactsVersion string
 	//go:embed sql/artifacts_changeartifactbinding_update_agents_version.sql
 	queryArtifactsChangeartifactbindingUpdateAgentsVersion string
+	//go:embed sql/artifacts_lifecycle_select_for_update.sql
+	queryArtifactsLifecycleSelectForUpdate string
+	//go:embed sql/artifacts_lifecycle_soft_delete.sql
+	queryArtifactsLifecycleSoftDelete string
+	//go:embed sql/artifacts_lifecycle_restore.sql
+	queryArtifactsLifecycleRestore string
+	//go:embed sql/artifacts_purge_select_artifact_content_for_update.sql
+	queryArtifactsPurgeSelectArtifactContentForUpdate string
+	//go:embed sql/artifacts_purge_mark_pending.sql
+	queryArtifactsPurgeMarkPending string
+	//go:embed sql/artifacts_purge_finalize.sql
+	queryArtifactsPurgeFinalize string
+	//go:embed sql/artifacts_purge_delete_bindings.sql
+	queryArtifactsPurgeDeleteBindings string
+	//go:embed sql/artifacts_purge_delete_download_grants.sql
+	queryArtifactsPurgeDeleteDownloadGrants string
+	//go:embed sql/artifacts_purge_delete_content.sql
+	queryArtifactsPurgeDeleteContent string
+	//go:embed sql/artifacts_purge_update_idempotency_receipt.sql
+	queryArtifactsPurgeUpdateIdempotencyReceipt string
 )

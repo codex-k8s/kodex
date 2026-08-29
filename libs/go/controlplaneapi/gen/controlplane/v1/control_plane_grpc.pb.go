@@ -1563,6 +1563,9 @@ const (
 	PlatformCommandService_UploadArtifact_FullMethodName                           = "/controlplane.v1.PlatformCommandService/UploadArtifact"
 	PlatformCommandService_DownloadArtifact_FullMethodName                         = "/controlplane.v1.PlatformCommandService/DownloadArtifact"
 	PlatformCommandService_ChangeArtifactBinding_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ChangeArtifactBinding"
+	PlatformCommandService_DeleteArtifact_FullMethodName                           = "/controlplane.v1.PlatformCommandService/DeleteArtifact"
+	PlatformCommandService_RestoreArtifact_FullMethodName                          = "/controlplane.v1.PlatformCommandService/RestoreArtifact"
+	PlatformCommandService_PurgeArtifact_FullMethodName                            = "/controlplane.v1.PlatformCommandService/PurgeArtifact"
 	PlatformCommandService_CreateSchedule_FullMethodName                           = "/controlplane.v1.PlatformCommandService/CreateSchedule"
 	PlatformCommandService_UpdateSchedule_FullMethodName                           = "/controlplane.v1.PlatformCommandService/UpdateSchedule"
 	PlatformCommandService_SetScheduleEnabled_FullMethodName                       = "/controlplane.v1.PlatformCommandService/SetScheduleEnabled"
@@ -1622,6 +1625,9 @@ type PlatformCommandServiceClient interface {
 	UploadArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error)
 	DownloadArtifact(ctx context.Context, in *DownloadArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactResponse], error)
 	ChangeArtifactBinding(ctx context.Context, in *ChangeArtifactBindingRequest, opts ...grpc.CallOption) (*ChangeArtifactBindingResponse, error)
+	DeleteArtifact(ctx context.Context, in *DeleteArtifactRequest, opts ...grpc.CallOption) (*DeleteArtifactResponse, error)
+	RestoreArtifact(ctx context.Context, in *RestoreArtifactRequest, opts ...grpc.CallOption) (*RestoreArtifactResponse, error)
+	PurgeArtifact(ctx context.Context, in *PurgeArtifactRequest, opts ...grpc.CallOption) (*PurgeArtifactResponse, error)
 	CreateSchedule(ctx context.Context, in *CreateScheduleRequest, opts ...grpc.CallOption) (*CreateScheduleResponse, error)
 	UpdateSchedule(ctx context.Context, in *UpdateScheduleRequest, opts ...grpc.CallOption) (*UpdateScheduleResponse, error)
 	SetScheduleEnabled(ctx context.Context, in *SetScheduleEnabledRequest, opts ...grpc.CallOption) (*SetScheduleEnabledResponse, error)
@@ -1982,6 +1988,36 @@ func (c *platformCommandServiceClient) ChangeArtifactBinding(ctx context.Context
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) DeleteArtifact(ctx context.Context, in *DeleteArtifactRequest, opts ...grpc.CallOption) (*DeleteArtifactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteArtifactResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_DeleteArtifact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RestoreArtifact(ctx context.Context, in *RestoreArtifactRequest, opts ...grpc.CallOption) (*RestoreArtifactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreArtifactResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RestoreArtifact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PurgeArtifact(ctx context.Context, in *PurgeArtifactRequest, opts ...grpc.CallOption) (*PurgeArtifactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurgeArtifactResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PurgeArtifact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformCommandServiceClient) CreateSchedule(ctx context.Context, in *CreateScheduleRequest, opts ...grpc.CallOption) (*CreateScheduleResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateScheduleResponse)
@@ -2201,6 +2237,9 @@ type PlatformCommandServiceServer interface {
 	UploadArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error
 	DownloadArtifact(*DownloadArtifactRequest, grpc.ServerStreamingServer[DownloadArtifactResponse]) error
 	ChangeArtifactBinding(context.Context, *ChangeArtifactBindingRequest) (*ChangeArtifactBindingResponse, error)
+	DeleteArtifact(context.Context, *DeleteArtifactRequest) (*DeleteArtifactResponse, error)
+	RestoreArtifact(context.Context, *RestoreArtifactRequest) (*RestoreArtifactResponse, error)
+	PurgeArtifact(context.Context, *PurgeArtifactRequest) (*PurgeArtifactResponse, error)
 	CreateSchedule(context.Context, *CreateScheduleRequest) (*CreateScheduleResponse, error)
 	UpdateSchedule(context.Context, *UpdateScheduleRequest) (*UpdateScheduleResponse, error)
 	SetScheduleEnabled(context.Context, *SetScheduleEnabledRequest) (*SetScheduleEnabledResponse, error)
@@ -2324,6 +2363,15 @@ func (UnimplementedPlatformCommandServiceServer) DownloadArtifact(*DownloadArtif
 }
 func (UnimplementedPlatformCommandServiceServer) ChangeArtifactBinding(context.Context, *ChangeArtifactBindingRequest) (*ChangeArtifactBindingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ChangeArtifactBinding not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DeleteArtifact(context.Context, *DeleteArtifactRequest) (*DeleteArtifactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteArtifact not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RestoreArtifact(context.Context, *RestoreArtifactRequest) (*RestoreArtifactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreArtifact not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PurgeArtifact(context.Context, *PurgeArtifactRequest) (*PurgeArtifactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PurgeArtifact not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) CreateSchedule(context.Context, *CreateScheduleRequest) (*CreateScheduleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateSchedule not implemented")
@@ -2959,6 +3007,60 @@ func _PlatformCommandService_ChangeArtifactBinding_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_DeleteArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteArtifactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).DeleteArtifact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_DeleteArtifact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).DeleteArtifact(ctx, req.(*DeleteArtifactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RestoreArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreArtifactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RestoreArtifact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RestoreArtifact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RestoreArtifact(ctx, req.(*RestoreArtifactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PurgeArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurgeArtifactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PurgeArtifact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PurgeArtifact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PurgeArtifact(ctx, req.(*PurgeArtifactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformCommandService_CreateSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateScheduleRequest)
 	if err := dec(in); err != nil {
@@ -3409,6 +3511,18 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ChangeArtifactBinding",
 			Handler:    _PlatformCommandService_ChangeArtifactBinding_Handler,
+		},
+		{
+			MethodName: "DeleteArtifact",
+			Handler:    _PlatformCommandService_DeleteArtifact_Handler,
+		},
+		{
+			MethodName: "RestoreArtifact",
+			Handler:    _PlatformCommandService_RestoreArtifact_Handler,
+		},
+		{
+			MethodName: "PurgeArtifact",
+			Handler:    _PlatformCommandService_PurgeArtifact_Handler,
 		},
 		{
 			MethodName: "CreateSchedule",

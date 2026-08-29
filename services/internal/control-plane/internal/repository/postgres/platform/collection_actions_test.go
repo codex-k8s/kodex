@@ -99,8 +99,23 @@ func TestProjectResourceActionsArePermissionAware(t *testing.T) {
 	if got := gateActions("OPEN", false); len(got) != 0 {
 		t.Fatalf("read-only actor received gate resolution: %v", got)
 	}
-	if got := artifactActions("CLEAN", false); !reflect.DeepEqual(got, []string{"DOWNLOAD"}) {
+	if got := artifactActions("CLEAN", "ACTIVE", false); !reflect.DeepEqual(got, []string{"DOWNLOAD"}) {
 		t.Fatalf("viewer received unexpected artifact actions: %v", got)
+	}
+	if got := artifactActions("CLEAN", "ACTIVE", true); !reflect.DeepEqual(got, []string{"DOWNLOAD", "BIND", "DELETE"}) {
+		t.Fatalf("artifact manager received incorrect active actions: %v", got)
+	}
+	if got := artifactActions("CLEAN", "DELETED", true); !reflect.DeepEqual(got, []string{"RESTORE", "PURGE"}) {
+		t.Fatalf("artifact manager received incorrect trash actions: %v", got)
+	}
+	if got := artifactActions("CLEAN", "DELETED", false); len(got) != 0 {
+		t.Fatalf("viewer received trash mutations: %v", got)
+	}
+	if got := artifactActions("CLEAN", "PURGE_PENDING", true); len(got) != 0 {
+		t.Fatalf("artifact pending purge exposed mutations: %v", got)
+	}
+	if got := artifactActions("CLEAN", "PURGED", true); len(got) != 0 {
+		t.Fatalf("purged artifact exposed mutations: %v", got)
 	}
 	if got := scheduleActions(entity.Schedule{State: "ACTIVE", Enabled: true}, false); !reflect.DeepEqual(got, []string{"OPEN"}) {
 		t.Fatalf("read-only actor received schedule mutations: %v", got)

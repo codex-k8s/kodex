@@ -6,6 +6,7 @@ SELECT ar.id,
 FROM control_plane.artifacts ar
 WHERE ar.organization_id = @organization_id::uuid
   AND ar.ref = @artifact_ref
+  AND ar.lifecycle_state = 'ACTIVE'
   AND (
       @platform_role IN ('OWNER', 'ADMINISTRATOR')
       OR EXISTS (

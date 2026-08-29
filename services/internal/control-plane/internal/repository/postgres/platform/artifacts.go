@@ -128,6 +128,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	item.RunRef = input.RunRef
 	item.SessionRef = sessionRef
 	item.Source = "CONTROL_CENTER"
+	item.LifecycleState = "ACTIVE"
 	if input.ScanState == "CLEAN" {
 		item.NextActions = []string{"DOWNLOAD", "BIND"}
 	}
@@ -223,6 +224,177 @@ func mapObjectStorageError(err error) error {
 	default:
 		return errs.ErrUnavailable
 	}
+}
+
+type artifactPurgeReceipt struct {
+	ArtifactRef    string `json:"artifactRef"`
+	ArtifactID     string `json:"artifactId"`
+	ProjectID      string `json:"projectId"`
+	ProjectRef     string `json:"projectRef"`
+	ObjectKey      string `json:"objectKey"`
+	ObjectVersion  string `json:"objectVersion"`
+	LifecycleState string `json:"lifecycleState"`
+}
+
+func (repository *Repository) PurgeArtifact(ctx context.Context, principal value.Principal, mutation value.Mutation, artifactRef string) (string, error) {
+	scope, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return "", err
+	}
+	receipt, err := repository.prepareArtifactPurge(ctx, scope, mutation, artifactRef)
+	if err != nil {
+		return "", err
+	}
+	if receipt.LifecycleState == "PURGED" {
+		return receipt.LifecycleState, nil
+	}
+	if err := repository.objects.Delete(ctx, receipt.ObjectKey, receipt.ObjectVersion); err != nil && !errors.Is(err, objectstorage.ErrNotFound) {
+		return "", mapObjectStorageError(err)
+	}
+	return repository.finalizeArtifactPurge(ctx, scope, mutation, receipt)
+}
+
+func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope scope, mutation value.Mutation, artifactRef string) (artifactPurgeReceipt, error) {
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return artifactPurgeReceipt{}, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey); err != nil {
+		return artifactPurgeReceipt{}, errs.ErrUnavailable
+	}
+	_, target, err := repository.resolveCommandTarget(ctx, tx, scope, "artifact.manage", "ARTIFACT", artifactRef, "")
+	if err != nil {
+		return artifactPurgeReceipt{}, err
+	}
+	if err := repository.requireAccess(ctx, tx, scope, "artifact.manage", target); err != nil {
+		return artifactPurgeReceipt{}, errs.ErrNotFound
+	}
+	var storedDigest string
+	var stored []byte
+	err = tx.QueryRow(ctx, queryArtifactsUploadartifactSelectIdempotencyReceiptsOrganizationIdActorIdOperation,
+		scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey).Scan(&storedDigest, &stored)
+	if err == nil {
+		if storedDigest != mutation.IntentDigest {
+			return artifactPurgeReceipt{}, errs.ErrIdempotencyReuse
+		}
+		var receipt artifactPurgeReceipt
+		if json.Unmarshal(stored, &receipt) != nil || receipt.ArtifactRef != artifactRef {
+			return artifactPurgeReceipt{}, errs.ErrConflict
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return artifactPurgeReceipt{}, errs.ErrConflict
+		}
+		return receipt, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return artifactPurgeReceipt{}, errs.ErrUnavailable
+	}
+	var receipt artifactPurgeReceipt
+	var version int64
+	if err := tx.QueryRow(ctx, queryArtifactsPurgeSelectArtifactContentForUpdate, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+		"artifact_ref":    artifactRef,
+	}).Scan(&receipt.ArtifactID, &receipt.ProjectID, &receipt.ProjectRef, &version, &receipt.LifecycleState, &receipt.ObjectKey, &receipt.ObjectVersion); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return artifactPurgeReceipt{}, errs.ErrNotFound
+		}
+		return artifactPurgeReceipt{}, errs.ErrUnavailable
+	}
+	receipt.ArtifactRef = artifactRef
+	if mutation.ExpectedVersion == nil || version != *mutation.ExpectedVersion {
+		return artifactPurgeReceipt{}, errs.ErrVersionMismatch
+	}
+	if receipt.LifecycleState != "DELETED" {
+		return artifactPurgeReceipt{}, errs.ErrConflict
+	}
+	tag, err := tx.Exec(ctx, queryArtifactsPurgeMarkPending, pgx.StrictNamedArgs{
+		"artifact_id":      receipt.ArtifactID,
+		"expected_version": version,
+	})
+	if err != nil || tag.RowsAffected() != 1 {
+		return artifactPurgeReceipt{}, errs.ErrConflict
+	}
+	receipt.LifecycleState = "PURGE_PENDING"
+	encoded, _ := json.Marshal(receipt)
+	if _, err := tx.Exec(ctx, queryArtifactsUploadartifactInsertIdempotencyReceiptsOrganizationIdOperationIntentDigest,
+		scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey, mutation.IntentDigest, encoded); err != nil {
+		return artifactPurgeReceipt{}, errs.ErrConflict
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return artifactPurgeReceipt{}, errs.ErrConflict
+	}
+	return receipt, nil
+}
+
+func (repository *Repository) finalizeArtifactPurge(ctx context.Context, scope scope, mutation value.Mutation, receipt artifactPurgeReceipt) (string, error) {
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return "", errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey); err != nil {
+		return "", errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryArtifactsPurgeDeleteBindings, pgx.StrictNamedArgs{"artifact_id": receipt.ArtifactID}); err != nil {
+		return "", errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryArtifactsPurgeDeleteDownloadGrants, pgx.StrictNamedArgs{"artifact_id": receipt.ArtifactID}); err != nil {
+		return "", errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryArtifactsPurgeDeleteContent, pgx.StrictNamedArgs{"artifact_id": receipt.ArtifactID}); err != nil {
+		return "", errs.ErrUnavailable
+	}
+	tag, err := tx.Exec(ctx, queryArtifactsPurgeFinalize, pgx.StrictNamedArgs{"artifact_id": receipt.ArtifactID})
+	if err != nil {
+		return "", errs.ErrUnavailable
+	}
+	if tag.RowsAffected() != 1 {
+		var lifecycleState string
+		if err := tx.QueryRow(ctx, queryArtifactsLifecycleSelectForUpdate, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID,
+			"artifact_ref":    receipt.ArtifactRef,
+		}).Scan(new(string), new(string), new(string), new(int64), &lifecycleState); err != nil || lifecycleState != "PURGED" {
+			return "", errs.ErrConflict
+		}
+	}
+	receipt.LifecycleState = "PURGED"
+	storedReceipt := artifactPurgeReceipt{
+		ArtifactRef:    receipt.ArtifactRef,
+		LifecycleState: receipt.LifecycleState,
+	}
+	encoded, _ := json.Marshal(storedReceipt)
+	updated, err := tx.Exec(ctx, queryArtifactsPurgeUpdateIdempotencyReceipt, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+		"actor_id":        scope.actorID,
+		"operation":       mutation.Operation,
+		"idempotency_key": mutation.IdempotencyKey,
+		"intent_digest":   mutation.IntentDigest,
+		"stored_result":   encoded,
+	})
+	if err != nil || updated.RowsAffected() != 1 {
+		return "", errs.ErrConflict
+	}
+	auditRef, _ := newRef("aud")
+	if _, err := tx.Exec(ctx, queryArtifactsDownloadartifactInsertAuditEvent, pgx.StrictNamedArgs{
+		"audit_ref":       auditRef,
+		"organization_id": scope.organizationID,
+		"project_id":      receipt.ProjectID,
+		"subject_id":      scope.actorID,
+		"action":          "artifact.purge",
+		"artifact_ref":    receipt.ArtifactRef,
+		"safe_summary":    "i18n:ARTIFACT_PURGED",
+		"correlation_ref": scope.correlationRef,
+	}); err != nil {
+		return "", errs.ErrUnavailable
+	}
+	if err := repository.emitPlatformEvent(ctx, tx, scope, "ARTIFACT_CHANGED", receipt.ProjectRef, receipt.ArtifactRef, "i18n:ARTIFACT_PURGED"); err != nil {
+		return "", err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", errs.ErrConflict
+	}
+	return receipt.LifecycleState, nil
 }
 func safeFileName(name string) string {
 	name = strings.TrimSpace(name)
@@ -417,4 +589,59 @@ func (repository *Repository) changeArtifactBinding(ctx context.Context, tx pgx.
 		return commandOutcome{}, err
 	}
 	return commandOutcome{result: command.Result{Artifact: &item}, projectID: projectID, projectRef: projectRef, resourceKind: "ARTIFACT", resourceRef: payload.ArtifactRef, summary: "i18n:ARTIFACT_BINDING_UPDATED", platformEvent: "ARTIFACT_CHANGED"}, nil
+}
+
+func (repository *Repository) changeArtifactLifecycle(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	payload, ok := input.Payload.(command.ArtifactLifecycleInput)
+	if !ok || strings.TrimSpace(payload.ArtifactRef) == "" || input.Mutation.ExpectedVersion == nil {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	var artifactID, projectID, projectRef, lifecycleState string
+	var version int64
+	if err := tx.QueryRow(ctx, queryArtifactsLifecycleSelectForUpdate, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+		"artifact_ref":    payload.ArtifactRef,
+	}).Scan(&artifactID, &projectID, &projectRef, &version, &lifecycleState); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrNotFound
+		}
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if version != *input.Mutation.ExpectedVersion {
+		return commandOutcome{}, errs.ErrVersionMismatch
+	}
+	queryText := queryArtifactsLifecycleSoftDelete
+	expectedState := "ACTIVE"
+	summary := "i18n:ARTIFACT_DELETED"
+	if input.Kind == command.RestoreArtifact {
+		queryText = queryArtifactsLifecycleRestore
+		expectedState = "DELETED"
+		summary = "i18n:ARTIFACT_RESTORED"
+	}
+	if lifecycleState != expectedState {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	tag, err := tx.Exec(ctx, queryText, pgx.StrictNamedArgs{
+		"artifact_id":      artifactID,
+		"expected_version": version,
+	})
+	if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if tag.RowsAffected() != 1 {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	item, err := scanArtifact(tx.QueryRow(ctx, queryQueriesGetartifactSelectArtifactBindingsArtifactIdIdOrganizationId, scope.organizationID, payload.ArtifactRef, scope.role, scope.actorID))
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	return commandOutcome{
+		result:        command.Result{Artifact: &item},
+		projectID:     projectID,
+		projectRef:    projectRef,
+		resourceKind:  "ARTIFACT",
+		resourceRef:   payload.ArtifactRef,
+		summary:       summary,
+		platformEvent: "ARTIFACT_CHANGED",
+	}, nil
 }

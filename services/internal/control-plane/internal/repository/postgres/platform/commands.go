@@ -168,6 +168,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.resolveGate(ctx, tx, scope, input)
 	case command.ChangeArtifactBinding:
 		return repository.changeArtifactBinding(ctx, tx, scope, input)
+	case command.DeleteArtifact, command.RestoreArtifact:
+		return repository.changeArtifactLifecycle(ctx, tx, scope, input)
 	case command.CreateSchedule, command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule:
 		return repository.changeSchedule(ctx, tx, scope, input)
 	case command.CreateConnection, command.ConfigureConnectionCredential, command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:

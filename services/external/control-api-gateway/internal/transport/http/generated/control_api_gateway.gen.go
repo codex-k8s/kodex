@@ -309,6 +309,30 @@ func (e AgentRuntimeConfigurationInputProviderPolicyMode) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactLifecycleState.
+const (
+	ArtifactLifecycleStateACTIVE       ArtifactLifecycleState = "ACTIVE"
+	ArtifactLifecycleStateDELETED      ArtifactLifecycleState = "DELETED"
+	ArtifactLifecycleStatePURGED       ArtifactLifecycleState = "PURGED"
+	ArtifactLifecycleStatePURGEPENDING ArtifactLifecycleState = "PURGE_PENDING"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactLifecycleState enum.
+func (e ArtifactLifecycleState) Valid() bool {
+	switch e {
+	case ArtifactLifecycleStateACTIVE:
+		return true
+	case ArtifactLifecycleStateDELETED:
+		return true
+	case ArtifactLifecycleStatePURGED:
+		return true
+	case ArtifactLifecycleStatePURGEPENDING:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactScanState.
 const (
 	ArtifactScanStateCLEAN       ArtifactScanState = "CLEAN"
@@ -357,6 +381,21 @@ func (e ArtifactSource) Valid() bool {
 	case ArtifactSourceINTERACTIONATTACHMENT:
 		return true
 	case ArtifactSourceKNOWLEDGESOURCE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactPurgeReceiptLifecycleState.
+const (
+	ArtifactPurgeReceiptLifecycleStatePURGED ArtifactPurgeReceiptLifecycleState = "PURGED"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactPurgeReceiptLifecycleState enum.
+func (e ArtifactPurgeReceiptLifecycleState) Valid() bool {
+	switch e {
+	case ArtifactPurgeReceiptLifecycleStatePURGED:
 		return true
 	default:
 		return false
@@ -2607,6 +2646,30 @@ func (e WorkflowStepInputGateDecisions) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactLifecycleStateQuery.
+const (
+	ArtifactLifecycleStateQueryACTIVE       ArtifactLifecycleStateQuery = "ACTIVE"
+	ArtifactLifecycleStateQueryDELETED      ArtifactLifecycleStateQuery = "DELETED"
+	ArtifactLifecycleStateQueryPURGED       ArtifactLifecycleStateQuery = "PURGED"
+	ArtifactLifecycleStateQueryPURGEPENDING ArtifactLifecycleStateQuery = "PURGE_PENDING"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactLifecycleStateQuery enum.
+func (e ArtifactLifecycleStateQuery) Valid() bool {
+	switch e {
+	case ArtifactLifecycleStateQueryACTIVE:
+		return true
+	case ArtifactLifecycleStateQueryDELETED:
+		return true
+	case ArtifactLifecycleStateQueryPURGED:
+		return true
+	case ArtifactLifecycleStateQueryPURGEPENDING:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DownloadArtifactParamsPurpose.
 const (
 	DOWNLOAD DownloadArtifactParamsPurpose = "DOWNLOAD"
@@ -2619,6 +2682,30 @@ func (e DownloadArtifactParamsPurpose) Valid() bool {
 	case DOWNLOAD:
 		return true
 	case PREVIEW:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListArtifactsParamsLifecycleState.
+const (
+	ListArtifactsParamsLifecycleStateACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
+	ListArtifactsParamsLifecycleStateDELETED      ListArtifactsParamsLifecycleState = "DELETED"
+	ListArtifactsParamsLifecycleStatePURGED       ListArtifactsParamsLifecycleState = "PURGED"
+	ListArtifactsParamsLifecycleStatePURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
+)
+
+// Valid indicates whether the value is a known member of the ListArtifactsParamsLifecycleState enum.
+func (e ListArtifactsParamsLifecycleState) Valid() bool {
+	switch e {
+	case ListArtifactsParamsLifecycleStateACTIVE:
+		return true
+	case ListArtifactsParamsLifecycleStateDELETED:
+		return true
+	case ListArtifactsParamsLifecycleStatePURGED:
+		return true
+	case ListArtifactsParamsLifecycleStatePURGEPENDING:
 		return true
 	default:
 		return false
@@ -2931,23 +3018,29 @@ type AgentRuntimeEnvironmentBinding struct {
 
 // Artifact defines model for Artifact.
 type Artifact struct {
-	AgentBindings    []OpaqueRef       `json:"agentBindings"`
-	CreatedAt        Timestamp         `json:"createdAt"`
-	Digest           string            `json:"digest"`
-	FileName         string            `json:"fileName"`
-	MediaType        string            `json:"mediaType"`
-	NextActions      []NextAction      `json:"nextActions"`
-	PreviewAvailable bool              `json:"previewAvailable"`
-	ProjectRef       OpaqueRef         `json:"projectRef"`
-	Ref              OpaqueRef         `json:"ref"`
-	Revision         int               `json:"revision"`
-	RunRef           *OpaqueRef        `json:"runRef,omitempty"`
-	ScanState        ArtifactScanState `json:"scanState"`
-	SessionRef       *OpaqueRef        `json:"sessionRef,omitempty"`
-	SizeBytes        int64             `json:"sizeBytes"`
-	Source           ArtifactSource    `json:"source"`
-	Version          int64             `json:"version"`
+	AgentBindings    []OpaqueRef            `json:"agentBindings"`
+	CreatedAt        Timestamp              `json:"createdAt"`
+	DeletedAt        *Timestamp             `json:"deletedAt,omitempty"`
+	Digest           string                 `json:"digest"`
+	FileName         string                 `json:"fileName"`
+	LifecycleState   ArtifactLifecycleState `json:"lifecycleState"`
+	MediaType        string                 `json:"mediaType"`
+	NextActions      []NextAction           `json:"nextActions"`
+	PreviewAvailable bool                   `json:"previewAvailable"`
+	ProjectRef       OpaqueRef              `json:"projectRef"`
+	PurgeAfter       *Timestamp             `json:"purgeAfter,omitempty"`
+	Ref              OpaqueRef              `json:"ref"`
+	Revision         int                    `json:"revision"`
+	RunRef           *OpaqueRef             `json:"runRef,omitempty"`
+	ScanState        ArtifactScanState      `json:"scanState"`
+	SessionRef       *OpaqueRef             `json:"sessionRef,omitempty"`
+	SizeBytes        int64                  `json:"sizeBytes"`
+	Source           ArtifactSource         `json:"source"`
+	Version          int64                  `json:"version"`
 }
+
+// ArtifactLifecycleState defines model for Artifact.LifecycleState.
+type ArtifactLifecycleState string
 
 // ArtifactScanState defines model for Artifact.ScanState.
 type ArtifactScanState string
@@ -2966,6 +3059,15 @@ type ArtifactPage struct {
 	Items         []Artifact `json:"items"`
 	NextPageToken *string    `json:"nextPageToken,omitempty"`
 }
+
+// ArtifactPurgeReceipt defines model for ArtifactPurgeReceipt.
+type ArtifactPurgeReceipt struct {
+	ArtifactRef    OpaqueRef                          `json:"artifactRef"`
+	LifecycleState ArtifactPurgeReceiptLifecycleState `json:"lifecycleState"`
+}
+
+// ArtifactPurgeReceiptLifecycleState defines model for ArtifactPurgeReceipt.LifecycleState.
+type ArtifactPurgeReceiptLifecycleState string
 
 // AssistantContextDescriptor defines model for AssistantContextDescriptor.
 type AssistantContextDescriptor struct {
@@ -4369,6 +4471,9 @@ type AccessRoleRef = OpaqueRef
 // AgentRef defines model for AgentRef.
 type AgentRef = OpaqueRef
 
+// ArtifactLifecycleStateQuery defines model for ArtifactLifecycleStateQuery.
+type ArtifactLifecycleStateQuery string
+
 // ArtifactRef defines model for ArtifactRef.
 type ArtifactRef = OpaqueRef
 
@@ -4640,6 +4745,13 @@ type BindAgentRuntimeEnvironmentParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// DeleteArtifactParams defines parameters for DeleteArtifact.
+type DeleteArtifactParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // ChangeArtifactBindingParams defines parameters for ChangeArtifactBinding.
 type ChangeArtifactBindingParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -4654,6 +4766,20 @@ type DownloadArtifactParams struct {
 
 // DownloadArtifactParamsPurpose defines parameters for DownloadArtifact.
 type DownloadArtifactParamsPurpose string
+
+// PurgeArtifactParams defines parameters for PurgeArtifact.
+type PurgeArtifactParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// RestoreArtifactParams defines parameters for RestoreArtifact.
+type RestoreArtifactParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
 
 // ListAssistantConversationsParams defines parameters for ListAssistantConversations.
 type ListAssistantConversationsParams struct {
@@ -4845,11 +4971,15 @@ type CreateAgentParams struct {
 
 // ListArtifactsParams defines parameters for ListArtifacts.
 type ListArtifactsParams struct {
-	RunRef    *RunRefQuery `form:"runRef,omitempty" json:"runRef,omitempty"`
-	Query     *Query       `form:"query,omitempty" json:"query,omitempty"`
-	PageSize  *PageSize    `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken   `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	RunRef         *RunRefQuery                       `form:"runRef,omitempty" json:"runRef,omitempty"`
+	LifecycleState *ListArtifactsParamsLifecycleState `form:"lifecycleState,omitempty" json:"lifecycleState,omitempty"`
+	Query          *Query                             `form:"query,omitempty" json:"query,omitempty"`
+	PageSize       *PageSize                          `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken      *PageToken                         `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
+
+// ListArtifactsParamsLifecycleState defines parameters for ListArtifacts.
+type ListArtifactsParamsLifecycleState string
 
 // UploadArtifactParams defines parameters for UploadArtifact.
 type UploadArtifactParams struct {
@@ -5347,6 +5477,9 @@ type ServerInterface interface {
 	// (PUT /api/v1/agents/{agentRef}/runtime-environment-binding)
 	BindAgentRuntimeEnvironment(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params BindAgentRuntimeEnvironmentParams)
 
+	// (DELETE /api/v1/artifacts/{artifactRef})
+	DeleteArtifact(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, params DeleteArtifactParams)
+
 	// (GET /api/v1/artifacts/{artifactRef})
 	GetArtifact(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef)
 
@@ -5355,6 +5488,12 @@ type ServerInterface interface {
 
 	// (GET /api/v1/artifacts/{artifactRef}/content)
 	DownloadArtifact(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, params DownloadArtifactParams)
+
+	// (DELETE /api/v1/artifacts/{artifactRef}/purge)
+	PurgeArtifact(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, params PurgeArtifactParams)
+
+	// (POST /api/v1/artifacts/{artifactRef}/restore)
+	RestoreArtifact(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, params RestoreArtifactParams)
 
 	// (GET /api/v1/assistant-conversations)
 	ListAssistantConversations(w http.ResponseWriter, r *http.Request, params ListAssistantConversationsParams)
@@ -8295,6 +8434,112 @@ func (siw *ServerInterfaceWrapper) BindAgentRuntimeEnvironment(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteArtifact operation middleware
+func (siw *ServerInterfaceWrapper) DeleteArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteArtifactParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteArtifact(w, r, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetArtifact operation middleware
 func (siw *ServerInterfaceWrapper) GetArtifact(w http.ResponseWriter, r *http.Request) {
 
@@ -8472,6 +8717,218 @@ func (siw *ServerInterfaceWrapper) DownloadArtifact(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DownloadArtifact(w, r, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PurgeArtifact operation middleware
+func (siw *ServerInterfaceWrapper) PurgeArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PurgeArtifactParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PurgeArtifact(w, r, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreArtifact operation middleware
+func (siw *ServerInterfaceWrapper) RestoreArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RestoreArtifactParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreArtifact(w, r, artifactRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10591,6 +11048,19 @@ func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "runRef"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "lifecycleState" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "lifecycleState", r.URL.Query(), &params.LifecycleState, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lifecycleState"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lifecycleState", Err: err})
 		}
 		return
 	}
@@ -14033,9 +14503,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-configuration", wrapper.PublishAgentRuntimeConfiguration)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-configuration/versions", wrapper.ListAgentRuntimeConfigurationVersions)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-environment-binding", wrapper.BindAgentRuntimeEnvironment)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}", wrapper.DeleteArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}", wrapper.GetArtifact)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/bindings", wrapper.ChangeArtifactBinding)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/content", wrapper.DownloadArtifact)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/purge", wrapper.PurgeArtifact)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/restore", wrapper.RestoreArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.ListAssistantConversations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.CreateAssistantConversation)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/title", wrapper.UpdateAssistantConversationTitle)

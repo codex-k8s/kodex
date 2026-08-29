@@ -119,6 +119,14 @@ func artifactSource(value string) controlplanev1.ArtifactSource {
 	raw := controlplanev1.ArtifactSource_value["ARTIFACT_SOURCE_"+value]
 	return controlplanev1.ArtifactSource(raw)
 }
+
+func artifactLifecycleState(value string) controlplanev1.ArtifactLifecycleState {
+	if value == "" {
+		value = "ACTIVE"
+	}
+	raw := controlplanev1.ArtifactLifecycleState_value["ARTIFACT_LIFECYCLE_STATE_"+value]
+	return controlplanev1.ArtifactLifecycleState(raw)
+}
 func scheduleState(schedule entity.Schedule) controlplanev1.ScheduleState {
 	switch schedule.State {
 	case "ARCHIVED":
@@ -371,7 +379,7 @@ func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
 	return gate
 }
 func castArtifact(value entity.Artifact) *controlplanev1.Artifact {
-	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, SessionRef: value.SessionRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: artifactSource(value.Source), Revision: int32(value.Revision), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions), Digest: value.Digest}
+	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, SessionRef: value.SessionRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: artifactSource(value.Source), Revision: int32(value.Revision), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions), Digest: value.Digest, LifecycleState: artifactLifecycleState(value.LifecycleState), DeletedAt: optionalTimestamp(value.DeletedAt), PurgeAfter: optionalTimestamp(value.PurgeAfter)}
 }
 func castSchedule(value entity.Schedule) *controlplanev1.Schedule {
 	return &controlplanev1.Schedule{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Target: castRunTarget(value.Target), State: scheduleState(value), Preset: value.Preset, CronExpression: value.CronExpression, Timezone: value.Timezone, Input: structure(value.Input), SessionPolicy: value.SessionPolicy, NotificationPolicy: value.NotificationPolicy, NextRunAt: optionalTimestamp(value.NextRunAt), NextActions: nextActions(value.NextActions), TimeOfDay: value.TimeOfDay, DayOfWeek: value.DayOfWeek}

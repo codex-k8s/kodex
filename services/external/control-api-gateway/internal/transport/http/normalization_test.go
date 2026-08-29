@@ -88,6 +88,15 @@ func TestNormalizeArtifactSource(t *testing.T) {
 	}
 }
 
+func TestNormalizeArtifactLifecycleState(t *testing.T) {
+	t.Parallel()
+	value := map[string]any{"lifecycleState": "ARTIFACT_LIFECYCLE_STATE_DELETED"}
+	normalize(value)
+	if value["lifecycleState"] != "DELETED" {
+		t.Fatalf("lifecycle artifact не нормализован: %#v", value)
+	}
+}
+
 func TestNormalizeEnumCollections(t *testing.T) {
 	t.Parallel()
 	value := map[string]any{"nextActions": []any{"NEXT_ACTION_OPEN", "NEXT_ACTION_CREATE_PROJECT"}}

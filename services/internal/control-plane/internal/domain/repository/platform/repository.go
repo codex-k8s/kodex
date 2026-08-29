@@ -123,6 +123,7 @@ type Repository interface {
 	GetArtifact(context.Context, value.Principal, string) (entity.Artifact, error)
 	UploadArtifact(context.Context, value.Principal, value.Mutation, ArtifactUpload) (entity.Artifact, error)
 	DownloadArtifact(context.Context, value.Principal, string, string) (ArtifactDownload, error)
+	PurgeArtifact(context.Context, value.Principal, value.Mutation, string) (string, error)
 	ReadExecutionArtifact(context.Context, value.Principal, string, string, int64, string) (ArtifactDownload, error)
 	ListSchedules(context.Context, value.Principal, query.Filter) ([]entity.Schedule, string, error)
 	GetSchedule(context.Context, value.Principal, string) (entity.Schedule, error)

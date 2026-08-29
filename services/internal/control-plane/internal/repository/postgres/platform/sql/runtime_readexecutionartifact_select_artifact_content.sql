@@ -46,6 +46,7 @@ WHERE lease.organization_id = @organization_id::uuid
   AND lease.expires_at > clock_timestamp()
   AND artifact.ref = @artifact_ref
   AND artifact.scan_state = 'CLEAN'
+  AND artifact.lifecycle_state = 'ACTIVE'
   AND (
     artifact.ref = ANY(root_run.input_artifact_refs)
     OR EXISTS (
