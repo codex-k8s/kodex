@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -1102,7 +1103,14 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 	if !contains([]string{"ACTIVE", "DELETED", "PURGE_PENDING", "PURGED"}, lifecycleState) {
 		return nil, "", errs.ErrInvalid
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId, scope.organizationID, filter.ProjectRef, filter.ResourceRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), lifecycleState, boundedPage(filter.Page))
+	cursorCreatedAt, cursorRef, err := decodeArtifactCursor(filter.Page.Token)
+	if err != nil {
+		return nil, "", err
+	}
+	limit := boundedPage(filter.Page)
+	rows, err := repository.pool.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId,
+		scope.organizationID, filter.ProjectRef, filter.ResourceRef, scope.role, scope.actorID,
+		strings.TrimSpace(filter.Query), lifecycleState, cursorCreatedAt, cursorRef, limit+1)
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -1115,7 +1123,44 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 		}
 		result = append(result, item)
 	}
-	return result, "", rows.Err()
+	if rows.Err() != nil {
+		return nil, "", errs.ErrUnavailable
+	}
+	next := ""
+	if len(result) > int(limit) {
+		result = result[:limit]
+		last := result[len(result)-1]
+		next = encodeArtifactCursor(last.CreatedAt, last.Ref)
+	}
+	return result, next, nil
+}
+
+const artifactCursorVersion = "v1"
+
+func encodeArtifactCursor(createdAt time.Time, ref string) string {
+	payload := createdAt.UTC().Format(time.RFC3339Nano) + "\n" + ref
+	return artifactCursorVersion + "." + base64.RawURLEncoding.EncodeToString([]byte(payload))
+}
+
+func decodeArtifactCursor(token string) (*time.Time, string, error) {
+	if token == "" {
+		return nil, "", nil
+	}
+	version, payload, found := strings.Cut(token, ".")
+	if !found || version != artifactCursorVersion || len(payload) > 256 {
+		return nil, "", errs.ErrInvalid
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, "", errs.ErrInvalid
+	}
+	createdAtText, ref, found := strings.Cut(string(decoded), "\n")
+	createdAt, err := time.Parse(time.RFC3339Nano, createdAtText)
+	if !found || err != nil || !strings.HasPrefix(ref, "art_") || len(ref) > 96 || strings.ContainsAny(ref, "\r\n") {
+		return nil, "", errs.ErrInvalid
+	}
+	createdAt = createdAt.UTC()
+	return &createdAt, ref, nil
 }
 
 func scanArtifact(row rowScanner) (entity.Artifact, error) {
