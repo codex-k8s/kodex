@@ -461,8 +461,14 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	}
 	projectionErr := server.recordToolCall(request.Context(), input, params.Name, params.Arguments, result, err, rpc.ID, time.Since(startedAt))
 	if err != nil {
+		failureClass := "tool_unavailable"
+		var planInputErr *assistantPlanInputError
+		if errors.As(err, &planInputErr) {
+			failureClass = "assistant_plan_" + planInputErr.reason
+		}
 		server.logger.WarnContext(request.Context(), "runtime MCP tool operation failed",
-			"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String())
+			"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String(),
+			"failure_class", failureClass)
 	}
 	if projectionErr != nil {
 		server.logger.WarnContext(request.Context(), "runtime MCP tool projection failed",
@@ -475,10 +481,26 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	encoded, _ := json.Marshal(result)
 	structured := result
 	if err != nil {
-		structured = map[string]string{"error_code": "TOOL_UNAVAILABLE"}
+		structured = map[string]any{"error_code": "TOOL_UNAVAILABLE", "retryable": false}
+		var planInputErr *assistantPlanInputError
+		if errors.As(err, &planInputErr) {
+			structured = map[string]any{
+				"error_code": "PLAN_INPUT_INVALID",
+				"retryable":  true,
+				"guidance":   "Read the current tool schema and retry once with exactly the required operation fields and camelCase parameter names.",
+			}
+		}
 		encoded, _ = json.Marshal(structured)
 	}
 	server.writeMCPResult(writer, rpc.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "structuredContent": structured, "isError": err != nil})
+}
+
+type assistantPlanInputError struct{ reason string }
+
+func (planErr *assistantPlanInputError) Error() string { return "assistant plan input is invalid" }
+
+func invalidAssistantPlan(reason string) error {
+	return &assistantPlanInputError{reason: reason}
 }
 
 func controlFailureClass(err error) string {
@@ -517,18 +539,26 @@ func decodeMCPToolCallParams(raw json.RawMessage) (mcpToolCallParams, error) {
 
 func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
 	if !input.SystemAssistant || !onlyKeys(arguments, "summary", "operations") {
-		return nil, errors.New("assistant plan tool is not available")
+		return nil, invalidAssistantPlan("top_level_shape")
 	}
 	summary, _ := arguments["summary"].(string)
 	rawOperations, _ := arguments["operations"].([]any)
 	if strings.TrimSpace(summary) == "" || len(summary) > 2000 || len(rawOperations) == 0 || len(rawOperations) > 32 {
-		return nil, errors.New("assistant plan is invalid")
+		return nil, invalidAssistantPlan("summary_or_count")
 	}
 	operations := make([]*controlplanev1.AssistantPlanOperation, 0, len(rawOperations))
+	currentProjectName := ""
+	if input.AssistantContext != nil && input.AssistantContext.EntityKind == "PROJECT" && input.AssistantContext.EntityRef == input.ProjectRef {
+		currentProjectName = input.AssistantContext.EntityName
+	}
 	for index, raw := range rawOperations {
 		operation, ok := raw.(map[string]any)
 		if !ok || !onlyKeys(operation, "type", "action", "title", "summary", "target", "parameters", "expectedVersion", "before", "after", "selected") {
-			return nil, errors.New("assistant plan operation is invalid")
+			return nil, invalidAssistantPlan("operation_shape")
+		}
+		operation, normalizeErr := normalizeServerHydratedAssistantOperation(operation, summary, input.ProjectRef, currentProjectName)
+		if normalizeErr != nil {
+			return nil, normalizeErr
 		}
 		kind, _ := operation["type"].(string)
 		serverHydrated := assistantServerHydratedOperation(kind)
@@ -556,23 +586,47 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		}
 		typeValue, exists := controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+kind]
 		actionValue, actionExists := controlplanev1.AssistantPlanOperation_Action_value["ACTION_"+action]
-		if !exists || typeValue == 0 || !actionExists || actionValue == 0 || strings.TrimSpace(title) == "" || len(title) > 200 ||
-			strings.TrimSpace(operationSummary) == "" || len(operationSummary) > 500 || parameters == nil || !beforeOK || !afterOK || !targetOK || !selectedOK || !selected {
-			return nil, errors.New("assistant plan operation is invalid")
+		if !exists || typeValue == 0 {
+			return nil, invalidAssistantPlan("operation_type")
+		}
+		if !actionExists || actionValue == 0 {
+			return nil, invalidAssistantPlan("operation_action")
+		}
+		if strings.TrimSpace(title) == "" || len(title) > 200 {
+			return nil, invalidAssistantPlan("operation_title")
+		}
+		if strings.TrimSpace(operationSummary) == "" || len(operationSummary) > 500 {
+			return nil, invalidAssistantPlan("operation_summary")
+		}
+		if parameters == nil {
+			return nil, invalidAssistantPlan("operation_parameters")
+		}
+		if !beforeOK || !afterOK {
+			return nil, invalidAssistantPlan("operation_projection")
+		}
+		if !targetOK {
+			return nil, invalidAssistantPlan("operation_target")
+		}
+		if !selectedOK || !selected {
+			return nil, invalidAssistantPlan("operation_selection")
 		}
 		parameterStruct, parameterErr := structpb.NewStruct(parameters)
 		beforeStruct, beforeErr := structpb.NewStruct(before)
 		afterStruct, afterErr := structpb.NewStruct(after)
 		if parameterErr != nil || beforeErr != nil || afterErr != nil {
-			return nil, errors.New("assistant plan operation input is invalid")
+			return nil, invalidAssistantPlan("operation_struct")
 		}
 		targetKind, _ := target["kind"].(string)
 		targetRef, _ := target["ref"].(string)
 		targetName, _ := target["name"].(string)
 		expectedVersion, expectedOK := exactJSONInt64(operation["expectedVersion"])
 		targetVersion, targetVersionOK := exactJSONInt64(target["version"])
+		if serverHydrated {
+			expectedVersion, expectedOK = 0, false
+			targetVersion, targetVersionOK = 0, false
+		}
 		if expectedOK != targetVersionOK || expectedOK && expectedVersion != targetVersion || targetKind == "" || targetName == "" {
-			return nil, errors.New("assistant plan target is invalid")
+			return nil, invalidAssistantPlan("operation_target_version")
 		}
 		var expected *int64
 		if expectedOK {
@@ -600,6 +654,151 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 	}
 	return map[string]any{"ok": true, "plan_ref": response.GetPlan().GetRef(), "plan_version": response.GetPlan().GetVersion(), "plan_revision": response.GetPlan().GetRevision(),
 		"conversation_ref": response.GetConversation().GetRef()}, nil
+}
+
+func normalizeServerHydratedAssistantOperation(operation map[string]any, planSummary, projectRef, projectName string) (map[string]any, error) {
+	kind, _ := operation["type"].(string)
+	if kind == "" {
+		candidate, _ := operation["action"].(string)
+		if assistantServerHydratedOperation(candidate) {
+			kind = candidate
+		}
+	}
+	if !assistantServerHydratedOperation(kind) {
+		return operation, nil
+	}
+	parameters, ok := operation["parameters"].(map[string]any)
+	if !ok {
+		return operation, nil
+	}
+	normalizedParameters, err := normalizeAssistantParameterNames(parameters)
+	if err != nil {
+		return nil, invalidAssistantPlan("operation_parameter_alias")
+	}
+	if assistantProjectScopedOperation(kind) && strings.TrimSpace(projectRef) != "" {
+		normalizedParameters["projectRef"] = strings.TrimSpace(projectRef)
+	}
+	normalized := make(map[string]any, len(operation)+3)
+	for key, value := range operation {
+		normalized[key] = value
+	}
+	normalized["type"] = kind
+	normalized["parameters"] = normalizedParameters
+	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" {
+		normalized["title"] = assistantOperationTitle(kind, normalizedParameters, projectName)
+	}
+	if operationSummary, _ := normalized["summary"].(string); strings.TrimSpace(operationSummary) == "" {
+		normalized["summary"] = truncateRunes(planSummary, 500)
+	}
+	if kind == "UPDATE_PROJECT" {
+		normalized["summary"] = assistantProjectUpdateSummary(normalizedParameters, projectName)
+	}
+	return normalized, nil
+}
+
+func assistantProjectScopedOperation(kind string) bool {
+	switch kind {
+	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE":
+		return true
+	default:
+		return false
+	}
+}
+
+var assistantParameterAliases = map[string]string{
+	"agent_ref": "agentRef", "artifact_refs": "artifactRefs", "avatar_url": "avatarUrl",
+	"capability_key": "capabilityKey", "completion_criteria": "completionCriteria",
+	"connection_ref": "connectionRef", "coordinator_agent_ref": "coordinatorAgentRef",
+	"day_of_week": "dayOfWeek", "definition_key": "definitionKey", "gate_decisions": "gateDecisions",
+	"human_gate": "humanGate", "input_fields": "inputFields", "max_concurrency": "maxConcurrency",
+	"notification_policy": "notificationPolicy", "parallel_group": "parallelGroup",
+	"project_ref": "projectRef", "public_configuration": "publicConfiguration",
+	"required_capability_keys": "requiredCapabilityKeys", "role_definition_ref": "roleDefinitionRef",
+	"role_description": "roleDescription", "runtime_ref": "runtimeRef", "session_policy": "sessionPolicy",
+	"session_ref": "sessionRef", "target_ref": "targetRef", "target_type": "targetType",
+	"time_of_day": "timeOfDay", "timeout_seconds": "timeoutSeconds", "value_type": "valueType",
+	"workflow_ref": "workflowRef",
+}
+
+func normalizeAssistantParameterNames(value map[string]any) (map[string]any, error) {
+	result := make(map[string]any, len(value))
+	for key, item := range value {
+		normalizedKey := key
+		if alias := assistantParameterAliases[key]; alias != "" {
+			normalizedKey = alias
+		}
+		if _, duplicate := result[normalizedKey]; duplicate {
+			return nil, errors.New("assistant parameter aliases conflict")
+		}
+		normalizedItem, err := normalizeAssistantParameterValue(item)
+		if err != nil {
+			return nil, err
+		}
+		result[normalizedKey] = normalizedItem
+	}
+	return result, nil
+}
+
+func normalizeAssistantParameterValue(value any) (any, error) {
+	switch typed := value.(type) {
+	case map[string]any:
+		return normalizeAssistantParameterNames(typed)
+	case []any:
+		result := make([]any, len(typed))
+		for index, item := range typed {
+			normalized, err := normalizeAssistantParameterValue(item)
+			if err != nil {
+				return nil, err
+			}
+			result[index] = normalized
+		}
+		return result, nil
+	default:
+		return value, nil
+	}
+}
+
+func assistantOperationTitle(kind string, parameters map[string]any, projectName string) string {
+	name, _ := parameters["name"].(string)
+	if kind == "UPDATE_PROJECT" && strings.TrimSpace(projectName) != "" {
+		name = projectName
+	}
+	if strings.TrimSpace(name) == "" {
+		name, _ = parameters["projectRef"].(string)
+	}
+	labels := map[string]string{
+		"CREATE_PROJECT":                "Создать Проект",
+		"UPDATE_PROJECT":                "Изменить Проект",
+		"CREATE_AGENT":                  "Создать ИИ-сотрудника",
+		"CREATE_WORKFLOW":               "Создать Процесс",
+		"CREATE_INTEGRATION_CONNECTION": "Создать подключение",
+		"CREATE_SCHEDULE":               "Создать автоматизацию",
+	}
+	label := labels[kind]
+	if strings.TrimSpace(name) == "" {
+		return label
+	}
+	return truncateRunes(fmt.Sprintf("%s «%s»", label, strings.TrimSpace(name)), 200)
+}
+
+func assistantProjectUpdateSummary(parameters map[string]any, projectName string) string {
+	changes := make([]string, 0, 3)
+	for _, field := range []struct {
+		key, label string
+	}{{"name", "название"}, {"purpose", "назначение"}, {"language", "язык"}} {
+		value, _ := parameters[field.key].(string)
+		if strings.TrimSpace(value) != "" {
+			changes = append(changes, fmt.Sprintf("%s: «%s»", field.label, strings.TrimSpace(value)))
+		}
+	}
+	project := "Проект"
+	if strings.TrimSpace(projectName) != "" {
+		project = fmt.Sprintf("Проект «%s»", strings.TrimSpace(projectName))
+	}
+	if len(changes) == 0 {
+		return "Изменить параметры " + project + "."
+	}
+	return truncateRunes("Изменить "+project+" — "+strings.Join(changes, "; ")+".", 500)
 }
 
 func assistantServerHydratedOperation(kind string) bool {

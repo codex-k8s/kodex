@@ -2,6 +2,7 @@ package callback
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -165,5 +166,83 @@ func TestDecodeMCPToolCallParamsRejectsUnknownAuthorityFields(t *testing.T) {
 	}`))
 	if err == nil {
 		t.Fatal("unknown authority-like field was accepted")
+	}
+}
+
+func TestAssistantPlanInputErrorsKeepAClosedFailureClass(t *testing.T) {
+	t.Parallel()
+	server := &Server{}
+	_, err := server.proposeAssistantPlan(t.Context(), runtimecontract.RunnerInput{SystemAssistant: true}, map[string]any{
+		"summary": "Create one agent",
+		"operations": []any{map[string]any{
+			"action":     "DELETE_PROJECT",
+			"parameters": map[string]any{"name": "Analyst"},
+		}}}, json.RawMessage(`1`))
+	var inputErr *assistantPlanInputError
+	if !errors.As(err, &inputErr) {
+		t.Fatalf("expected a typed assistant plan input error, got %v", err)
+	}
+	if inputErr.reason != "operation_type" {
+		t.Fatalf("unexpected safe failure class: %q", inputErr.reason)
+	}
+}
+
+func TestNormalizeServerHydratedAssistantOperationAcceptsBoundedModelShorthand(t *testing.T) {
+	t.Parallel()
+	parameters := map[string]any{
+		"project_ref":      "prj_12345678",
+		"name":             "Analyst",
+		"role_description": "Sales analyst",
+	}
+	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
+		"action":     "CREATE_AGENT",
+		"parameters": parameters,
+	}, "Create one analyst", "prj_12345678", "Sales")
+	if err != nil {
+		t.Fatalf("normalize model shorthand: %v", err)
+	}
+	if operation["type"] != "CREATE_AGENT" || operation["title"] != "Создать ИИ-сотрудника «Analyst»" ||
+		operation["summary"] != "Create one analyst" {
+		t.Fatalf("unexpected normalized envelope: %#v", operation)
+	}
+	normalized := operation["parameters"].(map[string]any)
+	if normalized["projectRef"] != "prj_12345678" || normalized["roleDescription"] != "Sales analyst" {
+		t.Fatalf("parameter aliases were not normalized: %#v", normalized)
+	}
+	if _, exists := normalized["project_ref"]; exists {
+		t.Fatalf("snake_case alias survived normalization: %#v", normalized)
+	}
+}
+
+func TestNormalizeServerHydratedAssistantOperationRejectsAliasCollision(t *testing.T) {
+	t.Parallel()
+	_, err := normalizeServerHydratedAssistantOperation(map[string]any{
+		"type": "CREATE_AGENT",
+		"parameters": map[string]any{
+			"projectRef":  "prj_12345678",
+			"project_ref": "prj_87654321",
+		},
+	}, "Create one analyst", "prj_12345678", "Sales")
+	var inputErr *assistantPlanInputError
+	if !errors.As(err, &inputErr) || inputErr.reason != "operation_parameter_alias" {
+		t.Fatalf("expected a closed alias collision, got %v", err)
+	}
+}
+
+func TestNormalizeServerHydratedAssistantOperationPinsCurrentProject(t *testing.T) {
+	t.Parallel()
+	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
+		"action":     "UPDATE_PROJECT",
+		"parameters": map[string]any{"purpose": "Updated purpose"},
+	}, "Update current project", "prj_current1", "Sales")
+	if err != nil {
+		t.Fatalf("normalize project update: %v", err)
+	}
+	parameters := operation["parameters"].(map[string]any)
+	if parameters["projectRef"] != "prj_current1" {
+		t.Fatalf("current project was not server-pinned: %#v", parameters)
+	}
+	if operation["title"] != "Изменить Проект «Sales»" || operation["summary"] != "Изменить Проект «Sales» — назначение: «Updated purpose»." {
+		t.Fatalf("project update is not explicit: %#v", operation)
 	}
 }
