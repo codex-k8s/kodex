@@ -65,6 +65,14 @@ func (client *Client) Complete(ctx context.Context, input model.Input, payload r
 	return client.post(ctx, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/complete", payload)
 }
 
+func (client *Client) RecordNativeToolCall(ctx context.Context, input model.Input, call runtimecontract.NativeToolCall) error {
+	payload := runtimecontract.RunnerNativeToolCallRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, NativeToolCall: call}
+	if err := payload.Validate(); err != nil {
+		return errors.New("validate native tool callback: " + err.Error())
+	}
+	return client.post(ctx, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/native-tool-call", payload)
+}
+
 func (client *Client) WriteArtifact(ctx context.Context, input model.Input, artifact runtimecontract.RunnerInputArtifact, destination io.Writer) error {
 	endpoint := *client.base
 	endpoint.Path = "/v1/executions/" + url.PathEscape(input.LeaseRef) + "/artifacts/" + url.PathEscape(artifact.Ref)

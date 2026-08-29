@@ -218,9 +218,81 @@ func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 		server.mcp(writer, request, parts[2])
+	case "native-tool-call":
+		if request.Method != http.MethodPost {
+			http.NotFound(writer, request)
+			return
+		}
+		server.nativeToolCall(writer, request, parts[2])
 	default:
 		http.NotFound(writer, request)
 	}
+}
+
+func (server *Server) nativeToolCall(writer http.ResponseWriter, request *http.Request, leaseRef string) {
+	input, ok := server.authorize(request, leaseRef)
+	if !ok {
+		http.NotFound(writer, request)
+		return
+	}
+	var payload runtimecontract.RunnerNativeToolCallRequest
+	if decode(request, &payload, 8<<10) != nil || payload.Validate() != nil ||
+		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest {
+		http.Error(writer, "invalid native tool call", http.StatusBadRequest)
+		return
+	}
+	projection, err := nativeToolCallProjection(input, payload)
+	if err != nil {
+		http.Error(writer, "invalid native tool call", http.StatusBadRequest)
+		return
+	}
+	requestContext, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
+	defer cancel()
+	response, err := server.control.Runtime.RecordRunToolCall(requestContext, projection)
+	if status.Code(err) == codes.AlreadyExists {
+		writer.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err != nil {
+		server.logger.WarnContext(request.Context(), "control-plane native tool projection request failed",
+			"tool", payload.Kind, "grpc_code", status.Code(err).String(), "failure_class", controlFailureClass(err))
+		writeControlError(writer, err)
+		return
+	}
+	if response.GetEvent().GetRef() == "" {
+		http.Error(writer, "runtime owner unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	writer.WriteHeader(http.StatusNoContent)
+}
+
+func nativeToolCallProjection(input runtimecontract.RunnerInput, payload runtimecontract.RunnerNativeToolCallRequest) (*controlplanev1.RecordRunToolCallRequest, error) {
+	if input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 || payload.Validate() != nil ||
+		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest {
+		return nil, errors.New("native tool call projection is invalid")
+	}
+	rawParameters, err := json.Marshal(payload.SafeParameters)
+	var normalizedParameters map[string]any
+	if err != nil || json.Unmarshal(rawParameters, &normalizedParameters) != nil {
+		return nil, errors.New("native tool call projection is invalid")
+	}
+	normalizedParameters["codex_item_id"] = payload.CallID
+	parameters, err := structpb.NewStruct(normalizedParameters)
+	if err != nil {
+		return nil, errors.New("native tool call projection is invalid")
+	}
+	state := controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_SUCCEEDED
+	if payload.State == runtimecontract.NativeToolStateFailed {
+		state = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED
+	}
+	correlationKey := "native:" + payload.CallID
+	digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, correlationKey)))
+	return &controlplanev1.RecordRunToolCallRequest{
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, correlationKey+":activity")},
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
+		CallRef: "tcl_" + hex.EncodeToString(digest[:16]), Tool: payload.Kind, SafeParameters: parameters,
+		State: state, DurationMs: payload.DurationMS, SafeResult: payload.SafeResult,
+	}, nil
 }
 
 func (server *Server) artifact(writer http.ResponseWriter, request *http.Request, leaseRef, artifactRef string) {

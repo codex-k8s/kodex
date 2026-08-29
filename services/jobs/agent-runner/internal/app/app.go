@@ -151,6 +151,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 	if err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_PROVIDER_UNAVAILABLE")
 	}
+	if err := recordNativeToolTimeline(ctx, input, client, result.ToolCalls); err != nil {
+		return err
+	}
 	if result.Outcome != "SUCCEEDED" {
 		_, message, _ := codex.TerminalPresentation(result.FailureCode)
 		return completeResultFailure(ctx, input, client, result, message)
@@ -164,6 +167,25 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
 	return client.Complete(ctx, input, payload)
+}
+
+type nativeToolCallRecorder interface {
+	RecordNativeToolCall(context.Context, model.Input, runtimecontract.NativeToolCall) error
+}
+
+func recordNativeToolTimeline(ctx context.Context, input model.Input, recorder nativeToolCallRecorder, calls []runtimecontract.NativeToolCall) error {
+	if len(calls) > runtimecontract.MaximumNativeToolCalls {
+		return errors.New("native tool timeline is invalid")
+	}
+	for _, call := range calls {
+		if call.Validate() != nil {
+			return errors.New("native tool timeline is invalid")
+		}
+		if err := recorder.RecordNativeToolCall(ctx, input, call); err != nil {
+			return errors.New("record native tool timeline")
+		}
+	}
+	return nil
 }
 
 func completeResultFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, summary string) error {
@@ -407,6 +429,7 @@ func promptTemplateVariables(input model.Input) map[string]any {
 			"name": tool.Name, "command": tool.Command, "description": tool.Description, "usage_hint": tool.UsageHint,
 		})
 	}
+	image := map[string]any{"reference": input.EnvironmentImage.Reference, "digest": input.EnvironmentImage.Digest}
 	variables := map[string]any{
 		"agent":   map[string]any{"ref": input.AgentRef},
 		"project": mergeFileScope(map[string]any{"ref": input.ProjectRef}, projectScope),
@@ -414,7 +437,7 @@ func promptTemplateVariables(input model.Input) map[string]any {
 		"session": mergeFileScope(map[string]any{"ref": input.SessionRef}, sessionScope),
 		"turn":    map[string]any{"ref": input.TurnRef},
 		"runtime": map[string]any{"environment": map[string]any{
-			"ref": input.RuntimeEnvironmentRef, "image": input.EnvironmentImage, "tools": tools,
+			"ref": input.RuntimeEnvironmentRef, "image": image, "tools": tools,
 		}},
 		"tools":    tools,
 		"input":    inputScope,

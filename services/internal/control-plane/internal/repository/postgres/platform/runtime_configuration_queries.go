@@ -161,17 +161,7 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 	if _, err := repository.GetProject(ctx, principal, filter.ProjectRef); err != nil {
 		return nil, "", err
 	}
-	catalog := []entity.TemplateVariable{
-		{Name: "agent.name", Type: "string", Description: "Имя текущего агента", Example: "Аналитик", Source: "AGENT"},
-		{Name: "agent.ref", Type: "reference", Description: "Ссылка текущего агента", Example: "agt_example", Source: "AGENT"},
-		{Name: "project.name", Type: "string", Description: "Имя текущего проекта", Example: "Продажи", Source: "PROJECT"},
-		{Name: "project.ref", Type: "reference", Description: "Ссылка текущего проекта", Example: "prj_example", Source: "PROJECT"},
-		{Name: "run.ref", Type: "reference", Description: "Ссылка текущего запуска", Example: "run_example", Source: "RUNTIME"},
-		{Name: "runtime.config.ref", Type: "reference", Description: "Ссылка опубликованной runtime-конфигурации", Example: "rconf_example", Source: "RUNTIME"},
-		{Name: "runtime.environment.ref", Type: "reference", Description: "Ссылка опубликованного окружения", Example: "renv_example", Source: "RUNTIME"},
-		{Name: "session.ref", Type: "reference", Description: "Ссылка текущей сессии", Example: "ses_example", Source: "SESSION"},
-		{Name: "turn.ref", Type: "reference", Description: "Ссылка текущего turn", Example: "trn_example", Source: "SESSION"},
-	}
+	catalog := templateVariableCatalog()
 	needle := strings.ToLower(strings.TrimSpace(filter.Query))
 	start := 0
 	if filter.Page.Token != "" {
@@ -195,6 +185,40 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 		next = filtered[len(filtered)-1].Name
 	}
 	return filtered, next, nil
+}
+
+func templateVariableCatalog() []entity.TemplateVariable {
+	return []entity.TemplateVariable{
+		{Name: "agent.ref", Type: "reference", Description: "Ссылка текущего ИИ-сотрудника", Example: "{{ .agent.ref }}", Source: "AGENT"},
+		{Name: "input.files", Type: "collection", Description: "Файлы текущего сообщения или запуска", Example: "{{ range .input.files }}{{ .path }}{{ end }}", Source: "INPUT"},
+		{Name: "input.files_count", Type: "integer", Description: "Количество файлов текущего входа", Example: "{{ .input.files_count }}", Source: "INPUT"},
+		{Name: "input.files_dir", Type: "string", Description: "Каталог файлов текущего входа в workspace", Example: "{{ .input.files_dir }}", Source: "INPUT"},
+		{Name: "input.manifest_path", Type: "string", Description: "Путь к manifest текущего входа", Example: "{{ .input.manifest_path }}", Source: "INPUT"},
+		{Name: "project.files", Type: "collection", Description: "Явно выбранные файлы знаний Проекта", Example: "{{ range .project.files }}{{ .path }}{{ end }}", Source: "PROJECT"},
+		{Name: "project.files_count", Type: "integer", Description: "Количество выбранных файлов знаний Проекта", Example: "{{ .project.files_count }}", Source: "PROJECT"},
+		{Name: "project.files_dir", Type: "string", Description: "Каталог выбранных файлов знаний Проекта", Example: "{{ .project.files_dir }}", Source: "PROJECT"},
+		{Name: "project.manifest_path", Type: "string", Description: "Путь к manifest выбранных знаний Проекта", Example: "{{ .project.manifest_path }}", Source: "PROJECT"},
+		{Name: "project.ref", Type: "reference", Description: "Ссылка текущего Проекта", Example: "{{ .project.ref }}", Source: "PROJECT"},
+		{Name: "run.files", Type: "collection", Description: "Файлы текущего запуска, вошедшие в RuntimeRevision", Example: "{{ range .run.files }}{{ .path }}{{ end }}", Source: "RUN"},
+		{Name: "run.files_count", Type: "integer", Description: "Количество файлов текущего запуска", Example: "{{ .run.files_count }}", Source: "RUN"},
+		{Name: "run.files_dir", Type: "string", Description: "Каталог файлов текущего запуска", Example: "{{ .run.files_dir }}", Source: "RUN"},
+		{Name: "run.manifest_path", Type: "string", Description: "Путь к manifest файлов текущего запуска", Example: "{{ .run.manifest_path }}", Source: "RUN"},
+		{Name: "run.ref", Type: "reference", Description: "Ссылка текущего запуска", Example: "{{ .run.ref }}", Source: "RUN"},
+		{Name: "runtime.environment.image.digest", Type: "string", Description: "Digest exact runtime image", Example: "{{ .runtime.environment.image.digest }}", Source: "RUNTIME"},
+		{Name: "runtime.environment.image.reference", Type: "string", Description: "Exact reference runtime image", Example: "{{ .runtime.environment.image.reference }}", Source: "RUNTIME"},
+		{Name: "runtime.environment.ref", Type: "reference", Description: "Ссылка опубликованного окружения", Example: "{{ .runtime.environment.ref }}", Source: "RUNTIME"},
+		{Name: "runtime.environment.tools", Type: "collection", Description: "Проверенные инструменты exact runtime image", Example: "{{ range .runtime.environment.tools }}{{ .name }}: {{ .description }}{{ end }}", Source: "RUNTIME"},
+		{Name: "session.files", Type: "collection", Description: "Immutable inputs текущей сессии", Example: "{{ range .session.files }}{{ .path }}{{ end }}", Source: "SESSION"},
+		{Name: "session.files_count", Type: "integer", Description: "Количество доступных файлов текущей сессии", Example: "{{ .session.files_count }}", Source: "SESSION"},
+		{Name: "session.files_dir", Type: "string", Description: "Корневой каталог файлов текущей сессии", Example: "{{ .session.files_dir }}", Source: "SESSION"},
+		{Name: "session.manifest_path", Type: "string", Description: "Путь к manifest файлов текущей сессии", Example: "{{ .session.manifest_path }}", Source: "SESSION"},
+		{Name: "session.ref", Type: "reference", Description: "Ссылка текущей сессии", Example: "{{ .session.ref }}", Source: "SESSION"},
+		{Name: "turn.ref", Type: "reference", Description: "Ссылка текущего turn", Example: "{{ .turn.ref }}", Source: "SESSION"},
+		{Name: "workflow.files", Type: "collection", Description: "Файлы входного snapshot текущего Workflow", Example: "{{ range .workflow.files }}{{ .path }}{{ end }}", Source: "WORKFLOW"},
+		{Name: "workflow.files_count", Type: "integer", Description: "Количество файлов входного snapshot Workflow", Example: "{{ .workflow.files_count }}", Source: "WORKFLOW"},
+		{Name: "workflow.files_dir", Type: "string", Description: "Каталог файлов входного snapshot Workflow", Example: "{{ .workflow.files_dir }}", Source: "WORKFLOW"},
+		{Name: "workflow.manifest_path", Type: "string", Description: "Путь к manifest входного snapshot Workflow", Example: "{{ .workflow.manifest_path }}", Source: "WORKFLOW"},
+	}
 }
 
 func scanAgentRuntimeConfiguration(scanner rowScanner) (entity.AgentRuntimeConfiguration, error) {

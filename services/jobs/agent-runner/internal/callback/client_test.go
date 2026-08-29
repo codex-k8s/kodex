@@ -86,6 +86,60 @@ func TestCompleteRejectsInvalidPayloadBeforeTransport(t *testing.T) {
 	}
 }
 
+func TestRecordNativeToolCallUsesExecutionScopedBoundedPayload(t *testing.T) {
+	var captured runtimecontract.RunnerNativeToolCallRequest
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost || request.URL.Path != "/v1/executions/lease_abcdefgh/native-tool-call" ||
+			request.Header.Get("Authorization") != "Bearer ticket" {
+			http.NotFound(writer, request)
+			return
+		}
+		decoder := json.NewDecoder(request.Body)
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&captured) != nil {
+			http.Error(writer, "invalid", http.StatusBadRequest)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket"}
+	input := validWarmTurnFixture()
+	call := runtimecontract.NativeToolCall{CallID: "call-shell", Kind: runtimecontract.NativeToolKindShell,
+		State: runtimecontract.NativeToolStateSucceeded, DurationMS: 25, SafeResult: runtimecontract.NativeToolResultCompleted,
+		SafeParameters: map[string]any{"action_count": 1, "action_kinds": []string{"READ"}, "cwd_scope": "WORKSPACE", "exit_code": "ZERO", "source": "AGENT"}}
+	if err := client.RecordNativeToolCall(context.Background(), input, call); err != nil {
+		t.Fatalf("RecordNativeToolCall() error = %v", err)
+	}
+	if captured.RuntimeRevisionDigest != input.RuntimeRevisionDigest || captured.CallID != call.CallID || captured.Kind != call.Kind {
+		t.Fatalf("captured payload = %#v", captured)
+	}
+}
+
+func TestRecordNativeToolCallRejectsUnsafeParametersBeforeTransport(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket"}
+	call := runtimecontract.NativeToolCall{CallID: "call-shell", Kind: runtimecontract.NativeToolKindShell,
+		State: runtimecontract.NativeToolStateSucceeded, SafeResult: runtimecontract.NativeToolResultCompleted,
+		SafeParameters: map[string]any{"command": "print secret"}}
+	if err := client.RecordNativeToolCall(context.Background(), validWarmTurnFixture(), call); err == nil {
+		t.Fatal("unsafe native tool projection was accepted")
+	}
+	if called {
+		t.Fatal("unsafe native tool projection reached transport")
+	}
+}
+
 func validWarmTurnFixture() runtimecontract.RunnerInput {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
 	image := runtimecontract.RuntimeEnvironmentImage{ArtifactRef: "imgart_abcdefgh", RecipeRef: "imgrec_abcdefgh",
