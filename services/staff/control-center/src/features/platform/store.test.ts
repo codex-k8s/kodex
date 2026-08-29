@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  Artifact,
   IntegrationConnection,
   Project,
   ProjectPage,
@@ -22,6 +23,16 @@ const listAgentInstructionVersionsMock = vi.hoisted(() => vi.fn());
 const downloadArtifactMock = vi.hoisted(() => vi.fn());
 const createIntegrationConnectionMock = vi.hoisted(() => vi.fn());
 const configureIntegrationConnectionCredentialMock = vi.hoisted(() => vi.fn());
+const uploadArtifactMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").uploadArtifact
+  >(),
+);
+const uploadOrganizationArtifactMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").uploadOrganizationArtifact
+  >(),
+);
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   ...(await importOriginal<
@@ -37,6 +48,8 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   createIntegrationConnection: createIntegrationConnectionMock,
   configureIntegrationConnectionCredential:
     configureIntegrationConnectionCredentialMock,
+  uploadArtifact: uploadArtifactMock,
+  uploadOrganizationArtifact: uploadOrganizationArtifactMock,
 }));
 vi.mock("@/shared/api/client", () => ({
   requestSignal: () => new AbortController().signal,
@@ -199,6 +212,26 @@ function integrationConnection(
   };
 }
 
+function artifact(ref: string, projectRef?: string): Artifact {
+  return {
+    ref,
+    version: 1,
+    ...(projectRef ? { projectRef } : {}),
+    fileName: `${ref}.txt`,
+    mediaType: "text/plain",
+    sizeBytes: 7,
+    digest: `sha256:${"a".repeat(64)}`,
+    scanState: "CLEAN",
+    source: "INTERACTION_ATTACHMENT",
+    revision: 1,
+    lifecycleState: "ACTIVE",
+    agentBindings: [],
+    previewAvailable: true,
+    createdAt: "2026-08-29T00:00:00Z",
+    nextActions: [],
+  };
+}
+
 describe("platform store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -211,6 +244,8 @@ describe("platform store", () => {
     downloadArtifactMock.mockReset();
     createIntegrationConnectionMock.mockReset();
     configureIntegrationConnectionCredentialMock.mockReset();
+    uploadArtifactMock.mockReset();
+    uploadOrganizationArtifactMock.mockReset();
     selectProjectRef(undefined);
   });
 
@@ -458,6 +493,46 @@ describe("platform store", () => {
       store.downloadArtifactContent("artifact_owner", "DOWNLOAD"),
     ).resolves.toBe(expected);
     expect(downloadArtifactMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("выбирает область загрузки вложения по наличию Проекта", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const organizationArtifact = artifact("artifact_organization");
+    const projectArtifact = artifact("artifact_project", "project_owner");
+    uploadOrganizationArtifactMock.mockResolvedValue({
+      data: organizationArtifact,
+      request: new Request("http://localhost/api/v1/artifacts"),
+      response: new Response(null, { status: 201 }),
+    });
+    uploadArtifactMock.mockResolvedValue({
+      data: projectArtifact,
+      request: new Request(
+        "http://localhost/api/v1/projects/project_owner/artifacts",
+      ),
+      response: new Response(null, { status: 201 }),
+    });
+    const store = usePlatformStore();
+
+    const organizationFile = new File(["global"], "global.txt", {
+      type: "text/plain",
+    });
+    const projectFile = new File(["project"], "project.txt", {
+      type: "text/plain",
+    });
+    await store.uploadAttachmentArtifact(undefined, organizationFile);
+    await store.uploadAttachmentArtifact("project_owner", projectFile);
+
+    const organizationCall = uploadOrganizationArtifactMock.mock.calls[0]?.[0];
+    expect(organizationCall?.body).toBe(organizationFile);
+    expect(organizationCall?.headers["X-File-Name"]).toBe("global.txt");
+    const projectCall = uploadArtifactMock.mock.calls[0]?.[0];
+    expect(projectCall?.path).toEqual({ projectRef: "project_owner" });
+    expect(projectCall?.body).toBe(projectFile);
+    expect(projectCall?.headers["X-File-Name"]).toBe("project.txt");
+    expect(store.artifacts.artifact_organization).toEqual(organizationArtifact);
+    expect(store.artifacts.artifact_project).toEqual(projectArtifact);
   });
 
   it("очищает owner state и project context при завершении сессии", async () => {

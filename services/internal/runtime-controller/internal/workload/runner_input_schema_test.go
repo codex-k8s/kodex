@@ -48,11 +48,12 @@ func TestRunnerInputSchemaV6CarriesOnlySecretDescriptors(t *testing.T) {
 		SecretUID: "20000000-0000-4000-8000-000000000001", SecretResourceVersion: "7",
 		ContentSHA256: hex.EncodeToString(digest[:]),
 	}}
-	environmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(values, projections)
+	execution := testExecution(false)
+	image, tools := runtimeEnvironmentContract(execution.Revision)
+	environmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(values, projections, image, tools)
 	if err != nil {
 		t.Fatalf("RuntimeEnvironmentDigest() error = %v", err)
 	}
-	execution := testExecution(false)
 	execution.Revision.EnvironmentValues = []*controlplanev1.RuntimeEnvironmentValue{{Name: values[0].Name, Value: values[0].Value}}
 	execution.Revision.SecretProjections = []*controlplanev1.RuntimeSecretDescriptor{{
 		Name: projections[0].Name, SecretName: projections[0].SecretName, SecretKey: projections[0].SecretKey,

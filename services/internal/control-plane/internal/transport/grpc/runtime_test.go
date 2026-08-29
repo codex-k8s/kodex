@@ -2,7 +2,10 @@ package grpc
 
 import (
 	"math"
+	"strings"
 	"testing"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 func TestMapInt64AcceptsUnsignedValuesAndRejectsOverflow(t *testing.T) {
@@ -31,6 +34,27 @@ func TestCastRuntimeRevisionPreservesUnsignedContractRevision(t *testing.T) {
 	})
 	if revision.GetRoleRuntimeContractRevision() != 3 {
 		t.Fatalf("revision runtime-контракта потеряна: %d", revision.GetRoleRuntimeContractRevision())
+	}
+}
+
+func TestCastRuntimeRevisionCarriesExactEnvironmentImageAndTools(t *testing.T) {
+	t.Parallel()
+
+	revision := castRuntimeRevision(map[string]any{
+		"roleImageRecipeRef":        "imgrec_abcdefgh",
+		"roleImageArtifactRef":      "imgart_abcdefgh",
+		"roleImageRecipeGeneration": int64(4),
+		"imageReference":            "registry.example/kodex/role@sha256:" + strings.Repeat("a", 64),
+		"imageManifestDigest":       "sha256:" + strings.Repeat("a", 64),
+		"environmentTools": []runtimecontract.RuntimeEnvironmentTool{{
+			Name: "GitHub CLI", Command: "gh", Description: "Работа с GitHub", UsageHint: "Используй gh api",
+		}},
+	})
+	if revision.GetRoleImageRecipeRef() != "imgrec_abcdefgh" ||
+		revision.GetRoleImageArtifactRef() != "imgart_abcdefgh" ||
+		revision.GetRoleImageRecipeGeneration() != 4 || len(revision.GetEnvironmentTools()) != 1 ||
+		revision.GetEnvironmentTools()[0].GetCommand() != "gh" {
+		t.Fatalf("runtime revision lost environment image/tools: %#v", revision)
 	}
 }
 

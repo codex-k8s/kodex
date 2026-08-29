@@ -2046,6 +2046,8 @@ message RuntimeRevisionSnapshot {
   string attachment_set_manifest_digest = 50;
   repeated RuntimeInputArtifact input_artifacts = 51;
   string attachment_context = 52;
+  int64 role_image_recipe_generation = 53;
+  repeated RuntimeEnvironmentTool environment_tools = 54;
 }
 
 message RuntimeInputArtifact {
@@ -2730,6 +2732,8 @@ message CreateRuntimeEnvironmentSetRequest {
   string description = 4;
   repeated RuntimeEnvironmentValue values = 5;
   repeated RuntimeSecretDescriptor secret_descriptors = 6;
+  string image_artifact_ref = 7;
+  repeated RuntimeEnvironmentTool tools = 8;
 }
 message CreateRuntimeEnvironmentSetResponse {
   RuntimeEnvironmentSet environment = 1;
@@ -2741,6 +2745,8 @@ message PublishRuntimeEnvironmentVersionRequest {
   string description = 4;
   repeated RuntimeEnvironmentValue values = 5;
   repeated RuntimeSecretDescriptor secret_descriptors = 6;
+  string image_artifact_ref = 7;
+  repeated RuntimeEnvironmentTool tools = 8;
 }
 message PublishRuntimeEnvironmentVersionResponse {
   RuntimeEnvironmentSet environment = 1;
@@ -2824,6 +2830,23 @@ message RuntimeEnvironmentVersion {
   repeated RuntimeSecretDescriptor secret_descriptors = 5;
   string digest = 6;
   google.protobuf.Timestamp created_at = 7;
+  RuntimeEnvironmentImage image = 8;
+  repeated RuntimeEnvironmentTool tools = 9;
+}
+
+message RuntimeEnvironmentImage {
+  string artifact_ref = 1;
+  string recipe_ref = 2;
+  int64 recipe_generation = 3;
+  string reference = 4;
+  string digest = 5;
+}
+
+message RuntimeEnvironmentTool {
+  string name = 1;
+  string command = 2;
+  string description = 3;
+  string usage_hint = 4;
 }
 
 message RuntimeEnvironmentSet {

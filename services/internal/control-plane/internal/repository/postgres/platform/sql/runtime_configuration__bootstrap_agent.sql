@@ -74,14 +74,25 @@ WITH eligible_accounts AS (
       AND existing.project_id IS NOT DISTINCT FROM NULLIF(@project_id, '')::uuid
       AND existing.name = 'i18n:DEFAULT_RUNTIME_ENVIRONMENT'
     LIMIT 1
+), current_environment_version AS (
+    SELECT current_version.id,
+           current_version.version_number,
+           current_version.role_image_artifact_id
+    FROM environment
+    LEFT JOIN control_plane.runtime_environment_versions current_version
+      ON current_version.id = environment.current_version_id
 ), inserted_environment_version AS (
     INSERT INTO control_plane.runtime_environment_versions
-        (ref, organization_id, environment_set_id, version_number, non_secret_values, secret_descriptors, digest, created_by)
-    SELECT @environment_version_ref, @organization_id::uuid, environment.id, 1,
-           '[]'::jsonb, '[]'::jsonb,
-           'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', @created_by::uuid
+        (ref, organization_id, environment_set_id, version_number, non_secret_values,
+         secret_descriptors, role_image_artifact_id, selected_tools, digest, created_by)
+    SELECT @environment_version_ref, @organization_id::uuid, environment.id,
+           COALESCE(current_environment_version.version_number, 0) + 1,
+           '[]'::jsonb, '[]'::jsonb, NULLIF(@environment_image_artifact_id, '')::uuid,
+           @environment_selected_tools, @environment_digest, @created_by::uuid
     FROM environment
-    WHERE environment.current_version_id IS NULL
+    JOIN current_environment_version ON true
+    WHERE (environment.current_version_id IS NULL OR current_environment_version.role_image_artifact_id IS NULL)
+      AND (@project_id = '' OR NULLIF(@environment_image_artifact_id, '') IS NOT NULL)
     RETURNING id, environment_set_id
 ), binding AS (
     INSERT INTO control_plane.agent_runtime_environment_bindings

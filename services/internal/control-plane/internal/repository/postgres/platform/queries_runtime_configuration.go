@@ -37,6 +37,8 @@ var (
 	queryRuntimeConfigurationRollbackOverlay string
 	//go:embed sql/runtime_configuration__create_environment.sql
 	queryRuntimeConfigurationCreateEnvironment string
+	//go:embed sql/runtime_configuration__resolve_image_artifact.sql
+	queryRuntimeConfigurationResolveImageArtifact string
 	//go:embed sql/runtime_configuration__lock_environment.sql
 	queryRuntimeConfigurationLockEnvironment string
 	//go:embed sql/runtime_configuration__publish_environment.sql
@@ -47,6 +49,10 @@ var (
 	queryRuntimeConfigurationBindEnvironment string
 	//go:embed sql/runtime_configuration__bootstrap_agent.sql
 	queryRuntimeConfigurationBootstrapAgent string
+	//go:embed sql/runtime_configuration__resolve_bootstrap_image.sql
+	queryRuntimeConfigurationResolveBootstrapImage string
+	//go:embed sql/runtime_configuration__materialize_system_image.sql
+	queryRuntimeConfigurationMaterializeSystemImage string
 	//go:embed sql/runtime_configuration__activate_environment.sql
 	queryRuntimeConfigurationActivateEnvironment string
 	//go:embed sql/runtime_configuration__select_provider_account.sql

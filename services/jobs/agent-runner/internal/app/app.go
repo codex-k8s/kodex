@@ -353,6 +353,22 @@ func renderInstructions(input model.Input) (string, error) {
 	if err := parsed.Execute(&rendered, promptTemplateVariables(input)); err != nil {
 		return "", errors.New("render instruction template")
 	}
+	if len(input.EnvironmentTools) > 0 {
+		rendered.WriteString("\n\n# Verified runtime tools\n")
+		rendered.WriteString("Only the following environment-selected executables are declared available for this runtime revision:\n")
+		for _, tool := range input.EnvironmentTools {
+			rendered.WriteString("\n- `")
+			rendered.WriteString(tool.Command)
+			rendered.WriteString("` — ")
+			rendered.WriteString(tool.Description)
+			if tool.UsageHint != "" {
+				rendered.WriteString(" (")
+				rendered.WriteString(tool.UsageHint)
+				rendered.WriteString(")")
+			}
+		}
+		rendered.WriteString("\n")
+	}
 	if rendered.Len() == 0 || rendered.Len() > 1<<20 || !utf8.ValidString(rendered.String()) {
 		return "", errors.New("rendered instructions are invalid")
 	}
@@ -385,13 +401,22 @@ func promptTemplateVariables(input model.Input) map[string]any {
 	emptyScope := fileScope(nil, "", "")
 	sessionScope := fileScope(sessionInputs, "/workspace", "/workspace/input/manifest.json")
 	projectScope := fileScope(knowledge, "/workspace/knowledge", "/workspace/input/manifest.json")
+	tools := make([]map[string]any, 0, len(input.EnvironmentTools))
+	for _, tool := range input.EnvironmentTools {
+		tools = append(tools, map[string]any{
+			"name": tool.Name, "command": tool.Command, "description": tool.Description, "usage_hint": tool.UsageHint,
+		})
+	}
 	variables := map[string]any{
-		"agent":    map[string]any{"ref": input.AgentRef},
-		"project":  mergeFileScope(map[string]any{"ref": input.ProjectRef}, projectScope),
-		"run":      mergeFileScope(map[string]any{"ref": input.RunRef}, inputScope),
-		"session":  mergeFileScope(map[string]any{"ref": input.SessionRef}, sessionScope),
-		"turn":     map[string]any{"ref": input.TurnRef},
-		"runtime":  map[string]any{"environment": map[string]any{"ref": input.RuntimeEnvironmentRef}},
+		"agent":   map[string]any{"ref": input.AgentRef},
+		"project": mergeFileScope(map[string]any{"ref": input.ProjectRef}, projectScope),
+		"run":     mergeFileScope(map[string]any{"ref": input.RunRef}, inputScope),
+		"session": mergeFileScope(map[string]any{"ref": input.SessionRef}, sessionScope),
+		"turn":    map[string]any{"ref": input.TurnRef},
+		"runtime": map[string]any{"environment": map[string]any{
+			"ref": input.RuntimeEnvironmentRef, "image": input.EnvironmentImage, "tools": tools,
+		}},
+		"tools":    tools,
 		"input":    inputScope,
 		"files":    inputScope["files"],
 		"inputs":   input.BoundedInput,

@@ -151,6 +151,9 @@ func TestSessionPVCNameIsStableAndRejectsInvalidReference(t *testing.T) {
 
 func validRunnerInputFixture() RunnerInput {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
+	image := RuntimeEnvironmentImage{ArtifactRef: "imgart_abcdefgh", RecipeRef: "imgrec_abcdefgh",
+		RecipeGeneration: 1, Reference: "registry.example/roles@" + imageDigest, Digest: imageDigest}
+	environmentDigest, _ := RuntimeEnvironmentDigest(nil, nil, image, nil)
 	return RunnerInput{
 		Schema: RunnerInputSchemaV6, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
 		RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh", SessionRef: "session_abcdefgh",
@@ -158,7 +161,7 @@ func validRunnerInputFixture() RunnerInput {
 		LeaseRef: "lease_abcdefgh", LeaseFence: "fence-1", LeaseGeneration: 1,
 		RuntimeRevisionRef: "revision_abcdefgh", RuntimeRevisionVersion: 1,
 		RuntimeRevisionDigest: strings.Repeat("b", 64), ImageReference: "registry.example/roles@" + imageDigest,
-		ImageManifestDigest: imageDigest, RoleRuntimeContractRevision: 1,
+		ImageManifestDigest: imageDigest, EnvironmentImage: image, RoleRuntimeContractRevision: 1,
 		RoleRuntimeContractSHA256: strings.Repeat("d", 64), Instructions: "Complete the bounded task.",
 		Task: "Prepare the customer response.", Provider: "openai", Model: "codex",
 		ProviderAccountRef: "pacc_abcdefgh", ProviderCredentialRef: "pcr_abcdefgh",
@@ -168,7 +171,7 @@ func validRunnerInputFixture() RunnerInput {
 		ConfigOverlayRef: "cov_abcdefgh", ConfigOverlayVersion: 1,
 		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
-		RuntimeEnvironmentDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		RuntimeEnvironmentDigest: environmentDigest,
 		EnvironmentBindingRef:    "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
 		CodexSandbox: "read-only", CodexApprovalPolicy: "never",
 		CallbackURL: "https://10.0.0.10:8444", CallbackTLS: RuntimeTLSBinding{

@@ -129,9 +129,10 @@ type ConfigOverlayInput struct {
 	AgentRef, Content, PublishedOverlayRef string
 }
 type RuntimeEnvironmentInput struct {
-	Ref, ProjectRef, Name, Description, PublishedVersionRef string
-	Values                                                  []entity.RuntimeEnvironmentValue
-	SecretDescriptors                                       []entity.RuntimeSecretDescriptor
+	Ref, ProjectRef, Name, Description, PublishedVersionRef, ImageArtifactRef string
+	Values                                                                    []entity.RuntimeEnvironmentValue
+	SecretDescriptors                                                         []entity.RuntimeSecretDescriptor
+	Tools                                                                     []entity.RuntimeEnvironmentTool
 }
 type RuntimeEnvironmentBindingInput struct {
 	AgentRef, EnvironmentRef string

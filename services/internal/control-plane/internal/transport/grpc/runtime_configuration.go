@@ -145,7 +145,7 @@ func (server *Server) RollbackConfigOverlay(ctx context.Context, request *contro
 	return &controlplanev1.RollbackConfigOverlayResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}, nil
 }
 
-func domainEnvironment(values []*controlplanev1.RuntimeEnvironmentValue, secrets []*controlplanev1.RuntimeSecretDescriptor) ([]entity.RuntimeEnvironmentValue, []entity.RuntimeSecretDescriptor) {
+func domainEnvironment(values []*controlplanev1.RuntimeEnvironmentValue, secrets []*controlplanev1.RuntimeSecretDescriptor, tools []*controlplanev1.RuntimeEnvironmentTool) ([]entity.RuntimeEnvironmentValue, []entity.RuntimeSecretDescriptor, []entity.RuntimeEnvironmentTool) {
 	domainValues := make([]entity.RuntimeEnvironmentValue, 0, len(values))
 	for _, item := range values {
 		domainValues = append(domainValues, entity.RuntimeEnvironmentValue{Name: item.GetName(), Value: item.GetValue()})
@@ -154,22 +154,26 @@ func domainEnvironment(values []*controlplanev1.RuntimeEnvironmentValue, secrets
 	for _, item := range secrets {
 		domainSecrets = append(domainSecrets, entity.RuntimeSecretDescriptor{Name: item.GetName(), SecretName: item.GetSecretName(), SecretKey: item.GetSecretKey(), SecretUID: item.GetSecretUid(), SecretResourceVersion: item.GetSecretResourceVersion(), ContentSHA256: item.GetContentSha256()})
 	}
-	return domainValues, domainSecrets
+	domainTools := make([]entity.RuntimeEnvironmentTool, 0, len(tools))
+	for _, item := range tools {
+		domainTools = append(domainTools, entity.RuntimeEnvironmentTool{Name: item.GetName(), Command: item.GetCommand(), Description: item.GetDescription(), UsageHint: item.GetUsageHint()})
+	}
+	return domainValues, domainSecrets, domainTools
 }
 
 func (server *Server) CreateRuntimeEnvironmentSet(ctx context.Context, request *controlplanev1.CreateRuntimeEnvironmentSetRequest) (*controlplanev1.CreateRuntimeEnvironmentSetResponse, error) {
-	values, secrets := domainEnvironment(request.GetValues(), request.GetSecretDescriptors())
+	values, secrets, tools := domainEnvironment(request.GetValues(), request.GetSecretDescriptors(), request.GetTools())
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentSet_FullMethodName,
-		command.CreateRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), Values: values, SecretDescriptors: secrets})
+		command.CreateRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretDescriptors: secrets, Tools: tools})
 	if err != nil {
 		return nil, err
 	}
 	return &controlplanev1.CreateRuntimeEnvironmentSetResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}, nil
 }
 func (server *Server) PublishRuntimeEnvironmentVersion(ctx context.Context, request *controlplanev1.PublishRuntimeEnvironmentVersionRequest) (*controlplanev1.PublishRuntimeEnvironmentVersionResponse, error) {
-	values, secrets := domainEnvironment(request.GetValues(), request.GetSecretDescriptors())
+	values, secrets, tools := domainEnvironment(request.GetValues(), request.GetSecretDescriptors(), request.GetTools())
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_PublishRuntimeEnvironmentVersion_FullMethodName,
-		command.PublishRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{Ref: request.GetEnvironmentRef(), Name: request.GetName(), Description: request.GetDescription(), Values: values, SecretDescriptors: secrets})
+		command.PublishRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{Ref: request.GetEnvironmentRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretDescriptors: secrets, Tools: tools})
 	if err != nil {
 		return nil, err
 	}

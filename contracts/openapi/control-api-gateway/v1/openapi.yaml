@@ -1113,6 +1113,30 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Artifact' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/artifacts:
+    post:
+      tags: [Artifacts]
+      operationId: uploadOrganizationArtifact
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/CsrfToken' }
+        - name: X-File-Name
+          in: header
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      requestBody:
+        required: true
+        description: Поток одного файла организационного помощника размером до 512 MiB; gateway и control-plane сверяют Content-Length и SHA-256 без полной буферизации тела.
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '201':
+          description: Artifact принят в организационную область и синхронно проверен обязательной встроенной policy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Artifact' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/artifacts/{artifactRef}:
     get:
       tags: [Artifacts]
@@ -2691,7 +2715,7 @@ components:
     RuntimeEnvironmentVersion:
       type: object
       additionalProperties: false
-      required: [ref, version, revision, values, secretDescriptors, digest, createdAt]
+      required: [ref, version, revision, image, tools, values, secretDescriptors, digest, createdAt]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -2700,6 +2724,27 @@ components:
         secretDescriptors: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeSecretDescriptor' } }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
+        image: { $ref: '#/components/schemas/RuntimeEnvironmentImage' }
+        tools: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeEnvironmentTool' } }
+    RuntimeEnvironmentImage:
+      type: object
+      additionalProperties: false
+      required: [artifactRef, recipeRef, recipeGeneration, reference, digest]
+      properties:
+        artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
+        recipeRef: { $ref: '#/components/schemas/OpaqueRef' }
+        recipeGeneration: { type: integer, format: int64, minimum: 1 }
+        reference: { type: string, minLength: 1, maxLength: 1000 }
+        digest: { type: string, pattern: '^sha256:[a-f0-9]{64}$' }
+    RuntimeEnvironmentTool:
+      type: object
+      additionalProperties: false
+      required: [name, command, description, usageHint]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        command: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$' }
+        description: { type: string, minLength: 1, maxLength: 500 }
+        usageHint: { type: string, maxLength: 500 }
     RuntimeEnvironmentSet:
       type: object
       additionalProperties: false
@@ -2716,10 +2761,12 @@ components:
     RuntimeEnvironmentInput:
       type: object
       additionalProperties: false
-      required: [name, description, values, secretDescriptors]
+      required: [name, description, imageArtifactRef, tools, values, secretDescriptors]
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
+        imageArtifactRef: { $ref: '#/components/schemas/OpaqueRef' }
+        tools: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeEnvironmentTool' } }
         values: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeEnvironmentValue' } }
         secretDescriptors: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeSecretDescriptor' } }
     RuntimeEnvironmentRollbackInput:
@@ -2805,7 +2852,7 @@ components:
     RoleEnvironment:
       type: object
       additionalProperties: false
-      required: [key, nameMessageKey, descriptionMessageKey, softwareMessageKeys, platforms, recommended, available, customInstallationAllowed]
+      required: [key, nameMessageKey, descriptionMessageKey, softwareMessageKeys, platforms, recommended, available, customInstallationAllowed, dockerfileTemplate]
       properties:
         key: { type: string, pattern: '^[a-z][a-z0-9.-]*$', maxLength: 100 }
         nameMessageKey: { type: string, pattern: '^[a-z][a-z0-9.-]*$', maxLength: 100 }
@@ -2819,6 +2866,7 @@ components:
         available: { type: boolean }
         unavailableMessageKey: { type: string, pattern: '^[a-z][a-z0-9.-]*$', maxLength: 100 }
         customInstallationAllowed: { type: boolean }
+        dockerfileTemplate: { type: string, minLength: 1, maxLength: 262144 }
     RoleEnvironmentPage:
       type: object
       additionalProperties: false
@@ -2828,7 +2876,7 @@ components:
     RoleEnvironmentSelection:
       type: object
       additionalProperties: false
-      required: [environmentKey]
+      required: [environmentKey, dockerfile]
       properties:
         environmentKey: { type: string, pattern: '^[a-z][a-z0-9.-]*$', maxLength: 100 }
         packageKeys:
@@ -2845,6 +2893,7 @@ components:
           type: string
           maxLength: 65536
           description: Дополнительный declarative build fragment; доступен только для явно разрешённого окружения
+        dockerfile: { type: string, minLength: 1, maxLength: 262144 }
     RoleImageRecipe:
       type: object
       additionalProperties: false
@@ -2859,17 +2908,21 @@ components:
         environment: { $ref: '#/components/schemas/RoleEnvironmentSelection' }
         generation: { type: integer, format: int64, minimum: 1 }
         promotedImageReady: { type: boolean }
+        activeImageArtifactRef: { $ref: '#/components/schemas/OpaqueRef' }
+        promotedImageReference: { type: string, maxLength: 1000 }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         updatedAt: { $ref: '#/components/schemas/Timestamp' }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
     RoleImageBuild:
       type: object
       additionalProperties: false
-      required: [ref, version, recipeRef, attempt, stage, progressPercent, createdAt, updatedAt]
+      required: [ref, version, recipeRef, recipeGeneration, dockerfile, attempt, stage, progressPercent, createdAt, updatedAt]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
         recipeRef: { $ref: '#/components/schemas/OpaqueRef' }
+        recipeGeneration: { type: integer, format: int64, minimum: 1 }
+        dockerfile: { type: string, minLength: 1, maxLength: 262144 }
         attempt: { type: integer, minimum: 1 }
         stage: { type: string, enum: [QUEUED, MATERIALIZATION, CONTEXT_VALIDATION, BASE_PULL, SOLVING, INSTALLATION, TRUSTED_RUNTIME_FINALIZATION, STAGING_PUSH, PROVENANCE, COMPLETED, FAILED, CANCELLED, EXPIRED, DEAD_LETTER] }
         progressPercent: { type: integer, minimum: 0, maximum: 100 }
@@ -2913,6 +2966,30 @@ components:
       properties:
         recipe: { $ref: '#/components/schemas/RoleImageRecipe' }
         builds: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RoleImageBuild' } }
+        activeArtifact: { $ref: '#/components/schemas/RoleImageArtifact' }
+    RoleImageArtifactTool:
+      type: object
+      additionalProperties: false
+      required: [name, version]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: string, minLength: 1, maxLength: 160 }
+    RoleImageArtifact:
+      type: object
+      additionalProperties: false
+      required: [ref, version, recipeRef, recipeGeneration, manifestDigest, promotedReference, admissionVerdict, tools, promotedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1 }
+        recipeRef: { $ref: '#/components/schemas/OpaqueRef' }
+        recipeGeneration: { type: integer, format: int64, minimum: 1 }
+        manifestDigest: { type: string, pattern: '^sha256:[a-f0-9]{64}$' }
+        promotedReference: { type: string, minLength: 1, maxLength: 1000 }
+        admissionVerdict: { type: string, enum: [ACCEPTED, REJECTED] }
+        sbomSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        vulnerabilityEvidenceSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        tools: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RoleImageArtifactTool' } }
+        promotedAt: { $ref: '#/components/schemas/Timestamp' }
     RoleImageRecipeCommandReceipt:
       type: object
       additionalProperties: false
@@ -3291,7 +3368,7 @@ components:
     Artifact:
       type: object
       additionalProperties: false
-      required: [ref, version, projectRef, fileName, mediaType, sizeBytes, digest, scanState, source, revision, lifecycleState, agentBindings, previewAvailable, createdAt, nextActions]
+      required: [ref, version, fileName, mediaType, sizeBytes, digest, scanState, source, revision, lifecycleState, agentBindings, previewAvailable, createdAt, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -3300,7 +3377,7 @@ components:
         sessionRef: { $ref: '#/components/schemas/OpaqueRef' }
         fileName: { type: string, maxLength: 255 }
         mediaType: { type: string, maxLength: 160 }
-        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 104857600 }
+        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 536870912 }
         digest: { type: string, pattern: '^sha256:[a-f0-9]{64}$' }
         scanState: { type: string, enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED] }
         source: { type: string, enum: [CONTROL_CENTER, AGENT_RESULT, INTEGRATION_RESULT, KNOWLEDGE_SOURCE, INTERACTION_ATTACHMENT] }

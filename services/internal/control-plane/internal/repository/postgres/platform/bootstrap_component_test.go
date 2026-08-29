@@ -190,8 +190,8 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("enterprise access restricts exact agent and project", func(t *testing.T) {
 		testEnterpriseAccessRestriction(t, ctx, repository)
 	})
-	t.Run("runtime environment create activates authoritative readback", func(t *testing.T) {
-		testRuntimeEnvironmentCreate(t, ctx, repository)
+	t.Run("runtime environment create rejects a missing exact image", func(t *testing.T) {
+		testRuntimeEnvironmentRejectsMissingImage(t, ctx, repository)
 	})
 	t.Run("runtime configuration publish validates canonical provider accounts", func(t *testing.T) {
 		testRuntimeConfigurationPublish(t, ctx, repository)
@@ -247,7 +247,7 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 	}
 }
 
-func testRuntimeEnvironmentCreate(t *testing.T, ctx context.Context, repository *Repository) {
+func testRuntimeEnvironmentRejectsMissingImage(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
@@ -268,19 +268,8 @@ func testRuntimeEnvironmentCreate(t *testing.T, ctx context.Context, repository 
 			ProjectRef: createdProject.Project.Ref, Name: "Component environment", Description: "Runtime environment component readback",
 			Values: []entity.RuntimeEnvironmentValue{{Name: "E2E_MODE", Value: "component"}},
 		}})
-	if err != nil || created.RuntimeEnvironment == nil {
-		t.Fatalf("create runtime environment: environment=%#v err=%v", created.RuntimeEnvironment, err)
-	}
-	environment, err := service.GetRuntimeEnvironment(ctx, owner, created.RuntimeEnvironment.Ref)
-	if err != nil || environment.CurrentVersion.Revision != 1 || len(environment.CurrentVersion.Values) != 1 ||
-		environment.CurrentVersion.Values[0].Name != "E2E_MODE" || environment.CurrentVersion.Values[0].Value != "component" {
-		t.Fatalf("read created runtime environment: environment=%#v err=%v", environment, err)
-	}
-	versions, _, err := service.ListRuntimeEnvironmentVersions(ctx, owner, query.Filter{
-		ResourceRef: environment.Ref, Page: query.Page{Size: 10},
-	})
-	if err != nil || len(versions) != 1 || versions[0].Ref != environment.CurrentVersion.Ref {
-		t.Fatalf("list created runtime environment versions: versions=%#v err=%v", versions, err)
+	if !errors.Is(err, domainerrs.ErrInvalid) || created.RuntimeEnvironment != nil {
+		t.Fatalf("environment without exact promoted image was accepted: environment=%#v err=%v", created.RuntimeEnvironment, err)
 	}
 }
 

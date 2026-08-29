@@ -88,6 +88,9 @@ func TestCompleteRejectsInvalidPayloadBeforeTransport(t *testing.T) {
 
 func validWarmTurnFixture() runtimecontract.RunnerInput {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
+	image := runtimecontract.RuntimeEnvironmentImage{ArtifactRef: "imgart_abcdefgh", RecipeRef: "imgrec_abcdefgh",
+		RecipeGeneration: 1, Reference: "registry.example/roles@" + imageDigest, Digest: imageDigest}
+	environmentDigest, _ := runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, nil)
 	return runtimecontract.RunnerInput{
 		Schema: runtimecontract.RunnerInputSchemaV6, Mode: runtimecontract.RunnerModeTurn,
 		WorkloadInstance: "runtime-controller-1", RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh",
@@ -95,7 +98,7 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 		Attempt: 1, LeaseRef: "lease_abcdefgh", LeaseFence: "fence-1", LeaseGeneration: 1,
 		RuntimeRevisionRef: "revision_abcdefgh", RuntimeRevisionVersion: 1,
 		RuntimeRevisionDigest: strings.Repeat("b", 64), ImageReference: "registry.example/roles@" + imageDigest,
-		ImageManifestDigest: imageDigest, RoleRuntimeContractRevision: 1,
+		ImageManifestDigest: imageDigest, EnvironmentImage: image, RoleRuntimeContractRevision: 1,
 		RoleRuntimeContractSHA256: strings.Repeat("d", 64), SystemAssistant: true,
 		Instructions: "Complete the bounded task.", Task: "Prepare the customer response.",
 		Provider: "openai", Model: "codex", ProviderAccountRef: "pacc_abcdefgh",
@@ -106,7 +109,7 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 		ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 1,
 		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
-		RuntimeEnvironmentDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		RuntimeEnvironmentDigest: environmentDigest,
 		EnvironmentBindingRef:    "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
 		CodexSandbox:        "read-only",
 		CodexApprovalPolicy: "never", CallbackURL: "https://10.0.0.10:8444",

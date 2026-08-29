@@ -87,6 +87,24 @@ func TestRenderInstructionsExposesTypedFileScopes(t *testing.T) {
 	}
 }
 
+func TestRenderInstructionsExposesOnlyEnvironmentSelectedTools(t *testing.T) {
+	input := model.Input{
+		Instructions: `{{range .tools}}{{.command}}|{{.description}}|{{.usage_hint}}{{end}}`,
+		EnvironmentTools: []runtimecontract.RuntimeEnvironmentTool{{
+			Name: "GitHub CLI", Command: "gh", Description: "Работа с GitHub", UsageHint: "Используй gh api",
+		}},
+	}
+	rendered, err := renderInstructions(input)
+	if err != nil {
+		t.Fatalf("renderInstructions() error = %v", err)
+	}
+	for _, expected := range []string{"gh|Работа с GitHub|Используй gh api", "# Verified runtime tools", "`gh`"} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("rendered instructions do not contain %q: %s", expected, rendered)
+		}
+	}
+}
+
 func TestSystemAssistantCompletionDoesNotCreateProjectArtifact(t *testing.T) {
 	artifacts, err := completionArtifacts(model.Input{SystemAssistant: true}, "Configuration plan proposed.")
 	if err != nil {

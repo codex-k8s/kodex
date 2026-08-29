@@ -26,6 +26,15 @@ type lockedRuntimeAgent struct {
 }
 
 func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.Tx, organizationID, agentID, projectID string, runtime entity.RuntimeSelection, createdBy string) error {
+	imageArtifactID, image, selectedTools, err := repository.ensureBootstrapRuntimeEnvironmentImage(
+		ctx, tx, organizationID, agentID, projectID, createdBy)
+	if err != nil {
+		return err
+	}
+	environmentDigest, err := runtimeEnvironmentConfigurationDigest(nil, nil, image, nil)
+	if err != nil {
+		return errors.New("compute bootstrap runtime environment digest")
+	}
 	policyRef, _ := newRef("ppol")
 	configRef, _ := newRef("rconf")
 	overlayRef, _ := newRef("cov")
@@ -33,12 +42,14 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 	environmentVersionRef, _ := newRef("renvv")
 	bindingRef, _ := newRef("aenv")
 	var updatedAgentID, runtimeEnvironmentID, runtimeEnvironmentVersionID string
-	err := tx.QueryRow(ctx, queryRuntimeConfigurationBootstrapAgent, pgx.StrictNamedArgs{
+	err = tx.QueryRow(ctx, queryRuntimeConfigurationBootstrapAgent, pgx.StrictNamedArgs{
 		"organization_id": organizationID, "agent_id": agentID, "project_id": projectID,
 		"policy_ref": policyRef, "config_ref": configRef, "overlay_ref": overlayRef,
 		"environment_ref": environmentRef, "environment_version_ref": environmentVersionRef,
 		"binding_ref": bindingRef, "runtime_profile_ref": runtime.Ref, "provider": runtime.Provider,
 		"model": runtime.Model, "created_by": createdBy,
+		"environment_image_artifact_id": imageArtifactID, "environment_selected_tools": selectedTools,
+		"environment_digest": environmentDigest,
 	}).Scan(&updatedAgentID, &runtimeEnvironmentID, &runtimeEnvironmentVersionID)
 	if err != nil {
 		return fmt.Errorf("bootstrap agent runtime configuration: %w", err)
@@ -51,6 +62,96 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 		return errors.New("activate bootstrap runtime environment version")
 	}
 	return nil
+}
+
+func (repository *Repository) ensureBootstrapRuntimeEnvironmentImage(
+	ctx context.Context,
+	tx pgx.Tx,
+	organizationID, agentID, projectID, createdBy string,
+) (string, entity.RuntimeEnvironmentImage, []byte, error) {
+	emptyTools, _ := json.Marshal([]entity.RuntimeEnvironmentTool{})
+	if projectID == "" {
+		return "", entity.RuntimeEnvironmentImage{
+			Reference: repository.roleImages.DefaultImageReference,
+			Digest:    repository.roleImages.DefaultImageDigest,
+		}, emptyTools, nil
+	}
+	image, err := scanBootstrapRuntimeEnvironmentImage(tx.QueryRow(ctx,
+		queryRuntimeConfigurationResolveBootstrapImage, pgx.StrictNamedArgs{
+			"organization_id": organizationID, "project_id": projectID,
+		}))
+	if err == nil {
+		return image.id, image.image, emptyTools, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", entity.RuntimeEnvironmentImage{}, nil, errs.ErrUnavailable
+	}
+	separator := strings.LastIndex(repository.roleImages.DefaultImageReference, "@")
+	if separator < 1 {
+		return "", entity.RuntimeEnvironmentImage{}, nil, errs.ErrUnavailable
+	}
+	contentSHA256 := strings.TrimPrefix(repository.roleImages.DefaultImageDigest, "sha256:")
+	specification := entity.RoleImageRecipeInput{
+		BaseImageReference: repository.roleImages.DefaultImageReference[:separator],
+		BaseImageDigest:    repository.roleImages.DefaultImageDigest,
+		SourceRef:          "platform-owned:default-role-image",
+		SourceRevision:     repository.roleImages.DefaultImageDigest,
+		SourceSHA256:       contentSHA256,
+		ContextRef:         repository.roleImages.DefaultImageReference,
+		ContextSHA256:      contentSHA256,
+		BuilderSHA256:      repository.roleImages.RoleRuntimeContractSHA256,
+		FrontendSHA256:     repository.roleImages.RoleRuntimeContractSHA256,
+		ToolchainSHA256:    repository.roleImages.RoleRuntimeContractSHA256,
+		EnvironmentKey:     "system-base",
+		Platforms:          []entity.RoleImagePlatform{{OS: "linux", Architecture: "amd64"}},
+		Dockerfile:         "FROM " + repository.roleImages.DefaultImageReference + "\n",
+	}
+	specificationJSON := asJSON(specification)
+	specificationSHA256 := roleImageDigest(specification)
+	immutableBuildSHA256 := digestBytes(specificationJSON, []byte(repository.roleImages.RoleRuntimeContractSHA256))
+	provenanceSHA256 := digestBytes([]byte("platform-owned-bootstrap"), []byte(repository.roleImages.DefaultImageReference))
+	evidenceSHA256 := digestBytes([]byte("platform-owned-bootstrap-evidence"), []byte(repository.roleImages.DefaultImageDigest))
+	recipeRef, refErr := newRef("imgrec")
+	if refErr != nil {
+		return "", entity.RuntimeEnvironmentImage{}, nil, errs.ErrUnavailable
+	}
+	buildRef, refErr := newRef("imgbld")
+	if refErr != nil {
+		return "", entity.RuntimeEnvironmentImage{}, nil, errs.ErrUnavailable
+	}
+	artifactRef, refErr := newRef("imgart")
+	if refErr != nil {
+		return "", entity.RuntimeEnvironmentImage{}, nil, errs.ErrUnavailable
+	}
+	image, err = scanBootstrapRuntimeEnvironmentImage(tx.QueryRow(ctx,
+		queryRuntimeConfigurationMaterializeSystemImage, pgx.StrictNamedArgs{
+			"organization_id": organizationID, "project_id": projectID, "agent_id": agentID,
+			"created_by": createdBy, "recipe_ref": recipeRef, "build_ref": buildRef,
+			"artifact_ref": artifactRef, "specification": specificationJSON,
+			"spec_sha256": specificationSHA256, "policy_revision": repository.roleImages.PolicyRevision,
+			"policy_sha256":          repository.roleImages.PolicySHA256,
+			"contract_revision":      repository.roleImages.RoleRuntimeContractRevision,
+			"contract_sha256":        repository.roleImages.RoleRuntimeContractSHA256,
+			"immutable_build_sha256": immutableBuildSHA256, "provenance_sha256": provenanceSHA256,
+			"evidence_sha256": evidenceSHA256, "image_reference": repository.roleImages.DefaultImageReference,
+			"manifest_digest": repository.roleImages.DefaultImageDigest,
+		}))
+	if err != nil {
+		return "", entity.RuntimeEnvironmentImage{}, nil, errs.ErrUnavailable
+	}
+	return image.id, image.image, emptyTools, nil
+}
+
+type bootstrapRuntimeEnvironmentImage struct {
+	id    string
+	image entity.RuntimeEnvironmentImage
+}
+
+func scanBootstrapRuntimeEnvironmentImage(row interface{ Scan(...any) error }) (bootstrapRuntimeEnvironmentImage, error) {
+	var result bootstrapRuntimeEnvironmentImage
+	err := row.Scan(&result.id, &result.image.ArtifactRef, &result.image.RecipeRef,
+		&result.image.RecipeGeneration, &result.image.Reference, &result.image.Digest)
+	return result, err
 }
 
 func (repository *Repository) selectProviderAccountForAgent(ctx context.Context, tx pgx.Tx, organizationID, agentRef string) (string, error) {
@@ -265,7 +366,7 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 	if !ok {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	values, secrets, digest, err := validateEnvironmentPayload(payload.Values, payload.SecretDescriptors)
+	values, secrets, contractValues, contractSecrets, err := validateEnvironmentPayload(payload.Values, payload.SecretDescriptors)
 	if err != nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -277,6 +378,15 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		if projectID == "" {
 			return commandOutcome{}, errs.ErrNotFound
 		}
+		imageArtifactID, image, normalizedTools, selectedTools, resolveErr := repository.resolveRuntimeEnvironmentImage(
+			ctx, tx, scope.organizationID, projectID, payload.ImageArtifactRef, payload.Tools)
+		if resolveErr != nil {
+			return commandOutcome{}, resolveErr
+		}
+		digest, digestErr := runtimeEnvironmentConfigurationDigest(contractValues, contractSecrets, image, normalizedTools)
+		if digestErr != nil {
+			return commandOutcome{}, errs.ErrInvalid
+		}
 		environmentRef, _ := newRef("renv")
 		versionRef, _ := newRef("renvv")
 		var environmentID, environmentVersionID, created string
@@ -284,6 +394,7 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 			"environment_ref": environmentRef, "version_ref": versionRef, "organization_id": scope.organizationID,
 			"project_id": projectID, "name": strings.TrimSpace(payload.Name), "description": strings.TrimSpace(payload.Description),
 			"created_by": scope.actorID, "non_secret_values": values, "secret_descriptors": secrets, "digest": digest,
+			"image_artifact_id": imageArtifactID, "selected_tools": selectedTools,
 		}).Scan(&environmentID, &environmentVersionID, &created)
 		if err != nil {
 			return commandOutcome{}, fmt.Errorf("create runtime environment storage: %w", mapWriteError(err))
@@ -325,10 +436,20 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		if strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 160 || len(payload.Description) > 2000 {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+		imageArtifactID, image, normalizedTools, selectedTools, resolveErr := repository.resolveRuntimeEnvironmentImage(
+			ctx, tx, scope.organizationID, projectID, payload.ImageArtifactRef, payload.Tools)
+		if resolveErr != nil {
+			return commandOutcome{}, resolveErr
+		}
+		digest, digestErr := runtimeEnvironmentConfigurationDigest(contractValues, contractSecrets, image, normalizedTools)
+		if digestErr != nil {
+			return commandOutcome{}, errs.ErrInvalid
+		}
 		err = tx.QueryRow(ctx, queryRuntimeConfigurationPublishEnvironment, pgx.StrictNamedArgs{
 			"version_ref": versionRef, "organization_id": scope.organizationID, "environment_id": environmentID,
 			"version_number": currentRevision + 1, "parent_version_id": currentVersionID,
 			"non_secret_values": values, "secret_descriptors": secrets, "digest": digest, "created_by": scope.actorID,
+			"image_artifact_id": imageArtifactID, "selected_tools": selectedTools,
 			"name": strings.TrimSpace(payload.Name), "description": strings.TrimSpace(payload.Description),
 		}).Scan(&changed)
 	} else if input.Kind == command.RollbackRuntimeEnvironment && payload.PublishedVersionRef != "" {
@@ -352,6 +473,58 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 	return commandOutcome{result: command.Result{RuntimeEnvironment: &environment}, projectID: projectID,
 		projectRef: projectRef, resourceKind: "RUNTIME_ENVIRONMENT", resourceRef: payload.Ref,
 		summary: "i18n:RUNTIME_ENVIRONMENT_PUBLISHED", platformEvent: "AGENT_CHANGED"}, nil
+}
+
+func (repository *Repository) resolveRuntimeEnvironmentImage(
+	ctx context.Context,
+	tx pgx.Tx,
+	organizationID, projectID, artifactRef string,
+	tools []entity.RuntimeEnvironmentTool,
+) (string, entity.RuntimeEnvironmentImage, []entity.RuntimeEnvironmentTool, []byte, error) {
+	if !strings.HasPrefix(artifactRef, "imgart_") || len(artifactRef) > 96 || len(tools) > 128 {
+		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrInvalid
+	}
+	var artifactID, storedArtifactRef, recipeRef, reference, manifestDigest string
+	var recipeGeneration int64
+	var rawSpecification []byte
+	err := tx.QueryRow(ctx, queryRuntimeConfigurationResolveImageArtifact, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "project_id": projectID, "artifact_ref": artifactRef,
+	}).Scan(&artifactID, &storedArtifactRef, &recipeRef, &recipeGeneration, &reference, &manifestDigest, &rawSpecification)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrNotFound
+	}
+	if err != nil || storedArtifactRef != artifactRef || recipeGeneration < 1 || reference == "" || manifestDigest == "" {
+		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrUnavailable
+	}
+	var specification entity.RoleImageRecipeInput
+	if json.Unmarshal(rawSpecification, &specification) != nil {
+		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrUnavailable
+	}
+	available := make(map[string]struct{}, len(specification.Tools))
+	for _, tool := range specification.Tools {
+		available[tool.Name] = struct{}{}
+	}
+	normalized := append([]entity.RuntimeEnvironmentTool(nil), tools...)
+	sort.Slice(normalized, func(left, right int) bool { return normalized[left].Command < normalized[right].Command })
+	for index, tool := range normalized {
+		if strings.TrimSpace(tool.Name) != tool.Name || tool.Name == "" || len(tool.Name) > 160 ||
+			strings.TrimSpace(tool.Command) != tool.Command || tool.Command == "" || len(tool.Command) > 160 ||
+			strings.TrimSpace(tool.Description) != tool.Description || tool.Description == "" || len(tool.Description) > 500 ||
+			len(tool.UsageHint) > 500 || !utf8.ValidString(tool.Name+tool.Command+tool.Description+tool.UsageHint) ||
+			strings.ContainsRune(tool.Name+tool.Command+tool.Description+tool.UsageHint, 0) {
+			return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrInvalid
+		}
+		if _, ok := available[tool.Command]; !ok || index > 0 && normalized[index-1].Command == tool.Command {
+			return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrInvalid
+		}
+	}
+	encoded, err := json.Marshal(normalized)
+	if err != nil {
+		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrInvalid
+	}
+	image := entity.RuntimeEnvironmentImage{ArtifactRef: storedArtifactRef, RecipeRef: recipeRef,
+		RecipeGeneration: recipeGeneration, Reference: reference, Digest: manifestDigest}
+	return artifactID, image, normalized, encoded, nil
 }
 
 func (repository *Repository) bindRuntimeEnvironment(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -428,7 +601,7 @@ func runtimeConfigurationOutcome(view entity.AgentRuntimeConfigurationView, agen
 		summary: summary, platformEvent: "AGENT_CHANGED"}
 }
 
-func validateEnvironmentPayload(values []entity.RuntimeEnvironmentValue, secrets []entity.RuntimeSecretDescriptor) ([]byte, []byte, string, error) {
+func validateEnvironmentPayload(values []entity.RuntimeEnvironmentValue, secrets []entity.RuntimeSecretDescriptor) ([]byte, []byte, []runtimecontract.RuntimeEnvironmentValue, []runtimecontract.RuntimeSecretProjection, error) {
 	normalizedValues := make([]entity.RuntimeEnvironmentValue, len(values))
 	copy(normalizedValues, values)
 	normalizedSecrets := make([]entity.RuntimeSecretDescriptor, len(secrets))
@@ -443,13 +616,30 @@ func validateEnvironmentPayload(values []entity.RuntimeEnvironmentValue, secrets
 			SecretName: item.SecretName, SecretKey: item.SecretKey, SecretUID: item.SecretUID,
 			SecretResourceVersion: item.SecretResourceVersion, ContentSHA256: item.ContentSHA256})
 	}
-	digest, err := runtimecontract.RuntimeEnvironmentDigest(contractValues, contractSecrets)
-	if err != nil {
-		return nil, nil, "", err
+	if err := runtimecontract.ValidateRuntimeEnvironment(contractValues, contractSecrets); err != nil {
+		return nil, nil, nil, nil, err
 	}
 	rawValues, _ := json.Marshal(normalizedValues)
 	rawSecrets, _ := json.Marshal(normalizedSecrets)
-	return rawValues, rawSecrets, digest, nil
+	return rawValues, rawSecrets, contractValues, contractSecrets, nil
+}
+
+func runtimeEnvironmentConfigurationDigest(
+	values []runtimecontract.RuntimeEnvironmentValue,
+	secrets []runtimecontract.RuntimeSecretProjection,
+	image entity.RuntimeEnvironmentImage,
+	tools []entity.RuntimeEnvironmentTool,
+) (string, error) {
+	contractTools := make([]runtimecontract.RuntimeEnvironmentTool, 0, len(tools))
+	for _, tool := range tools {
+		contractTools = append(contractTools, runtimecontract.RuntimeEnvironmentTool{
+			Name: tool.Name, Command: tool.Command, Description: tool.Description, UsageHint: tool.UsageHint,
+		})
+	}
+	return runtimecontract.RuntimeEnvironmentDigest(values, secrets, runtimecontract.RuntimeEnvironmentImage{
+		ArtifactRef: image.ArtifactRef, RecipeRef: image.RecipeRef, RecipeGeneration: image.RecipeGeneration,
+		Reference: image.Reference, Digest: image.Digest,
+	}, contractTools)
 }
 
 func validProviderPolicy(mode string, candidates []entity.ProviderAccountCandidate) bool {

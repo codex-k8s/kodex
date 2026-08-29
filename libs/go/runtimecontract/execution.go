@@ -120,6 +120,8 @@ type RunnerInput struct {
 	RuntimeRevisionDigest       string                    `json:"runtime_revision_digest"`
 	ImageReference              string                    `json:"image_reference"`
 	ImageManifestDigest         string                    `json:"image_manifest_digest"`
+	EnvironmentImage            RuntimeEnvironmentImage   `json:"environment_image"`
+	EnvironmentTools            []RuntimeEnvironmentTool  `json:"environment_tools,omitempty"`
 	RoleRuntimeContractRevision uint64                    `json:"role_runtime_contract_revision"`
 	RoleRuntimeContractSHA256   string                    `json:"role_runtime_contract_sha256"`
 	SystemAssistant             bool                      `json:"system_assistant"`
@@ -199,14 +201,16 @@ func (input RunnerInput) Validate() error {
 		len(input.SessionContext) > 128 || len(input.DelegationTargets) > 128 || len(input.IntegrationGrants) > 256 ||
 		len(input.BoundedInput) > 256 || len(input.CodexSessionID) > 255 ||
 		!validSessionContext(input.SessionContext) || !validIntegrationGrants(input.IntegrationGrants) ||
-		!validCapabilities(input.Capabilities) || ValidateRuntimeEnvironment(input.EnvironmentValues, input.SecretProjections) != nil {
+		!validCapabilities(input.Capabilities) || ValidateRuntimeEnvironment(input.EnvironmentValues, input.SecretProjections) != nil ||
+		input.EnvironmentImage.Reference != input.ImageReference || input.EnvironmentImage.Digest != input.ImageManifestDigest ||
+		(!input.SystemAssistant && (input.EnvironmentImage.ArtifactRef == "" || input.EnvironmentImage.RecipeRef == "" || input.EnvironmentImage.RecipeGeneration < 1)) {
 		return errors.New("runner input is invalid")
 	}
 	canonicalOverlay, overlayDigest, err := CanonicalConfigOverlay(input.ConfigOverlay)
 	if err != nil || canonicalOverlay != input.ConfigOverlay || overlayDigest != input.ConfigOverlayDigest {
 		return errors.New("runner config overlay binding is invalid")
 	}
-	environmentDigest, err := RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections)
+	environmentDigest, err := RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections, input.EnvironmentImage, input.EnvironmentTools)
 	if err != nil || environmentDigest != input.RuntimeEnvironmentDigest {
 		return errors.New("runner environment binding is invalid")
 	}
@@ -382,6 +386,8 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 	payload := struct {
 		ImageReference              string
 		ImageManifestDigest         string
+		EnvironmentImage            RuntimeEnvironmentImage
+		EnvironmentTools            []RuntimeEnvironmentTool
 		RoleRuntimeContractRevision uint64
 		RoleRuntimeContractSHA256   string
 		Instructions                string
@@ -414,6 +420,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		SecretProjections           []RuntimeSecretProjection
 	}{
 		ImageReference: input.ImageReference, ImageManifestDigest: input.ImageManifestDigest,
+		EnvironmentImage: input.EnvironmentImage, EnvironmentTools: input.EnvironmentTools,
 		RoleRuntimeContractRevision: input.RoleRuntimeContractRevision,
 		RoleRuntimeContractSHA256:   input.RoleRuntimeContractSHA256,
 		Instructions:                input.Instructions, Provider: input.Provider, Model: input.Model,

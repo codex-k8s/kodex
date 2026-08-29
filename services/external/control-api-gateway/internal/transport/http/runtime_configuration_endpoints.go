@@ -174,7 +174,8 @@ func (server *Server) CreateRuntimeEnvironmentSet(writer http.ResponseWriter, re
 	}
 	response, err := server.control.Command.CreateRuntimeEnvironmentSet(request.Context(), &controlplanev1.CreateRuntimeEnvironmentSetRequest{
 		Mutation: mutation, ProjectRef: projectRef, Name: body.Name, Description: body.Description,
-		Values: runtimeEnvironmentValues(body.Values), SecretDescriptors: runtimeSecretDescriptors(body.SecretDescriptors),
+		ImageArtifactRef: body.ImageArtifactRef, Values: runtimeEnvironmentValues(body.Values),
+		SecretDescriptors: runtimeSecretDescriptors(body.SecretDescriptors), Tools: runtimeEnvironmentTools(body.Tools),
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
@@ -194,7 +195,8 @@ func (server *Server) PublishRuntimeEnvironmentVersion(writer http.ResponseWrite
 	}
 	response, err := server.control.Command.PublishRuntimeEnvironmentVersion(request.Context(), &controlplanev1.PublishRuntimeEnvironmentVersionRequest{
 		Mutation: mutation, EnvironmentRef: environmentRef, Name: body.Name, Description: body.Description,
-		Values: runtimeEnvironmentValues(body.Values), SecretDescriptors: runtimeSecretDescriptors(body.SecretDescriptors),
+		ImageArtifactRef: body.ImageArtifactRef, Values: runtimeEnvironmentValues(body.Values),
+		SecretDescriptors: runtimeSecretDescriptors(body.SecretDescriptors), Tools: runtimeEnvironmentTools(body.Tools),
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
@@ -258,6 +260,14 @@ func runtimeSecretDescriptors(input []generated.RuntimeSecretDescriptor) []*cont
 			Name: item.Name, SecretName: item.SecretName, SecretKey: item.SecretKey, SecretUid: item.SecretUid,
 			SecretResourceVersion: item.SecretResourceVersion, ContentSha256: item.ContentSha256,
 		})
+	}
+	return result
+}
+
+func runtimeEnvironmentTools(input []generated.RuntimeEnvironmentTool) []*controlplanev1.RuntimeEnvironmentTool {
+	result := make([]*controlplanev1.RuntimeEnvironmentTool, 0, len(input))
+	for _, item := range input {
+		result = append(result, &controlplanev1.RuntimeEnvironmentTool{Name: item.Name, Command: item.Command, Description: item.Description, UsageHint: item.UsageHint})
 	}
 	return result
 }

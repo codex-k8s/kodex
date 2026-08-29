@@ -9,6 +9,7 @@ import (
 	"io"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -23,6 +24,7 @@ const (
 var environmentNamePattern = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,126}$`)
 var secretNamePattern = regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?$`)
 var secretKeyPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,253}$`)
+var runtimeToolCommandPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$`)
 
 // ConfigOverlay содержит только owner-editable и не несущие authority ключи
 // Codex. Provider, credentials, sandbox, approvals, permissions, MCP и shell
@@ -52,6 +54,26 @@ type RuntimeSecretProjection struct {
 	SecretUID             string `json:"secret_uid"`
 	SecretResourceVersion string `json:"secret_resource_version"`
 	ContentSHA256         string `json:"content_sha256"`
+}
+
+// RuntimeEnvironmentImage связывает версию окружения с exact promoted image.
+// Для project-scoped окружений ArtifactRef/RecipeRef/RecipeGeneration обязательны.
+// Always-hot system assistant использует platform-owned exact reference без DB artifact.
+type RuntimeEnvironmentImage struct {
+	ArtifactRef      string `json:"artifact_ref,omitempty"`
+	RecipeRef        string `json:"recipe_ref,omitempty"`
+	RecipeGeneration int64  `json:"recipe_generation,omitempty"`
+	Reference        string `json:"reference"`
+	Digest           string `json:"digest"`
+}
+
+// RuntimeEnvironmentTool является проверенным image executable, разрешенным
+// конкретной immutable версией окружения.
+type RuntimeEnvironmentTool struct {
+	Name        string `json:"name"`
+	Command     string `json:"command"`
+	Description string `json:"description"`
+	UsageHint   string `json:"usage_hint,omitempty"`
 }
 
 type SafeEffectiveConfigInput struct {
@@ -231,23 +253,70 @@ func ValidateRuntimeEnvironment(values []RuntimeEnvironmentValue, secrets []Runt
 	return nil
 }
 
-func RuntimeEnvironmentDigest(values []RuntimeEnvironmentValue, secrets []RuntimeSecretProjection) (string, error) {
+func RuntimeEnvironmentDigest(values []RuntimeEnvironmentValue, secrets []RuntimeSecretProjection, image RuntimeEnvironmentImage, tools []RuntimeEnvironmentTool) (string, error) {
 	if err := ValidateRuntimeEnvironment(values, secrets); err != nil {
+		return "", err
+	}
+	if err := validateRuntimeEnvironmentImage(image); err != nil {
+		return "", err
+	}
+	if err := validateRuntimeEnvironmentTools(tools); err != nil {
 		return "", err
 	}
 	values = append([]RuntimeEnvironmentValue(nil), values...)
 	secrets = append([]RuntimeSecretProjection(nil), secrets...)
+	tools = append([]RuntimeEnvironmentTool(nil), tools...)
 	sort.Slice(values, func(left, right int) bool { return values[left].Name < values[right].Name })
 	sort.Slice(secrets, func(left, right int) bool { return secrets[left].Name < secrets[right].Name })
+	sort.Slice(tools, func(left, right int) bool { return tools[left].Command < tools[right].Command })
 	var payload bytes.Buffer
+	payload.WriteString("image\x00" + image.ArtifactRef + "\x00" + image.RecipeRef + "\x00")
+	payload.WriteString(strconv.FormatInt(image.RecipeGeneration, 10) + "\x00" + image.Reference + "\x00" + image.Digest + "\x00")
 	for _, item := range values {
 		payload.WriteString("value\x00" + item.Name + "\x00" + item.Value + "\x00")
 	}
 	for _, item := range secrets {
 		payload.WriteString("secret\x00" + item.Name + "\x00" + item.SecretName + "\x00" + item.SecretKey + "\x00" + item.SecretUID + "\x00" + item.SecretResourceVersion + "\x00" + item.ContentSHA256 + "\x00")
 	}
+	for _, item := range tools {
+		payload.WriteString("tool\x00" + item.Name + "\x00" + item.Command + "\x00" + item.Description + "\x00" + item.UsageHint + "\x00")
+	}
 	digest := sha256.Sum256(payload.Bytes())
 	return hex.EncodeToString(digest[:]), nil
+}
+
+func validateRuntimeEnvironmentImage(image RuntimeEnvironmentImage) error {
+	if !validPinnedImage(image.Reference, image.Digest) {
+		return errors.New("runtime environment image is invalid")
+	}
+	if image.ArtifactRef == "" && image.RecipeRef == "" && image.RecipeGeneration == 0 {
+		return nil
+	}
+	if !opaqueReferencePattern.MatchString(image.ArtifactRef) || !strings.HasPrefix(image.ArtifactRef, "imgart_") ||
+		!opaqueReferencePattern.MatchString(image.RecipeRef) || !strings.HasPrefix(image.RecipeRef, "imgrec_") || image.RecipeGeneration < 1 {
+		return errors.New("runtime environment image identity is invalid")
+	}
+	return nil
+}
+
+func validateRuntimeEnvironmentTools(tools []RuntimeEnvironmentTool) error {
+	if len(tools) > 128 {
+		return errors.New("runtime environment tools exceed limit")
+	}
+	seen := make(map[string]struct{}, len(tools))
+	for _, tool := range tools {
+		if strings.TrimSpace(tool.Name) != tool.Name || tool.Name == "" || len(tool.Name) > 160 ||
+			!runtimeToolCommandPattern.MatchString(tool.Command) || strings.TrimSpace(tool.Description) != tool.Description ||
+			tool.Description == "" || len(tool.Description) > 500 || len(tool.UsageHint) > 500 ||
+			!utf8.ValidString(tool.Name+tool.Description+tool.UsageHint) {
+			return errors.New("runtime environment tool is invalid")
+		}
+		if _, duplicate := seen[tool.Command]; duplicate {
+			return errors.New("runtime environment tool is duplicated")
+		}
+		seen[tool.Command] = struct{}{}
+	}
+	return nil
 }
 
 func DecodeRuntimeEnvironment(rawValues, rawSecrets []byte) ([]RuntimeEnvironmentValue, []RuntimeSecretProjection, error) {
@@ -263,6 +332,17 @@ func DecodeRuntimeEnvironment(rawValues, rawSecrets []byte) ([]RuntimeEnvironmen
 		return nil, nil, err
 	}
 	return values, secrets, nil
+}
+
+func DecodeRuntimeEnvironmentTools(raw []byte) ([]RuntimeEnvironmentTool, error) {
+	var tools []RuntimeEnvironmentTool
+	if err := strictJSON(raw, &tools); err != nil {
+		return nil, errors.New("decode runtime environment tools")
+	}
+	if err := validateRuntimeEnvironmentTools(tools); err != nil {
+		return nil, err
+	}
+	return tools, nil
 }
 
 func strictJSON(raw []byte, target any) error {

@@ -15,6 +15,7 @@
     "runtime_revision_digest",
     "image_reference",
     "image_manifest_digest",
+    "environment_image",
     "role_runtime_contract_revision",
     "role_runtime_contract_sha256",
     "system_assistant",
@@ -79,6 +80,12 @@
       "pattern": "^[^\\s$\\{\\}]+@sha256:[a-f0-9]{64}$"
     },
     "image_manifest_digest": {"$ref": "#/$defs/image_digest"},
+    "environment_image": {"$ref": "#/$defs/environment_image"},
+    "environment_tools": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/environment_tool"}
+    },
     "role_runtime_contract_revision": {"type": "integer", "minimum": 1},
     "role_runtime_contract_sha256": {"$ref": "#/$defs/sha256"},
     "system_assistant": {"type": "boolean"},
@@ -205,6 +212,19 @@
           "capabilities": {"contains": {"const": "platform.artifact.manage"}}
         },
         "required": ["capabilities"]
+      }
+    },
+    {
+      "if": {"properties": {"system_assistant": {"const": false}}, "required": ["system_assistant"]},
+      "then": {
+        "properties": {
+          "environment_image": {
+            "allOf": [
+              {"$ref": "#/$defs/environment_image"},
+              {"required": ["artifact_ref", "recipe_ref", "recipe_generation"]}
+            ]
+          }
+        }
       }
     }
   ],
@@ -362,6 +382,34 @@
       "properties": {
         "name": {"$ref": "#/$defs/environment_name"},
         "value": {"type": "string", "maxLength": 8192, "not": {"pattern": "\\x00"}}
+      }
+    },
+    "environment_image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "digest"],
+      "properties": {
+        "artifact_ref": {"type": "string", "pattern": "^imgart_[A-Za-z0-9_-]{8,89}$"},
+        "recipe_ref": {"type": "string", "pattern": "^imgrec_[A-Za-z0-9_-]{8,89}$"},
+        "recipe_generation": {"type": "integer", "minimum": 1},
+        "reference": {
+          "type": "string",
+          "minLength": 73,
+          "maxLength": 512,
+          "pattern": "^[^\\s$\\{\\}]+@sha256:[a-f0-9]{64}$"
+        },
+        "digest": {"$ref": "#/$defs/image_digest"}
+      }
+    },
+    "environment_tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "command", "description"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 160},
+        "command": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$"},
+        "description": {"type": "string", "minLength": 1, "maxLength": 500},
+        "usage_hint": {"type": "string", "maxLength": 500}
       }
     },
     "secret_projection": {

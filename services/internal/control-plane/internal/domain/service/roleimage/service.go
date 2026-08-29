@@ -127,7 +127,7 @@ func (service *Service) Manage(ctx context.Context, input repository.ManageInput
 		if !validRef(input.ProjectRef, "prj") || !validRef(input.RecipeRef, "imgrec") ||
 			input.Mutation.ExpectedVersion == nil || input.RoleDefinitionRef != "" ||
 			input.Environment.EnvironmentKey != "" || len(input.Environment.PackageKeys) != 0 ||
-			len(input.Environment.ToolKeys) != 0 || input.Environment.InstallationBlock != "" {
+			len(input.Environment.ToolKeys) != 0 || input.Environment.InstallationBlock != "" || input.Environment.Dockerfile != "" {
 			return repository.ManageResult{}, errs.ErrInvalid
 		}
 	default:
@@ -319,6 +319,9 @@ func validateRecipe(input entity.RoleImageRecipeInput) error {
 		!utf8.ValidString(input.InstallationBlock) || len(input.InstallationBlock) > 64<<10 || strings.ContainsRune(input.InstallationBlock, 0) {
 		return errs.ErrInvalid
 	}
+	if validateDockerfile(input.Dockerfile, input.BaseImageReference, input.BaseImageDigest) != nil {
+		return errs.ErrInvalid
+	}
 	platformKeys := make([]string, 0, len(input.Platforms))
 	for _, platform := range input.Platforms {
 		if platform.OS != "linux" || (platform.Architecture != "amd64" && platform.Architecture != "arm64") ||
@@ -347,6 +350,43 @@ func validateRecipe(input entity.RoleImageRecipeInput) error {
 		toolKeys = append(toolKeys, input.ToolKeys[index])
 	}
 	if !uniqueSorted(platformKeys) || !uniqueSorted(packageKeys) || !uniqueSorted(toolKeys) {
+		return errs.ErrInvalid
+	}
+	return nil
+}
+
+func validateDockerfile(input, baseReference, baseDigest string) error {
+	if input == "" || !utf8.ValidString(input) || len(input) > 256<<10 || strings.ContainsAny(input, "\x00\r") {
+		return errs.ErrInvalid
+	}
+	expectedBase := baseReference + "@" + baseDigest
+	foundFrom := false
+	for _, rawLine := range strings.Split(input, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" {
+			continue
+		}
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "# syntax=") || strings.HasPrefix(lower, "#syntax=") {
+			return errs.ErrInvalid
+		}
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) > 0 && strings.EqualFold(fields[0], "FROM") {
+			if foundFrom || len(fields) != 2 && len(fields) != 4 || fields[1] != expectedBase ||
+				len(fields) == 4 && !strings.EqualFold(fields[2], "AS") || strings.HasSuffix(line, "\\") {
+				return errs.ErrInvalid
+			}
+			foundFrom = true
+			continue
+		}
+		if !foundFrom {
+			return errs.ErrInvalid
+		}
+	}
+	if !foundFrom {
 		return errs.ErrInvalid
 	}
 	return nil

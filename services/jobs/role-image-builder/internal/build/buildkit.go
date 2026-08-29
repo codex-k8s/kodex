@@ -175,7 +175,7 @@ func (executor *Executor) Prepare(
 		input.GetRoleRuntimeContractRevision() != executor.config.RoleRuntimeContractRevision ||
 		input.GetRoleRuntimeContractSha256() != executor.config.RoleRuntimeContractSHA256 ||
 		!strings.HasPrefix(input.GetContextRef(), "oci://") ||
-		strings.ContainsAny(input.GetInstallationBlock(), "\x00\r") {
+		strings.ContainsAny(input.GetInstallationBlock(), "\x00\r") || !validOwnerDockerfile(input) {
 		return nil, "INPUT_FETCH_REJECTED", ErrInvalidContext
 	}
 	root, err := os.MkdirTemp(executor.config.WorkspaceRoot, "image-build-")
@@ -344,10 +344,45 @@ func dockerfile(
 		"--mount=type=bind,target=/workspace/source,readonly",
 		"--mount=type=bind,from=kodex-install,source=install.sh,target=/run/kodex/install.sh,readonly",
 	}
-	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s AS trusted-runtime\nFROM %s@%s\nRUN %s /bin/sh /run/kodex/install.sh\nCOPY --from=trusted-runtime /usr/local/bin/kodex-init /usr/local/bin/kodex-init\nCOPY --from=trusted-runtime /usr/local/bin/kodex-agent-runner /usr/local/bin/kodex-agent-runner\nUSER 10001:10001\nENTRYPOINT [\"/usr/local/bin/kodex-init\",\"entrypoint\",\"/usr/local/bin/kodex-agent-runner\"]\nCMD [\"runtime-session\"]\nLABEL kodex.dev/spec-sha256=%q kodex.dev/runtime-contract-sha256=%q\n",
+	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s AS trusted-runtime\n%s\nUSER root\nRUN %s /bin/sh /run/kodex/install.sh\nCOPY --from=trusted-runtime /usr/local/bin/kodex-init /usr/local/bin/kodex-init\nCOPY --from=trusted-runtime /usr/local/bin/kodex-agent-runner /usr/local/bin/kodex-agent-runner\nUSER 10001:10001\nENTRYPOINT [\"/usr/local/bin/kodex-init\",\"entrypoint\",\"/usr/local/bin/kodex-agent-runner\"]\nCMD [\"runtime-session\"]\nLABEL kodex.dev/spec-sha256=%q kodex.dev/runtime-contract-sha256=%q\n",
 		frontendRepository, input.GetFrontendSha256(), trustedRuntimeRepository, trustedRuntimeDigest,
-		input.GetBaseImageReference(), input.GetBaseImageDigest(), strings.Join(mounts, " "), input.GetSpecSha256(),
+		strings.TrimSpace(input.GetDockerfile()), strings.Join(mounts, " "), input.GetSpecSha256(),
 		input.GetRoleRuntimeContractSha256()))
+}
+
+func validOwnerDockerfile(input *controlplanev1.RoleImageBuildInput) bool {
+	dockerfile := input.GetDockerfile()
+	if dockerfile == "" || len(dockerfile) > 256<<10 || strings.ContainsAny(dockerfile, "\x00\r") {
+		return false
+	}
+	expectedBase := input.GetBaseImageReference() + "@" + input.GetBaseImageDigest()
+	foundFrom := false
+	for _, rawLine := range strings.Split(dockerfile, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" {
+			continue
+		}
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "# syntax=") || strings.HasPrefix(lower, "#syntax=") {
+			return false
+		}
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) > 0 && strings.EqualFold(fields[0], "FROM") {
+			if foundFrom || len(fields) != 2 && len(fields) != 4 || fields[1] != expectedBase ||
+				len(fields) == 4 && !strings.EqualFold(fields[2], "AS") || strings.HasSuffix(line, "\\") {
+				return false
+			}
+			foundFrom = true
+			continue
+		}
+		if !foundFrom {
+			return false
+		}
+	}
+	return foundFrom
 }
 
 func installationScript(input *controlplanev1.RoleImageBuildInput) []byte {

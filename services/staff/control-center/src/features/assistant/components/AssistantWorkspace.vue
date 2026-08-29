@@ -208,8 +208,7 @@ async function send(): Promise<void> {
 }
 
 async function uploadAttachment(file: File): Promise<{ ref: string }> {
-  if (!props.projectRef) throw new Error(t("attachments.projectRequired"));
-  return platform.uploadProjectArtifact(props.projectRef, file);
+  return platform.uploadAttachmentArtifact(props.projectRef, file);
 }
 
 function handleComposerKeydown(event: KeyboardEvent): void {
@@ -558,16 +557,9 @@ onBeforeUnmount(() => {
                 ref="attachmentComposer"
                 compact
                 :upload="uploadAttachment"
-                :disabled="store.busy || !live || !projectRef"
+                :disabled="store.busy || !live"
                 @change="attachmentState = $event"
               />
-              <p
-                v-if="!projectRef"
-                class="assistant-attachments-unavailable"
-                role="status"
-              >
-                {{ $t("attachments.projectRequired") }}
-              </p>
               <div class="assistant-composer__field">
                 <textarea
                   ref="composer"
@@ -915,11 +907,6 @@ onBeforeUnmount(() => {
   padding: 12px 16px 14px;
   border-top: 1px solid var(--border);
   background: var(--surface);
-}
-.assistant-attachments-unavailable {
-  margin: 0;
-  color: var(--warning);
-  font-size: 0.78rem;
 }
 .assistant-composer__field {
   position: relative;

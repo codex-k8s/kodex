@@ -69,7 +69,12 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	if err := decodeStoredRuntimeEnvironment(rawEnvironmentValues, rawSecretProjections, &environmentValues, &secretProjections); err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
-	verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(environmentValues, secretProjections)
+	environmentImage := runtimecontract.RuntimeEnvironmentImage{
+		Reference: repository.roleImages.DefaultImageReference,
+		Digest:    repository.roleImages.DefaultImageDigest,
+	}
+	verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(
+		environmentValues, secretProjections, environmentImage, nil)
 	if err != nil || verifiedEnvironmentDigest != runtimeEnvironmentDigest {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
@@ -141,6 +146,8 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"environmentBindingDigest":    environmentBindingDigest,
 		"environmentValues":           environmentValues,
 		"secretProjections":           secretProjections,
+		"environmentImage":            environmentImage,
+		"environmentTools":            []runtimecontract.RuntimeEnvironmentTool{},
 		"revisionDigest":              hex.EncodeToString(revisionDigest[:]),
 	}
 	if err := tx.Commit(ctx); err != nil {

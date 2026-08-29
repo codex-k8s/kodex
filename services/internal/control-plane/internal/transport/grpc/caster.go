@@ -200,7 +200,10 @@ func castConfigOverlay(value *entity.ConfigOverlayVersion) *controlplanev1.Confi
 }
 func castRuntimeEnvironmentVersion(value entity.RuntimeEnvironmentVersion) *controlplanev1.RuntimeEnvironmentVersion {
 	result := &controlplanev1.RuntimeEnvironmentVersion{Ref: value.Ref, Version: value.Version, Revision: value.Revision,
-		Digest: value.Digest, CreatedAt: timestamp(value.CreatedAt)}
+		Digest: value.Digest, CreatedAt: timestamp(value.CreatedAt), Image: &controlplanev1.RuntimeEnvironmentImage{
+			ArtifactRef: value.Image.ArtifactRef, RecipeRef: value.Image.RecipeRef, RecipeGeneration: value.Image.RecipeGeneration,
+			Reference: value.Image.Reference, Digest: value.Image.Digest,
+		}}
 	for _, item := range value.Values {
 		result.Values = append(result.Values, &controlplanev1.RuntimeEnvironmentValue{Name: item.Name, Value: item.Value})
 	}
@@ -208,6 +211,9 @@ func castRuntimeEnvironmentVersion(value entity.RuntimeEnvironmentVersion) *cont
 		result.SecretDescriptors = append(result.SecretDescriptors, &controlplanev1.RuntimeSecretDescriptor{Name: item.Name,
 			SecretName: item.SecretName, SecretKey: item.SecretKey, SecretUid: item.SecretUID,
 			SecretResourceVersion: item.SecretResourceVersion, ContentSha256: item.ContentSHA256})
+	}
+	for _, item := range value.Tools {
+		result.Tools = append(result.Tools, &controlplanev1.RuntimeEnvironmentTool{Name: item.Name, Command: item.Command, Description: item.Description, UsageHint: item.UsageHint})
 	}
 	return result
 }

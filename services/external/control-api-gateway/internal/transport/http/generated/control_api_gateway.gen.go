@@ -1611,6 +1611,24 @@ func (e RoleEnvironmentPlatformOs) Valid() bool {
 	}
 }
 
+// Defines values for RoleImageArtifactAdmissionVerdict.
+const (
+	ACCEPTED RoleImageArtifactAdmissionVerdict = "ACCEPTED"
+	REJECTED RoleImageArtifactAdmissionVerdict = "REJECTED"
+)
+
+// Valid indicates whether the value is a known member of the RoleImageArtifactAdmissionVerdict enum.
+func (e RoleImageArtifactAdmissionVerdict) Valid() bool {
+	switch e {
+	case ACCEPTED:
+		return true
+	case REJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RoleImageBuildStage.
 const (
 	RoleImageBuildStageBASEPULL                   RoleImageBuildStage = "BASE_PULL"
@@ -3027,7 +3045,7 @@ type Artifact struct {
 	MediaType        string                 `json:"mediaType"`
 	NextActions      []NextAction           `json:"nextActions"`
 	PreviewAvailable bool                   `json:"previewAvailable"`
-	ProjectRef       OpaqueRef              `json:"projectRef"`
+	ProjectRef       *OpaqueRef             `json:"projectRef,omitempty"`
 	PurgeAfter       *Timestamp             `json:"purgeAfter,omitempty"`
 	Ref              OpaqueRef              `json:"ref"`
 	Revision         int                    `json:"revision"`
@@ -3742,6 +3760,7 @@ type RoleEnvironment struct {
 	Available                 bool                      `json:"available"`
 	CustomInstallationAllowed bool                      `json:"customInstallationAllowed"`
 	DescriptionMessageKey     string                    `json:"descriptionMessageKey"`
+	DockerfileTemplate        string                    `json:"dockerfileTemplate"`
 	Key                       string                    `json:"key"`
 	NameMessageKey            string                    `json:"nameMessageKey"`
 	Platforms                 []RoleEnvironmentPlatform `json:"platforms"`
@@ -3770,6 +3789,7 @@ type RoleEnvironmentPlatformOs string
 
 // RoleEnvironmentSelection defines model for RoleEnvironmentSelection.
 type RoleEnvironmentSelection struct {
+	Dockerfile     string `json:"dockerfile"`
 	EnvironmentKey string `json:"environmentKey"`
 
 	// InstallationBlock Дополнительный declarative build fragment; доступен только для явно разрешённого окружения
@@ -3778,13 +3798,39 @@ type RoleEnvironmentSelection struct {
 	ToolKeys          *[]string `json:"toolKeys,omitempty"`
 }
 
+// RoleImageArtifact defines model for RoleImageArtifact.
+type RoleImageArtifact struct {
+	AdmissionVerdict            RoleImageArtifactAdmissionVerdict `json:"admissionVerdict"`
+	ManifestDigest              string                            `json:"manifestDigest"`
+	PromotedAt                  Timestamp                         `json:"promotedAt"`
+	PromotedReference           string                            `json:"promotedReference"`
+	RecipeGeneration            int64                             `json:"recipeGeneration"`
+	RecipeRef                   OpaqueRef                         `json:"recipeRef"`
+	Ref                         OpaqueRef                         `json:"ref"`
+	SbomSha256                  *string                           `json:"sbomSha256,omitempty"`
+	Tools                       []RoleImageArtifactTool           `json:"tools"`
+	Version                     int64                             `json:"version"`
+	VulnerabilityEvidenceSha256 *string                           `json:"vulnerabilityEvidenceSha256,omitempty"`
+}
+
+// RoleImageArtifactAdmissionVerdict defines model for RoleImageArtifact.AdmissionVerdict.
+type RoleImageArtifactAdmissionVerdict string
+
+// RoleImageArtifactTool defines model for RoleImageArtifactTool.
+type RoleImageArtifactTool struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
 // RoleImageBuild defines model for RoleImageBuild.
 type RoleImageBuild struct {
 	Attempt           int                 `json:"attempt"`
 	CreatedAt         Timestamp           `json:"createdAt"`
 	DiagnosticCode    *string             `json:"diagnosticCode,omitempty"`
 	DiagnosticSummary *string             `json:"diagnosticSummary,omitempty"`
+	Dockerfile        string              `json:"dockerfile"`
 	ProgressPercent   int                 `json:"progressPercent"`
+	RecipeGeneration  int64               `json:"recipeGeneration"`
 	RecipeRef         OpaqueRef           `json:"recipeRef"`
 	Ref               OpaqueRef           `json:"ref"`
 	SafeErrorCode     *string             `json:"safeErrorCode,omitempty"`
@@ -3798,18 +3844,20 @@ type RoleImageBuildStage string
 
 // RoleImageRecipe defines model for RoleImageRecipe.
 type RoleImageRecipe struct {
-	CreatedAt          Timestamp                `json:"createdAt"`
-	Environment        RoleEnvironmentSelection `json:"environment"`
-	Generation         int64                    `json:"generation"`
-	Name               string                   `json:"name"`
-	NextActions        []NextAction             `json:"nextActions"`
-	ProjectRef         OpaqueRef                `json:"projectRef"`
-	PromotedImageReady bool                     `json:"promotedImageReady"`
-	Ref                OpaqueRef                `json:"ref"`
-	RoleDefinitionRef  OpaqueRef                `json:"roleDefinitionRef"`
-	State              RoleImageRecipeState     `json:"state"`
-	UpdatedAt          Timestamp                `json:"updatedAt"`
-	Version            int64                    `json:"version"`
+	ActiveImageArtifactRef *OpaqueRef               `json:"activeImageArtifactRef,omitempty"`
+	CreatedAt              Timestamp                `json:"createdAt"`
+	Environment            RoleEnvironmentSelection `json:"environment"`
+	Generation             int64                    `json:"generation"`
+	Name                   string                   `json:"name"`
+	NextActions            []NextAction             `json:"nextActions"`
+	ProjectRef             OpaqueRef                `json:"projectRef"`
+	PromotedImageReady     bool                     `json:"promotedImageReady"`
+	PromotedImageReference *string                  `json:"promotedImageReference,omitempty"`
+	Ref                    OpaqueRef                `json:"ref"`
+	RoleDefinitionRef      OpaqueRef                `json:"roleDefinitionRef"`
+	State                  RoleImageRecipeState     `json:"state"`
+	UpdatedAt              Timestamp                `json:"updatedAt"`
+	Version                int64                    `json:"version"`
 }
 
 // RoleImageRecipeState defines model for RoleImageRecipe.State.
@@ -3839,8 +3887,9 @@ type RoleImageRecipeCreateInput struct {
 
 // RoleImageRecipeDetail defines model for RoleImageRecipeDetail.
 type RoleImageRecipeDetail struct {
-	Builds []RoleImageBuild `json:"builds"`
-	Recipe RoleImageRecipe  `json:"recipe"`
+	ActiveArtifact *RoleImageArtifact `json:"activeArtifact,omitempty"`
+	Builds         []RoleImageBuild   `json:"builds"`
+	Recipe         RoleImageRecipe    `json:"recipe"`
 }
 
 // RoleImageRecipePage defines model for RoleImageRecipePage.
@@ -4099,11 +4148,22 @@ type RuntimeEnvironmentBindingInput struct {
 	EnvironmentRef OpaqueRef `json:"environmentRef"`
 }
 
+// RuntimeEnvironmentImage defines model for RuntimeEnvironmentImage.
+type RuntimeEnvironmentImage struct {
+	ArtifactRef      OpaqueRef `json:"artifactRef"`
+	Digest           string    `json:"digest"`
+	RecipeGeneration int64     `json:"recipeGeneration"`
+	RecipeRef        OpaqueRef `json:"recipeRef"`
+	Reference        string    `json:"reference"`
+}
+
 // RuntimeEnvironmentInput defines model for RuntimeEnvironmentInput.
 type RuntimeEnvironmentInput struct {
 	Description       string                    `json:"description"`
+	ImageArtifactRef  OpaqueRef                 `json:"imageArtifactRef"`
 	Name              string                    `json:"name"`
 	SecretDescriptors []RuntimeSecretDescriptor `json:"secretDescriptors"`
+	Tools             []RuntimeEnvironmentTool  `json:"tools"`
 	Values            []RuntimeEnvironmentValue `json:"values"`
 }
 
@@ -4130,6 +4190,14 @@ type RuntimeEnvironmentSet struct {
 	Version        int64                     `json:"version"`
 }
 
+// RuntimeEnvironmentTool defines model for RuntimeEnvironmentTool.
+type RuntimeEnvironmentTool struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+	Name        string `json:"name"`
+	UsageHint   string `json:"usageHint"`
+}
+
 // RuntimeEnvironmentValue defines model for RuntimeEnvironmentValue.
 type RuntimeEnvironmentValue struct {
 	Name  string `json:"name"`
@@ -4140,9 +4208,11 @@ type RuntimeEnvironmentValue struct {
 type RuntimeEnvironmentVersion struct {
 	CreatedAt         Timestamp                 `json:"createdAt"`
 	Digest            string                    `json:"digest"`
+	Image             RuntimeEnvironmentImage   `json:"image"`
 	Ref               OpaqueRef                 `json:"ref"`
 	Revision          int64                     `json:"revision"`
 	SecretDescriptors []RuntimeSecretDescriptor `json:"secretDescriptors"`
+	Tools             []RuntimeEnvironmentTool  `json:"tools"`
 	Values            []RuntimeEnvironmentValue `json:"values"`
 	Version           int64                     `json:"version"`
 }
@@ -4744,6 +4814,13 @@ type BindAgentRuntimeEnvironmentParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// UploadOrganizationArtifactParams defines parameters for UploadOrganizationArtifact.
+type UploadOrganizationArtifactParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	XFileName      string         `json:"X-File-Name"`
 }
 
 // DeleteArtifactParams defines parameters for DeleteArtifact.
@@ -5477,6 +5554,9 @@ type ServerInterface interface {
 
 	// (PUT /api/v1/agents/{agentRef}/runtime-environment-binding)
 	BindAgentRuntimeEnvironment(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params BindAgentRuntimeEnvironmentParams)
+
+	// (POST /api/v1/artifacts)
+	UploadOrganizationArtifact(w http.ResponseWriter, r *http.Request, params UploadOrganizationArtifactParams)
 
 	// (DELETE /api/v1/artifacts/{artifactRef})
 	DeleteArtifact(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, params DeleteArtifactParams)
@@ -8426,6 +8506,103 @@ func (siw *ServerInterfaceWrapper) BindAgentRuntimeEnvironment(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.BindAgentRuntimeEnvironment(w, r, agentRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadOrganizationArtifact operation middleware
+func (siw *ServerInterfaceWrapper) UploadOrganizationArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UploadOrganizationArtifactParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-File-Name" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-File-Name")]; found {
+		var XFileName string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-File-Name", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-File-Name", valueList[0], &XFileName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-File-Name", Err: err})
+			return
+		}
+
+		params.XFileName = XFileName
+
+	} else {
+		err := fmt.Errorf("Header parameter X-File-Name is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-File-Name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadOrganizationArtifact(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14504,6 +14681,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-configuration", wrapper.PublishAgentRuntimeConfiguration)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-configuration/versions", wrapper.ListAgentRuntimeConfigurationVersions)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-environment-binding", wrapper.BindAgentRuntimeEnvironment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/artifacts", wrapper.UploadOrganizationArtifact)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}", wrapper.DeleteArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}", wrapper.GetArtifact)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/bindings", wrapper.ChangeArtifactBinding)

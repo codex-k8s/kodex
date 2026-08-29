@@ -287,10 +287,15 @@ SELECT n.id::text,
        COALESCE(role_image.recipe_ref, ''),
        COALESCE(role_image.artifact_id::text, ''),
        COALESCE(role_image.artifact_ref, ''),
-       COALESCE(role_image.promoted_reference, $3),
-       COALESCE(role_image.manifest_digest, $4),
-       COALESCE(role_image.role_runtime_contract_revision, $5),
-       COALESCE(role_image.role_runtime_contract_sha256, $6),
+       COALESCE(role_image.recipe_generation, 0),
+       CASE WHEN a.system_key = 'system-assistant' THEN $3
+            ELSE COALESCE(role_image.promoted_reference, '') END,
+       CASE WHEN a.system_key = 'system-assistant' THEN $4
+            ELSE COALESCE(role_image.manifest_digest, '') END,
+       CASE WHEN a.system_key = 'system-assistant' THEN $5
+            ELSE COALESCE(role_image.role_runtime_contract_revision, 0) END,
+       CASE WHEN a.system_key = 'system-assistant' THEN $6
+            ELSE COALESCE(role_image.role_runtime_contract_sha256, '') END,
        runtime_config.id::text,
        runtime_config.ref,
        runtime_config.version_number,
@@ -315,6 +320,7 @@ SELECT n.id::text,
        runtime_environment.digest,
        runtime_environment.non_secret_values,
        runtime_environment.secret_descriptors,
+       runtime_environment.selected_tools,
        COALESCE(session_storage.codex_session_id::text, '')
 FROM control_plane.run_nodes n
 JOIN control_plane.runs r ON r.id = n.run_id
@@ -361,6 +367,7 @@ LEFT JOIN LATERAL (
            recipe.ref AS recipe_ref,
            artifact.id AS artifact_id,
            artifact.ref AS artifact_ref,
+           artifact.recipe_generation,
            artifact.promoted_reference,
            artifact.manifest_digest,
            artifact.role_runtime_contract_revision,
@@ -381,7 +388,11 @@ WHERE n.organization_id = $1::uuid
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
   AND COALESCE(session_storage.state, 'LIVE') = 'LIVE'
-  AND (runtime_environment.role_image_artifact_id IS NULL OR role_image.artifact_id IS NOT NULL)
+  AND (
+      (a.system_key = 'system-assistant' AND runtime_environment.role_image_artifact_id IS NULL)
+      OR
+      (a.system_key IS NULL AND runtime_environment.role_image_artifact_id IS NOT NULL AND role_image.artifact_id IS NOT NULL)
+  )
   AND (
       input_attachment_set.id IS NULL
       OR input_attachment_set.item_count = (

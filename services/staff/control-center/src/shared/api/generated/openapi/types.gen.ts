@@ -514,6 +514,23 @@ export type RuntimeEnvironmentVersion = {
     secretDescriptors: Array<RuntimeSecretDescriptor>;
     digest: string;
     createdAt: Timestamp;
+    image: RuntimeEnvironmentImage;
+    tools: Array<RuntimeEnvironmentTool>;
+};
+
+export type RuntimeEnvironmentImage = {
+    artifactRef: OpaqueRef;
+    recipeRef: OpaqueRef;
+    recipeGeneration: number;
+    reference: string;
+    digest: string;
+};
+
+export type RuntimeEnvironmentTool = {
+    name: string;
+    command: string;
+    description: string;
+    usageHint: string;
 };
 
 export type RuntimeEnvironmentSet = {
@@ -530,6 +547,8 @@ export type RuntimeEnvironmentSet = {
 export type RuntimeEnvironmentInput = {
     name: string;
     description: string;
+    imageArtifactRef: OpaqueRef;
+    tools: Array<RuntimeEnvironmentTool>;
     values: Array<RuntimeEnvironmentValue>;
     secretDescriptors: Array<RuntimeSecretDescriptor>;
 };
@@ -604,6 +623,7 @@ export type RoleEnvironment = {
     available: boolean;
     unavailableMessageKey?: string;
     customInstallationAllowed: boolean;
+    dockerfileTemplate: string;
 };
 
 export type RoleEnvironmentPage = {
@@ -618,6 +638,7 @@ export type RoleEnvironmentSelection = {
      * Дополнительный declarative build fragment; доступен только для явно разрешённого окружения
      */
     installationBlock?: string;
+    dockerfile: string;
 };
 
 export type RoleImageRecipe = {
@@ -630,6 +651,8 @@ export type RoleImageRecipe = {
     environment: RoleEnvironmentSelection;
     generation: number;
     promotedImageReady: boolean;
+    activeImageArtifactRef?: OpaqueRef;
+    promotedImageReference?: string;
     createdAt: Timestamp;
     updatedAt: Timestamp;
     nextActions: Array<NextAction>;
@@ -639,6 +662,8 @@ export type RoleImageBuild = {
     ref: OpaqueRef;
     version: number;
     recipeRef: OpaqueRef;
+    recipeGeneration: number;
+    dockerfile: string;
     attempt: number;
     stage: 'QUEUED' | 'MATERIALIZATION' | 'CONTEXT_VALIDATION' | 'BASE_PULL' | 'SOLVING' | 'INSTALLATION' | 'TRUSTED_RUNTIME_FINALIZATION' | 'STAGING_PUSH' | 'PROVENANCE' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'DEAD_LETTER';
     progressPercent: number;
@@ -672,6 +697,26 @@ export type RoleImageRecipePage = {
 export type RoleImageRecipeDetail = {
     recipe: RoleImageRecipe;
     builds: Array<RoleImageBuild>;
+    activeArtifact?: RoleImageArtifact;
+};
+
+export type RoleImageArtifactTool = {
+    name: string;
+    version: string;
+};
+
+export type RoleImageArtifact = {
+    ref: OpaqueRef;
+    version: number;
+    recipeRef: OpaqueRef;
+    recipeGeneration: number;
+    manifestDigest: string;
+    promotedReference: string;
+    admissionVerdict: 'ACCEPTED' | 'REJECTED';
+    sbomSha256?: string;
+    vulnerabilityEvidenceSha256?: string;
+    tools: Array<RoleImageArtifactTool>;
+    promotedAt: Timestamp;
 };
 
 export type RoleImageRecipeCommandReceipt = {
@@ -1001,7 +1046,7 @@ export type GateResolutionReceipt = {
 export type Artifact = {
     ref: OpaqueRef;
     version: number;
-    projectRef: OpaqueRef;
+    projectRef?: OpaqueRef;
     runRef?: OpaqueRef;
     sessionRef?: OpaqueRef;
     fileName: string;
@@ -3465,6 +3510,9 @@ export type ListArtifactsResponses = {
 export type ListArtifactsResponse = ListArtifactsResponses[keyof ListArtifactsResponses];
 
 export type UploadArtifactData = {
+    /**
+     * Поток одного файла размером до 512 MiB; gateway и control-plane сверяют Content-Length и SHA-256 без полной буферизации тела.
+     */
     body: Blob | File;
     headers: {
         'Idempotency-Key': string;
@@ -3497,6 +3545,39 @@ export type UploadArtifactResponses = {
 };
 
 export type UploadArtifactResponse = UploadArtifactResponses[keyof UploadArtifactResponses];
+
+export type UploadOrganizationArtifactData = {
+    /**
+     * Поток одного файла организационного помощника размером до 512 MiB; gateway и control-plane сверяют Content-Length и SHA-256 без полной буферизации тела.
+     */
+    body: Blob | File;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'X-File-Name': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/artifacts';
+};
+
+export type UploadOrganizationArtifactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UploadOrganizationArtifactError = UploadOrganizationArtifactErrors[keyof UploadOrganizationArtifactErrors];
+
+export type UploadOrganizationArtifactResponses = {
+    /**
+     * Artifact принят в организационную область и синхронно проверен обязательной встроенной policy
+     */
+    201: Artifact;
+};
+
+export type UploadOrganizationArtifactResponse = UploadOrganizationArtifactResponses[keyof UploadOrganizationArtifactResponses];
 
 export type DeleteArtifactData = {
     body?: never;
@@ -3643,7 +3724,7 @@ export type DownloadArtifactError = DownloadArtifactErrors[keyof DownloadArtifac
 
 export type DownloadArtifactResponses = {
     /**
-     * Защищённое содержимое artifact
+     * Поток защищённого содержимого artifact размером до 512 MiB
      */
     200: Blob | File;
 };

@@ -86,14 +86,23 @@ func scanLockedRecipe(row roleImageRowScanner) (lockedRecipe, error) {
 
 func scanBuild(row roleImageRowScanner) (entity.ImageBuild, error) {
 	var result entity.ImageBuild
+	var specification []byte
 	err := row.Scan(&result.Ref, &result.RecipeRef, &result.SpecSHA256, &result.Stage,
 		&result.StagingReference, &result.ManifestDigest, &result.ProvenanceSHA256,
 		&result.ImmutableBuildSHA256, &result.SafeErrorCode, &result.DiagnosticCode,
 		&result.DiagnosticSummary, &result.LeaseTokenSHA256, &result.ClaimantWorkload,
 		&result.Version, &result.RecipeVersion, &result.RecipeGeneration, &result.Fence,
 		&result.AuthorityGeneration, &result.Attempt, &result.ProgressPercent,
-		&result.LeaseExpiresAt, &result.CreatedAt, &result.UpdatedAt)
-	return result, err
+		&result.LeaseExpiresAt, &result.CreatedAt, &result.UpdatedAt, &specification)
+	if err != nil {
+		return entity.ImageBuild{}, err
+	}
+	var recipe entity.RoleImageRecipeInput
+	if err := json.Unmarshal(specification, &recipe); err != nil {
+		return entity.ImageBuild{}, errors.New("decode image build specification")
+	}
+	result.Dockerfile = recipe.Dockerfile
+	return result, nil
 }
 
 func scanLockedBuild(row roleImageRowScanner) (lockedBuild, error) {
@@ -145,6 +154,7 @@ func scanRoleImageArtifact(row roleImageRowScanner) (entity.ImageArtifact, error
 	result.ContextSHA256, result.BuilderSHA256 = recipe.ContextSHA256, recipe.BuilderSHA256
 	result.FrontendSHA256, result.ToolchainSHA256 = recipe.FrontendSHA256, recipe.ToolchainSHA256
 	result.Platforms = append([]entity.RoleImagePlatform(nil), recipe.Platforms...)
+	result.Tools = append([]entity.RoleImageTool(nil), recipe.Tools...)
 	return result, nil
 }
 
@@ -184,6 +194,7 @@ func scanLockedArtifact(row roleImageRowScanner) (lockedArtifact, error) {
 	result.Artifact.ContextSHA256, result.Artifact.BuilderSHA256 = recipe.ContextSHA256, recipe.BuilderSHA256
 	result.Artifact.FrontendSHA256, result.Artifact.ToolchainSHA256 = recipe.FrontendSHA256, recipe.ToolchainSHA256
 	result.Artifact.Platforms = append([]entity.RoleImagePlatform(nil), recipe.Platforms...)
+	result.Artifact.Tools = append([]entity.RoleImageTool(nil), recipe.Tools...)
 	return result, nil
 }
 
@@ -291,6 +302,7 @@ func newRoleImageBuildInput(recipe entity.RoleImageRecipe, immutableBuildSHA256 
 		ContextRef: recipe.Input.ContextRef, ContextSHA256: recipe.Input.ContextSHA256,
 		BuilderSHA256: recipe.Input.BuilderSHA256, FrontendSHA256: recipe.Input.FrontendSHA256,
 		InstallationBlock: recipe.Input.InstallationBlock, ToolchainSHA256: recipe.Input.ToolchainSHA256,
+		Dockerfile:     recipe.Input.Dockerfile,
 		PolicyRevision: recipe.PolicyRevision, PolicySHA256: recipe.PolicySHA256,
 		ImmutableBuildSHA256:        immutableBuildSHA256,
 		RoleRuntimeContractRevision: recipe.RoleRuntimeContractRevision,

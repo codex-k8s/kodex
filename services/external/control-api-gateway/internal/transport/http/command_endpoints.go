@@ -665,6 +665,29 @@ func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, pro
 	if !ok {
 		return
 	}
+	server.uploadArtifact(w, r, artifactUploadRequest{
+		projectRef:     projectRef,
+		runRef:         stringValue(p.RunRef),
+		fileName:       p.XFileName,
+		idempotencyKey: p.IdempotencyKey,
+	})
+}
+
+func (server *Server) UploadOrganizationArtifact(w http.ResponseWriter, r *http.Request, p generated.UploadOrganizationArtifactParams) {
+	server.uploadArtifact(w, r, artifactUploadRequest{
+		fileName:       p.XFileName,
+		idempotencyKey: p.IdempotencyKey,
+	})
+}
+
+type artifactUploadRequest struct {
+	projectRef     string
+	runRef         string
+	fileName       string
+	idempotencyKey string
+}
+
+func (server *Server) uploadArtifact(w http.ResponseWriter, r *http.Request, upload artifactUploadRequest) {
 	if r.ContentLength < 0 {
 		writeLocalProblem(w, http.StatusLengthRequired, "CONTENT_LENGTH_REQUIRED", false)
 		return
@@ -673,7 +696,7 @@ func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, pro
 		writeLocalProblem(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", false)
 		return
 	}
-	m, ok := requireMutation(w, p.IdempotencyKey, "")
+	m, ok := requireMutation(w, upload.idempotencyKey, "")
 	if !ok {
 		return
 	}
@@ -682,7 +705,7 @@ func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, pro
 		writeRPCProblem(w, err)
 		return
 	}
-	if err = stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Metadata{Metadata: &controlplanev1.UploadArtifactMetadata{Mutation: m, ProjectRef: projectRef, RunRef: stringValue(p.RunRef), FileName: p.XFileName, MediaType: r.Header.Get("Content-Type"), SizeBytes: r.ContentLength}}}); err != nil {
+	if err = stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Metadata{Metadata: &controlplanev1.UploadArtifactMetadata{Mutation: m, ProjectRef: upload.projectRef, RunRef: upload.runRef, FileName: upload.fileName, MediaType: r.Header.Get("Content-Type"), SizeBytes: r.ContentLength}}}); err != nil {
 		writeRPCProblem(w, err)
 		return
 	}

@@ -70,6 +70,7 @@ import {
   updateSystemAssistantOwnerInstructions,
   updateWorkflowDraft,
   uploadArtifact,
+  uploadOrganizationArtifact,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   AdministrationState,
@@ -682,6 +683,30 @@ export const usePlatformStore = defineStore("platform", () => {
     );
     upsert(artifacts, [result.data]);
     return result.data;
+  }
+
+  async function uploadOrganizationArtifactFile(file: File): Promise<Artifact> {
+    const result = await mutate((headers) =>
+      uploadOrganizationArtifact({
+        body: file,
+        headers: {
+          ...mutationHeaders(headers),
+          "X-File-Name": file.name,
+        },
+        signal: requestSignal(),
+      }),
+    );
+    upsert(artifacts, [result.data]);
+    return result.data;
+  }
+
+  async function uploadAttachmentArtifact(
+    projectRef: string | undefined,
+    file: File,
+  ): Promise<Artifact> {
+    return projectRef
+      ? uploadProjectArtifact(projectRef, file)
+      : uploadOrganizationArtifactFile(file);
   }
 
   async function changeArtifactAgentBinding(
@@ -1692,6 +1717,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loadGates,
     loadArtifacts,
     uploadProjectArtifact,
+    uploadAttachmentArtifact,
     changeArtifactAgentBinding,
     downloadArtifactContent,
     loadSchedules,

@@ -83,6 +83,7 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	result.RoleDefinitionRef = mapString(values, "roleDefinitionRef")
 	result.RoleImageRecipeRef = mapString(values, "roleImageRecipeRef")
 	result.RoleImageArtifactRef = mapString(values, "roleImageArtifactRef")
+	result.RoleImageRecipeGeneration = mapInt64(values, "roleImageRecipeGeneration")
 	result.ImageReference = mapString(values, "imageReference")
 	result.ImageManifestDigest = mapString(values, "imageManifestDigest")
 	result.RoleRuntimeContractRevision = uint64(mapInt64(values, "roleRuntimeContractRevision"))
@@ -126,6 +127,13 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 				Name: item.Name, SecretName: item.SecretName, SecretKey: item.SecretKey,
 				SecretUid: item.SecretUID, SecretResourceVersion: item.SecretResourceVersion,
 				ContentSha256: item.ContentSHA256,
+			})
+		}
+	}
+	if tools, ok := values["environmentTools"].([]runtimecontract.RuntimeEnvironmentTool); ok {
+		for _, item := range tools {
+			result.EnvironmentTools = append(result.EnvironmentTools, &controlplanev1.RuntimeEnvironmentTool{
+				Name: item.Name, Command: item.Command, Description: item.Description, UsageHint: item.UsageHint,
 			})
 		}
 	}

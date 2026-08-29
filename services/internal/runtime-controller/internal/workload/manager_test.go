@@ -202,7 +202,8 @@ func TestEnsureTurnMaterializesExactEnvironmentSecretOutsideRunnerInput(t *testi
 		Name: "SERVICE_TOKEN", SecretName: source.Name, SecretKey: "token", SecretUID: string(source.UID),
 		SecretResourceVersion: source.ResourceVersion, ContentSHA256: digestHex,
 	}}
-	environmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(values, projections)
+	image, tools := runtimeEnvironmentContract(execution.Revision)
+	environmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(values, projections, image, tools)
 	if err != nil {
 		t.Fatalf("RuntimeEnvironmentDigest() error = %v", err)
 	}
@@ -278,7 +279,8 @@ func TestEnsureTurnRejectsStaleEnvironmentSecretRevision(t *testing.T) {
 		SecretUID: "20000000-0000-4000-8000-000000000001", SecretResourceVersion: "8",
 		ContentSHA256: hex.EncodeToString(digest[:]),
 	}}
-	environmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(nil, projections)
+	image, tools := runtimeEnvironmentContract(execution.Revision)
+	environmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(nil, projections, image, tools)
 	if err != nil {
 		t.Fatalf("RuntimeEnvironmentDigest() error = %v", err)
 	}
@@ -310,6 +312,27 @@ func TestValidateImageAcceptsOnlyPromotedOrExactReleaseDefault(t *testing.T) {
 	input.ImageReference = "registry.example/kodex/other@" + testDefaultDigest
 	if err := manager.validateImage(input); err == nil {
 		t.Fatal("arbitrary pinned image was accepted")
+	}
+}
+
+func TestBuildTurnInputCarriesExactEnvironmentImageAndSelectedTools(t *testing.T) {
+	t.Parallel()
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	execution := testExecution(false)
+	input, _, err := manager.BuildTurnInput(execution)
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	if input.EnvironmentImage.ArtifactRef != execution.Revision.GetRoleImageArtifactRef() ||
+		input.EnvironmentImage.RecipeRef != execution.Revision.GetRoleImageRecipeRef() ||
+		input.EnvironmentImage.RecipeGeneration != execution.Revision.GetRoleImageRecipeGeneration() ||
+		input.EnvironmentImage.Reference != execution.Revision.GetImageReference() ||
+		input.EnvironmentImage.Digest != execution.Revision.GetImageManifestDigest() {
+		t.Fatalf("runner workload lost exact environment image: %#v", input.EnvironmentImage)
+	}
+	if len(input.EnvironmentTools) != 1 || input.EnvironmentTools[0].Command != "gh" ||
+		input.EnvironmentTools[0].UsageHint != "Используй gh api" {
+		t.Fatalf("runner workload lost selected tools: %#v", input.EnvironmentTools)
 	}
 }
 
@@ -678,7 +701,7 @@ func testManagerConfig() Config {
 }
 
 func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
-	return &controlplanev1.ClaimedExecution{
+	execution := &controlplanev1.ClaimedExecution{
 		Run: &controlplanev1.Run{Ref: "run_abcdefgh", ProjectRef: "prj_abcdefgh"}, Node: &controlplanev1.RunNode{Ref: "node_abcdefgh"},
 		Revision: &controlplanev1.RuntimeRevisionSnapshot{
 			Ref: "revision_abcdefgh", Version: 1, SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", Attempt: 1,
@@ -707,6 +730,32 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 		},
 		Lease: &controlplanev1.WorkLease{Ref: "lease_abcdefgh", Fence: "fence-1", Generation: 1}, Task: "Prepare the result.",
 	}
+	if !systemAssistant {
+		execution.Revision.RoleImageRecipeRef = "imgrec_abcdefgh"
+		execution.Revision.RoleImageArtifactRef = "imgart_abcdefgh"
+		execution.Revision.RoleImageRecipeGeneration = 1
+		execution.Revision.EnvironmentTools = []*controlplanev1.RuntimeEnvironmentTool{{
+			Name: "GitHub CLI", Command: "gh", Description: "Работа с GitHub", UsageHint: "Используй gh api",
+		}}
+	}
+	image, tools := runtimeEnvironmentContract(execution.Revision)
+	execution.Revision.RuntimeEnvironmentDigest, _ = runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, tools)
+	return execution
+}
+
+func runtimeEnvironmentContract(revision *controlplanev1.RuntimeRevisionSnapshot) (runtimecontract.RuntimeEnvironmentImage, []runtimecontract.RuntimeEnvironmentTool) {
+	image := runtimecontract.RuntimeEnvironmentImage{
+		ArtifactRef: revision.GetRoleImageArtifactRef(), RecipeRef: revision.GetRoleImageRecipeRef(),
+		RecipeGeneration: revision.GetRoleImageRecipeGeneration(), Reference: revision.GetImageReference(),
+		Digest: revision.GetImageManifestDigest(),
+	}
+	tools := make([]runtimecontract.RuntimeEnvironmentTool, 0, len(revision.GetEnvironmentTools()))
+	for _, tool := range revision.GetEnvironmentTools() {
+		tools = append(tools, runtimecontract.RuntimeEnvironmentTool{
+			Name: tool.GetName(), Command: tool.GetCommand(), Description: tool.GetDescription(), UsageHint: tool.GetUsageHint(),
+		})
+	}
+	return image, tools
 }
 
 func hasMount(container corev1.Container, name string) bool {

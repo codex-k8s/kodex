@@ -432,6 +432,7 @@ type RoleEnvironment struct {
 	Available                 bool                   `protobuf:"varint,7,opt,name=available,proto3" json:"available,omitempty"`
 	UnavailableMessageKey     string                 `protobuf:"bytes,8,opt,name=unavailable_message_key,json=unavailableMessageKey,proto3" json:"unavailable_message_key,omitempty"`
 	CustomInstallationAllowed bool                   `protobuf:"varint,9,opt,name=custom_installation_allowed,json=customInstallationAllowed,proto3" json:"custom_installation_allowed,omitempty"`
+	DockerfileTemplate        string                 `protobuf:"bytes,10,opt,name=dockerfile_template,json=dockerfileTemplate,proto3" json:"dockerfile_template,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -529,12 +530,20 @@ func (x *RoleEnvironment) GetCustomInstallationAllowed() bool {
 	return false
 }
 
+func (x *RoleEnvironment) GetDockerfileTemplate() string {
+	if x != nil {
+		return x.DockerfileTemplate
+	}
+	return ""
+}
+
 type RoleEnvironmentSelection struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	EnvironmentKey    string                 `protobuf:"bytes,1,opt,name=environment_key,json=environmentKey,proto3" json:"environment_key,omitempty"`
 	PackageKeys       []string               `protobuf:"bytes,2,rep,name=package_keys,json=packageKeys,proto3" json:"package_keys,omitempty"`
 	ToolKeys          []string               `protobuf:"bytes,3,rep,name=tool_keys,json=toolKeys,proto3" json:"tool_keys,omitempty"`
 	InstallationBlock string                 `protobuf:"bytes,4,opt,name=installation_block,json=installationBlock,proto3" json:"installation_block,omitempty"`
+	Dockerfile        string                 `protobuf:"bytes,5,opt,name=dockerfile,proto3" json:"dockerfile,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -593,6 +602,13 @@ func (x *RoleEnvironmentSelection) GetToolKeys() []string {
 func (x *RoleEnvironmentSelection) GetInstallationBlock() string {
 	if x != nil {
 		return x.InstallationBlock
+	}
+	return ""
+}
+
+func (x *RoleEnvironmentSelection) GetDockerfile() string {
+	if x != nil {
+		return x.Dockerfile
 	}
 	return ""
 }
@@ -696,6 +712,7 @@ type RoleImageRecipeInput struct {
 	EnvironmentKey     string                 `protobuf:"bytes,15,opt,name=environment_key,json=environmentKey,proto3" json:"environment_key,omitempty"`
 	PackageKeys        []string               `protobuf:"bytes,16,rep,name=package_keys,json=packageKeys,proto3" json:"package_keys,omitempty"`
 	ToolKeys           []string               `protobuf:"bytes,17,rep,name=tool_keys,json=toolKeys,proto3" json:"tool_keys,omitempty"`
+	Dockerfile         string                 `protobuf:"bytes,18,opt,name=dockerfile,proto3" json:"dockerfile,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -847,6 +864,13 @@ func (x *RoleImageRecipeInput) GetToolKeys() []string {
 		return x.ToolKeys
 	}
 	return nil
+}
+
+func (x *RoleImageRecipeInput) GetDockerfile() string {
+	if x != nil {
+		return x.Dockerfile
+	}
+	return ""
 }
 
 type RoleImageRecipe struct {
@@ -1051,6 +1075,7 @@ type ImageBuild struct {
 	LeaseExpiresAt       *timestamppb.Timestamp `protobuf:"bytes,18,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
 	CreatedAt            *timestamppb.Timestamp `protobuf:"bytes,19,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt            *timestamppb.Timestamp `protobuf:"bytes,20,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Dockerfile           string                 `protobuf:"bytes,21,opt,name=dockerfile,proto3" json:"dockerfile,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -1225,6 +1250,13 @@ func (x *ImageBuild) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *ImageBuild) GetDockerfile() string {
+	if x != nil {
+		return x.Dockerfile
+	}
+	return ""
+}
+
 type ImageArtifact struct {
 	state                             protoimpl.MessageState `protogen:"open.v1"`
 	Ref                               string                 `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
@@ -1264,6 +1296,7 @@ type ImageArtifact struct {
 	PromotedAt                        *timestamppb.Timestamp `protobuf:"bytes,35,opt,name=promoted_at,json=promotedAt,proto3" json:"promoted_at,omitempty"`
 	CreatedAt                         *timestamppb.Timestamp `protobuf:"bytes,36,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt                         *timestamppb.Timestamp `protobuf:"bytes,37,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Tools                             []*RoleImageTool       `protobuf:"bytes,38,rep,name=tools,proto3" json:"tools,omitempty"`
 	unknownFields                     protoimpl.UnknownFields
 	sizeCache                         protoimpl.SizeCache
 }
@@ -1553,6 +1586,13 @@ func (x *ImageArtifact) GetCreatedAt() *timestamppb.Timestamp {
 func (x *ImageArtifact) GetUpdatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *ImageArtifact) GetTools() []*RoleImageTool {
+	if x != nil {
+		return x.Tools
 	}
 	return nil
 }
@@ -1958,6 +1998,7 @@ type RoleImageBuildInput struct {
 	ImmutableBuildSha256        string                 `protobuf:"bytes,21,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
 	RoleRuntimeContractRevision uint64                 `protobuf:"varint,22,opt,name=role_runtime_contract_revision,json=roleRuntimeContractRevision,proto3" json:"role_runtime_contract_revision,omitempty"`
 	RoleRuntimeContractSha256   string                 `protobuf:"bytes,23,opt,name=role_runtime_contract_sha256,json=roleRuntimeContractSha256,proto3" json:"role_runtime_contract_sha256,omitempty"`
+	Dockerfile                  string                 `protobuf:"bytes,24,opt,name=dockerfile,proto3" json:"dockerfile,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -2149,6 +2190,13 @@ func (x *RoleImageBuildInput) GetRoleRuntimeContractRevision() uint64 {
 func (x *RoleImageBuildInput) GetRoleRuntimeContractSha256() string {
 	if x != nil {
 		return x.RoleRuntimeContractSha256
+	}
+	return ""
+}
+
+func (x *RoleImageBuildInput) GetDockerfile() string {
+	if x != nil {
+		return x.Dockerfile
 	}
 	return ""
 }
@@ -3638,7 +3686,7 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x1d\n" +
 	"\n" +
 	"source_ref\x18\x03 \x01(\tR\tsourceRef\x12\x16\n" +
-	"\x06sha256\x18\x04 \x01(\tR\x06sha256\"\xb3\x03\n" +
+	"\x06sha256\x18\x04 \x01(\tR\x06sha256\"\xe4\x03\n" +
 	"\x0fRoleEnvironment\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12(\n" +
 	"\x10name_message_key\x18\x02 \x01(\tR\x0enameMessageKey\x126\n" +
@@ -3648,15 +3696,20 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\vrecommended\x18\x06 \x01(\bR\vrecommended\x12\x1c\n" +
 	"\tavailable\x18\a \x01(\bR\tavailable\x126\n" +
 	"\x17unavailable_message_key\x18\b \x01(\tR\x15unavailableMessageKey\x12>\n" +
-	"\x1bcustom_installation_allowed\x18\t \x01(\bR\x19customInstallationAllowed\"\xb2\x01\n" +
+	"\x1bcustom_installation_allowed\x18\t \x01(\bR\x19customInstallationAllowed\x12/\n" +
+	"\x13dockerfile_template\x18\n" +
+	" \x01(\tR\x12dockerfileTemplate\"\xd2\x01\n" +
 	"\x18RoleEnvironmentSelection\x12'\n" +
 	"\x0fenvironment_key\x18\x01 \x01(\tR\x0eenvironmentKey\x12!\n" +
 	"\fpackage_keys\x18\x02 \x03(\tR\vpackageKeys\x12\x1b\n" +
 	"\ttool_keys\x18\x03 \x03(\tR\btoolKeys\x12-\n" +
-	"\x12installation_block\x18\x04 \x01(\tR\x11installationBlock\"\x1d\n" +
+	"\x12installation_block\x18\x04 \x01(\tR\x11installationBlock\x12\x1e\n" +
+	"\n" +
+	"dockerfile\x18\x05 \x01(\tR\n" +
+	"dockerfile\"\x1d\n" +
 	"\x1bListRoleEnvironmentsRequest\"d\n" +
 	"\x1cListRoleEnvironmentsResponse\x12D\n" +
-	"\fenvironments\x18\x01 \x03(\v2 .controlplane.v1.RoleEnvironmentR\fenvironments\"\xf3\x05\n" +
+	"\fenvironments\x18\x01 \x03(\v2 .controlplane.v1.RoleEnvironmentR\fenvironments\"\x93\x06\n" +
 	"\x14RoleImageRecipeInput\x120\n" +
 	"\x14base_image_reference\x18\x01 \x01(\tR\x12baseImageReference\x12*\n" +
 	"\x11base_image_digest\x18\x02 \x01(\tR\x0fbaseImageDigest\x12\x1d\n" +
@@ -3677,7 +3730,10 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x10toolchain_sha256\x18\x0e \x01(\tR\x0ftoolchainSha256\x12'\n" +
 	"\x0fenvironment_key\x18\x0f \x01(\tR\x0eenvironmentKey\x12!\n" +
 	"\fpackage_keys\x18\x10 \x03(\tR\vpackageKeys\x12\x1b\n" +
-	"\ttool_keys\x18\x11 \x03(\tR\btoolKeys\"\xb5\x06\n" +
+	"\ttool_keys\x18\x11 \x03(\tR\btoolKeys\x12\x1e\n" +
+	"\n" +
+	"dockerfile\x18\x12 \x01(\tR\n" +
+	"dockerfile\"\xb5\x06\n" +
 	"\x0fRoleImageRecipe\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x04R\aversion\x12.\n" +
@@ -3703,7 +3759,7 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\fnext_actions\x18\x11 \x03(\tR\vnextActions\x12K\n" +
 	"\venvironment\x18\x12 \x01(\v2).controlplane.v1.RoleEnvironmentSelectionR\venvironment\x12\x1f\n" +
 	"\vproject_ref\x18\x13 \x01(\tR\n" +
-	"projectRefJ\x04\b\x06\x10\aR\x05input\"\xd4\x06\n" +
+	"projectRefJ\x04\b\x06\x10\aR\x05input\"\xf4\x06\n" +
 	"\n" +
 	"ImageBuild\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
@@ -3730,7 +3786,10 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x14 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xe5\r\n" +
+	"updated_at\x18\x14 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1e\n" +
+	"\n" +
+	"dockerfile\x18\x15 \x01(\tR\n" +
+	"dockerfile\"\x9b\x0e\n" +
 	"\rImageArtifact\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x04R\aversion\x12\x1d\n" +
@@ -3775,7 +3834,8 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18$ \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18% \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xa0\x01\n" +
+	"updated_at\x18% \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x124\n" +
+	"\x05tools\x18& \x03(\v2\x1e.controlplane.v1.RoleImageToolR\x05tools\"\xa0\x01\n" +
 	"\x1bListRoleImageRecipesRequest\x12\x1f\n" +
 	"\vproject_ref\x18\x01 \x01(\tR\n" +
 	"projectRef\x12.\n" +
@@ -3806,7 +3866,7 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\vimage_build\x18\x02 \x01(\v2\x1b.controlplane.v1.ImageBuildR\n" +
 	"imageBuild\x12E\n" +
 	"\x0eimage_artifact\x18\x03 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\rimageArtifact\x12\x16\n" +
-	"\x06reused\x18\x04 \x01(\bR\x06reused\"\xa7\b\n" +
+	"\x06reused\x18\x04 \x01(\bR\x06reused\"\xc7\b\n" +
 	"\x13RoleImageBuildInput\x12\x1d\n" +
 	"\n" +
 	"recipe_ref\x18\x01 \x01(\tR\trecipeRef\x12%\n" +
@@ -3835,7 +3895,10 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\rpolicy_sha256\x18\x14 \x01(\tR\fpolicySha256\x124\n" +
 	"\x16immutable_build_sha256\x18\x15 \x01(\tR\x14immutableBuildSha256\x12C\n" +
 	"\x1erole_runtime_contract_revision\x18\x16 \x01(\x04R\x1broleRuntimeContractRevision\x12?\n" +
-	"\x1crole_runtime_contract_sha256\x18\x17 \x01(\tR\x19roleRuntimeContractSha256\"A\n" +
+	"\x1crole_runtime_contract_sha256\x18\x17 \x01(\tR\x19roleRuntimeContractSha256\x12\x1e\n" +
+	"\n" +
+	"dockerfile\x18\x18 \x01(\tR\n" +
+	"dockerfile\"A\n" +
 	"\x16ClaimImageBuildRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\"\xc3\x02\n" +
 	"\x17ClaimImageBuildResponse\x12<\n" +
@@ -4089,73 +4152,74 @@ var file_controlplane_v1_role_images_proto_depIdxs = []int32{
 	41, // 14: controlplane.v1.ImageArtifact.promoted_at:type_name -> google.protobuf.Timestamp
 	41, // 15: controlplane.v1.ImageArtifact.created_at:type_name -> google.protobuf.Timestamp
 	41, // 16: controlplane.v1.ImageArtifact.updated_at:type_name -> google.protobuf.Timestamp
-	42, // 17: controlplane.v1.ListRoleImageRecipesRequest.page:type_name -> controlplane.v1.PageRequest
-	11, // 18: controlplane.v1.ListRoleImageRecipesResponse.recipes:type_name -> controlplane.v1.RoleImageRecipe
-	43, // 19: controlplane.v1.ListRoleImageRecipesResponse.page:type_name -> controlplane.v1.PageInfo
-	11, // 20: controlplane.v1.GetRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
-	12, // 21: controlplane.v1.GetRoleImageRecipeResponse.builds:type_name -> controlplane.v1.ImageBuild
-	13, // 22: controlplane.v1.GetRoleImageRecipeResponse.active_artifact:type_name -> controlplane.v1.ImageArtifact
-	44, // 23: controlplane.v1.ManageRoleImageRecipeRequest.mutation:type_name -> controlplane.v1.MutationContext
-	2,  // 24: controlplane.v1.ManageRoleImageRecipeRequest.action:type_name -> controlplane.v1.RoleImageRecipeAction
-	7,  // 25: controlplane.v1.ManageRoleImageRecipeRequest.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
-	11, // 26: controlplane.v1.ManageRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
-	12, // 27: controlplane.v1.ManageRoleImageRecipeResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	13, // 28: controlplane.v1.ManageRoleImageRecipeResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	3,  // 29: controlplane.v1.RoleImageBuildInput.platforms:type_name -> controlplane.v1.RoleImagePlatform
-	4,  // 30: controlplane.v1.RoleImageBuildInput.packages:type_name -> controlplane.v1.RoleImagePackage
-	5,  // 31: controlplane.v1.RoleImageBuildInput.tools:type_name -> controlplane.v1.RoleImageTool
-	12, // 32: controlplane.v1.ClaimImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	20, // 33: controlplane.v1.ClaimImageBuildResponse.input:type_name -> controlplane.v1.RoleImageBuildInput
-	41, // 34: controlplane.v1.ClaimImageBuildResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
-	12, // 35: controlplane.v1.RenewImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	41, // 36: controlplane.v1.RenewImageBuildResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
-	0,  // 37: controlplane.v1.ReportImageBuildProgressRequest.stage:type_name -> controlplane.v1.ImageBuildStage
-	12, // 38: controlplane.v1.ReportImageBuildProgressResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	12, // 39: controlplane.v1.CompleteImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	13, // 40: controlplane.v1.CompleteImageBuildResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	12, // 41: controlplane.v1.FailImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	13, // 42: controlplane.v1.ClaimImageAdmissionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	41, // 43: controlplane.v1.ClaimImageAdmissionResponse.claim_expires_at:type_name -> google.protobuf.Timestamp
-	1,  // 44: controlplane.v1.RecordImageAdmissionRequest.verdict:type_name -> controlplane.v1.ImageAdmissionVerdict
-	13, // 45: controlplane.v1.RecordImageAdmissionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	13, // 46: controlplane.v1.ClaimImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	41, // 47: controlplane.v1.ClaimImagePromotionResponse.claim_expires_at:type_name -> google.protobuf.Timestamp
-	13, // 48: controlplane.v1.AuthorizeImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	41, // 49: controlplane.v1.AuthorizeImagePromotionResponse.authorization_expires_at:type_name -> google.protobuf.Timestamp
-	13, // 50: controlplane.v1.CompleteImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	8,  // 51: controlplane.v1.RoleImageService.ListRoleEnvironments:input_type -> controlplane.v1.ListRoleEnvironmentsRequest
-	14, // 52: controlplane.v1.RoleImageService.ListRoleImageRecipes:input_type -> controlplane.v1.ListRoleImageRecipesRequest
-	16, // 53: controlplane.v1.RoleImageService.GetRoleImageRecipe:input_type -> controlplane.v1.GetRoleImageRecipeRequest
-	18, // 54: controlplane.v1.RoleImageService.ManageRoleImageRecipe:input_type -> controlplane.v1.ManageRoleImageRecipeRequest
-	21, // 55: controlplane.v1.RoleImageService.ClaimImageBuild:input_type -> controlplane.v1.ClaimImageBuildRequest
-	23, // 56: controlplane.v1.RoleImageService.RenewImageBuild:input_type -> controlplane.v1.RenewImageBuildRequest
-	25, // 57: controlplane.v1.RoleImageService.ReportImageBuildProgress:input_type -> controlplane.v1.ReportImageBuildProgressRequest
-	27, // 58: controlplane.v1.RoleImageService.CompleteImageBuild:input_type -> controlplane.v1.CompleteImageBuildRequest
-	29, // 59: controlplane.v1.RoleImageService.FailImageBuild:input_type -> controlplane.v1.FailImageBuildRequest
-	31, // 60: controlplane.v1.RoleImageService.ClaimImageAdmission:input_type -> controlplane.v1.ClaimImageAdmissionRequest
-	33, // 61: controlplane.v1.RoleImageService.RecordImageAdmission:input_type -> controlplane.v1.RecordImageAdmissionRequest
-	35, // 62: controlplane.v1.RoleImageService.ClaimImagePromotion:input_type -> controlplane.v1.ClaimImagePromotionRequest
-	37, // 63: controlplane.v1.RoleImageService.AuthorizeImagePromotion:input_type -> controlplane.v1.AuthorizeImagePromotionRequest
-	39, // 64: controlplane.v1.RoleImageService.CompleteImagePromotion:input_type -> controlplane.v1.CompleteImagePromotionRequest
-	9,  // 65: controlplane.v1.RoleImageService.ListRoleEnvironments:output_type -> controlplane.v1.ListRoleEnvironmentsResponse
-	15, // 66: controlplane.v1.RoleImageService.ListRoleImageRecipes:output_type -> controlplane.v1.ListRoleImageRecipesResponse
-	17, // 67: controlplane.v1.RoleImageService.GetRoleImageRecipe:output_type -> controlplane.v1.GetRoleImageRecipeResponse
-	19, // 68: controlplane.v1.RoleImageService.ManageRoleImageRecipe:output_type -> controlplane.v1.ManageRoleImageRecipeResponse
-	22, // 69: controlplane.v1.RoleImageService.ClaimImageBuild:output_type -> controlplane.v1.ClaimImageBuildResponse
-	24, // 70: controlplane.v1.RoleImageService.RenewImageBuild:output_type -> controlplane.v1.RenewImageBuildResponse
-	26, // 71: controlplane.v1.RoleImageService.ReportImageBuildProgress:output_type -> controlplane.v1.ReportImageBuildProgressResponse
-	28, // 72: controlplane.v1.RoleImageService.CompleteImageBuild:output_type -> controlplane.v1.CompleteImageBuildResponse
-	30, // 73: controlplane.v1.RoleImageService.FailImageBuild:output_type -> controlplane.v1.FailImageBuildResponse
-	32, // 74: controlplane.v1.RoleImageService.ClaimImageAdmission:output_type -> controlplane.v1.ClaimImageAdmissionResponse
-	34, // 75: controlplane.v1.RoleImageService.RecordImageAdmission:output_type -> controlplane.v1.RecordImageAdmissionResponse
-	36, // 76: controlplane.v1.RoleImageService.ClaimImagePromotion:output_type -> controlplane.v1.ClaimImagePromotionResponse
-	38, // 77: controlplane.v1.RoleImageService.AuthorizeImagePromotion:output_type -> controlplane.v1.AuthorizeImagePromotionResponse
-	40, // 78: controlplane.v1.RoleImageService.CompleteImagePromotion:output_type -> controlplane.v1.CompleteImagePromotionResponse
-	65, // [65:79] is the sub-list for method output_type
-	51, // [51:65] is the sub-list for method input_type
-	51, // [51:51] is the sub-list for extension type_name
-	51, // [51:51] is the sub-list for extension extendee
-	0,  // [0:51] is the sub-list for field type_name
+	5,  // 17: controlplane.v1.ImageArtifact.tools:type_name -> controlplane.v1.RoleImageTool
+	42, // 18: controlplane.v1.ListRoleImageRecipesRequest.page:type_name -> controlplane.v1.PageRequest
+	11, // 19: controlplane.v1.ListRoleImageRecipesResponse.recipes:type_name -> controlplane.v1.RoleImageRecipe
+	43, // 20: controlplane.v1.ListRoleImageRecipesResponse.page:type_name -> controlplane.v1.PageInfo
+	11, // 21: controlplane.v1.GetRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
+	12, // 22: controlplane.v1.GetRoleImageRecipeResponse.builds:type_name -> controlplane.v1.ImageBuild
+	13, // 23: controlplane.v1.GetRoleImageRecipeResponse.active_artifact:type_name -> controlplane.v1.ImageArtifact
+	44, // 24: controlplane.v1.ManageRoleImageRecipeRequest.mutation:type_name -> controlplane.v1.MutationContext
+	2,  // 25: controlplane.v1.ManageRoleImageRecipeRequest.action:type_name -> controlplane.v1.RoleImageRecipeAction
+	7,  // 26: controlplane.v1.ManageRoleImageRecipeRequest.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
+	11, // 27: controlplane.v1.ManageRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
+	12, // 28: controlplane.v1.ManageRoleImageRecipeResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	13, // 29: controlplane.v1.ManageRoleImageRecipeResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	3,  // 30: controlplane.v1.RoleImageBuildInput.platforms:type_name -> controlplane.v1.RoleImagePlatform
+	4,  // 31: controlplane.v1.RoleImageBuildInput.packages:type_name -> controlplane.v1.RoleImagePackage
+	5,  // 32: controlplane.v1.RoleImageBuildInput.tools:type_name -> controlplane.v1.RoleImageTool
+	12, // 33: controlplane.v1.ClaimImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	20, // 34: controlplane.v1.ClaimImageBuildResponse.input:type_name -> controlplane.v1.RoleImageBuildInput
+	41, // 35: controlplane.v1.ClaimImageBuildResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	12, // 36: controlplane.v1.RenewImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	41, // 37: controlplane.v1.RenewImageBuildResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	0,  // 38: controlplane.v1.ReportImageBuildProgressRequest.stage:type_name -> controlplane.v1.ImageBuildStage
+	12, // 39: controlplane.v1.ReportImageBuildProgressResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	12, // 40: controlplane.v1.CompleteImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	13, // 41: controlplane.v1.CompleteImageBuildResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	12, // 42: controlplane.v1.FailImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	13, // 43: controlplane.v1.ClaimImageAdmissionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	41, // 44: controlplane.v1.ClaimImageAdmissionResponse.claim_expires_at:type_name -> google.protobuf.Timestamp
+	1,  // 45: controlplane.v1.RecordImageAdmissionRequest.verdict:type_name -> controlplane.v1.ImageAdmissionVerdict
+	13, // 46: controlplane.v1.RecordImageAdmissionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	13, // 47: controlplane.v1.ClaimImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	41, // 48: controlplane.v1.ClaimImagePromotionResponse.claim_expires_at:type_name -> google.protobuf.Timestamp
+	13, // 49: controlplane.v1.AuthorizeImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	41, // 50: controlplane.v1.AuthorizeImagePromotionResponse.authorization_expires_at:type_name -> google.protobuf.Timestamp
+	13, // 51: controlplane.v1.CompleteImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	8,  // 52: controlplane.v1.RoleImageService.ListRoleEnvironments:input_type -> controlplane.v1.ListRoleEnvironmentsRequest
+	14, // 53: controlplane.v1.RoleImageService.ListRoleImageRecipes:input_type -> controlplane.v1.ListRoleImageRecipesRequest
+	16, // 54: controlplane.v1.RoleImageService.GetRoleImageRecipe:input_type -> controlplane.v1.GetRoleImageRecipeRequest
+	18, // 55: controlplane.v1.RoleImageService.ManageRoleImageRecipe:input_type -> controlplane.v1.ManageRoleImageRecipeRequest
+	21, // 56: controlplane.v1.RoleImageService.ClaimImageBuild:input_type -> controlplane.v1.ClaimImageBuildRequest
+	23, // 57: controlplane.v1.RoleImageService.RenewImageBuild:input_type -> controlplane.v1.RenewImageBuildRequest
+	25, // 58: controlplane.v1.RoleImageService.ReportImageBuildProgress:input_type -> controlplane.v1.ReportImageBuildProgressRequest
+	27, // 59: controlplane.v1.RoleImageService.CompleteImageBuild:input_type -> controlplane.v1.CompleteImageBuildRequest
+	29, // 60: controlplane.v1.RoleImageService.FailImageBuild:input_type -> controlplane.v1.FailImageBuildRequest
+	31, // 61: controlplane.v1.RoleImageService.ClaimImageAdmission:input_type -> controlplane.v1.ClaimImageAdmissionRequest
+	33, // 62: controlplane.v1.RoleImageService.RecordImageAdmission:input_type -> controlplane.v1.RecordImageAdmissionRequest
+	35, // 63: controlplane.v1.RoleImageService.ClaimImagePromotion:input_type -> controlplane.v1.ClaimImagePromotionRequest
+	37, // 64: controlplane.v1.RoleImageService.AuthorizeImagePromotion:input_type -> controlplane.v1.AuthorizeImagePromotionRequest
+	39, // 65: controlplane.v1.RoleImageService.CompleteImagePromotion:input_type -> controlplane.v1.CompleteImagePromotionRequest
+	9,  // 66: controlplane.v1.RoleImageService.ListRoleEnvironments:output_type -> controlplane.v1.ListRoleEnvironmentsResponse
+	15, // 67: controlplane.v1.RoleImageService.ListRoleImageRecipes:output_type -> controlplane.v1.ListRoleImageRecipesResponse
+	17, // 68: controlplane.v1.RoleImageService.GetRoleImageRecipe:output_type -> controlplane.v1.GetRoleImageRecipeResponse
+	19, // 69: controlplane.v1.RoleImageService.ManageRoleImageRecipe:output_type -> controlplane.v1.ManageRoleImageRecipeResponse
+	22, // 70: controlplane.v1.RoleImageService.ClaimImageBuild:output_type -> controlplane.v1.ClaimImageBuildResponse
+	24, // 71: controlplane.v1.RoleImageService.RenewImageBuild:output_type -> controlplane.v1.RenewImageBuildResponse
+	26, // 72: controlplane.v1.RoleImageService.ReportImageBuildProgress:output_type -> controlplane.v1.ReportImageBuildProgressResponse
+	28, // 73: controlplane.v1.RoleImageService.CompleteImageBuild:output_type -> controlplane.v1.CompleteImageBuildResponse
+	30, // 74: controlplane.v1.RoleImageService.FailImageBuild:output_type -> controlplane.v1.FailImageBuildResponse
+	32, // 75: controlplane.v1.RoleImageService.ClaimImageAdmission:output_type -> controlplane.v1.ClaimImageAdmissionResponse
+	34, // 76: controlplane.v1.RoleImageService.RecordImageAdmission:output_type -> controlplane.v1.RecordImageAdmissionResponse
+	36, // 77: controlplane.v1.RoleImageService.ClaimImagePromotion:output_type -> controlplane.v1.ClaimImagePromotionResponse
+	38, // 78: controlplane.v1.RoleImageService.AuthorizeImagePromotion:output_type -> controlplane.v1.AuthorizeImagePromotionResponse
+	40, // 79: controlplane.v1.RoleImageService.CompleteImagePromotion:output_type -> controlplane.v1.CompleteImagePromotionResponse
+	66, // [66:80] is the sub-list for method output_type
+	52, // [52:66] is the sub-list for method input_type
+	52, // [52:52] is the sub-list for extension type_name
+	52, // [52:52] is the sub-list for extension extendee
+	0,  // [0:52] is the sub-list for field type_name
 }
 
 func init() { file_controlplane_v1_role_images_proto_init() }

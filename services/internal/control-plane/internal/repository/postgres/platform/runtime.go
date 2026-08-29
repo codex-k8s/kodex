@@ -284,14 +284,15 @@ type claimableExecution struct {
 	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest           string
 	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext string
 	codexSessionID                                                                  string
-	providerCredentialRevisionNumber, generation, roleRuntimeContractRevision       int64
+	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration         int64
+	roleRuntimeContractRevision                                                     int64
 	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion               int64
 	environmentBindingVersion, runtimeEnvironmentVersion                            int64
 	attempt                                                                         int32
 	capabilities, knowledge                                                         []string
 	rawInput, rawArtifacts, rawIntegrationGrants, rawDelegationTargets              []byte
 	rawSessionContext                                                               []byte
-	rawEnvironmentValues, rawSecretProjections                                      []byte
+	rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools                 []byte
 }
 
 func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -328,6 +329,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.rawSessionContext, &candidate.turnID, &candidate.agentID,
 			&candidate.roleDefinitionID, &candidate.roleDefinitionRef, &candidate.roleImageRecipeID,
 			&candidate.roleImageRecipeRef, &candidate.roleImageArtifactID, &candidate.roleImageArtifactRef,
+			&candidate.roleImageRecipeGeneration,
 			&candidate.imageReference, &candidate.imageManifestDigest,
 			&candidate.roleRuntimeContractRevision, &candidate.roleRuntimeContractSHA256,
 			&candidate.runtimeConfigID, &candidate.runtimeConfigRef, &candidate.runtimeConfigVersion, &candidate.runtimeConfigDigest,
@@ -335,7 +337,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.configOverlayID, &candidate.configOverlayRef, &candidate.configOverlayVersion, &candidate.configOverlayDigest, &candidate.configOverlay,
 			&candidate.environmentBindingID, &candidate.environmentBindingRef, &candidate.environmentBindingVersion, &candidate.environmentBindingDigest,
 			&candidate.runtimeEnvironmentID, &candidate.runtimeEnvironmentRef, &candidate.runtimeEnvironmentVersion, &candidate.runtimeEnvironmentDigest,
-			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections,
+			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
 			&candidate.codexSessionID); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
@@ -371,6 +373,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		roleDefinitionID, roleDefinitionRef := candidate.roleDefinitionID, candidate.roleDefinitionRef
 		roleImageRecipeID, roleImageRecipeRef := candidate.roleImageRecipeID, candidate.roleImageRecipeRef
 		roleImageArtifactID, roleImageArtifactRef := candidate.roleImageArtifactID, candidate.roleImageArtifactRef
+		roleImageRecipeGeneration := candidate.roleImageRecipeGeneration
 		imageReference, imageManifestDigest := candidate.imageReference, candidate.imageManifestDigest
 		roleRuntimeContractRevision := candidate.roleRuntimeContractRevision
 		roleRuntimeContractSHA256 := candidate.roleRuntimeContractSHA256
@@ -402,11 +405,19 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if err := decodeStoredRuntimeEnvironment(candidate.rawEnvironmentValues, candidate.rawSecretProjections, &environmentValues, &secretProjections); err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
+		environmentTools, err := runtimecontract.DecodeRuntimeEnvironmentTools(candidate.rawEnvironmentTools)
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		environmentImage := runtimecontract.RuntimeEnvironmentImage{
+			ArtifactRef: roleImageArtifactRef, RecipeRef: roleImageRecipeRef, RecipeGeneration: roleImageRecipeGeneration,
+			Reference: imageReference, Digest: imageManifestDigest,
+		}
 		canonicalOverlay, verifiedOverlayDigest, err := runtimecontract.CanonicalConfigOverlay(configOverlay)
 		if err != nil || canonicalOverlay != configOverlay || verifiedOverlayDigest != configOverlayDigest {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(environmentValues, secretProjections)
+		verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(environmentValues, secretProjections, environmentImage, environmentTools)
 		if err != nil || verifiedEnvironmentDigest != runtimeEnvironmentDigest {
 			return commandOutcome{}, errs.ErrConflict
 		}
@@ -420,7 +431,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		resolvedInstructionsDigestHex := hex.EncodeToString(resolvedInstructionsDigest[:])
 		integrationGrantsDigest := sha256.Sum256(rawIntegrationGrants)
 		integrationGrantsDigestHex := hex.EncodeToString(integrationGrantsDigest[:])
-		revisionDigest := sha256.Sum256([]byte(strings.Join([]string{
+		revisionDigestHex := runtimeRevisionDigest(runtimeEnvironmentDigest,
 			runtimeRevision, provider, model, resolvedInstructionsDigestHex,
 			providerAccountRef, providerCredentialRef, providerSecretName,
 			providerSecretUID, providerSecretResourceVersion, providerCredentialSHA256,
@@ -432,11 +443,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			runtimeConfigRef, strconv.FormatInt(runtimeConfigVersion, 10), runtimeConfigDigest,
 			providerPolicyRef, strconv.FormatInt(providerPolicyVersion, 10), providerPolicyDigest,
 			configOverlayRef, strconv.FormatInt(configOverlayVersion, 10), configOverlayDigest,
-			runtimeEnvironmentRef, strconv.FormatInt(runtimeEnvironmentVersion, 10), runtimeEnvironmentDigest,
+			runtimeEnvironmentRef, strconv.FormatInt(runtimeEnvironmentVersion, 10),
 			environmentBindingRef, strconv.FormatInt(environmentBindingVersion, 10), environmentBindingDigest,
 			codexSessionID,
-		}, "\x00")))
-		revisionDigestHex := hex.EncodeToString(revisionDigest[:])
+		)
 		revisionRef, err := newRef("rrev")
 		if err != nil {
 			return commandOutcome{}, err
@@ -465,7 +475,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"revisionDigest": revisionDigestHex, "runtimeRevisionRef": revisionRef,
 			"runtimeRevisionVersion": generation, "roleDefinitionRef": roleDefinitionRef,
 			"roleImageRecipeRef": roleImageRecipeRef, "roleImageArtifactRef": roleImageArtifactRef,
-			"imageReference": imageReference, "imageManifestDigest": imageManifestDigest,
+			"roleImageRecipeGeneration": roleImageRecipeGeneration,
+			"imageReference":            imageReference, "imageManifestDigest": imageManifestDigest,
 			"roleRuntimeContractRevision": roleRuntimeContractRevision,
 			"roleRuntimeContractSHA256":   roleRuntimeContractSHA256,
 			"runtimeConfigRef":            runtimeConfigRef, "runtimeConfigVersion": runtimeConfigVersion, "runtimeConfigDigest": runtimeConfigDigest,
@@ -475,6 +486,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"runtimeEnvironmentRef": runtimeEnvironmentRef, "runtimeEnvironmentVersion": runtimeEnvironmentVersion, "runtimeEnvironmentDigest": runtimeEnvironmentDigest,
 			"environmentBindingRef": environmentBindingRef, "environmentBindingVersion": environmentBindingVersion, "environmentBindingDigest": environmentBindingDigest,
 			"environmentValues": environmentValues, "secretProjections": secretProjections,
+			"environmentImage": environmentImage, "environmentTools": environmentTools,
 			"codexSessionID": codexSessionID,
 		}
 		if len(assistantContext) != 0 {
@@ -529,6 +541,12 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 }
 
 func jsonUnmarshal(raw []byte, target any) error { return json.Unmarshal(raw, target) }
+
+func runtimeRevisionDigest(runtimeEnvironmentDigest string, parts ...string) string {
+	material := append(append([]string(nil), parts...), "runtime-environment", runtimeEnvironmentDigest)
+	digest := sha256.Sum256([]byte(strings.Join(material, "\x00")))
+	return hex.EncodeToString(digest[:])
+}
 
 func decodeStoredRuntimeEnvironment(rawValues, rawSecrets []byte, values *[]runtimecontract.RuntimeEnvironmentValue, secrets *[]runtimecontract.RuntimeSecretProjection) error {
 	decodedValues, decodedSecrets, err := runtimecontract.DecodeRuntimeEnvironment(rawValues, rawSecrets)

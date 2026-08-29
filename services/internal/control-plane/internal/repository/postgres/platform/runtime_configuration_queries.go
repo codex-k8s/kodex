@@ -271,15 +271,20 @@ func scanAgentRuntimeConfigurationView(scanner rowScanner) (entity.AgentRuntimeC
 
 func scanRuntimeEnvironment(scanner rowScanner) (entity.RuntimeEnvironmentSet, error) {
 	var item entity.RuntimeEnvironmentSet
-	var rawValues, rawSecrets []byte
+	var rawValues, rawSecrets, rawTools []byte
 	err := scanner.Scan(&item.Ref, &item.Version, &item.ProjectRef, &item.Name, &item.Description, &item.State,
 		&item.UpdatedAt, &item.CurrentVersion.Ref, &item.CurrentVersion.Revision, &rawValues, &rawSecrets,
+		&item.CurrentVersion.Image.ArtifactRef, &item.CurrentVersion.Image.RecipeRef,
+		&item.CurrentVersion.Image.RecipeGeneration, &item.CurrentVersion.Image.Reference,
+		&item.CurrentVersion.Image.Digest, &rawTools,
 		&item.CurrentVersion.Digest, &item.CurrentVersion.CreatedAt)
 	if err != nil {
 		return entity.RuntimeEnvironmentSet{}, err
 	}
 	item.CurrentVersion.Version = item.CurrentVersion.Revision
-	if decodeStrict(rawValues, &item.CurrentVersion.Values) != nil || decodeStrict(rawSecrets, &item.CurrentVersion.SecretDescriptors) != nil {
+	if decodeStrict(rawValues, &item.CurrentVersion.Values) != nil ||
+		decodeStrict(rawSecrets, &item.CurrentVersion.SecretDescriptors) != nil ||
+		decodeStrict(rawTools, &item.CurrentVersion.Tools) != nil {
 		return entity.RuntimeEnvironmentSet{}, errors.New("decode runtime environment")
 	}
 	return item, nil
@@ -287,12 +292,15 @@ func scanRuntimeEnvironment(scanner rowScanner) (entity.RuntimeEnvironmentSet, e
 
 func scanRuntimeEnvironmentVersion(scanner rowScanner) (entity.RuntimeEnvironmentVersion, error) {
 	var item entity.RuntimeEnvironmentVersion
-	var rawValues, rawSecrets []byte
-	if err := scanner.Scan(&item.Ref, &item.Revision, &rawValues, &rawSecrets, &item.Digest, &item.CreatedAt); err != nil {
+	var rawValues, rawSecrets, rawTools []byte
+	if err := scanner.Scan(&item.Ref, &item.Revision, &rawValues, &rawSecrets,
+		&item.Image.ArtifactRef, &item.Image.RecipeRef, &item.Image.RecipeGeneration,
+		&item.Image.Reference, &item.Image.Digest, &rawTools, &item.Digest, &item.CreatedAt); err != nil {
 		return entity.RuntimeEnvironmentVersion{}, err
 	}
 	item.Version = item.Revision
-	if decodeStrict(rawValues, &item.Values) != nil || decodeStrict(rawSecrets, &item.SecretDescriptors) != nil {
+	if decodeStrict(rawValues, &item.Values) != nil || decodeStrict(rawSecrets, &item.SecretDescriptors) != nil ||
+		decodeStrict(rawTools, &item.Tools) != nil {
 		return entity.RuntimeEnvironmentVersion{}, errors.New("decode runtime environment version")
 	}
 	return item, nil

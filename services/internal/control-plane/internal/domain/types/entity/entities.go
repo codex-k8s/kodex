@@ -86,9 +86,26 @@ type RuntimeSecretDescriptor struct {
 	ContentSHA256         string `json:"content_sha256"`
 }
 
+type RuntimeEnvironmentTool struct {
+	Name        string `json:"name"`
+	Command     string `json:"command"`
+	Description string `json:"description"`
+	UsageHint   string `json:"usage_hint,omitempty"`
+}
+
+type RuntimeEnvironmentImage struct {
+	ArtifactRef      string `json:"artifact_ref"`
+	RecipeRef        string `json:"recipe_ref"`
+	Reference        string `json:"reference"`
+	Digest           string `json:"digest"`
+	RecipeGeneration int64  `json:"recipe_generation"`
+}
+
 type RuntimeEnvironmentVersion struct {
 	Ref, Digest       string
 	Version, Revision int64
+	Image             RuntimeEnvironmentImage
+	Tools             []RuntimeEnvironmentTool
 	Values            []RuntimeEnvironmentValue
 	SecretDescriptors []RuntimeSecretDescriptor
 	CreatedAt         time.Time

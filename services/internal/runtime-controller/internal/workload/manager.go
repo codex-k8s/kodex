@@ -219,6 +219,10 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		Schema: runtimecontract.RunnerInputSchemaV6, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
 		RuntimeRevisionRef: revision.GetRef(), RuntimeRevisionVersion: revision.GetVersion(), RuntimeRevisionDigest: revision.GetRevisionDigest(),
 		ImageReference: revision.GetImageReference(), ImageManifestDigest: revision.GetImageManifestDigest(),
+		EnvironmentImage: runtimecontract.RuntimeEnvironmentImage{
+			ArtifactRef: revision.GetRoleImageArtifactRef(), RecipeRef: revision.GetRoleImageRecipeRef(),
+			RecipeGeneration: revision.GetRoleImageRecipeGeneration(), Reference: revision.GetImageReference(), Digest: revision.GetImageManifestDigest(),
+		},
 		RoleRuntimeContractRevision: revision.GetRoleRuntimeContractRevision(), RoleRuntimeContractSHA256: revision.GetRoleRuntimeContractSha256(),
 		SystemAssistant: revision.GetSystemAssistant(), Instructions: revision.GetInstructions(), Provider: revision.GetRuntime().GetProvider(), Model: revision.GetRuntime().GetModel(),
 		CodexSessionID:             revision.GetCodexSessionId(),
@@ -258,6 +262,11 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 			Name: item.GetName(), SecretName: item.GetSecretName(), SecretKey: item.GetSecretKey(),
 			SecretUID: item.GetSecretUid(), SecretResourceVersion: item.GetSecretResourceVersion(),
 			ContentSHA256: item.GetContentSha256(),
+		})
+	}
+	for _, item := range revision.GetEnvironmentTools() {
+		input.EnvironmentTools = append(input.EnvironmentTools, runtimecontract.RuntimeEnvironmentTool{
+			Name: item.GetName(), Command: item.GetCommand(), Description: item.GetDescription(), UsageHint: item.GetUsageHint(),
 		})
 	}
 	return input
