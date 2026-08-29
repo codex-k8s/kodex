@@ -101,9 +101,13 @@
       "items": {"$ref": "#/$defs/integration_grant"}
     },
     "assistant_context": {"$ref": "#/$defs/assistant_context"},
+    "attachment_set_ref": {"$ref": "#/$defs/opaque_ref"},
+    "attachment_set_manifest_digest": {"$ref": "#/$defs/sha256"},
+    "attachment_context": {
+      "enum": ["ASSISTANT_MESSAGE", "SESSION_TURN", "RUN_INPUT", "WORKFLOW_INPUT", "OWNER_GATE_MESSAGE"]
+    },
     "input_artifacts": {
       "type": "array",
-      "maxItems": 128,
       "items": {"$ref": "#/$defs/input_artifact"}
     },
     "capabilities": {
@@ -318,7 +322,7 @@
     "input_artifact": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ref", "file_name", "media_type", "digest", "size_bytes", "revision", "version"],
+      "required": ["ref", "file_name", "media_type", "digest", "size_bytes", "revision", "version", "scope", "position", "source"],
       "properties": {
         "ref": {"$ref": "#/$defs/opaque_ref"},
         "file_name": {
@@ -330,9 +334,12 @@
         },
         "media_type": {"type": "string", "minLength": 1, "maxLength": 255},
         "digest": {"$ref": "#/$defs/image_digest"},
-        "size_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "size_bytes": {"type": "integer", "minimum": 0, "maximum": 536870912},
         "revision": {"type": "integer", "minimum": 1},
-        "version": {"type": "integer", "minimum": 1}
+        "version": {"type": "integer", "minimum": 1},
+        "scope": {"enum": ["INPUT", "SESSION", "KNOWLEDGE"]},
+        "position": {"type": "integer", "minimum": 1},
+        "source": {"enum": ["CONTROL_CENTER", "AGENT_RESULT", "INTEGRATION_RESULT", "KNOWLEDGE_SOURCE", "INTERACTION_ATTACHMENT"]}
       }
     },
     "environment_name": {

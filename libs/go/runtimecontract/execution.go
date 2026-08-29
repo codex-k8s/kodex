@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -20,9 +21,8 @@ const (
 	RunnerModeTurn            = "TURN"
 	RunnerModeWarm            = "WARM"
 	MaximumRunnerInputBytes   = 2 << 20
-	MaximumInputArtifactBytes = 16 << 20
-	MaximumInputArtifacts     = 128
-	MaximumInputArtifactTotal = 256 << 20
+	MaximumInputArtifactBytes = 512 << 20
+	MaximumInputArtifactTotal = 512 << 20
 	MaximumCompletionBytes    = 16 << 20
 	MaximumCompletionFiles    = 32
 	MaximumSessionSourceBytes = 64 << 20
@@ -94,6 +94,9 @@ type RunnerInputArtifact struct {
 	SizeBytes int64  `json:"size_bytes"`
 	Revision  int64  `json:"revision"`
 	Version   int64  `json:"version"`
+	Scope     string `json:"scope"`
+	Position  int64  `json:"position"`
+	Source    string `json:"source"`
 }
 
 // RunnerInput — immutable contract одного turn либо always-hot system runtime.
@@ -127,6 +130,9 @@ type RunnerInput struct {
 	DelegationTargets           []RunnerDelegationTarget  `json:"delegation_targets,omitempty"`
 	IntegrationGrants           []RunnerIntegrationGrant  `json:"integration_grants,omitempty"`
 	AssistantContext            *RunnerAssistantContext   `json:"assistant_context,omitempty"`
+	AttachmentSetRef            string                    `json:"attachment_set_ref,omitempty"`
+	AttachmentSetManifestDigest string                    `json:"attachment_set_manifest_digest,omitempty"`
+	AttachmentContext           string                    `json:"attachment_context,omitempty"`
 	InputArtifacts              []RunnerInputArtifact     `json:"input_artifacts,omitempty"`
 	Capabilities                []string                  `json:"capabilities,omitempty"`
 	Provider                    string                    `json:"provider"`
@@ -191,7 +197,7 @@ func (input RunnerInput) Validate() error {
 		!validSecretFile(input.ProviderAuthSHA256File) || input.WorkspaceRoot != "/workspace" ||
 		input.OutboxRoot != "/workspace/.kodex/outbox" || input.CodexHome != "/workspace/.kodex/state/codex-home" ||
 		len(input.SessionContext) > 128 || len(input.DelegationTargets) > 128 || len(input.IntegrationGrants) > 256 ||
-		len(input.InputArtifacts) > MaximumInputArtifacts || len(input.BoundedInput) > 256 || len(input.CodexSessionID) > 255 ||
+		len(input.BoundedInput) > 256 || len(input.CodexSessionID) > 255 ||
 		!validSessionContext(input.SessionContext) || !validIntegrationGrants(input.IntegrationGrants) ||
 		!validCapabilities(input.Capabilities) || ValidateRuntimeEnvironment(input.EnvironmentValues, input.SecretProjections) != nil {
 		return errors.New("runner input is invalid")
@@ -248,22 +254,44 @@ func (input RunnerInput) Validate() error {
 		}
 	}
 	artifactRefs := make(map[string]struct{}, len(input.InputArtifacts))
+	artifactPositions := make(map[string]struct{}, len(input.InputArtifacts))
 	var artifactBytes int64
+	hasInputAttachments := false
 	for _, artifact := range input.InputArtifacts {
 		if !opaqueReferencePattern.MatchString(artifact.Ref) || !validArtifactFileName(artifact.FileName) ||
 			strings.TrimSpace(artifact.MediaType) == "" || len(artifact.MediaType) > 255 ||
 			!imageDigestPattern.MatchString(artifact.Digest) || artifact.SizeBytes < 0 ||
-			artifact.SizeBytes > MaximumInputArtifactBytes || artifact.Revision < 1 || artifact.Version < 1 {
+			artifact.SizeBytes > MaximumInputArtifactBytes || artifact.Revision < 1 || artifact.Version < 1 ||
+			!containsString([]string{"INPUT", "SESSION", "KNOWLEDGE"}, artifact.Scope) || artifact.Position < 1 ||
+			!containsString([]string{"CONTROL_CENTER", "AGENT_RESULT", "INTEGRATION_RESULT", "KNOWLEDGE_SOURCE", "INTERACTION_ATTACHMENT"}, artifact.Source) {
 			return errors.New("runner artifact catalog is invalid")
 		}
 		if _, exists := artifactRefs[artifact.Ref]; exists {
 			return errors.New("runner artifact catalog is invalid")
 		}
 		artifactRefs[artifact.Ref] = struct{}{}
+		positionKey := artifact.Scope + ":" + strconv.FormatInt(artifact.Position, 10)
+		if _, exists := artifactPositions[positionKey]; exists {
+			return errors.New("runner artifact catalog is invalid")
+		}
+		artifactPositions[positionKey] = struct{}{}
+		if artifact.Scope == "INPUT" {
+			hasInputAttachments = true
+		}
 		artifactBytes += artifact.SizeBytes
 		if artifactBytes > MaximumInputArtifactTotal {
 			return errors.New("runner artifact catalog is invalid")
 		}
+	}
+	if hasInputAttachments != (opaqueReferencePattern.MatchString(input.AttachmentSetRef) && sha256Pattern.MatchString(input.AttachmentSetManifestDigest)) {
+		return errors.New("runner attachment set binding is invalid")
+	}
+	if !hasInputAttachments && (input.AttachmentSetRef != "" || input.AttachmentSetManifestDigest != "") {
+		return errors.New("runner attachment set binding is invalid")
+	}
+	if hasInputAttachments && !containsString([]string{"ASSISTANT_MESSAGE", "SESSION_TURN", "RUN_INPUT", "WORKFLOW_INPUT", "OWNER_GATE_MESSAGE"}, input.AttachmentContext) ||
+		!hasInputAttachments && input.AttachmentContext != "" {
+		return errors.New("runner attachment context is invalid")
 	}
 	return nil
 }

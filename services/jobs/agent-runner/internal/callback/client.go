@@ -65,35 +65,35 @@ func (client *Client) Complete(ctx context.Context, input model.Input, payload r
 	return client.post(ctx, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/complete", payload)
 }
 
-func (client *Client) ReadArtifact(ctx context.Context, input model.Input, artifact runtimecontract.RunnerInputArtifact) ([]byte, error) {
+func (client *Client) WriteArtifact(ctx context.Context, input model.Input, artifact runtimecontract.RunnerInputArtifact, destination io.Writer) error {
 	endpoint := *client.base
 	endpoint.Path = "/v1/executions/" + url.PathEscape(input.LeaseRef) + "/artifacts/" + url.PathEscape(artifact.Ref)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
-		return nil, errors.New("create runtime artifact request")
+		return errors.New("create runtime artifact request")
 	}
 	request.Header.Set("Authorization", "Bearer "+client.token)
 	request.Header.Set("Accept", artifact.MediaType)
 	response, err := client.http.Do(request)
 	if err != nil {
-		return nil, errors.New("runtime artifact callback is unavailable")
+		return errors.New("runtime artifact callback is unavailable")
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != artifact.MediaType ||
 		response.Header.Get("X-Kodex-Artifact-Digest") != artifact.Digest || response.ContentLength != artifact.SizeBytes {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 16<<10))
-		return nil, errors.New("runtime artifact callback rejected request")
+		return errors.New("runtime artifact callback rejected request")
 	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, runtimecontract.MaximumInputArtifactBytes+1))
-	if err != nil || len(raw) > runtimecontract.MaximumInputArtifactBytes || int64(len(raw)) != artifact.SizeBytes {
-		return nil, errors.New("runtime artifact response is invalid")
+	digest := sha256.New()
+	written, err := io.Copy(io.MultiWriter(destination, digest), io.LimitReader(response.Body, runtimecontract.MaximumInputArtifactBytes+1))
+	if err != nil || written > runtimecontract.MaximumInputArtifactBytes || written != artifact.SizeBytes {
+		return errors.New("runtime artifact response is invalid")
 	}
-	digest := sha256.Sum256(raw)
-	actualDigest := "sha256:" + hex.EncodeToString(digest[:])
+	actualDigest := "sha256:" + hex.EncodeToString(digest.Sum(nil))
 	if subtle.ConstantTimeCompare([]byte(actualDigest), []byte(artifact.Digest)) != 1 {
-		return nil, errors.New("runtime artifact digest is invalid")
+		return errors.New("runtime artifact digest is invalid")
 	}
-	return raw, nil
+	return nil
 }
 
 func (client *Client) NextWarm(ctx context.Context, input model.Input) (model.Input, bool, error) {

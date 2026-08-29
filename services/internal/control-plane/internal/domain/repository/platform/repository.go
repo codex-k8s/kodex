@@ -38,13 +38,21 @@ type Administration struct {
 	ObservedAt           time.Time
 }
 
-const MaximumArtifactBytes int64 = 16 << 20
+const MaximumArtifactBytes int64 = 512 << 20
+
+// ArtifactReader даёт policy и storage повторно прочитать один bounded
+// file-backed поток без материализации полного содержимого в памяти.
+type ArtifactReader interface {
+	io.Reader
+	io.ReaderAt
+	io.Seeker
+}
 
 type ArtifactUpload struct {
 	ProjectRef, RunRef, FileName, MediaType, Digest string
 	ScanState, PreviewState                         string
 	SizeBytes                                       int64
-	Reader                                          io.Reader
+	Reader                                          ArtifactReader
 }
 
 type ArtifactDownload struct {

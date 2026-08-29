@@ -15,9 +15,11 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
+	"text/template"
 	"time"
 	"unicode/utf8"
 
@@ -229,12 +231,16 @@ func safeFailureCode(code string) string {
 }
 
 func materializeWorkspace(input model.Input) error {
-	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input"} {
+	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input", "session", "knowledge"} {
 		if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
 			return err
 		}
 	}
-	if err := writeWorkspaceFile(input.WorkspaceRoot, "AGENTS.md", []byte(input.Instructions+"\n")); err != nil {
+	renderedInstructions, err := renderInstructions(input)
+	if err != nil {
+		return err
+	}
+	if err := writeWorkspaceFile(input.WorkspaceRoot, "AGENTS.md", []byte(renderedInstructions+"\n")); err != nil {
 		return err
 	}
 	prompt, err := buildPrompt(input)
@@ -256,6 +262,7 @@ func buildPrompt(input model.Input) ([]byte, error) {
 	builder.WriteString("# Task\n\n")
 	builder.WriteString(strings.TrimSpace(input.Task))
 	builder.WriteString("\n")
+	appendAttachmentNotice(&builder, input)
 	if len(input.SessionContext) != 0 {
 		builder.WriteString("\n# Session context\n")
 		for _, message := range input.SessionContext {
@@ -278,10 +285,10 @@ func buildPrompt(input model.Input) ([]byte, error) {
 	if hasCapability(input, runtimecontract.ArtifactCapability) {
 		builder.WriteString("\n# File access\n")
 		if len(input.InputArtifacts) != 0 {
-			builder.WriteString("\nInput files are read-only at the paths listed below:\n")
-			for index, artifact := range input.InputArtifacts {
+			builder.WriteString("\nAll materialized files are read-only. The complete catalog is `/workspace/input/manifest.json`.\n")
+			for _, artifact := range input.InputArtifacts {
 				builder.WriteString("\n- `/workspace/")
-				builder.WriteString(filepath.ToSlash(artifactWorkspacePath(index, artifact)))
+				builder.WriteString(filepath.ToSlash(artifactWorkspacePath(input, artifact)))
 				builder.WriteString("` — ")
 				builder.WriteString(fmt.Sprintf("%q", artifact.FileName))
 				builder.WriteString(" (")
@@ -300,51 +307,336 @@ func buildPrompt(input model.Input) ([]byte, error) {
 	return result, nil
 }
 
-func materializeInputArtifacts(ctx context.Context, input model.Input, client *callback.Client) error {
-	directory := filepath.Join(input.WorkspaceRoot, "input")
-	entries, err := os.ReadDir(directory)
+func appendAttachmentNotice(builder *strings.Builder, input model.Input) {
+	inputFiles := scopedArtifacts(input.InputArtifacts, "INPUT")
+	if len(inputFiles) == 0 {
+		return
+	}
+	builder.WriteString("\n# Platform attachment notice\n\n")
+	builder.WriteString("The user attached ")
+	builder.WriteString(strconv.Itoa(len(inputFiles)))
+	builder.WriteString(" read-only file(s) to this turn. The authoritative manifest is `/workspace/input/")
+	builder.WriteString(input.AttachmentSetRef)
+	builder.WriteString("/manifest.json` and the files directory is `/workspace/input/")
+	builder.WriteString(input.AttachmentSetRef)
+	builder.WriteString("/files`.\n")
+	if len(inputFiles) <= 20 {
+		for _, artifact := range inputFiles {
+			builder.WriteString("\n- `/workspace/")
+			builder.WriteString(filepath.ToSlash(artifactWorkspacePath(input, artifact)))
+			builder.WriteString("`")
+		}
+		builder.WriteString("\n")
+	}
+	if input.CodexSessionID != "" || input.AttachmentContext == "SESSION_TURN" || input.AttachmentContext == "OWNER_GATE_MESSAGE" {
+		builder.WriteString("These files were added with a continuation. Treat them as new input for the current turn even when earlier session context does not mention them.\n")
+	}
+}
+
+func scopedArtifacts(artifacts []runtimecontract.RunnerInputArtifact, scope string) []runtimecontract.RunnerInputArtifact {
+	result := make([]runtimecontract.RunnerInputArtifact, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		if artifact.Scope == scope {
+			result = append(result, artifact)
+		}
+	}
+	sort.Slice(result, func(left, right int) bool { return result[left].Position < result[right].Position })
+	return result
+}
+
+func renderInstructions(input model.Input) (string, error) {
+	parsed, err := template.New("instructions").Option("missingkey=error").Parse(input.Instructions)
 	if err != nil {
-		return errors.New("read runtime input directory")
+		return "", errors.New("parse instruction template")
 	}
-	for _, entry := range entries {
-		if entry.IsDir() || (entry.Type()&os.ModeType != 0 && entry.Type()&os.ModeSymlink == 0) {
-			return errors.New("runtime input directory contains an unsupported entry")
+	var rendered strings.Builder
+	if err := parsed.Execute(&rendered, promptTemplateVariables(input)); err != nil {
+		return "", errors.New("render instruction template")
+	}
+	if rendered.Len() == 0 || rendered.Len() > 1<<20 || !utf8.ValidString(rendered.String()) {
+		return "", errors.New("rendered instructions are invalid")
+	}
+	return rendered.String(), nil
+}
+
+func promptTemplateVariables(input model.Input) map[string]any {
+	fileScope := func(artifacts []runtimecontract.RunnerInputArtifact, directory, manifest string) map[string]any {
+		files := make([]map[string]any, 0, len(artifacts))
+		for _, artifact := range artifacts {
+			files = append(files, map[string]any{
+				"ref": artifact.Ref, "name": artifact.FileName, "media_type": artifact.MediaType,
+				"size": artifact.SizeBytes, "sha256": artifact.Digest,
+				"path":   "/workspace/" + filepath.ToSlash(artifactWorkspacePath(input, artifact)),
+				"source": artifact.Source, "version": artifact.Version,
+				"revision": artifact.Revision, "purpose": artifactPurpose(input, artifact),
+			})
 		}
-		if err := os.Remove(filepath.Join(directory, entry.Name())); err != nil {
-			return errors.New("clear runtime input directory")
+		return map[string]any{"files": files, "files_count": len(files), "files_dir": directory, "manifest_path": manifest}
+	}
+	inputs := scopedArtifacts(input.InputArtifacts, "INPUT")
+	sessionInputs := append(scopedArtifacts(input.InputArtifacts, "SESSION"), inputs...)
+	knowledge := scopedArtifacts(input.InputArtifacts, "KNOWLEDGE")
+	inputDirectory, inputManifest := "", "/workspace/input/manifest.json"
+	if input.AttachmentSetRef != "" {
+		inputDirectory = "/workspace/input/" + input.AttachmentSetRef + "/files"
+		inputManifest = "/workspace/input/" + input.AttachmentSetRef + "/manifest.json"
+	}
+	inputScope := fileScope(inputs, inputDirectory, inputManifest)
+	emptyScope := fileScope(nil, "", "")
+	sessionScope := fileScope(sessionInputs, "/workspace", "/workspace/input/manifest.json")
+	projectScope := fileScope(knowledge, "/workspace/knowledge", "/workspace/input/manifest.json")
+	variables := map[string]any{
+		"agent":    map[string]any{"ref": input.AgentRef},
+		"project":  mergeFileScope(map[string]any{"ref": input.ProjectRef}, projectScope),
+		"run":      mergeFileScope(map[string]any{"ref": input.RunRef}, inputScope),
+		"session":  mergeFileScope(map[string]any{"ref": input.SessionRef}, sessionScope),
+		"turn":     map[string]any{"ref": input.TurnRef},
+		"runtime":  map[string]any{"environment": map[string]any{"ref": input.RuntimeEnvironmentRef}},
+		"input":    inputScope,
+		"files":    inputScope["files"],
+		"inputs":   input.BoundedInput,
+		"workflow": emptyScope,
+		"gate":     emptyScope,
+	}
+	if input.AttachmentContext == "WORKFLOW_INPUT" {
+		variables["workflow"] = inputScope
+	}
+	if input.AttachmentContext == "OWNER_GATE_MESSAGE" {
+		variables["gate"] = inputScope
+	}
+	return variables
+}
+
+func mergeFileScope(base, scope map[string]any) map[string]any {
+	for key, value := range scope {
+		base[key] = value
+	}
+	return base
+}
+
+func artifactPurpose(input model.Input, artifact runtimecontract.RunnerInputArtifact) string {
+	switch artifact.Scope {
+	case "KNOWLEDGE":
+		return "PROJECT_KNOWLEDGE"
+	case "SESSION":
+		return "SESSION_INPUT"
+	default:
+		return input.AttachmentContext
+	}
+}
+
+func materializeInputArtifacts(ctx context.Context, input model.Input, client *callback.Client) error {
+	if err := resetWorkspaceDirectory(input.WorkspaceRoot, "input"); err != nil {
+		return err
+	}
+	if err := resetWorkspaceDirectory(input.WorkspaceRoot, "knowledge"); err != nil {
+		return err
+	}
+	if err := resetWorkspaceDirectory(input.WorkspaceRoot, "session"); err != nil {
+		return err
+	}
+	inputArtifacts := make([]runtimecontract.RunnerInputArtifact, 0, len(input.InputArtifacts))
+	for _, artifact := range input.InputArtifacts {
+		if artifact.Scope == "INPUT" {
+			inputArtifacts = append(inputArtifacts, artifact)
 		}
 	}
-	for index, artifact := range input.InputArtifacts {
-		raw, err := client.ReadArtifact(ctx, input, artifact)
+	if err := verifyAttachmentManifest(input, inputArtifacts); err != nil {
+		return err
+	}
+	if input.AttachmentSetRef != "" {
+		for _, relative := range []string{filepath.Join("input", input.AttachmentSetRef), filepath.Join("input", input.AttachmentSetRef, "files")} {
+			if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
+				return err
+			}
+		}
+	}
+	for _, artifact := range input.InputArtifacts {
+		path := artifactWorkspacePath(input, artifact)
+		if err := writeWorkspaceArtifact(ctx, input, artifact, path, client); err != nil {
+			return err
+		}
+	}
+	if input.AttachmentSetRef != "" {
+		manifest, err := canonicalAttachmentManifest(input, inputArtifacts)
 		if err != nil {
 			return err
 		}
-		if err := writeWorkspaceFile(input.WorkspaceRoot, artifactWorkspacePath(index, artifact), raw); err != nil {
+		manifestPath := filepath.Join("input", input.AttachmentSetRef, "manifest.json")
+		if err := writeReadOnlyWorkspaceFile(input.WorkspaceRoot, manifestPath, manifest); err != nil {
 			return err
+		}
+		readme := []byte("This directory contains a read-only, server-owned AttachmentSet. Read manifest.json before using files.\n")
+		if err := writeReadOnlyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", input.AttachmentSetRef, "README.md"), readme); err != nil {
+			return err
+		}
+	}
+	return writeInputCatalog(input)
+}
+
+func artifactWorkspacePath(input model.Input, artifact runtimecontract.RunnerInputArtifact) string {
+	name := fmt.Sprintf("%04d-%s", artifact.Position, safeWorkspaceFileName(artifact.FileName))
+	if artifact.Scope == "INPUT" {
+		return filepath.Join("input", input.AttachmentSetRef, "files", name)
+	}
+	if artifact.Scope == "SESSION" {
+		return filepath.Join("session", name)
+	}
+	return filepath.Join("knowledge", name)
+}
+
+func safeWorkspaceFileName(value string) string {
+	value = filepath.Base(strings.TrimSpace(value))
+	var builder strings.Builder
+	for _, character := range value {
+		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' || character == '.' || character == '-' || character == '_' {
+			builder.WriteRune(character)
+		} else {
+			builder.WriteByte('_')
+		}
+		if builder.Len() >= 160 {
+			break
+		}
+	}
+	result := strings.Trim(builder.String(), ".")
+	if result == "" {
+		return "file.bin"
+	}
+	return result
+}
+
+type workspaceAttachmentItem struct {
+	ArtifactRef      string `json:"artifactRef"`
+	ArtifactRevision int64  `json:"artifactRevision"`
+	ArtifactVersion  int64  `json:"artifactVersion"`
+	FileName         string `json:"fileName"`
+	MediaType        string `json:"mediaType"`
+	SizeBytes        int64  `json:"sizeBytes"`
+	Digest           string `json:"digest"`
+	Position         int64  `json:"position"`
+}
+
+type workspaceAttachmentManifest struct {
+	Schema string                    `json:"schema"`
+	Ref    string                    `json:"ref"`
+	Items  []workspaceAttachmentItem `json:"items"`
+}
+
+func canonicalAttachmentManifest(input model.Input, artifacts []runtimecontract.RunnerInputArtifact) ([]byte, error) {
+	sorted := append([]runtimecontract.RunnerInputArtifact(nil), artifacts...)
+	sort.Slice(sorted, func(left, right int) bool { return sorted[left].Position < sorted[right].Position })
+	manifest := workspaceAttachmentManifest{Schema: "kodex.attachment-set.v1", Ref: input.AttachmentSetRef}
+	for _, artifact := range sorted {
+		manifest.Items = append(manifest.Items, workspaceAttachmentItem{
+			ArtifactRef: artifact.Ref, ArtifactRevision: artifact.Revision, ArtifactVersion: artifact.Version,
+			FileName: artifact.FileName, MediaType: artifact.MediaType, SizeBytes: artifact.SizeBytes,
+			Digest: artifact.Digest, Position: artifact.Position,
+		})
+	}
+	raw, err := json.Marshal(manifest)
+	if err != nil || len(raw) > 1<<20 {
+		return nil, errors.New("encode runtime attachment manifest")
+	}
+	return raw, nil
+}
+
+func verifyAttachmentManifest(input model.Input, artifacts []runtimecontract.RunnerInputArtifact) error {
+	if len(artifacts) == 0 {
+		return nil
+	}
+	raw, err := canonicalAttachmentManifest(input, artifacts)
+	if err != nil {
+		return err
+	}
+	digest := sha256.Sum256(raw)
+	if hex.EncodeToString(digest[:]) != input.AttachmentSetManifestDigest {
+		return errors.New("runtime attachment manifest digest is invalid")
+	}
+	return nil
+}
+
+func resetWorkspaceDirectory(root, relative string) error {
+	directory := filepath.Join(root, relative)
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return errors.New("read runtime artifact directory")
+	}
+	for _, entry := range entries {
+		path := filepath.Join(directory, entry.Name())
+		if !strings.HasPrefix(filepath.Clean(path), directory+string(os.PathSeparator)) {
+			return errors.New("runtime artifact path is invalid")
+		}
+		if err := os.RemoveAll(path); err != nil {
+			return errors.New("clear runtime artifact directory")
 		}
 	}
 	return nil
 }
 
-func artifactWorkspacePath(index int, artifact runtimecontract.RunnerInputArtifact) string {
-	extension := strings.ToLower(filepath.Ext(artifact.FileName))
-	if len(extension) > 16 || !safeArtifactExtension(extension) {
-		extension = ".bin"
+func writeWorkspaceArtifact(ctx context.Context, input model.Input, artifact runtimecontract.RunnerInputArtifact, relative string, client *callback.Client) error {
+	path := filepath.Join(input.WorkspaceRoot, relative)
+	if filepath.Clean(path) != path || !strings.HasPrefix(path, input.WorkspaceRoot+string(os.PathSeparator)) {
+		return errors.New("workspace artifact path is invalid")
 	}
-	return filepath.Join("input", fmt.Sprintf("%03d%s", index+1, extension))
+	temporary := path + ".next"
+	_ = os.Remove(temporary)
+	file, err := os.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o440)
+	if err != nil {
+		return errors.New("create workspace artifact")
+	}
+	writeErr := client.WriteArtifact(ctx, input, artifact, file)
+	if syncErr := file.Sync(); writeErr == nil {
+		writeErr = syncErr
+	}
+	if closeErr := file.Close(); writeErr == nil {
+		writeErr = closeErr
+	}
+	if writeErr != nil {
+		_ = os.Remove(temporary)
+		return writeErr
+	}
+	if err := os.Rename(temporary, path); err != nil {
+		_ = os.Remove(temporary)
+		return errors.New("commit workspace artifact")
+	}
+	return nil
 }
 
-func safeArtifactExtension(extension string) bool {
-	if len(extension) < 2 || extension[0] != '.' {
-		return false
+func writeReadOnlyWorkspaceFile(root, relative string, payload []byte) error {
+	if err := writeWorkspaceFile(root, relative, payload); err != nil {
+		return err
 	}
-	for _, character := range extension[1:] {
-		if character >= 'a' && character <= 'z' || character >= '0' && character <= '9' {
-			continue
-		}
-		return false
+	if err := os.Chmod(filepath.Join(root, relative), 0o440); err != nil {
+		return errors.New("protect workspace input file")
 	}
-	return true
+	return nil
+}
+
+func writeInputCatalog(input model.Input) error {
+	type catalogItem struct {
+		Scope   string `json:"scope"`
+		Path    string `json:"path"`
+		Name    string `json:"name"`
+		Source  string `json:"source"`
+		Purpose string `json:"purpose"`
+	}
+	catalog := struct {
+		Schema            string        `json:"schema"`
+		AttachmentSetRef  string        `json:"attachmentSetRef,omitempty"`
+		AttachmentContext string        `json:"attachmentContext,omitempty"`
+		Files             []catalogItem `json:"files"`
+	}{Schema: "kodex.workspace-input.v1", AttachmentSetRef: input.AttachmentSetRef, AttachmentContext: input.AttachmentContext}
+	for _, artifact := range input.InputArtifacts {
+		catalog.Files = append(catalog.Files, catalogItem{Scope: artifact.Scope,
+			Path: "/workspace/" + filepath.ToSlash(artifactWorkspacePath(input, artifact)), Name: artifact.FileName,
+			Source: artifact.Source, Purpose: artifactPurpose(input, artifact)})
+	}
+	raw, err := json.MarshalIndent(catalog, "", "  ")
+	if err != nil {
+		return errors.New("encode workspace input catalog")
+	}
+	return writeReadOnlyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", "manifest.json"), raw)
 }
 
 func writeWorkspaceFile(root, relative string, payload []byte) error {

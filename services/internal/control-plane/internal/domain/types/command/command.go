@@ -151,7 +151,10 @@ type SessionTurnInput struct {
 	ArtifactRefs                      []string
 }
 type RunCommandInput struct{ RunRef, Reason string }
-type GateResolutionInput struct{ GateRef, Decision, Comment string }
+type GateResolutionInput struct {
+	GateRef, Decision, Comment string
+	ArtifactRefs               []string
+}
 type ArtifactBindingInput struct {
 	ArtifactRef, AgentRef string
 	Enabled               bool

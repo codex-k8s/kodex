@@ -1102,6 +1102,7 @@ paths:
           schema: { $ref: '#/components/schemas/OpaqueRef' }
       requestBody:
         required: true
+        description: Поток одного файла размером до 512 MiB; gateway и control-plane сверяют Content-Length и SHA-256 без полной буферизации тела.
         content:
           application/octet-stream:
             schema: { type: string, format: binary }
@@ -1173,7 +1174,7 @@ paths:
             enum: [DOWNLOAD, PREVIEW]
       responses:
         '200':
-          description: Защищённое содержимое artifact
+          description: Поток защищённого содержимого artifact размером до 512 MiB
           headers:
             Content-Disposition:
               schema: { type: string }
@@ -1520,7 +1521,7 @@ paths:
               required: [content]
               properties:
                 content: { type: string, minLength: 1, maxLength: 32768 }
-                artifactRefs: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/OpaqueRef' } }
+                artifactRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
       responses:
         '202':
           description: Turn поставлен в последовательную очередь warm session
@@ -3070,7 +3071,7 @@ components:
         safeErrorCode: { type: string, maxLength: 80 }
         safeErrorMessage: { type: string, maxLength: 500 }
         usage: { $ref: '#/components/schemas/TokenUsage' }
-        inputArtifactRefs: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        inputArtifactRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
         artifactRefs: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/OpaqueRef' } }
         gateRefs: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/OpaqueRef' } }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
@@ -3214,7 +3215,7 @@ components:
         title: { type: string, minLength: 1, maxLength: 240 }
         task: { type: string, minLength: 1, maxLength: 32768 }
         input: { type: object, maxProperties: 100, additionalProperties: true }
-        artifactRefs: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        artifactRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
         sessionRef: { $ref: '#/components/schemas/OpaqueRef' }
     RunCommand:
       type: object
@@ -3231,7 +3232,7 @@ components:
         runRef: { $ref: '#/components/schemas/OpaqueRef' }
         nodeRef: { $ref: '#/components/schemas/OpaqueRef' }
         task: { type: string, minLength: 1, maxLength: 32768 }
-        artifactRefs: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        artifactRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
     RunPage:
       type: object
       additionalProperties: false
@@ -3278,6 +3279,7 @@ components:
       properties:
         decision: { type: string, enum: [APPROVE, REJECT, REQUEST_CHANGES, CANCEL] }
         comment: { type: string, maxLength: 4000 }
+        artifactRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
     GateResolutionReceipt:
       type: object
       additionalProperties: false

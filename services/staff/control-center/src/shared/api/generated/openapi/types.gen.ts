@@ -989,6 +989,7 @@ export type OwnerGate = {
 export type GateResolution = {
     decision: 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'CANCEL';
     comment?: string;
+    artifactRefs?: Array<OpaqueRef>;
 };
 
 export type GateResolutionReceipt = {

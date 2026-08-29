@@ -1664,6 +1664,7 @@ message ResolveOwnerGateRequest {
   string gate_ref = 2;
   OwnerGateDecision decision = 3;
   string comment = 4;
+  repeated string artifact_refs = 5;
 }
 message ResolveOwnerGateResponse {
   OwnerGate gate = 1;
@@ -1696,10 +1697,15 @@ message UploadArtifactMetadata {
   string media_type = 5;
   int64 size_bytes = 6;
 }
+message UploadArtifactCommit {
+  int64 size_bytes = 1;
+  string sha256 = 2;
+}
 message UploadArtifactRequest {
   oneof part {
     UploadArtifactMetadata metadata = 1;
     bytes chunk = 2;
+    UploadArtifactCommit commit = 3;
   }
 }
 message UploadArtifactResponse {
@@ -2036,6 +2042,16 @@ message RuntimeRevisionSnapshot {
   // terminal handoff предыдущего turn.
   string codex_session_id = 47;
   AssistantContextDescriptor assistant_context = 48;
+  string attachment_set_ref = 49;
+  string attachment_set_manifest_digest = 50;
+  repeated RuntimeInputArtifact input_artifacts = 51;
+  string attachment_context = 52;
+}
+
+message RuntimeInputArtifact {
+  Artifact artifact = 1;
+  string scope = 2;
+  int64 position = 3;
 }
 
 message ProviderCredentialBinding {

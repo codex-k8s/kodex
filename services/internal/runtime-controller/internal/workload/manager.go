@@ -292,12 +292,37 @@ func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision 
 		}
 		input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{Ref: grant.GetRef(), ConnectionRef: grant.GetConnectionRef(), DefinitionKey: grant.GetDefinitionKey(), ConnectionName: grant.GetConnectionName(), CapabilityKey: grant.GetCapabilityKey(), CapabilityName: grant.GetCapabilityName(), CapabilityDescription: grant.GetCapabilityDescription(), Risk: grant.GetRisk()})
 	}
-	for _, artifact := range revision.GetArtifacts() {
+	input.AttachmentSetRef = revision.GetAttachmentSetRef()
+	input.AttachmentSetManifestDigest = revision.GetAttachmentSetManifestDigest()
+	input.AttachmentContext = revision.GetAttachmentContext()
+	for _, runtimeArtifact := range revision.GetInputArtifacts() {
+		artifact := runtimeArtifact.GetArtifact()
+		if artifact == nil {
+			continue
+		}
 		input.InputArtifacts = append(input.InputArtifacts, runtimecontract.RunnerInputArtifact{
 			Ref: artifact.GetRef(), FileName: artifact.GetFileName(), MediaType: artifact.GetMediaType(),
 			Digest: artifact.GetDigest(), SizeBytes: artifact.GetSizeBytes(), Revision: int64(artifact.GetRevision()),
-			Version: artifact.GetVersion(),
+			Version: artifact.GetVersion(), Scope: runtimeArtifact.GetScope(), Position: runtimeArtifact.GetPosition(),
+			Source: runnerArtifactSource(artifact.GetSource()),
 		})
+	}
+}
+
+func runnerArtifactSource(source controlplanev1.ArtifactSource) string {
+	switch source {
+	case controlplanev1.ArtifactSource_ARTIFACT_SOURCE_CONTROL_CENTER:
+		return "CONTROL_CENTER"
+	case controlplanev1.ArtifactSource_ARTIFACT_SOURCE_AGENT_RESULT:
+		return "AGENT_RESULT"
+	case controlplanev1.ArtifactSource_ARTIFACT_SOURCE_INTEGRATION_RESULT:
+		return "INTEGRATION_RESULT"
+	case controlplanev1.ArtifactSource_ARTIFACT_SOURCE_KNOWLEDGE_SOURCE:
+		return "KNOWLEDGE_SOURCE"
+	case controlplanev1.ArtifactSource_ARTIFACT_SOURCE_INTERACTION_ATTACHMENT:
+		return "INTERACTION_ATTACHMENT"
+	default:
+		return ""
 	}
 }
 

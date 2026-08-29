@@ -267,30 +267,31 @@ func toolCapabilityMatches(tool, capability string, integration, systemAssistant
 }
 
 type claimableExecution struct {
-	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef               string
-	sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision             string
-	provider, model, providerAccountID, providerAccountRef                         string
-	providerCredentialID, providerCredentialRef                                    string
-	providerSecretName, providerSecretUID, providerSecretResourceVersion           string
-	providerCredentialSHA256, instructionRef, instructionDigest, instructions      string
-	turnRef, stableKey, callbackEdgeRef, turnID, agentID                           string
-	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef     string
-	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest string
-	roleRuntimeContractSHA256                                                      string
-	runtimeConfigID, runtimeConfigRef, runtimeConfigDigest                         string
-	providerPolicyID, providerPolicyRef, providerPolicyDigest, providerPolicyMode  string
-	configOverlayID, configOverlayRef, configOverlayDigest, configOverlay          string
-	environmentBindingID, environmentBindingRef, environmentBindingDigest          string
-	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest          string
-	codexSessionID                                                                 string
-	providerCredentialRevisionNumber, generation, roleRuntimeContractRevision      int64
-	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion              int64
-	environmentBindingVersion, runtimeEnvironmentVersion                           int64
-	attempt                                                                        int32
-	capabilities, knowledge                                                        []string
-	rawInput, rawArtifacts, rawIntegrationGrants, rawDelegationTargets             []byte
-	rawSessionContext                                                              []byte
-	rawEnvironmentValues, rawSecretProjections                                     []byte
+	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef                string
+	sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision              string
+	provider, model, providerAccountID, providerAccountRef                          string
+	providerCredentialID, providerCredentialRef                                     string
+	providerSecretName, providerSecretUID, providerSecretResourceVersion            string
+	providerCredentialSHA256, instructionRef, instructionDigest, instructions       string
+	turnRef, stableKey, callbackEdgeRef, turnID, agentID                            string
+	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef      string
+	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest  string
+	roleRuntimeContractSHA256                                                       string
+	runtimeConfigID, runtimeConfigRef, runtimeConfigDigest                          string
+	providerPolicyID, providerPolicyRef, providerPolicyDigest, providerPolicyMode   string
+	configOverlayID, configOverlayRef, configOverlayDigest, configOverlay           string
+	environmentBindingID, environmentBindingRef, environmentBindingDigest           string
+	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest           string
+	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext string
+	codexSessionID                                                                  string
+	providerCredentialRevisionNumber, generation, roleRuntimeContractRevision       int64
+	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion               int64
+	environmentBindingVersion, runtimeEnvironmentVersion                            int64
+	attempt                                                                         int32
+	capabilities, knowledge                                                         []string
+	rawInput, rawArtifacts, rawIntegrationGrants, rawDelegationTargets              []byte
+	rawSessionContext                                                               []byte
+	rawEnvironmentValues, rawSecretProjections                                      []byte
 }
 
 func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -321,7 +322,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.providerSecretUID, &candidate.providerSecretResourceVersion,
 			&candidate.providerCredentialSHA256, &candidate.instructionRef, &candidate.instructionDigest,
 			&candidate.instructions, &candidate.capabilities, &candidate.knowledge, &candidate.rawInput,
-			&candidate.rawArtifacts,
+			&candidate.inputAttachmentSetRef, &candidate.inputAttachmentSetManifestDigest, &candidate.inputAttachmentContext, &candidate.rawArtifacts,
 			&candidate.attempt, &candidate.generation, &candidate.turnRef, &candidate.stableKey,
 			&candidate.rawIntegrationGrants, &candidate.rawDelegationTargets, &candidate.callbackEdgeRef,
 			&candidate.rawSessionContext, &candidate.turnID, &candidate.agentID,
@@ -360,6 +361,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		providerCredentialSHA256 := candidate.providerCredentialSHA256
 		instructionRef, instructionDigest, instructions := candidate.instructionRef, candidate.instructionDigest, candidate.instructions
 		capabilities, knowledge, rawInput := candidate.capabilities, candidate.knowledge, candidate.rawInput
+		inputAttachmentSetRef, inputAttachmentSetManifestDigest := candidate.inputAttachmentSetRef, candidate.inputAttachmentSetManifestDigest
+		inputAttachmentContext := candidate.inputAttachmentContext
 		rawArtifacts := candidate.rawArtifacts
 		attempt, generation, turnRef, stableKey := candidate.attempt, candidate.generation, candidate.turnRef, candidate.stableKey
 		rawIntegrationGrants, rawDelegationTargets := candidate.rawIntegrationGrants, candidate.rawDelegationTargets
@@ -422,7 +425,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			providerAccountRef, providerCredentialRef, providerSecretName,
 			providerSecretUID, providerSecretResourceVersion, providerCredentialSHA256,
 			strings.Join(capabilities, ","), strings.Join(knowledge, ","),
-			integrationGrantsDigestHex, string(rawArtifacts), string(rawDelegationTargets), string(rawSessionContext), string(rawAssistantContext),
+			integrationGrantsDigestHex, inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext,
+			string(rawArtifacts), string(rawDelegationTargets), string(rawSessionContext), string(rawAssistantContext),
 			roleDefinitionRef, roleImageRecipeRef, roleImageArtifactRef, imageReference,
 			imageManifestDigest, roleRuntimeContractSHA256, hex.EncodeToString(inputDigest[:]),
 			runtimeConfigRef, strconv.FormatInt(runtimeConfigVersion, 10), runtimeConfigDigest,
@@ -452,8 +456,11 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"providerCredentialSHA256":         providerCredentialSHA256,
 			"instructionDigest":                instructionDigest, "instructions": instructions,
 			"capabilities": capabilities, "integrationGrants": integrationGrants,
-			"knowledgeArtifactRefs": knowledge, "artifacts": artifacts, "delegationTargets": delegationTargets,
-			"callbackEdgeRef": callbackEdgeRef, "sessionContext": sessionContext,
+			"knowledgeArtifactRefs": knowledge, "artifacts": artifacts,
+			"attachmentSetRef": inputAttachmentSetRef, "attachmentSetManifestDigest": inputAttachmentSetManifestDigest,
+			"attachmentContext": inputAttachmentContext,
+			"delegationTargets": delegationTargets,
+			"callbackEdgeRef":   callbackEdgeRef, "sessionContext": sessionContext,
 			"input": inputMap, "inputDigest": hex.EncodeToString(inputDigest[:]),
 			"revisionDigest": revisionDigestHex, "runtimeRevisionRef": revisionRef,
 			"runtimeRevisionVersion": generation, "roleDefinitionRef": roleDefinitionRef,

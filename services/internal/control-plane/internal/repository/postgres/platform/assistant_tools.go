@@ -581,7 +581,7 @@ func assistantRun(input map[string]any) (command.LaunchRunInput, error) {
 		SessionRef: assistantString(input, "sessionRef"), Source: "SYSTEM_ASSISTANT", Input: boundedInput, ArtifactRefs: assistantStrings(input, "artifactRefs"),
 		Target: entity.RunTarget{Type: assistantString(input, "targetType"), Ref: assistantString(input, "targetRef")}}
 	if !boundedInputOK || payload.ProjectRef == "" || !contains([]string{"AGENT", "WORKFLOW"}, payload.Target.Type) || payload.Target.Ref == "" || payload.Title == "" || len(payload.Title) > 240 ||
-		payload.Task == "" || len(payload.Task) > 32768 || !validBoundedRunInput(payload.Input) || len(payload.ArtifactRefs) > 50 {
+		payload.Task == "" || len(payload.Task) > 32768 || !validBoundedRunInput(payload.Input) {
 		return command.LaunchRunInput{}, errs.ErrInvalid
 	}
 	return payload, nil

@@ -41,6 +41,9 @@ SELECT n.id::text,
                    AND knowledge_artifact.lifecycle_state='ACTIVE'),'{}')
        ELSE '{}'::text[] END,
        r.input,
+       COALESCE(input_attachment_set.ref, ''),
+       COALESCE(input_attachment_set.manifest_digest, ''),
+       COALESCE(input_attachment_set.context_kind, ''),
        CASE WHEN 'platform.artifact.manage'=ANY(a.capabilities) THEN COALESCE((
            SELECT jsonb_agg(jsonb_build_object(
                'ref', runtime_artifact.ref,
@@ -50,25 +53,89 @@ SELECT n.id::text,
                'digest', runtime_artifact.digest,
                'revision', runtime_artifact.revision,
                'version', runtime_artifact.version,
-               'source', runtime_artifact.source
-           ) ORDER BY array_position(root.input_artifact_refs, runtime_artifact.ref) NULLS LAST,
+               'source', runtime_artifact.source,
+               'scope', runtime_artifact.usage_scope,
+               'position', runtime_artifact.position
+           ) ORDER BY runtime_artifact.scope_order,
+                      runtime_artifact.position,
                       runtime_artifact.file_name,
                       runtime_artifact.ref)
-           FROM control_plane.artifacts AS runtime_artifact
-           WHERE runtime_artifact.organization_id = r.organization_id
-             AND runtime_artifact.project_id = r.project_id
-             AND runtime_artifact.scan_state = 'CLEAN'
-             AND runtime_artifact.lifecycle_state = 'ACTIVE'
-             AND (
-               runtime_artifact.ref = ANY(root.input_artifact_refs)
-               OR EXISTS (
-                 SELECT 1
-                 FROM control_plane.artifact_bindings AS runtime_binding
-                 WHERE runtime_binding.artifact_id = runtime_artifact.id
-                   AND runtime_binding.target_kind = 'KNOWLEDGE'
-                   AND runtime_binding.target_ref = a.ref
-               )
-             )
+           FROM (
+               SELECT DISTINCT ON (candidate.ref) candidate.*
+               FROM (
+                   SELECT item.artifact_ref AS ref,
+                          item.file_name,
+                          item.media_type,
+                          item.size_bytes,
+                          item.digest,
+                          item.artifact_revision AS revision,
+                          item.artifact_version AS version,
+                          artifact.source,
+                          'INPUT'::text AS usage_scope,
+                          item.position,
+                          0::integer AS scope_order
+                   FROM control_plane.attachment_set_items AS item
+                   JOIN control_plane.artifacts AS artifact ON artifact.id = item.artifact_id
+                   JOIN control_plane.artifact_content AS content ON content.artifact_id = artifact.id
+                   WHERE item.attachment_set_id = input_attachment_set.id
+                     AND artifact.lifecycle_state <> 'PURGED'
+
+                   UNION ALL
+
+                   SELECT previous_artifact.ref,
+                          previous_artifact.file_name,
+                          previous_artifact.media_type,
+                          previous_artifact.size_bytes,
+                          previous_artifact.digest,
+                          previous_artifact.revision,
+                          previous_artifact.version,
+                          previous_artifact.source,
+                          'SESSION'::text AS usage_scope,
+                          row_number() OVER (
+                              ORDER BY previous_turn.turn_number, previous_item.position,
+                                       previous_artifact.created_at, previous_artifact.ref
+                          ),
+                          1::integer AS scope_order
+                   FROM control_plane.session_turns AS previous_turn
+                   JOIN control_plane.attachment_sets AS previous_set
+                     ON previous_set.id = previous_turn.attachment_set_id
+                   JOIN control_plane.attachment_set_items AS previous_item
+                     ON previous_item.attachment_set_id = previous_set.id
+                   JOIN control_plane.artifacts AS previous_artifact
+                     ON previous_artifact.id = previous_item.artifact_id
+                   JOIN control_plane.artifact_content AS previous_content
+                     ON previous_content.artifact_id = previous_artifact.id
+                   WHERE previous_turn.session_id = s.id
+                     AND (t.id IS NULL OR previous_turn.id <> t.id)
+                     AND (input_attachment_set.id IS NULL OR previous_set.id <> input_attachment_set.id)
+                     AND previous_artifact.scan_state = 'CLEAN'
+                     AND previous_artifact.lifecycle_state = 'ACTIVE'
+
+                   UNION ALL
+
+                   SELECT knowledge_artifact.ref,
+                          knowledge_artifact.file_name,
+                          knowledge_artifact.media_type,
+                          knowledge_artifact.size_bytes,
+                          knowledge_artifact.digest,
+                          knowledge_artifact.revision,
+                          knowledge_artifact.version,
+                          knowledge_artifact.source,
+                          'KNOWLEDGE'::text AS usage_scope,
+                          row_number() OVER (ORDER BY knowledge_binding.created_at, knowledge_artifact.ref),
+                          2::integer AS scope_order
+                   FROM control_plane.artifact_bindings AS knowledge_binding
+                   JOIN control_plane.artifacts AS knowledge_artifact ON knowledge_artifact.id = knowledge_binding.artifact_id
+                   JOIN control_plane.artifact_content AS knowledge_content ON knowledge_content.artifact_id = knowledge_artifact.id
+                   WHERE knowledge_binding.target_kind = 'KNOWLEDGE'
+                     AND knowledge_binding.target_ref = a.ref
+                     AND knowledge_artifact.organization_id = r.organization_id
+                     AND knowledge_artifact.project_id = r.project_id
+                     AND knowledge_artifact.scan_state = 'CLEAN'
+                     AND knowledge_artifact.lifecycle_state = 'ACTIVE'
+               ) AS candidate
+               ORDER BY candidate.ref, candidate.scope_order, candidate.position
+           ) AS runtime_artifact
        ), '[]'::jsonb) ELSE '[]'::jsonb END,
        n.attempt,
        COALESCE((
@@ -282,6 +349,8 @@ JOIN LATERAL (
 ) iv ON true
 LEFT JOIN control_plane.assistant_runtime ar ON ar.agent_id = a.id
 LEFT JOIN control_plane.session_turns t ON t.id = n.turn_id
+LEFT JOIN control_plane.attachment_sets input_attachment_set
+  ON input_attachment_set.id = COALESCE(t.attachment_set_id, root.input_attachment_set_id)
 LEFT JOIN LATERAL (
     SELECT recipe.id AS recipe_id,
            recipe.ref AS recipe_ref,
@@ -307,14 +376,16 @@ WHERE n.organization_id = $1::uuid
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
   AND COALESCE(session_storage.state, 'LIVE') = 'LIVE'
-  AND cardinality(root.input_artifact_refs) = (
-      SELECT count(DISTINCT input_artifact.ref)
-      FROM control_plane.artifacts AS input_artifact
-      WHERE input_artifact.organization_id = r.organization_id
-        AND input_artifact.project_id = r.project_id
-        AND input_artifact.ref = ANY(root.input_artifact_refs)
-        AND input_artifact.scan_state = 'CLEAN'
-        AND input_artifact.lifecycle_state = 'ACTIVE'
+  AND (
+      input_attachment_set.id IS NULL
+      OR input_attachment_set.item_count = (
+          SELECT count(*)
+          FROM control_plane.attachment_set_items AS input_item
+          JOIN control_plane.artifacts AS input_artifact ON input_artifact.id = input_item.artifact_id
+          JOIN control_plane.artifact_content AS input_content ON input_content.artifact_id = input_artifact.id
+          WHERE input_item.attachment_set_id = input_attachment_set.id
+            AND input_artifact.lifecycle_state <> 'PURGED'
+      )
   )
   AND NOT EXISTS (
       SELECT 1

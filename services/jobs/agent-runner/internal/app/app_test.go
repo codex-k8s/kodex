@@ -10,12 +10,15 @@ import (
 
 func TestBuildPromptExplainsBoundedFileAccessWithArtifactCapability(t *testing.T) {
 	input := model.Input{
-		Mode:         runtimecontract.RunnerModeTurn,
-		Task:         "Analyze the attached customer brief.",
-		Capabilities: []string{runtimecontract.ArtifactCapability},
+		Mode:                        runtimecontract.RunnerModeTurn,
+		Task:                        "Analyze the attached customer brief.",
+		Capabilities:                []string{runtimecontract.ArtifactCapability},
+		AttachmentSetRef:            "aset_abcdefgh",
+		AttachmentSetManifestDigest: strings.Repeat("a", 64),
+		AttachmentContext:           "RUN_INPUT",
 		InputArtifacts: []runtimecontract.RunnerInputArtifact{
-			{Ref: "artifact_abcdefgh", FileName: "customer brief.txt", MediaType: "text/plain"},
-			{Ref: "artifact_ijklmnop", FileName: "terms.pdf", MediaType: "application/pdf"},
+			{Ref: "artifact_abcdefgh", FileName: "customer brief.txt", MediaType: "text/plain", Scope: "INPUT", Position: 1, Source: "CONTROL_CENTER"},
+			{Ref: "artifact_ijklmnop", FileName: "terms.pdf", MediaType: "application/pdf", Scope: "INPUT", Position: 2, Source: "CONTROL_CENTER"},
 		},
 	}
 	prompt, err := buildPrompt(input)
@@ -25,9 +28,9 @@ func TestBuildPromptExplainsBoundedFileAccessWithArtifactCapability(t *testing.T
 	text := string(prompt)
 	for _, expected := range []string{
 		"# File access",
-		"Input files are read-only at the paths listed below:",
-		"`/workspace/input/001.txt`",
-		"`/workspace/input/002.pdf`",
+		"The user attached 2 read-only file(s) to this turn.",
+		"`/workspace/input/aset_abcdefgh/files/0001-customer_brief.txt`",
+		"`/workspace/input/aset_abcdefgh/files/0002-terms.pdf`",
 		"Write every output file directly to `/workspace/.kodex/outbox/<safe-name>`.",
 		"The workspace root and all other paths are read-only",
 		"do not write output files to `/workspace` itself.",
@@ -50,6 +53,36 @@ func TestBuildPromptDoesNotPromiseFileAccessWithoutArtifactCapability(t *testing
 	for _, forbidden := range []string{"# File access", "/workspace/.kodex/outbox", "output file", "read-only"} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("prompt without artifact capability contains %q: %s", forbidden, text)
+		}
+	}
+}
+
+func TestRenderInstructionsExposesTypedFileScopes(t *testing.T) {
+	input := model.Input{
+		Instructions: `{{range .input.files}}{{.name}}|{{.media_type}}|{{.path}}|{{.source}}|{{.purpose}}|{{.version}}{{end}}
+{{range .session.files}}{{.name}};{{end}}
+{{range .project.files}}{{.name}};{{end}}
+{{.input.files_count}}|{{.input.files_dir}}|{{.input.manifest_path}}`,
+		ProjectRef: "prj_abcdefgh", SessionRef: "ses_abcdefgh", RunRef: "run_abcdefgh",
+		AttachmentSetRef: "aset_abcdefgh", AttachmentContext: "SESSION_TURN",
+		InputArtifacts: []runtimecontract.RunnerInputArtifact{
+			{Ref: "artifact_abcdefgh", FileName: "new.txt", MediaType: "text/plain", Scope: "INPUT", Position: 1, Source: "CONTROL_CENTER", Version: 2},
+			{Ref: "artifact_ijklmnop", FileName: "prior.txt", MediaType: "text/plain", Scope: "SESSION", Position: 1, Source: "CONTROL_CENTER", Version: 1},
+			{Ref: "artifact_qrstuvwx", FileName: "policy.md", MediaType: "text/markdown", Scope: "KNOWLEDGE", Position: 1, Source: "KNOWLEDGE_SOURCE", Version: 3},
+		},
+	}
+	rendered, err := renderInstructions(input)
+	if err != nil {
+		t.Fatalf("renderInstructions() error = %v", err)
+	}
+	for _, expected := range []string{
+		"new.txt|text/plain|/workspace/input/aset_abcdefgh/files/0001-new.txt|CONTROL_CENTER|SESSION_TURN|2",
+		"prior.txt;new.txt;",
+		"policy.md;",
+		"1|/workspace/input/aset_abcdefgh/files|/workspace/input/aset_abcdefgh/manifest.json",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("rendered instructions do not contain %q: %s", expected, rendered)
 		}
 	}
 }

@@ -2,7 +2,6 @@
 package platform
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -339,17 +338,29 @@ func (service *Service) UploadArtifact(ctx context.Context, p value.Principal, m
 	if input.SizeBytes < 0 || input.SizeBytes > repository.MaximumArtifactBytes || input.Reader == nil || strings.TrimSpace(input.ProjectRef) == "" {
 		return entity.Artifact{}, errs.ErrInvalid
 	}
-	body, err := io.ReadAll(io.LimitReader(input.Reader, repository.MaximumArtifactBytes+1))
-	if err != nil || int64(len(body)) != input.SizeBytes {
+	if _, err := input.Reader.Seek(0, io.SeekStart); err != nil {
 		return entity.Artifact{}, errs.ErrInvalid
 	}
-	contentDigest := sha256.Sum256(body)
-	input.Digest = "sha256:" + hex.EncodeToString(contentDigest[:])
-	verdict := artifactpolicy.Inspect(input.FileName, input.MediaType, body)
+	contentDigest := sha256.New()
+	written, err := io.Copy(contentDigest, io.LimitReader(input.Reader, repository.MaximumArtifactBytes+1))
+	if err != nil || written != input.SizeBytes {
+		return entity.Artifact{}, errs.ErrInvalid
+	}
+	actualDigest := "sha256:" + hex.EncodeToString(contentDigest.Sum(nil))
+	if input.Digest != "" && input.Digest != actualDigest {
+		return entity.Artifact{}, errs.ErrInvalid
+	}
+	input.Digest = actualDigest
+	verdict, err := artifactpolicy.InspectReader(input.FileName, input.MediaType, input.Reader, input.SizeBytes)
+	if err != nil {
+		return entity.Artifact{}, errs.ErrUnavailable
+	}
 	input.MediaType = verdict.MediaType
 	input.ScanState = verdict.ScanState
 	input.PreviewState = verdict.PreviewState
-	input.Reader = bytes.NewReader(body)
+	if _, err := input.Reader.Seek(0, io.SeekStart); err != nil {
+		return entity.Artifact{}, errs.ErrUnavailable
+	}
 	mutation.Operation = "artifact.upload"
 	mutation.IntentDigest = digest(struct {
 		ProjectRef, RunRef, FileName, MediaType, Digest string

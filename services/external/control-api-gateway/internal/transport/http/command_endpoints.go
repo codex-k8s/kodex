@@ -1,6 +1,9 @@
 package httptransport
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -17,6 +20,12 @@ const (
 	scheduleActionEnable  = "ENABLE"
 	scheduleActionPause   = "PAUSE"
 	scheduleActionArchive = "ARCHIVE"
+	maximumArtifactBytes  = 512 << 20
+)
+
+var (
+	errArtifactContentLengthMismatch = errors.New("artifact content length mismatch")
+	errArtifactBodyRead              = errors.New("artifact request body read failed")
 )
 
 func (server *Server) CompleteOnboarding(w http.ResponseWriter, r *http.Request, p generated.CompleteOnboardingParams) {
@@ -437,7 +446,7 @@ func (server *Server) ResolveOwnerGate(w http.ResponseWriter, r *http.Request, r
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.ResolveOwnerGate(r.Context(), &controlplanev1.ResolveOwnerGateRequest{Mutation: m, GateRef: ref, Decision: gateDecision(string(body.Decision)), Comment: stringValue(body.Comment)})
+	response, err := server.control.Command.ResolveOwnerGate(r.Context(), &controlplanev1.ResolveOwnerGateRequest{Mutation: m, GateRef: ref, Decision: gateDecision(string(body.Decision)), Comment: stringValue(body.Comment), ArtifactRefs: sliceOrEmpty(body.ArtifactRefs)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -660,7 +669,7 @@ func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, pro
 		writeLocalProblem(w, http.StatusLengthRequired, "CONTENT_LENGTH_REQUIRED", false)
 		return
 	}
-	if r.ContentLength > 16<<20 {
+	if r.ContentLength > maximumArtifactBytes {
 		writeLocalProblem(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", false)
 		return
 	}
@@ -677,32 +686,26 @@ func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, pro
 		writeRPCProblem(w, err)
 		return
 	}
-	buffer := make([]byte, 64<<10)
-	reader := io.LimitReader(r.Body, (16<<20)+1)
-	var received int64
-	for {
-		count, readErr := reader.Read(buffer)
-		if count > 0 {
-			received += int64(count)
-			if received > r.ContentLength || received > 16<<20 {
-				writeLocalProblem(w, http.StatusBadRequest, "CONTENT_LENGTH_MISMATCH", false)
-				return
-			}
-			if err := stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Chunk{Chunk: append([]byte(nil), buffer[:count]...)}}); err != nil {
-				writeRPCProblem(w, err)
-				return
-			}
-		}
-		if readErr == io.EOF {
-			break
-		}
-		if readErr != nil {
-			writeLocalProblem(w, http.StatusBadRequest, "REQUEST_BODY_READ_FAILED", false)
-			return
-		}
-	}
-	if received != r.ContentLength {
+	received, sha256Digest, err := forwardArtifactBody(r.Body, r.ContentLength, func(chunk []byte) error {
+		return stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Chunk{Chunk: chunk}})
+	})
+	if errors.Is(err, errArtifactContentLengthMismatch) {
 		writeLocalProblem(w, http.StatusBadRequest, "CONTENT_LENGTH_MISMATCH", false)
+		return
+	}
+	if errors.Is(err, errArtifactBodyRead) {
+		writeLocalProblem(w, http.StatusBadRequest, "REQUEST_BODY_READ_FAILED", false)
+		return
+	}
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	if err := stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Commit{Commit: &controlplanev1.UploadArtifactCommit{
+		SizeBytes: received,
+		Sha256:    sha256Digest,
+	}}}); err != nil {
+		writeRPCProblem(w, err)
 		return
 	}
 	response, err := stream.CloseAndRecv()
@@ -711,6 +714,39 @@ func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, pro
 		return
 	}
 	writeMessage(w, http.StatusCreated, response, "artifact", "")
+}
+
+func forwardArtifactBody(reader io.Reader, declaredSize int64, send func([]byte) error) (int64, string, error) {
+	if reader == nil || send == nil || declaredSize < 0 || declaredSize > maximumArtifactBytes {
+		return 0, "", errArtifactContentLengthMismatch
+	}
+	buffer := make([]byte, 64<<10)
+	bounded := io.LimitReader(reader, maximumArtifactBytes+1)
+	digest := sha256.New()
+	var received int64
+	for {
+		count, readErr := bounded.Read(buffer)
+		if count > 0 {
+			received += int64(count)
+			if received > declaredSize || received > maximumArtifactBytes {
+				return received, "", errArtifactContentLengthMismatch
+			}
+			_, _ = digest.Write(buffer[:count])
+			if err := send(append([]byte(nil), buffer[:count]...)); err != nil {
+				return received, "", err
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return received, "", errArtifactBodyRead
+		}
+	}
+	if received != declaredSize {
+		return received, "", errArtifactContentLengthMismatch
+	}
+	return received, hex.EncodeToString(digest.Sum(nil)), nil
 }
 func (server *Server) DownloadArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.DownloadArtifactParams) {
 	purpose := controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_UNSPECIFIED
@@ -730,7 +766,7 @@ func (server *Server) DownloadArtifact(w http.ResponseWriter, r *http.Request, r
 		writeRPCProblem(w, err)
 		return
 	}
-	if len(metadata.GetData()) != 0 || metadata.GetSizeBytes() < 0 || metadata.GetSizeBytes() > 16<<20 {
+	if len(metadata.GetData()) != 0 || metadata.GetSizeBytes() < 0 || metadata.GetSizeBytes() > maximumArtifactBytes {
 		writeLocalProblem(w, http.StatusBadGateway, "UPSTREAM_ARTIFACT_METADATA_INVALID", false)
 		return
 	}
@@ -763,7 +799,7 @@ func (server *Server) DownloadArtifact(w http.ResponseWriter, r *http.Request, r
 			return
 		}
 		written += int64(len(chunk.GetData()))
-		if written > metadata.GetSizeBytes() || written > 16<<20 {
+		if written > metadata.GetSizeBytes() || written > maximumArtifactBytes {
 			return
 		}
 		if len(chunk.GetData()) > 0 {

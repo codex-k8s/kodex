@@ -338,7 +338,10 @@ func TestBuildTurnInputSelectsCodexSandboxFromArtifactCapability(t *testing.T) {
 			execution := testExecution(false)
 			execution.Revision.Capabilities = test.capabilities
 			if test.want == "read-only" {
-				execution.Revision.Artifacts = nil
+				execution.Revision.AttachmentSetRef = ""
+				execution.Revision.AttachmentSetManifestDigest = ""
+				execution.Revision.AttachmentContext = ""
+				execution.Revision.InputArtifacts = nil
 			}
 			manager := newTestManager(t, fake.NewSimpleClientset())
 			input, _, err := manager.BuildTurnInput(execution)
@@ -683,8 +686,12 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 			RevisionDigest: strings.Repeat("a", 64), SystemAssistant: systemAssistant,
 			ImageReference: "registry.example/kodex/roles@" + testDigest, ImageManifestDigest: testDigest,
 			RoleRuntimeContractRevision: 1, RoleRuntimeContractSha256: testContractDigest,
-			Capabilities: []*controlplanev1.PlatformCapability{{Key: runtimecontract.ArtifactCapability}},
-			Artifacts:    []*controlplanev1.Artifact{{Ref: "artifact_abcdefgh", FileName: "brief.txt", MediaType: "text/plain", SizeBytes: 12, Digest: testArtifactDigest, Revision: 1, Version: 1}},
+			Capabilities:     []*controlplanev1.PlatformCapability{{Key: runtimecontract.ArtifactCapability}},
+			AttachmentSetRef: "aset_abcdefgh", AttachmentSetManifestDigest: strings.Repeat("4", 64), AttachmentContext: "RUN_INPUT",
+			InputArtifacts: []*controlplanev1.RuntimeInputArtifact{{
+				Artifact: &controlplanev1.Artifact{Ref: "artifact_abcdefgh", FileName: "brief.txt", MediaType: "text/plain", SizeBytes: 12, Digest: testArtifactDigest, Revision: 1, Version: 1, Source: controlplanev1.ArtifactSource_ARTIFACT_SOURCE_CONTROL_CENTER},
+				Scope:    "INPUT", Position: 1,
+			}},
 			ProviderCredential: &controlplanev1.ProviderCredentialBinding{
 				AccountRef: "pacc_abcdefgh", CredentialRevisionRef: "pcr_abcdefgh", CredentialRevision: 1,
 				SecretName: "runtime-provider-openai-default-r1", SecretUid: "10000000-0000-4000-8000-000000000001",

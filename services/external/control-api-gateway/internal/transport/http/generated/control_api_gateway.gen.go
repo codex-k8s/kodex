@@ -3311,8 +3311,9 @@ type ExplainAccessResult struct {
 
 // GateResolution defines model for GateResolution.
 type GateResolution struct {
-	Comment  *string                `json:"comment,omitempty"`
-	Decision GateResolutionDecision `json:"decision"`
+	ArtifactRefs *[]OpaqueRef           `json:"artifactRefs,omitempty"`
+	Comment      *string                `json:"comment,omitempty"`
+	Decision     GateResolutionDecision `json:"decision"`
 }
 
 // GateResolutionDecision defines model for GateResolution.Decision.

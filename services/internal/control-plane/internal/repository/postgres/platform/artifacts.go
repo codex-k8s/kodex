@@ -1,7 +1,6 @@
 package platform
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -29,14 +28,12 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	if input.SizeBytes > maximumArtifactBytes {
 		return entity.Artifact{}, errs.ErrInvalid
 	}
-	body, err := io.ReadAll(io.LimitReader(input.Reader, maximumArtifactBytes+1))
-	if err != nil || int64(len(body)) != input.SizeBytes {
-		return entity.Artifact{}, errs.ErrInvalid
-	}
-	digest := sha256.Sum256(body)
-	if input.Digest != "sha256:"+hex.EncodeToString(digest[:]) || input.MediaType == "" ||
+	if input.Reader == nil || input.Digest == "" || input.MediaType == "" ||
 		!contains([]string{"CLEAN", "QUARANTINED", "FAILED"}, input.ScanState) ||
 		!contains([]string{"AVAILABLE", "UNAVAILABLE", "BLOCKED"}, input.PreviewState) {
+		return entity.Artifact{}, errs.ErrInvalid
+	}
+	if _, err := input.Reader.Seek(0, io.SeekStart); err != nil {
 		return entity.Artifact{}, errs.ErrInvalid
 	}
 	existing, err := repository.preflightArtifactUpload(ctx, scope, mutation, input)
@@ -51,12 +48,18 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
 	objectKey := artifactObjectKey(scope.organizationRef, input.ProjectRef, ref, input.Digest)
+	contentDigest := sha256.New()
+	stream := &countingReader{reader: io.TeeReader(input.Reader, contentDigest)}
 	objectReceipt, err := repository.objects.Put(ctx, objectstorage.PutInput{
 		Key: objectKey, MediaType: input.MediaType, Digest: input.Digest,
-		SizeBytes: input.SizeBytes, Body: bytes.NewReader(body),
+		SizeBytes: input.SizeBytes, Body: stream,
 	})
 	if err != nil {
 		return entity.Artifact{}, mapObjectStorageError(err)
+	}
+	if stream.read != input.SizeBytes || "sha256:"+hex.EncodeToString(contentDigest.Sum(nil)) != input.Digest {
+		repository.cleanupPreparedObjects(ctx, []objectstorage.Receipt{objectReceipt}, false)
+		return entity.Artifact{}, errs.ErrConflict
 	}
 	keepObject := false
 	defer func() {
@@ -153,6 +156,17 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	keepObject = true
 	_ = runRef
 	return item, nil
+}
+
+type countingReader struct {
+	reader io.Reader
+	read   int64
+}
+
+func (reader *countingReader) Read(target []byte) (int, error) {
+	count, err := reader.reader.Read(target)
+	reader.read += int64(count)
+	return count, err
 }
 
 func (repository *Repository) preflightArtifactUpload(

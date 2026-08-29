@@ -252,7 +252,7 @@ func (server *Server) RetryRun(ctx context.Context, request *controlplanev1.Retr
 }
 
 func (server *Server) ResolveOwnerGate(ctx context.Context, request *controlplanev1.ResolveOwnerGateRequest) (*controlplanev1.ResolveOwnerGateResponse, error) {
-	payload := command.GateResolutionInput{GateRef: request.GetGateRef(), Decision: enumSuffix(request.GetDecision(), "OWNER_GATE_DECISION_"), Comment: request.GetComment()}
+	payload := command.GateResolutionInput{GateRef: request.GetGateRef(), Decision: enumSuffix(request.GetDecision(), "OWNER_GATE_DECISION_"), Comment: request.GetComment(), ArtifactRefs: request.GetArtifactRefs()}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ResolveOwnerGate_FullMethodName, command.ResolveOwnerGate, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err

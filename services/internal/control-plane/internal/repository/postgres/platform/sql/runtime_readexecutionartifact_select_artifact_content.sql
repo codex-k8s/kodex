@@ -25,6 +25,10 @@ JOIN control_plane.runs AS root_run
   ON root_run.id = run.root_run_id
 JOIN control_plane.run_nodes AS node
   ON node.id = lease.node_id
+JOIN control_plane.runtime_revisions AS revision
+  ON revision.id = lease.runtime_revision_id
+LEFT JOIN control_plane.session_turns AS turn
+  ON turn.id = node.turn_id
 JOIN control_plane.agents AS agent
   ON agent.id = node.agent_id
 JOIN control_plane.artifacts AS artifact
@@ -46,14 +50,12 @@ WHERE lease.organization_id = @organization_id::uuid
   AND lease.expires_at > clock_timestamp()
   AND artifact.ref = @artifact_ref
   AND artifact.scan_state = 'CLEAN'
-  AND artifact.lifecycle_state = 'ACTIVE'
-  AND (
-    artifact.ref = ANY(root_run.input_artifact_refs)
-    OR EXISTS (
-      SELECT 1
-      FROM control_plane.artifact_bindings AS binding
-      WHERE binding.artifact_id = artifact.id
-        AND binding.target_kind = 'KNOWLEDGE'
-        AND binding.target_ref = agent.ref
-    )
+  AND artifact.lifecycle_state <> 'PURGED'
+  AND EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(COALESCE(revision.safe_snapshot -> 'artifacts', '[]'::jsonb)) AS exact(item)
+    WHERE exact.item ->> 'ref' = artifact.ref
+      AND exact.item ->> 'digest' = artifact.digest
+      AND (exact.item ->> 'revision')::bigint = artifact.revision
+      AND (exact.item ->> 'version')::bigint = artifact.version
   )

@@ -1190,7 +1190,7 @@ func (repository *Repository) agentsHaveCapabilities(ctx context.Context, tx pgx
 
 func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LaunchRunInput)
-	if !ok || payload.ProjectRef == "" || strings.TrimSpace(payload.Task) == "" || len(payload.Task) > 32768 || len(payload.Title) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) || len(payload.ArtifactRefs) > 50 {
+	if !ok || payload.ProjectRef == "" || strings.TrimSpace(payload.Task) == "" || len(payload.Task) > 32768 || len(payload.Title) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
@@ -1272,16 +1272,15 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	if artifactRefs == nil {
 		artifactRefs = []string{}
 	}
-	var artifactsValid bool
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrunValidateInputArtifacts, pgx.StrictNamedArgs{
-		"organization_id": scope.organizationID,
-		"project_id":      projectID,
-		"artifact_refs":   artifactRefs,
-	}).Scan(&artifactsValid); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+	attachmentContext := "RUN_INPUT"
+	if payload.Target.Type == "WORKFLOW" {
+		attachmentContext = "WORKFLOW_INPUT"
+	} else if payload.SessionRef != "" {
+		attachmentContext = "SESSION_TURN"
 	}
-	if !artifactsValid {
-		return commandOutcome{}, errs.ErrConflict
+	attachmentSet, err := repository.sealAttachmentSet(ctx, tx, scope, projectID, artifactRefs, attachmentContext)
+	if err != nil {
+		return commandOutcome{}, err
 	}
 	var runID string
 	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunsRefProjectIdTargetType, pgx.StrictNamedArgs{
@@ -1296,11 +1295,15 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		"title":               title,
 		"task":                payload.Task,
 		"input":               rawInput,
-		"input_artifact_refs": artifactRefs,
+		"input_artifact_refs": []string{},
 		"initiated_by":        scope.actorID,
 		"concurrency_limit":   runConcurrency,
 	}).Scan(&runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert launched run: %w", mapWriteError(err))
+	}
+	runAttachmentKind := attachmentContext
+	if err := repository.attachSetToRun(ctx, tx, scope, projectID, attachmentSet, runID, runRef, runAttachmentKind); err != nil {
+		return commandOutcome{}, fmt.Errorf("bind run attachment set: %w", err)
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsRootRunId, runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("bind root run lineage: %w", errs.ErrUnavailable)
@@ -1311,8 +1314,11 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	turnRef, _ := newRef("trn")
 	var turnID string
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, runID, scope.actorRef, executionTask, artifactRefs).Scan(&turnID); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, runID, scope.actorRef, executionTask, []string{}).Scan(&turnID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert initial session turn: %w", errs.ErrUnavailable)
+	}
+	if err := repository.attachSetToTurn(ctx, tx, scope, projectID, attachmentSet, turnID, turnRef, "SESSION_TURN"); err != nil {
+		return commandOutcome{}, fmt.Errorf("bind turn attachment set: %w", err)
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
 		return commandOutcome{}, fmt.Errorf("advance run session: %w", errs.ErrUnavailable)
@@ -2006,6 +2012,14 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if !contains(allowed, payload.Decision) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
+	artifactRefs := append([]string(nil), payload.ArtifactRefs...)
+	if artifactRefs == nil {
+		artifactRefs = []string{}
+	}
+	attachmentSet, err := repository.sealAttachmentSet(ctx, tx, scope, projectID, artifactRefs, "OWNER_GATE_MESSAGE")
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	if integrationInvocationID != "" {
 		invocationState, safeErrorCode := "READY", ""
 		if payload.Decision == "REJECT" {
@@ -2025,6 +2039,18 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	}
 	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateOwnerGatesStateDecisionDecisionComment, gateID, nextState, payload.Decision, truncate(payload.Comment, 2000), scope.actorID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if attachmentSet.ID != "" {
+		tag, err := tx.Exec(ctx, queryAttachmentSetsBindGateResolution, pgx.StrictNamedArgs{
+			"attachment_set_id": attachmentSet.ID,
+			"gate_id":           gateID,
+		})
+		if err != nil || tag.RowsAffected() != 1 {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if err := repository.bindAttachmentSet(ctx, tx, scope, projectID, attachmentSet, "OWNER_GATE_MESSAGE", payload.GateRef); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	if _, err := tx.Exec(ctx, queryInteractionCancelPendingGateDeliveries, pgx.StrictNamedArgs{"gate_id": gateID}); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -2054,6 +2080,9 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		if err := tx.QueryRow(ctx, queryCommandsResolvegateInsertChangeRequestTurn, turnRef, scope.organizationID,
 			sessionID, predecessorRunID, scope.actorRef, truncate(comment, 2000)).Scan(&turnID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if err := repository.attachSetToTurn(ctx, tx, scope, projectID, attachmentSet, turnID, turnRef, "SESSION_TURN"); err != nil {
+			return commandOutcome{}, err
 		}
 		if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateChangeRequestSession, sessionID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable

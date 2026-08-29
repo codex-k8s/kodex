@@ -678,6 +678,13 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if artifactRefs == nil {
 		artifactRefs = []string{}
 	}
+	if len(artifactRefs) > 0 && projectID == "" {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	attachmentSet, err := repository.sealAttachmentSet(ctx, tx, scope, projectID, artifactRefs, "ASSISTANT_MESSAGE")
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	var turnNumber int64
 	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectSessionsId, sessionID).Scan(&turnNumber); err != nil {
 		return commandOutcome{}, fmt.Errorf("lock system assistant session: %w", errs.ErrUnavailable)
@@ -687,14 +694,20 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertRunsRefProjectIdTargetType, runRef, scope.organizationID, projectID, sessionID, payload.Content, scope.actorID).Scan(&runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert system assistant run: %w", errs.ErrUnavailable)
 	}
+	if err := repository.attachSetToRun(ctx, tx, scope, projectID, attachmentSet, runID, runRef, "RUN_INPUT"); err != nil {
+		return commandOutcome{}, fmt.Errorf("bind system assistant run attachment set: %w", err)
+	}
 	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateRunsRootRunIdStartedAt, runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("start system assistant root run: %w", errs.ErrUnavailable)
 	}
 	var turnID string
 	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertSessionTurnsRefSessionIdActorKind,
-		turnRef, scope.organizationID, sessionID, runID, turnNumber, scope.actorRef, payload.Content, artifactRefs,
+		turnRef, scope.organizationID, sessionID, runID, turnNumber, scope.actorRef, payload.Content, []string{},
 	).Scan(&turnID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert system assistant user turn: %w", errs.ErrUnavailable)
+	}
+	if err := repository.attachSetToTurn(ctx, tx, scope, projectID, attachmentSet, turnID, turnRef, "ASSISTANT_MESSAGE"); err != nil {
+		return commandOutcome{}, fmt.Errorf("bind system assistant message attachment set: %w", err)
 	}
 	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
 		return commandOutcome{}, fmt.Errorf("advance system assistant session: %w", errs.ErrUnavailable)

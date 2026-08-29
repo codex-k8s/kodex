@@ -13,7 +13,10 @@ SELECT artifact.ref,
        artifact.size_bytes,
        artifact.revision,
        artifact.version,
+       artifact.lifecycle_state,
        artifact.created_at,
+       artifact.deleted_at,
+       artifact.purge_after,
        COALESCE((
            SELECT array_agg(binding.target_ref ORDER BY binding.created_at)
            FROM control_plane.artifact_bindings binding

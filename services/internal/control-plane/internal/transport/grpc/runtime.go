@@ -112,6 +112,9 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	result.EnvironmentBindingRef = mapString(values, "environmentBindingRef")
 	result.EnvironmentBindingVersion = mapInt64(values, "environmentBindingVersion")
 	result.EnvironmentBindingDigest = mapString(values, "environmentBindingDigest")
+	result.AttachmentSetRef = mapString(values, "attachmentSetRef")
+	result.AttachmentSetManifestDigest = mapString(values, "attachmentSetManifestDigest")
+	result.AttachmentContext = mapString(values, "attachmentContext")
 	if environmentValues, ok := values["environmentValues"].([]runtimecontract.RuntimeEnvironmentValue); ok {
 		for _, item := range environmentValues {
 			result.EnvironmentValues = append(result.EnvironmentValues, &controlplanev1.RuntimeEnvironmentValue{Name: item.Name, Value: item.Value})
@@ -141,7 +144,7 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	}
 	if artifacts, ok := values["artifacts"].([]map[string]any); ok {
 		for _, artifact := range artifacts {
-			result.Artifacts = append(result.Artifacts, &controlplanev1.Artifact{
+			item := &controlplanev1.Artifact{
 				Ref:       mapString(artifact, "ref"),
 				FileName:  mapString(artifact, "fileName"),
 				MediaType: mapString(artifact, "mediaType"),
@@ -151,6 +154,12 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 				Version:   mapInt64(artifact, "version"),
 				ScanState: controlplanev1.ArtifactScanState_ARTIFACT_SCAN_STATE_CLEAN,
 				Source:    artifactSource(mapString(artifact, "source")),
+			}
+			result.Artifacts = append(result.Artifacts, item)
+			result.InputArtifacts = append(result.InputArtifacts, &controlplanev1.RuntimeInputArtifact{
+				Artifact: item,
+				Scope:    mapString(artifact, "scope"),
+				Position: mapInt64(artifact, "position"),
 			})
 		}
 	}
