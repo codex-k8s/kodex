@@ -35,9 +35,11 @@ function delay(durationMs: number): Promise<void> {
 function mergeConversation(
   previous: AssistantConversation | undefined,
   incoming: AssistantConversation,
+  authoritativeTurns = false,
 ): AssistantConversation {
   if (!previous) return incoming;
   if (incoming.version < previous.version) return previous;
+  if (authoritativeTurns) return incoming;
   const turns = new Map(previous.turns.map((turn) => [turn.ref, turn]));
   for (const turn of incoming.turns) turns.set(turn.ref, turn);
   return {
@@ -105,7 +107,11 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         ]),
       );
       conversations.value = conversationValues.map((conversation) =>
-        mergeConversation(previousByRef.get(conversation.ref), conversation),
+        mergeConversation(
+          previousByRef.get(conversation.ref),
+          conversation,
+          true,
+        ),
       );
       selectMatchingConversation();
     } catch (error) {
@@ -145,6 +151,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   function upsertConversation(
     value: AssistantConversation,
     select = true,
+    authoritativeTurns = false,
   ): AssistantConversation {
     const index = conversations.value.findIndex(
       (item) => item.ref === value.ref,
@@ -152,6 +159,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     const merged = mergeConversation(
       index >= 0 ? conversations.value[index] : undefined,
       value,
+      authoritativeTurns,
     );
     if (index >= 0) conversations.value[index] = merged;
     else conversations.value.push(merged);
@@ -191,7 +199,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       )
         continue;
 
-      const merged = upsertConversation(incoming, false);
+      const merged = upsertConversation(incoming, false, true);
       const submitted = merged.turns.find(
         (turn) => turn.ref === submittedTurn.ref,
       );
@@ -263,6 +271,11 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         ...conversation.turns.map((turn) => turn.sequence),
       );
       const appended = await appendTurn(conversation.ref, normalized);
+      conversations.value = conversations.value.map((item) =>
+        item.ref === conversation.ref
+          ? { ...item, turns: item.turns.filter((turn) => !turn.plan) }
+          : item,
+      );
       upsertConversation(appended);
       const turn = [...appended.turns]
         .filter(

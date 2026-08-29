@@ -120,10 +120,12 @@ describe("assistant workspace store", () => {
   });
 
   it("создаёт server-context conversation перед первым сообщением", async () => {
-    createConversationMock.mockResolvedValue(conversation());
+    const created = { ...conversation(), turns: [] };
+    createConversationMock.mockResolvedValue(created);
     appendTurnMock.mockResolvedValue({
-      ...conversation(),
-      turns: [...conversation().turns, userTurn("QUEUED")],
+      ...created,
+      version: 3,
+      turns: [userTurn("QUEUED")],
     });
     const store = useAssistantStore();
     store.setContext(context, "prj_sales");
@@ -135,7 +137,7 @@ describe("assistant workspace store", () => {
       "cnv_sales",
       "Создай сотрудника",
     );
-    expect(store.selectedConversation?.turns).toHaveLength(2);
+    expect(store.selectedConversation?.turns).toHaveLength(1);
   });
 
   it("подхватывает terminal ответ без перезагрузки страницы", async () => {
@@ -143,18 +145,17 @@ describe("assistant workspace store", () => {
     const queued = {
       ...initial,
       version: 3,
-      turns: [...initial.turns, userTurn("QUEUED")],
+      turns: [userTurn("QUEUED")],
     };
     const running = {
       ...queued,
       version: 4,
-      turns: [...initial.turns, userTurn("RUNNING")],
+      turns: [userTurn("RUNNING")],
     };
     const completed = {
       ...queued,
       version: 5,
       turns: [
-        ...initial.turns,
         userTurn("COMPLETED"),
         {
           ref: "trn_result",
@@ -178,6 +179,9 @@ describe("assistant workspace store", () => {
     store.selectedRef = initial.ref;
 
     await store.send("Создай сотрудника");
+    expect(
+      store.selectedConversation?.turns.some((turn) => Boolean(turn.plan)),
+    ).toBe(false);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(store.selectedConversation?.version).toBe(3);
     await vi.advanceTimersByTimeAsync(2_000);
