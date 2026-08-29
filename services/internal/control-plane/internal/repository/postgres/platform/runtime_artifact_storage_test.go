@@ -14,7 +14,7 @@ func TestResultContainsPreparedObjects(t *testing.T) {
 	t.Parallel()
 	digest := "sha256:" + strings.Repeat("a", 64)
 	prepared := []objectstorage.Receipt{{
-		Key: artifactObjectKey("org-1", "project-1", "art-1", digest), Digest: digest,
+		Key: artifactObjectKey("org-1", "subject-1", "project-1", "art-1", digest), Digest: digest,
 	}}
 	if !resultContainsPreparedObjects(command.Result{CreatedRefs: []string{"art-1"}}, prepared) {
 		t.Fatal("committed artifact was not recognized")

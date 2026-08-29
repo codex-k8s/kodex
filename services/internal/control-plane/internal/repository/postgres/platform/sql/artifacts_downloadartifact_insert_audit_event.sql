@@ -14,7 +14,7 @@ INSERT INTO control_plane.audit_events(
 VALUES (
     @audit_ref,
     @organization_id::uuid,
-    @project_id::uuid,
+    NULLIF(@project_id, '')::uuid,
     @subject_id::uuid,
     @action,
     'ARTIFACT',

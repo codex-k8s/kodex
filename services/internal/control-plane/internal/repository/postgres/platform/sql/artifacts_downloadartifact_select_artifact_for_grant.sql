@@ -1,6 +1,6 @@
 -- name: artifacts_downloadartifact_select_artifact_for_grant :one
 SELECT ar.id,
-       ar.project_id,
+       COALESCE(ar.project_id::text, ''),
        ar.version,
        ar.scan_state
 FROM control_plane.artifacts ar
@@ -9,6 +9,7 @@ WHERE ar.organization_id = @organization_id::uuid
   AND ar.lifecycle_state = 'ACTIVE'
   AND (
       @platform_role IN ('OWNER', 'ADMINISTRATOR')
+      OR (ar.project_id IS NULL AND ar.created_by = @subject_id::uuid)
       OR EXISTS (
           SELECT 1
           FROM control_plane.memberships m

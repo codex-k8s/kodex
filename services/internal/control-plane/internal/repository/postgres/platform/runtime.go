@@ -670,7 +670,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	for _, artifact := range payload.Artifacts {
 		projectID := stringMap(lease, "projectID")
 		prepared, preparedErr := preparedArtifact(artifact)
-		if preparedErr != nil || projectID == "" || len(payload.Artifacts) > 16 ||
+		if preparedErr != nil || len(payload.Artifacts) > 16 ||
 			artifact.FileName == "" || safeFileName(artifact.FileName) != artifact.FileName ||
 			artifact.SizeBytes < 0 || artifact.SizeBytes > 1<<20 {
 			return commandOutcome{}, errs.ErrInvalid
@@ -679,7 +679,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		if artifactBytes > maximumArtifactBytes {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		if prepared.ObjectKey != artifactObjectKey(scope.organizationRef, stringMap(lease, "projectRef"), prepared.Ref, prepared.Digest) {
+		if prepared.ObjectKey != artifactObjectKey(scope.organizationRef, scope.actorRef, stringMap(lease, "projectRef"), prepared.Ref, prepared.Digest) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		receiptRef, _ := newRef("obj")
@@ -687,7 +687,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionInsertArtifactsRefProjectIdNodeId,
 			prepared.Ref, scope.organizationID, projectID, lease["runID"], lease["nodeID"],
 			artifact.FileName, prepared.MediaType, artifact.SizeBytes, prepared.Digest,
-			prepared.ScanState, receiptRef, prepared.PreviewState, scope.actorID).Scan(&artifactID); err != nil {
+			prepared.ScanState, receiptRef, prepared.PreviewState).Scan(&artifactID); err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertArtifactContentArtifactId,

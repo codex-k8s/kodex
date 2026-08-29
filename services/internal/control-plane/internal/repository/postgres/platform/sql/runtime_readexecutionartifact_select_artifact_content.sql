@@ -1,6 +1,6 @@
 -- name: runtime_readexecutionartifact_select_artifact_content :one
 SELECT artifact.ref,
-       project.ref,
+       COALESCE(project.ref, ''),
        COALESCE(artifact_run.ref, ''),
        COALESCE(artifact_session.ref, ''),
        artifact.file_name,
@@ -33,8 +33,8 @@ JOIN control_plane.agents AS agent
   ON agent.id = node.agent_id
 JOIN control_plane.artifacts AS artifact
   ON artifact.organization_id = lease.organization_id
- AND artifact.project_id = run.project_id
-JOIN control_plane.projects AS project
+ AND artifact.project_id IS NOT DISTINCT FROM run.project_id
+LEFT JOIN control_plane.projects AS project
   ON project.id = artifact.project_id
 JOIN control_plane.artifact_content AS content
   ON content.artifact_id = artifact.id
@@ -56,6 +56,5 @@ WHERE lease.organization_id = @organization_id::uuid
     FROM jsonb_array_elements(COALESCE(revision.safe_snapshot -> 'artifacts', '[]'::jsonb)) AS exact(item)
     WHERE exact.item ->> 'ref' = artifact.ref
       AND exact.item ->> 'digest' = artifact.digest
-      AND (exact.item ->> 'revision')::bigint = artifact.revision
-      AND (exact.item ->> 'version')::bigint = artifact.version
+      AND exact.item ->> 'digest' = content.digest
   )

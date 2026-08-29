@@ -1,6 +1,6 @@
 -- name: commands_emitrunevent_select_artifact_delta :one
 SELECT artifact.ref,
-       project.ref,
+       COALESCE(project.ref, ''),
        COALESCE(run.ref, ''),
        COALESCE(session.ref, ''),
        COALESCE(node.ref, ''),
@@ -25,7 +25,7 @@ SELECT artifact.ref,
        ), '{}'::text[]),
        false
 FROM control_plane.artifacts artifact
-JOIN control_plane.projects project ON project.id = artifact.project_id
+LEFT JOIN control_plane.projects project ON project.id = artifact.project_id
 LEFT JOIN control_plane.runs run ON run.id = artifact.run_id
 LEFT JOIN control_plane.sessions session ON session.id = run.session_id
 LEFT JOIN control_plane.run_nodes node ON node.id = artifact.node_id

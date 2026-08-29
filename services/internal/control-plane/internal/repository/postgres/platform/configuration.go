@@ -678,9 +678,6 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if artifactRefs == nil {
 		artifactRefs = []string{}
 	}
-	if len(artifactRefs) > 0 && projectID == "" {
-		return commandOutcome{}, errs.ErrInvalid
-	}
 	attachmentSet, err := repository.sealAttachmentSet(ctx, tx, scope, projectID, artifactRefs, "ASSISTANT_MESSAGE")
 	if err != nil {
 		return commandOutcome{}, err

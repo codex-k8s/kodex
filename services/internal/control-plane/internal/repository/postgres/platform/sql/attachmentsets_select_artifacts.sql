@@ -15,8 +15,12 @@ SELECT artifact.id::text,
 FROM requested
 JOIN control_plane.artifacts AS artifact
   ON artifact.organization_id = @organization_id::uuid
- AND artifact.project_id = @project_id::uuid
+ AND artifact.project_id IS NOT DISTINCT FROM NULLIF(@project_id, '')::uuid
  AND artifact.ref = requested.ref
  AND artifact.scan_state = 'CLEAN'
  AND artifact.lifecycle_state = 'ACTIVE'
+ AND (
+      NULLIF(@project_id, '') IS NOT NULL
+      OR artifact.created_by = @created_by::uuid
+ )
 ORDER BY requested.position;

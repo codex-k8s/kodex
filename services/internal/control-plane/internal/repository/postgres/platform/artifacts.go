@@ -47,7 +47,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	if err != nil {
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
-	objectKey := artifactObjectKey(scope.organizationRef, input.ProjectRef, ref, input.Digest)
+	objectKey := artifactObjectKey(scope.organizationRef, scope.actorRef, input.ProjectRef, ref, input.Digest)
 	contentDigest := sha256.New()
 	stream := &countingReader{reader: io.TeeReader(input.Reader, contentDigest)}
 	objectReceipt, err := repository.objects.Put(ctx, objectstorage.PutInput{
@@ -93,15 +93,24 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
-	projectID := mustProjectID(ctx, tx, scope.organizationID, input.ProjectRef)
-	if projectID == "" {
-		return entity.Artifact{}, errs.ErrNotFound
-	}
-	if err := requireProjectPermission(ctx, tx, scope, projectID, "MANAGE_ARTIFACTS"); err != nil {
-		return entity.Artifact{}, err
+	projectID := ""
+	if input.ProjectRef != "" {
+		projectID = mustProjectID(ctx, tx, scope.organizationID, input.ProjectRef)
+		if projectID == "" {
+			return entity.Artifact{}, errs.ErrNotFound
+		}
+		if err := requireProjectPermission(ctx, tx, scope, projectID, "MANAGE_ARTIFACTS"); err != nil {
+			return entity.Artifact{}, err
+		}
+	} else if input.RunRef != "" {
+		return entity.Artifact{}, errs.ErrInvalid
 	}
 	fileName := safeFileName(input.FileName)
-	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, projectID,
+	lockScopeID := projectID
+	if lockScopeID == "" {
+		lockScopeID = scope.actorID
+	}
+	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, lockScopeID,
 		"artifact.upload.filename", fileName); err != nil {
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
@@ -200,12 +209,17 @@ func (repository *Repository) preflightArtifactUpload(
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, errs.ErrUnavailable
 	}
-	projectID := mustProjectID(ctx, tx, scope.organizationID, input.ProjectRef)
-	if projectID == "" {
-		return nil, errs.ErrNotFound
-	}
-	if err := requireProjectPermission(ctx, tx, scope, projectID, "MANAGE_ARTIFACTS"); err != nil {
-		return nil, err
+	projectID := ""
+	if input.ProjectRef != "" {
+		projectID = mustProjectID(ctx, tx, scope.organizationID, input.ProjectRef)
+		if projectID == "" {
+			return nil, errs.ErrNotFound
+		}
+		if err := requireProjectPermission(ctx, tx, scope, projectID, "MANAGE_ARTIFACTS"); err != nil {
+			return nil, err
+		}
+	} else if input.RunRef != "" {
+		return nil, errs.ErrInvalid
 	}
 	if input.RunRef != "" {
 		var runID, rootRunID, runRef, sessionRef string
@@ -220,11 +234,13 @@ func (repository *Repository) preflightArtifactUpload(
 	return nil, nil
 }
 
-func artifactObjectKey(organizationRef, projectRef, artifactRef, digest string) string {
-	return strings.Join([]string{
-		"organizations", organizationRef, "projects", projectRef, "artifacts", artifactRef,
-		strings.TrimPrefix(digest, "sha256:"),
-	}, "/")
+func artifactObjectKey(organizationRef, actorRef, projectRef, artifactRef, digest string) string {
+	scopeKind, scopeRef := "projects", projectRef
+	if projectRef == "" {
+		scopeKind, scopeRef = "subjects", actorRef
+	}
+	return strings.Join([]string{"organizations", organizationRef, scopeKind, scopeRef, "artifacts", artifactRef,
+		strings.TrimPrefix(digest, "sha256:")}, "/")
 }
 
 func mapObjectStorageError(err error) error {
@@ -263,6 +279,12 @@ func (repository *Repository) PurgeArtifact(ctx context.Context, principal value
 		return receipt.LifecycleState, nil
 	}
 	if err := repository.objects.Delete(ctx, receipt.ObjectKey, receipt.ObjectVersion); err != nil && !errors.Is(err, objectstorage.ErrNotFound) {
+		return "", mapObjectStorageError(err)
+	}
+	if _, err := repository.objects.Head(ctx, receipt.ObjectKey, receipt.ObjectVersion); !errors.Is(err, objectstorage.ErrNotFound) {
+		if err == nil {
+			return "", errs.ErrConflict
+		}
 		return "", mapObjectStorageError(err)
 	}
 	return repository.finalizeArtifactPurge(ctx, scope, mutation, receipt)
@@ -384,7 +406,7 @@ func (repository *Repository) finalizeArtifactPurge(ctx context.Context, scope s
 		"operation":       mutation.Operation,
 		"idempotency_key": mutation.IdempotencyKey,
 		"intent_digest":   mutation.IntentDigest,
-		"stored_result":   encoded,
+		"response_payload": encoded,
 	})
 	if err != nil || updated.RowsAffected() != 1 {
 		return "", errs.ErrConflict

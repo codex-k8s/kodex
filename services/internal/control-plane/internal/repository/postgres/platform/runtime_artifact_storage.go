@@ -100,7 +100,7 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 			return nil, errs.ErrUnavailable
 		}
 		digestValue := "sha256:" + digestHex
-		key := artifactObjectKey(scope.organizationRef, stringMap(lease, "projectRef"), ref, digestValue)
+		key := artifactObjectKey(scope.organizationRef, scope.actorRef, stringMap(lease, "projectRef"), ref, digestValue)
 		receipt, putErr := repository.objects.Put(ctx, objectstorage.PutInput{
 			Key: key, MediaType: verdict.MediaType, Digest: digestValue,
 			SizeBytes: artifact.SizeBytes, Body: bytes.NewReader(artifact.Content),

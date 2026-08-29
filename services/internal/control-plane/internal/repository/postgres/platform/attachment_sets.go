@@ -55,6 +55,7 @@ func (repository *Repository) sealAttachmentSet(
 	rows, err := tx.Query(ctx, queryAttachmentSetsSelectArtifacts, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"project_id":      projectID,
+		"created_by":      scope.actorID,
 		"artifact_refs":   artifactRefs,
 	})
 	if err != nil {

@@ -49,12 +49,12 @@ FROM (
   WHERE @resource_kind = 'OWNER_GATE' AND gate.organization_id = @organization_id::uuid
     AND gate.ref = @resource_ref
   UNION ALL
-  SELECT artifact.id::text, p.id::text, p.ref, owner_subject.ref,
+  SELECT artifact.id::text, COALESCE(p.id::text, ''), COALESCE(p.ref, ''), owner_subject.ref,
          jsonb_strip_nulls(jsonb_build_object('PROJECT', p.ref, 'RUN', run.ref,
            'AGENT', CASE WHEN run.target_type = 'AGENT' THEN run.target_ref END,
            'WORKFLOW', CASE WHEN run.target_type = 'WORKFLOW' THEN run.target_ref END))
   FROM control_plane.artifacts artifact
-  JOIN control_plane.projects p ON p.id = artifact.project_id
+  LEFT JOIN control_plane.projects p ON p.id = artifact.project_id
   JOIN control_plane.subjects owner_subject ON owner_subject.id = artifact.created_by
   LEFT JOIN control_plane.runs run ON run.id = artifact.run_id
   WHERE @resource_kind = 'ARTIFACT' AND artifact.organization_id = @organization_id::uuid

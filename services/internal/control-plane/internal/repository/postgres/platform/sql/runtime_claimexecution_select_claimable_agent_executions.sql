@@ -78,17 +78,20 @@ SELECT n.id::text,
                    JOIN control_plane.artifacts AS artifact ON artifact.id = item.artifact_id
                    JOIN control_plane.artifact_content AS content ON content.artifact_id = artifact.id
                    WHERE item.attachment_set_id = input_attachment_set.id
-                     AND artifact.lifecycle_state <> 'PURGED'
+                     AND artifact.scan_state = 'CLEAN'
+                     AND artifact.lifecycle_state = 'ACTIVE'
+                     AND artifact.revision = item.artifact_revision
+                     AND artifact.version = item.artifact_version
 
                    UNION ALL
 
-                   SELECT previous_artifact.ref,
-                          previous_artifact.file_name,
-                          previous_artifact.media_type,
-                          previous_artifact.size_bytes,
-                          previous_artifact.digest,
-                          previous_artifact.revision,
-                          previous_artifact.version,
+                   SELECT previous_item.artifact_ref,
+                          previous_item.file_name,
+                          previous_item.media_type,
+                          previous_item.size_bytes,
+                          previous_item.digest,
+                          previous_item.artifact_revision,
+                          previous_item.artifact_version,
                           previous_artifact.source,
                           'SESSION'::text AS usage_scope,
                           row_number() OVER (
@@ -110,6 +113,8 @@ SELECT n.id::text,
                      AND (input_attachment_set.id IS NULL OR previous_set.id <> input_attachment_set.id)
                      AND previous_artifact.scan_state = 'CLEAN'
                      AND previous_artifact.lifecycle_state = 'ACTIVE'
+                     AND previous_artifact.revision = previous_item.artifact_revision
+                     AND previous_artifact.version = previous_item.artifact_version
 
                    UNION ALL
 
@@ -360,15 +365,15 @@ LEFT JOIN LATERAL (
            artifact.manifest_digest,
            artifact.role_runtime_contract_revision,
            artifact.role_runtime_contract_sha256
-    FROM control_plane.role_image_recipes recipe
-    JOIN control_plane.image_artifacts artifact ON artifact.id = recipe.active_image_artifact_id
-    WHERE recipe.organization_id = r.organization_id
-      AND recipe.role_definition_id = rd.id
+    FROM control_plane.image_artifacts artifact
+    JOIN control_plane.role_image_recipes recipe ON recipe.id = artifact.recipe_id
+    WHERE artifact.id = runtime_environment.role_image_artifact_id
+      AND artifact.organization_id = r.organization_id
+      AND recipe.project_id = r.project_id
       AND recipe.state = 'ACTIVE'
       AND artifact.admission_state = 'ACCEPTED'
       AND artifact.promotion_state = 'PROMOTED'
       AND artifact.promoted_reference <> ''
-    ORDER BY recipe.updated_at DESC, recipe.created_at DESC
     LIMIT 1
 ) role_image ON true
 WHERE n.organization_id = $1::uuid
@@ -376,6 +381,7 @@ WHERE n.organization_id = $1::uuid
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
   AND COALESCE(session_storage.state, 'LIVE') = 'LIVE'
+  AND (runtime_environment.role_image_artifact_id IS NULL OR role_image.artifact_id IS NOT NULL)
   AND (
       input_attachment_set.id IS NULL
       OR input_attachment_set.item_count = (
@@ -384,7 +390,10 @@ WHERE n.organization_id = $1::uuid
           JOIN control_plane.artifacts AS input_artifact ON input_artifact.id = input_item.artifact_id
           JOIN control_plane.artifact_content AS input_content ON input_content.artifact_id = input_artifact.id
           WHERE input_item.attachment_set_id = input_attachment_set.id
-            AND input_artifact.lifecycle_state <> 'PURGED'
+            AND input_artifact.scan_state = 'CLEAN'
+            AND input_artifact.lifecycle_state = 'ACTIVE'
+            AND input_artifact.revision = input_item.artifact_revision
+            AND input_artifact.version = input_item.artifact_version
       )
   )
   AND NOT EXISTS (

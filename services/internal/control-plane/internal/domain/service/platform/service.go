@@ -335,7 +335,8 @@ func (service *Service) UploadArtifact(ctx context.Context, p value.Principal, m
 	if err != nil {
 		return entity.Artifact{}, err
 	}
-	if input.SizeBytes < 0 || input.SizeBytes > repository.MaximumArtifactBytes || input.Reader == nil || strings.TrimSpace(input.ProjectRef) == "" {
+	if input.SizeBytes < 0 || input.SizeBytes > repository.MaximumArtifactBytes || input.Reader == nil ||
+		(strings.TrimSpace(input.ProjectRef) == "" && strings.TrimSpace(input.RunRef) != "") {
 		return entity.Artifact{}, errs.ErrInvalid
 	}
 	if _, err := input.Reader.Seek(0, io.SeekStart); err != nil {

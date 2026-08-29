@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	_ "embed"
@@ -2458,6 +2459,10 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.assistant.plan.propose",
 	}, "runtime-controller")
+	runtimeReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.artifact.read",
+	}, "runtime-controller")
 	toolWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.tool-call.record",
@@ -2506,6 +2511,14 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if err != nil {
 		t.Fatalf("create assistant conversation: %v", err)
 	}
+	assistantInputBody := "Approved organization policy\n"
+	assistantInput, err := service.UploadArtifact(ctx, owner, value.Mutation{IdempotencyKey: "assistant-artifact-upload-1"}, platformrepo.ArtifactUpload{
+		FileName: "organization-policy.txt", MediaType: "text/plain",
+		SizeBytes: int64(len(assistantInputBody)), Reader: strings.NewReader(assistantInputBody),
+	})
+	if err != nil || assistantInput.ProjectRef != "" || assistantInput.ScanState != "CLEAN" {
+		t.Fatalf("upload organization-scoped assistant artifact: artifact=%#v err=%v", assistantInput, err)
+	}
 	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
 	if err != nil {
 		t.Fatalf("resolve owner readback: %v", err)
@@ -2523,7 +2536,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	}
 	turn, err := service.Execute(ctx, command.Command{Kind: command.AddAssistantTurn, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-turn-1"}, Payload: command.AssistantTurnInput{
-			ConversationRef: created.Conversation.Ref, Content: "Create a sales project",
+			ConversationRef: created.Conversation.Ref, Content: "Create a sales project", ArtifactRefs: []string{assistantInput.Ref},
 		}})
 	if err != nil || turn.Plan != nil {
 		t.Fatalf("queue assistant turn without keyword fallback: plan=%#v err=%v", turn.Plan, err)
@@ -2541,6 +2554,50 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	lease := claimed.RuntimeItems[0]
 	if stringMap(lease, "projectRef") != projectRef {
 		t.Fatalf("assistant runtime lost project binding: got=%q want=%q", stringMap(lease, "projectRef"), projectRef)
+	}
+	artifactCatalog, ok := lease["artifacts"].([]map[string]any)
+	if !ok || len(artifactCatalog) != 1 || stringMap(artifactCatalog[0], "ref") != assistantInput.Ref {
+		t.Fatalf("assistant runtime lost organization attachment snapshot: %#v", lease["artifacts"])
+	}
+	inputVersion := assistantInput.Version
+	deletedInput, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-1", ExpectedVersion: &inputVersion},
+		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref},
+	})
+	if err != nil || deletedInput.Artifact == nil || deletedInput.Artifact.LifecycleState != "DELETED" {
+		t.Fatalf("soft-delete claimed assistant input: artifact=%#v err=%v", deletedInput.Artifact, err)
+	}
+	runtimeInput, err := service.ReadExecutionArtifact(ctx, runtimeReader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), assistantInput.Ref)
+	if err != nil {
+		t.Fatalf("read soft-deleted artifact from existing runtime snapshot: %v", err)
+	}
+	runtimeInputBody, readErr := io.ReadAll(runtimeInput.Reader)
+	closeErr := runtimeInput.Reader.Close()
+	if readErr != nil || closeErr != nil || string(runtimeInputBody) != assistantInputBody {
+		t.Fatalf("read assistant snapshot body=%q read_err=%v close_err=%v", string(runtimeInputBody), readErr, closeErr)
+	}
+	deletedVersion := deletedInput.Artifact.Version
+	restoredInput, err := service.Execute(ctx, command.Command{Kind: command.RestoreArtifact, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-restore-1", ExpectedVersion: &deletedVersion},
+		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref},
+	})
+	if err != nil || restoredInput.Artifact == nil || restoredInput.Artifact.LifecycleState != "ACTIVE" {
+		t.Fatalf("restore assistant input: artifact=%#v err=%v", restoredInput.Artifact, err)
+	}
+	restoredVersion := restoredInput.Artifact.Version
+	deletedAgain, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-2", ExpectedVersion: &restoredVersion},
+		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref},
+	})
+	if err != nil || deletedAgain.Artifact == nil || deletedAgain.Artifact.LifecycleState != "DELETED" {
+		t.Fatalf("soft-delete restored assistant input: artifact=%#v err=%v", deletedAgain.Artifact, err)
+	}
+	deletedAgainVersion := deletedAgain.Artifact.Version
+	if _, err := service.PurgeArtifact(ctx, owner, value.Mutation{IdempotencyKey: "assistant-artifact-purge-1", ExpectedVersion: &deletedAgainVersion}, assistantInput.Ref); err != nil {
+		t.Fatalf("purge assistant input: %v", err)
+	}
+	if _, err := service.ReadExecutionArtifact(ctx, runtimeReader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), assistantInput.Ref); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("purged assistant input remained readable from runtime snapshot: %v", err)
 	}
 	planResult, err := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-plan-1"}, Payload: command.ProposeAssistantPlanInput{
@@ -2568,13 +2625,27 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if err := repository.pool.QueryRow(ctx, bootstrapComponentToolCallOutboxReadbackQuery, toolCall.Event.Ref).Scan(&outboxTool); err != nil || outboxTool != "propose_configuration_plan" {
 		t.Fatalf("read assistant tool call outbox projection: tool=%q err=%v", outboxTool, err)
 	}
+	assistantOutputBody := []byte("Assistant result\n")
+	assistantOutputDigest := sha256.Sum256(assistantOutputBody)
 	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-complete-1"}, Payload: command.CompleteExecutionInput{
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
-			Success: true, ResultSummary: "The configuration plan is ready for review.",
+			Success: true, ResultSummary: "The configuration plan is ready for review.", Artifacts: []command.CompletedArtifact{{
+				FileName: "assistant-result.txt", MediaType: "text/plain", SHA256: hex.EncodeToString(assistantOutputDigest[:]),
+				SizeBytes: int64(len(assistantOutputBody)), Content: assistantOutputBody,
+			}},
 		}})
-	if err != nil || completed.Run == nil || completed.Run.State != "SUCCEEDED" {
+	if err != nil || completed.Run == nil || completed.Run.State != "SUCCEEDED" || len(completed.CreatedRefs) != 1 {
 		t.Fatalf("complete direct assistant execution: run=%#v err=%v", completed.Run, err)
+	}
+	assistantOutput, err := service.DownloadArtifact(ctx, owner, completed.CreatedRefs[0], "DOWNLOAD")
+	if err != nil {
+		t.Fatalf("download organization-scoped assistant result: %v", err)
+	}
+	downloadedOutput, readErr := io.ReadAll(assistantOutput.Reader)
+	closeErr = assistantOutput.Reader.Close()
+	if readErr != nil || closeErr != nil || !bytes.Equal(downloadedOutput, assistantOutputBody) {
+		t.Fatalf("read assistant result body=%q read_err=%v close_err=%v", string(downloadedOutput), readErr, closeErr)
 	}
 	expectedPlanVersion := int64(1)
 	validated, err := service.Execute(ctx, command.Command{Kind: command.ValidateAssistantPlan, Principal: owner,

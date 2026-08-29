@@ -180,7 +180,8 @@ CREATE TABLE control_plane.access_bindings (
     CHECK ((scope_kind = 'ORGANIZATION' AND project_id IS NULL AND resource_kind IS NULL AND resource_id IS NULL) OR
            (scope_kind = 'PROJECT' AND project_id IS NOT NULL AND resource_kind IS NULL AND resource_id IS NULL) OR
            (scope_kind = 'RESOURCE_KIND' AND resource_kind IS NOT NULL AND resource_id IS NULL) OR
-           (scope_kind = 'RESOURCE_INSTANCE' AND project_id IS NOT NULL AND resource_kind IS NOT NULL AND resource_id IS NOT NULL)),
+           (scope_kind = 'RESOURCE_INSTANCE' AND resource_kind IS NOT NULL AND resource_id IS NOT NULL AND
+            (project_id IS NOT NULL OR resource_kind IN ('INTEGRATION', 'ARTIFACT')))),
     CHECK (valid_until IS NULL OR valid_from IS NULL OR
            (valid_until > valid_from AND valid_until <= valid_from + interval '366 days'))
 );
