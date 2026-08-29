@@ -171,11 +171,15 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 	if err := tx.QueryRow(ctx, queryRuntimeRecordtoolcallSelectActorAndGrant, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "node_id": lease["nodeID"], "generation": payload.Generation,
 		"grant_ref": payload.GrantRef, "capability_ref": payload.CapabilityRef,
-	}).Scan(&actorRef, &actorName, &systemAssistant, &grantAllowed); err != nil || !grantAllowed {
+	}).Scan(&actorRef, &actorName, &systemAssistant, &grantAllowed); errors.Is(err, pgx.ErrNoRows) {
+		return commandOutcome{}, errs.ErrNotFound
+	} else if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	} else if !grantAllowed {
 		return commandOutcome{}, errs.ErrForbidden
 	}
 	if !toolCapabilityMatches(payload.Tool, payload.CapabilityRef, payload.GrantRef != "", systemAssistant) {
-		return commandOutcome{}, errs.ErrForbidden
+		return commandOutcome{}, errs.ErrInvalid
 	}
 	auditRef, err := newRef("aud")
 	if err != nil {

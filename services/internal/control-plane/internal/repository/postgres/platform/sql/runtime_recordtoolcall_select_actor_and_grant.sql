@@ -4,8 +4,8 @@ SELECT agent.ref,agent.name,agent.system_key='system-assistant',
          WHEN @grant_ref='' THEN true
          ELSE EXISTS (
            SELECT 1
-           FROM jsonb_array_elements(COALESCE(revision.safe_snapshot->'integrationGrants','[]'::jsonb)) grant(value)
-           WHERE grant.value->>'ref'=@grant_ref AND grant.value->>'capabilityKey'=@capability_ref
+           FROM jsonb_array_elements(COALESCE(revision.safe_snapshot->'integrationGrants','[]'::jsonb)) integration_grant(value)
+           WHERE integration_grant.value->>'ref'=@grant_ref AND integration_grant.value->>'capabilityKey'=@capability_ref
          )
        END
 FROM control_plane.runtime_revisions revision

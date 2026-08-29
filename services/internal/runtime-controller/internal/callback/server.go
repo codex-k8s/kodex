@@ -460,6 +460,15 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		err = errors.New("tool is not available")
 	}
 	projectionErr := server.recordToolCall(request.Context(), input, params.Name, params.Arguments, result, err, rpc.ID, time.Since(startedAt))
+	if err != nil {
+		server.logger.WarnContext(request.Context(), "runtime MCP tool operation failed",
+			"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String())
+	}
+	if projectionErr != nil {
+		server.logger.WarnContext(request.Context(), "runtime MCP tool projection failed",
+			"tool", params.Name, "stage", "projection", "grpc_code", status.Code(projectionErr).String(),
+			"failure_class", controlFailureClass(projectionErr))
+	}
 	if projectionErr != nil {
 		err = errors.Join(err, projectionErr)
 	}
@@ -470,6 +479,23 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		encoded, _ = json.Marshal(structured)
 	}
 	server.writeMCPResult(writer, rpc.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "structuredContent": structured, "isError": err != nil})
+}
+
+func controlFailureClass(err error) string {
+	switch status.Convert(err).Message() {
+	case "authority proof permission is rejected":
+		return "authority_proof_permission"
+	case "authority proof request is rejected":
+		return "authority_proof_request"
+	case "internal RPC operation is not registered":
+		return "operation_registry"
+	case "operation is not permitted":
+		return "domain_permission"
+	case "record tool call projection":
+		return "projection_" + strings.ToLower(status.Code(err).String())
+	default:
+		return "control_" + strings.ToLower(status.Code(err).String())
+	}
 }
 
 func decodeMCPToolCallParams(raw json.RawMessage) (mcpToolCallParams, error) {
@@ -549,7 +575,12 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
 		Summary: strings.TrimSpace(summary), Operations: operations,
 	})
-	if err != nil || response.GetPlan().GetRef() == "" || response.GetConversation().GetRef() == "" {
+	if err != nil {
+		server.logger.WarnContext(ctx, "control-plane assistant plan request failed",
+			"grpc_code", status.Code(err).String(), "failure_class", controlFailureClass(err))
+		return nil, status.Error(status.Code(err), "propose assistant plan")
+	}
+	if response.GetPlan().GetRef() == "" || response.GetConversation().GetRef() == "" {
 		return nil, errors.New("propose assistant plan")
 	}
 	return map[string]any{"ok": true, "plan_ref": response.GetPlan().GetRef(), "plan_version": response.GetPlan().GetVersion(), "plan_revision": response.GetPlan().GetRevision(),
@@ -644,7 +675,12 @@ func (server *Server) recordToolCall(ctx context.Context, input runtimecontract.
 		CallRef: callRef, Tool: tool, SafeParameters: structure, CapabilityRef: capabilityRef, GrantRef: grantRef,
 		State: state, DurationMs: duration.Milliseconds(), SafeResult: safeToolCallResult(tool, result, toolErr),
 	})
-	if err != nil || response.GetEvent().GetRef() == "" {
+	if err != nil {
+		server.logger.WarnContext(ctx, "control-plane tool projection request failed",
+			"tool", tool, "grpc_code", status.Code(err).String(), "failure_class", controlFailureClass(err))
+		return status.Error(status.Code(err), "record tool call projection")
+	}
+	if response.GetEvent().GetRef() == "" {
 		return errors.New("record tool call projection")
 	}
 	return nil

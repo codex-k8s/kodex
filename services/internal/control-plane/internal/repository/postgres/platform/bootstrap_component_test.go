@@ -63,6 +63,8 @@ var (
 	bootstrapComponentInstructionDraftReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_effect_receipt_count.sql
 	bootstrapComponentEffectReceiptCountQuery string
+	//go:embed testdata/sql/bootstrap_component_tool_call_outbox_readback.sql
+	bootstrapComponentToolCallOutboxReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_integration_invocation_effect_key.sql
 	bootstrapComponentIntegrationInvocationEffectKeyQuery string
 )
@@ -2265,6 +2267,10 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.assistant.plan.propose",
 	}, "runtime-controller")
+	toolWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.tool-call.record",
+	}, "runtime-controller")
 	warmWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report",
@@ -2350,6 +2356,21 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		}})
 	if err != nil || planResult.Plan == nil || planResult.Plan.State != "DRAFT" {
 		t.Fatalf("propose assistant plan: result=%#v err=%v", planResult.Plan, err)
+	}
+	toolCall, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: toolWorker,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-tool-call-1"}, Payload: command.RunToolCallInput{
+			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
+			CallRef: "tcl_assistant_plan_001", Tool: "propose_configuration_plan",
+			CapabilityRef: "platform.configuration.plan", State: "SUCCEEDED", SafeResult: "propose_configuration_plan:completed",
+			SafeParameters: map[string]any{"operation_count": 1},
+		}})
+	if err != nil || toolCall.Event == nil || toolCall.Event.ToolCall == nil ||
+		toolCall.Event.ToolCall.Tool != "propose_configuration_plan" || toolCall.Event.ToolCall.State != "SUCCEEDED" {
+		t.Fatalf("record assistant tool call: event=%#v err=%v", toolCall.Event, err)
+	}
+	var outboxTool string
+	if err := repository.pool.QueryRow(ctx, bootstrapComponentToolCallOutboxReadbackQuery, toolCall.Event.Ref).Scan(&outboxTool); err != nil || outboxTool != "propose_configuration_plan" {
+		t.Fatalf("read assistant tool call outbox projection: tool=%q err=%v", outboxTool, err)
 	}
 	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-complete-1"}, Payload: command.CompleteExecutionInput{

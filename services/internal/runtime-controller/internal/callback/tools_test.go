@@ -2,6 +2,7 @@ package callback
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -40,10 +41,19 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 	byType := make(map[string]map[string]any, len(oneOf))
+	operationByType := make(map[string]map[string]any, len(oneOf))
 	for _, operation := range oneOf {
 		properties := operation["properties"].(map[string]any)
 		operationType := properties["type"].(map[string]any)["const"].(string)
 		byType[operationType] = properties["parameters"].(map[string]any)
+		operationByType[operationType] = properties
+	}
+	createProject := operationByType["CREATE_PROJECT"]
+	createBefore := createProject["before"].(map[string]any)
+	createAfter := createProject["after"].(map[string]any)
+	if createBefore["additionalProperties"] != false || createAfter["additionalProperties"] != false ||
+		!reflect.DeepEqual(createAfter["required"], byType["CREATE_PROJECT"]["required"]) {
+		t.Fatalf("create operation schema is not canonical: before=%#v after=%#v parameters=%#v", createBefore, createAfter, byType["CREATE_PROJECT"])
 	}
 	workflowProperties := byType["CREATE_WORKFLOW"]["properties"].(map[string]any)
 	if workflowProperties["projectRef"].(map[string]any)["enum"].([]string)[0] != input.ProjectRef ||

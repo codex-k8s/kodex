@@ -73,7 +73,7 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 func assistantPlanTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "propose_configuration_plan",
-		"description": "Propose an editable Kodex draft for explicit user approval. This tool never validates or applies the plan. Every operation must disclose action, target, exact parameters, expectedVersion when applicable, before, after, and selected. No omitted field may imply a change.",
+		"description": "Propose an editable Kodex draft for explicit user approval. This tool never validates or applies the plan. Every operation must disclose action, target, exact parameters, expectedVersion when applicable, before, after, and selected. For CREATE operations, before must be an empty object and after must exactly repeat parameters. No omitted field may imply a change.",
 		"inputSchema": objectSchema([]string{"summary", "operations"}, map[string]any{
 			"summary": stringSchema(1, 2000),
 			"operations": map[string]any{"type": "array", "minItems": 1, "maxItems": 32,
@@ -171,14 +171,19 @@ func assistantOperationSchema(kind string, parameters map[string]any) map[string
 		targetRequired = append(targetRequired, "ref", "version")
 		required = append(required, "expectedVersion")
 	}
+	before := map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true}
+	after := map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true}
+	if action == "CREATE" {
+		before = objectSchema(nil, map[string]any{})
+		after = parameters
+	}
 	properties := map[string]any{
 		"type": map[string]any{"const": kind}, "action": map[string]any{"const": action}, "title": stringSchema(1, 200),
 		"summary": stringSchema(1, 500), "target": objectSchema(targetRequired, map[string]any{
 			"kind": stringSchema(1, 80), "ref": opaqueRefSchema(), "name": stringSchema(1, 300),
 			"version": map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991},
 		}),
-		"parameters": parameters, "before": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
-		"after": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true}, "selected": map[string]any{"const": true},
+		"parameters": parameters, "before": before, "after": after, "selected": map[string]any{"const": true},
 		"expectedVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991},
 	}
 	return objectSchema(required, properties)
