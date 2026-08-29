@@ -745,7 +745,7 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Conversation: &conversation, Assistant: &assistant}, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_TURN", resourceRef: turnRef, summary: "i18n:ASSISTANT_TURN_ACCEPTED"}, nil
+	return commandOutcome{result: command.Result{Conversation: &conversation, Assistant: &assistant}, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_TURN", resourceRef: turnRef, summary: "i18n:ASSISTANT_TURN_ACCEPTED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
 func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {

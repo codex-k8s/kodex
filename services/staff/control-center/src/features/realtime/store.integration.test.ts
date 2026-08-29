@@ -19,6 +19,7 @@ vi.mock("@/shared/locale", () => ({
 }));
 
 import { useRealtimeStore } from "@/features/realtime/store";
+import { usePlatformStore } from "@/features/platform/store";
 
 type SocketListener = (event: { data?: string }) => void;
 
@@ -75,6 +76,10 @@ class FakeWebSocket {
 
 const reconnectCallbacks: Array<() => void> = [];
 const windowEvents = new Map<string, () => void>();
+
+async function flushProcessing(): Promise<void> {
+  for (let index = 0; index < 8; index += 1) await Promise.resolve();
+}
 
 function graph(sequence = 1): RunGraph {
   return {
@@ -221,8 +226,7 @@ describe("realtime store", () => {
       title: "Обновления платформы временно недоступны",
       retryable: true,
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushProcessing();
     socket?.close(1013, "PLATFORM_UNAVAILABLE");
 
     expect(store.platformState).toMatchObject({
@@ -246,8 +250,7 @@ describe("realtime store", () => {
       type: "PLATFORM_STREAM_READY",
       latestSequence: 0,
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushProcessing();
     expect(store.platformState).toMatchObject({ state: "live", attempt: 0 });
 
     first?.close(1006, "CONNECTION_LOST");
@@ -267,9 +270,86 @@ describe("realtime store", () => {
       type: "PLATFORM_STREAM_READY",
       latestSequence: 0,
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushProcessing();
     expect(store.platformState).toMatchObject({ state: "live", attempt: 0 });
+    store.closeAll();
+  });
+
+  it("применяет RUN invalidation, игнорирует duplicate и продолжает с cursor", async () => {
+    const platform = usePlatformStore();
+    const reload = vi
+      .spyOn(platform, "reloadPlatformKind")
+      .mockResolvedValue(undefined);
+    const store = useRealtimeStore();
+    store.openPlatform();
+    const first = FakeWebSocket.instances[0];
+    first?.open();
+    first?.message({
+      type: "PLATFORM_STREAM_READY",
+      latestSequence: 0,
+    });
+    first?.message({
+      type: "PLATFORM_INVALIDATED",
+      sequence: 1,
+      eventName: "RUN_CHANGED",
+      kind: "RUN",
+    });
+    await flushProcessing();
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(reload).toHaveBeenLastCalledWith("RUN");
+    expect(store.platformSequence).toBe(1);
+
+    first?.message({
+      type: "PLATFORM_INVALIDATED",
+      sequence: 1,
+      eventName: "RUN_CHANGED",
+      kind: "RUN",
+    });
+    await flushProcessing();
+    expect(reload).toHaveBeenCalledTimes(1);
+
+    first?.close(1006, "CONNECTION_LOST");
+    reconnectCallbacks[0]?.();
+    const second = FakeWebSocket.instances[1];
+    second?.open();
+    expect(JSON.parse(second?.sent[0] ?? "{}")).toMatchObject({
+      type: "RESUME",
+      afterSequence: 1,
+    });
+    store.closeAll();
+  });
+
+  it("закрывает platform stream при out-of-order и не запускает timer polling в healthy состоянии", async () => {
+    const platform = usePlatformStore();
+    vi.spyOn(platform, "reloadPlatformKind").mockResolvedValue(undefined);
+    const interval = vi.fn();
+    vi.stubGlobal("setInterval", interval);
+    const store = useRealtimeStore();
+    store.openPlatform();
+    const socket = FakeWebSocket.instances[0];
+    socket?.open();
+    socket?.message({
+      type: "PLATFORM_STREAM_READY",
+      latestSequence: 0,
+    });
+    await flushProcessing();
+
+    expect(store.platformState.state).toBe("live");
+    expect(reconnectCallbacks).toHaveLength(0);
+    expect(interval).not.toHaveBeenCalled();
+
+    socket?.message({
+      type: "PLATFORM_INVALIDATED",
+      sequence: 2,
+      eventName: "RUN_CHANGED",
+      kind: "RUN",
+    });
+    await flushProcessing();
+
+    expect(socket?.closeCode).toBe(4000);
+    expect(socket?.closeReason).toBe("GAP_DETECTED");
+    expect(reconnectCallbacks).toHaveLength(1);
     store.closeAll();
   });
 });

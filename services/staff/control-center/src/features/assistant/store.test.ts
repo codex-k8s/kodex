@@ -5,6 +5,7 @@ import type {
   AssistantContextDescriptor,
   AssistantConversation,
   AssistantPlan,
+  SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
 
 const createConversationMock = vi.hoisted(() => vi.fn());
@@ -104,6 +105,21 @@ function userTurn(state: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED") {
   };
 }
 
+function systemAssistant(): SystemAssistant {
+  return {
+    ref: "ast_system_assistant",
+    version: 7,
+    name: "Kodex",
+    system: true,
+    removable: false,
+    corePromptRevision: "core-v7",
+    ownerInstructions: "",
+    runtimeState: "READY",
+    readinessSummary: "Готов",
+    nextActions: ["ADD_TURN", "CREATE_CONVERSATION"],
+  };
+}
+
 describe("assistant workspace store", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -182,17 +198,12 @@ describe("assistant workspace store", () => {
     ]);
   });
 
-  it("подхватывает terminal ответ без перезагрузки страницы", async () => {
+  it("применяет terminal ответ из realtime snapshot без polling", async () => {
     const initial = conversation();
     const queued = {
       ...initial,
       version: 3,
       turns: [userTurn("QUEUED")],
-    };
-    const running = {
-      ...queued,
-      version: 4,
-      turns: [userTurn("RUNNING")],
     };
     const completed = {
       ...queued,
@@ -211,10 +222,6 @@ describe("assistant workspace store", () => {
       ],
     };
     appendTurnMock.mockResolvedValue(queued);
-    readConversationsMock
-      .mockResolvedValueOnce([{ ...running, version: 2 }])
-      .mockResolvedValueOnce([running])
-      .mockResolvedValueOnce([completed]);
     const store = useAssistantStore();
     store.setContext(context, "prj_sales");
     store.conversations = [initial];
@@ -224,11 +231,11 @@ describe("assistant workspace store", () => {
     expect(
       store.selectedConversation?.turns.some((turn) => Boolean(turn.plan)),
     ).toBe(false);
-    await vi.advanceTimersByTimeAsync(1_000);
-    expect(store.selectedConversation?.version).toBe(3);
-    await vi.advanceTimersByTimeAsync(2_000);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(readConversationsMock).not.toHaveBeenCalled();
 
-    expect(readConversationsMock).toHaveBeenCalledTimes(3);
+    store.applyRealtimeSnapshot(systemAssistant(), [completed], "prj_sales");
+
     expect(store.selectedConversation?.version).toBe(5);
     expect(store.selectedConversation?.turns.at(-1)?.content).toBe(
       "План готов",

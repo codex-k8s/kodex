@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
@@ -10,7 +10,6 @@ import {
   type RunFilter,
   type RunView,
 } from "@/features/workboard/model";
-import { useBackgroundRefresh } from "@/features/workboard/use-background-refresh";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
@@ -49,9 +48,13 @@ async function refreshProject(): Promise<void> {
   if (!platform.problems.project) projectReady.value = true;
 }
 
-const { refreshing, run: refresh } = useBackgroundRefresh(async () => {
+const refreshing = computed(() => runsReady.value && platform.loading.runs);
+
+async function refresh(): Promise<void> {
   await Promise.all([refreshRuns(), refreshProject()]);
-});
+}
+
+onMounted(() => void refresh());
 
 watch(projectRef, (next) => {
   runsReady.value = false;

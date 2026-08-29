@@ -292,6 +292,36 @@ export const usePlatformStore = defineStore("platform", () => {
     upsert(target, values);
   }
 
+  function reconcileRuns(values: Run[], projectRef?: string): void {
+    const currentRefs = new Set(values.map((value) => value.ref));
+    for (const [ref, value] of Object.entries(runs)) {
+      if (
+        (!projectRef || value.projectRef === projectRef) &&
+        !currentRefs.has(ref)
+      )
+        Reflect.deleteProperty(runs, ref);
+    }
+    for (const value of values) {
+      const current = runs[value.ref];
+      if (current && current.version <= value.version)
+        Object.assign(current, value);
+      else if (!current) runs[value.ref] = value;
+    }
+  }
+
+  function reconcileConversations(values: AssistantConversation[]): void {
+    const currentRefs = new Set(values.map((value) => value.ref));
+    for (const ref of Object.keys(conversations)) {
+      if (!currentRefs.has(ref)) Reflect.deleteProperty(conversations, ref);
+    }
+    for (const value of values) {
+      const current = conversations[value.ref];
+      if (current && current.version <= value.version)
+        Object.assign(current, value);
+      else if (!current) conversations[value.ref] = value;
+    }
+  }
+
   function replaceByKey<T>(
     target: Record<string, T>,
     values: T[],
@@ -564,9 +594,7 @@ export const usePlatformStore = defineStore("platform", () => {
           )
         ).data.items,
       (values) => {
-        if (projectRef)
-          replaceScoped(runs, values, (run) => run.projectRef === projectRef);
-        else replace(runs, values);
+        reconcileRuns(values, projectRef);
       },
     );
   }
@@ -873,7 +901,7 @@ export const usePlatformStore = defineStore("platform", () => {
       },
       (value) => {
         assistant.value = value.assistant;
-        replace(conversations, value.conversations);
+        reconcileConversations(value.conversations);
       },
     );
   }
@@ -1600,6 +1628,11 @@ export const usePlatformStore = defineStore("platform", () => {
       case "ROLE_IMAGE_RECIPE":
         if (projectRef)
           add("roleImages", () => loadRoleImageRecipes(projectRef));
+        break;
+      case "RUN":
+        add("runs", () => loadRuns(projectRef));
+        add("gates", () => loadGates(projectRef));
+        add("overview", () => loadOverview(projectRef));
         break;
       default:
         throw new Error("Unknown platform invalidation kind");

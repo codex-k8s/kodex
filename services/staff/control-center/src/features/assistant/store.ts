@@ -19,18 +19,9 @@ import type {
   AssistantPlan,
   AssistantPlanOperationInput,
   AssistantPlanReceipt,
-  AssistantTurn,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
-
-const activeTurnStates = new Set<AssistantTurn["state"]>(["QUEUED", "RUNNING"]);
-const conversationPollIntervalMs = 1_000;
-const conversationPollAttempts = 15 * 60;
-
-function delay(durationMs: number): Promise<void> {
-  return new Promise((resolve) => globalThis.setTimeout(resolve, durationMs));
-}
 
 function mergeConversation(
   previous: AssistantConversation | undefined,
@@ -59,7 +50,6 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   const problem = ref<AppProblem>();
   const receipt = ref<AssistantPlanReceipt>();
   let generation = 0;
-  const conversationPollGenerations = new Map<string, number>();
 
   const selectedConversation = computed(() =>
     conversations.value.find((item) => item.ref === selectedRef.value),
@@ -167,56 +157,31 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     return merged;
   }
 
-  async function pollConversationUntilSettled(
-    conversationRef: string,
-    submittedTurn: AssistantTurn,
+  function applyRealtimeSnapshot(
+    assistantValue: SystemAssistant | undefined,
+    values: AssistantConversation[],
     sourceProjectRef?: string,
-  ): Promise<void> {
-    const pollGeneration =
-      (conversationPollGenerations.get(conversationRef) ?? 0) + 1;
-    conversationPollGenerations.set(conversationRef, pollGeneration);
-
-    for (let attempt = 0; attempt < conversationPollAttempts; attempt += 1) {
-      await delay(conversationPollIntervalMs);
-      if (
-        conversationPollGenerations.get(conversationRef) !== pollGeneration ||
-        projectRef.value !== sourceProjectRef
-      )
-        return;
-
-      let incoming: AssistantConversation | undefined;
-      try {
-        incoming = (await readConversations(sourceProjectRef)).find(
-          (conversation) => conversation.ref === conversationRef,
-        );
-      } catch {
-        continue;
-      }
-      if (
-        !incoming ||
-        conversationPollGenerations.get(conversationRef) !== pollGeneration ||
-        projectRef.value !== sourceProjectRef
-      )
-        continue;
-
-      const merged = upsertConversation(incoming, false, true);
-      const submitted = merged.turns.find(
-        (turn) => turn.ref === submittedTurn.ref,
-      );
-      if (submitted?.state === "FAILED") break;
-      if (
-        submitted?.state === "COMPLETED" &&
-        merged.turns.some(
-          (turn) =>
-            turn.sequence > submittedTurn.sequence &&
-            !activeTurnStates.has(turn.state),
-        )
-      )
-        break;
-    }
-
-    if (conversationPollGenerations.get(conversationRef) === pollGeneration)
-      conversationPollGenerations.delete(conversationRef);
+  ): void {
+    if (projectRef.value !== sourceProjectRef) return;
+    if (assistantValue) assistant.value = assistantValue;
+    const visible = sourceProjectRef
+      ? values.filter((value) => value.projectRef === sourceProjectRef)
+      : values;
+    const previousByRef = new Map(
+      conversations.value.map((conversation) => [
+        conversation.ref,
+        conversation,
+      ]),
+    );
+    const reconciled = visible.map((incoming) => {
+      const previous = previousByRef.get(incoming.ref);
+      const merged = mergeConversation(previous, incoming, true);
+      if (!previous) return merged;
+      Object.assign(previous, merged);
+      return previous;
+    });
+    conversations.value.splice(0, conversations.value.length, ...reconciled);
+    selectMatchingConversation();
   }
 
   function replacePlan(value: AssistantPlan): void {
@@ -252,13 +217,6 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   ): Promise<void> {
     const normalized = content.trim();
     if (!normalized) return;
-    let submitted:
-      | {
-          conversationRef: string;
-          projectRef?: string;
-          turn: AssistantTurn;
-        }
-      | undefined;
     await runMutation(async () => {
       let conversation = selectedConversation.value;
       if (!conversation) {
@@ -269,10 +227,6 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         );
         upsertConversation(conversation);
       }
-      const previousSequence = Math.max(
-        0,
-        ...conversation.turns.map((turn) => turn.sequence),
-      );
       const appended = artifactRefs.length
         ? await appendTurn(conversation.ref, normalized, artifactRefs)
         : await appendTurn(conversation.ref, normalized);
@@ -282,25 +236,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
           : item,
       );
       upsertConversation(appended);
-      const turn = [...appended.turns]
-        .filter(
-          (candidate) =>
-            candidate.role === "USER" && candidate.sequence > previousSequence,
-        )
-        .sort((left, right) => right.sequence - left.sequence)[0];
-      if (turn)
-        submitted = {
-          conversationRef: appended.ref,
-          projectRef: projectRef.value,
-          turn,
-        };
     });
-    if (submitted)
-      void pollConversationUntilSettled(
-        submitted.conversationRef,
-        submitted.turn,
-        submitted.projectRef,
-      );
   }
 
   async function saveDraft(
@@ -361,6 +297,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     sortedConversations,
     load,
     setContext,
+    applyRealtimeSnapshot,
     startConversation,
     changeTitle,
     send,

@@ -262,7 +262,11 @@ watch(
   () => props.refreshRevision,
   (value, previous) => {
     if (open.value && value !== previous)
-      void store.load(props.context, props.projectRef);
+      store.applyRealtimeSnapshot(
+        platform.assistant,
+        Object.values(platform.conversations),
+        props.projectRef,
+      );
   },
 );
 watch(

@@ -60,6 +60,14 @@ func TestDecodePlatformSignalRedactsPayloadAndRejectsMismatch(t *testing.T) {
 	}
 }
 
+func TestDecodePlatformSignalAcceptsRunInvalidationWithoutForwardingRefs(t *testing.T) {
+	payload := []byte(`{"eventId":"d561fbb0-02c0-4be7-af7c-5998925632bd","eventName":"RUN_CHANGED","eventVersion":1,"occurredAt":"2026-08-22T12:00:00Z","organizationRef":"org_example0001","projectRef":"prj_example0001","aggregateRef":"run_example0001","aggregateVersion":3,"sequence":9,"correlationRef":"d1713d76-566d-43c3-a0b2-0ca2307869d0","data":{"kind":"RUN","safeSummary":"i18n:RUN_UPDATED"}}`)
+	signal, ok := decodePlatformSignal(payload, "org_example0001")
+	if !ok || signal.Sequence != 9 || signal.EventName != "RUN_CHANGED" || signal.Kind != "RUN" {
+		t.Fatalf("valid run invalidation rejected: ok=%t signal=%+v", ok, signal)
+	}
+}
+
 type catchUpQueryClient struct {
 	controlplanev1.PlatformQueryServiceClient
 	events []*controlplanev1.RunEvent

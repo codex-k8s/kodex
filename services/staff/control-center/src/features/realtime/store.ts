@@ -71,7 +71,8 @@ type PlatformKind =
   | "MEMBERSHIP"
   | "PLATFORM_MEMBERSHIP"
   | "SYSTEM_ASSISTANT"
-  | "ROLE_IMAGE_RECIPE";
+  | "ROLE_IMAGE_RECIPE"
+  | "RUN";
 
 interface PlatformInvalidatedWire {
   type: "PLATFORM_INVALIDATED";
@@ -93,6 +94,7 @@ const platformKinds = new Set<PlatformKind>([
   "PLATFORM_MEMBERSHIP",
   "SYSTEM_ASSISTANT",
   "ROLE_IMAGE_RECIPE",
+  "RUN",
 ]);
 
 // Browsers only permit applications to send close code 1000 or 3000-4999.

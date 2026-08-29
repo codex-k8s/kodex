@@ -33,6 +33,7 @@ var platformEventNames = map[string]string{
 	"PLATFORM_MEMBERSHIP_CHANGED":    "PLATFORM_MEMBERSHIP",
 	"SYSTEM_ASSISTANT_CHANGED":       "SYSTEM_ASSISTANT",
 	"ROLE_IMAGE_RECIPE_CHANGED":      "ROLE_IMAGE_RECIPE",
+	"RUN_CHANGED":                    "RUN",
 }
 
 type platformBusEnvelope struct {

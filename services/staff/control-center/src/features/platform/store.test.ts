@@ -7,6 +7,7 @@ import type {
   Project,
   ProjectPage,
   Run,
+  RunPage,
   RunEvent,
   RunWorkspace,
   SearchResult,
@@ -19,6 +20,7 @@ const searchPlatformMock = vi.hoisted(() => vi.fn());
 const listAuditEventsMock = vi.hoisted(() => vi.fn());
 const getRunGraphMock = vi.hoisted(() => vi.fn());
 const listRunEventsMock = vi.hoisted(() => vi.fn());
+const listRunsMock = vi.hoisted(() => vi.fn());
 const listAgentInstructionVersionsMock = vi.hoisted(() => vi.fn());
 const downloadArtifactMock = vi.hoisted(() => vi.fn());
 const getArtifactMock = vi.hoisted(() =>
@@ -51,6 +53,7 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   listAuditEvents: listAuditEventsMock,
   getRunGraph: getRunGraphMock,
   listRunEvents: listRunEventsMock,
+  listRuns: listRunsMock,
   listAgentInstructionVersions: listAgentInstructionVersionsMock,
   downloadArtifact: downloadArtifactMock,
   getArtifact: getArtifactMock,
@@ -250,6 +253,7 @@ describe("platform store", () => {
     listAuditEventsMock.mockReset();
     getRunGraphMock.mockReset();
     listRunEventsMock.mockReset();
+    listRunsMock.mockReset();
     listAgentInstructionVersionsMock.mockReset();
     downloadArtifactMock.mockReset();
     getArtifactMock.mockReset();
@@ -318,6 +322,29 @@ describe("platform store", () => {
 
     expect(Object.keys(store.projects)).toEqual(["project_second"]);
     expect(store.projects.project_second?.version).toBe(2);
+  });
+
+  it("обновляет список запусков по authoritative readback без замены существующего объекта", async () => {
+    const first = run(1);
+    const second = run(2);
+    const runResponse = (
+      items: Run[],
+    ): { data: RunPage; response: Response } => ({
+      data: { items },
+      response: new Response(null, { status: 200 }),
+    });
+    listRunsMock
+      .mockResolvedValueOnce(runResponse([first]))
+      .mockResolvedValueOnce(runResponse([second]));
+    const store = usePlatformStore();
+
+    await store.loadRuns("project_owner");
+    const original = store.runs.run_consistent01;
+    await store.loadRuns("project_owner");
+
+    expect(store.runs.run_consistent01).toBe(original);
+    expect(store.runs.run_consistent01?.version).toBe(2);
+    expect(store.runs.run_consistent01?.state).toBe("WAITING_HUMAN");
   });
 
   it("передаёт поиск аудита авторитетному owner API", async () => {

@@ -1592,6 +1592,11 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertOutboxEventsEventIdOrderingKeyPayload, eventID, subject, "run:"+rootRef, sequence, asJSON(payload)); err != nil {
 		return entity.RunEvent{}, errs.ErrUnavailable
 	}
+	// Org-wide stream получает только безопасный invalidation-сигнал. Полная
+	// delta остаётся в авторитетном run event store и защищённом run stream.
+	if err := repository.emitPlatformEventSnapshot(ctx, tx, scope, "RUN_CHANGED", projectRef, rootRef, safeSummary, version, runState); err != nil {
+		return entity.RunEvent{}, err
+	}
 	return event, nil
 }
 
@@ -1730,6 +1735,8 @@ func platformEventKind(eventName string) string {
 		return "SYSTEM_ASSISTANT"
 	case "ROLE_IMAGE_RECIPE_CHANGED":
 		return "ROLE_IMAGE_RECIPE"
+	case "RUN_CHANGED":
+		return "RUN"
 	default:
 		return "SYSTEM_ASSISTANT"
 	}

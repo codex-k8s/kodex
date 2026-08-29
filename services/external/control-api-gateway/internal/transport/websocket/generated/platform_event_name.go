@@ -17,4 +17,5 @@ const (
 	PlatformEventNamePlatformMembershipChanged    PlatformEventName = "PLATFORM_MEMBERSHIP_CHANGED"
 	PlatformEventNameSystemAssistantChanged       PlatformEventName = "SYSTEM_ASSISTANT_CHANGED"
 	PlatformEventNameRoleImageRecipeChanged       PlatformEventName = "ROLE_IMAGE_RECIPE_CHANGED"
+	PlatformEventNameRunChanged                   PlatformEventName = "RUN_CHANGED"
 )
