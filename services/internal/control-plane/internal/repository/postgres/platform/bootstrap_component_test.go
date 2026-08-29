@@ -68,6 +68,8 @@ var (
 	bootstrapComponentSequenceReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_tool_call_outbox_readback.sql
 	bootstrapComponentToolCallOutboxReadbackQuery string
+	//go:embed testdata/sql/bootstrap_component_insert_secondary_provider.sql
+	bootstrapComponentInsertSecondaryProviderQuery string
 	//go:embed testdata/sql/bootstrap_component_integration_invocation_effect_key.sql
 	bootstrapComponentIntegrationInvocationEffectKeyQuery string
 )
@@ -197,6 +199,9 @@ func TestBootstrapComponent(t *testing.T) {
 
 func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
+	if _, err := repository.pool.Exec(ctx, bootstrapComponentInsertSecondaryProviderQuery); err != nil {
+		t.Fatalf("insert secondary provider account: %v", err)
+	}
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		ExternalDisplayName: "Runtime configuration owner", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
@@ -216,6 +221,11 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 	current, err := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
 	if err != nil {
 		t.Fatalf("read initial runtime configuration: %v", err)
+	}
+	if current.Configuration.ProviderPolicy.Mode != "LEAST_USED" ||
+		len(current.Configuration.ProviderPolicy.AccountCandidates) != 2 {
+		t.Fatalf("bootstrap runtime policy does not contain the authorized provider pool: %#v",
+			current.Configuration.ProviderPolicy)
 	}
 	expectedVersion := current.AgentVersion
 	result, err := service.Execute(ctx, command.Command{Kind: command.PublishAgentRuntimeConfig, Principal: owner,

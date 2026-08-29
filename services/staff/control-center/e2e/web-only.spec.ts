@@ -812,6 +812,9 @@ test.describe("web-only fresh installation", () => {
     expect(readback.safeEffectiveConfig).toContain(
       'model_reasoning_effort = "high"',
     );
+
+    await pinAgentProviderCandidate(page, coordinatorRef, 0);
+    await pinAgentProviderCandidate(page, analystRef, 1);
   });
 
   test("файл загружается, просматривается, привязывается и скачивается", async ({
@@ -1063,7 +1066,7 @@ test.describe("web-only fresh installation", () => {
   test("автоматизация создаётся, редактируется, запускается и архивируется", async ({
     page,
   }) => {
-    requireRefs("projectRef", "coordinatorRef");
+    requireRefs("projectRef", "analystRef");
     const schedulesResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "GET" &&
@@ -1085,7 +1088,7 @@ test.describe("web-only fresh installation", () => {
       const dialog = page.getByRole("dialog", { name: "Новая автоматизация" });
       await dialog.getByLabel("Название").fill(automationName);
       await dialog.getByLabel("Тип цели").selectOption("AGENT");
-      await dialog.getByLabel("Цель").selectOption({ label: coordinatorName });
+      await dialog.getByLabel("Цель").selectOption({ label: analystName });
       const triggerAt = new Date(Date.now() + 75_000);
       const saratovHour = (triggerAt.getUTCHours() + 4) % 24;
       const timeOfDay = `${String(saratovHour).padStart(2, "0")}:${String(
@@ -2139,6 +2142,71 @@ function requireRefs(...required: ReadonlyArray<keyof DiscoveryRefs>): void {
     missing.length > 0,
     `BLOCKED: отсутствуют prerequisite refs: ${missing.join(", ")}`,
   );
+}
+
+async function pinAgentProviderCandidate(
+  page: Page,
+  agentRef: string,
+  candidateIndex: number,
+): Promise<void> {
+  const result = await page.evaluate(
+    async ({ expectedAgentRef, expectedCandidateIndex }) => {
+      const readbackResponse = await fetch(
+        `/api/v1/agents/${encodeURIComponent(expectedAgentRef)}/runtime-configuration`,
+      );
+      if (!readbackResponse.ok) {
+        return { status: readbackResponse.status, detail: "runtime readback" };
+      }
+      const readback = (await readbackResponse.json()) as {
+        agentVersion: number;
+        configuration: {
+          runtimeProfileRef: string;
+          model: string;
+          providerPolicy: {
+            accountCandidates: Array<{ accountRef: string; weight: number }>;
+          };
+        };
+      };
+      const candidate =
+        readback.configuration.providerPolicy.accountCandidates[
+          expectedCandidateIndex
+        ];
+      if (!candidate) {
+        return { status: 0, detail: "provider candidate is unavailable" };
+      }
+      const csrfPrefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
+      const csrf = document.cookie
+        .split(";")
+        .map((part) => part.trim())
+        .find((part) => part.startsWith(csrfPrefix))
+        ?.slice(csrfPrefix.length);
+      if (!csrf) return { status: 0, detail: "CSRF token is unavailable" };
+      const publication = await fetch(
+        `/api/v1/agents/${encodeURIComponent(expectedAgentRef)}/runtime-configuration`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": crypto.randomUUID(),
+            "If-Match": `"${String(readback.agentVersion)}"`,
+            "X-CSRF-Token": decodeURIComponent(csrf),
+          },
+          body: JSON.stringify({
+            runtimeProfileRef: readback.configuration.runtimeProfileRef,
+            model: readback.configuration.model,
+            providerPolicyMode: "FIXED",
+            providerAccounts: [{ ...candidate, weight: 1 }],
+          }),
+        },
+      );
+      return {
+        status: publication.status,
+        detail: publication.ok ? "" : await publication.text(),
+      };
+    },
+    { expectedAgentRef: agentRef, expectedCandidateIndex: candidateIndex },
+  );
+  expect(result.status, result.detail).toBe(200);
 }
 
 async function resolveArtifactRef(
