@@ -63,6 +63,8 @@ var (
 	bootstrapComponentInstructionDraftReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_effect_receipt_count.sql
 	bootstrapComponentEffectReceiptCountQuery string
+	//go:embed testdata/sql/bootstrap_component_sequence_readback.sql
+	bootstrapComponentSequenceReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_tool_call_outbox_readback.sql
 	bootstrapComponentToolCallOutboxReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_integration_invocation_effect_key.sql
@@ -122,6 +124,23 @@ func TestBootstrapComponent(t *testing.T) {
 		})
 	}
 	assertBootstrapReadback(t, ctx, pool)
+	t.Run("authority proof revision keeps platform cursor stable", func(t *testing.T) {
+		var platformBefore, proofBefore int64
+		if err := pool.QueryRow(ctx, bootstrapComponentSequenceReadbackQuery).Scan(&platformBefore, &proofBefore); err != nil {
+			t.Fatalf("read sequences before authority proof: %v", err)
+		}
+		revision, err := repository.NextAuthorityProofRevision(ctx)
+		if err != nil {
+			t.Fatalf("issue authority proof revision: %v", err)
+		}
+		var platformAfter, proofAfter int64
+		if err := pool.QueryRow(ctx, bootstrapComponentSequenceReadbackQuery).Scan(&platformAfter, &proofAfter); err != nil {
+			t.Fatalf("read sequences after authority proof: %v", err)
+		}
+		if platformAfter != platformBefore || proofAfter != proofBefore+1 || revision != uint64(proofAfter) {
+			t.Fatalf("authority proof changed platform cursor: platform=%d->%d proof=%d->%d revision=%d", platformBefore, platformAfter, proofBefore, proofAfter, revision)
+		}
+	})
 	t.Run("provider credential legacy repair creates an immutable next revision", func(t *testing.T) {
 		testProviderCredentialLegacyRepair(t, ctx, repository, pool)
 	})
