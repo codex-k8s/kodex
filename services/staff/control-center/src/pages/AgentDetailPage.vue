@@ -577,14 +577,18 @@ onMounted(() => void load());
                 </div>
                 <div>
                   <dt>{{ $t("agents.instructions") }}</dt>
-                  <dd>
-                    {{
-                      agent.publishedInstructions
-                        ? $t("agents.revision", {
+                  <dd class="agent-summary__instruction-state">
+                    <template v-if="agent.publishedInstructions">
+                      <span>
+                        {{
+                          $t("agents.revision", {
                             revision: agent.publishedInstructions.revision,
                           })
-                        : $t("common.noData")
-                    }}
+                        }}
+                      </span>
+                      <StatusBadge :state="agent.publishedInstructions.state" />
+                    </template>
+                    <template v-else>{{ $t("common.noData") }}</template>
                   </dd>
                 </div>
                 <div>
@@ -809,6 +813,12 @@ onMounted(() => void load());
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
+}
+.agent-summary__instruction-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 .agent-role-unavailable {
   padding: 10px 12px;

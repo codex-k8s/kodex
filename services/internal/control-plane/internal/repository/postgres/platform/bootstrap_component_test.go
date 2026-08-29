@@ -2142,6 +2142,15 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || launch.Run == nil || launch.Graph == nil || launch.Run.State != "RUNNING" || len(launch.Graph.Nodes) != 2 {
 		t.Fatalf("launch direct run: run=%#v graph=%#v err=%v", launch.Run, launch.Graph, err)
 	}
+	readRun, readGraph, err := service.GetRunGraph(ctx, owner, launch.Run.Ref)
+	if err != nil || readRun.Ref != launch.Run.Ref || len(readGraph.Nodes) != 2 {
+		t.Fatalf("read materialized run graph: run=%#v graph=%#v err=%v", readRun, readGraph, err)
+	}
+	for _, node := range readGraph.Nodes {
+		if node.MaterializationState != "MATERIALIZED" {
+			t.Fatalf("read run graph node without materialization state: %#v", node)
+		}
+	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "lifecycle-concurrent-session"}, Payload: command.LaunchRunInput{
 			ProjectRef: project.Project.Ref, SessionRef: launch.Run.SessionRef, Title: "Concurrent answer",

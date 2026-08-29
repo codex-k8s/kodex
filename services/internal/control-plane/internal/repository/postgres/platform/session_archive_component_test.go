@@ -54,7 +54,7 @@ func testSessionArchiveLifecycle(t *testing.T, ctx context.Context, repository *
 	}
 	lease := claimed.RuntimeItems[0]
 	const codexSessionID = "00000000-0000-4000-8000-000000000003"
-	const sourcePath = ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000003.jsonl"
+	const sourcePath = ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-00000000-0000-4000-8000-000000000003.jsonl"
 	const sourceSize = int64(128)
 	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: runtimeWorker,
 		Mutation: value.Mutation{IdempotencyKey: "session-archive-runtime-complete"}, Payload: command.CompleteExecutionInput{

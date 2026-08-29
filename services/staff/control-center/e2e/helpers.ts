@@ -104,7 +104,11 @@ export async function ensureAgentCapability(
   capabilityName: string | RegExp,
 ): Promise<void> {
   await gotoWithRetry(page, `/projects/${projectRef}/agents/${agentRef}`);
-  const capability = page.getByRole("checkbox", { name: capabilityName });
+  let capability = page.getByRole("checkbox", { name: capabilityName });
+  if ((await capability.count()) === 0) {
+    await page.getByRole("tab", { name: "Возможности" }).click();
+    capability = page.getByRole("checkbox", { name: capabilityName });
+  }
   await expect(capability).toBeVisible();
   if (!(await capability.isChecked())) {
     const response = page.waitForResponse(
@@ -120,7 +124,12 @@ export async function ensureAgentCapability(
 }
 
 export async function launchAgent(page: Page, task: string): Promise<string> {
-  const panel = page.locator(".launch-panel");
+  let panel = page.locator(".launch-panel");
+  if ((await panel.count()) === 0) {
+    await page.getByRole("tab", { name: "Профиль сотрудника" }).click();
+    panel = page.locator(".launch-panel");
+  }
+  await expect(panel).toBeVisible();
   await panel.getByLabel("Задание").fill(task);
   await panel.getByRole("button", { name: "Запустить", exact: true }).click();
   await expect(page).toHaveURL(/\/runs\/[^/]+$/);
