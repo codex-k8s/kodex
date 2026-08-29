@@ -47,8 +47,29 @@ type Config struct {
 
 // Client выполняет протокол одноразового запроса и подтверждения.
 type Client struct {
-	config Config
+	config    Config
+	transport *transport
 }
+
+type attestorAPI interface {
+	IssueAttestationChallenge(
+		context.Context,
+		*internalrpcauthorityv1.IssueAttestationChallengeRequest,
+		...grpc.CallOption,
+	) (*internalrpcauthorityv1.IssueAttestationChallengeResponse, error)
+	AttestServedState(
+		context.Context,
+		*internalrpcauthorityv1.AttestServedStateRequest,
+		...grpc.CallOption,
+	) (*internalrpcauthorityv1.AttestServedStateResponse, error)
+}
+
+type transport struct {
+	api   attestorAPI
+	close func() error
+}
+
+type transportFactory func(string, *tls.Config, grpc.UnaryClientInterceptor) (*transport, error)
 
 // FileConfig задаёт материал проверки, доставленный через файлы.
 type FileConfig struct {
@@ -69,7 +90,8 @@ type FileConfig struct {
 
 // FileAttestor читает материал из закреплённых файлов перед проверкой.
 type FileAttestor struct {
-	config FileConfig
+	config    FileConfig
+	transport *transport
 }
 
 // SecretConfig задаёт материал проверки, доставленный через Kubernetes Secret.
@@ -95,11 +117,16 @@ type SecretReader interface {
 
 // SecretAttestor получает материал из Kubernetes Secret перед каждой проверкой.
 type SecretAttestor struct {
-	config SecretConfig
+	config    SecretConfig
+	transport *transport
 }
 
 // NewSecretAttestor создаёт клиент только из полной конфигурации доверия.
 func NewSecretAttestor(config SecretConfig) (*SecretAttestor, error) {
+	return newSecretAttestor(config, newTransport)
+}
+
+func newSecretAttestor(config SecretConfig, factory transportFactory) (*SecretAttestor, error) {
 	if config.Address == "" ||
 		config.TLS == nil ||
 		config.CredentialPath == "" ||
@@ -114,7 +141,16 @@ func NewSecretAttestor(config SecretConfig) (*SecretAttestor, error) {
 		config.UnaryInterceptor == nil {
 		return nil, errors.New("invalid readback Secret client configuration")
 	}
-	return &SecretAttestor{config: config}, nil
+	opened, err := factory(config.Address, config.TLS, config.UnaryInterceptor)
+	if err != nil {
+		return nil, fmt.Errorf("open readback attestor transport: %w", err)
+	}
+	return &SecretAttestor{config: config, transport: opened}, nil
+}
+
+// Close освобождает общий transport после остановки refresh worker.
+func (attestor *SecretAttestor) Close() error {
+	return attestor.transport.close()
 }
 
 // Attest читает актуальный материал и выполняет независимую проверку.
@@ -148,7 +184,7 @@ func (attestor *SecretAttestor) Attest(
 	if err != nil {
 		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("parse readback possession private key: %w", err)
 	}
-	client, err := New(Config{
+	client, err := newClient(Config{
 		Address: attestor.config.Address, TLS: attestor.config.TLS,
 		IntentID:                credentialMaterial.Data["pinned_intent_id"],
 		CredentialCompact:       credentialMaterial.Data["readback_credential_compact_jws"],
@@ -161,7 +197,7 @@ func (attestor *SecretAttestor) Attest(
 		PossessionKeyGeneration: attestor.config.PossessionKeyGeneration,
 		PossessionKey:           key,
 		UnaryInterceptor:        attestor.config.UnaryInterceptor,
-	})
+	}, attestor.transport)
 	if err != nil {
 		return repository.SnapshotAttestationReceipt{}, err
 	}
@@ -170,6 +206,10 @@ func (attestor *SecretAttestor) Attest(
 
 // NewFileAttestor создаёт клиент для закреплённых файлов материала.
 func NewFileAttestor(config FileConfig) (*FileAttestor, error) {
+	return newFileAttestor(config, newTransport)
+}
+
+func newFileAttestor(config FileConfig, factory transportFactory) (*FileAttestor, error) {
 	if config.IntentIDFile == "" ||
 		config.CredentialCompactFile == "" ||
 		config.CredentialJTIFile == "" ||
@@ -187,7 +227,16 @@ func NewFileAttestor(config FileConfig) (*FileAttestor, error) {
 		config.UnaryInterceptor == nil {
 		return nil, errors.New("invalid readback file client configuration")
 	}
-	return &FileAttestor{config: config}, nil
+	opened, err := factory(config.Address, config.TLS, config.UnaryInterceptor)
+	if err != nil {
+		return nil, fmt.Errorf("open readback attestor transport: %w", err)
+	}
+	return &FileAttestor{config: config, transport: opened}, nil
+}
+
+// Close освобождает общий transport после остановки refresh worker.
+func (attestor *FileAttestor) Close() error {
+	return attestor.transport.close()
 }
 
 // Attest читает файлы и выполняет независимую проверку.
@@ -218,7 +267,7 @@ func (attestor *FileAttestor) Attest(
 	if err != nil {
 		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("parse readback possession private key: %w", err)
 	}
-	client, err := New(Config{
+	client, err := newClient(Config{
 		Address: attestor.config.Address, TLS: attestor.config.TLS,
 		IntentID: intentID, CredentialCompact: credential,
 		CredentialJTI:           credentialJTI,
@@ -230,7 +279,7 @@ func (attestor *FileAttestor) Attest(
 		PossessionKeyGeneration: attestor.config.PossessionKeyGeneration,
 		PossessionKey:           key,
 		UnaryInterceptor:        attestor.config.UnaryInterceptor,
-	})
+	}, attestor.transport)
 	if err != nil {
 		return repository.SnapshotAttestationReceipt{}, err
 	}
@@ -251,6 +300,27 @@ func readMountedValue(path string, maximum int) (string, error) {
 
 // New создаёт клиент протокола проверки обслуживаемого состояния.
 func New(config Config) (*Client, error) {
+	if err := validateConfig(config); err != nil {
+		return nil, err
+	}
+	opened, err := newTransport(config.Address, config.TLS, config.UnaryInterceptor)
+	if err != nil {
+		return nil, fmt.Errorf("open readback attestor transport: %w", err)
+	}
+	return &Client{config: config, transport: opened}, nil
+}
+
+func newClient(config Config, opened *transport) (*Client, error) {
+	if err := validateConfig(config); err != nil {
+		return nil, err
+	}
+	if opened == nil || opened.api == nil || opened.close == nil {
+		return nil, errors.New("invalid readback client transport")
+	}
+	return &Client{config: config, transport: opened}, nil
+}
+
+func validateConfig(config Config) error {
 	if config.Address == "" ||
 		config.TLS == nil ||
 		config.TLS.ServerName == "" ||
@@ -266,9 +336,33 @@ func New(config Config) (*Client, error) {
 		config.PossessionKeyGeneration == 0 ||
 		config.PossessionKey.Private == nil ||
 		config.UnaryInterceptor == nil {
-		return nil, errors.New("invalid readback client configuration")
+		return errors.New("invalid readback client configuration")
 	}
-	return &Client{config: config}, nil
+	return nil
+}
+
+func newTransport(
+	address string,
+	tlsConfig *tls.Config,
+	interceptor grpc.UnaryClientInterceptor,
+) (*transport, error) {
+	connection, err := grpc.NewClient(
+		address,
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig.Clone())),
+		grpc.WithUnaryInterceptor(interceptor),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &transport{
+		api:   internalrpcauthorityv1.NewAuthorityReadbackAttestorServiceClient(connection),
+		close: connection.Close,
+	}, nil
+}
+
+// Close освобождает transport standalone-клиента.
+func (client *Client) Close() error {
+	return client.transport.close()
 }
 
 // Attest запрашивает одноразовый challenge и отправляет доказательство владения.
@@ -285,16 +379,6 @@ func (client *Client) Attest(
 	if err != nil {
 		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("create readback challenge request identifier: %w", err)
 	}
-	connection, err := grpc.NewClient(
-		client.config.Address,
-		grpc.WithTransportCredentials(credentials.NewTLS(client.config.TLS.Clone())),
-		grpc.WithUnaryInterceptor(client.config.UnaryInterceptor),
-	)
-	if err != nil {
-		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("connect to readback attestor: %w", err)
-	}
-	defer connection.Close()
-	api := internalrpcauthorityv1.NewAuthorityReadbackAttestorServiceClient(connection)
 	challengeRequest := &internalrpcauthorityv1.IssueAttestationChallengeRequest{
 		PinnedIntentId:               client.config.IntentID,
 		ReadbackCredentialCompactJws: client.config.CredentialCompact,
@@ -312,7 +396,7 @@ func (client *Client) Attest(
 			case <-timer.C:
 			}
 		}
-		challenge, err = api.IssueAttestationChallenge(ctx, challengeRequest)
+		challenge, err = client.transport.api.IssueAttestationChallenge(ctx, challengeRequest)
 		if err == nil || status.Code(err) != codes.Unavailable || attempt == 2 {
 			break
 		}
@@ -406,7 +490,7 @@ func (client *Client) Attest(
 			case <-timer.C:
 			}
 		}
-		receipt, err = api.AttestServedState(ctx, request)
+		receipt, err = client.transport.api.AttestServedState(ctx, request)
 		if err == nil || status.Code(err) != codes.Unavailable || attempt == 2 {
 			break
 		}
