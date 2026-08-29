@@ -12,8 +12,6 @@ import { gotoWithRetry } from "./helpers";
 
 const environment = loadE2EEnvironment();
 const execFileAsync = promisify(execFile);
-const githubOwner = "codex-k8s";
-const githubRepository = "kodex-integration-e2e";
 const terminalStates = new Set(["SUCCEEDED", "FAILED", "CANCELLED"]);
 
 interface VersionedRef {
@@ -129,6 +127,19 @@ test.describe("deployed local integration path", () => {
       name: `${environment.resourcePrefix} — synthetic`,
       publicConfiguration: { journal },
     });
+    const connectedVersion = connection.version;
+    connection = await commandConnection(page, connection, "DISABLE");
+    expect(connection.state).toBe("DISABLED");
+    await expectMutationError(page, {
+      method: "POST",
+      path: `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}/commands`,
+      body: { action: "ENABLE" },
+      version: connectedVersion,
+      expectedStatus: 412,
+      expectedCode: "VERSION_OR_STATE_CONFLICT",
+    });
+    connection = await commandConnection(page, connection, "ENABLE");
+    connection = await testConnection(page, connection);
     connection = await changeGrant(
       page,
       connection,
@@ -234,6 +245,7 @@ test.describe("deployed local integration path", () => {
       !githubEnabled(),
       "GitHub fixture требует явного KODEX_INTEGRATION_E2E_GITHUB=1",
     );
+    const github = githubFixtureConfiguration();
     let token: string | undefined = await readGitHubToken();
     const marker = `kodex-integration-e2e:${environment.resourcePrefix}`;
     let cleanupIssueNumber = 0;
@@ -241,10 +253,10 @@ test.describe("deployed local integration path", () => {
     try {
       const repository = await githubRequest<GitHubRepository>(
         token,
-        `/repos/${githubOwner}/${githubRepository}`,
+        githubRepositoryPath(github),
       );
       expect(repository).toMatchObject({
-        full_name: `${githubOwner}/${githubRepository}`,
+        full_name: `${github.owner}/${github.repository}`,
         private: true,
       });
       expect(await findGitHubMarkerIssues(token, marker)).toHaveLength(0);
@@ -285,8 +297,8 @@ test.describe("deployed local integration path", () => {
           definitionKey: "github",
           name: `${environment.resourcePrefix} — private GitHub fixture`,
           publicConfiguration: {
-            owner: githubOwner,
-            repository: githubRepository,
+            owner: github.owner,
+            repository: github.repository,
           },
         },
         expectedStatus: 201,
@@ -371,7 +383,7 @@ test.describe("deployed local integration path", () => {
         for (const issue of issues) {
           await githubRequest<GitHubIssue>(
             token,
-            `/repos/${githubOwner}/${githubRepository}/issues/${String(issue.number)}`,
+            `${githubRepositoryPath(github)}/issues/${String(issue.number)}`,
             {
               method: "PATCH",
               body: { state: "closed", state_reason: "not_planned" },
@@ -405,14 +417,13 @@ async function testConnection(
   page: Page,
   connection: Connection,
 ): Promise<Connection> {
-  await mutateAPI<Connection>(page, {
+  let current = await mutateAPI<Connection>(page, {
     method: "POST",
     path: `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}/commands`,
     body: { action: "TEST" },
     version: connection.version,
     expectedStatus: 200,
   });
-  let current = connection;
   await expect
     .poll(
       async () => {
@@ -426,6 +437,20 @@ async function testConnection(
     )
     .toBe("CONNECTED");
   return current;
+}
+
+async function commandConnection(
+  page: Page,
+  connection: Connection,
+  action: "DISABLE" | "ENABLE",
+): Promise<Connection> {
+  return mutateAPI<Connection>(page, {
+    method: "POST",
+    path: `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}/commands`,
+    body: { action },
+    version: connection.version,
+    expectedStatus: 200,
+  });
 }
 
 async function changeGrant(
@@ -633,6 +658,53 @@ async function mutateAPI<T>(
   return result.body as T;
 }
 
+async function expectMutationError(
+  page: Page,
+  request: {
+    method: "POST" | "PATCH" | "PUT" | "DELETE";
+    path: string;
+    body?: unknown;
+    version?: number;
+    expectedStatus: number;
+    expectedCode: string;
+  },
+): Promise<void> {
+  const result = await page.evaluate(async (input) => {
+    const prefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
+    const csrf = document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(prefix))
+      ?.slice(prefix.length);
+    if (!csrf) return { status: 0, code: "CSRF_UNAVAILABLE" };
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "Idempotency-Key": crypto.randomUUID(),
+      "X-CSRF-Token": decodeURIComponent(csrf),
+    };
+    if (input.version !== undefined) {
+      headers["If-Match"] = `"${String(input.version)}"`;
+    }
+    const response = await fetch(input.path, {
+      method: input.method,
+      headers,
+      body: input.body === undefined ? undefined : JSON.stringify(input.body),
+    });
+    let code = "UNKNOWN";
+    try {
+      code = ((await response.json()) as { code?: string }).code ?? code;
+    } catch {
+      // Error bodies from credential operations are intentionally ignored.
+    }
+    return { status: response.status, code };
+  }, request);
+  expect(result).toEqual({
+    status: request.expectedStatus,
+    code: request.expectedCode,
+  });
+}
+
 function syntheticReadbackURL(): URL {
   const raw = process.env.KODEX_E2E_SYNTHETIC_READBACK_URL ?? "";
   const parsed = new URL(raw);
@@ -717,6 +789,28 @@ function githubEnabled(): boolean {
   return true;
 }
 
+function githubFixtureConfiguration(): {
+  readonly owner: string;
+  readonly repository: string;
+} {
+  const owner = process.env.KODEX_INTEGRATION_E2E_GITHUB_OWNER ?? "";
+  const repository = process.env.KODEX_INTEGRATION_E2E_GITHUB_REPOSITORY ?? "";
+  const slugPattern = /^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,98}[A-Za-z0-9])?$/;
+  if (!slugPattern.test(owner) || !slugPattern.test(repository)) {
+    throw new Error(
+      "KODEX_INTEGRATION_E2E_GITHUB_OWNER and KODEX_INTEGRATION_E2E_GITHUB_REPOSITORY must identify the dedicated fixture repository",
+    );
+  }
+  return { owner, repository };
+}
+
+function githubRepositoryPath(configuration: {
+  readonly owner: string;
+  readonly repository: string;
+}): string {
+  return `/repos/${encodeURIComponent(configuration.owner)}/${encodeURIComponent(configuration.repository)}`;
+}
+
 async function readGitHubToken(): Promise<string> {
   const direct = process.env.KODEX_GITHUB_BOT_PAT;
   const file = process.env.KODEX_GITHUB_BOT_PAT_FILE;
@@ -788,11 +882,12 @@ async function findGitHubMarkerIssues(
   token: string,
   marker: string,
 ): Promise<GitHubIssue[]> {
+  const github = githubFixtureConfiguration();
   const found: GitHubIssue[] = [];
   for (let page = 1; page <= 5; page += 1) {
     const issues = await githubRequest<GitHubIssue[]>(
       token,
-      `/repos/${githubOwner}/${githubRepository}/issues?state=all&per_page=100&page=${String(page)}`,
+      `${githubRepositoryPath(github)}/issues?state=all&per_page=100&page=${String(page)}`,
     );
     found.push(
       ...issues.filter(
