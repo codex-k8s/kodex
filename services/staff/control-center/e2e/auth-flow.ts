@@ -159,9 +159,9 @@ async function startFrontendOIDCTransition(
   };
   page.on("response", recordFailedResponse);
   try {
-    await page.getByRole("button", { name: "Войти", exact: true }).click({
-      timeout: remainingTimeout(deadline),
-    });
+    await page
+      .getByRole("button", { name: /^(Войти|Повторить)$/ })
+      .click({ timeout: remainingTimeout(deadline) });
     const transitionDeadline = Math.min(
       deadline,
       Date.now() + frontendOIDCTransitionTimeoutMs,
@@ -315,6 +315,14 @@ async function detectAuthSurface(page: Page): Promise<AuthSurface> {
     }
     if (
       await page.getByRole("button", { name: "Войти", exact: true }).isVisible()
+    ) {
+      return "frontend-sign-in";
+    }
+    if (
+      new URL(page.url()).pathname === "/auth/callback" &&
+      (await page
+        .getByRole("button", { name: "Повторить", exact: true })
+        .isVisible())
     ) {
       return "frontend-sign-in";
     }

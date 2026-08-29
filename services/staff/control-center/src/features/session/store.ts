@@ -36,6 +36,22 @@ export type SessionPhase =
 const sessionRevisionKey = "kodex.session.revision";
 const sessionRenewalIntervalMs = 5 * 60 * 1000;
 const sessionProbeRetryDelaysMs = [250, 500, 1_000] as const;
+const ownerSessionRetryDelaysMs = [250, 500, 1_000] as const;
+
+async function withOwnerSessionRetry<T>(request: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      const normalized = asProblem(error);
+      const retryDelay = ownerSessionRetryDelaysMs[attempt];
+      if (!normalized.retryable || retryDelay === undefined) throw normalized;
+      await new Promise<void>((resolve) =>
+        globalThis.setTimeout(resolve, retryDelay),
+      );
+    }
+  }
+}
 
 function oidcManager(): UserManager {
   const config = runtimeConfig().oidc;
@@ -132,12 +148,15 @@ export const useSessionStore = defineStore("session", () => {
           credentials: "include",
         }),
       );
-      const response = await unwrap(
-        createOwnerSession({
-          client: oneUseClient,
-          headers: { "Idempotency-Key": idempotencyKey() },
-          signal: requestSignal(),
-        }),
+      const sessionIdempotencyKey = idempotencyKey();
+      const response = await withOwnerSessionRetry(() =>
+        unwrap(
+          createOwnerSession({
+            client: oneUseClient,
+            headers: { "Idempotency-Key": sessionIdempotencyKey },
+            signal: requestSignal(),
+          }),
+        ),
       );
       const parsedRevision = Number.parseInt(
         response.etag?.replaceAll('"', "") ?? "0",

@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
+  createOwnerSession: vi.fn(),
   deleteOwnerSession: vi.fn(() => Promise.resolve({ data: undefined })),
   getBootstrapState: vi.fn(() => Promise.resolve({ data: {} })),
   renewOwnerSession: vi.fn((options?: { signal?: AbortSignal }) => {
@@ -9,12 +10,42 @@ const api = vi.hoisted(() => ({
     return Promise.resolve({ data: undefined });
   }),
 }));
+const oidc = vi.hoisted(() => ({
+  removeUser: vi.fn(() => Promise.resolve()),
+  signinRedirect: vi.fn(() => Promise.resolve()),
+  signinRedirectCallback: vi.fn(() =>
+    Promise.resolve({ access_token: "owner-access-token" }),
+  ),
+}));
+const mutation = vi.hoisted(() => ({
+  idempotencyKey: vi.fn(() => "00000000-0000-4000-8000-000000000000"),
+}));
+
+vi.mock("oidc-client-ts", () => ({
+  InMemoryWebStorage: class {},
+  UserManager: class {
+    removeUser() {
+      return oidc.removeUser();
+    }
+
+    signinRedirect() {
+      return oidc.signinRedirect();
+    }
+
+    signinRedirectCallback() {
+      return oidc.signinRedirectCallback();
+    }
+  },
+  WebStorageStateStore: class {
+    constructor(_options: unknown) {}
+  },
+}));
 
 vi.mock("@/shared/api/client", () => ({
   requestSignal: () => AbortSignal.timeout(1_000),
 }));
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
-  createOwnerSession: vi.fn(),
+  createOwnerSession: api.createOwnerSession,
   deleteOwnerSession: api.deleteOwnerSession,
   getBootstrapState: api.getBootstrapState,
   renewOwnerSession: api.renewOwnerSession,
@@ -22,7 +53,19 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
 vi.mock("@/shared/api/mutation", () => ({
   csrfToken: () => "c".repeat(43),
   etag: (version: number) => `"${String(version)}"`,
-  idempotencyKey: () => "00000000-0000-4000-8000-000000000000",
+  idempotencyKey: mutation.idempotencyKey,
+}));
+vi.mock("@/shared/config/runtime", () => ({
+  runtimeConfig: () => ({
+    apiBaseUrl: "https://control.example.test",
+    oidc: {
+      authority: "https://identity.example.test/realms/kodex",
+      clientId: "control-center",
+      postLogoutRedirectUri: "https://control.example.test/",
+      redirectUri: "https://control.example.test/auth/callback",
+      scope: "openid profile email",
+    },
+  }),
 }));
 vi.mock("@/shared/api/problem", () => ({
   asProblem: (error: unknown) => error,
@@ -36,10 +79,18 @@ describe("session renewal lifecycle", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     api.getBootstrapState.mockClear();
+    api.createOwnerSession.mockClear();
     api.deleteOwnerSession.mockClear();
     api.deleteOwnerSession.mockResolvedValue({ data: undefined });
     api.renewOwnerSession.mockClear();
     api.renewOwnerSession.mockResolvedValue({ data: undefined });
+    oidc.removeUser.mockClear();
+    oidc.signinRedirect.mockClear();
+    oidc.signinRedirectCallback.mockClear();
+    oidc.signinRedirectCallback.mockResolvedValue({
+      access_token: "owner-access-token",
+    });
+    mutation.idempotencyKey.mockClear();
     const values = new Map<string, string>([["kodex.session.revision", "7"]]);
     Object.defineProperty(globalThis, "window", {
       configurable: true,
@@ -92,6 +143,25 @@ describe("session renewal lifecycle", () => {
 
     expect(api.getBootstrapState).toHaveBeenCalledTimes(2);
     expect(session.phase).toBe("authenticated");
+  });
+
+  test("повторяет создание owner session с одним idempotency key", async () => {
+    api.createOwnerSession
+      .mockRejectedValueOnce({ kind: "unavailable", retryable: true })
+      .mockResolvedValueOnce({ data: undefined, etag: '"8"' });
+    const session = useSessionStore();
+
+    const completing = session.completeLogin();
+    await vi.advanceTimersByTimeAsync(250);
+    await completing;
+
+    expect(api.createOwnerSession).toHaveBeenCalledTimes(2);
+    expect(api.createOwnerSession.mock.calls[0]?.[0]?.headers).toEqual(
+      api.createOwnerSession.mock.calls[1]?.[0]?.headers,
+    );
+    expect(mutation.idempotencyKey).toHaveBeenCalledOnce();
+    expect(session.phase).toBe("authenticated");
+    expect(oidc.removeUser).toHaveBeenCalledOnce();
   });
 
   test("отменяет renewal и ждёт его завершения перед logout", async () => {
