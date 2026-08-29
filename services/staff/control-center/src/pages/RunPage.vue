@@ -607,6 +607,7 @@ onBeforeUnmount(() => {
             <AttachmentComposer
               compact
               :upload="uploadAttachment"
+              :project-ref="run?.projectRef"
               :disabled="busy"
               @change="gateAttachmentStates[gate.ref] = $event"
             />
@@ -751,6 +752,7 @@ onBeforeUnmount(() => {
                 ref="turnAttachmentComposer"
                 compact
                 :upload="uploadAttachment"
+                :project-ref="run.projectRef"
                 :disabled="busy"
                 @change="turnAttachmentState = $event"
               />

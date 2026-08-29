@@ -31,6 +31,13 @@ export interface AttachmentComposerState {
   ready: boolean;
 }
 
+export interface ExistingAttachmentSelection {
+  ref: string;
+  name: string;
+  mediaType: string;
+  size: number;
+}
+
 export interface AttachmentComposerHandle {
   clear: () => void;
 }
@@ -90,6 +97,31 @@ export function attachmentQueueState(
     hasErrors,
     overLimit,
     ready: !busy && !hasErrors && !overLimit,
+  };
+}
+
+export function attachmentComposerState(
+  uploadState: AttachmentComposerState,
+  existing: readonly ExistingAttachmentSelection[],
+): AttachmentComposerState {
+  const selected = new Map(existing.map((item) => [item.ref, item]));
+  const refs = [
+    ...selected.keys(),
+    ...uploadState.refs.filter((reference) => !selected.has(reference)),
+  ];
+  const totalBytes =
+    uploadState.totalBytes +
+    [...selected.values()].reduce((total, item) => total + item.size, 0);
+  const overLimit = totalBytes > attachmentAggregateLimitBytes;
+  return {
+    refs,
+    count: uploadState.count + selected.size,
+    uploadedCount: uploadState.uploadedCount + selected.size,
+    totalBytes,
+    busy: uploadState.busy,
+    hasErrors: uploadState.hasErrors,
+    overLimit,
+    ready: !uploadState.busy && !uploadState.hasErrors && !overLimit,
   };
 }
 

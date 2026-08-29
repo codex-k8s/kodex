@@ -1,16 +1,34 @@
 <script setup lang="ts">
-import { File, Paperclip, RotateCcw, Upload, X } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import {
+  File,
+  FolderOpen,
+  Link2,
+  Paperclip,
+  RotateCcw,
+  Upload,
+  X,
+} from "@lucide/vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
+import {
+  createAttachmentArtifactLoader,
+  type AttachmentArtifactPickerItem,
+} from "@/shared/api/attachment-artifacts";
 import { asProblem } from "@/shared/api/problem";
+import AsyncEntityPicker, {
+  type AsyncEntityPickerLabels,
+} from "@/shared/ui/AsyncEntityPicker.vue";
 import {
   attachmentAggregateLimitBytes,
+  attachmentComposerState,
   createAttachmentUploadQueue,
   formatAttachmentSize,
   type AttachmentComposerHandle,
   type AttachmentComposerState,
+  type ExistingAttachmentSelection,
 } from "@/shared/ui/attachment-composer";
+import type { AsyncEntityLoader } from "@/shared/ui/async-entity-picker";
 
 const props = withDefaults(
   defineProps<{
@@ -18,6 +36,8 @@ const props = withDefaults(
     disabled?: boolean;
     compact?: boolean;
     reservedBytes?: number;
+    projectRef?: string;
+    loadExisting?: AsyncEntityLoader<AttachmentArtifactPickerItem>;
   }>(),
   { disabled: false, compact: false, reservedBytes: 0 },
 );
@@ -28,6 +48,11 @@ const emit = defineEmits<{
 const { locale, t } = useI18n();
 const input = ref<HTMLInputElement>();
 const dragDepth = ref(0);
+const existingPickerOpen = ref(false);
+const existingRefs = ref<string[]>([]);
+const knownExisting = shallowRef(
+  new Map<string, AttachmentArtifactPickerItem>(),
+);
 const queue = createAttachmentUploadQueue({
   upload: (file) => props.upload(file),
   disabled: () => props.disabled,
@@ -35,8 +60,41 @@ const queue = createAttachmentUploadQueue({
   formatError: (error) =>
     asProblem(error).detail || t("attachments.uploadFailed"),
 });
-const { items, state } = queue;
+const { items, state: uploadState } = queue;
 const dragActive = computed(() => dragDepth.value > 0);
+const existingLoader = computed(() => {
+  if (props.loadExisting) return props.loadExisting;
+  return props.projectRef
+    ? createAttachmentArtifactLoader(props.projectRef)
+    : undefined;
+});
+const existingSelections = computed<ExistingAttachmentSelection[]>(() =>
+  existingRefs.value.flatMap((reference) => {
+    const item = knownExisting.value.get(reference);
+    return item
+      ? [
+          {
+            mediaType: item.artifact.mediaType,
+            name: item.artifact.fileName,
+            ref: item.artifact.ref,
+            size: item.artifact.sizeBytes,
+          },
+        ]
+      : [];
+  }),
+);
+const state = computed(() =>
+  attachmentComposerState(uploadState.value, existingSelections.value),
+);
+const existingPickerLabels = computed<AsyncEntityPickerLabels>(() => ({
+  label: t("attachments.existing.label"),
+  searchPlaceholder: t("attachments.existing.search"),
+  loading: t("attachments.existing.loading"),
+  loadingMore: t("attachments.existing.loadingMore"),
+  empty: t("attachments.existing.empty"),
+  error: t("attachments.existing.error"),
+  retry: t("common.retry"),
+}));
 
 watch(state, (value) => emit("change", { ...value, refs: [...value.refs] }), {
   immediate: true,
@@ -45,6 +103,15 @@ watch(
   () => props.disabled,
   (disabled) => {
     if (!disabled) queue.process();
+  },
+);
+watch(
+  () => props.projectRef,
+  (next, previous) => {
+    if (next === previous) return;
+    existingPickerOpen.value = false;
+    existingRefs.value = [];
+    knownExisting.value = new Map();
   },
 );
 watch(
@@ -84,9 +151,29 @@ function retry(key: string): void {
   queue.retry(key);
 }
 
+function updateExistingRefs(value: string | null | readonly string[]): void {
+  if (value === null || typeof value === "string") return;
+  existingRefs.value = [...value];
+}
+
+function rememberExisting(item: AttachmentArtifactPickerItem): void {
+  const next = new Map(knownExisting.value);
+  next.set(item.artifact.ref, item);
+  knownExisting.value = next;
+}
+
+function detachExisting(reference: string): void {
+  existingRefs.value = existingRefs.value.filter(
+    (candidate) => candidate !== reference,
+  );
+}
+
 function clear(): void {
   queue.clear();
   dragDepth.value = 0;
+  existingPickerOpen.value = false;
+  existingRefs.value = [];
+  knownExisting.value = new Map();
 }
 
 defineExpose<AttachmentComposerHandle>({ clear });
@@ -125,7 +212,78 @@ defineExpose<AttachmentComposerHandle>({ clear });
       <small>{{ t("attachments.dropHint") }}</small>
     </button>
 
-    <div v-if="items.length" class="attachment-composer__queue">
+    <button
+      v-if="existingLoader"
+      class="attachment-composer__existing-toggle"
+      type="button"
+      :disabled="disabled"
+      :aria-expanded="existingPickerOpen"
+      @click="existingPickerOpen = !existingPickerOpen"
+    >
+      <FolderOpen :size="17" aria-hidden="true" />
+      <span>{{ t("attachments.existing.choose") }}</span>
+    </button>
+
+    <div
+      v-if="existingPickerOpen && existingLoader"
+      class="attachment-composer__existing-picker"
+    >
+      <header>
+        <strong>{{ t("attachments.existing.title") }}</strong>
+        <span>{{ t("attachments.existing.hint") }}</span>
+      </header>
+      <AsyncEntityPicker
+        :model-value="existingRefs"
+        :load-items="existingLoader"
+        :labels="existingPickerLabels"
+        :disabled="disabled"
+        multiple
+        @update:model-value="updateExistingRefs"
+        @select="rememberExisting"
+      >
+        <template #option="{ item }">
+          <File :size="17" aria-hidden="true" />
+          <span class="attachment-composer__existing-copy">
+            <strong>{{ item.artifact.fileName }}</strong>
+            <small>
+              {{ item.artifact.mediaType }} ·
+              {{ formatAttachmentSize(item.artifact.sizeBytes, locale) }}
+            </small>
+          </span>
+        </template>
+      </AsyncEntityPicker>
+    </div>
+
+    <div
+      v-if="existingSelections.length || items.length"
+      class="attachment-composer__queue"
+    >
+      <article
+        v-for="item in existingSelections"
+        :key="`existing:${item.ref}`"
+        class="attachment-composer__item attachment-composer__item--existing"
+      >
+        <Link2 :size="17" aria-hidden="true" />
+        <span class="attachment-composer__copy">
+          <strong :title="item.name">{{ item.name }}</strong>
+          <small>
+            {{ formatAttachmentSize(item.size, locale) }} ·
+            {{ t("attachments.existing.attached") }}
+          </small>
+        </span>
+        <span class="attachment-composer__detach-hint">
+          {{ t("attachments.existing.detachHint") }}
+        </span>
+        <button
+          class="icon-button"
+          type="button"
+          :aria-label="t('attachments.detach', { name: item.name })"
+          :title="t('attachments.detach', { name: item.name })"
+          @click="detachExisting(item.ref)"
+        >
+          <X :size="15" aria-hidden="true" />
+        </button>
+      </article>
       <article
         v-for="item in items"
         :key="item.key"
@@ -176,7 +334,7 @@ defineExpose<AttachmentComposerHandle>({ clear });
       </article>
     </div>
 
-    <footer v-if="items.length" class="attachment-composer__summary">
+    <footer v-if="state.count" class="attachment-composer__summary">
       <span>
         {{
           t("attachments.progress", {
@@ -232,6 +390,44 @@ defineExpose<AttachmentComposerHandle>({ clear });
   color: var(--text);
   cursor: pointer;
 }
+.attachment-composer__existing-toggle {
+  display: inline-flex;
+  min-height: 34px;
+  width: fit-content;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.attachment-composer__existing-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.attachment-composer__existing-picker {
+  display: grid;
+  min-height: 0;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.attachment-composer__existing-picker > header,
+.attachment-composer__existing-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.attachment-composer__existing-picker > header span,
+.attachment-composer__existing-copy small,
+.attachment-composer__detach-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
 .attachment-composer__picker small {
   margin-left: auto;
   color: var(--text-secondary);
@@ -255,6 +451,9 @@ defineExpose<AttachmentComposerHandle>({ clear });
 }
 .attachment-composer__item--failed {
   border-color: var(--danger);
+}
+.attachment-composer__item--existing {
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto;
 }
 .attachment-composer__copy {
   display: grid;
@@ -309,6 +508,9 @@ defineExpose<AttachmentComposerHandle>({ clear });
   }
   .attachment-composer__progress {
     width: 42px;
+  }
+  .attachment-composer__detach-hint {
+    display: none;
   }
 }
 </style>

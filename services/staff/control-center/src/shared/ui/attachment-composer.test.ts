@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   attachmentAggregateLimitBytes,
+  attachmentComposerState,
   attachmentQueueState,
   createAttachmentUploadQueue,
   stageAttachments,
@@ -39,6 +40,44 @@ async function flushQueue(): Promise<void> {
 }
 
 describe("attachment composer model", () => {
+  it("объединяет загруженные и выбранные Project-файлы без count-limit", () => {
+    const uploaded = attachmentQueueState([
+      {
+        ...required(stageAttachments([], [file("upload.txt", 5)])[0]),
+        artifactRef: "artifact_upload",
+        state: "UPLOADED",
+      },
+    ]);
+    const existing = Array.from({ length: 300 }, (_, index) => ({
+      ref: `artifact_${String(index)}`,
+      name: `existing-${String(index)}.txt`,
+      mediaType: "text/plain",
+      size: 1,
+    }));
+
+    const state = attachmentComposerState(uploaded, existing);
+
+    expect(state.count).toBe(301);
+    expect(state.uploadedCount).toBe(301);
+    expect(state.refs).toHaveLength(301);
+    expect(state.ready).toBe(true);
+  });
+
+  it("detach сохранённого файла меняет только draft state", () => {
+    const base = attachmentQueueState([]);
+    const artifact = {
+      ref: "artifact_existing",
+      name: "existing.txt",
+      mediaType: "text/plain",
+      size: 10,
+    };
+
+    expect(attachmentComposerState(base, [artifact]).refs).toEqual([
+      "artifact_existing",
+    ]);
+    expect(attachmentComposerState(base, []).refs).toEqual([]);
+  });
+
   it("добавляет произвольное число файлов без count-limit и дедуплицирует browser descriptor", () => {
     const files = Array.from({ length: 256 }, (_, index) =>
       file(`input-${String(index)}.txt`, index + 1, "text/plain", index),

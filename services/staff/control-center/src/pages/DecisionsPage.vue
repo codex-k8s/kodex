@@ -431,6 +431,7 @@ onMounted(
             </label>
             <AttachmentComposer
               :upload="uploadSelectedAttachment"
+              :project-ref="selected.gate.projectRef"
               :disabled="busyRef === selected.gate.ref"
               @change="attachmentStates[selected.gate.ref] = $event"
             />
