@@ -47,9 +47,14 @@ describe("agent catalog model", () => {
     expect(item.initials).toBe("АП");
     expect(item.avatarUrl).toBeUndefined();
     expect(item.statusTone).toBe("success");
-    expect(sameOriginAvatarUrl("/api/v1/avatars/agent_sales?v=2")).toBe(
-      "/api/v1/avatars/agent_sales?v=2",
-    );
+    expect(
+      sameOriginAvatarUrl(
+        "/api/v1/artifacts/art_avatar01/content?purpose=PREVIEW",
+      ),
+    ).toBe("/api/v1/artifacts/art_avatar01/content?purpose=PREVIEW");
+    expect(
+      sameOriginAvatarUrl("/api/v1/avatars/agent_sales?v=2"),
+    ).toBeUndefined();
     expect(sameOriginAvatarUrl("//images.example/agent.png")).toBeUndefined();
     expect(sameOriginAvatarUrl("/\\images.example/agent.png")).toBeUndefined();
     expect(agentInitials("   ")).toBe("AI");

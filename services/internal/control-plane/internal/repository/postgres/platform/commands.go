@@ -576,6 +576,11 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	if projectID == "" {
 		return commandOutcome{}, errs.ErrNotFound
 	}
+	avatarURL, err := repository.validateAvatarArtifact(ctx, tx, scope, projectID, input.AvatarURL)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	input.AvatarURL = avatarURL
 	runtimeKey := input.RuntimeRef
 	if runtimeKey == "" {
 		runtimeKey = defaultRuntimeKey
@@ -675,15 +680,27 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 	var projectID string
 	switch input.Kind {
 	case command.UpdateAgent:
-		if payload.RuntimeRef != "" {
-			locked, lockErr := repository.lockRuntimeAgent(ctx, tx, scope, payload.Ref)
-			if lockErr != nil {
-				return commandOutcome{}, lockErr
-			}
-			if payload.RuntimeRef != locked.runtimeProfileRef {
-				return commandOutcome{}, errs.ErrInvalid
-			}
+		locked, lockErr := repository.lockRuntimeAgent(ctx, tx, scope, payload.Ref)
+		if lockErr != nil {
+			return commandOutcome{}, lockErr
 		}
+		if payload.RuntimeRef != "" && payload.RuntimeRef != locked.runtimeProfileRef {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		var currentAvatarURL string
+		if avatarErr := tx.QueryRow(ctx, queryCommandsSelectAgentAvatarURL, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID,
+			"agent_ref":       payload.Ref,
+		}).Scan(&currentAvatarURL); avatarErr != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		avatarURL, avatarErr := repository.validateAvatarUpdate(
+			ctx, tx, scope, locked.projectID, currentAvatarURL, payload.AvatarURL,
+		)
+		if avatarErr != nil {
+			return commandOutcome{}, avatarErr
+		}
+		payload.AvatarURL = avatarURL
 		err := tx.QueryRow(ctx, queryCommandsChangeagentUpdateAgentsNamePurposeRoleDescription, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Purpose, payload.RoleDescription, payload.AvatarURL, payload.RuntimeRef, payload.RoleDefinitionRef).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch

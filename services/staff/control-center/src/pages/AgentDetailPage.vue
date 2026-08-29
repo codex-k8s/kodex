@@ -8,10 +8,15 @@ import InstructionHistory from "@/features/agents/components/InstructionHistory.
 import AgentAccessPanel from "@/features/agents/detail/AgentAccessPanel.vue";
 import AgentApiGaps from "@/features/agents/detail/AgentApiGaps.vue";
 import AgentApplyState from "@/features/agents/detail/AgentApplyState.vue";
+import AvatarCropDialog from "@/features/agents/detail/AvatarCropDialog.vue";
 import AgentEnvironmentPanel from "@/features/agents/detail/AgentEnvironmentPanel.vue";
 import AgentInstructionsPanel from "@/features/agents/detail/AgentInstructionsPanel.vue";
 import AgentProfilePanel from "@/features/agents/detail/AgentProfilePanel.vue";
 import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
+import {
+  avatarArtifactContentUrl,
+  avatarArtifactRef,
+} from "@/features/agents/detail/avatar";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import {
   sameProfileDraft,
@@ -35,8 +40,14 @@ const router = useRouter();
 const agentRef = computed(() => String(route.params.agentRef));
 const projectRef = computed(() => String(route.params.projectRef));
 const agent = computed(() => platform.agents[agentRef.value]);
+const project = computed(() => platform.projects[projectRef.value]);
 const canEdit = computed(
   () => agent.value?.nextActions.includes("EDIT") ?? false,
+);
+const canManageAvatar = computed(
+  () =>
+    canEdit.value &&
+    (project.value?.nextActions.includes("UPLOAD_ARTIFACT") ?? false),
 );
 const canManageCapabilities = computed(
   () => agent.value?.nextActions.includes("MANAGE_CAPABILITIES") ?? false,
@@ -72,6 +83,7 @@ const profileDraft = ref<AgentProfileDraft>({
 });
 const instructions = ref("");
 const task = ref("");
+const avatarFile = ref<File>();
 const busy = ref(false);
 const capabilityBusy = ref("");
 const problem = ref<AppProblem>();
@@ -102,11 +114,15 @@ const tabApplyStates = reactive<
   },
   access: { state: "APPLIED", scope: "access", boundary: "next-run" },
 });
-const avatarAsset = computed<AgentBackendFeatureAvailability>(() => ({
-  state: "UNAVAILABLE",
-  code: "avatar_asset",
-  reason: agentDetailCopy(locale.value).gaps.avatar,
-}));
+const avatarAsset = computed<AgentBackendFeatureAvailability>(() =>
+  canManageAvatar.value
+    ? { state: "AVAILABLE", code: "avatar_asset" }
+    : {
+        state: "UNAVAILABLE",
+        code: "avatar_asset",
+        reason: agentDetailCopy(locale.value).gaps.avatar,
+      },
+);
 
 const currentProfile = computed<AgentProfileDraft>(() => ({
   name: agent.value?.name ?? "",
@@ -216,12 +232,112 @@ function syncInstructions(): void {
 
 async function load(): Promise<void> {
   await Promise.all([
+    platform.loadProject(projectRef.value),
     platform.loadAgent(agentRef.value),
     platform.loadInstructionVersions(agentRef.value),
     platform.loadCapabilities(),
   ]);
   syncProfile();
   syncInstructions();
+}
+
+function avatarUpdateInput(avatarUrl: string) {
+  const current = agent.value;
+  if (!current) throw new Error("Agent state is unavailable");
+  return {
+    name: current.name,
+    purpose: current.purpose,
+    roleDescription: current.roleDescription,
+    roleDefinitionRef: current.roleDefinitionRef,
+    avatarUrl,
+    runtimeRef: current.runtimeRef,
+  };
+}
+
+function markAvatarApplied(): void {
+  if (profileDirty.value)
+    setApplyState("DRAFT", tabScope("profile"), "next-run");
+  else setApplyState("APPLIED", tabScope("profile"), "next-run");
+}
+
+async function moveAvatarArtifactToTrash(
+  artifactRef: string | undefined,
+): Promise<void> {
+  if (!artifactRef) return;
+  const artifact = await platform.readArtifact(artifactRef);
+  if (
+    artifact.lifecycleState === "ACTIVE" &&
+    (artifact.nextActions as readonly string[]).includes("DELETE")
+  )
+    await platform.deleteProjectArtifact(artifact);
+}
+
+async function applyAvatar(file: File): Promise<void> {
+  if (!agent.value || !canManageAvatar.value || busy.value) return;
+  const previousArtifactRef = avatarArtifactRef(agent.value.avatarUrl);
+  let uploadedArtifactRef: string | undefined;
+  busy.value = true;
+  problem.value = undefined;
+  markApplying(tabScope("profile"), "next-run");
+  try {
+    const uploaded = await platform.uploadProjectArtifact(
+      projectRef.value,
+      file,
+    );
+    uploadedArtifactRef = uploaded.ref;
+    await platform.saveAgent(
+      projectRef.value,
+      avatarUpdateInput(avatarArtifactContentUrl(uploaded.ref)),
+      agent.value,
+    );
+    avatarFile.value = undefined;
+    markAvatarApplied();
+    if (previousArtifactRef && previousArtifactRef !== uploaded.ref) {
+      try {
+        await moveAvatarArtifactToTrash(previousArtifactRef);
+      } catch (error) {
+        problem.value = asProblem(error);
+      }
+    }
+  } catch (error) {
+    if (uploadedArtifactRef) {
+      try {
+        await moveAvatarArtifactToTrash(uploadedArtifactRef);
+      } catch {
+        // The original mutation failure remains authoritative for the user.
+      }
+    }
+    problem.value = asProblem(error);
+    markFailed();
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function removeAvatar(): Promise<void> {
+  if (!agent.value?.avatarUrl || !canManageAvatar.value || busy.value) return;
+  const previousArtifactRef = avatarArtifactRef(agent.value.avatarUrl);
+  busy.value = true;
+  problem.value = undefined;
+  markApplying(tabScope("profile"), "next-run");
+  try {
+    await platform.saveAgent(
+      projectRef.value,
+      avatarUpdateInput(""),
+      agent.value,
+    );
+    markAvatarApplied();
+    try {
+      await moveAvatarArtifactToTrash(previousArtifactRef);
+    } catch (error) {
+      problem.value = asProblem(error);
+    }
+  } catch (error) {
+    problem.value = asProblem(error);
+    markFailed();
+  } finally {
+    busy.value = false;
+  }
 }
 
 function updateProfile(value: AgentProfileDraft): void {
@@ -489,6 +605,8 @@ onMounted(() => void load());
             :busy="busy"
             :dirty="profileDirty"
             @update:model-value="updateProfile"
+            @upload-avatar="avatarFile = $event"
+            @remove-avatar="removeAvatar"
             @save="saveProfile"
           />
           <aside class="agent-profile-aside">
@@ -652,6 +770,13 @@ onMounted(() => void load());
         <AgentApiGaps />
       </div>
     </AsyncState>
+    <AvatarCropDialog
+      v-if="avatarFile"
+      :file="avatarFile"
+      :busy="busy"
+      @close="avatarFile = undefined"
+      @confirm="applyAvatar"
+    />
   </PageFrame>
 </template>
 

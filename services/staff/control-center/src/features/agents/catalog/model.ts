@@ -61,15 +61,12 @@ export function agentAvatarTone(seed: string): number {
 
 export function sameOriginAvatarUrl(value?: string): string | undefined {
   const source = value?.trim();
-  if (!source || !source.startsWith("/")) return undefined;
-  try {
-    const base = "https://kodex.invalid";
-    const parsed = new URL(source, base);
-    if (parsed.origin !== base) return undefined;
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return undefined;
-  }
+  if (!source) return undefined;
+  return /^\/api\/v1\/artifacts\/[A-Za-z0-9_-]{8,96}\/content\?purpose=PREVIEW$/.test(
+    source,
+  )
+    ? source
+    : undefined;
 }
 
 export function agentStatusTone(state: Agent["state"]): AgentStatusTone {

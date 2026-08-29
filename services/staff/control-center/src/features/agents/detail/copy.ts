@@ -14,6 +14,16 @@ export interface AgentDetailCopy {
     upload: string;
     remove: string;
     fallback: string;
+    cropTitle: string;
+    cropCanvas: string;
+    cropHelp: string;
+    cropApply: string;
+    zoom: string;
+    processingError: string;
+    dimensionError: string;
+    typeError: string;
+    removeTitle: string;
+    removeConfirmation: string;
   };
   profile: {
     save: string;
@@ -82,11 +92,24 @@ const ru: AgentDetailCopy = {
   },
   avatar: {
     preview: "Аватар сотрудника",
-    help: "Аватар загружается как файл. Ручной ввод URL не используется; операция станет доступна после появления avatar asset API.",
+    help: "Изображение обрезается до квадрата и сохраняется как новая неизменяемая ревизия файла Проекта.",
     generate: "Создать с Kodex",
     upload: "Загрузить изображение",
     remove: "Удалить аватар",
     fallback: "Используются инициалы",
+    cropTitle: "Настроить аватар",
+    cropCanvas: "Квадратная область обрезки аватара",
+    cropHelp:
+      "Перемещайте изображение мышью или стрелками. Масштаб изменяется ползунком.",
+    cropApply: "Обрезать и загрузить",
+    zoom: "Масштаб",
+    processingError: "Не удалось обработать изображение.",
+    dimensionError:
+      "Размер изображения превышает безопасный предел 8192 × 8192.",
+    typeError: "Выберите JPEG, PNG или WebP размером не более 10 МБ.",
+    removeTitle: "Удалить аватар?",
+    removeConfirmation:
+      "Ссылка будет удалена из профиля, а файл перемещён в корзину Проекта на 30 дней.",
   },
   profile: { save: "Сохранить профиль" },
   runtime: {
@@ -140,7 +163,7 @@ const ru: AgentDetailCopy = {
     description:
       "Эти зоны показаны fail-closed и не имитируют применение изменений.",
     avatar:
-      "Нет upload/remove mutation для avatar asset; сохранённое изображение доступно только для чтения.",
+      "Для изменения аватара нужны права на профиль сотрудника и файлы Проекта.",
   },
 };
 
@@ -159,11 +182,23 @@ const en: AgentDetailCopy = {
   },
   avatar: {
     preview: "Employee avatar",
-    help: "The avatar is uploaded as a file. Manual URL input is not used; the operation will become available with the avatar asset API.",
+    help: "The image is cropped to a square and stored as a new immutable Project file revision.",
     generate: "Create with Kodex",
     upload: "Upload image",
     remove: "Remove avatar",
     fallback: "Initials are used",
+    cropTitle: "Adjust avatar",
+    cropCanvas: "Square avatar crop area",
+    cropHelp:
+      "Move the image with the pointer or arrow keys. Use the slider to zoom.",
+    cropApply: "Crop and upload",
+    zoom: "Zoom",
+    processingError: "The image could not be processed.",
+    dimensionError: "The image exceeds the safe 8192 × 8192 limit.",
+    typeError: "Select a JPEG, PNG, or WebP image up to 10 MB.",
+    removeTitle: "Remove avatar?",
+    removeConfirmation:
+      "The profile link will be cleared and the file will move to the Project trash for 30 days.",
   },
   profile: { save: "Save profile" },
   runtime: {
@@ -217,7 +252,7 @@ const en: AgentDetailCopy = {
     description:
       "These areas fail closed and never simulate successful application.",
     avatar:
-      "There are no upload/remove mutations for avatar assets; a stored image is read-only.",
+      "Changing the avatar requires access to the employee profile and Project files.",
   },
 };
 

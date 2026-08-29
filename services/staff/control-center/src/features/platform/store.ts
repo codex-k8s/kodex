@@ -27,9 +27,11 @@ import {
   createRun,
   createSchedule,
   createWorkflow,
+  deleteArtifact,
   downloadArtifact,
   getAdministration,
   getAgent,
+  getArtifact,
   getBootstrapState,
   getIntegrationConnection,
   getOverview,
@@ -707,6 +709,31 @@ export const usePlatformStore = defineStore("platform", () => {
     return projectRef
       ? uploadProjectArtifact(projectRef, file)
       : uploadOrganizationArtifactFile(file);
+  }
+
+  async function readArtifact(artifactRef: string): Promise<Artifact> {
+    const result = await unwrap(
+      getArtifact({
+        path: { artifactRef },
+        signal: requestSignal(),
+      }),
+    );
+    upsert(artifacts, [result.data]);
+    return result.data;
+  }
+
+  async function deleteProjectArtifact(artifact: Artifact): Promise<Artifact> {
+    const result = await mutate(
+      (headers) =>
+        deleteArtifact({
+          path: { artifactRef: artifact.ref },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      artifact.version,
+    );
+    upsert(artifacts, [result.data]);
+    return result.data;
   }
 
   async function changeArtifactAgentBinding(
@@ -1718,6 +1745,8 @@ export const usePlatformStore = defineStore("platform", () => {
     loadArtifacts,
     uploadProjectArtifact,
     uploadAttachmentArtifact,
+    readArtifact,
+    deleteProjectArtifact,
     changeArtifactAgentBinding,
     downloadArtifactContent,
     loadSchedules,

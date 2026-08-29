@@ -60,16 +60,16 @@ describe("agent detail model", () => {
   it("выделяет переменные и синтаксические токены без HTML", () => {
     expect(
       extractTemplateVariables(
-        "# Роль\n{{project.name}} и {{ run.task }} и {{project.name}}",
+        "# Роль\n{{project.ref}} и {{ run.ref }} и {{project.ref}}",
       ),
-    ).toEqual(["{{project.name}}", "{{run.task}}"]);
+    ).toEqual(["{{project.ref}}", "{{run.ref}}"]);
     expect(tokenizeCodeLine('model = "gpt-5.1"', "toml")).toEqual([
       { text: "model", tone: "keyword" },
       { text: " = ", tone: "plain" },
       { text: '"gpt-5.1"', tone: "string" },
     ]);
     expect(
-      tokenizeCodeLine("- Проверь {{run.task}}", "markdown").map(
+      tokenizeCodeLine("- Проверь {{run.ref}}", "markdown").map(
         (token) => token.tone,
       ),
     ).toContain("variable");
@@ -78,22 +78,22 @@ describe("agent detail model", () => {
 
   it("вставляет server-owned template variable строго в текущее выделение", () => {
     const item = toTemplateVariablePickerItem({
-      name: "project.name",
-      valueType: "string",
-      description: "Имя проекта",
-      example: "Продажи",
+      name: "project.ref",
+      valueType: "reference",
+      description: "Ссылка Проекта",
+      example: "{{ .project.ref }}",
       source: "PROJECT",
     });
 
     expect(item.scope).toBe("PROJECT");
     expect(templateVariableInsertion(item.variable.name)).toBe(
-      "{{project.name}}",
+      "{{project.ref}}",
     );
-    expect(insertTextAtSelection("До после", "{{project.name}}", 3, 3)).toEqual(
+    expect(insertTextAtSelection("До после", "{{project.ref}}", 3, 3)).toEqual(
       {
-        value: "До {{project.name}}после",
-        selectionStart: 19,
-        selectionEnd: 19,
+        value: "До {{project.ref}}после",
+        selectionStart: 18,
+        selectionEnd: 18,
       },
     );
     expect(insertTextAtSelection("До X после", "{{run.ref}}", 3, 4).value).toBe(

@@ -4,11 +4,13 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AgentAvatar from "@/features/agents/detail/AgentAvatar.vue";
+import { supportedAvatarFile } from "@/features/agents/detail/avatar";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import type {
   AgentBackendFeatureAvailability,
   AgentProfileDraft,
 } from "@/features/agents/detail/model";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
 
 const props = defineProps<{
   modelValue: AgentProfileDraft;
@@ -28,6 +30,8 @@ const emit = defineEmits<{
 const { locale } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
 const fileInput = ref<HTMLInputElement>();
+const avatarProblem = ref("");
+const removeConfirmationOpen = ref(false);
 const avatarAvailable = computed(() => props.avatarAsset.state === "AVAILABLE");
 const avatarUnavailableReason = computed(() =>
   props.avatarAsset.state === "UNAVAILABLE"
@@ -48,7 +52,9 @@ function updateField(key: keyof AgentProfileDraft, event: Event): void {
 }
 
 function chooseAvatar(): void {
-  if (avatarAvailable.value) fileInput.value?.click();
+  if (!avatarAvailable.value) return;
+  avatarProblem.value = "";
+  fileInput.value?.click();
 }
 
 function uploadAvatar(event: Event): void {
@@ -56,7 +62,29 @@ function uploadAvatar(event: Event): void {
   if (!(target instanceof HTMLInputElement)) return;
   const file = target.files?.[0];
   target.value = "";
-  if (file && avatarAvailable.value) emit("upload-avatar", file);
+  if (!file || !avatarAvailable.value) return;
+  if (!supportedAvatarFile(file)) {
+    avatarProblem.value = copy.value.avatar.typeError;
+    return;
+  }
+  avatarProblem.value = "";
+  emit("upload-avatar", file);
+}
+
+function requestAvatarRemoval(): void {
+  if (
+    !props.canEdit ||
+    props.busy ||
+    !props.avatarUrl ||
+    !avatarAvailable.value
+  )
+    return;
+  removeConfirmationOpen.value = true;
+}
+
+function confirmAvatarRemoval(): void {
+  removeConfirmationOpen.value = false;
+  emit("remove-avatar");
 }
 </script>
 
@@ -144,11 +172,18 @@ function uploadAvatar(event: Event): void {
             type="button"
             :disabled="!canEdit || busy || !avatarUrl || !avatarAvailable"
             :title="avatarUnavailableReason"
-            @click="emit('remove-avatar')"
+            @click="requestAvatarRemoval"
           >
             <Trash2 :size="16" aria-hidden="true" />{{ copy.avatar.remove }}
           </button>
         </div>
+        <p
+          v-if="avatarProblem"
+          class="profile-panel__avatar-problem"
+          role="alert"
+        >
+          {{ avatarProblem }}
+        </p>
         <code v-if="avatarAsset.state === 'UNAVAILABLE'">
           {{ avatarAsset.code }}: {{ $t("states.UNAVAILABLE") }} ·
           {{ avatarAsset.reason }}
@@ -173,6 +208,36 @@ function uploadAvatar(event: Event): void {
         </button>
       </div>
     </form>
+
+    <ModalDialog
+      v-if="removeConfirmationOpen"
+      :title="copy.avatar.removeTitle"
+      :busy="busy"
+      size="sm"
+      @close="removeConfirmationOpen = false"
+    >
+      <p class="profile-panel__remove-copy">
+        {{ copy.avatar.removeConfirmation }}
+      </p>
+      <template #actions>
+        <button
+          class="button"
+          type="button"
+          :disabled="busy"
+          @click="removeConfirmationOpen = false"
+        >
+          {{ $t("common.cancel") }}
+        </button>
+        <button
+          class="button button--danger"
+          type="button"
+          :disabled="busy"
+          @click="confirmAvatarRemoval"
+        >
+          <Trash2 :size="16" aria-hidden="true" />{{ copy.avatar.remove }}
+        </button>
+      </template>
+    </ModalDialog>
   </article>
 </template>
 
@@ -240,6 +305,14 @@ function uploadAvatar(event: Event): void {
   font-family: var(--font-mono);
   font-size: 0.76rem;
   overflow-wrap: anywhere;
+}
+.profile-panel__avatar-problem,
+.profile-panel__remove-copy {
+  margin: 0;
+}
+.profile-panel__avatar-problem {
+  color: var(--danger);
+  font-size: 0.8rem;
 }
 .profile-panel__actions {
   justify-content: flex-end;

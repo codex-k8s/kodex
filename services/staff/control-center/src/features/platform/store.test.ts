@@ -21,6 +21,14 @@ const getRunGraphMock = vi.hoisted(() => vi.fn());
 const listRunEventsMock = vi.hoisted(() => vi.fn());
 const listAgentInstructionVersionsMock = vi.hoisted(() => vi.fn());
 const downloadArtifactMock = vi.hoisted(() => vi.fn());
+const getArtifactMock = vi.hoisted(() =>
+  vi.fn<typeof import("@/shared/api/generated/openapi/sdk.gen").getArtifact>(),
+);
+const deleteArtifactMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").deleteArtifact
+  >(),
+);
 const createIntegrationConnectionMock = vi.hoisted(() => vi.fn());
 const configureIntegrationConnectionCredentialMock = vi.hoisted(() => vi.fn());
 const uploadArtifactMock = vi.hoisted(() =>
@@ -45,6 +53,8 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   listRunEvents: listRunEventsMock,
   listAgentInstructionVersions: listAgentInstructionVersionsMock,
   downloadArtifact: downloadArtifactMock,
+  getArtifact: getArtifactMock,
+  deleteArtifact: deleteArtifactMock,
   createIntegrationConnection: createIntegrationConnectionMock,
   configureIntegrationConnectionCredential:
     configureIntegrationConnectionCredentialMock,
@@ -242,6 +252,8 @@ describe("platform store", () => {
     listRunEventsMock.mockReset();
     listAgentInstructionVersionsMock.mockReset();
     downloadArtifactMock.mockReset();
+    getArtifactMock.mockReset();
+    deleteArtifactMock.mockReset();
     createIntegrationConnectionMock.mockReset();
     configureIntegrationConnectionCredentialMock.mockReset();
     uploadArtifactMock.mockReset();
@@ -533,6 +545,46 @@ describe("platform store", () => {
     expect(projectCall?.headers["X-File-Name"]).toBe("project.txt");
     expect(store.artifacts.artifact_organization).toEqual(organizationArtifact);
     expect(store.artifacts.artifact_project).toEqual(projectArtifact);
+  });
+
+  it("читает avatar artifact и перемещает его в общую корзину с OCC", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const active = {
+      ...artifact("art_avatar01", "project_owner"),
+      fileName: "agent-avatar.png",
+      mediaType: "image/png",
+      nextActions: ["DELETE" as never],
+    };
+    const deleted = {
+      ...active,
+      version: 2,
+      lifecycleState: "DELETED" as const,
+      nextActions: [],
+    };
+    getArtifactMock.mockResolvedValue({
+      data: active,
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    deleteArtifactMock.mockResolvedValue({
+      data: deleted,
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await expect(store.readArtifact(active.ref)).resolves.toEqual(active);
+    await expect(store.deleteProjectArtifact(active)).resolves.toEqual(deleted);
+
+    expect(getArtifactMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: { artifactRef: active.ref } }),
+    );
+    const deleteCall = deleteArtifactMock.mock.calls[0]?.[0];
+    expect(deleteCall?.path).toEqual({ artifactRef: active.ref });
+    expect(deleteCall?.headers["If-Match"]).toBe('"1"');
+    expect(store.artifacts[active.ref]?.lifecycleState).toBe("DELETED");
   });
 
   it("очищает owner state и project context при завершении сессии", async () => {

@@ -20,12 +20,14 @@ const messages = {
   ru: {
     common: {
       details: "Подробнее",
+      cancel: "Отмена",
       open: "Открыть",
       save: "Сохранить",
       unavailable: "Недоступно",
       unknownStatus: "Неизвестно",
     },
     agents: {
+      avatar: "Аватар",
       instructions: "Инструкции",
       validate: "Проверить инструкции",
       publish: "Опубликовать инструкции",
@@ -76,7 +78,7 @@ describe("agent detail panels", () => {
 
   it("рендерит monospace editor с gutter и безопасной подсветкой", async () => {
     const html = await render(CodeEditorSurface, {
-      modelValue: '# Роль\nmodel = "gpt-5.1"\n{{run.task}}',
+      modelValue: '# Роль\nmodel = "gpt-5.1"\n{{run.ref}}',
       language: "markdown",
       label: "Инструкции",
       readonly: true,
@@ -115,9 +117,35 @@ describe("agent detail panels", () => {
     expect(html).toMatch(/<button[^>]*disabled[^>]*>[\s\S]*Загрузить/);
   });
 
+  it("разрешает upload/remove только при совместном RBAC профиля и файлов", async () => {
+    const html = await render(AgentProfilePanel, {
+      modelValue: {
+        name: "Аналитик",
+        purpose: "Проверять данные",
+        roleDescription: "Работает с фактами",
+      },
+      roleName: "Аналитик",
+      avatarUrl: "/api/v1/artifacts/art_avatar01/content?purpose=PREVIEW",
+      avatarAsset: { state: "AVAILABLE", code: "avatar_asset" },
+      canEdit: true,
+      busy: false,
+      dirty: false,
+    });
+
+    const uploadLabelPosition = html.indexOf("Загрузить изображение");
+    const uploadButton = html.slice(
+      html.lastIndexOf("<button", uploadLabelPosition),
+      html.indexOf(">", html.lastIndexOf("<button", uploadLabelPosition)) + 1,
+    );
+    expect(uploadLabelPosition).toBeGreaterThan(0);
+    expect(uploadButton).not.toContain("disabled");
+    expect(html).not.toContain("avatar_asset:");
+    expect(html).not.toContain('type="url"');
+  });
+
   it("показывает server-owned каталог переменных и использованные значения", async () => {
     const html = await render(AgentInstructionsPanel, {
-      modelValue: "# Роль\nВыполни {{run.task}} для {{project.name}}.",
+      modelValue: "# Роль\nОбработай {{run.ref}} в {{project.ref}}.",
       projectRef: "project_sales",
       state: "DRAFT",
       validationMessages: [],
@@ -128,8 +156,8 @@ describe("agent detail panels", () => {
       dirty: true,
     });
 
-    expect(html).toContain("{{run.task}}");
-    expect(html).toContain("{{project.name}}");
+    expect(html).toContain("{{run.ref}}");
+    expect(html).toContain("{{project.ref}}");
     expect(html).toContain("Template variables");
     expect(html).toContain("Авторитетный каталог");
     expect(html).toContain('role="combobox"');

@@ -21,14 +21,15 @@ describe("agent detail api", () => {
       data: {
         items: [
           {
-            name: "environment.tools",
-            valueType: "array",
+            name: "runtime.environment.tools",
+            valueType: "collection",
             description: "Разрешённые инструменты",
-            example: "[]",
-            source: "ENVIRONMENT",
+            example:
+              "{{ range .runtime.environment.tools }}{{ .name }}{{ end }}",
+            source: "RUNTIME",
           },
         ],
-        nextPageToken: "environment.tools",
+        nextPageToken: "runtime.environment.tools",
       },
     });
     const signal = new AbortController().signal;
@@ -48,9 +49,9 @@ describe("agent detail api", () => {
       signal,
     });
     expect(page.items[0]).toMatchObject({
-      id: "environment.tools",
-      scope: "ENVIRONMENT",
+      id: "runtime.environment.tools",
+      scope: "RUNTIME",
     });
-    expect(page.nextCursor).toBe("environment.tools");
+    expect(page.nextCursor).toBe("runtime.environment.tools");
   });
 });
