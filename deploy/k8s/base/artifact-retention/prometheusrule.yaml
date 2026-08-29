@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: artifact-retention
+  labels: {app.kubernetes.io/name: artifact-retention}
+spec:
+  groups:
+    - name: artifact-retention
+      rules:
+        - alert: ArtifactRetentionUnavailable
+          expr: absent(kodex_artifact_retention_readiness{ready="true"}) or sum(kodex_artifact_retention_readiness{ready="true"}) < 1
+          for: 10m
+          labels: {severity: critical}
+          annotations:
+            summary: Artifact retention is unavailable
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/artifact-retention.md
+        - alert: ArtifactRetentionFailures
+          expr: increase(kodex_artifact_retention_failures_total[30m]) > 2
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: Artifact retention cycles are failing
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/artifact-retention.md

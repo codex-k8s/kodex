@@ -165,7 +165,7 @@ write_value() {
 postgresql_bootstrap_password="$output_directory/postgresql/bootstrap-password"
 openssl rand -hex 32 >"$postgresql_bootstrap_password"
 for role in \
-  control_plane_migrator control_plane_runtime_g1 internal_rpc_authority_migrator \
+  control_plane_migrator control_plane_runtime_g1 artifact_retention_runtime_g1 internal_rpc_authority_migrator \
   kodex_backup_reader \
   ira_restore_controller_g1 ira_publisher_g4 ira_readback_attestor_g4 \
   ira_role_image_builder_issuer_g1 ira_image_admission_issuer_g1 \
@@ -192,6 +192,9 @@ create_database_material control_plane_migrator control_plane \
 create_database_material control_plane_runtime_g1 control_plane \
   control-plane-postgresql-rw.kodex-system.svc.cluster.local \
   /var/run/config/kodex/control-plane/postgres/ca.pem
+create_database_material artifact_retention_runtime_g1 control_plane \
+  control-plane-postgresql-rw.kodex-system.svc.cluster.local \
+  /var/run/config/kodex/artifact-retention/postgres/ca.pem
 create_database_material internal_rpc_authority_migrator internal_rpc_authority \
   internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local \
   /var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem
@@ -205,6 +208,8 @@ put_material kodex/control-plane/postgres-migration dsn \
   "$output_directory/database/control_plane_migrator/dsn"
 put_material kodex/control-plane/postgres-runtime dsn \
   "$output_directory/database/control_plane_runtime_g1/dsn"
+put_material kodex/artifact-retention/postgres-runtime dsn \
+  "$output_directory/database/artifact_retention_runtime_g1/dsn"
 put_material internal-rpc-authority/postgres-migration dsn \
   "$output_directory/database/internal_rpc_authority_migrator/dsn"
 

@@ -12,12 +12,20 @@ CREATE ROLE control_plane_migrator
 CREATE ROLE control_plane_runtime_g1
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT
     NOREPLICATION NOBYPASSRLS;
+CREATE ROLE artifact_retention_runtime
+    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+    NOREPLICATION NOBYPASSRLS;
+CREATE ROLE artifact_retention_runtime_g1
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT
+    NOREPLICATION NOBYPASSRLS;
 CREATE ROLE kodex_backup_reader
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION BYPASSRLS;
 GRANT control_plane_owner TO control_plane_migrator
     WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
 GRANT control_plane_runtime TO control_plane_runtime_g1
+    WITH INHERIT TRUE, SET TRUE, ADMIN FALSE;
+GRANT artifact_retention_runtime TO artifact_retention_runtime_g1
     WITH INHERIT TRUE, SET TRUE, ADMIN FALSE;
 CREATE DATABASE control_plane OWNER control_plane_owner;
 
@@ -42,7 +50,8 @@ CREATE DATABASE internal_rpc_authority OWNER internal_rpc_authority_owner;
 REVOKE CONNECT ON DATABASE control_plane FROM PUBLIC;
 REVOKE CONNECT ON DATABASE internal_rpc_authority FROM PUBLIC;
 GRANT CONNECT, TEMPORARY ON DATABASE control_plane
-    TO control_plane_migrator, control_plane_runtime_g1, kodex_backup_reader;
+    TO control_plane_migrator, control_plane_runtime_g1,
+       artifact_retention_runtime_g1, kodex_backup_reader;
 GRANT CONNECT, CREATE, TEMPORARY ON DATABASE internal_rpc_authority
     TO internal_rpc_authority_migrator;
 GRANT CONNECT, TEMPORARY ON DATABASE internal_rpc_authority

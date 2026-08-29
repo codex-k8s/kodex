@@ -107,6 +107,7 @@ go_modules=(
   services/external/egress-gateway
   services/external/integration-gateway
   services/jobs/automation-scheduler
+  services/jobs/artifact-retention
   services/jobs/session-archive
 )
 for module in "${go_modules[@]}"; do
@@ -187,7 +188,7 @@ SEAWEEDFS_IMAGE="$seaweedfs_image" AWS_CLI_IMAGE="$aws_cli_image" yq -i '
 yq -i '
   select(
     (.kind != "NetworkPolicy" or
-      (.metadata.name | test("^(backup-controller|control-plane|seaweedfs|integration-gateway|integration-synthetic|session-archive)"))) and
+      (.metadata.name | test("^(artifact-retention|backup-controller|control-plane|seaweedfs|integration-gateway|integration-synthetic|session-archive)"))) and
     .kind != "PodDisruptionBudget" and
     .kind != "ServiceMonitor" and
     .kind != "PodMonitor" and
@@ -204,7 +205,8 @@ yq -i '
       .metadata.name == "runtime-controller" or .metadata.name == "integration-gateway" or
       .metadata.name == "integration-synthetic" or
       .metadata.name == "backup-controller" or
-      .metadata.name == "automation-scheduler" or .metadata.name == "staff-control-center" or
+      .metadata.name == "automation-scheduler" or .metadata.name == "artifact-retention" or
+      .metadata.name == "staff-control-center" or
       .metadata.name == "session-archive" or
       .metadata.name == "internal-rpc-authority-publisher" or
       .metadata.name == "internal-rpc-authority-readback-attestor" or
@@ -257,6 +259,10 @@ OIDC_HOST="$oidc_host" yq -i '
   with(select(.kind == "Deployment" and .metadata.name == "control-plane");
     (.spec.template.spec.containers[] | select(.name == "control-plane") |
       .env[] | select(.name == "CONTROL_PLANE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL").value) = "true"
+  ) |
+  with(select(.kind == "Deployment" and .metadata.name == "artifact-retention");
+    (.spec.template.spec.containers[] | select(.name == "artifact-retention") |
+      .env[] | select(.name == "ARTIFACT_RETENTION_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL").value) = "true"
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "session-archive-runtime");
     .data.SESSION_ARCHIVE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL = "true"
@@ -445,6 +451,7 @@ patch_go_container Deployment integration-gateway internal-rpc-authority-issuer 
 patch_go_container Deployment integration-gateway platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
 patch_go_container Deployment integration-synthetic integration-synthetic services/external/integration-gateway ./cmd/integration-synthetic
 patch_go_container Deployment automation-scheduler automation-scheduler services/jobs/automation-scheduler ./cmd/automation-scheduler
+patch_go_container Deployment artifact-retention artifact-retention services/jobs/artifact-retention ./cmd/artifact-retention
 patch_go_container Deployment automation-scheduler internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment automation-scheduler platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
 patch_go_container Deployment session-archive internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer

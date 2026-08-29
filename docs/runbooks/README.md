@@ -19,8 +19,10 @@ updated: 2026-08-25
 - `agent-runner.md` — выполнение внутри promoted role image;
 - `role-image-builder.md` и `image-supply-chain.md` — build/admission/promotion;
 - `integration-gateway.md` — managed typed MCP integrations;
+- `local-integration-fixture.md` — local-only CRUD, approval и retry fixture;
 - `interaction-gateway.md` — optional Mattermost adapter;
 - `automation-scheduler.md` — schedule occurrence worker;
+- `artifact-retention.md` — 30-day trash retention и exact object version purge;
 - `session-archive.md` — snapshot/restore session JSONL, guarded PVC cleanup и GC;
 - `internal-rpc-authority.md` и `egress-gateway.md` — security boundaries.
 

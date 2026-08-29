@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: artifact-retention-dashboard
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: artifact-retention
+data:
+  artifact-retention.json: |
+    {"uid":"kodex-artifact-retention","title":"Kodex artifact retention","schemaVersion":39,"panels":[{"type":"timeseries","title":"Retention cycles","targets":[{"expr":"sum by (outcome) (rate(kodex_artifact_retention_cycles_total[5m]))"}]},{"type":"timeseries","title":"Purged artifacts","targets":[{"expr":"sum(rate(kodex_artifact_retention_purged_artifacts_total[5m]))"}]},{"type":"stat","title":"Failures","targets":[{"expr":"sum(increase(kodex_artifact_retention_failures_total[1h]))"}]}]}
