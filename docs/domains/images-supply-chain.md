@@ -4,41 +4,92 @@ title: Образы и цепочка поставки
 type: domain
 status: approved
 owner: architect
-version: 0.5.2
-updated: 2026-08-24
+version: 0.6.0
+updated: 2026-08-29
 ---
 
 # Образы и цепочка поставки
 
+Документ закрепляет принятые решения `D1-A`-`D3-A`, `D4-B` и
+`D5-A`-`D8-A` без совместимости с прежней моделью прототипа.
+
 ## Назначение
 
-Владеет `RoleImageRecipe`, запросом сборки, неизменяемым дайджестом образа, кешем, SBOM, происхождением, проверкой уязвимостей и состоянием подписи.
+Владеет `RoleImage`, immutable `RoleImageRevision`, запросом сборки,
+неизменяемым дайджестом образа, tool manifest, кешем, SBOM, происхождением,
+проверкой уязвимостей, promotion и состоянием подписи.
 
-## Рецепт
+## RoleImage и полный Dockerfile
 
-Рецепт содержит:
+`RoleImage` является mutable identity и контейнером истории. Каждая правка
+создаёт новую immutable `RoleImageRevision`; опубликованная revision никогда не
+перезаписывается. Revision содержит:
 
-- закрепленную ссылку или дайджест базового образа;
-- целевые платформы;
-- типизированные пакеты ОС, языков и инструментов;
-- возможности браузера и тестирования;
-- необязательный проверенный администратором сценарий установки;
-- сетевую политику и политику реестра на время сборки;
-- метаданные для каталога инструментов в промпте.
+- полный пользовательский Dockerfile как exact UTF-8 source bytes;
+- immutable refs и digests разрешённого build context;
+- целевые платформы, builder/frontend/toolchain versions и policy digests;
+- server-owned final-wrapper revision и runtime ABI digest;
+- декларации инструментов с command/probe и безопасными metadata;
+- сетевую и registry policy только для build path.
 
-Хеш вычисляется по канонической сериализации полной спецификации: base/source/
-context/builder/frontend/platform/package/tool/toolchain/policy digests,
-версиям и multiline installation block. Изменение любого байта installation
-block меняет `spec_sha256`; этот hash входит в image labels и provenance binding,
-поэтому новый рецепт не может переиспользовать старый manifest digest. Reuse
-разрешён только для exact promoted artifact с актуальными admission receipt,
-policy, signature и registry readback.
+Пользовательский Dockerfile может полностью определять базовые образы, стадии,
+пакеты, языки, браузеры и прикладное ПО, но не является окончательным
+исполняемым Dockerfile. Платформа проверяет синтаксис и закрытые запреты,
+выбирает объявленную terminal user stage и добавляет неизменяемый
+platform-owned final wrapper. Wrapper наследует пользовательскую файловую
+систему, затем из exact trusted base добавляет `kodex-init` и
+`kodex-agent-runner`, назначает обязательные UID, entrypoint, runtime layout,
+labels и ABI. Пользовательская инструкция после wrapper не исполняется.
+Отсутствующая terminal stage, попытка подменить wrapper contract или
+неоднозначный final target закрыто отклоняют revision до сборки.
 
-Installation block необязателен: пустая строка является единственным
-каноническим значением отсутствия. Status projection не содержит этот block.
-Полную редактируемую specification, включая пустой/multiline block и только
-ссылки на secrets без значений, возвращает специализированный owner-scoped
-`GetRoleImageRecipe` с обязательной exact version.
+`spec_sha256` вычисляется по каноническому envelope, который включает exact
+байты пользовательского Dockerfile, context descriptor digests,
+builder/frontend/platform/toolchain/policy versions, tool declarations и exact
+final-wrapper/runtime ABI digests. Изменение любого байта или зависимости
+создаёт другую revision и не может неявно переиспользовать прежний artifact.
+Reuse разрешён только для exact promoted artifact с тем же полным envelope,
+актуальными admission receipt, policy, signature и registry readback.
+
+Полный Dockerfile возвращает только специализированная owner-scoped операция с
+обязательной exact version и отдельным правом просмотра source. Status/list
+projection не содержит Dockerfile. Build- и runtime-secrets в Dockerfile,
+`ARG`, `ENV`, context или revision запрещены; recipe хранит только immutable
+content refs без credentials.
+
+## Immutable build и promotion lifecycle
+
+`ImageBuild` принадлежит одной `RoleImageRevision` и фиксирует attempt, fence,
+builder inputs, final-wrapper revision и policy snapshot. Retry создаёт новую
+attempt, но не меняет source revision. Успешная сборка создаёт immutable
+candidate digest в staging; scan, SBOM, provenance, signature и admission
+относятся к этому exact digest. Promotion создаёт immutable `PromotedImage` с
+`repository@sha256`, evidence digest, runtime ABI и tool manifest digest.
+
+Теги являются только неавторитетными проекциями для человека. Runtime и
+окружение используют исключительно promoted digest. Update/archive/delete
+`RoleImage` не переписывают опубликованные revisions и artifacts; они запрещают
+новые build/promotion claims согласно lifecycle и retention policy.
+
+`RuntimeEnvironmentRevision` pin-ит exact `PromotedImage` digest. Несколько
+окружений могут ссылаться на одну promoted revision. Новая image revision не
+обновляет окружение автоматически: переход выполняется отдельной versioned
+операцией с повторной проверкой tools, resources, network, scoped RBAC и Secret
+references. Окружение задаёт runtime settings и не устанавливает ПО.
+
+## Tool manifest
+
+Каждая декларация инструмента содержит стабильные `name`, canonical command,
+executable path, version probe, readiness probe и безопасное описание. Builder
+выполняет probes после platform finalization в том же effective image и сохраняет
+результаты в подписанном immutable tool manifest. Непрошедшая декларация
+блокирует admission; автоматически обнаруженный executable без утверждённой
+декларации не выдаёт агенту capability.
+
+Окружение выбирает только поднабор manifest и может уточнить пользовательское
+описание и usage hint, но не command/path/probe. Runtime повторяет bounded
+readiness probes после materialization. Только подтверждённый effective subset
+попадает в `RuntimeRevision` и типизированную переменную prompt template.
 
 ## Сборщик
 
@@ -64,15 +115,15 @@ materializer по pull-only mTLS и basic identity читает context/package/
 совпадают. Байты пишутся в private bounded `emptyDir`, тем же immutable
 snapshot безопасно разбираются и удаляются после attempt. RWX PVC, ручной
 producer и повторное чтение изменяемого inode после hash не входят в путь.
-Role image recipe не принимает build credentials. Context/package/tool blobs
+Role image revision не принимает build credentials. Context/package/tool blobs
 заранее публикует владелец в закрытый immutable input repository, а trusted
 materializer использует только собственную pull-only authority этого
-repository. Installation `RUN` не получает credentials через spec, mount,
+repository. Пользовательские `RUN` не получают credentials через spec, mount,
 environment или build context.
 
 Builder обращается к BuildKit через client-only mTLS и публикует только в
-staging. Installation block исполняется в удалённом worker без credential
-files, secret mounts и builder Pod filesystem. После недоверенного `RUN`
+staging. Пользовательский Dockerfile исполняется в удалённом worker без
+credential files, secret mounts и builder Pod filesystem. После недоверенных `RUN`
 защищённые `kodex-init` и `kodex-agent-runner` копируются из exact
 trusted base. Output фиксирует exact `USER`, entrypoint/commands, runtime ABI
 revision/digest и labels. Отдельный admission owner связывает exact
@@ -84,7 +135,7 @@ Staging registry принимает запись только по отдель�
 Readiness BuildKit исполняет защищённый `RUN` и реальный push в выделенный
 readiness repository, поэтому декларативный worker без рабочего exporter path
 не получает readiness.
-Update, archive или delete рецепта в той же owner-транзакции закрывает
+Update, archive или delete `RoleImage` в той же owner-транзакции закрывает
 незавершённые build/artifact и отзывает их build, admission и promotion claims.
 Только отдельный HMAC-signed fenced короткоживущий claim, который включает
 оба receipt digest, выданный promotion workload после verdict, может быть
@@ -107,21 +158,21 @@ pull видит только promoted admitted content. Admin DELETE не выд
 сохраняет process sandbox, работает без Kubernetes token, прикладных owner
 secrets и persistent worker state; ослаблять mTLS или registry scopes запрещено.
 Builder сверяет заявленный builder digest с exact BuildKit image, а toolchain
-digest — с отрендеренным builder image. Package/tool blobs внутри context имеют
+digest — с отрендеренным builder image. Context/tool blobs имеют
 digest-named пути, повторно хешируются до BuildKit, устанавливаются offline, а
-source context подключается к installation step read-only и не входит в layers.
+source context подключается к user stage read-only и не входит в layers.
 
 Фазы сборки достижимы и закрыты: `MATERIALIZATION`, `CONTEXT_VALIDATION`,
-`BASE_PULL`, `SOLVING`, `INSTALLATION`, `TRUSTED_RUNTIME_FINALIZATION`,
+`BASE_PULL`, `USER_DOCKERFILE_SOLVE`, `TRUSTED_RUNTIME_FINALIZATION`,
 `STAGING_PUSH`, `PROVENANCE`. Финализация означает только server-owned перенос
-защищённых runtime-компонентов после пользовательской установки и не считается
+защищённых runtime-компонентов после пользовательских стадий и не считается
 возвратом в общую фазу `SOLVING`.
 `ImageBuild` сохраняет только bounded `errorCode`, `diagnosticCode` и безопасный
-summary до 256 байт. Raw BuildKit output, installation text, context paths и
+summary до 256 байт. Raw BuildKit output, Dockerfile text, context paths и
 credential values в status/log/audit/provenance не публикуются.
 
-Авторитетный build spec связывает только immutable `contextRef`, package/tool
-source refs и их digest. Credential reference не входит в source Proto/OpenAPI,
+Авторитетный build spec связывает только immutable `contextRef`, user Dockerfile,
+tool source refs и их digest. Credential reference не входит в source Proto/OpenAPI,
 canonical hash, owner readback или builder claim; private external source
 переносится в input repository до создания recipe через owner-side boundary.
 
@@ -162,20 +213,49 @@ push/admin credential, anonymous fallback, plaintext registry и ручная
 
 | Шаг | Actor/authority | Exact contract и authoritative effect |
 | --- | --- | --- |
-| owner create/update/read | verified owner session → control-api-gateway | специализированные manage/get operations, server-owned tenant/owner/generation, version CAS и canonical hash в control-plane transaction |
+| owner create/update/read | verified owner session → control-api-gateway | специализированные manage/get operations, server-owned tenant/owner/generation, version CAS, full Dockerfile access permission и canonical hash в control-plane transaction |
 | claim/materialize | role-image-builder SPIFFE + signed build claim | exact recipe/build/attempt/fence/immutable input; pull-only OCI mTLS materializer, private cleanup, bounded failure |
-| solve/push | isolated BuildKit client/server mTLS | trusted base/runtime ABI и offline inputs; BuildKit единственный владелец staging push credential/egress |
+| solve/push | isolated BuildKit client/server mTLS | full user Dockerfile, immutable final wrapper, trusted base/runtime ABI и offline inputs; BuildKit единственный владелец staging push credential/egress |
 | orchestrate | image-admission-controller Kubernetes identity + immutable policy + VAP | создаёт только точную последовательность phase Job/PVC; не получает credential фаз и не владеет artifact lifecycle |
 | admit | image-admission SPIFFE + artifact claim | exact provenance/SBOM/policy/signature/runtime ABI; receipt и verdict owner-side |
 | authorize/promote/complete | image-promotion SPIFFE + consumed claim/token | owner verification до side effect, exact destination digest/readback и durable replay protection |
-| runtime revision | runtime-controller SPIFFE + protected read | current owner versions/evidence и exact promoted `repository@sha256` + ABI |
-| Pod materialization | signed workload ticket + broker/webhook/VAP | два exact init и три exact containers; legacy repository, mutable ref и extras отклоняются |
+| environment pin | verified owner session → control-plane | immutable environment revision pin-ит exact promoted `repository@sha256`, tools/resources/network/scoped RBAC и versioned Secret refs |
+| runtime revision | runtime-controller SPIFFE + protected read | перед каждым turn/retry/continuation получает current owner versions/evidence, exact environment revision, promoted digest, ABI и effective tool/policy digests |
+| Pod materialization | signed workload ticket + broker/webhook/VAP | два exact init и три exact containers; неутверждённый repository, mutable ref и extras отклоняются |
 
 Node pull — отдельная platform boundary: внешний exact DNS/SAN, trusted CA,
 per-node client identity, forward-only pull credential generation и exact
 rendered node CIDR. Pull registry требует mTLS+application auth; DaemonSet с
 `imagePullPolicy: Always` проверяет реальный CRI path на каждом node. Push,
 admin и promotion identities не принимаются.
+
+## Secret и RuntimeRevision boundary
+
+Image supply chain не принимает runtime Secret values и не является secret
+store. Runtime secrets создаёт и ротирует отдельный `secret-broker` с
+минимальным namespace-scoped Kubernetes доступом. Image/environment records
+содержат только versioned descriptors; PostgreSQL хранит metadata и безопасный
+`display_hint`, но не plaintext или обратимо зашифрованную копию.
+
+Повторное раскрытие D4-B требует отдельного permission, свежей OIDC
+re-authentication и одноразового короткоживущего `no-store` ответа напрямую от
+`secret-broker`. Hint содержит суммарно не более 15 процентов и максимум 12
+символов; короткие, binary и structured значения не раскрывают фрагменты.
+
+Перед каждым turn, retry и continuation создаётся новая immutable
+`RuntimeRevision`, которая связывает exact image digest, environment revision,
+Secret grants/versions, effective tools, resources, volumes, network, scoped
+RBAC и instruction-template digest. Ранее созданная revision не обновляется и
+не используется как shortcut после изменения любой из этих зависимостей.
+
+Instruction template исполняется ограниченным Go `text/template` с
+типизированными namespaces, allowlisted функциями, validate/preview и `range`
+по effective tools. Secret values в template catalog и prompt не передаются.
+
+Прежний recipe, installation-block-only API, mutable image reference,
+автоматическое следование окружения за tag и fallback на прежний runtime
+contract не поддерживаются. Dual-read/dual-write и миграционная ветвь для
+прототипа не создаются.
 
 ## Допуск к публикации
 
@@ -191,7 +271,12 @@ admin и promotion identities не принимаются.
 ## Критерии приемки
 
 - Одинаковый рецепт переиспользует дайджест.
-- Изменение сценария, инструмента или основы меняет хеш.
+- Изменение Dockerfile, context, инструмента, wrapper или ABI меняет хеш.
+- Пользовательский Dockerfile не может удалить или подменить final wrapper.
 - Неуспешная проверка блокирует использование и дает понятное состояние.
 - Среда выполнения запускает дайджест, а не изменяемый тег.
-- Перечень инструментов в промпте соответствует фактическому манифесту образа.
+- Окружение pin-ит exact promoted digest и обновляется только явно.
+- Перечень инструментов в prompt соответствует подписанному manifest и
+  повторной readiness-проверке materialized container.
+- Новый turn получает свежую `RuntimeRevision` с exact environment, Secret и
+  policy digests.

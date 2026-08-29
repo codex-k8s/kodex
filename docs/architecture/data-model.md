@@ -4,8 +4,8 @@ title: Логическая модель данных web-first платформ
 type: architecture
 status: approved
 owner: architect
-version: 1.2.0
-updated: 2026-08-28
+version: 1.3.0
+updated: 2026-08-29
 ---
 
 # Логическая модель данных web-first платформы
@@ -59,13 +59,14 @@ purpose. RuntimeRevision ссылается только на admitted promoted 
 | --- | --- |
 | `workflows` | Project aggregate и current published version |
 | `workflow_versions` | immutable coordinator/agents/input/result/gate specification |
+| `workflow_input_snapshots` | exact finalized AttachmentSet и параметрический input, материализованные для конкретного invocation |
 | `sessions` | Agent-owned durable FIFO context; каждый delegated child получает отдельную Session |
-| `session_turns` | ordered tasks with source, attempt и lifecycle |
+| `session_turns` | ordered tasks with source, attempt, finalized input AttachmentSet и lifecycle |
 | `runs` | root/child execution, pinned WorkflowVersion, source, target, result, graph revision/sequence |
 | `run_nodes` | root process, Agent, Human Gate или bounded external action |
 | `run_edges` | delegation, callback, retry, continuation и waiting semantics |
 | `run_events` | immutable ordered deltas в пределах root Run |
-| `runtime_revisions` | exact immutable versions/digests/grants/input для attempt |
+| `runtime_revisions` | exact immutable versions/digests/grants, finalized AttachmentSet refs и ArtifactRevision input для attempt |
 | `runtime_leases` | workload/method/attempt/input/fence-bound claim lifecycle |
 | `callback_receipts` | exactly-once child-to-parent continuation effect |
 
@@ -74,16 +75,37 @@ external locator не доказывают происхождение. Exactly-o
 completed Turn в родительской Session, а после всех ожидаемых результатов —
 новый coordinator continuation Turn и `CONTINUES` edge.
 
-## Gates, artifacts и schedules
+## Gates, attachments, artifacts и schedules
 
 | Сущность | Назначение и ключевые связи |
 | --- | --- |
 | `owner_gates` | server-owned recipient policy, safe context, version и one-winner resolution |
-| `artifacts` | organization/project/run metadata, version/digest/scan/result state |
-| `artifact_bindings` | exact input/result/session/run/node relation |
-| `artifact_content` | S3 object key/version/ETag/digest/size receipt; тело в PostgreSQL отсутствует |
+| `owner_gate_messages` | сообщения и решения точного Gate; пользовательское вложение связывается через finalized AttachmentSet |
+| `artifacts` | стабильный organization/project aggregate, current lifecycle, delete/restore/purge state и OCC version |
+| `artifact_revisions` | immutable server-numbered source/provenance/display metadata/media type/size/SHA-256/scan state |
+| `artifact_uploads` | resumable upload reservation, idempotency scope, quota snapshot, ожидаемый размер/digest и terminal state |
+| `artifact_upload_parts` | bounded chunk ordinal/offset/size/digest receipt; иной payload того же ordinal является conflict |
+| `artifact_content` | exact S3 bucket/key/version_id/ETag/checksum/size receipt конкретной ArtifactRevision; тело в PostgreSQL отсутствует |
+| `attachment_sets` | immutable envelope одного действия: organization/project/actor/source/purpose/finalization/manifest digest |
+| `attachment_set_items` | stable ordered refs finalized AttachmentSet на exact ArtifactRevision с display name и purpose |
+| `attachment_bindings` | server-owned binding finalized AttachmentSet ровно к одному assistant message, Session Turn, Run input, Workflow input или owner Gate message |
+| `artifact_bindings` | direct semantic output/result/knowledge/avatar relation exact ArtifactRevision к Run/node/turn/attempt либо другому закрытому owner kind; как input не используется |
+| `artifact_purge_tombstones` | минимальный audit receipt необратимого удаления без filename, content metadata, S3 locator и secret values |
 | `schedules` | Agent/Workflow target, server-normalized preset, timezone, next due, input/session/notification policy |
 | `schedule_occurrences` | immutable due time, schedule version, target/input snapshot и digest, attempt/fence и materialized Run |
+
+`attachment_bindings` не хранит универсальную пару, которой доверяет
+application. Физическая схема содержит nullable foreign keys на допустимые
+авторитетные targets и constraint ровно одного target. Binding создаёт только
+owner command после разрешения actor, Organization, Project и target. Для
+initial Run, continuation, delegated child, Workflow invocation и Human Gate
+input одна transaction фиксирует command/message/Turn, finalized AttachmentSet
+binding, audit, idempotency receipt и обязательный outbox event.
+
+Прямой `artifact_bindings` применим к сгенерированному result и другим
+семантическим выходам. Чтобы использовать такой result как новый input,
+control-plane повторно проверяет eligibility и создаёт новый immutable
+`AttachmentSet`; mutable переиспользование output binding запрещено.
 
 ## Integrations
 
@@ -103,6 +125,7 @@ Secret material не хранится в этих таблицах и не во�
 | --- | --- |
 | `assistant_runtime` | desired/observed warm revision, heartbeat и readiness |
 | `assistant_conversations` | durable system Session presentation per User/Project context |
+| `assistant_messages` | immutable ordered user/assistant/platform messages; входные файлы связаны finalized AttachmentSet |
 | `assistant_plans` | safe typed configuration preview и apply receipt |
 
 Каждая assistant operation сохраняет initiator User и assistant attribution.
@@ -112,6 +135,10 @@ Secret material не хранится в этих таблицах и не во�
 `idempotency_receipts` связывает organization, actor, operation, key и intent
 digest. Один key с тем же intent возвращает receipt, а с другим — conflict.
 `audit_events` хранит actor/assistant attribution и safe before/after metadata.
+После purge `artifact_purge_tombstones` и audit содержат только opaque refs,
+scope, actor, timestamps, reason category, число revisions и digest deletion
+receipt. Filename, media type, content digest, S3 locator, prompt fragment и
+body удаляются.
 `outbox_events` публикует обязательные domain events после commit.
 `worker_grant_high_watermarks` обеспечивает durable replay/rollback protection.
 
@@ -121,6 +148,33 @@ digest. Один key с тем же intent возвращает receipt, а с �
   через server-owned relation;
 - version/OCC проверяется после owner resolution;
 - published Instruction/Workflow и terminal attempt immutable;
+- finalized `AttachmentSet`, его порядок items и exact ArtifactRevision refs
+  immutable; draft set не может быть связан с message/Turn/Run/Workflow/Gate;
+- каждая не purged `ArtifactRevision` immutable и имеет ровно один exact
+  content receipt; после подтверждённого purge content metadata заменяется
+  минимальным tombstone, а не пустым или новым receipt;
+- число files в AttachmentSet не ограничивается продуктовым contract, но upload
+  materialize-ится bounded batches/chunks с installation quotas по bytes и
+  storage; transport batch size не становится `max_files_per_*`;
+- только `CLEAN` active ArtifactRevision включается в новый AttachmentSet,
+  download grant или RuntimeRevision;
+- `RuntimeRevision` pin-ит exact AttachmentSet refs, manifest digests и
+  ArtifactRevision refs; materialized input directory read-only и не меняется
+  после старта attempt;
+- soft delete переводит Artifact в `DELETED`, задаёт `purge_after` через 30
+  дней и закрывает новые bindings/grants/materializations, но не меняет уже
+  работающий immutable workspace;
+- restore до purge влияет только на будущие owner commands и RuntimeRevision;
+  terminal и активные snapshots задним числом не переписываются;
+- purge удаляет каждую exact S3 version и становится `PURGED` только после
+  deletion readback; ошибка сохраняет retryable `PURGE_FAILED`, а не успешный
+  статус;
+- continuation с новым AttachmentSet всегда имеет platform-owned typed notice с
+  count, read-only directory и manifest path независимо от пользовательского
+  instruction template;
+- prompt file descriptors происходят только из текущей RuntimeRevision,
+  содержат safe metadata/local path и никогда не содержат S3 locator,
+  credentials или secret values;
 - event sequence монотонен в пределах root Run;
 - retry создаёт новую attempt/revision/lease и `RETRY_OF` edge;
 - Human Gate и callback имеют одного доменного winner;
