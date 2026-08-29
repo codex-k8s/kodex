@@ -126,6 +126,10 @@ cluster_mode=readback
   --mode "$cluster_mode" --state-directory "$state_directory"
 
 if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" == e2e ]]; then
+  if [[ "$command_name" == e2e ]]; then
+    "$repository_root/tools/dev/build-local-session-archive.sh" \
+      --source-root "$repository_root" --state-directory "$state_directory"
+  fi
   "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
     --render "$state_directory/render.yaml"
   if [[ "$command_name" == status ]]; then
