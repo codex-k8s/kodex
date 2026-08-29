@@ -7,7 +7,6 @@ import {
   History,
   ListChecks,
   Mic,
-  Paperclip,
   Pencil,
   Plus,
   Send,
@@ -24,16 +23,10 @@ import {
 } from "vue";
 import { useI18n } from "vue-i18n";
 
-import {
-  assistantAttachmentTransportAvailable,
-  formatAttachmentSize,
-  removeAssistantAttachment,
-  stageAssistantAttachments,
-  type StagedAssistantAttachment,
-} from "@/features/assistant/attachments";
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
 import { openAssistantEvent } from "@/features/assistant/events";
 import { useAssistantStore } from "@/features/assistant/store";
+import { usePlatformStore } from "@/features/platform/store";
 import RunActivityView from "@/features/runs/RunActivityView.vue";
 import type {
   AssistantContextDescriptor,
@@ -44,6 +37,11 @@ import {
   focusableElements,
   trappedFocusTarget,
 } from "@/shared/ui/dialog-focus";
+import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
+import type {
+  AttachmentComposerHandle,
+  AttachmentComposerState,
+} from "@/shared/ui/attachment-composer";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -60,6 +58,7 @@ const props = withDefaults(
 );
 const { t } = useI18n();
 const store = useAssistantStore();
+const platform = usePlatformStore();
 const open = ref(false);
 const historyOpen = ref(false);
 const message = ref("");
@@ -67,9 +66,17 @@ const titleDraft = ref("");
 const titleEditing = ref(false);
 const openPlanRef = ref<string>();
 const activeView = ref<"CHAT" | "ACTIVITY">("CHAT");
-const attachments = ref<StagedAssistantAttachment[]>([]);
-const attachmentInput = ref<HTMLInputElement>();
-const attachmentDragActive = ref(false);
+const attachmentComposer = ref<AttachmentComposerHandle>();
+const attachmentState = ref<AttachmentComposerState>({
+  refs: [],
+  count: 0,
+  uploadedCount: 0,
+  totalBytes: 0,
+  busy: false,
+  hasErrors: false,
+  overLimit: false,
+  ready: true,
+});
 const panel = ref<HTMLElement>();
 const composer = ref<HTMLTextAreaElement>();
 const historyMenu = ref<HTMLElement>();
@@ -96,7 +103,7 @@ const canSend = computed(
       store.selectedConversation ||
       store.assistant?.nextActions.includes("CREATE_CONVERSATION"),
     ) &&
-    attachments.value.length === 0,
+    attachmentState.value.ready,
 );
 const canStartConversation = computed(
   () =>
@@ -161,14 +168,14 @@ function chooseConversation(ref?: string): void {
   store.selectedRef = ref;
   historyOpen.value = false;
   titleEditing.value = false;
-  attachments.value = [];
+  attachmentComposer.value?.clear();
 }
 
 async function startConversation(): Promise<void> {
   historyOpen.value = false;
   titleEditing.value = false;
   openPlanRef.value = undefined;
-  attachments.value = [];
+  attachmentComposer.value?.clear();
   await store.startConversation();
 }
 
@@ -193,47 +200,16 @@ async function saveTitle(): Promise<void> {
 async function send(): Promise<void> {
   const value = message.value.trim();
   if (!value || !canSend.value) return;
-  await store.send(value);
+  await store.send(value, attachmentState.value.refs);
   message.value = "";
+  attachmentComposer.value?.clear();
   await nextTick();
   composer.value?.focus();
 }
 
-function openAttachmentPicker(): void {
-  attachmentInput.value?.click();
-}
-
-function stageFiles(files: Iterable<File>): void {
-  attachments.value = stageAssistantAttachments(attachments.value, files);
-}
-
-function handleAttachmentInput(event: Event): void {
-  const target = event.currentTarget;
-  if (!(target instanceof HTMLInputElement) || !target.files) return;
-  stageFiles(Array.from(target.files));
-  target.value = "";
-}
-
-function handleAttachmentDrop(event: DragEvent): void {
-  attachmentDragActive.value = false;
-  if (store.busy || !props.live || !event.dataTransfer?.files.length) return;
-  stageFiles(Array.from(event.dataTransfer.files));
-}
-
-function handleAttachmentDragLeave(event: DragEvent): void {
-  const current = event.currentTarget;
-  const next = event.relatedTarget;
-  if (
-    current instanceof HTMLElement &&
-    next instanceof Node &&
-    current.contains(next)
-  )
-    return;
-  attachmentDragActive.value = false;
-}
-
-function removeAttachment(key: string): void {
-  attachments.value = removeAssistantAttachment(attachments.value, key);
+async function uploadAttachment(file: File): Promise<{ ref: string }> {
+  if (!props.projectRef) throw new Error(t("attachments.projectRequired"));
+  return platform.uploadProjectArtifact(props.projectRef, file);
 }
 
 function handleComposerKeydown(event: KeyboardEvent): void {
@@ -280,8 +256,7 @@ watch(contextKey, () => {
   store.setContext(props.context, props.projectRef);
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
-  attachments.value = [];
-  attachmentDragActive.value = false;
+  attachmentComposer.value?.clear();
   if (open.value) void store.load(props.context, props.projectRef);
 });
 watch(
@@ -578,64 +553,20 @@ onBeforeUnmount(() => {
               </article>
             </section>
 
-            <footer
-              class="assistant-composer"
-              :class="{ 'assistant-composer--dragging': attachmentDragActive }"
-              @dragenter.prevent="attachmentDragActive = true"
-              @dragover.prevent="attachmentDragActive = true"
-              @dragleave="handleAttachmentDragLeave"
-              @drop.prevent="handleAttachmentDrop"
-            >
-              <input
-                ref="attachmentInput"
-                class="sr-only"
-                type="file"
-                multiple
-                :disabled="store.busy || !live"
-                @change="handleAttachmentInput"
+            <footer class="assistant-composer">
+              <AttachmentComposer
+                ref="attachmentComposer"
+                compact
+                :upload="uploadAttachment"
+                :disabled="store.busy || !live || !projectRef"
+                @change="attachmentState = $event"
               />
-              <div
-                v-if="attachments.length"
-                class="assistant-attachments"
-                aria-live="polite"
-              >
-                <article
-                  v-for="attachment in attachments"
-                  :key="attachment.key"
-                  class="assistant-attachment"
-                >
-                  <Paperclip :size="15" aria-hidden="true" />
-                  <span>
-                    <strong>{{ attachment.name }}</strong>
-                    <small>{{ formatAttachmentSize(attachment.size) }}</small>
-                  </span>
-                  <button
-                    class="icon-button"
-                    type="button"
-                    :aria-label="
-                      $t('assistant.removeAttachment', {
-                        name: attachment.name,
-                      })
-                    "
-                    :title="
-                      $t('assistant.removeAttachment', {
-                        name: attachment.name,
-                      })
-                    "
-                    @click="removeAttachment(attachment.key)"
-                  >
-                    <X :size="15" aria-hidden="true" />
-                  </button>
-                </article>
-              </div>
               <p
-                v-if="
-                  attachments.length && !assistantAttachmentTransportAvailable
-                "
+                v-if="!projectRef"
                 class="assistant-attachments-unavailable"
                 role="status"
               >
-                {{ $t("assistant.attachmentsUnavailable") }}
+                {{ $t("attachments.projectRequired") }}
               </p>
               <div class="assistant-composer__field">
                 <textarea
@@ -652,16 +583,6 @@ onBeforeUnmount(() => {
                   <button
                     class="assistant-composer__icon"
                     type="button"
-                    :disabled="store.busy || !live"
-                    :aria-label="$t('assistant.addAttachments')"
-                    :title="$t('assistant.addAttachments')"
-                    @click="openAttachmentPicker"
-                  >
-                    <Paperclip :size="18" aria-hidden="true" />
-                  </button>
-                  <button
-                    class="assistant-composer__icon"
-                    type="button"
                     disabled
                     :aria-label="$t('assistant.microphoneUnavailable')"
                     :title="$t('assistant.microphoneUnavailable')"
@@ -673,24 +594,14 @@ onBeforeUnmount(() => {
                     type="button"
                     :aria-label="$t('assistant.send')"
                     :disabled="!canSend || !message.trim()"
-                    :title="
-                      attachments.length
-                        ? $t('assistant.attachmentsBlockSend')
-                        : $t('assistant.send')
-                    "
+                    :title="$t('assistant.send')"
                     @click="send"
                   >
                     <Send :size="19" aria-hidden="true" />
                   </button>
                 </div>
               </div>
-              <small>
-                {{
-                  attachmentDragActive
-                    ? $t("assistant.dropAttachments")
-                    : $t("assistant.audit")
-                }}
-              </small>
+              <small>{{ $t("assistant.audit") }}</small>
             </footer>
           </div>
         </div>
@@ -1005,47 +916,6 @@ onBeforeUnmount(() => {
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
-.assistant-composer--dragging {
-  box-shadow: inset 0 0 0 2px var(--accent);
-  background: var(--accent-soft);
-}
-.assistant-attachments {
-  display: flex;
-  max-height: 132px;
-  gap: 6px;
-  overflow: auto;
-  padding-bottom: 2px;
-}
-.assistant-attachment {
-  display: grid;
-  min-width: 184px;
-  max-width: 260px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-}
-.assistant-attachment > span {
-  display: grid;
-  min-width: 0;
-}
-.assistant-attachment strong {
-  overflow: hidden;
-  font-size: 0.78rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.assistant-attachment small {
-  color: var(--subtle);
-  font-size: 0.72rem;
-}
-.assistant-attachment .icon-button {
-  width: 28px;
-  height: 28px;
-}
 .assistant-attachments-unavailable {
   margin: 0;
   color: var(--warning);
@@ -1059,7 +929,7 @@ onBeforeUnmount(() => {
   min-height: 72px;
   max-height: 180px;
   resize: vertical;
-  padding: 11px 146px 11px 12px;
+  padding: 11px 104px 11px 12px;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
 }
@@ -1131,12 +1001,6 @@ onBeforeUnmount(() => {
   }
   .assistant-message {
     width: 94%;
-  }
-  .assistant-attachments {
-    max-height: 108px;
-  }
-  .assistant-attachment {
-    min-width: min(240px, calc(100vw - 64px));
   }
 }
 </style>

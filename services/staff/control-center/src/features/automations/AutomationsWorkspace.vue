@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import {
+  Archive,
   Bot,
   CalendarClock,
+  History,
   Pause,
   Pencil,
   Play,
   Plus,
   Search,
-  Trash2,
   Workflow,
 } from "@lucide/vue";
 import { computed, onMounted, ref, watch } from "vue";
@@ -44,6 +45,7 @@ const editorProblem = ref<AppProblem>();
 const commandBusy = ref("");
 const archiveScheduleRef = ref("");
 const problem = ref<AppProblem>();
+const selectedSection = ref<"OVERVIEW" | "VERSIONS" | "RUNS">("OVERVIEW");
 
 const project = computed(() => platform.projects[props.projectRef]);
 const canCreate = computed(() =>
@@ -149,6 +151,10 @@ watch(
   },
   { immediate: true },
 );
+
+watch(selectedRef, () => {
+  selectedSection.value = "OVERVIEW";
+});
 
 function scheduleLabel(schedule: Schedule): string {
   const preset = t(`automations.presetValue.${schedule.preset}`);
@@ -387,7 +393,26 @@ onMounted(
             </div>
             <CalendarClock :size="22" aria-hidden="true" />
           </header>
-          <dl>
+          <nav
+            class="automation-details__tabs"
+            :aria-label="$t('automations.sectionsLabel')"
+          >
+            <button
+              v-for="section in ['OVERVIEW', 'VERSIONS', 'RUNS'] as const"
+              :key="section"
+              class="automation-details__tab"
+              :class="{
+                'automation-details__tab--active': selectedSection === section,
+              }"
+              type="button"
+              :aria-current="selectedSection === section ? 'page' : undefined"
+              @click="selectedSection = section"
+            >
+              {{ $t(`automations.sections.${section}`) }}
+            </button>
+          </nav>
+
+          <dl v-if="selectedSection === 'OVERVIEW'">
             <div>
               <dt>{{ custom.target }}</dt>
               <dd>{{ selectedSchedule.target.displayName }}</dd>
@@ -443,6 +468,72 @@ onMounted(
               <dd>{{ selectedSchedule.lastOutcome || "—" }}</dd>
             </div>
           </dl>
+          <section
+            v-else-if="selectedSection === 'VERSIONS'"
+            class="automation-details__history"
+            :aria-labelledby="`schedule-versions-${selectedSchedule.ref}`"
+          >
+            <div class="automation-details__history-heading">
+              <History :size="18" aria-hidden="true" />
+              <h3 :id="`schedule-versions-${selectedSchedule.ref}`">
+                {{ $t("automations.versionHistory") }}
+              </h3>
+            </div>
+            <article class="automation-details__revision">
+              <div>
+                <strong>
+                  {{
+                    $t("automations.currentVersion", {
+                      version: selectedSchedule.version,
+                    })
+                  }}
+                </strong>
+                <StatusBadge :state="selectedSchedule.state" />
+              </div>
+              <p>{{ scheduleLabel(selectedSchedule) }}</p>
+              <p>{{ task(selectedSchedule) }}</p>
+            </article>
+            <div class="automation-details__unavailable" role="note">
+              <strong>{{ $t("automations.versionHistoryUnavailable") }}</strong>
+              <p>{{ $t("automations.versionHistoryUnavailableText") }}</p>
+            </div>
+          </section>
+          <section
+            v-else
+            class="automation-details__history"
+            :aria-labelledby="`schedule-runs-${selectedSchedule.ref}`"
+          >
+            <div class="automation-details__history-heading">
+              <History :size="18" aria-hidden="true" />
+              <h3 :id="`schedule-runs-${selectedSchedule.ref}`">
+                {{ $t("automations.runHistory") }}
+              </h3>
+            </div>
+            <dl class="automation-details__run-summary">
+              <div>
+                <dt>{{ $t("automations.nextRun") }}</dt>
+                <dd>
+                  {{
+                    selectedSchedule.nextRunAt
+                      ? formatDate(selectedSchedule.nextRunAt)
+                      : $t("automations.notScheduled")
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ custom.lastResult }}</dt>
+                <dd>
+                  {{
+                    selectedSchedule.lastOutcome || $t("automations.noRunsYet")
+                  }}
+                </dd>
+              </div>
+            </dl>
+            <div class="automation-details__unavailable" role="note">
+              <strong>{{ $t("automations.runHistoryUnavailable") }}</strong>
+              <p>{{ $t("automations.runHistoryUnavailableText") }}</p>
+            </div>
+          </section>
           <div class="automation-details__actions" :aria-label="custom.actions">
             <button
               v-if="selectedCapabilities?.canEdit"
@@ -479,7 +570,7 @@ onMounted(
               type="button"
               @click="requestArchive(selectedSchedule)"
             >
-              <Trash2 :size="16" aria-hidden="true" />
+              <Archive :size="16" aria-hidden="true" />
               {{ custom.archive }}
             </button>
           </div>
@@ -667,6 +758,32 @@ onMounted(
 .automation-details dl {
   margin: 0;
 }
+.automation-details__tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.automation-details__tab {
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.automation-details__tab:hover,
+.automation-details__tab--active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.automation-details__tab--active {
+  font-weight: 700;
+}
 .automation-details dl div {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr);
@@ -687,6 +804,41 @@ onMounted(
   flex-wrap: wrap;
   gap: 8px;
   padding-top: 14px;
+}
+.automation-details__history {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+.automation-details__history-heading,
+.automation-details__revision > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.automation-details__history-heading {
+  justify-content: flex-start;
+  color: var(--accent);
+}
+.automation-details__history-heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.automation-details__revision {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.automation-details__revision p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+.automation-details dl.automation-details__run-summary div {
+  grid-template-columns: 98px minmax(0, 1fr);
 }
 .automation-details__unavailable {
   margin-top: 14px;

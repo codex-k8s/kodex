@@ -313,7 +313,7 @@ p {
 }
 .global-search-wrap {
   position: relative;
-  flex: 1 1 auto;
+  flex: 1 1 720px;
   min-width: 180px;
 }
 .global-search {
@@ -386,6 +386,15 @@ p {
 .decision-link:focus-visible {
   color: var(--accent-strong);
   background: var(--accent-soft);
+}
+.topbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  gap: 8px;
+  margin-left: auto;
 }
 .topbar-project-switcher {
   display: flex;
@@ -493,7 +502,7 @@ p {
 }
 .nav-link:hover,
 .nav-link:focus-visible,
-.nav-link.router-link-active {
+.nav-link--active {
   color: var(--accent-strong);
   background: var(--accent-soft);
 }
@@ -1395,7 +1404,7 @@ time,
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .mobile-tabs a.router-link-active {
+  .mobile-tabs a.mobile-tabs__active {
     color: var(--accent);
     background: var(--accent-soft);
   }

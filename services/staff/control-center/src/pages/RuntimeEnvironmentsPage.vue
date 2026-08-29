@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Layers3, Plus, Search } from "@lucide/vue";
+import { CircleAlert, Layers3, Plus, Search } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import { useRuntimeStore } from "@/features/runtime/store";
+import { compactIdentifier } from "@/features/runtime/environment-capabilities";
 import type { RuntimeEnvironmentSet } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import PageFrame from "@/shared/ui/PageFrame.vue";
@@ -135,6 +136,7 @@ onBeforeUnmount(() => {
               <tr>
                 <th>{{ $t("common.name") }}</th>
                 <th>{{ $t("runtime.revision") }}</th>
+                <th>{{ $t("runtime.versionDigest") }}</th>
                 <th>{{ $t("runtime.variables") }}</th>
                 <th>{{ $t("runtime.secretDescriptors") }}</th>
                 <th>{{ $t("common.status") }}</th>
@@ -163,6 +165,11 @@ onBeforeUnmount(() => {
                   </button>
                 </td>
                 <td>rev {{ environment.currentVersion.revision }}</td>
+                <td>
+                  <code>{{
+                    compactIdentifier(environment.currentVersion.digest)
+                  }}</code>
+                </td>
                 <td>{{ environment.currentVersion.values.length }}</td>
                 <td>
                   {{ environment.currentVersion.secretDescriptors.length }}
@@ -182,6 +189,12 @@ onBeforeUnmount(() => {
           <p v-if="loadingMore" class="environment-loading" role="status">
             {{ $t("common.loading") }}
           </p>
+          <p
+            v-else-if="cursor"
+            class="environment-loading environment-loading--hint"
+          >
+            {{ $t("runtime.pickerScroll") }}
+          </p>
         </div>
         <aside v-if="selected" class="environment-inspector">
           <div class="section-header">
@@ -195,6 +208,14 @@ onBeforeUnmount(() => {
             <div>
               <dt>{{ $t("runtime.revision") }}</dt>
               <dd>rev {{ selected.currentVersion.revision }}</dd>
+            </div>
+            <div>
+              <dt>{{ $t("runtime.versionDigest") }}</dt>
+              <dd>
+                <code>{{
+                  compactIdentifier(selected.currentVersion.digest)
+                }}</code>
+              </dd>
             </div>
             <div>
               <dt>{{ $t("runtime.variables") }}</dt>
@@ -220,6 +241,13 @@ onBeforeUnmount(() => {
               </span>
             </div>
             <p v-else>{{ $t("common.empty") }}</p>
+          </section>
+          <section class="environment-boundary" role="note">
+            <CircleAlert :size="17" aria-hidden="true" />
+            <div>
+              <strong>{{ $t("runtime.effectivePolicyPreview") }}</strong>
+              <p>{{ $t("runtime.catalogCapabilityBoundary") }}</p>
+            </div>
           </section>
           <section>
             <h3>{{ $t("runtime.secretDescriptorNames") }}</h3>
@@ -317,6 +345,11 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.environment-table code,
+.environment-inspector code {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+}
 .environment-name {
   display: grid;
   width: 100%;
@@ -394,6 +427,19 @@ onBeforeUnmount(() => {
 .environment-loading {
   padding: 12px;
   text-align: center;
+}
+.environment-loading--hint {
+  color: var(--text-secondary);
+}
+.environment-boundary {
+  display: flex;
+  gap: 9px;
+  padding: 11px 0;
+  border-top: 1px solid var(--hairline);
+  color: var(--text-secondary);
+}
+.environment-boundary p {
+  margin: 4px 0 0;
 }
 @media (max-width: 780px) {
   .environment-toolbar {

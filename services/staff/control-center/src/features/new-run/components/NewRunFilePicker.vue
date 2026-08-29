@@ -49,7 +49,6 @@ const emit = defineEmits<{
   confirm: [artifacts: Artifact[]];
 }>();
 
-const maximumFiles = 50;
 const viewMode = ref<ViewMode>("list");
 const draftRefs = ref<string[]>([]);
 const knownArtifacts = shallowRef(new Map<string, Artifact>());
@@ -69,7 +68,7 @@ function seedSelection(): void {
 
 function updateDraft(value: string | null | readonly string[]): void {
   if (value === null || typeof value === "string") return;
-  draftRefs.value = value.slice(0, maximumFiles);
+  draftRefs.value = [...value];
 }
 
 function remember(item: ArtifactPickerItem): void {

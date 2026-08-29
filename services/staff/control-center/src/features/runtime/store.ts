@@ -61,6 +61,9 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
   const environmentVersions = reactive<
     Record<string, RuntimeEnvironmentVersion[]>
   >({});
+  const environmentVersionCursors = reactive<
+    Record<string, string | undefined>
+  >({});
   const loading = reactive<Record<string, boolean>>({});
   const problems = reactive<Record<string, AppProblem | undefined>>({});
   const generations = new Map<string, number>();
@@ -261,7 +264,12 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
 
   async function loadEnvironmentVersions(
     environmentRef: string,
+    reset = true,
   ): Promise<void> {
+    const pageToken = reset
+      ? undefined
+      : environmentVersionCursors[environmentRef];
+    if (!reset && !pageToken) return;
     await query(
       `environment-versions:${environmentRef}`,
       async () =>
@@ -269,13 +277,27 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
           await unwrap(
             listRuntimeEnvironmentVersions({
               path: { environmentRef },
-              query: { pageSize: 100 },
+              query: {
+                pageSize: 30,
+                ...(pageToken ? { pageToken } : {}),
+              },
               signal: requestSignal(),
             }),
           )
-        ).data.items,
-      (values) => {
-        environmentVersions[environmentRef] = values;
+        ).data,
+      (page) => {
+        if (reset) environmentVersions[environmentRef] = page.items;
+        else {
+          const merged = new Map(
+            (environmentVersions[environmentRef] ?? []).map((item) => [
+              item.ref,
+              item,
+            ]),
+          );
+          for (const item of page.items) merged.set(item.ref, item);
+          environmentVersions[environmentRef] = [...merged.values()];
+        }
+        environmentVersionCursors[environmentRef] = page.nextPageToken;
       },
     );
   }
@@ -342,6 +364,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
       agentVersions,
       environments,
       environmentVersions,
+      environmentVersionCursors,
       loading,
       problems,
     ]) {
@@ -355,6 +378,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     agentVersions,
     environments,
     environmentVersions,
+    environmentVersionCursors,
     loading,
     problems,
     loadAgentRuntime,

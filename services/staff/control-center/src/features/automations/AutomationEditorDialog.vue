@@ -57,7 +57,7 @@ const custom = computed(() =>
         task: "Task",
         targetType: "Target type",
         versionHint: props.schedule
-          ? `The update uses version ${String(props.schedule.version)} and will fail if the automation changed.`
+          ? `Saving creates the next version from version ${String(props.schedule.version)} and fails if the automation changed.`
           : "The automation will be created after server validation.",
         workflow: "Process",
       }
@@ -68,7 +68,7 @@ const custom = computed(() =>
         task: "Задача",
         targetType: "Тип цели",
         versionHint: props.schedule
-          ? `Изменение отправится с версией ${String(props.schedule.version)} и будет отклонено, если автоматизация уже изменилась.`
+          ? `Сохранение создаст следующую версию на основе версии ${String(props.schedule.version)} и будет отклонено, если автоматизация уже изменилась.`
           : "Автоматизация будет создана только после проверки сервером.",
         workflow: "Процесс",
       },

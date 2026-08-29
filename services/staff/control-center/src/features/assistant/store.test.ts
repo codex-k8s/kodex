@@ -162,6 +162,26 @@ describe("assistant workspace store", () => {
     expect(store.conversations).toHaveLength(2);
   });
 
+  it("передаёт загруженные artifact refs в сообщение помощнику", async () => {
+    const initial = conversation();
+    appendTurnMock.mockResolvedValue({
+      ...initial,
+      version: 3,
+      turns: [userTurn("QUEUED")],
+    });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.conversations = [initial];
+    store.selectedRef = initial.ref;
+
+    await store.send("Изучи вложения", ["art_contract", "art_brief"]);
+
+    expect(appendTurnMock).toHaveBeenCalledWith("cnv_sales", "Изучи вложения", [
+      "art_contract",
+      "art_brief",
+    ]);
+  });
+
   it("подхватывает terminal ответ без перезагрузки страницы", async () => {
     const initial = conversation();
     const queued = {

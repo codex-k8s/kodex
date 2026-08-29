@@ -113,6 +113,24 @@ export const router = createRouter({
       meta: { projectScoped: true },
     },
     {
+      path: "/projects/:projectRef/role-images",
+      name: "role-images",
+      component: lazyPage(() => import("@/pages/RoleImagesPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/role-images/new",
+      name: "role-image-new",
+      component: lazyPage(() => import("@/pages/RoleImageEditorPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/role-images/:recipeRef",
+      name: "role-image",
+      component: lazyPage(() => import("@/pages/RoleImageEditorPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
       path: "/integrations",
       name: "integrations",
       component: lazyPage(() => import("@/pages/IntegrationsPage.vue")),

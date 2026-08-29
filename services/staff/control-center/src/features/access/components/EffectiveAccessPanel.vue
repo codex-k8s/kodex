@@ -18,9 +18,11 @@ import type {
   Agent,
   EffectiveAccessPage,
   ExplainAccessResult,
+  IntegrationConnection,
   PermissionDefinition,
   Project,
   SimulateAccessResult,
+  Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
 import type { AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -34,6 +36,8 @@ const props = defineProps<{
   roles: AccessRole[];
   projects: Project[];
   agents: Agent[];
+  workflows: Workflow[];
+  integrations: IntegrationConnection[];
   effective?: EffectiveAccessPage;
   explanation?: ExplainAccessResult;
   simulation?: SimulateAccessResult;
@@ -72,7 +76,7 @@ const emit = defineEmits<{
       };
     },
   ];
-  "load-agents": [projectRef: string];
+  "load-project-resources": [projectRef: string];
   clear: [];
 }>();
 const i18n = useI18n();
@@ -234,9 +238,11 @@ watch(mode, () => emit("clear"));
           v-model="form.scope"
           :projects="projects"
           :agents="agents"
+          :workflows="workflows"
+          :integrations="integrations"
           :allowed-scopes="selectedPermission?.allowedScopes"
           :allowed-resource-kinds="selectedPermission?.resourceKinds"
-          @load-agents="emit('load-agents', $event)"
+          @load-project-resources="emit('load-project-resources', $event)"
         />
         <ProblemNotice v-if="problem" :problem="problem" compact />
         <button
@@ -291,6 +297,40 @@ watch(mode, () => emit("clear"));
               :tone="decision.decision === 'ALLOWED' ? 'success' : 'danger'"
             />
           </header>
+          <dl class="decision-context">
+            <div>
+              <dt>{{ $t("access.effective.who") }}</dt>
+              <dd>{{ selectedSubject?.displayName }}</dd>
+            </div>
+            <div>
+              <dt>{{ $t("access.effective.what") }}</dt>
+              <dd>
+                {{
+                  selectedPermission
+                    ? permissionMessage(
+                        permissionMessages,
+                        selectedPermission.key,
+                        "name",
+                      )
+                    : form.permissionKey
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ $t("access.effective.where") }}</dt>
+              <dd>{{ $t("access.scope.values." + decision.target.kind) }}</dd>
+            </div>
+            <div>
+              <dt>{{ $t("access.effective.target") }}</dt>
+              <dd>
+                {{
+                  decision.target.resourceKind
+                    ? $t("access.resourceKinds." + decision.target.resourceKind)
+                    : $t("access.resourceKinds.ORGANIZATION")
+                }}
+              </dd>
+            </div>
+          </dl>
           <ol class="explanation-list">
             <li
               v-for="(step, index) in decision.explanation"
@@ -321,6 +361,30 @@ watch(mode, () => emit("clear"));
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+}
+.decision-context {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.decision-context div {
+  padding: 9px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.decision-context dt,
+.decision-context dd {
+  margin: 0;
+}
+.decision-context dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.decision-context dd {
+  margin-top: 3px;
+  font-weight: 600;
 }
 .effective-header {
   margin-bottom: 14px;

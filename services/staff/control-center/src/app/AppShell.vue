@@ -28,6 +28,10 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import { buildBreadcrumbs, type BreadcrumbLabels } from "@/app/breadcrumbs";
+import {
+  activeNavigationSection,
+  routeProjectRef,
+} from "@/app/navigation-context";
 import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
 import { resolveAssistantContext } from "@/features/assistant/context";
 import { openAssistantWorkspace } from "@/features/assistant/events";
@@ -43,7 +47,10 @@ import {
 } from "@/shared/locale";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import CurrentUserSummary from "@/shared/ui/CurrentUserSummary.vue";
-import { useDismissibleLayer } from "@/shared/ui/useDismissibleLayer";
+import {
+  useDismissibleLayer,
+  type DismissibleLayerCloseReason,
+} from "@/shared/ui/useDismissibleLayer";
 import { runPath } from "@/shared/routes";
 
 const route = useRoute();
@@ -62,10 +69,8 @@ const mobileSearchOpen = ref(false);
 const searchRoot = ref<HTMLElement>();
 let disposed = false;
 
-const projectRef = computed(() => {
-  const value = route.params.projectRef;
-  return typeof value === "string" ? value : undefined;
-});
+const projectRef = computed(() => routeProjectRef(route.params));
+const activeSection = computed(() => activeNavigationSection(route.name));
 const project = computed(() =>
   projectRef.value ? platform.projects[projectRef.value] : undefined,
 );
@@ -271,9 +276,16 @@ function openMobileSearch(): void {
   void nextTick(() => searchInput.value?.focus());
 }
 
-function closeSearch(): void {
+function closeSearch(
+  reason:
+    | DismissibleLayerCloseReason
+    | "programmatic"
+    | "route" = "programmatic",
+): void {
   searchOpen.value = false;
   mobileSearchOpen.value = false;
+  if (reason === "programmatic")
+    void nextTick(() => searchInput.value?.focus());
 }
 
 function searchResultPath(result: {
@@ -299,7 +311,7 @@ function setOnline(): void {
 
 function openAssistant(): void {
   mobileOpen.value = false;
-  closeSearch();
+  closeSearch("route");
   openAssistantWorkspace();
 }
 
@@ -315,10 +327,13 @@ watch(
   () => route.fullPath,
   () => {
     mobileOpen.value = false;
-    closeSearch();
+    closeSearch("route");
   },
 );
-useDismissibleLayer(searchRoot, closeSearch);
+useDismissibleLayer(searchRoot, closeSearch, {
+  enabled: computed(() => searchOpen.value || mobileSearchOpen.value),
+  returnFocusTo: searchInput,
+});
 onMounted(() => {
   locale.value = currentLocale();
   document.documentElement.lang = locale.value;
@@ -400,14 +415,16 @@ onBeforeUnmount(() => {
             v-model="search"
             type="search"
             :placeholder="$t('app.search')"
+            aria-controls="global-search-results"
+            :aria-expanded="searchOpen"
           />
         </form>
         <section
           v-if="searchOpen"
+          id="global-search-results"
           class="global-search-results"
           :aria-label="$t('app.searchResults')"
           aria-live="polite"
-          @keydown.esc="closeSearch"
         >
           <header>
             <strong>{{ $t("app.searchResults") }}</strong>
@@ -415,7 +432,7 @@ onBeforeUnmount(() => {
               class="icon-button"
               type="button"
               :aria-label="$t('app.closeSearch')"
-              @click="closeSearch"
+              @click="closeSearch('programmatic')"
             >
               ×
             </button>
@@ -441,7 +458,7 @@ onBeforeUnmount(() => {
               :key="`${result.kind}:${result.ref}`"
               class="search-result"
               :to="searchResultPath(result)"
-              @click="closeSearch"
+              @click="closeSearch('route')"
             >
               <span>
                 <small>{{ $t(`app.searchKind.${result.kind}`) }}</small>
@@ -462,25 +479,29 @@ onBeforeUnmount(() => {
       >
         <Search :size="19" aria-hidden="true" />
       </button>
-      <RouterLink class="decision-link" to="/decisions">
-        <KeyRound :size="17" aria-hidden="true" />
-        <span class="decision-link__label">{{ $t("nav.decisions") }}</span>
-        <span v-if="pendingCount" class="count-badge">{{ pendingCount }}</span>
-      </RouterLink>
-      <StatusBadge
-        class="connection-badge"
-        :state="connectionState"
-        aria-live="polite"
-      />
-      <CurrentUserSummary
-        v-if="platform.bootstrap"
-        :user="platform.bootstrap.currentUser"
-        :platform-role="platform.bootstrap.platformRole"
-        :locale="locale as SupportedLocale"
-        :can-logout="session.canLogout"
-        @change-locale="changeLocale"
-        @logout="session.logout"
-      />
+      <div class="topbar-actions">
+        <RouterLink class="decision-link" to="/decisions">
+          <KeyRound :size="17" aria-hidden="true" />
+          <span class="decision-link__label">{{ $t("nav.decisions") }}</span>
+          <span v-if="pendingCount" class="count-badge">{{
+            pendingCount
+          }}</span>
+        </RouterLink>
+        <StatusBadge
+          class="connection-badge"
+          :state="connectionState"
+          aria-live="polite"
+        />
+        <CurrentUserSummary
+          v-if="platform.bootstrap"
+          :user="platform.bootstrap.currentUser"
+          :platform-role="platform.bootstrap.platformRole"
+          :locale="locale as SupportedLocale"
+          :can-logout="session.canLogout"
+          @change-locale="changeLocale"
+          @logout="session.logout"
+        />
+      </div>
     </header>
 
     <div v-if="!online" class="offline-banner" role="status">
@@ -525,6 +546,7 @@ onBeforeUnmount(() => {
           :key="link.name"
           :to="link.path"
           class="nav-link"
+          :class="{ 'nav-link--active': activeSection === link.name }"
         >
           <span class="nav-link__label"
             ><component :is="link.icon" :size="17" aria-hidden="true" />
@@ -563,6 +585,7 @@ onBeforeUnmount(() => {
           :key="link.name"
           :to="link.path"
           class="nav-link nav-link--project"
+          :class="{ 'nav-link--active': activeSection === link.name }"
           ><span class="nav-link__label"
             ><component :is="link.icon" :size="16" aria-hidden="true" />
             <span>{{ link.label }}</span></span
@@ -573,6 +596,7 @@ onBeforeUnmount(() => {
         <RouterLink
           :to="administrationLink.path"
           class="nav-link nav-link--administration"
+          :class="{ 'nav-link--active': activeSection === 'administration' }"
         >
           <span class="nav-link__label"
             ><component
@@ -603,22 +627,37 @@ onBeforeUnmount(() => {
     </div>
 
     <nav class="mobile-tabs" :aria-label="$t('app.navigation')">
-      <RouterLink to="/"
+      <RouterLink
+        to="/"
+        :class="{ 'mobile-tabs__active': activeSection === 'home' }"
         ><Home :size="18" aria-hidden="true" /><span>{{
           $t("nav.home")
         }}</span></RouterLink
       >
-      <RouterLink to="/projects"
+      <RouterLink
+        to="/projects"
+        :class="{
+          'mobile-tabs__active':
+            activeSection === 'projects' ||
+            (projectRef !== undefined && activeSection !== 'project-runs'),
+        }"
         ><FolderKanban :size="18" aria-hidden="true" /><span>{{
           $t("nav.projects")
         }}</span></RouterLink
       >
-      <RouterLink to="/runs"
+      <RouterLink
+        to="/runs"
+        :class="{
+          'mobile-tabs__active':
+            activeSection === 'runs' || activeSection === 'project-runs',
+        }"
         ><Activity :size="18" aria-hidden="true" /><span>{{
           $t("nav.runs")
         }}</span></RouterLink
       >
-      <RouterLink to="/decisions"
+      <RouterLink
+        to="/decisions"
+        :class="{ 'mobile-tabs__active': activeSection === 'decisions' }"
         ><KeyRound :size="18" aria-hidden="true" /><span>{{
           $t("nav.decisions")
         }}</span></RouterLink

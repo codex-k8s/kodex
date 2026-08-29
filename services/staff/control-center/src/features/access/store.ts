@@ -16,11 +16,14 @@ import type {
   EffectiveAccessQuery,
   ExplainAccessInput,
   ExplainAccessResult,
+  IntegrationConnection,
+  Membership,
   OidcGroup,
   PermissionDefinition,
   Project,
   SimulateAccessInput,
   SimulateAccessResult,
+  Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 
@@ -33,6 +36,10 @@ export type AccessLoadKey =
   | "bindings"
   | "projects"
   | "agents"
+  | "workflows"
+  | "integrations"
+  | "platformMemberships"
+  | "projectMemberships"
   | "effective"
   | "explanation"
   | "simulation";
@@ -55,6 +62,10 @@ export const useAccessStore = defineStore("access", () => {
   const bindings = ref<AccessBinding[]>([]);
   const projects = ref<Project[]>([]);
   const agents = reactive<Record<string, Agent[]>>({});
+  const workflows = reactive<Record<string, Workflow[]>>({});
+  const integrations = ref<IntegrationConnection[]>([]);
+  const platformMemberships = ref<Membership[]>([]);
+  const projectMemberships = ref<Membership[]>([]);
   const roleVersions = reactive<Record<string, AccessRoleVersion[]>>({});
   const effective = ref<EffectiveAccessPage>();
   const explanation = ref<ExplainAccessResult>();
@@ -72,6 +83,10 @@ export const useAccessStore = defineStore("access", () => {
     bindings: false,
     projects: false,
     agents: false,
+    workflows: false,
+    integrations: false,
+    platformMemberships: false,
+    projectMemberships: false,
     effective: false,
     explanation: false,
     simulation: false,
@@ -86,6 +101,10 @@ export const useAccessStore = defineStore("access", () => {
     bindings: 0,
     projects: 0,
     agents: 0,
+    workflows: 0,
+    integrations: 0,
+    platformMemberships: 0,
+    projectMemberships: 0,
     effective: 0,
     explanation: 0,
     simulation: 0,
@@ -212,6 +231,48 @@ export const useAccessStore = defineStore("access", () => {
     );
   }
 
+  async function loadWorkflows(
+    projectRef: string,
+    queryText = "",
+  ): Promise<void> {
+    if (!projectRef) return;
+    await query(
+      "workflows",
+      () => api.fetchWorkflows(projectRef, queryText),
+      (page) => {
+        workflows[projectRef] = page.items;
+      },
+    );
+  }
+
+  async function loadIntegrations(): Promise<void> {
+    await query("integrations", api.fetchIntegrationConnections, (items) => {
+      integrations.value = items;
+    });
+  }
+
+  async function loadMembershipPresentation(projectRef = ""): Promise<void> {
+    await query(
+      "platformMemberships",
+      api.fetchPlatformMemberships,
+      (items) => {
+        platformMemberships.value = items;
+      },
+    );
+    if (!projectRef) {
+      projectMemberships.value = [];
+      delete problems.projectMemberships;
+      return;
+    }
+    await query(
+      "projectMemberships",
+      () => api.fetchProjectMemberships(projectRef),
+      (items) => {
+        projectMemberships.value = items;
+      },
+    );
+  }
+
   async function saveRole(
     input: AccessRoleInput,
     current?: AccessRole,
@@ -295,6 +356,10 @@ export const useAccessStore = defineStore("access", () => {
     bindings,
     projects,
     agents,
+    workflows,
+    integrations,
+    platformMemberships,
+    projectMemberships,
     roleVersions,
     effective,
     explanation,
@@ -313,6 +378,9 @@ export const useAccessStore = defineStore("access", () => {
     loadBindings,
     loadProjects,
     loadAgents,
+    loadWorkflows,
+    loadIntegrations,
+    loadMembershipPresentation,
     saveRole,
     archiveRole,
     saveBinding,

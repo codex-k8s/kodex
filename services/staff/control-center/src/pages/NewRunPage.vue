@@ -41,6 +41,11 @@ import type {
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
+import type {
+  AttachmentComposerHandle,
+  AttachmentComposerState,
+} from "@/shared/ui/attachment-composer";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
@@ -60,6 +65,17 @@ const problem = ref<AppProblem>();
 const sessionMode = ref<"NEW" | "CONTINUE">("NEW");
 const selectedArtifactItems = ref<Artifact[]>([]);
 const selectedSession = ref<Run>();
+const attachmentComposer = ref<AttachmentComposerHandle>();
+const attachmentState = ref<AttachmentComposerState>({
+  refs: [],
+  count: 0,
+  uploadedCount: 0,
+  totalBytes: 0,
+  busy: false,
+  hasErrors: false,
+  overLimit: false,
+  ready: true,
+});
 const filePickerOpen = ref(false);
 const sessionPickerOpen = ref(false);
 const inputValues = reactive<Record<string, string | number>>({});
@@ -103,6 +119,15 @@ const selectedWorkflow = computed(() =>
 const selectedArtifactRefs = computed(() =>
   selectedArtifactItems.value.map((artifact) => artifact.ref),
 );
+const selectedArtifactBytes = computed(() =>
+  selectedArtifactItems.value.reduce(
+    (total, artifact) => total + artifact.sizeBytes,
+    0,
+  ),
+);
+const inputArtifactRefs = computed(() => [
+  ...new Set([...selectedArtifactRefs.value, ...attachmentState.value.refs]),
+]);
 const artifactCapability = "platform.artifact.manage";
 const targetSupportsFiles = computed(() => {
   if (!selectedTarget.value) return false;
@@ -133,6 +158,7 @@ const canSubmit = computed(
     Boolean(selectedTarget.value) &&
     Boolean(form.title.trim()) &&
     Boolean(form.task.trim()) &&
+    attachmentState.value.ready &&
     (sessionMode.value === "NEW" || Boolean(form.sessionRef)),
 );
 
@@ -224,6 +250,7 @@ function resetTargetContext(): void {
     if (field.valueType === "BOOLEAN") booleanInputValues[field.key] = false;
   }
   selectedArtifactItems.value = [];
+  attachmentComposer.value?.clear();
   selectedSession.value = undefined;
   sessionMode.value = "NEW";
   form.sessionRef = "";
@@ -276,6 +303,10 @@ function removeArtifact(reference: string): void {
   );
 }
 
+async function uploadAttachment(file: File): Promise<{ ref: string }> {
+  return platform.uploadProjectArtifact(projectRef.value, file);
+}
+
 function inputComponentType(field: WorkflowInputField): string {
   if (field.valueType === "NUMBER") return "number";
   if (field.valueType === "DATE") return "date";
@@ -307,7 +338,7 @@ async function submit(): Promise<void> {
       title: form.title.trim(),
       task: form.task.trim(),
       ...(selectedWorkflow.value ? { input: workflowInput() } : {}),
-      artifactRefs: [...selectedArtifactRefs.value],
+      artifactRefs: inputArtifactRefs.value,
       ...(sessionMode.value === "CONTINUE"
         ? { sessionRef: form.sessionRef }
         : {}),
@@ -669,7 +700,7 @@ watch(
                 <h2 id="new-run-files-title">
                   {{ $t("runs.inputFiles") }}
                   <span class="count-badge">{{
-                    selectedArtifactItems.length
+                    inputArtifactRefs.length
                   }}</span>
                 </h2>
                 <p>
@@ -690,6 +721,14 @@ watch(
                 {{ $t("runs.newRun.files.choose") }}
               </button>
             </header>
+
+            <AttachmentComposer
+              ref="attachmentComposer"
+              :upload="uploadAttachment"
+              :disabled="busy || !targetSupportsFiles"
+              :reserved-bytes="selectedArtifactBytes"
+              @change="attachmentState = $event"
+            />
 
             <div v-if="selectedArtifactItems.length" class="selected-files">
               <div

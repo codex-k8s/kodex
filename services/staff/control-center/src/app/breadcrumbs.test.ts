@@ -104,4 +104,21 @@ describe("breadcrumbs", () => {
       { label: "Новое окружение" },
     ]);
   });
+
+  it("связывает новый запуск со списком запусков текущего Проекта", () => {
+    expect(
+      buildBreadcrumbs(
+        {
+          routeName: "new-run",
+          project: { ref: "project_sales", name: "Продажи" },
+        },
+        labels,
+      ),
+    ).toEqual([
+      { label: "Проекты", path: "/projects" },
+      { label: "Продажи", path: "/projects/project_sales" },
+      { label: "Запуски", path: "/projects/project_sales/runs" },
+      { label: "Новый запуск" },
+    ]);
+  });
 });

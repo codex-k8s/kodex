@@ -5,11 +5,15 @@ import { AppProblem } from "@/shared/api/problem";
 
 const fetchAccessSubjects = vi.hoisted(() => vi.fn());
 const fetchAccessBindings = vi.hoisted(() => vi.fn());
+const fetchPlatformMemberships = vi.hoisted(() => vi.fn());
+const fetchProjectMemberships = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/access/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/access/api")>()),
   fetchAccessSubjects,
   fetchAccessBindings,
+  fetchPlatformMemberships,
+  fetchProjectMemberships,
 }));
 
 import { useAccessStore } from "@/features/access/store";
@@ -40,6 +44,8 @@ describe("access store", () => {
     setActivePinia(createPinia());
     fetchAccessSubjects.mockReset();
     fetchAccessBindings.mockReset();
+    fetchPlatformMemberships.mockReset();
+    fetchProjectMemberships.mockReset();
   });
 
   it("не позволяет старому поиску участников заменить новый", async () => {
@@ -92,5 +98,32 @@ describe("access store", () => {
       includeRevoked: true,
       pageToken: undefined,
     });
+  });
+
+  it("загружает platform role и Project membership отдельными read paths", async () => {
+    const platformMembership = {
+      ref: "membership_platform",
+      version: 1,
+      user: { ref: "subject_owner", displayName: "Владелец" },
+      platformRole: "OWNER" as const,
+      permissions: [],
+      active: true,
+      nextActions: [],
+    };
+    const projectMembership = {
+      ...platformMembership,
+      ref: "membership_project",
+      permissions: ["MANAGE_AGENTS" as const],
+    };
+    fetchPlatformMemberships.mockResolvedValue([platformMembership]);
+    fetchProjectMemberships.mockResolvedValue([projectMembership]);
+    const store = useAccessStore();
+
+    await store.loadMembershipPresentation("project_sales");
+
+    expect(fetchPlatformMemberships).toHaveBeenCalledOnce();
+    expect(fetchProjectMemberships).toHaveBeenCalledWith("project_sales");
+    expect(store.platformMemberships).toEqual([platformMembership]);
+    expect(store.projectMemberships).toEqual([projectMembership]);
   });
 });

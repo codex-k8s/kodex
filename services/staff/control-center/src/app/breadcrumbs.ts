@@ -99,7 +99,16 @@ export function buildBreadcrumbs(
         current(context.workflowName ?? labels.workflow),
       ];
     case "new-run":
-      return [...project, current(labels.newRun)];
+      return [
+        ...project,
+        {
+          label: labels.runs,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/runs`
+            : "/runs",
+        },
+        current(labels.newRun),
+      ];
     case "project-runs":
       return [...project, current(labels.runs)];
     case "runs":

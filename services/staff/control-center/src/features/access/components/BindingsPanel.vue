@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 
 import type {
   AccessBinding,
+  AccessRole,
   Agent,
   Project,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -12,6 +13,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{
   bindings: AccessBinding[];
+  roles: AccessRole[];
   projects: Project[];
   agentsByProject: Record<string, Agent[]>;
   loading?: boolean;
@@ -52,6 +54,17 @@ function resourceName(binding: AccessBinding): string {
     );
   }
   return scope.resourceKind ?? "";
+}
+function assignmentKind(
+  binding: AccessBinding,
+): "PLATFORM_ROLE" | "PROJECT_MEMBERSHIP" | "SCOPED_GRANT" {
+  const role = props.roles.find(
+    (item) => item.ref === binding.roleVersion.roleRef,
+  );
+  if (binding.scope.kind === "ORGANIZATION" && role?.kind === "SYSTEM")
+    return "PLATFORM_ROLE";
+  if (binding.scope.kind === "PROJECT") return "PROJECT_MEMBERSHIP";
+  return "SCOPED_GRANT";
 }
 </script>
 
@@ -105,9 +118,22 @@ function resourceName(binding: AccessBinding): string {
           <div class="binding-arrow" aria-hidden="true">→</div>
           <div>
             <strong>{{ binding.roleVersion.name }}</strong>
-            <small>v{{ binding.roleVersion.revision }}</small>
+            <small
+              >v{{ binding.roleVersion.revision }} ·
+              {{
+                $t("access.bindingsWorkspace.permissionCount", {
+                  count: binding.roleVersion.permissionKeys.length,
+                })
+              }}</small
+            >
           </div>
           <div>
+            <span class="assignment-kind">{{
+              $t(
+                "access.bindingsWorkspace.assignmentKinds." +
+                  assignmentKind(binding),
+              )
+            }}</span>
             <strong>{{
               $t(`access.scope.values.${binding.scope.kind}`)
             }}</strong>
@@ -217,6 +243,17 @@ function resourceName(binding: AccessBinding): string {
 .binding-conditions {
   display: grid;
   gap: 2px;
+}
+.assignment-kind {
+  display: block;
+  width: max-content;
+  margin-bottom: 4px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 .load-more {
   display: flex;

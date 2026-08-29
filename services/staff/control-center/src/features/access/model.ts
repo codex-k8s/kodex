@@ -1,4 +1,5 @@
 import type {
+  AccessBinding,
   AccessBindingInput,
   AccessConditions,
   AccessResourceKind,
@@ -7,6 +8,7 @@ import type {
   AccessScopeKind,
   AccessSubject,
   AccessSubjectKind,
+  Membership,
   PermissionDefinition,
 } from "@/shared/api/generated/openapi/types.gen";
 
@@ -181,4 +183,42 @@ export function subjectsOfKind(
   kind: AccessSubjectKind,
 ): AccessSubject[] {
   return subjects.filter((subject) => subject.kind === kind);
+}
+
+export function subjectMatchesBinding(
+  subject: AccessSubject,
+  binding: AccessBinding,
+): boolean {
+  return (
+    binding.subject.ref === subject.ref ||
+    (binding.subject.kind === "OIDC_GROUP" &&
+      subject.oidcGroupRefs.includes(binding.subject.ref))
+  );
+}
+
+export function subjectBindings(
+  subject: AccessSubject,
+  bindings: readonly AccessBinding[],
+): AccessBinding[] {
+  return bindings.filter(
+    (binding) =>
+      binding.state === "ACTIVE" && subjectMatchesBinding(subject, binding),
+  );
+}
+
+export function membershipForSubject(
+  subject: AccessSubject,
+  memberships: readonly Membership[],
+): Membership | undefined {
+  return memberships.find((membership) => membership.user.ref === subject.ref);
+}
+
+export function uniquePermissionKeys(
+  bindings: readonly AccessBinding[],
+): string[] {
+  return [
+    ...new Set(
+      bindings.flatMap((binding) => binding.roleVersion.permissionKeys),
+    ),
+  ].sort();
 }

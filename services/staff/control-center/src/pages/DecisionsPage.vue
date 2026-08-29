@@ -20,6 +20,8 @@ import type { OwnerGate } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
+import type { AttachmentComposerState } from "@/shared/ui/attachment-composer";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -32,6 +34,7 @@ const projectFilter = ref(
 );
 const selectedRef = ref("");
 const comments = ref<Record<string, string>>({});
+const attachmentStates = ref<Record<string, AttachmentComposerState>>({});
 const busyRef = ref("");
 const problem = ref<AppProblem>();
 
@@ -96,13 +99,35 @@ async function decide(
     await platform.decide(gate, {
       decision,
       comment: comments.value[gate.ref] ?? "",
+      ...(attachmentStates.value[gate.ref]?.refs.length
+        ? { artifactRefs: attachmentStates.value[gate.ref]?.refs ?? [] }
+        : {}),
     });
+    Reflect.deleteProperty(comments.value, gate.ref);
+    Reflect.deleteProperty(attachmentStates.value, gate.ref);
   } catch (error) {
     problem.value = asProblem(error);
     if (problem.value.kind === "conflict") await platform.loadGates();
   } finally {
     busyRef.value = "";
   }
+}
+
+async function uploadAttachment(
+  gate: OwnerGate,
+  file: File,
+): Promise<{ ref: string }> {
+  return platform.uploadProjectArtifact(gate.projectRef, file);
+}
+
+async function uploadSelectedAttachment(file: File): Promise<{ ref: string }> {
+  const item = selected.value;
+  if (!item) throw new Error("Owner Gate is unavailable");
+  return uploadAttachment(item.gate, file);
+}
+
+function attachmentsReady(gateRef: string): boolean {
+  return attachmentStates.value[gateRef]?.ready ?? true;
 }
 
 onMounted(
@@ -302,12 +327,20 @@ onMounted(
                 :placeholder="$t('decisions.commentPlaceholder')"
               />
             </label>
+            <AttachmentComposer
+              :upload="uploadSelectedAttachment"
+              :disabled="busyRef === selected.gate.ref"
+              @change="attachmentStates[selected.gate.ref] = $event"
+            />
             <div class="decision-actions">
               <button
                 v-if="selected.gate.allowedDecisions.includes('APPROVE')"
                 class="button button--primary"
                 type="button"
-                :disabled="busyRef === selected.gate.ref"
+                :disabled="
+                  busyRef === selected.gate.ref ||
+                  !attachmentsReady(selected.gate.ref)
+                "
                 @click="decide(selected.gate, 'APPROVE')"
               >
                 {{ $t("common.approve") }}
@@ -318,7 +351,10 @@ onMounted(
                 "
                 class="button"
                 type="button"
-                :disabled="busyRef === selected.gate.ref"
+                :disabled="
+                  busyRef === selected.gate.ref ||
+                  !attachmentsReady(selected.gate.ref)
+                "
                 @click="decide(selected.gate, 'REQUEST_CHANGES')"
               >
                 {{ $t("common.requestChanges") }}
@@ -327,7 +363,10 @@ onMounted(
                 v-if="selected.gate.allowedDecisions.includes('REJECT')"
                 class="button button--danger"
                 type="button"
-                :disabled="busyRef === selected.gate.ref"
+                :disabled="
+                  busyRef === selected.gate.ref ||
+                  !attachmentsReady(selected.gate.ref)
+                "
                 @click="decide(selected.gate, 'REJECT')"
               >
                 {{ $t("common.reject") }}

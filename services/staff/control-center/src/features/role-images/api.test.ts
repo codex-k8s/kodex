@@ -1,0 +1,125 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import {
+  commandRoleImage,
+  loadRoleDefinitionOptions,
+  loadRoleImagePage,
+} from "@/features/role-images/api";
+import type { RoleImageRecipe } from "@/shared/api/generated/openapi/types.gen";
+
+const api = vi.hoisted(() => ({
+  commandRoleImageRecipe: vi.fn(),
+  getRoleImageRecipe: vi.fn(),
+  listAgents: vi.fn(),
+  listRoleEnvironments: vi.fn(),
+  listRoleImageRecipes: vi.fn(),
+}));
+const mutation = vi.hoisted(() => ({ mutate: vi.fn() }));
+
+vi.mock("@/shared/api/generated/openapi/sdk.gen", () => api);
+vi.mock("@/shared/api/client", () => ({
+  requestSignal: () => new AbortController().signal,
+}));
+vi.mock("@/shared/api/mutation", () => mutation);
+
+function response<T>(data: T) {
+  return Promise.resolve({
+    data,
+    response: new Response(null, { status: 200 }),
+  });
+}
+
+const recipe: RoleImageRecipe = {
+  ref: "image_1",
+  version: 3,
+  projectRef: "project_1",
+  roleDefinitionRef: "role_1",
+  name: "Образ аналитика",
+  state: "ACTIVE",
+  environment: { environmentKey: "standard" },
+  generation: 2,
+  promotedImageReady: false,
+  createdAt: "2026-08-29T10:00:00Z",
+  updatedAt: "2026-08-29T10:00:00Z",
+  nextActions: ["OPEN", "REQUEST_BUILD"],
+};
+
+describe("role image API adapter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mutation.mutate.mockImplementation(
+      async (request: (headers: Record<string, string>) => Promise<unknown>) =>
+        request({
+          "Idempotency-Key": "idem_1",
+          "If-Match": '"3"',
+          "X-CSRF-Token": "csrf_1",
+        }),
+    );
+  });
+
+  it("передаёт project и cursor в настоящий list endpoint", async () => {
+    api.listRoleImageRecipes.mockReturnValueOnce(
+      response({ items: [recipe], nextPageToken: "page_2" }),
+    );
+    const page = await loadRoleImagePage("project_1", "page_1");
+    expect(api.listRoleImageRecipes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { projectRef: "project_1" },
+        query: { pageSize: 40, pageToken: "page_1" },
+      }),
+    );
+    expect(page.nextPageToken).toBe("page_2");
+  });
+
+  it("собирает роли только из авторитетных agent roleDefinitionRef", async () => {
+    api.listAgents
+      .mockReturnValueOnce(
+        response({
+          items: [
+            {
+              ref: "agent_1",
+              roleDefinitionRef: "role_1",
+              roleDefinitionName: "Аналитик",
+            },
+            { ref: "agent_without_role", name: "Без роли" },
+          ],
+          nextPageToken: "page_2",
+        }),
+      )
+      .mockReturnValueOnce(
+        response({
+          items: [
+            {
+              ref: "agent_2",
+              roleDefinitionRef: "role_1",
+              roleDefinitionName: "Аналитик",
+            },
+          ],
+        }),
+      );
+
+    await expect(loadRoleDefinitionOptions("project_1")).resolves.toEqual([
+      { ref: "role_1", label: "Аналитик", agentCount: 2 },
+    ]);
+    expect(api.listAgents).toHaveBeenCalledTimes(2);
+  });
+
+  it("выполняет только существующую versioned build command", async () => {
+    api.commandRoleImageRecipe.mockReturnValueOnce(
+      response({ recipe, reused: false }),
+    );
+    await commandRoleImage("project_1", recipe, "REQUEST_BUILD");
+    expect(mutation.mutate).toHaveBeenCalledWith(expect.any(Function), 3);
+    expect(api.commandRoleImageRecipe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { projectRef: "project_1", recipeRef: "image_1" },
+        body: { action: "REQUEST_BUILD" },
+        headers: {
+          "Idempotency-Key": "idem_1",
+          "If-Match": '"3"',
+          "X-CSRF-Token": "csrf_1",
+        },
+      }),
+    );
+  });
+});

@@ -17,7 +17,7 @@ const emit = defineEmits<{ close: []; confirm: [] }>();
 
 <template>
   <ModalDialog :title="title" :busy="busy" @close="emit('close')">
-    <div class="automation-delete-confirmation">
+    <div class="automation-archive-confirmation">
       <CircleAlert :size="24" aria-hidden="true" />
       <div>
         <strong>{{ schedule.name }}</strong>
@@ -47,14 +47,14 @@ const emit = defineEmits<{ close: []; confirm: [] }>();
 </template>
 
 <style scoped>
-.automation-delete-confirmation {
+.automation-archive-confirmation {
   display: grid;
   width: min(480px, 72vw);
   grid-template-columns: 28px minmax(0, 1fr);
   gap: 12px;
   color: var(--danger);
 }
-.automation-delete-confirmation p {
+.automation-archive-confirmation p {
   margin: 6px 0 0;
   color: var(--muted);
 }

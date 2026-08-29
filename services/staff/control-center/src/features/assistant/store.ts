@@ -246,7 +246,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     });
   }
 
-  async function send(content: string): Promise<void> {
+  async function send(
+    content: string,
+    artifactRefs: string[] = [],
+  ): Promise<void> {
     const normalized = content.trim();
     if (!normalized) return;
     let submitted:
@@ -270,7 +273,9 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         0,
         ...conversation.turns.map((turn) => turn.sequence),
       );
-      const appended = await appendTurn(conversation.ref, normalized);
+      const appended = artifactRefs.length
+        ? await appendTurn(conversation.ref, normalized, artifactRefs)
+        : await appendTurn(conversation.ref, normalized);
       conversations.value = conversations.value.map((item) =>
         item.ref === conversation.ref
           ? { ...item, turns: item.turns.filter((turn) => !turn.plan) }

@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AgentRuntimeConfigurationView,
   RuntimeEnvironmentPage,
+  RuntimeEnvironmentVersionPage,
 } from "@/shared/api/generated/openapi/types.gen";
 
 const getAgentRuntimeConfigurationMock = vi.hoisted(() => vi.fn());
 const listRuntimeEnvironmentSetsMock = vi.hoisted(() => vi.fn());
+const listRuntimeEnvironmentVersionsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   ...(await importOriginal<
@@ -15,6 +17,7 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   >()),
   getAgentRuntimeConfiguration: getAgentRuntimeConfigurationMock,
   listRuntimeEnvironmentSets: listRuntimeEnvironmentSetsMock,
+  listRuntimeEnvironmentVersions: listRuntimeEnvironmentVersionsMock,
 }));
 vi.mock("@/shared/api/client", () => ({
   requestSignal: () => new AbortController().signal,
@@ -102,6 +105,7 @@ describe("runtime store", () => {
     setActivePinia(createPinia());
     getAgentRuntimeConfigurationMock.mockReset();
     listRuntimeEnvironmentSetsMock.mockReset();
+    listRuntimeEnvironmentVersionsMock.mockReset();
   });
 
   it("не позволяет старому runtime readback перезаписать новый", async () => {
@@ -141,6 +145,53 @@ describe("runtime store", () => {
           pageSize: 30,
           pageToken: "cursor-current",
         },
+      }),
+    );
+  });
+
+  it("добавляет следующую cursor-страницу ревизий без повторов", async () => {
+    const currentVersion = {
+      ref: "environment_version_2",
+      version: 2,
+      revision: 2,
+      values: [],
+      secretDescriptors: [],
+      digest: "a".repeat(64),
+      createdAt: "2026-08-29T12:00:00Z",
+    };
+    const first: RuntimeEnvironmentVersionPage = {
+      items: [currentVersion],
+      nextPageToken: "cursor-2",
+    };
+    const second: RuntimeEnvironmentVersionPage = {
+      items: [
+        currentVersion,
+        {
+          ref: "environment_version_1",
+          version: 1,
+          revision: 1,
+          values: [],
+          secretDescriptors: [],
+          digest: "b".repeat(64),
+          createdAt: "2026-08-29T11:00:00Z",
+        },
+      ],
+    };
+    listRuntimeEnvironmentVersionsMock
+      .mockResolvedValueOnce(response(first))
+      .mockResolvedValueOnce(response(second));
+    const store = useRuntimeStore();
+
+    await store.loadEnvironmentVersions("environment_main");
+    await store.loadEnvironmentVersions("environment_main", false);
+
+    expect(
+      store.environmentVersions.environment_main?.map((item) => item.ref),
+    ).toEqual(["environment_version_2", "environment_version_1"]);
+    expect(listRuntimeEnvironmentVersionsMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        path: { environmentRef: "environment_main" },
+        query: { pageSize: 30, pageToken: "cursor-2" },
       }),
     );
   });

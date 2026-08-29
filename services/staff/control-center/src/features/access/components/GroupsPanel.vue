@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from "vue";
 
-import type { OidcGroup } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  AccessBinding,
+  OidcGroup,
+} from "@/shared/api/generated/openapi/types.gen";
 import type { AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
-defineProps<{
+const props = defineProps<{
   groups: OidcGroup[];
+  bindings: AccessBinding[];
+  bindingsUnavailable?: boolean;
   loading?: boolean;
   problem?: AppProblem;
   hasMore?: boolean;
@@ -27,6 +32,13 @@ watch(query, (value) => {
 onBeforeUnmount(() => {
   if (timer) clearTimeout(timer);
 });
+
+function mappings(group: OidcGroup): AccessBinding[] {
+  return props.bindings.filter(
+    (binding) =>
+      binding.state === "ACTIVE" && binding.subject.ref === group.ref,
+  );
+}
 </script>
 
 <template>
@@ -80,13 +92,28 @@ onBeforeUnmount(() => {
               <dd>{{ new Date(group.lastSeenAt).toLocaleString() }}</dd>
             </div>
           </dl>
+          <section class="group-mappings">
+            <strong>{{ $t("access.groups.roleMappings") }}</strong>
+            <p v-if="bindingsUnavailable" class="unavailable">
+              {{ $t("access.groups.bindingsUnavailable") }}
+            </p>
+            <ul v-else-if="mappings(group).length">
+              <li v-for="binding in mappings(group)" :key="binding.ref">
+                <span>{{ binding.roleVersion.name }}</span>
+                <small>{{
+                  $t(`access.scope.values.${binding.scope.kind}`)
+                }}</small>
+              </li>
+            </ul>
+            <p v-else>{{ $t("access.groups.noRoleMappings") }}</p>
+          </section>
           <button
             class="button group-bind"
             type="button"
             :disabled="group.state !== 'ACTIVE'"
             @click="emit('bind', group)"
           >
-            {{ $t("access.participants.assignRole") }}
+            {{ $t("access.groups.createMapping") }}
           </button>
         </article>
       </div>
@@ -158,6 +185,37 @@ dt {
 }
 .group-bind {
   margin-top: 12px;
+}
+.group-mappings {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+.group-mappings ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.group-mappings li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--panel);
+}
+.group-mappings p,
+.group-mappings small {
+  margin: 0;
+  color: var(--muted);
+}
+.group-mappings .unavailable {
+  color: var(--warning);
 }
 .group-card dt,
 .group-card dd {

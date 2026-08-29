@@ -115,4 +115,46 @@ describe("automations model", () => {
       scheduleCapabilities(schedule({ nextActions: ["ARCHIVE"] })),
     ).toMatchObject({ canEdit: false, canArchive: true });
   });
+
+  it("строит lifecycle только из authoritative nextActions", () => {
+    expect(
+      scheduleCapabilities(
+        schedule({
+          state: "ACTIVE",
+          nextActions: ["EDIT", "DISABLE", "ARCHIVE"],
+        }),
+      ),
+    ).toEqual({
+      canEdit: true,
+      canPause: true,
+      canEnable: false,
+      canArchive: true,
+      canDeletePermanently: false,
+    });
+    expect(
+      scheduleCapabilities(
+        schedule({
+          state: "PAUSED",
+          nextActions: ["EDIT", "ENABLE", "ARCHIVE"],
+        }),
+      ),
+    ).toEqual({
+      canEdit: true,
+      canPause: false,
+      canEnable: true,
+      canArchive: true,
+      canDeletePermanently: false,
+    });
+    expect(
+      scheduleCapabilities(
+        schedule({ state: "ARCHIVED", nextActions: ["OPEN"] }),
+      ),
+    ).toEqual({
+      canEdit: false,
+      canPause: false,
+      canEnable: false,
+      canArchive: false,
+      canDeletePermanently: false,
+    });
+  });
 });

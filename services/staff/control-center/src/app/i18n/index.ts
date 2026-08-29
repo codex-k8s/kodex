@@ -360,6 +360,81 @@ const ru = {
     variableNames: "Доступные переменные",
     secretDescriptorNames: "Секретные переменные",
     openEditor: "Открыть редактор",
+    editorSections: "Разделы редактора окружения",
+    section: {
+      GENERAL: "Основное",
+      IMAGE_TOOLS: "Образ и инструменты",
+      VALUES: "Переменные",
+      SECRETS: "Секреты",
+      POLICY: "Ресурсы и доступ",
+      READINESS: "Готовность",
+    },
+    notPublished: "Ещё не опубликовано",
+    versionDigest: "Digest ревизии окружения",
+    imageAndTools: "Образ и проверенные инструменты",
+    imageAndToolsHelp:
+      "Окружение должно закреплять exact promoted image digest и разрешать только проверенные executable.",
+    exactImage: "Exact image revision и digest",
+    exactImageUnavailable:
+      "Текущий API окружений не возвращает promoted image revision/digest и не принимает image binding.",
+    verifiedTools: "Проверенные инструменты",
+    verifiedToolsUnavailable:
+      "Текущий API не предоставляет каталог executable и не сохраняет выбранный поднабор инструментов окружения.",
+    noFakePersistence:
+      "Неподдержанные параметры не сохраняются локально: UI ждёт авторитетный versioned API.",
+    secretReferences: "Ссылки на секреты",
+    createSecret: "Создать секрет",
+    rotateSecret: "Ротировать",
+    revealSecret: "Показать значение",
+    secretActionsUnavailable:
+      "Secret create/rotate/reveal отсутствуют в текущем API.",
+    secretLifecycleUnavailable:
+      "Операция недоступна: API secret-broker lifecycle не материализован.",
+    secretRevealUnavailable:
+      "Reveal недоступен: нет API, permission readback и fresh OIDC action proof.",
+    secretReferenceIncomplete: "Неполная ссылка на ревизию секрета",
+    secretMaskedHint: "Безопасная маска",
+    secretMaskedHintUnavailable:
+      "Недоступна: API не возвращает типизированный display_hint.",
+    editSecretReference: "Изменить immutable reference",
+    noSecretReferences: "Ссылки на секреты не добавлены.",
+    resourcesAndAccess: "Ресурсы, сеть и Kubernetes RBAC",
+    resourcesAndAccessHelp:
+      "Effective policy должен вычисляться сервером в пределах полномочий пользователя и admission policy.",
+    resources: "Requests и limits",
+    resourcesUnavailable:
+      "Typed resource profile отсутствует в текущем RuntimeEnvironment API.",
+    networkPolicy: "Сетевая политика",
+    networkPolicyUnavailable:
+      "API не предоставляет typed destinations и итоговый NetworkPolicy preview.",
+    kubernetesRbac: "Scoped Kubernetes RBAC",
+    kubernetesRbacUnavailable:
+      "API не возвращает workload identity, RBAC profile и effective grants.",
+    effectivePolicyPreview: "Effective policy preview",
+    effectivePolicyUnavailable:
+      "Авторитетный preview ресурсов, сети и RBAC пока недоступен; UI не строит его по догадке.",
+    catalogCapabilityBoundary:
+      "Каталог показывает environment revision. Exact image digest, tools, resources, network и RBAC появятся только после materialization соответствующего API.",
+    readiness: "Готовность окружения",
+    readinessHelp:
+      "Локальные проверки отделены от server-side readiness выбранного image digest и effective policy.",
+    readinessCheck: {
+      FORM: "Основные параметры и env values",
+      SECRET_REFS: "Immutable Secret references",
+      REVISION: "Опубликованная immutable revision",
+      SERVER_READINESS: "Server-side readiness",
+    },
+    readinessState: {
+      READY: "Готово",
+      NEEDS_ATTENTION: "Требует внимания",
+      UNAVAILABLE: "Недоступно в API",
+    },
+    safeEffectivePreview: "Безопасное представление текущей ревизии",
+    safeEffectivePreviewHelp:
+      "Показывает только доступные API метаданные и никогда не включает plaintext секретов.",
+    revisionHistoryHelp:
+      "Возврат публикует новую ревизию и не изменяет старую.",
+    revisionHistoryEmpty: "Опубликованных ревизий пока нет.",
     errors: {
       nameRequired: "Укажите название окружения.",
       variableName: "Имя переменной должно соответствовать формату VAR_NAME.",
@@ -387,6 +462,75 @@ const ru = {
       pdf: "Обработка PDF",
       ocr: "Распознавание текста",
       office: "Офисные форматы",
+    },
+  },
+  roleImages: {
+    title: "Образы ИИ-сотрудников",
+    subtitle:
+      "Сборки, ревизии и программное окружение для рабочих сред Проекта",
+    entity: "Образ ИИ-сотрудника",
+    new: "Новый образ",
+    editorTitle: "Настройка образа",
+    editorSubtitle:
+      "Dockerfile, сборка, promotion и доказательства supply chain",
+    backToCatalog: "К каталогу образов",
+    search: "Найти образ в загруженной части каталога",
+    searchLimitation:
+      "Текущий API не принимает поисковый запрос: фильтр применяется только к уже загруженным страницам.",
+    loaded: "Загружено: {count}",
+    loadMore: "Загрузить ещё",
+    archived: "Архивные",
+    empty: "Образы не найдены",
+    emptyHelp:
+      "Измените фильтры или откройте редактор нового образа. Сохранение полного Dockerfile появится после расширения backend-контракта.",
+    unknownRole: "Название роли недоступно",
+    generation: "Поколение",
+    environment: "Базовое окружение",
+    promotion: "Promotion",
+    promoted: "Promoted",
+    notPromoted: "Не promoted",
+    updated: "Обновлено: {date}",
+    updatedAt: "Обновлено",
+    role: "Роль",
+    chooseRole: "Выберите роль",
+    agentsCount: "сотрудников: {count}",
+    sourceTitle: "Исходный Dockerfile",
+    sourceHelp:
+      "Платформа должна сохранить immutable revision и добавить защищённый runtime contract Kodex.",
+    dockerfile: "Полный Dockerfile",
+    localDraft: "Локальный черновик",
+    saveBlocked:
+      "Сохранение заблокировано: текущий публичный API не принимает Dockerfile и не создаёт immutable RoleImageRevision.",
+    createRevision: "Создать ревизию",
+    requestBuild: "Запросить сборку",
+    restore: "Восстановить",
+    confirmArchive:
+      "Архивировать этот образ? Новые сборки станут недоступны до восстановления.",
+    confirmRestore: "Восстановить этот образ?",
+    buildHistory: "История сборок",
+    buildHistoryHelp:
+      "Фактические attempt, stage, progress и безопасная диагностика из API.",
+    noBuilds: "Сборки ещё не запускались.",
+    attempt: "Попытка {attempt}",
+    currentState: "Текущее состояние",
+    evidence: "Digest, SBOM и provenance",
+    executables: "Обнаруженные executable",
+    usedByEnvironments: "Используется окружениями",
+    openEnvironments: "Открыть окружения",
+    unavailable: {
+      title: "Контракт ещё не материализован",
+      description:
+        "Интерфейс не имитирует сохранение или данные, которых нет в фактическом OpenAPI.",
+      dockerfile: "Сохранение Dockerfile",
+      revisions: "Immutable revisions",
+      promotion: "Управляемый promotion",
+      evidence: "Digest, SBOM и provenance",
+      executables: "Инвентаризация executable",
+      "environment-links": "Обратные ссылки окружений",
+    },
+    validation: {
+      dockerfileRequired: "Dockerfile не должен быть пустым.",
+      fromRequired: "Dockerfile должен содержать инструкцию FROM.",
     },
   },
   workflows: {
@@ -649,6 +793,23 @@ const ru = {
     sessionPolicy: "Политика сессии",
     notifications: "Уведомления",
     nextRun: "Следующий запуск",
+    sectionsLabel: "Разделы автоматизации",
+    sections: {
+      OVERVIEW: "Сводка",
+      VERSIONS: "Версии",
+      RUNS: "Запуски",
+    },
+    versionHistory: "История версий",
+    currentVersion: "Версия {version} · текущая",
+    versionHistoryUnavailable: "Предыдущие версии пока недоступны",
+    versionHistoryUnavailableText:
+      "API возвращает только текущую версию автоматизации и не позволяет достоверно показать или восстановить предыдущую конфигурацию.",
+    runHistory: "История запусков",
+    runHistoryUnavailable: "Полная история запусков пока недоступна",
+    runHistoryUnavailableText:
+      "API не связывает запуск с точной автоматизацией. Kodex не сопоставляет историю по изменяемому названию, чтобы не показать чужой или неверный запуск.",
+    notScheduled: "Не запланирован",
+    noRunsYet: "Результатов пока нет",
     emptyTitle: "Автоматизаций пока нет",
     emptyText:
       "Создайте расписание для сотрудника или опубликованного Процесса.",
@@ -864,25 +1025,69 @@ const ru = {
       "OIDC определяет личность и группы, Kodex — прикладные роли, области и эффективный доступ",
     workspaceProjectSubtitle:
       "Доступ в контексте выбранного Проекта без расширения полномочий организации",
+    model: {
+      title: "Как вычисляется доступ",
+      authorityBadge: "Авторитет: control-plane",
+      organizationContext:
+        "Организационная роль задаёт базовую границу, а точные действия разрешают versioned-роли и привязки.",
+      projectContext:
+        "Платформенная роль наследуется из организации; членство и узкие привязки действуют только в выбранном Проекте.",
+      layers: {
+        identity: {
+          title: "Identity",
+          description:
+            "Проверенный пользователь, OIDC-группа или служебный субъект.",
+        },
+        platform: {
+          title: "Платформенная роль",
+          description:
+            "Системная роль в области организации: владелец, администратор, оператор, участник или аудитор.",
+        },
+        project: {
+          title: "Доступ к Проекту",
+          description:
+            "Членство в Проекте и узкие привязки к типу или экземпляру сущности.",
+        },
+        effective: {
+          title: "Эффективное решение",
+          description:
+            "Backend сопоставляет typed permission, scope, условия и актуальное состояние.",
+        },
+      },
+      rule: "Название роли само по себе ничего не разрешает: authority появляется только из активной version-pinned привязки и всегда повторно проверяется control-plane.",
+    },
     loadMore: "Показать ещё",
     sections: {
       label: "Разделы управления доступом",
-      participants: "Участники",
+      participants: "Субъекты и членство",
       groups: "Группы OIDC",
       roles: "Роли",
-      bindings: "Привязки",
+      bindings: "Назначения",
       effective: "Эффективный доступ",
     },
     participants: {
       title: "Участники",
       subtitle: "Пользователи и служебные субъекты с прикладными привязками",
+      projectSubtitle:
+        "Платформенная роль, членство и узкие назначения в выбранном Проекте",
       search: "Поиск участников",
       searchPlaceholder: "Имя участника",
       participant: "Участник",
       identity: "Identity и группы",
       bindings: "Привязки",
+      platformRole: "Платформенная роль",
+      projectAccess: "Доступ к Проекту",
       directIdentity: "Прямая identity",
       assignRole: "Назначить роль",
+      createBinding: "Создать назначение",
+      noPlatformRole: "Не назначена",
+      organizationWide: "Область организации",
+      noProjectAccess: "Нет проектного доступа",
+      presentationUnavailable:
+        "Недоступно: сервер не вернул membership presentation",
+      permissionCount: "Полномочий: {count}",
+      scopedBindingCount: "Узких назначений: {count}",
+      bindingCount: "Активных назначений: {count}",
       empty: "Участники не найдены",
       emptyHint:
         "Пользователь появится после первого входа через OIDC; до выдачи binding доступ закрыт.",
@@ -899,6 +1104,11 @@ const ru = {
       members: "Участники",
       bindings: "Привязки",
       lastSeen: "Последний вход",
+      roleMappings: "Прикладные назначения",
+      noRoleMappings: "Роли Kodex группе не назначены.",
+      bindingsUnavailable:
+        "Недоступно: сервер не вернул прикладные назначения.",
+      createMapping: "Создать назначение группе",
       empty: "Группы OIDC пока не обнаружены",
       emptyHint:
         "Группа появится после проверенного входа её участника; отсутствие группы не расширяет доступ.",
@@ -912,7 +1122,10 @@ const ru = {
       emptyHint: "Создайте пользовательскую роль из полномочий реестра.",
       bindingsShort: "привязок",
       permissionCount: "Полномочий: {count}",
+      showPermissions: "Полномочия и риск ({count})",
       systemImmutable: "Системная роль",
+      permissionUnavailable:
+        "Недоступно: серверный реестр не подтвердил описание полномочия.",
       archiveConfirm:
         "Архивировать роль «{name}»? Существующие version-pinned привязки останутся действовать до явного изменения.",
     },
@@ -952,6 +1165,12 @@ const ru = {
       ownerOnly: "Только свои ресурсы",
       until: "До {date}",
       noConditions: "Без дополнительных условий",
+      permissionCount: "полномочий: {count}",
+      assignmentKinds: {
+        PLATFORM_ROLE: "Платформенная роль",
+        PROJECT_MEMBERSHIP: "Членство в Проекте",
+        SCOPED_GRANT: "Узкое назначение",
+      },
       revokeConfirm:
         "Отозвать эту привязку? Действие будет зафиксировано в аудите.",
     },
@@ -978,6 +1197,9 @@ const ru = {
       ownerOnlyHint:
         "Условие доступно только полномочиям, для которых его разрешает серверный реестр.",
       invalidWindow: "Дата окончания должна быть позже даты начала.",
+      operationCount: "Типизированных операций: {count}",
+      permissionRegistryUnavailable:
+        "Сохранение недоступно: серверный реестр вернул не все полномочия выбранной роли.",
       create: "Создать привязку",
     },
     effective: {
@@ -1010,6 +1232,10 @@ const ru = {
       noResult: "Заполните параметры проверки",
       noResultHint:
         "Результат и цепочка источников появятся после ответа control-plane.",
+      who: "Кто",
+      what: "Какое действие",
+      where: "Область",
+      target: "Над чем",
     },
     subjectKinds: {
       USER: "Пользователь",
@@ -1033,12 +1259,22 @@ const ru = {
       resourceKind: "Тип ресурса",
       agent: "ИИ-сотрудник",
       chooseAgent: "Выберите конкретного ИИ-сотрудника",
+      chooseResource: "Выберите конкретный ресурс",
       agentHint:
         "Такой binding не разрешает запуск других сотрудников даже в том же Проекте.",
+      exactResourceHint:
+        "Backend повторно разрешит выбранный экземпляр внутри указанного Проекта; ref не является authority.",
       resourceRef: "Экземпляр ресурса",
       resourceRefPlaceholder: "Выберите или укажите авторитетный ref",
       resourceRefHint:
         "Для типов без отдельного picker используется непрозрачная ссылка, полученная из интерфейса Kodex.",
+      contractBoundary: "Поддержка условий текущим серверным контрактом",
+      operationCondition: "Конкретная операция",
+      operationConditionHint:
+        "Операция задаётся typed permission из закреплённой версии роли, а не произвольной строкой.",
+      environmentCondition: "Конкретное окружение",
+      environmentUnavailable:
+        "Недоступно: RuntimeEnvironment ещё отсутствует в AccessResourceKind и не отправляется на сервер.",
       values: {
         ORGANIZATION: "Организация",
         PROJECT: "Проект",
@@ -1062,6 +1298,13 @@ const ru = {
       ARTIFACT: "Файл",
       SCHEDULE: "Автоматизация",
       INTEGRATION: "Интеграция",
+    },
+    platformRoles: {
+      OWNER: "Владелец",
+      ADMINISTRATOR: "Администратор",
+      OPERATOR: "Оператор",
+      MEMBER: "Участник",
+      AUDITOR: "Аудитор",
     },
     explanation: {
       DIRECT_BINDING: "Найдена прямая привязка субъекта",
@@ -1377,6 +1620,26 @@ const ru = {
       SYSTEM_ASSISTANT: "Помощник Kodex",
     },
   },
+  attachments: {
+    add: "Добавить файлы",
+    dropHint: "или перетащите сюда",
+    drop: "Отпустите файлы для загрузки",
+    remove: "Убрать файл «{name}»",
+    retry: "Повторить загрузку файла «{name}»",
+    uploading: "Загружается файл «{name}»",
+    uploadFailed: "Не удалось загрузить файл",
+    progress: "Загружено {uploaded} из {count}",
+    aggregateLimit:
+      "Общий размер вложений не должен превышать 512 МиБ. Уберите лишние файлы.",
+    projectRequired:
+      "Для загрузки файлов откройте помощника в контексте Проекта.",
+    states: {
+      QUEUED: "В очереди",
+      UPLOADING: "Загружается",
+      UPLOADED: "Готов",
+      FAILED: "Ошибка",
+    },
+  },
   assistant: {
     title: "Kodex",
     subtitle:
@@ -1447,6 +1710,7 @@ const ru = {
   states: {
     READY: "Готов",
     ACTIVE: "Активен",
+    PROMOTED: "Promoted",
     DRAFT: "Черновик",
     VALID: "Проверен",
     INVALID: "Есть ошибки",
@@ -1644,6 +1908,73 @@ const en = {
     next: "Next",
     required: "Required field",
     skipToContent: "Skip to content",
+  },
+  roleImages: {
+    title: "AI employee images",
+    subtitle: "Builds, revisions and software environments for this Project",
+    entity: "AI employee image",
+    new: "New image",
+    editorTitle: "Image configuration",
+    editorSubtitle: "Dockerfile, build, promotion and supply-chain evidence",
+    backToCatalog: "Back to image catalog",
+    search: "Search the loaded catalog",
+    searchLimitation:
+      "The current API has no search parameter. Filtering applies only to loaded pages.",
+    loaded: "Loaded: {count}",
+    loadMore: "Load more",
+    archived: "Archived",
+    empty: "No images found",
+    emptyHelp:
+      "Change the filters or open the new image editor. Full Dockerfile persistence requires a backend contract update.",
+    unknownRole: "Role name unavailable",
+    generation: "Generation",
+    environment: "Base environment",
+    promotion: "Promotion",
+    promoted: "Promoted",
+    notPromoted: "Not promoted",
+    updated: "Updated: {date}",
+    updatedAt: "Updated",
+    role: "Role",
+    chooseRole: "Choose a role",
+    agentsCount: "employees: {count}",
+    sourceTitle: "Source Dockerfile",
+    sourceHelp:
+      "The platform must persist an immutable revision and append the protected Kodex runtime contract.",
+    dockerfile: "Full Dockerfile",
+    localDraft: "Local draft",
+    saveBlocked:
+      "Save is blocked: the current public API accepts neither Dockerfile nor an immutable RoleImageRevision.",
+    createRevision: "Create revision",
+    requestBuild: "Request build",
+    restore: "Restore",
+    confirmArchive:
+      "Archive this image? New builds will be unavailable until it is restored.",
+    confirmRestore: "Restore this image?",
+    buildHistory: "Build history",
+    buildHistoryHelp:
+      "Authoritative attempt, stage, progress and safe diagnostics from the API.",
+    noBuilds: "No builds have been requested yet.",
+    attempt: "Attempt {attempt}",
+    currentState: "Current state",
+    evidence: "Digest, SBOM and provenance",
+    executables: "Detected executables",
+    usedByEnvironments: "Used by environments",
+    openEnvironments: "Open environments",
+    unavailable: {
+      title: "Contract not materialized yet",
+      description:
+        "The UI does not fake persistence or data absent from the actual OpenAPI.",
+      dockerfile: "Dockerfile persistence",
+      revisions: "Immutable revisions",
+      promotion: "Managed promotion",
+      evidence: "Digest, SBOM and provenance",
+      executables: "Executable inventory",
+      "environment-links": "Environment backlinks",
+    },
+    validation: {
+      dockerfileRequired: "Dockerfile must not be empty.",
+      fromRequired: "Dockerfile must contain a FROM instruction.",
+    },
   },
   auth: {
     title: "Sign in to Kodex",
@@ -1896,6 +2227,81 @@ const en = {
     variableNames: "Available variables",
     secretDescriptorNames: "Secret variables",
     openEditor: "Open editor",
+    editorSections: "Environment editor sections",
+    section: {
+      GENERAL: "General",
+      IMAGE_TOOLS: "Image and tools",
+      VALUES: "Variables",
+      SECRETS: "Secrets",
+      POLICY: "Resources and access",
+      READINESS: "Readiness",
+    },
+    notPublished: "Not published yet",
+    versionDigest: "Environment revision digest",
+    imageAndTools: "Image and verified tools",
+    imageAndToolsHelp:
+      "The environment must pin an exact promoted image digest and allow only verified executables.",
+    exactImage: "Exact image revision and digest",
+    exactImageUnavailable:
+      "The current environment API neither returns a promoted image revision/digest nor accepts an image binding.",
+    verifiedTools: "Verified tools",
+    verifiedToolsUnavailable:
+      "The current API does not expose executable discovery or persist an environment tool subset.",
+    noFakePersistence:
+      "Unsupported settings are not stored locally: the UI waits for an authoritative versioned API.",
+    secretReferences: "Secret references",
+    createSecret: "Create secret",
+    rotateSecret: "Rotate",
+    revealSecret: "Reveal value",
+    secretActionsUnavailable:
+      "Secret create/rotate/reveal are absent from the current API.",
+    secretLifecycleUnavailable:
+      "Unavailable: the secret-broker lifecycle API is not materialized.",
+    secretRevealUnavailable:
+      "Reveal is unavailable: API, permission readback and fresh OIDC action proof are absent.",
+    secretReferenceIncomplete: "Incomplete secret revision reference",
+    secretMaskedHint: "Safe masked hint",
+    secretMaskedHintUnavailable:
+      "Unavailable: the API does not return a typed display_hint.",
+    editSecretReference: "Edit immutable reference",
+    noSecretReferences: "No secret references added.",
+    resourcesAndAccess: "Resources, network and Kubernetes RBAC",
+    resourcesAndAccessHelp:
+      "The server must calculate effective policy within user grants and installation admission policy.",
+    resources: "Requests and limits",
+    resourcesUnavailable:
+      "A typed resource profile is absent from the current RuntimeEnvironment API.",
+    networkPolicy: "Network policy",
+    networkPolicyUnavailable:
+      "The API does not expose typed destinations or final NetworkPolicy preview.",
+    kubernetesRbac: "Scoped Kubernetes RBAC",
+    kubernetesRbacUnavailable:
+      "The API does not return workload identity, RBAC profile or effective grants.",
+    effectivePolicyPreview: "Effective policy preview",
+    effectivePolicyUnavailable:
+      "Authoritative resources, network and RBAC preview is unavailable; the UI does not infer it.",
+    catalogCapabilityBoundary:
+      "The catalog shows the environment revision. Exact image digest, tools, resources, network and RBAC require their authoritative API.",
+    readiness: "Environment readiness",
+    readinessHelp:
+      "Local checks are separated from server-side readiness for the selected image digest and effective policy.",
+    readinessCheck: {
+      FORM: "General settings and env values",
+      SECRET_REFS: "Immutable Secret references",
+      REVISION: "Published immutable revision",
+      SERVER_READINESS: "Server-side readiness",
+    },
+    readinessState: {
+      READY: "Ready",
+      NEEDS_ATTENTION: "Needs attention",
+      UNAVAILABLE: "Unavailable in API",
+    },
+    safeEffectivePreview: "Safe current revision view",
+    safeEffectivePreviewHelp:
+      "Shows only metadata available from the API and never includes secret plaintext.",
+    revisionHistoryHelp:
+      "Rollback publishes a new revision and does not mutate an old revision.",
+    revisionHistoryEmpty: "No published revisions yet.",
     errors: {
       nameRequired: "Enter an environment name.",
       variableName: "Variable names must use the VAR_NAME format.",
@@ -2190,6 +2596,23 @@ const en = {
     sessionPolicy: "Session policy",
     notifications: "Notifications",
     nextRun: "Next run",
+    sectionsLabel: "Automation sections",
+    sections: {
+      OVERVIEW: "Overview",
+      VERSIONS: "Versions",
+      RUNS: "Runs",
+    },
+    versionHistory: "Version history",
+    currentVersion: "Version {version} · current",
+    versionHistoryUnavailable: "Previous versions are not available yet",
+    versionHistoryUnavailableText:
+      "The API exposes only the current automation version and cannot reliably show or restore a previous configuration.",
+    runHistory: "Run history",
+    runHistoryUnavailable: "Complete run history is not available yet",
+    runHistoryUnavailableText:
+      "The API does not link a run to an exact automation. Kodex does not match history by a mutable name, avoiding unrelated or incorrect runs.",
+    notScheduled: "Not scheduled",
+    noRunsYet: "No results yet",
     emptyTitle: "No automations yet",
     emptyText: "Create a schedule for an employee or published Process.",
     chooseTarget: "Choose target",
@@ -2406,25 +2829,68 @@ const en = {
       "OIDC provides identities and groups; Kodex owns application roles, scopes and effective access",
     workspaceProjectSubtitle:
       "Access in the selected Project without broadening organization permissions",
+    model: {
+      title: "How access is evaluated",
+      authorityBadge: "Authority: control-plane",
+      organizationContext:
+        "An organization role defines the base boundary; versioned roles and bindings permit exact actions.",
+      projectContext:
+        "The platform role is inherited from the organization; memberships and narrow bindings apply only in the selected Project.",
+      layers: {
+        identity: {
+          title: "Identity",
+          description: "A verified user, OIDC group, or service subject.",
+        },
+        platform: {
+          title: "Platform role",
+          description:
+            "A system role at organization scope: owner, administrator, operator, member, or auditor.",
+        },
+        project: {
+          title: "Project access",
+          description:
+            "Project membership and narrow bindings to an entity kind or instance.",
+        },
+        effective: {
+          title: "Effective decision",
+          description:
+            "The backend matches a typed permission, scope, conditions, and current state.",
+        },
+      },
+      rule: "A role name grants nothing on its own: authority comes from an active version-pinned binding and is always re-evaluated by control-plane.",
+    },
     loadMore: "Load more",
     sections: {
       label: "Access management sections",
-      participants: "Participants",
+      participants: "Subjects and membership",
       groups: "OIDC groups",
       roles: "Roles",
-      bindings: "Bindings",
+      bindings: "Assignments",
       effective: "Effective access",
     },
     participants: {
       title: "Participants",
       subtitle: "Users and service subjects with application bindings",
+      projectSubtitle:
+        "Platform role, membership, and narrow assignments in the selected Project",
       search: "Search participants",
       searchPlaceholder: "Participant name",
       participant: "Participant",
       identity: "Identity and groups",
       bindings: "Bindings",
+      platformRole: "Platform role",
+      projectAccess: "Project access",
       directIdentity: "Direct identity",
       assignRole: "Assign role",
+      createBinding: "Create assignment",
+      noPlatformRole: "Not assigned",
+      organizationWide: "Organization scope",
+      noProjectAccess: "No Project access",
+      presentationUnavailable:
+        "Unavailable: the server did not return membership presentation",
+      permissionCount: "Permissions: {count}",
+      scopedBindingCount: "Narrow assignments: {count}",
+      bindingCount: "Active assignments: {count}",
       empty: "No participants found",
       emptyHint:
         "A user appears after the first OIDC sign-in; access remains denied until a binding is assigned.",
@@ -2441,6 +2907,11 @@ const en = {
       members: "Members",
       bindings: "Bindings",
       lastSeen: "Last sign-in",
+      roleMappings: "Application assignments",
+      noRoleMappings: "No Kodex role is assigned to this group.",
+      bindingsUnavailable:
+        "Unavailable: the server did not return application assignments.",
+      createMapping: "Create group assignment",
       empty: "No OIDC groups discovered",
       emptyHint:
         "A group appears after a verified member sign-in; an absent group never broadens access.",
@@ -2454,7 +2925,10 @@ const en = {
       emptyHint: "Create a custom role from registry permissions.",
       bindingsShort: "bindings",
       permissionCount: "Permissions: {count}",
+      showPermissions: "Permissions and risk ({count})",
       systemImmutable: "System role",
+      permissionUnavailable:
+        "Unavailable: the server registry did not confirm this permission definition.",
       archiveConfirm:
         "Archive role “{name}”? Existing version-pinned bindings remain active until explicitly changed.",
     },
@@ -2493,6 +2967,12 @@ const en = {
       ownerOnly: "Owned resources only",
       until: "Until {date}",
       noConditions: "No additional conditions",
+      permissionCount: "permissions: {count}",
+      assignmentKinds: {
+        PLATFORM_ROLE: "Platform role",
+        PROJECT_MEMBERSHIP: "Project membership",
+        SCOPED_GRANT: "Narrow assignment",
+      },
       revokeConfirm: "Revoke this binding? The action will be audited.",
     },
     bindingEditor: {
@@ -2518,6 +2998,9 @@ const en = {
       ownerOnlyHint:
         "This condition works only for permissions that support it in the server registry.",
       invalidWindow: "The end date must be later than the start date.",
+      operationCount: "Typed operations: {count}",
+      permissionRegistryUnavailable:
+        "Saving is unavailable: the server registry did not return every permission in the selected role.",
       create: "Create binding",
     },
     effective: {
@@ -2545,6 +3028,10 @@ const en = {
       noResult: "Fill in the query parameters",
       noResultHint:
         "The result and source chain appear after a control-plane response.",
+      who: "Who",
+      what: "Action",
+      where: "Scope",
+      target: "Target",
     },
     subjectKinds: {
       USER: "User",
@@ -2560,12 +3047,22 @@ const en = {
       resourceKind: "Resource kind",
       agent: "AI employee",
       chooseAgent: "Choose one AI employee",
+      chooseResource: "Choose an exact resource",
       agentHint:
         "This binding does not permit launching any other employee in the same Project.",
+      exactResourceHint:
+        "The backend resolves this instance again inside the selected Project; a ref is not authority.",
       resourceRef: "Resource instance",
       resourceRefPlaceholder: "Choose or enter an authoritative ref",
       resourceRefHint:
         "Kinds without a dedicated picker use an opaque reference obtained from the Kodex UI.",
+      contractBoundary: "Conditions supported by the current server contract",
+      operationCondition: "Exact operation",
+      operationConditionHint:
+        "The operation is the typed permission from the pinned role version, not an arbitrary string.",
+      environmentCondition: "Exact environment",
+      environmentUnavailable:
+        "Unavailable: RuntimeEnvironment is not yet part of AccessResourceKind and is not sent to the server.",
       values: {
         ORGANIZATION: "Organization",
         PROJECT: "Project",
@@ -2589,6 +3086,13 @@ const en = {
       ARTIFACT: "File",
       SCHEDULE: "Automation",
       INTEGRATION: "Integration",
+    },
+    platformRoles: {
+      OWNER: "Owner",
+      ADMINISTRATOR: "Administrator",
+      OPERATOR: "Operator",
+      MEMBER: "Member",
+      AUDITOR: "Auditor",
     },
     explanation: {
       DIRECT_BINDING: "A direct subject binding matched",
@@ -2905,6 +3409,26 @@ const en = {
       SYSTEM_ASSISTANT: "Kodex Assistant",
     },
   },
+  attachments: {
+    ...ru.attachments,
+    add: "Add files",
+    dropHint: "or drag them here",
+    drop: "Drop files to upload",
+    remove: "Remove “{name}”",
+    retry: "Retry uploading “{name}”",
+    uploading: "Uploading “{name}”",
+    uploadFailed: "Failed to upload the file",
+    progress: "Uploaded {uploaded} of {count}",
+    aggregateLimit:
+      "The total attachment size must not exceed 512 MiB. Remove some files.",
+    projectRequired: "Open the assistant in a Project context to upload files.",
+    states: {
+      QUEUED: "Queued",
+      UPLOADING: "Uploading",
+      UPLOADED: "Ready",
+      FAILED: "Failed",
+    },
+  },
   assistant: {
     ...ru.assistant,
     title: "Kodex Assistant",
@@ -2976,6 +3500,7 @@ const en = {
   states: {
     READY: "Ready",
     ACTIVE: "Active",
+    PROMOTED: "Promoted",
     DRAFT: "Draft",
     VALID: "Valid",
     INVALID: "Invalid",

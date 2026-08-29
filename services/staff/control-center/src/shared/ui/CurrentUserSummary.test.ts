@@ -32,6 +32,8 @@ describe("CurrentUserSummary", () => {
 
     expect(html).toContain("Станислав Лепехов");
     expect(html).toContain("Владелец");
+    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain("usr_owner");
     expect(html).not.toContain("example.test");
   });

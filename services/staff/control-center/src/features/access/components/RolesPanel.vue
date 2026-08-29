@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import type { AccessRole } from "@/shared/api/generated/openapi/types.gen";
+import { computed } from "vue";
+import { useI18n } from "vue-i18n";
+
+import { permissionMessage } from "@/features/access/presentation";
+import type {
+  AccessRole,
+  PermissionDefinition,
+} from "@/shared/api/generated/openapi/types.gen";
 import type { AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
-defineProps<{
+const props = defineProps<{
   roles: AccessRole[];
+  permissions: PermissionDefinition[];
+  permissionRegistryUnavailable?: boolean;
   loading?: boolean;
   problem?: AppProblem;
   hasMore?: boolean;
@@ -17,6 +26,14 @@ const emit = defineEmits<{
   more: [];
   retry: [];
 }>();
+const i18n = useI18n();
+const permissionMessages = computed(() =>
+  i18n.tm("access.permissionsRegistry"),
+);
+
+function permissionDefinition(key: string): PermissionDefinition | undefined {
+  return props.permissions.find((permission) => permission.key === key);
+}
 </script>
 
 <template>
@@ -29,6 +46,7 @@ const emit = defineEmits<{
       <button
         class="button button--primary"
         type="button"
+        :disabled="permissionRegistryUnavailable"
         @click="emit('create')"
       >
         {{ $t("access.rolesWorkspace.create") }}
@@ -81,11 +99,66 @@ const emit = defineEmits<{
                   })
                 }}</span>
               </div>
+              <details class="permission-details">
+                <summary>
+                  {{
+                    $t("access.rolesWorkspace.showPermissions", {
+                      count: role.currentVersion.permissionKeys.length,
+                    })
+                  }}
+                </summary>
+                <ul>
+                  <li
+                    v-for="permissionKey in role.currentVersion.permissionKeys"
+                    :key="permissionKey"
+                  >
+                    <div>
+                      <strong>
+                        {{
+                          permissionDefinition(permissionKey)
+                            ? permissionMessage(
+                                permissionMessages,
+                                permissionKey,
+                                "name",
+                              )
+                            : permissionKey
+                        }}
+                      </strong>
+                      <small v-if="permissionDefinition(permissionKey)">
+                        {{
+                          permissionMessage(
+                            permissionMessages,
+                            permissionKey,
+                            "description",
+                          )
+                        }}
+                      </small>
+                      <small v-else class="unavailable">
+                        {{ $t("access.rolesWorkspace.permissionUnavailable") }}
+                      </small>
+                    </div>
+                    <span
+                      v-if="permissionDefinition(permissionKey)"
+                      :class="`risk risk--${permissionDefinition(permissionKey)!.risk.toLowerCase()}`"
+                    >
+                      {{
+                        $t(
+                          `access.risk.${permissionDefinition(permissionKey)!.risk}`,
+                        )
+                      }}
+                    </span>
+                  </li>
+                </ul>
+              </details>
               <footer>
                 <button
                   class="button"
                   type="button"
-                  :disabled="role.kind === 'SYSTEM' || role.state !== 'ACTIVE'"
+                  :disabled="
+                    role.kind === 'SYSTEM' ||
+                    role.state !== 'ACTIVE' ||
+                    permissionRegistryUnavailable
+                  "
                   @click="emit('edit', role)"
                 >
                   {{
@@ -131,6 +204,52 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+}
+.permission-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.permission-details ul {
+  display: grid;
+  gap: 6px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.permission-details li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.permission-details small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.permission-details .unavailable {
+  color: var(--warning);
+}
+.risk {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: #edf1f5;
+  font-size: 0.72rem;
+}
+.risk--write,
+.risk--approve {
+  color: #725100;
+  background: #fff0c7;
+}
+.risk--admin {
+  color: #8a2626;
+  background: #fde2e2;
 }
 .roles-header {
   margin-bottom: 16px;

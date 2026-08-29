@@ -30,6 +30,11 @@ import type {
 import { AppProblem, asProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
+import type {
+  AttachmentComposerHandle,
+  AttachmentComposerState,
+} from "@/shared/ui/attachment-composer";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
@@ -247,7 +252,19 @@ const resultOutcomeState = computed(() => {
 });
 
 const turn = ref("");
-const comment = ref("");
+const comments = ref<Record<string, string>>({});
+const turnAttachmentComposer = ref<AttachmentComposerHandle>();
+const turnAttachmentState = ref<AttachmentComposerState>({
+  refs: [],
+  count: 0,
+  uploadedCount: 0,
+  totalBytes: 0,
+  busy: false,
+  hasErrors: false,
+  overLimit: false,
+  ready: true,
+});
+const gateAttachmentStates = ref<Record<string, AttachmentComposerState>>({});
 const busy = ref(false);
 const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
@@ -314,7 +331,11 @@ async function command(action: "CANCEL" | "RETRY") {
   }
 }
 async function continueRun() {
-  if (!run.value?.nextActions.includes("ADD_TURN") || !turn.value.trim())
+  if (
+    !run.value?.nextActions.includes("ADD_TURN") ||
+    !turn.value.trim() ||
+    !turnAttachmentState.value.ready
+  )
     return;
   busy.value = true;
   problem.value = undefined;
@@ -323,8 +344,12 @@ async function continueRun() {
       runRef: run.value.ref,
       nodeRef: selectedNode.value?.ref,
       task: turn.value.trim(),
+      ...(turnAttachmentState.value.refs.length
+        ? { artifactRefs: turnAttachmentState.value.refs }
+        : {}),
     });
     turn.value = "";
+    turnAttachmentComposer.value?.clear();
     if (next.ref !== runRef.value)
       await router.replace(
         runPath(next.ref, routeProjectRef.value ?? next.projectRef),
@@ -347,17 +372,27 @@ async function decide(
   busy.value = true;
   problem.value = undefined;
   try {
+    const artifactRefs = gateAttachmentStates.value[gate.ref]?.refs ?? [];
     await platform.decide(gate, {
       decision,
-      comment: comment.value.trim() || undefined,
+      comment: comments.value[gate.ref]?.trim() || undefined,
+      ...(artifactRefs.length ? { artifactRefs } : {}),
     });
-    comment.value = "";
+    Reflect.deleteProperty(comments.value, gate.ref);
+    Reflect.deleteProperty(gateAttachmentStates.value, gate.ref);
   } catch (error) {
     problem.value = asProblem(error);
     await platform.loadGates(run.value?.projectRef, run.value?.rootRunRef);
   } finally {
     busy.value = false;
   }
+}
+async function uploadAttachment(file: File): Promise<{ ref: string }> {
+  if (!run.value) throw new Error("Run is unavailable");
+  return platform.uploadProjectArtifact(run.value.projectRef, file);
+}
+function gateAttachmentsReady(gateRef: string): boolean {
+  return gateAttachmentStates.value[gateRef]?.ready ?? true;
 }
 function select(node: RunNode) {
   selectedRef.value = node.ref;
@@ -422,6 +457,10 @@ watch(runRef, async (next, previous) => {
   selectedRef.value = undefined;
   nodeInspectorOpen.value = true;
   nodeDetailsOpen.value = false;
+  turn.value = "";
+  turnAttachmentComposer.value?.clear();
+  gateAttachmentStates.value = {};
+  comments.value = {};
   mobilePane.value = "graph";
   await load(next);
   if (runRef.value === next) openCurrentStream();
@@ -515,8 +554,14 @@ onBeforeUnmount(() => {
           </div>
           <label class="field"
             ><span>{{ $t("decisions.comment") }}</span
-            ><input v-model="comment" maxlength="1000"
+            ><input v-model="comments[gate.ref]" maxlength="1000"
           /></label>
+          <AttachmentComposer
+            compact
+            :upload="uploadAttachment"
+            :disabled="busy"
+            @change="gateAttachmentStates[gate.ref] = $event"
+          />
           <div class="gate-actions">
             <button
               v-if="
@@ -525,7 +570,7 @@ onBeforeUnmount(() => {
               "
               class="button button--primary"
               type="button"
-              :disabled="busy"
+              :disabled="busy || !gateAttachmentsReady(gate.ref)"
               @click="decide(gate, 'APPROVE')"
             >
               {{ $t("common.approve") }}</button
@@ -536,7 +581,7 @@ onBeforeUnmount(() => {
               "
               class="button"
               type="button"
-              :disabled="busy"
+              :disabled="busy || !gateAttachmentsReady(gate.ref)"
               @click="decide(gate, 'REQUEST_CHANGES')"
             >
               {{ $t("common.requestChanges") }}</button
@@ -547,7 +592,7 @@ onBeforeUnmount(() => {
               "
               class="button button--danger"
               type="button"
-              :disabled="busy"
+              :disabled="busy || !gateAttachmentsReady(gate.ref)"
               @click="decide(gate, 'REJECT')"
             >
               {{ $t("common.reject") }}
@@ -712,11 +757,18 @@ onBeforeUnmount(() => {
           <h2>{{ $t("common.continue") }}</h2>
           <label class="field"
             ><span>{{ $t("runs.continueTask") }}</span
-            ><textarea v-model="turn" maxlength="8000" /></label
-          ><button
+            ><textarea v-model="turn" maxlength="8000" />
+          </label>
+          <AttachmentComposer
+            ref="turnAttachmentComposer"
+            :upload="uploadAttachment"
+            :disabled="busy"
+            @change="turnAttachmentState = $event"
+          />
+          <button
             class="button button--primary"
             type="button"
-            :disabled="busy || !turn.trim()"
+            :disabled="busy || !turn.trim() || !turnAttachmentState.ready"
             @click="continueRun"
           >
             {{ $t("common.send") }}

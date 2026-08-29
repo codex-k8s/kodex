@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
+import {
+  membershipForSubject,
+  subjectBindings,
+  uniquePermissionKeys,
+} from "@/features/access/model";
+
 import type {
   AccessBinding,
   AccessSubject,
+  Membership,
   OidcGroup,
 } from "@/shared/api/generated/openapi/types.gen";
 import type { AppProblem } from "@/shared/api/problem";
@@ -14,6 +21,11 @@ const props = defineProps<{
   subjects: AccessSubject[];
   groups: OidcGroup[];
   bindings: AccessBinding[];
+  platformMemberships: Membership[];
+  projectMemberships: Membership[];
+  projectRef?: string;
+  platformMembershipsUnavailable?: boolean;
+  projectMembershipsUnavailable?: boolean;
   loading?: boolean;
   problem?: AppProblem;
   hasMore?: boolean;
@@ -31,16 +43,44 @@ const groupNames = computed(
   () => new Map(props.groups.map((group) => [group.ref, group.displayName])),
 );
 function bindingCount(subject: AccessSubject): number {
-  return props.bindings.filter(
-    (binding) =>
-      binding.state === "ACTIVE" && binding.subject.ref === subject.ref,
-  ).length;
+  return subjectBindings(subject, props.bindings).length;
 }
 function groupsFor(subject: AccessSubject): string {
   return subject.oidcGroupRefs
     .map((ref) => groupNames.value.get(ref))
     .filter(Boolean)
     .join(", ");
+}
+
+function platformRole(subject: AccessSubject): Membership["platformRole"] | "" {
+  return (
+    membershipForSubject(subject, props.platformMemberships)?.platformRole ?? ""
+  );
+}
+
+function projectMembership(subject: AccessSubject): Membership | undefined {
+  return membershipForSubject(subject, props.projectMemberships);
+}
+
+function scopedBindings(subject: AccessSubject): AccessBinding[] {
+  return subjectBindings(subject, props.bindings).filter(
+    (binding) =>
+      binding.scope.kind === "RESOURCE_KIND" ||
+      binding.scope.kind === "RESOURCE_INSTANCE",
+  );
+}
+
+function assignedRoleNames(subject: AccessSubject): string[] {
+  const roleNames = subjectBindings(subject, props.bindings)
+    .filter((binding) => binding.scope.kind !== "ORGANIZATION")
+    .map((binding) => binding.roleVersion.name);
+  return [...new Set(roleNames)].slice(0, 2);
+}
+
+function permissionCount(subject: AccessSubject): number {
+  const membership = projectMembership(subject);
+  if (membership) return membership.permissions.length;
+  return uniquePermissionKeys(subjectBindings(subject, props.bindings)).length;
 }
 
 watch(query, (value) => {
@@ -57,7 +97,15 @@ onBeforeUnmount(() => {
     <header class="section-toolbar">
       <div>
         <h2>{{ $t("access.participants.title") }}</h2>
-        <p>{{ $t("access.participants.subtitle") }}</p>
+        <p>
+          {{
+            $t(
+              projectRef
+                ? "access.participants.projectSubtitle"
+                : "access.participants.subtitle",
+            )
+          }}
+        </p>
       </div>
       <label class="search-field">
         <span class="sr-only">{{ $t("access.participants.search") }}</span>
@@ -82,7 +130,8 @@ onBeforeUnmount(() => {
         <div class="access-table__head" role="row">
           <span>{{ $t("access.participants.participant") }}</span>
           <span>{{ $t("access.participants.identity") }}</span>
-          <span>{{ $t("access.participants.bindings") }}</span>
+          <span>{{ $t("access.participants.platformRole") }}</span>
+          <span>{{ $t("access.participants.projectAccess") }}</span>
           <span>{{ $t("common.status") }}</span>
           <span class="sr-only">{{ $t("common.actions") }}</span>
         </div>
@@ -102,7 +151,48 @@ onBeforeUnmount(() => {
               $t("access.participants.directIdentity")
             }}</span>
           </div>
-          <span>{{ bindingCount(subject) }}</span>
+          <div class="assignment-summary">
+            <span v-if="platformMembershipsUnavailable" class="unavailable">{{
+              $t("access.participants.presentationUnavailable")
+            }}</span>
+            <strong v-else-if="platformRole(subject)">{{
+              $t(`access.platformRoles.${platformRole(subject)}`)
+            }}</strong>
+            <span v-else class="muted">{{
+              $t("access.participants.noPlatformRole")
+            }}</span>
+            <small>{{ $t("access.participants.organizationWide") }}</small>
+          </div>
+          <div class="assignment-summary">
+            <span
+              v-if="projectRef && projectMembershipsUnavailable"
+              class="unavailable"
+              >{{ $t("access.participants.presentationUnavailable") }}</span
+            >
+            <template v-else-if="projectRef && projectMembership(subject)">
+              <strong>{{
+                $t("access.participants.permissionCount", {
+                  count: permissionCount(subject),
+                })
+              }}</strong>
+              <small v-if="scopedBindings(subject).length">{{
+                $t("access.participants.scopedBindingCount", {
+                  count: scopedBindings(subject).length,
+                })
+              }}</small>
+            </template>
+            <template v-else-if="assignedRoleNames(subject).length">
+              <strong>{{ assignedRoleNames(subject).join(", ") }}</strong>
+              <small>{{
+                $t("access.participants.bindingCount", {
+                  count: bindingCount(subject),
+                })
+              }}</small>
+            </template>
+            <span v-else class="muted">{{
+              $t("access.participants.noProjectAccess")
+            }}</span>
+          </div>
           <StatusBadge :state="subject.active ? 'ACTIVE' : 'DISABLED'" />
           <button
             class="button"
@@ -110,7 +200,7 @@ onBeforeUnmount(() => {
             :disabled="!subject.active"
             @click="emit('bind', subject)"
           >
-            {{ $t("access.participants.assignRole") }}
+            {{ $t("access.participants.createBinding") }}
           </button>
         </article>
       </div>
@@ -157,8 +247,8 @@ onBeforeUnmount(() => {
 .access-table__row {
   display: grid;
   grid-template-columns:
-    minmax(200px, 1.3fr) minmax(180px, 1fr)
-    100px 110px auto;
+    minmax(190px, 1.15fr) minmax(160px, 0.9fr)
+    minmax(150px, 0.8fr) minmax(190px, 1.1fr) 105px auto;
   align-items: center;
   gap: 14px;
   padding: 10px 13px;
@@ -178,6 +268,25 @@ onBeforeUnmount(() => {
 .access-table__row small {
   display: block;
   margin-top: 2px;
+}
+.assignment-summary {
+  min-width: 0;
+}
+.assignment-summary strong,
+.assignment-summary small {
+  display: block;
+}
+.assignment-summary strong {
+  overflow-wrap: anywhere;
+}
+.assignment-summary .unavailable {
+  display: block;
+  width: max-content;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  font-size: 0.75rem;
 }
 .load-more {
   display: flex;

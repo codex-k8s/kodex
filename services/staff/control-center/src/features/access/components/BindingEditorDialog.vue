@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
+import { useI18n } from "vue-i18n";
 
 import AccessScopeEditor from "@/features/access/components/AccessScopeEditor.vue";
 import {
@@ -9,6 +10,7 @@ import {
   validScope,
   type BindingDraft,
 } from "@/features/access/model";
+import { permissionMessage } from "@/features/access/presentation";
 import type {
   AccessBinding,
   AccessBindingChangeInput,
@@ -16,8 +18,10 @@ import type {
   AccessRole,
   AccessSubject,
   Agent,
+  IntegrationConnection,
   PermissionDefinition,
   Project,
+  Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
 import type { AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -32,14 +36,20 @@ const props = defineProps<{
   permissions: PermissionDefinition[];
   projects: Project[];
   agents: Agent[];
+  workflows: Workflow[];
+  integrations: IntegrationConnection[];
   busy?: boolean;
   problem?: AppProblem;
 }>();
 const emit = defineEmits<{
   close: [];
   save: [input: AccessBindingInput | AccessBindingChangeInput];
-  "load-agents": [projectRef: string];
+  "load-project-resources": [projectRef: string];
 }>();
+const i18n = useI18n();
+const permissionMessages = computed(() =>
+  i18n.tm("access.permissionsRegistry"),
+);
 
 const form = reactive<BindingDraft>(emptyBindingDraft());
 const selectedRole = computed(() =>
@@ -52,6 +62,12 @@ const rolePermissions = computed(() =>
   props.permissions.filter((permission) =>
     selectedRole.value?.currentVersion.permissionKeys.includes(permission.key),
   ),
+);
+const permissionRegistryComplete = computed(
+  () =>
+    !selectedRole.value ||
+    rolePermissions.value.length ===
+      selectedRole.value.currentVersion.permissionKeys.length,
 );
 const allowedResourceKinds = computed(() => [
   ...new Set(
@@ -67,6 +83,7 @@ const valid = computed(
   () =>
     Boolean(form.subjectRef) &&
     Boolean(form.roleVersionRef) &&
+    permissionRegistryComplete.value &&
     validScope(form.scope) &&
     selectedRole.value?.currentVersion.allowedScopes.includes(
       form.scope.kind,
@@ -96,8 +113,11 @@ function reset(): void {
     draft.subjectRef = props.initialSubject.ref;
   }
   Object.assign(form, draft);
-  if (draft.scope.projectRef && draft.scope.resourceKind === "AGENT")
-    emit("load-agents", draft.scope.projectRef);
+  if (
+    draft.scope.projectRef &&
+    ["AGENT", "WORKFLOW"].includes(draft.scope.resourceKind)
+  )
+    emit("load-project-resources", draft.scope.projectRef);
 }
 
 function submit(): void {
@@ -208,12 +228,52 @@ watch(ownerConditionSupported, (supported) => {
           v-model="form.scope"
           :projects="projects"
           :agents="agents"
+          :workflows="workflows"
+          :integrations="integrations"
           :allowed-scopes="selectedRole?.currentVersion.allowedScopes"
           :allowed-resource-kinds="allowedResourceKinds"
           :busy="busy"
-          @load-agents="emit('load-agents', $event)"
+          @load-project-resources="emit('load-project-resources', $event)"
         />
       </div>
+
+      <section v-if="selectedRole" class="selected-role-summary">
+        <header>
+          <div>
+            <strong>{{ selectedRole.currentVersion.name }}</strong>
+            <small>
+              {{ $t("access.roleKinds." + selectedRole.kind) }} · v{{
+                selectedRole.currentVersion.revision
+              }}
+            </small>
+          </div>
+          <span>{{
+            $t("access.bindingEditor.operationCount", {
+              count: selectedRole.currentVersion.permissionKeys.length,
+            })
+          }}</span>
+        </header>
+        <p v-if="!permissionRegistryComplete" class="registry-unavailable">
+          {{ $t("access.bindingEditor.permissionRegistryUnavailable") }}
+        </p>
+        <ul>
+          <li v-for="permission in rolePermissions" :key="permission.key">
+            <div>
+              <strong>{{
+                permissionMessage(permissionMessages, permission.key, "name")
+              }}</strong>
+              <small>{{
+                permissionMessage(
+                  permissionMessages,
+                  permission.key,
+                  "description",
+                )
+              }}</small>
+            </div>
+            <code>{{ permission.key }}</code>
+          </li>
+        </ul>
+      </section>
 
       <fieldset class="conditions">
         <legend>{{ $t("access.bindingEditor.conditions") }}</legend>
@@ -300,6 +360,60 @@ watch(ownerConditionSupported, (supported) => {
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+.selected-role-summary {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.registry-unavailable {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+.selected-role-summary header,
+.selected-role-summary li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.selected-role-summary header small,
+.selected-role-summary li small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.selected-role-summary header > span {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.75rem;
+}
+.selected-role-summary ul {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.selected-role-summary li {
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.selected-role-summary code {
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 .conditions legend {
   padding-inline: 5px;

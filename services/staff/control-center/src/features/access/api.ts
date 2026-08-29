@@ -11,9 +11,13 @@ import {
   listAccessRoleVersions,
   listAccessSubjects,
   listAgents,
+  listIntegrationConnections,
   listOidcGroups,
   listPermissionRegistry,
+  listPlatformMemberships,
+  listProjectMemberships,
   listProjects,
+  listWorkflows,
   queryEffectiveAccess,
   revokeAccessBinding,
   simulateAccess,
@@ -35,10 +39,13 @@ import type {
   ExplainAccessInput,
   ExplainAccessResult,
   OidcGroupPage,
+  IntegrationConnection,
+  Membership,
   PermissionDefinitionPage,
   ProjectPage,
   SimulateAccessInput,
   SimulateAccessResult,
+  WorkflowPage,
 } from "@/shared/api/generated/openapi/types.gen";
 import { csrfToken, mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
@@ -187,6 +194,64 @@ export async function fetchAgents(
       }),
     )
   ).data;
+}
+
+export async function fetchWorkflows(
+  projectRef: string,
+  query = "",
+): Promise<WorkflowPage> {
+  return (
+    await unwrap(
+      listWorkflows({
+        path: { projectRef },
+        query: { ...(query ? { query } : {}), pageSize: 100 },
+        signal: requestSignal(),
+      }),
+    )
+  ).data;
+}
+
+export async function fetchIntegrationConnections(): Promise<
+  IntegrationConnection[]
+> {
+  return (await unwrap(listIntegrationConnections({ signal: requestSignal() })))
+    .data.items;
+}
+
+export async function fetchPlatformMemberships(): Promise<Membership[]> {
+  const items: Membership[] = [];
+  const seenPageTokens = new Set<string>();
+  let pageToken: string | undefined;
+  do {
+    const page = (
+      await unwrap(
+        listPlatformMemberships({
+          query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+          signal: requestSignal(),
+        }),
+      )
+    ).data;
+    items.push(...page.items);
+    pageToken = page.nextPageToken;
+    if (pageToken && seenPageTokens.has(pageToken)) {
+      throw new Error("Platform membership pagination token was repeated");
+    }
+    if (pageToken) seenPageTokens.add(pageToken);
+  } while (pageToken);
+  return items;
+}
+
+export async function fetchProjectMemberships(
+  projectRef: string,
+): Promise<Membership[]> {
+  return (
+    await unwrap(
+      listProjectMemberships({
+        path: { projectRef },
+        signal: requestSignal(),
+      }),
+    )
+  ).data.items;
 }
 
 export async function addAccessRole(

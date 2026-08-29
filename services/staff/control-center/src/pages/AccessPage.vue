@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import AccessTabs from "@/features/access/components/AccessTabs.vue";
+import AccessModelOverview from "@/features/access/components/AccessModelOverview.vue";
 import BindingEditorDialog from "@/features/access/components/BindingEditorDialog.vue";
 import BindingsPanel from "@/features/access/components/BindingsPanel.vue";
 import EffectiveAccessPanel from "@/features/access/components/EffectiveAccessPanel.vue";
@@ -66,6 +67,9 @@ const editorAgentsProjectRef = ref("");
 const editorAgents = computed(
   () => access.agents[editorAgentsProjectRef.value] ?? [],
 );
+const editorWorkflows = computed(
+  () => access.workflows[editorAgentsProjectRef.value] ?? [],
+);
 const roleDialog = ref(false);
 const bindingDialog = ref(false);
 const selectedRole = ref<AccessRole>();
@@ -93,14 +97,21 @@ async function loadSection(section = routeSection.value): Promise<void> {
       access.loadBindings({ projectRef: projectRef.value || undefined }),
     ]);
   } else if (section === "groups") {
-    await Promise.all([access.loadGroups(), access.loadSubjects()]);
+    await Promise.all([
+      access.loadGroups(),
+      access.loadSubjects(),
+      access.loadBindings({ projectRef: projectRef.value || undefined }),
+    ]);
   } else if (section === "roles") {
     await access.loadRoles(true);
   } else if (section === "bindings") {
-    await access.loadBindings({
-      projectRef: projectRef.value || undefined,
-      includeRevoked: true,
-    });
+    await Promise.all([
+      access.loadSubjects(),
+      access.loadBindings({
+        projectRef: projectRef.value || undefined,
+        includeRevoked: true,
+      }),
+    ]);
   } else {
     await Promise.all([
       access.loadSubjects(),
@@ -116,13 +127,15 @@ async function loadBaseline(): Promise<void> {
     access.loadProjects(),
     access.loadRoles(true),
     access.loadGroups(),
+    access.loadIntegrations(),
+    access.loadMembershipPresentation(projectRef.value),
   ]);
   await loadSection();
 }
 
-async function loadAgents(value: string): Promise<void> {
+async function loadProjectResources(value: string): Promise<void> {
   editorAgentsProjectRef.value = value;
-  await access.loadAgents(value);
+  await Promise.all([access.loadAgents(value), access.loadWorkflows(value)]);
 }
 
 function createRole(): void {
@@ -199,10 +212,10 @@ function editBinding(binding: AccessBinding): void {
   bindingDialog.value = true;
   if (
     binding.scope.kind === "RESOURCE_INSTANCE" &&
-    binding.scope.resourceKind === "AGENT" &&
+    ["AGENT", "WORKFLOW"].includes(binding.scope.resourceKind ?? "") &&
     binding.scope.projectRef
   )
-    void loadAgents(binding.scope.projectRef);
+    void loadProjectResources(binding.scope.projectRef);
 }
 
 async function saveBinding(
@@ -246,7 +259,9 @@ async function revokeBinding(binding: AccessBinding): Promise<void> {
 }
 
 watch(routeSection, (section) => void loadSection(section));
-watch(projectRef, () => void loadSection());
+watch(projectRef, (value) => {
+  void Promise.all([loadSection(), access.loadMembershipPresentation(value)]);
+});
 onMounted(() => void loadBaseline());
 </script>
 
@@ -261,10 +276,16 @@ onMounted(() => void loadBaseline());
       )
     "
   >
+    <AccessModelOverview :project-context="Boolean(projectRef)" />
     <AccessTabs
       :active="routeSection"
       :counts="counts"
       @select="selectSection"
+    />
+    <ProblemNotice
+      v-if="access.problems.permissions"
+      :problem="access.problems.permissions"
+      @retry="access.loadPermissions"
     />
     <ProblemNotice
       v-if="mutationProblem && !roleDialog && !bindingDialog"
@@ -277,6 +298,15 @@ onMounted(() => void loadBaseline());
       :subjects="participantSubjects"
       :groups="access.groups"
       :bindings="access.bindings"
+      :platform-memberships="access.platformMemberships"
+      :project-memberships="access.projectMemberships"
+      :project-ref="projectRef"
+      :platform-memberships-unavailable="
+        Boolean(access.problems.platformMemberships)
+      "
+      :project-memberships-unavailable="
+        Boolean(access.problems.projectMemberships)
+      "
       :loading="access.loading.subjects"
       :problem="access.problems.subjects"
       :has-more="Boolean(access.subjectNextPageToken)"
@@ -288,6 +318,8 @@ onMounted(() => void loadBaseline());
     <GroupsPanel
       v-else-if="routeSection === 'groups'"
       :groups="access.groups"
+      :bindings="access.bindings"
+      :bindings-unavailable="Boolean(access.problems.bindings)"
       :loading="access.loading.groups"
       :problem="access.problems.groups"
       :has-more="Boolean(access.groupNextPageToken)"
@@ -299,6 +331,8 @@ onMounted(() => void loadBaseline());
     <RolesPanel
       v-else-if="routeSection === 'roles'"
       :roles="access.roles"
+      :permissions="access.permissions"
+      :permission-registry-unavailable="Boolean(access.problems.permissions)"
       :loading="access.loading.roles"
       :problem="access.problems.roles"
       :has-more="Boolean(access.roleNextPageToken)"
@@ -311,6 +345,7 @@ onMounted(() => void loadBaseline());
     <BindingsPanel
       v-else-if="routeSection === 'bindings'"
       :bindings="access.bindings"
+      :roles="access.roles"
       :projects="access.projects"
       :agents-by-project="access.agents"
       :loading="access.loading.bindings"
@@ -334,6 +369,8 @@ onMounted(() => void loadBaseline());
       :roles="access.roles"
       :projects="access.projects"
       :agents="editorAgents"
+      :workflows="editorWorkflows"
+      :integrations="access.integrations"
       :effective="access.effective"
       :explanation="access.explanation"
       :simulation="access.simulation"
@@ -350,7 +387,7 @@ onMounted(() => void loadBaseline());
       @query="access.queryEffective"
       @explain="access.explain"
       @simulate="access.simulate"
-      @load-agents="loadAgents"
+      @load-project-resources="loadProjectResources"
       @clear="access.clearDecision"
     />
 
@@ -376,11 +413,13 @@ onMounted(() => void loadBaseline());
       :permissions="access.permissions"
       :projects="access.projects"
       :agents="editorAgents"
+      :workflows="editorWorkflows"
+      :integrations="access.integrations"
       :busy="mutationBusy"
       :problem="mutationProblem"
       @close="bindingDialog = false"
       @save="saveBinding"
-      @load-agents="loadAgents"
+      @load-project-resources="loadProjectResources"
     />
   </PageFrame>
 </template>
