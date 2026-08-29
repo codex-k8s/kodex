@@ -1,0 +1,51 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: runtime-controller-agent-runner-default-deny
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: runtime-controller-agent-runner-exact-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agent-runner
+      app.kubernetes.io/component: role-runtime
+      runtime.kodex.dev/managed: "true"
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: runtime-controller
+              app.kubernetes.io/component: internal-controller
+      ports:
+        - {protocol: TCP, port: 8444}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: egress-gateway
+              app.kubernetes.io/component: platform-egress
+      ports:
+        - {protocol: TCP, port: 8080}

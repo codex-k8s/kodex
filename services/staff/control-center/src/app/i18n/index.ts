@@ -53,6 +53,7 @@ const ru = {
     environments: "Окружения",
     environment: "Окружение",
     newEnvironment: "Новое окружение",
+    secrets: "Секреты",
     members: "Участники",
     access: "Участники и доступ",
     audit: "Аудит и диагностика",
@@ -344,10 +345,31 @@ const ru = {
     nonSecretValue: "Несекретное значение",
     secretDescriptorsHelp:
       "Ссылки закрепляют точную ревизию Kubernetes Secret; значения не читаются и не сохраняются UI.",
+    secretBindingsHelp:
+      "Задайте имя переменной и выберите активный секрет Проекта. Неизменяемые Kubernetes-метаданные назначит сервер при публикации.",
     addSecretDescriptor: "Добавить descriptor",
+    addSecretBinding: "Добавить секрет",
     secretValuesForbidden:
-      "Не вставляйте сюда token, пароль или ключ. Форма принимает только метаданные неизменяемой ревизии Secret.",
+      "Не вставляйте сюда token, пароль или ключ. Выберите секрет из безопасного каталога Проекта.",
     secretDescriptor: "Secret descriptor {number}",
+    secretBinding: "Секретная переменная {number}",
+    runtimeSecret: "Секрет Проекта",
+    chooseRuntimeSecret: "Выберите секрет",
+    searchRuntimeSecret: "Поиск секретов на сервере",
+    secretNotSelected: "Секрет не выбран",
+    secretRevoked: "Секрет отозван и недоступен для новых ревизий",
+    currentPublishedSecret: "Секрет текущей опубликованной ревизии",
+    currentImmutableDescriptor:
+      "Неизменяемые метаданные текущей опубликованной ревизии",
+    descriptorGeneratedOnPublish:
+      "Точные Kubernetes-метаданные появятся после публикации и будут доступны только для чтения.",
+    secretTarget: "Kubernetes Secret и ключ",
+    secretPicker: {
+      loading: "Загрузка секретов",
+      loadingMore: "Загрузка следующей страницы",
+      empty: "Активные секреты не найдены",
+      error: "Не удалось загрузить секреты",
+    },
     secretName: "Имя Kubernetes Secret",
     secretKey: "Ключ в Secret",
     secretUid: "Secret UID",
@@ -454,9 +476,70 @@ const ru = {
       reservedVariableName:
         "Это имя зарезервировано платформой или средой выполнения.",
       duplicateVariable: "Имена переменных в окружении не должны повторяться.",
+      secretBindingRequired: "Выберите секрет Проекта.",
       secretDescriptorRequired:
         "Заполните все обязательные поля Secret descriptor.",
       sha256: "SHA-256 должен содержать 64 строчные шестнадцатеричные цифры.",
+    },
+  },
+  runtimeSecrets: {
+    title: "Секреты Проекта",
+    subtitle:
+      "Безопасные значения для окружений: версии, ротация и контролируемая выдача",
+    secret: "Секрет",
+    search: "Поиск секретов",
+    searchPlaceholder: "Найти по названию или описанию",
+    shown: "Показано: {count}",
+    create: "Создать секрет",
+    createTitle: "Новый секрет",
+    rotate: "Ротировать",
+    rotateTitle: "Ротация секрета",
+    rotateHelp:
+      "Будет создана новая неизменяемая ревизия. Прежнее значение останется недоступным из интерфейса.",
+    revoke: "Отозвать",
+    revokeTitle: "Отозвать секрет?",
+    revokeHelp:
+      "Секрет и все его ревизии будут отозваны. Новые запуски не смогут использовать это значение.",
+    reveal: "Показать значение",
+    revealTitle: "Одноразовый просмотр секрета",
+    revealNamed: "Показать значение секрета {name}",
+    rotateNamed: "Ротировать секрет {name}",
+    revokeNamed: "Отозвать секрет {name}",
+    reauthRequired: "Требуется свежая OIDC-аутентификация",
+    reauthHelp:
+      "Сервер выдаст значение только пользователю с полномочием secret.reveal после отдельного свежего входа через OIDC.",
+    reauthenticate: "Войти заново через OIDC",
+    reauthRedirectHelp:
+      "Перед просмотром вы перейдёте к провайдеру входа. После подтверждения платформа вернёт вас к этому секрету.",
+    reauthCompleted:
+      "Свежий вход подтверждён. Одноразовый допуск действует только для этого секрета.",
+    revealedValue: "Выданное значение",
+    revealEphemeral:
+      "Значение хранится только в памяти этого открытого диалога и будет очищено при скрытии или закрытии.",
+    hideValue: "Скрыть и очистить",
+    showEnteredValue: "Показать введённое значение",
+    hideEnteredValue: "Скрыть введённое значение",
+    value: "Секретное значение",
+    valueHelp:
+      "Значение отправляется напрямую в защищённый API и не записывается в browser storage или метаданные каталога.",
+    valueType: "Тип значения",
+    types: {
+      STRING: "Строка",
+      JSON: "JSON",
+      BINARY: "Бинарное значение в Base64",
+    },
+    maskedHint: "Безопасная маска",
+    revision: "Текущая ревизия",
+    updatedAt: "Обновлено",
+    loadMore: "Загрузить ещё",
+    emptyTitle: "Секретов пока нет",
+    emptyText:
+      "Создайте первый секрет, чтобы затем закрепить его ревизию в рабочем окружении.",
+    emptySearchText: "Измените поисковый запрос.",
+    errors: {
+      nameRequired: "Укажите название секрета.",
+      required: "Введите секретное значение.",
+      "invalid-json": "Введите корректный JSON.",
     },
   },
   "role-environments": {
@@ -1876,6 +1959,7 @@ const en = {
     environments: "Environments",
     environment: "Environment",
     newEnvironment: "New environment",
+    secrets: "Secrets",
     members: "Members",
     access: "Members and access",
     audit: "Audit and diagnostics",
@@ -2241,10 +2325,31 @@ const en = {
     nonSecretValue: "Non-secret value",
     secretDescriptorsHelp:
       "References pin an exact Kubernetes Secret revision; values are not read or stored by the UI.",
+    secretBindingsHelp:
+      "Set the variable name and choose an active Project secret. The server assigns immutable Kubernetes metadata when publishing.",
     addSecretDescriptor: "Add descriptor",
+    addSecretBinding: "Add secret",
     secretValuesForbidden:
-      "Do not paste a token, password or key. This form accepts immutable Secret revision metadata only.",
+      "Do not paste a token, password or key. Choose a secret from the protected Project catalog.",
     secretDescriptor: "Secret descriptor {number}",
+    secretBinding: "Secret variable {number}",
+    runtimeSecret: "Project secret",
+    chooseRuntimeSecret: "Choose a secret",
+    searchRuntimeSecret: "Search secrets on the server",
+    secretNotSelected: "No secret selected",
+    secretRevoked: "The secret is revoked and unavailable to new revisions",
+    currentPublishedSecret: "Secret from the current published revision",
+    currentImmutableDescriptor:
+      "Immutable metadata of the current published revision",
+    descriptorGeneratedOnPublish:
+      "Exact Kubernetes metadata is generated when publishing and remains read-only.",
+    secretTarget: "Kubernetes Secret and key",
+    secretPicker: {
+      loading: "Loading secrets",
+      loadingMore: "Loading the next page",
+      empty: "No active secrets found",
+      error: "Failed to load secrets",
+    },
     secretName: "Kubernetes Secret name",
     secretKey: "Secret key",
     secretUid: "Secret UID",
@@ -2351,9 +2456,70 @@ const en = {
       reservedVariableName:
         "This name is reserved by the platform or runtime environment.",
       duplicateVariable: "Variable names must be unique within an environment.",
+      secretBindingRequired: "Choose a Project secret.",
       secretDescriptorRequired:
         "Complete all required Secret descriptor fields.",
       sha256: "SHA-256 must contain 64 lowercase hexadecimal digits.",
+    },
+  },
+  runtimeSecrets: {
+    title: "Project secrets",
+    subtitle:
+      "Protected environment values with revisions, rotation, and controlled reveal",
+    secret: "Secret",
+    search: "Search secrets",
+    searchPlaceholder: "Find by name or description",
+    shown: "Shown: {count}",
+    create: "Create secret",
+    createTitle: "New secret",
+    rotate: "Rotate",
+    rotateTitle: "Rotate secret",
+    rotateHelp:
+      "A new immutable revision will be created. The previous value remains unavailable in the UI.",
+    revoke: "Revoke",
+    revokeTitle: "Revoke secret?",
+    revokeHelp:
+      "The secret and all its revisions will be revoked. New runs will no longer be able to use this value.",
+    reveal: "Reveal value",
+    revealTitle: "One-time secret reveal",
+    revealNamed: "Reveal secret {name}",
+    rotateNamed: "Rotate secret {name}",
+    revokeNamed: "Revoke secret {name}",
+    reauthRequired: "Fresh OIDC authentication is required",
+    reauthHelp:
+      "The server returns the value only to a user with the secret.reveal permission after a separate fresh OIDC sign-in.",
+    reauthenticate: "Sign in again with OIDC",
+    reauthRedirectHelp:
+      "You will be redirected to the identity provider. After confirmation, the platform returns to this secret.",
+    reauthCompleted:
+      "Fresh sign-in confirmed. This one-time authorization applies only to this secret.",
+    revealedValue: "Revealed value",
+    revealEphemeral:
+      "The value exists only in this open dialog memory and is cleared when hidden or closed.",
+    hideValue: "Hide and clear",
+    showEnteredValue: "Show entered value",
+    hideEnteredValue: "Hide entered value",
+    value: "Secret value",
+    valueHelp:
+      "The value is sent directly to the protected API and is not written to browser storage or catalog metadata.",
+    valueType: "Value type",
+    types: {
+      STRING: "String",
+      JSON: "JSON",
+      BINARY: "Base64 binary value",
+    },
+    maskedHint: "Safe masked hint",
+    revision: "Current revision",
+    updatedAt: "Updated",
+    loadMore: "Load more",
+    emptyTitle: "No secrets yet",
+    emptyText:
+      "Create the first secret, then pin its revision in a work environment.",
+    emptySearchText: "Change the search query.",
+    errors: {
+      nameRequired: "Enter a secret name.",
+      required: "Enter a secret value.",
+      "invalid-json": "Enter valid JSON.",
     },
   },
   "role-environments": {

@@ -69,7 +69,7 @@ export function environmentReadiness(
 ): EnvironmentReadinessCheck[] {
   const problems = validateEnvironmentInput(input);
   const secretProblems = problems.filter((problem) =>
-    problem.field.startsWith("secretDescriptors."),
+    problem.field.startsWith("secretBindings."),
   );
   const imageProblems = problems.filter(
     (problem) => problem.field === "imageArtifactRef",
@@ -79,7 +79,7 @@ export function environmentReadiness(
   );
   const formProblems = problems.filter(
     (problem) =>
-      !problem.field.startsWith("secretDescriptors.") &&
+      !problem.field.startsWith("secretBindings.") &&
       problem.field !== "imageArtifactRef" &&
       !problem.field.startsWith("tools."),
   );

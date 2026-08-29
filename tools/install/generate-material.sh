@@ -99,14 +99,16 @@ for authority in pki pki-buildkit-push pki-node-pull pki-public; do
 done
 
 issue_certificate() {
-  local source_json=$1 authority profile common_name alt_names cache_key directory ext_file
+  local source_json=$1 authority profile common_name alt_names uri_sans cache_key directory ext_file
+  local subject_alt_name=""
   authority=$(jq -er '.authority' <<<"$source_json")
   profile=$(jq -er '.profile' <<<"$source_json")
   common_name=$(jq -er '.arguments.common_name' <<<"$source_json")
   alt_names=$(jq -r '.arguments.alt_names // ""' <<<"$source_json")
+  uri_sans=$(jq -r '.arguments.uri_sans // ""' <<<"$source_json")
   common_name=${common_name//registry-pull.invalid/$promoted_pull_host}
   alt_names=${alt_names//registry-pull.invalid/$promoted_pull_host}
-  cache_key=$(printf '%s\0%s\0%s\0%s' "$authority" "$profile" "$common_name" "$alt_names" |
+  cache_key=$(printf '%s\0%s\0%s\0%s\0%s' "$authority" "$profile" "$common_name" "$alt_names" "$uri_sans" |
     sha256sum | awk '{print $1}')
   directory="$output_directory/certificates/$cache_key"
   [[ -s "$directory/tls.crt" && -s "$directory/tls.key" ]] && {
@@ -127,16 +129,21 @@ issue_certificate() {
       'subjectKeyIdentifier=hash' \
       'authorityKeyIdentifier=keyid,issuer'
     if [[ -n "$alt_names" ]]; then
-      printf 'subjectAltName='
-      awk -v list="$alt_names" 'BEGIN {
+      subject_alt_name=$(awk -v list="$alt_names" 'BEGIN {
         count=split(list, names, ",");
-        for (i=1; i<=count; i++) {
-          printf "%sDNS:%s", i == 1 ? "" : ",", names[i]
-        }
-        printf "\n"
-      }'
+        for (i=1; i<=count; i++) printf "%sDNS:%s", i == 1 ? "" : ",", names[i]
+      }')
     elif [[ "$common_name" == *.* ]]; then
-      printf 'subjectAltName=DNS:%s\n' "$common_name"
+      subject_alt_name="DNS:$common_name"
+    fi
+    if [[ -n "$uri_sans" ]]; then
+      while IFS= read -r uri; do
+        [[ -n "$uri" ]] || continue
+        subject_alt_name+="${subject_alt_name:+,}URI:$uri"
+      done < <(tr ',' '\n' <<<"$uri_sans")
+    fi
+    if [[ -n "$subject_alt_name" ]]; then
+      printf 'subjectAltName=%s\n' "$subject_alt_name"
     fi
   } >"$ext_file"
   openssl x509 -req -sha256 -days 825 \
@@ -170,7 +177,7 @@ for role in \
   ira_restore_controller_g1 ira_publisher_g4 ira_readback_attestor_g4 \
   ira_role_image_builder_issuer_g1 ira_image_admission_issuer_g1 \
   ira_image_promotion_issuer_g1 ira_automation_scheduler_issuer_g1 \
-  ira_session_archive_issuer_g1 \
+  ira_session_archive_issuer_g1 ira_secret_broker_issuer_g1 \
   ira_control_api_gateway_issuer_g1 ira_control_plane_verifier_g1 \
   ira_control_plane_resolver_g1 ira_integration_gateway_issuer_g1 \
   ira_interaction_gateway_issuer_g1 ira_runtime_controller_issuer_g1; do
@@ -241,6 +248,23 @@ jq -cn --arg certificate_sha256 "$control_api_certificate_sha256" '{
 }' >"$output_directory/control-api/public-tls-material.json"
 put_material kodex/control-api-gateway/public-tls-material material.json \
   "$output_directory/control-api/public-tls-material.json"
+
+runtime_execution_tls_source=$(jq -cn '{
+  authority:"pki", profile:"kodex-runtime-execution-client",
+  arguments:{
+    common_name:"agent-runner.kodex-runtime.svc.cluster.local",
+    alt_names:"agent-runner,agent-runner.kodex-runtime.svc,agent-runner.kodex-runtime.svc.cluster.local",
+    uri_sans:"spiffe://kodex.local/ns/kodex-runtime/sa/agent-runner",
+    ttl:"720h"
+  }
+}')
+runtime_execution_tls_directory=$(issue_certificate "$runtime_execution_tls_source")
+put_material kodex/runtime-execution-client/tls tls.crt \
+  "$runtime_execution_tls_directory/tls.crt"
+put_material kodex/runtime-execution-client/tls tls.key \
+  "$runtime_execution_tls_directory/tls.key"
+put_material kodex/runtime-execution-client/tls ca.crt \
+  "$output_directory/authorities/pki/ca.crt"
 
 create_registry_credential() {
   local name=$1 host=$2 username_file=${3:-} password_file=${4:-}
@@ -324,7 +348,7 @@ put_material kodex/image-admission/signing public_key "$output_directory/registr
     --output "$output_directory/crypto/authority-bootstrap"
 )
 
-for worker in automation-scheduler session-archive integration-gateway interaction-gateway runtime-controller role-image-builder image-admission image-promotion; do
+for worker in automation-scheduler session-archive integration-gateway interaction-gateway runtime-controller role-image-builder image-admission image-promotion secret-broker; do
   put_material "kodex/platform-worker-grants/$worker" private.jwk \
     "$output_directory/crypto/platform-worker/$worker/private.jwk"
   put_material "kodex/platform-worker-grants/$worker" public-jwk \

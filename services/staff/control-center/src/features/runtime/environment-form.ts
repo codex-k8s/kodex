@@ -1,10 +1,10 @@
 import type {
   RuntimeEnvironmentInput,
+  RuntimeSecretBinding,
   RuntimeSecretDescriptor,
 } from "@/shared/api/generated/openapi/types.gen";
 
 const variableName = /^[A-Z_][A-Z0-9_]{0,126}$/;
-const sha256 = /^[a-f0-9]{64}$/;
 const toolCommand = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$/;
 const reservedVariablePrefixes = [
   "KODEX_",
@@ -66,7 +66,7 @@ export function validateEnvironmentInput(
       });
     names.add(item.name);
   }
-  for (const [index, item] of input.secretDescriptors.entries()) {
+  for (const [index, item] of input.secretBindings.entries()) {
     validateSecret(item, index, names, problems);
     names.add(item.name);
   }
@@ -101,42 +101,30 @@ export function validateEnvironmentInput(
 }
 
 function validateSecret(
-  item: RuntimeSecretDescriptor,
+  item: RuntimeSecretBinding,
   index: number,
   names: Set<string>,
   problems: EnvironmentFormProblem[],
 ): void {
   if (!variableName.test(item.name))
     problems.push({
-      field: `secretDescriptors.${String(index)}.name`,
+      field: `secretBindings.${String(index)}.name`,
       message: "runtime.errors.variableName",
     });
   else if (isReservedVariableName(item.name))
     problems.push({
-      field: `secretDescriptors.${String(index)}.name`,
+      field: `secretBindings.${String(index)}.name`,
       message: "runtime.errors.reservedVariableName",
     });
   if (names.has(item.name))
     problems.push({
-      field: `secretDescriptors.${String(index)}.name`,
+      field: `secretBindings.${String(index)}.name`,
       message: "runtime.errors.duplicateVariable",
     });
-  for (const field of [
-    "secretName",
-    "secretKey",
-    "secretUid",
-    "secretResourceVersion",
-  ] as const) {
-    if (!item[field].trim())
-      problems.push({
-        field: `secretDescriptors.${String(index)}.${field}`,
-        message: "runtime.errors.secretDescriptorRequired",
-      });
-  }
-  if (!sha256.test(item.contentSha256))
+  if (!item.secretRef.trim())
     problems.push({
-      field: `secretDescriptors.${String(index)}.contentSha256`,
-      message: "runtime.errors.sha256",
+      field: `secretBindings.${String(index)}.secretRef`,
+      message: "runtime.errors.secretBindingRequired",
     });
 }
 
@@ -147,13 +135,15 @@ function isReservedVariableName(name: string): boolean {
   );
 }
 
-export function emptySecretDescriptor(): RuntimeSecretDescriptor {
+export function emptySecretBinding(): RuntimeSecretBinding {
   return {
     name: "",
-    secretName: "",
-    secretKey: "",
-    secretUid: "",
-    secretResourceVersion: "",
-    contentSha256: "",
+    secretRef: "",
   };
+}
+
+export function editableSecretBindings(
+  descriptors: readonly RuntimeSecretDescriptor[],
+): RuntimeSecretBinding[] {
+  return descriptors.map(({ name, secretRef }) => ({ name, secretRef }));
 }

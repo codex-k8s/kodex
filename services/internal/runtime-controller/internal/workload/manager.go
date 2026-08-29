@@ -43,14 +43,14 @@ const (
 )
 
 type Config struct {
-	Environment, Namespace, ControllerPodUID, ControllerPodIP              string
-	CallbackTLSServerName, CallbackClientCASecret, CallbackClientTLSSecret string
-	StorageClass, SessionPVCSize, RunnerServiceAccount                     string
-	ProviderHTTPSProxy                                                     string
-	PromotedRoleImageRepository, DefaultRoleImageReference                 string
-	RoleRuntimeContractSHA256                                              string
-	RoleRuntimeContractRevision                                            uint64
-	TurnCPUMilli, TurnMemoryBytes                                          int64
+	Environment, ControlNamespace, RuntimeNamespace, ControllerPodUID, ControllerPodIP string
+	CallbackTLSServerName, CallbackClientCASecret, CallbackClientTLSSecret             string
+	StorageClass, SessionPVCSize, RunnerServiceAccount                                 string
+	ProviderHTTPSProxy                                                                 string
+	PromotedRoleImageRepository, DefaultRoleImageReference                             string
+	RoleRuntimeContractSHA256                                                          string
+	RoleRuntimeContractRevision                                                        uint64
+	TurnCPUMilli, TurnMemoryBytes                                                      int64
 }
 
 // ProviderSecretBinding остаётся только внутри trusted runtime-controller и
@@ -80,7 +80,8 @@ func InCluster(config Config) (*Manager, error) {
 
 func New(client kubernetes.Interface, config Config) (*Manager, error) {
 	pvcRequest, err := resource.ParseQuantity(config.SessionPVCSize)
-	if client == nil || err != nil || pvcRequest.Sign() <= 0 || config.Namespace == "" ||
+	if client == nil || err != nil || pvcRequest.Sign() <= 0 || config.ControlNamespace == "" ||
+		config.RuntimeNamespace == "" || config.ControlNamespace == config.RuntimeNamespace ||
 		config.ControllerPodUID == "" || net.ParseIP(config.ControllerPodIP) == nil ||
 		config.CallbackTLSServerName == "" || config.CallbackClientCASecret == "" ||
 		config.CallbackClientTLSSecret == "" ||
@@ -96,7 +97,7 @@ func New(client kubernetes.Interface, config Config) (*Manager, error) {
 }
 
 func (manager *Manager) Check(ctx context.Context) error {
-	if _, err := manager.client.CoreV1().Pods(manager.config.Namespace).List(ctx, metav1.ListOptions{Limit: 1}); err != nil {
+	if _, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{Limit: 1}); err != nil {
 		return fmt.Errorf("Kubernetes runtime namespace observation failed: %w", err)
 	}
 	return nil
@@ -126,7 +127,7 @@ func (manager *Manager) RunAsLeader(ctx context.Context, run func(context.Contex
 	defer cancel()
 	result := make(chan error, 1)
 	elector, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
-		Lock: &resourcelock.LeaseLock{LeaseMeta: metav1.ObjectMeta{Name: "runtime-controller-leader", Namespace: manager.config.Namespace},
+		Lock: &resourcelock.LeaseLock{LeaseMeta: metav1.ObjectMeta{Name: "runtime-controller-leader", Namespace: manager.config.ControlNamespace},
 			Client: manager.client.CoordinationV1(), LockConfig: resourcelock.ResourceLockConfig{Identity: manager.config.ControllerPodUID}},
 		LeaseDuration: 15 * time.Second, RenewDeadline: 10 * time.Second, RetryPeriod: 2 * time.Second, ReleaseOnCancel: true,
 		Callbacks: leaderelection.LeaderCallbacks{OnStartedLeading: func(leaderContext context.Context) {
@@ -151,7 +152,7 @@ func (manager *Manager) RunAsLeader(ctx context.Context, run func(context.Contex
 
 func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 	selector := labels.Set{managedLabel: "true", modeLabel: "turn"}.AsSelector().String()
-	pods, err := manager.client.CoreV1().Pods(manager.config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: selector, Limit: 256})
+	pods, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector, Limit: 256})
 	if err != nil {
 		return errors.New("list retained runtime turn pods")
 	}
@@ -161,7 +162,7 @@ func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 		if pod.Annotations[controllerAnnotation] == manager.config.ControllerPodUID {
 			continue
 		}
-		if err := manager.client.CoreV1().Pods(manager.config.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{GracePeriodSeconds: int64Pointer(0)}); err != nil && !apierrors.IsNotFound(err) {
+		if err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Delete(ctx, pod.Name, metav1.DeleteOptions{GracePeriodSeconds: int64Pointer(0)}); err != nil && !apierrors.IsNotFound(err) {
 			result = errors.Join(result, errors.New("delete stale runtime turn pod"))
 		}
 	}
@@ -359,9 +360,9 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 		return err
 	}
 	pod := manager.runtimePod(input, providerBinding, secretName, podName, "turn")
-	_, err = manager.client.CoreV1().Pods(manager.config.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+	_, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, pod, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
-		existing, getErr := manager.client.CoreV1().Pods(manager.config.Namespace).Get(ctx, podName, metav1.GetOptions{})
+		existing, getErr := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
 		if getErr != nil || existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest || existing.Spec.Containers[0].Image != input.ImageReference {
 			return errors.New("existing runtime turn pod conflicts with immutable revision")
 		}
@@ -390,13 +391,13 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 	const podName = "system-assistant-warm"
 	secretName := manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest)
 	compatibilityDigest, _ := runtimecontract.WarmCompatibilityDigest(input)
-	existing, err := manager.client.CoreV1().Pods(manager.config.Namespace).Get(ctx, podName, metav1.GetOptions{})
+	existing, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
 	if err == nil && (existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest ||
 		existing.Annotations[warmCompatibilityAnnotation] != compatibilityDigest ||
 		existing.Annotations[controllerAnnotation] != manager.config.ControllerPodUID ||
 		runtimePodTerminal(existing)) {
 		boundTicket := runtimeInputSecretName(existing)
-		if deleteErr := manager.client.CoreV1().Pods(manager.config.Namespace).Delete(ctx, podName, metav1.DeleteOptions{GracePeriodSeconds: int64Pointer(0)}); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
+		if deleteErr := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Delete(ctx, podName, metav1.DeleteOptions{GracePeriodSeconds: int64Pointer(0)}); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
 			return false, errors.New("replace stale warm runtime pod")
 		}
 		if boundTicket != "" {
@@ -418,9 +419,9 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 			return false, ticketErr
 		}
 		pod := manager.runtimePod(input, providerBinding, secretName, podName, "warm")
-		existing, err = manager.client.CoreV1().Pods(manager.config.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+		existing, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, pod, metav1.CreateOptions{})
 		if apierrors.IsAlreadyExists(err) {
-			existing, err = manager.client.CoreV1().Pods(manager.config.Namespace).Get(ctx, podName, metav1.GetOptions{})
+			existing, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
 		}
 		if err != nil {
 			return false, errors.New("create warm runtime pod")
@@ -435,7 +436,7 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 }
 
 func (manager *Manager) deleteOwnedWarmTicket(ctx context.Context, name string) error {
-	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	secret, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
@@ -445,7 +446,7 @@ func (manager *Manager) deleteOwnedWarmTicket(ctx context.Context, name string) 
 	if secret.Labels[managedLabel] != "true" || secret.Labels[modeLabel] != "warm" {
 		return errors.New("stale warm runtime ticket ownership is invalid")
 	}
-	if err := manager.client.CoreV1().Secrets(manager.config.Namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+	if err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		return errors.New("delete stale warm runtime ticket")
 	}
 	return nil
@@ -453,7 +454,7 @@ func (manager *Manager) deleteOwnedWarmTicket(ctx context.Context, name string) 
 
 func (manager *Manager) cleanupStaleWarmTickets(ctx context.Context, current string) error {
 	selector := labels.Set{managedLabel: "true", modeLabel: "warm"}.AsSelector().String()
-	secrets, err := manager.client.CoreV1().Secrets(manager.config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: selector, Limit: 256})
+	secrets, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector, Limit: 256})
 	if err != nil {
 		return errors.New("list stale warm runtime tickets")
 	}
@@ -462,7 +463,7 @@ func (manager *Manager) cleanupStaleWarmTickets(ctx context.Context, current str
 		if secrets.Items[index].Name == current {
 			continue
 		}
-		if err := manager.client.CoreV1().Secrets(manager.config.Namespace).Delete(ctx, secrets.Items[index].Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		if err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Delete(ctx, secrets.Items[index].Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			result = errors.Join(result, errors.New("delete stale warm runtime ticket"))
 		}
 	}
@@ -482,7 +483,7 @@ func runtimeInputSecretName(pod *corev1.Pod) string {
 }
 
 func (manager *Manager) removeConflictingWarmTicket(ctx context.Context, secretName string, input runtimecontract.RunnerInput) error {
-	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+	secret, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, secretName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
@@ -498,7 +499,7 @@ func (manager *Manager) removeConflictingWarmTicket(ctx context.Context, secretN
 			return nil
 		}
 	}
-	if err := manager.client.CoreV1().Secrets(manager.config.Namespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+	if err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		return errors.New("replace stale warm runtime ticket")
 	}
 	return nil
@@ -512,7 +513,7 @@ func (manager *Manager) RegisterWarmTurn(ctx context.Context, input runtimecontr
 }
 
 func (manager *Manager) WarmTicket(ctx context.Context, revisionRef, revisionDigest string) (string, error) {
-	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, manager.warmTicketName(revisionRef, revisionDigest), metav1.GetOptions{})
+	secret, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, manager.warmTicketName(revisionRef, revisionDigest), metav1.GetOptions{})
 	if err != nil || len(secret.Data[ticketKey]) < 32 {
 		return "", errors.New("read warm runtime ticket")
 	}
@@ -523,7 +524,7 @@ func (manager *Manager) ResolveWarm(ctx context.Context, revisionRef, revisionDi
 	if revisionRef == "" || len(revisionDigest) != sha256.Size*2 || token == "" {
 		return runtimecontract.RunnerInput{}, errors.New("warm runtime callback authority is incomplete")
 	}
-	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, manager.warmTicketName(revisionRef, revisionDigest), metav1.GetOptions{})
+	secret, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, manager.warmTicketName(revisionRef, revisionDigest), metav1.GetOptions{})
 	if err != nil {
 		return runtimecontract.RunnerInput{}, errors.New("warm runtime callback ticket is unavailable")
 	}
@@ -542,7 +543,7 @@ func (manager *Manager) ResolveTurn(ctx context.Context, leaseRef, token string)
 	if leaseRef == "" || token == "" {
 		return runtimecontract.RunnerInput{}, errors.New("runtime callback authority is invalid")
 	}
-	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, ticketName(leaseRef), metav1.GetOptions{})
+	secret, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, ticketName(leaseRef), metav1.GetOptions{})
 	if err != nil || subtle.ConstantTimeCompare(secret.Data[ticketKey], []byte(token)) != 1 {
 		return runtimecontract.RunnerInput{}, errors.New("runtime callback authority is invalid")
 	}
@@ -555,18 +556,18 @@ func (manager *Manager) ResolveTurn(ctx context.Context, leaseRef, token string)
 
 func (manager *Manager) DeleteTurn(ctx context.Context, leaseRef string) error {
 	secretName := ticketName(leaseRef)
-	secret, _ := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+	secret, _ := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, secretName, metav1.GetOptions{})
 	podName := ""
 	if secret != nil {
 		podName = secret.Annotations[podAnnotation]
 	}
 	var result error
 	if podName != "" && podName != "system-assistant-warm" {
-		if err := manager.client.CoreV1().Pods(manager.config.Namespace).Delete(ctx, podName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		if err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Delete(ctx, podName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			result = errors.Join(result, errors.New("delete completed runtime pod"))
 		}
 	}
-	if err := manager.client.CoreV1().Secrets(manager.config.Namespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+	if err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		result = errors.Join(result, errors.New("delete completed runtime ticket"))
 	}
 	return result
@@ -577,7 +578,7 @@ func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.
 	if warmExecution {
 		podName = "system-assistant-warm"
 	}
-	pod, err := manager.client.CoreV1().Pods(manager.config.Namespace).Get(ctx, podName, metav1.GetOptions{})
+	pod, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return "MISSING", nil
 	}
@@ -622,15 +623,15 @@ func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode st
 	for key, value := range environmentSecrets {
 		data[key] = append([]byte(nil), value...)
 	}
-	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.Namespace,
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.RuntimeNamespace,
 		Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: map[string]string{
 			revisionAnnotation: input.RuntimeRevisionDigest, configAnnotation: input.RuntimeConfigDigest,
 			environmentAnnotation: input.RuntimeEnvironmentDigest, controllerAnnotation: manager.config.ControllerPodUID, podAnnotation: podName,
 		}},
 		Immutable: &immutable, Type: corev1.SecretTypeOpaque, Data: data}
-	_, err = manager.client.CoreV1().Secrets(manager.config.Namespace).Create(ctx, secret, metav1.CreateOptions{})
+	_, err = manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Create(ctx, secret, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
-		existing, getErr := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+		existing, getErr := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
 		if getErr != nil || existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest ||
 			mode != "warm-turn" && !environmentProjectionMatches(input, existing.Data) ||
 			subtle.ConstantTimeCompare(existing.Data[ticketKey], []byte(token)) != 1 && mode == "warm-turn" {
@@ -649,7 +650,7 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, sessionRef string)
 	if err != nil {
 		return err
 	}
-	_, err = manager.client.CoreV1().PersistentVolumeClaims(manager.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	_, err = manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
 		return nil
 	}
@@ -660,11 +661,11 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, sessionRef string)
 	if manager.config.StorageClass != "" {
 		storageClassName = &manager.config.StorageClass
 	}
-	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.Namespace,
+	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.RuntimeNamespace,
 		Labels: map[string]string{managedLabel: "true", "runtime.kodex.dev/session-hash": shortHash(sessionRef)}},
 		Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, StorageClassName: storageClassName,
 			Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: manager.pvcRequest}}}}
-	_, err = manager.client.CoreV1().PersistentVolumeClaims(manager.config.Namespace).Create(ctx, pvc, metav1.CreateOptions{})
+	_, err = manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Create(ctx, pvc, metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return errors.New("create runtime session volume")
 	}
@@ -725,7 +726,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		compatibility, _ := runtimecontract.WarmCompatibilityDigest(input)
 		annotations[warmCompatibilityAnnotation] = compatibility
 	}
-	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: manager.config.Namespace,
+	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: manager.config.RuntimeNamespace,
 		Labels:      map[string]string{managedLabel: "true", modeLabel: mode, "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment},
 		Annotations: annotations},
 		Spec: corev1.PodSpec{ServiceAccountName: manager.config.RunnerServiceAccount, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(30),
@@ -765,7 +766,7 @@ func (manager *Manager) validateProviderSecret(ctx context.Context, input runtim
 		binding.ContentSHA256 != input.ProviderCredentialSHA256 {
 		return errors.New("provider credential binding is invalid")
 	}
-	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, binding.Name, metav1.GetOptions{})
+	secret, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, binding.Name, metav1.GetOptions{})
 	if err != nil || secret.Immutable == nil || !*secret.Immutable || string(secret.UID) != binding.UID ||
 		secret.ResourceVersion != binding.ResourceVersion {
 		return errors.New("provider credential revision is unavailable")
@@ -790,7 +791,7 @@ func (manager *Manager) materializeEnvironmentSecrets(ctx context.Context, input
 		if !validDNSSubdomain(item.SecretName) {
 			return nil, errors.New("runtime Secret projection is invalid")
 		}
-		secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, item.SecretName, metav1.GetOptions{})
+		secret, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, item.SecretName, metav1.GetOptions{})
 		if err != nil || secret.Immutable == nil || !*secret.Immutable || string(secret.UID) != item.SecretUID ||
 			secret.ResourceVersion != item.SecretResourceVersion {
 			return nil, errors.New("runtime Secret projection is unavailable")
@@ -927,5 +928,5 @@ func httpProbe(path, port string, period, failures int32) *corev1.Probe {
 }
 
 func (manager *Manager) DebugSummary() string {
-	return fmt.Sprintf("namespace=%s controller=%s", manager.config.Namespace, shortHash(manager.config.ControllerPodUID))
+	return fmt.Sprintf("namespace=%s controller=%s", manager.config.RuntimeNamespace, shortHash(manager.config.ControllerPodUID))
 }

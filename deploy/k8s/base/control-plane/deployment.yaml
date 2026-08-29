@@ -156,6 +156,8 @@ spec:
               value: /var/run/config/kodex/control-plane/application-grants/image-admission.platform-worker.public.jwk
             - name: CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE
               value: /var/run/config/kodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk
+            - name: CONTROL_PLANE_SECRET_BROKER_GRANT_TRUST_FILE
+              value: /var/run/config/kodex/control-plane/application-grants/secret-broker.platform-worker.public.jwk
           ports:
             - name: grpc
               containerPort: 8443

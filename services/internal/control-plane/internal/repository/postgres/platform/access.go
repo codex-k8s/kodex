@@ -582,6 +582,8 @@ func visibilityPermission(kind string) string {
 		return "schedule.view"
 	case "INTEGRATION":
 		return "integration.view"
+	case "SECRET":
+		return "secret.view"
 	default:
 		return ""
 	}

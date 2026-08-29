@@ -16,6 +16,7 @@ SELECT b.id::text, b.ref, b.version, b.state, b.subject_kind,
          WHEN 'ARTIFACT' THEN COALESCE((SELECT artifact.ref FROM control_plane.artifacts artifact WHERE artifact.id = b.resource_id), '')
          WHEN 'SCHEDULE' THEN COALESCE((SELECT schedule.ref FROM control_plane.schedules schedule WHERE schedule.id = b.resource_id), '')
          WHEN 'INTEGRATION' THEN COALESCE((SELECT connection.ref FROM control_plane.integration_connections connection WHERE connection.id = b.resource_id), '')
+         WHEN 'SECRET' THEN COALESCE((SELECT secret.ref FROM control_plane.runtime_secrets secret WHERE secret.id = b.resource_id), '')
          ELSE ''
        END,
        b.valid_from, b.valid_until, b.require_owner, b.created_at, b.updated_at

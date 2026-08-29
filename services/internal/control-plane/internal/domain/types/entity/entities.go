@@ -79,11 +79,19 @@ type RuntimeEnvironmentValue struct {
 
 type RuntimeSecretDescriptor struct {
 	Name                  string `json:"name"`
+	SecretRef             string `json:"secret_ref"`
+	Namespace             string `json:"namespace"`
+	Revision              int64  `json:"revision"`
 	SecretName            string `json:"secret_name"`
 	SecretKey             string `json:"secret_key"`
 	SecretUID             string `json:"secret_uid"`
 	SecretResourceVersion string `json:"secret_resource_version"`
 	ContentSHA256         string `json:"content_sha256"`
+}
+
+type RuntimeSecretBinding struct {
+	Name      string
+	SecretRef string
 }
 
 type RuntimeEnvironmentTool struct {

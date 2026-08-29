@@ -48,6 +48,7 @@ type Config struct {
 	DefaultProviderCredentialSHA256 string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256"`
 	IntegrationCredentialNamespace  string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_NAMESPACE"`
 	IntegrationCredentialSecretName string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_SECRET_NAME"`
+	RuntimeSecretNamespace          string        `env:"CONTROL_PLANE_RUNTIME_SECRET_NAMESPACE"`
 	KubernetesAPITimeout            time.Duration `env:"CONTROL_PLANE_KUBERNETES_API_TIMEOUT"`
 	AuthorityVerifierSocket         string        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_SOCKET"`
 	AuthorityVerifierUID            uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_UID"`
@@ -63,6 +64,7 @@ type Config struct {
 	RoleImageBuilderGrantTrustFile  string        `env:"CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE"`
 	ImageAdmissionGrantTrustFile    string        `env:"CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE"`
 	ImagePromotionGrantTrustFile    string        `env:"CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE"`
+	SecretBrokerGrantTrustFile      string        `env:"CONTROL_PLANE_SECRET_BROKER_GRANT_TRUST_FILE"`
 	LeaseSigningKeyFile             string        `env:"CONTROL_PLANE_LEASE_SIGNING_KEY_FILE"`
 	ImagePolicyRevision             uint64        `env:"CONTROL_PLANE_IMAGE_POLICY_REVISION"`
 	ImagePolicySHA256               string        `env:"CONTROL_PLANE_IMAGE_POLICY_SHA256"`
@@ -127,6 +129,7 @@ func loadConfig() (Config, error) {
 		DefaultRuntimeModel:             "gpt-5.6-sol",
 		IntegrationCredentialNamespace:  "kodex-system",
 		IntegrationCredentialSecretName: "kodex-integration-credentials",
+		RuntimeSecretNamespace:          "kodex-runtime",
 		KubernetesAPITimeout:            3 * time.Second,
 		AuthorityVerifierSocket:         authorityclient.VerifierSocketPath,
 		AuthorityVerifierUID:            29002, AuthorityVerifierGID: 29000,
@@ -141,6 +144,7 @@ func loadConfig() (Config, error) {
 		RoleImageBuilderGrantTrustFile: "/var/run/config/kodex/control-plane/application-grants/role-image-builder.platform-worker.public.jwk",
 		ImageAdmissionGrantTrustFile:   "/var/run/config/kodex/control-plane/application-grants/image-admission.platform-worker.public.jwk",
 		ImagePromotionGrantTrustFile:   "/var/run/config/kodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk",
+		SecretBrokerGrantTrustFile:     "/var/run/config/kodex/control-plane/application-grants/secret-broker.platform-worker.public.jwk",
 		LeaseSigningKeyFile:            "/var/run/secrets/kodex/control-plane/lease-signing/key",
 		ImageBuildLeaseDuration:        5 * time.Minute,
 		ImageAdmissionClaimTTL:         30 * time.Minute,
@@ -169,7 +173,7 @@ func (config Config) validate() error {
 			return errors.New("control-plane listen address is invalid")
 		}
 	}
-	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.ObjectStorageAccessKeyFile, config.ObjectStorageSecretKeyFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.SessionArchiveGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
+	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.ObjectStorageAccessKeyFile, config.ObjectStorageSecretKeyFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.SessionArchiveGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.SecretBrokerGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("control-plane file path is invalid")
 		}
@@ -187,6 +191,7 @@ func (config Config) validate() error {
 		config.DefaultProviderSecretVersion == "" || len(config.DefaultProviderSecretVersion) > 128 ||
 		!validSHA256(config.DefaultProviderCredentialSHA256) ||
 		config.IntegrationCredentialNamespace != "kodex-system" || config.IntegrationCredentialSecretName != "kodex-integration-credentials" ||
+		!validDNSLabel(config.RuntimeSecretNamespace) ||
 		config.KubernetesAPITimeout < 500*time.Millisecond || config.KubernetesAPITimeout > 10*time.Second ||
 		config.ImagePolicyRevision == 0 || !validSHA256(config.ImagePolicySHA256) ||
 		config.ImageBuildLeaseDuration < 30*time.Second || config.ImageBuildLeaseDuration > 30*time.Minute ||

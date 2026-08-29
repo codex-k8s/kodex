@@ -1,8 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: kodex-system
 resources:
   - namespace.yaml
+  - runtime-namespace.yaml
   - ../../base/platform-state
   - ../../base/platform-endpoints
   - ../../overlays/production/internal-rpc-authority
@@ -11,8 +11,10 @@ resources:
   - ../../overlays/production/egress-gateway
   - ../../overlays/production/role-image-builder
   - ../../overlays/production/runtime-controller
+  - ../../base/runtime-workloads
   - ../../overlays/production/integration-gateway
   - ../../overlays/production/automation-scheduler
+  - ../../overlays/production/secret-broker
   - ../../overlays/production/artifact-retention
   - ../../overlays/production/session-archive
   - ../../overlays/production/backup-controller

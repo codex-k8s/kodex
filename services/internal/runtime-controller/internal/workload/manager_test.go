@@ -71,7 +71,7 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
 		t.Fatalf("EnsureTurn() error = %v", err)
 	}
-	pod, err := client.CoreV1().Pods("kodex-system").Get(context.Background(), turnPodName(input.LeaseRef), metav1.GetOptions{})
+	pod, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), turnPodName(input.LeaseRef), metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get(Pod) error = %v", err)
 	}
@@ -127,7 +127,7 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 		!hasEnv(pod.Spec.Containers[0], "DEPLOYMENT_ENVIRONMENT", "test") {
 		t.Fatal("role runtime does not have a valid telemetry identity")
 	}
-	secret, err := client.CoreV1().Secrets("kodex-system").Get(context.Background(), ticketName(input.LeaseRef), metav1.GetOptions{})
+	secret, err := client.CoreV1().Secrets("kodex-runtime").Get(context.Background(), ticketName(input.LeaseRef), metav1.GetOptions{})
 	if err != nil || secret.Immutable == nil || !*secret.Immutable || len(secret.Data[ticketKey]) != 64 {
 		t.Fatalf("immutable execution ticket is invalid: err=%v", err)
 	}
@@ -138,10 +138,10 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	if nameErr != nil {
 		t.Fatalf("derive session volume name: %v", nameErr)
 	}
-	if _, err := client.CoreV1().PersistentVolumeClaims("kodex-system").Get(context.Background(), sessionVolumeName, metav1.GetOptions{}); err != nil {
+	if _, err := client.CoreV1().PersistentVolumeClaims("kodex-runtime").Get(context.Background(), sessionVolumeName, metav1.GetOptions{}); err != nil {
 		t.Fatalf("session volume was not materialized: %v", err)
 	}
-	pvc, err := client.CoreV1().PersistentVolumeClaims("kodex-system").Get(context.Background(), sessionVolumeName, metav1.GetOptions{})
+	pvc, err := client.CoreV1().PersistentVolumeClaims("kodex-runtime").Get(context.Background(), sessionVolumeName, metav1.GetOptions{})
 	if err != nil || pvc.Spec.StorageClassName != nil {
 		t.Fatalf("session volume must use the cluster default StorageClass: storage_class=%v err=%v", pvc.Spec.StorageClassName, err)
 	}
@@ -157,6 +157,15 @@ func TestManagerAcceptsOnlyDefaultOrValidExplicitStorageClass(t *testing.T) {
 	config.StorageClass = "invalid/storage-class"
 	if _, err := New(fake.NewSimpleClientset(), config); err == nil {
 		t.Fatal("invalid explicit StorageClass was accepted")
+	}
+}
+
+func TestManagerRejectsSharedControlAndRuntimeNamespace(t *testing.T) {
+	t.Parallel()
+	config := testManagerConfig()
+	config.RuntimeNamespace = config.ControlNamespace
+	if _, err := New(fake.NewSimpleClientset(), config); err == nil {
+		t.Fatal("shared control and runtime namespace was accepted")
 	}
 }
 
@@ -182,13 +191,13 @@ func TestEnsureTurnMaterializesExactEnvironmentSecretOutsideRunnerInput(t *testi
 	digestHex := hex.EncodeToString(digest[:])
 	source := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "runtime-agent-environment-r1", Namespace: "kodex-system",
+			Name: "runtime-agent-environment-r1", Namespace: "kodex-runtime",
 			UID: "20000000-0000-4000-8000-000000000001", ResourceVersion: "7",
 		},
 		Immutable: &immutable,
 		Data:      map[string][]byte{"token": secretValue},
 	}
-	if _, err := client.CoreV1().Secrets("kodex-system").Create(context.Background(), source, metav1.CreateOptions{}); err != nil {
+	if _, err := client.CoreV1().Secrets("kodex-runtime").Create(context.Background(), source, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("create runtime environment Secret fixture: %v", err)
 	}
 
@@ -217,7 +226,7 @@ func TestEnsureTurnMaterializesExactEnvironmentSecretOutsideRunnerInput(t *testi
 		t.Fatalf("EnsureTurn() error = %v", err)
 	}
 
-	ticket, err := client.CoreV1().Secrets("kodex-system").Get(context.Background(), ticketName(input.LeaseRef), metav1.GetOptions{})
+	ticket, err := client.CoreV1().Secrets("kodex-runtime").Get(context.Background(), ticketName(input.LeaseRef), metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get(runtime ticket Secret) error = %v", err)
 	}
@@ -233,7 +242,7 @@ func TestEnsureTurnMaterializesExactEnvironmentSecretOutsideRunnerInput(t *testi
 		t.Fatalf("runtime.json does not preserve the exact Secret descriptor: input=%#v err=%v", bound.SecretProjections, err)
 	}
 
-	pod, err := client.CoreV1().Pods("kodex-system").Get(context.Background(), turnPodName(input.LeaseRef), metav1.GetOptions{})
+	pod, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), turnPodName(input.LeaseRef), metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get(runtime Pod) error = %v", err)
 	}
@@ -262,8 +271,8 @@ func TestEnsureTurnRejectsStaleEnvironmentSecretRevision(t *testing.T) {
 	immutable := true
 	secretValue := []byte("runtime-environment-secret-fixture")
 	digest := sha256.Sum256(secretValue)
-	if _, err := client.CoreV1().Secrets("kodex-system").Create(context.Background(), &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "runtime-agent-environment-r1", Namespace: "kodex-system",
+	if _, err := client.CoreV1().Secrets("kodex-runtime").Create(context.Background(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "runtime-agent-environment-r1", Namespace: "kodex-runtime",
 			UID: "20000000-0000-4000-8000-000000000001", ResourceVersion: "7"},
 		Immutable: &immutable, Data: map[string][]byte{"token": secretValue},
 	}, metav1.CreateOptions{}); err != nil {
@@ -380,7 +389,7 @@ func TestBuildTurnInputSelectsCodexSandboxFromArtifactCapability(t *testing.T) {
 }
 
 func TestTurnPodStateRejectsStaleWarmRevision(t *testing.T) {
-	warmPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "system-assistant-warm", Namespace: "kodex-system", Annotations: map[string]string{revisionAnnotation: strings.Repeat("c", 64)}}, Status: corev1.PodStatus{Phase: corev1.PodRunning}}
+	warmPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "system-assistant-warm", Namespace: "kodex-runtime", Annotations: map[string]string{revisionAnnotation: strings.Repeat("c", 64)}}, Status: corev1.PodStatus{Phase: corev1.PodRunning}}
 	client := fake.NewSimpleClientset(warmPod)
 	manager := newTestManager(t, client)
 	input, _, err := manager.BuildTurnInput(testExecution(true))
@@ -469,7 +478,7 @@ func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 			}
 			pod := manager.runtimePod(input, binding, ticketName(input.LeaseRef), turnPodName(input.LeaseRef), "turn")
 			pod.Status = corev1.PodStatus{Phase: corev1.PodRunning, ContainerStatuses: test.statuses, Conditions: test.conditions}
-			if _, err := client.CoreV1().Pods("kodex-system").Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
+			if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 				t.Fatalf("Create(cold runtime Pod) error = %v", err)
 			}
 			state, err := manager.TurnPodState(context.Background(), input, false)
@@ -528,7 +537,7 @@ func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
 	}
 	terminal := manager.runtimePod(input, binding, manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), "system-assistant-warm", "warm")
 	terminal.Status.Phase = corev1.PodFailed
-	if _, err := client.CoreV1().Pods("kodex-system").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
+	if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Create(terminal warm Pod) error = %v", err)
 	}
 	ready, err := manager.EnsureWarm(context.Background(), input, binding)
@@ -538,7 +547,7 @@ func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
 	if ready {
 		t.Fatal("new warm Pod cannot be ready before Kubernetes observation")
 	}
-	pod, err := client.CoreV1().Pods("kodex-system").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{})
+	pod, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get(recreated warm Pod) error = %v", err)
 	}
@@ -560,7 +569,7 @@ func TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime(t *testing.T) {
 		{Name: "role-runtime", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}}},
 		{Name: "provider-runtime", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
 	}
-	if _, err := client.CoreV1().Pods("kodex-system").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
+	if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Create(terminal warm Pod) error = %v", err)
 	}
 	ready, err := manager.EnsureWarm(context.Background(), input, binding)
@@ -570,7 +579,7 @@ func TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime(t *testing.T) {
 	if ready {
 		t.Fatal("recreated warm Pod cannot be ready before Kubernetes observation")
 	}
-	pod, err := client.CoreV1().Pods("kodex-system").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{})
+	pod, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get(recreated warm Pod) error = %v", err)
 	}
@@ -599,20 +608,20 @@ func TestEnsureWarmRotatesTerminalTicketAndDeletesStaleWarmTickets(t *testing.T)
 	}
 	terminal := manager.runtimePod(input, binding, secretName, "system-assistant-warm", "warm")
 	terminal.Status.Phase = corev1.PodFailed
-	if _, err := client.CoreV1().Pods("kodex-system").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
+	if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Create(terminal warm Pod) error = %v", err)
 	}
 	if _, err := manager.EnsureWarm(context.Background(), input, binding); err != nil {
 		t.Fatalf("EnsureWarm() error = %v", err)
 	}
-	current, err := client.CoreV1().Secrets("kodex-system").Get(context.Background(), secretName, metav1.GetOptions{})
+	current, err := client.CoreV1().Secrets("kodex-runtime").Get(context.Background(), secretName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get(current warm ticket) error = %v", err)
 	}
 	if bytes.Equal(current.Data[ticketKey], []byte(oldToken)) {
 		t.Fatal("terminal warm Pod reused its execution ticket")
 	}
-	items, err := client.CoreV1().Secrets("kodex-system").List(context.Background(), metav1.ListOptions{
+	items, err := client.CoreV1().Secrets("kodex-runtime").List(context.Background(), metav1.ListOptions{
 		LabelSelector: labels.Set{managedLabel: "true", modeLabel: "warm"}.AsSelector().String(),
 	})
 	if err != nil {
@@ -638,8 +647,8 @@ func TestEnsureWarmReplacesTicketFromPreviousControllerInstance(t *testing.T) {
 	}
 	immutable := true
 	secretName := ticketName("warm-legacy-" + input.RuntimeRevisionRef)
-	_, err = client.CoreV1().Secrets("kodex-system").Create(context.Background(), &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "kodex-system",
+	_, err = client.CoreV1().Secrets("kodex-runtime").Create(context.Background(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "kodex-runtime",
 			Annotations: map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, controllerAnnotation: "previous-controller"}},
 		Immutable: &immutable, Data: map[string][]byte{inputKey: raw, ticketKey: []byte(strings.Repeat("a", 64))},
 	}, metav1.CreateOptions{})
@@ -649,7 +658,7 @@ func TestEnsureWarmReplacesTicketFromPreviousControllerInstance(t *testing.T) {
 	if _, err := manager.EnsureWarm(context.Background(), input, binding); err != nil {
 		t.Fatalf("EnsureWarm() error = %v", err)
 	}
-	current, err := client.CoreV1().Secrets("kodex-system").Get(context.Background(), manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), metav1.GetOptions{})
+	current, err := client.CoreV1().Secrets("kodex-runtime").Get(context.Background(), manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get(current warm ticket) error = %v", err)
 	}
@@ -674,8 +683,8 @@ func TestEnsureWarmReplacesTicketWithStaleCallbackAddress(t *testing.T) {
 	}
 	immutable := true
 	secretName := manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest)
-	_, err = client.CoreV1().Secrets("kodex-system").Create(context.Background(), &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "kodex-system",
+	_, err = client.CoreV1().Secrets("kodex-runtime").Create(context.Background(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "kodex-runtime",
 			Annotations: map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, controllerAnnotation: manager.config.ControllerPodUID}},
 		Immutable: &immutable, Data: map[string][]byte{inputKey: raw, ticketKey: []byte(strings.Repeat("a", 64))},
 	}, metav1.CreateOptions{})
@@ -685,7 +694,7 @@ func TestEnsureWarmReplacesTicketWithStaleCallbackAddress(t *testing.T) {
 	if _, err := manager.EnsureWarm(context.Background(), input, binding); err != nil {
 		t.Fatalf("EnsureWarm() error = %v", err)
 	}
-	current, err := client.CoreV1().Secrets("kodex-system").Get(context.Background(), secretName, metav1.GetOptions{})
+	current, err := client.CoreV1().Secrets("kodex-runtime").Get(context.Background(), secretName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get(current warm ticket) error = %v", err)
 	}
@@ -704,7 +713,7 @@ func TestEnsureTurnRejectsExistingPodFromAnotherRevision(t *testing.T) {
 	}
 	conflict := manager.runtimePod(input, binding, ticketName(input.LeaseRef), turnPodName(input.LeaseRef), "turn")
 	conflict.Annotations[revisionAnnotation] = strings.Repeat("c", 64)
-	if _, err := client.CoreV1().Pods("kodex-system").Create(context.Background(), conflict, metav1.CreateOptions{}); err != nil {
+	if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), conflict, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Create(conflict Pod) error = %v", err)
 	}
 	if err := manager.EnsureTurn(context.Background(), input, binding); err == nil {
@@ -719,8 +728,8 @@ func newTestManager(t *testing.T, client *fake.Clientset) *Manager {
 		t.Fatalf("New() error = %v", err)
 	}
 	immutable := true
-	_, err = client.CoreV1().Secrets("kodex-system").Create(context.Background(), &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "runtime-provider-openai-default-r1", Namespace: "kodex-system",
+	_, err = client.CoreV1().Secrets("kodex-runtime").Create(context.Background(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "runtime-provider-openai-default-r1", Namespace: "kodex-runtime",
 			UID: "10000000-0000-4000-8000-000000000001", ResourceVersion: "1"},
 		Immutable: &immutable,
 		Data:      map[string][]byte{"auth.json": []byte(`{"auth":"fixture"}`), "auth.sha256": []byte(testProviderDigest)},
@@ -733,7 +742,8 @@ func newTestManager(t *testing.T, client *fake.Clientset) *Manager {
 
 func testManagerConfig() Config {
 	return Config{
-		Environment: "test", Namespace: "kodex-system", ControllerPodUID: "controller-pod-uid", ControllerPodIP: "10.0.0.10",
+		Environment: "test", ControlNamespace: "kodex-system", RuntimeNamespace: "kodex-runtime",
+		ControllerPodUID: "controller-pod-uid", ControllerPodIP: "10.0.0.10",
 		CallbackTLSServerName:  "runtime-controller-callback.kodex-system.svc.cluster.local",
 		CallbackClientCASecret: "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
 		ProviderHTTPSProxy: "http://egress-gateway.kodex-system.svc:8080",

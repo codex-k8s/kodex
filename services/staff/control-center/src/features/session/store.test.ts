@@ -12,9 +12,15 @@ const api = vi.hoisted(() => ({
 }));
 const oidc = vi.hoisted(() => ({
   removeUser: vi.fn(() => Promise.resolve()),
-  signinRedirect: vi.fn(() => Promise.resolve()),
+  signinRedirect: vi.fn((args?: unknown) => {
+    void args;
+    return Promise.resolve();
+  }),
   signinRedirectCallback: vi.fn(() =>
-    Promise.resolve({ access_token: "owner-access-token" }),
+    Promise.resolve({
+      access_token: "owner-access-token",
+      state: undefined as unknown,
+    }),
   ),
 }));
 const mutation = vi.hoisted(() => ({
@@ -30,8 +36,8 @@ vi.mock("oidc-client-ts", () => ({
       return oidc.removeUser();
     }
 
-    signinRedirect() {
-      return oidc.signinRedirect();
+    signinRedirect(args?: unknown) {
+      return oidc.signinRedirect(args);
     }
 
     signinRedirectCallback() {
@@ -93,11 +99,22 @@ function requestHeaders(call: unknown[]): unknown {
   return options.headers;
 }
 
+function requestBody(call: unknown[]): unknown {
+  const options = call[0];
+  if (typeof options !== "object" || options === null || !("body" in options))
+    return undefined;
+  return options.body;
+}
+
 describe("session renewal lifecycle", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     api.getBootstrapState.mockClear();
     api.createOwnerSession.mockClear();
+    api.createOwnerSession.mockResolvedValue({
+      data: undefined,
+      etag: '"8"',
+    });
     api.deleteOwnerSession.mockClear();
     api.deleteOwnerSession.mockResolvedValue({ data: undefined });
     api.renewOwnerSession.mockClear();
@@ -107,6 +124,7 @@ describe("session renewal lifecycle", () => {
     oidc.signinRedirectCallback.mockClear();
     oidc.signinRedirectCallback.mockResolvedValue({
       access_token: "owner-access-token",
+      state: undefined,
     });
     mutation.idempotencyKey.mockClear();
     const values = new Map<string, string>([["kodex.session.revision", "7"]]);
@@ -178,8 +196,123 @@ describe("session renewal lifecycle", () => {
       requestHeaders(api.createOwnerSession.mock.calls[1] ?? []),
     );
     expect(mutation.idempotencyKey).toHaveBeenCalledOnce();
+    expect(
+      requestBody(api.createOwnerSession.mock.calls[0] ?? []),
+    ).toBeUndefined();
     expect(session.phase).toBe("authenticated");
     expect(oidc.removeUser).toHaveBeenCalledOnce();
+  });
+
+  test("запрашивает fresh OIDC login с max_age=0 и operation state", async () => {
+    const session = useSessionStore();
+
+    await session.beginRuntimeSecretRevealReauth({
+      projectRef: "project_sales",
+      secretRef: "secret_main",
+    });
+
+    expect(oidc.signinRedirect).toHaveBeenCalledOnce();
+    const redirect = oidc.signinRedirect.mock.calls[0]?.[0] as {
+      max_age?: unknown;
+      prompt?: unknown;
+      state?: unknown;
+    };
+    expect(redirect.max_age).toBe(0);
+    expect(redirect.prompt).toBe("login");
+    expect(redirect.state).toMatchObject({
+      action: "reveal",
+      kind: "runtime-secret",
+      projectRef: "project_sales",
+      returnPath: "/projects/project_sales/secrets",
+      secretRef: "secret_main",
+    });
+  });
+
+  test("после callback создаёт свежую owner session и возвращает к секретам", async () => {
+    const session = useSessionStore();
+    await session.beginRuntimeSecretRevealReauth({
+      projectRef: "project_sales",
+      secretRef: "secret_main",
+    });
+    const redirect = oidc.signinRedirect.mock.calls[0]?.[0] as {
+      state?: unknown;
+    };
+    oidc.signinRedirectCallback.mockResolvedValue({
+      access_token: "fresh-owner-access-token",
+      state: redirect.state,
+    });
+
+    const completion = await session.completeLogin();
+
+    expect(completion).toEqual({
+      kind: "runtime-secret",
+      returnPath: "/projects/project_sales/secrets",
+    });
+    expect(api.createOwnerSession).toHaveBeenCalledOnce();
+    expect(requestBody(api.createOwnerSession.mock.calls[0] ?? [])).toEqual({
+      purpose: {
+        kind: "RUNTIME_SECRET_REVEAL",
+        projectRef: "project_sales",
+        secretRef: "secret_main",
+      },
+    });
+    expect(oidc.removeUser).toHaveBeenCalledOnce();
+    expect(
+      session.hasPendingRuntimeSecretReveal("project_sales", "secret_main"),
+    ).toBe(true);
+    expect(
+      session.consumePendingRuntimeSecretReveal("project_sales", "secret_main"),
+    ).toBe(true);
+    expect(
+      session.consumePendingRuntimeSecretReveal("project_sales", "secret_main"),
+    ).toBe(false);
+  });
+
+  test("отклоняет подменённый return path до создания owner session", async () => {
+    const session = useSessionStore();
+    await session.beginRuntimeSecretRevealReauth({
+      projectRef: "project_sales",
+      secretRef: "secret_main",
+    });
+    const redirect = oidc.signinRedirect.mock.calls[0]?.[0] as {
+      state: Record<string, unknown>;
+    };
+    oidc.signinRedirectCallback.mockResolvedValue({
+      access_token: "fresh-owner-access-token",
+      state: {
+        ...redirect.state,
+        returnPath: "https://attacker.example/collect",
+      },
+    });
+
+    await expect(session.completeLogin()).rejects.toThrow("state is invalid");
+    expect(api.createOwnerSession).not.toHaveBeenCalled();
+    expect(session.phase).toBe("error");
+  });
+
+  test("отклоняет повторный callback после потребления operation state", async () => {
+    const session = useSessionStore();
+    await session.beginRuntimeSecretRevealReauth({
+      projectRef: "project_sales",
+      secretRef: "secret_main",
+    });
+    const redirect = oidc.signinRedirect.mock.calls[0]?.[0] as {
+      state?: unknown;
+    };
+    oidc.signinRedirectCallback.mockResolvedValue({
+      access_token: "fresh-owner-access-token",
+      state: redirect.state,
+    });
+
+    await session.completeLogin();
+    oidc.signinRedirectCallback.mockResolvedValue({
+      access_token: "replayed-owner-access-token",
+      state: redirect.state,
+    });
+    await expect(session.completeLogin()).rejects.toThrow(
+      "missing or already consumed",
+    );
+    expect(api.createOwnerSession).toHaveBeenCalledOnce();
   });
 
   test("отменяет renewal и ждёт его завершения перед logout", async () => {

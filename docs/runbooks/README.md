@@ -24,6 +24,7 @@ updated: 2026-08-25
 - `automation-scheduler.md` — schedule occurrence worker;
 - `artifact-retention.md` — 30-day trash retention и exact object version purge;
 - `session-archive.md` — snapshot/restore session JSONL, guarded PVC cleanup и GC;
+- `secret-broker.md` — Runtime Secret operations, recovery и exact cleanup;
 - `internal-rpc-authority.md` и `egress-gateway.md` — security boundaries.
 
 Runbooks не разрешают merge, deployment, reset или доступ к live credentials.

@@ -41,6 +41,7 @@ done
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'current Kubernetes context mismatch'
 
 namespace=kodex-system
+runtime_namespace=kodex-runtime
 public_certificate_name=staff-control-center-public
 export KODEX_DEPLOY_PUBLIC_TLS_MODE=$public_tls_mode
 export KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME=$public_certificate_name
@@ -60,6 +61,8 @@ rg -n '__KODEX_[A-Z0-9_]+__|\.invalid|sha256:0{64}|kind: (Vault|SecretProviderCl
   "$render_file" >/dev/null && fail 'release render contains unresolved or retired resources'
 yq -e 'select(.kind == "Namespace" and .metadata.name == "kodex-system")' \
   "$render_file" >/dev/null || fail 'Kodex namespace is absent from the release render'
+yq -e 'select(.kind == "Namespace" and .metadata.name == "kodex-runtime")' \
+  "$render_file" >/dev/null || fail 'Kodex runtime namespace is absent from the release render'
 yq -o=json -I=0 '.' "$render_file" | jq -s -e '
   map(select(.kind != null)) as $resources |
   ($resources | length) > 0 and
@@ -75,18 +78,22 @@ while IFS= read -r secret_name; do
 done <<<"$required_secret_names"
 for secret_name in kodex-installation-ca kodex-postgresql-bootstrap \
   kodex-postgresql-runtime-credentials kodex-nats-credentials \
-  runtime-provider-openai-default-r1 internal-rpc-authority-bootstrap-roots; do
+  internal-rpc-authority-bootstrap-roots; do
   kubectl --context "$context" -n "$namespace" get secret "$secret_name" >/dev/null 2>&1 ||
     fail "installation Secret is absent: $secret_name"
+done
+for secret_name in runtime-execution-client-tls runtime-provider-openai-default-r1; do
+  kubectl --context "$context" -n "$runtime_namespace" get secret "$secret_name" >/dev/null 2>&1 ||
+    fail "installation runtime Secret is absent: $secret_name"
 done
 
 verify_provider_credential() {
   local name=runtime-provider-openai-default-r1 secret_json metadata_json
   local auth_digest digest_file metadata_digest
-  secret_json=$(kubectl --context "$context" -n "$namespace" get "secret/$name" -o json)
+  secret_json=$(kubectl --context "$context" -n "$runtime_namespace" get "secret/$name" -o json)
   metadata_json=$(kubectl --context "$context" -n "$namespace" get \
     configmap/runtime-provider-openai-default-metadata -o json)
-  jq -e --arg namespace "$namespace" --arg name "$name" '
+  jq -e --arg namespace "$runtime_namespace" --arg name "$name" '
     .metadata.namespace == $namespace and .metadata.name == $name and
     .immutable == true and .type == "Opaque" and
     (.data["auth.json"] | type == "string" and length > 0) and
@@ -646,12 +653,12 @@ wait_system_assistant() {
 	local deadline warm_json pvc_name pvc_json leader_uid pods_json leader_pod endpoint
 	deadline=$((SECONDS + 15 * 60))
 	while ((SECONDS < deadline)); do
-		warm_json=$(kubectl --context "$context" -n "$namespace" get pod/system-assistant-warm -o json 2>/dev/null || true)
+		warm_json=$(kubectl --context "$context" -n "$runtime_namespace" get pod/system-assistant-warm -o json 2>/dev/null || true)
 		if [[ -n "$warm_json" ]] && jq -e '
 			any(.status.conditions[]?; .type == "Ready" and .status == "True")
 		' <<<"$warm_json" >/dev/null; then
 			pvc_name=$(jq -r '.spec.volumes[]? | select(.name == "session") | .persistentVolumeClaim.claimName // ""' <<<"$warm_json")
-			pvc_json=$(kubectl --context "$context" -n "$namespace" get "pvc/$pvc_name" -o json 2>/dev/null || true)
+			pvc_json=$(kubectl --context "$context" -n "$runtime_namespace" get "pvc/$pvc_name" -o json 2>/dev/null || true)
 			if [[ -n "$pvc_json" ]] && jq -e '
 				.status.phase == "Bound" and
 				(.spec.storageClassName | type == "string" and length > 0)
@@ -681,6 +688,30 @@ wait_system_assistant() {
 		sleep 2
 	done
 	fail 'system assistant readiness was not reported by the runtime-controller leader'
+}
+
+verify_runtime_namespace_boundary() {
+  local controller=system:serviceaccount:kodex-system:runtime-controller
+  local broker=system:serviceaccount:kodex-system:secret-broker
+  local runner=system:serviceaccount:kodex-runtime:agent-runner
+  local actual verb resource target_namespace expected principal
+  while IFS='|' read -r expected verb resource target_namespace principal; do
+    actual=$(kubectl --context "$context" auth can-i "$verb" "$resource" \
+      --namespace "$target_namespace" --as "$principal")
+    [[ "$actual" == "$expected" ]] ||
+      fail "runtime namespace RBAC mismatch: $verb $resource $target_namespace expected=$expected"
+  done <<EOF
+yes|create|pods|$runtime_namespace|$controller
+yes|create|secrets|$runtime_namespace|$controller
+yes|create|persistentvolumeclaims|$runtime_namespace|$controller
+yes|update|leases|$namespace|$controller
+no|get|secrets|$namespace|$controller
+yes|create|secrets|$runtime_namespace|$broker
+yes|delete|secrets|$runtime_namespace|$broker
+no|get|secrets|$namespace|$broker
+no|get|secrets|$runtime_namespace|$runner
+no|create|pods|$runtime_namespace|$runner
+EOF
 }
 
 if [[ "$mode" == prepare-preflight ]]; then
@@ -796,6 +827,7 @@ fi
 wait_trust_material
 wait_authority_projections all
 wait_workloads
+verify_runtime_namespace_boundary
 wait_system_assistant
 for job_name in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
   control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
@@ -809,5 +841,12 @@ failing_pods=$(kubectl --context "$context" -n "$namespace" get pods -o json | j
     .metadata.name] | join(",")
 ')
 [[ -z "$failing_pods" ]] || fail "failing Pods remain: $failing_pods"
+failing_runtime_pods=$(kubectl --context "$context" -n "$runtime_namespace" get pods -o json | jq -r '
+  [.items[] | select(any(.status.containerStatuses[]?;
+    .state.waiting.reason == "CrashLoopBackOff" or .state.waiting.reason == "ImagePullBackOff" or
+    .state.waiting.reason == "ErrImagePull" or .state.waiting.reason == "CreateContainerConfigError")) |
+    .metadata.name] | join(",")
+')
+[[ -z "$failing_runtime_pods" ]] || fail "failing runtime Pods remain: $failing_runtime_pods"
 printf 'Kodex platform deployment completed: %s render_sha256=%s\n' \
   "$mode" "$(sha256sum "$render_file" | awk '{print $1}')"

@@ -57,6 +57,8 @@ const (
 	PlatformQueryService_GetRuntimeEnvironmentSet_FullMethodName              = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentSet"
 	PlatformQueryService_ListRuntimeEnvironmentVersions_FullMethodName        = "/controlplane.v1.PlatformQueryService/ListRuntimeEnvironmentVersions"
 	PlatformQueryService_ListTemplateVariables_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListTemplateVariables"
+	PlatformQueryService_ListRuntimeSecrets_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListRuntimeSecrets"
+	PlatformQueryService_GetRuntimeSecret_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetRuntimeSecret"
 )
 
 // PlatformQueryServiceClient is the client API for PlatformQueryService service.
@@ -103,6 +105,8 @@ type PlatformQueryServiceClient interface {
 	GetRuntimeEnvironmentSet(ctx context.Context, in *GetRuntimeEnvironmentSetRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentSetResponse, error)
 	ListRuntimeEnvironmentVersions(ctx context.Context, in *ListRuntimeEnvironmentVersionsRequest, opts ...grpc.CallOption) (*ListRuntimeEnvironmentVersionsResponse, error)
 	ListTemplateVariables(ctx context.Context, in *ListTemplateVariablesRequest, opts ...grpc.CallOption) (*ListTemplateVariablesResponse, error)
+	ListRuntimeSecrets(ctx context.Context, in *ListRuntimeSecretsRequest, opts ...grpc.CallOption) (*ListRuntimeSecretsResponse, error)
+	GetRuntimeSecret(ctx context.Context, in *GetRuntimeSecretRequest, opts ...grpc.CallOption) (*GetRuntimeSecretResponse, error)
 }
 
 type platformQueryServiceClient struct {
@@ -493,6 +497,26 @@ func (c *platformQueryServiceClient) ListTemplateVariables(ctx context.Context, 
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) ListRuntimeSecrets(ctx context.Context, in *ListRuntimeSecretsRequest, opts ...grpc.CallOption) (*ListRuntimeSecretsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRuntimeSecretsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListRuntimeSecrets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetRuntimeSecret(ctx context.Context, in *GetRuntimeSecretRequest, opts ...grpc.CallOption) (*GetRuntimeSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeSecretResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformQueryServiceServer is the server API for PlatformQueryService service.
 // All implementations must embed UnimplementedPlatformQueryServiceServer
 // for forward compatibility.
@@ -537,6 +561,8 @@ type PlatformQueryServiceServer interface {
 	GetRuntimeEnvironmentSet(context.Context, *GetRuntimeEnvironmentSetRequest) (*GetRuntimeEnvironmentSetResponse, error)
 	ListRuntimeEnvironmentVersions(context.Context, *ListRuntimeEnvironmentVersionsRequest) (*ListRuntimeEnvironmentVersionsResponse, error)
 	ListTemplateVariables(context.Context, *ListTemplateVariablesRequest) (*ListTemplateVariablesResponse, error)
+	ListRuntimeSecrets(context.Context, *ListRuntimeSecretsRequest) (*ListRuntimeSecretsResponse, error)
+	GetRuntimeSecret(context.Context, *GetRuntimeSecretRequest) (*GetRuntimeSecretResponse, error)
 	mustEmbedUnimplementedPlatformQueryServiceServer()
 }
 
@@ -660,6 +686,12 @@ func (UnimplementedPlatformQueryServiceServer) ListRuntimeEnvironmentVersions(co
 }
 func (UnimplementedPlatformQueryServiceServer) ListTemplateVariables(context.Context, *ListTemplateVariablesRequest) (*ListTemplateVariablesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListTemplateVariables not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListRuntimeSecrets(context.Context, *ListRuntimeSecretsRequest) (*ListRuntimeSecretsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRuntimeSecrets not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecret(context.Context, *GetRuntimeSecretRequest) (*GetRuntimeSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeSecret not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) mustEmbedUnimplementedPlatformQueryServiceServer() {}
 func (UnimplementedPlatformQueryServiceServer) testEmbeddedByValue()                              {}
@@ -1366,6 +1398,42 @@ func _PlatformQueryService_ListTemplateVariables_Handler(srv interface{}, ctx co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_ListRuntimeSecrets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRuntimeSecretsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListRuntimeSecrets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListRuntimeSecrets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListRuntimeSecrets(ctx, req.(*ListRuntimeSecretsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetRuntimeSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecret(ctx, req.(*GetRuntimeSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformQueryService_ServiceDesc is the grpc.ServiceDesc for PlatformQueryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1525,6 +1593,14 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ListTemplateVariables",
 			Handler:    _PlatformQueryService_ListTemplateVariables_Handler,
 		},
+		{
+			MethodName: "ListRuntimeSecrets",
+			Handler:    _PlatformQueryService_ListRuntimeSecrets_Handler,
+		},
+		{
+			MethodName: "GetRuntimeSecret",
+			Handler:    _PlatformQueryService_GetRuntimeSecret_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "controlplane/v1/control_plane.proto",
@@ -1584,6 +1660,10 @@ const (
 	PlatformCommandService_PublishRuntimeEnvironmentVersion_FullMethodName         = "/controlplane.v1.PlatformCommandService/PublishRuntimeEnvironmentVersion"
 	PlatformCommandService_RollbackRuntimeEnvironment_FullMethodName               = "/controlplane.v1.PlatformCommandService/RollbackRuntimeEnvironment"
 	PlatformCommandService_BindAgentRuntimeEnvironment_FullMethodName              = "/controlplane.v1.PlatformCommandService/BindAgentRuntimeEnvironment"
+	PlatformCommandService_PrepareCreateRuntimeSecret_FullMethodName               = "/controlplane.v1.PlatformCommandService/PrepareCreateRuntimeSecret"
+	PlatformCommandService_PrepareRotateRuntimeSecret_FullMethodName               = "/controlplane.v1.PlatformCommandService/PrepareRotateRuntimeSecret"
+	PlatformCommandService_PrepareRevealRuntimeSecret_FullMethodName               = "/controlplane.v1.PlatformCommandService/PrepareRevealRuntimeSecret"
+	PlatformCommandService_PrepareRevokeRuntimeSecret_FullMethodName               = "/controlplane.v1.PlatformCommandService/PrepareRevokeRuntimeSecret"
 )
 
 // PlatformCommandServiceClient is the client API for PlatformCommandService service.
@@ -1646,6 +1726,10 @@ type PlatformCommandServiceClient interface {
 	PublishRuntimeEnvironmentVersion(ctx context.Context, in *PublishRuntimeEnvironmentVersionRequest, opts ...grpc.CallOption) (*PublishRuntimeEnvironmentVersionResponse, error)
 	RollbackRuntimeEnvironment(ctx context.Context, in *RollbackRuntimeEnvironmentRequest, opts ...grpc.CallOption) (*RollbackRuntimeEnvironmentResponse, error)
 	BindAgentRuntimeEnvironment(ctx context.Context, in *BindAgentRuntimeEnvironmentRequest, opts ...grpc.CallOption) (*BindAgentRuntimeEnvironmentResponse, error)
+	PrepareCreateRuntimeSecret(ctx context.Context, in *PrepareCreateRuntimeSecretRequest, opts ...grpc.CallOption) (*PrepareCreateRuntimeSecretResponse, error)
+	PrepareRotateRuntimeSecret(ctx context.Context, in *PrepareRotateRuntimeSecretRequest, opts ...grpc.CallOption) (*PrepareRotateRuntimeSecretResponse, error)
+	PrepareRevealRuntimeSecret(ctx context.Context, in *PrepareRevealRuntimeSecretRequest, opts ...grpc.CallOption) (*PrepareRevealRuntimeSecretResponse, error)
+	PrepareRevokeRuntimeSecret(ctx context.Context, in *PrepareRevokeRuntimeSecretRequest, opts ...grpc.CallOption) (*PrepareRevokeRuntimeSecretResponse, error)
 }
 
 type platformCommandServiceClient struct {
@@ -2198,6 +2282,46 @@ func (c *platformCommandServiceClient) BindAgentRuntimeEnvironment(ctx context.C
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) PrepareCreateRuntimeSecret(ctx context.Context, in *PrepareCreateRuntimeSecretRequest, opts ...grpc.CallOption) (*PrepareCreateRuntimeSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareCreateRuntimeSecretResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareCreateRuntimeSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PrepareRotateRuntimeSecret(ctx context.Context, in *PrepareRotateRuntimeSecretRequest, opts ...grpc.CallOption) (*PrepareRotateRuntimeSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareRotateRuntimeSecretResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareRotateRuntimeSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PrepareRevealRuntimeSecret(ctx context.Context, in *PrepareRevealRuntimeSecretRequest, opts ...grpc.CallOption) (*PrepareRevealRuntimeSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareRevealRuntimeSecretResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareRevealRuntimeSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PrepareRevokeRuntimeSecret(ctx context.Context, in *PrepareRevokeRuntimeSecretRequest, opts ...grpc.CallOption) (*PrepareRevokeRuntimeSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareRevokeRuntimeSecretResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareRevokeRuntimeSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformCommandServiceServer is the server API for PlatformCommandService service.
 // All implementations must embed UnimplementedPlatformCommandServiceServer
 // for forward compatibility.
@@ -2258,6 +2382,10 @@ type PlatformCommandServiceServer interface {
 	PublishRuntimeEnvironmentVersion(context.Context, *PublishRuntimeEnvironmentVersionRequest) (*PublishRuntimeEnvironmentVersionResponse, error)
 	RollbackRuntimeEnvironment(context.Context, *RollbackRuntimeEnvironmentRequest) (*RollbackRuntimeEnvironmentResponse, error)
 	BindAgentRuntimeEnvironment(context.Context, *BindAgentRuntimeEnvironmentRequest) (*BindAgentRuntimeEnvironmentResponse, error)
+	PrepareCreateRuntimeSecret(context.Context, *PrepareCreateRuntimeSecretRequest) (*PrepareCreateRuntimeSecretResponse, error)
+	PrepareRotateRuntimeSecret(context.Context, *PrepareRotateRuntimeSecretRequest) (*PrepareRotateRuntimeSecretResponse, error)
+	PrepareRevealRuntimeSecret(context.Context, *PrepareRevealRuntimeSecretRequest) (*PrepareRevealRuntimeSecretResponse, error)
+	PrepareRevokeRuntimeSecret(context.Context, *PrepareRevokeRuntimeSecretRequest) (*PrepareRevokeRuntimeSecretResponse, error)
 	mustEmbedUnimplementedPlatformCommandServiceServer()
 }
 
@@ -2426,6 +2554,18 @@ func (UnimplementedPlatformCommandServiceServer) RollbackRuntimeEnvironment(cont
 }
 func (UnimplementedPlatformCommandServiceServer) BindAgentRuntimeEnvironment(context.Context, *BindAgentRuntimeEnvironmentRequest) (*BindAgentRuntimeEnvironmentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BindAgentRuntimeEnvironment not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareCreateRuntimeSecret(context.Context, *PrepareCreateRuntimeSecretRequest) (*PrepareCreateRuntimeSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareCreateRuntimeSecret not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareRotateRuntimeSecret(context.Context, *PrepareRotateRuntimeSecretRequest) (*PrepareRotateRuntimeSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareRotateRuntimeSecret not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareRevealRuntimeSecret(context.Context, *PrepareRevealRuntimeSecretRequest) (*PrepareRevealRuntimeSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareRevealRuntimeSecret not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareRevokeRuntimeSecret(context.Context, *PrepareRevokeRuntimeSecretRequest) (*PrepareRevokeRuntimeSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareRevokeRuntimeSecret not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) mustEmbedUnimplementedPlatformCommandServiceServer() {
 }
@@ -3385,6 +3525,78 @@ func _PlatformCommandService_BindAgentRuntimeEnvironment_Handler(srv interface{}
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_PrepareCreateRuntimeSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareCreateRuntimeSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareCreateRuntimeSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareCreateRuntimeSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareCreateRuntimeSecret(ctx, req.(*PrepareCreateRuntimeSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PrepareRotateRuntimeSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareRotateRuntimeSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareRotateRuntimeSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareRotateRuntimeSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareRotateRuntimeSecret(ctx, req.(*PrepareRotateRuntimeSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PrepareRevealRuntimeSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareRevealRuntimeSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareRevealRuntimeSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareRevealRuntimeSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareRevealRuntimeSecret(ctx, req.(*PrepareRevealRuntimeSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PrepareRevokeRuntimeSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareRevokeRuntimeSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareRevokeRuntimeSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareRevokeRuntimeSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareRevokeRuntimeSecret(ctx, req.(*PrepareRevokeRuntimeSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformCommandService_ServiceDesc is the grpc.ServiceDesc for PlatformCommandService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3596,6 +3808,22 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "BindAgentRuntimeEnvironment",
 			Handler:    _PlatformCommandService_BindAgentRuntimeEnvironment_Handler,
 		},
+		{
+			MethodName: "PrepareCreateRuntimeSecret",
+			Handler:    _PlatformCommandService_PrepareCreateRuntimeSecret_Handler,
+		},
+		{
+			MethodName: "PrepareRotateRuntimeSecret",
+			Handler:    _PlatformCommandService_PrepareRotateRuntimeSecret_Handler,
+		},
+		{
+			MethodName: "PrepareRevealRuntimeSecret",
+			Handler:    _PlatformCommandService_PrepareRevealRuntimeSecret_Handler,
+		},
+		{
+			MethodName: "PrepareRevokeRuntimeSecret",
+			Handler:    _PlatformCommandService_PrepareRevokeRuntimeSecret_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -3609,6 +3837,305 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
+	Metadata: "controlplane/v1/control_plane.proto",
+}
+
+const (
+	RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName     = "/controlplane.v1.RuntimeSecretWorkService/CheckRuntimeSecretWorkReadiness"
+	RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName       = "/controlplane.v1.RuntimeSecretWorkService/ListRuntimeSecretRecoveryWork"
+	RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName       = "/controlplane.v1.RuntimeSecretWorkService/ConsumeRuntimeSecretOperation"
+	RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName      = "/controlplane.v1.RuntimeSecretWorkService/CompleteRuntimeSecretOperation"
+	RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName          = "/controlplane.v1.RuntimeSecretWorkService/FailRuntimeSecretOperation"
+	RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName = "/controlplane.v1.RuntimeSecretWorkService/RecoverRuntimeSecretMaterialization"
+)
+
+// RuntimeSecretWorkServiceClient is the client API for RuntimeSecretWorkService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
+// grant связывает actor, Проект, вид операции и exact Secret revision.
+type RuntimeSecretWorkServiceClient interface {
+	CheckRuntimeSecretWorkReadiness(ctx context.Context, in *CheckRuntimeSecretWorkReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeSecretWorkReadinessResponse, error)
+	ListRuntimeSecretRecoveryWork(ctx context.Context, in *ListRuntimeSecretRecoveryWorkRequest, opts ...grpc.CallOption) (*ListRuntimeSecretRecoveryWorkResponse, error)
+	ConsumeRuntimeSecretOperation(ctx context.Context, in *ConsumeRuntimeSecretOperationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeSecretOperationResponse, error)
+	CompleteRuntimeSecretOperation(ctx context.Context, in *CompleteRuntimeSecretOperationRequest, opts ...grpc.CallOption) (*CompleteRuntimeSecretOperationResponse, error)
+	FailRuntimeSecretOperation(ctx context.Context, in *FailRuntimeSecretOperationRequest, opts ...grpc.CallOption) (*FailRuntimeSecretOperationResponse, error)
+	RecoverRuntimeSecretMaterialization(ctx context.Context, in *RecoverRuntimeSecretMaterializationRequest, opts ...grpc.CallOption) (*RecoverRuntimeSecretMaterializationResponse, error)
+}
+
+type runtimeSecretWorkServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewRuntimeSecretWorkServiceClient(cc grpc.ClientConnInterface) RuntimeSecretWorkServiceClient {
+	return &runtimeSecretWorkServiceClient{cc}
+}
+
+func (c *runtimeSecretWorkServiceClient) CheckRuntimeSecretWorkReadiness(ctx context.Context, in *CheckRuntimeSecretWorkReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeSecretWorkReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckRuntimeSecretWorkReadinessResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretWorkServiceClient) ListRuntimeSecretRecoveryWork(ctx context.Context, in *ListRuntimeSecretRecoveryWorkRequest, opts ...grpc.CallOption) (*ListRuntimeSecretRecoveryWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRuntimeSecretRecoveryWorkResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretWorkServiceClient) ConsumeRuntimeSecretOperation(ctx context.Context, in *ConsumeRuntimeSecretOperationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeSecretOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConsumeRuntimeSecretOperationResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretWorkServiceClient) CompleteRuntimeSecretOperation(ctx context.Context, in *CompleteRuntimeSecretOperationRequest, opts ...grpc.CallOption) (*CompleteRuntimeSecretOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteRuntimeSecretOperationResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretWorkServiceClient) FailRuntimeSecretOperation(ctx context.Context, in *FailRuntimeSecretOperationRequest, opts ...grpc.CallOption) (*FailRuntimeSecretOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailRuntimeSecretOperationResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretWorkServiceClient) RecoverRuntimeSecretMaterialization(ctx context.Context, in *RecoverRuntimeSecretMaterializationRequest, opts ...grpc.CallOption) (*RecoverRuntimeSecretMaterializationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecoverRuntimeSecretMaterializationResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RuntimeSecretWorkServiceServer is the server API for RuntimeSecretWorkService service.
+// All implementations must embed UnimplementedRuntimeSecretWorkServiceServer
+// for forward compatibility.
+//
+// RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
+// grant связывает actor, Проект, вид операции и exact Secret revision.
+type RuntimeSecretWorkServiceServer interface {
+	CheckRuntimeSecretWorkReadiness(context.Context, *CheckRuntimeSecretWorkReadinessRequest) (*CheckRuntimeSecretWorkReadinessResponse, error)
+	ListRuntimeSecretRecoveryWork(context.Context, *ListRuntimeSecretRecoveryWorkRequest) (*ListRuntimeSecretRecoveryWorkResponse, error)
+	ConsumeRuntimeSecretOperation(context.Context, *ConsumeRuntimeSecretOperationRequest) (*ConsumeRuntimeSecretOperationResponse, error)
+	CompleteRuntimeSecretOperation(context.Context, *CompleteRuntimeSecretOperationRequest) (*CompleteRuntimeSecretOperationResponse, error)
+	FailRuntimeSecretOperation(context.Context, *FailRuntimeSecretOperationRequest) (*FailRuntimeSecretOperationResponse, error)
+	RecoverRuntimeSecretMaterialization(context.Context, *RecoverRuntimeSecretMaterializationRequest) (*RecoverRuntimeSecretMaterializationResponse, error)
+	mustEmbedUnimplementedRuntimeSecretWorkServiceServer()
+}
+
+// UnimplementedRuntimeSecretWorkServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedRuntimeSecretWorkServiceServer struct{}
+
+func (UnimplementedRuntimeSecretWorkServiceServer) CheckRuntimeSecretWorkReadiness(context.Context, *CheckRuntimeSecretWorkReadinessRequest) (*CheckRuntimeSecretWorkReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckRuntimeSecretWorkReadiness not implemented")
+}
+func (UnimplementedRuntimeSecretWorkServiceServer) ListRuntimeSecretRecoveryWork(context.Context, *ListRuntimeSecretRecoveryWorkRequest) (*ListRuntimeSecretRecoveryWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRuntimeSecretRecoveryWork not implemented")
+}
+func (UnimplementedRuntimeSecretWorkServiceServer) ConsumeRuntimeSecretOperation(context.Context, *ConsumeRuntimeSecretOperationRequest) (*ConsumeRuntimeSecretOperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConsumeRuntimeSecretOperation not implemented")
+}
+func (UnimplementedRuntimeSecretWorkServiceServer) CompleteRuntimeSecretOperation(context.Context, *CompleteRuntimeSecretOperationRequest) (*CompleteRuntimeSecretOperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteRuntimeSecretOperation not implemented")
+}
+func (UnimplementedRuntimeSecretWorkServiceServer) FailRuntimeSecretOperation(context.Context, *FailRuntimeSecretOperationRequest) (*FailRuntimeSecretOperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FailRuntimeSecretOperation not implemented")
+}
+func (UnimplementedRuntimeSecretWorkServiceServer) RecoverRuntimeSecretMaterialization(context.Context, *RecoverRuntimeSecretMaterializationRequest) (*RecoverRuntimeSecretMaterializationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecoverRuntimeSecretMaterialization not implemented")
+}
+func (UnimplementedRuntimeSecretWorkServiceServer) mustEmbedUnimplementedRuntimeSecretWorkServiceServer() {
+}
+func (UnimplementedRuntimeSecretWorkServiceServer) testEmbeddedByValue() {}
+
+// UnsafeRuntimeSecretWorkServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to RuntimeSecretWorkServiceServer will
+// result in compilation errors.
+type UnsafeRuntimeSecretWorkServiceServer interface {
+	mustEmbedUnimplementedRuntimeSecretWorkServiceServer()
+}
+
+func RegisterRuntimeSecretWorkServiceServer(s grpc.ServiceRegistrar, srv RuntimeSecretWorkServiceServer) {
+	// If the following call panics, it indicates UnimplementedRuntimeSecretWorkServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&RuntimeSecretWorkService_ServiceDesc, srv)
+}
+
+func _RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckRuntimeSecretWorkReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretWorkServiceServer).CheckRuntimeSecretWorkReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretWorkServiceServer).CheckRuntimeSecretWorkReadiness(ctx, req.(*CheckRuntimeSecretWorkReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRuntimeSecretRecoveryWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretWorkServiceServer).ListRuntimeSecretRecoveryWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretWorkServiceServer).ListRuntimeSecretRecoveryWork(ctx, req.(*ListRuntimeSecretRecoveryWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConsumeRuntimeSecretOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretWorkServiceServer).ConsumeRuntimeSecretOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretWorkServiceServer).ConsumeRuntimeSecretOperation(ctx, req.(*ConsumeRuntimeSecretOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretWorkService_CompleteRuntimeSecretOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteRuntimeSecretOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretWorkServiceServer).CompleteRuntimeSecretOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretWorkServiceServer).CompleteRuntimeSecretOperation(ctx, req.(*CompleteRuntimeSecretOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretWorkService_FailRuntimeSecretOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FailRuntimeSecretOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretWorkServiceServer).FailRuntimeSecretOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretWorkServiceServer).FailRuntimeSecretOperation(ctx, req.(*FailRuntimeSecretOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecoverRuntimeSecretMaterializationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretWorkServiceServer).RecoverRuntimeSecretMaterialization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretWorkServiceServer).RecoverRuntimeSecretMaterialization(ctx, req.(*RecoverRuntimeSecretMaterializationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// RuntimeSecretWorkService_ServiceDesc is the grpc.ServiceDesc for RuntimeSecretWorkService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var RuntimeSecretWorkService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.RuntimeSecretWorkService",
+	HandlerType: (*RuntimeSecretWorkServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CheckRuntimeSecretWorkReadiness",
+			Handler:    _RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_Handler,
+		},
+		{
+			MethodName: "ListRuntimeSecretRecoveryWork",
+			Handler:    _RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_Handler,
+		},
+		{
+			MethodName: "ConsumeRuntimeSecretOperation",
+			Handler:    _RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_Handler,
+		},
+		{
+			MethodName: "CompleteRuntimeSecretOperation",
+			Handler:    _RuntimeSecretWorkService_CompleteRuntimeSecretOperation_Handler,
+		},
+		{
+			MethodName: "FailRuntimeSecretOperation",
+			Handler:    _RuntimeSecretWorkService_FailRuntimeSecretOperation_Handler,
+		},
+		{
+			MethodName: "RecoverRuntimeSecretMaterialization",
+			Handler:    _RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "controlplane/v1/control_plane.proto",
 }
 

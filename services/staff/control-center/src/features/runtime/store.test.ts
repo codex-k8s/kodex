@@ -288,7 +288,12 @@ describe("runtime store", () => {
         },
       ],
       values: [],
-      secretDescriptors: [],
+      secretBindings: [
+        {
+          name: "GITHUB_TOKEN",
+          secretRef: "secret_github_token",
+        },
+      ],
     };
     const environment = view("gpt-5.6-sol", 3).environment;
     createRuntimeEnvironmentSetMock.mockResolvedValueOnce(
@@ -311,6 +316,9 @@ describe("runtime store", () => {
       body: input,
       headers: { "If-Match": '"3"' },
     });
+    expect(JSON.stringify({ createRequest, publishRequest })).not.toMatch(
+      /secretName|secretKey|secretUid|secretResourceVersion|contentSha256/,
+    );
   });
 
   it("добавляет следующую cursor-страницу ревизий без повторов", async () => {

@@ -20,6 +20,7 @@ export interface BreadcrumbLabels {
   environments: string;
   environment: string;
   newEnvironment: string;
+  secrets: string;
   integrations: string;
   decisions: string;
   administration: string;
@@ -157,6 +158,8 @@ export function buildBreadcrumbs(
         },
         current(context.environmentName ?? labels.environment),
       ];
+    case "runtime-secrets":
+      return [...project, current(labels.secrets)];
     case "integrations":
       return [current(labels.integrations)];
     case "decisions":

@@ -211,6 +211,67 @@ func (service *Service) ListRuntimeEnvironmentVersions(ctx context.Context, p va
 	}
 	return service.repository.ListRuntimeEnvironmentVersions(ctx, p, filter)
 }
+func (service *Service) ListRuntimeSecrets(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.RuntimeSecret, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListRuntimeSecrets(ctx, p, filter)
+}
+func (service *Service) GetRuntimeSecret(ctx context.Context, p value.Principal, ref string) (entity.RuntimeSecret, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.RuntimeSecret{}, err
+	}
+	return service.repository.GetRuntimeSecret(ctx, p, ref)
+}
+func (service *Service) PrepareRuntimeSecretOperation(ctx context.Context, p value.Principal, input repository.RuntimeSecretPrepareInput) (repository.RuntimeSecretPrepareResult, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return repository.RuntimeSecretPrepareResult{}, err
+	}
+	input.Mutation.Operation = "runtime-secret." + strings.ToLower(input.Kind)
+	input.Mutation.IntentDigest = digest(struct {
+		Kind, ProjectRef, SecretRef, Name, Description, ValueType, ExpectedContentSHA256 string
+		ExpectedVersion                                                                  *int64
+	}{input.Kind, input.ProjectRef, input.SecretRef, input.Name, input.Description, input.ValueType, input.ExpectedContentSHA256, input.Mutation.ExpectedVersion})
+	return service.repository.PrepareRuntimeSecretOperation(ctx, p, input)
+}
+func (service *Service) ListRuntimeSecretRecoveryWork(ctx context.Context, p value.Principal, page repository.RuntimeSecretRecoveryPage) ([]entity.RuntimeSecretRecoveryWork, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListRuntimeSecretRecoveryWork(ctx, p, page)
+}
+func (service *Service) ConsumeRuntimeSecretOperation(ctx context.Context, p value.Principal, input repository.RuntimeSecretConsumeInput) (entity.RuntimeSecretOperation, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.RuntimeSecretOperation{}, err
+	}
+	return service.repository.ConsumeRuntimeSecretOperation(ctx, p, input)
+}
+func (service *Service) CompleteRuntimeSecretOperation(ctx context.Context, p value.Principal, input repository.RuntimeSecretCompleteInput) (entity.RuntimeSecret, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.RuntimeSecret{}, err
+	}
+	return service.repository.CompleteRuntimeSecretOperation(ctx, p, input)
+}
+func (service *Service) FailRuntimeSecretOperation(ctx context.Context, p value.Principal, input repository.RuntimeSecretFailInput) (repository.RuntimeSecretFailureResult, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return repository.RuntimeSecretFailureResult{}, err
+	}
+	return service.repository.FailRuntimeSecretOperation(ctx, p, input)
+}
+func (service *Service) RecoverRuntimeSecretMaterialization(ctx context.Context, p value.Principal, input repository.RuntimeSecretRecoveryInput) (repository.RuntimeSecretRecoveryResult, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return repository.RuntimeSecretRecoveryResult{}, err
+	}
+	return service.repository.RecoverRuntimeSecretMaterialization(ctx, p, input)
+}
 func (service *Service) ListTemplateVariables(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.TemplateVariable, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {

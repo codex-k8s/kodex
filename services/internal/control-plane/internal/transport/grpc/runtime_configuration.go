@@ -145,14 +145,14 @@ func (server *Server) RollbackConfigOverlay(ctx context.Context, request *contro
 	return &controlplanev1.RollbackConfigOverlayResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}, nil
 }
 
-func domainEnvironment(values []*controlplanev1.RuntimeEnvironmentValue, secrets []*controlplanev1.RuntimeSecretDescriptor, tools []*controlplanev1.RuntimeEnvironmentTool) ([]entity.RuntimeEnvironmentValue, []entity.RuntimeSecretDescriptor, []entity.RuntimeEnvironmentTool) {
+func domainEnvironment(values []*controlplanev1.RuntimeEnvironmentValue, secrets []*controlplanev1.RuntimeSecretBinding, tools []*controlplanev1.RuntimeEnvironmentTool) ([]entity.RuntimeEnvironmentValue, []entity.RuntimeSecretBinding, []entity.RuntimeEnvironmentTool) {
 	domainValues := make([]entity.RuntimeEnvironmentValue, 0, len(values))
 	for _, item := range values {
 		domainValues = append(domainValues, entity.RuntimeEnvironmentValue{Name: item.GetName(), Value: item.GetValue()})
 	}
-	domainSecrets := make([]entity.RuntimeSecretDescriptor, 0, len(secrets))
+	domainSecrets := make([]entity.RuntimeSecretBinding, 0, len(secrets))
 	for _, item := range secrets {
-		domainSecrets = append(domainSecrets, entity.RuntimeSecretDescriptor{Name: item.GetName(), SecretName: item.GetSecretName(), SecretKey: item.GetSecretKey(), SecretUID: item.GetSecretUid(), SecretResourceVersion: item.GetSecretResourceVersion(), ContentSHA256: item.GetContentSha256()})
+		domainSecrets = append(domainSecrets, entity.RuntimeSecretBinding{Name: item.GetName(), SecretRef: item.GetSecretRef()})
 	}
 	domainTools := make([]entity.RuntimeEnvironmentTool, 0, len(tools))
 	for _, item := range tools {
@@ -162,18 +162,18 @@ func domainEnvironment(values []*controlplanev1.RuntimeEnvironmentValue, secrets
 }
 
 func (server *Server) CreateRuntimeEnvironmentSet(ctx context.Context, request *controlplanev1.CreateRuntimeEnvironmentSetRequest) (*controlplanev1.CreateRuntimeEnvironmentSetResponse, error) {
-	values, secrets, tools := domainEnvironment(request.GetValues(), request.GetSecretDescriptors(), request.GetTools())
+	values, secrets, tools := domainEnvironment(request.GetValues(), request.GetSecretBindings(), request.GetTools())
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentSet_FullMethodName,
-		command.CreateRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretDescriptors: secrets, Tools: tools})
+		command.CreateRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretBindings: secrets, Tools: tools})
 	if err != nil {
 		return nil, err
 	}
 	return &controlplanev1.CreateRuntimeEnvironmentSetResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}, nil
 }
 func (server *Server) PublishRuntimeEnvironmentVersion(ctx context.Context, request *controlplanev1.PublishRuntimeEnvironmentVersionRequest) (*controlplanev1.PublishRuntimeEnvironmentVersionResponse, error) {
-	values, secrets, tools := domainEnvironment(request.GetValues(), request.GetSecretDescriptors(), request.GetTools())
+	values, secrets, tools := domainEnvironment(request.GetValues(), request.GetSecretBindings(), request.GetTools())
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_PublishRuntimeEnvironmentVersion_FullMethodName,
-		command.PublishRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{Ref: request.GetEnvironmentRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretDescriptors: secrets, Tools: tools})
+		command.PublishRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{Ref: request.GetEnvironmentRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretBindings: secrets, Tools: tools})
 	if err != nil {
 		return nil, err
 	}

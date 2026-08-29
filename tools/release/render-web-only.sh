@@ -563,6 +563,43 @@ fi
 if rg -n '\$\{[A-Z][A-Z0-9_]*IMAGE[A-Z0-9_]*\}' "$output" >/dev/null; then
   fail 'render contains an unresolved image variable'
 fi
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  any(.[]; .kind == "Namespace" and .metadata.name == "kodex-system") and
+  any(.[]; .kind == "Namespace" and .metadata.name == "kodex-runtime") and
+  any(.[];
+    .kind == "ServiceAccount" and .metadata.name == "agent-runner" and
+    .metadata.namespace == "kodex-runtime") and
+  any(.[];
+    .kind == "RoleBinding" and .metadata.name == "runtime-controller-workloads" and
+    .metadata.namespace == "kodex-runtime" and
+    .subjects == [{"kind":"ServiceAccount","name":"runtime-controller","namespace":"kodex-system"}]) and
+  any(.[];
+    .kind == "RoleBinding" and .metadata.name == "secret-broker-runtime-secrets" and
+    .metadata.namespace == "kodex-runtime" and
+    .subjects == [{"kind":"ServiceAccount","name":"secret-broker","namespace":"kodex-system"}]) and
+  any(.[];
+    .kind == "Role" and .metadata.name == "runtime-controller" and
+    .metadata.namespace == "kodex-system" and .rules == [{
+      "apiGroups":["coordination.k8s.io"],
+      "resources":["leases"],
+      "verbs":["get","create","update","patch"]
+    }]) and
+  ([ .[] |
+    select(.kind == "Role" and .metadata.namespace == "kodex-system" and
+      (.metadata.name == "runtime-controller" or .metadata.name == "secret-broker")) |
+    .rules[]? | .resources[]? ] | index("secrets") == null) and
+  any(.[];
+    .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "runtime-execution-ticket-exact-projection" and
+    .spec.matchResources.namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-runtime") and
+  any(.[];
+    .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "runtime-role-pod-exact-secret-projection" and
+    .spec.matchResources.namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-runtime") and
+  all(.[];
+    select(.kind == "ServiceAccount" and .metadata.name == "agent-runner");
+    .metadata.namespace == "kodex-runtime")
+' >/dev/null || fail 'release runtime namespace boundary is invalid'
 
 allowed_images="$temporary_directory/allowed-images.txt"
 jq -r '.images[].pull_ref,.external_images[].pull_ref' "$lock_file" >"$allowed_images"

@@ -29,6 +29,7 @@ spec:
                 operator: In
                 values:
                   - automation-scheduler
+                  - secret-broker
                   - session-archive
                   - control-api-gateway
                   - integration-gateway

@@ -88,7 +88,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
 	manager, err := workload.InCluster(workload.Config{
-		Environment: config.Environment, Namespace: config.Namespace, ControllerPodUID: config.PodUID, ControllerPodIP: config.PodIP,
+		Environment: config.Environment, ControlNamespace: config.ControlNamespace, RuntimeNamespace: config.RuntimeNamespace,
+		ControllerPodUID: config.PodUID, ControllerPodIP: config.PodIP,
 		CallbackTLSServerName: config.CallbackTLSServerName, CallbackClientCASecret: config.CallbackClientCASecret,
 		CallbackClientTLSSecret: config.CallbackClientTLSSecret, ProviderHTTPSProxy: config.ProviderHTTPSProxy,
 		StorageClass: config.StorageClass, SessionPVCSize: config.SessionPVCSize, RunnerServiceAccount: config.RunnerServiceAccount,

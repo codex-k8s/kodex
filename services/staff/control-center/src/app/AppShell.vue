@@ -9,6 +9,7 @@ import {
   Home,
   KeyRound,
   Layers3,
+  LockKeyhole,
   Menu,
   PlugZap,
   Search,
@@ -116,6 +117,7 @@ const breadcrumbs = computed(() => {
     environments: t("nav.environments"),
     environment: t("nav.environment"),
     newEnvironment: t("nav.newEnvironment"),
+    secrets: t("nav.secrets"),
     integrations: t("nav.integrations"),
     decisions: t("nav.decisions"),
     administration: t("nav.administration"),
@@ -244,6 +246,12 @@ const projectLinks = computed(() => {
       label: t("nav.environments"),
       path: `${prefix}/environments`,
       icon: Layers3,
+    },
+    {
+      name: "runtime-secrets",
+      label: t("nav.secrets"),
+      path: `${prefix}/secrets`,
+      icon: LockKeyhole,
     },
     {
       name: "project-access",

@@ -113,6 +113,12 @@ export const router = createRouter({
       meta: { projectScoped: true },
     },
     {
+      path: "/projects/:projectRef/secrets",
+      name: "runtime-secrets",
+      component: lazyPage(() => import("@/pages/RuntimeSecretsPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
       path: "/projects/:projectRef/role-images",
       name: "role-images",
       component: lazyPage(() => import("@/pages/RoleImagesPage.vue")),
@@ -164,7 +170,9 @@ export const router = createRouter({
     {
       path: "/auth/callback",
       name: "auth-callback",
-      component: lazyPage(() => import("@/pages/AuthCallbackPage.vue")),
+      component: lazyPage(
+        () => import("@/features/session/AuthCallbackView.vue"),
+      ),
       meta: { public: true },
     },
     { path: "/:pathMatch(.*)*", redirect: "/" },

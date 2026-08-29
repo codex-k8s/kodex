@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  emptySecretDescriptor,
+  editableSecretBindings,
+  emptySecretBinding,
   validateEnvironmentInput,
 } from "@/features/runtime/environment-form";
 
 describe("runtime environment form", () => {
-  it("принимает несекретные значения и полный immutable Secret descriptor", () => {
+  it("принимает несекретные значения и ссылку на runtime secret", () => {
     expect(
       validateEnvironmentInput({
         name: "Документы",
@@ -21,23 +22,19 @@ describe("runtime environment form", () => {
           },
         ],
         values: [{ name: "OUTPUT_FORMAT", value: "markdown" }],
-        secretDescriptors: [
+        secretBindings: [
           {
             name: "PROVIDER_TOKEN",
-            secretName: "runtime-provider",
-            secretKey: "token",
-            secretUid: "4ea063ab-b3ee-49fd-b6d2-d0f44fd85bb1",
-            secretResourceVersion: "128",
-            contentSha256: "a".repeat(64),
+            secretRef: "secret_provider_token",
           },
         ],
       }),
     ).toEqual([]);
   });
 
-  it("закрыто отклоняет повторы, небезопасные имена и неполный descriptor", () => {
-    const descriptor = emptySecretDescriptor();
-    descriptor.name = "bad-name";
+  it("закрыто отклоняет повторы, небезопасные имена и пустую ссылку", () => {
+    const binding = emptySecretBinding();
+    binding.name = "bad-name";
     const problems = validateEnvironmentInput({
       name: " ",
       description: "",
@@ -61,7 +58,7 @@ describe("runtime environment form", () => {
         { name: "DUPLICATE", value: "two" },
         { name: "KODEX_INTERNAL", value: "forbidden" },
       ],
-      secretDescriptors: [descriptor],
+      secretBindings: [binding],
     });
 
     expect(problems.map((item) => item.message)).toEqual(
@@ -75,9 +72,29 @@ describe("runtime environment form", () => {
         "runtime.errors.duplicateVariable",
         "runtime.errors.variableName",
         "runtime.errors.reservedVariableName",
-        "runtime.errors.secretDescriptorRequired",
-        "runtime.errors.sha256",
+        "runtime.errors.secretBindingRequired",
       ]),
     );
+  });
+
+  it("не переносит server-generated descriptor в редактируемый input", () => {
+    expect(
+      editableSecretBindings([
+        {
+          name: "PROVIDER_TOKEN",
+          secretRef: "secret_provider_token",
+          secretName: "runtime-provider-token",
+          secretKey: "value",
+          secretUid: "4ea063ab-b3ee-49fd-b6d2-d0f44fd85bb1",
+          secretResourceVersion: "128",
+          contentSha256: "a".repeat(64),
+        },
+      ]),
+    ).toEqual([
+      {
+        name: "PROVIDER_TOKEN",
+        secretRef: "secret_provider_token",
+      },
+    ]);
   });
 });

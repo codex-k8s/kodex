@@ -148,6 +148,21 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
+  name: internal-rpc-authority-secret-broker-workload
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-secret-broker-workload-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [secret-broker, secret-broker.kodex-system.svc, secret-broker.kodex-system.svc.cluster.local]
+  uris: [spiffe://kodex.local/ns/kodex-system/sa/secret-broker]
+  usages: [server auth, client auth]
+  issuerRef: {name: kodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
   name: internal-rpc-authority-control-api-gateway-workload
   annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
@@ -233,18 +248,4 @@ spec:
   dnsNames: [runtime-controller-callback, runtime-controller-callback.kodex-system.svc, runtime-controller-callback.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/runtime-controller]
   usages: [server auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: runtime-execution-client
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
-spec:
-  secretName: runtime-execution-client-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
-  uris: [spiffe://kodex.local/ns/kodex-system/sa/agent-runner]
-  usages: [client auth]
   issuerRef: {name: kodex-installation-ca, kind: Issuer}

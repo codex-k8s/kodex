@@ -196,6 +196,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("runtime configuration publish validates canonical provider accounts", func(t *testing.T) {
 		testRuntimeConfigurationPublish(t, ctx, repository)
 	})
+	t.Run("runtime secret lifecycle is crash consistent", func(t *testing.T) {
+		testRuntimeSecretCrashConsistency(t, ctx, repository)
+	})
 }
 
 func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, repository *Repository) {

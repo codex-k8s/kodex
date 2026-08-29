@@ -126,9 +126,11 @@ Dockerfile создаёт новую ревизию и не меняет уже 
 control-center:
 
 - принимает create/rotate/reveal от авторизованного control plane;
-- пишет versioned immutable Kubernetes Secret в namespace Проекта;
+- пишет versioned immutable Kubernetes Secret в единый installation runtime
+  namespace `kodex-runtime`;
 - возвращает только descriptor, version и безопасный `display_hint`;
-- имеет минимальный namespace-scoped ServiceAccount;
+- использует ServiceAccount из `kodex-system`, которому отдельный RoleBinding
+  выдаёт минимальные права только внутри `kodex-runtime`;
 - пишет audit-факт операции без значения;
 - выдаёт секрет workload только через ссылку RuntimeRevision;
 - не хранит plaintext или обратимо зашифрованную копию в PostgreSQL.
@@ -514,7 +516,12 @@ digest и локальным путём. Коллизии имён разреш�
 ### D6. Граница secret writer
 
 - **A, принято:** отдельный `secret-broker` с минимальным namespace-scoped
-  Kubernetes доступом.
+  Kubernetes доступом. Control services размещаются в `kodex-system`, а один
+  выделенный installation runtime namespace `kodex-runtime` содержит только
+  agent Pods, PVC, execution tickets, provider projections и versioned runtime
+  Secrets. Namespace-per-Project не создаётся: Project остаётся логической
+  tenant-границей control-plane, а workload связывается с ним через
+  server-owned refs, immutable RuntimeRevision, labels и admission policy.
 - B: control-plane напрямую пишет Kubernetes Secrets.
 - C: External Secrets Operator и внешний secret store обязательны для всех
   установок.

@@ -17,6 +17,7 @@ import (
 	oidcauth "github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	internalobservability "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/observability"
+	secretbrokerclient "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/secretbroker"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/ratelimit"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
@@ -64,6 +65,15 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
+	secrets, err := secretbrokerclient.Dial(startup, secretbrokerclient.Config{
+		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName, CAFile: config.SecretBrokerCAFile,
+		ClientCertificateFile: config.SecretBrokerClientCertificateFile, ClientPrivateKeyFile: config.SecretBrokerClientPrivateKeyFile,
+		DialTimeout: config.RPCTimeout, RequestTimeout: config.RPCTimeout,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, secrets.Close()) }()
 	bus, err := connectNATS(config, logger)
 	if err != nil {
 		return err
@@ -83,6 +93,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	if err := errors.Join(
 		control.CheckLocalAuthority(startup),
+		secrets.Check(startup),
 		realtime.Check(startup),
 		revocations.Check(startup),
 	); err != nil {
@@ -94,6 +105,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	api, err := httptransport.New(control, security, logger, texts)
 	if err != nil {
+		return err
+	}
+	if err := api.AttachSecretBroker(secrets.SecretBroker); err != nil {
 		return err
 	}
 	api.AttachRealtime(http.HandlerFunc(realtime.ServeRunHTTP), http.HandlerFunc(realtime.ServePlatformHTTP))
@@ -114,7 +128,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	technicalMux.Handle("/metrics", metrics.PrometheusHandler())
 	technical := &http.Server{Addr: config.TechnicalListen, Handler: technicalMux, BaseContext: func(net.Listener) context.Context { return lifecycle }, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	readiness.Set(false, "dependencies_starting")
-	workers := serviceruntime.StartWorkers(lifecycle, httpWorker(public, true, config), httpWorker(technical, false, config), readinessWorker(control, realtime, revocations, readiness, metrics, logger, config), oidcRefreshWorker(oidc, logger, config))
+	workers := serviceruntime.StartWorkers(lifecycle, httpWorker(public, true, config), httpWorker(technical, false, config), readinessWorker(control, secrets, realtime, revocations, readiness, metrics, logger, config), oidcRefreshWorker(oidc, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	security.StopAdmission()
 	shutdownErr := serviceruntime.RunShutdown(shutdownBase, serviceruntime.ShutdownOperation{Name: "public HTTP server", Timeout: config.ShutdownTimeout, Run: public.Shutdown}, serviceruntime.ShutdownOperation{Name: "technical HTTP server", Timeout: config.ShutdownTimeout, Run: technical.Shutdown}, serviceruntime.ShutdownOperation{Name: "gateway workers", Timeout: config.ShutdownTimeout, Run: workers.Wait}, serviceruntime.ShutdownOperation{Name: "tracing", Timeout: config.ShutdownTimeout, Run: telemetry.ShutdownTracing}, serviceruntime.ShutdownOperation{Name: "error reporting", Timeout: config.ShutdownTimeout, Run: telemetry.FlushSentry})
@@ -189,13 +203,13 @@ func httpWorker(server *http.Server, tlsEnabled bool, config Config) servicerunt
 		}
 	}
 }
-func readinessWorker(control *controlplaneclient.Client, realtime *websockettransport.Server, revocations *sessionrevocation.Store, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func readinessWorker(control *controlplaneclient.Client, secrets *secretbrokerclient.Client, realtime *websockettransport.Server, revocations *sessionrevocation.Store, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
 		for {
 			check, cancel := context.WithTimeout(ctx, config.RPCTimeout)
-			err := errors.Join(control.CheckLocalAuthority(check), realtime.Check(check), revocations.Check(check))
+			err := errors.Join(control.CheckLocalAuthority(check), secrets.Check(check), realtime.Check(check), revocations.Check(check))
 			cancel()
 			if err == nil {
 				changed := readiness.Set(true, "ready")

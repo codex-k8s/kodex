@@ -6,6 +6,16 @@ export type ClientOptions = {
 
 export type OpaqueRef = string;
 
+export type OwnerSessionCreateInput = {
+    purpose?: OwnerSessionPurpose;
+};
+
+export type OwnerSessionPurpose = {
+    kind: 'RUNTIME_SECRET_REVEAL';
+    projectRef: OpaqueRef;
+    secretRef: OpaqueRef;
+};
+
 export type Timestamp = string;
 
 export type PermissionRisk = 'READ' | 'WRITE' | 'APPROVE' | 'ADMIN';
@@ -494,16 +504,65 @@ export type RuntimeEnvironmentValue = {
     value: string;
 };
 
+export type RuntimeSecretValueType = 'STRING' | 'BINARY' | 'JSON';
+
+export type RuntimeSecretDisplayHint = {
+    prefix: string;
+    suffix: string;
+};
+
+export type RuntimeSecret = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef: OpaqueRef;
+    name: string;
+    description: string;
+    valueType: RuntimeSecretValueType;
+    state: 'ACTIVE' | 'REVOKED';
+    currentRevision: number;
+    displayHint?: RuntimeSecretDisplayHint;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+};
+
+export type RuntimeSecretPage = {
+    items: Array<RuntimeSecret>;
+    nextPageToken: string;
+};
+
+export type RuntimeSecretCreateInput = {
+    name: string;
+    description: string;
+    valueType: RuntimeSecretValueType;
+    value: string;
+};
+
+export type RuntimeSecretRotateInput = {
+    valueType: RuntimeSecretValueType;
+    value: string;
+};
+
+export type RuntimeSecretReveal = {
+    value: string;
+    valueType: RuntimeSecretValueType;
+};
+
 /**
  * Descriptor immutable Kubernetes Secret revision; значение Secret запрещено.
  */
 export type RuntimeSecretDescriptor = {
     name: string;
+    secretRef: OpaqueRef;
     secretName: string;
     secretKey: string;
     secretUid: string;
     secretResourceVersion: string;
     contentSha256: string;
+};
+
+export type RuntimeSecretBinding = {
+    name: string;
+    secretRef: OpaqueRef;
 };
 
 export type RuntimeEnvironmentVersion = {
@@ -550,7 +609,7 @@ export type RuntimeEnvironmentInput = {
     imageArtifactRef: OpaqueRef;
     tools: Array<RuntimeEnvironmentTool>;
     values: Array<RuntimeEnvironmentValue>;
-    secretDescriptors: Array<RuntimeSecretDescriptor>;
+    secretBindings: Array<RuntimeSecretBinding>;
 };
 
 export type RuntimeEnvironmentRollbackInput = {
@@ -1410,6 +1469,8 @@ export type AgentRef = OpaqueRef;
 
 export type RuntimeEnvironmentRef = OpaqueRef;
 
+export type SecretRef = OpaqueRef;
+
 export type RecipeRef = OpaqueRef;
 
 export type RoleDefinitionRefQuery = OpaqueRef;
@@ -1473,7 +1534,7 @@ export type DeleteOwnerSessionResponses = {
 export type DeleteOwnerSessionResponse = DeleteOwnerSessionResponses[keyof DeleteOwnerSessionResponses];
 
 export type CreateOwnerSessionData = {
-    body?: never;
+    body?: OwnerSessionCreateInput;
     headers: {
         'Idempotency-Key': string;
     };
@@ -2837,6 +2898,190 @@ export type RollbackRuntimeEnvironmentResponses = {
 };
 
 export type RollbackRuntimeEnvironmentResponse = RollbackRuntimeEnvironmentResponses[keyof RollbackRuntimeEnvironmentResponses];
+
+export type ListRuntimeSecretsData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/runtime-secrets';
+};
+
+export type ListRuntimeSecretsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRuntimeSecretsError = ListRuntimeSecretsErrors[keyof ListRuntimeSecretsErrors];
+
+export type ListRuntimeSecretsResponses = {
+    /**
+     * Метаданные Runtime Secrets без значений
+     */
+    200: RuntimeSecretPage;
+};
+
+export type ListRuntimeSecretsResponse = ListRuntimeSecretsResponses[keyof ListRuntimeSecretsResponses];
+
+export type CreateRuntimeSecretData = {
+    body: RuntimeSecretCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/runtime-secrets';
+};
+
+export type CreateRuntimeSecretErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateRuntimeSecretError = CreateRuntimeSecretErrors[keyof CreateRuntimeSecretErrors];
+
+export type CreateRuntimeSecretResponses = {
+    /**
+     * Immutable первая версия Runtime Secret создана
+     */
+    201: RuntimeSecret;
+};
+
+export type CreateRuntimeSecretResponse = CreateRuntimeSecretResponses[keyof CreateRuntimeSecretResponses];
+
+export type RevokeRuntimeSecretData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        secretRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secrets/{secretRef}';
+};
+
+export type RevokeRuntimeSecretErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevokeRuntimeSecretError = RevokeRuntimeSecretErrors[keyof RevokeRuntimeSecretErrors];
+
+export type RevokeRuntimeSecretResponses = {
+    /**
+     * Runtime Secret и все его версии отозваны
+     */
+    200: RuntimeSecret;
+};
+
+export type RevokeRuntimeSecretResponse = RevokeRuntimeSecretResponses[keyof RevokeRuntimeSecretResponses];
+
+export type GetRuntimeSecretData = {
+    body?: never;
+    path: {
+        secretRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secrets/{secretRef}';
+};
+
+export type GetRuntimeSecretErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeSecretError = GetRuntimeSecretErrors[keyof GetRuntimeSecretErrors];
+
+export type GetRuntimeSecretResponses = {
+    /**
+     * Метаданные Runtime Secret без значения
+     */
+    200: RuntimeSecret;
+};
+
+export type GetRuntimeSecretResponse = GetRuntimeSecretResponses[keyof GetRuntimeSecretResponses];
+
+export type RotateRuntimeSecretData = {
+    body: RuntimeSecretRotateInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        secretRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secrets/{secretRef}/rotations';
+};
+
+export type RotateRuntimeSecretErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RotateRuntimeSecretError = RotateRuntimeSecretErrors[keyof RotateRuntimeSecretErrors];
+
+export type RotateRuntimeSecretResponses = {
+    /**
+     * Новая immutable версия Runtime Secret создана
+     */
+    200: RuntimeSecret;
+};
+
+export type RotateRuntimeSecretResponse = RotateRuntimeSecretResponses[keyof RotateRuntimeSecretResponses];
+
+export type RevealRuntimeSecretData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        secretRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secrets/{secretRef}/reveal';
+};
+
+export type RevealRuntimeSecretErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevealRuntimeSecretError = RevealRuntimeSecretErrors[keyof RevealRuntimeSecretErrors];
+
+export type RevealRuntimeSecretResponses = {
+    /**
+     * Одноразовая выдача значения после fresh OIDC re-auth
+     */
+    200: RuntimeSecretReveal;
+};
+
+export type RevealRuntimeSecretResponse = RevealRuntimeSecretResponses[keyof RevealRuntimeSecretResponses];
 
 export type ListRoleEnvironmentsData = {
     body?: never;

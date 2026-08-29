@@ -1,0 +1,80 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: secret-broker-default-deny
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: secret-broker
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: secret-broker-exact-runtime-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: secret-broker
+      app.kubernetes.io/component: secret-broker
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-api-gateway
+              app.kubernetes.io/component: external-gateway
+      ports:
+        - {protocol: TCP, port: 8443}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - {protocol: TCP, port: 9090}
+        - {protocol: TCP, port: 9091}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-plane
+      ports:
+        - {protocol: TCP, port: 8443}
+    - to:
+        - ipBlock: {cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__}
+      ports:
+        - {protocol: TCP, port: 443}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: opentelemetry-collector
+      ports:
+        - {protocol: TCP, port: 4317}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sentry-relay
+      ports:
+        - {protocol: TCP, port: 8443}

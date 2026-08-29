@@ -195,6 +195,13 @@ func applyWorkloadProfile(config *Config) error {
 	}
 	profiles := map[Mode]map[string]workloadProfile{
 		ModeIssuer: {
+			"secret-broker": {
+				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+				readbackCredentialSecret:    "internal-rpc-authority-secret-broker-issuer-readback-credential",
+				readbackPossessionSecret:    "internal-rpc-authority-secret-broker-issuer-readback-possession",
+				restoreRoleCredentialSecret: "internal-rpc-authority-secret-broker-issuer-restore-credential",
+				restoreACKSecret:            "internal-rpc-authority-secret-broker-issuer-restore-ack",
+			},
 			"role-image-builder": {
 				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/role-image-builder",
 				readbackCredentialSecret:    "internal-rpc-authority-role-image-builder-issuer-readback-credential",

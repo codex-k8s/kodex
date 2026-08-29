@@ -27,6 +27,9 @@ const (
 	maximumEmailBytes   = 254
 	maximumGroups       = 100
 	maximumGroupRunes   = 200
+	maximumAMRValues    = 16
+	maximumAMRRunes     = 64
+	maximumACRRunes     = 160
 	ownerScope          = "kodex.owner"
 	ownerRealmRole      = "kodex-owner"
 	unknownUserName     = "i18n:OIDC_USER_NAME"
@@ -57,6 +60,9 @@ type Principal struct {
 	Groups          []string
 	OwnerClaim      bool
 	SessionRevision uint64
+	AuthenticatedAt time.Time
+	ACR             string
+	AMR             []string
 	ExpiresAt       time.Time
 }
 
@@ -92,6 +98,9 @@ type claims struct {
 	Email           string   `json:"email"`
 	EmailVerified   bool     `json:"email_verified"`
 	Groups          []string `json:"groups"`
+	AuthTime        int64    `json:"auth_time"`
+	ACR             string   `json:"acr"`
+	AMR             []string `json:"amr"`
 	RealmAccess     struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access"`
@@ -197,7 +206,10 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 		return Principal{}, errors.New("OIDC session claims are invalid")
 	}
 	groups, groupsErr := normalizeGroups(values.Groups)
-	if groupsErr != nil {
+	amr, amrErr := normalizeBoundedStrings(values.AMR, maximumAMRValues, maximumAMRRunes)
+	acr := strings.TrimSpace(values.ACR)
+	if groupsErr != nil || amrErr != nil || utf8.RuneCountInString(acr) > maximumACRRunes || strings.ContainsAny(acr, "\r\n\x00") ||
+		values.AuthTime < 0 || values.AuthTime > token.Expiry.Unix() {
 		return Principal{}, errors.New("OIDC session claims are invalid")
 	}
 	subject, subjectErr := oidcidentity.Subject(token.Issuer, token.Subject)
@@ -208,12 +220,37 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 	if _, tokenIDErr := oidcidentity.TokenID(token.Issuer, values.TokenID); tokenIDErr != nil {
 		return Principal{}, errors.New("OIDC session claims are invalid")
 	}
+	var authenticatedAt time.Time
+	if values.AuthTime > 0 {
+		authenticatedAt = time.Unix(values.AuthTime, 0).UTC()
+	}
 	return Principal{
 		Subject: subject, OrganizationID: values.OrganizationID, Issuer: token.Issuer, SessionID: sessionID,
 		DisplayName: safeDisplayName(values.Name, values.PreferredName), EmailHint: maskedVerifiedEmail(values.Email, values.EmailVerified),
 		Groups: groups, OwnerClaim: containsWord(values.Scope, ownerScope) && contains(values.RealmAccess.Roles, ownerRealmRole),
-		SessionRevision: values.SessionRevision, ExpiresAt: token.Expiry,
+		SessionRevision: values.SessionRevision, AuthenticatedAt: authenticatedAt, ACR: acr, AMR: amr, ExpiresAt: token.Expiry,
 	}, nil
+}
+
+func normalizeBoundedStrings(values []string, maximumValues, maximumRunes int) ([]string, error) {
+	if len(values) > maximumValues {
+		return nil, errors.New("too many values")
+	}
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" || utf8.RuneCountInString(value) > maximumRunes || strings.ContainsAny(value, "\r\n\x00") {
+			return nil, errors.New("value is invalid")
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 func normalizeGroups(values []string) ([]string, error) {

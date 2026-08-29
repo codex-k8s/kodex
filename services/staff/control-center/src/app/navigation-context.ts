@@ -12,6 +12,7 @@ export type NavigationSection =
   | "files"
   | "automations"
   | "runtime-environments"
+  | "runtime-secrets"
   | "project-access";
 
 const routeSections: Readonly<Record<string, NavigationSection>> = {
@@ -37,6 +38,7 @@ const routeSections: Readonly<Record<string, NavigationSection>> = {
   "runtime-environments": "runtime-environments",
   "runtime-environment-new": "runtime-environments",
   "runtime-environment": "runtime-environments",
+  "runtime-secrets": "runtime-secrets",
   "project-access": "project-access",
 };
 

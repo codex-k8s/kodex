@@ -75,6 +75,42 @@ func TestSessionExpiryIsClosed(t *testing.T) {
 	}
 }
 
+func TestSessionElevationIsSealedAndRenewalDoesNotExtendIt(t *testing.T) {
+	directory := t.TempDir()
+	key := filepath.Join(directory, "key.hex")
+	writeKey(t, key, strings.Repeat("44", 32))
+	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	store, err := New(Config{CurrentKeyFile: key, TTL: 3 * time.Minute})
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	store.now = func() time.Time { return now }
+	elevation := &Elevation{
+		Kind: ElevationKindRuntimeSecretReveal, ProjectRef: "project_sales", SecretRef: "secret_main", ExpiresAt: now.Add(90 * time.Second).Unix(),
+	}
+	claims, encoded, _, err := store.IssueWithElevation(uuid.NewString(), uuid.NewString(), uuid.NewString(), 2, "header.payload.signature", now.Add(time.Hour), elevation)
+	if err != nil {
+		t.Fatalf("issue elevated session: %v", err)
+	}
+	elevation.SecretRef = "secret_mutated"
+	opened, err := store.Open(encoded)
+	if err != nil || opened.Elevation == nil || opened.Elevation.SecretRef != "secret_main" || claims.Elevation == nil {
+		t.Fatalf("sealed elevation is not exact: %#v/%v", opened.Elevation, err)
+	}
+
+	store.now = func() time.Time { return now.Add(2*time.Minute + 10*time.Second) }
+	renewed, renewedEncoded, changed, err := store.Renew(opened, now.Add(time.Hour))
+	if err != nil || !changed || renewedEncoded == "" {
+		t.Fatalf("renew after elevation expiry: changed=%t err=%v", changed, err)
+	}
+	if renewed.Elevation != nil {
+		t.Fatalf("expired elevation survived renewal: %#v", renewed.Elevation)
+	}
+	if reopened, err := store.Open(renewedEncoded); err != nil || reopened.Elevation != nil {
+		t.Fatalf("renewed session extended elevation: %#v/%v", reopened.Elevation, err)
+	}
+}
+
 func TestSessionRenewalPreservesBindingAndBearerCeiling(t *testing.T) {
 	directory := t.TempDir()
 	key := filepath.Join(directory, "key.hex")

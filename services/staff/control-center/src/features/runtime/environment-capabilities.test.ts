@@ -37,7 +37,7 @@ describe("runtime environment capabilities", () => {
       imageArtifactRef: "imgart_documents",
       tools: [],
       values: [{ name: "OUTPUT_FORMAT", value: "markdown" }],
-      secretDescriptors: [],
+      secretBindings: [],
     };
     const checks = environmentReadiness(input, {
       ref: "environment_docs",
@@ -79,6 +79,7 @@ describe("runtime environment capabilities", () => {
   it("строит только безопасное представление ссылки на секрет", () => {
     const reference = safeSecretReference({
       name: "PROVIDER_TOKEN",
+      secretRef: "secret_provider_token",
       secretName: "provider-token",
       secretKey: "token",
       secretUid: "4ea063ab-b3ee-49fd-b6d2-d0f44fd85bb1",

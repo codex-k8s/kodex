@@ -58,6 +58,8 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.runtime-environments.get":                  controlplanev1.PlatformQueryService_GetRuntimeEnvironmentSet_FullMethodName,
 		"platform.query.runtime-environment-versions.list":         controlplanev1.PlatformQueryService_ListRuntimeEnvironmentVersions_FullMethodName,
 		"platform.query.template-variables.list":                   controlplanev1.PlatformQueryService_ListTemplateVariables_FullMethodName,
+		"platform.query.runtime-secrets.list":                      controlplanev1.PlatformQueryService_ListRuntimeSecrets_FullMethodName,
+		"platform.query.runtime-secrets.get":                       controlplanev1.PlatformQueryService_GetRuntimeSecret_FullMethodName,
 		"platform.role-images.environments.list":                   controlplanev1.RoleImageService_ListRoleEnvironments_FullMethodName,
 		"platform.role-images.recipes.list":                        controlplanev1.RoleImageService_ListRoleImageRecipes_FullMethodName,
 		"platform.role-images.recipes.get":                         controlplanev1.RoleImageService_GetRoleImageRecipe_FullMethodName,
@@ -115,6 +117,10 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.runtime-environments.publish":            controlplanev1.PlatformCommandService_PublishRuntimeEnvironmentVersion_FullMethodName,
 		"platform.command.runtime-environments.rollback":           controlplanev1.PlatformCommandService_RollbackRuntimeEnvironment_FullMethodName,
 		"platform.command.agent-runtime-environment.bind":          controlplanev1.PlatformCommandService_BindAgentRuntimeEnvironment_FullMethodName,
+		"platform.command.runtime-secrets.create":                  controlplanev1.PlatformCommandService_PrepareCreateRuntimeSecret_FullMethodName,
+		"platform.command.runtime-secrets.rotate":                  controlplanev1.PlatformCommandService_PrepareRotateRuntimeSecret_FullMethodName,
+		"platform.command.runtime-secrets.reveal":                  controlplanev1.PlatformCommandService_PrepareRevealRuntimeSecret_FullMethodName,
+		"platform.command.runtime-secrets.revoke":                  controlplanev1.PlatformCommandService_PrepareRevokeRuntimeSecret_FullMethodName,
 		"platform.assistant.get":                                   controlplanev1.SystemAssistantService_GetSystemAssistant_FullMethodName,
 		"platform.assistant.conversations.list":                    controlplanev1.SystemAssistantService_ListAssistantConversations_FullMethodName,
 		"platform.assistant.conversations.create":                  controlplanev1.SystemAssistantService_CreateAssistantConversation_FullMethodName,
@@ -126,6 +132,17 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.assistant.plans.reject":                          controlplanev1.SystemAssistantService_RejectAssistantPlan_FullMethodName,
 		"platform.assistant.owner-instructions.update":             controlplanev1.SystemAssistantService_UpdateAssistantOwnerInstructions_FullMethodName,
 		"platform.assistant.recover":                               controlplanev1.SystemAssistantService_RecoverSystemAssistant_FullMethodName,
+	}
+}
+
+func SecretBrokerOperations() map[string]string {
+	return map[string]string{
+		"platform.runtime-secrets.readiness.check":         controlplanev1.RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName,
+		"platform.runtime-secrets.operations.consume":      controlplanev1.RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName,
+		"platform.runtime-secrets.operations.complete":     controlplanev1.RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName,
+		"platform.runtime-secrets.operations.fail":         controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName,
+		"platform.runtime-secrets.operations.recover":      controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName,
+		"platform.runtime-secrets.materialization.recover": controlplanev1.RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName,
 	}
 }
 
@@ -234,6 +251,7 @@ func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 		"platform.query.artifacts.list":                {},
 		"platform.query.schedules.list":                {},
 		"platform.query.runtime-environments.list":     {},
+		"platform.query.runtime-secrets.list":          {},
 		"platform.query.template-variables.list":       {},
 		"platform.command.projects.update":             {},
 		"platform.command.memberships.add":             {},
@@ -244,6 +262,7 @@ func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 		"platform.command.artifacts.upload":            {},
 		"platform.command.schedules.create":            {},
 		"platform.command.runtime-environments.create": {},
+		"platform.command.runtime-secrets.create":      {},
 		"platform.role-images.recipes.list":            {},
 		"platform.role-images.recipes.manage":          {},
 	}

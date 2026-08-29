@@ -29,9 +29,6 @@ spec:
               app.kubernetes.io/name: control-api-gateway
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: agent-runner
-        - podSelector:
-            matchLabels:
               app.kubernetes.io/name: automation-scheduler
         - podSelector:
             matchLabels:

@@ -16,13 +16,17 @@ const (
 	controlPlaneTarget        = "dns:///control-plane.kodex-system.svc:8443"
 	controlPlaneTLSServerName = "control-plane.kodex-system.svc.cluster.local"
 	callbackTLSServerName     = "runtime-controller-callback.kodex-system.svc.cluster.local"
+	defaultControlNamespace   = "kodex-system"
+	defaultRuntimeNamespace   = "kodex-runtime"
+	runtimeCallbackClientID   = "spiffe://kodex.local/ns/kodex-runtime/sa/agent-runner"
 )
 
 var sha256TextPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 type Config struct {
 	Environment                    string        `env:"DEPLOYMENT_ENVIRONMENT"`
-	Namespace                      string        `env:"POD_NAMESPACE"`
+	ControlNamespace               string        `env:"POD_NAMESPACE"`
+	RuntimeNamespace               string        `env:"RUNTIME_CONTROLLER_RUNTIME_NAMESPACE"`
 	PodUID                         string        `env:"POD_UID"`
 	PodIP                          string        `env:"POD_IP"`
 	TechnicalListen                string        `env:"RUNTIME_CONTROLLER_TECHNICAL_LISTEN"`
@@ -62,12 +66,12 @@ type Config struct {
 
 func loadConfig() (Config, error) {
 	config := Config{
-		Environment: "development", Namespace: "kodex-system",
+		Environment: "development", ControlNamespace: defaultControlNamespace, RuntimeNamespace: defaultRuntimeNamespace,
 		TechnicalListen: ":9090", CallbackListen: ":8444", CallbackTLSServerName: callbackTLSServerName,
 		CallbackServerCertificateFile:  "/var/run/secrets/kodex/runtime-controller/callback-server/tls.crt",
 		CallbackServerPrivateKeyFile:   "/var/run/secrets/kodex/runtime-controller/callback-server/tls.key",
 		CallbackClientCAFile:           "/var/run/config/kodex/runtime-controller/callback-client/ca.crt",
-		CallbackExpectedClientSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/agent-runner",
+		CallbackExpectedClientSPIFFEID: runtimeCallbackClientID,
 		CallbackClientCASecret:         "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
 		ControlPlaneTarget: controlPlaneTarget, ControlPlaneTLSServerName: controlPlaneTLSServerName,
 		ControlPlaneCAFile:          "/var/run/config/kodex/runtime-controller/control-plane/ca.pem",
@@ -90,8 +94,10 @@ func loadConfig() (Config, error) {
 
 func (config Config) validate() error {
 	if config.PodUID == "" || len(config.PodUID) > 128 || net.ParseIP(config.PodIP) == nil ||
-		config.Namespace == "" || config.Environment == "" || config.ControlPlaneTarget != controlPlaneTarget ||
-		config.ControlPlaneTLSServerName != controlPlaneTLSServerName || config.CallbackTLSServerName != callbackTLSServerName {
+		config.ControlNamespace != defaultControlNamespace || config.RuntimeNamespace != defaultRuntimeNamespace ||
+		config.ControlNamespace == config.RuntimeNamespace || config.Environment == "" || config.ControlPlaneTarget != controlPlaneTarget ||
+		config.ControlPlaneTLSServerName != controlPlaneTLSServerName || config.CallbackTLSServerName != callbackTLSServerName ||
+		config.CallbackExpectedClientSPIFFEID != runtimeCallbackClientID {
 		return errors.New("runtime controller identity is invalid")
 	}
 	for _, address := range []string{config.TechnicalListen, config.CallbackListen} {

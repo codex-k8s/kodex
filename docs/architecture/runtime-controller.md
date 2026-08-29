@@ -58,6 +58,28 @@ manifest, integration/MCP bindings, resources, volumes, network и scoped RBAC.
 
 ## Обычный turn
 
+### Installation runtime namespace
+
+Установка использует ровно два namespace с разными назначениями:
+
+- `kodex-system` содержит control-plane, runtime-controller, secret-broker и
+  остальные управляющие сервисы;
+- `kodex-runtime` содержит agent Pods, session PVC, execution tickets,
+  provider credential projections и versioned runtime Secrets.
+
+Namespace-per-Project не используется. Project является логической tenant и
+authority-границей в PostgreSQL и `RuntimeRevision`; его ref не выбирает
+Kubernetes namespace. Все runtime-объекты дополнительно связываются с exact
+Project, Session, Turn, attempt и revision через server-owned metadata и
+admission policy. Это не даёт одному Project namespace-wide полномочий и не
+превращает имя Project в security boundary.
+
+Leader-election Lease runtime-controller остаётся в `kodex-system`. ServiceAccount
+runtime-controller и secret-broker не получают Role над Secrets `kodex-system`:
+cross-namespace RoleBinding выдаёт им только необходимые verbs в
+`kodex-runtime`. `agent-runner` ServiceAccount существует только в
+`kodex-runtime`, не монтирует Kubernetes token и не получает RoleBinding.
+
 Каждый turn, retry и continuation создаёт новый execution-scoped Pod из exact
 promoted role image. Role image содержит собственное окружение, пакеты,
 инструменты и ПО конкретной роли. Пользователь редактирует полный Dockerfile,
@@ -127,7 +149,10 @@ materialized container. Отсутствие executable, несовпавшая 
 Control-center, browser и основной control-plane не получают Kubernetes
 credentials для записи Secret. Специализированный `secret-broker` с минимальным
 namespace-scoped ServiceAccount выполняет create/rotate/revoke и создаёт
-versioned immutable Kubernetes Secret. PostgreSQL хранит только metadata:
+versioned immutable Kubernetes Secret только в `kodex-runtime`. Его
+ServiceAccount находится в `kodex-system`, но cross-namespace RoleBinding не
+даёт читать или менять служебные Secrets control namespace. PostgreSQL хранит
+только metadata:
 scope, owner, type, Kubernetes reference, version, rotation state, timestamps и
 безопасный `display_hint`; plaintext и обратимо зашифрованная копия там не
 хранятся.
@@ -228,7 +253,8 @@ server policy. Controller cleanup не определяет terminal Run сам�
 
 ## Network и admission
 
-Base deny-all. Role Pod получает DNS, exact provider egress proxy, exact MCP
+Base deny-all применяется отдельно в `kodex-system` и `kodex-runtime`. Role Pod
+получает DNS, exact provider egress proxy, exact MCP
 service и только разрешённый project access profile. Admission проверяет exact
 image digest, runtime ABI, container layout, ServiceAccount, volumes, commands,
 resources, immutable input binding и execution ticket Secret. Admission также
@@ -255,6 +281,11 @@ user-supplied Kubernetes policy, broad token, host access и privileged fallback
 - stale claim/fence/revision не запускает workload;
 - stale Secret revision или digest не запускает workload, а runner input не
   содержит Secret values;
+- agent Pods, session PVC, execution tickets, provider projections и runtime
+  Secrets создаются только в `kodex-runtime`, а leader Lease остаётся в
+  `kodex-system`;
+- runtime-controller и secret-broker не могут читать Secrets `kodex-system`, а
+  `agent-runner` не получает Kubernetes API authority;
 - обычные API не возвращают Secret value, а reveal требует permission, свежую
   OIDC re-authentication и одноразовый `no-store` ответ secret-broker;
 - Mattermost и любая optional integration не участвуют в materialization;

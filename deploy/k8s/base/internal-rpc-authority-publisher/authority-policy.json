@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 38,
+  "policy_revision": 39,
   "policy": {
     "trust_domain": "kodex.local",
     "default_decision": "DENY",
@@ -312,6 +312,10 @@
           "platform.command.runtime-environments.create",
           "platform.command.runtime-environments.publish",
           "platform.command.runtime-environments.rollback",
+          "platform.command.runtime-secrets.create",
+          "platform.command.runtime-secrets.reveal",
+          "platform.command.runtime-secrets.revoke",
+          "platform.command.runtime-secrets.rotate",
           "platform.command.schedules.archive",
           "platform.command.schedules.create",
           "platform.command.schedules.enable",
@@ -353,6 +357,8 @@
           "platform.query.runtime-environment-versions.list",
           "platform.query.runtime-environments.get",
           "platform.query.runtime-environments.list",
+          "platform.query.runtime-secrets.get",
+          "platform.query.runtime-secrets.list",
           "platform.query.runtimes.list",
           "platform.query.schedules.get",
           "platform.query.schedules.list",
@@ -459,6 +465,50 @@
           "platform.runtime.tool-call.record",
           "platform.runtime.warm.reconcile",
           "platform.runtime.warm.report"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "ownership",
+          "provenance"
+        ]
+      },
+      {
+        "producer_id": "control-plane.secret-broker",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "owner_workload_id": "control-plane",
+        "owner_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "kodex-internal-ca-g1",
+        "application_credential": "PLATFORM_WORKER_GRANT",
+        "application_credential_metadata": "authorization",
+        "application_credential_issuer": "https://control-plane.kodex-system.svc.cluster.local/authority/platform-worker/secret-broker",
+        "application_credential_audience": "urn:kodex:platform-worker:secret-broker",
+        "application_credential_trust_bundle_id": "secret-broker-platform-worker-grants-g1",
+        "authority_proof_issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "authority_proof_audience": "urn:kodex:internal-rpc-authority-issuer:secret-broker",
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_proof_max_age_seconds": 15,
+        "deadline_milliseconds": 2000,
+        "max_attempts": 2,
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "allowed_operation_ids": [
+          "platform.runtime-secrets.materialization.recover",
+          "platform.runtime-secrets.operations.complete",
+          "platform.runtime-secrets.operations.consume",
+          "platform.runtime-secrets.operations.fail",
+          "platform.runtime-secrets.operations.recover",
+          "platform.runtime-secrets.readiness.check"
         ],
         "server_resolved_fields": [
           "actor",
@@ -2517,6 +2567,122 @@
         }
       },
       {
+        "operation_id": "platform.command.runtime-secrets.create",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/PrepareCreateRuntimeSecret",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "secret.create",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": true,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.command.runtime-secrets.reveal",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/PrepareRevealRuntimeSecret",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "secret.reveal",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.command.runtime-secrets.revoke",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/PrepareRevokeRuntimeSecret",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "secret.revoke",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.command.runtime-secrets.rotate",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/PrepareRotateRuntimeSecret",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "secret.rotate",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
         "operation_id": "platform.command.schedules.archive",
         "caller_workload_id": "control-api-gateway",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
@@ -3818,6 +3984,64 @@
         }
       },
       {
+        "operation_id": "platform.query.runtime-secrets.get",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformQueryService/GetRuntimeSecret",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "secret.view",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.query.runtime-secrets.list",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformQueryService/ListRuntimeSecrets",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "secret.view",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": true,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
         "operation_id": "platform.query.runtimes.list",
         "caller_workload_id": "control-api-gateway",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
@@ -4405,6 +4629,174 @@
           "DOMAIN_STATE"
         ],
         "project_required": true,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secrets.materialization.recover",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretWorkService/RecoverRuntimeSecretMaterialization",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secrets.operations.recover",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secrets.operations.complete",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretWorkService/CompleteRuntimeSecretOperation",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secrets.operations.complete",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secrets.operations.consume",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretWorkService/ConsumeRuntimeSecretOperation",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secrets.operations.consume",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secrets.operations.fail",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretWorkService/FailRuntimeSecretOperation",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secrets.operations.fail",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secrets.operations.recover",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretWorkService/ListRuntimeSecretRecoveryWork",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secrets.operations.recover",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secrets.readiness.check",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretWorkService/CheckRuntimeSecretWorkReadiness",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secrets.readiness.check",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,

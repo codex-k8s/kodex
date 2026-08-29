@@ -3,6 +3,7 @@
   "images": [
     {"component":"dockerfile","dockerfile":"infra/dockerfile-frontend/Dockerfile"},
     {"component":"control-plane","dockerfile":"services/internal/control-plane/Dockerfile"},
+    {"component":"secret-broker","dockerfile":"services/internal/secret-broker/Dockerfile"},
     {"component":"internal-rpc-authority","dockerfile":"services/internal/internal-rpc-authority/Dockerfile"},
     {"component":"runtime-controller","dockerfile":"services/internal/runtime-controller/Dockerfile"},
     {"component":"integration-gateway","dockerfile":"services/external/integration-gateway/Dockerfile"},

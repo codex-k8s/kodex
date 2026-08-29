@@ -175,7 +175,7 @@ func (server *Server) CreateRuntimeEnvironmentSet(writer http.ResponseWriter, re
 	response, err := server.control.Command.CreateRuntimeEnvironmentSet(request.Context(), &controlplanev1.CreateRuntimeEnvironmentSetRequest{
 		Mutation: mutation, ProjectRef: projectRef, Name: body.Name, Description: body.Description,
 		ImageArtifactRef: body.ImageArtifactRef, Values: runtimeEnvironmentValues(body.Values),
-		SecretDescriptors: runtimeSecretDescriptors(body.SecretDescriptors), Tools: runtimeEnvironmentTools(body.Tools),
+		SecretBindings: runtimeSecretBindings(body.SecretBindings), Tools: runtimeEnvironmentTools(body.Tools),
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
@@ -196,7 +196,7 @@ func (server *Server) PublishRuntimeEnvironmentVersion(writer http.ResponseWrite
 	response, err := server.control.Command.PublishRuntimeEnvironmentVersion(request.Context(), &controlplanev1.PublishRuntimeEnvironmentVersionRequest{
 		Mutation: mutation, EnvironmentRef: environmentRef, Name: body.Name, Description: body.Description,
 		ImageArtifactRef: body.ImageArtifactRef, Values: runtimeEnvironmentValues(body.Values),
-		SecretDescriptors: runtimeSecretDescriptors(body.SecretDescriptors), Tools: runtimeEnvironmentTools(body.Tools),
+		SecretBindings: runtimeSecretBindings(body.SecretBindings), Tools: runtimeEnvironmentTools(body.Tools),
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
@@ -253,13 +253,10 @@ func runtimeEnvironmentValues(input []generated.RuntimeEnvironmentValue) []*cont
 	return result
 }
 
-func runtimeSecretDescriptors(input []generated.RuntimeSecretDescriptor) []*controlplanev1.RuntimeSecretDescriptor {
-	result := make([]*controlplanev1.RuntimeSecretDescriptor, 0, len(input))
+func runtimeSecretBindings(input []generated.RuntimeSecretBinding) []*controlplanev1.RuntimeSecretBinding {
+	result := make([]*controlplanev1.RuntimeSecretBinding, 0, len(input))
 	for _, item := range input {
-		result = append(result, &controlplanev1.RuntimeSecretDescriptor{
-			Name: item.Name, SecretName: item.SecretName, SecretKey: item.SecretKey, SecretUid: item.SecretUid,
-			SecretResourceVersion: item.SecretResourceVersion, ContentSha256: item.ContentSha256,
-		})
+		result = append(result, &controlplanev1.RuntimeSecretBinding{Name: item.Name, SecretRef: item.SecretRef})
 	}
 	return result
 }

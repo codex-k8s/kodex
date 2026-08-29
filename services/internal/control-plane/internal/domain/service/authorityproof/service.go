@@ -159,21 +159,27 @@ type authority struct {
 	Tenant    identity  `json:"tenant"`
 	Project   *identity `json:"project,omitempty"`
 }
+type credentialAuthentication struct {
+	AuthenticatedAt int64    `json:"auth_time"`
+	ACR             string   `json:"acr,omitempty"`
+	AMR             []string `json:"amr,omitempty"`
+}
 type proofClaims struct {
-	Version                      int       `json:"v"`
-	Issuer                       string    `json:"iss"`
-	Audience                     string    `json:"aud"`
-	Caller                       workload  `json:"caller"`
-	OperationID                  string    `json:"operation_id"`
-	AuthorizationContextAudience string    `json:"authorization_context_audience"`
-	Authority                    authority `json:"authority"`
-	ProofRevision                uint64    `json:"proof_revision"`
-	SignerGeneration             uint64    `json:"signer_generation"`
-	CallerCredentialRevision     uint64    `json:"caller_credential_revision"`
-	JTI                          string    `json:"jti"`
-	IssuedAt                     int64     `json:"iat"`
-	NotBefore                    int64     `json:"nbf"`
-	ExpiresAt                    int64     `json:"exp"`
+	Version                      int                       `json:"v"`
+	Issuer                       string                    `json:"iss"`
+	Audience                     string                    `json:"aud"`
+	Caller                       workload                  `json:"caller"`
+	OperationID                  string                    `json:"operation_id"`
+	AuthorizationContextAudience string                    `json:"authorization_context_audience"`
+	Authority                    authority                 `json:"authority"`
+	ProofRevision                uint64                    `json:"proof_revision"`
+	SignerGeneration             uint64                    `json:"signer_generation"`
+	CallerCredentialRevision     uint64                    `json:"caller_credential_revision"`
+	CredentialAuthentication     *credentialAuthentication `json:"credential_authentication,omitempty"`
+	JTI                          string                    `json:"jti"`
+	IssuedAt                     int64                     `json:"iat"`
+	NotBefore                    int64                     `json:"nbf"`
+	ExpiresAt                    int64                     `json:"exp"`
 }
 
 type workerGrantClaims struct {
@@ -320,6 +326,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		principal.ExternalDisplayName, principal.ExternalEmailHint = verified.DisplayName, verified.EmailHint
 		principal.ExternalIssuer, principal.ExternalGroups = verified.Issuer, verified.Groups
 		principal.ExternalSessionRevision, principal.OwnerClaim = verified.SessionRevision, verified.OwnerClaim
+		principal.ExternalAuthenticatedAt, principal.ExternalACR, principal.ExternalAMR = verified.AuthenticatedAt, verified.ACR, append([]string(nil), verified.AMR...)
 		actorKind, actorSource, actorReference, actorRevision = "HUMAN", "OIDC_SESSION", verified.SessionID, verified.SessionRevision
 		callerCredentialRevision = verified.SessionRevision
 	} else {
@@ -360,11 +367,15 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	}
 	now := service.now().UTC().Truncate(time.Second)
 	expiresAt := now.Add(time.Duration(producer.AuthorityProofMaxAgeSeconds) * time.Second)
+	var authentication *credentialAuthentication
+	if actorKind == "HUMAN" && !principal.ExternalAuthenticatedAt.IsZero() {
+		authentication = &credentialAuthentication{AuthenticatedAt: principal.ExternalAuthenticatedAt.Unix(), ACR: principal.ExternalACR, AMR: append([]string(nil), principal.ExternalAMR...)}
+	}
 	claims := proofClaims{
 		Version: 1, Issuer: producer.AuthorityProofIssuer, Audience: producer.AuthorityProofAudience,
 		Caller:      workload{WorkloadID: producer.CallerWorkloadID, SPIFFEID: producer.CallerSPIFFEID},
 		OperationID: input.OperationID, AuthorizationContextAudience: binding.Audience, Authority: proofAuthority,
-		ProofRevision: revision, SignerGeneration: service.signerGeneration, CallerCredentialRevision: callerCredentialRevision, JTI: uuid.NewString(),
+		ProofRevision: revision, SignerGeneration: service.signerGeneration, CallerCredentialRevision: callerCredentialRevision, CredentialAuthentication: authentication, JTI: uuid.NewString(),
 		IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: expiresAt.Unix(),
 	}
 	compact, err := internalrpcauth.SignCanonicalJSON(claims, service.signer, internalrpcauth.ProtectedHeaderExpectation{Type: internalrpcauth.AuthorityProofProtectedType, KeyID: service.signer.KeyID})

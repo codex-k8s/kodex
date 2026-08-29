@@ -89,13 +89,11 @@ describe("agent detail model", () => {
     expect(templateVariableInsertion(item.variable.name)).toBe(
       "{{project.ref}}",
     );
-    expect(insertTextAtSelection("До после", "{{project.ref}}", 3, 3)).toEqual(
-      {
-        value: "До {{project.ref}}после",
-        selectionStart: 18,
-        selectionEnd: 18,
-      },
-    );
+    expect(insertTextAtSelection("До после", "{{project.ref}}", 3, 3)).toEqual({
+      value: "До {{project.ref}}после",
+      selectionStart: 18,
+      selectionEnd: 18,
+    });
     expect(insertTextAtSelection("До X после", "{{run.ref}}", 3, 4).value).toBe(
       "До {{run.ref}} после",
     );

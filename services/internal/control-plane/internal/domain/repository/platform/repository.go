@@ -72,6 +72,9 @@ type ProofPrincipalInput struct {
 	ExternalIssuer          string
 	ExternalGroups          []string
 	ExternalSessionRevision uint64
+	ExternalAuthenticatedAt time.Time
+	ExternalACR             string
+	ExternalAMR             []string
 	OwnerClaim              bool
 	CallerWorkload          string
 	Operation               string
@@ -91,6 +94,51 @@ type WorkerGrantInput struct {
 	Revision   uint64
 	IssuedAt   time.Time
 	ExpiresAt  time.Time
+}
+
+type RuntimeSecretPrepareInput struct {
+	Kind, ProjectRef, SecretRef, Name, Description, ValueType, ExpectedContentSHA256 string
+	Mutation                                                                         value.Mutation
+}
+
+type RuntimeSecretPrepareResult struct {
+	OperationRef, OperationGrant, State, ValueType, FailureCode string
+	ExpiresAt                                                   time.Time
+	TerminalSecret                                              *entity.RuntimeSecret
+}
+
+type RuntimeSecretCompleteInput struct {
+	OperationRef, ClaimantID string
+	ClaimGeneration          int64
+	Materialization          *entity.RuntimeSecretMaterialization
+}
+
+type RuntimeSecretConsumeInput struct {
+	OperationGrant, ClaimantID string
+}
+
+type RuntimeSecretFailInput struct {
+	OperationRef, ClaimantID, FailureCode string
+	ClaimGeneration                       int64
+}
+
+type RuntimeSecretFailureResult struct {
+	OperationRef, State, FailureCode string
+}
+
+type RuntimeSecretRecoveryInput struct {
+	OperationRef    string
+	Materialization entity.RuntimeSecretMaterialization
+}
+
+type RuntimeSecretRecoveryResult struct {
+	Action, OperationState string
+	Secret                 *entity.RuntimeSecret
+}
+
+type RuntimeSecretRecoveryPage struct {
+	Size  int32
+	Token string
 }
 
 type Repository interface {
@@ -118,6 +166,14 @@ type Repository interface {
 	ListRuntimeEnvironments(context.Context, value.Principal, query.Filter) ([]entity.RuntimeEnvironmentSet, string, error)
 	GetRuntimeEnvironment(context.Context, value.Principal, string) (entity.RuntimeEnvironmentSet, error)
 	ListRuntimeEnvironmentVersions(context.Context, value.Principal, query.Filter) ([]entity.RuntimeEnvironmentVersion, string, error)
+	ListRuntimeSecrets(context.Context, value.Principal, query.Filter) ([]entity.RuntimeSecret, string, error)
+	GetRuntimeSecret(context.Context, value.Principal, string) (entity.RuntimeSecret, error)
+	PrepareRuntimeSecretOperation(context.Context, value.Principal, RuntimeSecretPrepareInput) (RuntimeSecretPrepareResult, error)
+	ListRuntimeSecretRecoveryWork(context.Context, value.Principal, RuntimeSecretRecoveryPage) ([]entity.RuntimeSecretRecoveryWork, string, error)
+	ConsumeRuntimeSecretOperation(context.Context, value.Principal, RuntimeSecretConsumeInput) (entity.RuntimeSecretOperation, error)
+	CompleteRuntimeSecretOperation(context.Context, value.Principal, RuntimeSecretCompleteInput) (entity.RuntimeSecret, error)
+	FailRuntimeSecretOperation(context.Context, value.Principal, RuntimeSecretFailInput) (RuntimeSecretFailureResult, error)
+	RecoverRuntimeSecretMaterialization(context.Context, value.Principal, RuntimeSecretRecoveryInput) (RuntimeSecretRecoveryResult, error)
 	ListTemplateVariables(context.Context, value.Principal, query.Filter) ([]entity.TemplateVariable, string, error)
 	ListWorkflows(context.Context, value.Principal, query.Filter) ([]entity.Workflow, string, error)
 	GetWorkflow(context.Context, value.Principal, string) (entity.Workflow, error)

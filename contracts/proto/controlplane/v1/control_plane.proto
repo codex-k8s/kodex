@@ -52,6 +52,8 @@ service PlatformQueryService {
   rpc GetRuntimeEnvironmentSet(GetRuntimeEnvironmentSetRequest) returns (GetRuntimeEnvironmentSetResponse);
   rpc ListRuntimeEnvironmentVersions(ListRuntimeEnvironmentVersionsRequest) returns (ListRuntimeEnvironmentVersionsResponse);
   rpc ListTemplateVariables(ListTemplateVariablesRequest) returns (ListTemplateVariablesResponse);
+  rpc ListRuntimeSecrets(ListRuntimeSecretsRequest) returns (ListRuntimeSecretsResponse);
+  rpc GetRuntimeSecret(GetRuntimeSecretRequest) returns (GetRuntimeSecretResponse);
 }
 
 service PlatformCommandService {
@@ -111,6 +113,21 @@ service PlatformCommandService {
   rpc PublishRuntimeEnvironmentVersion(PublishRuntimeEnvironmentVersionRequest) returns (PublishRuntimeEnvironmentVersionResponse);
   rpc RollbackRuntimeEnvironment(RollbackRuntimeEnvironmentRequest) returns (RollbackRuntimeEnvironmentResponse);
   rpc BindAgentRuntimeEnvironment(BindAgentRuntimeEnvironmentRequest) returns (BindAgentRuntimeEnvironmentResponse);
+  rpc PrepareCreateRuntimeSecret(PrepareCreateRuntimeSecretRequest) returns (PrepareCreateRuntimeSecretResponse);
+  rpc PrepareRotateRuntimeSecret(PrepareRotateRuntimeSecretRequest) returns (PrepareRotateRuntimeSecretResponse);
+  rpc PrepareRevealRuntimeSecret(PrepareRevealRuntimeSecretRequest) returns (PrepareRevealRuntimeSecretResponse);
+  rpc PrepareRevokeRuntimeSecret(PrepareRevokeRuntimeSecretRequest) returns (PrepareRevokeRuntimeSecretResponse);
+}
+
+// RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
+// grant связывает actor, Проект, вид операции и exact Secret revision.
+service RuntimeSecretWorkService {
+  rpc CheckRuntimeSecretWorkReadiness(CheckRuntimeSecretWorkReadinessRequest) returns (CheckRuntimeSecretWorkReadinessResponse);
+  rpc ListRuntimeSecretRecoveryWork(ListRuntimeSecretRecoveryWorkRequest) returns (ListRuntimeSecretRecoveryWorkResponse);
+  rpc ConsumeRuntimeSecretOperation(ConsumeRuntimeSecretOperationRequest) returns (ConsumeRuntimeSecretOperationResponse);
+  rpc CompleteRuntimeSecretOperation(CompleteRuntimeSecretOperationRequest) returns (CompleteRuntimeSecretOperationResponse);
+  rpc FailRuntimeSecretOperation(FailRuntimeSecretOperationRequest) returns (FailRuntimeSecretOperationResponse);
+  rpc RecoverRuntimeSecretMaterialization(RecoverRuntimeSecretMaterializationRequest) returns (RecoverRuntimeSecretMaterializationResponse);
 }
 
 service SystemAssistantService {
@@ -2684,6 +2701,212 @@ message ListTemplateVariablesResponse {
   PageInfo page = 2;
 }
 
+enum RuntimeSecretValueType {
+  RUNTIME_SECRET_VALUE_TYPE_UNSPECIFIED = 0;
+  RUNTIME_SECRET_VALUE_TYPE_STRING = 1;
+  RUNTIME_SECRET_VALUE_TYPE_BINARY = 2;
+  RUNTIME_SECRET_VALUE_TYPE_JSON = 3;
+}
+
+enum RuntimeSecretOperationKind {
+  RUNTIME_SECRET_OPERATION_KIND_UNSPECIFIED = 0;
+  RUNTIME_SECRET_OPERATION_KIND_CREATE = 1;
+  RUNTIME_SECRET_OPERATION_KIND_ROTATE = 2;
+  RUNTIME_SECRET_OPERATION_KIND_REVEAL = 3;
+  RUNTIME_SECRET_OPERATION_KIND_REVOKE = 4;
+}
+
+enum RuntimeSecretOperationState {
+  RUNTIME_SECRET_OPERATION_STATE_UNSPECIFIED = 0;
+  RUNTIME_SECRET_OPERATION_STATE_PREPARED = 1;
+  RUNTIME_SECRET_OPERATION_STATE_CLAIMED = 2;
+  RUNTIME_SECRET_OPERATION_STATE_COMPLETED = 3;
+  RUNTIME_SECRET_OPERATION_STATE_FAILED = 4;
+}
+
+enum RuntimeSecretFailureCode {
+  RUNTIME_SECRET_FAILURE_CODE_UNSPECIFIED = 0;
+  RUNTIME_SECRET_FAILURE_CODE_KUBERNETES_UNAVAILABLE = 1;
+  RUNTIME_SECRET_FAILURE_CODE_MATERIALIZATION_CONFLICT = 2;
+  RUNTIME_SECRET_FAILURE_CODE_MATERIALIZATION_INVALID = 3;
+  RUNTIME_SECRET_FAILURE_CODE_STALE_SECRET_VERSION = 4;
+  RUNTIME_SECRET_FAILURE_CODE_RECONCILIATION_FAILED = 5;
+  RUNTIME_SECRET_FAILURE_CODE_GRANT_EXPIRED = 6;
+}
+
+enum RuntimeSecretRecoveryAction {
+  RUNTIME_SECRET_RECOVERY_ACTION_UNSPECIFIED = 0;
+  RUNTIME_SECRET_RECOVERY_ACTION_KEEP = 1;
+  RUNTIME_SECRET_RECOVERY_ACTION_DELETE = 2;
+}
+
+message RuntimeSecretDisplayHint {
+  string prefix = 1;
+  string suffix = 2;
+}
+
+message RuntimeSecret {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  string name = 4;
+  string description = 5;
+  RuntimeSecretValueType value_type = 6;
+  string state = 7;
+  int64 current_revision = 8;
+  RuntimeSecretDisplayHint display_hint = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  string namespace = 12;
+  RuntimeSecretRevisionDescriptor current_revision_descriptor = 13;
+}
+
+message ListRuntimeSecretsRequest {
+  string project_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message ListRuntimeSecretsResponse {
+  repeated RuntimeSecret secrets = 1;
+  PageInfo page = 2;
+}
+message GetRuntimeSecretRequest { string secret_ref = 1; }
+message GetRuntimeSecretResponse { RuntimeSecret secret = 1; }
+
+message PrepareCreateRuntimeSecretRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string name = 3;
+  string description = 4;
+  RuntimeSecretValueType value_type = 5;
+  // SHA-256 точных bytes, которые будут переданы secret-broker; для BINARY
+  // вычисляется после строгого base64 decode.
+  string expected_content_sha256 = 6;
+}
+message PrepareCreateRuntimeSecretResponse { RuntimeSecretOperationReceipt operation = 1; }
+
+message PrepareRotateRuntimeSecretRequest {
+  MutationContext mutation = 1;
+  string secret_ref = 2;
+  RuntimeSecretValueType value_type = 3;
+  string expected_content_sha256 = 4;
+}
+message PrepareRotateRuntimeSecretResponse { RuntimeSecretOperationReceipt operation = 1; }
+
+message PrepareRevealRuntimeSecretRequest {
+  MutationContext mutation = 1;
+  string secret_ref = 2;
+}
+message PrepareRevealRuntimeSecretResponse { RuntimeSecretOperationReceipt operation = 1; }
+
+message PrepareRevokeRuntimeSecretRequest {
+  MutationContext mutation = 1;
+  string secret_ref = 2;
+}
+message PrepareRevokeRuntimeSecretResponse { RuntimeSecretOperationReceipt operation = 1; }
+
+message RuntimeSecretOperationReceipt {
+  string operation_grant = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  RuntimeSecretValueType value_type = 3;
+  string operation_ref = 4;
+  RuntimeSecretOperationState state = 5;
+  RuntimeSecret terminal_secret = 6;
+  RuntimeSecretFailureCode failure_code = 7;
+}
+
+message CheckRuntimeSecretWorkReadinessRequest {}
+message CheckRuntimeSecretWorkReadinessResponse { bool ready = 1; }
+
+message ListRuntimeSecretRecoveryWorkRequest { PageRequest page = 1; }
+message RuntimeSecretRecoveryWork {
+  string operation_ref = 1;
+  RuntimeSecretOperationKind kind = 2;
+  string claimant_id = 3;
+  int64 claim_generation = 4;
+  string namespace = 5;
+  string secret_ref = 6;
+  int64 target_revision = 7;
+  string secret_key = 8;
+  string expected_content_sha256 = 9;
+}
+message ListRuntimeSecretRecoveryWorkResponse {
+  repeated RuntimeSecretRecoveryWork operations = 1;
+  PageInfo page = 2;
+}
+
+message ConsumeRuntimeSecretOperationRequest {
+  string operation_grant = 1;
+  string claimant_id = 2;
+}
+message ConsumeRuntimeSecretOperationResponse {
+  string operation_ref = 1;
+  RuntimeSecretOperationKind kind = 2;
+  string project_ref = 3;
+  string secret_ref = 4;
+  string name = 5;
+  string description = 6;
+  RuntimeSecretValueType value_type = 7;
+  string namespace = 8;
+  int64 target_revision = 9;
+  repeated string versioned_secret_names = 10;
+  string secret_key = 11;
+  google.protobuf.Timestamp expires_at = 12;
+  int64 claim_generation = 13;
+  google.protobuf.Timestamp lease_deadline = 14;
+  string expected_content_sha256 = 15;
+  repeated RuntimeSecretRevisionDescriptor revision_descriptors = 16;
+}
+
+message RuntimeSecretRevisionDescriptor {
+  int64 revision = 1;
+  string namespace = 2;
+  string secret_name = 3;
+  string secret_key = 4;
+  string secret_uid = 5;
+  string secret_resource_version = 6;
+  string content_sha256 = 7;
+}
+
+message RuntimeSecretMaterialization {
+  string namespace = 1;
+  string secret_name = 2;
+  string secret_key = 3;
+  string secret_uid = 4;
+  string secret_resource_version = 5;
+  string content_sha256 = 6;
+  RuntimeSecretDisplayHint display_hint = 7;
+}
+message CompleteRuntimeSecretOperationRequest {
+  string operation_ref = 1;
+  RuntimeSecretMaterialization materialization = 2;
+  string claimant_id = 3;
+  int64 claim_generation = 4;
+}
+message CompleteRuntimeSecretOperationResponse { RuntimeSecret secret = 1; }
+
+message FailRuntimeSecretOperationRequest {
+  string operation_ref = 1;
+  string claimant_id = 2;
+  int64 claim_generation = 3;
+  RuntimeSecretFailureCode failure_code = 4;
+}
+message FailRuntimeSecretOperationResponse {
+  string operation_ref = 1;
+  RuntimeSecretOperationState state = 2;
+  RuntimeSecretFailureCode failure_code = 3;
+}
+
+message RecoverRuntimeSecretMaterializationRequest {
+  string operation_ref = 1;
+  RuntimeSecretMaterialization materialization = 2;
+}
+message RecoverRuntimeSecretMaterializationResponse {
+  RuntimeSecretRecoveryAction action = 1;
+  RuntimeSecretOperationState operation_state = 2;
+  RuntimeSecret secret = 3;
+}
+
 message PublishAgentRuntimeConfigurationRequest {
   MutationContext mutation = 1;
   string agent_ref = 2;
@@ -2731,7 +2954,7 @@ message CreateRuntimeEnvironmentSetRequest {
   string name = 3;
   string description = 4;
   repeated RuntimeEnvironmentValue values = 5;
-  repeated RuntimeSecretDescriptor secret_descriptors = 6;
+  repeated RuntimeSecretBinding secret_bindings = 6;
   string image_artifact_ref = 7;
   repeated RuntimeEnvironmentTool tools = 8;
 }
@@ -2744,7 +2967,7 @@ message PublishRuntimeEnvironmentVersionRequest {
   string name = 3;
   string description = 4;
   repeated RuntimeEnvironmentValue values = 5;
-  repeated RuntimeSecretDescriptor secret_descriptors = 6;
+  repeated RuntimeSecretBinding secret_bindings = 6;
   string image_artifact_ref = 7;
   repeated RuntimeEnvironmentTool tools = 8;
 }
@@ -2811,6 +3034,13 @@ message RuntimeEnvironmentValue {
   string value = 2;
 }
 
+// RuntimeSecretBinding является единственным browser-facing input для
+// привязки активной Runtime Secret revision к имени переменной окружения.
+message RuntimeSecretBinding {
+  string name = 1;
+  string secret_ref = 2;
+}
+
 // RuntimeSecretDescriptor содержит только immutable Secret identity и digest.
 // Secret values не входят ни в один control-plane wire contract.
 message RuntimeSecretDescriptor {
@@ -2820,6 +3050,9 @@ message RuntimeSecretDescriptor {
   string secret_uid = 4;
   string secret_resource_version = 5;
   string content_sha256 = 6;
+  string secret_ref = 7;
+  string namespace = 8;
+  int64 revision = 9;
 }
 
 message RuntimeEnvironmentVersion {

@@ -76,5 +76,13 @@ FROM (
   JOIN control_plane.subjects owner_subject ON owner_subject.id = connection.created_by
   WHERE @resource_kind = 'INTEGRATION' AND connection.organization_id = @organization_id::uuid
     AND connection.ref = @resource_ref
+  UNION ALL
+  SELECT secret.id::text, project.id::text, project.ref, owner_subject.ref,
+         jsonb_build_object('PROJECT', project.ref)
+  FROM control_plane.runtime_secrets secret
+  JOIN control_plane.projects project ON project.id = secret.project_id
+  JOIN control_plane.subjects owner_subject ON owner_subject.id = secret.created_by
+  WHERE @resource_kind = 'SECRET' AND secret.organization_id = @organization_id::uuid
+    AND secret.ref = @resource_ref AND secret.state <> 'PROVISIONING'
 ) resolved
 LIMIT 1

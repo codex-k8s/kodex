@@ -42,6 +42,9 @@ CREATE ROLE ira_image_promotion_issuer_g1
 CREATE ROLE ira_automation_scheduler_issuer_g1
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
+CREATE ROLE ira_secret_broker_issuer_g1
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+    NOREPLICATION NOBYPASSRLS;
 CREATE ROLE ira_control_api_gateway_issuer_g1
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
@@ -75,6 +78,7 @@ GRANT internal_rpc_authority_issuer
        ira_image_admission_issuer_g1,
        ira_image_promotion_issuer_g1,
        ira_automation_scheduler_issuer_g1,
+       ira_secret_broker_issuer_g1,
        ira_control_api_gateway_issuer_g1,
        ira_integration_gateway_issuer_g1,
        ira_interaction_gateway_issuer_g1,
@@ -95,6 +99,7 @@ GRANT CONNECT ON DATABASE internal_rpc_authority
        ira_image_admission_issuer_g1,
        ira_image_promotion_issuer_g1,
        ira_automation_scheduler_issuer_g1,
+       ira_secret_broker_issuer_g1,
        ira_control_api_gateway_issuer_g1,
        ira_control_plane_verifier_g1,
        ira_control_plane_resolver_g1,

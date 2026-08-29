@@ -366,10 +366,6 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 	if !ok {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	values, secrets, contractValues, contractSecrets, err := validateEnvironmentPayload(payload.Values, payload.SecretDescriptors)
-	if err != nil {
-		return commandOutcome{}, errs.ErrInvalid
-	}
 	if input.Kind == command.CreateRuntimeEnvironment {
 		if payload.ProjectRef == "" || strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 160 || len(payload.Description) > 2000 {
 			return commandOutcome{}, errs.ErrInvalid
@@ -377,6 +373,11 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
 		if projectID == "" {
 			return commandOutcome{}, errs.ErrNotFound
+		}
+		values, secrets, contractValues, contractSecrets, err := repository.resolveEnvironmentPayload(
+			ctx, tx, scope.organizationID, projectID, payload.Values, payload.SecretBindings)
+		if err != nil {
+			return commandOutcome{}, err
 		}
 		imageArtifactID, image, normalizedTools, selectedTools, resolveErr := repository.resolveRuntimeEnvironmentImage(
 			ctx, tx, scope.organizationID, projectID, payload.ImageArtifactRef, payload.Tools)
@@ -390,14 +391,14 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		environmentRef, _ := newRef("renv")
 		versionRef, _ := newRef("renvv")
 		var environmentID, environmentVersionID, created string
-		err := tx.QueryRow(ctx, queryRuntimeConfigurationCreateEnvironment, pgx.StrictNamedArgs{
+		createErr := tx.QueryRow(ctx, queryRuntimeConfigurationCreateEnvironment, pgx.StrictNamedArgs{
 			"environment_ref": environmentRef, "version_ref": versionRef, "organization_id": scope.organizationID,
 			"project_id": projectID, "name": strings.TrimSpace(payload.Name), "description": strings.TrimSpace(payload.Description),
 			"created_by": scope.actorID, "non_secret_values": values, "secret_descriptors": secrets, "digest": digest,
 			"image_artifact_id": imageArtifactID, "selected_tools": selectedTools,
 		}).Scan(&environmentID, &environmentVersionID, &created)
-		if err != nil {
-			return commandOutcome{}, fmt.Errorf("create runtime environment storage: %w", mapWriteError(err))
+		if createErr != nil {
+			return commandOutcome{}, fmt.Errorf("create runtime environment storage: %w", mapWriteError(createErr))
 		}
 		if created != environmentRef {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -419,7 +420,7 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 	}
 	var environmentID, projectID, projectRef, currentVersionID string
 	var environmentVersion, currentRevision int64
-	err = tx.QueryRow(ctx, queryRuntimeConfigurationLockEnvironment, scope.organizationID, payload.Ref).Scan(
+	err := tx.QueryRow(ctx, queryRuntimeConfigurationLockEnvironment, scope.organizationID, payload.Ref).Scan(
 		&environmentID, &projectID, &projectRef, &environmentVersion, &currentVersionID, &currentRevision)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
@@ -435,6 +436,11 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 	if input.Kind == command.PublishRuntimeEnvironment {
 		if strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 160 || len(payload.Description) > 2000 {
 			return commandOutcome{}, errs.ErrInvalid
+		}
+		values, secrets, contractValues, contractSecrets, payloadErr := repository.resolveEnvironmentPayload(
+			ctx, tx, scope.organizationID, projectID, payload.Values, payload.SecretBindings)
+		if payloadErr != nil {
+			return commandOutcome{}, payloadErr
 		}
 		imageArtifactID, image, normalizedTools, selectedTools, resolveErr := repository.resolveRuntimeEnvironmentImage(
 			ctx, tx, scope.organizationID, projectID, payload.ImageArtifactRef, payload.Tools)
@@ -622,6 +628,44 @@ func validateEnvironmentPayload(values []entity.RuntimeEnvironmentValue, secrets
 	rawValues, _ := json.Marshal(normalizedValues)
 	rawSecrets, _ := json.Marshal(normalizedSecrets)
 	return rawValues, rawSecrets, contractValues, contractSecrets, nil
+}
+
+func (repository *Repository) resolveEnvironmentPayload(
+	ctx context.Context,
+	tx pgx.Tx,
+	organizationID, projectID string,
+	values []entity.RuntimeEnvironmentValue,
+	bindings []entity.RuntimeSecretBinding,
+) ([]byte, []byte, []runtimecontract.RuntimeEnvironmentValue, []runtimecontract.RuntimeSecretProjection, error) {
+	if len(bindings) > 128 {
+		return nil, nil, nil, nil, errs.ErrInvalid
+	}
+	seen := make(map[string]struct{}, len(bindings))
+	descriptors := make([]entity.RuntimeSecretDescriptor, 0, len(bindings))
+	for _, binding := range bindings {
+		if !strings.HasPrefix(binding.SecretRef, "sec_") || len(binding.SecretRef) > 96 ||
+			strings.TrimSpace(binding.Name) != binding.Name || binding.Name == "" {
+			return nil, nil, nil, nil, errs.ErrInvalid
+		}
+		if _, duplicate := seen[binding.Name]; duplicate {
+			return nil, nil, nil, nil, errs.ErrInvalid
+		}
+		seen[binding.Name] = struct{}{}
+		item := entity.RuntimeSecretDescriptor{Name: binding.Name}
+		if err := tx.QueryRow(ctx, queryRuntimeSecretResolveBinding, pgx.StrictNamedArgs{
+			"organization_id": organizationID, "project_id": projectID, "secret_ref": binding.SecretRef,
+		}).Scan(&item.SecretRef, &item.Namespace, &item.Revision, &item.SecretName, &item.SecretKey, &item.SecretUID, &item.SecretResourceVersion, &item.ContentSHA256); errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, nil, nil, errs.ErrNotFound
+		} else if err != nil {
+			return nil, nil, nil, nil, errs.ErrUnavailable
+		}
+		descriptors = append(descriptors, item)
+	}
+	encodedValues, encodedSecrets, contractValues, contractSecrets, err := validateEnvironmentPayload(values, descriptors)
+	if err != nil {
+		return nil, nil, nil, nil, errs.ErrInvalid
+	}
+	return encodedValues, encodedSecrets, contractValues, contractSecrets, nil
 }
 
 func runtimeEnvironmentConfigurationDigest(

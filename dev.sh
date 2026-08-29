@@ -169,6 +169,10 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
       KODEX_E2E_RUN_STATE="$run_state" \
       KODEX_E2E_DISCOVERY_REPORT="$report" \
       KODEX_E2E_RUN_TIMEOUT_MS="$run_timeout_ms" \
+      KODEX_E2E_KUBECONFIG="$kubeconfig" \
+      KODEX_E2E_KUBE_CONTEXT="$context" \
+      KODEX_E2E_REPOSITORY_ROOT="$repository_root" \
+      KODEX_E2E_STATE_DIRECTORY="$state_directory" \
       NODE_EXTRA_CA_CERTS="$state_directory/kodex-local-ca.crt" \
       npm --prefix "$frontend_directory" run test:e2e:discovery; then
       fail 'local browser E2E failed'

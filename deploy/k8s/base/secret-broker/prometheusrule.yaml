@@ -1,0 +1,42 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: secret-broker
+  labels:
+    app.kubernetes.io/name: secret-broker
+spec:
+  groups:
+    - name: secret-broker
+      rules:
+        - alert: SecretBrokerUnavailable
+          expr: absent(kodex_secret_broker_readiness{ready="true"}) or sum(kodex_secret_broker_readiness{ready="true"}) < 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: Secret broker has no ready replica
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/secret-broker.md
+        - alert: SecretBrokerUnexpectedFailures
+          expr: sum(rate(kodex_secret_broker_grpc_requests_total{code=~"Internal|Unknown|DataLoss"}[10m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Secret broker returns unexpected gRPC failures
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/secret-broker.md
+        - alert: SecretBrokerRecoveryBacklog
+          expr: sum(kodex_secret_broker_recovery_backlog) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Secret broker recovery has unresolved materializations
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/secret-broker.md
+        - alert: SecretBrokerRecoveryErrors
+          expr: sum(increase(kodex_secret_broker_recovery_errors_total[10m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Secret broker recovery reports bounded-stage errors
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/secret-broker.md

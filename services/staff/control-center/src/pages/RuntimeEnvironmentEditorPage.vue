@@ -4,16 +4,15 @@ import {
   CheckCircle2,
   CircleAlert,
   Cpu,
-  Eye,
   KeyRound,
   Network,
   Plus,
-  RotateCcw,
   ServerCog,
   ShieldCheck,
   Trash2,
 } from "@lucide/vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import {
@@ -22,15 +21,23 @@ import {
   safeSecretReference,
 } from "@/features/runtime/environment-capabilities";
 import {
-  emptySecretDescriptor,
+  editableSecretBindings,
+  emptySecretBinding,
   validateEnvironmentInput,
 } from "@/features/runtime/environment-form";
 import { useRuntimeStore } from "@/features/runtime/store";
+import { loadRuntimeSecretPage } from "@/features/runtime-secrets/api";
+import {
+  maskedSecretHint,
+  type RuntimeSecret,
+} from "@/features/runtime-secrets/model";
 import type {
   RoleImageArtifact,
   RoleImageArtifactTool,
   RuntimeEnvironmentInput,
   RuntimeEnvironmentSet,
+  RuntimeSecretBinding,
+  RuntimeSecretDescriptor,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
@@ -50,6 +57,7 @@ type EditorSection =
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const runtime = useRuntimeStore();
 const projectRef = computed(() => String(route.params.projectRef));
 const environmentRef = computed(() => {
@@ -73,17 +81,24 @@ const input = reactive<RuntimeEnvironmentInput>({
   imageArtifactRef: "",
   tools: [],
   values: [],
-  secretDescriptors: [],
+  secretBindings: [],
 });
+const selectedSecrets = reactive<Record<string, AsyncEntityOption>>({});
 const selectedImage = ref<AsyncEntityOption>();
 const imageArtifact = ref<RoleImageArtifact>();
 const imageLoading = ref(false);
 const imageProblem = ref<AppProblem>();
 const validation = computed(() => validateEnvironmentInput(input));
 const readiness = computed(() => environmentReadiness(input, current.value));
-const secretReferences = computed(() =>
-  input.secretDescriptors.map(safeSecretReference),
-);
+const secretPickerLabels = computed(() => ({
+  label: t("runtime.chooseRuntimeSecret"),
+  searchPlaceholder: t("runtime.searchRuntimeSecret"),
+  loading: t("runtime.secretPicker.loading"),
+  loadingMore: t("runtime.secretPicker.loadingMore"),
+  empty: t("runtime.secretPicker.empty"),
+  error: t("runtime.secretPicker.error"),
+  retry: t("common.retry"),
+}));
 const versionDigest = computed(() =>
   current.value
     ? compactIdentifier(current.value.currentVersion.digest)
@@ -111,8 +126,8 @@ function sync(value = current.value): void {
     meta: `generation ${String(value.currentVersion.image.recipeGeneration)}`,
   };
   input.values = value.currentVersion.values.map((item) => ({ ...item }));
-  input.secretDescriptors = value.currentVersion.secretDescriptors.map(
-    (item) => ({ ...item }),
+  input.secretBindings = editableSecretBindings(
+    value.currentVersion.secretDescriptors,
   );
 }
 
@@ -138,6 +153,64 @@ async function loadImageArtifact(
 
 function loadImagePage(query: string, cursor?: string) {
   return runtime.searchPromotedRoleImagePage(projectRef.value, query, cursor);
+}
+
+async function loadSecretPage(query: string, cursor?: string) {
+  const page = await loadRuntimeSecretPage(projectRef.value, query, cursor);
+  return {
+    items: page.items.map(runtimeSecretOption),
+    nextPageToken: page.nextPageToken || undefined,
+  };
+}
+
+function runtimeSecretOption(secret: RuntimeSecret): AsyncEntityOption {
+  return {
+    ref: secret.ref,
+    title: secret.name,
+    description: secret.description,
+    meta: `${maskedSecretHint(secret)} · rev ${String(secret.currentRevision)}`,
+    disabled: secret.state !== "ACTIVE",
+    disabledReason:
+      secret.state === "ACTIVE" ? undefined : t("runtime.secretRevoked"),
+  };
+}
+
+function currentDescriptor(
+  binding: RuntimeSecretBinding,
+): RuntimeSecretDescriptor | undefined {
+  return current.value?.currentVersion.secretDescriptors.find(
+    (descriptor) =>
+      descriptor.name === binding.name &&
+      descriptor.secretRef === binding.secretRef,
+  );
+}
+
+function safeCurrentDescriptor(binding: RuntimeSecretBinding) {
+  const descriptor = currentDescriptor(binding);
+  return descriptor ? safeSecretReference(descriptor) : undefined;
+}
+
+function selectedSecret(
+  binding: RuntimeSecretBinding,
+): AsyncEntityOption | undefined {
+  if (!binding.secretRef) return undefined;
+  const selected = selectedSecrets[binding.secretRef];
+  if (selected) return selected;
+  const descriptor = currentDescriptor(binding);
+  if (!descriptor) return undefined;
+  return {
+    ref: descriptor.secretRef,
+    title:
+      [descriptor.secretName, descriptor.secretKey]
+        .filter(Boolean)
+        .join(" / ") || binding.name,
+    description: t("runtime.currentPublishedSecret"),
+    meta: `rev ${descriptor.secretResourceVersion}`,
+  };
+}
+
+function selectSecret(option: AsyncEntityOption): void {
+  selectedSecrets[option.ref] = option;
 }
 
 async function selectImage(option: AsyncEntityOption): Promise<void> {
@@ -188,7 +261,7 @@ function addValue(): void {
 }
 
 function addSecret(): void {
-  input.secretDescriptors.push(emptySecretDescriptor());
+  input.secretBindings.push(emptySecretBinding());
 }
 
 async function load(): Promise<void> {
@@ -224,13 +297,9 @@ async function save(): Promise<void> {
         name: item.name.trim(),
         value: item.value,
       })),
-      secretDescriptors: input.secretDescriptors.map((item) => ({
+      secretBindings: input.secretBindings.map((item) => ({
         name: item.name.trim(),
-        secretName: item.secretName.trim(),
-        secretKey: item.secretKey.trim(),
-        secretUid: item.secretUid.trim(),
-        secretResourceVersion: item.secretResourceVersion.trim(),
-        contentSha256: item.contentSha256.trim(),
+        secretRef: item.secretRef,
       })),
     };
     const saved = current.value
@@ -563,49 +632,19 @@ onMounted(() => void load());
             <div class="section-header">
               <div>
                 <h2>{{ $t("runtime.secretReferences") }}</h2>
-                <p>{{ $t("runtime.secretDescriptorsHelp") }}</p>
+                <p>{{ $t("runtime.secretBindingsHelp") }}</p>
               </div>
               <button class="button" type="button" @click="addSecret">
                 <Plus :size="15" aria-hidden="true" />
-                {{ $t("runtime.addSecretDescriptor") }}
+                {{ $t("runtime.addSecretBinding") }}
               </button>
             </div>
             <div class="secret-warning" role="note">
               <ShieldCheck :size="18" aria-hidden="true" />
               {{ $t("runtime.secretValuesForbidden") }}
             </div>
-            <div class="secret-lifecycle-toolbar">
-              <button
-                class="button"
-                type="button"
-                disabled
-                :title="$t('runtime.secretLifecycleUnavailable')"
-              >
-                <Plus :size="15" aria-hidden="true" />
-                {{ $t("runtime.createSecret") }}
-              </button>
-              <button
-                class="button"
-                type="button"
-                disabled
-                :title="$t('runtime.secretLifecycleUnavailable')"
-              >
-                <RotateCcw :size="15" aria-hidden="true" />
-                {{ $t("runtime.rotateSecret") }}
-              </button>
-              <button
-                class="button"
-                type="button"
-                disabled
-                :title="$t('runtime.secretRevealUnavailable')"
-              >
-                <Eye :size="15" aria-hidden="true" />
-                {{ $t("runtime.revealSecret") }}
-              </button>
-              <span>{{ $t("runtime.secretActionsUnavailable") }}</span>
-            </div>
             <article
-              v-for="(item, index) in input.secretDescriptors"
+              v-for="(item, index) in input.secretBindings"
               :key="index"
               class="secret-descriptor"
             >
@@ -614,13 +653,13 @@ onMounted(() => void load());
                   <strong>
                     {{
                       item.name ||
-                      $t("runtime.secretDescriptor", { number: index + 1 })
+                      $t("runtime.secretBinding", { number: index + 1 })
                     }}
                   </strong>
                   <p>
                     {{
-                      secretReferences[index]?.target ||
-                      $t("runtime.secretReferenceIncomplete")
+                      selectedSecret(item)?.title ||
+                      $t("runtime.secretNotSelected")
                     }}
                   </p>
                 </div>
@@ -628,68 +667,60 @@ onMounted(() => void load());
                   class="icon-button icon-button--danger"
                   type="button"
                   :aria-label="$t('common.delete')"
-                  @click="input.secretDescriptors.splice(index, 1)"
+                  @click="input.secretBindings.splice(index, 1)"
                 >
                   <Trash2 :size="16" aria-hidden="true" />
                 </button>
               </div>
-              <dl class="secret-safe-meta">
+              <div class="secret-binding-fields">
+                <label class="field">
+                  <span>{{ $t("runtime.variableName") }}</span>
+                  <input v-model="item.name" placeholder="SECRET_NAME" />
+                </label>
+                <div class="field">
+                  <span>{{ $t("runtime.runtimeSecret") }}</span>
+                  <AsyncEntityPicker
+                    v-model="item.secretRef"
+                    :selected="selectedSecret(item)"
+                    :load-page="loadSecretPage"
+                    :labels="secretPickerLabels"
+                    :placeholder="$t('runtime.chooseRuntimeSecret')"
+                    :search-placeholder="$t('runtime.searchRuntimeSecret')"
+                    @select="selectSecret"
+                  />
+                </div>
+              </div>
+              <dl
+                v-if="currentDescriptor(item)"
+                class="secret-safe-meta"
+                :aria-label="$t('runtime.currentImmutableDescriptor')"
+              >
                 <div>
-                  <dt>{{ $t("runtime.secretMaskedHint") }}</dt>
-                  <dd>{{ $t("runtime.secretMaskedHintUnavailable") }}</dd>
+                  <dt>{{ $t("runtime.secretTarget") }}</dt>
+                  <dd>{{ safeCurrentDescriptor(item)?.target }}</dd>
                 </div>
                 <div>
                   <dt>{{ $t("runtime.secretResourceVersion") }}</dt>
-                  <dd>{{ secretReferences[index]?.revision || "—" }}</dd>
+                  <dd>{{ safeCurrentDescriptor(item)?.revision }}</dd>
                 </div>
                 <div>
                   <dt>UID</dt>
                   <dd>
-                    <code>{{ secretReferences[index]?.uidHint }}</code>
+                    <code>{{ safeCurrentDescriptor(item)?.uidHint }}</code>
                   </dd>
                 </div>
                 <div>
                   <dt>SHA-256</dt>
                   <dd>
-                    <code>{{ secretReferences[index]?.digestHint }}</code>
+                    <code>{{ safeCurrentDescriptor(item)?.digestHint }}</code>
                   </dd>
                 </div>
               </dl>
-              <details>
-                <summary>{{ $t("runtime.editSecretReference") }}</summary>
-                <div class="secret-grid">
-                  <label class="field">
-                    <span>{{ $t("runtime.variableName") }}</span>
-                    <input v-model="item.name" placeholder="SECRET_NAME" />
-                  </label>
-                  <label class="field">
-                    <span>{{ $t("runtime.secretName") }}</span>
-                    <input v-model="item.secretName" />
-                  </label>
-                  <label class="field">
-                    <span>{{ $t("runtime.secretKey") }}</span>
-                    <input v-model="item.secretKey" />
-                  </label>
-                  <label class="field">
-                    <span>{{ $t("runtime.secretUid") }}</span>
-                    <input v-model="item.secretUid" />
-                  </label>
-                  <label class="field">
-                    <span>{{ $t("runtime.secretResourceVersion") }}</span>
-                    <input v-model="item.secretResourceVersion" />
-                  </label>
-                  <label class="field field--wide">
-                    <span>SHA-256</span>
-                    <input
-                      v-model="item.contentSha256"
-                      maxlength="64"
-                      class="mono-input"
-                    />
-                  </label>
-                </div>
-              </details>
+              <p v-else class="secondary-text">
+                {{ $t("runtime.descriptorGeneratedOnPublish") }}
+              </p>
             </article>
-            <p v-if="!input.secretDescriptors.length" class="secondary-text">
+            <p v-if="!input.secretBindings.length" class="secondary-text">
               {{ $t("runtime.noSecretReferences") }}
             </p>
           </section>
@@ -814,7 +845,7 @@ onMounted(() => void load());
                 </div>
                 <div>
                   <dt>{{ $t("runtime.secretReferences") }}</dt>
-                  <dd>{{ input.secretDescriptors.length }}</dd>
+                  <dd>{{ input.secretBindings.length }}</dd>
                 </div>
                 <div>
                   <dt>{{ $t("runtime.exactImage") }}</dt>
@@ -991,7 +1022,6 @@ onMounted(() => void load());
   font-size: 0.78rem;
 }
 .environment-fields,
-.secret-grid,
 .capability-list,
 .readiness-list {
   display: grid;
@@ -1095,21 +1125,17 @@ onMounted(() => void load());
   background: var(--warning-soft);
   color: var(--warning);
 }
-.secret-lifecycle-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.secret-lifecycle-toolbar > span {
-  color: var(--text-secondary);
-  font-size: 0.82rem;
-}
 .secret-descriptor {
   display: grid;
   gap: 12px;
   padding: 14px 0;
   border-bottom: 1px solid var(--border);
+}
+.secret-binding-fields {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.4fr) minmax(280px, 1fr);
+  gap: 10px;
+  align-items: end;
 }
 .secret-safe-meta,
 .effective-preview dl {
@@ -1126,19 +1152,6 @@ onMounted(() => void load());
 .secret-safe-meta dd,
 .effective-preview dd {
   margin: 0;
-}
-.secret-descriptor details {
-  border: 1px solid var(--border);
-  border-radius: 7px;
-}
-.secret-descriptor summary {
-  padding: 10px 12px;
-  cursor: pointer;
-  font-weight: 600;
-}
-.secret-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 0 12px 12px;
 }
 .mono-input,
 code {
@@ -1202,7 +1215,7 @@ code {
 }
 @media (max-width: 700px) {
   .environment-field-row,
-  .secret-grid,
+  .secret-binding-fields,
   .safe-summary,
   .secret-safe-meta,
   .effective-preview dl,

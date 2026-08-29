@@ -13,7 +13,7 @@ spec:
   matchConditions:
     - name: managed-runtime-ticket
       expression: >-
-        object.metadata.namespace == 'kodex-system' &&
+        object.metadata.namespace == 'kodex-runtime' &&
         has(object.metadata.labels) &&
         'runtime.kodex.dev/managed' in object.metadata.labels &&
         object.metadata.labels['runtime.kodex.dev/managed'] == 'true' &&
@@ -68,7 +68,7 @@ spec:
   matchResources:
     namespaceSelector:
       matchLabels:
-        kubernetes.io/metadata.name: kodex-system
+        kubernetes.io/metadata.name: kodex-runtime
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -85,7 +85,7 @@ spec:
   matchConditions:
     - name: managed-role-runtime
       expression: >-
-        object.metadata.namespace == 'kodex-system' &&
+        object.metadata.namespace == 'kodex-runtime' &&
         has(object.metadata.labels) &&
         'runtime.kodex.dev/managed' in object.metadata.labels &&
         object.metadata.labels['runtime.kodex.dev/managed'] == 'true' &&
@@ -168,4 +168,4 @@ spec:
   matchResources:
     namespaceSelector:
       matchLabels:
-        kubernetes.io/metadata.name: kodex-system
+        kubernetes.io/metadata.name: kodex-runtime

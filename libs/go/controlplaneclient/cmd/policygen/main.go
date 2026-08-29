@@ -119,8 +119,9 @@ func main() {
 		worker("role-image-builder", "control-plane.role-image-builder", controlplaneclient.RoleImageBuilderOperations()),
 		worker("image-admission", "control-plane.image-admission", controlplaneclient.ImageAdmissionOperations()),
 		worker("image-promotion", "control-plane.image-promotion", controlplaneclient.ImagePromotionOperations()),
+		worker("secret-broker", "control-plane.secret-broker", controlplaneclient.SecretBrokerOperations()),
 	}
-	value := document{Version: 1, PolicyRevision: 38, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 39, Policy: policy{
 		TrustDomain: "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
 	}}
@@ -148,7 +149,7 @@ func main() {
 				OperationID: operationID, CallerWorkloadID: item.WorkloadID, CallerSPIFFEID: peer, Issuer: peer,
 				TargetWorkloadID: controlPlaneID, TargetSPIFFEID: controlPlanePeer, Audience: internalAudience,
 				FullMethod: item.Operations[operationID], TargetTLSServerName: controlPlaneTLS,
-				TargetTrustBundleID: "kodex-internal-ca-g1", Permission: operationID,
+				TargetTrustBundleID: "kodex-internal-ca-g1", Permission: permissionForOperation(operationID),
 				ProofProducerID: item.ProducerID, AuthoritySources: item.AuthoritySources, ProjectRequired: projectRequired,
 				LocalCaller: localPeer{UID: 10001, PrimaryGID: 10001, SharedFSGID: 29000},
 				LocalTarget: localPeer{UID: 10001, PrimaryGID: 10001, SharedFSGID: 29000},
@@ -169,6 +170,22 @@ func main() {
 	if err := os.WriteFile(*output, raw, 0o600); err != nil {
 		fatal("write policy: %v", err)
 	}
+}
+
+func permissionForOperation(operationID string) string {
+	permissions := map[string]string{
+		"platform.query.runtime-secrets.list":              "secret.view",
+		"platform.query.runtime-secrets.get":               "secret.view",
+		"platform.command.runtime-secrets.create":          "secret.create",
+		"platform.command.runtime-secrets.rotate":          "secret.rotate",
+		"platform.command.runtime-secrets.reveal":          "secret.reveal",
+		"platform.command.runtime-secrets.revoke":          "secret.revoke",
+		"platform.runtime-secrets.materialization.recover": "platform.runtime-secrets.operations.recover",
+	}
+	if permission := permissions[operationID]; permission != "" {
+		return permission
+	}
+	return operationID
 }
 
 func worker(workloadID, producerID string, operations map[string]string) profile {

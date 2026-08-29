@@ -101,6 +101,7 @@ chmod 0777 "$source_root/services/staff/control-center/node_modules"
 # service restarts are deterministic and do not weaken that boundary.
 go_modules=(
   services/internal/control-plane
+  services/internal/secret-broker
   services/internal/internal-rpc-authority
   services/internal/runtime-controller
   services/external/control-api-gateway
@@ -201,6 +202,7 @@ yq -i '
     (.kind != "PersistentVolumeClaim") and
     (.kind != "IngressRouteTCP") and
     (.kind != "Deployment" or .metadata.name == "control-plane" or
+      .metadata.name == "secret-broker" or
       .metadata.name == "control-api-gateway" or .metadata.name == "egress-gateway" or
       .metadata.name == "runtime-controller" or .metadata.name == "integration-gateway" or
       .metadata.name == "integration-synthetic" or
@@ -440,6 +442,9 @@ patch_go_job() {
 
 patch_go_container Deployment control-plane control-plane services/internal/control-plane ./cmd/control-plane
 patch_go_container Deployment control-plane internal-rpc-authority-verifier services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-verifier
+patch_go_container Deployment secret-broker secret-broker services/internal/secret-broker ./cmd/secret-broker
+patch_go_container Deployment secret-broker internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
+patch_go_container Deployment secret-broker platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
 patch_go_container Deployment control-api-gateway control-api-gateway services/external/control-api-gateway ./cmd/control-api-gateway
 patch_go_container Deployment control-api-gateway internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment egress-gateway egress-gateway services/external/egress-gateway ./cmd/egress-gateway
@@ -473,7 +478,7 @@ yq -i '
   )
 ' "$render"
 
-for workload in control-plane control-api-gateway runtime-controller integration-gateway automation-scheduler session-archive; do
+for workload in control-plane secret-broker control-api-gateway runtime-controller integration-gateway automation-scheduler session-archive; do
   patch_go_init_container "$workload" internal-rpc-authority-socket-init \
     services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-socket-init
 done
@@ -617,6 +622,7 @@ SESSION_ARCHIVE_IMAGE="$session_archive_image" yq -i '
         .workload_id == "control-api-gateway" or
         .workload_id == "control-plane" or
         .workload_id == "integration-gateway" or
+        .workload_id == "secret-broker" or
         .workload_id == "session-archive" or
         .workload_id == "runtime-controller"
       )) |
@@ -676,6 +682,43 @@ yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center"
   fail 'frontend development workload is absent'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$output" >/dev/null ||
   fail 'Control Plane development workload is absent'
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  any(.[]; .kind == "Namespace" and .metadata.name == "kodex-runtime") and
+  any(.[];
+    .kind == "ServiceAccount" and .metadata.name == "agent-runner" and
+    .metadata.namespace == "kodex-runtime") and
+  any(.[];
+    .kind == "RoleBinding" and .metadata.name == "runtime-controller-workloads" and
+    .metadata.namespace == "kodex-runtime" and
+    .subjects == [{"kind":"ServiceAccount","name":"runtime-controller","namespace":"kodex-system"}]) and
+  any(.[];
+    .kind == "RoleBinding" and .metadata.name == "secret-broker-runtime-secrets" and
+    .metadata.namespace == "kodex-runtime" and
+    .subjects == [{"kind":"ServiceAccount","name":"secret-broker","namespace":"kodex-system"}]) and
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "runtime-controller" and
+    .metadata.namespace == "kodex-system" and
+    any(.spec.template.spec.containers[];
+      .name == "runtime-controller" and
+      any(.env[]?; .name == "POD_NAMESPACE" and has("valueFrom")))) and
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "secret-broker" and
+    .metadata.namespace == "kodex-system" and
+    any(.spec.template.spec.containers[];
+      .name == "secret-broker" and
+      any(.env[]?; .name == "POD_NAMESPACE" and .value == "kodex-runtime"))) and
+  any(.[];
+    .kind == "Role" and .metadata.name == "runtime-controller" and
+    .metadata.namespace == "kodex-system" and .rules == [{
+      "apiGroups":["coordination.k8s.io"],
+      "resources":["leases"],
+      "verbs":["get","create","update","patch"]
+    }]) and
+  ([ .[] |
+    select(.kind == "Role" and .metadata.namespace == "kodex-system" and
+      (.metadata.name == "runtime-controller" or .metadata.name == "secret-broker")) |
+    .rules[]? | .resources[]? ] | index("secrets") == null)
+' >/dev/null || fail 'dedicated local runtime namespace boundary is invalid'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "integration-synthetic")' "$output" >/dev/null ||
   fail 'integration-synthetic development workload is absent'
 yq -o=json -I=0 '.' "$output" | jq -s -e --arg image "$session_archive_image" '

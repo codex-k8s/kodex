@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: secret-broker-dashboard
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: secret-broker
+data:
+  secret-broker.json: |
+    {"uid":"kodex-secret-broker","title":"Kodex secret-broker","schemaVersion":39,"panels":[{"type":"stat","title":"Ready replicas","targets":[{"expr":"sum(kodex_secret_broker_readiness{ready=\"true\"})"}]},{"type":"stat","title":"Recovery backlog","targets":[{"expr":"sum(kodex_secret_broker_recovery_backlog)"}]},{"type":"timeseries","title":"gRPC request rate","targets":[{"expr":"sum by (operation,code) (rate(kodex_secret_broker_grpc_requests_total[5m]))"}]},{"type":"timeseries","title":"gRPC latency p95","targets":[{"expr":"histogram_quantile(0.95, sum by (le,operation) (rate(kodex_secret_broker_grpc_request_duration_seconds_bucket[5m])))"}]},{"type":"timeseries","title":"Recovery outcomes","targets":[{"expr":"sum by (outcome) (rate(kodex_secret_broker_recovery_runs_total[5m]))"}]},{"type":"timeseries","title":"Recovery errors","targets":[{"expr":"sum by (stage) (rate(kodex_secret_broker_recovery_errors_total[5m]))"}]}]}

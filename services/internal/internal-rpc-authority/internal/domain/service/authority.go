@@ -248,6 +248,17 @@ func (authority *Authority) Issue(
 			err,
 		)
 	}
+	if !validCredentialAuthentication(
+		proof.CredentialAuthentication,
+		proof.Authority.ActorKind,
+		now,
+		time.Duration(authority.policy.AllowedClockSkewSeconds)*time.Second,
+	) {
+		return "", model.AuthorizationClaims{}, failure.New(
+			failure.BindingMismatch,
+			"credential authentication binding failed",
+		)
+	}
 	proofDigest := sha256.Sum256([]byte(proofCompact))
 	if err := authority.store.Reserve(ctx, repository.Reservation{
 		Kind:        repository.ReservationAuthorityProof,
@@ -310,6 +321,7 @@ func (authority *Authority) Issue(
 		PolicyRevision:           authority.policy.PolicyRevision,
 		SignerGeneration:         authority.policy.SignerGeneration,
 		CallerCredentialRevision: proof.CallerCredentialRevision,
+		CredentialAuthentication: proof.CredentialAuthentication,
 	}
 	compact, err := internalrpcauth.SignCanonicalJSON(
 		claims,
@@ -327,6 +339,27 @@ func (authority *Authority) Issue(
 		)
 	}
 	return compact, claims, nil
+}
+
+func validCredentialAuthentication(value *model.CredentialAuthentication, actorKind string, now time.Time, clockSkew time.Duration) bool {
+	if value == nil {
+		return true
+	}
+	if actorKind != "HUMAN" || value.AuthenticatedAt <= 0 || time.Unix(value.AuthenticatedAt, 0).After(now.Add(clockSkew)) ||
+		strings.TrimSpace(value.ACR) != value.ACR || len(value.ACR) > 128 || len(value.AMR) > 16 {
+		return false
+	}
+	seen := make(map[string]struct{}, len(value.AMR))
+	for _, method := range value.AMR {
+		if method == "" || strings.TrimSpace(method) != method || len(method) > 64 {
+			return false
+		}
+		if _, duplicate := seen[method]; duplicate {
+			return false
+		}
+		seen[method] = struct{}{}
+	}
+	return true
 }
 
 // Verify проверяет контекст, peer, RPC, разрешение и защиту от повтора.

@@ -12,6 +12,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/objectstorage v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcverifier v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
+	github.com/codex-k8s/kodex/libs/go/runtimesecret v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
@@ -134,6 +135,8 @@ replace github.com/codex-k8s/kodex/libs/go/oidcverifier => ../../../libs/go/oidc
 replace github.com/codex-k8s/kodex/libs/go/objectstorage => ../../../libs/go/objectstorage
 
 replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../../../libs/go/runtimecontract
+
+replace github.com/codex-k8s/kodex/libs/go/runtimesecret => ../../../libs/go/runtimesecret
 
 replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
 

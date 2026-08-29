@@ -281,6 +281,10 @@ message VerifiedAuthorizationContext {
   // Ревизия проверенной application credential caller: session revision для
   // человека либо grant revision для service workload. Caller её не задаёт.
   uint64 caller_credential_revision = 22;
+  // Проверенное OIDC auth_time. Для service workload поля 23-25 отсутствуют.
+  google.protobuf.Timestamp credential_authenticated_at = 23;
+  string credential_acr = 24;
+  repeated string credential_amr = 25;
 }
 
 message AuthorizationIssuerServiceCheckReadinessRequest {}

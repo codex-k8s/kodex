@@ -131,7 +131,7 @@ type ConfigOverlayInput struct {
 type RuntimeEnvironmentInput struct {
 	Ref, ProjectRef, Name, Description, PublishedVersionRef, ImageArtifactRef string
 	Values                                                                    []entity.RuntimeEnvironmentValue
-	SecretDescriptors                                                         []entity.RuntimeSecretDescriptor
+	SecretBindings                                                            []entity.RuntimeSecretBinding
 	Tools                                                                     []entity.RuntimeEnvironmentTool
 }
 type RuntimeEnvironmentBindingInput struct {

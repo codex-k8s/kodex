@@ -41,6 +41,7 @@ type Repository struct {
 	roleImages             RoleImageConfig
 	objects                objectstorage.Store
 	integrationDefinitions map[string]integrationpackage.Package
+	runtimeSecretNamespace string
 }
 
 // ProviderCredentialConfig содержит только безопасную identity неизменяемой
@@ -72,8 +73,16 @@ func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string,
 	}
 	return &Repository{
 		pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel,
-		objects: objects, integrationDefinitions: definitions,
+		objects: objects, integrationDefinitions: definitions, runtimeSecretNamespace: "kodex-runtime",
 	}, nil
+}
+
+func (repository *Repository) ConfigureRuntimeSecrets(namespace string) error {
+	if !validDNSLabel(namespace) {
+		return errors.New("runtime secret namespace is invalid")
+	}
+	repository.runtimeSecretNamespace = namespace
+	return nil
 }
 
 func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error {

@@ -19,6 +19,7 @@ const labels: BreadcrumbLabels = {
   environments: "Окружения",
   environment: "Окружение",
   newEnvironment: "Новое окружение",
+  secrets: "Секреты",
   integrations: "Интеграции",
   decisions: "Решения",
   administration: "Администрирование",
@@ -102,6 +103,22 @@ describe("breadcrumbs", () => {
         path: "/projects/project_sales/environments",
       },
       { label: "Новое окружение" },
+    ]);
+  });
+
+  it("сохраняет контекст проекта в каталоге runtime-секретов", () => {
+    expect(
+      buildBreadcrumbs(
+        {
+          routeName: "runtime-secrets",
+          project: { ref: "project_sales", name: "Продажи" },
+        },
+        labels,
+      ),
+    ).toEqual([
+      { label: "Проекты", path: "/projects" },
+      { label: "Продажи", path: "/projects/project_sales" },
+      { label: "Секреты" },
     ]);
   });
 

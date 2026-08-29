@@ -73,6 +73,9 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct platform repository: %w", err)
 	}
+	if err := repository.ConfigureRuntimeSecrets(config.RuntimeSecretNamespace); err != nil {
+		return fmt.Errorf("configure runtime secrets: %w", err)
+	}
 	if err := repository.ConfigureProviderCredential(platformrepository.ProviderCredentialConfig{
 		SecretName: config.DefaultProviderSecretName, SecretUID: config.DefaultProviderSecretUID,
 		SecretResourceVersion: config.DefaultProviderSecretVersion,
@@ -125,6 +128,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		"role-image-builder":   config.RoleImageBuilderGrantTrustFile,
 		"image-admission":      config.ImageAdmissionGrantTrustFile,
 		"image-promotion":      config.ImagePromotionGrantTrustFile,
+		"secret-broker":        config.SecretBrokerGrantTrustFile,
 	}
 	if config.InteractionGrantTrustFile != "" {
 		workerGrantTrustFiles["interaction-gateway"] = config.InteractionGrantTrustFile
@@ -206,6 +210,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterPlatformCommandServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSystemAssistantServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterRuntimeSecretWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSessionArchiveWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterInteractionWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterAccessServiceServer(grpcServer, transport)

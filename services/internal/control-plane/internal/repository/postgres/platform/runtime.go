@@ -253,6 +253,13 @@ func toolCapabilityMatches(tool, capability string, integration, systemAssistant
 	if integration {
 		return tool == "invoke_integration" && capability != ""
 	}
+	switch tool {
+	case runtimecontract.NativeToolKindShell, runtimecontract.NativeToolKindFileChange,
+		runtimecontract.NativeToolKindWebSearch, runtimecontract.NativeToolKindDynamicTool,
+		runtimecontract.NativeToolKindImageView, runtimecontract.NativeToolKindImageGeneration,
+		runtimecontract.NativeToolKindSleep:
+		return capability == ""
+	}
 	expected := map[string]string{
 		"get_configuration_catalog":  "platform.configuration.read",
 		"propose_configuration_plan": "platform.configuration.plan",

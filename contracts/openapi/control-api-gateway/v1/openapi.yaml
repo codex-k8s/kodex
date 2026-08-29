@@ -26,6 +26,7 @@ tags:
   - name: Assistant
   - name: Administration
   - name: Access
+  - name: RuntimeSecrets
 
 paths:
   /api/v1/session:
@@ -34,6 +35,11 @@ paths:
       operationId: createOwnerSession
       security: [{ oidcBearer: [] }]
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OwnerSessionCreateInput' }
       responses:
         '204':
           description: Защищённая browser-сессия создана
@@ -730,6 +736,95 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RuntimeEnvironmentSet' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/projects/{projectRef}/runtime-secrets:
+    parameters: [{ $ref: '#/components/parameters/ProjectRef' }]
+    get:
+      tags: [RuntimeSecrets]
+      operationId: listRuntimeSecrets
+      parameters: [{ $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Метаданные Runtime Secrets без значений
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretPage' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [RuntimeSecrets]
+      operationId: createRuntimeSecret
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeSecretCreateInput' }
+      responses:
+        '201':
+          description: Immutable первая версия Runtime Secret создана
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecret' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secrets/{secretRef}:
+    parameters: [{ $ref: '#/components/parameters/SecretRef' }]
+    get:
+      tags: [RuntimeSecrets]
+      operationId: getRuntimeSecret
+      responses:
+        '200':
+          description: Метаданные Runtime Secret без значения
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecret' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [RuntimeSecrets]
+      operationId: revokeRuntimeSecret
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Runtime Secret и все его версии отозваны
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecret' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secrets/{secretRef}/rotations:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: rotateRuntimeSecret
+      parameters: [{ $ref: '#/components/parameters/SecretRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeSecretRotateInput' }
+      responses:
+        '200':
+          description: Новая immutable версия Runtime Secret создана
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecret' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secrets/{secretRef}/reveal:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: revealRuntimeSecret
+      parameters: [{ $ref: '#/components/parameters/SecretRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Одноразовая выдача значения после fresh OIDC re-auth
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretReveal' }
         default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/role-environments:
@@ -1989,6 +2084,11 @@ components:
       in: path
       required: true
       schema: { $ref: '#/components/schemas/OpaqueRef' }
+    SecretRef:
+      name: secretRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
     RecipeRef:
       name: recipeRef
       in: path
@@ -2084,6 +2184,21 @@ components:
       minLength: 8
       maxLength: 128
       pattern: '^[A-Za-z0-9_-]+$'
+    OwnerSessionCreateInput:
+      type: object
+      additionalProperties: false
+      properties:
+        purpose: { $ref: '#/components/schemas/OwnerSessionPurpose' }
+    OwnerSessionPurpose:
+      type: object
+      additionalProperties: false
+      required: [kind, projectRef, secretRef]
+      properties:
+        kind:
+          type: string
+          enum: [RUNTIME_SECRET_REVEAL]
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretRef: { $ref: '#/components/schemas/OpaqueRef' }
     Timestamp:
       type: string
       format: date-time
@@ -2700,18 +2815,82 @@ components:
       properties:
         name: { type: string, pattern: '^[A-Z_][A-Z0-9_]{0,126}$' }
         value: { type: string, maxLength: 8192 }
+    RuntimeSecretValueType:
+      type: string
+      enum: [STRING, BINARY, JSON]
+    RuntimeSecretDisplayHint:
+      type: object
+      additionalProperties: false
+      required: [prefix, suffix]
+      properties:
+        prefix: { type: string, maxLength: 6 }
+        suffix: { type: string, maxLength: 6 }
+    RuntimeSecret:
+      type: object
+      additionalProperties: false
+      required: [ref, version, projectRef, name, description, valueType, state, currentRevision, createdAt, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        valueType: { $ref: '#/components/schemas/RuntimeSecretValueType' }
+        state: { type: string, enum: [ACTIVE, REVOKED] }
+        currentRevision: { type: integer, format: int64, minimum: 1 }
+        displayHint: { $ref: '#/components/schemas/RuntimeSecretDisplayHint' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    RuntimeSecretPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeSecret' } }
+        nextPageToken: { type: string, maxLength: 1000 }
+    RuntimeSecretCreateInput:
+      type: object
+      additionalProperties: false
+      required: [name, description, valueType, value]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        valueType: { $ref: '#/components/schemas/RuntimeSecretValueType' }
+        value: { type: string, minLength: 1, maxLength: 699052 }
+    RuntimeSecretRotateInput:
+      type: object
+      additionalProperties: false
+      required: [valueType, value]
+      properties:
+        valueType: { $ref: '#/components/schemas/RuntimeSecretValueType' }
+        value: { type: string, minLength: 1, maxLength: 699052 }
+    RuntimeSecretReveal:
+      type: object
+      additionalProperties: false
+      required: [value, valueType]
+      properties:
+        value: { type: string, maxLength: 699052 }
+        valueType: { $ref: '#/components/schemas/RuntimeSecretValueType' }
     RuntimeSecretDescriptor:
       type: object
       additionalProperties: false
       description: Descriptor immutable Kubernetes Secret revision; значение Secret запрещено.
-      required: [name, secretName, secretKey, secretUid, secretResourceVersion, contentSha256]
+      required: [name, secretRef, secretName, secretKey, secretUid, secretResourceVersion, contentSha256]
       properties:
         name: { type: string, pattern: '^[A-Z_][A-Z0-9_]{0,126}$' }
+        secretRef: { $ref: '#/components/schemas/OpaqueRef' }
         secretName: { type: string, minLength: 1, maxLength: 253 }
         secretKey: { type: string, minLength: 1, maxLength: 253 }
         secretUid: { type: string, minLength: 1, maxLength: 128 }
         secretResourceVersion: { type: string, minLength: 1, maxLength: 128 }
         contentSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+    RuntimeSecretBinding:
+      type: object
+      additionalProperties: false
+      required: [name, secretRef]
+      properties:
+        name: { type: string, pattern: '^[A-Z_][A-Z0-9_]{0,126}$' }
+        secretRef: { $ref: '#/components/schemas/OpaqueRef' }
     RuntimeEnvironmentVersion:
       type: object
       additionalProperties: false
@@ -2761,14 +2940,14 @@ components:
     RuntimeEnvironmentInput:
       type: object
       additionalProperties: false
-      required: [name, description, imageArtifactRef, tools, values, secretDescriptors]
+      required: [name, description, imageArtifactRef, tools, values, secretBindings]
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
         imageArtifactRef: { $ref: '#/components/schemas/OpaqueRef' }
         tools: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeEnvironmentTool' } }
         values: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeEnvironmentValue' } }
-        secretDescriptors: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeSecretDescriptor' } }
+        secretBindings: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeSecretBinding' } }
     RuntimeEnvironmentRollbackInput:
       type: object
       additionalProperties: false

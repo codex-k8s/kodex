@@ -14,6 +14,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	texti18n "github.com/codex-k8s/kodex/libs/go/i18n"
+	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -25,6 +26,7 @@ const maximumJSONBody = 1 << 20
 
 type Server struct {
 	control          *controlplaneclient.Client
+	secrets          secretbrokerv1.SecretBrokerServiceClient
 	boundary         *boundary.Boundary
 	logger           *slog.Logger
 	realtime         http.Handler
@@ -37,6 +39,14 @@ func New(control *controlplaneclient.Client, security *boundary.Boundary, logger
 		return nil, errors.New("control API HTTP server configuration is invalid")
 	}
 	return &Server{control: control, boundary: security, logger: logger, texts: texts}, nil
+}
+
+func (server *Server) AttachSecretBroker(client secretbrokerv1.SecretBrokerServiceClient) error {
+	if client == nil || server.secrets != nil {
+		return errors.New("secret broker attachment is invalid")
+	}
+	server.secrets = client
+	return nil
 }
 
 func (server *Server) AttachRealtime(run, platform http.Handler) {
@@ -87,11 +97,26 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 		writeLocalProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
 		return
 	}
-	claims, encoded, csrf, err := server.boundary.IssueSession(principal, bearer)
+	body, ok := decodeOptionalJSON[generated.OwnerSessionCreateInput](writer, request)
+	if !ok {
+		return
+	}
+	var purpose *boundary.SessionPurpose
+	if body != nil && body.Purpose != nil {
+		purpose = &boundary.SessionPurpose{
+			Kind: string(body.Purpose.Kind), ProjectRef: body.Purpose.ProjectRef, SecretRef: body.Purpose.SecretRef,
+		}
+	}
+	claims, encoded, csrf, err := server.boundary.IssueSession(principal, bearer, purpose)
 	if err != nil {
-		if errors.Is(err, boundary.ErrRateLimited) {
+		switch {
+		case errors.Is(err, boundary.ErrRateLimited):
 			writeLocalProblem(writer, http.StatusTooManyRequests, "RATE_LIMITED", true)
-		} else {
+		case errors.Is(err, boundary.ErrSessionPurposeInvalid):
+			writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+		case errors.Is(err, boundary.ErrFreshAuthenticationRequired):
+			writeLocalProblem(writer, http.StatusForbidden, "FRESH_AUTHENTICATION_REQUIRED", false)
+		default:
 			writeLocalProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
 		}
 		return
@@ -141,6 +166,24 @@ func decodeJSON[T any](writer http.ResponseWriter, request *http.Request) (T, bo
 		return result, false
 	}
 	return result, true
+}
+
+func decodeOptionalJSON[T any](writer http.ResponseWriter, request *http.Request) (*T, bool) {
+	decoder := json.NewDecoder(io.LimitReader(request.Body, maximumJSONBody+1))
+	decoder.DisallowUnknownFields()
+	var result T
+	if err := decoder.Decode(&result); errors.Is(err, io.EOF) {
+		return nil, true
+	} else if err != nil {
+		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return nil, false
+	}
+	var extra any
+	if decoder.Decode(&extra) != io.EOF {
+		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return nil, false
+	}
+	return &result, true
 }
 
 func mutation(idempotency, etag string) (*controlplanev1.MutationContext, bool) {

@@ -209,6 +209,7 @@ func castRuntimeEnvironmentVersion(value entity.RuntimeEnvironmentVersion) *cont
 	}
 	for _, item := range value.SecretDescriptors {
 		result.SecretDescriptors = append(result.SecretDescriptors, &controlplanev1.RuntimeSecretDescriptor{Name: item.Name,
+			SecretRef: item.SecretRef, Namespace: item.Namespace, Revision: item.Revision,
 			SecretName: item.SecretName, SecretKey: item.SecretKey, SecretUid: item.SecretUID,
 			SecretResourceVersion: item.SecretResourceVersion, ContentSha256: item.ContentSHA256})
 	}
