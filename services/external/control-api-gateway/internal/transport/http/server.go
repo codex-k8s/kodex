@@ -316,6 +316,11 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 		return items, nil
 	}
 	if field.Kind() == protoreflect.MessageKind || field.Kind() == protoreflect.GroupKind {
+		if field.Message().FullName() == "google.protobuf.Struct" ||
+			field.Message().FullName() == "google.protobuf.Value" ||
+			field.Message().FullName() == "google.protobuf.ListValue" {
+			return value, nil
+		}
 		item, ok := value.(map[string]any)
 		if !ok {
 			return value, nil
@@ -388,7 +393,7 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 	}
 }
 
-var enumPrefixes = []string{"PLATFORM_ROLE_", "PROJECT_PERMISSION_", "NEXT_ACTION_", "ENTITY_LIFECYCLE_", "AGENT_STATE_", "INSTRUCTION_STATE_", "WORKFLOW_STATE_", "RUN_STATE_", "RUN_SOURCE_", "RUN_NODE_TYPE_", "RUN_NODE_STATE_", "RUN_EDGE_TYPE_", "RUN_EVENT_TYPE_", "OWNER_GATE_STATE_", "OWNER_GATE_DECISION_", "ARTIFACT_SCAN_STATE_", "ARTIFACT_SOURCE_", "SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "TYPE_"}
+var enumPrefixes = []string{"PLATFORM_ROLE_", "PROJECT_PERMISSION_", "NEXT_ACTION_", "ENTITY_LIFECYCLE_", "AGENT_STATE_", "INSTRUCTION_STATE_", "WORKFLOW_STATE_", "RUN_STATE_", "RUN_SOURCE_", "RUN_NODE_TYPE_", "RUN_NODE_STATE_", "RUN_EDGE_TYPE_", "RUN_EVENT_TYPE_", "OWNER_GATE_STATE_", "OWNER_GATE_DECISION_", "ARTIFACT_SCAN_STATE_", "ARTIFACT_SOURCE_", "SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_", "ACTION_", "TYPE_"}
 
 func normalize(value any) {
 	switch current := value.(type) {
@@ -432,6 +437,7 @@ func normalize(value any) {
 			current["system"] = true
 			current["removable"] = false
 		}
+		normalizeAssistantShape(current)
 		if targetType, targetRef, ok := target(current); ok {
 			current["type"] = targetType
 			current["ref"] = targetRef
@@ -444,6 +450,54 @@ func normalize(value any) {
 			flattenWorkflow(current)
 		}
 		ensureRequiredCollections(current)
+	}
+}
+
+func normalizeAssistantShape(value map[string]any) {
+	if _, hasRoute := value["route"]; hasRoute {
+		if _, hasOperations := value["allowedOperations"]; hasOperations {
+			for _, key := range []string{"entityKind", "entityRef", "entityName"} {
+				if _, exists := value[key]; !exists {
+					value[key] = ""
+				}
+			}
+		}
+	}
+	if _, isPlan := value["auditSummary"]; isPlan {
+		if _, exists := value["applied"]; !exists {
+			value["applied"] = false
+		}
+	}
+	if _, hasType := value["type"]; !hasType {
+		return
+	}
+	if _, hasAction := value["action"]; !hasAction {
+		return
+	}
+	targetKind, hasTargetKind := value["targetKind"]
+	if !hasTargetKind {
+		return
+	}
+	target := map[string]any{"kind": targetKind, "name": ""}
+	if targetName, exists := value["targetName"]; exists {
+		target["name"] = targetName
+	}
+	if targetRef, exists := value["targetRef"]; exists && targetRef != "" {
+		target["ref"] = targetRef
+	}
+	value["target"] = target
+	delete(value, "targetKind")
+	delete(value, "targetRef")
+	delete(value, "targetName")
+	for _, key := range []string{"parameters", "before", "after"} {
+		if _, exists := value[key]; !exists {
+			value[key] = map[string]any{}
+		}
+	}
+	for _, key := range []string{"selected", "permitted"} {
+		if _, exists := value[key]; !exists {
+			value[key] = false
+		}
 	}
 }
 

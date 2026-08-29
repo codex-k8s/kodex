@@ -142,3 +142,25 @@ func TestCastPlanBoundsOperationTitleWithoutChangingSummary(t *testing.T) {
 		t.Fatalf("operation summary = %q", operation.GetSummary())
 	}
 }
+
+func TestCastConversationUsesPublicAssistantTurnShape(t *testing.T) {
+	t.Parallel()
+
+	conversation := castConversation(entity.AssistantConversation{
+		Ref: "cnv-example", ProjectRef: "prj-example",
+		LatestPlan: &entity.AssistantPlan{
+			Ref: "pln-example", ConversationRef: "cnv-example", ProjectRef: "prj-example",
+			State: "DRAFT", Summary: "План готов", Version: 1, Revision: 1,
+		},
+	})
+	if len(conversation.GetTurns()) != 1 {
+		t.Fatalf("assistant plan turn count = %d, want 1", len(conversation.GetTurns()))
+	}
+	turn := conversation.GetTurns()[0]
+	if turn.GetRole() != "ASSISTANT" || turn.GetState() != "COMPLETED" {
+		t.Fatalf("assistant plan turn = role %q state %q", turn.GetRole(), turn.GetState())
+	}
+	if turn.GetPlan().GetConversationRef() != "cnv-example" || turn.GetPlan().GetProjectRef() != "prj-example" {
+		t.Fatalf("assistant plan lineage was lost: %#v", turn.GetPlan())
+	}
+}

@@ -112,7 +112,7 @@ export function conversationMatchesContext(
   context: AssistantContextDescriptor,
 ): boolean {
   return (
-    conversation.context.entityKind === context.entityKind &&
-    conversation.context.entityRef === context.entityRef
+    (conversation.context.entityKind ?? "") === context.entityKind &&
+    (conversation.context.entityRef ?? "") === context.entityRef
   );
 }

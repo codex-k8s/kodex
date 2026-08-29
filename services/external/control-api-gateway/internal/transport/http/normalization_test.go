@@ -9,6 +9,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type localizingRecorder struct{ *httptest.ResponseRecorder }
@@ -173,6 +174,57 @@ func TestMessageMapMaterializesNestedEmptyCollections(t *testing.T) {
 	conversation := conversations[0].(map[string]any)
 	if turns, ok := conversation["turns"].([]any); !ok || len(turns) != 0 {
 		t.Fatalf("пустой обязательный turns не материализован: %#v", conversation)
+	}
+}
+
+func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
+	t.Parallel()
+
+	parameters, err := structpb.NewStruct(map[string]any{"name": "Продажи"})
+	if err != nil {
+		t.Fatalf("create parameters: %v", err)
+	}
+	value, err := messageMap(&controlplanev1.AssistantConversation{
+		Ref: "cnv-example", Version: 3, Title: "Диалог", TitleSource: "SERVER_DEFAULT", TitleRevision: 1,
+		Context: &controlplanev1.AssistantContextDescriptor{Route: "/onboarding"},
+		Turns: []*controlplanev1.AssistantTurn{{
+			Ref: "pln-example", Sequence: 2, Role: "ASSISTANT", State: "COMPLETED",
+			Plan: &controlplanev1.AssistantPlan{
+				Ref: "pln-example", Version: 1, Revision: 1, ConversationRef: "cnv-example",
+				State: controlplanev1.AssistantPlanState_ASSISTANT_PLAN_STATE_DRAFT, AuditSummary: "Создать проект",
+				ContentDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Operations: []*controlplanev1.AssistantPlanOperation{{
+					Ref: "operation-001", Type: controlplanev1.AssistantPlanOperation_TYPE_CREATE_PROJECT,
+					Action: controlplanev1.AssistantPlanOperation_ACTION_CREATE, TargetKind: "PROJECT", TargetName: "Продажи",
+					Parameters: parameters,
+				}},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	context := value["context"].(map[string]any)
+	for _, key := range []string{"entityKind", "entityRef", "entityName"} {
+		if context[key] != "" {
+			t.Fatalf("required assistant context field %s = %#v", key, context[key])
+		}
+	}
+	turn := value["turns"].([]any)[0].(map[string]any)
+	plan := turn["plan"].(map[string]any)
+	if plan["state"] != "DRAFT" || plan["applied"] != false {
+		t.Fatalf("assistant plan state is not public: %#v", plan)
+	}
+	operation := plan["operations"].([]any)[0].(map[string]any)
+	if operation["type"] != "CREATE_PROJECT" || operation["action"] != "CREATE" {
+		t.Fatalf("assistant operation enums are not public: %#v", operation)
+	}
+	target := operation["target"].(map[string]any)
+	if target["kind"] != "PROJECT" || target["name"] != "Продажи" {
+		t.Fatalf("assistant operation target is invalid: %#v", target)
+	}
+	if !reflect.DeepEqual(operation["parameters"], map[string]any{"name": "Продажи"}) {
+		t.Fatalf("protobuf Struct was corrupted: %#v", operation["parameters"])
 	}
 }
 

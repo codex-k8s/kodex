@@ -712,8 +712,16 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 		conversationID,
 	).Scan(
 		&conversation.Title,
+		&conversation.TitleSource,
+		&conversation.TitleRevision,
 		&conversation.State,
 		&conversation.Version,
+		&conversation.Context.Route,
+		&conversation.Context.EntityKind,
+		&conversation.Context.EntityRef,
+		&conversation.Context.EntityName,
+		&conversation.Context.EntityVersion,
+		&conversation.Context.AllowedOperations,
 		&conversation.CreatedAt,
 		&conversation.UpdatedAt,
 	); err != nil {

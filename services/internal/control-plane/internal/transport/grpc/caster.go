@@ -501,7 +501,7 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: int64(index + 1), Role: turn.Actor, Content: turn.Content, State: turn.State, CreatedAt: timestamp(turn.CreatedAt)})
 	}
 	if value.LatestPlan != nil {
-		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: value.LatestPlan.Ref, Sequence: int64(len(result.Turns) + 1), Role: "SYSTEM_ASSISTANT", Content: value.LatestPlan.Summary, State: value.LatestPlan.State, Plan: castPlan(value.LatestPlan), CreatedAt: timestamp(value.LatestPlan.CreatedAt)})
+		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: value.LatestPlan.Ref, Sequence: int64(len(result.Turns) + 1), Role: "ASSISTANT", Content: value.LatestPlan.Summary, State: "COMPLETED", Plan: castPlan(value.LatestPlan), CreatedAt: timestamp(value.LatestPlan.CreatedAt)})
 	}
 	return result
 }

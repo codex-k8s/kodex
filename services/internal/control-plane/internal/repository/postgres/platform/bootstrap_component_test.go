@@ -2356,6 +2356,11 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if err != nil || turn.Plan != nil {
 		t.Fatalf("queue assistant turn without keyword fallback: plan=%#v err=%v", turn.Plan, err)
 	}
+	if turn.Conversation == nil || turn.Conversation.TitleSource != "SERVER_DEFAULT" ||
+		turn.Conversation.TitleRevision != 1 || turn.Conversation.Context.Route != "" ||
+		len(turn.Conversation.Context.AllowedOperations) != 2 {
+		t.Fatalf("assistant turn returned incomplete conversation: %#v", turn.Conversation)
+	}
 	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-claim-1"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
 	if err != nil || len(claimed.RuntimeItems) != 1 {

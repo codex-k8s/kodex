@@ -1469,6 +1469,8 @@ func (repository *Repository) attachConversation(ctx context.Context, scope scop
 	)
 	if err == nil {
 		_ = json.Unmarshal(raw, &plan.Operations)
+		plan.ConversationRef = item.Ref
+		plan.ProjectRef = item.ProjectRef
 		item.LatestPlan = &plan
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return errs.ErrUnavailable

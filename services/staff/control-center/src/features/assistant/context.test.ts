@@ -104,4 +104,18 @@ describe("assistant route context", () => {
       ),
     ).toBe(true);
   });
+
+  it("сопоставляет глобальный контекст со старым ответом без пустых scalar", () => {
+    const current = resolveAssistantContext(
+      route("/onboarding", {}),
+      sources,
+    ).descriptor;
+
+    expect(
+      conversationMatchesContext(
+        { context: {} as { entityKind: string; entityRef: string } },
+        current,
+      ),
+    ).toBe(true);
+  });
 });
