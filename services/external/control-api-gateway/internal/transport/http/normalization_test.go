@@ -107,7 +107,7 @@ func TestMessageMapConvertsProtoInt64ToOpenAPIJSONNumber(t *testing.T) {
 	if value["version"] != float64(7) {
 		t.Fatalf("version не преобразован в JSON number: %#v", value)
 	}
-	for _, key := range []string{"operations", "nextActions"} {
+	for _, key := range []string{"operations", "validationProblems", "nextActions"} {
 		if items, ok := value[key].([]any); !ok || len(items) != 0 {
 			t.Fatalf("пустая обязательная коллекция %s не материализована: %#v", key, value)
 		}
@@ -225,6 +225,35 @@ func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
 	}
 	if !reflect.DeepEqual(operation["parameters"], map[string]any{"name": "Продажи"}) {
 		t.Fatalf("protobuf Struct was corrupted: %#v", operation["parameters"])
+	}
+	if problems, ok := operation["validationProblems"].([]any); !ok || len(problems) != 0 {
+		t.Fatalf("assistant operation validation problems are invalid: %#v", operation)
+	}
+}
+
+func TestMessageMapMaterializesEmptyAssistantPlanReceiptCollections(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.AssistantPlanReceipt{
+		Ref: "rcp-example", PlanRef: "pln-example", PlanRevision: 1,
+		Outcome: "APPLIED", Operations: []*controlplanev1.AssistantPlanOperationReceipt{{
+			OperationRef: "operation-001", ResourceRef: "prj-example", Outcome: "APPLIED", AuditRef: "aud-example",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	operationReceipts, ok := value["operationReceipts"].([]any)
+	if !ok || len(operationReceipts) != 1 {
+		t.Fatalf("assistant receipt operations are not normalized: %#v", value)
+	}
+	if _, exists := value["operations"]; exists {
+		t.Fatalf("internal receipt operations leaked into the public response: %#v", value)
+	}
+	for _, key := range []string{"conflicts", "auditRefs", "createdResourceRefs"} {
+		if items, ok := value[key].([]any); !ok || len(items) != 0 {
+			t.Fatalf("empty assistant receipt collection %s is not materialized: %#v", key, value)
+		}
 	}
 }
 

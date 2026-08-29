@@ -467,6 +467,22 @@ func normalizeAssistantShape(value map[string]any) {
 		if _, exists := value["applied"]; !exists {
 			value["applied"] = false
 		}
+		for _, key := range []string{"operations", "validationProblems", "nextActions"} {
+			if _, exists := value[key]; !exists {
+				value[key] = []any{}
+			}
+		}
+	}
+	if _, isReceipt := value["planRevision"]; isReceipt {
+		if operations, exists := value["operations"]; exists {
+			value["operationReceipts"] = operations
+			delete(value, "operations")
+		}
+		for _, key := range []string{"operationReceipts", "conflicts", "auditRefs", "createdResourceRefs"} {
+			if _, exists := value[key]; !exists {
+				value[key] = []any{}
+			}
+		}
 	}
 	if _, hasType := value["type"]; !hasType {
 		return
@@ -498,6 +514,9 @@ func normalizeAssistantShape(value map[string]any) {
 		if _, exists := value[key]; !exists {
 			value[key] = false
 		}
+	}
+	if _, exists := value["validationProblems"]; !exists {
+		value["validationProblems"] = []any{}
 	}
 }
 
