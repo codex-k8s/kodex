@@ -31,7 +31,7 @@ test("mobile shell, помощник и граф доступны без гор�
   ).toBeVisible();
 
   await gotoWithRetry(page, `/projects/${projectRef}/runs`);
-  const run = page.locator(".entity-row").first();
+  const run = page.locator(".run-work-item").first();
   await expect(run).toBeVisible();
   await run.click();
   const graph = page.getByRole("tree", { name: "Связи графа" });

@@ -183,11 +183,8 @@ const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
     flex: 1;
   }
   .runs-board__kanban {
-    grid-template-columns: repeat(4, minmax(280px, 82vw));
-    scroll-snap-type: x proximity;
-  }
-  .runs-lane {
-    scroll-snap-align: start;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: hidden;
   }
 }
 </style>

@@ -1019,8 +1019,9 @@ test.describe("web-only fresh installation", () => {
       sessionReadback.initial.sessionRef,
     );
     await page.getByRole("radio", { name: /Продолжить существующую/ }).check();
-    await page.locator("#new-run-session-picker-trigger").click();
-    const sessionPicker = page.locator(".new-run-session-picker__overlay");
+    const sessionPicker = page.getByRole("dialog", {
+      name: "Выберите предыдущую сессию",
+    });
     await expect(sessionPicker).toBeVisible();
     await sessionPicker
       .locator('input[type="search"]')
@@ -1897,9 +1898,10 @@ test.describe("web-only fresh installation", () => {
       );
       await dialog.getByRole("button", { name: "Создать привязку" }).click();
       expect((await creation).status()).toBe(201);
-      const card = page.locator(".binding-card").filter({
-        hasText: setup.candidate.displayName,
-      });
+      const card = page
+        .locator(".binding-card")
+        .filter({ hasText: setup.candidate.displayName })
+        .filter({ hasText: accessRoleName });
       await expect(card).toContainText(accessRoleName);
       await expect(card).toContainText(coordinatorName);
     }
