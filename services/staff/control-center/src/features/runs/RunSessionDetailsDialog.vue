@@ -6,6 +6,7 @@ import { useI18n } from "vue-i18n";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
 import type {
   Agent,
+  Artifact,
   Run,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -20,6 +21,7 @@ const props = withDefaults(
     node: RunNode;
     nodes: RunNode[];
     events: PresentedRunEvent[];
+    artifacts: Artifact[];
     agent?: Agent;
   }>(),
   { agent: undefined },
@@ -32,6 +34,14 @@ const parentNode = computed(() =>
 );
 const nodeEvents = computed(() =>
   props.events.filter((event) => event.nodeRef === props.node.ref),
+);
+const nodeArtifacts = computed(() => {
+  const refs = new Set(props.node.artifactRefs);
+  return props.artifacts.filter((artifact) => refs.has(artifact.ref));
+});
+const sessionNode = computed(
+  () =>
+    props.node.type === "ROOT_PROCESS" || props.node.type === "AGENT_EXECUTION",
 );
 
 function formatDate(value?: string): string {
@@ -48,6 +58,9 @@ function formatDate(value?: string): string {
         </span>
         <div>
           <strong>{{ node.role || $t(`runs.nodeTypes.${node.type}`) }}</strong>
+          <small>
+            {{ $t(sessionNode ? "runs.sessionNode" : "runs.controlNode") }}
+          </small>
           <p>
             {{
               node.progressSummary ||
@@ -69,6 +82,10 @@ function formatDate(value?: string): string {
             </div>
             <div>
               <dt>{{ $t("runs.attempt", { attempt: node.attempt }) }}</dt>
+              <dd>{{ node.attempt }}</dd>
+            </div>
+            <div>
+              <dt>{{ $t("agents.role") }}</dt>
               <dd>{{ node.role || $t(`runs.nodeTypes.${node.type}`) }}</dd>
             </div>
             <div v-if="parentNode">
@@ -92,6 +109,10 @@ function formatDate(value?: string): string {
             <div>
               <dt>{{ $t("common.source") }}</dt>
               <dd>{{ $t(`runs.source.${run.source}`) }}</dd>
+            </div>
+            <div>
+              <dt>{{ $t("runs.runContext") }}</dt>
+              <dd>{{ run.title }}</dd>
             </div>
             <div>
               <dt>{{ $t("common.input") }}</dt>
@@ -134,7 +155,21 @@ function formatDate(value?: string): string {
         <section class="session-details__section">
           <h3>{{ $t("agents.instructions") }}</h3>
           <p class="session-details__unavailable">
-            {{ $t("common.unavailable") }}
+            {{ $t("runs.renderedPromptUnavailable") }}
+          </p>
+        </section>
+
+        <section class="session-details__section">
+          <h3>{{ $t("runs.artifacts") }}</h3>
+          <div v-if="nodeArtifacts.length" class="session-details__files">
+            <div v-for="artifact in nodeArtifacts" :key="artifact.ref">
+              <span>{{ artifact.fileName }}</span>
+              <small>{{ artifact.mediaType }} · v{{ artifact.revision }}</small>
+              <StatusBadge :state="artifact.scanState" />
+            </div>
+          </div>
+          <p v-else class="session-details__unavailable">
+            {{ $t("common.empty") }}
           </p>
         </section>
       </div>
@@ -169,6 +204,10 @@ function formatDate(value?: string): string {
                 <summary>{{ $t("runs.toolParameters") }}</summary>
                 <SafeStructuredData :value="event.toolCall.safeParameters" />
               </details>
+              <details v-if="event.toolCall?.safeResult">
+                <summary>{{ $t("runs.toolResult") }}</summary>
+                <SafeMarkdown :content="event.toolCall.safeResult" />
+              </details>
             </article>
           </li>
         </ol>
@@ -200,6 +239,10 @@ function formatDate(value?: string): string {
   margin: 3px 0 0;
   color: var(--muted);
   font-size: 0.84rem;
+}
+.session-details__summary small {
+  color: var(--subtle);
+  font-size: 0.74rem;
 }
 .session-details__avatar,
 .session-details__event-icon {
@@ -264,6 +307,33 @@ function formatDate(value?: string): string {
   border-radius: 8px;
   color: var(--muted);
   background: var(--panel);
+}
+.session-details__files {
+  display: grid;
+}
+.session-details__files > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.session-details__files > div:last-child {
+  border-bottom: 0;
+}
+.session-details__files span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-details__files small {
+  grid-column: 1;
+  color: var(--subtle);
+}
+.session-details__files :deep(.status-badge) {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
 }
 .session-details__activity ol {
   display: grid;

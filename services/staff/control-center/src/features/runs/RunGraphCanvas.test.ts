@@ -76,6 +76,8 @@ async function render(): Promise<string> {
             zoomOut: "Уменьшить масштаб",
             fitGraph: "Вместить",
             waitingForActivity: "Ожидает начала работы",
+            sessionNode: "Сессия",
+            controlNode: "Контрольный этап",
             callback: "Ответ дочернего запуска",
             retry: "Повторить попытку",
             continueTask: "Дополнительное задание",
@@ -132,6 +134,8 @@ describe("RunGraphCanvas", () => {
     expect(html).toContain("canvas-node--future");
     expect(html).toContain("canvas-node--active");
     expect(html).toContain('data-node-future="true"');
+    expect(html).toContain('data-node-surface="session"');
+    expect(html).toContain("Сессия");
     expect(html).toContain("В очереди");
   });
 });

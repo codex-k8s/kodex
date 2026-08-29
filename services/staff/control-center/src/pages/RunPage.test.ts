@@ -74,6 +74,10 @@ function messages() {
       zoomOut: "Уменьшить",
       fitGraph: "Вместить",
       waitingForActivity: "Ожидает начала работы",
+      sessionNode: "Сессия",
+      controlNode: "Контрольный этап",
+      toolResult: "Безопасный результат",
+      artifactUnavailable: "Описание файла недоступно",
       source: {
         CONTROL_CENTER: "Control Center",
         AGENT_DELEGATION: "Делегирование",

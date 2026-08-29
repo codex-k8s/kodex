@@ -397,6 +397,21 @@ function nodeIcon(type: RunNode["type"]): Component {
   }
 }
 
+function nodeSurface(node: RunNode): "session" | "control" {
+  return node.type === "ROOT_PROCESS" || node.type === "AGENT_EXECUTION"
+    ? "session"
+    : "control";
+}
+
+function nodeAccessibleLabel(node: RunNode): string {
+  return [
+    t(`runs.${nodeSurface(node)}Node`),
+    node.displayName,
+    node.role || t(`runs.nodeTypes.${node.type}`),
+    t(`states.${node.state}`),
+  ].join(" · ");
+}
+
 function moveOutlineFocus(event: KeyboardEvent): void {
   if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
   const items = Array.from(
@@ -570,6 +585,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
           class="canvas-node"
           :data-node-ref="item.node.ref"
           :data-node-type="item.node.type"
+          :data-node-surface="nodeSurface(item.node)"
           :data-node-future="futureRefs.has(item.node.ref) || undefined"
           :class="[
             'canvas-node--' + item.node.state.toLowerCase(),
@@ -577,6 +593,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
               'canvas-node--selected': item.node.ref === selectedRef,
               'canvas-node--future': futureRefs.has(item.node.ref),
               'canvas-node--active': activeRefs.has(item.node.ref),
+              'canvas-node--session': nodeSurface(item.node) === 'session',
+              'canvas-node--control': nodeSurface(item.node) === 'control',
             },
           ]"
           :style="{
@@ -586,6 +604,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
             height: runGraphNodeHeight + 'px',
           }"
           :aria-pressed="item.node.ref === selectedRef"
+          :aria-label="nodeAccessibleLabel(item.node)"
           @click="handleNodeClick($event, item.node)"
         >
           <span class="canvas-node__heading">
@@ -696,6 +715,14 @@ function compareNodes(left: RunNode, right: RunNode): number {
         </span>
       </div>
       <div class="graph-legend__states">
+        <span class="graph-legend__item">
+          <i class="graph-legend__node graph-legend__node--session" />
+          {{ $t("runs.sessionNode") }}
+        </span>
+        <span class="graph-legend__item">
+          <i class="graph-legend__node graph-legend__node--control" />
+          {{ $t("runs.controlNode") }}
+        </span>
         <StatusBadge state="RUNNING" />
         <StatusBadge state="WAITING" />
         <StatusBadge state="SUCCEEDED" />
@@ -852,6 +879,12 @@ function compareNodes(left: RunNode, right: RunNode): number {
 .canvas-node--failed,
 .canvas-node--cancelled {
   border-left-color: var(--danger);
+}
+.canvas-node--session {
+  border-left: 3px solid var(--accent);
+}
+.canvas-node--control {
+  border-style: dashed;
 }
 .canvas-node--skipped {
   border-left-color: var(--subtle);
@@ -1030,6 +1063,19 @@ function compareNodes(left: RunNode, right: RunNode): number {
   display: block;
   width: 25px;
   border-top: 2px solid var(--border-strong);
+}
+.graph-legend__node {
+  width: 14px;
+  height: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: var(--surface);
+}
+.graph-legend__node--session {
+  border-left: 3px solid var(--accent);
+}
+.graph-legend__node--control {
+  border-style: dashed;
 }
 .graph-legend__line--delegated_to {
   border-color: var(--accent);

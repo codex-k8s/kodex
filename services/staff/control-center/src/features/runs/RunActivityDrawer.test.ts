@@ -5,7 +5,11 @@ import { describe, expect, it } from "vitest";
 
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
-import type { Run, RunNode } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  Artifact,
+  Run,
+  RunNode,
+} from "@/shared/api/generated/openapi/types.gen";
 
 const run: Run = {
   ref: "run_example",
@@ -100,6 +104,7 @@ const event: PresentedRunEvent = {
 async function render(
   nodes: RunNode[] = [node],
   events: PresentedRunEvent[] = [event],
+  artifacts: Artifact[] = [],
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
@@ -108,7 +113,8 @@ async function render(
         run,
         nodes,
         events,
-        initiatorSummary: run.inputSummary,
+        artifacts,
+        initiatorSummary: run.inputSummary ?? "",
       }),
   });
   app.use(
@@ -120,6 +126,7 @@ async function render(
           common: {
             all: "Все",
             close: "Закрыть",
+            download: "Скачать",
             details: "Подробнее",
             unavailable: "Функция временно недоступна",
             noData: "Нет данных",
@@ -129,6 +136,8 @@ async function render(
             context: "Контекст узла",
             noNodeActivity: "Сообщений пока нет",
             toolParameters: "Безопасные параметры",
+            toolResult: "Безопасный результат",
+            artifactUnavailable: "Описание файла недоступно",
             toolDuration: "Длительность: {duration} мс",
             nodeTypes: { EXTERNAL_ACTION: "Внешнее действие" },
           },
@@ -188,5 +197,42 @@ describe("RunActivityDrawer", () => {
     expect(html).toContain("project_files.search");
     expect(html).toContain("квартальный отчёт");
     expect(html).toContain("Найдено 4 фрагмента");
+    expect(html).toContain("Безопасный результат");
+  });
+
+  it("показывает безопасное описание файла из события", async () => {
+    const artifact: Artifact = {
+      ref: "art_report",
+      version: 2,
+      projectRef: run.projectRef,
+      runRef: run.ref,
+      fileName: "report.md",
+      mediaType: "text/markdown",
+      sizeBytes: 2048,
+      digest: "sha256:example",
+      scanState: "CLEAN",
+      source: "AGENT_RESULT",
+      revision: 2,
+      lifecycleState: "ACTIVE",
+      agentBindings: [],
+      previewAvailable: true,
+      createdAt: "2026-08-28T08:00:03Z",
+      nextActions: ["DOWNLOAD"],
+    };
+    const artifactEvent: PresentedRunEvent = {
+      ...event,
+      ref: "evt_artifact",
+      type: "ARTIFACT_AVAILABLE",
+      messageKind: "ARTIFACT",
+      artifactRef: artifact.ref,
+      displaySummary: "Агент подготовил файл",
+    };
+
+    const html = await render([node], [artifactEvent], [artifact]);
+
+    expect(html).toContain("report.md");
+    expect(html).toContain("text/markdown");
+    expect(html).toContain("2 кБ");
+    expect(html).toContain("Скачать");
   });
 });

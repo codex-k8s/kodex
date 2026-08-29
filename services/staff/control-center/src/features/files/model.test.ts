@@ -7,6 +7,7 @@ import {
   fileVisual,
   matchesArtifactFilters,
   supportsInlinePreview,
+  trashBulkConfirmed,
 } from "@/features/files/model";
 import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
 
@@ -102,7 +103,7 @@ describe("files model", () => {
     ).toBe(true);
   });
 
-  it("не обещает lifecycle mutation без generated команды", () => {
+  it("разрешает только объявленные сервером lifecycle mutations", () => {
     expect(artifactLifecycleState(artifact(), "DELETE")).toEqual({
       action: "DELETE",
       available: false,
@@ -121,8 +122,7 @@ describe("files model", () => {
       ),
     ).toEqual({
       action: "DELETE",
-      available: false,
-      reason: "CONTRACT_UNAVAILABLE",
+      available: true,
     });
   });
 
@@ -156,6 +156,16 @@ describe("files model", () => {
       supportsInlinePreview(
         artifact({ fileName: "notes.txt", mediaType: "text/plain" }),
       ),
+    ).toBe(true);
+  });
+
+  it("требует точную фразу для необратимых массовых операций", () => {
+    expect(trashBulkConfirmed("RESTORE", "", "УДАЛИТЬ НАВСЕГДА")).toBe(true);
+    expect(
+      trashBulkConfirmed("PURGE", " удалить навсегда ", "УДАЛИТЬ НАВСЕГДА"),
+    ).toBe(false);
+    expect(
+      trashBulkConfirmed("EMPTY", " УДАЛИТЬ НАВСЕГДА ", "УДАЛИТЬ НАВСЕГДА"),
     ).toBe(true);
   });
 });

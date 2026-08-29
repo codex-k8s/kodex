@@ -96,6 +96,7 @@ describe("RunSessionDetailsDialog", () => {
           node,
           nodes: [node],
           events: [event],
+          artifacts: [],
         }),
     });
     app.use(
@@ -109,6 +110,7 @@ describe("RunSessionDetailsDialog", () => {
               status: "Состояние",
               source: "Источник",
               input: "Входные данные",
+              empty: "Пусто",
               noData: "Нет данных",
               unavailable: "Функция временно недоступна",
             },
@@ -117,6 +119,7 @@ describe("RunSessionDetailsDialog", () => {
               runtime: "Модель выполнения",
               instructions: "Инструкции",
               integrations: "Разрешённые интеграции",
+              role: "Роль",
             },
             runs: {
               launchSummary: "Что будет запущено",
@@ -127,6 +130,13 @@ describe("RunSessionDetailsDialog", () => {
               nodeConversation: "Работа ИИ-сотрудника",
               noNodeActivity: "Сообщений пока нет",
               toolParameters: "Безопасные параметры",
+              toolResult: "Безопасный результат",
+              sessionNode: "Сессия",
+              controlNode: "Контрольный этап",
+              runContext: "Контекст запуска",
+              artifacts: "Результаты и файлы",
+              renderedPromptUnavailable:
+                "Полностью отрендеренные инструкции недоступны текущему API.",
               source: { CONTROL_CENTER: "Control Center" },
               nodeTypes: { AGENT_EXECUTION: "ИИ-сотрудник" },
             },
@@ -144,7 +154,10 @@ describe("RunSessionDetailsDialog", () => {
     expect(html).toContain("Файлы Проекта");
     expect(html).toContain("Модель выполнения");
     expect(html).toContain("Инструкции");
-    expect(html.match(/Функция временно недоступна/g)).toHaveLength(2);
+    expect(html).toContain(
+      "Полностью отрендеренные инструкции недоступны текущему API.",
+    );
+    expect(html).toContain("Пусто");
     expect(html).toContain("Собираю подтверждённые факты");
     expect(html).not.toContain("ses_example");
   });

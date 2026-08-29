@@ -144,4 +144,41 @@ describe("buildRunActivityItems", () => {
       toolCall: { tool: "project_files.search" },
     });
   });
+
+  it("сохраняет ссылку и безопасный descriptor файла из события", () => {
+    const [firstEvent] = events;
+    if (!firstEvent) throw new Error("test event fixture is required");
+    const artifactEvent: PresentedRunEvent = {
+      ...firstEvent,
+      ref: "evt_artifact",
+      type: "ARTIFACT_AVAILABLE",
+      messageKind: "ARTIFACT",
+      artifactRef: "art_report",
+      artifact: {
+        ref: "art_report",
+        version: 1,
+        projectRef: run.projectRef,
+        runRef: run.ref,
+        fileName: "report.md",
+        mediaType: "text/markdown",
+        sizeBytes: 512,
+        digest: "sha256:example",
+        scanState: "CLEAN",
+        source: "AGENT_RESULT",
+        revision: 1,
+        lifecycleState: "ACTIVE",
+        agentBindings: [],
+        previewAvailable: true,
+        createdAt: "2026-08-28T08:00:03Z",
+        nextActions: ["DOWNLOAD"],
+      },
+    };
+
+    const items = buildRunActivityItems(run, [node], [artifactEvent]);
+
+    expect(items[1]).toMatchObject({
+      artifactRef: "art_report",
+      artifact: { fileName: "report.md", scanState: "CLEAN" },
+    });
+  });
 });

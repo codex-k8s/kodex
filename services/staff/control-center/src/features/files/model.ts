@@ -5,6 +5,7 @@ export type FileSource = "ALL" | Artifact["source"];
 export type FileTab = "FILES" | "KNOWLEDGE" | "RESULTS" | "TRASH";
 
 export type ArtifactLifecycleAction = "DELETE" | "RESTORE" | "PURGE";
+export type ArtifactTrashBulkAction = "RESTORE" | "PURGE" | "EMPTY";
 export type ArtifactLifecycleBlockReason =
   | "ACTION_NOT_ALLOWED"
   | "CONTRACT_UNAVAILABLE";
@@ -150,19 +151,20 @@ export function artifactLifecycleState(
   const announcedByApi = (artifact.nextActions as readonly string[]).includes(
     action,
   );
-  if (announcedByApi && action === "DELETE") {
-    return {
-      action,
-      available: false,
-      reason: "CONTRACT_UNAVAILABLE",
-    };
-  }
   if (announcedByApi) return { action, available: true };
   return {
     action,
     available: false,
     reason: "ACTION_NOT_ALLOWED",
   };
+}
+
+export function trashBulkConfirmed(
+  action: ArtifactTrashBulkAction,
+  input: string,
+  phrase: string,
+): boolean {
+  return action === "RESTORE" || input.trim() === phrase;
 }
 
 export function createUploadQueueItems(

@@ -21,6 +21,7 @@ import {
 import FileLifecycleDialog from "@/features/files/FileLifecycleDialog.vue";
 import FilePreviewDialog from "@/features/files/FilePreviewDialog.vue";
 import FileTypeIcon from "@/features/files/FileTypeIcon.vue";
+import TrashBulkDialog from "@/features/files/TrashBulkDialog.vue";
 import {
   artifactLifecycleState,
   createUploadQueueItems,
@@ -66,6 +67,7 @@ const scanState = ref<"ALL" | Artifact["scanState"]>("ALL");
 const source = ref<FileSource>("ALL");
 const viewMode = ref<ViewMode>("list");
 const selectedRef = ref(props.initialArtifactRef ?? "");
+const selectedRefs = ref<string[]>([]);
 const uploadBusy = ref(false);
 const uploadQueue = ref<UploadQueueItem[]>([]);
 const dragDepth = ref(0);
@@ -82,6 +84,10 @@ const lifecycleDialog = ref<{
   action: ArtifactLifecycleAction;
   artifact: Artifact;
   state: ArtifactLifecycleState;
+}>();
+const bulkDialog = ref<{
+  action: "RESTORE" | "PURGE" | "EMPTY";
+  artifacts: Artifact[];
 }>();
 let uploadSequence = 0;
 
@@ -135,6 +141,17 @@ const filteredArtifacts = computed(() =>
 const selectedArtifact = computed(() =>
   loadedArtifacts.value.find((artifact) => artifact.ref === selectedRef.value),
 );
+const selectedArtifacts = computed(() => {
+  const refs = new Set(selectedRefs.value);
+  return loadedArtifacts.value.filter((artifact) => refs.has(artifact.ref));
+});
+const allVisibleSelected = computed(
+  () =>
+    filteredArtifacts.value.length > 0 &&
+    filteredArtifacts.value.every((artifact) =>
+      selectedRefs.value.includes(artifact.ref),
+    ),
+);
 const listProblem = computed(() =>
   loadError.value === undefined ? undefined : asProblem(loadError.value),
 );
@@ -161,8 +178,9 @@ const custom = computed(() =>
         allFiles: "Files",
         cancel: "Cancel",
         clearSearch: "Clear search",
-        contractUnavailable:
-          "The lifecycle contract has not been generated for this client yet.",
+        confirmationHint:
+          "Type the confirmation phrase exactly. This operation cannot be undone.",
+        confirmationPhrase: "DELETE PERMANENTLY",
         delete: "Move to trash",
         deleteDescription:
           "The file will stop being available to new runs and can be restored for 30 days.",
@@ -171,7 +189,7 @@ const custom = computed(() =>
         failed: "Upload failed",
         grid: "Grid",
         impactUnavailable:
-          "Affected active runs cannot be calculated until the lifecycle API is available.",
+          "Already materialized inputs remain available to an active session; new turns no longer receive this file.",
         loaded: "Loaded",
         loadingMore: "Loading more…",
         purge: "Delete permanently",
@@ -186,8 +204,11 @@ const custom = computed(() =>
         retry: "Retry",
         trash: "Trash",
         trashContract:
-          "Trash listing, restore and purge are shown as unavailable until the server contract is implemented.",
+          "Files remain recoverable for 30 days. Permanent deletion removes the exact object version from storage.",
         trashEmpty: "No deleted files are available in this response.",
+        purgeAt: "Permanent deletion",
+        selectAll: "Select all loaded files",
+        selected: "Selected",
         uploadMore: "Add files",
         uploading: "Uploading",
         uploadQueue: "Upload queue",
@@ -218,6 +239,23 @@ const custom = computed(() =>
             RESTORE: "Restore file?",
           },
         },
+        bulk: {
+          confirm: {
+            EMPTY: "Empty trash",
+            PURGE: "Delete permanently",
+            RESTORE: "Restore selected",
+          },
+          description: {
+            EMPTY: "files in the trash will be permanently deleted.",
+            PURGE: "selected files will be permanently deleted.",
+            RESTORE: "selected files will be restored to the Project.",
+          },
+          title: {
+            EMPTY: "Empty the entire trash?",
+            PURGE: "Delete selected files permanently?",
+            RESTORE: "Restore selected files?",
+          },
+        },
       }
     : {
         actionUnavailable:
@@ -225,8 +263,9 @@ const custom = computed(() =>
         allFiles: "Файлы",
         cancel: "Отмена",
         clearSearch: "Очистить поиск",
-        contractUnavailable:
-          "Контракт lifecycle ещё не сгенерирован для этого клиента.",
+        confirmationHint:
+          "Введите фразу подтверждения без изменений. Операцию нельзя отменить.",
+        confirmationPhrase: "УДАЛИТЬ НАВСЕГДА",
         delete: "В корзину",
         deleteDescription:
           "Файл перестанет выдаваться новым запускам, но его можно будет восстановить в течение 30 дней.",
@@ -235,7 +274,7 @@ const custom = computed(() =>
         failed: "Не удалось загрузить",
         grid: "Сетка",
         impactUnavailable:
-          "Список затронутых активных запусков нельзя вычислить до появления lifecycle API.",
+          "Уже материализованный вход останется у активной сессии; новые ходы этот файл больше не получат.",
         loaded: "Загружено",
         loadingMore: "Загружаем ещё…",
         purge: "Удалить навсегда",
@@ -250,8 +289,11 @@ const custom = computed(() =>
         retry: "Повторить",
         trash: "Корзина",
         trashContract:
-          "Список корзины, восстановление и очистка честно недоступны до реализации серверного контракта.",
+          "Файлы можно восстановить в течение 30 дней. Необратимое удаление стирает точную версию объекта из хранилища.",
         trashEmpty: "В текущем ответе нет удалённых файлов.",
+        purgeAt: "Необратимое удаление",
+        selectAll: "Выбрать все загруженные файлы",
+        selected: "Выбрано",
         uploadMore: "Добавить файлы",
         uploading: "Загружается",
         uploadQueue: "Очередь загрузки",
@@ -280,6 +322,23 @@ const custom = computed(() =>
             RESTORE: "Восстановить файл?",
           },
         },
+        bulk: {
+          confirm: {
+            EMPTY: "Очистить корзину",
+            PURGE: "Удалить навсегда",
+            RESTORE: "Восстановить выбранные",
+          },
+          description: {
+            EMPTY: "файлов в корзине будут необратимо удалены.",
+            PURGE: "выбранных файлов будут необратимо удалены.",
+            RESTORE: "выбранных файлов будут восстановлены в Проекте.",
+          },
+          title: {
+            EMPTY: "Очистить всю корзину?",
+            PURGE: "Удалить выбранные файлы навсегда?",
+            RESTORE: "Восстановить выбранные файлы?",
+          },
+        },
       },
 );
 
@@ -298,6 +357,7 @@ watch(viewMode, (mode) => {
 });
 watch(activeTab, () => {
   selectedRef.value = "";
+  selectedRefs.value = [];
   refresh();
 });
 
@@ -509,6 +569,87 @@ function openLifecycleDialog(
     artifact,
     state: artifactLifecycleState(artifact, action),
   };
+}
+
+function toggleSelection(artifactRef: string, selected: boolean): void {
+  const refs = new Set(selectedRefs.value);
+  if (selected) refs.add(artifactRef);
+  else refs.delete(artifactRef);
+  selectedRefs.value = [...refs];
+}
+
+function toggleAllVisible(): void {
+  const refs = new Set(selectedRefs.value);
+  if (allVisibleSelected.value) {
+    for (const artifact of filteredArtifacts.value) refs.delete(artifact.ref);
+  } else {
+    for (const artifact of filteredArtifacts.value) refs.add(artifact.ref);
+  }
+  selectedRefs.value = [...refs];
+}
+
+function openSelectedBulk(action: "RESTORE" | "PURGE"): void {
+  const artifacts = selectedArtifacts.value.filter(
+    (artifact) => artifactLifecycleState(artifact, action).available,
+  );
+  if (artifacts.length === 0) return;
+  bulkDialog.value = { action, artifacts };
+}
+
+async function loadEntireTrash(): Promise<Artifact[]> {
+  const controller = new AbortController();
+  const artifacts: Artifact[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    if (cursor && seenCursors.has(cursor))
+      throw new Error("Artifact trash cursor did not advance");
+    if (cursor) seenCursors.add(cursor);
+    const page = await loadArtifactPage(
+      props.projectRef,
+      { cursor, query: "", signal: controller.signal },
+      "DELETED",
+    );
+    artifacts.push(...page.items.map((item) => item.artifact));
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return artifacts;
+}
+
+async function openEmptyTrash(): Promise<void> {
+  contentBusy.value = true;
+  operationProblem.value = undefined;
+  try {
+    const artifacts = (await loadEntireTrash()).filter(
+      (artifact) => artifactLifecycleState(artifact, "PURGE").available,
+    );
+    if (artifacts.length > 0) bulkDialog.value = { action: "EMPTY", artifacts };
+  } catch (error) {
+    operationProblem.value = asProblem(error);
+  } finally {
+    contentBusy.value = false;
+  }
+}
+
+async function confirmBulkOperation(): Promise<void> {
+  const operation = bulkDialog.value;
+  if (!operation) return;
+  contentBusy.value = true;
+  operationProblem.value = undefined;
+  try {
+    for (const artifact of operation.artifacts) {
+      if (operation.action === "RESTORE") await restoreArtifactItem(artifact);
+      else await purgeArtifactItem(artifact);
+    }
+    bulkDialog.value = undefined;
+    selectedRefs.value = [];
+    selectedRef.value = "";
+    refresh();
+  } catch (error) {
+    operationProblem.value = asProblem(error);
+  } finally {
+    contentBusy.value = false;
+  }
 }
 
 async function confirmLifecycleOperation(): Promise<void> {
@@ -812,15 +953,49 @@ onBeforeUnmount(clearPreview);
         <strong>{{ custom.trash }}</strong>
         <p>{{ custom.trashContract }}</p>
       </div>
-      <button
-        class="button button--danger"
-        type="button"
-        disabled
-        :title="custom.contractUnavailable"
-      >
-        <Trash2 :size="16" aria-hidden="true" />
-        {{ custom.emptyTrash }}
-      </button>
+      <div class="trash-toolbar__actions">
+        <label class="trash-toolbar__select-all">
+          <input
+            type="checkbox"
+            :checked="allVisibleSelected"
+            :disabled="filteredArtifacts.length === 0 || contentBusy"
+            @change="toggleAllVisible"
+          />
+          <span>{{ custom.selectAll }}</span>
+        </label>
+        <span v-if="selectedArtifacts.length > 0" class="mono">
+          {{ custom.selected }} {{ selectedArtifacts.length }}
+        </span>
+        <button
+          v-if="selectedArtifacts.length > 0"
+          class="button button--small"
+          type="button"
+          :disabled="contentBusy"
+          @click="openSelectedBulk('RESTORE')"
+        >
+          <RotateCcw :size="16" aria-hidden="true" />
+          {{ custom.bulk.confirm.RESTORE }}
+        </button>
+        <button
+          v-if="selectedArtifacts.length > 0"
+          class="button button--small button--danger"
+          type="button"
+          :disabled="contentBusy"
+          @click="openSelectedBulk('PURGE')"
+        >
+          <Trash2 :size="16" aria-hidden="true" />
+          {{ custom.bulk.confirm.PURGE }}
+        </button>
+        <button
+          class="button button--danger"
+          type="button"
+          :disabled="contentBusy || items.length === 0"
+          @click="openEmptyTrash"
+        >
+          <Trash2 :size="16" aria-hidden="true" />
+          {{ custom.emptyTrash }}
+        </button>
+      </div>
     </section>
 
     <ProblemNotice
@@ -878,6 +1053,22 @@ onBeforeUnmount(clearPreview);
               class="file-collection-item file-collection-item--tile"
               role="listitem"
             >
+              <label
+                v-if="activeTab === 'TRASH'"
+                class="file-collection-item__select"
+                :aria-label="`${custom.selected}: ${artifact.fileName}`"
+              >
+                <input
+                  type="checkbox"
+                  :checked="selectedRefs.includes(artifact.ref)"
+                  @change="
+                    toggleSelection(
+                      artifact.ref,
+                      ($event.target as HTMLInputElement).checked,
+                    )
+                  "
+                />
+              </label>
               <button
                 class="file-tile"
                 :class="{
@@ -941,8 +1132,27 @@ onBeforeUnmount(clearPreview);
               v-for="artifact in filteredArtifacts"
               :key="artifact.ref"
               class="file-collection-item"
+              :class="{
+                'file-collection-item--selectable': activeTab === 'TRASH',
+              }"
               role="listitem"
             >
+              <label
+                v-if="activeTab === 'TRASH'"
+                class="file-collection-item__select"
+                :aria-label="`${custom.selected}: ${artifact.fileName}`"
+              >
+                <input
+                  type="checkbox"
+                  :checked="selectedRefs.includes(artifact.ref)"
+                  @change="
+                    toggleSelection(
+                      artifact.ref,
+                      ($event.target as HTMLInputElement).checked,
+                    )
+                  "
+                />
+              </label>
               <button
                 class="file-list-row"
                 :class="{
@@ -1039,6 +1249,14 @@ onBeforeUnmount(clearPreview);
             <div>
               <dt>{{ $t("files.addedAt") }}</dt>
               <dd>{{ formatDate(selectedArtifact.createdAt) }}</dd>
+            </div>
+            <div v-if="selectedArtifact.deletedAt">
+              <dt>{{ custom.trash }}</dt>
+              <dd>{{ formatDate(selectedArtifact.deletedAt) }}</dd>
+            </div>
+            <div v-if="selectedArtifact.purgeAfter">
+              <dt>{{ custom.purgeAt }}</dt>
+              <dd>{{ formatDate(selectedArtifact.purgeAfter) }}</dd>
             </div>
           </dl>
           <section class="file-details__preview">
@@ -1175,6 +1393,23 @@ onBeforeUnmount(clearPreview);
       :state="lifecycleDialog.state"
       @close="lifecycleDialog = undefined"
       @confirm="confirmLifecycleOperation"
+    />
+
+    <TrashBulkDialog
+      v-if="bulkDialog"
+      :action="bulkDialog.action"
+      :busy="contentBusy"
+      :count="bulkDialog.artifacts.length"
+      :labels="{
+        cancel: custom.cancel,
+        confirm: custom.bulk.confirm,
+        confirmationHint: custom.confirmationHint,
+        confirmationPhrase: custom.confirmationPhrase,
+        description: custom.bulk.description,
+        title: custom.bulk.title,
+      }"
+      @close="bulkDialog = undefined"
+      @confirm="confirmBulkOperation"
     />
   </section>
 </template>
@@ -1336,6 +1571,20 @@ onBeforeUnmount(clearPreview);
   color: var(--muted);
   font-size: 0.8rem;
 }
+.trash-toolbar__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.trash-toolbar__select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
 .files-workspace__scroll {
   min-width: 0;
   max-height: 68vh;
@@ -1381,6 +1630,25 @@ onBeforeUnmount(clearPreview);
   right: 9px;
   border: 1px solid var(--border);
   background: var(--surface);
+}
+.file-collection-item__select {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  left: 12px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.file-collection-item__select input {
+  margin: 0;
+}
+.file-collection-item--selectable .file-list-row {
+  padding-left: 48px;
 }
 .file-collection-item__lifecycle--danger {
   color: var(--danger, #b42318);

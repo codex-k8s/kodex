@@ -7,6 +7,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 defineProps<{ artifacts: Artifact[] }>();
 
 function artifactPath(artifact: Artifact): string {
+  if (!artifact.projectRef) return "/projects";
   return `/projects/${encodeURIComponent(artifact.projectRef)}/files?artifactRef=${encodeURIComponent(artifact.ref)}`;
 }
 </script>

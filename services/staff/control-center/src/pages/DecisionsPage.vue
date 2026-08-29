@@ -13,7 +13,9 @@ import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
 import {
+  decisionHistory,
   decisionInbox,
+  groupDecisionInbox,
   type DecisionInboxItem,
 } from "@/features/workboard/model";
 import type { OwnerGate } from "@/shared/api/generated/openapi/types.gen";
@@ -32,6 +34,7 @@ const { locale } = useI18n();
 const projectFilter = ref(
   typeof route.query.projectRef === "string" ? route.query.projectRef : "",
 );
+const view = ref<"PENDING" | "HISTORY">("PENDING");
 const selectedRef = ref("");
 const comments = ref<Record<string, string>>({});
 const attachmentStates = ref<Record<string, AttachmentComposerState>>({});
@@ -43,22 +46,38 @@ const inbox = computed(() =>
     platform.gateList,
     platform.projectList,
     projectFilter.value || undefined,
+    new Date(),
+    platform.runList,
   ),
 );
+const history = computed(() =>
+  decisionHistory(
+    platform.gateList,
+    platform.projectList,
+    projectFilter.value || undefined,
+    platform.runList,
+  ),
+);
+const visibleItems = computed(() =>
+  view.value === "PENDING" ? inbox.value : history.value,
+);
+const groups = computed(() => groupDecisionInbox(visibleItems.value));
 const selected = computed(() =>
-  inbox.value.find((item) => item.gate.ref === selectedRef.value),
+  visibleItems.value.find((item) => item.gate.ref === selectedRef.value),
 );
 const projectsWithGates = computed(() => {
   const refs = new Set(
     platform.gateList
-      .filter((gate) => gate.state === "OPEN")
+      .filter((gate) =>
+        view.value === "PENDING" ? gate.state === "OPEN" : true,
+      )
       .map((gate) => gate.projectRef),
   );
   return platform.projectList.filter((project) => refs.has(project.ref));
 });
 
 watch(
-  inbox,
+  visibleItems,
   (items) => {
     if (!items.some((item) => item.gate.ref === selectedRef.value))
       selectedRef.value = items[0]?.gate.ref ?? "";
@@ -76,6 +95,13 @@ function formatDate(value?: string): string {
 
 function projectPath(item: DecisionInboxItem): string {
   return `/projects/${encodeURIComponent(item.gate.projectRef)}`;
+}
+
+function runNodePath(item: DecisionInboxItem) {
+  return {
+    path: runPath(item.gate.runRef, item.gate.projectRef),
+    query: { nodeRef: item.gate.nodeRef },
+  };
 }
 
 function artifactPath(gate: OwnerGate): string {
@@ -131,7 +157,12 @@ function attachmentsReady(gateRef: string): boolean {
 }
 
 onMounted(
-  () => void Promise.all([platform.loadGates(), platform.loadProjects()]),
+  () =>
+    void Promise.all([
+      platform.loadGates(),
+      platform.loadProjects(),
+      platform.loadRuns(),
+    ]),
 );
 </script>
 
@@ -141,70 +172,127 @@ onMounted(
     :subtitle="$t('decisions.subtitle')"
   >
     <div class="decision-toolbar">
-      <label>
-        <span>{{ $t("decisions.projectFilter") }}</span>
-        <select v-model="projectFilter">
-          <option value="">{{ $t("decisions.allProjects") }}</option>
-          <option
-            v-for="project in projectsWithGates"
-            :key="project.ref"
-            :value="project.ref"
+      <div class="decision-toolbar__filters">
+        <div class="decision-view-switch" role="group">
+          <button
+            class="button"
+            type="button"
+            :aria-pressed="view === 'PENDING'"
+            @click="view = 'PENDING'"
           >
-            {{ project.name }}
-          </option>
-        </select>
-      </label>
+            {{ $t("decisions.pending") }}
+          </button>
+          <button
+            class="button"
+            type="button"
+            :aria-pressed="view === 'HISTORY'"
+            @click="view = 'HISTORY'"
+          >
+            {{ $t("decisions.history") }}
+          </button>
+        </div>
+        <label>
+          <span>{{ $t("decisions.projectFilter") }}</span>
+          <select v-model="projectFilter">
+            <option value="">{{ $t("decisions.allProjects") }}</option>
+            <option
+              v-for="project in projectsWithGates"
+              :key="project.ref"
+              :value="project.ref"
+            >
+              {{ project.name }}
+            </option>
+          </select>
+        </label>
+      </div>
       <span class="decision-toolbar__count">
-        {{ $t("decisions.pendingCount", { count: inbox.length }) }}
+        {{
+          $t(
+            view === "PENDING"
+              ? "decisions.pendingCount"
+              : "decisions.historyCount",
+            { count: visibleItems.length },
+          )
+        }}
       </span>
     </div>
 
     <ProblemNotice v-if="problem" :problem="problem" compact />
     <AsyncState
-      :loading="platform.loading.gates || platform.loading.projects"
+      :loading="
+        platform.loading.gates ||
+        platform.loading.projects ||
+        platform.loading.runs
+      "
       :problem="platform.problems.gates"
-      :empty="inbox.length === 0"
-      :empty-title="$t('decisions.emptyTitle')"
-      :empty-text="$t('decisions.emptyText')"
+      :empty="visibleItems.length === 0"
+      :empty-title="
+        $t(
+          view === 'PENDING'
+            ? 'decisions.emptyTitle'
+            : 'decisions.historyEmpty',
+        )
+      "
+      :empty-text="
+        $t(
+          view === 'PENDING'
+            ? 'decisions.emptyText'
+            : 'decisions.historyEmptyText',
+        )
+      "
       @retry="platform.loadGates()"
     >
       <div class="decision-inbox">
-        <div class="decision-list" role="list">
-          <button
-            v-for="item in inbox"
-            :key="item.gate.ref"
-            class="decision-row"
-            :class="{ 'decision-row--selected': selectedRef === item.gate.ref }"
-            type="button"
-            role="listitem"
-            @click="selectedRef = item.gate.ref"
-          >
-            <span class="decision-row__icon">
-              <ShieldQuestion :size="18" aria-hidden="true" />
-            </span>
-            <span class="decision-row__copy">
-              <strong>{{ item.gate.title }}</strong>
-              <span>{{
-                item.hasQuestion
-                  ? item.gate.contextSummary
-                  : $t("decisions.questionUnavailable")
-              }}</span>
-              <small>
-                {{ item.project?.name ?? $t("decisions.projectUnavailable") }}
-                · {{ item.gate.requestedBy.displayName }}
-              </small>
-            </span>
-            <span class="decision-row__status">
+        <div class="decision-list">
+          <section v-for="group in groups" :key="group.key">
+            <header class="decision-group-header">
               <span
-                v-if="item.urgency !== 'NORMAL'"
+                v-if="view === 'PENDING'"
                 class="decision-urgency"
-                :class="`decision-urgency--${item.urgency.toLowerCase()}`"
+                :class="`decision-urgency--${group.urgency.toLowerCase()}`"
               >
-                {{ $t(`decisions.urgency.${item.urgency}`) }}
+                {{ $t(`decisions.urgency.${group.urgency}`) }}
               </span>
-              <StatusBadge :state="item.gate.state" />
-            </span>
-          </button>
+              <strong>
+                {{ group.project?.name ?? $t("decisions.projectUnavailable") }}
+              </strong>
+              <span>{{
+                group.run?.title ?? $t("decisions.runUnavailable")
+              }}</span>
+            </header>
+            <div role="list">
+              <button
+                v-for="item in group.items"
+                :key="item.gate.ref"
+                class="decision-row"
+                :class="{
+                  'decision-row--selected': selectedRef === item.gate.ref,
+                }"
+                type="button"
+                role="listitem"
+                @click="selectedRef = item.gate.ref"
+              >
+                <span class="decision-row__icon">
+                  <ShieldQuestion :size="18" aria-hidden="true" />
+                </span>
+                <span class="decision-row__copy">
+                  <strong>{{ item.gate.title }}</strong>
+                  <span>{{
+                    item.hasQuestion
+                      ? item.gate.contextSummary
+                      : $t("decisions.questionUnavailable")
+                  }}</span>
+                  <small>
+                    {{ item.gate.requestedBy.displayName }} ·
+                    {{ formatDate(item.gate.openedAt) }}
+                  </small>
+                </span>
+                <span class="decision-row__status">
+                  <StatusBadge :state="item.gate.state" />
+                </span>
+              </button>
+            </div>
+          </section>
         </div>
 
         <aside v-if="selected" class="decision-detail">
@@ -234,14 +322,12 @@ onMounted(
             <div>
               <dt>
                 <ExternalLink :size="15" aria-hidden="true" />{{
-                  $t("decisions.run")
+                  $t("decisions.process")
                 }}
               </dt>
               <dd>
-                <RouterLink
-                  :to="runPath(selected.gate.runRef, selected.gate.projectRef)"
-                >
-                  {{ $t("decisions.openRun") }}
+                <RouterLink :to="runNodePath(selected)">
+                  {{ selected.run?.title ?? $t("decisions.openNode") }}
                 </RouterLink>
               </dd>
             </div>
@@ -318,6 +404,22 @@ onMounted(
             </p>
           </section>
 
+          <section v-if="view === 'HISTORY'" class="decision-copy">
+            <h3>{{ $t("decisions.outcome") }}</h3>
+            <p>
+              <StatusBadge :state="selected.gate.state" />
+              <template v-if="selected.gate.decidedBy">
+                · {{ selected.gate.decidedBy.displayName }}
+              </template>
+              <template v-if="selected.gate.decidedAt">
+                · {{ formatDate(selected.gate.decidedAt) }}
+              </template>
+            </p>
+            <p v-if="selected.gate.decisionComment">
+              {{ selected.gate.decisionComment }}
+            </p>
+          </section>
+
           <template v-if="selected.canResolve">
             <label class="field decision-comment">
               <span>{{ $t("decisions.comment") }}</span>
@@ -391,12 +493,36 @@ onMounted(
   gap: 12px;
   margin-bottom: 14px;
 }
+.decision-toolbar__filters {
+  display: flex;
+  min-width: 0;
+  align-items: end;
+  gap: 12px;
+}
 .decision-toolbar label {
   display: grid;
   gap: 5px;
   min-width: min(320px, 100%);
   font-size: 0.78rem;
   font-weight: 600;
+}
+.decision-view-switch {
+  display: flex;
+}
+.decision-view-switch .button {
+  min-width: 112px;
+  border-radius: 0;
+}
+.decision-view-switch .button:first-child {
+  border-radius: 7px 0 0 7px;
+}
+.decision-view-switch .button:last-child {
+  border-radius: 0 7px 7px 0;
+}
+.decision-view-switch .button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 .decision-toolbar select {
   min-height: 38px;
@@ -417,6 +543,26 @@ onMounted(
   max-height: 72vh;
   overflow: auto;
   border-right: 1px solid var(--border);
+}
+.decision-list > section + section {
+  border-top: 1px solid var(--border-strong);
+}
+.decision-group-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--panel);
+}
+.decision-group-header > span:last-child {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
 }
 .decision-row {
   display: grid;
@@ -578,6 +724,13 @@ onMounted(
   .decision-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+  .decision-toolbar__filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .decision-view-switch .button {
+    flex: 1 1 50%;
   }
   .decision-row {
     grid-template-columns: auto minmax(0, 1fr);

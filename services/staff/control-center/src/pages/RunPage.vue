@@ -45,6 +45,9 @@ const route = useRoute();
 const router = useRouter();
 const translator = useI18n();
 const runRef = computed(() => String(route.params.runRef));
+const requestedNodeRef = computed(() =>
+  typeof route.query.nodeRef === "string" ? route.query.nodeRef : undefined,
+);
 const routeProjectRef = computed(() =>
   typeof route.params.projectRef === "string"
     ? route.params.projectRef
@@ -292,6 +295,17 @@ const refreshKey = computed(() => {
   return authoritativeRunRefreshKey(run.value, platform.events[rootRef] ?? {});
 });
 
+watch(
+  [presentedGraph, requestedNodeRef],
+  ([snapshot, nodeRef]) => {
+    if (!nodeRef || !snapshot?.nodes.some((node) => node.ref === nodeRef))
+      return;
+    selectedRef.value = nodeRef;
+    nodeInspectorOpen.value = true;
+  },
+  { immediate: true },
+);
+
 async function refreshAuthoritativeState(ref: string): Promise<void> {
   await platform.loadRun(ref);
   if (runRef.value !== ref) return;
@@ -393,6 +407,18 @@ async function uploadAttachment(file: File): Promise<{ ref: string }> {
 }
 function gateAttachmentsReady(gateRef: string): boolean {
   return gateAttachmentStates.value[gateRef]?.ready ?? true;
+}
+function gateNodeName(gate: OwnerGate): string {
+  return (
+    presentedGraph.value?.nodes.find((node) => node.ref === gate.nodeRef)
+      ?.displayName ?? translator.t("decisions.openNode")
+  );
+}
+function inspectGateNode(gate: OwnerGate): void {
+  const node = presentedGraph.value?.nodes.find(
+    (candidate) => candidate.ref === gate.nodeRef,
+  );
+  if (node) select(node);
 }
 function select(node: RunNode) {
   selectedRef.value = node.ref;
@@ -547,56 +573,79 @@ onBeforeUnmount(() => {
           v-for="gate in gateList.filter((g) => g.state === 'OPEN')"
           :key="gate.ref"
         >
-          <div>
+          <div class="gate-question">
+            <p class="eyebrow">{{ $t("decisions.question") }}</p>
             <h2>{{ gate.title }}</h2>
-            <p>{{ gate.contextSummary }}</p>
-            <strong>{{ gate.consequencesSummary }}</strong>
+            <dl>
+              <div>
+                <dt>{{ $t("decisions.requestedBy") }}</dt>
+                <dd>{{ gate.requestedBy.displayName }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("decisions.process") }}</dt>
+                <dd>
+                  <button
+                    class="button button--ghost"
+                    type="button"
+                    @click="inspectGateNode(gate)"
+                  >
+                    {{ gateNodeName(gate) }}
+                  </button>
+                </dd>
+              </div>
+            </dl>
+            <h3>{{ $t("decisions.fullQuestion") }}</h3>
+            <SafeMarkdown :content="gate.contextSummary" />
+            <h3>{{ $t("decisions.consequences") }}</h3>
+            <SafeMarkdown :content="gate.consequencesSummary" />
           </div>
-          <label class="field"
-            ><span>{{ $t("decisions.comment") }}</span
-            ><input v-model="comments[gate.ref]" maxlength="1000"
-          /></label>
-          <AttachmentComposer
-            compact
-            :upload="uploadAttachment"
-            :disabled="busy"
-            @change="gateAttachmentStates[gate.ref] = $event"
-          />
-          <div class="gate-actions">
-            <button
-              v-if="
-                gate.nextActions.includes('RESOLVE_GATE') &&
-                gate.allowedDecisions.includes('APPROVE')
-              "
-              class="button button--primary"
-              type="button"
-              :disabled="busy || !gateAttachmentsReady(gate.ref)"
-              @click="decide(gate, 'APPROVE')"
-            >
-              {{ $t("common.approve") }}</button
-            ><button
-              v-if="
-                gate.nextActions.includes('RESOLVE_GATE') &&
-                gate.allowedDecisions.includes('REQUEST_CHANGES')
-              "
-              class="button"
-              type="button"
-              :disabled="busy || !gateAttachmentsReady(gate.ref)"
-              @click="decide(gate, 'REQUEST_CHANGES')"
-            >
-              {{ $t("common.requestChanges") }}</button
-            ><button
-              v-if="
-                gate.nextActions.includes('RESOLVE_GATE') &&
-                gate.allowedDecisions.includes('REJECT')
-              "
-              class="button button--danger"
-              type="button"
-              :disabled="busy || !gateAttachmentsReady(gate.ref)"
-              @click="decide(gate, 'REJECT')"
-            >
-              {{ $t("common.reject") }}
-            </button>
+          <div class="gate-response">
+            <label class="field"
+              ><span>{{ $t("decisions.comment") }}</span
+              ><textarea v-model="comments[gate.ref]" maxlength="1000" />
+            </label>
+            <AttachmentComposer
+              compact
+              :upload="uploadAttachment"
+              :disabled="busy"
+              @change="gateAttachmentStates[gate.ref] = $event"
+            />
+            <div class="gate-actions">
+              <button
+                v-if="
+                  gate.nextActions.includes('RESOLVE_GATE') &&
+                  gate.allowedDecisions.includes('APPROVE')
+                "
+                class="button button--primary"
+                type="button"
+                :disabled="busy || !gateAttachmentsReady(gate.ref)"
+                @click="decide(gate, 'APPROVE')"
+              >
+                {{ $t("common.approve") }}</button
+              ><button
+                v-if="
+                  gate.nextActions.includes('RESOLVE_GATE') &&
+                  gate.allowedDecisions.includes('REQUEST_CHANGES')
+                "
+                class="button"
+                type="button"
+                :disabled="busy || !gateAttachmentsReady(gate.ref)"
+                @click="decide(gate, 'REQUEST_CHANGES')"
+              >
+                {{ $t("common.requestChanges") }}</button
+              ><button
+                v-if="
+                  gate.nextActions.includes('RESOLVE_GATE') &&
+                  gate.allowedDecisions.includes('REJECT')
+                "
+                class="button button--danger"
+                type="button"
+                :disabled="busy || !gateAttachmentsReady(gate.ref)"
+                @click="decide(gate, 'REJECT')"
+              >
+                {{ $t("common.reject") }}
+              </button>
+            </div>
           </div>
         </article>
       </section>
@@ -686,10 +735,35 @@ onBeforeUnmount(() => {
           :run="run"
           :nodes="presentedGraph.nodes"
           :events="eventList"
+          :artifacts="artifactList"
           :initiator-summary="runInputSummary"
           :initial-node-ref="activityNodeRef"
           @close="closeActivity"
-        />
+          @download="downloadArtifact"
+        >
+          <template v-if="run.nextActions.includes('ADD_TURN')" #composer>
+            <form class="run-continuation" @submit.prevent="continueRun">
+              <label class="field">
+                <span>{{ $t("runs.continueTask") }}</span>
+                <textarea v-model="turn" maxlength="8000" />
+              </label>
+              <AttachmentComposer
+                ref="turnAttachmentComposer"
+                compact
+                :upload="uploadAttachment"
+                :disabled="busy"
+                @change="turnAttachmentState = $event"
+              />
+              <button
+                class="button button--primary"
+                type="submit"
+                :disabled="busy || !turn.trim() || !turnAttachmentState.ready"
+              >
+                {{ $t("common.send") }}
+              </button>
+            </form>
+          </template>
+        </RunActivityDrawer>
       </div>
       <RunSessionDetailsDialog
         v-if="run && presentedGraph && selectedNode && nodeDetailsOpen"
@@ -697,6 +771,7 @@ onBeforeUnmount(() => {
         :node="selectedNode"
         :nodes="presentedGraph.nodes"
         :events="eventList"
+        :artifacts="artifactList"
         :agent="selectedAgent"
         @close="nodeDetailsOpen = false"
       />
@@ -752,27 +827,6 @@ onBeforeUnmount(() => {
             </button>
           </div>
           <p v-else>{{ $t("common.empty") }}</p>
-        </article>
-        <article v-if="run.nextActions.includes('ADD_TURN')" class="panel">
-          <h2>{{ $t("common.continue") }}</h2>
-          <label class="field"
-            ><span>{{ $t("runs.continueTask") }}</span
-            ><textarea v-model="turn" maxlength="8000" />
-          </label>
-          <AttachmentComposer
-            ref="turnAttachmentComposer"
-            :upload="uploadAttachment"
-            :disabled="busy"
-            @change="turnAttachmentState = $event"
-          />
-          <button
-            class="button button--primary"
-            type="button"
-            :disabled="busy || !turn.trim() || !turnAttachmentState.ready"
-            @click="continueRun"
-          >
-            {{ $t("common.send") }}
-          </button>
         </article>
       </section></AsyncState
     ></PageFrame
@@ -848,8 +902,8 @@ onBeforeUnmount(() => {
 }
 .gate-strip article {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.5fr) auto;
-  align-items: end;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  align-items: start;
   gap: 16px;
   padding: 16px;
   border: 1px solid #ead8ac;
@@ -859,6 +913,44 @@ onBeforeUnmount(() => {
 .gate-strip h2,
 .gate-strip p {
   margin-bottom: 4px;
+}
+.gate-question {
+  min-width: 0;
+}
+.gate-question h3 {
+  margin: 14px 0 5px;
+  font-size: 0.82rem;
+}
+.gate-question :deep(p) {
+  margin: 0;
+}
+.gate-question dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 10px 0 0;
+}
+.gate-question dl > div {
+  display: grid;
+  gap: 3px;
+}
+.gate-question dt {
+  color: var(--subtle);
+  font-size: 0.72rem;
+}
+.gate-question dd {
+  margin: 0;
+}
+.gate-question dd .button {
+  min-height: 0;
+  padding: 0;
+}
+.gate-response {
+  display: grid;
+  gap: 10px;
+}
+.gate-response textarea {
+  min-height: 92px;
 }
 .gate-actions {
   display: flex;
@@ -961,6 +1053,13 @@ onBeforeUnmount(() => {
 }
 .run-mobile-tabs {
   display: none;
+}
+.run-continuation {
+  display: grid;
+  gap: 9px;
+}
+.run-continuation > .button {
+  justify-self: end;
 }
 .run-bottom {
   display: grid;

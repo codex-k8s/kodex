@@ -1,4 +1,5 @@
 import type {
+  Artifact,
   Run,
   RunEvent,
   RunNode,
@@ -21,6 +22,8 @@ export interface RunActivityItem {
   state?: RunEvent["nodeState"] | RunEvent["runState"];
   messageKind?: RunEvent["messageKind"];
   toolCall?: RunEvent["toolCall"];
+  artifactRef?: string;
+  artifact?: Artifact;
 }
 
 const agentMessageTypes = new Set<RunEvent["type"]>([
@@ -77,6 +80,8 @@ export function buildRunActivityItems(
       state: event.nodeState ?? event.runState,
       messageKind: event.messageKind,
       toolCall: event.toolCall,
+      artifactRef: event.artifactRef,
+      artifact: event.artifact,
     });
   }
 

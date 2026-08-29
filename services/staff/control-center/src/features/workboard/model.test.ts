@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   collectAttention,
+  decisionHistory,
   decisionInbox,
   decisionUrgency,
   filterRuns,
+  groupDecisionInbox,
   groupRuns,
   runExecutor,
 } from "@/features/workboard/model";
@@ -260,5 +262,45 @@ describe("workboard model", () => {
         (item) => item.gate.ref,
       ),
     ).toEqual(["gate_soon", "gate_normal"]);
+  });
+
+  it("связывает решение с авторитетным запуском и группирует контекст", () => {
+    const currentRun = run("run_current", "WAITING_HUMAN", {
+      title: "Согласование предложения",
+    });
+    const items = decisionInbox(
+      [gate(currentRun.ref)],
+      [project],
+      undefined,
+      new Date("2026-08-28T10:00:00Z"),
+      [currentRun],
+    );
+    const groups = groupDecisionInbox(items);
+
+    expect(items[0]?.run?.title).toBe("Согласование предложения");
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      project: { name: "Продажи" },
+      run: { title: "Согласование предложения" },
+      items: [{ gate: { ref: "gate_owner" } }],
+    });
+  });
+
+  it("отделяет закрытые Human Gates от ожидающих решения", () => {
+    const approved = {
+      ...gate("run_approved"),
+      state: "APPROVED" as const,
+      decision: "APPROVE" as const,
+      decidedAt: "2026-08-28T11:00:00Z",
+      nextActions: [],
+    };
+
+    expect(decisionInbox([approved], [project])).toHaveLength(0);
+    expect(decisionHistory([approved], [project])).toMatchObject([
+      {
+        gate: { ref: "gate_owner", state: "APPROVED" },
+        canResolve: false,
+      },
+    ]);
   });
 });

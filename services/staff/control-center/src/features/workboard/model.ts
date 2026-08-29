@@ -23,10 +23,19 @@ export type DecisionUrgency = "OVERDUE" | "SOON" | "NORMAL";
 export interface DecisionInboxItem {
   gate: OwnerGate;
   project?: Project;
+  run?: Run;
   urgency: DecisionUrgency;
   hasQuestion: boolean;
   hasConsequences: boolean;
   canResolve: boolean;
+}
+
+export interface DecisionInboxGroup {
+  key: string;
+  urgency: DecisionUrgency;
+  project?: Project;
+  run?: Run;
+  items: DecisionInboxItem[];
 }
 
 const activeStates = new Set<Run["state"]>([
@@ -124,10 +133,12 @@ export function decisionInbox(
   projects: Project[],
   projectRef?: string,
   now = new Date(),
+  runs: Run[] = [],
 ): DecisionInboxItem[] {
   const projectsByRef = new Map(
     projects.map((project) => [project.ref, project]),
   );
+  const runsByRef = new Map(runs.map((run) => [run.ref, run]));
   const urgencyOrder: Record<DecisionUrgency, number> = {
     OVERDUE: 0,
     SOON: 1,
@@ -146,6 +157,7 @@ export function decisionInbox(
       return {
         gate,
         project: projectsByRef.get(gate.projectRef),
+        run: runsByRef.get(gate.runRef),
         urgency: decisionUrgency(gate, now),
         hasQuestion,
         hasConsequences,
@@ -164,6 +176,59 @@ export function decisionInbox(
       const deadline = leftDeadline.localeCompare(rightDeadline);
       return deadline || right.gate.openedAt.localeCompare(left.gate.openedAt);
     });
+}
+
+export function decisionHistory(
+  gates: OwnerGate[],
+  projects: Project[],
+  projectRef?: string,
+  runs: Run[] = [],
+): DecisionInboxItem[] {
+  const projectsByRef = new Map(
+    projects.map((project) => [project.ref, project]),
+  );
+  const runsByRef = new Map(runs.map((run) => [run.ref, run]));
+  return gates
+    .filter(
+      (gate) =>
+        gate.state !== "OPEN" &&
+        (!projectRef || gate.projectRef === projectRef),
+    )
+    .map((gate) => ({
+      gate,
+      project: projectsByRef.get(gate.projectRef),
+      run: runsByRef.get(gate.runRef),
+      urgency: "NORMAL" as const,
+      hasQuestion: gate.contextSummary.trim().length > 0,
+      hasConsequences: gate.consequencesSummary.trim().length > 0,
+      canResolve: false,
+    }))
+    .sort((left, right) =>
+      (right.gate.decidedAt ?? right.gate.openedAt).localeCompare(
+        left.gate.decidedAt ?? left.gate.openedAt,
+      ),
+    );
+}
+
+export function groupDecisionInbox(
+  items: DecisionInboxItem[],
+): DecisionInboxGroup[] {
+  const groups = new Map<string, DecisionInboxGroup>();
+  for (const item of items) {
+    const key = [item.urgency, item.gate.projectRef, item.gate.runRef].join(
+      ":",
+    );
+    const group = groups.get(key) ?? {
+      key,
+      urgency: item.urgency,
+      project: item.project,
+      run: item.run,
+      items: [],
+    };
+    group.items.push(item);
+    groups.set(key, group);
+  }
+  return [...groups.values()];
 }
 
 export function projectArtifacts(
