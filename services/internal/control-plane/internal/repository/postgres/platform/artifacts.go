@@ -401,11 +401,11 @@ func (repository *Repository) finalizeArtifactPurge(ctx context.Context, scope s
 	}
 	encoded, _ := json.Marshal(storedReceipt)
 	updated, err := tx.Exec(ctx, queryArtifactsPurgeUpdateIdempotencyReceipt, pgx.StrictNamedArgs{
-		"organization_id": scope.organizationID,
-		"actor_id":        scope.actorID,
-		"operation":       mutation.Operation,
-		"idempotency_key": mutation.IdempotencyKey,
-		"intent_digest":   mutation.IntentDigest,
+		"organization_id":  scope.organizationID,
+		"actor_id":         scope.actorID,
+		"operation":        mutation.Operation,
+		"idempotency_key":  mutation.IdempotencyKey,
+		"intent_digest":    mutation.IntentDigest,
 		"response_payload": encoded,
 	})
 	if err != nil || updated.RowsAffected() != 1 {
@@ -656,6 +656,18 @@ func (repository *Repository) changeArtifactLifecycle(ctx context.Context, tx pg
 	}
 	if lifecycleState != expectedState {
 		return commandOutcome{}, errs.ErrConflict
+	}
+	if input.Kind == command.DeleteArtifact {
+		var hasQueuedDependencies bool
+		if err := tx.QueryRow(ctx, queryArtifactsLifecycleSelectHasQueuedDependencies, pgx.StrictNamedArgs{
+			"artifact_id":      artifactID,
+			"artifact_version": version,
+		}).Scan(&hasQueuedDependencies); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if hasQueuedDependencies {
+			return commandOutcome{}, errs.ErrConflict
+		}
 	}
 	tag, err := tx.Exec(ctx, queryText, pgx.StrictNamedArgs{
 		"artifact_id":      artifactID,

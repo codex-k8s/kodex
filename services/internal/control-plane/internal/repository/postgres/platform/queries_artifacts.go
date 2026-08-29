@@ -39,6 +39,8 @@ var (
 	queryArtifactsChangeartifactbindingUpdateAgentsVersion string
 	//go:embed sql/artifacts_lifecycle_select_for_update.sql
 	queryArtifactsLifecycleSelectForUpdate string
+	//go:embed sql/artifacts_lifecycle_select_has_queued_dependencies.sql
+	queryArtifactsLifecycleSelectHasQueuedDependencies string
 	//go:embed sql/artifacts_lifecycle_soft_delete.sql
 	queryArtifactsLifecycleSoftDelete string
 	//go:embed sql/artifacts_lifecycle_restore.sql

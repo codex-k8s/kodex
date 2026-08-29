@@ -38,6 +38,9 @@ CREATE TABLE control_plane.attachment_set_items (
     UNIQUE (attachment_set_id, artifact_id)
 );
 
+CREATE INDEX attachment_set_items_artifact_version
+    ON control_plane.attachment_set_items (artifact_id, artifact_version, attachment_set_id);
+
 CREATE TABLE control_plane.attachment_bindings (
     ref text PRIMARY KEY CHECK (ref ~ '^abnd_[A-Za-z0-9_-]{8,89}$'),
     organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),

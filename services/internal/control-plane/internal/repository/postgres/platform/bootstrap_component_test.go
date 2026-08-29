@@ -2547,6 +2547,13 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		len(turn.Conversation.Context.AllowedOperations) != 2 {
 		t.Fatalf("assistant turn returned incomplete conversation: %#v", turn.Conversation)
 	}
+	queuedInputVersion := assistantInput.Version
+	if _, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-before-claim-1", ExpectedVersion: &queuedInputVersion},
+		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("queued assistant input was soft-deleted before claim: %v", err)
+	}
 	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-claim-1"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
 	if err != nil || len(claimed.RuntimeItems) != 1 {
