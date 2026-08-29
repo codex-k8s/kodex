@@ -37,6 +37,36 @@ func TestEvaluateRestrictsAgentAndProjectInstance(t *testing.T) {
 	}
 }
 
+func TestEvaluateRestrictsOrganizationIntegrationInstance(t *testing.T) {
+	subject := entity.AccessSubject{Ref: "usr_alice", Kind: "USER", Active: true}
+	binding := entity.AccessBinding{
+		Ref: "abnd_integration_a", State: "ACTIVE", Subject: subject,
+		RoleVersion: entity.AccessRoleVersion{Ref: "arv_integration", RoleRef: "arole_integration", PermissionKeys: []string{"integration.manage"}},
+		Scope:       entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: "int_a"},
+	}
+	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+
+	if err := ValidateScope(binding.Scope); err != nil {
+		t.Fatalf("organization integration scope was rejected: %v", err)
+	}
+	if decision := Evaluate(subject, "integration.manage", binding.Scope, "", []entity.AccessBinding{binding}, now); !decision.Allowed {
+		t.Fatalf("exact integration binding was not applied: %#v", decision)
+	}
+	other := entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: "int_b"}
+	if decision := Evaluate(subject, "integration.manage", other, "", []entity.AccessBinding{binding}, now); decision.Allowed {
+		t.Fatalf("integration binding escaped its exact instance: %#v", decision)
+	}
+}
+
+func TestValidateScopeRequiresProjectForProjectOwnedResourceInstance(t *testing.T) {
+	if err := ValidateScope(entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: "agt_a"}); err == nil {
+		t.Fatal("project-owned agent scope without project was accepted")
+	}
+	if err := ValidateScope(entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: "prj_a", ResourceKind: "INTEGRATION", ResourceRef: "int_a"}); err == nil {
+		t.Fatal("organization-owned integration scope with project was accepted")
+	}
+}
+
 func TestEvaluateAppliesBoundedWindowAndOIDCGroup(t *testing.T) {
 	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
 	from, until := now.Add(-time.Minute), now.Add(time.Minute)

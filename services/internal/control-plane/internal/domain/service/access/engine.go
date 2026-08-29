@@ -128,7 +128,10 @@ func ValidateScope(scope entity.AccessScope) error {
 			return errors.New("resource-kind scope is incomplete")
 		}
 	case "RESOURCE_INSTANCE":
-		if scope.ProjectRef == "" || scope.ResourceKind == "" || scope.ResourceKind == "ORGANIZATION" || scope.ResourceRef == "" || !knownResourceKind(scope.ResourceKind) {
+		organizationScoped := scope.ResourceKind == "INTEGRATION"
+		if scope.ResourceKind == "" || scope.ResourceKind == "ORGANIZATION" || scope.ResourceRef == "" ||
+			!knownResourceKind(scope.ResourceKind) || organizationScoped && scope.ProjectRef != "" ||
+			!organizationScoped && scope.ProjectRef == "" {
 			return errors.New("resource-instance scope is incomplete")
 		}
 	}

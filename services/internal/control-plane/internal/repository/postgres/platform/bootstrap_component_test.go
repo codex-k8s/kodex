@@ -526,7 +526,7 @@ func testOptionalInteractionIncident(t *testing.T, ctx context.Context, reposito
 		}},
 	})
 	if err != nil || connection.Connection == nil {
-		t.Fatalf("create Mattermost connection: connection=%#v err=%v", connection.Connection, err)
+		t.Fatalf("configure Mattermost credential: connection=%#v err=%v", connection.Connection, err)
 	}
 	var connectedVersion int64
 	if err := pool.QueryRow(ctx, bootstrapComponentConnectIntegrationQuery, connection.Connection.Ref).Scan(&connectedVersion); err != nil {
