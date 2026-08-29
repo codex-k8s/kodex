@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,17 +18,18 @@ import (
 )
 
 type config struct {
-	Environment   string        `env:"DEPLOYMENT_ENVIRONMENT"`
-	TaskFile      string        `env:"SESSION_ARCHIVE_TASK_FILE"`
-	Workspace     string        `env:"SESSION_ARCHIVE_WORKSPACE"`
-	ResultFile    string        `env:"SESSION_ARCHIVE_RESULT_FILE"`
-	Endpoint      string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_ENDPOINT"`
-	Region        string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_REGION"`
-	Bucket        string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_BUCKET"`
-	AccessKeyFile string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_ACCESS_KEY_FILE"`
-	SecretKeyFile string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_SECRET_KEY_FILE"`
-	UsePathStyle  bool          `env:"SESSION_ARCHIVE_OBJECT_STORAGE_USE_PATH_STYLE"`
-	Timeout       time.Duration `env:"SESSION_ARCHIVE_WORKER_TIMEOUT"`
+	Environment        string        `env:"DEPLOYMENT_ENVIRONMENT"`
+	TaskFile           string        `env:"SESSION_ARCHIVE_TASK_FILE"`
+	Workspace          string        `env:"SESSION_ARCHIVE_WORKSPACE"`
+	ResultFile         string        `env:"SESSION_ARCHIVE_RESULT_FILE"`
+	Endpoint           string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_ENDPOINT"`
+	Region             string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_REGION"`
+	Bucket             string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_BUCKET"`
+	AccessKeyFile      string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_ACCESS_KEY_FILE"`
+	SecretKeyFile      string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_SECRET_KEY_FILE"`
+	UsePathStyle       bool          `env:"SESSION_ARCHIVE_OBJECT_STORAGE_USE_PATH_STYLE"`
+	AllowInsecureLocal bool          `env:"SESSION_ARCHIVE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL"`
+	Timeout            time.Duration `env:"SESSION_ARCHIVE_WORKER_TIMEOUT"`
 }
 
 func Run(lifecycle context.Context) error {
@@ -90,13 +92,22 @@ func validateConfig(value config) error {
 	if value.Environment != "local" && value.Environment != "staging" && value.Environment != "production" {
 		return errors.New("worker environment is invalid")
 	}
-	if value.Endpoint == "" || value.Region == "" || value.Bucket == "" || value.Timeout < time.Minute || value.Timeout > 15*time.Minute {
+	if value.Endpoint == "" || value.Region == "" || value.Bucket == "" || value.Timeout < time.Minute || value.Timeout > 15*time.Minute ||
+		!validObjectStorageBoundary(value) {
 		return errors.New("worker lifecycle is invalid")
 	}
-	if value.Environment != "local" && !strings.HasPrefix(value.Endpoint, "https://") {
-		return errors.New("worker object storage TLS is required")
-	}
 	return nil
+}
+
+func validObjectStorageBoundary(value config) bool {
+	endpoint, err := url.Parse(value.Endpoint)
+	if err != nil || endpoint == nil || endpoint.Host == "" || endpoint.User != nil ||
+		endpoint.RawQuery != "" || endpoint.Fragment != "" || endpoint.Path != "" && endpoint.Path != "/" {
+		return false
+	}
+	localInsecure := value.AllowInsecureLocal && value.Environment == "staging" && endpoint.Scheme == "http" &&
+		endpoint.Hostname() == "seaweedfs-s3.kodex-system.svc.cluster.local" && endpoint.Port() == "8333"
+	return endpoint.Scheme == "https" || localInsecure
 }
 
 func readSecret(path string) (string, error) {

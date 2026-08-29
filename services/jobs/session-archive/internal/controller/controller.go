@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
@@ -30,6 +31,7 @@ type Config struct {
 	Namespace, Environment, WorkerImage, WorkerServiceAccount, ObjectStorageSecret string
 	StorageClass, SessionPVCSize                                                   string
 	ObjectStorageEndpoint, ObjectStorageRegion, ObjectStorageBucket                string
+	ObjectStorageAllowInsecureLocal                                                bool
 	WorkerTimeout                                                                  time.Duration
 }
 
@@ -281,6 +283,7 @@ func (controller *Controller) job(name string, task model.Task) *batchv1.Job {
 			{Name: "SESSION_ARCHIVE_OBJECT_STORAGE_ENDPOINT", Value: controller.config.ObjectStorageEndpoint},
 			{Name: "SESSION_ARCHIVE_OBJECT_STORAGE_REGION", Value: controller.config.ObjectStorageRegion},
 			{Name: "SESSION_ARCHIVE_OBJECT_STORAGE_BUCKET", Value: controller.config.ObjectStorageBucket},
+			{Name: "SESSION_ARCHIVE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL", Value: strconv.FormatBool(controller.config.ObjectStorageAllowInsecureLocal)},
 			{Name: "SESSION_ARCHIVE_OBJECT_STORAGE_USE_PATH_STYLE", Value: "true"},
 			{Name: "SESSION_ARCHIVE_WORKER_TIMEOUT", Value: controller.config.WorkerTimeout.String()}},
 		VolumeMounts: mounts, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile,

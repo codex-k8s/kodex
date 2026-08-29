@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 const (
@@ -98,7 +99,7 @@ func (task Task) Validate() error {
 	if task.RuntimeRevisionVersion < 1 || task.ContentGeneration < 1 || task.Attempt < 1 ||
 		task.SourceSizeBytes < 1 || task.SourceSizeBytes > MaximumSourceBytes ||
 		len(task.RuntimeRevisionDigest) != 64 || len(task.SourceSHA256) != 64 || len(task.InputDigest) != 64 ||
-		strings.Contains(task.SourceRelativePath, "..") || !strings.HasSuffix(task.SourceRelativePath, "rollout-"+task.CodexSessionID+".jsonl") {
+		runtimecontract.ValidateCodexArchiveIdentity(task.CodexSessionID, task.SourceRelativePath) != nil {
 		return errors.New("session archive task binding is invalid")
 	}
 	switch task.Kind {

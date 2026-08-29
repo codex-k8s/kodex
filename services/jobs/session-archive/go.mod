@@ -9,6 +9,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/objectstorage v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
+	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.23.2
@@ -18,6 +19,7 @@ require (
 )
 
 require (
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.45.1 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.20 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.33.1 // indirect

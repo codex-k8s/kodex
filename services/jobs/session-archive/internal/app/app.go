@@ -54,7 +54,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 		WorkerImage: config.WorkerImage, WorkerServiceAccount: config.WorkerServiceAccount, ObjectStorageSecret: config.ObjectStorageSecret,
 		StorageClass: config.StorageClass, SessionPVCSize: config.SessionPVCSize,
 		ObjectStorageEndpoint: config.ObjectStorageEndpoint, ObjectStorageRegion: config.ObjectStorageRegion,
-		ObjectStorageBucket: config.ObjectStorageBucket, WorkerTimeout: config.WorkerTimeout})
+		ObjectStorageBucket: config.ObjectStorageBucket, ObjectStorageAllowInsecureLocal: config.ObjectStorageAllowInsecureLocal,
+		WorkerTimeout: config.WorkerTimeout})
 	if err != nil {
 		_ = control.Close()
 		return err
@@ -142,7 +143,9 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 					readiness.Set(true, "ready")
 					metrics.SetReady(true)
 					if len(claimed.GetTasks()) > 0 {
-						process(ctx, control, kube, claimed.GetTasks()[0], owned, config)
+						if err := process(ctx, control, kube, claimed.GetTasks()[0], owned, config); err != nil {
+							logger.WarnContext(ctx, "session archive task processing failed", "error_class", "task_processing")
+						}
 					}
 				}
 			}
@@ -159,14 +162,18 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 	}
 }
 
-func process(ctx context.Context, control *controlplaneclient.Client, kube *controller.Controller, claim *controlplanev1.SessionArchiveTask, metrics *archiveMetrics, config Config) {
-	task, err := model.FromProto(claim)
-	if err != nil {
-		return
+func process(ctx context.Context, control *controlplaneclient.Client, kube *controller.Controller, claim *controlplanev1.SessionArchiveTask, metrics *archiveMetrics, config Config) error {
+	if claim == nil || claim.GetLease() == nil {
+		return errors.New("claimed session archive task is incomplete")
 	}
 	lease := claim.GetLease()
-	if lease == nil {
-		return
+	task, err := model.FromProto(claim)
+	if err != nil {
+		metrics.tasks.WithLabelValues("INVALID", "error").Inc()
+		if failErr := failClaim(ctx, control, claim.GetTaskRef(), lease, "SESSION_ARCHIVE_SOURCE_INVALID", config.RPCDeadline); failErr != nil {
+			return errors.New("reject invalid session archive task")
+		}
+		return errors.New("invalid session archive task was rejected")
 	}
 	started := time.Now()
 	metrics.active.Inc()
@@ -213,4 +220,20 @@ func process(ctx context.Context, control *controlplaneclient.Client, kube *cont
 	if err == nil && result.ObjectSizeBytes > 0 {
 		metrics.bytes.WithLabelValues(task.Kind).Add(float64(result.ObjectSizeBytes))
 	}
+	return err
+}
+
+func failClaim(ctx context.Context, control *controlplaneclient.Client, taskRef string, lease *controlplanev1.WorkLease, safeErrorCode string, timeout time.Duration) error {
+	if taskRef == "" || lease == nil || lease.GetRef() == "" || lease.GetFence() == "" || lease.GetGeneration() < 1 {
+		return errors.New("session archive claim identity is invalid")
+	}
+	rpc, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+	defer cancel()
+	mutation := &controlplanev1.MutationContext{IdempotencyKey: uuid.NewSHA1(uuid.NameSpaceOID,
+		[]byte(taskRef+"\x00"+fmt.Sprint(lease.GetGeneration())+"\x00fail-invalid")).String()}
+	_, err := control.SessionArchive.FailSessionArchiveTask(rpc, &controlplanev1.FailSessionArchiveTaskRequest{
+		Mutation: mutation, TaskRef: taskRef, LeaseRef: lease.GetRef(), Fence: lease.GetFence(),
+		Generation: lease.GetGeneration(), SafeErrorCode: safeErrorCode,
+	})
+	return err
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -53,6 +54,20 @@ func TestWorkerJobUsesSessionVolumeGroupWithoutServiceAccountToken(t *testing.T)
 	if pod.AutomountServiceAccountToken == nil || *pod.AutomountServiceAccountToken {
 		t.Fatal("worker received a Kubernetes service account token")
 	}
+	assertEnvironmentValue(t, pod.Containers[0].Env, "SESSION_ARCHIVE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL", "false")
+}
+
+func assertEnvironmentValue(t *testing.T, values []corev1.EnvVar, name, expected string) {
+	t.Helper()
+	for _, value := range values {
+		if value.Name == name {
+			if value.Value != expected {
+				t.Fatalf("environment %s = %q, expected %q", name, value.Value, expected)
+			}
+			return
+		}
+	}
+	t.Fatalf("environment %s is absent", name)
 }
 
 func testConfig() Config {
