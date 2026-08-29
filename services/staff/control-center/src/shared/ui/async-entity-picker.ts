@@ -89,6 +89,9 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     return "ready";
   });
   const hasMore = computed(() => nextCursor.value !== null);
+  const loadMoreError = computed(
+    () => error.value !== undefined && items.value.length > 0,
+  );
 
   function cancelPending(): void {
     if (timer) clearTimeout(timer);
@@ -186,6 +189,7 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     initialLoading,
     items,
     loadMore,
+    loadMoreError,
     loadingMore,
     nextCursor,
     phase,

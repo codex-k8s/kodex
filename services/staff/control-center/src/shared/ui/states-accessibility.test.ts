@@ -134,8 +134,20 @@ describe("authoritative UI states and accessibility", () => {
 
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
-    expect(html).toContain('aria-label="Новый сотрудник"');
+    expect(html).toMatch(/aria-labelledby="modal-title-[^"]+"/);
+    expect(html).toMatch(/<h2 id="modal-title-[^"]+"[^>]*>/);
+    expect(html).toContain("Новый сотрудник</h2>");
+    expect(html).toContain("modal--md");
     expect(html).toContain('tabindex="-1"');
     expect(html).toMatch(/<button[^>]*aria-label="Закрыть"[^>]*disabled/);
+  });
+
+  it("применяет запрошенный семантический размер dialog", async () => {
+    const html = await render(ModalDialog, {
+      title: "Предпросмотр файла",
+      size: "xl",
+    });
+
+    expect(html).toContain("modal--xl");
   });
 });

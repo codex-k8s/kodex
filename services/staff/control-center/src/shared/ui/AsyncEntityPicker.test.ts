@@ -137,6 +137,43 @@ describe("useAsyncEntityCollection", () => {
     expect(collection.phase.value).toBe("empty");
     scope.stop();
   });
+
+  it("сохраняет загруженные элементы при ошибке cursor-страницы", async () => {
+    vi.useFakeTimers();
+    const loader = vi
+      .fn<
+        (request: AsyncEntityLoadRequest) => Promise<AsyncEntityPage<TestItem>>
+      >()
+      .mockResolvedValueOnce({
+        items: [{ id: "one", label: "Один", revision: 1 }],
+        nextCursor: "cursor-2",
+      })
+      .mockRejectedValueOnce(new Error("next page unavailable"))
+      .mockResolvedValueOnce({
+        items: [{ id: "two", label: "Два", revision: 1 }],
+      });
+    const scope = effectScope();
+    const collection = scope.run(() =>
+      useAsyncEntityCollection(loader, { debounceMs: 0, immediate: false }),
+    );
+    if (!collection) throw new Error("collection was not created");
+
+    collection.query.value = "каталог";
+    await vi.advanceTimersByTimeAsync(0);
+    await collection.loadMore();
+
+    expect(collection.items.value.map((item) => item.id)).toEqual(["one"]);
+    expect(collection.loadMoreError.value).toBe(true);
+    expect(collection.phase.value).toBe("ready");
+
+    await collection.loadMore();
+    expect(collection.items.value.map((item) => item.id)).toEqual([
+      "one",
+      "two",
+    ]);
+    expect(collection.loadMoreError.value).toBe(false);
+    scope.stop();
+  });
 });
 
 describe("cursor infinite scroll", () => {
@@ -186,6 +223,8 @@ describe("AsyncEntityPicker", () => {
     const html = await renderToString(app);
 
     expect(html).toContain('role="listbox"');
+    expect(html).toContain('role="combobox"');
+    expect(html).toContain('aria-expanded="true"');
     expect(html).toContain('aria-label="Выбор сущности"');
     expect(html).toContain("Загрузка");
   });

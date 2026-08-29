@@ -116,6 +116,7 @@ const {
   initialLoading,
   items,
   loadMore,
+  loadMoreError,
   loadingMore,
   phase,
   query,
@@ -159,8 +160,15 @@ const infiniteScrollEnabled = computed(
   () => (inline || open.value) && hasMore.value,
 );
 
-watch(items, (nextItems) => {
-  activeIndex.value = nextItems.findIndex((item) => !item.disabled);
+watch(items, (nextItems, previousItems) => {
+  const previousActiveId = previousItems[activeIndex.value]?.id;
+  const preservedIndex = previousActiveId
+    ? nextItems.findIndex((item) => item.id === previousActiveId)
+    : -1;
+  activeIndex.value =
+    preservedIndex >= 0
+      ? preservedIndex
+      : nextItems.findIndex((item) => !item.disabled);
 });
 useCursorInfiniteScroll({
   root: list,
@@ -313,8 +321,11 @@ onBeforeUnmount(() => {
         type="search"
         :placeholder="copy.searchPlaceholder"
         :disabled="disabled"
+        role="combobox"
         :aria-controls="`${pickerId}-listbox`"
         :aria-activedescendant="activeDescendant"
+        aria-expanded="true"
+        aria-haspopup="listbox"
         aria-autocomplete="list"
         @keydown="handleListKeydown($event, false)"
     /></label>
@@ -396,6 +407,18 @@ onBeforeUnmount(() => {
             :size="16"
             aria-hidden="true"
           />{{ copy.loadingMore }}
+        </div>
+        <div
+          v-else-if="loadMoreError"
+          class="async-picker__more async-picker__more--error"
+          role="alert"
+        >
+          <CircleAlert :size="16" aria-hidden="true" />
+          <span>{{ copy.error }}</span>
+          <button type="button" class="async-picker__retry" @click="loadMore">
+            <RefreshCw :size="15" aria-hidden="true" />
+            {{ copy.retry }}
+          </button>
         </div>
       </template>
     </div>
@@ -521,6 +544,22 @@ onBeforeUnmount(() => {
                 aria-hidden="true"
               />{{ $t("common.loading") }}
             </div>
+            <div
+              v-else-if="loadMoreError"
+              class="async-picker__more async-picker__more--error"
+              role="alert"
+            >
+              <CircleAlert :size="16" aria-hidden="true" />
+              <span>{{ $t("common.error") }}</span>
+              <button
+                type="button"
+                class="async-picker__retry"
+                @click="loadMore"
+              >
+                <RefreshCw :size="15" aria-hidden="true" />
+                {{ $t("common.retry") }}
+              </button>
+            </div>
           </template>
         </div>
         <footer class="async-picker__footer">
@@ -534,7 +573,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .async-picker {
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 .async-picker--inline {
   display: flex;
@@ -629,6 +670,7 @@ onBeforeUnmount(() => {
   color: var(--text);
   text-align: left;
   cursor: pointer;
+  overflow: hidden;
 }
 .async-picker__option:hover,
 .async-picker__option--active {
@@ -644,6 +686,19 @@ onBeforeUnmount(() => {
 }
 .async-picker__reason {
   color: var(--warning) !important;
+}
+.async-picker__option-copy strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.async-picker__option-copy small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 .async-picker__state {
   display: flex;
@@ -685,6 +740,20 @@ onBeforeUnmount(() => {
 }
 .async-picker__sentinel {
   height: 1px;
+}
+.async-picker__more {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.async-picker__more--error {
+  flex-wrap: wrap;
+  padding: 6px 12px;
+  color: var(--danger);
 }
 .async-picker__spin {
   animation: async-picker-spin 0.9s linear infinite;
