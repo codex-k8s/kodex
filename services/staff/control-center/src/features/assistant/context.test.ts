@@ -111,11 +111,6 @@ describe("assistant route context", () => {
       sources,
     ).descriptor;
 
-    expect(
-      conversationMatchesContext(
-        { context: {} as { entityKind: string; entityRef: string } },
-        current,
-      ),
-    ).toBe(true);
+    expect(conversationMatchesContext({ context: {} }, current)).toBe(true);
   });
 });

@@ -107,7 +107,9 @@ export function resolveAssistantContext(
 
 export function conversationMatchesContext(
   conversation: {
-    context: Pick<AssistantContextDescriptor, "entityKind" | "entityRef">;
+    context: Partial<
+      Pick<AssistantContextDescriptor, "entityKind" | "entityRef">
+    >;
   },
   context: AssistantContextDescriptor,
 ): boolean {

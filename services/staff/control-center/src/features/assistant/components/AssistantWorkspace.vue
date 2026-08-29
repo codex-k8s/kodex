@@ -468,6 +468,17 @@ onBeforeUnmount(() => {
                   <StatusBadge :state="turn.plan.state" />
                 </header>
                 <SafeMarkdown :content="turn.plan.auditSummary" />
+                <ul class="assistant-plan-card__operations">
+                  <li
+                    v-for="operation in turn.plan.operations.slice(0, 3)"
+                    :key="operation.ref"
+                  >
+                    {{ operation.title }}
+                  </li>
+                  <li v-if="turn.plan.operations.length > 3">
+                    +{{ turn.plan.operations.length - 3 }}
+                  </li>
+                </ul>
                 <button
                   class="button button--primary"
                   type="button"
@@ -775,6 +786,14 @@ onBeforeUnmount(() => {
 .assistant-plan-card > header span {
   color: var(--subtle);
   font-size: 0.76rem;
+}
+.assistant-plan-card__operations {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text);
+  font-size: 0.84rem;
 }
 .assistant-plan-card .button {
   justify-self: start;
