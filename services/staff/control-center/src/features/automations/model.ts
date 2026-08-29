@@ -4,6 +4,24 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
 
+export interface ScheduleCapabilities {
+  canEdit: boolean;
+  canPause: boolean;
+  canEnable: boolean;
+  canArchive: boolean;
+  canDeletePermanently: false;
+}
+
+export function scheduleCapabilities(schedule: Schedule): ScheduleCapabilities {
+  return {
+    canEdit: schedule.nextActions.includes("EDIT"),
+    canPause: schedule.nextActions.includes("DISABLE"),
+    canEnable: schedule.nextActions.includes("ENABLE"),
+    canArchive: schedule.nextActions.includes("ARCHIVE"),
+    canDeletePermanently: false,
+  };
+}
+
 export function scheduleInput(schedule: Schedule): ScheduleInput {
   const targetType = schedule.target.type;
   if (!isSchedulePreset(schedule.preset))

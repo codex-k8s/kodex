@@ -108,4 +108,40 @@ describe("buildRunActivityItems", () => {
     expect(items).toHaveLength(2);
     expect(items.some((item) => "tool" in item)).toBe(false);
   });
+
+  it("выделяет нормализованный tool call в самостоятельный блок", () => {
+    const [firstEvent] = events;
+    if (!firstEvent) {
+      throw new Error("test event fixture is required");
+    }
+    const toolEvent: PresentedRunEvent = {
+      ...firstEvent,
+      ref: "evt_tool",
+      sequence: 3,
+      type: "TOOL_CALL_RECORDED",
+      messageKind: "TOOL_CALL",
+      actor: {
+        kind: "AGENT",
+        ref: "agt_example",
+        name: "Аналитик продаж",
+      },
+      toolCall: {
+        ref: "trn_tool",
+        tool: "project_files.search",
+        safeParameters: { query: "квартальный отчёт" },
+        state: "SUCCEEDED",
+        durationMs: 240,
+        safeResult: "Найдено 4 фрагмента",
+        auditRef: "evt_audit",
+      },
+    };
+
+    const items = buildRunActivityItems(run, [node], [toolEvent]);
+
+    expect(items[1]).toMatchObject({
+      kind: "tool",
+      actor: "Аналитик продаж",
+      toolCall: { tool: "project_files.search" },
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import type {
   Artifact,
   OwnerGate,
+  Project,
   Run,
 } from "@/shared/api/generated/openapi/types.gen";
 
@@ -16,6 +17,17 @@ export type AttentionItem =
       run: Run;
       incident: NonNullable<Run["incidents"]>[number];
     };
+
+export type DecisionUrgency = "OVERDUE" | "SOON" | "NORMAL";
+
+export interface DecisionInboxItem {
+  gate: OwnerGate;
+  project?: Project;
+  urgency: DecisionUrgency;
+  hasQuestion: boolean;
+  hasConsequences: boolean;
+  canResolve: boolean;
+}
 
 const activeStates = new Set<Run["state"]>([
   "QUEUED",
@@ -94,6 +106,64 @@ export function collectAttention(
       right.kind === "GATE" ? right.gate.openedAt : right.incident.createdAt;
     return rightAt.localeCompare(leftAt);
   });
+}
+
+export function decisionUrgency(
+  gate: OwnerGate,
+  now = new Date(),
+): DecisionUrgency {
+  if (!gate.expiresAt) return "NORMAL";
+  const expiresAt = Date.parse(gate.expiresAt);
+  if (!Number.isFinite(expiresAt)) return "NORMAL";
+  if (expiresAt <= now.getTime()) return "OVERDUE";
+  return expiresAt - now.getTime() <= 24 * 60 * 60 * 1000 ? "SOON" : "NORMAL";
+}
+
+export function decisionInbox(
+  gates: OwnerGate[],
+  projects: Project[],
+  projectRef?: string,
+  now = new Date(),
+): DecisionInboxItem[] {
+  const projectsByRef = new Map(
+    projects.map((project) => [project.ref, project]),
+  );
+  const urgencyOrder: Record<DecisionUrgency, number> = {
+    OVERDUE: 0,
+    SOON: 1,
+    NORMAL: 2,
+  };
+
+  return gates
+    .filter(
+      (gate) =>
+        gate.state === "OPEN" &&
+        (!projectRef || gate.projectRef === projectRef),
+    )
+    .map((gate) => {
+      const hasQuestion = gate.contextSummary.trim().length > 0;
+      const hasConsequences = gate.consequencesSummary.trim().length > 0;
+      return {
+        gate,
+        project: projectsByRef.get(gate.projectRef),
+        urgency: decisionUrgency(gate, now),
+        hasQuestion,
+        hasConsequences,
+        canResolve:
+          hasQuestion &&
+          hasConsequences &&
+          gate.nextActions.includes("RESOLVE_GATE") &&
+          gate.allowedDecisions.length > 0,
+      };
+    })
+    .sort((left, right) => {
+      const urgency = urgencyOrder[left.urgency] - urgencyOrder[right.urgency];
+      if (urgency !== 0) return urgency;
+      const leftDeadline = left.gate.expiresAt ?? "9999-12-31T23:59:59Z";
+      const rightDeadline = right.gate.expiresAt ?? "9999-12-31T23:59:59Z";
+      const deadline = leftDeadline.localeCompare(rightDeadline);
+      return deadline || right.gate.openedAt.localeCompare(left.gate.openedAt);
+    });
 }
 
 export function projectArtifacts(

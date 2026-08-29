@@ -1,11 +1,8 @@
 import type {
-  RoleEnvironment,
   RuntimeSelection,
+  TemplateVariable,
 } from "@/shared/api/generated/openapi/types.gen";
-import type {
-  AsyncEntityLoader,
-  AsyncEntityPickerItem,
-} from "@/shared/ui/async-entity-picker";
+import type { AsyncEntityPickerItem } from "@/shared/ui/async-entity-picker";
 
 export type AgentDetailTab =
   | "profile"
@@ -20,8 +17,17 @@ export interface AgentProfileDraft {
   name: string;
   purpose: string;
   roleDescription: string;
-  avatarUrl: string;
 }
+
+export type AgentBackendFeatureCode = "avatar_asset";
+
+export type AgentBackendFeatureAvailability =
+  | { state: "AVAILABLE" }
+  | {
+      state: "UNAVAILABLE";
+      code: AgentBackendFeatureCode;
+      reason: string;
+    };
 
 export interface CodeToken {
   text: string;
@@ -36,9 +42,15 @@ export interface CodeToken {
     | "strong";
 }
 
-export interface EnvironmentPickerItem extends AsyncEntityPickerItem {
-  environment: RoleEnvironment;
-  software: string[];
+export interface TemplateVariablePickerItem extends AsyncEntityPickerItem {
+  variable: TemplateVariable;
+  scope: string;
+}
+
+export interface TextInsertionResult {
+  value: string;
+  selectionStart: number;
+  selectionEnd: number;
 }
 
 export function agentInitials(name: string): string {
@@ -112,9 +124,40 @@ export function sameProfileDraft(
   return (
     draft.name === current.name &&
     draft.purpose === current.purpose &&
-    draft.roleDescription === current.roleDescription &&
-    draft.avatarUrl === current.avatarUrl
+    draft.roleDescription === current.roleDescription
   );
+}
+
+export function toTemplateVariablePickerItem(
+  variable: TemplateVariable,
+): TemplateVariablePickerItem {
+  return {
+    id: variable.name,
+    label: variable.name,
+    description: variable.description,
+    scope: variable.source,
+    variable,
+  };
+}
+
+export function templateVariableInsertion(name: string): string {
+  return `{{${name}}}`;
+}
+
+export function insertTextAtSelection(
+  value: string,
+  insertion: string,
+  selectionStart: number,
+  selectionEnd: number,
+): TextInsertionResult {
+  const start = Math.max(0, Math.min(selectionStart, value.length));
+  const end = Math.max(start, Math.min(selectionEnd, value.length));
+  const nextCursor = start + insertion.length;
+  return {
+    value: `${value.slice(0, start)}${insertion}${value.slice(end)}`,
+    selectionStart: nextCursor,
+    selectionEnd: nextCursor,
+  };
 }
 
 export function extractTemplateVariables(content: string): string[] {
@@ -181,35 +224,4 @@ export function tokenizeCodeLine(
     { text: prefix[2] ?? "", tone: "plain" },
     ...inlineTokens(prefix[3] ?? ""),
   ];
-}
-
-export function createLocalEnvironmentLoader(
-  items: () => readonly EnvironmentPickerItem[],
-  pageSize = 25,
-): AsyncEntityLoader<EnvironmentPickerItem> {
-  const boundedPageSize = Math.max(1, pageSize);
-  return async ({ cursor, query, signal }) => {
-    await Promise.resolve();
-    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-
-    const normalizedQuery = query.trim().toLocaleLowerCase();
-    const filtered = items().filter((item) => {
-      const searchable = [item.label, item.description, ...item.software]
-        .filter(Boolean)
-        .join(" ")
-        .toLocaleLowerCase();
-      return !normalizedQuery || searchable.includes(normalizedQuery);
-    });
-    const parsedCursor = cursor ? Number.parseInt(cursor, 10) : 0;
-    const offset =
-      Number.isSafeInteger(parsedCursor) && parsedCursor >= 0
-        ? parsedCursor
-        : 0;
-    const page = filtered.slice(offset, offset + boundedPageSize);
-    const nextOffset = offset + page.length;
-    return {
-      items: page,
-      nextCursor: nextOffset < filtered.length ? String(nextOffset) : null,
-    };
-  };
 }

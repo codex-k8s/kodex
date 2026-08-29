@@ -61,6 +61,9 @@ defineProps<{ project: Project }>();
 <style scoped>
 .project-resources {
   display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 1px;
+  background: var(--hairline);
 }
 .project-resource {
   display: grid;
@@ -69,12 +72,9 @@ defineProps<{ project: Project }>();
   gap: 10px;
   min-height: 58px;
   padding: 9px 16px;
-  border-bottom: 1px solid var(--hairline);
   color: inherit;
+  background: var(--surface);
   text-decoration: none;
-}
-.project-resource:last-child {
-  border-bottom: 0;
 }
 .project-resource:hover {
   background: var(--panel);
@@ -94,5 +94,15 @@ defineProps<{ project: Project }>();
 .project-resource b {
   font-family: var(--font-mono);
   font-size: 1rem;
+}
+@media (max-width: 1100px) {
+  .project-resources {
+    grid-template-columns: repeat(3, minmax(170px, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .project-resources {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -3,11 +3,40 @@ import { describe, expect, it, vi } from "vitest";
 import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
 
 const listArtifactsMock = vi.hoisted(() => vi.fn());
+const deleteArtifactMock = vi.hoisted(() => vi.fn());
+const purgeArtifactMock = vi.hoisted(() => vi.fn());
+const restoreArtifactMock = vi.hoisted(() => vi.fn());
+const mutateMock = vi.hoisted(() =>
+  vi.fn(
+    async (
+      request: (headers: Record<string, string>) => Promise<{ data: unknown }>,
+      version?: number,
+    ) => ({
+      data: (
+        await request({
+          "Idempotency-Key": "idempotency-key",
+          "If-Match": `"${String(version ?? 1)}"`,
+          "X-CSRF-Token": "csrf-token",
+        })
+      ).data,
+    }),
+  ),
+);
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
+  deleteArtifact: deleteArtifactMock,
   listArtifacts: listArtifactsMock,
+  purgeArtifact: purgeArtifactMock,
+  restoreArtifact: restoreArtifactMock,
 }));
+vi.mock("@/shared/api/client", () => ({ requestSignal: () => undefined }));
+vi.mock("@/shared/api/mutation", () => ({ mutate: mutateMock }));
 
-import { loadArtifactPage } from "@/features/files/api";
+import {
+  deleteArtifactItem,
+  loadArtifactPage,
+  purgeArtifactItem,
+  restoreArtifactItem,
+} from "@/features/files/api";
 
 function artifact(ref: string): Artifact {
   return {
@@ -21,6 +50,7 @@ function artifact(ref: string): Artifact {
     scanState: "CLEAN",
     source: "CONTROL_CENTER",
     revision: 1,
+    lifecycleState: "ACTIVE",
     agentBindings: [],
     previewAvailable: true,
     createdAt: "2026-08-28T09:00:00Z",
@@ -48,6 +78,7 @@ describe("loadArtifactPage", () => {
     expect(listArtifactsMock).toHaveBeenCalledWith({
       path: { projectRef: "project_sales" },
       query: {
+        lifecycleState: "ACTIVE",
         pageSize: 40,
         pageToken: "cursor-current",
         query: "договор",
@@ -59,5 +90,58 @@ describe("loadArtifactPage", () => {
       label: "artifact_one.pdf",
     });
     expect(page.nextCursor).toBe("cursor-next");
+  });
+
+  it("выполняет lifecycle-команды с OCC и mutation headers", async () => {
+    const active = artifact("artifact_one");
+    const deleted = {
+      ...active,
+      lifecycleState: "DELETED" as const,
+      nextActions: ["RESTORE"] as Artifact["nextActions"],
+      version: 2,
+    };
+    deleteArtifactMock.mockResolvedValue({ data: deleted });
+    restoreArtifactMock.mockResolvedValue({ data: active });
+    purgeArtifactMock.mockResolvedValue({
+      data: { artifactRef: active.ref, lifecycleState: "PURGED" },
+    });
+
+    await expect(deleteArtifactItem(active)).resolves.toEqual(deleted);
+    await expect(restoreArtifactItem(deleted)).resolves.toEqual(active);
+    await expect(purgeArtifactItem(deleted)).resolves.toEqual({
+      artifactRef: active.ref,
+      lifecycleState: "PURGED",
+    });
+
+    expect(deleteArtifactMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { artifactRef: active.ref },
+        headers: {
+          "Idempotency-Key": "idempotency-key",
+          "If-Match": '"1"',
+          "X-CSRF-Token": "csrf-token",
+        },
+      }),
+    );
+    expect(restoreArtifactMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { artifactRef: active.ref },
+        headers: {
+          "Idempotency-Key": "idempotency-key",
+          "If-Match": '"2"',
+          "X-CSRF-Token": "csrf-token",
+        },
+      }),
+    );
+    expect(purgeArtifactMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { artifactRef: active.ref },
+        headers: {
+          "Idempotency-Key": "idempotency-key",
+          "If-Match": '"2"',
+          "X-CSRF-Token": "csrf-token",
+        },
+      }),
+    );
   });
 });

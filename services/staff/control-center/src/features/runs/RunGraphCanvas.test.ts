@@ -91,6 +91,8 @@ async function render(): Promise<string> {
             RUNNING: "Выполняется",
             QUEUED: "В очереди",
             WAITING: "Ожидает",
+            SUCCEEDED: "Завершено",
+            FAILED: "Ошибка",
           },
         },
       },
@@ -113,12 +115,14 @@ describe("RunGraphCanvas", () => {
     expect(html).toContain('aria-selected="true"');
   });
 
-  it("показывает направление и локализует пустую подпись ребра", async () => {
+  it("убирает подписи с рёбер и объясняет связи в легенде", async () => {
     const html = await render();
 
     expect(html).toContain("Подготовка отчёта");
     expect(html).toContain("Делегирование ИИ-сотрудника");
     expect(html).toContain("Аналитик продаж с подробным понятным названием");
+    expect(html).toContain("graph-legend");
+    expect(html).not.toContain("graph-edge-label");
     expect(html).not.toContain(">DELEGATED_TO<");
   });
 

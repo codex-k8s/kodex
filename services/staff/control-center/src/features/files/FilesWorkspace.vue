@@ -1,18 +1,38 @@
 <script setup lang="ts">
-import { Download, Eye, Search, Upload, X } from "@lucide/vue";
+import {
+  Download,
+  Eye,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Trash2,
+  Upload,
+  X,
+} from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
-import { loadArtifactPage } from "@/features/files/api";
+import {
+  deleteArtifactItem,
+  loadArtifactPage,
+  purgeArtifactItem,
+  restoreArtifactItem,
+} from "@/features/files/api";
+import FileLifecycleDialog from "@/features/files/FileLifecycleDialog.vue";
 import FilePreviewDialog from "@/features/files/FilePreviewDialog.vue";
 import FileTypeIcon from "@/features/files/FileTypeIcon.vue";
 import {
+  artifactLifecycleState,
+  createUploadQueueItems,
   matchesArtifactFilters,
   supportsInlinePreview,
+  type ArtifactLifecycleAction,
+  type ArtifactLifecycleState,
   type FileKind,
   type FilePreviewLabels,
   type FileSource,
   type FileTab,
+  type UploadQueueItem,
 } from "@/features/files/model";
 import { usePlatformStore } from "@/features/platform/store";
 import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
@@ -47,6 +67,9 @@ const source = ref<FileSource>("ALL");
 const viewMode = ref<ViewMode>("list");
 const selectedRef = ref(props.initialArtifactRef ?? "");
 const uploadBusy = ref(false);
+const uploadQueue = ref<UploadQueueItem[]>([]);
+const dragDepth = ref(0);
+const dragActive = computed(() => dragDepth.value > 0);
 const bindingBusy = ref("");
 const contentBusy = ref(false);
 const operationProblem = ref<AppProblem>();
@@ -55,9 +78,20 @@ const previewOpen = ref(false);
 const previewText = ref("");
 const previewImage = ref("");
 const previewUnavailable = ref(false);
+const lifecycleDialog = ref<{
+  action: ArtifactLifecycleAction;
+  artifact: Artifact;
+  state: ArtifactLifecycleState;
+}>();
+let uploadSequence = 0;
 
 const collection = useAsyncEntityCollection(
-  (request) => loadArtifactPage(props.projectRef, request),
+  (request) =>
+    loadArtifactPage(
+      props.projectRef,
+      request,
+      activeTab.value === "TRASH" ? "DELETED" : "ACTIVE",
+    ),
   { debounceMs: 250 },
 );
 const {
@@ -122,20 +156,130 @@ const previewLabels = computed<FilePreviewLabels>(() => ({
 const custom = computed(() =>
   locale.value.startsWith("en")
     ? {
+        actionUnavailable:
+          "The current API does not expose this operation. No file was changed.",
+        allFiles: "Files",
+        cancel: "Cancel",
         clearSearch: "Clear search",
+        contractUnavailable:
+          "The lifecycle contract has not been generated for this client yet.",
+        delete: "Move to trash",
+        deleteDescription:
+          "The file will stop being available to new runs and can be restored for 30 days.",
+        dropFiles: "Drop files to upload",
+        emptyTrash: "Empty trash",
+        failed: "Upload failed",
         grid: "Grid",
+        impactUnavailable:
+          "Affected active runs cannot be calculated until the lifecycle API is available.",
         loaded: "Loaded",
         loadingMore: "Loading more…",
+        purge: "Delete permanently",
+        purgeDescription:
+          "The exact object version will be removed from storage without recovery.",
         preview: previewLabels.value,
+        queued: "Queued",
+        removeFromQueue: "Remove from upload queue",
+        restore: "Restore",
+        restoreDescription:
+          "The file will return to the Project with its previous revision and bindings.",
+        retry: "Retry",
+        trash: "Trash",
+        trashContract:
+          "Trash listing, restore and purge are shown as unavailable until the server contract is implemented.",
+        trashEmpty: "No deleted files are available in this response.",
+        uploadMore: "Add files",
+        uploading: "Uploading",
+        uploadQueue: "Upload queue",
+        viewFilter: "Collection",
         view: "File view",
+        lifecycle: {
+          confirm: {
+            DELETE: "Move to trash",
+            PURGE: "Delete permanently",
+            RESTORE: "Restore",
+          },
+          description: {
+            DELETE:
+              "The file will be hidden from future work and retained for 30 days.",
+            PURGE:
+              "The exact object version will be permanently removed from storage.",
+            RESTORE: "The file will return to its previous Project scope.",
+          },
+          reason: {
+            ACTION_NOT_ALLOWED:
+              "Your current permissions do not include this action.",
+            CONTRACT_UNAVAILABLE:
+              "The server announced the action, but this client has no generated command for it.",
+          },
+          title: {
+            DELETE: "Move file to trash?",
+            PURGE: "Delete file permanently?",
+            RESTORE: "Restore file?",
+          },
+        },
       }
     : {
+        actionUnavailable:
+          "Текущий API не предоставляет эту операцию. Файл не был изменён.",
+        allFiles: "Файлы",
+        cancel: "Отмена",
         clearSearch: "Очистить поиск",
+        contractUnavailable:
+          "Контракт lifecycle ещё не сгенерирован для этого клиента.",
+        delete: "В корзину",
+        deleteDescription:
+          "Файл перестанет выдаваться новым запускам, но его можно будет восстановить в течение 30 дней.",
+        dropFiles: "Перетащите файлы для загрузки",
+        emptyTrash: "Очистить корзину",
+        failed: "Не удалось загрузить",
         grid: "Сетка",
+        impactUnavailable:
+          "Список затронутых активных запусков нельзя вычислить до появления lifecycle API.",
         loaded: "Загружено",
         loadingMore: "Загружаем ещё…",
+        purge: "Удалить навсегда",
+        purgeDescription:
+          "Точная версия объекта будет удалена из хранилища без возможности восстановления.",
         preview: previewLabels.value,
+        queued: "В очереди",
+        removeFromQueue: "Убрать из очереди загрузки",
+        restore: "Восстановить",
+        restoreDescription:
+          "Файл вернётся в Проект с прежней ревизией и привязками.",
+        retry: "Повторить",
+        trash: "Корзина",
+        trashContract:
+          "Список корзины, восстановление и очистка честно недоступны до реализации серверного контракта.",
+        trashEmpty: "В текущем ответе нет удалённых файлов.",
+        uploadMore: "Добавить файлы",
+        uploading: "Загружается",
+        uploadQueue: "Очередь загрузки",
+        viewFilter: "Раздел",
         view: "Вид файлов",
+        lifecycle: {
+          confirm: {
+            DELETE: "Переместить в корзину",
+            PURGE: "Удалить навсегда",
+            RESTORE: "Восстановить",
+          },
+          description: {
+            DELETE: "Файл будет скрыт от будущей работы и сохранён на 30 дней.",
+            PURGE:
+              "Точная версия объекта будет необратимо удалена из хранилища.",
+            RESTORE: "Файл вернётся в прежнюю область Проекта.",
+          },
+          reason: {
+            ACTION_NOT_ALLOWED: "Текущие полномочия не содержат эту операцию.",
+            CONTRACT_UNAVAILABLE:
+              "Сервер объявил операцию, но в клиенте нет сгенерированной команды.",
+          },
+          title: {
+            DELETE: "Переместить файл в корзину?",
+            PURGE: "Удалить файл навсегда?",
+            RESTORE: "Восстановить файл?",
+          },
+        },
       },
 );
 
@@ -151,6 +295,10 @@ watch(
 watch(viewMode, (mode) => {
   if (typeof window !== "undefined")
     window.localStorage.setItem(viewPreferenceKey, mode);
+});
+watch(activeTab, () => {
+  selectedRef.value = "";
+  refresh();
 });
 
 useCursorInfiniteScroll({
@@ -191,6 +339,26 @@ function sourceLabel(value: Artifact["source"]): string {
   return t(`files.source.${value}`);
 }
 
+function uploadPreviewArtifact(item: UploadQueueItem): Artifact {
+  return {
+    ref: item.id,
+    version: 1,
+    projectRef: props.projectRef,
+    fileName: item.file.name,
+    mediaType: item.file.type || "application/octet-stream",
+    sizeBytes: item.file.size,
+    digest: "",
+    scanState: "PENDING",
+    source: "CONTROL_CENTER",
+    revision: 1,
+    lifecycleState: "ACTIVE",
+    agentBindings: [],
+    previewAvailable: false,
+    createdAt: "1970-01-01T00:00:00.000Z",
+    nextActions: [],
+  };
+}
+
 function bindingNames(artifact: Artifact): string {
   return artifact.agentBindings
     .map((ref) => platform.agents[ref]?.name)
@@ -219,30 +387,153 @@ function replaceArtifact(artifact: Artifact): void {
   );
 }
 
-async function upload(event: Event): Promise<void> {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  input.value = "";
-  if (!file || !canUpload.value) return;
+function updateUploadQueueItem(
+  id: string,
+  update: Partial<Pick<UploadQueueItem, "problem" | "state">>,
+): void {
+  uploadQueue.value = uploadQueue.value.map((item) =>
+    item.id === id ? { ...item, ...update } : item,
+  );
+}
+
+function enqueueFiles(files: readonly File[]): void {
+  if (!canUpload.value || files.length === 0) return;
   operationProblem.value = undefined;
   validationMessage.value = "";
-  if (file.size > maximumUploadBytes) {
-    validationMessage.value = t("files.uploadTooLarge");
+  const queued = createUploadQueueItems(files, () => {
+    uploadSequence += 1;
+    return `upload-${String(uploadSequence)}`;
+  }).map((item) =>
+    item.file.size > maximumUploadBytes
+      ? {
+          ...item,
+          problem: t("files.uploadTooLarge"),
+          state: "FAILED" as const,
+        }
+      : item,
+  );
+  uploadQueue.value = [...uploadQueue.value, ...queued];
+  void processUploadQueue();
+}
+
+async function processUploadQueue(): Promise<void> {
+  if (uploadBusy.value) return;
+  uploadBusy.value = true;
+  let uploaded = false;
+  try {
+    let next = uploadQueue.value.find((item) => item.state === "QUEUED");
+    while (next) {
+      updateUploadQueueItem(next.id, {
+        problem: undefined,
+        state: "UPLOADING",
+      });
+      try {
+        const artifact = await platform.uploadProjectArtifact(
+          props.projectRef,
+          next.file,
+        );
+        selectedRef.value = artifact.ref;
+        activeTab.value = "FILES";
+        uploaded = true;
+        updateUploadQueueItem(next.id, { state: "SUCCEEDED" });
+      } catch (error) {
+        const problem = asProblem(error);
+        updateUploadQueueItem(next.id, {
+          problem: problem.detail || problem.title,
+          state: "FAILED",
+        });
+      }
+      next = uploadQueue.value.find((item) => item.state === "QUEUED");
+    }
+  } finally {
+    uploadBusy.value = false;
+    if (uploaded) refresh();
+  }
+}
+
+function upload(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = "";
+  enqueueFiles(files);
+}
+
+function handleDragEnter(event: DragEvent): void {
+  if (!canUpload.value || !event.dataTransfer?.types.includes("Files")) return;
+  event.preventDefault();
+  dragDepth.value += 1;
+}
+
+function handleDragOver(event: DragEvent): void {
+  if (!canUpload.value || !event.dataTransfer?.types.includes("Files")) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
+}
+
+function handleDragLeave(event: DragEvent): void {
+  if (!canUpload.value || !event.dataTransfer?.types.includes("Files")) return;
+  event.preventDefault();
+  dragDepth.value = Math.max(0, dragDepth.value - 1);
+}
+
+function handleDrop(event: DragEvent): void {
+  if (!canUpload.value) return;
+  event.preventDefault();
+  dragDepth.value = 0;
+  enqueueFiles(Array.from(event.dataTransfer?.files ?? []));
+}
+
+function retryUpload(id: string): void {
+  updateUploadQueueItem(id, { problem: undefined, state: "QUEUED" });
+  void processUploadQueue();
+}
+
+function removeUpload(id: string): void {
+  uploadQueue.value = uploadQueue.value.filter(
+    (item) => item.id !== id || item.state === "UPLOADING",
+  );
+}
+
+function clearFinishedUploads(): void {
+  uploadQueue.value = uploadQueue.value.filter(
+    (item) => item.state === "UPLOADING" || item.state === "QUEUED",
+  );
+}
+
+function openLifecycleDialog(
+  artifact: Artifact,
+  action: ArtifactLifecycleAction,
+): void {
+  lifecycleDialog.value = {
+    action,
+    artifact,
+    state: artifactLifecycleState(artifact, action),
+  };
+}
+
+async function confirmLifecycleOperation(): Promise<void> {
+  const operation = lifecycleDialog.value;
+  if (!operation?.state.available) {
+    validationMessage.value = custom.value.actionUnavailable;
+    lifecycleDialog.value = undefined;
     return;
   }
-  uploadBusy.value = true;
+  contentBusy.value = true;
+  operationProblem.value = undefined;
+  validationMessage.value = "";
   try {
-    const artifact = await platform.uploadProjectArtifact(
-      props.projectRef,
-      file,
-    );
-    selectedRef.value = artifact.ref;
-    activeTab.value = "FILES";
+    if (operation.action === "DELETE")
+      replaceArtifact(await deleteArtifactItem(operation.artifact));
+    else if (operation.action === "RESTORE")
+      replaceArtifact(await restoreArtifactItem(operation.artifact));
+    else await purgeArtifactItem(operation.artifact);
+    selectedRef.value = "";
+    lifecycleDialog.value = undefined;
     refresh();
   } catch (error) {
     operationProblem.value = asProblem(error);
   } finally {
-    uploadBusy.value = false;
+    contentBusy.value = false;
   }
 }
 
@@ -345,15 +636,28 @@ onBeforeUnmount(clearPreview);
 </script>
 
 <template>
-  <section class="files-workspace" aria-label="files">
+  <section
+    class="files-workspace"
+    :class="{ 'files-workspace--drag-active': dragActive }"
+    aria-label="files"
+    @dragenter="handleDragEnter"
+    @dragover="handleDragOver"
+    @dragleave="handleDragLeave"
+    @drop="handleDrop"
+  >
     <input
       ref="fileInput"
       class="sr-only"
       type="file"
+      multiple
       accept=".txt,.md,.markdown,.csv,.json,.pdf,.png,.jpg,.jpeg,.gif,.webp,.docx,.xlsx,.pptx"
       :aria-label="$t('common.upload')"
       @change="upload"
     />
+    <div v-if="dragActive" class="files-workspace__drop-overlay">
+      <Upload :size="32" aria-hidden="true" />
+      <strong>{{ custom.dropFiles }}</strong>
+    </div>
     <div class="files-workspace__toolbar">
       <label class="files-workspace__search">
         <Search :size="16" aria-hidden="true" />
@@ -372,6 +676,15 @@ onBeforeUnmount(clearPreview);
         >
           <X :size="15" aria-hidden="true" />
         </button>
+      </label>
+      <label>
+        <span class="sr-only">{{ custom.viewFilter }}</span>
+        <select v-model="activeTab" :aria-label="custom.viewFilter">
+          <option value="FILES">{{ $t("files.tab.FILES") }}</option>
+          <option value="KNOWLEDGE">{{ $t("files.tab.KNOWLEDGE") }}</option>
+          <option value="RESULTS">{{ $t("files.tab.RESULTS") }}</option>
+          <option value="TRASH">{{ custom.trash }}</option>
+        </select>
       </label>
       <label>
         <span class="sr-only">{{ $t("files.typeFilter") }}</span>
@@ -425,33 +738,90 @@ onBeforeUnmount(clearPreview);
         :grid-label="custom.grid"
       />
       <button
-        v-if="canUpload"
+        v-if="canUpload && activeTab !== 'TRASH'"
         class="button button--primary"
         type="button"
         :disabled="uploadBusy"
         @click="fileInput?.click()"
       >
         <Upload :size="16" aria-hidden="true" />
-        {{ uploadBusy ? $t("files.uploading") : $t("common.upload") }}
+        {{ uploadBusy ? $t("files.uploading") : custom.uploadMore }}
       </button>
     </div>
 
-    <div
-      class="files-workspace__tabs"
-      role="tablist"
-      :aria-label="$t('files.tabs')"
-    >
+    <section v-if="uploadQueue.length > 0" class="upload-queue">
+      <header>
+        <div>
+          <strong>{{ custom.uploadQueue }}</strong>
+          <span class="mono">{{ uploadQueue.length }}</span>
+        </div>
+        <button
+          class="button button--small"
+          type="button"
+          :disabled="uploadQueue.every((item) => item.state === 'UPLOADING')"
+          @click="clearFinishedUploads"
+        >
+          {{ $t("common.close") }}
+        </button>
+      </header>
+      <ul>
+        <li v-for="item in uploadQueue" :key="item.id">
+          <FileTypeIcon :artifact="uploadPreviewArtifact(item)" />
+          <span>
+            <strong>{{ item.file.name }}</strong>
+            <small>
+              {{ formatBytes(item.file.size) }} ·
+              {{
+                item.state === "UPLOADING"
+                  ? custom.uploading
+                  : item.state === "QUEUED"
+                    ? custom.queued
+                    : item.state === "FAILED"
+                      ? item.problem || custom.failed
+                      : $t("states.CLEAN")
+              }}
+            </small>
+          </span>
+          <button
+            v-if="item.state === 'FAILED'"
+            class="icon-button"
+            type="button"
+            :title="custom.retry"
+            :aria-label="`${custom.retry}: ${item.file.name}`"
+            @click="retryUpload(item.id)"
+          >
+            <RefreshCw :size="16" aria-hidden="true" />
+          </button>
+          <button
+            v-else-if="item.state !== 'UPLOADING'"
+            class="icon-button"
+            type="button"
+            :title="custom.removeFromQueue"
+            :aria-label="`${custom.removeFromQueue}: ${item.file.name}`"
+            @click="removeUpload(item.id)"
+          >
+            <X :size="16" aria-hidden="true" />
+          </button>
+          <span v-else class="upload-queue__spinner" aria-hidden="true"></span>
+        </li>
+      </ul>
+    </section>
+
+    <section v-if="activeTab === 'TRASH'" class="trash-toolbar">
+      <div>
+        <strong>{{ custom.trash }}</strong>
+        <p>{{ custom.trashContract }}</p>
+      </div>
       <button
-        v-for="tab in ['FILES', 'KNOWLEDGE', 'RESULTS'] as FileTab[]"
-        :key="tab"
+        class="button button--danger"
         type="button"
-        role="tab"
-        :aria-selected="activeTab === tab"
-        @click="activeTab = tab"
+        disabled
+        :title="custom.contractUnavailable"
       >
-        {{ $t(`files.tab.${tab}`) }}
+        <Trash2 :size="16" aria-hidden="true" />
+        {{ custom.emptyTrash }}
       </button>
-    </div>
+    </section>
 
     <ProblemNotice
       v-if="operationProblem"
@@ -485,15 +855,27 @@ onBeforeUnmount(clearPreview);
             v-if="filteredArtifacts.length === 0"
             class="empty-state files-workspace__filtered-empty"
           >
-            <h2>{{ $t("files.noMatches") }}</h2>
-            <p>{{ $t("files.noMatchesText") }}</p>
+            <h2>
+              {{
+                activeTab === "TRASH"
+                  ? custom.trashEmpty
+                  : $t("files.noMatches")
+              }}
+            </h2>
+            <p>
+              {{
+                activeTab === "TRASH"
+                  ? custom.trashContract
+                  : $t("files.noMatchesText")
+              }}
+            </p>
           </section>
 
           <div v-else-if="viewMode === 'grid'" class="files-grid" role="list">
             <div
               v-for="artifact in filteredArtifacts"
               :key="artifact.ref"
-              class="file-collection-item"
+              class="file-collection-item file-collection-item--tile"
               role="listitem"
             >
               <button
@@ -518,6 +900,31 @@ onBeforeUnmount(clearPreview);
                   <span class="mono">v{{ artifact.revision }}</span>
                 </span>
                 <StatusBadge :state="artifact.scanState" />
+              </button>
+              <button
+                class="icon-button file-collection-item__lifecycle"
+                :class="{
+                  'file-collection-item__lifecycle--danger':
+                    activeTab !== 'TRASH',
+                }"
+                type="button"
+                :title="activeTab === 'TRASH' ? custom.restore : custom.delete"
+                :aria-label="`${
+                  activeTab === 'TRASH' ? custom.restore : custom.delete
+                }: ${artifact.fileName}`"
+                @click="
+                  openLifecycleDialog(
+                    artifact,
+                    activeTab === 'TRASH' ? 'RESTORE' : 'DELETE',
+                  )
+                "
+              >
+                <RotateCcw
+                  v-if="activeTab === 'TRASH'"
+                  :size="16"
+                  aria-hidden="true"
+                />
+                <Trash2 v-else :size="16" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -565,6 +972,31 @@ onBeforeUnmount(clearPreview);
                 <span class="file-list-row__date">{{
                   formatDate(artifact.createdAt)
                 }}</span>
+              </button>
+              <button
+                class="icon-button file-collection-item__lifecycle"
+                :class="{
+                  'file-collection-item__lifecycle--danger':
+                    activeTab !== 'TRASH',
+                }"
+                type="button"
+                :title="activeTab === 'TRASH' ? custom.restore : custom.delete"
+                :aria-label="`${
+                  activeTab === 'TRASH' ? custom.restore : custom.delete
+                }: ${artifact.fileName}`"
+                @click="
+                  openLifecycleDialog(
+                    artifact,
+                    activeTab === 'TRASH' ? 'RESTORE' : 'DELETE',
+                  )
+                "
+              >
+                <RotateCcw
+                  v-if="activeTab === 'TRASH'"
+                  :size="16"
+                  aria-hidden="true"
+                />
+                <Trash2 v-else :size="16" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -671,6 +1103,34 @@ onBeforeUnmount(clearPreview);
             <Download :size="16" aria-hidden="true" />
             {{ $t("common.download") }}
           </button>
+          <button
+            class="button file-details__lifecycle"
+            :class="activeTab === 'TRASH' ? '' : 'button--danger'"
+            type="button"
+            @click="
+              openLifecycleDialog(
+                selectedArtifact,
+                activeTab === 'TRASH' ? 'RESTORE' : 'DELETE',
+              )
+            "
+          >
+            <RotateCcw
+              v-if="activeTab === 'TRASH'"
+              :size="16"
+              aria-hidden="true"
+            />
+            <Trash2 v-else :size="16" aria-hidden="true" />
+            {{ activeTab === "TRASH" ? custom.restore : custom.delete }}
+          </button>
+          <button
+            v-if="activeTab === 'TRASH'"
+            class="button button--danger file-details__lifecycle"
+            type="button"
+            @click="openLifecycleDialog(selectedArtifact, 'PURGE')"
+          >
+            <Trash2 :size="16" aria-hidden="true" />
+            {{ custom.purge }}
+          </button>
         </aside>
       </div>
     </AsyncState>
@@ -680,6 +1140,8 @@ onBeforeUnmount(clearPreview);
       :artifact="selectedArtifact"
       :image-url="previewImage"
       :labels="custom.preview"
+      :delete-label="activeTab === 'TRASH' ? custom.restore : custom.delete"
+      :lifecycle-action="activeTab === 'TRASH' ? 'RESTORE' : 'DELETE'"
       :loading="contentBusy"
       :preview-text="previewText"
       :unavailable="previewUnavailable"
@@ -688,18 +1150,62 @@ onBeforeUnmount(clearPreview);
       :source-label="sourceLabel"
       @close="closePreview"
       @download="download(selectedArtifact)"
+      @request-delete="
+        openLifecycleDialog(
+          selectedArtifact,
+          activeTab === 'TRASH' ? 'RESTORE' : 'DELETE',
+        );
+        closePreview();
+      "
+    />
+
+    <FileLifecycleDialog
+      v-if="lifecycleDialog"
+      :action="lifecycleDialog.action"
+      :artifact="lifecycleDialog.artifact"
+      :busy="contentBusy"
+      :labels="{
+        cancel: custom.cancel,
+        confirm: custom.lifecycle.confirm,
+        description: custom.lifecycle.description,
+        impactUnavailable: custom.impactUnavailable,
+        reason: custom.lifecycle.reason,
+        title: custom.lifecycle.title,
+      }"
+      :state="lifecycleDialog.state"
+      @close="lifecycleDialog = undefined"
+      @confirm="confirmLifecycleOperation"
     />
   </section>
 </template>
 
 <style scoped>
 .files-workspace {
+  position: relative;
   display: grid;
   min-height: 640px;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+}
+.files-workspace--drag-active {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.files-workspace__drop-overlay {
+  position: absolute;
+  z-index: 20;
+  inset: 8px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  border: 2px dashed var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  color: var(--accent-strong);
+  pointer-events: none;
 }
 .files-workspace__toolbar {
   display: flex;
@@ -711,12 +1217,12 @@ onBeforeUnmount(clearPreview);
 }
 .files-workspace__toolbar select {
   min-height: 36px;
-  max-width: 180px;
+  max-width: 168px;
 }
 .files-workspace__search {
   display: flex;
-  width: 240px;
-  flex: 0 1 240px;
+  min-width: 210px;
+  flex: 1 1 320px;
   align-items: center;
   gap: 7px;
   padding: 0 9px;
@@ -749,26 +1255,6 @@ onBeforeUnmount(clearPreview);
   font-size: 0.78rem;
   white-space: nowrap;
 }
-.files-workspace__tabs {
-  display: flex;
-  gap: 18px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--border);
-}
-.files-workspace__tabs button {
-  min-height: 42px;
-  padding: 0 2px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.files-workspace__tabs button[aria-selected="true"] {
-  border-color: var(--accent);
-  color: var(--accent-strong);
-  font-weight: 600;
-}
 .files-workspace > .problem-notice,
 .files-workspace > .field-error {
   margin: 10px 14px 0;
@@ -776,7 +1262,79 @@ onBeforeUnmount(clearPreview);
 .files-workspace__layout {
   display: grid;
   min-height: 540px;
-  grid-template-columns: minmax(0, 1fr) 350px;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+}
+.upload-queue,
+.trash-toolbar {
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.upload-queue {
+  padding: 10px 14px;
+}
+.upload-queue header,
+.trash-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.upload-queue header > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.upload-queue ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
+}
+.upload-queue li {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.upload-queue li > span:nth-child(2),
+.upload-queue li strong,
+.upload-queue li small {
+  min-width: 0;
+  display: block;
+}
+.upload-queue li strong,
+.upload-queue li small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-queue li small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+.upload-queue__spinner {
+  width: 17px;
+  height: 17px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: upload-spin 0.8s linear infinite;
+}
+.trash-toolbar {
+  padding: 10px 14px;
+}
+.trash-toolbar p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 .files-workspace__scroll {
   min-width: 0;
@@ -794,9 +1352,11 @@ onBeforeUnmount(clearPreview);
   padding: 14px;
 }
 .file-collection-item {
+  position: relative;
   min-width: 0;
 }
-.file-collection-item > button {
+.file-collection-item > .file-tile,
+.file-collection-item > .file-list-row {
   width: 100%;
 }
 .file-tile {
@@ -806,13 +1366,24 @@ onBeforeUnmount(clearPreview);
   align-content: start;
   justify-items: start;
   gap: 8px;
-  padding: 12px;
+  padding: 12px 44px 12px 12px;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--surface);
   color: inherit;
   text-align: left;
   cursor: pointer;
+}
+.file-collection-item__lifecycle {
+  position: absolute;
+  z-index: 1;
+  top: 9px;
+  right: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.file-collection-item__lifecycle--danger {
+  color: var(--danger, #b42318);
 }
 .file-tile:hover,
 .file-tile--selected {
@@ -872,7 +1443,7 @@ onBeforeUnmount(clearPreview);
 .file-list-row {
   width: 100%;
   min-height: 64px;
-  padding: 8px 14px;
+  padding: 8px 52px 8px 14px;
   border: 0;
   border-bottom: 1px solid var(--hairline);
   background: var(--surface);
@@ -993,9 +1564,19 @@ onBeforeUnmount(clearPreview);
   width: 100%;
   justify-content: center;
 }
+.file-details__lifecycle {
+  width: 100%;
+  justify-content: center;
+  margin-top: 8px;
+}
+@keyframes upload-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @media (max-width: 980px) {
   .files-workspace__layout {
-    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 250px);
   }
   .files-workspace__toolbar .desktop-only {
     display: none;
@@ -1028,14 +1609,13 @@ onBeforeUnmount(clearPreview);
     min-height: 44px;
     margin-left: auto;
   }
-  .files-workspace__tabs {
-    gap: 12px;
-    padding: 0;
-    overflow-x: auto;
+  .upload-queue,
+  .trash-toolbar {
+    margin: 0 -16px;
   }
-  .files-workspace__tabs button {
-    flex: 0 0 auto;
-    min-height: 44px;
+  .trash-toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
   .files-workspace__layout {
     display: block;
@@ -1053,7 +1633,7 @@ onBeforeUnmount(clearPreview);
     grid-template-columns: minmax(0, 1fr) auto;
     min-height: 76px;
     gap: 6px 10px;
-    padding: 10px 2px;
+    padding: 10px 48px 10px 2px;
   }
   .file-list-row__identity {
     grid-row: 1 / 3;

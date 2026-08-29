@@ -19,6 +19,7 @@ import { useRealtimeStore } from "@/features/realtime/store";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
+import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
 import type {
   Artifact,
@@ -184,6 +185,11 @@ const selectedNode = computed(
     presentedGraph.value?.nodes.find((n) => n.state === "RUNNING") ??
     presentedGraph.value?.nodes[0],
 );
+const selectedAgent = computed(() =>
+  selectedNode.value?.agentRef
+    ? platform.agents[selectedNode.value.agentRef]
+    : undefined,
+);
 const openGateNodeRefs = computed(
   () =>
     new Set(
@@ -248,6 +254,7 @@ const problem = ref<AppProblem>();
 const activityOpen = ref(false);
 const activityNodeRef = ref<string>();
 const nodeInspectorOpen = ref(true);
+const nodeDetailsOpen = ref(false);
 const mobilePane = ref<"graph" | "activity">("graph");
 const activityTrigger = ref<HTMLButtonElement>();
 const hasAuthoritativeSnapshot = computed(() =>
@@ -414,6 +421,7 @@ watch(runRef, async (next, previous) => {
   activityNodeRef.value = undefined;
   selectedRef.value = undefined;
   nodeInspectorOpen.value = true;
+  nodeDetailsOpen.value = false;
   mobilePane.value = "graph";
   await load(next);
   if (runRef.value === next) openCurrentStream();
@@ -472,22 +480,7 @@ onBeforeUnmount(() => {
       :loading="platform.loading.run && !hasAuthoritativeSnapshot"
       :problem="fatalLoadProblem"
       @retry="load"
-      ><div v-if="run && graph" class="run-summary">
-        <span>{{ run.target.displayName }}</span
-        ><span>{{ $t(`runs.source.${run.source}`) }}</span
-        ><span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span
-        ><RouterLink
-          v-if="run.retryOfRunRef"
-          :to="runPath(run.retryOfRunRef, routeProjectRef ?? run.projectRef)"
-          >{{ $t("runs.previousAttempt") }}</RouterLink
-        >
-        <span>{{ new Date(run.createdAt).toLocaleString() }}</span
-        ><span
-          class="live-indicator"
-          :class="`live-indicator--${realtime.state[graph?.runRef ?? runRef]?.state ?? 'connecting'}`"
-          >● {{ $t("runs.live") }}</span
-        >
-      </div>
+    >
       <div
         v-if="streamState?.problemTitle"
         class="offline-banner"
@@ -597,14 +590,28 @@ onBeforeUnmount(() => {
         class="run-workspace"
         :class="{ 'run-workspace--activity': activityOpen }"
       >
-        <section id="run-graph-panel" class="graph-panel">
-          <div class="workspace-heading">
-            <h2>{{ $t("runs.graph") }}</h2>
-            <span>
-              {{ presentedGraph.nodes.length }} ·
-              {{ presentedGraph.edges.length }}
-            </span>
+        <aside class="run-canvas-summary">
+          <div>
+            <strong>{{ run.target.displayName }}</strong>
+            <span>{{ $t(`runs.source.${run.source}`) }}</span>
           </div>
+          <StatusBadge :state="run.state" />
+          <span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span>
+          <RouterLink
+            v-if="run.retryOfRunRef"
+            :to="runPath(run.retryOfRunRef, routeProjectRef ?? run.projectRef)"
+          >
+            {{ $t("runs.previousAttempt") }}
+          </RouterLink>
+          <span
+            class="live-indicator"
+            :class="`live-indicator--${streamState?.state ?? 'connecting'}`"
+          >
+            ● {{ $t("runs.live") }} · #{{ presentedGraph.sequence }}
+          </span>
+        </aside>
+
+        <section id="run-graph-panel" class="graph-panel">
           <div class="graph-panel__canvas">
             <RunGraphCanvas
               :nodes="presentedGraph.nodes"
@@ -614,15 +621,6 @@ onBeforeUnmount(() => {
               :active-node-refs="activeNodeRefs"
               @select="select"
             />
-          </div>
-          <div class="graph-panel__realtime" role="status" aria-live="polite">
-            <span
-              class="live-indicator"
-              :class="`live-indicator--${streamState?.state ?? 'connecting'}`"
-            >
-              ● {{ $t("runs.live") }}
-            </span>
-            <span>#{{ presentedGraph.sequence }}</span>
           </div>
         </section>
 
@@ -634,6 +632,7 @@ onBeforeUnmount(() => {
             :project-ref="routeProjectRef ?? run.projectRef"
             @close="nodeInspectorOpen = false"
             @activity="openActivity"
+            @details="nodeDetailsOpen = true"
           />
         </aside>
 
@@ -647,6 +646,15 @@ onBeforeUnmount(() => {
           @close="closeActivity"
         />
       </div>
+      <RunSessionDetailsDialog
+        v-if="run && presentedGraph && selectedNode && nodeDetailsOpen"
+        :run="run"
+        :node="selectedNode"
+        :nodes="presentedGraph.nodes"
+        :events="eventList"
+        :agent="selectedAgent"
+        @close="nodeDetailsOpen = false"
+      />
       <section v-if="run" class="run-bottom">
         <article v-if="run.resultSummary" class="panel run-result">
           <div class="workspace-heading">
@@ -719,15 +727,6 @@ onBeforeUnmount(() => {
   >
 </template>
 <style scoped>
-.run-summary {
-  display: flex;
-  gap: 18px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin: -10px 0 16px;
-  color: var(--muted);
-  font-size: 0.86rem;
-}
 .run-statuses,
 .run-statuses > span {
   display: flex;
@@ -816,14 +815,50 @@ onBeforeUnmount(() => {
 }
 .run-workspace {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 1fr);
-  height: clamp(590px, calc(100vh - 250px), 760px);
-  min-height: 590px;
+  height: max(640px, calc(100dvh - 170px));
+  min-height: 640px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
   overflow: hidden;
+}
+.run-canvas-summary {
+  position: absolute;
+  z-index: 14;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: min(360px, calc(100% - 190px));
+  gap: 6px 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 8px 24px rgba(16, 22, 30, 0.1);
+  backdrop-filter: blur(8px);
+}
+.run-canvas-summary > div {
+  display: grid;
+  min-width: 0;
+}
+.run-canvas-summary strong,
+.run-canvas-summary span,
+.run-canvas-summary a {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-canvas-summary > div span,
+.run-canvas-summary > span,
+.run-canvas-summary a {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.run-canvas-summary .live-indicator {
+  grid-column: 1 / -1;
+  margin-left: 0;
+  white-space: normal;
 }
 .graph-panel,
 .node-panel {
@@ -831,12 +866,21 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 .graph-panel {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  position: absolute;
+  inset: 0;
   background: var(--canvas);
 }
 .node-panel {
-  border-left: 1px solid var(--border);
+  position: absolute;
+  z-index: 16;
+  top: 126px;
+  right: 14px;
+  bottom: 14px;
+  width: min(380px, calc(100% - 28px));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 16px 44px rgba(16, 22, 30, 0.16);
   overflow: hidden;
 }
 .workspace-heading {
@@ -859,25 +903,9 @@ onBeforeUnmount(() => {
   font-size: 0.74rem;
 }
 .graph-panel__canvas {
+  width: 100%;
+  height: 100%;
   min-height: 0;
-}
-.graph-panel__realtime {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 34px;
-  padding: 6px 14px;
-  border-top: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--muted);
-  font-size: 0.75rem;
-}
-.graph-panel__realtime .live-indicator {
-  margin-left: 0;
-}
-.graph-panel__realtime > span:last-child {
-  font-family: var(--font-mono);
 }
 .run-mobile-tabs {
   display: none;
@@ -941,23 +969,25 @@ onBeforeUnmount(() => {
     font-size: 0.74rem;
   }
   .run-workspace {
-    grid-template-columns: minmax(0, 1fr);
-    height: max(600px, calc(100dvh - 250px));
+    height: max(600px, calc(100dvh - 180px));
     min-height: 600px;
   }
-  .run-workspace--activity .graph-panel,
-  .run-workspace--activity .node-panel {
-    display: none;
+  .run-canvas-summary {
+    top: 66px;
+    right: 8px;
+    width: min(320px, calc(100% - 16px));
   }
   .node-panel {
-    position: absolute;
-    z-index: 5;
+    z-index: 20;
+    top: auto;
     right: 0;
     bottom: 0;
     left: 0;
+    width: 100%;
     max-height: 56%;
     border-top: 1px solid var(--border);
     border-left: 0;
+    border-radius: 8px 8px 0 0;
   }
   .artifact-row {
     grid-template-columns: 1fr auto;

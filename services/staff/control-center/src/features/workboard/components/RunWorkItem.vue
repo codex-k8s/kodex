@@ -70,7 +70,13 @@ const sourceIcon = computed(() => {
         </div>
         <div class="run-work-item__source">
           <dt>{{ $t("workboard.source") }}</dt>
-          <dd>
+          <dd
+            :title="
+              $t('workboard.sourceHint', {
+                source: $t(`runs.source.${run.source}`),
+              })
+            "
+          >
             <component :is="sourceIcon" :size="14" aria-hidden="true" />{{
               $t(`runs.source.${run.source}`)
             }}

@@ -378,10 +378,6 @@ function edgeDisplayLabel(edge: RunEdge): string {
   }
 }
 
-function compactEdgeLabel(edge: RunEdge): string {
-  return compactDisplayName(edgeDisplayLabel(edge));
-}
-
 function edgeAccessibleLabel(edge: RunEdge): string {
   const source = nodeByRef.value.get(edge.sourceNodeRef)?.displayName ?? "";
   const target = nodeByRef.value.get(edge.targetNodeRef)?.displayName ?? "";
@@ -534,7 +530,16 @@ function compareNodes(left: RunNode, right: RunNode): number {
         >
           <defs>
             <marker
-              id="run-graph-arrow"
+              v-for="edgeType in [
+                'DELEGATED_TO',
+                'CALLBACK_TO',
+                'RETRY_OF',
+                'CONTINUES',
+                'WAITING_FOR',
+              ]"
+              :id="`run-graph-arrow-${edgeType.toLowerCase()}`"
+              :key="edgeType"
+              :class="`graph-arrow graph-arrow--${edgeType.toLowerCase()}`"
               markerWidth="9"
               markerHeight="9"
               refX="8"
@@ -554,16 +559,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
             <path
               :d="item.path"
               :class="'graph-edge graph-edge--' + item.edge.type.toLowerCase()"
-              marker-end="url(#run-graph-arrow)"
+              :marker-end="`url(#run-graph-arrow-${item.edge.type.toLowerCase()})`"
             />
-            <text
-              class="graph-edge-label"
-              :x="item.labelX"
-              :y="item.labelY"
-              text-anchor="middle"
-            >
-              {{ compactEdgeLabel(item.edge) }}
-            </text>
           </g>
         </svg>
         <button
@@ -670,27 +667,69 @@ function compareNodes(left: RunNode, right: RunNode): number {
         <StatusBadge :state="item.node.state" />
       </button>
     </div>
+
+    <aside class="graph-legend" :aria-label="$t('runs.connections')">
+      <header>
+        <Network :size="16" aria-hidden="true" />
+        <strong>{{ $t("runs.connections") }}</strong>
+      </header>
+      <div class="graph-legend__edges">
+        <span class="graph-legend__item">
+          <i class="graph-legend__line graph-legend__line--delegated_to" />
+          {{ $t("runs.source.AGENT_DELEGATION") }}
+        </span>
+        <span class="graph-legend__item">
+          <i class="graph-legend__line graph-legend__line--callback_to" />
+          {{ $t("runs.callback") }}
+        </span>
+        <span class="graph-legend__item">
+          <i class="graph-legend__line graph-legend__line--retry_of" />
+          {{ $t("runs.retry") }}
+        </span>
+        <span class="graph-legend__item">
+          <i class="graph-legend__line graph-legend__line--continues" />
+          {{ $t("runs.continueTask") }}
+        </span>
+        <span class="graph-legend__item">
+          <i class="graph-legend__line graph-legend__line--waiting_for" />
+          {{ $t("states.WAITING") }}
+        </span>
+      </div>
+      <div class="graph-legend__states">
+        <StatusBadge state="RUNNING" />
+        <StatusBadge state="WAITING" />
+        <StatusBadge state="SUCCEEDED" />
+        <StatusBadge state="FAILED" />
+      </div>
+    </aside>
   </section>
 </template>
 
 <style scoped>
 .graph-canvas-shell {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  position: relative;
+  display: block;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
 }
 .graph-toolbar {
+  position: absolute;
+  z-index: 12;
+  top: 14px;
+  left: 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 48px;
+  min-height: 42px;
   padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 8px 24px rgba(16, 22, 30, 0.1);
+  backdrop-filter: blur(8px);
 }
 .graph-view-switch,
 .graph-zoom-controls {
@@ -715,7 +754,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
   gap: 6px;
 }
 .graph-viewport {
-  position: relative;
+  position: absolute;
+  inset: 0;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -749,22 +789,39 @@ function compareNodes(left: RunNode, right: RunNode): number {
   stroke: var(--border-strong);
   stroke-width: 2;
 }
-.graph-edge--callback_to,
-.graph-edge--retry_of,
+.graph-edge--delegated_to {
+  stroke: var(--accent);
+}
+.graph-edge--callback_to {
+  stroke: var(--success);
+  stroke-dasharray: 9 5;
+}
+.graph-edge--retry_of {
+  stroke: var(--warning);
+  stroke-dasharray: 3 5;
+}
+.graph-edge--continues {
+  stroke: color-mix(in srgb, var(--accent) 58%, var(--muted));
+  stroke-width: 3;
+}
 .graph-edge--waiting_for {
+  stroke: var(--subtle);
   stroke-dasharray: 6 5;
 }
-.graph-edges marker path {
+.graph-arrow path {
   fill: var(--border-strong);
 }
-.graph-edge-label {
+.graph-arrow--delegated_to path {
+  fill: var(--accent);
+}
+.graph-arrow--callback_to path {
+  fill: var(--success);
+}
+.graph-arrow--retry_of path {
+  fill: var(--warning);
+}
+.graph-arrow--waiting_for path {
   fill: var(--subtle);
-  font-size: 13px;
-  font-weight: 600;
-  paint-order: stroke;
-  stroke: var(--canvas);
-  stroke-linejoin: round;
-  stroke-width: 6px;
 }
 .canvas-node {
   position: absolute;
@@ -854,12 +911,14 @@ function compareNodes(left: RunNode, right: RunNode): number {
   color: var(--text-secondary);
 }
 .graph-outline {
+  position: absolute;
+  inset: 0;
   display: none;
   align-content: start;
   min-width: 0;
   min-height: 0;
   gap: 8px;
-  padding: 10px;
+  padding: 72px 14px 126px;
   overflow: auto;
   background: var(--canvas);
 }
@@ -929,6 +988,68 @@ function compareNodes(left: RunNode, right: RunNode): number {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
   opacity: 1;
 }
+.graph-legend {
+  position: absolute;
+  z-index: 12;
+  bottom: 14px;
+  left: 14px;
+  display: grid;
+  width: min(560px, calc(100% - 28px));
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 8px 24px rgba(16, 22, 30, 0.1);
+  backdrop-filter: blur(8px);
+}
+.graph-legend > header,
+.graph-legend__edges,
+.graph-legend__states,
+.graph-legend__item {
+  display: flex;
+  align-items: center;
+}
+.graph-legend > header {
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.graph-legend__edges,
+.graph-legend__states {
+  flex-wrap: wrap;
+  gap: 7px 12px;
+}
+.graph-legend__item {
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.graph-legend__line {
+  display: block;
+  width: 25px;
+  border-top: 2px solid var(--border-strong);
+}
+.graph-legend__line--delegated_to {
+  border-color: var(--accent);
+}
+.graph-legend__line--callback_to {
+  border-color: var(--success);
+  border-top-style: dashed;
+}
+.graph-legend__line--retry_of {
+  border-color: var(--warning);
+  border-top-style: dotted;
+}
+.graph-legend__line--continues {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--muted));
+  border-top-width: 3px;
+}
+.graph-legend__line--waiting_for {
+  border-color: var(--subtle);
+  border-top-style: dashed;
+}
 @keyframes run-node-pulse {
   0%,
   100% {
@@ -959,6 +1080,21 @@ function compareNodes(left: RunNode, right: RunNode): number {
   .graph-outline-node {
     width: calc(100% - min(calc(var(--tree-depth) * 12px), 36px));
     margin-inline-start: min(calc(var(--tree-depth) * 12px), 36px);
+  }
+  .graph-toolbar {
+    top: 8px;
+    left: 8px;
+    max-width: calc(100% - 16px);
+  }
+  .graph-legend {
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    width: auto;
+  }
+  .graph-legend__edges {
+    max-height: 52px;
+    overflow: auto;
   }
 }
 </style>

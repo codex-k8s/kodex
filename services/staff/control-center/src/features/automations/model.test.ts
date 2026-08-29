@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  scheduleCapabilities,
   scheduleInput,
   verifyScheduleCommandReadback,
   verifyScheduleReadback,
@@ -100,5 +101,18 @@ describe("automations model", () => {
     expect(() => scheduleInput(schedule({ preset: "0 9 * * *" }))).toThrow(
       AppProblem,
     );
+  });
+
+  it("не путает права редактирования и архивации", () => {
+    expect(scheduleCapabilities(schedule({ nextActions: ["EDIT"] }))).toEqual({
+      canEdit: true,
+      canPause: false,
+      canEnable: false,
+      canArchive: false,
+      canDeletePermanently: false,
+    });
+    expect(
+      scheduleCapabilities(schedule({ nextActions: ["ARCHIVE"] })),
+    ).toMatchObject({ canEdit: false, canArchive: true });
   });
 });

@@ -12,6 +12,7 @@ export interface AgentDetailCopy {
     help: string;
     generate: string;
     upload: string;
+    remove: string;
     fallback: string;
   };
   profile: {
@@ -25,6 +26,9 @@ export interface AgentDetailCopy {
     overlayHelp: string;
     overlayPlaceholder: string;
     save: string;
+    saveOverlay: string;
+    accountPolicy: string;
+    accounts: string;
   };
   instructions: {
     editor: string;
@@ -32,7 +36,10 @@ export interface AgentDetailCopy {
     markdown: string;
     saveDraft: string;
     variables: string;
-    variablesUnavailable: string;
+    variablesHelp: string;
+    variableSearch: string;
+    variableScope: string;
+    insertVariable: string;
     usedVariables: string;
     noVariables: string;
     validation: string;
@@ -41,9 +48,13 @@ export interface AgentDetailCopy {
     current: string;
     catalog: string;
     localSearch: string;
+    serverSearch: string;
     choose: string;
     loadingMore: string;
     imageReady: string;
+    bind: string;
+    values: string;
+    secrets: string;
   };
   access: {
     integrationsEmpty: string;
@@ -52,10 +63,7 @@ export interface AgentDetailCopy {
   gaps: {
     title: string;
     description: string;
-    overlay: string;
-    variables: string;
     avatar: string;
-    environmentSearch: string;
   };
 }
 
@@ -74,9 +82,10 @@ const ru: AgentDetailCopy = {
   },
   avatar: {
     preview: "Аватар сотрудника",
-    help: "API поддерживает только ссылку на изображение.",
+    help: "Аватар загружается как файл. Ручной ввод URL не используется; операция станет доступна после появления avatar asset API.",
     generate: "Создать с Kodex",
     upload: "Загрузить изображение",
+    remove: "Удалить аватар",
     fallback: "Используются инициалы",
   },
   profile: { save: "Сохранить профиль" },
@@ -86,9 +95,12 @@ const ru: AgentDetailCopy = {
     catalogRef: "Единый выбор из авторитетного runtime catalog",
     overlay: "Overlay config.toml",
     overlayHelp:
-      "Чтение, проверка и сохранение overlay не представлены текущим API.",
-    overlayPlaceholder: "Overlay недоступен: API чтения отсутствует",
+      "Черновик проверяется сервером и применяется только после публикации.",
+    overlayPlaceholder: "# Параметры, разрешённые политикой Kodex",
     save: "Сохранить runtime",
+    saveOverlay: "Сохранить overlay",
+    accountPolicy: "Политика аккаунтов",
+    accounts: "Аккаунты",
   },
   instructions: {
     editor: "Редактор",
@@ -96,7 +108,11 @@ const ru: AgentDetailCopy = {
     markdown: "Markdown-шаблон инструкций",
     saveDraft: "Сохранить черновик",
     variables: "Template variables",
-    variablesUnavailable: "Каталог разрешённых переменных не представлен API.",
+    variablesHelp:
+      "Авторитетный каталог сгруппирован по scope. Выбор вставляет переменную в позицию курсора.",
+    variableSearch: "Найти переменную по имени или описанию",
+    variableScope: "Scope",
+    insertVariable: "Вставить переменную",
     usedVariables: "Переменные в тексте",
     noVariables: "В тексте нет шаблонных переменных",
     validation: "Сообщения проверки",
@@ -106,25 +122,25 @@ const ru: AgentDetailCopy = {
     catalog: "Каталог окружений",
     localSearch:
       "Поиск и cursor-разбиение выполняются по уже загруженному каталогу.",
+    serverSearch:
+      "Поиск и cursor pagination выполняются авторитетным API окружений.",
     choose: "Найти окружение по названию, назначению или ПО",
     loadingMore: "Загружаем следующую страницу",
     imageReady: "Образ подготовлен",
+    bind: "Назначить окружение",
+    values: "Переменные окружения",
+    secrets: "Ссылки на секреты",
   },
   access: {
     integrationsEmpty: "Интеграционные grants не выданы",
     knowledgeBindings: "Привязанные источники знаний",
   },
   gaps: {
-    title: "API gaps",
+    title: "Ограничения API",
     description:
       "Эти зоны показаны fail-closed и не имитируют применение изменений.",
-    overlay:
-      "Нет операций чтения, проверки и mutation для config.toml overlay.",
-    variables: "Нет каталога разрешённых template variables.",
     avatar:
-      "Нет upload/generation mutation для аватара; доступен только avatarUrl.",
-    environmentSearch:
-      "listRoleEnvironments не поддерживает query, pageToken и серверную pagination.",
+      "Нет upload/remove mutation для avatar asset; сохранённое изображение доступно только для чтения.",
   },
 };
 
@@ -143,9 +159,10 @@ const en: AgentDetailCopy = {
   },
   avatar: {
     preview: "Employee avatar",
-    help: "The API currently supports only an image URL.",
+    help: "The avatar is uploaded as a file. Manual URL input is not used; the operation will become available with the avatar asset API.",
     generate: "Create with Kodex",
     upload: "Upload image",
+    remove: "Remove avatar",
     fallback: "Initials are used",
   },
   profile: { save: "Save profile" },
@@ -155,9 +172,12 @@ const en: AgentDetailCopy = {
     catalogRef: "One selection from the authoritative runtime catalog",
     overlay: "config.toml overlay",
     overlayHelp:
-      "Overlay read, validation, and save operations are absent from the current API.",
-    overlayPlaceholder: "Overlay unavailable: no read API",
+      "The draft is validated by the server and only applies after publication.",
+    overlayPlaceholder: "# Parameters allowed by the Kodex policy",
     save: "Save runtime",
+    saveOverlay: "Save overlay",
+    accountPolicy: "Account policy",
+    accounts: "Accounts",
   },
   instructions: {
     editor: "Editor",
@@ -165,8 +185,11 @@ const en: AgentDetailCopy = {
     markdown: "Instruction Markdown template",
     saveDraft: "Save draft",
     variables: "Template variables",
-    variablesUnavailable:
-      "The API does not provide an allowed variable catalog.",
+    variablesHelp:
+      "The authoritative catalog is grouped by scope. Selecting an item inserts it at the cursor.",
+    variableSearch: "Find a variable by name or description",
+    variableScope: "Scope",
+    insertVariable: "Insert variable",
     usedVariables: "Variables used in text",
     noVariables: "The text does not use template variables",
     validation: "Validation messages",
@@ -176,9 +199,14 @@ const en: AgentDetailCopy = {
     catalog: "Environment catalog",
     localSearch:
       "Search and cursor paging run over the catalog already loaded by the client.",
+    serverSearch:
+      "Search and cursor pagination are provided by the authoritative environment API.",
     choose: "Find by name, purpose, or software",
     loadingMore: "Loading the next page",
     imageReady: "Image prepared",
+    bind: "Assign environment",
+    values: "Environment values",
+    secrets: "Secret descriptors",
   },
   access: {
     integrationsEmpty: "No integration grants",
@@ -188,13 +216,8 @@ const en: AgentDetailCopy = {
     title: "API gaps",
     description:
       "These areas fail closed and never simulate successful application.",
-    overlay:
-      "No read, validate, or mutation operations for config.toml overlay.",
-    variables: "No allowed template variable catalog.",
     avatar:
-      "No avatar upload or generation mutation; only avatarUrl is available.",
-    environmentSearch:
-      "listRoleEnvironments has no query, pageToken, or server pagination.",
+      "There are no upload/remove mutations for avatar assets; a stored image is read-only.",
   },
 };
 

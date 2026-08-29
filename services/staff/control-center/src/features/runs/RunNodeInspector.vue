@@ -2,6 +2,7 @@
 import {
   Activity,
   Bot,
+  Maximize2,
   PlugZap,
   UserRoundCheck,
   Workflow,
@@ -30,6 +31,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
   activity: [nodeRef: string];
+  details: [];
 }>();
 const { locale } = useI18n();
 
@@ -182,6 +184,14 @@ function formatDate(value: string): string {
         <Activity :size="17" aria-hidden="true" />
         {{ $t("runs.activity") }}
       </button>
+      <button
+        class="button button--primary"
+        type="button"
+        @click="emit('details')"
+      >
+        <Maximize2 :size="16" aria-hidden="true" />
+        {{ $t("common.details") }}
+      </button>
     </footer>
   </section>
 </template>
@@ -314,6 +324,7 @@ function formatDate(value: string): string {
 }
 .run-node-inspector__footer {
   display: flex;
+  justify-content: flex-end;
   gap: 8px;
   margin-top: auto;
   padding: 11px 16px;

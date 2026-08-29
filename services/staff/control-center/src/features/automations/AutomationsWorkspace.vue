@@ -16,6 +16,7 @@ import { useI18n } from "vue-i18n";
 import AutomationArchiveDialog from "@/features/automations/AutomationArchiveDialog.vue";
 import AutomationEditorDialog from "@/features/automations/AutomationEditorDialog.vue";
 import {
+  scheduleCapabilities,
   verifyScheduleCommandReadback,
   verifyScheduleReadback,
 } from "@/features/automations/model";
@@ -68,6 +69,11 @@ const filteredSchedules = computed(() => {
 const selectedSchedule = computed(() =>
   schedules.value.find((schedule) => schedule.ref === selectedRef.value),
 );
+const selectedCapabilities = computed(() =>
+  selectedSchedule.value
+    ? scheduleCapabilities(selectedSchedule.value)
+    : undefined,
+);
 const editorSchedule = computed(() =>
   schedules.value.find((schedule) => schedule.ref === editorScheduleRef.value),
 );
@@ -101,6 +107,9 @@ const custom = computed(() =>
           "Future runs will be cancelled. The automation and its history will remain available read-only.",
         archiveTitle: "Archive automation?",
         edit: "Edit automation",
+        permanentDeleteUnavailable: "Permanent deletion is unavailable",
+        permanentDeleteUnavailableText:
+          "The current API supports safe archiving with read-only history, but not permanent deletion.",
         lastResult: "Last result",
         list: "Project automations",
         noMatches: "No matching automations",
@@ -118,6 +127,9 @@ const custom = computed(() =>
           "Будущие запуски будут отменены. Автоматизация и её история останутся доступны только для чтения.",
         archiveTitle: "Архивировать автоматизацию?",
         edit: "Изменить автоматизацию",
+        permanentDeleteUnavailable: "Безвозвратное удаление недоступно",
+        permanentDeleteUnavailableText:
+          "Текущий API поддерживает безопасную архивацию с историей только для чтения, но не безвозвратное удаление.",
         lastResult: "Последний результат",
         list: "Автоматизации Проекта",
         noMatches: "Подходящих автоматизаций нет",
@@ -174,7 +186,7 @@ function openCreate(): void {
 }
 
 function openEdit(schedule: Schedule): void {
-  if (!schedule.nextActions.includes("EDIT")) return;
+  if (!scheduleCapabilities(schedule).canEdit) return;
   editorScheduleRef.value = schedule.ref;
   editorProblem.value = undefined;
   editorOpen.value = true;
@@ -433,7 +445,7 @@ onMounted(
           </dl>
           <div class="automation-details__actions" :aria-label="custom.actions">
             <button
-              v-if="selectedSchedule.nextActions.includes('ARCHIVE')"
+              v-if="selectedCapabilities?.canEdit"
               class="button button--primary"
               type="button"
               @click="openEdit(selectedSchedule)"
@@ -442,7 +454,7 @@ onMounted(
               {{ custom.edit }}
             </button>
             <button
-              v-if="selectedSchedule.nextActions.includes('DISABLE')"
+              v-if="selectedCapabilities?.canPause"
               class="button"
               type="button"
               :disabled="commandBusy === selectedSchedule.ref"
@@ -452,7 +464,7 @@ onMounted(
               {{ $t("automations.pause") }}
             </button>
             <button
-              v-if="selectedSchedule.nextActions.includes('ENABLE')"
+              v-if="selectedCapabilities?.canEnable"
               class="button"
               type="button"
               :disabled="commandBusy === selectedSchedule.ref"
@@ -462,7 +474,7 @@ onMounted(
               {{ $t("common.enable") }}
             </button>
             <button
-              v-if="selectedSchedule.nextActions.includes('EDIT')"
+              v-if="selectedCapabilities?.canArchive"
               class="button button--danger"
               type="button"
               @click="requestArchive(selectedSchedule)"
@@ -470,6 +482,14 @@ onMounted(
               <Trash2 :size="16" aria-hidden="true" />
               {{ custom.archive }}
             </button>
+          </div>
+          <div
+            v-if="!selectedCapabilities?.canDeletePermanently"
+            class="automation-details__unavailable"
+            role="note"
+          >
+            <strong>{{ custom.permanentDeleteUnavailable }}</strong>
+            <p>{{ custom.permanentDeleteUnavailableText }}</p>
           </div>
         </aside>
       </div>
@@ -667,6 +687,18 @@ onMounted(
   flex-wrap: wrap;
   gap: 8px;
   padding-top: 14px;
+}
+.automation-details__unavailable {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.automation-details__unavailable p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 .automations-workspace__empty {
   margin: 16px;

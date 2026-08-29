@@ -102,7 +102,8 @@ const ru = {
     all: "Все",
     active: "Активные",
     duration: "Длительность",
-    source: "Источник",
+    source: "Запущено через",
+    sourceHint: "Запуск создан через «{source}».",
     target: "Цель",
     input: "Входные данные",
     download: "Скачать",
@@ -448,10 +449,13 @@ const ru = {
       targetHint: "Выберите ИИ-сотрудника или опубликованный Процесс.",
       targetTypeLabel: "Тип цели",
       titlePlaceholder: "Краткое понятное название",
-      titleRequiredHint: "Название обязательно и будет видно в списке запусков.",
+      titleRequiredHint:
+        "Название обязательно и будет видно в списке запусков.",
       taskPlaceholder: "Опишите результат, ограничения и критерии готовности",
-      taskHint: "Задание получит выбранный ИИ-сотрудник или координатор Процесса.",
-      authorityHint: "Запуск выполняется только с вашими текущими полномочиями в Проекте.",
+      taskHint:
+        "Задание получит выбранный ИИ-сотрудник или координатор Процесса.",
+      authorityHint:
+        "Запуск выполняется только с вашими текущими полномочиями в Проекте.",
       files: {
         choose: "Выбрать файлы",
         pickerTitle: "Выберите входные файлы",
@@ -471,10 +475,13 @@ const ru = {
         error: "Не удалось загрузить файлы.",
       },
       session: {
-        newDescription: "Создать отдельную сессию без истории предыдущей работы.",
-        continueDescription: "Продолжить выбранную сессию этого же ИИ-сотрудника или Процесса.",
+        newDescription:
+          "Создать отдельную сессию без истории предыдущей работы.",
+        continueDescription:
+          "Продолжить выбранную сессию этого же ИИ-сотрудника или Процесса.",
         pickerTitle: "Выберите предыдущую сессию",
-        pickerSubtitle: "Поиск выполняется только среди совместимых сессий текущей цели.",
+        pickerSubtitle:
+          "Поиск выполняется только среди совместимых сессий текущей цели.",
         pickerLabel: "Доступные сессии",
         searchHint: "Начните вводить название или задачу запуска.",
         searchPlaceholder: "Найти сессию",
@@ -813,11 +820,39 @@ const ru = {
   },
   decisions: {
     title: "Решения",
-    subtitle: "Долговечные Human Gates, ожидающие вашего выбора",
+    subtitle: "Вопросы, без ответа на которые работа не продолжится",
     emptyTitle: "Нет ожидающих решений",
+    emptyText:
+      "В выбранном Проекте сейчас нет вопросов, ожидающих вашего ответа.",
+    projectFilter: "Проект",
+    allProjects: "Все Проекты",
+    pendingCount: "Ожидают ответа: {count}",
+    question: "Решение человека",
+    fullQuestion: "Что нужно решить",
+    questionUnavailable:
+      "Авторитетный текст вопроса не передан API. Откройте запуск для проверки контекста.",
+    consequencesUnavailable:
+      "Последствия решения не переданы API. Действие следует выполнять только после проверки запуска.",
+    projectUnavailable: "Название Проекта недоступно",
+    run: "Запуск",
+    openedAt: "Запрошено",
+    deadline: "Срок ответа",
+    noDeadline: "Без указанного срока",
+    evidence: "Материалы",
+    evidenceCount: "Открыть материалы: {count}",
+    noEvidence: "Дополнительные материалы не приложены",
     requestedBy: "Запросил",
     consequences: "Что произойдёт",
     comment: "Комментарий",
+    commentPlaceholder: "Добавьте контекст для продолжения работы",
+    actionsUnavailable: "Ответ сейчас недоступен",
+    actionsUnavailableText:
+      "Сервер не выдал право RESOLVE_GATE или допустимые варианты ответа. Интерфейс не будет имитировать решение.",
+    urgency: {
+      OVERDUE: "Срок истёк",
+      SOON: "Срочно",
+      NORMAL: "Обычный приоритет",
+    },
     stale: "Это решение уже принял другой участник",
     openRun: "Открыть запуск",
   },
@@ -1375,6 +1410,13 @@ const ru = {
     receipt: "Квитанция",
     openPlan: "Открыть план",
     microphoneUnavailable: "Голосовой ввод появится позже",
+    addAttachments: "Добавить файлы",
+    dropAttachments: "Отпустите файлы, чтобы добавить их в сообщение",
+    removeAttachment: "Убрать файл «{name}» из сообщения",
+    attachmentsUnavailable:
+      "Файлы выбраны, но API вложений помощника ещё недоступен. Они не будут отправлены; уберите их, чтобы отправить текст.",
+    attachmentsBlockSend:
+      "Отправка заблокирована: выбранные файлы пока нельзя передать помощнику",
     planEditor: {
       back: "Вернуться к диалогу",
       revision: "Ревизия {revision} · операций: {count}",
@@ -1399,6 +1441,7 @@ const ru = {
       expected: "Ожидалось",
       actual: "Сейчас",
       receipt: "Квитанция ревизии {revision}: применено операций — {count}.",
+      openFieldEditor: "Открыть поле в расширенном редакторе",
     },
   },
   states: {
@@ -1589,7 +1632,8 @@ const en = {
     all: "All",
     active: "Active",
     duration: "Duration",
-    source: "Source",
+    source: "Started through",
+    sourceHint: "This run was started through “{source}”.",
     target: "Target",
     input: "Input",
     download: "Download",
@@ -1944,13 +1988,17 @@ const en = {
       targetTypeLabel: "Target type",
       titlePlaceholder: "A short, clear title",
       titleRequiredHint: "A title is required and will appear in the run list.",
-      taskPlaceholder: "Describe the result, constraints, and completion criteria",
-      taskHint: "The selected AI employee or Process coordinator receives this task.",
-      authorityHint: "The run uses only your current permissions in this Project.",
+      taskPlaceholder:
+        "Describe the result, constraints, and completion criteria",
+      taskHint:
+        "The selected AI employee or Process coordinator receives this task.",
+      authorityHint:
+        "The run uses only your current permissions in this Project.",
       files: {
         choose: "Choose files",
         pickerTitle: "Choose input files",
-        pickerSubtitle: "Only validated files from Project “{project}” are available.",
+        pickerSubtitle:
+          "Only validated files from Project “{project}” are available.",
         confirm: "Add selected",
         selectedCount: "Selected: {count}",
         remove: "Remove file {name}",
@@ -1966,10 +2014,13 @@ const en = {
         error: "Could not load files.",
       },
       session: {
-        newDescription: "Create a separate session without previous work history.",
-        continueDescription: "Continue a compatible session for the same AI employee or Process.",
+        newDescription:
+          "Create a separate session without previous work history.",
+        continueDescription:
+          "Continue a compatible session for the same AI employee or Process.",
         pickerTitle: "Choose a previous session",
-        pickerSubtitle: "Search is limited to sessions compatible with the current target.",
+        pickerSubtitle:
+          "Search is limited to sessions compatible with the current target.",
         pickerLabel: "Available sessions",
         searchHint: "Start typing a run title or task.",
         searchPlaceholder: "Find a session",
@@ -2311,11 +2362,38 @@ const en = {
   decisions: {
     ...ru.decisions,
     title: "Decisions",
-    subtitle: "Durable Human Gates awaiting your choice",
+    subtitle: "Questions that block work until you answer",
     emptyTitle: "No pending decisions",
+    emptyText: "The selected Project has no questions awaiting your answer.",
+    projectFilter: "Project",
+    allProjects: "All Projects",
+    pendingCount: "Awaiting answer: {count}",
+    question: "Human decision",
+    fullQuestion: "What needs to be decided",
+    questionUnavailable:
+      "The authoritative question was not provided by the API. Open the run to inspect its context.",
+    consequencesUnavailable:
+      "The consequences were not provided by the API. Inspect the run before taking action.",
+    projectUnavailable: "Project name unavailable",
+    run: "Run",
+    openedAt: "Requested",
+    deadline: "Answer deadline",
+    noDeadline: "No deadline specified",
+    evidence: "Evidence",
+    evidenceCount: "Open evidence: {count}",
+    noEvidence: "No additional evidence attached",
     requestedBy: "Requested by",
     consequences: "What happens next",
     comment: "Comment",
+    commentPlaceholder: "Add context for the next step",
+    actionsUnavailable: "Answer is currently unavailable",
+    actionsUnavailableText:
+      "The server did not grant RESOLVE_GATE or any allowed decisions. The UI will not simulate a decision.",
+    urgency: {
+      OVERDUE: "Overdue",
+      SOON: "Urgent",
+      NORMAL: "Normal priority",
+    },
     stale: "Another member has already resolved this decision",
     openRun: "Open run",
   },
@@ -2861,6 +2939,13 @@ const en = {
     receipt: "Receipt",
     openPlan: "Open plan",
     microphoneUnavailable: "Voice input will be available later",
+    addAttachments: "Add files",
+    dropAttachments: "Drop files to add them to the message",
+    removeAttachment: "Remove “{name}” from the message",
+    attachmentsUnavailable:
+      "Files are selected, but the assistant attachment API is not available yet. They will not be sent; remove them to send the text.",
+    attachmentsBlockSend:
+      "Sending is blocked because the selected files cannot be delivered to the assistant yet",
     planEditor: {
       back: "Back to conversation",
       revision: "Revision {revision} · operations: {count}",
@@ -2885,6 +2970,7 @@ const en = {
       expected: "Expected",
       actual: "Current",
       receipt: "Revision {revision} receipt: operations applied — {count}.",
+      openFieldEditor: "Open field in the expanded editor",
     },
   },
   states: {

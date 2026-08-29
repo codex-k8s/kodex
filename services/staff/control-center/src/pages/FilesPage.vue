@@ -15,7 +15,11 @@ const initialArtifactRef = computed(() =>
 </script>
 
 <template>
-  <PageFrame :title="$t('files.title')" :subtitle="$t('files.subtitle')">
+  <PageFrame
+    class="files-page"
+    :title="$t('files.title')"
+    :subtitle="$t('files.subtitle')"
+  >
     <FilesWorkspace
       :key="projectRef"
       :project-ref="projectRef"
@@ -23,3 +27,10 @@ const initialArtifactRef = computed(() =>
     />
   </PageFrame>
 </template>
+
+<style scoped>
+.files-page {
+  width: 100%;
+  max-width: none;
+}
+</style>

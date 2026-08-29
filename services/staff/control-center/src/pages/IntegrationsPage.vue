@@ -269,6 +269,7 @@ async function submit(): Promise<void> {
     if (outcome.status === "CREDENTIAL_FAILED") {
       dialogMode.value = "CREDENTIAL";
       pendingCredential.value = outcome.pending;
+      credentialValue.value = "";
       credentialStepFailed.value = true;
       problem.value = asProblem(outcome.error);
       return;
@@ -482,9 +483,32 @@ onBeforeUnmount(() => {
         )
       "
       :busy="busy"
+      size="lg"
       @close="closeConnectionDialog"
     >
       <form id="integration-form" class="form-grid" @submit.prevent="submit">
+        <section class="field field--wide manifest-summary">
+          <div>
+            <strong>{{ selectedDefinition.name }}</strong>
+            <span class="mono">
+              {{ selectedDefinition.schemaVersion }} · v{{
+                selectedDefinition.definitionVersion
+              }}
+            </span>
+          </div>
+          <p>{{ selectedDefinition.description }}</p>
+          <div class="manifest-summary__facts">
+            <span class="mono">{{ selectedDefinition.adapter }}</span>
+            <span
+              v-for="capability in selectedDefinition.capabilities"
+              :key="capability.key"
+            >
+              {{ capability.name }} ·
+              {{ $t("integrations.risk." + capability.risk) }}
+              <strong v-if="capability.approvalRequired">Human Gate</strong>
+            </span>
+          </div>
+        </section>
         <label v-if="dialogMode === 'CREATE'" class="field field--wide">
           <span>{{ $t("common.name") }}</span>
           <input v-model.trim="form.name" required maxlength="160" autofocus />
@@ -519,13 +543,16 @@ onBeforeUnmount(() => {
           class="field field--wide card credential-boundary"
         >
           <strong>{{ $t("integrations.credentials") }}</strong>
+          <code v-if="selectedDefinition.credentialSecretKey">
+            {{ selectedDefinition.credentialSecretKey }}
+          </code>
           <span>{{ $t("integrations.credentialValue") }}</span>
           <input
             v-model="credentialValue"
             type="password"
             required
             maxlength="16384"
-            autocomplete="off"
+            autocomplete="new-password"
             autocapitalize="none"
             spellcheck="false"
             :aria-invalid="credentialRequired"
@@ -601,6 +628,40 @@ onBeforeUnmount(() => {
   margin: 0;
   border-radius: 8px;
   background: var(--panel);
+}
+.manifest-summary {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.manifest-summary > div:first-child,
+.manifest-summary__facts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.manifest-summary > div:first-child {
+  justify-content: space-between;
+}
+.manifest-summary p {
+  margin: 0;
+  color: var(--muted);
+}
+.manifest-summary__facts span {
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 0.76rem;
+}
+.manifest-summary__facts strong {
+  color: var(--warning);
 }
 .credential-boundary p {
   margin-bottom: 0;

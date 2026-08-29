@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { Eye, FilePenLine, Save, ShieldCheck } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { computed, ref, shallowRef } from "vue";
 import { useI18n } from "vue-i18n";
 
+import { createTemplateVariableLoader } from "@/features/agents/detail/api";
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
-import { extractTemplateVariables } from "@/features/agents/detail/model";
+import {
+  extractTemplateVariables,
+  templateVariableInsertion,
+  type TemplateVariablePickerItem,
+} from "@/features/agents/detail/model";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
@@ -18,6 +24,7 @@ const props = defineProps<{
   canPublish: boolean;
   busy: boolean;
   dirty: boolean;
+  projectRef: string;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: string];
@@ -25,12 +32,29 @@ const emit = defineEmits<{
   validate: [];
   publish: [];
 }>();
-const { locale } = useI18n();
+const { locale, t } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
 const mode = ref<"edit" | "preview">("edit");
+const editor = shallowRef<{
+  insertAtCursor(value: string): void;
+}>();
 const usedVariables = computed(() =>
   extractTemplateVariables(props.modelValue),
 );
+const loadVariables = createTemplateVariableLoader(props.projectRef);
+const variableLabels = computed(() => ({
+  label: copy.value.instructions.variables,
+  searchPlaceholder: copy.value.instructions.variableSearch,
+  loading: t("common.loading"),
+  loadingMore: copy.value.environment.loadingMore,
+  empty: t("common.empty"),
+  error: t("common.error"),
+  retry: t("common.retry"),
+}));
+
+function insertVariable(item: TemplateVariablePickerItem): void {
+  editor.value?.insertAtCursor(templateVariableInsertion(item.variable.name));
+}
 </script>
 
 <template>
@@ -71,6 +95,7 @@ const usedVariables = computed(() =>
       <div class="instructions-panel__editor">
         <CodeEditorSurface
           v-if="mode === 'edit'"
+          ref="editor"
           :model-value="modelValue"
           language="markdown"
           :label="copy.instructions.markdown"
@@ -123,9 +148,29 @@ const usedVariables = computed(() =>
       <aside class="instructions-panel__variables">
         <div class="instructions-panel__variables-head">
           <h3>{{ copy.instructions.variables }}</h3>
-          <StatusBadge state="UNAVAILABLE" />
+          <StatusBadge state="AVAILABLE" />
         </div>
-        <p>{{ copy.instructions.variablesUnavailable }}</p>
+        <p>{{ copy.instructions.variablesHelp }}</p>
+        <AsyncEntityPicker
+          :load-items="loadVariables"
+          :labels="variableLabels"
+          :disabled="!canEdit || busy || mode !== 'edit'"
+          :debounce-ms="250"
+          @select="insertVariable"
+        >
+          <template #option="{ item }">
+            <span class="instructions-panel__variable-option">
+              <span>
+                <strong>{{ item.variable.name }}</strong>
+                <small>{{ item.variable.description }}</small>
+              </span>
+              <span class="instructions-panel__variable-meta">
+                <code>{{ item.scope }}</code>
+                <span>{{ item.variable.valueType }}</span>
+              </span>
+            </span>
+          </template>
+        </AsyncEntityPicker>
         <div class="instructions-panel__used">
           <strong>{{ copy.instructions.usedVariables }}</strong>
           <div v-if="usedVariables.length" class="instructions-panel__tokens">
@@ -135,14 +180,6 @@ const usedVariables = computed(() =>
           </div>
           <span v-else>{{ copy.instructions.noVariables }}</span>
         </div>
-        <button
-          class="button"
-          type="button"
-          disabled
-          :title="$t('common.unavailable')"
-        >
-          {{ $t("common.open") }} · {{ copy.instructions.variables }}
-        </button>
       </aside>
     </div>
 
@@ -275,6 +312,37 @@ const usedVariables = computed(() =>
   font-family: var(--font-mono);
   font-size: 0.74rem;
   overflow-wrap: anywhere;
+}
+.instructions-panel__variable-option {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 6px;
+}
+.instructions-panel__variable-option > span:first-child,
+.instructions-panel__variable-meta {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.instructions-panel__variable-option strong,
+.instructions-panel__variable-option small {
+  overflow-wrap: anywhere;
+}
+.instructions-panel__variable-option small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.instructions-panel__variable-meta code {
+  color: var(--accent-strong);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+.instructions-panel__variable-meta span {
+  color: var(--subtle);
+  font-size: 0.7rem;
 }
 .instructions-panel__actions {
   display: flex;

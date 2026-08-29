@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { AlertTriangle, ArrowLeft, Check, Save, Trash2 } from "@lucide/vue";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  Maximize2,
+  Save,
+  Trash2,
+} from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
+import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
 import {
   editableOperations,
   operationActionLabel,
@@ -36,6 +44,13 @@ const { t } = useI18n();
 const summary = ref("");
 const operations = ref<EditablePlanOperation[]>([]);
 const inputProblem = ref("");
+type EditorTarget =
+  | { kind: "SUMMARY" }
+  | {
+      kind: "OPERATION_SUMMARY" | "PARAMETERS" | "AFTER";
+      operationIndex: number;
+    };
+const editorTarget = ref<EditorTarget>();
 
 function resetDraft(): void {
   summary.value = props.plan.auditSummary;
@@ -83,6 +98,46 @@ function save(): void {
   } catch {
     inputProblem.value = t("assistant.planEditor.jsonError");
   }
+}
+
+const editorValue = computed(() => {
+  const target = editorTarget.value;
+  if (!target) return "";
+  if (target.kind === "SUMMARY") return summary.value;
+  const operation = operations.value[target.operationIndex];
+  if (!operation) return "";
+  if (target.kind === "OPERATION_SUMMARY") return operation.value.summary;
+  if (target.kind === "PARAMETERS") return operation.parametersText;
+  return operation.afterText;
+});
+const editorTitle = computed(() => {
+  const target = editorTarget.value;
+  if (!target) return "";
+  if (target.kind === "SUMMARY") return t("assistant.planEditor.summary");
+  if (target.kind === "OPERATION_SUMMARY")
+    return t("assistant.planEditor.operationSummary");
+  if (target.kind === "PARAMETERS") return t("assistant.planEditor.parameters");
+  return t("assistant.planEditor.after");
+});
+const editorLanguage = computed<"json" | "text">(() =>
+  editorTarget.value?.kind === "PARAMETERS" ||
+  editorTarget.value?.kind === "AFTER"
+    ? "json"
+    : "text",
+);
+
+function saveEditor(value: string): void {
+  const target = editorTarget.value;
+  if (!target) return;
+  if (target.kind === "SUMMARY") summary.value = value;
+  else {
+    const operation = operations.value[target.operationIndex];
+    if (!operation) return;
+    if (target.kind === "OPERATION_SUMMARY") operation.value.summary = value;
+    else if (target.kind === "PARAMETERS") operation.parametersText = value;
+    else operation.afterText = value;
+  }
+  editorTarget.value = undefined;
 }
 </script>
 
@@ -165,10 +220,26 @@ function save(): void {
         </p>
       </section>
 
-      <label class="field">
-        <span>{{ $t("assistant.planEditor.summary") }}</span>
-        <textarea v-model="summary" rows="3" maxlength="2000" />
-      </label>
+      <div class="field">
+        <span class="assistant-field-label">
+          <span>{{ $t("assistant.planEditor.summary") }}</span>
+          <button
+            class="icon-button"
+            type="button"
+            :aria-label="$t('assistant.planEditor.openFieldEditor')"
+            :title="$t('assistant.planEditor.openFieldEditor')"
+            @click.prevent="editorTarget = { kind: 'SUMMARY' }"
+          >
+            <Maximize2 :size="15" aria-hidden="true" />
+          </button>
+        </span>
+        <textarea
+          v-model="summary"
+          rows="3"
+          maxlength="2000"
+          :aria-label="$t('assistant.planEditor.summary')"
+        />
+      </div>
 
       <div class="assistant-plan-operations">
         <article
@@ -201,15 +272,32 @@ function save(): void {
               :disabled="busy"
             />
           </label>
-          <label class="field">
-            <span>{{ $t("assistant.planEditor.operationSummary") }}</span>
+          <div class="field">
+            <span class="assistant-field-label">
+              <span>{{ $t("assistant.planEditor.operationSummary") }}</span>
+              <button
+                class="icon-button"
+                type="button"
+                :aria-label="$t('assistant.planEditor.openFieldEditor')"
+                :title="$t('assistant.planEditor.openFieldEditor')"
+                @click.prevent="
+                  editorTarget = {
+                    kind: 'OPERATION_SUMMARY',
+                    operationIndex: index,
+                  }
+                "
+              >
+                <Maximize2 :size="15" aria-hidden="true" />
+              </button>
+            </span>
             <textarea
               v-model="operation.value.summary"
               rows="2"
               maxlength="2000"
               :disabled="busy"
+              :aria-label="$t('assistant.planEditor.operationSummary')"
             />
-          </label>
+          </div>
 
           <dl class="assistant-plan-target">
             <div>
@@ -226,24 +314,52 @@ function save(): void {
             <summary>{{ $t("assistant.planEditor.before") }}</summary>
             <SafeStructuredData :value="operation.value.before" />
           </details>
-          <label class="field field--code">
-            <span>{{ $t("assistant.planEditor.parameters") }}</span>
+          <div class="field field--code">
+            <span class="assistant-field-label">
+              <span>{{ $t("assistant.planEditor.parameters") }}</span>
+              <button
+                class="icon-button"
+                type="button"
+                :aria-label="$t('assistant.planEditor.openFieldEditor')"
+                :title="$t('assistant.planEditor.openFieldEditor')"
+                @click.prevent="
+                  editorTarget = { kind: 'PARAMETERS', operationIndex: index }
+                "
+              >
+                <Maximize2 :size="15" aria-hidden="true" />
+              </button>
+            </span>
             <textarea
               v-model="operation.parametersText"
-              rows="6"
+              rows="4"
               spellcheck="false"
               :disabled="busy"
+              :aria-label="$t('assistant.planEditor.parameters')"
             />
-          </label>
-          <label class="field field--code">
-            <span>{{ $t("assistant.planEditor.after") }}</span>
+          </div>
+          <div class="field field--code">
+            <span class="assistant-field-label">
+              <span>{{ $t("assistant.planEditor.after") }}</span>
+              <button
+                class="icon-button"
+                type="button"
+                :aria-label="$t('assistant.planEditor.openFieldEditor')"
+                :title="$t('assistant.planEditor.openFieldEditor')"
+                @click.prevent="
+                  editorTarget = { kind: 'AFTER', operationIndex: index }
+                "
+              >
+                <Maximize2 :size="15" aria-hidden="true" />
+              </button>
+            </span>
             <textarea
               v-model="operation.afterText"
-              rows="6"
+              rows="4"
               spellcheck="false"
               :disabled="busy"
+              :aria-label="$t('assistant.planEditor.after')"
             />
-          </label>
+          </div>
           <p v-if="operation.value.unavailableReason" class="field-error">
             {{ operation.value.unavailableReason }}
           </p>
@@ -312,6 +428,16 @@ function save(): void {
         </button>
       </div>
     </footer>
+    <AssistantCodeEditorModal
+      v-if="editorTarget"
+      :title="editorTitle"
+      :model-value="editorValue"
+      :language="editorLanguage"
+      :object-required="editorLanguage === 'json'"
+      :busy="busy"
+      @close="editorTarget = undefined"
+      @save="saveEditor"
+    />
   </section>
 </template>
 
@@ -347,6 +473,17 @@ function save(): void {
   min-height: 0;
   overflow: auto;
   padding: 16px;
+}
+.assistant-field-label {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.assistant-field-label .icon-button {
+  width: 30px;
+  height: 30px;
 }
 .assistant-plan-notice,
 .assistant-plan-receipt {

@@ -31,6 +31,7 @@ function messages() {
       continue: "Продолжить",
       send: "Отправить",
       retry: "Повторить",
+      details: "Подробнее",
       yes: "Да",
       no: "Нет",
     },
@@ -87,7 +88,9 @@ function messages() {
     states: {
       COMPLETED: "Готово",
       RUNNING: "Выполняется",
+      WAITING: "Ожидает",
       SUCCEEDED: "Завершён",
+      FAILED: "Ошибка",
       NEEDS_ATTENTION: "Требует внимания",
       CLEAN: "Проверен",
     },
@@ -229,6 +232,9 @@ describe("RunPage runtime presentation", () => {
     expect(html).toContain("Использование токенов");
     expect(html).toContain("История событий временно недоступна");
     expect(html).toContain("Граф выполнения");
+    expect(html).toContain("run-workspace");
+    expect(html).toContain("run-canvas-summary");
+    expect(html).toContain("graph-legend");
     expect(html).toContain("200 000");
     expect(html).not.toContain("MODEL_REQUEST_RUNNING");
     expect(html).not.toContain("WORKLOAD_SCHEDULED");

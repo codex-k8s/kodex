@@ -11,7 +11,7 @@ export type PresentedRunEvent = RunEvent & {
 
 export interface RunActivityItem {
   id: string;
-  kind: "initiator" | "agent" | "system";
+  kind: "initiator" | "agent" | "tool" | "system";
   actor: string;
   summary?: string;
   progress?: string;
@@ -19,6 +19,8 @@ export interface RunActivityItem {
   occurredAt: string;
   sequence?: number;
   state?: RunEvent["nodeState"] | RunEvent["runState"];
+  messageKind?: RunEvent["messageKind"];
+  toolCall?: RunEvent["toolCall"];
 }
 
 const agentMessageTypes = new Set<RunEvent["type"]>([
@@ -48,20 +50,33 @@ export function buildRunActivityItems(
     (left, right) => left.sequence - right.sequence,
   )) {
     const node = event.nodeRef ? nodeByRef.get(event.nodeRef) : undefined;
-    const kind = agentMessageTypes.has(event.type) ? "agent" : "system";
+    const kind: RunActivityItem["kind"] = event.toolCall
+      ? "tool"
+      : event.actor?.kind === "USER"
+        ? "initiator"
+        : event.actor?.kind === "AGENT" ||
+            event.actor?.kind === "SYSTEM_ASSISTANT" ||
+            agentMessageTypes.has(event.type)
+          ? "agent"
+          : "system";
     items.push({
       id: event.ref,
       kind,
       actor:
-        kind === "agent"
-          ? (node?.displayName ?? run.target.displayName)
-          : (node?.displayName ?? run.title),
+        event.actor?.name ??
+        (kind === "initiator"
+          ? run.initiator.displayName
+          : kind === "agent" || kind === "tool"
+            ? (node?.displayName ?? run.target.displayName)
+            : (node?.displayName ?? run.title)),
       summary: event.displaySummary,
       progress: event.displayProgress,
       nodeRef: event.nodeRef,
       occurredAt: event.occurredAt,
       sequence: event.sequence,
       state: event.nodeState ?? event.runState,
+      messageKind: event.messageKind,
+      toolCall: event.toolCall,
     });
   }
 

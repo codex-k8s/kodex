@@ -9,10 +9,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const { locale } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
 const gaps = computed(() => [
-  { code: "config.toml", text: copy.value.gaps.overlay },
-  { code: "template_variables", text: copy.value.gaps.variables },
   { code: "avatar_asset", text: copy.value.gaps.avatar },
-  { code: "role_environments_search", text: copy.value.gaps.environmentSearch },
 ]);
 </script>
 

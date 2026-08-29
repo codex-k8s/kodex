@@ -2,14 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   agentInitials,
-  createLocalEnvironmentLoader,
   extractTemplateVariables,
+  insertTextAtSelection,
   runtimeModels,
   runtimeProviders,
   runtimeRefForSelection,
   runtimesForSelection,
+  templateVariableInsertion,
   tokenizeCodeLine,
-  type EnvironmentPickerItem,
+  toTemplateVariablePickerItem,
 } from "@/features/agents/detail/model";
 import type { RuntimeSelection } from "@/shared/api/generated/openapi/types.gen";
 
@@ -75,62 +76,28 @@ describe("agent detail model", () => {
     expect(agentInitials("Аналитик продаж")).toBe("АП");
   });
 
-  it("разбивает уже загруженный каталог на cursor-страницы и ищет по ПО", async () => {
-    const items: EnvironmentPickerItem[] = [
+  it("вставляет server-owned template variable строго в текущее выделение", () => {
+    const item = toTemplateVariablePickerItem({
+      name: "project.name",
+      valueType: "string",
+      description: "Имя проекта",
+      example: "Продажи",
+      source: "PROJECT",
+    });
+
+    expect(item.scope).toBe("PROJECT");
+    expect(templateVariableInsertion(item.variable.name)).toBe(
+      "{{project.name}}",
+    );
+    expect(insertTextAtSelection("До после", "{{project.name}}", 3, 3)).toEqual(
       {
-        id: "standard",
-        label: "Стандартное",
-        description: "Общие задачи",
-        software: ["bash"],
-        environment: {
-          key: "standard",
-          nameMessageKey: "standard.name",
-          descriptionMessageKey: "standard.description",
-          softwareMessageKeys: ["software.bash"],
-          platforms: [{ os: "linux", architecture: "amd64" }],
-          recommended: true,
-          available: true,
-          customInstallationAllowed: false,
-        },
+        value: "До {{project.name}}после",
+        selectionStart: 19,
+        selectionEnd: 19,
       },
-      {
-        id: "documents",
-        label: "Документы",
-        description: "PDF и OCR",
-        software: ["pdftotext", "tesseract"],
-        environment: {
-          key: "documents",
-          nameMessageKey: "documents.name",
-          descriptionMessageKey: "documents.description",
-          softwareMessageKeys: ["software.pdf"],
-          platforms: [{ os: "linux", architecture: "amd64" }],
-          recommended: false,
-          available: true,
-          customInstallationAllowed: false,
-        },
-      },
-    ];
-    const loader = createLocalEnvironmentLoader(() => items, 1);
-
-    const first = await loader({
-      query: "",
-      signal: new AbortController().signal,
-    });
-    expect(first.items.map((item) => item.id)).toEqual(["standard"]);
-    expect(first.nextCursor).toBe("1");
-
-    const second = await loader({
-      query: "",
-      cursor: first.nextCursor ?? undefined,
-      signal: new AbortController().signal,
-    });
-    expect(second.items.map((item) => item.id)).toEqual(["documents"]);
-    expect(second.nextCursor).toBeNull();
-
-    const search = await loader({
-      query: "tesseract",
-      signal: new AbortController().signal,
-    });
-    expect(search.items.map((item) => item.id)).toEqual(["documents"]);
+    );
+    expect(insertTextAtSelection("До X после", "{{run.ref}}", 3, 4).value).toBe(
+      "До {{run.ref}} после",
+    );
   });
 });

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import {
+  ChevronDown,
+  FileCode2,
   LockKeyhole,
   PackageCheck,
   Plus,
   Search,
   ShieldCheck,
 } from "@lucide/vue";
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type { IntegrationPackagePresentation } from "@/features/integrations/ui/model";
@@ -25,6 +28,11 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const expandedKey = ref("");
+
+function toggleDetails(key: string): void {
+  expandedKey.value = expandedKey.value === key ? "" : key;
+}
 </script>
 
 <template>
@@ -84,13 +92,16 @@ const { t } = useI18n();
             <h3>{{ item.name }}</h3>
             <span class="package-meta">
               {{ item.category }} ·
-              {{
-                t(
-                  item.builtIn
-                    ? "integrationsRedesign.firstParty"
-                    : "integrationsRedesign.customPackage",
-                )
-              }}
+              <template v-if="item.source === 'SERVER_DEFINITION'">
+                {{
+                  t(
+                    item.builtIn
+                      ? "integrationsRedesign.firstParty"
+                      : "integrationsRedesign.customPackage",
+                  )
+                }}
+              </template>
+              <template v-else>YAML · API —</template>
             </span>
           </div>
           <StatusBadge
@@ -106,8 +117,10 @@ const { t } = useI18n();
           />
         </header>
 
-        <p class="package-description">{{ item.description }}</p>
-        <div class="package-facts">
+        <p class="package-description">
+          {{ item.description || t("integrations.unavailable") }}
+        </p>
+        <div v-if="item.definition" class="package-facts">
           <span>{{
             t("integrationsRedesign.connectionCount", {
               count: item.connectionCount,
@@ -129,7 +142,7 @@ const { t } = useI18n();
         </div>
         <div class="capability-preview">
           <span
-            v-for="capability in item.definition.capabilities.slice(0, 3)"
+            v-for="capability in item.definition?.capabilities.slice(0, 3)"
             :key="capability.key"
             class="capability-token"
           >
@@ -137,21 +150,71 @@ const { t } = useI18n();
             {{ t(`integrations.risk.${capability.risk}`) }}
           </span>
           <span
-            v-if="item.definition.capabilities.length > 3"
+            v-if="(item.definition?.capabilities.length ?? 0) > 3"
             class="capability-more"
           >
-            +{{ item.definition.capabilities.length - 3 }}
+            +{{ (item.definition?.capabilities.length ?? 0) - 3 }}
           </span>
         </div>
+
+        <section
+          v-if="expandedKey === item.key"
+          class="package-details"
+          :aria-label="t('integrationsRedesign.packageDetails')"
+        >
+          <template v-if="item.definition">
+            <div class="manifest-facts">
+              <span>
+                <FileCode2 :size="14" aria-hidden="true" />
+                {{ item.definition.schemaVersion }} · v{{
+                  item.definition.definitionVersion
+                }}
+              </span>
+              <span class="mono">{{ item.definition.adapter }}</span>
+              <span class="mono package-digest" :title="item.definition.digest">
+                {{ item.definition.digest.slice(0, 12) }}…
+              </span>
+            </div>
+            <ul class="capability-list">
+              <li
+                v-for="capability in item.definition.capabilities"
+                :key="capability.key"
+              >
+                <div class="capability-heading">
+                  <strong>{{ capability.name }}</strong>
+                  <span>{{ t("integrations.risk." + capability.risk) }}</span>
+                  <span
+                    v-if="capability.approvalRequired"
+                    class="approval-fact"
+                  >
+                    <ShieldCheck :size="13" aria-hidden="true" /> Human Gate
+                  </span>
+                </div>
+                <p>{{ capability.description }}</p>
+                <code>{{ capability.operation }}</code>
+              </li>
+            </ul>
+          </template>
+          <div v-else class="unavailable-details">
+            <LockKeyhole :size="16" aria-hidden="true" />
+            <span>{{
+              t("integrationsRedesign.packageDetailsUnavailable")
+            }}</span>
+          </div>
+        </section>
 
         <footer class="package-card__actions">
           <button
             class="button"
             type="button"
-            disabled
-            :title="t('integrationsRedesign.packageDetailsUnavailable')"
+            :aria-expanded="expandedKey === item.key"
+            @click="toggleDetails(item.key)"
           >
-            <LockKeyhole :size="15" aria-hidden="true" />
+            <ChevronDown
+              :size="15"
+              aria-hidden="true"
+              :class="{ 'details-chevron--open': expandedKey === item.key }"
+            />
             {{ t("integrationsRedesign.packageDetails") }}
           </button>
           <button
@@ -195,7 +258,10 @@ const { t } = useI18n();
 .package-card__actions,
 .package-facts,
 .catalog-toolbar,
-.zero-connection-notice {
+.zero-connection-notice,
+.manifest-facts,
+.capability-heading,
+.unavailable-details {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -318,6 +384,68 @@ const { t } = useI18n();
   gap: 6px;
   margin-top: 12px;
 }
+.package-details {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.manifest-facts {
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.manifest-facts > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.package-digest {
+  overflow: hidden;
+  max-width: 140px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.capability-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.capability-list li {
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.capability-list p {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.capability-list code {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+.capability-heading {
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+}
+.capability-heading > span:not(.approval-fact) {
+  color: var(--muted);
+}
+.unavailable-details {
+  align-items: flex-start;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.unavailable-details svg {
+  flex: 0 0 auto;
+}
 .capability-token {
   padding: 4px 7px;
   border: 1px solid var(--border);
@@ -329,6 +457,9 @@ const { t } = useI18n();
   justify-content: flex-end;
   margin-top: auto;
   padding-top: 16px;
+}
+.details-chevron--open {
+  transform: rotate(180deg);
 }
 .catalog-empty {
   display: grid;

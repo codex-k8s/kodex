@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
+import { sameOriginAvatarUrl } from "@/features/agents/catalog/model";
 import { agentInitials } from "@/features/agents/detail/model";
 
 const props = withDefaults(
@@ -14,7 +15,8 @@ const props = withDefaults(
 );
 const imageFailed = ref(false);
 const initials = computed(() => agentInitials(props.name));
-const showImage = computed(() => Boolean(props.url) && !imageFailed.value);
+const safeUrl = computed(() => sameOriginAvatarUrl(props.url));
+const showImage = computed(() => Boolean(safeUrl.value) && !imageFailed.value);
 
 watch(
   () => props.url,
@@ -33,7 +35,7 @@ watch(
   >
     <img
       v-if="showImage"
-      :src="url"
+      :src="safeUrl"
       alt=""
       referrerpolicy="no-referrer"
       @error="imageFailed = true"

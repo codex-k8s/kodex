@@ -7,6 +7,7 @@ import {
   History,
   ListChecks,
   Mic,
+  Paperclip,
   Pencil,
   Plus,
   Send,
@@ -21,7 +22,15 @@ import {
   ref,
   watch,
 } from "vue";
+import { useI18n } from "vue-i18n";
 
+import {
+  assistantAttachmentTransportAvailable,
+  formatAttachmentSize,
+  removeAssistantAttachment,
+  stageAssistantAttachments,
+  type StagedAssistantAttachment,
+} from "@/features/assistant/attachments";
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
 import { openAssistantEvent } from "@/features/assistant/events";
 import { useAssistantStore } from "@/features/assistant/store";
@@ -49,6 +58,7 @@ const props = withDefaults(
   }>(),
   { live: false, runEvents: () => [], refreshRevision: "" },
 );
+const { t } = useI18n();
 const store = useAssistantStore();
 const open = ref(false);
 const historyOpen = ref(false);
@@ -57,6 +67,9 @@ const titleDraft = ref("");
 const titleEditing = ref(false);
 const openPlanRef = ref<string>();
 const activeView = ref<"CHAT" | "ACTIVITY">("CHAT");
+const attachments = ref<StagedAssistantAttachment[]>([]);
+const attachmentInput = ref<HTMLInputElement>();
+const attachmentDragActive = ref(false);
 const panel = ref<HTMLElement>();
 const composer = ref<HTMLTextAreaElement>();
 const historyMenu = ref<HTMLElement>();
@@ -82,7 +95,14 @@ const canSend = computed(
     Boolean(
       store.selectedConversation ||
       store.assistant?.nextActions.includes("CREATE_CONVERSATION"),
-    ),
+    ) &&
+    attachments.value.length === 0,
+);
+const canStartConversation = computed(
+  () =>
+    props.live &&
+    !store.busy &&
+    Boolean(store.assistant?.nextActions.includes("CREATE_CONVERSATION")),
 );
 const isRunContext = computed(() => props.context.entityKind === "RUN");
 
@@ -141,13 +161,22 @@ function chooseConversation(ref?: string): void {
   store.selectedRef = ref;
   historyOpen.value = false;
   titleEditing.value = false;
+  attachments.value = [];
 }
 
 async function startConversation(): Promise<void> {
   historyOpen.value = false;
   titleEditing.value = false;
   openPlanRef.value = undefined;
+  attachments.value = [];
   await store.startConversation();
+}
+
+function conversationDisplayTitle(title: string): string {
+  return (
+    title.trim() ||
+    t("assistant.contextConversation", { context: contextTitle.value })
+  );
 }
 
 function startTitleEdit(): void {
@@ -168,6 +197,43 @@ async function send(): Promise<void> {
   message.value = "";
   await nextTick();
   composer.value?.focus();
+}
+
+function openAttachmentPicker(): void {
+  attachmentInput.value?.click();
+}
+
+function stageFiles(files: Iterable<File>): void {
+  attachments.value = stageAssistantAttachments(attachments.value, files);
+}
+
+function handleAttachmentInput(event: Event): void {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLInputElement) || !target.files) return;
+  stageFiles(Array.from(target.files));
+  target.value = "";
+}
+
+function handleAttachmentDrop(event: DragEvent): void {
+  attachmentDragActive.value = false;
+  if (store.busy || !props.live || !event.dataTransfer?.files.length) return;
+  stageFiles(Array.from(event.dataTransfer.files));
+}
+
+function handleAttachmentDragLeave(event: DragEvent): void {
+  const current = event.currentTarget;
+  const next = event.relatedTarget;
+  if (
+    current instanceof HTMLElement &&
+    next instanceof Node &&
+    current.contains(next)
+  )
+    return;
+  attachmentDragActive.value = false;
+}
+
+function removeAttachment(key: string): void {
+  attachments.value = removeAssistantAttachment(attachments.value, key);
 }
 
 function handleComposerKeydown(event: KeyboardEvent): void {
@@ -214,6 +280,8 @@ watch(contextKey, () => {
   store.setContext(props.context, props.projectRef);
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
+  attachments.value = [];
+  attachmentDragActive.value = false;
   if (open.value) void store.load(props.context, props.projectRef);
 });
 watch(
@@ -298,6 +366,16 @@ onBeforeUnmount(() => {
             v-if="store.assistant"
             :state="store.assistant.runtimeState"
           />
+          <button
+            class="icon-button assistant-new-conversation"
+            type="button"
+            :aria-label="$t('assistant.newConversation')"
+            :title="$t('assistant.newConversation')"
+            :disabled="!canStartConversation"
+            @click="startConversation"
+          >
+            <Plus :size="19" aria-hidden="true" />
+          </button>
           <div ref="historyMenu" class="assistant-history">
             <button
               class="icon-button"
@@ -316,14 +394,6 @@ onBeforeUnmount(() => {
             >
               <header>{{ $t("assistant.history") }}</header>
               <button
-                type="button"
-                :disabled="store.busy"
-                @click="startConversation"
-              >
-                <Plus :size="17" aria-hidden="true" />
-                <span>{{ $t("assistant.newConversation") }}</span>
-              </button>
-              <button
                 v-for="conversation in store.sortedConversations"
                 :key="conversation.ref"
                 type="button"
@@ -333,7 +403,9 @@ onBeforeUnmount(() => {
                 @click="chooseConversation(conversation.ref)"
               >
                 <span>
-                  <strong>{{ conversation.title }}</strong>
+                  <strong>{{
+                    conversationDisplayTitle(conversation.title)
+                  }}</strong>
                   <small>{{
                     new Date(conversation.updatedAt).toLocaleString()
                   }}</small>
@@ -376,167 +448,252 @@ onBeforeUnmount(() => {
           </button>
         </nav>
 
-        <RunActivityView v-if="activeView === 'ACTIVITY'" :events="runEvents" />
-        <template v-else>
-          <section class="assistant-context-strip">
-            <span>{{ $t("assistant.context") }}</span>
-            <strong>{{ contextTitle }}</strong>
-            <small>{{ context.route }}</small>
-          </section>
+        <div class="assistant-drawer__view">
+          <RunActivityView
+            v-if="activeView === 'ACTIVITY'"
+            :events="runEvents"
+          />
+          <div v-else class="assistant-chat-view">
+            <section class="assistant-context-strip">
+              <span>{{ $t("assistant.context") }}</span>
+              <strong>{{ contextTitle }}</strong>
+              <small>{{ context.route }}</small>
+            </section>
 
-          <section
-            v-if="store.selectedConversation"
-            class="assistant-conversation-title"
-          >
-            <form v-if="titleEditing" @submit.prevent="saveTitle">
-              <input
-                v-model="titleDraft"
-                maxlength="160"
-                :disabled="store.busy"
-                :aria-label="$t('assistant.conversationTitle')"
-              />
-              <button
-                class="button button--primary"
-                type="submit"
-                :disabled="store.busy || !titleDraft.trim()"
-              >
-                {{ $t("common.save") }}
-              </button>
-              <button
-                class="button"
-                type="button"
-                :disabled="store.busy"
-                @click="titleEditing = false"
-              >
-                {{ $t("common.cancel") }}
-              </button>
-            </form>
-            <template v-else>
-              <strong>{{ store.selectedConversation.title }}</strong>
-              <button
-                class="icon-button"
-                type="button"
-                :aria-label="$t('assistant.renameConversation')"
-                @click="startTitleEdit"
-              >
-                <Pencil :size="16" aria-hidden="true" />
-              </button>
-            </template>
-          </section>
-
-          <section class="assistant-chat-log" role="log" aria-live="polite">
-            <ProblemNotice
-              v-if="store.problem"
-              :problem="store.problem"
-              @retry="store.load(context, projectRef)"
-            />
-            <div
-              v-else-if="store.loading"
-              class="assistant-empty-state"
-              role="status"
+            <section
+              v-if="store.selectedConversation"
+              class="assistant-conversation-title"
             >
-              <span class="spinner" aria-hidden="true" />
-              <p>{{ $t("common.loading") }}</p>
-            </div>
-            <div
-              v-else-if="!store.selectedConversation?.turns.length"
-              class="assistant-empty-state"
-            >
-              <Sparkles :size="28" aria-hidden="true" />
-              <h2>{{ $t("assistant.ready") }}</h2>
-              <p>{{ $t("assistant.contextHelp") }}</p>
-            </div>
-            <article
-              v-for="turn in store.selectedConversation?.turns ?? []"
-              v-else
-              :key="turn.ref"
-              class="assistant-message"
-              :class="`assistant-message--${turn.role.toLowerCase()}`"
-            >
-              <header>
-                <strong>{{
-                  turn.role === "USER"
-                    ? $t("common.input")
-                    : turn.role === "SYSTEM_RECEIPT"
-                      ? $t("assistant.receipt")
-                      : "Kodex"
-                }}</strong>
-                <StatusBadge :state="turn.state" />
-              </header>
-              <SafeMarkdown :content="turn.content" />
-              <section v-if="turn.plan" class="assistant-plan-card">
-                <header>
-                  <ListChecks :size="19" aria-hidden="true" />
-                  <div>
-                    <strong>{{ $t("assistant.plan") }}</strong>
-                    <span>{{
-                      $t("assistant.planEditor.revision", {
-                        revision: turn.plan.revision,
-                        count: turn.plan.operations.length,
-                      })
-                    }}</span>
-                  </div>
-                  <StatusBadge :state="turn.plan.state" />
-                </header>
-                <SafeMarkdown :content="turn.plan.auditSummary" />
-                <ul class="assistant-plan-card__operations">
-                  <li
-                    v-for="operation in turn.plan.operations.slice(0, 3)"
-                    :key="operation.ref"
-                  >
-                    {{ operation.title }}
-                  </li>
-                  <li v-if="turn.plan.operations.length > 3">
-                    +{{ turn.plan.operations.length - 3 }}
-                  </li>
-                </ul>
+              <form v-if="titleEditing" @submit.prevent="saveTitle">
+                <input
+                  v-model="titleDraft"
+                  maxlength="160"
+                  :disabled="store.busy"
+                  :aria-label="$t('assistant.conversationTitle')"
+                />
                 <button
                   class="button button--primary"
-                  type="button"
-                  @click="openPlan(turn.plan)"
+                  type="submit"
+                  :disabled="store.busy || !titleDraft.trim()"
                 >
-                  {{ $t("assistant.openPlan") }}
+                  {{ $t("common.save") }}
                 </button>
-              </section>
-            </article>
-          </section>
+                <button
+                  class="button"
+                  type="button"
+                  :disabled="store.busy"
+                  @click="titleEditing = false"
+                >
+                  {{ $t("common.cancel") }}
+                </button>
+              </form>
+              <template v-else>
+                <strong>{{
+                  conversationDisplayTitle(store.selectedConversation.title)
+                }}</strong>
+                <button
+                  class="icon-button"
+                  type="button"
+                  :aria-label="$t('assistant.renameConversation')"
+                  @click="startTitleEdit"
+                >
+                  <Pencil :size="16" aria-hidden="true" />
+                </button>
+              </template>
+            </section>
 
-          <footer class="assistant-composer">
-            <div class="assistant-composer__field">
-              <textarea
-                ref="composer"
-                v-model="message"
-                rows="2"
-                maxlength="32768"
-                :aria-label="$t('assistant.message')"
-                :placeholder="$t('assistant.message')"
-                :disabled="store.busy || !live"
-                @keydown="handleComposerKeydown"
+            <section class="assistant-chat-log" role="log" aria-live="polite">
+              <ProblemNotice
+                v-if="store.problem"
+                :problem="store.problem"
+                @retry="store.load(context, projectRef)"
               />
-              <div>
-                <button
-                  class="assistant-composer__icon"
-                  type="button"
-                  disabled
-                  :aria-label="$t('assistant.microphoneUnavailable')"
-                  :title="$t('assistant.microphoneUnavailable')"
-                >
-                  <Mic :size="18" aria-hidden="true" />
-                </button>
-                <button
-                  class="assistant-composer__send"
-                  type="button"
-                  :aria-label="$t('assistant.send')"
-                  :disabled="!canSend || !message.trim()"
-                  @click="send"
-                >
-                  <Send :size="19" aria-hidden="true" />
-                </button>
+              <div
+                v-else-if="store.loading"
+                class="assistant-empty-state"
+                role="status"
+              >
+                <span class="spinner" aria-hidden="true" />
+                <p>{{ $t("common.loading") }}</p>
               </div>
-            </div>
-            <small>{{ $t("assistant.audit") }}</small>
-          </footer>
-        </template>
+              <div
+                v-else-if="!store.selectedConversation?.turns.length"
+                class="assistant-empty-state"
+              >
+                <Sparkles :size="28" aria-hidden="true" />
+                <h2>{{ $t("assistant.ready") }}</h2>
+                <p>{{ $t("assistant.contextHelp") }}</p>
+              </div>
+              <article
+                v-for="turn in store.selectedConversation?.turns ?? []"
+                v-else
+                :key="turn.ref"
+                class="assistant-message"
+                :class="`assistant-message--${turn.role.toLowerCase()}`"
+              >
+                <header>
+                  <strong>{{
+                    turn.role === "USER"
+                      ? $t("common.input")
+                      : turn.role === "SYSTEM_RECEIPT"
+                        ? $t("assistant.receipt")
+                        : "Kodex"
+                  }}</strong>
+                  <StatusBadge :state="turn.state" />
+                </header>
+                <SafeMarkdown :content="turn.content" />
+                <section v-if="turn.plan" class="assistant-plan-card">
+                  <header>
+                    <ListChecks :size="19" aria-hidden="true" />
+                    <div>
+                      <strong>{{ $t("assistant.plan") }}</strong>
+                      <span>{{
+                        $t("assistant.planEditor.revision", {
+                          revision: turn.plan.revision,
+                          count: turn.plan.operations.length,
+                        })
+                      }}</span>
+                    </div>
+                    <StatusBadge :state="turn.plan.state" />
+                  </header>
+                  <SafeMarkdown :content="turn.plan.auditSummary" />
+                  <ol class="assistant-plan-card__operations">
+                    <li
+                      v-for="operation in turn.plan.operations"
+                      :key="operation.ref"
+                    >
+                      <strong>{{ operation.title }}</strong>
+                      <span>{{ operation.summary }}</span>
+                      <small>{{ operation.target.name }}</small>
+                    </li>
+                  </ol>
+                  <button
+                    class="button button--primary"
+                    type="button"
+                    @click="openPlan(turn.plan)"
+                  >
+                    {{ $t("assistant.openPlan") }}
+                  </button>
+                </section>
+              </article>
+            </section>
+
+            <footer
+              class="assistant-composer"
+              :class="{ 'assistant-composer--dragging': attachmentDragActive }"
+              @dragenter.prevent="attachmentDragActive = true"
+              @dragover.prevent="attachmentDragActive = true"
+              @dragleave="handleAttachmentDragLeave"
+              @drop.prevent="handleAttachmentDrop"
+            >
+              <input
+                ref="attachmentInput"
+                class="sr-only"
+                type="file"
+                multiple
+                :disabled="store.busy || !live"
+                @change="handleAttachmentInput"
+              />
+              <div
+                v-if="attachments.length"
+                class="assistant-attachments"
+                aria-live="polite"
+              >
+                <article
+                  v-for="attachment in attachments"
+                  :key="attachment.key"
+                  class="assistant-attachment"
+                >
+                  <Paperclip :size="15" aria-hidden="true" />
+                  <span>
+                    <strong>{{ attachment.name }}</strong>
+                    <small>{{ formatAttachmentSize(attachment.size) }}</small>
+                  </span>
+                  <button
+                    class="icon-button"
+                    type="button"
+                    :aria-label="
+                      $t('assistant.removeAttachment', {
+                        name: attachment.name,
+                      })
+                    "
+                    :title="
+                      $t('assistant.removeAttachment', {
+                        name: attachment.name,
+                      })
+                    "
+                    @click="removeAttachment(attachment.key)"
+                  >
+                    <X :size="15" aria-hidden="true" />
+                  </button>
+                </article>
+              </div>
+              <p
+                v-if="
+                  attachments.length && !assistantAttachmentTransportAvailable
+                "
+                class="assistant-attachments-unavailable"
+                role="status"
+              >
+                {{ $t("assistant.attachmentsUnavailable") }}
+              </p>
+              <div class="assistant-composer__field">
+                <textarea
+                  ref="composer"
+                  v-model="message"
+                  rows="2"
+                  maxlength="32768"
+                  :aria-label="$t('assistant.message')"
+                  :placeholder="$t('assistant.message')"
+                  :disabled="store.busy || !live"
+                  @keydown="handleComposerKeydown"
+                />
+                <div>
+                  <button
+                    class="assistant-composer__icon"
+                    type="button"
+                    :disabled="store.busy || !live"
+                    :aria-label="$t('assistant.addAttachments')"
+                    :title="$t('assistant.addAttachments')"
+                    @click="openAttachmentPicker"
+                  >
+                    <Paperclip :size="18" aria-hidden="true" />
+                  </button>
+                  <button
+                    class="assistant-composer__icon"
+                    type="button"
+                    disabled
+                    :aria-label="$t('assistant.microphoneUnavailable')"
+                    :title="$t('assistant.microphoneUnavailable')"
+                  >
+                    <Mic :size="18" aria-hidden="true" />
+                  </button>
+                  <button
+                    class="assistant-composer__send"
+                    type="button"
+                    :aria-label="$t('assistant.send')"
+                    :disabled="!canSend || !message.trim()"
+                    :title="
+                      attachments.length
+                        ? $t('assistant.attachmentsBlockSend')
+                        : $t('assistant.send')
+                    "
+                    @click="send"
+                  >
+                    <Send :size="19" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+              <small>
+                {{
+                  attachmentDragActive
+                    ? $t("assistant.dropAttachments")
+                    : $t("assistant.audit")
+                }}
+              </small>
+            </footer>
+          </div>
+        </div>
       </template>
     </aside>
   </div>
@@ -577,15 +734,32 @@ onBeforeUnmount(() => {
   background: rgb(17 24 39 / 36%);
 }
 .assistant-drawer {
-  position: absolute;
-  inset: 0 0 0 auto;
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
   width: min(760px, calc(100vw - 64px));
+  height: 100dvh;
   min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--surface);
   box-shadow: -18px 0 48px rgb(15 23 42 / 20%);
   outline: 0;
+}
+.assistant-drawer > .assistant-plan-editor,
+.assistant-drawer__view,
+.assistant-chat-view {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.assistant-drawer__view,
+.assistant-chat-view {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .assistant-drawer__header {
   display: flex;
@@ -619,6 +793,7 @@ onBeforeUnmount(() => {
 }
 .assistant-history {
   position: relative;
+  flex: 0 0 auto;
 }
 .assistant-history > .icon-button {
   width: auto;
@@ -801,21 +976,80 @@ onBeforeUnmount(() => {
 }
 .assistant-plan-card__operations {
   display: grid;
-  gap: 4px;
+  gap: 8px;
   margin: 0;
-  padding-left: 20px;
+  padding: 0;
   color: var(--text);
   font-size: 0.84rem;
+  list-style: none;
+}
+.assistant-plan-card__operations li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+}
+.assistant-plan-card__operations span,
+.assistant-plan-card__operations small {
+  color: var(--muted);
 }
 .assistant-plan-card .button {
   justify-self: start;
 }
 .assistant-composer {
+  position: relative;
   display: grid;
   gap: 6px;
   padding: 12px 16px 14px;
   border-top: 1px solid var(--border);
   background: var(--surface);
+}
+.assistant-composer--dragging {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background: var(--accent-soft);
+}
+.assistant-attachments {
+  display: flex;
+  max-height: 132px;
+  gap: 6px;
+  overflow: auto;
+  padding-bottom: 2px;
+}
+.assistant-attachment {
+  display: grid;
+  min-width: 184px;
+  max-width: 260px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.assistant-attachment > span {
+  display: grid;
+  min-width: 0;
+}
+.assistant-attachment strong {
+  overflow: hidden;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.assistant-attachment small {
+  color: var(--subtle);
+  font-size: 0.72rem;
+}
+.assistant-attachment .icon-button {
+  width: 28px;
+  height: 28px;
+}
+.assistant-attachments-unavailable {
+  margin: 0;
+  color: var(--warning);
+  font-size: 0.78rem;
 }
 .assistant-composer__field {
   position: relative;
@@ -825,7 +1059,7 @@ onBeforeUnmount(() => {
   min-height: 72px;
   max-height: 180px;
   resize: vertical;
-  padding: 11px 104px 11px 12px;
+  padding: 11px 146px 11px 12px;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
 }
@@ -867,7 +1101,9 @@ onBeforeUnmount(() => {
     bottom: calc(76px + env(safe-area-inset-bottom));
   }
   .assistant-drawer {
-    inset: auto 0 0;
+    top: auto;
+    right: 0;
+    bottom: 0;
     width: 100%;
     height: min(88vh, 900px);
     border-radius: 14px 14px 0 0;
@@ -895,6 +1131,12 @@ onBeforeUnmount(() => {
   }
   .assistant-message {
     width: 94%;
+  }
+  .assistant-attachments {
+    max-height: 108px;
+  }
+  .assistant-attachment {
+    min-width: min(240px, calc(100vw - 64px));
   }
 }
 </style>

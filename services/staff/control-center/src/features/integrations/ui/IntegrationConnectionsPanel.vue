@@ -16,7 +16,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
-defineProps<{
+const props = defineProps<{
   connections: readonly IntegrationConnection[];
   definitions: Readonly<Record<string, IntegrationDefinition>>;
   busyRef: string;
@@ -32,6 +32,29 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+
+function publicConfiguration(
+  connection: IntegrationConnection,
+): Array<{ key: string; label: string; value: string }> {
+  const definition = props.definitions[connection.definitionKey];
+  return Object.entries(connection.publicConfiguration)
+    .map(([key, value]) => {
+      const field = definition?.configurationFields.find(
+        (item) => item.key === key,
+      );
+      const rendered = Array.isArray(value)
+        ? value.join(", ")
+        : typeof value === "string"
+          ? value
+          : JSON.stringify(value);
+      return {
+        key,
+        label: field?.label ?? key,
+        value: rendered.length > 160 ? rendered.slice(0, 157) + "…" : rendered,
+      };
+    })
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
 </script>
 
 <template>
@@ -50,25 +73,36 @@ const { t } = useI18n();
       }}</span>
     </header>
 
-    <div v-if="connections.length" class="connection-table" role="list">
+    <div v-if="connections.length" class="connection-grid" role="list">
       <article
         v-for="connection in connections"
         :key="connection.ref"
         class="connection-row connection-card"
         role="listitem"
       >
-        <div class="connection-main">
-          <div class="connection-title">
-            <h3>{{ connection.name }}</h3>
-            <StatusBadge :state="connection.state" />
+        <header class="connection-card__heading">
+          <div class="connection-main">
+            <div class="connection-title">
+              <h3>{{ connection.name }}</h3>
+              <StatusBadge :state="connection.state" />
+            </div>
+            <p>
+              {{
+                definitions[connection.definitionKey]?.name ??
+                connection.definitionKey
+              }}
+            </p>
           </div>
-          <p>
-            {{
-              definitions[connection.definitionKey]?.name ??
-              connection.definitionKey
-            }}
-          </p>
-          <div class="credential-state">
+          <div class="connection-version">
+            <span class="mono">v{{ connection.definitionVersion }}</span>
+            <span class="mono" :title="connection.definitionDigest"
+              >{{ connection.definitionDigest.slice(0, 12) }}…</span
+            >
+          </div>
+        </header>
+
+        <section class="credential-state">
+          <div>
             <StatusBadge
               :state="
                 connection.credentialsConfigured ? 'READY' : 'NEEDS_ATTENTION'
@@ -81,19 +115,44 @@ const { t } = useI18n();
             />
             <span>{{ connection.credentialsHint }}</span>
           </div>
-          <p v-if="connection.lastTestOutcome" class="last-test">
-            {{ t("integrations.lastTest") }}: {{ connection.lastTestOutcome }}
-          </p>
-          <div class="connection-capabilities">
-            <span
-              v-for="capability in connection.capabilities.slice(0, 4)"
-              :key="capability.key"
-              >{{ capability.name }}</span
-            >
-            <span v-if="connection.capabilities.length > 4"
-              >+{{ connection.capabilities.length - 4 }}</span
-            >
+          <code
+            v-if="definitions[connection.definitionKey]?.credentialSecretKey"
+          >
+            {{ definitions[connection.definitionKey]?.credentialSecretKey }}
+          </code>
+        </section>
+
+        <dl
+          v-if="publicConfiguration(connection).length"
+          class="public-configuration"
+        >
+          <div
+            v-for="entry in publicConfiguration(connection)"
+            :key="entry.key"
+          >
+            <dt>{{ entry.label }}</dt>
+            <dd :title="entry.value">{{ entry.value }}</dd>
           </div>
+        </dl>
+
+        <p v-if="connection.lastTestOutcome" class="last-test">
+          {{ t("integrations.lastTest") }}: {{ connection.lastTestOutcome }}
+        </p>
+
+        <div class="connection-capabilities">
+          <span
+            v-for="capability in connection.capabilities"
+            :key="capability.key"
+            :title="capability.description"
+          >
+            <strong>{{ capability.name }}</strong>
+            {{ t("integrations.risk." + capability.risk) }}
+            <ShieldCheck
+              v-if="capability.approvalRequired"
+              :size="12"
+              aria-label="Human Gate"
+            />
+          </span>
         </div>
 
         <div class="connection-facts">
@@ -109,7 +168,7 @@ const { t } = useI18n();
           </span>
         </div>
 
-        <div class="connection-actions">
+        <footer class="connection-actions">
           <button
             v-if="
               canConfigureCredential(
@@ -164,7 +223,7 @@ const { t } = useI18n();
             <PowerOff :size="15" aria-hidden="true" />
             {{ t("common.disable") }}
           </button>
-        </div>
+        </footer>
       </article>
     </div>
     <div v-else class="connection-empty">
@@ -186,7 +245,9 @@ const { t } = useI18n();
 .connection-actions,
 .connection-facts,
 .connection-capabilities,
-.credential-state {
+.credential-state,
+.credential-state > div,
+.connection-card__heading {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -210,26 +271,24 @@ const { t } = useI18n();
 .connection-empty p {
   color: var(--muted);
 }
-.connection-table {
-  overflow: hidden;
+.connection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+  gap: 12px;
+}
+.connection-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  padding: 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
 }
-.connection-row {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(150px, auto) minmax(
-      250px,
-      auto
-    );
-  align-items: center;
-  gap: 18px;
-  min-height: 104px;
-  padding: 13px 14px;
-  border-top: 1px solid var(--hairline);
-}
-.connection-row:first-child {
-  border-top: 0;
+.connection-card__heading {
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
 }
 .connection-title {
   flex-wrap: wrap;
@@ -242,27 +301,79 @@ const { t } = useI18n();
 .connection-main h3 {
   overflow-wrap: anywhere;
 }
+.connection-version {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
 .last-test {
+  margin: 9px 0 0;
   font-size: 0.8rem;
 }
 .credential-state {
+  justify-content: space-between;
   flex-wrap: wrap;
+  margin-top: 13px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
   color: var(--muted);
   font-size: 0.8rem;
 }
+.credential-state > div {
+  flex-wrap: wrap;
+}
+.credential-state code {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+.public-configuration {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 10px 0 0;
+}
+.public-configuration > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.public-configuration dt {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+.public-configuration dd {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .connection-capabilities {
   flex-wrap: wrap;
-  margin-top: 3px;
+  margin-top: 10px;
 }
 .connection-capabilities span {
-  padding: 3px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 7px;
   border-radius: 5px;
   color: var(--muted);
   background: var(--panel);
   font-size: 0.74rem;
 }
+.connection-capabilities strong {
+  color: var(--text-secondary);
+}
 .connection-facts {
   align-items: stretch;
+  margin-top: 12px;
 }
 .connection-facts span {
   display: grid;
@@ -280,6 +391,9 @@ const { t } = useI18n();
 .connection-actions {
   justify-content: flex-end;
   flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
 }
 .connection-empty {
   display: grid;
@@ -292,11 +406,7 @@ const { t } = useI18n();
   background: var(--panel);
 }
 @media (max-width: 980px) {
-  .connection-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
   .connection-actions {
-    grid-column: 1 / -1;
     justify-content: flex-start;
   }
 }
@@ -308,12 +418,14 @@ const { t } = useI18n();
   .panel-heading {
     flex-direction: column;
   }
-  .connection-row {
-    grid-template-columns: 1fr;
+  .connection-card__heading {
+    flex-direction: column;
   }
-  .connection-actions,
-  .connection-facts {
-    grid-column: auto;
+  .connection-version {
+    justify-items: start;
+  }
+  .public-configuration {
+    grid-template-columns: 1fr;
   }
   .connection-actions .button {
     flex: 1 1 130px;

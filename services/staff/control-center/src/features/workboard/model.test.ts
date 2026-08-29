@@ -2,11 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import {
   collectAttention,
+  decisionInbox,
+  decisionUrgency,
   filterRuns,
   groupRuns,
   runExecutor,
 } from "@/features/workboard/model";
-import type { OwnerGate, Run } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  OwnerGate,
+  Project,
+  Run,
+} from "@/shared/api/generated/openapi/types.gen";
 import { runPath } from "@/shared/routes";
 
 const activitySummaryByState: Record<Run["state"], string> = {
@@ -81,6 +87,21 @@ function gate(runRef: string): OwnerGate {
     nextActions: ["RESOLVE_GATE"],
   };
 }
+
+const project: Project = {
+  ref: "project_sales",
+  version: 1,
+  name: "Продажи",
+  purpose: "Работа с клиентами",
+  language: "ru",
+  lifecycle: "ACTIVE",
+  agentCount: 1,
+  workflowCount: 1,
+  activeRunCount: 1,
+  pendingGateCount: 1,
+  updatedAt: "2026-08-28T10:00:00Z",
+  nextActions: [],
+};
 
 describe("workboard model", () => {
   it("группирует состояния в четыре канонические колонки", () => {
@@ -174,5 +195,70 @@ describe("workboard model", () => {
       "/projects/project_sales/runs/context",
     );
     expect(runPath("context")).toBe("/runs/context");
+  });
+
+  it("формирует decision inbox только из открытых решений нужного Проекта", () => {
+    const current = gate("run_current");
+    const closed = {
+      ...gate("run_closed"),
+      ref: "gate_closed",
+      state: "APPROVED" as const,
+    };
+    const other = {
+      ...gate("run_other"),
+      ref: "gate_other",
+      projectRef: "project_other",
+    };
+
+    const items = decisionInbox(
+      [closed, other, current],
+      [project],
+      project.ref,
+      new Date("2026-08-28T10:00:00Z"),
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.project?.name).toBe("Продажи");
+    expect(items[0]?.canResolve).toBe(true);
+  });
+
+  it("честно отмечает неполный или недоступный контекст решения", () => {
+    const item = decisionInbox(
+      [
+        {
+          ...gate("run_unavailable"),
+          contextSummary: " ",
+          consequencesSummary: "",
+        },
+      ],
+      [project],
+    )[0];
+
+    expect(item).toMatchObject({
+      hasQuestion: false,
+      hasConsequences: false,
+      canResolve: false,
+    });
+  });
+
+  it("сортирует срочные решения до обычных", () => {
+    const now = new Date("2026-08-28T10:00:00Z");
+    const soon = {
+      ...gate("run_soon"),
+      ref: "gate_soon",
+      expiresAt: "2026-08-28T12:00:00Z",
+    };
+    const normal = {
+      ...gate("run_normal"),
+      ref: "gate_normal",
+      expiresAt: "2026-08-30T10:00:00Z",
+    };
+
+    expect(decisionUrgency(soon, now)).toBe("SOON");
+    expect(
+      decisionInbox([normal, soon], [project], undefined, now).map(
+        (item) => item.gate.ref,
+      ),
+    ).toEqual(["gate_soon", "gate_normal"]);
   });
 });

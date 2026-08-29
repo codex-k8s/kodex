@@ -5,7 +5,9 @@ import { gotoWithRetry, routeRef } from "./helpers";
 const environment = loadE2EEnvironment();
 const projectName = `${environment.resourcePrefix} — отдел продаж`;
 
-async function expectNoHorizontalOverflow(page: import("@playwright/test").Page) {
+async function expectNoHorizontalOverflow(
+  page: import("@playwright/test").Page,
+) {
   const overflow = await page.evaluate(
     () =>
       document.documentElement.scrollWidth -
@@ -33,7 +35,10 @@ test("mobile shell, помощник и граф доступны без гор�
     page.getByRole("navigation", { name: "Навигация Проекта" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: /^Помощник/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Помощник/ })
+    .first()
+    .click();
   await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
   await expect(
     page.getByLabel("Опишите, что нужно настроить или запустить"),

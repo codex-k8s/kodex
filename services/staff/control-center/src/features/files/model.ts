@@ -2,7 +2,32 @@ import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
 
 export type FileKind = "ALL" | "TEXT" | "DOCUMENT" | "IMAGE";
 export type FileSource = "ALL" | Artifact["source"];
-export type FileTab = "FILES" | "KNOWLEDGE" | "RESULTS";
+export type FileTab = "FILES" | "KNOWLEDGE" | "RESULTS" | "TRASH";
+
+export type ArtifactLifecycleAction = "DELETE" | "RESTORE" | "PURGE";
+export type ArtifactLifecycleBlockReason =
+  | "ACTION_NOT_ALLOWED"
+  | "CONTRACT_UNAVAILABLE";
+
+export type ArtifactLifecycleState =
+  | {
+      action: ArtifactLifecycleAction;
+      available: true;
+    }
+  | {
+      action: ArtifactLifecycleAction;
+      available: false;
+      reason: ArtifactLifecycleBlockReason;
+    };
+
+export type UploadQueueState = "QUEUED" | "UPLOADING" | "SUCCEEDED" | "FAILED";
+
+export interface UploadQueueItem {
+  file: File;
+  id: string;
+  problem?: string;
+  state: UploadQueueState;
+}
 
 export type FileIconKind =
   | "archive"
@@ -100,6 +125,9 @@ export function matchesArtifactFilters(
     tab: FileTab;
   },
 ): boolean {
+  const inTrash = artifact.lifecycleState !== "ACTIVE";
+  if (options.tab === "TRASH" && !inTrash) return false;
+  if (options.tab !== "TRASH" && inTrash) return false;
   if (options.tab === "KNOWLEDGE" && artifact.agentBindings.length === 0)
     return false;
   if (
@@ -113,6 +141,39 @@ export function matchesArtifactFilters(
   if (options.source !== "ALL" && artifact.source !== options.source)
     return false;
   return options.kind === "ALL" || artifactKind(artifact) === options.kind;
+}
+
+export function artifactLifecycleState(
+  artifact: Artifact,
+  action: ArtifactLifecycleAction,
+): ArtifactLifecycleState {
+  const announcedByApi = (artifact.nextActions as readonly string[]).includes(
+    action,
+  );
+  if (announcedByApi && action === "DELETE") {
+    return {
+      action,
+      available: false,
+      reason: "CONTRACT_UNAVAILABLE",
+    };
+  }
+  if (announcedByApi) return { action, available: true };
+  return {
+    action,
+    available: false,
+    reason: "ACTION_NOT_ALLOWED",
+  };
+}
+
+export function createUploadQueueItems(
+  files: readonly File[],
+  createId: () => string,
+): UploadQueueItem[] {
+  return files.map((file) => ({
+    file,
+    id: createId(),
+    state: "QUEUED",
+  }));
 }
 
 export function supportsInlinePreview(artifact: Artifact): boolean {

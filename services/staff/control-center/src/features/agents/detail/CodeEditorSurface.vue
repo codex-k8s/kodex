@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { FileCode2, LockKeyhole, ShieldAlert } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 
-import { tokenizeCodeLine } from "@/features/agents/detail/model";
+import {
+  insertTextAtSelection,
+  tokenizeCodeLine,
+} from "@/features/agents/detail/model";
 
 const props = withDefaults(
   defineProps<{
@@ -25,6 +28,7 @@ const props = withDefaults(
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 const highlight = ref<HTMLElement>();
 const gutter = ref<HTMLElement>();
+const input = ref<HTMLTextAreaElement>();
 const lines = computed(() =>
   props.modelValue.replace(/\r\n?/g, "\n").split("\n"),
 );
@@ -50,6 +54,23 @@ function syncScroll(event: Event): void {
   }
   if (gutter.value) gutter.value.scrollTop = target.scrollTop;
 }
+
+function insertAtCursor(value: string): void {
+  if (props.readonly || !input.value) return;
+  const result = insertTextAtSelection(
+    props.modelValue,
+    value,
+    input.value.selectionStart,
+    input.value.selectionEnd,
+  );
+  emit("update:modelValue", result.value);
+  void nextTick(() => {
+    input.value?.focus();
+    input.value?.setSelectionRange(result.selectionStart, result.selectionEnd);
+  });
+}
+
+defineExpose({ insertAtCursor });
 </script>
 
 <template>
@@ -85,6 +106,7 @@ function syncScroll(event: Event): void {
           :class="`code-editor__token--${token.tone}`"
         >{{ token.text }}</span>{{ lineIndex < highlightedLines.length - 1 ? "\n" : "" }}</span></code></pre>
         <textarea
+          ref="input"
           class="code-editor__input"
           :value="modelValue"
           :readonly="readonly"

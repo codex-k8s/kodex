@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Download, Search, ShieldCheck } from "@lucide/vue";
+import { Download, RotateCcw, Search, ShieldCheck, Trash2 } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 
 import FileTypeIcon from "@/features/files/FileTypeIcon.vue";
@@ -12,6 +12,8 @@ const props = defineProps<{
   artifact: Artifact;
   imageUrl?: string;
   labels: FilePreviewLabels;
+  deleteLabel: string;
+  lifecycleAction?: "DELETE" | "RESTORE";
   loading?: boolean;
   previewText?: string;
   unavailable?: boolean;
@@ -19,7 +21,11 @@ const props = defineProps<{
   formatDate: (value: string) => string;
   sourceLabel: (source: Artifact["source"]) => string;
 }>();
-const emit = defineEmits<{ close: []; download: [] }>();
+const emit = defineEmits<{
+  close: [];
+  download: [];
+  requestDelete: [];
+}>();
 const find = ref("");
 const zoom = ref(100);
 
@@ -61,6 +67,7 @@ const textChunks = computed(() => {
   <ModalDialog
     :title="artifact.fileName"
     :busy="loading"
+    size="full"
     @close="emit('close')"
   >
     <div class="file-preview-dialog">
@@ -134,6 +141,21 @@ const textChunks = computed(() => {
     <template #actions>
       <button
         class="button"
+        :class="lifecycleAction === 'RESTORE' ? '' : 'button--danger'"
+        type="button"
+        :disabled="loading"
+        @click="emit('requestDelete')"
+      >
+        <RotateCcw
+          v-if="lifecycleAction === 'RESTORE'"
+          :size="16"
+          aria-hidden="true"
+        />
+        <Trash2 v-else :size="16" aria-hidden="true" />
+        {{ deleteLabel }}
+      </button>
+      <button
+        class="button"
         type="button"
         :disabled="loading"
         @click="emit('close')"
@@ -157,9 +179,10 @@ const textChunks = computed(() => {
 <style scoped>
 .file-preview-dialog {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  width: min(1040px, 82vw);
-  min-height: min(620px, 68vh);
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+  width: calc(100% + 40px);
+  height: calc(100% + 40px);
+  min-height: 0;
   margin: -20px;
 }
 .file-preview-dialog__viewer {

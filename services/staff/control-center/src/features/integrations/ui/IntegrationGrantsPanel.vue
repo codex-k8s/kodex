@@ -45,6 +45,11 @@ const { t } = useI18n();
 const targets = computed(() =>
   props.targetKind === "AGENT" ? props.agents : props.workflows,
 );
+const selectedCapability = computed(() =>
+  props.selectedConnection?.capabilities.find(
+    (item) => item.key === props.capabilityKey,
+  ),
+);
 const canManageSelected = computed(
   () =>
     !!props.selectedConnection &&
@@ -112,6 +117,19 @@ const canManageSelected = computed(
             <div class="grant-capability">
               <strong>{{ item.capabilityName }}</strong>
               <span class="mono">{{ item.capabilityKey }}</span>
+              <span>
+                {{ t("integrations.risk." + item.grant.risk) }} ·
+                {{ item.grant.approvalPolicy }}
+              </span>
+              <span class="mono">{{ item.resourceKind }}</span>
+              <span
+                v-for="entry in item.resourceValues"
+                :key="entry.key"
+                class="mono resource-value"
+                :title="entry.value"
+              >
+                {{ entry.key }}={{ entry.value }}
+              </span>
             </div>
             <StatusBadge :state="item.enabled ? 'ENABLED' : 'REVOKED'" />
             <button
@@ -248,6 +266,36 @@ const canManageSelected = computed(
             </select>
           </label>
 
+          <section
+            v-if="selectedCapability"
+            class="capability-boundary"
+            aria-live="polite"
+          >
+            <header>
+              <strong>{{ selectedCapability.name }}</strong>
+              <span>{{
+                t("integrations.risk." + selectedCapability.risk)
+              }}</span>
+            </header>
+            <p>{{ selectedCapability.description }}</p>
+            <dl>
+              <div>
+                <dt>Operation</dt>
+                <dd class="mono">{{ selectedCapability.operation }}</dd>
+              </div>
+              <div>
+                <dt>Resource scope</dt>
+                <dd class="mono">{{ selectedCapability.resourceKind }}</dd>
+              </div>
+              <div>
+                <dt>Approval policy</dt>
+                <dd class="mono">
+                  {{ selectedCapability.approvalPolicy }}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
           <div class="missing-boundary">
             <LockKeyhole :size="17" aria-hidden="true" />
             <span>{{
@@ -283,6 +331,48 @@ const canManageSelected = computed(
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.capability-boundary {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.capability-boundary > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.capability-boundary > header span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.capability-boundary p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.capability-boundary dl {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+.capability-boundary dl > div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 8px;
+}
+.capability-boundary dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.capability-boundary dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-size: 0.72rem;
 }
 .panel-heading,
 .grant-editor > header {
@@ -370,6 +460,9 @@ const canManageSelected = computed(
   font-size: 0.72rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.grant-capability .resource-value {
+  max-width: 260px;
 }
 .grant-editor {
   position: sticky;

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Play, Power, PowerOff } from "@lucide/vue";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -11,14 +11,16 @@ import AgentApplyState from "@/features/agents/detail/AgentApplyState.vue";
 import AgentEnvironmentPanel from "@/features/agents/detail/AgentEnvironmentPanel.vue";
 import AgentInstructionsPanel from "@/features/agents/detail/AgentInstructionsPanel.vue";
 import AgentProfilePanel from "@/features/agents/detail/AgentProfilePanel.vue";
+import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
+import { agentDetailCopy } from "@/features/agents/detail/copy";
 import {
   sameProfileDraft,
+  type AgentBackendFeatureAvailability,
   type AgentDetailTab,
   type AgentProfileDraft,
   type ApplyBoundary,
 } from "@/features/agents/detail/model";
 import { usePlatformStore } from "@/features/platform/store";
-import AgentRuntimePanel from "@/features/runtime/components/AgentRuntimePanel.vue";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
@@ -27,7 +29,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const platform = usePlatformStore();
-const { t } = useI18n();
+const { locale, t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const agentRef = computed(() => String(route.params.agentRef));
@@ -49,27 +51,6 @@ const capabilityCatalog = computed(() => {
     ? values
     : values.filter((item) => hasCapability(item.key));
 });
-const roleImageRecipe = computed(() =>
-  Object.values(platform.roleImageRecipes).find(
-    (item) =>
-      item.projectRef === projectRef.value &&
-      item.roleDefinitionRef === agent.value?.roleDefinitionRef,
-  ),
-);
-const roleEnvironments = computed(() =>
-  Object.values(platform.roleEnvironments).sort(
-    (left, right) =>
-      Number(right.recommended) - Number(left.recommended) ||
-      left.key.localeCompare(right.key),
-  ),
-);
-const latestBuild = computed(() => {
-  const recipe = roleImageRecipe.value;
-  if (!recipe) return undefined;
-  return Object.values(platform.roleImageBuilds)
-    .filter((item) => item.recipeRef === recipe.ref)
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
-});
 const instructionHistory = computed(
   () => platform.instructionVersions[agentRef.value] ?? [],
 );
@@ -88,10 +69,8 @@ const profileDraft = ref<AgentProfileDraft>({
   name: "",
   purpose: "",
   roleDescription: "",
-  avatarUrl: "",
 });
 const instructions = ref("");
-const selectedEnvironment = ref("");
 const task = ref("");
 const busy = ref(false);
 const capabilityBusy = ref("");
@@ -99,12 +78,40 @@ const problem = ref<AppProblem>();
 const applyState = ref<"APPLIED" | "DRAFT" | "RUNNING" | "FAILED">("APPLIED");
 const applyScope = ref(t("agents.profile"));
 const applyBoundary = ref<ApplyBoundary>("next-run");
+const tabApplyStates = reactive<
+  Record<
+    AgentDetailTab,
+    {
+      state: "APPLIED" | "DRAFT" | "RUNNING" | "FAILED";
+      scope: string;
+      boundary: ApplyBoundary;
+    }
+  >
+>({
+  profile: { state: "APPLIED", scope: "profile", boundary: "next-run" },
+  instructions: {
+    state: "APPLIED",
+    scope: "instructions",
+    boundary: "published",
+  },
+  runtime: { state: "APPLIED", scope: "runtime", boundary: "next-turn" },
+  environment: {
+    state: "APPLIED",
+    scope: "environment",
+    boundary: "next-turn",
+  },
+  access: { state: "APPLIED", scope: "access", boundary: "next-run" },
+});
+const avatarAsset = computed<AgentBackendFeatureAvailability>(() => ({
+  state: "UNAVAILABLE",
+  code: "avatar_asset",
+  reason: agentDetailCopy(locale.value).gaps.avatar,
+}));
 
 const currentProfile = computed<AgentProfileDraft>(() => ({
   name: agent.value?.name ?? "",
   purpose: agent.value?.purpose ?? "",
   roleDescription: agent.value?.roleDescription ?? "",
-  avatarUrl: agent.value?.avatarUrl ?? "",
 }));
 const profileDirty = computed(
   () => !sameProfileDraft(profileDraft.value, currentProfile.value),
@@ -144,35 +151,44 @@ function tabBoundary(tab: AgentDetailTab): ApplyBoundary {
 function tabHasDraft(tab: AgentDetailTab): boolean {
   if (tab === "profile") return profileDirty.value;
   if (tab === "instructions") return instructionsDirty.value;
-  if (tab === "environment")
-    return (
-      selectedEnvironment.value !==
-      (roleImageRecipe.value?.environment.environmentKey ?? "")
-    );
   return false;
 }
 
 function selectTab(tab: AgentDetailTab): void {
   activeTab.value = tab;
-  applyScope.value = tabScope(tab);
-  applyBoundary.value = tabBoundary(tab);
-  applyState.value = tabHasDraft(tab) ? "DRAFT" : "APPLIED";
+  const snapshot = tabApplyStates[tab];
+  if (tabHasDraft(tab)) snapshot.state = "DRAFT";
+  snapshot.scope = tabScope(tab);
+  snapshot.boundary = tabBoundary(tab);
+  applyState.value = snapshot.state;
+  applyScope.value = snapshot.scope;
+  applyBoundary.value = snapshot.boundary;
+}
+
+function setApplyState(
+  state: "APPLIED" | "DRAFT" | "RUNNING" | "FAILED",
+  scope: string,
+  boundary: ApplyBoundary,
+): void {
+  const snapshot = tabApplyStates[activeTab.value];
+  snapshot.state = state;
+  snapshot.scope = scope;
+  snapshot.boundary = boundary;
+  applyState.value = state;
+  applyScope.value = scope;
+  applyBoundary.value = boundary;
 }
 
 function markDraft(scope: string, boundary: ApplyBoundary): void {
-  applyState.value = "DRAFT";
-  applyScope.value = scope;
-  applyBoundary.value = boundary;
+  setApplyState("DRAFT", scope, boundary);
 }
 
 function markApplying(scope: string, boundary: ApplyBoundary): void {
-  applyState.value = "RUNNING";
-  applyScope.value = scope;
-  applyBoundary.value = boundary;
+  setApplyState("RUNNING", scope, boundary);
 }
 
 function markApplied(): void {
-  applyState.value = "APPLIED";
+  setApplyState("APPLIED", applyScope.value, applyBoundary.value);
 }
 
 function markCurrent(scope: string, boundary: ApplyBoundary): void {
@@ -182,7 +198,7 @@ function markCurrent(scope: string, boundary: ApplyBoundary): void {
 }
 
 function markFailed(): void {
-  applyState.value = "FAILED";
+  setApplyState("FAILED", applyScope.value, applyBoundary.value);
 }
 
 function syncProfile(value = agent.value): void {
@@ -191,7 +207,6 @@ function syncProfile(value = agent.value): void {
     name: value.name,
     purpose: value.purpose,
     roleDescription: value.roleDescription,
-    avatarUrl: value.avatarUrl ?? "",
   };
 }
 
@@ -207,28 +222,6 @@ async function load(): Promise<void> {
   ]);
   syncProfile();
   syncInstructions();
-
-  await Promise.all([
-    platform.loadRoleEnvironments(),
-    platform.loadRoleImageRecipes(
-      projectRef.value,
-      agent.value?.roleDefinitionRef,
-    ),
-  ]);
-  if (roleImageRecipe.value) {
-    selectedEnvironment.value =
-      roleImageRecipe.value.environment.environmentKey;
-    await platform.loadRoleImageRecipe(
-      projectRef.value,
-      roleImageRecipe.value.ref,
-    );
-  } else {
-    selectedEnvironment.value =
-      roleEnvironments.value.find((item) => item.recommended && item.available)
-        ?.key ??
-      roleEnvironments.value.find((item) => item.available)?.key ??
-      "";
-  }
 }
 
 function updateProfile(value: AgentProfileDraft): void {
@@ -245,13 +238,6 @@ function updateInstructions(value: string): void {
   else markDraft(tabScope("instructions"), "published");
 }
 
-function updateEnvironment(value: string): void {
-  selectedEnvironment.value = value;
-  if (value === roleImageRecipe.value?.environment.environmentKey)
-    markCurrent(tabScope("environment"), "next-turn");
-  else markDraft(tabScope("environment"), "next-turn");
-}
-
 async function saveProfile(): Promise<void> {
   if (!agent.value || !canEdit.value || !profileDirty.value) return;
   busy.value = true;
@@ -265,7 +251,7 @@ async function saveProfile(): Promise<void> {
         purpose: profileDraft.value.purpose.trim(),
         roleDescription: profileDraft.value.roleDescription.trim(),
         roleDefinitionRef: agent.value.roleDefinitionRef,
-        avatarUrl: profileDraft.value.avatarUrl.trim() || undefined,
+        avatarUrl: agent.value.avatarUrl,
         runtimeRef: agent.value.runtimeRef,
       },
       agent.value,
@@ -356,52 +342,12 @@ async function rollbackInstructions(
   }
 }
 
-async function prepareRoleEnvironment(): Promise<void> {
-  if (
-    !agent.value?.roleDefinitionRef ||
-    !canEdit.value ||
-    !selectedEnvironment.value ||
-    !platform.roleEnvironments[selectedEnvironment.value]?.available
-  )
-    return;
-  busy.value = true;
-  problem.value = undefined;
-  markApplying(tabScope("environment"), "next-turn");
-  try {
-    await platform.saveRoleImageRecipe(
-      projectRef.value,
-      agent.value.roleDefinitionRef,
-      t("roleEnvironments.recipeName", { name: agent.value.name }),
-      { environmentKey: selectedEnvironment.value },
-      roleImageRecipe.value,
-    );
-    markApplied();
-  } catch (error) {
-    problem.value = asProblem(error);
-    markFailed();
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function changeRoleEnvironment(action: "ARCHIVE" | "RESTORE") {
-  if (!roleImageRecipe.value?.nextActions.includes(action)) return;
-  busy.value = true;
-  problem.value = undefined;
-  markApplying(tabScope("environment"), "next-turn");
-  try {
-    await platform.changeRoleImageRecipe(
-      projectRef.value,
-      roleImageRecipe.value,
-      action,
-    );
-    markApplied();
-  } catch (error) {
-    problem.value = asProblem(error);
-    markFailed();
-  } finally {
-    busy.value = false;
-  }
+function updateApplyState(
+  state: "APPLIED" | "DRAFT" | "RUNNING" | "FAILED",
+  scope: string,
+  boundary: ApplyBoundary,
+): void {
+  setApplyState(state, scope, boundary);
 }
 
 async function toggleCapability(key: string): Promise<void> {
@@ -537,6 +483,8 @@ onMounted(() => void load());
           <AgentProfilePanel
             :model-value="profileDraft"
             :role-name="agent.roleDefinitionName ?? agent.name"
+            :avatar-url="agent.avatarUrl"
+            :avatar-asset="avatarAsset"
             :can-edit="canEdit"
             :busy="busy"
             :dirty="profileDirty"
@@ -613,6 +561,7 @@ onMounted(() => void load());
         >
           <AgentInstructionsPanel
             :model-value="instructions"
+            :project-ref="projectRef"
             :state="instructionState"
             :validation-messages="instructionValidationMessages"
             :can-edit="canEdit"
@@ -650,9 +599,9 @@ onMounted(() => void load());
           aria-labelledby="agent-tab-runtime"
         >
           <AgentRuntimePanel
-            :agent="agent"
-            :project-ref="projectRef"
+            :agent-ref="agent.ref"
             :can-edit="canEdit"
+            @apply-state="updateApplyState"
           />
           <ProblemNotice
             v-if="platform.problems.runtimes"
@@ -669,33 +618,10 @@ onMounted(() => void load());
           aria-labelledby="agent-tab-environment"
         >
           <AgentEnvironmentPanel
-            :model-value="selectedEnvironment"
-            :environments="roleEnvironments"
-            :recipe="roleImageRecipe"
-            :latest-build="latestBuild"
-            :can-edit="canEdit && Boolean(agent.roleDefinitionRef)"
-            :busy="busy"
-            @update:model-value="updateEnvironment"
-            @save="prepareRoleEnvironment"
-            @archive="changeRoleEnvironment('ARCHIVE')"
-            @restore="changeRoleEnvironment('RESTORE')"
-          />
-          <p
-            v-if="!agent.roleDefinitionRef"
-            class="agent-role-unavailable"
-            role="status"
-          >
-            {{ $t("roleEnvironments.roleUnavailable") }}
-          </p>
-          <ProblemNotice
-            v-if="platform.problems.roleEnvironments"
-            :problem="platform.problems.roleEnvironments"
-            compact
-          />
-          <ProblemNotice
-            v-if="platform.problems.roleImages"
-            :problem="platform.problems.roleImages"
-            compact
+            :agent-ref="agent.ref"
+            :project-ref="projectRef"
+            :can-edit="canEdit"
+            @apply-state="updateApplyState"
           />
         </section>
 

@@ -97,14 +97,17 @@ const event: PresentedRunEvent = {
   },
 };
 
-async function render(nodes: RunNode[] = [node]): Promise<string> {
+async function render(
+  nodes: RunNode[] = [node],
+  events: PresentedRunEvent[] = [event],
+): Promise<string> {
   const app = createSSRApp({
     render: () =>
       h(RunActivityDrawer, {
         open: true,
         run,
         nodes,
-        events: [event],
+        events,
         initiatorSummary: run.inputSummary,
       }),
   });
@@ -125,6 +128,8 @@ async function render(nodes: RunNode[] = [node]): Promise<string> {
             activity: "Ход работы",
             context: "Контекст узла",
             noNodeActivity: "Сообщений пока нет",
+            toolParameters: "Безопасные параметры",
+            toolDuration: "Длительность: {duration} мс",
             nodeTypes: { EXTERNAL_ACTION: "Внешнее действие" },
           },
           states: { RUNNING: "Выполняется", SUCCEEDED: "Завершено" },
@@ -136,15 +141,14 @@ async function render(nodes: RunNode[] = [node]): Promise<string> {
 }
 
 describe("RunActivityDrawer", () => {
-  it("разделяет сообщения инициатора, агента и unavailable tool-call блок", async () => {
+  it("разделяет сообщения инициатора и агента без выдуманного tool-call", async () => {
     const html = await render();
 
     expect(html).toContain("Владелец");
     expect(html).toContain("Проверь квартальный отчёт");
     expect(html).toContain("Аналитик продаж");
     expect(html).toContain("Собираю данные");
-    expect(html).toContain("run-tool-call--unavailable");
-    expect(html).toContain("Функция временно недоступна");
+    expect(html).not.toContain("run-tool-event");
   });
 
   it("показывает EXTERNAL_ACTION отдельным tool-call блоком", async () => {
@@ -153,6 +157,36 @@ describe("RunActivityDrawer", () => {
     expect(html).toContain("Поиск по файлам");
     expect(html).toContain("Найдено 4 фрагмента");
     expect(html).toContain("Завершено");
-    expect(html).not.toContain("run-tool-call--unavailable");
+    expect(html).toContain("Функция временно недоступна");
+  });
+
+  it("показывает параметры и результат записанного tool call", async () => {
+    const toolEvent: PresentedRunEvent = {
+      ...event,
+      ref: "evt_tool",
+      type: "TOOL_CALL_RECORDED",
+      messageKind: "TOOL_CALL",
+      actor: {
+        kind: "AGENT",
+        ref: "agt_example",
+        name: "Аналитик продаж",
+      },
+      toolCall: {
+        ref: "trn_tool",
+        tool: "project_files.search",
+        safeParameters: { query: "квартальный отчёт" },
+        state: "SUCCEEDED",
+        durationMs: 240,
+        safeResult: "Найдено 4 фрагмента",
+        auditRef: "evt_audit",
+      },
+    };
+
+    const html = await render([node], [toolEvent]);
+
+    expect(html).toContain("run-activity-item--tool");
+    expect(html).toContain("project_files.search");
+    expect(html).toContain("квартальный отчёт");
+    expect(html).toContain("Найдено 4 фрагмента");
   });
 });

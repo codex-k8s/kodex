@@ -1,216 +1,219 @@
 <script setup lang="ts">
-import { Archive, Layers3, RotateCcw, Save } from "@lucide/vue";
-import { computed } from "vue";
+import { Layers3, Save, Search } from "@lucide/vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { agentDetailCopy } from "@/features/agents/detail/copy";
+import type { ApplyBoundary } from "@/features/agents/detail/model";
 import {
-  createLocalEnvironmentLoader,
-  type EnvironmentPickerItem,
-} from "@/features/agents/detail/model";
-import type {
-  RoleEnvironment,
-  RoleImageBuild,
-  RoleImageRecipe,
-} from "@/shared/api/generated/openapi/types.gen";
+  bindRuntimeEnvironment,
+  loadAgentRuntime,
+  searchRuntimeEnvironments,
+} from "@/features/agents/detail/runtime-api";
+import type { RuntimeEnvironmentSet } from "@/shared/api/generated/openapi/types.gen";
+import { asProblem, type AppProblem } from "@/shared/api/problem";
+import AsyncState from "@/shared/ui/AsyncState.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type {
+  AsyncEntityOption,
+  AsyncEntityOptionPage,
+} from "@/shared/ui/async-entity-picker";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{
-  modelValue: string;
-  environments: readonly RoleEnvironment[];
-  recipe?: RoleImageRecipe;
-  latestBuild?: RoleImageBuild;
+  agentRef: string;
+  projectRef: string;
   canEdit: boolean;
-  busy: boolean;
 }>();
 const emit = defineEmits<{
-  "update:modelValue": [value: string];
-  save: [];
-  archive: [];
-  restore: [];
+  "apply-state": [
+    state: "APPLIED" | "DRAFT" | "RUNNING" | "FAILED",
+    scope: string,
+    boundary: ApplyBoundary,
+  ];
 }>();
-const { locale, t } = useI18n();
+
+const { locale } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
-const currentKey = computed(
-  () => props.recipe?.environment.environmentKey ?? "",
+const view = ref<Awaited<ReturnType<typeof loadAgentRuntime>>>();
+const selectedEnvironment = ref("");
+const selectedCandidate = ref<AsyncEntityOption>();
+const busy = ref(false);
+const loading = ref(false);
+const problem = ref<AppProblem>();
+const dirty = computed(
+  () =>
+    Boolean(selectedEnvironment.value) &&
+    selectedEnvironment.value !== view.value?.environment.ref,
 );
-const selectedEnvironment = computed(() =>
-  props.environments.find(
-    (environment) => environment.key === props.modelValue,
-  ),
-);
-const currentEnvironment = computed(() =>
-  props.environments.find(
-    (environment) => environment.key === currentKey.value,
-  ),
-);
-const pickerItems = computed<EnvironmentPickerItem[]>(() =>
-  props.environments.map((environment) => {
-    const software = environment.softwareMessageKeys.map((key) => t(key));
-    return {
-      id: environment.key,
-      label: t(environment.nameMessageKey),
-      description: t(environment.descriptionMessageKey),
-      disabled: !environment.available,
-      environment,
-      software,
-    };
-  }),
-);
-const catalogKey = computed(() =>
-  props.environments
-    .map((environment) => `${environment.key}:${String(environment.available)}`)
-    .join("|"),
-);
-const loadItems = createLocalEnvironmentLoader(() => pickerItems.value);
-const pickerLabels = computed(() => ({
-  label: copy.value.environment.catalog,
-  searchPlaceholder: copy.value.environment.choose,
-  loading: t("common.loading"),
-  loadingMore: copy.value.environment.loadingMore,
-  empty: t("common.empty"),
-  error: t("common.error"),
-  retry: t("common.retry"),
-}));
+
+function notify(state: "APPLIED" | "DRAFT" | "RUNNING" | "FAILED"): void {
+  emit("apply-state", state, copy.value.environment.catalog, "next-turn");
+}
+
+function environmentOption(value: RuntimeEnvironmentSet): AsyncEntityOption {
+  return {
+    ref: value.ref,
+    title: value.name,
+    description: [
+      value.description,
+      `rev ${String(value.currentVersion.revision)}`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    meta: value.state,
+  };
+}
+
+const selectedOption = computed<AsyncEntityOption | undefined>(() => {
+  if (selectedCandidate.value?.ref === selectedEnvironment.value)
+    return selectedCandidate.value;
+  const environment = view.value?.environment;
+  return environment?.ref === selectedEnvironment.value
+    ? environmentOption(environment)
+    : undefined;
+});
+
+function sync(): void {
+  if (!view.value) return;
+  selectedEnvironment.value = view.value.environment.ref;
+  selectedCandidate.value = environmentOption(view.value.environment);
+  notify("APPLIED");
+}
+
+async function load(): Promise<void> {
+  loading.value = true;
+  problem.value = undefined;
+  try {
+    view.value = await loadAgentRuntime(props.agentRef);
+    sync();
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadEnvironmentPage(
+  query: string,
+  cursor?: string,
+): Promise<AsyncEntityOptionPage> {
+  const page = await searchRuntimeEnvironments(props.projectRef, query, cursor);
+  return {
+    items: page.items.map(environmentOption),
+    ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}),
+  };
+}
 
 function select(value: string | null | readonly string[]): void {
-  if (typeof value === "string") emit("update:modelValue", value);
+  if (typeof value !== "string") return;
+  selectedEnvironment.value = value;
+  notify(value === view.value?.environment.ref ? "APPLIED" : "DRAFT");
 }
+
+function selectOption(value: AsyncEntityOption): void {
+  selectedCandidate.value = value;
+}
+
+async function bind(): Promise<void> {
+  const current = view.value;
+  if (!current || !props.canEdit || !dirty.value) return;
+  busy.value = true;
+  problem.value = undefined;
+  notify("RUNNING");
+  try {
+    view.value = await bindRuntimeEnvironment(
+      props.agentRef,
+      selectedEnvironment.value,
+      current.agentVersion,
+    );
+    sync();
+  } catch (error) {
+    problem.value = asProblem(error);
+    notify("FAILED");
+  } finally {
+    busy.value = false;
+  }
+}
+
+onMounted(() => void load());
 </script>
 
 <template>
-  <div class="environment-layout">
-    <article class="environment-current panel">
-      <div class="environment-current__head">
-        <div>
-          <h2>{{ copy.environment.current }}</h2>
-          <p>{{ $t("roleEnvironments.description") }}</p>
+  <AsyncState :loading="loading" :problem="problem" @retry="load">
+    <div v-if="view" class="environment-layout">
+      <article class="environment-current panel">
+        <div class="environment-current__head">
+          <div>
+            <h2>{{ copy.environment.current }}</h2>
+            <p>{{ view.environment.description }}</p>
+          </div>
+          <StatusBadge :state="view.environment.state" />
         </div>
-        <StatusBadge v-if="latestBuild" :state="latestBuild.stage" />
-        <StatusBadge
-          v-else-if="recipe?.promotedImageReady"
-          state="READY"
-          :label="copy.environment.imageReady"
-        />
-      </div>
-      <div v-if="currentEnvironment" class="environment-current__identity">
-        <span class="environment-current__icon"
-          ><Layers3 :size="21" aria-hidden="true"
-        /></span>
-        <div>
-          <h3>{{ $t(currentEnvironment.nameMessageKey) }}</h3>
-          <p>{{ $t(currentEnvironment.descriptionMessageKey) }}</p>
-          <div class="environment-current__tags">
-            <code
-              v-for="key in currentEnvironment.softwareMessageKeys"
-              :key="key"
-            >
-              {{ $t(key) }}
-            </code>
+        <div class="environment-current__identity">
+          <span class="environment-current__icon">
+            <Layers3 :size="21" aria-hidden="true" />
+          </span>
+          <div>
+            <h3>{{ view.environment.name }}</h3>
+            <code>{{ view.environment.ref }}</code>
           </div>
         </div>
-      </div>
-      <p v-else class="environment-current__empty">{{ $t("common.noData") }}</p>
-      <dl v-if="recipe || latestBuild" class="environment-current__meta">
-        <div v-if="recipe">
-          <dt>{{ $t("common.version", { version: recipe.version }) }}</dt>
-          <dd>{{ $t("states." + recipe.state) }}</dd>
-        </div>
-        <div v-if="latestBuild">
-          <dt>{{ $t("roleEnvironments.lastBuild") }}</dt>
-          <dd>
-            {{ $t("states." + latestBuild.stage) }} ·
-            {{ latestBuild.progressPercent }}%
-          </dd>
-        </div>
-      </dl>
-      <div class="environment-current__actions">
-        <button
-          v-if="recipe?.nextActions.includes('ARCHIVE')"
-          class="button"
-          type="button"
-          :disabled="busy"
-          @click="emit('archive')"
-        >
-          <Archive :size="16" aria-hidden="true" />{{ $t("common.archive") }}
-        </button>
-        <button
-          v-if="recipe?.nextActions.includes('RESTORE')"
-          class="button"
-          type="button"
-          :disabled="busy"
-          @click="emit('restore')"
-        >
-          <RotateCcw :size="16" aria-hidden="true" />{{
-            $t("roleEnvironments.restore")
-          }}
-        </button>
-      </div>
-    </article>
+        <dl class="environment-current__meta">
+          <div>
+            <dt>
+              {{ $t("common.version", { version: view.environment.version }) }}
+            </dt>
+            <dd>rev {{ view.environment.currentVersion.revision }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.environment.values }}</dt>
+            <dd>{{ view.environment.currentVersion.values.length }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.environment.secrets }}</dt>
+            <dd>
+              {{ view.environment.currentVersion.secretDescriptors.length }}
+            </dd>
+          </div>
+        </dl>
+      </article>
 
-    <article class="environment-catalog panel">
-      <div class="environment-catalog__head">
-        <div>
-          <h2>{{ copy.environment.catalog }}</h2>
-          <p>{{ copy.environment.localSearch }}</p>
+      <article class="environment-catalog panel">
+        <div class="environment-catalog__head">
+          <div>
+            <h2>{{ copy.environment.catalog }}</h2>
+            <p>{{ copy.environment.serverSearch }}</p>
+          </div>
+          <Search :size="19" aria-hidden="true" />
         </div>
-        <code>listRoleEnvironments</code>
-      </div>
-      <AsyncEntityPicker
-        :key="catalogKey"
-        :model-value="modelValue || null"
-        :load-items="loadItems"
-        :labels="pickerLabels"
-        :disabled="!canEdit || busy"
-        @update:model-value="select"
-      >
-        <template #option="{ item, selected }">
-          <span class="environment-option__icon">
-            <Layers3 :size="18" aria-hidden="true" />
-          </span>
-          <span class="environment-option__copy">
-            <strong>{{ item.label }}</strong>
-            <span>{{ item.description }}</span>
-            <span class="environment-option__software">
-              <code v-for="software in item.software" :key="software">{{
-                software
-              }}</code>
-            </span>
-          </span>
-          <StatusBadge
-            :state="item.environment.available ? 'AVAILABLE' : 'UNAVAILABLE'"
-          />
-          <span v-if="selected" class="sr-only">{{
-            $t("common.selected")
-          }}</span>
-        </template>
-      </AsyncEntityPicker>
-      <div class="environment-catalog__selection">
-        <div>
-          <span>{{ $t("common.selected") }}</span>
-          <strong>{{
-            selectedEnvironment
-              ? $t(selectedEnvironment.nameMessageKey)
-              : $t("common.noData")
-          }}</strong>
+        <AsyncEntityPicker
+          :model-value="selectedEnvironment"
+          :selected="selectedOption"
+          :load-page="loadEnvironmentPage"
+          :placeholder="copy.environment.choose"
+          :search-placeholder="copy.environment.choose"
+          :disabled="!canEdit || busy"
+          @update:model-value="select"
+          @select="selectOption"
+        />
+        <div class="environment-catalog__selection">
+          <div>
+            <span>{{ $t("common.selected") }}</span>
+            <strong>{{ selectedOption?.title ?? selectedEnvironment }}</strong>
+          </div>
+          <button
+            class="button button--primary"
+            type="button"
+            :disabled="!canEdit || busy || !dirty"
+            @click="bind"
+          >
+            <Save :size="16" aria-hidden="true" />{{ copy.environment.bind }}
+          </button>
         </div>
-        <button
-          v-if="canEdit"
-          class="button button--primary"
-          type="button"
-          :disabled="
-            busy || !selectedEnvironment?.available || modelValue === currentKey
-          "
-          @click="emit('save')"
-        >
-          <Save :size="16" aria-hidden="true" />{{
-            $t("roleEnvironments.prepare")
-          }}
-        </button>
-      </div>
-    </article>
-  </div>
+      </article>
+    </div>
+  </AsyncState>
 </template>
 
 <style scoped>
@@ -245,10 +248,8 @@ function select(value: string | null | readonly string[]): void {
   color: var(--muted);
   font-size: 0.8rem;
 }
-.environment-catalog__head > code {
-  color: var(--subtle);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+.environment-catalog__head > svg {
+  color: var(--accent-strong);
 }
 .environment-current__identity {
   display: flex;
@@ -257,10 +258,9 @@ function select(value: string | null | readonly string[]): void {
   padding: 13px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--surface);
 }
-.environment-current__icon,
-.environment-option__icon {
+.environment-current__icon {
   display: inline-grid;
   flex: 0 0 auto;
   place-items: center;
@@ -271,27 +271,13 @@ function select(value: string | null | readonly string[]): void {
   color: var(--accent-strong);
   background: var(--accent-soft);
 }
-.environment-current__identity p {
-  margin-top: 4px;
+.environment-current__identity code {
+  display: block;
+  margin-top: 5px;
   color: var(--muted);
-  font-size: 0.82rem;
-}
-.environment-current__tags,
-.environment-option__software {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
-.environment-current__tags code,
-.environment-option__software code {
-  padding: 2px 5px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--muted);
-  background: var(--surface);
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
 }
 .environment-current__meta {
   display: grid;
@@ -302,43 +288,15 @@ function select(value: string | null | readonly string[]): void {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 8px;
-  border-top: 1px solid var(--hairline);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
 }
 .environment-current__meta dt {
-  color: var(--subtle);
+  color: var(--muted);
 }
 .environment-current__meta dd {
   margin: 0;
-  text-align: right;
-}
-.environment-current__actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.environment-current__empty {
-  color: var(--subtle);
-}
-.environment-option__copy {
-  display: grid;
-  min-width: 0;
-  flex: 1;
-  gap: 3px;
-  text-align: left;
-}
-.environment-option__copy > span:not(.environment-option__software) {
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-.environment-catalog :deep(.async-picker__option) {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-height: 78px;
-}
-.environment-catalog :deep(.async-picker__list) {
-  max-height: 410px;
+  font-family: var(--font-mono);
 }
 .environment-catalog__selection {
   display: flex;
@@ -348,15 +306,19 @@ function select(value: string | null | readonly string[]): void {
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
-.environment-catalog__selection > div {
+.environment-catalog__selection div {
   display: grid;
-  gap: 2px;
+  min-width: 0;
+  gap: 3px;
 }
 .environment-catalog__selection span {
   color: var(--subtle);
-  font-size: 0.74rem;
+  font-size: 0.72rem;
 }
-@media (max-width: 960px) {
+.environment-catalog__selection strong {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
   .environment-layout {
     grid-template-columns: 1fr;
   }

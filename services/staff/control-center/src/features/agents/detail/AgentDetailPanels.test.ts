@@ -1,12 +1,20 @@
 import { createSSRApp, h } from "vue";
 import { createI18n } from "vue-i18n";
 import { renderToString } from "@vue/server-renderer";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import AgentApplyState from "@/features/agents/detail/AgentApplyState.vue";
 import AgentInstructionsPanel from "@/features/agents/detail/AgentInstructionsPanel.vue";
-import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
+import AgentProfilePanel from "@/features/agents/detail/AgentProfilePanel.vue";
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
+
+vi.mock("@/features/agents/detail/api", () => ({
+  createTemplateVariableLoader: () => () =>
+    Promise.resolve({
+      items: [],
+      nextCursor: null,
+    }),
+}));
 
 const messages = {
   ru: {
@@ -81,35 +89,36 @@ describe("agent detail panels", () => {
     expect(html).not.toContain("v-html");
   });
 
-  it("связывает provider/model/profile с одним runtimeRef и блокирует overlay mutation", async () => {
-    const html = await render(AgentRuntimePanel, {
-      modelValue: "runtime_safe",
-      runtimes: [
-        {
-          ref: "runtime_safe",
-          name: "Безопасный",
-          revision: "runtime-v1",
-          ready: true,
-          provider: "openai-codex",
-          model: "gpt-5.1",
-        },
-      ],
+  it("не предлагает URL-поле и fail-closed блокирует отсутствующий avatar API", async () => {
+    const html = await render(AgentProfilePanel, {
+      modelValue: {
+        name: "Аналитик",
+        purpose: "Проверять данные",
+        roleDescription: "Работает с фактами",
+      },
+      roleName: "Аналитик",
+      avatarUrl: "/api/v1/artifacts/avatar/content",
+      avatarAsset: {
+        state: "UNAVAILABLE",
+        code: "avatar_asset",
+        reason: "Операция не представлена API",
+      },
       canEdit: true,
       busy: false,
       dirty: false,
     });
 
-    expect(html.match(/<select/g)).toHaveLength(3);
-    expect(html).toContain("openai-codex");
-    expect(html).toContain("gpt-5.1");
-    expect(html).toContain("Overlay config.toml");
-    expect(html).toContain("config.toml mutation");
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>\s*Сохранить\s*<\/button>/);
+    expect(html).not.toContain('type="url"');
+    expect(html).toContain('type="file"');
+    expect(html).toContain("avatar_asset");
+    expect(html).toContain("Операция не представлена API");
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>[\s\S]*Загрузить/);
   });
 
-  it("показывает переменные из текста, но не открывает отсутствующий API-каталог", async () => {
+  it("показывает server-owned каталог переменных и использованные значения", async () => {
     const html = await render(AgentInstructionsPanel, {
       modelValue: "# Роль\nВыполни {{run.task}} для {{project.name}}.",
+      projectRef: "project_sales",
       state: "DRAFT",
       validationMessages: [],
       canEdit: true,
@@ -121,7 +130,8 @@ describe("agent detail panels", () => {
 
     expect(html).toContain("{{run.task}}");
     expect(html).toContain("{{project.name}}");
-    expect(html).toContain("Каталог разрешённых переменных не представлен API");
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>[\s\S]*Template variables/);
+    expect(html).toContain("Template variables");
+    expect(html).toContain("Авторитетный каталог");
+    expect(html).toContain('role="combobox"');
   });
 });

@@ -22,7 +22,9 @@ const mutation = vi.hoisted(() => ({
 }));
 
 vi.mock("oidc-client-ts", () => ({
-  InMemoryWebStorage: class {},
+  InMemoryWebStorage: class {
+    readonly kind = "memory";
+  },
   UserManager: class {
     removeUser() {
       return oidc.removeUser();
@@ -37,7 +39,11 @@ vi.mock("oidc-client-ts", () => ({
     }
   },
   WebStorageStateStore: class {
-    constructor(_options: unknown) {}
+    readonly options: unknown;
+
+    constructor(options: unknown) {
+      this.options = options;
+    }
   },
 }));
 
@@ -74,6 +80,18 @@ vi.mock("@/shared/api/problem", () => ({
 }));
 
 import { useSessionStore } from "./store";
+
+function requestHeaders(call: unknown[]): unknown {
+  const options = call[0];
+  if (
+    typeof options !== "object" ||
+    options === null ||
+    !("headers" in options)
+  ) {
+    return undefined;
+  }
+  return options.headers;
+}
 
 describe("session renewal lifecycle", () => {
   beforeEach(() => {
@@ -156,8 +174,8 @@ describe("session renewal lifecycle", () => {
     await completing;
 
     expect(api.createOwnerSession).toHaveBeenCalledTimes(2);
-    expect(api.createOwnerSession.mock.calls[0]?.[0]?.headers).toEqual(
-      api.createOwnerSession.mock.calls[1]?.[0]?.headers,
+    expect(requestHeaders(api.createOwnerSession.mock.calls[0] ?? [])).toEqual(
+      requestHeaders(api.createOwnerSession.mock.calls[1] ?? []),
     );
     expect(mutation.idempotencyKey).toHaveBeenCalledOnce();
     expect(session.phase).toBe("authenticated");

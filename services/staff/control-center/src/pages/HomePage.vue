@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { Bot, FolderKanban, Upload, Workflow } from "@lucide/vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 
@@ -10,7 +11,6 @@ import AttentionList from "@/features/workboard/components/AttentionList.vue";
 import RunWorkItem from "@/features/workboard/components/RunWorkItem.vue";
 import WorkboardSection from "@/features/workboard/components/WorkboardSection.vue";
 import { collectAttention, projectArtifacts } from "@/features/workboard/model";
-import { useBackgroundRefresh } from "@/features/workboard/use-background-refresh";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -41,6 +41,11 @@ const pageTitle = computed(() =>
     ? t("workboard.greeting", { name: currentUserName.value })
     : t("home.title"),
 );
+const refreshing = computed(
+  () =>
+    (platform.loading.overview && overviewReady.value) ||
+    (platform.loading.projects && projectsReady.value),
+);
 
 const projectActionPermission = computed(() => {
   switch (projectAction.value) {
@@ -70,9 +75,9 @@ async function refreshProjects(): Promise<void> {
   if (!platform.problems.projects) projectsReady.value = true;
 }
 
-const { refreshing } = useBackgroundRefresh(async () => {
+async function refresh(): Promise<void> {
   await Promise.all([refreshOverview(), refreshProjects()]);
-});
+}
 
 function openProjectAction(action: ProjectAction): void {
   projectAction.value = action;
@@ -97,6 +102,8 @@ async function chooseProject(projectRef: string): Promise<void> {
   projectAction.value = undefined;
   await router.push(path);
 }
+
+onMounted(() => void refresh());
 </script>
 
 <template>
@@ -111,128 +118,129 @@ async function chooseProject(projectRef: string): Promise<void> {
       </button>
     </template>
 
-    <WorkboardSection
-      :title="$t('workboard.attention')"
-      :count="attention.length"
-      :loading="platform.loading.overview"
-      :refreshing="refreshing"
-      :ready="overviewReady"
-      :problem="platform.problems.overview"
-      :empty="attention.length === 0"
-      :empty-text="$t('workboard.noAttention')"
-      @retry="refreshOverview"
-    >
-      <template #action
-        ><RouterLink to="/decisions">{{
-          $t("common.all")
-        }}</RouterLink></template
+    <div class="home-focus-grid">
+      <WorkboardSection
+        :title="$t('workboard.attention')"
+        :count="attention.length"
+        :loading="platform.loading.overview"
+        :refreshing="refreshing"
+        :ready="overviewReady"
+        :problem="platform.problems.overview"
+        :empty="attention.length === 0"
+        :empty-text="$t('workboard.noAttention')"
+        @retry="refreshOverview"
       >
-      <AttentionList :items="attention" />
+        <template #action>
+          <RouterLink to="/decisions">{{ $t("common.all") }}</RouterLink>
+        </template>
+        <AttentionList :items="attention" />
+      </WorkboardSection>
+
+      <WorkboardSection
+        :title="$t('workboard.runningNow')"
+        :count="activeRuns.length"
+        :loading="platform.loading.overview"
+        :refreshing="refreshing"
+        :ready="overviewReady"
+        :problem="platform.problems.overview"
+        :empty="activeRuns.length === 0"
+        :empty-text="$t('workboard.noActiveRuns')"
+        @retry="refreshOverview"
+      >
+        <template #action>
+          <RouterLink to="/runs">{{ $t("common.all") }}</RouterLink>
+        </template>
+        <RunWorkItem
+          v-for="run in activeRuns.slice(0, 6)"
+          :key="run.ref"
+          :run="run"
+        />
+      </WorkboardSection>
+    </div>
+
+    <WorkboardSection
+      class="home-project-section"
+      :title="$t('home.projects')"
+      :count="platform.overview?.projectCount ?? platform.projectList.length"
+      :loading="platform.loading.projects"
+      :refreshing="refreshing"
+      :ready="projectsReady"
+      :problem="platform.problems.projects"
+      :empty="visibleProjects.length === 0"
+      :empty-text="$t('projects.emptyText')"
+      @retry="refreshProjects"
+    >
+      <template #action>
+        <RouterLink to="/projects">{{ $t("common.all") }}</RouterLink>
+      </template>
+      <div class="home-projects">
+        <RouterLink
+          v-for="project in visibleProjects"
+          :key="project.ref"
+          :to="`/projects/${project.ref}`"
+          class="home-project"
+        >
+          <span class="home-project__icon">
+            <FolderKanban :size="20" aria-hidden="true" />
+          </span>
+          <div class="home-project__copy">
+            <h3>{{ project.name }}</h3>
+            <p>{{ project.purpose }}</p>
+            <small>{{
+              $t("workboard.projectActivity", {
+                runs: project.activeRunCount,
+                gates: project.pendingGateCount,
+              })
+            }}</small>
+          </div>
+          <StatusBadge :state="project.lifecycle" />
+        </RouterLink>
+      </div>
     </WorkboardSection>
 
-    <div class="home-workboard">
-      <div class="home-workboard__main">
-        <WorkboardSection
-          :title="$t('workboard.runningNow')"
-          :count="activeRuns.length"
-          :loading="platform.loading.overview"
-          :refreshing="refreshing"
-          :ready="overviewReady"
-          :problem="platform.problems.overview"
-          :empty="activeRuns.length === 0"
-          :empty-text="$t('workboard.noActiveRuns')"
-          @retry="refreshOverview"
-        >
-          <template #action
-            ><RouterLink to="/runs">{{
-              $t("common.all")
-            }}</RouterLink></template
+    <div class="home-support-grid">
+      <WorkboardSection
+        :title="$t('workboard.recentResults')"
+        :count="recentArtifacts.length"
+        :loading="platform.loading.overview"
+        :refreshing="refreshing"
+        :ready="overviewReady"
+        :problem="platform.problems.overview"
+        :empty="recentArtifacts.length === 0"
+        :empty-text="$t('workboard.noRecentResults')"
+        @retry="refreshOverview"
+      >
+        <ArtifactList :artifacts="recentArtifacts" />
+      </WorkboardSection>
+
+      <WorkboardSection :title="$t('home.quickStart')" :ready="true">
+        <div class="home-quick-actions">
+          <button
+            class="button"
+            type="button"
+            @click="openProjectAction('AGENT')"
           >
-          <RunWorkItem v-for="run in activeRuns" :key="run.ref" :run="run" />
-        </WorkboardSection>
-
-        <WorkboardSection
-          :title="$t('workboard.recentResults')"
-          :count="recentArtifacts.length"
-          :loading="platform.loading.overview"
-          :refreshing="refreshing"
-          :ready="overviewReady"
-          :problem="platform.problems.overview"
-          :empty="recentArtifacts.length === 0"
-          :empty-text="$t('workboard.noRecentResults')"
-          @retry="refreshOverview"
-        >
-          <ArtifactList :artifacts="recentArtifacts" />
-        </WorkboardSection>
-      </div>
-
-      <aside class="home-workboard__aside">
-        <WorkboardSection
-          :title="$t('home.projects')"
-          :count="
-            platform.overview?.projectCount ?? platform.projectList.length
-          "
-          :loading="platform.loading.projects"
-          :refreshing="refreshing"
-          :ready="projectsReady"
-          :problem="platform.problems.projects"
-          :empty="visibleProjects.length === 0"
-          :empty-text="$t('projects.emptyText')"
-          @retry="refreshProjects"
-        >
-          <template #action
-            ><RouterLink to="/projects">{{
-              $t("common.all")
-            }}</RouterLink></template
+            <Bot :size="16" aria-hidden="true" />
+            {{ $t("project.createAgent") }}
+          </button>
+          <button
+            class="button"
+            type="button"
+            @click="openProjectAction('WORKFLOW')"
           >
-          <div class="home-projects">
-            <RouterLink
-              v-for="project in visibleProjects"
-              :key="project.ref"
-              :to="`/projects/${project.ref}`"
-              class="home-project"
-            >
-              <div>
-                <h3>{{ project.name }}</h3>
-                <p>{{ project.purpose }}</p>
-              </div>
-              <StatusBadge :state="project.lifecycle" />
-              <small>{{
-                $t("workboard.projectActivity", {
-                  runs: project.activeRunCount,
-                  gates: project.pendingGateCount,
-                })
-              }}</small>
-            </RouterLink>
-          </div>
-        </WorkboardSection>
-
-        <WorkboardSection :title="$t('home.quickStart')" :ready="true">
-          <div class="home-quick-actions">
-            <button
-              class="button"
-              type="button"
-              @click="openProjectAction('AGENT')"
-            >
-              {{ $t("project.createAgent") }}
-            </button>
-            <button
-              class="button"
-              type="button"
-              @click="openProjectAction('WORKFLOW')"
-            >
-              {{ $t("project.createWorkflow") }}
-            </button>
-            <button
-              class="button"
-              type="button"
-              @click="openProjectAction('FILE')"
-            >
-              {{ $t("common.upload") }}
-            </button>
-          </div>
-        </WorkboardSection>
-      </aside>
+            <Workflow :size="16" aria-hidden="true" />
+            {{ $t("project.createWorkflow") }}
+          </button>
+          <button
+            class="button"
+            type="button"
+            @click="openProjectAction('FILE')"
+          >
+            <Upload :size="16" aria-hidden="true" />
+            {{ $t("common.upload") }}
+          </button>
+        </div>
+      </WorkboardSection>
     </div>
 
     <ModalDialog
@@ -269,34 +277,51 @@ async function chooseProject(projectRef: string): Promise<void> {
 </template>
 
 <style scoped>
-.home-workboard {
+.home-focus-grid,
+.home-support-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(290px, 0.75fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-top: 16px;
 }
-.home-workboard__main,
-.home-workboard__aside {
+.home-support-grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.55fr);
+}
+.home-project-section {
+  margin-top: 16px;
+}
+.home-projects {
   display: grid;
-  align-content: start;
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 1px;
+  background: var(--hairline);
 }
 .home-project {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px 12px;
-  min-height: 72px;
-  padding: 11px 16px;
-  border-bottom: 1px solid var(--hairline);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  min-height: 108px;
+  padding: 15px 16px;
   color: inherit;
+  background: var(--surface);
   text-decoration: none;
-}
-.home-project:last-child {
-  border-bottom: 0;
 }
 .home-project:hover {
   background: var(--panel);
   text-decoration: none;
+}
+.home-project__icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+.home-project__copy {
+  min-width: 0;
 }
 .home-project h3,
 .home-project p {
@@ -307,7 +332,8 @@ async function chooseProject(projectRef: string): Promise<void> {
   color: var(--muted);
 }
 .home-project small {
-  grid-column: 1 / -1;
+  display: block;
+  margin-top: 9px;
   color: var(--muted);
 }
 .home-quick-actions,
@@ -346,7 +372,13 @@ async function chooseProject(projectRef: string): Promise<void> {
   flex-wrap: wrap;
 }
 @media (max-width: 980px) {
-  .home-workboard {
+  .home-focus-grid,
+  .home-support-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 620px) {
+  .home-projects {
     grid-template-columns: 1fr;
   }
 }
