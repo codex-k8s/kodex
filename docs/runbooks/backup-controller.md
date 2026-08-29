@@ -4,7 +4,7 @@ title: Backup, retention и restore drill
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
+version: 1.3.0
 updated: 2026-08-29
 ---
 
@@ -48,7 +48,10 @@ fixture. Production overlay обязан материализовать
 Основной `web-only` профиль включает production overlay controller. Для
 локального hot-reload `dev.sh up` собирает exact OCI image из штатного
 Dockerfile, материализует `backup-controller-credentials` без вывода значений и
-использует `kodex-artifacts` как source и `kodex-backups` как repository.
+использует `kodex-artifacts` и `kodex-session-archives` как независимые source
+stores, а `kodex-backups` — как repository. Оба source сохраняются в одном
+immutable manifest с исходными store name, bucket, key, version и digest;
+отсутствие любого из них делает backup неполным.
 `tools/dev/deploy-local.sh` проверяет точное содержимое Secret по digest,
 rollout Deployment и появление verified backup через `/status`.
 

@@ -396,17 +396,30 @@ write_local_backup_controller_credentials() {
           schemaKind: "goose"
         }
       ],
-      objectStores: [{
-        name: "artifacts",
-        endpoint: $endpoint,
-        region: $region,
-        bucket: $artifactBucket,
-        prefix: "organizations",
-        accessKeyId: $accessKey,
-        secretAccessKey: $secretKey,
-        usePathStyle: true,
-        allowInsecureLocal: true
-      }]
+      objectStores: [
+        {
+          name: "artifacts",
+          endpoint: $endpoint,
+          region: $region,
+          bucket: $artifactBucket,
+          prefix: "organizations",
+          accessKeyId: $accessKey,
+          secretAccessKey: $secretKey,
+          usePathStyle: true,
+          allowInsecureLocal: true
+        },
+        {
+          name: "session-archives",
+          endpoint: $endpoint,
+          region: $region,
+          bucket: "kodex-session-archives",
+          prefix: "organizations",
+          accessKeyId: $accessKey,
+          secretAccessKey: $secretKey,
+          usePathStyle: true,
+          allowInsecureLocal: true
+        }
+      ]
     } end
   ' >"$output" || fail 'build local backup-controller credentials'
   chmod 0600 "$output"

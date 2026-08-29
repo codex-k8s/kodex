@@ -15,6 +15,10 @@ fail() {
   fail 'both backup databases must use dedicated generated credentials'
 grep -Fq 'kodex.dev/backup-credentials-sha256' "$deploy" ||
   fail 'backup-controller rollout is not bound to the credentials digest'
+[[ $(grep -Fc 'bucket: "kodex-session-archives"' "$deploy") -eq 1 ]] ||
+  fail 'session archive object store must be included exactly once'
+[[ $(grep -Fc 'name: "session-archives"' "$deploy") -eq 1 ]] ||
+  fail 'session archive object store identity must be stable'
 grep -Fq 'NOREPLICATION BYPASSRLS' \
   "$root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" ||
   fail 'backup reader does not have the required bounded BYPASSRLS role'
