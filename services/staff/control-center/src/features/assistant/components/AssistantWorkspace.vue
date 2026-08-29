@@ -143,6 +143,13 @@ function chooseConversation(ref?: string): void {
   titleEditing.value = false;
 }
 
+async function startConversation(): Promise<void> {
+  historyOpen.value = false;
+  titleEditing.value = false;
+  openPlanRef.value = undefined;
+  await store.startConversation();
+}
+
 function startTitleEdit(): void {
   if (!store.selectedConversation) return;
   titleDraft.value = store.selectedConversation.title;
@@ -308,7 +315,11 @@ onBeforeUnmount(() => {
               :aria-label="$t('assistant.history')"
             >
               <header>{{ $t("assistant.history") }}</header>
-              <button type="button" @click="chooseConversation(undefined)">
+              <button
+                type="button"
+                :disabled="store.busy"
+                @click="startConversation"
+              >
                 <Plus :size="17" aria-hidden="true" />
                 <span>{{ $t("assistant.newConversation") }}</span>
               </button>

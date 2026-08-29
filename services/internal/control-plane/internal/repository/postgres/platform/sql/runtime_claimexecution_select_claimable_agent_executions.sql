@@ -185,7 +185,13 @@ SELECT n.id::text,
            LIMIT 1
        ), ''),
        COALESCE((
-           SELECT jsonb_agg(jsonb_build_object('role', history.actor_kind, 'content', history.content)
+           SELECT jsonb_agg(jsonb_build_object(
+                                'role', CASE
+                                    WHEN history.actor_kind = 'USER' THEN 'USER'
+                                    ELSE 'ASSISTANT'
+                                END,
+                                'content', history.content
+                            )
                             ORDER BY history.turn_number)
            FROM (
                SELECT previous.actor_kind,

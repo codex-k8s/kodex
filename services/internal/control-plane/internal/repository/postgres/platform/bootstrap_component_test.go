@@ -1946,6 +1946,9 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	}
 	callbackTurns := 0
 	for _, message := range callbackContext {
+		if message["role"] != "USER" && message["role"] != "ASSISTANT" {
+			t.Fatalf("continuation exposed a non-canonical session role: %#v", callbackContext)
+		}
 		if message["content"] == "Customer response prepared" {
 			callbackTurns++
 		}

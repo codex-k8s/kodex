@@ -140,6 +140,28 @@ describe("assistant workspace store", () => {
     expect(store.selectedConversation?.turns).toHaveLength(1);
   });
 
+  it("создаёт и выбирает отдельный диалог до первого сообщения", async () => {
+    const existing = conversation();
+    const created = {
+      ...conversation(),
+      ref: "cnv_new_sales",
+      sessionRef: "ses_new_sales",
+      turns: [],
+    };
+    createConversationMock.mockResolvedValue(created);
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.conversations = [existing];
+    store.selectedRef = existing.ref;
+
+    await store.startConversation();
+
+    expect(createConversationMock).toHaveBeenCalledWith(context, "prj_sales");
+    expect(store.selectedRef).toBe(created.ref);
+    expect(store.selectedConversation?.turns).toEqual([]);
+    expect(store.conversations).toHaveLength(2);
+  });
+
   it("подхватывает terminal ответ без перезагрузки страницы", async () => {
     const initial = conversation();
     const queued = {
