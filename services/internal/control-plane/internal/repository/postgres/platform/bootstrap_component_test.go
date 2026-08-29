@@ -1619,7 +1619,7 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 		Mutation: value.Mutation{IdempotencyKey: "schedule-pause-before-stale-archive", ExpectedVersion: &staleVersion},
 		Payload:  command.ScheduleInput{Ref: created.Schedule.Ref, Enabled: false},
 	})
-	if err != nil || paused.Schedule == nil || paused.Schedule.Version <= staleVersion {
+	if err != nil || paused.Schedule == nil || paused.Schedule.Version <= staleVersion || paused.Schedule.NextRunAt != nil {
 		t.Fatalf("prepare stale schedule archive: schedule=%#v err=%v", paused.Schedule, err)
 	}
 	if _, err := service.Execute(ctx, command.Command{
@@ -1628,6 +1628,15 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 		Payload:  command.ScheduleInput{Ref: created.Schedule.Ref},
 	}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
 		t.Fatalf("stale schedule archive was not rejected by OCC: %v", err)
+	}
+	pausedVersion := paused.Schedule.Version
+	reenabledSchedule, err := service.Execute(ctx, command.Command{
+		Kind: command.SetScheduleEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-enable-after-pause", ExpectedVersion: &pausedVersion},
+		Payload:  command.ScheduleInput{Ref: created.Schedule.Ref, Enabled: true},
+	})
+	if err != nil || reenabledSchedule.Schedule == nil || !reenabledSchedule.Schedule.Enabled || reenabledSchedule.Schedule.NextRunAt == nil {
+		t.Fatalf("reenable paused schedule: schedule=%#v err=%v", reenabledSchedule.Schedule, err)
 	}
 }
 

@@ -18,8 +18,10 @@ import AutomationArchiveDialog from "@/features/automations/AutomationArchiveDia
 import AutomationEditorDialog from "@/features/automations/AutomationEditorDialog.vue";
 import {
   scheduleCapabilities,
+  scheduleMatchesFilter,
   verifyScheduleCommandReadback,
   verifyScheduleReadback,
+  type ScheduleFilter,
 } from "@/features/automations/model";
 import { usePlatformStore } from "@/features/platform/store";
 import type {
@@ -36,7 +38,7 @@ const props = defineProps<{ projectRef: string }>();
 const platform = usePlatformStore();
 const { locale, t } = useI18n();
 const search = ref("");
-const state = ref<"ALL" | Schedule["state"]>("ALL");
+const state = ref<ScheduleFilter>("CURRENT");
 const selectedRef = ref("");
 const editorOpen = ref(false);
 const editorScheduleRef = ref("");
@@ -60,7 +62,7 @@ const filteredSchedules = computed(() => {
   const normalized = search.value.trim().toLocaleLowerCase(locale.value);
   return schedules.value.filter(
     (schedule) =>
-      (state.value === "ALL" || schedule.state === state.value) &&
+      scheduleMatchesFilter(schedule, state.value) &&
       (!normalized ||
         schedule.name.toLocaleLowerCase(locale.value).includes(normalized) ||
         schedule.target.displayName
@@ -103,15 +105,13 @@ const custom = computed(() =>
   locale.value.startsWith("en")
     ? {
         actions: "Automation actions",
-        allStates: "All states",
-        archive: "Archive",
+        allStates: "All, including archived",
+        archive: "Move to archive",
         archiveDescription:
-          "Future runs will be cancelled. The automation and its history will remain available read-only.",
+          "Future runs will be cancelled. The automation and its history will remain available read-only through the Archived filter. This is not permanent deletion.",
         archiveTitle: "Archive automation?",
+        currentStates: "Current",
         edit: "Edit automation",
-        permanentDeleteUnavailable: "Permanent deletion is unavailable",
-        permanentDeleteUnavailableText:
-          "The current API supports safe archiving with read-only history, but not permanent deletion.",
         lastResult: "Last result",
         list: "Project automations",
         noMatches: "No matching automations",
@@ -123,15 +123,13 @@ const custom = computed(() =>
       }
     : {
         actions: "Действия с автоматизацией",
-        allStates: "Все состояния",
-        archive: "Архивировать",
+        allStates: "Все, включая архивные",
+        archive: "Переместить в архив",
         archiveDescription:
-          "Будущие запуски будут отменены. Автоматизация и её история останутся доступны только для чтения.",
+          "Будущие запуски будут отменены. Автоматизация и её история останутся доступны только для чтения через фильтр «Архивные». Это не безвозвратное удаление.",
         archiveTitle: "Архивировать автоматизацию?",
+        currentStates: "Действующие",
         edit: "Изменить автоматизацию",
-        permanentDeleteUnavailable: "Безвозвратное удаление недоступно",
-        permanentDeleteUnavailableText:
-          "Текущий API поддерживает безопасную архивацию с историей только для чтения, но не безвозвратное удаление.",
         lastResult: "Последний результат",
         list: "Автоматизации Проекта",
         noMatches: "Подходящих автоматизаций нет",
@@ -292,6 +290,7 @@ onMounted(
       <label>
         <span class="sr-only">{{ $t("common.status") }}</span>
         <select v-model="state" :aria-label="$t('common.status')">
+          <option value="CURRENT">{{ custom.currentStates }}</option>
           <option value="ALL">{{ custom.allStates }}</option>
           <option value="ACTIVE">{{ $t("states.ACTIVE") }}</option>
           <option value="PAUSED">{{ $t("states.PAUSED") }}</option>
@@ -573,14 +572,6 @@ onMounted(
               <Archive :size="16" aria-hidden="true" />
               {{ custom.archive }}
             </button>
-          </div>
-          <div
-            v-if="!selectedCapabilities?.canDeletePermanently"
-            class="automation-details__unavailable"
-            role="note"
-          >
-            <strong>{{ custom.permanentDeleteUnavailable }}</strong>
-            <p>{{ custom.permanentDeleteUnavailableText }}</p>
           </div>
         </aside>
       </div>

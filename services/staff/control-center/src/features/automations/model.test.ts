@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   scheduleCapabilities,
   scheduleInput,
+  scheduleMatchesFilter,
   verifyScheduleCommandReadback,
   verifyScheduleReadback,
 } from "@/features/automations/model";
@@ -109,7 +110,6 @@ describe("automations model", () => {
       canPause: false,
       canEnable: false,
       canArchive: false,
-      canDeletePermanently: false,
     });
     expect(
       scheduleCapabilities(schedule({ nextActions: ["ARCHIVE"] })),
@@ -129,7 +129,6 @@ describe("automations model", () => {
       canPause: true,
       canEnable: false,
       canArchive: true,
-      canDeletePermanently: false,
     });
     expect(
       scheduleCapabilities(
@@ -143,7 +142,6 @@ describe("automations model", () => {
       canPause: false,
       canEnable: true,
       canArchive: true,
-      canDeletePermanently: false,
     });
     expect(
       scheduleCapabilities(
@@ -154,7 +152,24 @@ describe("automations model", () => {
       canPause: false,
       canEnable: false,
       canArchive: false,
-      canDeletePermanently: false,
     });
+  });
+
+  it("отделяет действующие автоматизации от read-only архива", () => {
+    expect(
+      scheduleMatchesFilter(schedule({ state: "ACTIVE" }), "CURRENT"),
+    ).toBe(true);
+    expect(
+      scheduleMatchesFilter(schedule({ state: "PAUSED" }), "CURRENT"),
+    ).toBe(true);
+    expect(
+      scheduleMatchesFilter(schedule({ state: "ARCHIVED" }), "CURRENT"),
+    ).toBe(false);
+    expect(
+      scheduleMatchesFilter(schedule({ state: "ARCHIVED" }), "ARCHIVED"),
+    ).toBe(true);
+    expect(scheduleMatchesFilter(schedule({ state: "ARCHIVED" }), "ALL")).toBe(
+      true,
+    );
   });
 });

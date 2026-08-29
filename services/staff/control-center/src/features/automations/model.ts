@@ -9,8 +9,9 @@ export interface ScheduleCapabilities {
   canPause: boolean;
   canEnable: boolean;
   canArchive: boolean;
-  canDeletePermanently: false;
 }
+
+export type ScheduleFilter = "CURRENT" | "ALL" | Schedule["state"];
 
 export function scheduleCapabilities(schedule: Schedule): ScheduleCapabilities {
   return {
@@ -18,8 +19,16 @@ export function scheduleCapabilities(schedule: Schedule): ScheduleCapabilities {
     canPause: schedule.nextActions.includes("DISABLE"),
     canEnable: schedule.nextActions.includes("ENABLE"),
     canArchive: schedule.nextActions.includes("ARCHIVE"),
-    canDeletePermanently: false,
   };
+}
+
+export function scheduleMatchesFilter(
+  schedule: Schedule,
+  filter: ScheduleFilter,
+): boolean {
+  if (filter === "ALL") return true;
+  if (filter === "CURRENT") return schedule.state !== "ARCHIVED";
+  return schedule.state === filter;
 }
 
 export function scheduleInput(schedule: Schedule): ScheduleInput {
