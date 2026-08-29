@@ -205,6 +205,14 @@ fi
 run_phase browser-auth-and-full-e2e "$repository_root/dev.sh" e2e \
   "${common_arguments[@]}" --resource-prefix "$resource_prefix" \
   --run-timeout-ms "$run_timeout_ms"
+run_phase session-archive-write-restore-delete-readback env \
+  KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+  "$repository_root/scripts/tests/local-session-archive-e2e.sh" \
+  "${common_arguments[@]}"
+run_phase backup-and-disposable-restore-drill env \
+  KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+  "$repository_root/scripts/tests/local-backup-restore-e2e.sh" \
+  "${common_arguments[@]}"
 for target in "${targets[@]}"; do
   run_phase "additional:$target" make --no-print-directory -C "$repository_root" "$target"
 done

@@ -4,8 +4,8 @@ title: Backup, retention и restore drill
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
-updated: 2026-08-28
+version: 1.2.0
+updated: 2026-08-29
 ---
 
 # Backup, retention и restore drill
@@ -91,6 +91,30 @@ rollout Deployment и появление verified backup через `/status`.
 Partial restore создаёт terminal `failure.json`; повтор с тем же `restoreId`
 запрещён. После устранения причины владелец выдаёт новый approval, новый
 `restoreId` и новый пустой target.
+
+## Disposable local restore drill
+
+В каноническом `./dev.sh full-e2e --context <exact-local-context>` фаза
+`backup-and-disposable-restore-drill` использует только уже verified backup из
+`/status`. Wrapper `scripts/tests/local-backup-restore-e2e.sh` создаёт уникальные
+новые PostgreSQL database names и пустой prefix bucket
+`kodex-restore-fixture`, вычисляет digest штатной командой
+`fingerprint-targets`, выпускает короткоживущий local approval и запускает
+существующий restore-drill Job с exact digest уже развернутого image.
+
+Успех требует `Complete` Job, существования обеих восстановленных БД,
+immutable restore receipt, совпадения числа exact object versions и receipt.
+После readback wrapper удаляет созданные exact object versions и disposable
+database, не меняя source backup. Все credential material находится во
+временных файлах без group/world permissions (`0400` для immutable restore
+config и `0600` для runtime credential files) и удаляется trap; stdout не
+содержит значений.
+
+Entrypoint отклоняет production-like context, неверные namespace labels,
+неприватный kubeconfig/state directory и запуск без явного
+`KODEX_E2E_CONFIRM_DISPOSABLE`. Нет verified backup, API path, receipt или
+авторитетного readback — фаза `FAIL`; mandatory local профиль не подменяет это
+conditional skip.
 
 ## Отказы
 

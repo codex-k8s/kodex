@@ -1,12 +1,15 @@
 import {
-  type Browser,
-  type BrowserContext,
   type Download,
+  type Locator,
   type Page,
   type Request,
   type Response,
+  type Route,
 } from "@playwright/test";
+import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { promisify } from "node:util";
 
 import { loadE2EEnvironment } from "./environment";
 import {
@@ -31,6 +34,7 @@ import {
 } from "./helpers";
 
 const environment = loadE2EEnvironment();
+const execFileAsync = promisify(execFile);
 const projectName = `${environment.resourcePrefix} — отдел продаж`;
 const coordinatorName = `${environment.resourcePrefix} — координатор продаж`;
 const analystName = `${environment.resourcePrefix} — аналитик лидов`;
@@ -111,6 +115,146 @@ async function applyLatestKodexPlan(
   await expect(apply).toHaveCount(0);
 }
 
+interface ExercisedAttachment {
+  readonly fileName: string;
+  readonly marker: string;
+  readonly ref: string;
+}
+
+async function exerciseAttachmentComposer(
+  page: Page,
+  composer: Locator,
+  uploadPath: string,
+  surface: string,
+): Promise<ExercisedAttachment> {
+  await expect(composer).toBeVisible();
+  const normalizedSurface = surface.replace(/[^a-z0-9-]/g, "-");
+  const failedName = `${environment.resourcePrefix}-${normalizedSurface}-retry.txt`;
+  const droppedName = `${environment.resourcePrefix}-${normalizedSurface}-drop.txt`;
+  const finalName = `${environment.resourcePrefix}-${normalizedSurface}-input.txt`;
+  const marker = `KODEX_E2E_${normalizedSurface.toUpperCase().replaceAll("-", "_")}_${environment.resourcePrefix}`;
+  let rejected = false;
+  const rejectFirstUpload = async (route: Route): Promise<void> => {
+    const request = route.request();
+    if (
+      !rejected &&
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === uploadPath &&
+      request.headers()["x-file-name"] === failedName
+    ) {
+      rejected = true;
+      await route.fulfill({
+        status: 429,
+        contentType: "application/problem+json",
+        body: JSON.stringify({
+          type: "https://kodex.invalid/problems/local-e2e-upload-retry",
+          title: "Local E2E upload retry fixture",
+          status: 429,
+          detail: "The disposable local E2E rejected the first upload attempt.",
+          code: "LOCAL_E2E_UPLOAD_RETRY",
+        }),
+      });
+      return;
+    }
+    await route.continue();
+  };
+
+  await page.route("**/api/v1/**", rejectFirstUpload);
+  try {
+    await composer.locator('input[type="file"]').setInputFiles({
+      name: failedName,
+      mimeType: "text/plain",
+      buffer: Buffer.from(`retry fixture for ${surface}`, "utf8"),
+    });
+    const failedItem = composer
+      .locator(".attachment-composer__item")
+      .filter({ hasText: failedName });
+    await expect(failedItem).toHaveClass(/attachment-composer__item--failed/);
+    await page.unroute("**/api/v1/**", rejectFirstUpload);
+    const retryResponse = waitForArtifactUpload(page, uploadPath, failedName);
+    await failedItem
+      .getByRole("button", {
+        name: `Повторить загрузку файла «${failedName}»`,
+      })
+      .click();
+    expect((await retryResponse).status()).toBe(201);
+    await expect(
+      failedItem.locator(".attachment-composer__ready"),
+    ).toBeVisible();
+    await failedItem
+      .getByRole("button", { name: `Убрать файл «${failedName}»` })
+      .click();
+    await expect(failedItem).toHaveCount(0);
+  } finally {
+    await page.unroute("**/api/v1/**", rejectFirstUpload);
+  }
+  expect(rejected, `retry fixture was not used on ${surface}`).toBe(true);
+
+  const droppedResponse = waitForArtifactUpload(page, uploadPath, droppedName);
+  const dataTransfer = await page.evaluateHandle(
+    ({ content, fileName }) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(
+        new File([content], fileName, {
+          type: "text/plain",
+          lastModified: 1_700_000_000_000,
+        }),
+      );
+      return transfer;
+    },
+    { content: `drop fixture for ${surface}`, fileName: droppedName },
+  );
+  try {
+    await composer.dispatchEvent("dragenter", { dataTransfer });
+    await expect(composer).toHaveClass(/attachment-composer--dragging/);
+    await composer.dispatchEvent("drop", { dataTransfer });
+  } finally {
+    await dataTransfer.dispose();
+  }
+  expect((await droppedResponse).status()).toBe(201);
+  const droppedItem = composer
+    .locator(".attachment-composer__item")
+    .filter({ hasText: droppedName });
+  await expect(
+    droppedItem.locator(".attachment-composer__ready"),
+  ).toBeVisible();
+  await droppedItem
+    .getByRole("button", { name: `Убрать файл «${droppedName}»` })
+    .click();
+  await expect(droppedItem).toHaveCount(0);
+
+  const finalResponse = waitForArtifactUpload(page, uploadPath, finalName);
+  await composer.locator('input[type="file"]').setInputFiles({
+    name: finalName,
+    mimeType: "text/plain",
+    buffer: Buffer.from(`${marker}\n`, "utf8"),
+  });
+  const response = await finalResponse;
+  expect(response.status(), await response.text()).toBe(201);
+  const artifact = (await response.json()) as { ref?: string };
+  expect(artifact.ref).toMatch(/^art_[A-Za-z0-9_-]+$/);
+  const finalItem = composer
+    .locator(".attachment-composer__item")
+    .filter({ hasText: finalName });
+  await expect(finalItem.locator(".attachment-composer__ready")).toBeVisible();
+  return { fileName: finalName, marker, ref: artifact.ref ?? "" };
+}
+
+function waitForArtifactUpload(
+  page: Page,
+  uploadPath: string,
+  fileName: string,
+): Promise<Response> {
+  return page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      request.method() === "POST" &&
+      new URL(response.url()).pathname === uploadPath &&
+      request.headers()["x-file-name"] === fileName
+    );
+  });
+}
+
 test.describe("web-only fresh installation", () => {
   test.describe.configure({ mode: discoveryMode ? "default" : "serial" });
 
@@ -171,6 +315,35 @@ test.describe("web-only fresh installation", () => {
       /owner.*роль: Владелец/i,
     );
     await waitForConnected(page);
+  });
+
+  test("глобальный и проектный Kodex принимают вложения через полный composer lifecycle", async ({
+    page,
+  }) => {
+    requireRefs("projectRef");
+    await gotoWithRetry(page, "/projects");
+    await openKodex(page, true);
+    let dialog = page.getByRole("dialog", { name: "Kodex" });
+    await exerciseAttachmentComposer(
+      page,
+      dialog.locator(".attachment-composer"),
+      "/api/v1/artifacts",
+      "kodex-global",
+    );
+    await dialog.getByRole("button", { name: "Закрыть" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    await gotoWithRetry(page, `/projects/${projectRef}`);
+    await openKodex(page, true);
+    dialog = page.getByRole("dialog", { name: "Kodex" });
+    await exerciseAttachmentComposer(
+      page,
+      dialog.locator(".attachment-composer"),
+      `/api/v1/projects/${projectRef}/artifacts`,
+      "kodex-project",
+    );
+    await dialog.getByRole("button", { name: "Закрыть" }).click();
+    await expect(dialog).toHaveCount(0);
   });
 
   test("ИИ-сотрудник выполняет первый запуск и отдаёт файл", async ({
@@ -281,10 +454,21 @@ test.describe("web-only fresh installation", () => {
     });
     await expect(continuation).toBeVisible();
     const initialSessionRef = await readRunSessionRef(page, firstRunRef);
+    const continuationAttachment = await exerciseAttachmentComposer(
+      page,
+      page.locator(".run-continuation .attachment-composer"),
+      `/api/v1/projects/${projectRef}/artifacts`,
+      "session-continuation",
+    );
     await page
       .getByLabel("Дополнительное задание")
       .fill(
-        "Добавь два вопроса для следующего контакта и повтори код лида из предыдущего сообщения.",
+        [
+          "В этом продолжении приложен новый файл, которого не было в исходном turn.",
+          `Найди manifest.json нового AttachmentSet, затем прочитай файл ${continuationAttachment.fileName}.`,
+          "Верни одной строкой фактический маркер из файла, имя файла, код лида из предыдущего turn и слово continuation-manifest-ok.",
+          "Не угадывай маркер и не используй внешние источники.",
+        ].join(" "),
       );
     const continuationResponsePromise = page.waitForResponse((response) => {
       const url = new URL(response.url());
@@ -300,6 +484,14 @@ test.describe("web-only fresh installation", () => {
       continuationResponse.status(),
       await mutationFailureDiagnostic(continuationResponse, page),
     ).toBe(201);
+    const continuationRequest = continuationResponse
+      .request()
+      .postDataJSON() as {
+      artifactRefs?: string[];
+    };
+    expect(continuationRequest.artifactRefs).toEqual([
+      continuationAttachment.ref,
+    ]);
     const continuationWorkspace = (await continuationResponse.json()) as {
       run?: { ref?: string };
     };
@@ -310,6 +502,15 @@ test.describe("web-only fresh installation", () => {
     await expect(page).toHaveURL(new RegExp(`/runs/${continuationRunRef}$`));
     await waitForTerminalSuccess(page);
     await expect(page.locator("#main-content")).toContainText("ALPHA-482");
+    await expect(page.locator("#main-content")).toContainText(
+      continuationAttachment.marker,
+    );
+    await expect(page.locator("#main-content")).toContainText(
+      continuationAttachment.fileName,
+    );
+    await expect(page.locator("#main-content")).toContainText(
+      "continuation-manifest-ok",
+    );
     const continuationSessionRef = await readRunSessionRef(
       page,
       continuationRunRef,
@@ -955,6 +1156,13 @@ test.describe("web-only fresh installation", () => {
     await expect(page.locator(".project-context")).toContainText(projectName);
     await expect(page.getByLabel("Цель")).toHaveValue(coordinatorRef);
 
+    const newRunAttachment = await exerciseAttachmentComposer(
+      page,
+      page.locator(".new-run-section .attachment-composer"),
+      `/api/v1/projects/${projectRef}/artifacts`,
+      "new-run",
+    );
+
     const chooseFiles = page
       .locator("#new-run-files-title")
       .locator("xpath=ancestor::section[1]")
@@ -1043,6 +1251,58 @@ test.describe("web-only fresh installation", () => {
         name: /Архивировать сессию|Восстановить сессию/,
       }),
     ).toHaveCount(0);
+
+    await page.getByRole("radio", { name: /Новая сессия/ }).check();
+    await page
+      .getByLabel("Название запуска")
+      .fill(`${environment.resourcePrefix} — manifest нового запуска`);
+    await page
+      .getByLabel("Задание")
+      .fill(
+        [
+          `Найди manifest.json текущего AttachmentSet и запись файла ${newRunAttachment.fileName}.`,
+          "После materialization выполни в терминале `sleep 20`, затем прочитай этот файл и верни одной строкой фактический маркер, имя файла и слово new-run-manifest-ok.",
+          "Не угадывай маркер и не используй внешние источники.",
+        ].join(" "),
+      );
+    const launchResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/api/v1/runs",
+    );
+    await page.getByRole("button", { name: "Запустить", exact: true }).click();
+    const launched = await launchResponse;
+    expect(
+      launched.status(),
+      await mutationFailureDiagnostic(launched, page),
+    ).toBe(201);
+    const launchRequest = launched.request().postDataJSON() as {
+      artifactRefs?: string[];
+    };
+    expect(launchRequest.artifactRefs).toEqual(
+      expect.arrayContaining([uploadedArtifactRef, newRunAttachment.ref]),
+    );
+    await expectRunState(page, /В очереди|Выполняется/);
+    const attachmentBeforeDelete = await readArtifact(
+      page,
+      newRunAttachment.ref,
+    );
+    const attachmentAfterDelete = await deleteArtifactAtVersion(
+      page,
+      newRunAttachment.ref,
+      attachmentBeforeDelete.version,
+    );
+    expect(attachmentAfterDelete.lifecycleState).toBe("DELETED");
+    await waitForTerminalSuccess(page);
+    await expect(page.locator("#main-content")).toContainText(
+      newRunAttachment.marker,
+    );
+    await expect(page.locator("#main-content")).toContainText(
+      newRunAttachment.fileName,
+    );
+    await expect(page.locator("#main-content")).toContainText(
+      "new-run-manifest-ok",
+    );
   });
 
   test("привязанный knowledge-файл доступен ИИ-сотруднику", async ({
@@ -1357,7 +1617,6 @@ test.describe("web-only fresh installation", () => {
 
   test("вложенный Процесс показывает live graph и Human Gate переживает reconnect", async ({
     page,
-    browser,
     browserDiagnostics,
   }) => {
     requireRefs("projectRef", "coordinatorRef", "analystRef");
@@ -1558,62 +1817,95 @@ test.describe("web-only fresh installation", () => {
       }),
     ).toHaveCount(2);
 
-    const contexts: BrowserContext[] = [];
-    try {
-      const freshStorageState = await page.context().storageState();
-      const gate = await openGateForRun(page, workflowRunRef);
-      const winner = await authenticatedRunPage(
-        browser,
-        workflowRunRef,
-        browserDiagnostics.monitorPage,
-        freshStorageState,
-      );
-      const contender = await authenticatedRunPage(
-        browser,
-        workflowRunRef,
-        browserDiagnostics.monitorPage,
-        freshStorageState,
-      );
-      contexts.push(winner.context, contender.context);
-      await browserDiagnostics.withExpectedNetworkInterruption(
-        page,
-        async () => {
-          await page.context().setOffline(true);
-          await expect(
-            page.getByText(
-              "Нет сети. Показываем последнее полученное состояние; действия временно недоступны.",
-              { exact: true },
-            ),
-          ).toBeVisible();
-
-          const resolutions = await Promise.all([
-            resolveGateAtVersion(winner.page, gate.ref, gate.version),
-            resolveGateAtVersion(contender.page, gate.ref, gate.version),
-          ]);
-          expect(
-            resolutions.map((resolution) => resolution.status).sort(),
-          ).toEqual([200, 409]);
-          expect(
-            resolutions.find((resolution) => resolution.status === 409)?.code,
-          ).not.toBe("");
-
-          await page.context().setOffline(false);
-          await expect(
-            page.getByText(
-              "Нет сети. Показываем последнее полученное состояние; действия временно недоступны.",
-              { exact: true },
-            ),
-          ).toHaveCount(0);
-        },
-      );
-      await expectRunState(page, /Выполняется|Завершён/);
-      await waitForTerminalSuccess(page);
-      await assertNoDuplicateGraphNodes(page);
-      await expect(activityDrawer).toContainText(/решение/i);
-    } finally {
+    await browserDiagnostics.withExpectedNetworkInterruption(page, async () => {
+      await page.context().setOffline(true);
+      await expect(
+        page.getByText(
+          "Нет сети. Показываем последнее полученное состояние; действия временно недоступны.",
+          { exact: true },
+        ),
+      ).toBeVisible();
       await page.context().setOffline(false);
-      await Promise.all(contexts.map((context) => context.close()));
-    }
+      await expect(
+        page.getByText(
+          "Нет сети. Показываем последнее полученное состояние; действия временно недоступны.",
+          { exact: true },
+        ),
+      ).toHaveCount(0);
+    });
+
+    const gate = await openGateForRun(page, workflowRunRef);
+    const gateReadback = await readOwnerGate(page, gate.ref);
+    await gotoWithRetry(page, "/decisions");
+    await expectPageHeading(page, "Решения");
+    const decisionRow = page
+      .locator(".decision-row")
+      .filter({ hasText: gateReadback.title })
+      .first();
+    await expect(decisionRow).toBeVisible();
+    await decisionRow.click();
+    const decisionDetail = page.locator(".decision-detail");
+    await expect(decisionDetail).toContainText(gateReadback.contextSummary);
+    await expect(decisionDetail).toContainText(
+      gateReadback.consequencesSummary,
+    );
+    await expect(decisionDetail).toContainText(
+      gateReadback.requestedBy.displayName,
+    );
+    const evidence = await exerciseAttachmentComposer(
+      page,
+      decisionDetail.locator(".attachment-composer"),
+      `/api/v1/projects/${projectRef}/artifacts`,
+      "human-gate",
+    );
+    await decisionDetail
+      .getByLabel("Комментарий")
+      .fill(
+        "Evidence приложен; локальный E2E подтверждает решение через inbox.",
+      );
+    const resolutionResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname ===
+          `/api/v1/owner-gates/${gate.ref}/resolution`,
+    );
+    await decisionDetail
+      .getByRole("button", { name: "Одобрить", exact: true })
+      .click();
+    const resolved = await resolutionResponse;
+    expect(resolved.status(), await resolved.text()).toBe(200);
+    const resolutionRequest = resolved.request().postDataJSON() as {
+      artifactRefs?: string[];
+    };
+    expect(resolutionRequest.artifactRefs).toEqual([evidence.ref]);
+    const resolvedGate = (await resolved.json()) as {
+      gate?: { artifactRefs?: string[]; state?: string };
+    };
+    expect(resolvedGate.gate?.state).toBe("APPROVED");
+    expect(resolvedGate.gate?.artifactRefs).toContain(evidence.ref);
+
+    const staleResolution = await resolveGateAtVersion(
+      page,
+      gate.ref,
+      gate.version,
+    );
+    expect(staleResolution.status).toBe(409);
+    expect(staleResolution.code).not.toBe("");
+    expect((await readOwnerGate(page, gate.ref)).artifactRefs).toContain(
+      evidence.ref,
+    );
+
+    await gotoWithRetry(page, `/runs/${workflowRunRef}`);
+    await expectRunState(page, /Выполняется|Завершён/);
+    await waitForTerminalSuccess(page);
+    await assertNoDuplicateGraphNodes(page);
+    await page
+      .getByLabel("Контекст узла")
+      .getByRole("button", { name: "Ход работы" })
+      .click();
+    await expect(
+      page.getByRole("dialog", { name: "Ход работы" }),
+    ).toContainText(/решение/i);
   });
 
   test("отмена закрывает граф, а retry создаёт новую попытку с lineage", async ({
@@ -1970,6 +2262,157 @@ test.describe("web-only fresh installation", () => {
     expect(workflowRef).toBeTruthy();
   });
 
+  test("корзина восстанавливает файл и необратимо удаляет точную S3-версию", async ({
+    page,
+  }) => {
+    requireRefs("projectRef");
+    await gotoWithRetry(page, `/projects/${projectRef}/files`);
+    await expectPageHeading(page, "Файлы и знания");
+
+    const restoreArtifact = await uploadFilesWorkspaceArtifact(
+      page,
+      `${environment.resourcePrefix}-trash-restore.txt`,
+      "restore fixture",
+    );
+    const deleted = await operateArtifactLifecycle(
+      page,
+      restoreArtifact.fileName,
+      restoreArtifact.ref,
+      "DELETE",
+    );
+    expect(deleted.lifecycleState).toBe("DELETED");
+    expect(deleted.deletedAt).toBeTruthy();
+    expect(deleted.purgeAfter).toBeTruthy();
+    const retentionMilliseconds =
+      Date.parse(deleted.purgeAfter ?? "") -
+      Date.parse(deleted.deletedAt ?? "");
+    expect(retentionMilliseconds).toBeGreaterThan(29.9 * 24 * 60 * 60 * 1000);
+    expect(retentionMilliseconds).toBeLessThan(30.1 * 24 * 60 * 60 * 1000);
+
+    await page.getByLabel("Раздел").selectOption("TRASH");
+    const restored = await operateArtifactLifecycle(
+      page,
+      restoreArtifact.fileName,
+      restoreArtifact.ref,
+      "RESTORE",
+    );
+    expect(restored.lifecycleState).toBe("ACTIVE");
+    expect(restored.deletedAt).toBeUndefined();
+    expect(restored.purgeAfter).toBeUndefined();
+
+    await page.getByLabel("Раздел").selectOption("FILES");
+    const deletedAgain = await operateArtifactLifecycle(
+      page,
+      restoreArtifact.fileName,
+      restoreArtifact.ref,
+      "DELETE",
+    );
+    expect(deletedAgain.lifecycleState).toBe("DELETED");
+    const purgeReceipt = artifactStorageReceipt("purge", restoreArtifact.ref);
+    await runArtifactStorageFixture(
+      "capture",
+      restoreArtifact.ref,
+      purgeReceipt,
+    );
+    await page.getByLabel("Раздел").selectOption("TRASH");
+    const purgeResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "DELETE" &&
+        new URL(response.url()).pathname ===
+          `/api/v1/artifacts/${restoreArtifact.ref}/purge`,
+    );
+    await page
+      .getByRole("button", { name: new RegExp(restoreArtifact.fileName) })
+      .first()
+      .click();
+    await page
+      .locator(".file-details")
+      .getByRole("button", { name: "Удалить навсегда", exact: true })
+      .click();
+    const purgeDialog = page.getByRole("dialog", {
+      name: "Удалить файл навсегда?",
+    });
+    await purgeDialog
+      .getByRole("button", { name: "Удалить навсегда", exact: true })
+      .click();
+    expect((await purgeResponse).status()).toBe(200);
+    await runArtifactStorageFixture(
+      "assert-absent",
+      restoreArtifact.ref,
+      purgeReceipt,
+    );
+
+    await page.getByLabel("Раздел").selectOption("FILES");
+    const emptyTrashArtifact = await uploadFilesWorkspaceArtifact(
+      page,
+      `${environment.resourcePrefix}-empty-trash.txt`,
+      "empty trash fixture",
+    );
+    await operateArtifactLifecycle(
+      page,
+      emptyTrashArtifact.fileName,
+      emptyTrashArtifact.ref,
+      "DELETE",
+    );
+    const emptyReceipt = artifactStorageReceipt(
+      "empty",
+      emptyTrashArtifact.ref,
+    );
+    await runArtifactStorageFixture(
+      "capture",
+      emptyTrashArtifact.ref,
+      emptyReceipt,
+    );
+    await page.getByLabel("Раздел").selectOption("TRASH");
+    await page.getByRole("button", { name: "Очистить корзину" }).click();
+    const emptyDialog = page.getByRole("dialog", {
+      name: "Очистить всю корзину?",
+    });
+    await emptyDialog.locator('input[type="text"]').fill("УДАЛИТЬ НАВСЕГДА");
+    await emptyDialog
+      .getByRole("button", { name: "Очистить корзину", exact: true })
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (await readArtifact(page, emptyTrashArtifact.ref)).lifecycleState,
+        { timeout: 60_000 },
+      )
+      .toBe("PURGED");
+    await runArtifactStorageFixture(
+      "assert-absent",
+      emptyTrashArtifact.ref,
+      emptyReceipt,
+    );
+
+    await page.getByLabel("Раздел").selectOption("FILES");
+    const retentionArtifact = await uploadFilesWorkspaceArtifact(
+      page,
+      `${environment.resourcePrefix}-retention-clock.txt`,
+      "retention clock fixture",
+    );
+    await operateArtifactLifecycle(
+      page,
+      retentionArtifact.fileName,
+      retentionArtifact.ref,
+      "DELETE",
+    );
+    const retentionReceipt = artifactStorageReceipt(
+      "retention",
+      retentionArtifact.ref,
+    );
+    await runArtifactStorageFixture(
+      "capture",
+      retentionArtifact.ref,
+      retentionReceipt,
+    );
+    await runArtifactStorageFixture(
+      "accelerate-retention",
+      retentionArtifact.ref,
+      retentionReceipt,
+    );
+  });
+
   test("административные экраны и security boundary дают ожидаемый readback", async ({
     browser,
     page,
@@ -2138,10 +2581,11 @@ function requireRefs(...required: ReadonlyArray<keyof DiscoveryRefs>): void {
   uploadedArtifactRef = persisted.uploadedArtifactRef ?? uploadedArtifactRef;
   const refs = currentRefs();
   const missing = required.filter((key) => !refs[key]);
-  test.skip(
-    missing.length > 0,
-    `BLOCKED: отсутствуют prerequisite refs: ${missing.join(", ")}`,
-  );
+  if (missing.length > 0) {
+    throw new Error(
+      `BLOCKED: отсутствуют prerequisite refs: ${missing.join(", ")}`,
+    );
+  }
 }
 
 async function pinAgentProviderCandidate(
@@ -2229,6 +2673,178 @@ async function resolveArtifactRef(
   );
 }
 
+interface ArtifactReadback {
+  readonly deletedAt?: string;
+  readonly fileName: string;
+  readonly lifecycleState: "ACTIVE" | "DELETED" | "PURGE_PENDING" | "PURGED";
+  readonly purgeAfter?: string;
+  readonly ref: string;
+  readonly version: number;
+}
+
+async function uploadFilesWorkspaceArtifact(
+  page: Page,
+  fileName: string,
+  content: string,
+): Promise<ArtifactReadback> {
+  const response = page.waitForResponse(
+    (candidate) =>
+      candidate.request().method() === "POST" &&
+      new URL(candidate.url()).pathname ===
+        `/api/v1/projects/${projectRef}/artifacts` &&
+      candidate.request().headers()["x-file-name"] === fileName,
+  );
+  await page.locator('.files-workspace input[type="file"]').setInputFiles({
+    name: fileName,
+    mimeType: "text/plain",
+    buffer: Buffer.from(content, "utf8"),
+  });
+  const upload = await response;
+  expect(upload.status(), await upload.text()).toBe(201);
+  return (await upload.json()) as ArtifactReadback;
+}
+
+async function operateArtifactLifecycle(
+  page: Page,
+  fileName: string,
+  artifactRef: string,
+  action: "DELETE" | "RESTORE",
+): Promise<ArtifactReadback> {
+  const path =
+    action === "DELETE"
+      ? `/api/v1/artifacts/${artifactRef}`
+      : `/api/v1/artifacts/${artifactRef}/restore`;
+  const method = action === "DELETE" ? "DELETE" : "POST";
+  const actionLabel = action === "DELETE" ? "В корзину" : "Восстановить";
+  const dialogTitle =
+    action === "DELETE" ? "Переместить файл в корзину?" : "Восстановить файл?";
+  const response = page.waitForResponse(
+    (candidate) =>
+      candidate.request().method() === method &&
+      new URL(candidate.url()).pathname === path,
+  );
+  await page
+    .getByRole("button", { name: `${actionLabel}: ${fileName}`, exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: dialogTitle });
+  await dialog.getByRole("button", { name: actionLabel, exact: true }).click();
+  const mutation = await response;
+  expect(mutation.status(), await mutation.text()).toBe(200);
+  return (await mutation.json()) as ArtifactReadback;
+}
+
+async function readArtifact(
+  page: Page,
+  artifactRef: string,
+): Promise<ArtifactReadback> {
+  return page.evaluate(async (ref) => {
+    const response = await fetch(
+      `/api/v1/artifacts/${encodeURIComponent(ref)}`,
+    );
+    if (!response.ok) {
+      throw new Error(`artifact readback failed: ${String(response.status)}`);
+    }
+    return (await response.json()) as ArtifactReadback;
+  }, artifactRef);
+}
+
+async function deleteArtifactAtVersion(
+  page: Page,
+  artifactRef: string,
+  version: number,
+): Promise<ArtifactReadback> {
+  return page.evaluate(
+    async ({ ref, expectedVersion }) => {
+      const prefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
+      const csrf = document.cookie
+        .split(";")
+        .map((part) => part.trim())
+        .find((part) => part.startsWith(prefix))
+        ?.slice(prefix.length);
+      if (!csrf) throw new Error("CSRF token is unavailable");
+      const response = await fetch(
+        `/api/v1/artifacts/${encodeURIComponent(ref)}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Idempotency-Key": crypto.randomUUID(),
+            "If-Match": `"${String(expectedVersion)}"`,
+            "X-CSRF-Token": decodeURIComponent(csrf),
+          },
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`artifact delete failed: ${String(response.status)}`);
+      }
+      return (await response.json()) as ArtifactReadback;
+    },
+    { ref: artifactRef, expectedVersion: version },
+  );
+}
+
+function artifactStorageReceipt(label: string, artifactRef: string): string {
+  const stateDirectory = process.env.KODEX_E2E_STATE_DIRECTORY;
+  if (!stateDirectory || !stateDirectory.startsWith("/")) {
+    throw new Error("KODEX_E2E_STATE_DIRECTORY is required for storage E2E");
+  }
+  return resolve(
+    stateDirectory,
+    "e2e",
+    `${environment.resourcePrefix}-${label}-${artifactRef}.json`,
+  );
+}
+
+async function runArtifactStorageFixture(
+  mode: "capture" | "assert-absent" | "accelerate-retention",
+  artifactRef: string,
+  receipt: string,
+): Promise<void> {
+  const repositoryRoot = process.env.KODEX_E2E_REPOSITORY_ROOT;
+  const kubeconfig = process.env.KODEX_E2E_KUBECONFIG;
+  const context = process.env.KODEX_E2E_KUBE_CONTEXT;
+  const stateDirectory = process.env.KODEX_E2E_STATE_DIRECTORY;
+  if (
+    !repositoryRoot?.startsWith("/") ||
+    !kubeconfig?.startsWith("/") ||
+    !context ||
+    !stateDirectory?.startsWith("/")
+  ) {
+    throw new Error(
+      "local storage E2E requires exact repository, kubeconfig, context and state paths",
+    );
+  }
+  const script = resolve(
+    repositoryRoot,
+    "scripts/tests/local-artifact-storage-e2e.sh",
+  );
+  await execFileAsync(
+    script,
+    [
+      mode,
+      "--context",
+      context,
+      "--kubeconfig",
+      kubeconfig,
+      "--state-directory",
+      stateDirectory,
+      "--artifact-ref",
+      artifactRef,
+      "--receipt",
+      receipt,
+    ],
+    {
+      cwd: repositoryRoot,
+      env: {
+        ...process.env,
+        KODEX_E2E_CONFIRM_DISPOSABLE:
+          "I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION",
+      },
+      maxBuffer: 2 * 1024 * 1024,
+      timeout: 5 * 60 * 1000,
+    },
+  );
+}
+
 async function resolveScheduleRef(
   page: Page,
   expectedProjectRef: string,
@@ -2247,26 +2863,6 @@ async function resolveScheduleRef(
     },
     { projectRef: expectedProjectRef, name: expectedName },
   );
-}
-
-async function authenticatedRunPage(
-  browser: Browser,
-  runRef: string,
-  monitorPage: (page: Page) => void,
-  storageState: Awaited<ReturnType<BrowserContext["storageState"]>>,
-): Promise<{ context: BrowserContext; page: Page }> {
-  const context = await browser.newContext({
-    baseURL: environment.baseURL,
-    storageState,
-    locale: "ru-RU",
-  });
-  const page = await context.newPage();
-  monitorPage(page);
-  await gotoWithRetry(page, `/runs/${runRef}`);
-  await expect(
-    page.getByRole("button", { name: "Одобрить", exact: true }),
-  ).toBeVisible();
-  return { context, page };
 }
 
 async function openGateForRun(
@@ -2312,6 +2908,37 @@ async function openGateForRun(
     .toBe(true);
   if (!gate) throw new Error("open owner gate was not found");
   return gate;
+}
+
+async function readOwnerGate(
+  page: Page,
+  gateRef: string,
+): Promise<{
+  artifactRefs: string[];
+  consequencesSummary: string;
+  contextSummary: string;
+  requestedBy: { displayName: string; ref: string };
+  state: string;
+  title: string;
+  version: number;
+}> {
+  return page.evaluate(async (ref) => {
+    const response = await fetch(
+      `/api/v1/owner-gates/${encodeURIComponent(ref)}`,
+    );
+    if (!response.ok) {
+      throw new Error(`owner gate readback failed: ${String(response.status)}`);
+    }
+    return (await response.json()) as {
+      artifactRefs: string[];
+      consequencesSummary: string;
+      contextSummary: string;
+      requestedBy: { displayName: string; ref: string };
+      state: string;
+      title: string;
+      version: number;
+    };
+  }, gateRef);
 }
 
 async function resolveGateAtVersion(

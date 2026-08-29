@@ -4,8 +4,8 @@ title: Диагностика session-archive
 type: runbook
 status: approved
 owner: sre
-version: 1.0.0
-updated: 2026-08-28
+version: 1.1.0
+updated: 2026-08-29
 ---
 
 # Диагностика session-archive
@@ -44,10 +44,16 @@ object key; dead-letter требует расследования причины
 
 ## Локальная проверка SeaweedFS
 
-Local bootstrap создаёт bucket `kodex-session-archives`. После безопасного
-port-forward S3 endpoint на loopback запустить
-`make test-session-archive-seaweedfs-e2e`, передав только пути к локальным
-credential files через `SESSION_ARCHIVE_E2E_ACCESS_KEY_FILE` и
-`SESSION_ARCHIVE_E2E_SECRET_KEY_FILE`, а endpoint через
-`SESSION_ARCHIVE_E2E_ENDPOINT`. Entrypoint отклоняет любой не-loopback endpoint
-и не выводит credentials.
+Local bootstrap создаёт bucket `kodex-session-archives`. Канонический
+`./dev.sh full-e2e --context <exact-local-context>` запускает
+`scripts/tests/local-session-archive-e2e.sh`: wrapper сам читает локальные
+Kubernetes Secret во временные файлы режима `0600`, поднимает только loopback
+port-forward и вызывает существующий SeaweedFS E2E.
+
+Проверка записывает реальную сессию, получает immutable object version,
+восстанавливает и побайтно сверяет исходный JSONL, затем удаляет exact version и
+требует `NotFound` через тот же object-storage adapter. Wrapper принимает
+только exact disposable local context и явное
+`KODEX_E2E_CONFIRM_DISPOSABLE`; значения credentials не передаются аргументами
+и не выводятся. Отсутствие bucket, readback или delete evidence является
+`FAIL`, а не условным успехом.

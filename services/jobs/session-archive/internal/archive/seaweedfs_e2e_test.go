@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 )
@@ -78,6 +79,9 @@ func TestSeaweedFSSnapshotRestoreDeleteE2E(t *testing.T) {
 	if _, err := Delete(ctx, store, deletion); err != nil {
 		t.Fatalf("delete local SeaweedFS archive: %v", err)
 	}
+	if _, err := store.Head(ctx, result.ObjectKey, result.ObjectVersion); !errors.Is(err, objectstorage.ErrNotFound) {
+		t.Fatalf("deleted local SeaweedFS archive version remains authoritative: %v", err)
+	}
 }
 
 func requireLoopbackEndpoint(t *testing.T, raw string) string {
@@ -93,7 +97,8 @@ func requireLoopbackEndpoint(t *testing.T, raw string) string {
 func readE2ESecret(t *testing.T, path string) string {
 	t.Helper()
 	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || !filepath.IsAbs(path) {
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 ||
+		!filepath.IsAbs(path) || info.Mode().Perm()&0o077 != 0 {
 		t.Fatal("E2E credential file is invalid")
 	}
 	raw, err := os.ReadFile(path)
