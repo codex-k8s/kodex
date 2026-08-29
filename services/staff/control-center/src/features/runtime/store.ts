@@ -7,10 +7,12 @@ import {
   createConfigOverlayDraft,
   createRuntimeEnvironmentSet,
   getAgentRuntimeConfiguration,
+  getRoleImageRecipe,
   getRuntimeEnvironmentSet,
   listAgentRuntimeConfigurationVersions,
   listRuntimeEnvironmentSets,
   listRuntimeEnvironmentVersions,
+  listRoleImageRecipes,
   publishAgentRuntimeConfiguration,
   publishConfigOverlayDraft,
   publishRuntimeEnvironmentVersion,
@@ -26,9 +28,21 @@ import type {
   RuntimeEnvironmentPage,
   RuntimeEnvironmentSet,
   RuntimeEnvironmentVersion,
+  RoleImageArtifact,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { asProblem, type AppProblem, unwrap } from "@/shared/api/problem";
+import type {
+  AsyncEntityOption,
+  AsyncEntityOptionPage,
+} from "@/shared/ui/async-entity-picker";
+
+export interface PromotedRoleImageOption extends AsyncEntityOption {
+  recipeRef: string;
+  artifactRef: string;
+  generation: number;
+  promotedReference: string;
+}
 
 type RuntimeResource =
   | `agent:${string}`
@@ -244,6 +258,88 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     ).data;
   }
 
+  async function searchPromotedRoleImagePage(
+    projectRef: string,
+    search: string,
+    pageToken?: string,
+    signal?: AbortSignal,
+  ): Promise<AsyncEntityOptionPage> {
+    const needle = search.trim().toLocaleLowerCase();
+    const visitedTokens = new Set<string>();
+    let cursor = pageToken;
+    do {
+      const page = (
+        await unwrap(
+          listRoleImageRecipes({
+            path: { projectRef },
+            query: {
+              pageSize: 30,
+              ...(cursor ? { pageToken: cursor } : {}),
+            },
+            signal: signal ?? requestSignal(),
+          }),
+        )
+      ).data;
+      const options: PromotedRoleImageOption[] = page.items.flatMap(
+        (recipe) => {
+          const artifactRef = recipe.activeImageArtifactRef;
+          if (
+            recipe.state !== "ACTIVE" ||
+            !recipe.promotedImageReady ||
+            !artifactRef ||
+            (needle &&
+              !recipe.name.toLocaleLowerCase().includes(needle) &&
+              !recipe.promotedImageReference
+                ?.toLocaleLowerCase()
+                .includes(needle))
+          )
+            return [];
+          return [
+            {
+              ref: artifactRef,
+              title: recipe.name,
+              description: recipe.promotedImageReference,
+              meta: `generation ${String(recipe.generation)}`,
+              recipeRef: recipe.ref,
+              artifactRef,
+              generation: recipe.generation,
+              promotedReference: recipe.promotedImageReference ?? "",
+            },
+          ];
+        },
+      );
+      if (options.length || !page.nextPageToken)
+        return { items: options, nextPageToken: page.nextPageToken };
+      cursor = page.nextPageToken;
+      if (visitedTokens.has(cursor))
+        throw new Error("Role image catalog returned a repeated page token");
+      visitedTokens.add(cursor);
+    } while (cursor);
+    return { items: [] };
+  }
+
+  async function loadPromotedRoleImageArtifact(
+    projectRef: string,
+    recipeRef: string,
+    expectedArtifactRef: string,
+  ): Promise<RoleImageArtifact> {
+    const detail = (
+      await unwrap(
+        getRoleImageRecipe({
+          path: { projectRef, recipeRef },
+          signal: requestSignal(),
+        }),
+      )
+    ).data;
+    if (
+      !detail.activeArtifact ||
+      detail.activeArtifact.ref !== expectedArtifactRef ||
+      detail.activeArtifact.admissionVerdict !== "ACCEPTED"
+    )
+      throw new Error("Promoted role image artifact is unavailable");
+    return detail.activeArtifact;
+  }
+
   async function loadEnvironment(environmentRef: string): Promise<void> {
     await query(
       `environment:${environmentRef}`,
@@ -389,6 +485,8 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     restoreOverlay,
     bindEnvironment,
     searchEnvironmentPage,
+    searchPromotedRoleImagePage,
+    loadPromotedRoleImageArtifact,
     loadEnvironment,
     loadEnvironmentVersions,
     createEnvironment,

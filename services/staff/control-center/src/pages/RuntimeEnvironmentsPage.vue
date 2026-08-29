@@ -137,6 +137,8 @@ onBeforeUnmount(() => {
                 <th>{{ $t("common.name") }}</th>
                 <th>{{ $t("runtime.revision") }}</th>
                 <th>{{ $t("runtime.versionDigest") }}</th>
+                <th>{{ $t("runtime.exactImage") }}</th>
+                <th>{{ $t("runtime.verifiedTools") }}</th>
                 <th>{{ $t("runtime.variables") }}</th>
                 <th>{{ $t("runtime.secretDescriptors") }}</th>
                 <th>{{ $t("common.status") }}</th>
@@ -170,6 +172,12 @@ onBeforeUnmount(() => {
                     compactIdentifier(environment.currentVersion.digest)
                   }}</code>
                 </td>
+                <td>
+                  <code>{{
+                    compactIdentifier(environment.currentVersion.image.digest)
+                  }}</code>
+                </td>
+                <td>{{ environment.currentVersion.tools.length }}</td>
                 <td>{{ environment.currentVersion.values.length }}</td>
                 <td>
                   {{ environment.currentVersion.secretDescriptors.length }}
@@ -229,7 +237,28 @@ onBeforeUnmount(() => {
               <dt>{{ $t("runtime.updatedAt") }}</dt>
               <dd>{{ new Date(selected.updatedAt).toLocaleString() }}</dd>
             </div>
+            <div>
+              <dt>{{ $t("runtime.exactImage") }}</dt>
+              <dd>
+                <code>{{
+                  compactIdentifier(selected.currentVersion.image.digest)
+                }}</code>
+              </dd>
+            </div>
           </dl>
+          <section>
+            <h3>{{ $t("runtime.verifiedTools") }}</h3>
+            <div v-if="selected.currentVersion.tools.length" class="chip-list">
+              <span
+                v-for="tool in selected.currentVersion.tools"
+                :key="tool.command"
+                :title="tool.description"
+              >
+                {{ tool.name }} · <code>{{ tool.command }}</code>
+              </span>
+            </div>
+            <p v-else>{{ $t("common.empty") }}</p>
+          </section>
           <section>
             <h3>{{ $t("runtime.variableNames") }}</h3>
             <div v-if="selected.currentVersion.values.length" class="chip-list">
@@ -313,6 +342,7 @@ onBeforeUnmount(() => {
 }
 .environment-table {
   width: 100%;
+  min-width: 1120px;
   border-collapse: collapse;
 }
 .environment-table th,

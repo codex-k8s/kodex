@@ -1,18 +1,24 @@
 import { requestSignal } from "@/shared/api/client";
 import {
   commandRoleImageRecipe,
+  createRoleImageRecipe,
   getRoleImageRecipe,
   listAgents,
   listRoleEnvironments,
   listRoleImageRecipes,
+  listRuntimeEnvironmentSets,
+  updateRoleImageRecipe,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   RoleEnvironment,
   RoleImageRecipe,
   RoleImageRecipeCommand,
   RoleImageRecipeCommandReceipt,
+  RoleImageRecipeCreateInput,
   RoleImageRecipeDetail,
   RoleImageRecipePage,
+  RoleImageRecipeUpdateInput,
+  RuntimeEnvironmentSet,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
@@ -67,6 +73,78 @@ export async function loadRoleImageDetail(
       }),
     )
   ).data;
+}
+
+export async function createRoleImage(
+  projectRef: string,
+  input: RoleImageRecipeCreateInput,
+): Promise<RoleImageRecipe> {
+  return (
+    await mutate((headers) =>
+      createRoleImageRecipe({
+        path: { projectRef },
+        body: input,
+        headers: {
+          "Idempotency-Key": headers["Idempotency-Key"],
+          "X-CSRF-Token": headers["X-CSRF-Token"],
+        },
+        signal: requestSignal(),
+      }),
+    )
+  ).data;
+}
+
+export async function updateRoleImage(
+  projectRef: string,
+  recipe: RoleImageRecipe,
+  input: RoleImageRecipeUpdateInput,
+): Promise<RoleImageRecipe> {
+  return (
+    await mutate(
+      (headers) =>
+        updateRoleImageRecipe({
+          path: { projectRef, recipeRef: recipe.ref },
+          body: input,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      recipe.version,
+    )
+  ).data;
+}
+
+export async function loadRoleImageDependencies(
+  projectRef: string,
+  imageArtifactRef: string,
+): Promise<RuntimeEnvironmentSet[]> {
+  const result: RuntimeEnvironmentSet[] = [];
+  const visitedTokens = new Set<string>();
+  let pageToken: string | undefined;
+  do {
+    const page = (
+      await unwrap(
+        listRuntimeEnvironmentSets({
+          path: { projectRef },
+          query: {
+            pageSize: 100,
+            ...(pageToken ? { pageToken } : {}),
+          },
+          signal: requestSignal(),
+        }),
+      )
+    ).data;
+    result.push(
+      ...page.items.filter(
+        (environment) =>
+          environment.currentVersion.image.artifactRef === imageArtifactRef,
+      ),
+    );
+    pageToken = page.nextPageToken;
+    if (pageToken && visitedTokens.has(pageToken))
+      throw new Error("Runtime environment catalog returned a repeated token");
+    if (pageToken) visitedTokens.add(pageToken);
+  } while (pageToken);
+  return result;
 }
 
 export async function loadRoleEnvironmentCatalog(): Promise<RoleEnvironment[]> {

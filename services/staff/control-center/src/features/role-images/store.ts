@@ -3,23 +3,32 @@ import { computed, reactive, ref } from "vue";
 
 import {
   commandRoleImage,
+  createRoleImage,
   loadRoleDefinitionOptions,
   loadRoleEnvironmentCatalog,
+  loadRoleImageDependencies,
   loadRoleImageDetail,
   loadRoleImagePage,
   type RoleDefinitionOption,
+  updateRoleImage,
 } from "@/features/role-images/api";
 import type {
   RoleEnvironment,
+  RoleImageArtifact,
   RoleImageBuild,
   RoleImageRecipe,
   RoleImageRecipeCommand,
+  RoleImageRecipeCreateInput,
+  RoleImageRecipeUpdateInput,
+  RuntimeEnvironmentSet,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 
 export const useRoleImagesStore = defineStore("role-images", () => {
   const recipes = reactive<Record<string, RoleImageRecipe>>({});
   const builds = reactive<Record<string, RoleImageBuild[]>>({});
+  const artifacts = reactive<Record<string, RoleImageArtifact | undefined>>({});
+  const dependencies = reactive<Record<string, RuntimeEnvironmentSet[]>>({});
   const projectRecipeRefs = reactive<Record<string, string[]>>({});
   const projectNextPageToken = reactive<Record<string, string | undefined>>({});
   const roleDefinitions = ref<RoleDefinitionOption[]>([]);
@@ -88,8 +97,14 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     try {
       const detail = await loadRoleImageDetail(projectRef, recipeRef);
       if (current !== detailGeneration) return;
+      const dependencyItems = detail.activeArtifact
+        ? await loadRoleImageDependencies(projectRef, detail.activeArtifact.ref)
+        : [];
+      if (current !== detailGeneration) return;
       recipes[detail.recipe.ref] = detail.recipe;
       builds[detail.recipe.ref] = detail.builds;
+      artifacts[detail.recipe.ref] = detail.activeArtifact;
+      dependencies[detail.recipe.ref] = dependencyItems;
     } catch (error) {
       if (current === detailGeneration) problem.value = asProblem(error);
     } finally {
@@ -137,6 +152,44 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     }
   }
 
+  async function create(
+    projectRef: string,
+    input: RoleImageRecipeCreateInput,
+  ): Promise<RoleImageRecipe> {
+    mutating.value = true;
+    problem.value = undefined;
+    try {
+      const recipe = await createRoleImage(projectRef, input);
+      recipes[recipe.ref] = recipe;
+      return recipe;
+    } catch (error) {
+      problem.value = asProblem(error);
+      throw error;
+    } finally {
+      mutating.value = false;
+    }
+  }
+
+  async function update(
+    projectRef: string,
+    recipe: RoleImageRecipe,
+    input: RoleImageRecipeUpdateInput,
+  ): Promise<RoleImageRecipe> {
+    mutating.value = true;
+    problem.value = undefined;
+    try {
+      const saved = await updateRoleImage(projectRef, recipe, input);
+      recipes[saved.ref] = saved;
+      await loadDetail(projectRef, saved.ref);
+      return saved;
+    } catch (error) {
+      problem.value = asProblem(error);
+      throw error;
+    } finally {
+      mutating.value = false;
+    }
+  }
+
   function dispose(): void {
     catalogGeneration += 1;
     detailGeneration += 1;
@@ -145,6 +198,8 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   return {
     recipes,
     builds,
+    artifacts,
+    dependencies,
     projectNextPageToken,
     roleDefinitions,
     environments,
@@ -159,6 +214,8 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     loadCatalog,
     loadDetail,
     loadSupportingCatalogs,
+    create,
+    update,
     command,
     dispose,
   };

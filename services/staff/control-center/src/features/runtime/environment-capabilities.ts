@@ -40,8 +40,8 @@ export const runtimeEnvironmentCapabilities: readonly EnvironmentCapability[] =
     { key: "search", state: "AVAILABLE" },
     { key: "values", state: "AVAILABLE" },
     { key: "secretReferences", state: "AVAILABLE" },
-    { key: "imageBinding", state: "UNAVAILABLE" },
-    { key: "verifiedTools", state: "UNAVAILABLE" },
+    { key: "imageBinding", state: "AVAILABLE" },
+    { key: "verifiedTools", state: "AVAILABLE" },
     { key: "resources", state: "UNAVAILABLE" },
     { key: "networkPolicy", state: "UNAVAILABLE" },
     { key: "kubernetesRbac", state: "UNAVAILABLE" },
@@ -52,7 +52,13 @@ export const runtimeEnvironmentCapabilities: readonly EnvironmentCapability[] =
   ];
 
 export interface EnvironmentReadinessCheck {
-  key: "FORM" | "REVISION" | "SECRET_REFS" | "SERVER_READINESS";
+  key:
+    | "FORM"
+    | "IMAGE"
+    | "TOOLS"
+    | "REVISION"
+    | "SECRET_REFS"
+    | "SERVER_READINESS";
   state: "READY" | "NEEDS_ATTENTION" | "UNAVAILABLE";
   problems: EnvironmentFormProblem[];
 }
@@ -65,8 +71,17 @@ export function environmentReadiness(
   const secretProblems = problems.filter((problem) =>
     problem.field.startsWith("secretDescriptors."),
   );
+  const imageProblems = problems.filter(
+    (problem) => problem.field === "imageArtifactRef",
+  );
+  const toolProblems = problems.filter((problem) =>
+    problem.field.startsWith("tools."),
+  );
   const formProblems = problems.filter(
-    (problem) => !problem.field.startsWith("secretDescriptors."),
+    (problem) =>
+      !problem.field.startsWith("secretDescriptors.") &&
+      problem.field !== "imageArtifactRef" &&
+      !problem.field.startsWith("tools."),
   );
   const revisionReady =
     environment !== undefined &&
@@ -83,6 +98,16 @@ export function environmentReadiness(
       key: "SECRET_REFS",
       state: secretProblems.length ? "NEEDS_ATTENTION" : "READY",
       problems: secretProblems,
+    },
+    {
+      key: "IMAGE",
+      state: imageProblems.length ? "NEEDS_ATTENTION" : "READY",
+      problems: imageProblems,
+    },
+    {
+      key: "TOOLS",
+      state: toolProblems.length ? "NEEDS_ATTENTION" : "READY",
+      problems: toolProblems,
     },
     {
       key: "REVISION",

@@ -3,11 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildIsActive,
   canRequestBuild,
-  defaultDockerfile,
   latestBuild,
-  roleImageApiGaps,
   roleImageState,
-  tokenizeDockerfileLine,
   validateDockerfile,
 } from "@/features/role-images/model";
 import type {
@@ -23,7 +20,10 @@ function recipe(overrides: Partial<RoleImageRecipe> = {}): RoleImageRecipe {
     roleDefinitionRef: "role_1",
     name: "Среда аналитика",
     state: "ACTIVE",
-    environment: { environmentKey: "standard" },
+    environment: {
+      environmentKey: "standard",
+      dockerfile: "FROM registry.example/base@sha256:" + "a".repeat(64),
+    },
     generation: 2,
     promotedImageReady: false,
     createdAt: "2026-08-29T10:00:00Z",
@@ -38,6 +38,8 @@ function build(overrides: Partial<RoleImageBuild> = {}): RoleImageBuild {
     ref: "build_1",
     version: 1,
     recipeRef: "image_1",
+    recipeGeneration: 2,
+    dockerfile: "FROM registry.example/base@sha256:" + "a".repeat(64),
     attempt: 1,
     stage: "SOLVING",
     progressPercent: 45,
@@ -78,17 +80,6 @@ describe("role image model", () => {
     ).toBe("PROMOTED");
   });
 
-  it("подсвечивает инструкции и переменные Dockerfile", () => {
-    expect(tokenizeDockerfileLine("RUN echo ${HOME}")).toEqual([
-      { text: "RUN", tone: "instruction" },
-      { text: " echo ", tone: "argument" },
-      { text: "${HOME}", tone: "variable" },
-    ]);
-    expect(tokenizeDockerfileLine("# comment")).toEqual([
-      { text: "# comment", tone: "comment" },
-    ]);
-  });
-
   it("валидирует минимальный source без подмены backend validation", () => {
     expect(validateDockerfile("")).toEqual([
       "roleImages.validation.dockerfileRequired",
@@ -96,17 +87,8 @@ describe("role image model", () => {
     expect(validateDockerfile("RUN true")).toEqual([
       "roleImages.validation.fromRequired",
     ]);
-    expect(validateDockerfile(defaultDockerfile())).toEqual([]);
-  });
-
-  it("фиксирует все отсутствующие поля публичного контракта", () => {
-    expect(roleImageApiGaps.map((gap) => gap.key)).toEqual([
-      "dockerfile",
-      "revisions",
-      "promotion",
-      "evidence",
-      "executables",
-      "environment-links",
-    ]);
+    expect(
+      validateDockerfile("FROM registry.example/base@sha256:" + "a".repeat(64)),
+    ).toEqual([]);
   });
 });

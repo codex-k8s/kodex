@@ -5,6 +5,7 @@ import type {
 
 const variableName = /^[A-Z_][A-Z0-9_]{0,126}$/;
 const sha256 = /^[a-f0-9]{64}$/;
+const toolCommand = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$/;
 const reservedVariablePrefixes = [
   "KODEX_",
   "CODEX_",
@@ -41,6 +42,11 @@ export function validateEnvironmentInput(
   const problems: EnvironmentFormProblem[] = [];
   if (!input.name.trim())
     problems.push({ field: "name", message: "runtime.errors.nameRequired" });
+  if (!input.imageArtifactRef.trim())
+    problems.push({
+      field: "imageArtifactRef",
+      message: "runtime.errors.imageRequired",
+    });
   const names = new Set<string>();
   for (const [index, item] of input.values.entries()) {
     if (!variableName.test(item.name))
@@ -63,6 +69,33 @@ export function validateEnvironmentInput(
   for (const [index, item] of input.secretDescriptors.entries()) {
     validateSecret(item, index, names, problems);
     names.add(item.name);
+  }
+  const toolCommands = new Set<string>();
+  for (const [index, item] of input.tools.entries()) {
+    if (!item.name.trim() || item.name.trim() !== item.name)
+      problems.push({
+        field: `tools.${String(index)}.name`,
+        message: "runtime.errors.toolNameRequired",
+      });
+    if (!toolCommand.test(item.command))
+      problems.push({
+        field: `tools.${String(index)}.command`,
+        message: "runtime.errors.toolCommand",
+      });
+    if (
+      !item.description.trim() ||
+      item.description.trim() !== item.description
+    )
+      problems.push({
+        field: `tools.${String(index)}.description`,
+        message: "runtime.errors.toolDescriptionRequired",
+      });
+    if (toolCommands.has(item.command))
+      problems.push({
+        field: `tools.${String(index)}.command`,
+        message: "runtime.errors.duplicateTool",
+      });
+    toolCommands.add(item.command);
   }
   return problems;
 }

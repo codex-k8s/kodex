@@ -225,7 +225,7 @@ const ru = {
     provider: "Провайдер",
     model: "Модель",
     runtimeRevision: "Ревизия runtime",
-    avatar: "Ссылка на аватар",
+    avatar: "Аватар",
     instructions: "Инструкции",
     capabilities: "Возможности",
     capabilitiesHelp: "Выдаются отдельно и применяются при следующем запуске",
@@ -375,13 +375,18 @@ const ru = {
     imageAndToolsHelp:
       "Окружение должно закреплять exact promoted image digest и разрешать только проверенные executable.",
     exactImage: "Exact image revision и digest",
-    exactImageUnavailable:
-      "Текущий API окружений не возвращает promoted image revision/digest и не принимает image binding.",
+    choosePromotedImage: "Выберите собранный и promoted образ",
+    searchPromotedImage: "Найти promoted образ",
+    promotedAndVerified: "Promoted и проверен",
     verifiedTools: "Проверенные инструменты",
-    verifiedToolsUnavailable:
-      "Текущий API не предоставляет каталог executable и не сохраняет выбранный поднабор инструментов окружения.",
-    noFakePersistence:
-      "Неподдержанные параметры не сохраняются локально: UI ждёт авторитетный versioned API.",
+    verifiedToolsHelp:
+      "Разрешите только нужные executable из выбранного образа и опишите их назначение для материализованного prompt.",
+    selectedToolsCount: "Выбрано: {selected} из {total}",
+    toolDisplayName: "Название в prompt",
+    toolCommand: "Проверенный executable",
+    toolUsageHint: "Подсказка по использованию",
+    noVerifiedTools: "В образе нет проверенных executable.",
+    chooseImageFirst: "Сначала выберите promoted образ.",
     secretReferences: "Ссылки на секреты",
     createSecret: "Создать секрет",
     rotateSecret: "Ротировать",
@@ -414,13 +419,15 @@ const ru = {
     effectivePolicyUnavailable:
       "Авторитетный preview ресурсов, сети и RBAC пока недоступен; UI не строит его по догадке.",
     catalogCapabilityBoundary:
-      "Каталог показывает environment revision. Exact image digest, tools, resources, network и RBAC появятся только после materialization соответствующего API.",
+      "Каталог показывает exact image и инструменты. Resources, network и RBAC появятся после materialization соответствующего API.",
     readiness: "Готовность окружения",
     readinessHelp:
       "Локальные проверки отделены от server-side readiness выбранного image digest и effective policy.",
     readinessCheck: {
       FORM: "Основные параметры и env values",
       SECRET_REFS: "Immutable Secret references",
+      IMAGE: "Exact promoted image",
+      TOOLS: "Разрешённые verified tools",
       REVISION: "Опубликованная immutable revision",
       SERVER_READINESS: "Server-side readiness",
     },
@@ -437,6 +444,12 @@ const ru = {
     revisionHistoryEmpty: "Опубликованных ревизий пока нет.",
     errors: {
       nameRequired: "Укажите название окружения.",
+      imageRequired: "Выберите promoted образ для окружения.",
+      toolNameRequired: "Укажите название инструмента без пробелов по краям.",
+      toolCommand: "Executable имеет недопустимый формат.",
+      toolDescriptionRequired:
+        "Добавьте описание инструмента без пробелов по краям.",
+      duplicateTool: "Один executable нельзя разрешить дважды.",
       variableName: "Имя переменной должно соответствовать формату VAR_NAME.",
       reservedVariableName:
         "Это имя зарезервировано платформой или средой выполнения.",
@@ -482,7 +495,7 @@ const ru = {
     archived: "Архивные",
     empty: "Образы не найдены",
     emptyHelp:
-      "Измените фильтры или откройте редактор нового образа. Сохранение полного Dockerfile появится после расширения backend-контракта.",
+      "Измените фильтры или создайте образ из доступного базового окружения.",
     unknownRole: "Название роли недоступно",
     generation: "Поколение",
     environment: "Базовое окружение",
@@ -493,14 +506,19 @@ const ru = {
     updatedAt: "Обновлено",
     role: "Роль",
     chooseRole: "Выберите роль",
+    chooseEnvironment: "Выберите базовое окружение",
+    recommended: "Рекомендуется",
     agentsCount: "сотрудников: {count}",
     sourceTitle: "Исходный Dockerfile",
     sourceHelp:
       "Платформа должна сохранить immutable revision и добавить защищённый runtime contract Kodex.",
     dockerfile: "Полный Dockerfile",
     localDraft: "Локальный черновик",
-    saveBlocked:
-      "Сохранение заблокировано: текущий публичный API не принимает Dockerfile и не создаёт immutable RoleImageRevision.",
+    generationLabel: "Поколение {generation}",
+    createHelp:
+      "Создание сохраняет исходный Dockerfile как первое неизменяемое поколение.",
+    immutableRevisionHelp:
+      "Сохранение создаёт новое поколение; уже собранные поколения и digest не изменяются.",
     createRevision: "Создать ревизию",
     requestBuild: "Запросить сборку",
     restore: "Восстановить",
@@ -514,20 +532,15 @@ const ru = {
     attempt: "Попытка {attempt}",
     currentState: "Текущее состояние",
     evidence: "Digest, SBOM и provenance",
+    manifestDigest: "OCI manifest digest",
+    vulnerabilityEvidence: "Доказательство проверки уязвимостей",
+    admissionVerdict: "Результат admission",
+    noPromotedArtifact: "Promoted artifact ещё не создан.",
     executables: "Обнаруженные executable",
+    noVerifiedExecutables: "Проверенные executable пока отсутствуют.",
     usedByEnvironments: "Используется окружениями",
+    noEnvironmentDependencies: "Ни одно окружение не использует этот artifact.",
     openEnvironments: "Открыть окружения",
-    unavailable: {
-      title: "Контракт ещё не материализован",
-      description:
-        "Интерфейс не имитирует сохранение или данные, которых нет в фактическом OpenAPI.",
-      dockerfile: "Сохранение Dockerfile",
-      revisions: "Immutable revisions",
-      promotion: "Управляемый promotion",
-      evidence: "Digest, SBOM и provenance",
-      executables: "Инвентаризация executable",
-      "environment-links": "Обратные ссылки окружений",
-    },
     validation: {
       dockerfileRequired: "Dockerfile не должен быть пустым.",
       fromRequired: "Dockerfile должен содержать инструкцию FROM.",
@@ -1942,7 +1955,7 @@ const en = {
     archived: "Archived",
     empty: "No images found",
     emptyHelp:
-      "Change the filters or open the new image editor. Full Dockerfile persistence requires a backend contract update.",
+      "Change the filters or create an image from an available base environment.",
     unknownRole: "Role name unavailable",
     generation: "Generation",
     environment: "Base environment",
@@ -1953,14 +1966,19 @@ const en = {
     updatedAt: "Updated",
     role: "Role",
     chooseRole: "Choose a role",
+    chooseEnvironment: "Choose a base environment",
+    recommended: "Recommended",
     agentsCount: "employees: {count}",
     sourceTitle: "Source Dockerfile",
     sourceHelp:
       "The platform must persist an immutable revision and append the protected Kodex runtime contract.",
     dockerfile: "Full Dockerfile",
     localDraft: "Local draft",
-    saveBlocked:
-      "Save is blocked: the current public API accepts neither Dockerfile nor an immutable RoleImageRevision.",
+    generationLabel: "Generation {generation}",
+    createHelp:
+      "Creating an image saves the source Dockerfile as the first immutable generation.",
+    immutableRevisionHelp:
+      "Saving creates a new generation; previously built generations and digests remain immutable.",
     createRevision: "Create revision",
     requestBuild: "Request build",
     restore: "Restore",
@@ -1974,20 +1992,15 @@ const en = {
     attempt: "Attempt {attempt}",
     currentState: "Current state",
     evidence: "Digest, SBOM and provenance",
+    manifestDigest: "OCI manifest digest",
+    vulnerabilityEvidence: "Vulnerability evidence",
+    admissionVerdict: "Admission verdict",
+    noPromotedArtifact: "No promoted artifact has been created yet.",
     executables: "Detected executables",
+    noVerifiedExecutables: "No verified executables are available yet.",
     usedByEnvironments: "Used by environments",
+    noEnvironmentDependencies: "No environment uses this artifact.",
     openEnvironments: "Open environments",
-    unavailable: {
-      title: "Contract not materialized yet",
-      description:
-        "The UI does not fake persistence or data absent from the actual OpenAPI.",
-      dockerfile: "Dockerfile persistence",
-      revisions: "Immutable revisions",
-      promotion: "Managed promotion",
-      evidence: "Digest, SBOM and provenance",
-      executables: "Executable inventory",
-      "environment-links": "Environment backlinks",
-    },
     validation: {
       dockerfileRequired: "Dockerfile must not be empty.",
       fromRequired: "Dockerfile must contain a FROM instruction.",
@@ -2108,7 +2121,7 @@ const en = {
     provider: "Provider",
     model: "Model",
     runtimeRevision: "Runtime revision",
-    avatar: "Avatar URL",
+    avatar: "Avatar",
     instructions: "Instructions",
     capabilities: "Capabilities",
     capabilitiesHelp: "Granted separately and applied to the next run",
@@ -2259,13 +2272,18 @@ const en = {
     imageAndToolsHelp:
       "The environment must pin an exact promoted image digest and allow only verified executables.",
     exactImage: "Exact image revision and digest",
-    exactImageUnavailable:
-      "The current environment API neither returns a promoted image revision/digest nor accepts an image binding.",
+    choosePromotedImage: "Choose a built and promoted image",
+    searchPromotedImage: "Search promoted images",
+    promotedAndVerified: "Promoted and verified",
     verifiedTools: "Verified tools",
-    verifiedToolsUnavailable:
-      "The current API does not expose executable discovery or persist an environment tool subset.",
-    noFakePersistence:
-      "Unsupported settings are not stored locally: the UI waits for an authoritative versioned API.",
+    verifiedToolsHelp:
+      "Allow only required executables from the selected image and describe their purpose for the materialized prompt.",
+    selectedToolsCount: "Selected: {selected} of {total}",
+    toolDisplayName: "Name in prompt",
+    toolCommand: "Verified executable",
+    toolUsageHint: "Usage hint",
+    noVerifiedTools: "The image has no verified executables.",
+    chooseImageFirst: "Choose a promoted image first.",
     secretReferences: "Secret references",
     createSecret: "Create secret",
     rotateSecret: "Rotate",
@@ -2298,13 +2316,15 @@ const en = {
     effectivePolicyUnavailable:
       "Authoritative resources, network and RBAC preview is unavailable; the UI does not infer it.",
     catalogCapabilityBoundary:
-      "The catalog shows the environment revision. Exact image digest, tools, resources, network and RBAC require their authoritative API.",
+      "The catalog shows the exact image and tools. Resources, network and RBAC still require their authoritative API.",
     readiness: "Environment readiness",
     readinessHelp:
       "Local checks are separated from server-side readiness for the selected image digest and effective policy.",
     readinessCheck: {
       FORM: "General settings and env values",
       SECRET_REFS: "Immutable Secret references",
+      IMAGE: "Exact promoted image",
+      TOOLS: "Allowed verified tools",
       REVISION: "Published immutable revision",
       SERVER_READINESS: "Server-side readiness",
     },
@@ -2321,6 +2341,12 @@ const en = {
     revisionHistoryEmpty: "No published revisions yet.",
     errors: {
       nameRequired: "Enter an environment name.",
+      imageRequired: "Choose a promoted image for the environment.",
+      toolNameRequired: "Enter a tool name without surrounding whitespace.",
+      toolCommand: "The executable has an invalid format.",
+      toolDescriptionRequired:
+        "Enter a tool description without surrounding whitespace.",
+      duplicateTool: "An executable cannot be allowed twice.",
       variableName: "Variable names must use the VAR_NAME format.",
       reservedVariableName:
         "This name is reserved by the platform or runtime environment.",

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 
 describe("RoleImageDockerfileEditor", () => {
-  it("рендерит строки и синтаксические токены без преобразования source", async () => {
+  it("рендерит контейнер CodeMirror и не подменяет source", async () => {
     const source = "FROM ubuntu:24.04\nRUN echo ${HOME}\n# comment";
     const html = await renderToString(
       createSSRApp({
@@ -17,12 +17,9 @@ describe("RoleImageDockerfileEditor", () => {
       }),
     );
 
-    expect(html).toContain('class="token--instruction"');
-    expect(html).toContain('class="token--variable"');
-    expect(html).toContain('class="token--comment"');
-    expect(html).toContain("FROM ubuntu:24.04");
-    expect(html).toContain("${HOME}");
-    expect(html).toContain(`3 · ${source.length}`);
+    expect(html).toContain('class="dockerfile-editor__viewport"');
+    expect(html).not.toContain("FROM ubuntu:24.04");
+    expect(html).toContain(`3 · ${String(source.length)}`);
   });
 
   it("делает исходник readonly и показывает validation boundary", async () => {
@@ -38,8 +35,7 @@ describe("RoleImageDockerfileEditor", () => {
       }),
     );
 
-    expect(html).toContain("readonly");
+    expect(html).toContain("is-readonly");
     expect(html).toContain("Нужен FROM");
-    expect(html).toContain('aria-invalid="true"');
   });
 });

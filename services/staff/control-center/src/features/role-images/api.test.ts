@@ -2,17 +2,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   commandRoleImage,
+  createRoleImage,
   loadRoleDefinitionOptions,
+  loadRoleImageDependencies,
   loadRoleImagePage,
+  updateRoleImage,
 } from "@/features/role-images/api";
 import type { RoleImageRecipe } from "@/shared/api/generated/openapi/types.gen";
 
 const api = vi.hoisted(() => ({
   commandRoleImageRecipe: vi.fn(),
+  createRoleImageRecipe: vi.fn(),
   getRoleImageRecipe: vi.fn(),
   listAgents: vi.fn(),
   listRoleEnvironments: vi.fn(),
   listRoleImageRecipes: vi.fn(),
+  listRuntimeEnvironmentSets: vi.fn(),
+  updateRoleImageRecipe: vi.fn(),
 }));
 const mutation = vi.hoisted(() => ({ mutate: vi.fn() }));
 
@@ -36,7 +42,10 @@ const recipe: RoleImageRecipe = {
   roleDefinitionRef: "role_1",
   name: "Образ аналитика",
   state: "ACTIVE",
-  environment: { environmentKey: "standard" },
+  environment: {
+    environmentKey: "standard",
+    dockerfile: "FROM registry.example/base@sha256:" + "a".repeat(64),
+  },
   generation: 2,
   promotedImageReady: false,
   createdAt: "2026-08-29T10:00:00Z",
@@ -121,5 +130,63 @@ describe("role image API adapter", () => {
         },
       }),
     );
+  });
+
+  it("создаёт и обновляет immutable recipe с точным Dockerfile", async () => {
+    api.createRoleImageRecipe.mockReturnValueOnce(response(recipe));
+    api.updateRoleImageRecipe.mockReturnValueOnce(
+      response({ ...recipe, version: 4, generation: 3 }),
+    );
+    const environment = {
+      environmentKey: "standard",
+      dockerfile: recipe.environment.dockerfile + "\nRUN true\n",
+    };
+
+    await createRoleImage("project_1", {
+      roleDefinitionRef: "role_1",
+      name: "Образ аналитика",
+      environment,
+    });
+    await updateRoleImage("project_1", recipe, {
+      name: "Образ аналитика v2",
+      environment,
+    });
+
+    const createRequest: unknown = api.createRoleImageRecipe.mock.calls[0]?.[0];
+    const updateRequest: unknown = api.updateRoleImageRecipe.mock.calls[0]?.[0];
+    expect(createRequest).toMatchObject({
+      path: { projectRef: "project_1" },
+      body: { environment },
+    });
+    expect(updateRequest).toMatchObject({
+      path: { projectRef: "project_1", recipeRef: "image_1" },
+      body: { environment },
+      headers: { "If-Match": '"3"' },
+    });
+  });
+
+  it("возвращает только окружения, закреплённые за exact artifact", async () => {
+    api.listRuntimeEnvironmentSets.mockReturnValueOnce(
+      response({
+        items: [
+          {
+            ref: "environment_1",
+            currentVersion: {
+              image: { artifactRef: "imgart_target" },
+            },
+          },
+          {
+            ref: "environment_2",
+            currentVersion: {
+              image: { artifactRef: "imgart_other" },
+            },
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      loadRoleImageDependencies("project_1", "imgart_target"),
+    ).resolves.toEqual([expect.objectContaining({ ref: "environment_1" })]);
   });
 });

@@ -12,7 +12,6 @@ import {
   ServerCog,
   ShieldCheck,
   Trash2,
-  Wrench,
 } from "@lucide/vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -28,10 +27,14 @@ import {
 } from "@/features/runtime/environment-form";
 import { useRuntimeStore } from "@/features/runtime/store";
 import type {
+  RoleImageArtifact,
+  RoleImageArtifactTool,
   RuntimeEnvironmentInput,
   RuntimeEnvironmentSet,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -67,9 +70,15 @@ const activeSection = ref<EditorSection>("GENERAL");
 const input = reactive<RuntimeEnvironmentInput>({
   name: "",
   description: "",
+  imageArtifactRef: "",
+  tools: [],
   values: [],
   secretDescriptors: [],
 });
+const selectedImage = ref<AsyncEntityOption>();
+const imageArtifact = ref<RoleImageArtifact>();
+const imageLoading = ref(false);
+const imageProblem = ref<AppProblem>();
 const validation = computed(() => validateEnvironmentInput(input));
 const readiness = computed(() => environmentReadiness(input, current.value));
 const secretReferences = computed(() =>
@@ -93,10 +102,85 @@ function sync(value = current.value): void {
   if (!value) return;
   input.name = value.name;
   input.description = value.description;
+  input.imageArtifactRef = value.currentVersion.image.artifactRef;
+  input.tools = value.currentVersion.tools.map((item) => ({ ...item }));
+  selectedImage.value = {
+    ref: value.currentVersion.image.artifactRef,
+    title: value.currentVersion.image.reference,
+    description: value.currentVersion.image.recipeRef,
+    meta: `generation ${String(value.currentVersion.image.recipeGeneration)}`,
+  };
   input.values = value.currentVersion.values.map((item) => ({ ...item }));
   input.secretDescriptors = value.currentVersion.secretDescriptors.map(
     (item) => ({ ...item }),
   );
+}
+
+async function loadImageArtifact(
+  recipeRef: string,
+  artifactRef: string,
+): Promise<void> {
+  imageLoading.value = true;
+  imageProblem.value = undefined;
+  try {
+    imageArtifact.value = await runtime.loadPromotedRoleImageArtifact(
+      projectRef.value,
+      recipeRef,
+      artifactRef,
+    );
+  } catch (error) {
+    imageArtifact.value = undefined;
+    imageProblem.value = asProblem(error);
+  } finally {
+    imageLoading.value = false;
+  }
+}
+
+function loadImagePage(query: string, cursor?: string) {
+  return runtime.searchPromotedRoleImagePage(projectRef.value, query, cursor);
+}
+
+async function selectImage(option: AsyncEntityOption): Promise<void> {
+  if (!("recipeRef" in option) || !("artifactRef" in option)) return;
+  selectedImage.value = option;
+  input.imageArtifactRef = String(option.artifactRef);
+  input.tools = [];
+  await loadImageArtifact(String(option.recipeRef), String(option.artifactRef));
+}
+
+function isToolSelected(tool: RoleImageArtifactTool): boolean {
+  return input.tools.some((item) => item.command === tool.name);
+}
+
+function toggleTool(tool: RoleImageArtifactTool): void {
+  const index = input.tools.findIndex((item) => item.command === tool.name);
+  if (index >= 0) {
+    input.tools.splice(index, 1);
+    return;
+  }
+  input.tools.push({
+    name: tool.name,
+    command: tool.name,
+    description: "",
+    usageHint: "",
+  });
+}
+
+function updateSelectedTool(
+  command: string,
+  field: "name" | "description" | "usageHint",
+  event: Event,
+): void {
+  const target = event.currentTarget;
+  if (
+    !(
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement
+    )
+  )
+    return;
+  const tool = input.tools.find((item) => item.command === command);
+  if (tool) tool[field] = target.value;
 }
 
 function addValue(): void {
@@ -114,6 +198,11 @@ async function load(): Promise<void> {
     runtime.loadEnvironmentVersions(environmentRef.value),
   ]);
   sync();
+  if (current.value)
+    await loadImageArtifact(
+      current.value.currentVersion.image.recipeRef,
+      current.value.currentVersion.image.artifactRef,
+    );
 }
 
 async function save(): Promise<void> {
@@ -124,6 +213,13 @@ async function save(): Promise<void> {
     const payload: RuntimeEnvironmentInput = {
       name: input.name.trim(),
       description: input.description.trim(),
+      imageArtifactRef: input.imageArtifactRef,
+      tools: input.tools.map((item) => ({
+        name: item.name.trim(),
+        command: item.command,
+        description: item.description.trim(),
+        usageHint: item.usageHint.trim(),
+      })),
       values: input.values.map((item) => ({
         name: item.name.trim(),
         value: item.value,
@@ -295,32 +391,127 @@ onMounted(() => void load());
                 <p>{{ $t("runtime.imageAndToolsHelp") }}</p>
               </div>
             </div>
-            <article class="capability-row">
-              <Boxes :size="20" aria-hidden="true" />
+            <label class="field">
+              <span>{{ $t("runtime.exactImage") }}</span>
+              <AsyncEntityPicker
+                v-model="input.imageArtifactRef"
+                :selected="selectedImage"
+                :load-page="loadImagePage"
+                :placeholder="$t('runtime.choosePromotedImage')"
+                :search-placeholder="$t('runtime.searchPromotedImage')"
+                @select="selectImage"
+              />
+            </label>
+            <ProblemNotice v-if="imageProblem" :problem="imageProblem" />
+            <article
+              v-if="selectedImage"
+              class="selected-image"
+              :aria-busy="imageLoading"
+            >
+              <Boxes :size="22" aria-hidden="true" />
               <div>
-                <strong>{{ $t("runtime.exactImage") }}</strong>
-                <p>{{ $t("runtime.exactImageUnavailable") }}</p>
+                <strong>{{ selectedImage.title }}</strong>
+                <p>{{ selectedImage.description }}</p>
+                <code>{{ input.imageArtifactRef }}</code>
               </div>
               <StatusBadge
-                state="UNAVAILABLE"
-                :label="$t('common.unavailable')"
+                :state="imageArtifact ? 'ACCEPTED' : 'PENDING'"
+                :label="
+                  imageArtifact
+                    ? $t('runtime.promotedAndVerified')
+                    : $t('common.loading')
+                "
               />
             </article>
-            <article class="capability-row">
-              <Wrench :size="20" aria-hidden="true" />
+
+            <div class="section-header tool-heading">
               <div>
-                <strong>{{ $t("runtime.verifiedTools") }}</strong>
-                <p>{{ $t("runtime.verifiedToolsUnavailable") }}</p>
-                <code>name · command · description · usage_hint</code>
+                <h3>{{ $t("runtime.verifiedTools") }}</h3>
+                <p>{{ $t("runtime.verifiedToolsHelp") }}</p>
               </div>
-              <StatusBadge
-                state="UNAVAILABLE"
-                :label="$t('common.unavailable')"
-              />
-            </article>
-            <p class="boundary-note" role="note">
-              <CircleAlert :size="17" aria-hidden="true" />
-              {{ $t("runtime.noFakePersistence") }}
+              <span>
+                {{
+                  $t("runtime.selectedToolsCount", {
+                    selected: input.tools.length,
+                    total: imageArtifact?.tools.length ?? 0,
+                  })
+                }}
+              </span>
+            </div>
+            <div v-if="imageLoading" class="secondary-text" role="status">
+              {{ $t("common.loading") }}
+            </div>
+            <div v-else-if="imageArtifact?.tools.length" class="tool-catalog">
+              <article
+                v-for="tool in imageArtifact.tools"
+                :key="tool.name"
+                class="tool-option"
+              >
+                <label>
+                  <input
+                    type="checkbox"
+                    :checked="isToolSelected(tool)"
+                    @change="toggleTool(tool)"
+                  />
+                  <span>
+                    <strong
+                      ><code>{{ tool.name }}</code></strong
+                    >
+                    <small>{{ tool.version }}</small>
+                  </span>
+                </label>
+                <div v-if="isToolSelected(tool)" class="tool-fields">
+                  <label class="field">
+                    <span>{{ $t("runtime.toolDisplayName") }}</span>
+                    <input
+                      :value="
+                        input.tools.find((item) => item.command === tool.name)
+                          ?.name
+                      "
+                      maxlength="160"
+                      @input="updateSelectedTool(tool.name, 'name', $event)"
+                    />
+                  </label>
+                  <label class="field">
+                    <span>{{ $t("runtime.toolCommand") }}</span>
+                    <input :value="tool.name" readonly />
+                  </label>
+                  <label class="field field--wide">
+                    <span>{{ $t("common.description") }}</span>
+                    <textarea
+                      :value="
+                        input.tools.find((item) => item.command === tool.name)
+                          ?.description
+                      "
+                      maxlength="500"
+                      required
+                      @input="
+                        updateSelectedTool(tool.name, 'description', $event)
+                      "
+                    />
+                  </label>
+                  <label class="field field--wide">
+                    <span>{{ $t("runtime.toolUsageHint") }}</span>
+                    <textarea
+                      :value="
+                        input.tools.find((item) => item.command === tool.name)
+                          ?.usageHint
+                      "
+                      maxlength="500"
+                      @input="
+                        updateSelectedTool(tool.name, 'usageHint', $event)
+                      "
+                    />
+                  </label>
+                </div>
+              </article>
+            </div>
+            <p v-else class="secondary-text">
+              {{
+                input.imageArtifactRef
+                  ? $t("runtime.noVerifiedTools")
+                  : $t("runtime.chooseImageFirst")
+              }}
             </p>
           </section>
 
@@ -625,6 +816,16 @@ onMounted(() => void load());
                   <dt>{{ $t("runtime.secretReferences") }}</dt>
                   <dd>{{ input.secretDescriptors.length }}</dd>
                 </div>
+                <div>
+                  <dt>{{ $t("runtime.exactImage") }}</dt>
+                  <dd>
+                    <code>{{ input.imageArtifactRef || "—" }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ $t("runtime.verifiedTools") }}</dt>
+                  <dd>{{ input.tools.length }}</dd>
+                </div>
               </dl>
               <p class="boundary-note" role="note">
                 <CircleAlert :size="17" aria-hidden="true" />
@@ -811,6 +1012,71 @@ onMounted(() => void load());
   padding: 14px 0;
   border-bottom: 1px solid var(--hairline);
 }
+.selected-image {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.selected-image p,
+.tool-heading p {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+}
+.selected-image code {
+  display: block;
+  overflow: hidden;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-heading {
+  padding-top: 6px;
+  border-top: 1px solid var(--hairline);
+}
+.tool-heading > span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+.tool-catalog {
+  display: grid;
+  gap: 10px;
+}
+.tool-option {
+  display: grid;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.tool-option > label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.tool-option > label > span {
+  display: grid;
+  gap: 2px;
+}
+.tool-option small {
+  color: var(--text-secondary);
+}
+.tool-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding-left: 26px;
+}
+.tool-fields .field--wide {
+  grid-column: 1 / -1;
+}
 .capability-row > svg,
 .readiness-icon {
   color: var(--subtle);
@@ -939,8 +1205,12 @@ code {
   .secret-grid,
   .safe-summary,
   .secret-safe-meta,
-  .effective-preview dl {
+  .effective-preview dl,
+  .tool-fields {
     grid-template-columns: 1fr;
+  }
+  .tool-fields .field--wide {
+    grid-column: auto;
   }
   .capability-row,
   .readiness-check {

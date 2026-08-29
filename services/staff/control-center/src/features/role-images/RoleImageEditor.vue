@@ -12,14 +12,12 @@ import {
 } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRouter } from "vue-router";
 
-import RoleImageContractGap from "@/features/role-images/RoleImageContractGap.vue";
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import {
   canRequestBuild,
-  defaultDockerfile,
   latestBuild,
-  roleImageApiGaps,
   roleImageState,
   validateDockerfile,
 } from "@/features/role-images/model";
@@ -32,10 +30,12 @@ const props = defineProps<{
   recipeRef?: string;
 }>();
 const { t } = useI18n();
+const router = useRouter();
 const store = useRoleImagesStore();
 const name = ref("");
 const roleDefinitionRef = ref("");
-const dockerfile = ref(defaultDockerfile());
+const environmentKey = ref("");
+const dockerfile = ref("");
 const recipe = computed(() =>
   props.recipeRef ? store.recipes[props.recipeRef] : undefined,
 );
@@ -43,8 +43,25 @@ const builds = computed(() =>
   props.recipeRef ? (store.builds[props.recipeRef] ?? []) : [],
 );
 const currentBuild = computed(() => latestBuild(builds.value));
+const artifact = computed(() =>
+  props.recipeRef ? store.artifacts[props.recipeRef] : undefined,
+);
+const dependencies = computed(() =>
+  props.recipeRef ? (store.dependencies[props.recipeRef] ?? []) : [],
+);
 const dockerfileMessages = computed(() =>
   validateDockerfile(dockerfile.value).map((key) => t(key)),
+);
+const selectedEnvironment = computed(() =>
+  store.environments.find((item) => item.key === environmentKey.value),
+);
+const canSave = computed(
+  () =>
+    name.value.trim().length > 0 &&
+    Boolean(roleDefinitionRef.value) &&
+    Boolean(selectedEnvironment.value?.available) &&
+    dockerfileMessages.value.length === 0 &&
+    (!recipe.value || recipe.value.nextActions.includes("UPDATE")),
 );
 const roleLabel = computed(
   () =>
@@ -53,27 +70,18 @@ const roleLabel = computed(
     )?.label ?? t("roleImages.unknownRole"),
 );
 const environmentLabel = computed(() => {
-  const key = recipe.value?.environment.environmentKey;
+  const key = environmentKey.value;
   if (!key) return t("common.noData");
   const environment = store.environmentByKey.get(key);
   return environment ? t(environment.nameMessageKey) : key;
 });
-const evidenceGap = computed(() =>
-  roleImageApiGaps.filter((gap) => gap.key === "evidence"),
-);
-const executableGap = computed(() =>
-  roleImageApiGaps.filter((gap) => gap.key === "executables"),
-);
-const environmentLinksGap = computed(() =>
-  roleImageApiGaps.filter((gap) => gap.key === "environment-links"),
-);
 
 function sync(): void {
   if (!recipe.value) return;
   name.value = recipe.value.name;
   roleDefinitionRef.value = recipe.value.roleDefinitionRef;
-  // Текущий API не возвращает исходный Dockerfile. Не подменяем его legacy spec.
-  dockerfile.value = "";
+  environmentKey.value = recipe.value.environment.environmentKey;
+  dockerfile.value = recipe.value.environment.dockerfile;
 }
 
 async function load(): Promise<void> {
@@ -83,7 +91,58 @@ async function load(): Promise<void> {
   if (props.recipeRef)
     tasks.push(store.loadDetail(props.projectRef, props.recipeRef));
   await Promise.all(tasks);
+  if (!props.recipeRef && !environmentKey.value) {
+    const recommended = store.environments.find(
+      (environment) => environment.available && environment.recommended,
+    );
+    if (recommended) selectEnvironment(recommended.key);
+  }
   sync();
+}
+
+function selectEnvironment(key: string): void {
+  environmentKey.value = key;
+  const environment = store.environments.find((item) => item.key === key);
+  dockerfile.value = environment?.dockerfileTemplate ?? "";
+}
+
+async function save(): Promise<void> {
+  if (!canSave.value || !selectedEnvironment.value) return;
+  const keepsEnvironmentSelection =
+    recipe.value?.environment.environmentKey === selectedEnvironment.value.key;
+  const selection = {
+    environmentKey: selectedEnvironment.value.key,
+    dockerfile: dockerfile.value.replace(/\r\n?/g, "\n"),
+    ...(keepsEnvironmentSelection && recipe.value.environment.packageKeys
+      ? { packageKeys: [...recipe.value.environment.packageKeys] }
+      : {}),
+    ...(keepsEnvironmentSelection && recipe.value.environment.toolKeys
+      ? { toolKeys: [...recipe.value.environment.toolKeys] }
+      : {}),
+    ...(keepsEnvironmentSelection && recipe.value.environment.installationBlock
+      ? { installationBlock: recipe.value.environment.installationBlock }
+      : {}),
+  };
+  try {
+    if (recipe.value) {
+      await store.update(props.projectRef, recipe.value, {
+        name: name.value.trim(),
+        environment: selection,
+      });
+      sync();
+      return;
+    }
+    const created = await store.create(props.projectRef, {
+      roleDefinitionRef: roleDefinitionRef.value,
+      name: name.value.trim(),
+      environment: selection,
+    });
+    await router.replace(
+      `/projects/${encodeURIComponent(props.projectRef)}/role-images/${encodeURIComponent(created.ref)}`,
+    );
+  } catch {
+    // Store сохраняет нормализованную problem-модель для видимого состояния.
+  }
 }
 
 async function runCommand(
@@ -190,16 +249,20 @@ onBeforeUnmount(() => store.dispose());
                 <p>{{ t("roleImages.sourceHelp") }}</p>
               </div>
               <StatusBadge
-                :state="recipe ? 'UNAVAILABLE' : 'DRAFT'"
+                :state="recipe ? 'ACTIVE' : 'DRAFT'"
                 :label="
-                  recipe ? t('common.unavailable') : t('roleImages.localDraft')
+                  recipe
+                    ? t('roleImages.generationLabel', {
+                        generation: recipe.generation,
+                      })
+                    : t('roleImages.localDraft')
                 "
               />
             </header>
             <div class="recipe-fields">
               <label class="field">
                 <span>{{ t("common.name") }}</span>
-                <input v-model="name" maxlength="120" :readonly="!!recipe" />
+                <input v-model="name" maxlength="120" />
               </label>
               <label class="field">
                 <span>{{ t("roleImages.role") }}</span>
@@ -222,33 +285,60 @@ onBeforeUnmount(() => store.dispose());
                   </option>
                 </select>
               </label>
+              <label class="field">
+                <span>{{ t("roleImages.environment") }}</span>
+                <select
+                  :value="environmentKey"
+                  :disabled="!store.environments.length"
+                  @change="
+                    selectEnvironment(
+                      ($event.currentTarget as HTMLSelectElement).value,
+                    )
+                  "
+                >
+                  <option value="" disabled>
+                    {{ t("roleImages.chooseEnvironment") }}
+                  </option>
+                  <option
+                    v-for="environment in store.environments"
+                    :key="environment.key"
+                    :value="environment.key"
+                    :disabled="!environment.available"
+                  >
+                    {{ t(environment.nameMessageKey) }}
+                    {{
+                      environment.recommended
+                        ? `· ${t("roleImages.recommended")}`
+                        : ""
+                    }}
+                  </option>
+                </select>
+              </label>
             </div>
             <RoleImageDockerfileEditor
               v-model="dockerfile"
               :label="t('roleImages.dockerfile')"
-              :readonly="!!recipe"
-              :validation-messages="recipe ? [] : dockerfileMessages"
+              :validation-messages="dockerfileMessages"
             />
             <div class="save-boundary">
-              <p>{{ t("roleImages.saveBlocked") }}</p>
+              <p>
+                {{
+                  recipe
+                    ? t("roleImages.immutableRevisionHelp")
+                    : t("roleImages.createHelp")
+                }}
+              </p>
               <button
                 class="button button--primary"
                 type="button"
-                disabled
-                :title="t('roleImages.saveBlocked')"
+                :disabled="store.mutating || !canSave"
+                @click="save"
               >
                 {{
                   recipe ? t("roleImages.createRevision") : t("common.create")
                 }}
               </button>
             </div>
-            <RoleImageContractGap
-              :gaps="
-                roleImageApiGaps.filter((gap) =>
-                  ['dockerfile', 'revisions'].includes(gap.key),
-                )
-              "
-            />
           </section>
 
           <section v-if="recipe" class="panel build-history">
@@ -324,20 +414,60 @@ onBeforeUnmount(() => store.dispose());
             </dl>
           </section>
 
-          <section class="panel unavailable-card">
+          <section class="panel artifact-card">
             <ShieldCheck :size="20" aria-hidden="true" />
             <h2>{{ t("roleImages.evidence") }}</h2>
-            <RoleImageContractGap :gaps="evidenceGap" compact />
+            <dl v-if="artifact">
+              <div>
+                <dt>{{ t("roleImages.manifestDigest") }}</dt>
+                <dd>
+                  <code>{{ artifact.manifestDigest }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>SBOM SHA-256</dt>
+                <dd>
+                  <code>{{ artifact.sbomSha256 ?? "—" }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t("roleImages.vulnerabilityEvidence") }}</dt>
+                <dd>
+                  <code>{{ artifact.vulnerabilityEvidenceSha256 ?? "—" }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t("roleImages.admissionVerdict") }}</dt>
+                <dd><StatusBadge :state="artifact.admissionVerdict" /></dd>
+              </div>
+            </dl>
+            <p v-else>{{ t("roleImages.noPromotedArtifact") }}</p>
           </section>
-          <section class="panel unavailable-card">
+          <section class="panel artifact-card">
             <TerminalSquare :size="20" aria-hidden="true" />
             <h2>{{ t("roleImages.executables") }}</h2>
-            <RoleImageContractGap :gaps="executableGap" compact />
+            <ul v-if="artifact?.tools.length" class="tool-list">
+              <li v-for="tool in artifact.tools" :key="tool.name">
+                <code>{{ tool.name }}</code
+                ><span>{{ tool.version }}</span>
+              </li>
+            </ul>
+            <p v-else>{{ t("roleImages.noVerifiedExecutables") }}</p>
           </section>
-          <section class="panel unavailable-card">
+          <section class="panel artifact-card">
             <Link2 :size="20" aria-hidden="true" />
             <h2>{{ t("roleImages.usedByEnvironments") }}</h2>
-            <RoleImageContractGap :gaps="environmentLinksGap" compact />
+            <ul v-if="dependencies.length" class="dependency-list">
+              <li v-for="environment in dependencies" :key="environment.ref">
+                <RouterLink
+                  :to="`/projects/${encodeURIComponent(projectRef)}/environments/${encodeURIComponent(environment.ref)}`"
+                >
+                  {{ environment.name }}
+                </RouterLink>
+                <span>rev {{ environment.currentVersion.revision }}</span>
+              </li>
+            </ul>
+            <p v-else>{{ t("roleImages.noEnvironmentDependencies") }}</p>
             <RouterLink
               class="button"
               :to="`/projects/${encodeURIComponent(projectRef)}/environments`"
@@ -424,7 +554,7 @@ onBeforeUnmount(() => store.dispose());
 }
 .recipe-fields {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.45fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 .field {
@@ -496,7 +626,7 @@ onBeforeUnmount(() => store.dispose());
   text-align: center;
 }
 .facts-panel h2,
-.unavailable-card h2 {
+.artifact-card h2 {
   margin: 0;
   font-size: 1rem;
 }
@@ -518,12 +648,47 @@ onBeforeUnmount(() => store.dispose());
   text-align: right;
   overflow-wrap: anywhere;
 }
-.unavailable-card {
+.artifact-card {
   display: grid;
   gap: 10px;
 }
-.unavailable-card > svg {
+.artifact-card > svg {
   color: var(--accent-strong);
+}
+.artifact-card dl,
+.tool-list,
+.dependency-list {
+  display: grid;
+  gap: 9px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.artifact-card dl > div,
+.tool-list li,
+.dependency-list li {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--hairline);
+}
+.artifact-card dt,
+.tool-list span,
+.dependency-list span,
+.artifact-card > p {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+.artifact-card dd,
+.artifact-card > p {
+  margin: 0;
+}
+.artifact-card code {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 @media (max-width: 1000px) {
   .editor-layout {

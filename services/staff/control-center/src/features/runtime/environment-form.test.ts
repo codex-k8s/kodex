@@ -11,6 +11,15 @@ describe("runtime environment form", () => {
       validateEnvironmentInput({
         name: "Документы",
         description: "Работа с документами",
+        imageArtifactRef: "imgart_documents",
+        tools: [
+          {
+            name: "GitHub CLI",
+            command: "gh",
+            description: "Работа с разрешёнными репозиториями",
+            usageHint: "Используйте gh для операций с GitHub.",
+          },
+        ],
         values: [{ name: "OUTPUT_FORMAT", value: "markdown" }],
         secretDescriptors: [
           {
@@ -32,6 +41,21 @@ describe("runtime environment form", () => {
     const problems = validateEnvironmentInput({
       name: " ",
       description: "",
+      imageArtifactRef: "",
+      tools: [
+        {
+          name: " ",
+          command: "bad command",
+          description: " ",
+          usageHint: "",
+        },
+        {
+          name: "Повтор",
+          command: "bad command",
+          description: "Описание",
+          usageHint: "",
+        },
+      ],
       values: [
         { name: "DUPLICATE", value: "one" },
         { name: "DUPLICATE", value: "two" },
@@ -43,6 +67,11 @@ describe("runtime environment form", () => {
     expect(problems.map((item) => item.message)).toEqual(
       expect.arrayContaining([
         "runtime.errors.nameRequired",
+        "runtime.errors.imageRequired",
+        "runtime.errors.toolNameRequired",
+        "runtime.errors.toolCommand",
+        "runtime.errors.toolDescriptionRequired",
+        "runtime.errors.duplicateTool",
         "runtime.errors.duplicateVariable",
         "runtime.errors.variableName",
         "runtime.errors.reservedVariableName",

@@ -18,8 +18,8 @@ describe("runtime environment capabilities", () => {
       search: "AVAILABLE",
       values: "AVAILABLE",
       secretReferences: "AVAILABLE",
-      imageBinding: "UNAVAILABLE",
-      verifiedTools: "UNAVAILABLE",
+      imageBinding: "AVAILABLE",
+      verifiedTools: "AVAILABLE",
       resources: "UNAVAILABLE",
       networkPolicy: "UNAVAILABLE",
       kubernetesRbac: "UNAVAILABLE",
@@ -34,6 +34,8 @@ describe("runtime environment capabilities", () => {
     const input = {
       name: "Документы",
       description: "Безопасное окружение",
+      imageArtifactRef: "imgart_documents",
+      tools: [],
       values: [{ name: "OUTPUT_FORMAT", value: "markdown" }],
       secretDescriptors: [],
     };
@@ -50,6 +52,14 @@ describe("runtime environment capabilities", () => {
         revision: 3,
         values: input.values,
         secretDescriptors: [],
+        image: {
+          artifactRef: input.imageArtifactRef,
+          recipeRef: "imgrec_documents",
+          recipeGeneration: 1,
+          reference: "registry.example/documents@sha256:" + "b".repeat(64),
+          digest: "b".repeat(64),
+        },
+        tools: [],
         digest: "a".repeat(64),
         createdAt: "2026-08-29T12:00:00Z",
       },
@@ -59,6 +69,8 @@ describe("runtime environment capabilities", () => {
     expect(checks.map(({ key, state }) => ({ key, state }))).toEqual([
       { key: "FORM", state: "READY" },
       { key: "SECRET_REFS", state: "READY" },
+      { key: "IMAGE", state: "READY" },
+      { key: "TOOLS", state: "READY" },
       { key: "REVISION", state: "READY" },
       { key: "SERVER_READINESS", state: "UNAVAILABLE" },
     ]);
