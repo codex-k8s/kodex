@@ -1893,6 +1893,10 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
 	}, "runtime-controller")
+	toolWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.tool-call.record",
+	}, "runtime-controller")
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatalf("construct delegation service: %v", err)
@@ -2018,6 +2022,19 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 			}})
 		if err != nil || delegated.Run == nil || stringMap(delegated.Runtime, "callbackEdgeRef") == "" {
 			t.Fatalf("delegate %s child: run=%#v runtime=%v err=%v", item.key, delegated.Run, delegated.Runtime, err)
+		}
+		toolCall, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: toolWorker,
+			Mutation: value.Mutation{IdempotencyKey: item.key + "-tool-call"}, Payload: command.RunToolCallInput{
+				LeaseRef: stringMap(coordinatorLease, "leaseRef"), Fence: stringMap(coordinatorLease, "fence"),
+				Generation: coordinatorLease["generation"].(int64), CallRef: "tcl_" + item.key,
+				Tool: "delegate_agent", CapabilityRef: "platform.run.delegate", State: "SUCCEEDED",
+				SafeResult: "delegate_agent:completed", SafeParameters: map[string]any{
+					"target_agent_ref": item.agent.Ref, "workflow_step_key": stepByAgent[item.agent.Ref],
+				},
+			}})
+		if err != nil || toolCall.Event == nil || toolCall.Event.ToolCall == nil ||
+			toolCall.Event.Actor.Kind != "AGENT" || toolCall.Event.ToolCall.Tool != "delegate_agent" {
+			t.Fatalf("record %s delegation tool call: event=%#v err=%v", item.key, toolCall.Event, err)
 		}
 	}
 	claimedChildren, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,

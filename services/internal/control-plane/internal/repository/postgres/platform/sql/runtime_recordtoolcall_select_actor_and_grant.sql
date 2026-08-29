@@ -1,5 +1,5 @@
 -- name: runtime_recordtoolcall_select_actor_and_grant :one
-SELECT agent.ref,agent.name,agent.system_key='system-assistant',
+SELECT agent.ref,agent.name,COALESCE(agent.system_key='system-assistant',false),
        CASE
          WHEN @grant_ref='' THEN true
          ELSE EXISTS (
