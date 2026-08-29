@@ -91,6 +91,8 @@ updated: 2026-07-28
 | `ARCH-MC-001`      | `docs/architecture/README.md`                               |
 | `UX-MC-002`        | `docs/design/web-first-reset-prompt-pack.md`                |
 | `UX-MC-003`        | `docs/design/mockups/index.md`                              |
+| `DESIGN-DOC-002`   | `docs/design/mvp-redesign/index.md`                         |
+| `DESIGN-DOC-003`   | `docs/design/mvp-redesign/implementation-plan.md`           |
 | `ARCH-DOC-002`     | `docs/architecture/technology-stack.md`                     |
 | `ARCH-MC-002`      | `docs/architecture/high-level-architecture.md`              |
 | `ARCH-MC-003`      | `docs/architecture/domain-map.md`                           |

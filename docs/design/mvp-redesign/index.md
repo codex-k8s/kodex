@@ -4,8 +4,8 @@ title: Канонический MVP-редизайн Kodex Control Center
 type: design
 status: approved
 owner: owner
-version: 1.0.0
-updated: 2026-08-28
+version: 1.1.0
+updated: 2026-08-29
 ---
 
 # Канонический MVP-редизайн Kodex Control Center
@@ -44,9 +44,10 @@ updated: 2026-08-28
 | ИИ-сотрудники | `agents-grid-desktop.html`, `agents-table-desktop.html`, `agents-mobile.html` | `/projects/:projectRef/agents` |
 | ИИ-сотрудник | `agent-profile-desktop.html`, `agent-instructions-desktop.html`, `agent-runtime-desktop.html`, `agent-environment-picker-desktop.html` | `/projects/:projectRef/agents/:agentRef` |
 | Kodex | `kodex-drawer-project-desktop.html`, `kodex-drawer-agent-desktop.html`, `kodex-plan-editor-desktop.html`, `kodex-plan-conflict-desktop.html`, `kodex-bottom-sheet-mobile.html` | контекст текущего маршрута |
-| Файлы | `files-list-desktop.html`, `files-grid-desktop.html`, `file-preview-desktop.html`, `files-automations-mobile.html` | `/projects/:projectRef/files` |
+| Файлы и корзина | `files-list-desktop.html`, `files-grid-desktop.html`, `file-preview-desktop.html`, `files-automations-mobile.html` | `/projects/:projectRef/files`, `/projects/:projectRef/files/trash` |
 | Автоматизации | `automations-desktop.html`, `automation-editor-desktop.html`, `files-automations-mobile.html` | `/projects/:projectRef/automations` |
 | Окружения | `environments-desktop.html`, `environment-editor-desktop.html` | `/administration/environments` |
+| Образы | требуется дополнить при реализации `DESIGN-DOC-003` | `/administration/images` |
 | Интеграции | `integrations-catalog-desktop.html`, `integration-package-desktop.html`, `integration-connection-desktop.html`, `integration-grants-desktop.html`, `integration-approval-desktop.html`, `integrations-mobile.html` | `/integrations` |
 | Доступ | `access-members-desktop.html`, `access-groups-desktop.html`, `access-roles-desktop.html`, `access-role-editor-desktop.html`, `access-effective-desktop.html`, `access-agent-scope-desktop.html`, `access-mobile.html` | `/administration/access/**` |
 
@@ -65,6 +66,13 @@ updated: 2026-08-28
   применения и не содержит скрытых изменений.
 - В MVP нет semantic vector search и управления embeddings/chunks.
 - Файлы, архивы сессий и backup используют S3-compatible storage.
+- Все диалоги, запуски, продолжения Session, Process inputs и Human Gates
+  используют общий AttachmentSet: drag-and-drop, очередь без продуктового
+  лимита числа файлов, workspace manifest и типизированные prompt variables.
+- Удалённые файлы 30 дней доступны в корзине; явная очистка удаляет exact S3
+  version, а активный immutable input не меняется без отмены Run.
+- Образы и окружения являются разными versioned сущностями: окружение pin-ит
+  promoted image digest и задаёт env, secret refs, tools, network и RBAC.
 - Интеграции описываются versioned YAML package и выдают ограниченные grants.
 - OIDC отвечает за identity и группы, Kodex - за прикладные allow-bindings до
   конкретного экземпляра сущности.
@@ -92,5 +100,5 @@ section failure. Интерактивные примеры дополнител�
 
 ## План реализации
 
-Исполнимые этапы, зависимости, локальный стенд и E2E-критерии зафиксированы в
-`implementation-plan.md`.
+Полный утверждённый scope D1-D20, исполнимые этапы, зависимости, локальный
+стенд и E2E-критерии зафиксированы в `implementation-plan.md`.
