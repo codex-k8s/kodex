@@ -13,11 +13,42 @@ function prettyJSON(value: Record<string, unknown>): string {
   return JSON.stringify(value, null, 2);
 }
 
+function cloneJSONRecord(
+  value: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+}
+
+function cloneOperation(
+  operation: AssistantPlanOperation,
+): AssistantPlanOperationInput {
+  return {
+    ref: operation.ref,
+    type: operation.type,
+    action: operation.action,
+    title: operation.title,
+    summary: operation.summary,
+    target: { ...operation.target },
+    ...(operation.expectedVersion === undefined
+      ? {}
+      : { expectedVersion: operation.expectedVersion }),
+    parameters: cloneJSONRecord(operation.parameters),
+    before: cloneJSONRecord(operation.before),
+    after: cloneJSONRecord(operation.after),
+    selected: operation.selected,
+    permitted: operation.permitted,
+    ...(operation.unavailableReason === undefined
+      ? {}
+      : { unavailableReason: operation.unavailableReason }),
+    validationProblems: [...operation.validationProblems],
+  };
+}
+
 export function editableOperations(
   operations: readonly AssistantPlanOperation[],
 ): EditablePlanOperation[] {
   return operations.map((operation) => ({
-    value: structuredClone(operation),
+    value: cloneOperation(operation),
     parametersText: prettyJSON(operation.parameters),
     afterText: prettyJSON(operation.after),
   }));
@@ -34,7 +65,7 @@ export function operationInputs(
   operations: readonly EditablePlanOperation[],
 ): AssistantPlanOperationInput[] {
   return operations.map((operation) => ({
-    ...structuredClone(operation.value),
+    ...cloneOperation(operation.value),
     parameters: parseObject(operation.parametersText),
     after: parseObject(operation.afterText),
   }));

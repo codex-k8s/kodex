@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { reactive } from "vue";
 
 import {
   editableOperations,
@@ -25,6 +26,16 @@ function operation(): AssistantPlanOperation {
 }
 
 describe("assistant plan editor model", () => {
+  it("создаёт независимый draft из Vue reactive proxy", () => {
+    const source = reactive(operation());
+
+    const editable = editableOperations([source]);
+
+    expect(editable[0]?.value).not.toBe(source);
+    expect(editable[0]?.value.target).not.toBe(source.target);
+    expect(editable[0]?.value).toEqual(operation());
+  });
+
   it("сохраняет полный набор явных параметров без скрытого преобразования", () => {
     const editable = editableOperations([operation()]);
     const first = editable[0];
