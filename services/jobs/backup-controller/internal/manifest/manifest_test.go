@@ -12,9 +12,11 @@ func TestManifestRequiresCompleteExactReceipts(t *testing.T) {
 	receipt := Receipt{Bucket: "backup", Key: "key", VersionID: "v1", ETag: "etag",
 		ChecksumSHA256: "sha256:" + strings.Repeat("a", 64), SizeBytes: 3}
 	value := Manifest{
-		SchemaVersion: 1, Kind: "kodex-backup", BackupID: "20260828T120000Z-0123456789abcdef",
+		SchemaVersion: SchemaVersion, Kind: "kodex-backup", BackupID: "20260828T120000Z-0123456789abcdef",
 		State: "complete", ControllerVersion: "test", ReleaseRevision: "sha256:test",
 		StartedAt: now, CompletedAt: now.Add(time.Minute), DatabaseCount: 1, PlatformObjectCount: 1,
+		ConsistencyModel: BoundedCrashConsistencyModel, ConsistencyStarted: now,
+		ConsistencyFinished: now.Add(30 * time.Second),
 		Databases: []Database{{Name: "control-plane", Engine: "postgresql", ServerVersion: "180003",
 			SchemaKind: "goose", SchemaVersion: "goose:1", SchemaChecksum: receipt.ChecksumSHA256,
 			SnapshotStarted: now, SnapshotFinished: now.Add(time.Second), Dump: receipt, Schema: receipt}},
@@ -26,6 +28,31 @@ func TestManifestRequiresCompleteExactReceipts(t *testing.T) {
 	value.PlatformObjects[0].Backup.VersionID = ""
 	if err := value.Validate(); err == nil {
 		t.Fatal("Validate() accepted a receipt without exact version")
+	}
+}
+
+func TestManifestRejectsAnUnboundedOrMisrepresentedConsistencyWindow(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+	receipt := Receipt{Bucket: "backup", Key: "key", VersionID: "v1", ETag: "etag",
+		ChecksumSHA256: "sha256:" + strings.Repeat("a", 64), SizeBytes: 3}
+	value := Manifest{
+		SchemaVersion: SchemaVersion, Kind: "kodex-backup", BackupID: "20260828T120000Z-0123456789abcdef",
+		State: "complete", ControllerVersion: "test", ReleaseRevision: "sha256:test",
+		StartedAt: now, CompletedAt: now.Add(time.Minute), ConsistencyModel: BoundedCrashConsistencyModel,
+		ConsistencyStarted: now, ConsistencyFinished: now.Add(30 * time.Second), DatabaseCount: 1,
+		Databases: []Database{{Name: "control-plane", Engine: "postgresql", ServerVersion: "180003",
+			SchemaKind: "goose", SchemaVersion: "goose:1", SchemaChecksum: receipt.ChecksumSHA256,
+			SnapshotStarted: now, SnapshotFinished: now.Add(time.Second), Dump: receipt, Schema: receipt}},
+	}
+	value.ConsistencyModel = "TRANSACTIONALLY_CONSISTENT"
+	if err := value.Validate(); err == nil {
+		t.Fatal("Validate() accepted an unsupported consistency claim")
+	}
+	value.ConsistencyModel = BoundedCrashConsistencyModel
+	value.ConsistencyFinished = now
+	if err := value.Validate(); err == nil {
+		t.Fatal("Validate() accepted a database snapshot outside the consistency window")
 	}
 }
 

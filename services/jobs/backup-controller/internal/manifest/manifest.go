@@ -11,7 +11,10 @@ import (
 	"time"
 )
 
-const SchemaVersion = 1
+const (
+	SchemaVersion                = 2
+	BoundedCrashConsistencyModel = "BOUNDED_CRASH_CONSISTENT"
+)
 
 var (
 	backupIDPattern      = regexp.MustCompile(`^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{16}$`)
@@ -57,6 +60,9 @@ type Manifest struct {
 	ReleaseRevision     string           `json:"releaseRevision"`
 	StartedAt           time.Time        `json:"startedAt"`
 	CompletedAt         time.Time        `json:"completedAt"`
+	ConsistencyModel    string           `json:"consistencyModel"`
+	ConsistencyStarted  time.Time        `json:"consistencyWindowStartedAt"`
+	ConsistencyFinished time.Time        `json:"consistencyWindowFinishedAt"`
 	Databases           []Database       `json:"databases"`
 	PlatformObjects     []PlatformObject `json:"platformObjects"`
 	DatabaseCount       int              `json:"databaseCount"`
@@ -106,7 +112,10 @@ func (value Manifest) Validate() error {
 	if value.SchemaVersion != SchemaVersion || value.Kind != "kodex-backup" ||
 		!backupIDPattern.MatchString(value.BackupID) || value.State != "complete" ||
 		value.ControllerVersion == "" || value.ReleaseRevision == "" || value.StartedAt.IsZero() ||
-		value.CompletedAt.Before(value.StartedAt) || len(value.Databases) == 0 ||
+		value.CompletedAt.Before(value.StartedAt) || value.ConsistencyModel != BoundedCrashConsistencyModel ||
+		value.ConsistencyStarted.IsZero() || value.ConsistencyStarted.Before(value.StartedAt) ||
+		value.ConsistencyFinished.Before(value.ConsistencyStarted) || value.CompletedAt.Before(value.ConsistencyFinished) ||
+		len(value.Databases) == 0 ||
 		value.DatabaseCount != len(value.Databases) ||
 		value.PlatformObjectCount != len(value.PlatformObjects) {
 		return errors.New("backup manifest is invalid")
@@ -119,6 +128,8 @@ func (value Manifest) Validate() error {
 			!validSchemaVersion(database.SchemaKind, database.SchemaVersion) ||
 			!validDigest(database.SchemaChecksum) || database.SnapshotStarted.IsZero() ||
 			database.SnapshotFinished.Before(database.SnapshotStarted) ||
+			database.SnapshotStarted.Before(value.ConsistencyStarted) ||
+			value.ConsistencyFinished.Before(database.SnapshotFinished) ||
 			!database.Dump.Valid() || !database.Schema.Valid() {
 			return errors.New("backup database manifest is invalid")
 		}

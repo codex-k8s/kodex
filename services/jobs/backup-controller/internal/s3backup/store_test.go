@@ -159,10 +159,12 @@ func TestCatalogExposesOnlyVerifiedBackupsAndValidDrills(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	backup := manifest.Manifest{SchemaVersion: 1, Kind: "kodex-backup",
+	backup := manifest.Manifest{SchemaVersion: manifest.SchemaVersion, Kind: "kodex-backup",
 		BackupID: backupID, State: "complete", ControllerVersion: "test",
 		ReleaseRevision: "sha256:test", StartedAt: now, CompletedAt: now.Add(time.Minute),
-		DatabaseCount: 1, Databases: []manifest.Database{{Name: "control-plane", Engine: "postgresql",
+		ConsistencyModel: manifest.BoundedCrashConsistencyModel, ConsistencyStarted: now,
+		ConsistencyFinished: now.Add(30 * time.Second),
+		DatabaseCount:       1, Databases: []manifest.Database{{Name: "control-plane", Engine: "postgresql",
 			ServerVersion: "180003", SchemaKind: "goose", SchemaVersion: "goose:1",
 			SchemaChecksum: dump.ChecksumSHA256, SnapshotStarted: now, SnapshotFinished: now.Add(time.Second),
 			Dump: dump, Schema: dump}}}
@@ -174,7 +176,7 @@ func TestCatalogExposesOnlyVerifiedBackupsAndValidDrills(t *testing.T) {
 	if err != nil || len(values) != 0 {
 		t.Fatalf("unverified catalog = %#v, %v", values, err)
 	}
-	verification := manifest.Verification{SchemaVersion: 1, Kind: "kodex-backup-verification",
+	verification := manifest.Verification{SchemaVersion: manifest.SchemaVersion, Kind: "kodex-backup-verification",
 		BackupID: backup.BackupID, Manifest: manifestReceipt, VerifiedAt: now.Add(2 * time.Minute), ObjectCount: 3}
 	if err := repository.EnsureVerification(ctx, backup, manifestReceipt, verification); err != nil {
 		t.Fatal(err)
@@ -183,7 +185,7 @@ func TestCatalogExposesOnlyVerifiedBackupsAndValidDrills(t *testing.T) {
 	if err != nil || len(values) != 1 || !drilled[backup.BackupID].IsZero() {
 		t.Fatalf("verified catalog = %#v, %#v, %v", values, drilled, err)
 	}
-	drill := manifest.RestoreDrill{SchemaVersion: 1, Kind: "kodex-restore-drill", RestoreID: "restore-test",
+	drill := manifest.RestoreDrill{SchemaVersion: manifest.SchemaVersion, Kind: "kodex-restore-drill", RestoreID: "restore-test",
 		ApprovalID: "approval-test", BackupID: backup.BackupID, RequestSHA256: dump.ChecksumSHA256,
 		TargetSetSHA256: dump.ChecksumSHA256, CompletedAt: now.Add(3 * time.Minute),
 		Databases: []manifest.RestoreDatabase{{Name: "control-plane", SchemaVersion: "goose:1",

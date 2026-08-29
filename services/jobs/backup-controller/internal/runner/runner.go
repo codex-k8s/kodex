@@ -156,10 +156,12 @@ func (runner *Runner) Backup(ctx context.Context) (backupID string, resultErr er
 		runner.observer.ObjectCompleted("backup", "error")
 		return backupID, err
 	}
+	completedAt := runner.now()
 	value := manifest.Manifest{
 		SchemaVersion: manifest.SchemaVersion, Kind: "kodex-backup", BackupID: backupID,
 		State: "complete", ControllerVersion: runner.controllerVersion, ReleaseRevision: runner.releaseRevision,
-		StartedAt: startedAt, CompletedAt: runner.now(), Databases: databases, PlatformObjects: objects,
+		StartedAt: startedAt, CompletedAt: completedAt, ConsistencyModel: manifest.BoundedCrashConsistencyModel,
+		ConsistencyStarted: startedAt, ConsistencyFinished: completedAt, Databases: databases, PlatformObjects: objects,
 		DatabaseCount: len(databases), PlatformObjectCount: len(objects),
 	}
 	if err := value.Validate(); err != nil {
@@ -172,7 +174,7 @@ func (runner *Runner) Backup(ctx context.Context) (backupID string, resultErr er
 	if err := runner.repository.Verify(ctx, value, manifestReceipt, directory); err != nil {
 		return backupID, fmt.Errorf("independent backup readback: %w", err)
 	}
-	verification := manifest.Verification{SchemaVersion: 1, Kind: "kodex-backup-verification",
+	verification := manifest.Verification{SchemaVersion: manifest.SchemaVersion, Kind: "kodex-backup-verification",
 		BackupID: backupID, Manifest: manifestReceipt, VerifiedAt: runner.now(),
 		ObjectCount: len(databases)*2 + len(objects) + 1}
 	if err := runner.repository.EnsureVerification(ctx, value, manifestReceipt, verification); err != nil {
@@ -194,7 +196,7 @@ func (runner *Runner) Verify(ctx context.Context, backupID string) (resultErr er
 	if err := runner.repository.Verify(ctx, value, receipt, runner.workDirectory); err != nil {
 		return err
 	}
-	verification := manifest.Verification{SchemaVersion: 1, Kind: "kodex-backup-verification",
+	verification := manifest.Verification{SchemaVersion: manifest.SchemaVersion, Kind: "kodex-backup-verification",
 		BackupID: backupID, Manifest: receipt, VerifiedAt: runner.now(),
 		ObjectCount: len(value.Databases)*2 + len(value.PlatformObjects) + 1}
 	return runner.repository.EnsureVerification(ctx, value, receipt, verification)
@@ -284,7 +286,7 @@ func (runner *Runner) RestoreDrill(ctx context.Context, approval configspec.Rest
 	} else if exists {
 		return errors.New("restore attempt is terminally failed; a new owner approval is required")
 	}
-	intent := manifest.RestoreIntent{SchemaVersion: 1, Kind: "kodex-restore-intent",
+	intent := manifest.RestoreIntent{SchemaVersion: manifest.SchemaVersion, Kind: "kodex-restore-intent",
 		RestoreID: approval.RestoreID, ApprovalID: approval.ApprovalID, BackupID: approval.BackupID,
 		RequestSHA256: requestDigest, TargetSetSHA256: targetDigest, CreatedAt: runner.now()}
 	if err := runner.repository.EnsureRestoreIntent(ctx, intent); err != nil {
@@ -348,7 +350,7 @@ func (runner *Runner) RestoreDrill(ctx context.Context, approval configspec.Rest
 		return err
 	}
 	sort.Slice(readbacks, func(i, j int) bool { return readbacks[i].Name < readbacks[j].Name })
-	drill := manifest.RestoreDrill{SchemaVersion: 1, Kind: "kodex-restore-drill",
+	drill := manifest.RestoreDrill{SchemaVersion: manifest.SchemaVersion, Kind: "kodex-restore-drill",
 		RestoreID: approval.RestoreID, ApprovalID: approval.ApprovalID, BackupID: approval.BackupID,
 		RequestSHA256: requestDigest, TargetSetSHA256: targetDigest, CompletedAt: runner.now(),
 		Databases: readbacks, Objects: objects}
