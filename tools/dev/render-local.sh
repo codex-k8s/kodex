@@ -447,7 +447,6 @@ patch_go_container Deployment integration-synthetic integration-synthetic servic
 patch_go_container Deployment automation-scheduler automation-scheduler services/jobs/automation-scheduler ./cmd/automation-scheduler
 patch_go_container Deployment automation-scheduler internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment automation-scheduler platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
-patch_go_container Deployment session-archive session-archive services/jobs/session-archive ./cmd/session-archive controller
 patch_go_container Deployment session-archive internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment session-archive platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
 patch_go_container Deployment internal-rpc-authority-publisher publisher services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-publisher
@@ -618,9 +617,12 @@ SESSION_ARCHIVE_IMAGE="$session_archive_image" yq -i '
     )
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "session-archive");
-    (.spec.template.spec.containers[] | select(.name == "session-archive") |
-      .env[] | select(.name == "SESSION_ARCHIVE_WORKER_IMAGE").value) =
-      strenv(SESSION_ARCHIVE_IMAGE)
+    (.spec.template.spec.containers[] | select(.name == "session-archive")) |= (
+      .image = strenv(SESSION_ARCHIVE_IMAGE) |
+      .imagePullPolicy = "IfNotPresent" |
+      (.env[] | select(.name == "SESSION_ARCHIVE_WORKER_IMAGE").value) =
+        strenv(SESSION_ARCHIVE_IMAGE)
+    )
   )
 ' "$render"
 
@@ -675,6 +677,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg image "$session_archive_image" '
     .metadata.namespace == "kodex-system" and
     any(.spec.template.spec.containers[];
       .name == "session-archive" and
+      .image == $image and .imagePullPolicy == "IfNotPresent" and
       any(.env[];
         .name == "SESSION_ARCHIVE_WORKER_IMAGE" and .value == $image)) and
     any(.spec.template.spec.containers[]; .name == "internal-rpc-authority-issuer") and

@@ -221,6 +221,7 @@ readback_session_archive() {
       (["internal-rpc-authority-issuer", "platform-worker-grant-agent", "session-archive"] | sort) and
     any(.spec.template.spec.containers[];
       .name == "session-archive" and
+      .image == $image and .imagePullPolicy == "IfNotPresent" and
       any(.env[];
         .name == "SESSION_ARCHIVE_WORKER_IMAGE" and .value == $image))
   ' <<<"$deployment" >/dev/null || fail 'session archive Deployment readback failed'
