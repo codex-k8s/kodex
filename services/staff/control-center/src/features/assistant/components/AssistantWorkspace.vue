@@ -315,6 +315,81 @@ onBeforeUnmount(() => {
       tabindex="-1"
       @keydown="handleKeydown"
     >
+      <header class="assistant-drawer__header">
+        <span class="assistant-drawer__mark" aria-hidden="true">
+          <Bot :size="21" />
+        </span>
+        <div class="assistant-drawer__identity">
+          <strong>Kodex</strong>
+          <span>{{ contextTitle }}</span>
+        </div>
+        <StatusBadge
+          v-if="store.assistant"
+          :state="store.assistant.runtimeState"
+        />
+        <button
+          class="icon-button assistant-new-conversation"
+          type="button"
+          :aria-label="$t('assistant.newConversation')"
+          :title="$t('assistant.newConversation')"
+          :disabled="!canStartConversation"
+          @click="startConversation"
+        >
+          <Plus :size="19" aria-hidden="true" />
+        </button>
+        <div ref="historyMenu" class="assistant-history">
+          <button
+            class="icon-button"
+            type="button"
+            :aria-label="$t('assistant.history')"
+            :aria-expanded="historyOpen"
+            @click="historyOpen = !historyOpen"
+          >
+            <History :size="18" aria-hidden="true" />
+            <ChevronDown :size="14" aria-hidden="true" />
+          </button>
+          <section
+            v-if="historyOpen"
+            class="assistant-history__menu"
+            :aria-label="$t('assistant.history')"
+          >
+            <header>{{ $t("assistant.history") }}</header>
+            <button
+              v-for="conversation in store.sortedConversations"
+              :key="conversation.ref"
+              type="button"
+              :class="{
+                selected: conversation.ref === store.selectedRef,
+              }"
+              @click="chooseConversation(conversation.ref)"
+            >
+              <span>
+                <strong>{{
+                  conversationDisplayTitle(conversation.title)
+                }}</strong>
+                <small>{{
+                  new Date(conversation.updatedAt).toLocaleString()
+                }}</small>
+              </span>
+              <Check
+                v-if="conversation.ref === store.selectedRef"
+                :size="16"
+                aria-hidden="true"
+              />
+            </button>
+          </section>
+        </div>
+        <button
+          class="icon-button"
+          type="button"
+          :aria-label="$t('common.close')"
+          :disabled="store.busy"
+          @click="close"
+        >
+          <X :size="20" aria-hidden="true" />
+        </button>
+      </header>
+
       <AssistantPlanEditor
         v-if="currentPlan"
         :plan="currentPlan"
@@ -328,81 +403,6 @@ onBeforeUnmount(() => {
         @reject="rejectPlan"
       />
       <template v-else>
-        <header class="assistant-drawer__header">
-          <span class="assistant-drawer__mark" aria-hidden="true">
-            <Bot :size="21" />
-          </span>
-          <div class="assistant-drawer__identity">
-            <strong>Kodex</strong>
-            <span>{{ contextTitle }}</span>
-          </div>
-          <StatusBadge
-            v-if="store.assistant"
-            :state="store.assistant.runtimeState"
-          />
-          <button
-            class="icon-button assistant-new-conversation"
-            type="button"
-            :aria-label="$t('assistant.newConversation')"
-            :title="$t('assistant.newConversation')"
-            :disabled="!canStartConversation"
-            @click="startConversation"
-          >
-            <Plus :size="19" aria-hidden="true" />
-          </button>
-          <div ref="historyMenu" class="assistant-history">
-            <button
-              class="icon-button"
-              type="button"
-              :aria-label="$t('assistant.history')"
-              :aria-expanded="historyOpen"
-              @click="historyOpen = !historyOpen"
-            >
-              <History :size="18" aria-hidden="true" />
-              <ChevronDown :size="14" aria-hidden="true" />
-            </button>
-            <section
-              v-if="historyOpen"
-              class="assistant-history__menu"
-              :aria-label="$t('assistant.history')"
-            >
-              <header>{{ $t("assistant.history") }}</header>
-              <button
-                v-for="conversation in store.sortedConversations"
-                :key="conversation.ref"
-                type="button"
-                :class="{
-                  selected: conversation.ref === store.selectedRef,
-                }"
-                @click="chooseConversation(conversation.ref)"
-              >
-                <span>
-                  <strong>{{
-                    conversationDisplayTitle(conversation.title)
-                  }}</strong>
-                  <small>{{
-                    new Date(conversation.updatedAt).toLocaleString()
-                  }}</small>
-                </span>
-                <Check
-                  v-if="conversation.ref === store.selectedRef"
-                  :size="16"
-                  aria-hidden="true"
-                />
-              </button>
-            </section>
-          </div>
-          <button
-            class="icon-button"
-            type="button"
-            :aria-label="$t('common.close')"
-            :disabled="store.busy"
-            @click="close"
-          >
-            <X :size="20" aria-hidden="true" />
-          </button>
-        </header>
-
         <nav v-if="isRunContext" class="assistant-drawer__tabs">
           <button
             type="button"
@@ -642,7 +642,8 @@ onBeforeUnmount(() => {
   right: 0;
   bottom: 0;
   display: flex;
-  width: min(760px, calc(100vw - 64px));
+  width: clamp(520px, 42vw, 640px);
+  max-width: calc(100vw - 64px);
   height: 100dvh;
   min-width: 0;
   flex-direction: column;
@@ -665,12 +666,17 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 .assistant-drawer__header {
+  position: sticky;
+  z-index: 4;
+  top: 0;
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 10px;
   min-height: 64px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 .assistant-drawer__mark {
   display: grid;
@@ -816,7 +822,9 @@ onBeforeUnmount(() => {
 }
 .assistant-chat-log {
   min-height: 0;
+  flex: 1 1 auto;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 18px 16px;
 }
 .assistant-empty-state {
@@ -901,8 +909,11 @@ onBeforeUnmount(() => {
   justify-self: start;
 }
 .assistant-composer {
-  position: relative;
+  position: sticky;
+  z-index: 2;
+  bottom: 0;
   display: grid;
+  flex: 0 0 auto;
   gap: 6px;
   padding: 12px 16px 14px;
   border-top: 1px solid var(--border);
@@ -958,11 +969,16 @@ onBeforeUnmount(() => {
     bottom: calc(76px + env(safe-area-inset-bottom));
   }
   .assistant-drawer {
+    left: 0;
     top: auto;
     right: 0;
     bottom: 0;
     width: 100%;
-    height: min(88vh, 900px);
+    max-width: none;
+    height: min(88dvh, 900px);
+    max-height: calc(100dvh - 12px);
+    border: 1px solid var(--border);
+    border-bottom: 0;
     border-radius: 14px 14px 0 0;
     box-shadow: 0 -16px 40px rgb(15 23 42 / 22%);
   }
@@ -978,6 +994,7 @@ onBeforeUnmount(() => {
     transform: translateX(-50%);
   }
   .assistant-drawer__header {
+    gap: 8px;
     padding-top: 14px;
   }
   .assistant-history__menu {
@@ -988,6 +1005,9 @@ onBeforeUnmount(() => {
   }
   .assistant-message {
     width: 94%;
+  }
+  .assistant-composer {
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
   }
 }
 </style>
