@@ -14,9 +14,8 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type {
-  AsyncEntityLoadRequest,
-  AsyncEntityPage,
-  AsyncEntityPickerItem,
+  AsyncEntityOption,
+  AsyncEntityOptionPage,
 } from "@/shared/ui/async-entity-picker";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -80,25 +79,27 @@ function accountLabel(index: number): string {
   return `#${String(index + 1)}`;
 }
 
-interface RuntimeEnvironmentPickerItem extends AsyncEntityPickerItem {
-  environment: RuntimeEnvironmentSet;
-}
-
-function environmentOption(
-  value: RuntimeEnvironmentSet,
-): RuntimeEnvironmentPickerItem {
+function environmentOption(value: RuntimeEnvironmentSet): AsyncEntityOption {
   return {
-    id: value.ref,
-    label: value.name,
+    ref: value.ref,
+    title: value.name,
     description: [
       value.description,
       `rev ${String(value.currentVersion.revision)}`,
     ]
       .filter(Boolean)
       .join(" · "),
-    environment: value,
   };
 }
+
+const selectedEnvironmentOption = computed<AsyncEntityOption | undefined>(
+  () => {
+    const environment = view.value?.environment;
+    return environment?.ref === selectedEnvironment.value
+      ? environmentOption(environment)
+      : undefined;
+  },
+);
 
 function sync(): void {
   const value = view.value;
@@ -207,16 +208,17 @@ async function bindSelectedEnvironment(): Promise<void> {
 }
 
 async function loadEnvironmentPage(
-  request: AsyncEntityLoadRequest,
-): Promise<AsyncEntityPage<RuntimeEnvironmentPickerItem>> {
+  query: string,
+  cursor?: string,
+): Promise<AsyncEntityOptionPage> {
   const page = await runtime.searchEnvironmentPage(
     props.projectRef,
-    request.query,
-    request.cursor,
+    query,
+    cursor,
   );
   return {
     items: page.items.map(environmentOption),
-    ...(page.nextPageToken ? { nextCursor: page.nextPageToken } : {}),
+    ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}),
   };
 }
 
@@ -347,16 +349,10 @@ onMounted(() => void load());
               <div>
                 <AsyncEntityPicker
                   :model-value="selectedEnvironment"
-                  :load-items="loadEnvironmentPage"
-                  :labels="{
-                    label: $t('runtime.chooseEnvironment'),
-                    searchPlaceholder: $t('runtime.searchEnvironment'),
-                    loading: $t('common.loading'),
-                    loadingMore: $t('common.loading'),
-                    empty: $t('common.empty'),
-                    error: $t('errors.default'),
-                    retry: $t('common.retry'),
-                  }"
+                  :selected="selectedEnvironmentOption"
+                  :load-page="loadEnvironmentPage"
+                  :placeholder="$t('runtime.chooseEnvironment')"
+                  :search-placeholder="$t('runtime.searchEnvironment')"
                   :disabled="busy || !canEdit"
                   @update:model-value="setEnvironment"
                 />

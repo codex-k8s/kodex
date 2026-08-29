@@ -250,7 +250,7 @@ func messageMap(message proto.Message) (map[string]any, error) {
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return nil, err
 	}
-	if err := normalizeProtoIntegers(value, message.ProtoReflect().Descriptor()); err != nil {
+	if err := normalizeProtoJSONShape(value, message.ProtoReflect().Descriptor()); err != nil {
 		return nil, err
 	}
 	normalize(value)
@@ -259,7 +259,7 @@ func messageMap(message proto.Message) (map[string]any, error) {
 
 const maximumSafeJSONInteger = int64(1<<53 - 1)
 
-func normalizeProtoIntegers(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
+func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
 	fields := descriptor.Fields()
 	for index := 0; index < fields.Len(); index++ {
 		field := fields.Get(index)
@@ -269,11 +269,8 @@ func normalizeProtoIntegers(value map[string]any, descriptor protoreflect.Messag
 				value[field.JSONName()] = []any{}
 			} else if field.IsMap() {
 				value[field.JSONName()] = map[string]any{}
-			} else if descriptor.FullName() == "controlplane.v1.TokenUsage" && isProto64BitInteger(field.Kind()) {
-				// OpenAPI/AsyncAPI требуют полный TokenUsage даже до появления
-				// первого provider counter. Для остальных сообщений proto3 zero
-				// не материализуется: пустая строка может означать optional поле.
-				value[field.JSONName()] = float64(0)
+			} else if defaultValue, required := requiredProtoScalarDefault(descriptor, field); required {
+				value[field.JSONName()] = defaultValue
 			}
 			continue
 		}
@@ -298,6 +295,23 @@ func normalizeProtoIntegers(value map[string]any, descriptor protoreflect.Messag
 		value[field.JSONName()] = normalized
 	}
 	return nil
+}
+
+func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
+	// Некоторым proto3 zero values соответствует обязательное поле OpenAPI.
+	// Список явный: другие пустые scalar могут означать отсутствующую ссылку.
+	if descriptor.FullName() == "controlplane.v1.TokenUsage" && isProto64BitInteger(field.Kind()) {
+		return float64(0), true
+	}
+	if field.Kind() == protoreflect.StringKind {
+		switch descriptor.FullName() {
+		case "controlplane.v1.ConfigOverlayVersion":
+			return "", field.JSONName() == "content"
+		case "controlplane.v1.AgentRuntimeConfigurationView":
+			return "", field.JSONName() == "safeEffectiveConfig"
+		}
+	}
+	return nil, false
 }
 
 func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, error) {
@@ -325,7 +339,7 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 		if !ok {
 			return value, nil
 		}
-		return item, normalizeProtoIntegers(item, field.Message())
+		return item, normalizeProtoJSONShape(item, field.Message())
 	}
 	switch field.Kind() {
 	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
@@ -393,7 +407,16 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 	}
 }
 
-var enumPrefixes = []string{"PLATFORM_ROLE_", "PROJECT_PERMISSION_", "NEXT_ACTION_", "ENTITY_LIFECYCLE_", "AGENT_STATE_", "INSTRUCTION_STATE_", "WORKFLOW_STATE_", "RUN_STATE_", "RUN_SOURCE_", "RUN_NODE_TYPE_", "RUN_NODE_STATE_", "RUN_EDGE_TYPE_", "RUN_EVENT_TYPE_", "OWNER_GATE_STATE_", "OWNER_GATE_DECISION_", "ARTIFACT_SCAN_STATE_", "ARTIFACT_SOURCE_", "SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_", "ACTION_", "TYPE_"}
+var enumPrefixes = []string{
+	"PLATFORM_ROLE_", "PROJECT_PERMISSION_", "NEXT_ACTION_", "ENTITY_LIFECYCLE_",
+	"AGENT_STATE_", "INSTRUCTION_STATE_", "WORKFLOW_STATE_", "RUN_STATE_", "RUN_SOURCE_",
+	"RUN_NODE_TYPE_", "RUN_NODE_STATE_", "RUN_EDGE_TYPE_", "RUN_EVENT_TYPE_",
+	"OWNER_GATE_STATE_", "OWNER_GATE_DECISION_", "ARTIFACT_SCAN_STATE_", "ARTIFACT_SOURCE_",
+	"SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_",
+	"PERMISSION_RISK_", "ACCESS_SUBJECT_KIND_", "ACCESS_SCOPE_KIND_", "ACCESS_RESOURCE_KIND_",
+	"ACCESS_ROLE_KIND_", "ACCESS_ROLE_STATE_", "ACCESS_BINDING_STATE_", "OIDC_GROUP_STATE_",
+	"ACCESS_DECISION_", "ACTION_", "TYPE_",
+}
 
 func normalize(value any) {
 	switch current := value.(type) {

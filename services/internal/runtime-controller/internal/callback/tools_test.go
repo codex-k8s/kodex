@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
@@ -102,8 +104,20 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	}
 	catalog := result.(map[string]any)
 	agents := catalog["agents"].([]map[string]string)
-	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" {
+	schemas := catalog["operation_schemas"].([]map[string]any)
+	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 12 {
 		t.Fatalf("unexpected configuration catalog: %#v", catalog)
+	}
+	workflowFound := false
+	for _, schema := range schemas {
+		properties := schema["properties"].(map[string]any)
+		if properties["type"].(map[string]any)["const"] != "CREATE_WORKFLOW" {
+			continue
+		}
+		workflowFound = properties["parameters"].(map[string]any)["properties"].(map[string]any)["steps"] != nil
+	}
+	if !workflowFound {
+		t.Fatal("configuration catalog does not expose the exact workflow contract")
 	}
 	if _, err := configurationCatalog(input, map[string]any{"projectRef": "untrusted"}); err == nil {
 		t.Fatal("configuration catalog accepted caller input")
@@ -184,6 +198,18 @@ func TestAssistantPlanInputErrorsKeepAClosedFailureClass(t *testing.T) {
 	}
 	if inputErr.reason != "operation_type" {
 		t.Fatalf("unexpected safe failure class: %q", inputErr.reason)
+	}
+}
+
+func TestAssistantPlanControlValidationRemainsRetryableInputError(t *testing.T) {
+	t.Parallel()
+	err := assistantPlanControlError(status.Error(codes.InvalidArgument, "request is invalid"))
+	var inputErr *assistantPlanInputError
+	if !errors.As(err, &inputErr) || inputErr.reason != "server_validation" {
+		t.Fatalf("expected closed server validation error, got %v", err)
+	}
+	if code := status.Code(assistantPlanControlError(status.Error(codes.Unavailable, "down"))); code != codes.Unavailable {
+		t.Fatalf("transient control error code changed: %s", code)
 	}
 }
 

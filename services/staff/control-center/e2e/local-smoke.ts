@@ -49,10 +49,38 @@ test("локальный OIDC, API и основные экраны доступ
   await page.locator("main").click({ position: { x: 1, y: 1 } });
   await expect(logout).toBeHidden();
 
-  const projectsStatus = await page.evaluate(async () =>
-    fetch("/api/v1/projects?pageSize=1").then((response) => response.status),
+  const projectsReadback = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/projects?pageSize=1");
+    return {
+      status: response.status,
+      problem: response.ok ? "" : await response.text(),
+    };
+  });
+  expect(projectsReadback.status, projectsReadback.problem).toBe(200);
+
+  const oidcGroups = await page.evaluate(async (expectedGroup) => {
+    const response = await fetch(
+      `/api/v1/administration/access/oidc-groups?query=${encodeURIComponent(expectedGroup)}&pageSize=10`,
+    );
+    if (!response.ok) {
+      throw new Error(
+        `OIDC group readback failed with ${String(response.status)}`,
+      );
+    }
+    return (await response.json()) as {
+      items: Array<{
+        displayName: string;
+        memberCount: number;
+        state: string;
+      }>;
+    };
+  }, environment.rbacGroup);
+  const exactOIDCGroups = oidcGroups.items.filter(
+    (group) => group.displayName === environment.rbacGroup,
   );
-  expect(projectsStatus).toBe(200);
+  expect(exactOIDCGroups).toHaveLength(1);
+  expect(exactOIDCGroups[0]).toMatchObject({ state: "ACTIVE" });
+  expect(exactOIDCGroups[0]?.memberCount).toBeGreaterThanOrEqual(1);
 
   await gotoWithRetry(page, "/onboarding");
   await expect(

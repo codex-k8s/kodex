@@ -7,11 +7,7 @@ SELECT parent_node.run_id::text,
        parent_node.role,
        parent_run.session_id::text,
        parent_agent.ref,
-       COALESCE(root.workflow_version_id::text, ''),
-       COALESCE((
-           SELECT bool_or(COALESCE((step.value ->> 'HumanGateAfter')::boolean, false))
-           FROM jsonb_array_elements(COALESCE(workflow_version.spec -> 'Steps', '[]'::jsonb)) step(value)
-       ), false) AND workflow_progress.missing_steps = 0
+       COALESCE(root.workflow_version_id::text, '')
 FROM control_plane.run_nodes parent_node
 JOIN control_plane.runs parent_run ON parent_run.id = parent_node.run_id
 JOIN control_plane.runs root ON root.id = parent_node.root_run_id

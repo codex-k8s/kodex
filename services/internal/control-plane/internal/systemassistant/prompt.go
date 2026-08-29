@@ -4,9 +4,9 @@ package systemassistant
 
 import _ "embed"
 
-const CorePromptRevision = "system-assistant-core-v1"
+const CorePromptRevision = "system-assistant-core-v2"
 
-//go:embed prompts/system-assistant-core-v1.md
+//go:embed prompts/system-assistant-core-v2.md
 var corePrompt string
 
 // CorePrompt возвращает versioned core prompt. Дополнение владельца хранится

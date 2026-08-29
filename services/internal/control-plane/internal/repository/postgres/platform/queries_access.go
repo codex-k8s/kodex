@@ -55,6 +55,10 @@ var (
 	queryAccessInsertOwnerBinding string
 	//go:embed sql/access_sync_upsert_group.sql
 	queryAccessSyncUpsertGroup string
+	//go:embed sql/access_sync_lock_subject.sql
+	queryAccessSyncLockSubject string
+	//go:embed sql/access_sync_list_memberships.sql
+	queryAccessSyncListMemberships string
 	//go:embed sql/access_sync_replace_memberships.sql
 	queryAccessSyncReplaceMemberships string
 	//go:embed sql/access_sync_insert_membership.sql

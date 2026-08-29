@@ -6,7 +6,7 @@ SELECT profile.provider,
 FROM control_plane.runtime_profiles profile
 LEFT JOIN control_plane.provider_definitions definition ON definition.stable_key = profile.provider
 LEFT JOIN control_plane.provider_accounts account
-  ON account.provider_definition_id = definition.id
+  ON account.definition_key = definition.stable_key
  AND account.organization_id = $1::uuid
  AND account.ref = ANY($3::text[])
  AND account.state = 'AUTHORIZED'

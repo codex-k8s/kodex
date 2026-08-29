@@ -46,7 +46,8 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 	if updatedAgentID != agentID {
 		return errors.New("bootstrap agent runtime configuration did not update the agent")
 	}
-	if _, err := tx.Exec(ctx, queryRuntimeConfigurationActivateEnvironment, runtimeEnvironmentID, runtimeEnvironmentVersionID); err != nil {
+	activation, err := tx.Exec(ctx, queryRuntimeConfigurationActivateEnvironment, runtimeEnvironmentID, runtimeEnvironmentVersionID)
+	if err != nil || activation.RowsAffected() != 1 {
 		return errors.New("activate bootstrap runtime environment version")
 	}
 	return nil
@@ -174,6 +175,9 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		if runtimecontract.ValidateConfigOverlayDraftPayload(payload.Content) != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+		if _, err := tx.Exec(ctx, queryRuntimeConfigurationSupersedeMutableOverlays, agent.id); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 		ref, _ := newRef("cov")
 		digest := sha256.Sum256([]byte(payload.Content))
 		var created string
@@ -210,6 +214,16 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		if err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
+		if _, err := tx.Exec(ctx, queryRuntimeConfigurationSupersedePublishedOverlay, agent.id); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		draftSuperseded, err := tx.Exec(ctx, queryRuntimeConfigurationSupersedeOverlayDraft, agent.id, draftID)
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if draftSuperseded.RowsAffected() != 1 {
+			return commandOutcome{}, errs.ErrConflict
+		}
 		ref, _ := newRef("cov")
 		var published string
 		if err := tx.QueryRow(ctx, queryRuntimeConfigurationPublishOverlay, pgx.StrictNamedArgs{
@@ -221,6 +235,9 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 	case command.RollbackConfigOverlay:
 		if payload.PublishedOverlayRef == "" {
 			return commandOutcome{}, errs.ErrInvalid
+		}
+		if _, err := tx.Exec(ctx, queryRuntimeConfigurationSupersedePublishedOverlay, agent.id); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
 		}
 		ref, _ := newRef("cov")
 		var published string
@@ -262,14 +279,21 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		}
 		environmentRef, _ := newRef("renv")
 		versionRef, _ := newRef("renvv")
-		var created string
+		var environmentID, environmentVersionID, created string
 		err := tx.QueryRow(ctx, queryRuntimeConfigurationCreateEnvironment, pgx.StrictNamedArgs{
 			"environment_ref": environmentRef, "version_ref": versionRef, "organization_id": scope.organizationID,
 			"project_id": projectID, "name": strings.TrimSpace(payload.Name), "description": strings.TrimSpace(payload.Description),
 			"created_by": scope.actorID, "non_secret_values": values, "secret_descriptors": secrets, "digest": digest,
-		}).Scan(&created)
-		if err != nil || created != environmentRef {
-			return commandOutcome{}, mapWriteError(err)
+		}).Scan(&environmentID, &environmentVersionID, &created)
+		if err != nil {
+			return commandOutcome{}, fmt.Errorf("create runtime environment storage: %w", mapWriteError(err))
+		}
+		if created != environmentRef {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		activation, err := tx.Exec(ctx, queryRuntimeConfigurationActivateEnvironment, environmentID, environmentVersionID)
+		if err != nil || activation.RowsAffected() != 1 {
+			return commandOutcome{}, errs.ErrUnavailable
 		}
 		environment, err := repository.getRuntimeEnvironmentTx(ctx, tx, scope, environmentRef)
 		if err != nil {
@@ -405,12 +429,16 @@ func runtimeConfigurationOutcome(view entity.AgentRuntimeConfigurationView, agen
 }
 
 func validateEnvironmentPayload(values []entity.RuntimeEnvironmentValue, secrets []entity.RuntimeSecretDescriptor) ([]byte, []byte, string, error) {
+	normalizedValues := make([]entity.RuntimeEnvironmentValue, len(values))
+	copy(normalizedValues, values)
+	normalizedSecrets := make([]entity.RuntimeSecretDescriptor, len(secrets))
+	copy(normalizedSecrets, secrets)
 	contractValues := make([]runtimecontract.RuntimeEnvironmentValue, 0, len(values))
-	for _, item := range values {
+	for _, item := range normalizedValues {
 		contractValues = append(contractValues, runtimecontract.RuntimeEnvironmentValue{Name: item.Name, Value: item.Value})
 	}
 	contractSecrets := make([]runtimecontract.RuntimeSecretProjection, 0, len(secrets))
-	for _, item := range secrets {
+	for _, item := range normalizedSecrets {
 		contractSecrets = append(contractSecrets, runtimecontract.RuntimeSecretProjection{Name: item.Name,
 			SecretName: item.SecretName, SecretKey: item.SecretKey, SecretUID: item.SecretUID,
 			SecretResourceVersion: item.SecretResourceVersion, ContentSHA256: item.ContentSHA256})
@@ -419,8 +447,8 @@ func validateEnvironmentPayload(values []entity.RuntimeEnvironmentValue, secrets
 	if err != nil {
 		return nil, nil, "", err
 	}
-	rawValues, _ := json.Marshal(values)
-	rawSecrets, _ := json.Marshal(secrets)
+	rawValues, _ := json.Marshal(normalizedValues)
+	rawSecrets, _ := json.Marshal(normalizedSecrets)
 	return rawValues, rawSecrets, digest, nil
 }
 

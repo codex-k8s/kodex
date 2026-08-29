@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -28,12 +29,7 @@ func (repository *Repository) syncOIDCGroups(ctx context.Context, tx pgx.Tx, org
 	if input.ExternalIssuer == "" || len(input.ExternalGroups) > 100 {
 		return errs.ErrForbidden
 	}
-	if _, err := tx.Exec(ctx, queryAccessSyncReplaceMemberships, pgx.NamedArgs{
-		"organization_id": organizationID, "subject_id": subjectID,
-	}); err != nil {
-		return errs.ErrUnavailable
-	}
-	observedAt := time.Now().UTC()
+	desiredGroups := make([]string, 0, len(input.ExternalGroups))
 	seen := make(map[string]struct{}, len(input.ExternalGroups))
 	for _, groupName := range input.ExternalGroups {
 		groupName = strings.TrimSpace(groupName)
@@ -44,6 +40,52 @@ func (repository *Repository) syncOIDCGroups(ctx context.Context, tx pgx.Tx, org
 			continue
 		}
 		seen[groupName] = struct{}{}
+		desiredGroups = append(desiredGroups, groupName)
+	}
+	sort.Strings(desiredGroups)
+	var locked int
+	if err := tx.QueryRow(ctx, queryAccessSyncLockSubject, pgx.NamedArgs{
+		"organization_id": organizationID, "subject_id": subjectID,
+	}).Scan(&locked); errors.Is(err, pgx.ErrNoRows) {
+		return errs.ErrForbidden
+	} else if err != nil || locked != 1 {
+		return errs.ErrUnavailable
+	}
+	rows, err := tx.Query(ctx, queryAccessSyncListMemberships, pgx.NamedArgs{
+		"organization_id": organizationID, "subject_id": subjectID,
+	})
+	if err != nil {
+		return errs.ErrUnavailable
+	}
+	currentGroups := make([]string, 0, len(desiredGroups))
+	currentRevision := input.ExternalSessionRevision
+	for rows.Next() {
+		var groupName string
+		var sessionRevision uint64
+		if err := rows.Scan(&groupName, &sessionRevision); err != nil {
+			rows.Close()
+			return errs.ErrUnavailable
+		}
+		currentGroups = append(currentGroups, groupName)
+		if sessionRevision != input.ExternalSessionRevision {
+			currentRevision = 0
+		}
+	}
+	if rows.Err() != nil {
+		rows.Close()
+		return errs.ErrUnavailable
+	}
+	rows.Close()
+	if currentRevision == input.ExternalSessionRevision && slicesEqual(currentGroups, desiredGroups) {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, queryAccessSyncReplaceMemberships, pgx.NamedArgs{
+		"organization_id": organizationID, "subject_id": subjectID,
+	}); err != nil {
+		return errs.ErrUnavailable
+	}
+	observedAt := time.Now().UTC()
+	for _, groupName := range desiredGroups {
 		digest := sha256.Sum256([]byte(input.ExternalIssuer + "\x00" + groupName))
 		groupRef, err := newRef("grp")
 		if err != nil {
@@ -64,6 +106,18 @@ func (repository *Repository) syncOIDCGroups(ctx context.Context, tx pgx.Tx, org
 		}
 	}
 	return nil
+}
+
+func slicesEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 type accessScanner interface{ Scan(...any) error }

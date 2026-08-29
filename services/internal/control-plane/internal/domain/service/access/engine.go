@@ -191,7 +191,7 @@ func Evaluate(subject entity.AccessSubject, permissionKey string, target entity.
 
 func bindingTargetsSubject(binding, subject entity.AccessSubject) bool {
 	if binding.Kind == "OIDC_GROUP" {
-		return contains(subject.OIDCGroupRefs, binding.Ref)
+		return binding.Ref == subject.Ref || contains(subject.OIDCGroupRefs, binding.Ref)
 	}
 	return binding.Kind == subject.Kind && binding.Ref == subject.Ref
 }

@@ -14,7 +14,8 @@ func configurationCatalogTool() map[string]any {
 		"inputSchema": objectSchema(nil, map[string]any{}),
 		"outputSchema": objectSchema([]string{"current_project_ref", "agents"}, map[string]any{
 			"current_project_ref": map[string]any{"type": "string"}, "agents": map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
-			"context": map[string]any{"type": "object"},
+			"context":           map[string]any{"type": "object"},
+			"operation_schemas": map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
 		}),
 	}
 }
@@ -67,13 +68,14 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 		"current_project_ref": input.ProjectRef,
 		"agents":              agents,
 		"context":             context,
+		"operation_schemas":   assistantPlanOperationSchemas(input),
 	}, nil
 }
 
 func assistantPlanTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "propose_configuration_plan",
-		"description": "Propose an editable Kodex draft for explicit user approval. This tool never validates or applies the plan. Every operation must disclose action, target, exact parameters, expectedVersion when applicable, before, after, and selected. For CREATE operations, before must be an empty object and after must exactly repeat parameters. No omitted field may imply a change.",
+		"description": "Propose an editable Kodex draft for explicit user approval. Before calling, read operation_schemas from get_configuration_catalog and use one of those exact schemas without guessing field names. This tool never validates or applies the plan. No omitted field may imply a change.",
 		"inputSchema": objectSchema([]string{"summary", "operations"}, map[string]any{
 			"summary": stringSchema(1, 2000),
 			"operations": map[string]any{"type": "array", "minItems": 1, "maxItems": 32,

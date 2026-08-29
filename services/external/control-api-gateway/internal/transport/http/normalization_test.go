@@ -97,6 +97,29 @@ func TestNormalizeEnumCollections(t *testing.T) {
 	}
 }
 
+func TestMessageMapNormalizesAccessEnumsToOpenAPIValues(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.PermissionDefinition{
+		Key:           "agent.launch",
+		Risk:          controlplanev1.PermissionRisk_PERMISSION_RISK_WRITE,
+		AllowedScopes: []controlplanev1.AccessScopeKind{controlplanev1.AccessScopeKind_ACCESS_SCOPE_KIND_RESOURCE_INSTANCE},
+		ResourceKinds: []controlplanev1.AccessResourceKind{controlplanev1.AccessResourceKind_ACCESS_RESOURCE_KIND_AGENT},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["risk"] != "WRITE" {
+		t.Fatalf("permission risk is not public: %#v", value)
+	}
+	if !reflect.DeepEqual(value["allowedScopes"], []any{"RESOURCE_INSTANCE"}) {
+		t.Fatalf("permission scopes are not public: %#v", value)
+	}
+	if !reflect.DeepEqual(value["resourceKinds"], []any{"AGENT"}) {
+		t.Fatalf("permission resources are not public: %#v", value)
+	}
+}
+
 func TestMessageMapConvertsProtoInt64ToOpenAPIJSONNumber(t *testing.T) {
 	t.Parallel()
 
@@ -143,6 +166,26 @@ func TestMessageMapMaterializesZeroTokenUsage(t *testing.T) {
 		if usage[key] != float64(0) {
 			t.Fatalf("нулевое поле %s не материализовано как JSON number: %#v", key, usage)
 		}
+	}
+}
+
+func TestMessageMapMaterializesRequiredEmptyRuntimeConfigurationStrings(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.AgentRuntimeConfigurationView{
+		PublishedOverlay: &controlplanev1.ConfigOverlayVersion{
+			Ref: "cov-example", Version: 1, Revision: 1, State: "PUBLISHED",
+		},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["safeEffectiveConfig"] != "" {
+		t.Fatalf("safeEffectiveConfig не материализован: %#v", value)
+	}
+	overlay, ok := value["publishedOverlay"].(map[string]any)
+	if !ok || overlay["content"] != "" {
+		t.Fatalf("пустой published overlay не материализован: %#v", value)
 	}
 }
 

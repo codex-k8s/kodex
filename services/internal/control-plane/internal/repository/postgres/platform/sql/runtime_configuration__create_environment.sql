@@ -11,11 +11,9 @@ WITH inserted_environment AS (
            @non_secret_values, @secret_descriptors, @digest, @created_by::uuid
     FROM inserted_environment
     RETURNING id, environment_set_id
-), updated_environment AS (
-    UPDATE control_plane.runtime_environment_sets environment
-    SET current_version_id = inserted_version.id
-    FROM inserted_version
-    WHERE environment.id = inserted_version.environment_set_id
-    RETURNING environment.ref
 )
-SELECT ref FROM updated_environment;
+SELECT inserted_environment.id,
+       inserted_version.id,
+       inserted_environment.ref
+FROM inserted_environment
+JOIN inserted_version ON inserted_version.environment_set_id = inserted_environment.id;

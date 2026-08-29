@@ -1074,11 +1074,10 @@ func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx
 func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, tx pgx.Tx, scope scope, parentNodeID, projectID string) (bool, error) {
 	var parentRunID, rootRunID, agentID, displayName, role, sessionID, agentRef, workflowVersionID string
 	var attempt int32
-	var humanGateAfter bool
 	err := tx.QueryRow(ctx, queryRuntimeCallbackResolveContinuation, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"parent_node_id":  parentNodeID,
-	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &humanGateAfter)
+	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -1127,7 +1126,7 @@ func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, 
 		"agent_id":          agentID,
 		"turn_id":           turnID,
 		"workflow_step_key": workflowStepKey,
-		"human_gate_after":  humanGateAfter,
+		"human_gate_after":  false,
 		"attempt":           attempt + 1,
 		"input_summary":     continuationTask,
 	}).Scan(&nodeID); err != nil {

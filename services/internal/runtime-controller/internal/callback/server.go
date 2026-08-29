@@ -647,13 +647,20 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 	if err != nil {
 		server.logger.WarnContext(ctx, "control-plane assistant plan request failed",
 			"grpc_code", status.Code(err).String(), "failure_class", controlFailureClass(err))
-		return nil, status.Error(status.Code(err), "propose assistant plan")
+		return nil, assistantPlanControlError(err)
 	}
 	if response.GetPlan().GetRef() == "" || response.GetConversation().GetRef() == "" {
 		return nil, errors.New("propose assistant plan")
 	}
 	return map[string]any{"ok": true, "plan_ref": response.GetPlan().GetRef(), "plan_version": response.GetPlan().GetVersion(), "plan_revision": response.GetPlan().GetRevision(),
 		"conversation_ref": response.GetConversation().GetRef()}, nil
+}
+
+func assistantPlanControlError(err error) error {
+	if status.Code(err) == codes.InvalidArgument {
+		return invalidAssistantPlan("server_validation")
+	}
+	return status.Error(status.Code(err), "propose assistant plan")
 }
 
 func normalizeServerHydratedAssistantOperation(operation map[string]any, planSummary, projectRef, projectName string) (map[string]any, error) {

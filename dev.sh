@@ -137,10 +137,16 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
   if [[ ! -x "$frontend_directory/node_modules/.bin/playwright" ]]; then
     npm --prefix "$frontend_directory" ci
   fi
+  if [[ "$command_name" == e2e ]]; then
+    KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+      "$repository_root/tools/dev/prepare-e2e-oidc-group.sh" --context "$context" \
+      --state-directory "$state_directory"
+  fi
   if ! KODEX_E2E_BASE_URL="https://$public_host" \
     KODEX_E2E_OWNER_USERNAME="$KODEX_LOCAL_OWNER_USERNAME" \
     KODEX_E2E_OWNER_PASSWORD="$KODEX_LOCAL_OWNER_PASSWORD" \
     KODEX_E2E_STORAGE_STATE="$state_directory/e2e/owner.json" \
+    KODEX_E2E_RBAC_GROUP=kodex-e2e-restricted \
     KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
     NODE_EXTRA_CA_CERTS="$state_directory/kodex-local-ca.crt" \
     npm --prefix "$frontend_directory" run test:e2e:local; then
@@ -153,6 +159,7 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
       fail 'E2E state or report already exists for this resource prefix'
     if ! KODEX_E2E_BASE_URL="https://$public_host" \
       KODEX_E2E_STORAGE_STATE="$state_directory/e2e/owner.json" \
+      KODEX_E2E_RBAC_GROUP=kodex-e2e-restricted \
       KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
       KODEX_E2E_RESOURCE_PREFIX="$resource_prefix" \
       KODEX_E2E_RUN_STATE="$run_state" \

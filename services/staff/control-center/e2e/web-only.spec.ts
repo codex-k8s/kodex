@@ -588,7 +588,7 @@ test.describe("web-only fresh installation", () => {
       await expect(page).toHaveURL(/\/environments\/[^/]+$/);
       runtimeEnvironmentRef = routeRef(page, "environments");
       persistRefs();
-      await expect(page.locator("#main-content")).toContainText("E2E_MODE");
+      await expect(page.getByLabel("Имя переменной")).toHaveValue("E2E_MODE");
     }
 
     await gotoWithRetry(
@@ -601,7 +601,7 @@ test.describe("web-only fresh installation", () => {
         new URL(response.url()).pathname ===
           `/api/v1/agents/${coordinatorRef}/runtime-configuration`,
     );
-    await page.getByRole("button", { name: "Runtime", exact: true }).click();
+    await page.getByRole("tab", { name: "Runtime", exact: true }).click();
     expect((await runtimeResponse).status()).toBe(200);
     const runtimePanel = page.locator("#agent-panel-runtime");
     await expect(
@@ -637,14 +637,29 @@ test.describe("web-only fresh installation", () => {
       await policy.selectOption(policyAfter);
       const runtimePublication = page.waitForResponse(
         (response) =>
-          response.request().method() === "POST" &&
+          response.request().method() === "PUT" &&
           new URL(response.url()).pathname ===
             `/api/v1/agents/${coordinatorRef}/runtime-configuration`,
       );
       await runtimePanel
         .getByRole("button", { name: "Опубликовать runtime-конфигурацию" })
         .click();
-      expect((await runtimePublication).status()).toBe(200);
+      const publicationResponse = await runtimePublication;
+      const publicationProblem =
+        publicationResponse.status() === 200
+          ? undefined
+          : ((await publicationResponse.json()) as {
+              code?: string;
+              detail?: string;
+            });
+      expect(
+        publicationResponse.status(),
+        JSON.stringify({
+          ifMatch: publicationResponse.request().headers()["if-match"],
+          code: publicationProblem?.code,
+          detail: publicationProblem?.detail,
+        }),
+      ).toBe(200);
     }
     await expect(policy).toHaveValue(policyAfter);
     await expect(
@@ -753,7 +768,7 @@ test.describe("web-only fresh installation", () => {
         .click();
       const binding = page.waitForResponse(
         (response) =>
-          response.request().method() === "POST" &&
+          response.request().method() === "PUT" &&
           new URL(response.url()).pathname ===
             `/api/v1/agents/${coordinatorRef}/runtime-environment-binding`,
       );
@@ -787,10 +802,13 @@ test.describe("web-only fresh installation", () => {
     expect(readback.configuration.providerPolicy.mode).toBe(policyAfter);
     expect(readback.environment.ref).toBe(runtimeEnvironmentRef);
     expect(readback.environment.currentVersion.revision).toBeGreaterThan(0);
-    expect(readback.publishedOverlay).toMatchObject({
-      content: runtimeOverlay,
-      state: "PUBLISHED",
-    });
+    expect(readback.publishedOverlay.state).toBe("PUBLISHED");
+    expect(readback.publishedOverlay.content).toMatch(
+      /model_reasoning_effort\s*=\s*"high"/,
+    );
+    expect(readback.publishedOverlay.content).toMatch(
+      /persistence\s*=\s*"none"/,
+    );
     expect(readback.safeEffectiveConfig).toContain(
       'model_reasoning_effort = "high"',
     );
@@ -816,8 +834,8 @@ test.describe("web-only fresh installation", () => {
     expect((await initialArtifactsResponse).ok()).toBe(true);
     await expectPageHeading(page, "Файлы и знания");
 
-    const existing = page.locator(".file-row").filter({
-      hasText: uploadedFileName,
+    const existing = page.getByRole("listitem", {
+      name: new RegExp(uploadedFileName),
     });
     if ((await existing.count()) === 0) {
       const uploadButton = page
@@ -843,10 +861,7 @@ test.describe("web-only fresh installation", () => {
       expect((await uploadResponse).status()).toBe(201);
     }
     const artifact = page
-      .locator(".file-row")
-      .filter({
-        hasText: uploadedFileName,
-      })
+      .getByRole("button", { name: new RegExp(uploadedFileName) })
       .first();
     await expect(artifact).toBeVisible();
     await artifact.click();
@@ -855,7 +870,26 @@ test.describe("web-only fresh installation", () => {
     ).toBeVisible();
     const preview = page.getByRole("button", { name: "Открыть", exact: true });
     if ((await preview.count()) > 0) await preview.click();
-    await expect(page.locator(".files-preview pre")).toContainText(content);
+    const previewDialog = page.getByRole("dialog", { name: uploadedFileName });
+    await expect(previewDialog).toBeVisible();
+    await expect(
+      previewDialog.locator(".file-preview-dialog__content pre"),
+    ).toContainText(content);
+
+    const downloadPromise = page.waitForEvent("download");
+    await previewDialog
+      .getByRole("button", { name: "Скачать", exact: true })
+      .click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe(uploadedFileName);
+    const path = await download.path();
+    if (!path) throw new Error("download did not produce a local file");
+    expect(await readFile(path, "utf8")).toBe(content);
+    await previewDialog
+      .locator("button.button")
+      .filter({ hasText: "Закрыть" })
+      .click();
+    await expect(previewDialog).toHaveCount(0);
 
     const binding = page.getByRole("checkbox", {
       name: new RegExp(coordinatorName),
@@ -882,14 +916,6 @@ test.describe("web-only fresh installation", () => {
     );
     expect(uploadedArtifactRef).not.toBe("");
     persistRefs();
-
-    const downloadPromise = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Скачать", exact: true }).click();
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toBe(uploadedFileName);
-    const path = await download.path();
-    if (!path) throw new Error("download did not produce a local file");
-    expect(await readFile(path, "utf8")).toBe(content);
   });
 
   test("workboard сохраняет контекст Проекта, а запуск выбирает файлы и сессию", async ({
@@ -1064,8 +1090,8 @@ test.describe("web-only fresh installation", () => {
       ).padStart(2, "0")}`;
       await dialog.getByLabel("Когда запускать").selectOption("DAILY");
       await dialog.getByLabel("Время запуска").fill(timeOfDay);
-      await dialog.getByLabel("Часовой пояс").fill("Europe/Saratov");
-      await dialog.getByLabel("Задание").fill(automationTask);
+      await dialog.getByLabel("Часовой пояс").selectOption("Europe/Saratov");
+      await dialog.getByLabel("Задача").fill(automationTask);
       await dialog
         .getByRole("button", { name: "Создать", exact: true })
         .click();
@@ -1228,9 +1254,11 @@ test.describe("web-only fresh installation", () => {
     );
 
     await gotoWithRetry(page, `/projects/${projectRef}/files`);
-    const knowledgeArtifact = page.getByRole("button", {
-      name: new RegExp(uploadedFileName),
-    });
+    const knowledgeArtifact = page
+      .getByRole("button", {
+        name: new RegExp(uploadedFileName),
+      })
+      .first();
     await expect(knowledgeArtifact).toBeVisible();
     await knowledgeArtifact.click();
     const binding = page.getByRole("checkbox", {
@@ -1339,24 +1367,12 @@ test.describe("web-only fresh installation", () => {
       await publishAgent(page);
     }
 
-    await gotoWithRetry(
+    await ensureAgentCapability(
       page,
-      `/projects/${projectRef}/agents/${coordinatorRef}`,
+      projectRef,
+      coordinatorRef,
+      /Делегирование/,
     );
-    const delegationCapability = page.getByRole("checkbox", {
-      name: /Делегирование/,
-    });
-    if (!(await delegationCapability.isChecked())) {
-      const capabilityResponse = page.waitForResponse(
-        (response) =>
-          response.request().method() === "POST" &&
-          response.url().includes(`/api/v1/agents/${coordinatorRef}/commands`),
-      );
-      await delegationCapability.check();
-      expect((await capabilityResponse).ok()).toBe(true);
-      await expect(page.getByText("Сохраняем возможность…")).toHaveCount(0);
-    }
-    await expect(delegationCapability).toBeChecked();
 
     if (discoveryMode && workflowRef) {
       await gotoWithRetry(
@@ -1369,7 +1385,7 @@ test.describe("web-only fresh installation", () => {
       const prompt = [
         `В текущем Проекте создай ровно один Процесс с точным названием «${workflowName}».`,
         `Назначение: параллельно оценить лид и подготовить предложение с решением владельца. Координатор — существующий сотрудник «${coordinatorName}».`,
-        `Добавь ровно два параллельных этапа в одной группе: «Оценка лида» выполняет существующий сотрудник «${analystName}» с заданием оценить лид и вернуть структурированный вывод; «Коммерческое предложение» выполняет существующий сотрудник «${writerName}» с заданием подготовить предложение на основе оценки.`,
+        `Добавь ровно два независимых параллельных этапа в одной группе: «Оценка лида» выполняет существующий сотрудник «${analystName}» с заданием оценить исходные данные лида и вернуть структурированный вывод; «Коммерческое предложение» выполняет существующий сотрудник «${writerName}» с заданием подготовить черновик предложения только по исходным данным лида. Ни один параллельный этап не должен ожидать результат другого.`,
         "Для второго этапа требуется решение человека с вариантами APPROVE, REJECT и REQUEST_CHANGES. Максимальная параллельность — 2, timeout Процесса — 7200 секунд.",
         "Не создавай и не меняй сотрудников, не запускай Процесс и не создавай другие объекты.",
       ].join(" ");
@@ -1438,7 +1454,7 @@ test.describe("web-only fresh installation", () => {
       await page
         .getByLabel("Задание")
         .fill(
-          "Квалифицируй лид производственной компании и подготовь предложение. Перед итогом запроси решение владельца.",
+          "Квалифицируй лид производственной компании и подготовь предложение. После завершения этапов и предусмотренного Процессом решения владельца собери итоговый ответ.",
         );
       await page
         .getByRole("button", { name: "Запустить", exact: true })
@@ -1521,12 +1537,19 @@ test.describe("web-only fresh installation", () => {
         { message: `authoritative edges: ${authoritativeEdgeTypes.join(",")}` },
       )
       .toEqual(authoritativeEdgeTypes);
+    await page
+      .getByLabel("Контекст узла")
+      .getByRole("button", { name: "Ход работы" })
+      .click();
+    const activityDrawer = page.getByRole("dialog", { name: "Ход работы" });
+    await expect(activityDrawer).toBeVisible();
+    await activityDrawer
+      .getByRole("combobox", { name: "Контекст узла" })
+      .selectOption("");
     await expect(
-      page
-        .locator(".timeline")
-        .getByText("Результат дочернего ИИ-сотрудника доставлен", {
-          exact: true,
-        }),
+      activityDrawer.getByText("Результат дочернего ИИ-сотрудника доставлен", {
+        exact: true,
+      }),
     ).toHaveCount(2);
 
     const contexts: BrowserContext[] = [];
@@ -1580,7 +1603,7 @@ test.describe("web-only fresh installation", () => {
       await expectRunState(page, /Выполняется|Завершён/);
       await waitForTerminalSuccess(page);
       await assertNoDuplicateGraphNodes(page);
-      await expect(page.locator(".timeline")).toContainText(/решение/i);
+      await expect(activityDrawer).toContainText(/решение/i);
     } finally {
       await page.context().setOffline(false);
       await Promise.all(contexts.map((context) => context.close()));
@@ -1651,7 +1674,8 @@ test.describe("web-only fresh installation", () => {
     await expectPageHeading(page, "Участники и доступ");
     let roleCard = page
       .locator(".role-card")
-      .filter({ hasText: accessRoleName });
+      .filter({ hasText: accessRoleName })
+      .first();
     if ((await roleCard.count()) === 0) {
       await page.getByRole("button", { name: "Создать роль" }).click();
       const dialog = page.getByRole("dialog", {
@@ -1661,13 +1685,21 @@ test.describe("web-only fresh installation", () => {
       await dialog
         .getByLabel("Понятное назначение")
         .fill("Запуск и просмотр одного явно выбранного ИИ-сотрудника.");
-      await dialog
-        .getByRole("checkbox", { name: /Просматривать ИИ-сотрудников/ })
+      const permissions = dialog.getByRole("group", { name: "Полномочия" });
+      await permissions
+        .getByRole("checkbox", {
+          name: /Просматривать ИИ-сотрудников/,
+        })
+        .check();
+      await permissions
+        .getByRole("checkbox", {
+          name: /Запускать ИИ-сотрудников/,
+        })
         .check();
       await dialog
-        .getByRole("checkbox", { name: /Запускать ИИ-сотрудников/ })
+        .getByRole("group", { name: "Допустимые области" })
+        .getByRole("checkbox", { name: /Конкретный ресурс/ })
         .check();
-      await dialog.getByRole("checkbox", { name: /Конкретный ресурс/ }).check();
       await dialog
         .getByLabel("Причина изменения")
         .fill("Проверка enterprise RBAC в локальном E2E.");
@@ -1679,7 +1711,10 @@ test.describe("web-only fresh installation", () => {
       );
       await dialog.getByRole("button", { name: "Создать роль v1" }).click();
       expect((await creation).status()).toBe(201);
-      roleCard = page.locator(".role-card").filter({ hasText: accessRoleName });
+      roleCard = page
+        .locator(".role-card")
+        .filter({ hasText: accessRoleName })
+        .first();
     }
     await expect(roleCard).toContainText("Конкретный ресурс");
     await expect(roleCard).toContainText("Полномочий: 2");
@@ -1687,25 +1722,18 @@ test.describe("web-only fresh installation", () => {
     const setup = await page.evaluate(
       async ({
         exactAgentRef,
+        expectedGroupName,
         expectedRoleName,
         otherAgentRef,
         projectRef,
       }) => {
-        type Subject = {
-          ref: string;
-          kind: "USER" | "OIDC_GROUP" | "SERVICE";
-          displayName: string;
-        };
-        type Candidate = Subject;
-        const [rolesResponse, subjectsResponse, groupsResponse] =
-          await Promise.all([
-            fetch(
-              "/api/v1/administration/access/roles?pageSize=100&includeArchived=false",
-            ),
-            fetch("/api/v1/administration/access/subjects?pageSize=100"),
-            fetch("/api/v1/administration/access/oidc-groups?pageSize=100"),
-          ]);
-        if (!rolesResponse.ok || !subjectsResponse.ok || !groupsResponse.ok)
+        const [rolesResponse, groupsResponse] = await Promise.all([
+          fetch(
+            "/api/v1/administration/access/roles?pageSize=100&includeArchived=false",
+          ),
+          fetch("/api/v1/administration/access/oidc-groups?pageSize=100"),
+        ]);
+        if (!rolesResponse.ok || !groupsResponse.ok)
           throw new Error("RBAC catalog readback failed");
         const roles = (await rolesResponse.json()) as {
           items: Array<{
@@ -1717,19 +1745,28 @@ test.describe("web-only fresh installation", () => {
           (item) => item.currentVersion.name === expectedRoleName,
         );
         if (!role) throw new Error("E2E access role is absent");
-        const subjects = (await subjectsResponse.json()) as {
-          items: Subject[];
-        };
         const groups = (await groupsResponse.json()) as {
-          items: Array<{ ref: string; displayName: string }>;
+          items: Array<{
+            ref: string;
+            displayName: string;
+            memberCount: number;
+            state: string;
+          }>;
         };
-        const candidates: Candidate[] = [
-          ...subjects.items.filter((subject) => subject.kind !== "USER"),
-          ...groups.items.map((group) => ({
-            ...group,
-            kind: "OIDC_GROUP" as const,
-          })),
-        ];
+        const matchingGroups = groups.items.filter(
+          (group) => group.displayName === expectedGroupName,
+        );
+        if (
+          matchingGroups.length !== 1 ||
+          matchingGroups[0]?.state !== "ACTIVE" ||
+          matchingGroups[0].memberCount < 1
+        ) {
+          throw new Error("Ожидаемая активная OIDC-группа не синхронизирована");
+        }
+        const candidate = {
+          ...matchingGroups[0],
+          kind: "OIDC_GROUP" as const,
+        };
         const bindingsResponse = await fetch(
           `/api/v1/administration/access/bindings?pageSize=100&projectRef=${encodeURIComponent(projectRef)}&roleRef=${encodeURIComponent(role.ref)}&includeRevoked=false`,
         );
@@ -1746,14 +1783,9 @@ test.describe("web-only fresh installation", () => {
             binding.scope.resourceKind === "AGENT" &&
             binding.scope.resourceRef === exactAgentRef,
         );
-        const existingCandidate = existing
-          ? candidates.find(
-              (candidate) => candidate.ref === existing.subject.ref,
-            )
-          : undefined;
-        if (existingCandidate) {
+        if (existing?.subject.ref === candidate.ref) {
           return {
-            candidate: existingCandidate,
+            candidate,
             exactAgentRef,
             otherAgentRef,
             projectRef,
@@ -1761,45 +1793,55 @@ test.describe("web-only fresh installation", () => {
             roleVersionRef: role.currentVersion.ref,
           };
         }
-        for (const candidate of candidates) {
-          const response = await fetch(
-            "/api/v1/administration/access/effective-access/query",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                subjectRef: candidate.ref,
-                permissionKeys: ["agent.launch"],
-                target: {
-                  kind: "RESOURCE_INSTANCE",
-                  projectRef,
-                  resourceKind: "AGENT",
-                  resourceRef: exactAgentRef,
-                },
-              }),
+        const csrfPrefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
+        const csrf = document.cookie
+          .split("; ")
+          .find((part) => part.startsWith(csrfPrefix))
+          ?.slice(csrfPrefix.length);
+        if (!csrf) throw new Error("E2E CSRF cookie is absent");
+        const response = await fetch(
+          "/api/v1/administration/access/effective-access/query",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": decodeURIComponent(csrf),
             },
-          );
-          if (!response.ok) continue;
-          const body = (await response.json()) as {
-            items: Array<{ decision: string }>;
-          };
-          if (body.items[0]?.decision === "DENIED") {
-            return {
-              candidate,
-              exactAgentRef,
-              otherAgentRef,
-              projectRef,
-              roleRef: role.ref,
-              roleVersionRef: role.currentVersion.ref,
-            };
-          }
-        }
-        throw new Error(
-          "Нет служебного субъекта или OIDC-группы без исходного agent.launch",
+            body: JSON.stringify({
+              subjectRef: candidate.ref,
+              permissionKeys: ["agent.launch"],
+              target: {
+                kind: "RESOURCE_INSTANCE",
+                projectRef,
+                resourceKind: "AGENT",
+                resourceRef: exactAgentRef,
+              },
+            }),
+          },
         );
+        if (!response.ok) {
+          throw new Error(
+            `Исходное решение OIDC-group RBAC недоступно: ${String(response.status)} ${await response.text()}`,
+          );
+        }
+        const body = (await response.json()) as {
+          items: Array<{ decision: string }>;
+        };
+        if (body.items[0]?.decision !== "DENIED") {
+          throw new Error("OIDC-группа имеет неожиданный исходный доступ");
+        }
+        return {
+          candidate,
+          exactAgentRef,
+          otherAgentRef,
+          projectRef,
+          roleRef: role.ref,
+          roleVersionRef: role.currentVersion.ref,
+        };
       },
       {
         exactAgentRef: coordinatorRef,
+        expectedGroupName: environment.rbacGroup,
         expectedRoleName: accessRoleName,
         otherAgentRef: analystRef,
         projectRef,
@@ -1835,12 +1877,16 @@ test.describe("web-only fresh installation", () => {
       await dialog
         .getByLabel("Тип субъекта")
         .selectOption(setup.candidate.kind);
-      await dialog.getByLabel("Субъект").selectOption(setup.candidate.ref);
+      await dialog
+        .locator(".form-grid select")
+        .nth(1)
+        .selectOption({ index: 1 });
       await dialog.getByLabel("Версия роли").selectOption(setup.roleVersionRef);
-      await dialog.getByLabel("Тип области").selectOption("RESOURCE_INSTANCE");
-      await dialog.getByLabel("Проект").selectOption(projectRef);
-      await dialog.getByLabel("Тип ресурса").selectOption("AGENT");
-      await dialog.getByLabel("ИИ-сотрудник").selectOption(coordinatorRef);
+      const scopeFields = dialog.locator(".scope-editor select");
+      await scopeFields.nth(0).selectOption("RESOURCE_INSTANCE");
+      await scopeFields.nth(1).selectOption(projectRef);
+      await scopeFields.nth(2).selectOption("AGENT");
+      await scopeFields.nth(3).selectOption(coordinatorRef);
       const creation = page.waitForResponse(
         (response) =>
           response.request().method() === "POST" &&
@@ -1860,10 +1906,11 @@ test.describe("web-only fresh installation", () => {
     const form = page.locator(".effective-form");
     await form.getByLabel("Субъект").selectOption(setup.candidate.ref);
     await form.getByLabel("Действие").selectOption("agent.launch");
-    await form.getByLabel("Тип области").selectOption("RESOURCE_INSTANCE");
-    await form.getByLabel("Проект").selectOption(projectRef);
-    await form.getByLabel("Тип ресурса").selectOption("AGENT");
-    await form.getByLabel("ИИ-сотрудник").selectOption(coordinatorRef);
+    const effectiveScopeFields = form.locator(".scope-editor select");
+    await effectiveScopeFields.nth(0).selectOption("RESOURCE_INSTANCE");
+    await effectiveScopeFields.nth(1).selectOption(projectRef);
+    await effectiveScopeFields.nth(2).selectOption("AGENT");
+    await effectiveScopeFields.nth(3).selectOption(coordinatorRef);
     const allowed = page.waitForResponse(
       (response) =>
         response.request().method() === "POST" &&
@@ -1875,7 +1922,7 @@ test.describe("web-only fresh installation", () => {
     await expect(result).toContainText("Разрешено");
     await expect(result).toContainText("Область привязки совпадает");
 
-    await form.getByLabel("ИИ-сотрудник").selectOption(analystRef);
+    await effectiveScopeFields.nth(3).selectOption(analystRef);
     const denied = page.waitForResponse(
       (response) =>
         response.request().method() === "POST" &&

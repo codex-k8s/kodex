@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 
 import AccessScopeEditor from "@/features/access/components/AccessScopeEditor.vue";
 import {
@@ -7,6 +8,10 @@ import {
   toAccessScope,
   validScope,
 } from "@/features/access/model";
+import {
+  accessScopeKind,
+  permissionMessage,
+} from "@/features/access/presentation";
 import type {
   AccessRole,
   AccessSubject,
@@ -70,6 +75,10 @@ const emit = defineEmits<{
   "load-agents": [projectRef: string];
   clear: [];
 }>();
+const i18n = useI18n();
+const permissionMessages = computed(() =>
+  i18n.tm("access.permissionsRegistry"),
+);
 
 const mode = ref<Mode>("EXPLAIN");
 const form = reactive({
@@ -198,7 +207,9 @@ watch(mode, () => emit("clear"));
               :key="permission.key"
               :value="permission.key"
             >
-              {{ $t(`access.permissionsRegistry.${permission.key}.name`) }}
+              {{
+                permissionMessage(permissionMessages, permission.key, "name")
+              }}
             </option>
           </select>
         </label>
@@ -286,8 +297,8 @@ watch(mode, () => emit("clear"));
               :key="`${step.code}-${index}`"
             >
               <strong>{{ $t(`access.explanation.${step.code}`) }}</strong>
-              <small v-if="step.scope">{{
-                $t(`access.scope.values.${step.scope.kind}`)
+              <small v-if="accessScopeKind(step.scope)">{{
+                $t(`access.scope.values.${accessScopeKind(step.scope)}`)
               }}</small>
             </li>
           </ol>

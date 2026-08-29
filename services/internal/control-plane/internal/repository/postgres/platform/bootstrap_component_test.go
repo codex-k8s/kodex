@@ -10,6 +10,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -186,6 +187,90 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("enterprise access restricts exact agent and project", func(t *testing.T) {
 		testEnterpriseAccessRestriction(t, ctx, repository)
 	})
+	t.Run("runtime environment create activates authoritative readback", func(t *testing.T) {
+		testRuntimeEnvironmentCreate(t, ctx, repository)
+	})
+	t.Run("runtime configuration publish validates canonical provider accounts", func(t *testing.T) {
+		testRuntimeConfigurationPublish(t, ctx, repository)
+	})
+}
+
+func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Runtime configuration owner", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
+	}, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct runtime configuration service: %v", err)
+	}
+	createdProject, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-configuration-project-create"},
+		Payload:  command.ProjectInput{Name: "Runtime configuration project", Language: "en"}})
+	if err != nil || createdProject.Project == nil {
+		t.Fatalf("create runtime configuration project: project=%#v err=%v", createdProject.Project, err)
+	}
+	agent := createLifecycleAgent(t, ctx, service, owner, createdProject.Project.Ref,
+		"runtime-configuration-agent-create", "Runtime configuration specialist")
+	current, err := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
+	if err != nil {
+		t.Fatalf("read initial runtime configuration: %v", err)
+	}
+	expectedVersion := current.AgentVersion
+	result, err := service.Execute(ctx, command.Command{Kind: command.PublishAgentRuntimeConfig, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-configuration-publish", ExpectedVersion: &expectedVersion},
+		Payload: command.AgentRuntimeConfigurationInput{
+			AgentRef: agent.Ref, RuntimeProfileRef: current.Configuration.RuntimeProfileRef,
+			Model: current.Configuration.Model, ProviderPolicyMode: current.Configuration.ProviderPolicy.Mode,
+			ProviderAccounts: current.Configuration.ProviderPolicy.AccountCandidates,
+		}})
+	if err != nil || result.RuntimeConfiguration == nil {
+		t.Fatalf("publish runtime configuration: configuration=%#v err=%v", result.RuntimeConfiguration, err)
+	}
+	if result.RuntimeConfiguration.Configuration.Version != current.Configuration.Version+1 ||
+		result.RuntimeConfiguration.AgentVersion != current.AgentVersion+1 ||
+		result.RuntimeConfiguration.Configuration.Provider != current.Configuration.Provider {
+		t.Fatalf("published runtime configuration readback mismatch: before=%#v after=%#v",
+			current, *result.RuntimeConfiguration)
+	}
+}
+
+func testRuntimeEnvironmentCreate(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Runtime environment owner", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
+	}, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct runtime environment service: %v", err)
+	}
+	createdProject, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-project-create"},
+		Payload:  command.ProjectInput{Name: "Runtime environment project", Language: "en"}})
+	if err != nil || createdProject.Project == nil {
+		t.Fatalf("create runtime environment project: project=%#v err=%v", createdProject.Project, err)
+	}
+	created, err := service.Execute(ctx, command.Command{Kind: command.CreateRuntimeEnvironment, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-create"}, Payload: command.RuntimeEnvironmentInput{
+			ProjectRef: createdProject.Project.Ref, Name: "Component environment", Description: "Runtime environment component readback",
+			Values: []entity.RuntimeEnvironmentValue{{Name: "E2E_MODE", Value: "component"}},
+		}})
+	if err != nil || created.RuntimeEnvironment == nil {
+		t.Fatalf("create runtime environment: environment=%#v err=%v", created.RuntimeEnvironment, err)
+	}
+	environment, err := service.GetRuntimeEnvironment(ctx, owner, created.RuntimeEnvironment.Ref)
+	if err != nil || environment.CurrentVersion.Revision != 1 || len(environment.CurrentVersion.Values) != 1 ||
+		environment.CurrentVersion.Values[0].Name != "E2E_MODE" || environment.CurrentVersion.Values[0].Value != "component" {
+		t.Fatalf("read created runtime environment: environment=%#v err=%v", environment, err)
+	}
+	versions, _, err := service.ListRuntimeEnvironmentVersions(ctx, owner, query.Filter{
+		ResourceRef: environment.Ref, Page: query.Page{Size: 10},
+	})
+	if err != nil || len(versions) != 1 || versions[0].Ref != environment.CurrentVersion.Ref {
+		t.Fatalf("list created runtime environment versions: versions=%#v err=%v", versions, err)
+	}
 }
 
 func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, repository *Repository) {
@@ -195,6 +280,42 @@ func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, reposito
 		ExternalDisplayName: "Enterprise owner", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
 	}
 	owner := resolvedTestPrincipal(t, ctx, repository, ownerInput, "control-api-gateway")
+	groupedOwner := ownerInput
+	groupedOwner.ExternalIssuer = "https://identity.example.test/realms/kodex"
+	groupedOwner.ExternalSessionRevision = 2
+	groupedOwner.ExternalGroups = []string{"component-restricted-operators"}
+	const concurrentResolutions = 8
+	start := make(chan struct{})
+	errorsByAttempt := make(chan error, concurrentResolutions)
+	var resolutions sync.WaitGroup
+	for range concurrentResolutions {
+		resolutions.Add(1)
+		go func() {
+			defer resolutions.Done()
+			<-start
+			_, resolveErr := repository.ResolveProofAuthority(ctx, groupedOwner)
+			errorsByAttempt <- resolveErr
+		}()
+	}
+	close(start)
+	resolutions.Wait()
+	close(errorsByAttempt)
+	for resolveErr := range errorsByAttempt {
+		if resolveErr != nil {
+			t.Fatalf("concurrent OIDC group synchronization failed: %v", resolveErr)
+		}
+	}
+	var synchronizedMemberships int
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM control_plane.oidc_group_memberships membership
+		JOIN control_plane.oidc_groups oidc_group ON oidc_group.id = membership.group_id
+		JOIN control_plane.subjects subject ON subject.id = membership.subject_id
+		WHERE subject.id = $1::uuid AND oidc_group.display_name = $2
+		  AND membership.subject_session_revision = $3
+	`, owner.ActorID, groupedOwner.ExternalGroups[0], groupedOwner.ExternalSessionRevision).Scan(&synchronizedMemberships); err != nil || synchronizedMemberships != 1 {
+		t.Fatalf("concurrent OIDC group synchronization readback: memberships=%d err=%v", synchronizedMemberships, err)
+	}
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatalf("construct enterprise access service: %v", err)
@@ -451,8 +572,8 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 		}
 		return tx.Commit(ctx)
 	}
-	const upgradedRevision = "system-assistant-core-v2"
-	const upgradedPrompt = "Platform-owned system assistant core prompt revision two."
+	const upgradedRevision = "system-assistant-core-v3"
+	const upgradedPrompt = "Platform-owned system assistant core prompt revision three."
 	if err := upgrade(upgradedRevision, upgradedPrompt); err != nil {
 		t.Fatalf("upgrade core prompt: %v", err)
 	}
@@ -1817,7 +1938,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		Inputs: []entity.WorkflowInputField{{Key: "campaign", Label: "Campaign", Type: "TEXT", Required: true}},
 		Steps: []entity.WorkflowStep{
 			{Key: "research", Position: 1, Name: "Campaign research", AgentRef: firstChild.Ref, Instructions: "Research the bounded campaign context.", TimeoutSeconds: 900, ExpectedResult: "Research notes"},
-			{Key: "editing", Position: 2, Name: "Campaign editing", AgentRef: secondChild.Ref, Instructions: "Prepare the bounded campaign copy.", TimeoutSeconds: 900, ExpectedResult: "Edited copy"},
+			{Key: "editing", Position: 2, Name: "Campaign editing", AgentRef: secondChild.Ref, Instructions: "Prepare the bounded campaign copy.", TimeoutSeconds: 900, ExpectedResult: "Edited copy", HumanGateAfter: true, GateDecisions: []string{"APPROVE", "REJECT", "REQUEST_CHANGES"}},
 		},
 	}
 	createdWorkflow, err := service.Execute(ctx, command.Command{Kind: command.CreateWorkflow, Principal: owner,
@@ -1915,11 +2036,19 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	if len(childSessions) != 2 {
 		t.Fatalf("parallel children did not receive distinct sessions: %#v", childSessions)
 	}
+	coordinatorCompleted := completeClaimedExecution(t, ctx, service, worker, coordinatorLease, "delegation-coordinator", false)
+	if coordinatorCompleted.Run == nil || coordinatorCompleted.Run.State != "RUNNING" || coordinatorCompleted.Graph == nil {
+		t.Fatalf("coordinator completion before callbacks changed the run incorrectly: run=%#v graph=%#v", coordinatorCompleted.Run, coordinatorCompleted.Graph)
+	}
 	for index, lease := range claimedChildren.RuntimeItems {
 		child := completeClaimedExecution(t, ctx, service, worker, lease, "delegation-child-"+leftPad(index+1, 2), false)
 		if child.Run == nil || child.Run.Usage != turnUsageFixture() {
 			t.Fatalf("child completion %d usage = %#v", index+1, child.Run)
 		}
+	}
+	waitingForOwner, err := service.GetRun(ctx, owner, launched.Run.Ref)
+	if err != nil || waitingForOwner.State != "WAITING_HUMAN" || len(waitingForOwner.GateRefs) != 1 {
+		t.Fatalf("human-gated delegated step did not open exactly one owner gate: run=%#v err=%v", waitingForOwner, err)
 	}
 	for index, lease := range claimedChildren.RuntimeItems {
 		replayed := completeClaimedExecution(t, ctx, service, worker, lease, "delegation-child-"+leftPad(index+1, 2), false)
@@ -1927,9 +2056,13 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 			t.Fatalf("replay child completion %d lost authoritative result: %#v", index+1, replayed)
 		}
 	}
-	coordinatorCompleted := completeClaimedExecution(t, ctx, service, worker, coordinatorLease, "delegation-coordinator", false)
-	if coordinatorCompleted.Run == nil || coordinatorCompleted.Run.State != "RUNNING" || coordinatorCompleted.Graph == nil {
-		t.Fatalf("coordinator completion did not queue callback continuation: run=%#v graph=%#v", coordinatorCompleted.Run, coordinatorCompleted.Graph)
+	gateVersion := int64(1)
+	approved, err := service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-gate-approve", ExpectedVersion: &gateVersion},
+		Payload:  command.GateResolutionInput{GateRef: waitingForOwner.GateRefs[0], Decision: "APPROVE", Comment: "Campaign proposal approved"},
+	})
+	if err != nil || approved.Run == nil || approved.Run.State != "RUNNING" {
+		t.Fatalf("approve delegated workflow gate: run=%#v err=%v", approved.Run, err)
 	}
 	continuationClaim, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "delegation-continuation-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
@@ -1960,7 +2093,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("completed workflow steps remained delegatable: %#v", targets)
 	}
 	completed := completeClaimedExecution(t, ctx, service, worker, continuationLease, "delegation-continuation", false)
-	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || completed.Graph == nil || len(completed.Graph.Nodes) < 5 || graphNodeState(completed.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
+	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || len(completed.Run.GateRefs) != 1 || completed.Graph == nil || len(completed.Graph.Nodes) < 6 || graphNodeState(completed.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
 		t.Fatalf("complete delegation root after callback continuation: run=%#v graph=%#v", completed.Run, completed.Graph)
 	}
 	wantUsage := entity.TokenUsage{

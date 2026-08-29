@@ -490,28 +490,36 @@ onBeforeUnmount(clearPreview);
           </section>
 
           <div v-else-if="viewMode === 'grid'" class="files-grid" role="list">
-            <button
+            <div
               v-for="artifact in filteredArtifacts"
               :key="artifact.ref"
-              class="file-tile"
-              :class="{ 'file-tile--selected': selectedRef === artifact.ref }"
-              type="button"
+              class="file-collection-item"
               role="listitem"
-              @click="selectedRef = artifact.ref"
-              @dblclick="openPreview(artifact)"
             >
-              <span class="file-tile__preview">
-                <FileTypeIcon :artifact="artifact" large />
-              </span>
-              <strong :title="artifact.fileName">{{
-                artifact.fileName
-              }}</strong>
-              <span class="file-tile__meta">
-                <span class="mono">{{ formatBytes(artifact.sizeBytes) }}</span>
-                <span class="mono">v{{ artifact.revision }}</span>
-              </span>
-              <StatusBadge :state="artifact.scanState" />
-            </button>
+              <button
+                class="file-tile"
+                :class="{
+                  'file-tile--selected': selectedRef === artifact.ref,
+                }"
+                type="button"
+                @click="selectedRef = artifact.ref"
+                @dblclick="openPreview(artifact)"
+              >
+                <span class="file-tile__preview">
+                  <FileTypeIcon :artifact="artifact" large />
+                </span>
+                <strong :title="artifact.fileName">{{
+                  artifact.fileName
+                }}</strong>
+                <span class="file-tile__meta">
+                  <span class="mono">{{
+                    formatBytes(artifact.sizeBytes)
+                  }}</span>
+                  <span class="mono">v{{ artifact.revision }}</span>
+                </span>
+                <StatusBadge :state="artifact.scanState" />
+              </button>
+            </div>
           </div>
 
           <div v-else class="files-list" role="list">
@@ -522,39 +530,43 @@ onBeforeUnmount(clearPreview);
               <span>{{ $t("common.status") }}</span>
               <span></span>
             </div>
-            <button
+            <div
               v-for="artifact in filteredArtifacts"
               :key="artifact.ref"
-              class="file-list-row"
-              :class="{
-                'file-list-row--selected': selectedRef === artifact.ref,
-              }"
-              type="button"
+              class="file-collection-item"
               role="listitem"
-              @click="selectedRef = artifact.ref"
-              @dblclick="openPreview(artifact)"
             >
-              <span class="file-list-row__identity">
-                <FileTypeIcon :artifact="artifact" />
-                <span>
-                  <strong :title="artifact.fileName">{{
-                    artifact.fileName
-                  }}</strong>
-                  <small>
-                    {{ formatBytes(artifact.sizeBytes) }} ·
-                    {{ sourceLabel(artifact.source) }}
-                  </small>
+              <button
+                class="file-list-row"
+                :class="{
+                  'file-list-row--selected': selectedRef === artifact.ref,
+                }"
+                type="button"
+                @click="selectedRef = artifact.ref"
+                @dblclick="openPreview(artifact)"
+              >
+                <span class="file-list-row__identity">
+                  <FileTypeIcon :artifact="artifact" />
+                  <span>
+                    <strong :title="artifact.fileName">{{
+                      artifact.fileName
+                    }}</strong>
+                    <small>
+                      {{ formatBytes(artifact.sizeBytes) }} ·
+                      {{ sourceLabel(artifact.source) }}
+                    </small>
+                  </span>
                 </span>
-              </span>
-              <span class="file-list-row__binding">
-                {{ bindingNames(artifact) || $t("files.notBound") }}
-              </span>
-              <span class="mono">v{{ artifact.revision }}</span>
-              <StatusBadge :state="artifact.scanState" />
-              <span class="file-list-row__date">{{
-                formatDate(artifact.createdAt)
-              }}</span>
-            </button>
+                <span class="file-list-row__binding">
+                  {{ bindingNames(artifact) || $t("files.notBound") }}
+                </span>
+                <span class="mono">v{{ artifact.revision }}</span>
+                <StatusBadge :state="artifact.scanState" />
+                <span class="file-list-row__date">{{
+                  formatDate(artifact.createdAt)
+                }}</span>
+              </button>
+            </div>
           </div>
 
           <div
@@ -780,6 +792,12 @@ onBeforeUnmount(clearPreview);
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 12px;
   padding: 14px;
+}
+.file-collection-item {
+  min-width: 0;
+}
+.file-collection-item > button {
+  width: 100%;
 }
 .file-tile {
   display: grid;

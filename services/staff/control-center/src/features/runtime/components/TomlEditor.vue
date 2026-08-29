@@ -3,12 +3,12 @@ import { computed } from "vue";
 
 const props = withDefaults(
   defineProps<{
-    modelValue: string;
+    modelValue?: string;
     label: string;
     readonly?: boolean;
     invalidLines?: number[];
   }>(),
-  { readonly: false, invalidLines: () => [] },
+  { modelValue: "", readonly: false, invalidLines: () => [] },
 );
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 

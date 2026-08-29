@@ -21,6 +21,12 @@ var (
 	queryRuntimeConfigurationPublish string
 	//go:embed sql/runtime_configuration__create_overlay_draft.sql
 	queryRuntimeConfigurationCreateOverlayDraft string
+	//go:embed sql/runtime_configuration__supersede_mutable_overlays.sql
+	queryRuntimeConfigurationSupersedeMutableOverlays string
+	//go:embed sql/runtime_configuration__supersede_published_overlay.sql
+	queryRuntimeConfigurationSupersedePublishedOverlay string
+	//go:embed sql/runtime_configuration__supersede_overlay_draft.sql
+	queryRuntimeConfigurationSupersedeOverlayDraft string
 	//go:embed sql/runtime_configuration__get_overlay_draft.sql
 	queryRuntimeConfigurationGetOverlayDraft string
 	//go:embed sql/runtime_configuration__validate_overlay.sql

@@ -5,10 +5,6 @@ WITH source AS (
     WHERE overlay_version.agent_id = @agent_id::uuid
       AND overlay_version.ref = @source_ref
       AND overlay_version.state IN ('PUBLISHED', 'SUPERSEDED')
-), superseded_published AS (
-    UPDATE control_plane.agent_config_overlay_versions published
-    SET state = 'SUPERSEDED'
-    WHERE published.agent_id = @agent_id::uuid AND published.state = 'PUBLISHED'
 ), inserted AS (
     INSERT INTO control_plane.agent_config_overlay_versions
         (ref, organization_id, agent_id, version_number, parent_version_id, state, content, digest,
@@ -22,7 +18,6 @@ WITH source AS (
 ), updated_agent AS (
     UPDATE control_plane.agents agent
     SET current_config_overlay_id = inserted.id,
-        version = agent.version + 1,
         updated_at = clock_timestamp()
     FROM inserted
     WHERE agent.id = @agent_id::uuid

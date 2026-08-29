@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
+import { useI18n } from "vue-i18n";
 
 import { accessScopeKinds, roleInput } from "@/features/access/model";
+import { permissionMessage } from "@/features/access/presentation";
 import type {
   AccessRole,
   AccessRoleInput,
@@ -25,6 +27,10 @@ const emit = defineEmits<{
   close: [];
   save: [input: AccessRoleInput];
 }>();
+const i18n = useI18n();
+const permissionMessages = computed(() =>
+  i18n.tm("access.permissionsRegistry"),
+);
 
 const form = reactive({
   name: "",
@@ -141,10 +147,14 @@ watch(() => props.role, reset, { immediate: true });
             />
             <span>
               <strong>{{
-                $t(`access.permissionsRegistry.${permission.key}.name`)
+                permissionMessage(permissionMessages, permission.key, "name")
               }}</strong>
               <small>{{
-                $t(`access.permissionsRegistry.${permission.key}.description`)
+                permissionMessage(
+                  permissionMessages,
+                  permission.key,
+                  "description",
+                )
               }}</small>
             </span>
             <span

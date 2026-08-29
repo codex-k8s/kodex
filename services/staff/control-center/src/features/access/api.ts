@@ -40,7 +40,7 @@ import type {
   SimulateAccessInput,
   SimulateAccessResult,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate, type MutationHeaders } from "@/shared/api/mutation";
+import { csrfToken, mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
 
 function mutationHeaders(headers: MutationHeaders): {
@@ -287,21 +287,40 @@ export async function fetchEffectiveAccess(
   input: EffectiveAccessQuery,
 ): Promise<EffectiveAccessPage> {
   return (
-    await unwrap(queryEffectiveAccess({ body: input, signal: requestSignal() }))
+    await unwrap(
+      queryEffectiveAccess({
+        body: input,
+        headers: { "X-CSRF-Token": csrfToken() },
+        signal: requestSignal(),
+      }),
+    )
   ).data;
 }
 
 export async function fetchAccessExplanation(
   input: ExplainAccessInput,
 ): Promise<ExplainAccessResult> {
-  return (await unwrap(explainAccess({ body: input, signal: requestSignal() })))
-    .data;
+  return (
+    await unwrap(
+      explainAccess({
+        body: input,
+        headers: { "X-CSRF-Token": csrfToken() },
+        signal: requestSignal(),
+      }),
+    )
+  ).data;
 }
 
 export async function fetchAccessSimulation(
   input: SimulateAccessInput,
 ): Promise<SimulateAccessResult> {
   return (
-    await unwrap(simulateAccess({ body: input, signal: requestSignal() }))
+    await unwrap(
+      simulateAccess({
+        body: input,
+        headers: { "X-CSRF-Token": csrfToken() },
+        signal: requestSignal(),
+      }),
+    )
   ).data;
 }

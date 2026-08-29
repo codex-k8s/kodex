@@ -81,6 +81,10 @@ func TestEvaluateAppliesBoundedWindowAndOIDCGroup(t *testing.T) {
 	if decision := Evaluate(subject, "agent.launch", target, "", []entity.AccessBinding{binding}, now); !decision.Allowed || decision.Explanation[0].Code != "OIDC_GROUP_BINDING" {
 		t.Fatalf("active group binding was not applied: %#v", decision)
 	}
+	directGroup := entity.AccessSubject{Ref: "grp_operators", Kind: "OIDC_GROUP", Active: true}
+	if decision := Evaluate(directGroup, "agent.launch", target, "", []entity.AccessBinding{binding}, now); !decision.Allowed || decision.Explanation[0].Code != "OIDC_GROUP_BINDING" {
+		t.Fatalf("direct group access explanation did not apply its binding: %#v", decision)
+	}
 	if decision := Evaluate(subject, "agent.launch", target, "", []entity.AccessBinding{binding}, until); decision.Allowed {
 		t.Fatalf("expired group binding was applied: %#v", decision)
 	}
