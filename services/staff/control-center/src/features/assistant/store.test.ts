@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   AssistantContextDescriptor,
@@ -10,10 +10,12 @@ import type {
 const createConversationMock = vi.hoisted(() => vi.fn());
 const appendTurnMock = vi.hoisted(() => vi.fn());
 const applyPlanDraftMock = vi.hoisted(() => vi.fn());
+const readAssistantMock = vi.hoisted(() => vi.fn());
+const readConversationsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/assistant/api", () => ({
-  readAssistant: vi.fn(),
-  readConversations: vi.fn(),
+  readAssistant: readAssistantMock,
+  readConversations: readConversationsMock,
   createConversation: createConversationMock,
   appendTurn: appendTurnMock,
   renameConversation: vi.fn(),
@@ -91,29 +93,37 @@ function conversation(value: AssistantPlan = plan()): AssistantConversation {
   };
 }
 
+function userTurn(state: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED") {
+  return {
+    ref: "trn_user",
+    sequence: 2,
+    role: "USER" as const,
+    content: "Создай сотрудника",
+    state,
+    createdAt: "2026-08-28T00:01:00Z",
+  };
+}
+
 describe("assistant workspace store", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     setActivePinia(createPinia());
     createConversationMock.mockReset();
     appendTurnMock.mockReset();
     applyPlanDraftMock.mockReset();
+    readAssistantMock.mockReset();
+    readConversationsMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("создаёт server-context conversation перед первым сообщением", async () => {
     createConversationMock.mockResolvedValue(conversation());
     appendTurnMock.mockResolvedValue({
       ...conversation(),
-      turns: [
-        ...conversation().turns,
-        {
-          ref: "trn_user",
-          sequence: 2,
-          role: "USER",
-          content: "Создай сотрудника",
-          state: "COMPLETED",
-          createdAt: "2026-08-28T00:01:00Z",
-        },
-      ],
+      turns: [...conversation().turns, userTurn("QUEUED")],
     });
     const store = useAssistantStore();
     store.setContext(context, "prj_sales");
@@ -126,6 +136,57 @@ describe("assistant workspace store", () => {
       "Создай сотрудника",
     );
     expect(store.selectedConversation?.turns).toHaveLength(2);
+  });
+
+  it("подхватывает terminal ответ без перезагрузки страницы", async () => {
+    const initial = conversation();
+    const queued = {
+      ...initial,
+      version: 3,
+      turns: [...initial.turns, userTurn("QUEUED")],
+    };
+    const running = {
+      ...queued,
+      version: 4,
+      turns: [...initial.turns, userTurn("RUNNING")],
+    };
+    const completed = {
+      ...queued,
+      version: 5,
+      turns: [
+        ...initial.turns,
+        userTurn("COMPLETED"),
+        {
+          ref: "trn_result",
+          sequence: 3,
+          role: "ASSISTANT" as const,
+          content: "План готов",
+          state: "COMPLETED" as const,
+          plan: plan(),
+          createdAt: "2026-08-28T00:02:00Z",
+        },
+      ],
+    };
+    appendTurnMock.mockResolvedValue(queued);
+    readConversationsMock
+      .mockResolvedValueOnce([{ ...running, version: 2 }])
+      .mockResolvedValueOnce([running])
+      .mockResolvedValueOnce([completed]);
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.conversations = [initial];
+    store.selectedRef = initial.ref;
+
+    await store.send("Создай сотрудника");
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(store.selectedConversation?.version).toBe(3);
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(readConversationsMock).toHaveBeenCalledTimes(3);
+    expect(store.selectedConversation?.version).toBe(5);
+    expect(store.selectedConversation?.turns.at(-1)?.content).toBe(
+      "План готов",
+    );
   });
 
   it("сохраняет conflict receipt и авторитетный STALE plan без частичного успеха", async () => {

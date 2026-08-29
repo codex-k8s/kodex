@@ -19,15 +19,25 @@ import type {
   AssistantPlan,
   AssistantPlanOperationInput,
   AssistantPlanReceipt,
+  AssistantTurn,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+
+const activeTurnStates = new Set<AssistantTurn["state"]>(["QUEUED", "RUNNING"]);
+const conversationPollIntervalMs = 1_000;
+const conversationPollAttempts = 15 * 60;
+
+function delay(durationMs: number): Promise<void> {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, durationMs));
+}
 
 function mergeConversation(
   previous: AssistantConversation | undefined,
   incoming: AssistantConversation,
 ): AssistantConversation {
   if (!previous) return incoming;
+  if (incoming.version < previous.version) return previous;
   const turns = new Map(previous.turns.map((turn) => [turn.ref, turn]));
   for (const turn of incoming.turns) turns.set(turn.ref, turn);
   return {
@@ -47,6 +57,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   const problem = ref<AppProblem>();
   const receipt = ref<AssistantPlanReceipt>();
   let generation = 0;
+  const conversationPollGenerations = new Map<string, number>();
 
   const selectedConversation = computed(() =>
     conversations.value.find((item) => item.ref === selectedRef.value),
@@ -87,7 +98,15 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       ]);
       if (current !== generation) return;
       assistant.value = assistantValue;
-      conversations.value = conversationValues;
+      const previousByRef = new Map(
+        conversations.value.map((conversation) => [
+          conversation.ref,
+          conversation,
+        ]),
+      );
+      conversations.value = conversationValues.map((conversation) =>
+        mergeConversation(previousByRef.get(conversation.ref), conversation),
+      );
       selectMatchingConversation();
     } catch (error) {
       if (current === generation) problem.value = asProblem(error);
@@ -123,7 +142,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     }
   }
 
-  function upsertConversation(value: AssistantConversation): void {
+  function upsertConversation(
+    value: AssistantConversation,
+    select = true,
+  ): AssistantConversation {
     const index = conversations.value.findIndex(
       (item) => item.ref === value.ref,
     );
@@ -133,7 +155,60 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     );
     if (index >= 0) conversations.value[index] = merged;
     else conversations.value.push(merged);
-    selectedRef.value = merged.ref;
+    if (select) selectedRef.value = merged.ref;
+    return merged;
+  }
+
+  async function pollConversationUntilSettled(
+    conversationRef: string,
+    submittedTurn: AssistantTurn,
+    sourceProjectRef?: string,
+  ): Promise<void> {
+    const pollGeneration =
+      (conversationPollGenerations.get(conversationRef) ?? 0) + 1;
+    conversationPollGenerations.set(conversationRef, pollGeneration);
+
+    for (let attempt = 0; attempt < conversationPollAttempts; attempt += 1) {
+      await delay(conversationPollIntervalMs);
+      if (
+        conversationPollGenerations.get(conversationRef) !== pollGeneration ||
+        projectRef.value !== sourceProjectRef
+      )
+        return;
+
+      let incoming: AssistantConversation | undefined;
+      try {
+        incoming = (await readConversations(sourceProjectRef)).find(
+          (conversation) => conversation.ref === conversationRef,
+        );
+      } catch {
+        continue;
+      }
+      if (
+        !incoming ||
+        conversationPollGenerations.get(conversationRef) !== pollGeneration ||
+        projectRef.value !== sourceProjectRef
+      )
+        continue;
+
+      const merged = upsertConversation(incoming, false);
+      const submitted = merged.turns.find(
+        (turn) => turn.ref === submittedTurn.ref,
+      );
+      if (submitted?.state === "FAILED") break;
+      if (
+        submitted?.state === "COMPLETED" &&
+        merged.turns.some(
+          (turn) =>
+            turn.sequence > submittedTurn.sequence &&
+            !activeTurnStates.has(turn.state),
+        )
+      )
+        break;
+    }
+
+    if (conversationPollGenerations.get(conversationRef) === pollGeneration)
+      conversationPollGenerations.delete(conversationRef);
   }
 
   function replacePlan(value: AssistantPlan): void {
@@ -166,6 +241,13 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   async function send(content: string): Promise<void> {
     const normalized = content.trim();
     if (!normalized) return;
+    let submitted:
+      | {
+          conversationRef: string;
+          projectRef?: string;
+          turn: AssistantTurn;
+        }
+      | undefined;
     await runMutation(async () => {
       let conversation = selectedConversation.value;
       if (!conversation) {
@@ -176,8 +258,31 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         );
         upsertConversation(conversation);
       }
-      upsertConversation(await appendTurn(conversation.ref, normalized));
+      const previousSequence = Math.max(
+        0,
+        ...conversation.turns.map((turn) => turn.sequence),
+      );
+      const appended = await appendTurn(conversation.ref, normalized);
+      upsertConversation(appended);
+      const turn = [...appended.turns]
+        .filter(
+          (candidate) =>
+            candidate.role === "USER" && candidate.sequence > previousSequence,
+        )
+        .sort((left, right) => right.sequence - left.sequence)[0];
+      if (turn)
+        submitted = {
+          conversationRef: appended.ref,
+          projectRef: projectRef.value,
+          turn,
+        };
     });
+    if (submitted)
+      void pollConversationUntilSettled(
+        submitted.conversationRef,
+        submitted.turn,
+        submitted.projectRef,
+      );
   }
 
   async function saveDraft(
