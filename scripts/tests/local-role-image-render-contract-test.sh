@@ -103,6 +103,14 @@ policy_json=$(yq -o=json -I=0 '
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   (first(.[] | select(.kind == "ConfigMap" and
     .metadata.name == "kodex-image-admission-policy")) | .data) as $policy |
+  all(.[] | select(.kind == "Deployment" or .kind == "StatefulSet" or
+      .kind == "Job");
+    .spec.template.metadata.annotations[
+      "kodex.dev/runtime-admission-policy-sha256"] == $policy.policySHA256 and
+    all(((.spec.template.spec.initContainers // []) +
+        (.spec.template.spec.containers // []))[];
+      all((.env // [])[];
+        .valueFrom.configMapKeyRef.name != "kodex-image-admission-policy"))) and
   any(.[ ];
     .kind == "Deployment" and .metadata.name == "runtime-controller" and
     .spec.template.metadata.annotations["kodex.dev/controller-image"] ==

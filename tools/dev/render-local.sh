@@ -368,36 +368,6 @@ ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
     .data.roleRuntimeContractRevision = "1" |
     .data.roleRuntimeContractSHA256 = strenv(SOURCE_DIGEST)
   ) |
-  # The local profile replaces an immutable ConfigMap under the same name.
-  # Materialize the exact values into the controller Pod template so kubelet
-  # cannot start it from a stale ConfigMap cache after that replacement.
-  with(select(.kind == "Deployment" and .metadata.name == "runtime-controller");
-    .spec.template.metadata.annotations."kodex.dev/runtime-admission-policy-sha256" =
-      strenv(SOURCE_DIGEST) |
-    with(.spec.template.spec.containers[] | select(.name == "runtime-controller");
-      (.env[] | select(.name ==
-        "RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY")) = {
-          "name":"RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY",
-          "value":(strenv(PROMOTED_PULL_HOST) + "/kodex/roles")
-        } |
-      (.env[] | select(.name ==
-        "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE")) = {
-          "name":"RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE",
-          "value":(strenv(PROMOTED_PULL_HOST) + "/kodex/agent-runner@" +
-            strenv(RUNNER_DIGEST))
-        } |
-      (.env[] | select(.name ==
-        "RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION")) = {
-          "name":"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION",
-          "value":"1"
-        } |
-      (.env[] | select(.name ==
-        "RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256")) = {
-          "name":"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256",
-          "value":strenv(SOURCE_DIGEST)
-        }
-    )
-  ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime");
     .data.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256 = strenv(ADMISSION_TOOLS_SHA256)
   ) |
@@ -445,10 +415,27 @@ admission_policy_json=$(yq -o=json -I=0 '
 [[ -n "$admission_policy_json" && "$admission_policy_json" != null ]] ||
   fail 'local image admission policy projection is absent'
 ADMISSION_POLICY_JSON="$admission_policy_json" yq -i '
+  (strenv(ADMISSION_POLICY_JSON) | from_json) as $policy |
   with(select(.apiVersion == "supplychain.kodex.dev/v1alpha1" and
       .kind == "ImageAdmissionPolicyParameters" and
       .metadata.name == "kodex-image-admission-policy");
-    .spec = (strenv(ADMISSION_POLICY_JSON) | from_json)
+    .spec = $policy
+  ) |
+  # A local upgrade replaces an immutable ConfigMap under the same name.
+  # Materialize its non-secret values into every Pod template so kubelet and
+  # admission cannot observe different revisions through independent caches.
+  with(select(.kind == "Deployment" or .kind == "StatefulSet" or
+      .kind == "Job");
+    .spec.template.metadata.annotations."kodex.dev/runtime-admission-policy-sha256" =
+      $policy.policySHA256 |
+    ((.spec.template.spec.initContainers[]?,
+      .spec.template.spec.containers[]?) | .env[]? |
+      select(.valueFrom.configMapKeyRef.name ==
+        "kodex-image-admission-policy")) |= (
+        (.valueFrom.configMapKeyRef.key) as $key |
+        .value = $policy[$key] |
+        del(.valueFrom)
+      )
   )
 ' "$render"
 
@@ -882,6 +869,14 @@ RENDER_DIGEST="$render_digest" yq -i '
 
 if rg -n '__KODEX_[A-Z0-9_]+__|\.invalid' "$output" >/dev/null; then
   fail 'local render contains unresolved placeholders'
+fi
+if yq -e '
+  select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job") |
+  .spec.template.spec |
+  (.initContainers[]?, .containers[]?) | .env[]? |
+  select(.valueFrom.configMapKeyRef.name == "kodex-image-admission-policy")
+' "$output" >/dev/null 2>&1; then
+  fail 'local workload retains an indirect immutable admission policy reference'
 fi
 if yq -e '
   select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job") |

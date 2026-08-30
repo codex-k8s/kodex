@@ -628,7 +628,7 @@ wait_stable_workloads() {
 }
 
 readback_local_image_supply_chain() {
-  local expected_policy actual_policy policy_resource controller expected_digest actual_digest
+  local expected_policy actual_policy policy_resource controller workloads expected_digest actual_digest
   local target_registry promoted_pull_host resource name
   expected_policy=$(yq -o=json -I=0 '
     select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
@@ -673,6 +673,20 @@ readback_local_image_supply_chain() {
       .value] | first) == $policy.roleRuntimeContractSHA256
   ' <<<"$controller" >/dev/null ||
     fail 'runtime-controller materialization config readback mismatch'
+  workloads=$(kubectl -n "$namespace" get deployments -o json) ||
+    fail 'local Deployments are unavailable for policy readback'
+  jq -e --argjson policy "$expected_policy" '
+    (.items | length) > 0 and
+    all(.items[];
+      .spec.template.metadata.annotations[
+        "kodex.dev/runtime-admission-policy-sha256"] == $policy.policySHA256 and
+      all(((.spec.template.spec.initContainers // []) +
+          (.spec.template.spec.containers // []))[];
+        all((.env // [])[];
+          .valueFrom.configMapKeyRef.name !=
+            "kodex-image-admission-policy")))
+  ' <<<"$workloads" >/dev/null ||
+    fail 'local Deployment admission policy materialization readback mismatch'
   jq -e '
     .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
     (.spec.orchestrationRevision | test("^[a-f0-9]{40}$")) and
