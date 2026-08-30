@@ -20,15 +20,15 @@ import (
 
 const (
 	SocketPath          = "/run/kodex/provider-credential-relay/relay.sock"
-	maximumRequestBytes = 2 << 20
+	maximumRequestBytes = runtimecontract.MaximumRunnerInputBytes + ((runtimecontract.MaximumProviderAuthBytes + 2) / 3 * 4) + (64 << 10)
 	maximumAckBytes     = 256
 	providerUID         = 10002
 	relayUID            = 10003
 )
 
 type request struct {
-	LeaseRef string                                                 `json:"lease_ref"`
-	Refresh  runtimecontract.RunnerProviderCredentialRefreshRequest `json:"refresh"`
+	Input   model.Input                                            `json:"input"`
+	Refresh runtimecontract.RunnerProviderCredentialRefreshRequest `json:"refresh"`
 }
 
 type response struct {
@@ -40,10 +40,11 @@ type refreshCommitter interface {
 }
 
 func Commit(ctx context.Context, input model.Input, refresh runtimecontract.RunnerProviderCredentialRefreshRequest) error {
-	if err := validateRequest(input, request{LeaseRef: input.LeaseRef, Refresh: refresh}); err != nil {
+	payload := request{Input: input, Refresh: refresh}
+	if _, err := validateRequest(input, payload); err != nil {
 		return err
 	}
-	raw, err := json.Marshal(request{LeaseRef: input.LeaseRef, Refresh: refresh})
+	raw, err := json.Marshal(payload)
 	if err != nil || len(raw) == 0 || len(raw) > maximumRequestBytes {
 		clear(raw)
 		return errors.New("encode provider credential relay request")
@@ -133,10 +134,11 @@ func serveConnection(ctx context.Context, input model.Input, connection net.Conn
 		return err
 	}
 	defer clear(payload.Refresh.Authentication)
-	if err := validateRequest(input, payload); err != nil {
+	turn, err := validateRequest(input, payload)
+	if err != nil {
 		return err
 	}
-	if err := committer.CommitProviderCredentialRefresh(ctx, input, payload.Refresh); err != nil {
+	if err := committer.CommitProviderCredentialRefresh(ctx, turn, payload.Refresh); err != nil {
 		return errors.New("provider credential refresh callback failed")
 	}
 	if err := json.NewEncoder(connection).Encode(response{OK: true}); err != nil {
@@ -162,14 +164,32 @@ func decodeRequest(reader io.Reader) (request, error) {
 	return payload, nil
 }
 
-func validateRequest(input model.Input, payload request) error {
-	if payload.LeaseRef != input.LeaseRef || payload.Refresh.Validate() != nil ||
-		payload.Refresh.RuntimeRevisionDigest != input.RuntimeRevisionDigest ||
-		payload.Refresh.PreviousCredentialRevisionRef != input.ProviderCredentialRef ||
-		payload.Refresh.PreviousContentSHA256 != input.ProviderCredentialSHA256 {
-		return errors.New("provider credential relay binding is invalid")
+func validateRequest(bound model.Input, payload request) (model.Input, error) {
+	turn := payload.Input
+	if turn.Mode != runtimecontract.RunnerModeTurn || turn.Validate() != nil || payload.Refresh.Validate() != nil ||
+		payload.Refresh.RuntimeRevisionDigest != turn.RuntimeRevisionDigest ||
+		payload.Refresh.PreviousCredentialRevisionRef != turn.ProviderCredentialRef ||
+		payload.Refresh.PreviousContentSHA256 != turn.ProviderCredentialSHA256 {
+		return model.Input{}, errors.New("provider credential relay binding is invalid")
 	}
-	return nil
+	if bound.Mode == runtimecontract.RunnerModeTurn {
+		if bound.LeaseRef != turn.LeaseRef || bound.LeaseFence != turn.LeaseFence ||
+			bound.LeaseGeneration != turn.LeaseGeneration || bound.RuntimeRevisionDigest != turn.RuntimeRevisionDigest {
+			return model.Input{}, errors.New("provider credential relay execution binding is invalid")
+		}
+		return turn, nil
+	}
+	if bound.Mode != runtimecontract.RunnerModeWarm || !bound.SystemAssistant || !turn.SystemAssistant ||
+		bound.WorkloadInstance != turn.WorkloadInstance || bound.CallbackURL != turn.CallbackURL ||
+		bound.CallbackTLS != turn.CallbackTLS || bound.ExecutionTicketFile != turn.ExecutionTicketFile {
+		return model.Input{}, errors.New("provider credential relay warm binding is invalid")
+	}
+	boundCompatibility, boundErr := runtimecontract.WarmCompatibilityDigest(bound)
+	turnCompatibility, turnErr := runtimecontract.WarmCompatibilityDigest(turn)
+	if boundErr != nil || turnErr != nil || boundCompatibility != turnCompatibility {
+		return model.Input{}, errors.New("provider credential relay warm compatibility is invalid")
+	}
+	return turn, nil
 }
 
 func peerUID(connection net.Conn) (uint32, error) {
