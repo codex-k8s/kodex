@@ -69,13 +69,14 @@ for argument in "$@"; do
 done
 mkdir -p "$runtime_root"
 cat >"$config" <<EOF
-root = "$module_root"
+root = "$repository_root"
 tmp_dir = "$runtime_root/build"
 
 [build]
-cmd = "CGO_ENABLED=0 GOWORK=off go build -trimpath -buildvcs=false -o $runtime_root/build/main $package"
+cmd = "cd $module_root && CGO_ENABLED=0 GOWORK=off go build -trimpath -buildvcs=false -o $runtime_root/build/main $package"
 entrypoint = [$entrypoint]
 include_ext = ["go", "json", "sql", "yaml", "yml", "toml"]
+include_dir = ["$module", "libs/go"]
 exclude_dir = [".git", ".kodex-dev", "node_modules", "tmp", "vendor"]
 exclude_regex = ["_test[.]go$"]
 delay = 250
@@ -97,5 +98,5 @@ time = true
 clean_on_exit = true
 EOF
 
-cd "$module_root"
+cd "$repository_root"
 exec "$air_binary" -c "$config"

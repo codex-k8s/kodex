@@ -32,7 +32,7 @@ const (
 
 var opaqueReferencePattern = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}_[A-Za-z0-9_-]{8,84}$`)
 var imageDigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
-var systemRuntimeRevisionPattern = regexp.MustCompile(`^system-assistant-core-v[1-9][0-9]*$`)
+var systemRuntimeRevisionPattern = regexp.MustCompile(`^system-assistant-(?:core-v[1-9][0-9]*|runtime-[a-f0-9]{64})$`)
 var workflowStepKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$`)
 
 // RuntimeTLSBinding описывает точную mTLS-границу callback runtime-controller.

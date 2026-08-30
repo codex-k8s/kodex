@@ -67,6 +67,18 @@ func TestWarmCompatibilityDigestIgnoresTurnIdentityAndRejectsRuntimeDrift(t *tes
 	}
 }
 
+func TestRunnerInputAcceptsImmutableSystemRuntimeRevision(t *testing.T) {
+	input := validRunnerInputFixture()
+	input.RuntimeRevisionRef = "system-assistant-runtime-" + strings.Repeat("a", 64)
+	if err := input.Validate(); err != nil {
+		t.Fatalf("immutable system runtime revision rejected: %v", err)
+	}
+	input.RuntimeRevisionRef = "system-assistant-runtime-latest"
+	if err := input.Validate(); err == nil {
+		t.Fatal("mutable system runtime revision accepted")
+	}
+}
+
 func TestRunnerInputNestedCatalogMatchesV6SchemaBoundary(t *testing.T) {
 	valid := validRunnerInputFixture()
 	valid.SessionContext = []RunnerSessionMessage{{Role: "USER", Content: "bounded context"}}

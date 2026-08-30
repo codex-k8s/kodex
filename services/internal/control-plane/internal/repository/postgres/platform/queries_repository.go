@@ -59,6 +59,12 @@ var (
 	queryRepositoryBootstrapUpdateAssistantCorePrompt string
 	//go:embed sql/repository_bootstrap_insert_assistant_core_prompt_audit.sql
 	queryRepositoryBootstrapInsertAssistantCorePromptAudit string
+	//go:embed sql/repository_bootstrap_select_assistant_runtime_environment.sql
+	queryRepositoryBootstrapSelectAssistantRuntimeEnvironment string
+	//go:embed sql/repository_bootstrap_reconcile_assistant_runtime_environment.sql
+	queryRepositoryBootstrapReconcileAssistantRuntimeEnvironment string
+	//go:embed sql/repository_bootstrap_insert_assistant_runtime_environment_audit.sql
+	queryRepositoryBootstrapInsertAssistantRuntimeEnvironmentAudit string
 	//go:embed sql/principal_resolve_verified_identity.sql
 	queryResolveVerifiedPrincipal string
 	//go:embed sql/proof_owner_lock_installation.sql

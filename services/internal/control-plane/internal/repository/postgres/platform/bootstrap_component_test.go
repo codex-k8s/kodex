@@ -80,6 +80,8 @@ var (
 	bootstrapComponentProviderAccountReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_rotate_provider_credential.sql
 	bootstrapComponentRotateProviderCredentialQuery string
+	//go:embed testdata/sql/bootstrap_component_runtime_environment_reconcile_readback.sql
+	bootstrapComponentRuntimeEnvironmentReconcileReadbackQuery string
 )
 
 func finalizedAttachmentSetRef(t *testing.T, ctx context.Context, service *platformservice.Service,
@@ -243,6 +245,60 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("provider auth rejection requires exact credential reauthorization", func(t *testing.T) {
 		testProviderAuthRejectionLifecycle(t, ctx, repository, pool)
 	})
+	t.Run("system assistant runtime image creates an immutable environment revision", func(t *testing.T) {
+		testSystemAssistantRuntimeEnvironmentReconciliation(t, ctx, repository, pool)
+	})
+}
+
+func testSystemAssistantRuntimeEnvironmentReconciliation(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	t.Helper()
+	config := repository.roleImages
+	config.DefaultImageReference = "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("e", 64)
+	if err := repository.ConfigureRoleImages(config); err != nil {
+		t.Fatalf("configure next system runtime image: %v", err)
+	}
+	reconcile := func() {
+		t.Helper()
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatalf("begin system runtime reconciliation: %v", err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		if err := repository.reconcileSystemAssistantRuntimeEnvironment(ctx, tx); err != nil {
+			t.Fatalf("reconcile next system runtime image: %v", err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatalf("commit system runtime reconciliation: %v", err)
+		}
+	}
+	reconcile()
+	image := entity.RuntimeEnvironmentImage{Reference: config.DefaultImageReference, Digest: "sha256:" + strings.Repeat("e", 64)}
+	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
+	expectedCoreDigest, expectedDigest, err := runtimeEnvironmentConfigurationDigests(nil, nil, image, nil, policy)
+	if err != nil {
+		t.Fatalf("compute expected system runtime digest: %v", err)
+	}
+	assertReadback := func(expectedVersions int) {
+		t.Helper()
+		var version, versionCount int
+		var coreDigest, digest, state, desiredRevision string
+		var parentBound, warmInstanceCleared, heartbeatCleared bool
+		if err := pool.QueryRow(ctx, bootstrapComponentRuntimeEnvironmentReconcileReadbackQuery).Scan(
+			&version, &coreDigest, &digest, &parentBound, &versionCount,
+			&state, &desiredRevision, &warmInstanceCleared, &heartbeatCleared,
+		); err != nil {
+			t.Fatalf("read reconciled system runtime environment: %v", err)
+		}
+		if version != 2 || coreDigest != expectedCoreDigest || digest != expectedDigest || !parentBound ||
+			versionCount != expectedVersions || state != "RECOVERING" ||
+			desiredRevision != "system-assistant-runtime-"+expectedDigest || !warmInstanceCleared || !heartbeatCleared {
+			t.Fatalf("unexpected reconciled system runtime: version=%d core=%s digest=%s parent=%t versions=%d state=%s desired=%s warmCleared=%t heartbeatCleared=%t",
+				version, coreDigest, digest, parentBound, versionCount, state, desiredRevision, warmInstanceCleared, heartbeatCleared)
+		}
+	}
+	assertReadback(2)
+	reconcile()
+	assertReadback(2)
 }
 
 func testProviderAccountApplicationAccess(t *testing.T, ctx context.Context, repository *Repository) {

@@ -38,7 +38,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	var configOverlayRef, configOverlayDigest, configOverlay string
 	var runtimeEnvironmentRef, runtimeEnvironmentDigest string
 	var environmentBindingRef, environmentBindingDigest string
-	var rawEnvironmentValues, rawSecretProjections []byte
+	var rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools []byte
 	var rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy, rawKubernetesAccessProfile []byte
 	var environmentCoreDigest, resourcesDigest, volumesDigest, networkDigest, rbacDigest string
 	var providerCredentialRevisionNumber, runtimeConfigVersion, providerPolicyVersion int64
@@ -57,7 +57,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		&configOverlayRef, &configOverlayVersion, &configOverlayDigest, &configOverlay,
 		&runtimeEnvironmentRef, &runtimeEnvironmentVersion, &runtimeEnvironmentDigest,
 		&environmentBindingRef, &environmentBindingVersion, &environmentBindingDigest,
-		&rawEnvironmentValues, &rawSecretProjections,
+		&rawEnvironmentValues, &rawSecretProjections, &rawEnvironmentTools,
 		&environmentCoreDigest, &rawResourcePolicy, &rawVolumePolicy, &rawNetworkPolicy, &rawKubernetesAccessProfile,
 		&resourcesDigest, &volumesDigest, &networkDigest, &rbacDigest,
 	)
@@ -71,6 +71,10 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	var environmentValues []runtimecontract.RuntimeEnvironmentValue
 	var secretProjections []runtimecontract.RuntimeSecretProjection
 	if err := decodeStoredRuntimeEnvironment(rawEnvironmentValues, rawSecretProjections, &environmentValues, &secretProjections); err != nil {
+		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+	}
+	var environmentTools []runtimecontract.RuntimeEnvironmentTool
+	if err := decodeStrict(rawEnvironmentTools, &environmentTools); err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
 	environmentImage := runtimecontract.RuntimeEnvironmentImage{
@@ -87,12 +91,12 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
-	verifiedCoreDigest, err := runtimecontract.RuntimeEnvironmentCoreDigest(environmentValues, secretProjections, environmentImage, nil)
+	verifiedCoreDigest, err := runtimecontract.RuntimeEnvironmentCoreDigest(environmentValues, secretProjections, environmentImage, environmentTools)
 	if err != nil || verifiedCoreDigest != environmentCoreDigest {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
 	verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(
-		environmentValues, secretProjections, environmentImage, nil, environmentPolicy)
+		environmentValues, secretProjections, environmentImage, environmentTools, environmentPolicy)
 	if err != nil || verifiedEnvironmentDigest != runtimeEnvironmentDigest {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
@@ -167,7 +171,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"environmentValues":           environmentValues,
 		"secretProjections":           secretProjections,
 		"environmentImage":            environmentImage,
-		"environmentTools":            []runtimecontract.RuntimeEnvironmentTool{},
+		"environmentTools":            environmentTools,
 		"environmentPolicy":           environmentPolicy,
 		"effectiveKubernetesAccess":   effectiveKubernetesAccess,
 		"revisionDigest":              hex.EncodeToString(revisionDigest[:]),

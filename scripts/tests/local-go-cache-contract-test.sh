@@ -24,5 +24,11 @@ if grep -Fq '"/go/pkg/mod/" + strenv(CACHE_KEY)' "$renderer"; then
 fi
 grep -Fq 'umask 0000' "$hot_reload" || fail 'hot-reload cache umask is absent'
 grep -Fq 'umask 0000' "$go_command" || fail 'Go command cache umask is absent'
+grep -Fq 'root = "$repository_root"' "$hot_reload" ||
+  fail 'hot reload does not observe the repository dependency graph'
+grep -Fq 'include_dir = ["$module", "libs/go"]' "$hot_reload" ||
+  fail 'hot reload does not observe shared Go libraries'
+grep -Fq 'cd $module_root && CGO_ENABLED=0' "$hot_reload" ||
+  fail 'hot reload no longer builds from the selected module'
 
 printf 'Kodex local Go cache contract test passed\n'

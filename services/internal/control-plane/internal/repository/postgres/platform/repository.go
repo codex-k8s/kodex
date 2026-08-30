@@ -17,6 +17,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -170,6 +171,9 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 			systemassistant.CorePromptRevision,
 			systemassistant.CorePrompt(),
 		); err != nil {
+			return err
+		}
+		if err := repository.reconcileSystemAssistantRuntimeEnvironment(ctx, tx); err != nil {
 			return err
 		}
 		if err := repository.reconcileIntegrationDefinitions(ctx, tx); err != nil {
@@ -516,6 +520,73 @@ func (repository *Repository) reconcileSystemAssistantCorePrompt(
 	})
 	if err != nil || tag.RowsAffected() != 1 {
 		return errors.New("audit system assistant core prompt revision")
+	}
+	return nil
+}
+
+func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx context.Context, tx pgx.Tx) error {
+	var organizationID, agentID, environmentID, currentVersionID, currentCoreDigest, currentDigest string
+	var currentVersion int64
+	var rawValues, rawSecrets, rawTools []byte
+	var rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte
+	var resourcesDigest, volumesDigest, networkDigest, rbacDigest string
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapSelectAssistantRuntimeEnvironment).Scan(
+		&organizationID, &agentID, &environmentID, &currentVersionID, &currentVersion,
+		&rawValues, &rawSecrets, &rawTools, &currentCoreDigest, &currentDigest,
+		&rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
+		&resourcesDigest, &volumesDigest, &networkDigest, &rbacDigest,
+	); err != nil {
+		return errors.New("read system assistant runtime environment")
+	}
+	var values []runtimecontract.RuntimeEnvironmentValue
+	var secrets []runtimecontract.RuntimeSecretProjection
+	if err := decodeStoredRuntimeEnvironment(rawValues, rawSecrets, &values, &secrets); err != nil {
+		return errors.New("decode system assistant runtime environment")
+	}
+	var tools []entity.RuntimeEnvironmentTool
+	if err := decodeStrict(rawTools, &tools); err != nil {
+		return errors.New("decode system assistant runtime tools")
+	}
+	policy, err := decodeRuntimeEnvironmentPolicy(rawResources, rawVolumes, rawNetwork, rawKubernetesAccess,
+		resourcesDigest, volumesDigest, networkDigest, rbacDigest)
+	if err != nil || policy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
+		return errors.New("verify system assistant runtime policy")
+	}
+	image := entity.RuntimeEnvironmentImage{
+		Reference: repository.roleImages.DefaultImageReference,
+		Digest:    repository.roleImages.DefaultImageDigest,
+	}
+	expectedCoreDigest, expectedDigest, err := runtimeEnvironmentConfigurationDigests(values, secrets, image, tools, policy)
+	if err != nil {
+		return errors.New("compute system assistant runtime environment digest")
+	}
+	if currentCoreDigest == expectedCoreDigest && currentDigest == expectedDigest {
+		return nil
+	}
+	versionRef, err := newRef("renvv")
+	if err != nil {
+		return err
+	}
+	nextRuntimeRevision := "system-assistant-runtime-" + expectedDigest
+	var activatedVersionID string
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapReconcileAssistantRuntimeEnvironment, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "agent_id": agentID, "environment_id": environmentID,
+		"current_version_id": currentVersionID, "current_version": currentVersion, "version_ref": versionRef,
+		"expected_core_digest": expectedCoreDigest, "expected_digest": expectedDigest,
+		"next_runtime_revision": nextRuntimeRevision,
+	}).Scan(&activatedVersionID); err != nil || activatedVersionID == "" {
+		return errors.New("activate system assistant runtime environment revision")
+	}
+	auditRef, err := newRef("aud")
+	if err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, queryRepositoryBootstrapInsertAssistantRuntimeEnvironmentAudit, pgx.StrictNamedArgs{
+		"audit_ref": auditRef, "organization_id": organizationID, "agent_id": agentID,
+		"environment_id": environmentID,
+	})
+	if err != nil || tag.RowsAffected() != 1 {
+		return errors.New("audit system assistant runtime environment revision")
 	}
 	return nil
 }
