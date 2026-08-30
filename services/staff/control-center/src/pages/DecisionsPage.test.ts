@@ -77,6 +77,26 @@ const gate: OwnerGate = {
   requestedBy: { ref: "agt_sales", displayName: "Менеджер продаж" },
   state: "OPEN",
   allowedDecisions: ["APPROVE", "REQUEST_CHANGES", "REJECT"],
+  decisionConsequences: [
+    {
+      decision: "APPROVE",
+      safeSummary: "Агент отправит предложение клиенту",
+      executesExternalEffect: true,
+      terminalForRun: false,
+    },
+    {
+      decision: "REQUEST_CHANGES",
+      safeSummary: "Агент скорректирует предложение",
+      executesExternalEffect: false,
+      terminalForRun: false,
+    },
+    {
+      decision: "REJECT",
+      safeSummary: "Запуск завершится без отправки",
+      executesExternalEffect: false,
+      terminalForRun: true,
+    },
+  ],
   openedAt: "2026-08-29T10:05:00Z",
   nextActions: ["RESOLVE_GATE"],
 };

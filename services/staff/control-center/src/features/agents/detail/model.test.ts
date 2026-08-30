@@ -88,6 +88,8 @@ describe("agent detail model", () => {
       description: "Ссылка Проекта",
       example: "{{ .project.ref }}",
       source: "PROJECT",
+      collection: false,
+      itemFields: [],
     });
 
     expect(item.scope).toBe("PROJECT");

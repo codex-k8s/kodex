@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Save, ServerOff, ShieldCheck } from "@lucide/vue";
+import { Save, ShieldCheck } from "@lucide/vue";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
+import { ProviderAccountSelector } from "@/features/providers";
 import {
   readyRuntimes,
   runtimeModels,
@@ -50,6 +51,7 @@ const loading = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const overlayContent = ref("");
+const providerAccountsEligible = ref(false);
 const form = reactive<AgentRuntimeConfigurationInput>({
   runtimeProfileRef: "",
   model: "",
@@ -148,6 +150,7 @@ function eventValue(event: Event): string | undefined {
 function chooseProvider(event: Event): void {
   const provider = eventValue(event);
   if (!provider) return;
+  const previousProvider = selectedProvider.value;
   const runtimeRef = runtimeRefForSelection(availableRuntimes.value, provider);
   const selected = availableRuntimes.value.find(
     (item) => item.ref === runtimeRef,
@@ -155,6 +158,7 @@ function chooseProvider(event: Event): void {
   if (!selected) return;
   form.runtimeProfileRef = selected.ref;
   form.model = selected.model;
+  if (provider !== previousProvider) form.providerAccounts = [];
   notify(runtimeDirty.value ? "DRAFT" : "APPLIED");
 }
 
@@ -380,12 +384,22 @@ onMounted(() => void load());
           </div>
         </dl>
         <section class="runtime-panel__account-capability">
-          <ServerOff :size="18" aria-hidden="true" />
-          <div>
-            <strong>{{ $t("runtime.accountCatalogUnavailable") }}</strong>
-            <p>{{ $t("runtime.accountCatalogBlocker") }}</p>
+          <div class="runtime-panel__account-heading">
+            <div>
+              <strong>{{ $t("runtime.accounts") }}</strong>
+              <p>{{ $t("runtime.accountCatalogHelp") }}</p>
+            </div>
+            <StatusBadge
+              :state="providerAccountsEligible ? 'READY' : 'UNAVAILABLE'"
+            />
           </div>
-          <StatusBadge state="UNAVAILABLE" />
+          <ProviderAccountSelector
+            v-model="form.providerAccounts"
+            :definition-key="selectedProvider"
+            :policy-mode="form.providerPolicyMode"
+            :disabled="!canEdit || busy"
+            @eligibility-change="providerAccountsEligible = $event"
+          />
         </section>
         <div v-if="canEdit" class="runtime-panel__actions">
           <span v-if="runtimeDirty">{{ $t("states.DRAFT") }}</span>
@@ -398,7 +412,8 @@ onMounted(() => void load());
               !form.runtimeProfileRef ||
               !form.model ||
               !selectedRuntime?.ready ||
-              !form.providerAccounts.length
+              !form.providerAccounts.length ||
+              !providerAccountsEligible
             "
             @click="saveRuntime"
           >
@@ -520,23 +535,23 @@ onMounted(() => void load());
 }
 .runtime-panel__account-capability {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
 }
-.runtime-panel__account-capability > svg {
-  margin-top: 2px;
-  color: var(--warning);
-}
 .runtime-panel__account-capability strong {
   font-size: 0.84rem;
 }
 .runtime-panel__account-capability p {
   margin-top: 4px;
+}
+.runtime-panel__account-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 .runtime-panel__actions,
 .overlay-panel__actions {
@@ -561,12 +576,6 @@ onMounted(() => void load());
 @media (max-width: 640px) {
   .runtime-panel__summary {
     grid-template-columns: 1fr;
-  }
-  .runtime-panel__account-capability {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-  .runtime-panel__account-capability .status-badge {
-    grid-column: 2;
   }
 }
 </style>

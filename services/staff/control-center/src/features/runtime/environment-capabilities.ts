@@ -1,5 +1,6 @@
 import type {
   RuntimeEnvironmentInput,
+  RuntimeEnvironmentReadiness,
   RuntimeEnvironmentSet,
   RuntimeSecretDescriptor,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -47,10 +48,17 @@ export const runtimeEnvironmentCapabilities: readonly EnvironmentCapability[] =
     { key: "networkPolicy", state: "AVAILABLE" },
     { key: "kubernetesRbac", state: "AVAILABLE" },
     { key: "effectivePolicy", state: "AVAILABLE" },
-    { key: "secretLifecycle", state: "UNAVAILABLE" },
-    { key: "secretReveal", state: "UNAVAILABLE" },
-    { key: "serverReadiness", state: "UNAVAILABLE" },
+    { key: "secretLifecycle", state: "AVAILABLE" },
+    { key: "secretReveal", state: "AVAILABLE" },
+    { key: "serverReadiness", state: "AVAILABLE" },
   ];
+
+export function hasEnvironmentAction(
+  environment: RuntimeEnvironmentSet,
+  action: "UPDATE" | "ENABLE" | "DISABLE" | "DELETE" | "ROLLBACK",
+): boolean {
+  return environment.nextActions.includes(action);
+}
 
 export interface EnvironmentReadinessCheck {
   key:
@@ -69,6 +77,7 @@ export interface EnvironmentReadinessCheck {
 export function environmentReadiness(
   input: RuntimeEnvironmentInput,
   environment?: RuntimeEnvironmentSet,
+  serverReadback?: RuntimeEnvironmentReadiness,
 ): EnvironmentReadinessCheck[] {
   const problems = validateEnvironmentInput(input);
   const secretProblems = problems.filter((problem) =>
@@ -97,6 +106,14 @@ export function environmentReadiness(
   const effectivePolicyReady =
     environment !== undefined &&
     hasEffectivePolicyDigests(environment.currentVersion.policy);
+  const serverReadbackMatches = Boolean(
+    environment &&
+    serverReadback &&
+    serverReadback.environmentRef === environment.ref &&
+    serverReadback.environmentVersion === environment.version &&
+    serverReadback.publishedVersionRef === environment.currentVersion.ref &&
+    serverReadback.publishedVersionDigest === environment.currentVersion.digest,
+  );
 
   return [
     {
@@ -136,7 +153,11 @@ export function environmentReadiness(
     },
     {
       key: "SERVER_READINESS",
-      state: "UNAVAILABLE",
+      state: !serverReadbackMatches
+        ? "UNAVAILABLE"
+        : serverReadback?.ready
+          ? "READY"
+          : "NEEDS_ATTENTION",
       problems: [],
     },
   ];

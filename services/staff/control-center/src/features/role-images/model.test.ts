@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildIsActive,
+  buildRevisionIdentity,
+  canPromoteRoleImage,
   canRequestBuild,
   latestBuild,
   roleImageState,
@@ -78,6 +80,40 @@ describe("role image model", () => {
         build({ stage: "COMPLETED" }),
       ),
     ).toBe("PROMOTED");
+  });
+
+  it("показывает build snapshot как точную попытку неизменяемого поколения", () => {
+    expect(
+      buildRevisionIdentity(build({ recipeGeneration: 7, attempt: 3 })),
+    ).toEqual({ generation: 7, attempt: 3 });
+  });
+
+  it("разрешает promotion только по серверному nextAction и admitted artifact", () => {
+    const artifact = {
+      ref: "artifact_1",
+      version: 1,
+      recipeRef: "image_1",
+      recipeGeneration: 2,
+      manifestDigest: `sha256:${"a".repeat(64)}`,
+      provenanceSha256: "b".repeat(64),
+      admissionVerdict: "ACCEPTED" as const,
+      tools: [],
+    };
+    expect(
+      canPromoteRoleImage(
+        recipe({ nextActions: ["OPEN", "PROMOTE"] }),
+        artifact,
+      ),
+    ).toBe(true);
+    expect(
+      canPromoteRoleImage(recipe({ nextActions: ["OPEN"] }), artifact),
+    ).toBe(false);
+    expect(
+      canPromoteRoleImage(recipe({ nextActions: ["PROMOTE"] }), {
+        ...artifact,
+        admissionVerdict: "REJECTED",
+      }),
+    ).toBe(false);
   });
 
   it("валидирует минимальный source без подмены backend validation", () => {

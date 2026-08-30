@@ -43,18 +43,40 @@ const schedule: Schedule = {
   sessionPolicy: "NEW_EACH_RUN",
   notificationPolicy: "CONTROL_CENTER_ONLY",
   nextActions: [],
+  currentRevision: {
+    ref: "schedule_revision_daily",
+    revision: 1,
+    digest: "schedule-digest",
+    name: "Ежедневная квалификация",
+    target: {
+      type: "AGENT",
+      ref: "agent_sales",
+      displayName: "Аналитик",
+      version: 1,
+    },
+    preset: "DAILY",
+    cronExpression: "0 9 * * *",
+    timezone: "Europe/Saratov",
+    input: {},
+    sessionPolicy: "NEW_EACH_RUN",
+    notificationPolicy: "CONTROL_CENTER_ONLY",
+    createdAt: "2026-08-29T09:00:00Z",
+  },
 };
 
-const environment = {
+const environment: RuntimeEnvironmentSet = {
   ref: "environment_sales",
   version: 1,
   projectRef: project.ref,
   name: "Инструменты продаж",
   description: "gh, psql и redis-cli",
-  state: "READY",
-  currentVersion: {},
+  state: "ACTIVE",
+  currentVersion: {} as RuntimeEnvironmentSet["currentVersion"],
   updatedAt: "2026-08-29T10:00:00Z",
-} as RuntimeEnvironmentSet;
+  ready: true,
+  readinessBlockers: [],
+  nextActions: [],
+};
 
 async function render(): Promise<string> {
   const router = createRouter({

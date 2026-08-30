@@ -89,6 +89,14 @@ function gate(runRef: string): OwnerGate {
     requestedBy: { ref: "agent_sales", displayName: "Аналитик продаж" },
     state: "OPEN",
     allowedDecisions: ["APPROVE"],
+    decisionConsequences: [
+      {
+        decision: "APPROVE",
+        safeSummary: "Запуск продолжится",
+        executesExternalEffect: false,
+        terminalForRun: false,
+      },
+    ],
     openedAt: "2026-08-28T10:05:00Z",
     nextActions: ["RESOLVE_GATE"],
   };
@@ -131,6 +139,25 @@ function schedule(
     sessionPolicy: "NEW_EACH_RUN",
     notificationPolicy: "CONTROL_CENTER_ONLY",
     nextActions: [],
+    currentRevision: {
+      ref: `revision_${ref}`,
+      revision: 1,
+      digest: `digest_${ref}`,
+      name: ref,
+      target: {
+        type: "AGENT",
+        ref: "agent_sales",
+        displayName: "Аналитик",
+        version: 1,
+      },
+      preset: "DAILY",
+      cronExpression: "0 9 * * *",
+      timezone: "Europe/Saratov",
+      input: {},
+      sessionPolicy: "NEW_EACH_RUN",
+      notificationPolicy: "CONTROL_CENTER_ONLY",
+      createdAt: "2026-08-28T09:00:00Z",
+    },
     ...options,
   };
 }
@@ -146,9 +173,12 @@ function environment(
     projectRef,
     name: ref,
     description: "Окружение",
-    state: "READY",
+    state: "ACTIVE",
     currentVersion: {} as RuntimeEnvironmentSet["currentVersion"],
     updatedAt,
+    ready: true,
+    readinessBlockers: [],
+    nextActions: [],
   };
 }
 
@@ -184,6 +214,8 @@ describe("workboard model", () => {
         schedule("sooner", "ACTIVE", {
           nextRunAt: "2026-08-30T10:00:00Z",
         }),
+        schedule("archived", "ARCHIVED"),
+        schedule("deleted", "DELETED"),
       ],
       project.ref,
     );
@@ -192,6 +224,8 @@ describe("workboard model", () => {
       "attention",
       "sooner",
       "later",
+      "archived",
+      "deleted",
     ]);
   });
 

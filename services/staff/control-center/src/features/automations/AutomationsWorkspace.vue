@@ -4,23 +4,39 @@ import {
   Bot,
   CalendarClock,
   History,
+  LoaderCircle,
   Pause,
   Pencil,
   Play,
   Plus,
   Search,
+  Trash2,
   Workflow,
 } from "@lucide/vue";
-import { computed, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+  type WatchStopHandle,
+} from "vue";
 import { useI18n } from "vue-i18n";
 
 import AutomationArchiveDialog from "@/features/automations/AutomationArchiveDialog.vue";
 import AutomationEditorDialog from "@/features/automations/AutomationEditorDialog.vue";
 import {
+  commandSchedule,
+  loadSchedulePage,
+  loadScheduleRevisionPage,
+  loadScheduleRunPage,
+  readSchedule,
+  removeSchedule,
+  saveSchedule,
+} from "@/features/automations/api";
+import {
   scheduleCapabilities,
   scheduleMatchesFilter,
-  verifyScheduleCommandReadback,
-  verifyScheduleReadback,
   type ScheduleFilter,
 } from "@/features/automations/model";
 import { usePlatformStore } from "@/features/platform/store";
@@ -28,6 +44,8 @@ import type {
   Schedule,
   ScheduleCommand,
   ScheduleInput,
+  ScheduleRevision,
+  ScheduleRunOccurrence,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem, asProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
@@ -37,39 +55,49 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const props = defineProps<{ projectRef: string }>();
 const platform = usePlatformStore();
 const { locale, t } = useI18n();
+
 const search = ref("");
 const state = ref<ScheduleFilter>("CURRENT");
+const schedules = ref<Schedule[]>([]);
+const nextPageToken = ref<string>();
+const listLoading = ref(false);
+const moreLoading = ref(false);
+const listProblem = ref<AppProblem>();
 const selectedRef = ref("");
+const selectedSection = ref<"OVERVIEW" | "VERSIONS" | "RUNS">("OVERVIEW");
 const editorOpen = ref(false);
 const editorScheduleRef = ref("");
 const editorBusy = ref(false);
 const editorProblem = ref<AppProblem>();
 const commandBusy = ref("");
 const archiveScheduleRef = ref("");
+const deleteScheduleRef = ref("");
 const problem = ref<AppProblem>();
-const selectedSection = ref<"OVERVIEW" | "VERSIONS" | "RUNS">("OVERVIEW");
+const revisions = ref<ScheduleRevision[]>([]);
+const revisionsToken = ref<string>();
+const revisionsLoading = ref(false);
+const revisionsProblem = ref<AppProblem>();
+const runOccurrences = ref<ScheduleRunOccurrence[]>([]);
+const runsToken = ref<string>();
+const runsLoading = ref(false);
+const runsProblem = ref<AppProblem>();
+const listSentinel = ref<HTMLElement>();
+
+let listController: AbortController | undefined;
+let historyController: AbortController | undefined;
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+let listObserver: IntersectionObserver | undefined;
+let stopSentinelWatch: WatchStopHandle | undefined;
 
 const project = computed(() => platform.projects[props.projectRef]);
 const canCreate = computed(() =>
   project.value?.nextActions.includes("CREATE_SCHEDULE"),
 );
-const schedules = computed(() =>
-  Object.values(platform.schedules)
-    .filter((schedule) => schedule.projectRef === props.projectRef)
-    .sort((left, right) => left.name.localeCompare(right.name, locale.value)),
+const filteredSchedules = computed(() =>
+  schedules.value.filter((schedule) =>
+    scheduleMatchesFilter(schedule, state.value),
+  ),
 );
-const filteredSchedules = computed(() => {
-  const normalized = search.value.trim().toLocaleLowerCase(locale.value);
-  return schedules.value.filter(
-    (schedule) =>
-      scheduleMatchesFilter(schedule, state.value) &&
-      (!normalized ||
-        schedule.name.toLocaleLowerCase(locale.value).includes(normalized) ||
-        schedule.target.displayName
-          .toLocaleLowerCase(locale.value)
-          .includes(normalized)),
-  );
-});
 const selectedSchedule = computed(() =>
   schedules.value.find((schedule) => schedule.ref === selectedRef.value),
 );
@@ -84,45 +112,140 @@ const editorSchedule = computed(() =>
 const archiveSchedule = computed(() =>
   schedules.value.find((schedule) => schedule.ref === archiveScheduleRef.value),
 );
+const deleteCandidate = computed(() =>
+  schedules.value.find((schedule) => schedule.ref === deleteScheduleRef.value),
+);
 const custom = computed(() =>
   locale.value.startsWith("en")
     ? {
         actions: "Automation actions",
-        allStates: "All, including archived",
-        archive: "Move to archive",
+        allStates: "All states",
+        archive: "Archive",
         archiveDescription:
-          "Future runs will be cancelled. The automation and its history will remain available read-only through the Archived filter. This is not permanent deletion.",
+          "Future runs will be cancelled. Immutable revisions and run history remain available read-only.",
         archiveTitle: "Archive automation?",
+        automationRef: "Automation ref",
         currentStates: "Current",
+        current: "Current",
+        createdAt: "Created",
+        delete: "Delete",
+        deleted: "Deleted",
+        deleteDescription:
+          "The automation will be terminally deleted. Immutable revisions and existing run history remain available read-only.",
+        deleteTitle: "Delete automation permanently?",
         edit: "Edit automation",
         lastResult: "Last result",
         list: "Project automations",
+        loadMore: "Load more",
         noMatches: "No matching automations",
         noMatchesText: "Change the search text or state filter.",
+        noRevisions: "No immutable revisions were returned.",
+        noRuns: "This automation has no runs yet.",
+        revision: "Revision",
+        revisionRef: "Revision ref",
+        runRef: "Run ref",
         schedule: "Schedule",
-        search: "Search by name or target",
+        search: "Search automations on the server",
         target: "Target",
-        version: "Version",
+        version: "Resource version",
       }
     : {
         actions: "Действия с автоматизацией",
-        allStates: "Все, включая архивные",
-        archive: "Переместить в архив",
+        allStates: "Все состояния",
+        archive: "Архивировать",
         archiveDescription:
-          "Будущие запуски будут отменены. Автоматизация и её история останутся доступны только для чтения через фильтр «Архивные». Это не безвозвратное удаление.",
+          "Будущие запуски будут отменены. Неизменяемые ревизии и история запусков останутся доступны только для чтения.",
         archiveTitle: "Архивировать автоматизацию?",
+        automationRef: "Ссылка автоматизации",
         currentStates: "Действующие",
+        current: "Текущая",
+        createdAt: "Создана",
+        delete: "Удалить",
+        deleted: "Удалена",
+        deleteDescription:
+          "Автоматизация будет окончательно удалена. Неизменяемые ревизии и существующая история запусков останутся доступны только для чтения.",
+        deleteTitle: "Удалить автоматизацию?",
         edit: "Изменить автоматизацию",
         lastResult: "Последний результат",
         list: "Автоматизации Проекта",
+        loadMore: "Загрузить ещё",
         noMatches: "Подходящих автоматизаций нет",
         noMatchesText: "Измените строку поиска или фильтр состояния.",
+        noRevisions: "Неизменяемые ревизии не найдены.",
+        noRuns: "У этой автоматизации ещё нет запусков.",
+        revision: "Ревизия",
+        revisionRef: "Ссылка ревизии",
+        runRef: "Ссылка запуска",
         schedule: "Расписание",
-        search: "Поиск по названию и цели",
+        search: "Поиск автоматизаций на сервере",
         target: "Цель",
-        version: "Версия",
+        version: "Версия ресурса",
       },
 );
+
+function mergeByRef<T extends { ref: string }>(
+  current: readonly T[],
+  incoming: readonly T[],
+): T[] {
+  const values = new Map(current.map((item) => [item.ref, item]));
+  for (const item of incoming) values.set(item.ref, item);
+  return [...values.values()];
+}
+
+function mergeRunOccurrences(
+  current: readonly ScheduleRunOccurrence[],
+  incoming: readonly ScheduleRunOccurrence[],
+): ScheduleRunOccurrence[] {
+  const key = (occurrence: ScheduleRunOccurrence) =>
+    `${occurrence.scheduleRef}\u0000${occurrence.scheduleRevisionRef}\u0000${occurrence.run.ref}`;
+  const values = new Map(current.map((item) => [key(item), item]));
+  for (const item of incoming) values.set(key(item), item);
+  return [...values.values()];
+}
+
+function replaceSchedule(schedule: Schedule): void {
+  schedules.value = mergeByRef(schedules.value, [schedule]);
+  platform.schedules[schedule.ref] = schedule;
+}
+
+async function loadList(reset = false): Promise<void> {
+  if (!reset && moreLoading.value) return;
+  if (!reset && !nextPageToken.value) return;
+  if (reset) {
+    listController?.abort();
+    listController = new AbortController();
+    listLoading.value = true;
+    listProblem.value = undefined;
+  } else moreLoading.value = true;
+  const controller = listController ?? new AbortController();
+  const requestedProject = props.projectRef;
+  try {
+    const page = await loadSchedulePage(
+      requestedProject,
+      search.value,
+      reset ? undefined : nextPageToken.value,
+      controller.signal,
+    );
+    if (controller.signal.aborted || requestedProject !== props.projectRef)
+      return;
+    schedules.value = reset
+      ? page.items
+      : mergeByRef(schedules.value, page.items);
+    nextPageToken.value = page.nextPageToken || undefined;
+    for (const schedule of page.items)
+      platform.schedules[schedule.ref] = schedule;
+  } catch (error) {
+    if (!controller.signal.aborted) listProblem.value = asProblem(error);
+  } finally {
+    if (reset) listLoading.value = false;
+    else moreLoading.value = false;
+  }
+}
+
+watch(search, () => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => void loadList(true), 280);
+});
 
 watch(
   filteredSchedules,
@@ -135,7 +258,89 @@ watch(
 
 watch(selectedRef, () => {
   selectedSection.value = "OVERVIEW";
+  resetHistory();
 });
+
+watch(selectedSection, (section) => {
+  if (section === "VERSIONS" && revisions.value.length === 0)
+    void loadRevisions(true);
+  if (section === "RUNS" && runOccurrences.value.length === 0)
+    void loadRuns(true);
+});
+
+function resetHistory(): void {
+  historyController?.abort();
+  historyController = undefined;
+  revisions.value = [];
+  revisionsToken.value = undefined;
+  revisionsProblem.value = undefined;
+  runOccurrences.value = [];
+  runsToken.value = undefined;
+  runsProblem.value = undefined;
+}
+
+async function loadRevisions(reset = false): Promise<void> {
+  const scheduleRef = selectedRef.value;
+  if (
+    !scheduleRef ||
+    revisionsLoading.value ||
+    (!reset && !revisionsToken.value)
+  )
+    return;
+  if (reset) {
+    historyController?.abort();
+    historyController = new AbortController();
+    revisions.value = [];
+    revisionsProblem.value = undefined;
+  }
+  revisionsLoading.value = true;
+  const controller = historyController ?? new AbortController();
+  try {
+    const page = await loadScheduleRevisionPage(
+      scheduleRef,
+      reset ? undefined : revisionsToken.value,
+      controller.signal,
+    );
+    if (controller.signal.aborted || scheduleRef !== selectedRef.value) return;
+    revisions.value = reset
+      ? page.items
+      : mergeByRef(revisions.value, page.items);
+    revisionsToken.value = page.nextPageToken || undefined;
+  } catch (error) {
+    if (!controller.signal.aborted) revisionsProblem.value = asProblem(error);
+  } finally {
+    revisionsLoading.value = false;
+  }
+}
+
+async function loadRuns(reset = false): Promise<void> {
+  const scheduleRef = selectedRef.value;
+  if (!scheduleRef || runsLoading.value || (!reset && !runsToken.value)) return;
+  if (reset) {
+    historyController?.abort();
+    historyController = new AbortController();
+    runOccurrences.value = [];
+    runsProblem.value = undefined;
+  }
+  runsLoading.value = true;
+  const controller = historyController ?? new AbortController();
+  try {
+    const page = await loadScheduleRunPage(
+      scheduleRef,
+      reset ? undefined : runsToken.value,
+      controller.signal,
+    );
+    if (controller.signal.aborted || scheduleRef !== selectedRef.value) return;
+    runOccurrences.value = reset
+      ? page.items
+      : mergeRunOccurrences(runOccurrences.value, page.items);
+    runsToken.value = page.nextPageToken || undefined;
+  } catch (error) {
+    if (!controller.signal.aborted) runsProblem.value = asProblem(error);
+  } finally {
+    runsLoading.value = false;
+  }
+}
 
 function scheduleLabel(schedule: Schedule): string {
   const preset = t(`automations.presetValue.${schedule.preset}`);
@@ -147,6 +352,10 @@ function scheduleLabel(schedule: Schedule): string {
   return `${preset}${day}${time}`;
 }
 
+function revisionLabel(revision: ScheduleRevision): string {
+  return `${t(`automations.presetValue.${revision.preset}`)} · ${revision.cronExpression} · ${revision.timezone}`;
+}
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(locale.value, {
     dateStyle: "medium",
@@ -154,16 +363,13 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
-function task(schedule: Schedule): string {
-  const value = schedule.input?.task;
-  return typeof value === "string" ? value : t("common.noData");
+function task(value: Schedule | ScheduleRevision): string {
+  const item = value.input?.task;
+  return typeof item === "string" ? item : t("common.noData");
 }
 
-async function loadReadback(ref: string): Promise<Schedule | undefined> {
-  await platform.loadSchedules(props.projectRef);
-  const loadProblem = platform.problems.schedules;
-  if (loadProblem) throw loadProblem;
-  return platform.schedules[ref];
+function statusLabel(schedule: Schedule): string | undefined {
+  return schedule.state === "DELETED" ? custom.value.deleted : undefined;
 }
 
 function openCreate(): void {
@@ -179,6 +385,10 @@ function openEdit(schedule: Schedule): void {
   editorOpen.value = true;
 }
 
+async function refreshExact(ref: string): Promise<void> {
+  replaceSchedule(await readSchedule(ref));
+}
+
 async function submitEditor(
   input: ScheduleInput,
   current?: Schedule,
@@ -187,31 +397,23 @@ async function submitEditor(
   editorBusy.value = true;
   editorProblem.value = undefined;
   try {
-    const mutationResult = await platform.saveSchedule(
-      props.projectRef,
-      input,
-      current,
-    );
-    verifyScheduleReadback(
-      input,
-      mutationResult,
-      await loadReadback(mutationResult.ref),
-    );
-    selectedRef.value = mutationResult.ref;
+    const result = await saveSchedule(props.projectRef, input, current);
+    replaceSchedule(result);
+    selectedRef.value = result.ref;
+    search.value = "";
     editorOpen.value = false;
+    resetHistory();
   } catch (error) {
     const nextProblem = asProblem(error);
-    if (nextProblem.kind === "conflict") {
-      await platform.loadSchedules(props.projectRef);
-      editorOpen.value = false;
-      problem.value = nextProblem;
-    } else editorProblem.value = nextProblem;
+    if (nextProblem.kind === "conflict" && current)
+      await refreshExact(current.ref).catch(() => undefined);
+    editorProblem.value = nextProblem;
   } finally {
     editorBusy.value = false;
   }
 }
 
-async function command(
+async function runCommand(
   schedule: Schedule,
   action: ScheduleCommand["action"],
 ): Promise<void> {
@@ -225,39 +427,63 @@ async function command(
   commandBusy.value = schedule.ref;
   problem.value = undefined;
   try {
-    const mutationResult = await platform.changeSchedule(schedule, action);
-    verifyScheduleCommandReadback(
-      mutationResult,
-      await loadReadback(mutationResult.ref),
-    );
+    replaceSchedule(await commandSchedule(schedule, action));
   } catch (error) {
     const nextProblem = asProblem(error);
     if (nextProblem.kind === "conflict")
-      await platform.loadSchedules(props.projectRef);
+      await refreshExact(schedule.ref).catch(() => undefined);
     problem.value = nextProblem;
   } finally {
     commandBusy.value = "";
   }
 }
 
-function requestArchive(schedule: Schedule): void {
-  archiveScheduleRef.value = schedule.ref;
-}
-
 async function confirmArchive(): Promise<void> {
   const schedule = archiveSchedule.value;
   if (!schedule) return;
-  await command(schedule, "ARCHIVE");
+  await runCommand(schedule, "ARCHIVE");
   if (!problem.value) archiveScheduleRef.value = "";
 }
 
-onMounted(
-  () =>
-    void Promise.all([
-      platform.loadSchedules(props.projectRef),
-      platform.loadProject(props.projectRef),
-    ]),
-);
+async function confirmDelete(): Promise<void> {
+  const schedule = deleteCandidate.value;
+  if (!schedule || !schedule.nextActions.includes("DELETE")) return;
+  commandBusy.value = schedule.ref;
+  problem.value = undefined;
+  try {
+    replaceSchedule(await removeSchedule(schedule));
+    deleteScheduleRef.value = "";
+  } catch (error) {
+    const nextProblem = asProblem(error);
+    if (nextProblem.kind === "conflict")
+      await refreshExact(schedule.ref).catch(() => undefined);
+    problem.value = nextProblem;
+  } finally {
+    commandBusy.value = "";
+  }
+}
+
+function observeSentinel(element: HTMLElement | undefined): void {
+  listObserver?.disconnect();
+  if (!element || typeof IntersectionObserver === "undefined") return;
+  listObserver = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) void loadList(false);
+  });
+  listObserver.observe(element);
+}
+
+onMounted(() => {
+  void Promise.all([loadList(true), platform.loadProject(props.projectRef)]);
+  stopSentinelWatch = watch(listSentinel, observeSentinel, { immediate: true });
+});
+
+onBeforeUnmount(() => {
+  listController?.abort();
+  historyController?.abort();
+  if (searchTimer) clearTimeout(searchTimer);
+  listObserver?.disconnect();
+  stopSentinelWatch?.();
+});
 </script>
 
 <template>
@@ -279,11 +505,12 @@ onMounted(
             {{ $t("states.NEEDS_ATTENTION") }}
           </option>
           <option value="ARCHIVED">{{ $t("states.ARCHIVED") }}</option>
+          <option value="DELETED">{{ custom.deleted }}</option>
         </select>
       </label>
-      <span class="automations-workspace__count mono">
-        {{ filteredSchedules.length }}
-      </span>
+      <span class="automations-workspace__count mono">{{
+        filteredSchedules.length
+      }}</span>
       <button
         v-if="canCreate"
         class="button button--primary"
@@ -297,12 +524,12 @@ onMounted(
 
     <ProblemNotice v-if="problem" :problem="problem" compact />
     <AsyncState
-      :loading="platform.loading.schedules"
-      :problem="platform.problems.schedules"
+      :loading="listLoading"
+      :problem="listProblem"
       :empty="schedules.length === 0"
       :empty-title="$t('automations.emptyTitle')"
       :empty-text="$t('automations.emptyText')"
-      @retry="platform.loadSchedules(projectRef)"
+      @retry="loadList(true)"
     >
       <section
         v-if="filteredSchedules.length === 0"
@@ -310,6 +537,15 @@ onMounted(
       >
         <h2>{{ custom.noMatches }}</h2>
         <p>{{ custom.noMatchesText }}</p>
+        <button
+          v-if="nextPageToken"
+          class="button"
+          type="button"
+          :disabled="moreLoading"
+          @click="loadList(false)"
+        >
+          {{ custom.loadMore }}
+        </button>
       </section>
       <div v-else class="automations-workspace__layout">
         <div class="automations-list" role="list">
@@ -349,16 +585,35 @@ onMounted(
               <small>{{ schedule.timezone }}</small>
             </span>
             <span class="automation-row__state">
-              <StatusBadge :state="schedule.state" />
+              <StatusBadge
+                :state="schedule.state"
+                :label="statusLabel(schedule)"
+              />
               <small class="mono">v{{ schedule.version }}</small>
             </span>
             <span class="automation-row__next">
               {{ schedule.nextRunAt ? formatDate(schedule.nextRunAt) : "—" }}
             </span>
-            <span class="automation-row__outcome">
-              {{ schedule.lastOutcome || "—" }}
-            </span>
+            <span class="automation-row__outcome">{{
+              schedule.lastOutcome || "—"
+            }}</span>
           </button>
+          <div ref="listSentinel" class="automation-list-sentinel">
+            <LoaderCircle
+              v-if="moreLoading"
+              class="spin"
+              :size="18"
+              aria-hidden="true"
+            />
+            <button
+              v-else-if="nextPageToken"
+              class="button"
+              type="button"
+              @click="loadList(false)"
+            >
+              {{ custom.loadMore }}
+            </button>
+          </div>
         </div>
 
         <aside v-if="selectedSchedule" class="automation-details">
@@ -366,7 +621,10 @@ onMounted(
             <div>
               <h2>{{ selectedSchedule.name }}</h2>
               <div class="automation-details__status">
-                <StatusBadge :state="selectedSchedule.state" />
+                <StatusBadge
+                  :state="selectedSchedule.state"
+                  :label="statusLabel(selectedSchedule)"
+                />
                 <span class="mono">v{{ selectedSchedule.version }}</span>
               </div>
             </div>
@@ -408,29 +666,17 @@ onMounted(
               <dd>{{ task(selectedSchedule) }}</dd>
             </div>
             <div>
-              <dt>{{ $t("automations.sessionPolicy") }}</dt>
+              <dt>{{ custom.revision }}</dt>
               <dd>
-                {{
-                  $t(
-                    selectedSchedule.sessionPolicy === "NEW_EACH_RUN"
-                      ? "automations.newSession"
-                      : "automations.continueSession",
-                  )
-                }}
+                <span class="mono">{{
+                  selectedSchedule.currentRevision.revision
+                }}</span>
+                · {{ selectedSchedule.currentRevision.ref }}
               </dd>
             </div>
             <div>
-              <dt>{{ $t("automations.notifications") }}</dt>
-              <dd>
-                {{
-                  $t(
-                    selectedSchedule.notificationPolicy ===
-                      "CONTROL_CENTER_ONLY"
-                      ? "automations.controlCenterOnly"
-                      : "automations.optionalChannels",
-                  )
-                }}
-              </dd>
+              <dt>{{ custom.automationRef }}</dt>
+              <dd class="mono">{{ selectedSchedule.ref }}</dd>
             </div>
             <div>
               <dt>{{ $t("automations.nextRun") }}</dt>
@@ -447,72 +693,150 @@ onMounted(
               <dd>{{ selectedSchedule.lastOutcome || "—" }}</dd>
             </div>
           </dl>
+
           <section
             v-else-if="selectedSection === 'VERSIONS'"
             class="automation-details__history"
-            :aria-labelledby="`schedule-versions-${selectedSchedule.ref}`"
           >
             <div class="automation-details__history-heading">
               <History :size="18" aria-hidden="true" />
-              <h3 :id="`schedule-versions-${selectedSchedule.ref}`">
-                {{ $t("automations.versionHistory") }}
-              </h3>
+              <h3>{{ $t("automations.versionHistory") }}</h3>
             </div>
-            <article class="automation-details__revision">
+            <ProblemNotice
+              v-if="revisionsProblem"
+              :problem="revisionsProblem"
+              compact
+            />
+            <div
+              v-if="revisionsLoading && revisions.length === 0"
+              class="automation-details__loading"
+            >
+              <LoaderCircle class="spin" :size="20" aria-hidden="true" />
+            </div>
+            <p
+              v-else-if="revisions.length === 0"
+              class="automation-details__empty"
+            >
+              {{ custom.noRevisions }}
+            </p>
+            <article
+              v-for="revision in revisions"
+              :key="revision.ref"
+              class="automation-details__revision"
+            >
               <div>
-                <strong>
-                  {{
-                    $t("automations.currentVersion", {
-                      version: selectedSchedule.version,
-                    })
-                  }}
-                </strong>
-                <StatusBadge :state="selectedSchedule.state" />
+                <strong>{{ custom.revision }} {{ revision.revision }}</strong>
+                <span
+                  v-if="revision.ref === selectedSchedule.currentRevision.ref"
+                  class="automation-details__current"
+                  >{{ custom.current }}</span
+                >
               </div>
-              <p>{{ scheduleLabel(selectedSchedule) }}</p>
-              <p>{{ task(selectedSchedule) }}</p>
+              <p>{{ revisionLabel(revision) }}</p>
+              <p>{{ task(revision) }}</p>
+              <dl>
+                <div>
+                  <dt>{{ custom.revisionRef }}</dt>
+                  <dd class="mono">{{ revision.ref }}</dd>
+                </div>
+                <div>
+                  <dt>Digest</dt>
+                  <dd class="mono">{{ revision.digest }}</dd>
+                </div>
+                <div>
+                  <dt>{{ custom.target }}</dt>
+                  <dd>{{ revision.target.displayName }}</dd>
+                </div>
+                <div>
+                  <dt>{{ custom.createdAt }}</dt>
+                  <dd>{{ formatDate(revision.createdAt) }}</dd>
+                </div>
+              </dl>
             </article>
-            <div class="automation-details__unavailable" role="note">
-              <strong>{{ $t("automations.versionHistoryUnavailable") }}</strong>
-              <p>{{ $t("automations.versionHistoryUnavailableText") }}</p>
-            </div>
+            <button
+              v-if="revisionsToken"
+              class="button"
+              type="button"
+              :disabled="revisionsLoading"
+              @click="loadRevisions(false)"
+            >
+              {{ custom.loadMore }}
+            </button>
           </section>
-          <section
-            v-else
-            class="automation-details__history"
-            :aria-labelledby="`schedule-runs-${selectedSchedule.ref}`"
-          >
+
+          <section v-else class="automation-details__history">
             <div class="automation-details__history-heading">
               <History :size="18" aria-hidden="true" />
-              <h3 :id="`schedule-runs-${selectedSchedule.ref}`">
-                {{ $t("automations.runHistory") }}
-              </h3>
+              <h3>{{ $t("automations.runHistory") }}</h3>
             </div>
-            <dl class="automation-details__run-summary">
-              <div>
-                <dt>{{ $t("automations.nextRun") }}</dt>
-                <dd>
-                  {{
-                    selectedSchedule.nextRunAt
-                      ? formatDate(selectedSchedule.nextRunAt)
-                      : $t("automations.notScheduled")
-                  }}
-                </dd>
-              </div>
-              <div>
-                <dt>{{ custom.lastResult }}</dt>
-                <dd>
-                  {{
-                    selectedSchedule.lastOutcome || $t("automations.noRunsYet")
-                  }}
-                </dd>
-              </div>
-            </dl>
-            <div class="automation-details__unavailable" role="note">
-              <strong>{{ $t("automations.runHistoryUnavailable") }}</strong>
-              <p>{{ $t("automations.runHistoryUnavailableText") }}</p>
+            <ProblemNotice v-if="runsProblem" :problem="runsProblem" compact />
+            <div
+              v-if="runsLoading && runOccurrences.length === 0"
+              class="automation-details__loading"
+            >
+              <LoaderCircle class="spin" :size="20" aria-hidden="true" />
             </div>
+            <p
+              v-else-if="runOccurrences.length === 0"
+              class="automation-details__empty"
+            >
+              {{ custom.noRuns }}
+            </p>
+            <article
+              v-for="occurrence in runOccurrences"
+              :key="`${occurrence.scheduleRef}:${occurrence.scheduleRevisionRef}:${occurrence.run.ref}`"
+              class="automation-details__run"
+            >
+              <div>
+                <strong>{{ occurrence.run.title }}</strong
+                ><StatusBadge :state="occurrence.run.state" />
+              </div>
+              <p>
+                {{
+                  occurrence.run.activitySummary ||
+                  occurrence.run.resultSummary ||
+                  "—"
+                }}
+              </p>
+              <dl>
+                <div>
+                  <dt>{{ custom.runRef }}</dt>
+                  <dd class="mono">{{ occurrence.run.ref }}</dd>
+                </div>
+                <div>
+                  <dt>{{ custom.automationRef }}</dt>
+                  <dd class="mono">{{ occurrence.scheduleRef }}</dd>
+                </div>
+                <div>
+                  <dt>{{ custom.revision }}</dt>
+                  <dd>{{ occurrence.scheduleRevision }}</dd>
+                </div>
+                <div>
+                  <dt>{{ custom.revisionRef }}</dt>
+                  <dd class="mono">{{ occurrence.scheduleRevisionRef }}</dd>
+                </div>
+                <div>
+                  <dt>{{ custom.createdAt }}</dt>
+                  <dd>{{ formatDate(occurrence.run.createdAt) }}</dd>
+                </div>
+              </dl>
+              <RouterLink
+                class="button"
+                :to="`/projects/${projectRef}/runs/${occurrence.run.ref}`"
+                >{{ $t("common.open") }}</RouterLink
+              >
+            </article>
+            <button
+              v-if="runsToken"
+              class="button"
+              type="button"
+              :disabled="runsLoading"
+              @click="loadRuns(false)"
+            >
+              {{ custom.loadMore }}
+            </button>
           </section>
+
           <div class="automation-details__actions" :aria-label="custom.actions">
             <button
               v-if="selectedCapabilities?.canEdit"
@@ -520,37 +844,43 @@ onMounted(
               type="button"
               @click="openEdit(selectedSchedule)"
             >
-              <Pencil :size="16" aria-hidden="true" />
-              {{ custom.edit }}
+              <Pencil :size="16" aria-hidden="true" />{{ custom.edit }}
             </button>
             <button
               v-if="selectedCapabilities?.canPause"
               class="button"
               type="button"
               :disabled="commandBusy === selectedSchedule.ref"
-              @click="command(selectedSchedule, 'PAUSE')"
+              @click="runCommand(selectedSchedule, 'PAUSE')"
             >
-              <Pause :size="16" aria-hidden="true" />
-              {{ $t("automations.pause") }}
+              <Pause :size="16" aria-hidden="true" />{{
+                $t("automations.pause")
+              }}
             </button>
             <button
               v-if="selectedCapabilities?.canEnable"
               class="button"
               type="button"
               :disabled="commandBusy === selectedSchedule.ref"
-              @click="command(selectedSchedule, 'ENABLE')"
+              @click="runCommand(selectedSchedule, 'ENABLE')"
             >
-              <Play :size="16" aria-hidden="true" />
-              {{ $t("common.enable") }}
+              <Play :size="16" aria-hidden="true" />{{ $t("common.enable") }}
             </button>
             <button
               v-if="selectedCapabilities?.canArchive"
+              class="button"
+              type="button"
+              @click="archiveScheduleRef = selectedSchedule.ref"
+            >
+              <Archive :size="16" aria-hidden="true" />{{ custom.archive }}
+            </button>
+            <button
+              v-if="selectedCapabilities?.canDelete"
               class="button button--danger"
               type="button"
-              @click="requestArchive(selectedSchedule)"
+              @click="deleteScheduleRef = selectedSchedule.ref"
             >
-              <Archive :size="16" aria-hidden="true" />
-              {{ custom.archive }}
+              <Trash2 :size="16" aria-hidden="true" />{{ custom.delete }}
             </button>
           </div>
         </aside>
@@ -577,6 +907,18 @@ onMounted(
       @close="archiveScheduleRef = ''"
       @confirm="confirmArchive"
     />
+    <AutomationArchiveDialog
+      v-if="deleteCandidate"
+      :schedule="deleteCandidate"
+      :title="custom.deleteTitle"
+      :description="custom.deleteDescription"
+      :cancel-label="$t('common.cancel')"
+      :confirm-label="custom.delete"
+      :busy="commandBusy === deleteCandidate.ref"
+      kind="DELETE"
+      @close="deleteScheduleRef = ''"
+      @confirm="confirmDelete"
+    />
   </section>
 </template>
 
@@ -601,7 +943,7 @@ onMounted(
 }
 .automations-workspace__search {
   display: flex;
-  width: 280px;
+  width: min(460px, 55vw);
   align-items: center;
   gap: 7px;
   padding: 0 9px;
@@ -625,19 +967,19 @@ onMounted(
 .automations-workspace__layout {
   display: grid;
   min-height: 540px;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 28vw);
 }
 .automations-list {
   min-width: 700px;
-  max-height: 68vh;
+  max-height: 72vh;
   overflow: auto;
 }
 .automations-list__head,
 .automation-row {
   display: grid;
   grid-template-columns:
-    minmax(230px, 1.35fr) minmax(160px, 0.9fr) 126px 138px
-    minmax(110px, 0.7fr);
+    minmax(230px, 1.35fr) minmax(160px, 0.9fr)
+    126px 138px minmax(110px, 0.7fr);
   gap: 12px;
   align-items: center;
 }
@@ -694,20 +1036,28 @@ onMounted(
   display: grid;
   gap: 4px;
 }
-.automation-row__state small {
-  padding-left: 2px;
+.automation-list-sentinel {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
 }
 .automation-details {
-  max-height: 68vh;
+  max-height: 72vh;
   overflow: auto;
   padding: 16px;
   border-left: 1px solid var(--border);
 }
-.automation-details header {
+.automation-details header,
+.automation-details__history-heading,
+.automation-details__revision > div,
+.automation-details__run > div {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+}
+.automation-details header {
   padding-bottom: 14px;
   border-bottom: 1px solid var(--border);
 }
@@ -716,7 +1066,8 @@ onMounted(
   overflow-wrap: anywhere;
   font-size: 1.05rem;
 }
-.automation-details header > svg {
+.automation-details header > svg,
+.automation-details__history-heading {
   color: var(--accent);
 }
 .automation-details__status {
@@ -724,9 +1075,6 @@ onMounted(
   align-items: center;
   gap: 8px;
   margin-top: 8px;
-}
-.automation-details dl {
-  margin: 0;
 }
 .automation-details__tabs {
   display: grid;
@@ -754,11 +1102,14 @@ onMounted(
 .automation-details__tab--active {
   font-weight: 700;
 }
+.automation-details dl {
+  margin: 0;
+}
 .automation-details dl div {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr);
   gap: 10px;
-  padding: 11px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--hairline);
 }
 .automation-details dt {
@@ -777,57 +1128,70 @@ onMounted(
 }
 .automation-details__history {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   padding-top: 14px;
-}
-.automation-details__history-heading,
-.automation-details__revision > div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
 }
 .automation-details__history-heading {
   justify-content: flex-start;
-  color: var(--accent);
+  align-items: center;
 }
 .automation-details__history-heading h3 {
   margin: 0;
   color: var(--text);
   font-size: 0.9rem;
 }
-.automation-details__revision {
+.automation-details__revision,
+.automation-details__run {
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 7px;
 }
-.automation-details__revision p {
-  margin: 8px 0 0;
+.automation-details__revision p,
+.automation-details__run p {
+  margin: 8px 0;
   color: var(--muted);
   font-size: 0.78rem;
   overflow-wrap: anywhere;
 }
-.automation-details dl.automation-details__run-summary div {
-  grid-template-columns: 98px minmax(0, 1fr);
+.automation-details__revision dl,
+.automation-details__run dl {
+  margin: 8px 0;
 }
-.automation-details__unavailable {
-  margin-top: 14px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--panel);
+.automation-details__revision dl div,
+.automation-details__run dl div {
+  grid-template-columns: 92px minmax(0, 1fr);
+  padding: 6px 0;
 }
-.automation-details__unavailable p {
-  margin: 4px 0 0;
+.automation-details__current {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.72rem;
+}
+.automation-details__loading {
+  display: flex;
+  min-height: 80px;
+  align-items: center;
+  justify-content: center;
+}
+.automation-details__empty {
   color: var(--muted);
-  font-size: 0.78rem;
 }
 .automations-workspace__empty {
   margin: 16px;
 }
+.spin {
+  animation: rotate 0.8s linear infinite;
+}
+@keyframes rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @media (max-width: 980px) {
   .automations-workspace__layout {
-    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-columns: minmax(0, 1fr) 320px;
   }
 }
 @media (max-width: 760px) {
@@ -866,9 +1230,6 @@ onMounted(
   }
   .automation-row__identity {
     grid-column: 1 / -1;
-  }
-  .automation-row__schedule {
-    grid-column: 1;
   }
   .automation-row__state {
     grid-column: 2;

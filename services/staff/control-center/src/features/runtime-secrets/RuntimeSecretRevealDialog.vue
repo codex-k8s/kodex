@@ -4,13 +4,15 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 import { revealRuntimeSecret } from "./api";
 import type { RuntimeSecret, RuntimeSecretValueType } from "./model";
-import { maskedSecretHint } from "./model";
+import { canRuntimeSecretAction, maskedSecretHint } from "./model";
 import { executeRuntimeSecretReveal } from "./reveal-flow";
 import { useSessionStore } from "@/features/session/store";
 import type { AppProblem } from "@/shared/api/problem";
 import { asProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+
+const plaintextLifetimeMs = 60_000;
 
 const props = defineProps<{ secret: RuntimeSecret }>();
 const emit = defineEmits<{ close: [] }>();
@@ -20,14 +22,20 @@ const problem = ref<AppProblem>();
 const value = ref("");
 const valueType = ref<RuntimeSecretValueType>();
 const revealed = ref(false);
+let clearTimer: ReturnType<typeof setTimeout> | undefined;
 const revealPending = computed(() =>
   session.hasPendingRuntimeSecretReveal(
     props.secret.projectRef,
     props.secret.ref,
   ),
 );
+const canReveal = computed(() =>
+  canRuntimeSecretAction(props.secret, "REVEAL"),
+);
 
 function clearPlaintext(): void {
+  if (clearTimer) clearTimeout(clearTimer);
+  clearTimer = undefined;
   value.value = "";
   valueType.value = undefined;
   revealed.value = false;
@@ -40,7 +48,7 @@ function close(): void {
 }
 
 async function reveal(): Promise<void> {
-  if (busy.value) return;
+  if (busy.value || !canReveal.value) return;
   clearPlaintext();
   problem.value = undefined;
   busy.value = true;
@@ -57,6 +65,7 @@ async function reveal(): Promise<void> {
     valueType.value = result.valueType;
     result.value = "";
     revealed.value = true;
+    clearTimer = setTimeout(clearPlaintext, plaintextLifetimeMs);
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -132,7 +141,7 @@ onBeforeUnmount(clearPlaintext);
         v-if="!revealed"
         class="button button--danger"
         type="button"
-        :disabled="busy"
+        :disabled="busy || !canReveal"
         @click="reveal"
       >
         <Eye v-if="revealPending" :size="16" aria-hidden="true" />

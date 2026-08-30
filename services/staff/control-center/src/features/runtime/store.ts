@@ -6,10 +6,13 @@ import {
   bindAgentRuntimeEnvironment,
   createConfigOverlayDraft,
   createRuntimeEnvironmentSet,
+  deleteRuntimeEnvironment,
   getAgentRuntimeConfiguration,
   getRoleImageRecipe,
+  getRuntimeEnvironmentReadiness,
   getRuntimeEnvironmentSet,
   listAgentRuntimeConfigurationVersions,
+  listRuntimeEnvironmentAgents,
   listRuntimeEnvironmentSets,
   listRuntimeEnvironmentVersions,
   listRoleImageRecipes,
@@ -18,14 +21,18 @@ import {
   publishRuntimeEnvironmentVersion,
   rollbackConfigOverlay,
   rollbackRuntimeEnvironment,
+  setRuntimeEnvironmentEnabled,
   validateConfigOverlayDraft,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   AgentRuntimeConfiguration,
   AgentRuntimeConfigurationInput,
   AgentRuntimeConfigurationView,
+  Agent,
+  AgentPage,
   RuntimeEnvironmentInput,
   RuntimeEnvironmentPage,
+  RuntimeEnvironmentReadiness,
   RuntimeEnvironmentSet,
   RuntimeEnvironmentVersion,
   RoleImageArtifact,
@@ -48,6 +55,8 @@ type RuntimeResource =
   | `agent:${string}`
   | `agent-versions:${string}`
   | `environment:${string}`
+  | `environment-agents:${string}`
+  | `environment-readiness:${string}`
   | `environment-versions:${string}`;
 
 function versionHeaders(headers: MutationHeaders): {
@@ -72,6 +81,13 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     {},
   );
   const environments = reactive<Record<string, RuntimeEnvironmentSet>>({});
+  const environmentReadiness = reactive<
+    Record<string, RuntimeEnvironmentReadiness | undefined>
+  >({});
+  const environmentAgents = reactive<Record<string, Agent[]>>({});
+  const environmentAgentCursors = reactive<Record<string, string | undefined>>(
+    {},
+  );
   const environmentVersions = reactive<
     Record<string, RuntimeEnvironmentVersion[]>
   >({});
@@ -358,6 +374,66 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     );
   }
 
+  async function loadEnvironmentReadiness(
+    environmentRef: string,
+  ): Promise<void> {
+    await query(
+      `environment-readiness:${environmentRef}`,
+      async () =>
+        (
+          await unwrap(
+            getRuntimeEnvironmentReadiness({
+              path: { environmentRef },
+              signal: requestSignal(),
+            }),
+          )
+        ).data,
+      (value) => {
+        environmentReadiness[environmentRef] = value;
+      },
+    );
+  }
+
+  async function loadEnvironmentAgents(
+    environmentRef: string,
+    reset = true,
+  ): Promise<void> {
+    const pageToken = reset
+      ? undefined
+      : environmentAgentCursors[environmentRef];
+    if (!reset && !pageToken) return;
+    await query(
+      `environment-agents:${environmentRef}`,
+      async (): Promise<AgentPage> =>
+        (
+          await unwrap(
+            listRuntimeEnvironmentAgents({
+              path: { environmentRef },
+              query: {
+                pageSize: 30,
+                ...(pageToken ? { pageToken } : {}),
+              },
+              signal: requestSignal(),
+            }),
+          )
+        ).data,
+      (page) => {
+        if (reset) environmentAgents[environmentRef] = page.items;
+        else {
+          const merged = new Map(
+            (environmentAgents[environmentRef] ?? []).map((item) => [
+              item.ref,
+              item,
+            ]),
+          );
+          for (const item of page.items) merged.set(item.ref, item);
+          environmentAgents[environmentRef] = [...merged.values()];
+        }
+        environmentAgentCursors[environmentRef] = page.nextPageToken;
+      },
+    );
+  }
+
   async function loadEnvironmentVersions(
     environmentRef: string,
     reset = true,
@@ -453,12 +529,50 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     return result.data;
   }
 
+  async function setEnvironmentEnabled(
+    current: RuntimeEnvironmentSet,
+    enabled: boolean,
+  ): Promise<RuntimeEnvironmentSet> {
+    const result = await mutate(
+      (headers) =>
+        setRuntimeEnvironmentEnabled({
+          path: { environmentRef: current.ref },
+          body: { enabled },
+          headers: versionHeaders(headers),
+          signal: requestSignal(),
+        }),
+      current.version,
+    );
+    environments[result.data.ref] = result.data;
+    await loadEnvironmentReadiness(result.data.ref);
+    return result.data;
+  }
+
+  async function removeEnvironment(
+    current: RuntimeEnvironmentSet,
+  ): Promise<RuntimeEnvironmentSet> {
+    const result = await mutate(
+      (headers) =>
+        deleteRuntimeEnvironment({
+          path: { environmentRef: current.ref },
+          headers: versionHeaders(headers),
+          signal: requestSignal(),
+        }),
+      current.version,
+    );
+    environments[result.data.ref] = result.data;
+    return result.data;
+  }
+
   function clear(): void {
     generations.clear();
     for (const target of [
       agentViews,
       agentVersions,
       environments,
+      environmentReadiness,
+      environmentAgents,
+      environmentAgentCursors,
       environmentVersions,
       environmentVersionCursors,
       loading,
@@ -473,6 +587,9 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     agentViews,
     agentVersions,
     environments,
+    environmentReadiness,
+    environmentAgents,
+    environmentAgentCursors,
     environmentVersions,
     environmentVersionCursors,
     loading,
@@ -488,10 +605,14 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     searchPromotedRoleImagePage,
     loadPromotedRoleImageArtifact,
     loadEnvironment,
+    loadEnvironmentReadiness,
+    loadEnvironmentAgents,
     loadEnvironmentVersions,
     createEnvironment,
     publishEnvironment,
     restoreEnvironment,
+    setEnvironmentEnabled,
+    removeEnvironment,
     clear,
   };
 });

@@ -10,10 +10,12 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{
   artifact: Artifact;
+  actionUnavailableLabel: string;
   imageUrl?: string;
   labels: FilePreviewLabels;
   deleteLabel: string;
   lifecycleAction?: "DELETE" | "RESTORE";
+  lifecycleAvailable: boolean;
   loading?: boolean;
   previewText?: string;
   unavailable?: boolean;
@@ -84,7 +86,13 @@ const textChunks = computed(() => {
           </label>
           <label v-else-if="imageUrl" class="file-preview-dialog__zoom">
             <span>{{ labels.zoom }}</span>
-            <input v-model="zoom" type="range" min="50" max="180" step="10" />
+            <input
+              v-model.number="zoom"
+              type="range"
+              min="50"
+              max="100"
+              step="10"
+            />
             <output>{{ zoom }}%</output>
           </label>
         </header>
@@ -100,7 +108,7 @@ const textChunks = computed(() => {
             <img
               :src="imageUrl"
               :alt="artifact.fileName"
-              :style="{ width: `${zoom}%` }"
+              :style="{ maxWidth: `${zoom}%` }"
             />
           </div>
           <div v-else class="file-preview-dialog__state">
@@ -143,7 +151,8 @@ const textChunks = computed(() => {
         class="button"
         :class="lifecycleAction === 'RESTORE' ? '' : 'button--danger'"
         type="button"
-        :disabled="loading"
+        :disabled="loading || !lifecycleAvailable"
+        :title="lifecycleAvailable ? deleteLabel : actionUnavailableLabel"
         @click="emit('requestDelete')"
       >
         <RotateCcw
@@ -163,10 +172,14 @@ const textChunks = computed(() => {
         {{ labels.close }}
       </button>
       <button
-        v-if="artifact.nextActions.includes('DOWNLOAD')"
         class="button button--primary"
         type="button"
-        :disabled="loading"
+        :disabled="loading || !artifact.nextActions.includes('DOWNLOAD')"
+        :title="
+          artifact.nextActions.includes('DOWNLOAD')
+            ? labels.download
+            : actionUnavailableLabel
+        "
         @click="emit('download')"
       >
         <Download :size="16" aria-hidden="true" />
@@ -180,10 +193,11 @@ const textChunks = computed(() => {
 .file-preview-dialog {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
-  width: calc(100% + 40px);
-  height: calc(100% + 40px);
+  width: 100%;
+  max-width: 100%;
+  height: min(78vh, 820px);
   min-height: 0;
-  margin: -20px;
+  overflow: hidden;
 }
 .file-preview-dialog__viewer {
   display: flex;
@@ -246,11 +260,13 @@ const textChunks = computed(() => {
   flex: 1;
   align-items: stretch;
   justify-content: center;
-  overflow: auto;
+  overflow: hidden auto;
   padding: 20px;
 }
 .file-preview-dialog__content pre {
   width: min(720px, 100%);
+  max-width: 100%;
+  box-sizing: border-box;
   min-height: 100%;
   padding: 28px;
   margin: 0;
@@ -268,13 +284,16 @@ const textChunks = computed(() => {
   background: #ffe89a;
 }
 .file-preview-dialog__image-wrap {
+  display: grid;
   width: 100%;
-  overflow: auto;
-  text-align: center;
+  min-width: 0;
+  place-items: start center;
+  overflow: hidden auto;
 }
 .file-preview-dialog__image-wrap img {
-  display: inline-block;
-  max-width: none;
+  display: block;
+  width: auto;
+  max-width: 100%;
   height: auto;
   border: 1px solid var(--border);
   background: var(--surface);
@@ -323,7 +342,8 @@ const textChunks = computed(() => {
 @media (max-width: 760px) {
   .file-preview-dialog {
     display: block;
-    width: auto;
+    width: 100%;
+    height: auto;
     min-height: 60vh;
   }
   .file-preview-dialog__viewer {

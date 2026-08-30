@@ -32,6 +32,7 @@ import {
   getAdministration,
   getAgent,
   getArtifact,
+  getArtifactImpact,
   getBootstrapState,
   getIntegrationConnection,
   getOverview,
@@ -80,6 +81,7 @@ import type {
   AgentCommand,
   AgentInput,
   Artifact,
+  ArtifactImpact,
   AssistantConversation,
   AuditEvent,
   BootstrapState,
@@ -756,11 +758,29 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   async function deleteProjectArtifact(artifact: Artifact): Promise<Artifact> {
+    const impactResult = await unwrap(
+      getArtifactImpact({
+        path: { artifactRef: artifact.ref },
+        query: { action: "DELETE" },
+        signal: requestSignal(),
+      }),
+    );
+    const impact: ArtifactImpact = impactResult.data;
+    if (
+      !impact.permitted ||
+      impact.action !== "DELETE" ||
+      impact.artifactRef !== artifact.ref ||
+      impact.artifactVersion !== artifact.version
+    )
+      throw new Error("Artifact impact does not authorize this mutation");
     const result = await mutate(
       (headers) =>
         deleteArtifact({
           path: { artifactRef: artifact.ref },
-          headers: versionedHeaders(headers),
+          headers: {
+            ...versionedHeaders(headers),
+            "X-Impact-Digest": impact.impactDigest,
+          },
           signal: requestSignal(),
         }),
       artifact.version,

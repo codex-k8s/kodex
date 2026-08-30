@@ -16,6 +16,8 @@ import { useRouter } from "vue-router";
 
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import {
+  buildRevisionIdentity,
+  canPromoteRoleImage,
   canRequestBuild,
   latestBuild,
   roleImageState,
@@ -45,6 +47,12 @@ const builds = computed(() =>
 const currentBuild = computed(() => latestBuild(builds.value));
 const artifact = computed(() =>
   props.recipeRef ? store.artifacts[props.recipeRef] : undefined,
+);
+const revisions = computed(() =>
+  props.recipeRef ? (store.revisions[props.recipeRef] ?? []) : [],
+);
+const promotionReceipt = computed(() =>
+  props.recipeRef ? store.promotionReceipts[props.recipeRef] : undefined,
 );
 const dependencies = computed(() =>
   props.recipeRef ? (store.dependencies[props.recipeRef] ?? []) : [],
@@ -168,6 +176,17 @@ async function runCommand(
   }
 }
 
+async function promote(): Promise<void> {
+  if (!recipe.value || !artifact.value) return;
+  if (!canPromoteRoleImage(recipe.value, artifact.value)) return;
+  try {
+    await store.promote(props.projectRef, recipe.value, artifact.value);
+    sync();
+  } catch {
+    // Store сохраняет нормализованную problem-модель для видимого состояния.
+  }
+}
+
 watch(
   () => [props.projectRef, props.recipeRef],
   () => void load(),
@@ -236,6 +255,16 @@ onBeforeUnmount(() => store.dispose());
           >
             <RotateCcw :size="16" aria-hidden="true" />
             {{ t("roleImages.restore") }}
+          </button>
+          <button
+            v-if="canPromoteRoleImage(recipe, artifact)"
+            class="button button--primary"
+            type="button"
+            :disabled="store.mutating"
+            @click="promote"
+          >
+            <PackageCheck :size="16" aria-hidden="true" />
+            {{ t("roleImages.promotion") }}
           </button>
         </div>
       </section>
@@ -362,6 +391,13 @@ onBeforeUnmount(() => store.dispose());
                 <strong>
                   {{ t("roleImages.attempt", { attempt: build.attempt }) }}
                 </strong>
+                <code>
+                  {{
+                    t("roleImages.generationLabel", {
+                      generation: buildRevisionIdentity(build).generation,
+                    })
+                  }}
+                </code>
                 <small>{{ new Date(build.updatedAt).toLocaleString() }}</small>
               </div>
               <div class="build-progress">
@@ -375,7 +411,64 @@ onBeforeUnmount(() => store.dispose());
                   {{ build.diagnosticCode }}
                 </code>
               </p>
+              <details class="build-source">
+                <summary>
+                  {{ t("roleImages.dockerfile") }} ·
+                  {{
+                    t("roleImages.generationLabel", {
+                      generation: build.recipeGeneration,
+                    })
+                  }}
+                </summary>
+                <pre><code>{{ build.dockerfile }}</code></pre>
+              </details>
             </article>
+          </section>
+
+          <section v-if="recipe" class="panel build-history">
+            <header class="section-header">
+              <div>
+                <h2>{{ t("runtime.revisionHistory") }}</h2>
+                <p>{{ t("roleImages.immutableRevisionHelp") }}</p>
+              </div>
+              <History :size="20" aria-hidden="true" />
+            </header>
+            <div v-if="!revisions.length" class="empty-section">
+              {{ t("common.empty") }}
+            </div>
+            <article
+              v-for="revision in revisions"
+              v-else
+              :key="revision.ref"
+              class="revision-row"
+            >
+              <div>
+                <strong>rev {{ revision.revision }}</strong>
+                <span>
+                  {{
+                    t("roleImages.generationLabel", {
+                      generation: revision.recipeGeneration,
+                    })
+                  }}
+                </span>
+              </div>
+              <code :title="revision.manifestDigest">{{
+                revision.manifestDigest
+              }}</code>
+              <StatusBadge
+                :state="revision.promotedReference ? 'PROMOTED' : 'COMPLETED'"
+              />
+              <small>{{ new Date(revision.createdAt).toLocaleString() }}</small>
+            </article>
+            <button
+              v-if="store.revisionNextPageToken[recipe.ref]"
+              class="button"
+              type="button"
+              :disabled="store.loadingDetail"
+              @click="store.loadMoreRevisions(projectRef, recipe.ref)"
+            >
+              {{ t("roleImages.loadMore") }}
+            </button>
           </section>
         </main>
 
@@ -411,6 +504,10 @@ onBeforeUnmount(() => store.dispose());
                   }}
                 </dd>
               </div>
+              <div>
+                <dt>{{ t("runtime.revisionHistory") }}</dt>
+                <dd>{{ revisions.length }}</dd>
+              </div>
             </dl>
           </section>
 
@@ -440,7 +537,23 @@ onBeforeUnmount(() => store.dispose());
                 <dt>{{ t("roleImages.admissionVerdict") }}</dt>
                 <dd><StatusBadge :state="artifact.admissionVerdict" /></dd>
               </div>
+              <div>
+                <dt>Provenance</dt>
+                <dd>
+                  <code>{{ artifact.provenanceSha256 }}</code>
+                </dd>
+              </div>
+              <div v-if="artifact.promotionReceiptSha256">
+                <dt>{{ t("roleImages.promotion") }}</dt>
+                <dd>
+                  <code>{{ artifact.promotionReceiptSha256 }}</code>
+                </dd>
+              </div>
             </dl>
+            <StatusBadge
+              v-if="promotionReceipt"
+              :state="promotionReceipt.state"
+            />
             <p v-else>{{ t("roleImages.noPromotedArtifact") }}</p>
           </section>
           <section class="panel artifact-card">
@@ -591,6 +704,11 @@ onBeforeUnmount(() => store.dispose());
 }
 .build-row > div:first-child {
   display: grid;
+  gap: 3px;
+}
+.build-row > div:first-child code {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
 }
 .build-row small {
   color: var(--text-secondary);
@@ -618,6 +736,51 @@ onBeforeUnmount(() => store.dispose());
 .build-diagnostic code {
   display: block;
   margin-top: 4px;
+}
+.build-source {
+  grid-column: 1 / -1;
+}
+.build-source summary {
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.build-source pre {
+  max-height: 280px;
+  padding: 12px;
+  margin: 10px 0 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--canvas);
+}
+.build-source code {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  white-space: pre;
+}
+.revision-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.5fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--hairline);
+}
+.revision-row > div {
+  display: grid;
+  gap: 3px;
+}
+.revision-row code {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.revision-row small,
+.revision-row span {
+  color: var(--text-secondary);
 }
 .empty-section {
   padding: 28px;

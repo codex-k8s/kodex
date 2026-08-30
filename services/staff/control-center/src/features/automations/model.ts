@@ -9,6 +9,7 @@ export interface ScheduleCapabilities {
   canPause: boolean;
   canEnable: boolean;
   canArchive: boolean;
+  canDelete: boolean;
 }
 
 export type ScheduleFilter = "CURRENT" | "ALL" | Schedule["state"];
@@ -19,6 +20,7 @@ export function scheduleCapabilities(schedule: Schedule): ScheduleCapabilities {
     canPause: schedule.nextActions.includes("DISABLE"),
     canEnable: schedule.nextActions.includes("ENABLE"),
     canArchive: schedule.nextActions.includes("ARCHIVE"),
+    canDelete: schedule.nextActions.includes("DELETE"),
   };
 }
 
@@ -27,7 +29,8 @@ export function scheduleMatchesFilter(
   filter: ScheduleFilter,
 ): boolean {
   if (filter === "ALL") return true;
-  if (filter === "CURRENT") return schedule.state !== "ARCHIVED";
+  if (filter === "CURRENT")
+    return schedule.state !== "ARCHIVED" && schedule.state !== "DELETED";
   return schedule.state === filter;
 }
 
@@ -98,7 +101,10 @@ export function verifyScheduleReadback(
     !readback ||
     readback.ref !== mutationResult.ref ||
     readback.version < mutationResult.version ||
-    !sameInput(scheduleInput(readback), submitted)
+    !sameInput(scheduleInput(readback), submitted) ||
+    readback.currentRevision.revision <
+      mutationResult.currentRevision.revision ||
+    !revisionMatchesInput(readback.currentRevision, submitted)
   )
     throw new AppProblem({
       status: 502,
@@ -117,7 +123,10 @@ export function verifyScheduleCommandReadback(
     !readback ||
     readback.ref !== mutationResult.ref ||
     readback.version < mutationResult.version ||
-    readback.state !== mutationResult.state
+    readback.state !== mutationResult.state ||
+    readback.currentRevision.ref !== mutationResult.currentRevision.ref ||
+    readback.currentRevision.revision !==
+      mutationResult.currentRevision.revision
   )
     throw new AppProblem({
       status: 502,
@@ -126,4 +135,35 @@ export function verifyScheduleCommandReadback(
       kind: "unavailable",
     });
   return readback;
+}
+
+export function verifyScheduleDeleteReadback(
+  mutationResult: Schedule,
+  readback: Schedule | undefined,
+): Schedule {
+  const result = verifyScheduleCommandReadback(mutationResult, readback);
+  if (result.state !== "DELETED" || result.nextActions.includes("DELETE"))
+    throw new AppProblem({
+      status: 502,
+      code: "SCHEDULE_DELETE_READBACK_MISMATCH",
+      retryable: true,
+      kind: "unavailable",
+    });
+  return result;
+}
+
+function revisionMatchesInput(
+  revision: Schedule["currentRevision"],
+  input: ScheduleInput,
+): boolean {
+  return (
+    revision.name === input.name &&
+    revision.target.ref === input.targetRef &&
+    revision.target.type === input.targetType &&
+    revision.preset === input.preset &&
+    revision.timezone === input.timezone &&
+    revision.sessionPolicy === input.sessionPolicy &&
+    revision.notificationPolicy === input.notificationPolicy &&
+    canonicalJson(revision.input) === canonicalJson(input.input)
+  );
 }

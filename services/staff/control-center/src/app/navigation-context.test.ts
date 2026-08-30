@@ -17,6 +17,7 @@ describe("shell navigation context", () => {
     ["runtime-environment", "runtime-environments"],
     ["runtime-secrets", "runtime-secrets"],
     ["files-trash", "files"],
+    ["provider-accounts", "administration"],
   ])(
     "выделяет один раздел для list/detail/create route %s",
     (route, section) => {

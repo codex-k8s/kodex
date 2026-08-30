@@ -49,6 +49,9 @@ onMounted(() => void load());
     :subtitle="$t('administration.subtitle')"
   >
     <template #actions
+      ><RouterLink class="button" to="/administration/providers">{{
+        $t("providers.title")
+      }}</RouterLink
       ><RouterLink class="button" to="/administration/access">{{
         $t("access.title")
       }}</RouterLink

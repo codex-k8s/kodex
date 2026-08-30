@@ -12,10 +12,6 @@ import AgentEnvironmentPanel from "@/features/agents/detail/AgentEnvironmentPane
 import AgentInstructionsPanel from "@/features/agents/detail/AgentInstructionsPanel.vue";
 import AgentProfilePanel from "@/features/agents/detail/AgentProfilePanel.vue";
 import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
-import {
-  avatarArtifactContentUrl,
-  avatarArtifactRef,
-} from "@/features/agents/detail/avatar";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import {
   sameProfileDraft,
@@ -25,6 +21,12 @@ import {
   type ApplyBoundary,
 } from "@/features/agents/detail/model";
 import { usePlatformStore } from "@/features/platform/store";
+import { requestSignal } from "@/shared/api/client";
+import {
+  removeAgentAvatar,
+  setAgentAvatar,
+} from "@/shared/api/generated/openapi/sdk.gen";
+import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
@@ -240,17 +242,45 @@ async function load(): Promise<void> {
   syncInstructions();
 }
 
-function avatarUpdateInput(avatarUrl: string) {
+function avatarMutationHeaders(headers: MutationHeaders) {
+  const version = headers["If-Match"];
+  if (!version) throw new Error("Agent avatar version header is unavailable");
+  return {
+    "Idempotency-Key": headers["Idempotency-Key"],
+    "If-Match": version,
+    "X-CSRF-Token": headers["X-CSRF-Token"],
+  };
+}
+
+async function setAvatarArtifact(artifactRef: string): Promise<void> {
   const current = agent.value;
   if (!current) throw new Error("Agent state is unavailable");
-  return {
-    name: current.name,
-    purpose: current.purpose,
-    roleDescription: current.roleDescription,
-    roleDefinitionRef: current.roleDefinitionRef,
-    avatarUrl,
-    runtimeRef: current.runtimeRef,
-  };
+  const result = await mutate(
+    (headers) =>
+      setAgentAvatar({
+        path: { agentRef: current.ref },
+        body: { artifactRef },
+        headers: avatarMutationHeaders(headers),
+        signal: requestSignal(),
+      }),
+    current.version,
+  );
+  platform.agents[result.data.ref] = result.data;
+}
+
+async function clearAvatar(): Promise<void> {
+  const current = agent.value;
+  if (!current) throw new Error("Agent state is unavailable");
+  const result = await mutate(
+    (headers) =>
+      removeAgentAvatar({
+        path: { agentRef: current.ref },
+        headers: avatarMutationHeaders(headers),
+        signal: requestSignal(),
+      }),
+    current.version,
+  );
+  platform.agents[result.data.ref] = result.data;
 }
 
 function markAvatarApplied(): void {
@@ -273,7 +303,7 @@ async function moveAvatarArtifactToTrash(
 
 async function applyAvatar(file: File): Promise<void> {
   if (!agent.value || !canManageAvatar.value || busy.value) return;
-  const previousArtifactRef = avatarArtifactRef(agent.value.avatarUrl);
+  const previousArtifactRef = agent.value.avatar?.artifactRef;
   let uploadedArtifactRef: string | undefined;
   busy.value = true;
   problem.value = undefined;
@@ -284,11 +314,7 @@ async function applyAvatar(file: File): Promise<void> {
       file,
     );
     uploadedArtifactRef = uploaded.ref;
-    await platform.saveAgent(
-      projectRef.value,
-      avatarUpdateInput(avatarArtifactContentUrl(uploaded.ref)),
-      agent.value,
-    );
+    await setAvatarArtifact(uploaded.ref);
     avatarFile.value = undefined;
     markAvatarApplied();
     if (previousArtifactRef && previousArtifactRef !== uploaded.ref) {
@@ -303,7 +329,7 @@ async function applyAvatar(file: File): Promise<void> {
       try {
         await moveAvatarArtifactToTrash(uploadedArtifactRef);
       } catch {
-        // The original mutation failure remains authoritative for the user.
+        // Исходная ошибка изменения остаётся авторитетной для пользователя.
       }
     }
     problem.value = asProblem(error);
@@ -314,17 +340,13 @@ async function applyAvatar(file: File): Promise<void> {
 }
 
 async function removeAvatar(): Promise<void> {
-  if (!agent.value?.avatarUrl || !canManageAvatar.value || busy.value) return;
-  const previousArtifactRef = avatarArtifactRef(agent.value.avatarUrl);
+  const previousArtifactRef = agent.value?.avatar?.artifactRef;
+  if (!previousArtifactRef || !canManageAvatar.value || busy.value) return;
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("profile"), "next-run");
   try {
-    await platform.saveAgent(
-      projectRef.value,
-      avatarUpdateInput(""),
-      agent.value,
-    );
+    await clearAvatar();
     markAvatarApplied();
     try {
       await moveAvatarArtifactToTrash(previousArtifactRef);
@@ -366,7 +388,6 @@ async function saveProfile(): Promise<void> {
         purpose: profileDraft.value.purpose.trim(),
         roleDescription: profileDraft.value.roleDescription.trim(),
         roleDefinitionRef: agent.value.roleDefinitionRef,
-        avatarUrl: agent.value.avatarUrl,
         runtimeRef: agent.value.runtimeRef,
       },
       agent.value,
@@ -598,7 +619,11 @@ onMounted(() => void load());
           <AgentProfilePanel
             :model-value="profileDraft"
             :role-name="agent.roleDefinitionName ?? agent.name"
-            :avatar-url="agent.avatarUrl"
+            :avatar-url="
+              agent.avatar?.source === 'ARTIFACT'
+                ? agent.avatar.contentPath
+                : undefined
+            "
             :avatar-asset="avatarAsset"
             :can-edit="canEdit"
             :busy="busy"

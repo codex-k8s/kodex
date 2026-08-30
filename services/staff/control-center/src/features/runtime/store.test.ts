@@ -5,17 +5,22 @@ import type {
   AgentRuntimeConfigurationView,
   RuntimeEnvironmentPolicy,
   RuntimeEnvironmentPage,
+  RuntimeEnvironmentSet,
   RuntimeEnvironmentVersionPage,
 } from "@/shared/api/generated/openapi/types.gen";
 import { defaultRuntimeEnvironmentPolicy } from "@/features/runtime/environment-form";
 
 const getAgentRuntimeConfigurationMock = vi.hoisted(() => vi.fn());
 const createRuntimeEnvironmentSetMock = vi.hoisted(() => vi.fn());
+const deleteRuntimeEnvironmentMock = vi.hoisted(() => vi.fn());
+const getRuntimeEnvironmentReadinessMock = vi.hoisted(() => vi.fn());
 const getRoleImageRecipeMock = vi.hoisted(() => vi.fn());
+const listRuntimeEnvironmentAgentsMock = vi.hoisted(() => vi.fn());
 const listRoleImageRecipesMock = vi.hoisted(() => vi.fn());
 const listRuntimeEnvironmentSetsMock = vi.hoisted(() => vi.fn());
 const listRuntimeEnvironmentVersionsMock = vi.hoisted(() => vi.fn());
 const publishRuntimeEnvironmentVersionMock = vi.hoisted(() => vi.fn());
+const setRuntimeEnvironmentEnabledMock = vi.hoisted(() => vi.fn());
 const mutateMock = vi.hoisted(() => vi.fn());
 
 const runtimeImage = {
@@ -50,12 +55,16 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
     typeof import("@/shared/api/generated/openapi/sdk.gen")
   >()),
   createRuntimeEnvironmentSet: createRuntimeEnvironmentSetMock,
+  deleteRuntimeEnvironment: deleteRuntimeEnvironmentMock,
   getAgentRuntimeConfiguration: getAgentRuntimeConfigurationMock,
+  getRuntimeEnvironmentReadiness: getRuntimeEnvironmentReadinessMock,
   getRoleImageRecipe: getRoleImageRecipeMock,
   listRoleImageRecipes: listRoleImageRecipesMock,
+  listRuntimeEnvironmentAgents: listRuntimeEnvironmentAgentsMock,
   listRuntimeEnvironmentSets: listRuntimeEnvironmentSetsMock,
   listRuntimeEnvironmentVersions: listRuntimeEnvironmentVersionsMock,
   publishRuntimeEnvironmentVersion: publishRuntimeEnvironmentVersionMock,
+  setRuntimeEnvironmentEnabled: setRuntimeEnvironmentEnabledMock,
 }));
 vi.mock("@/shared/api/client", () => ({
   requestSignal: () => new AbortController().signal,
@@ -135,6 +144,9 @@ function view(model: string, version: number): AgentRuntimeConfigurationView {
         createdAt: "2026-08-28T08:00:00Z",
       },
       updatedAt: "2026-08-28T08:00:00Z",
+      ready: true,
+      readinessBlockers: [],
+      nextActions: ["OPEN", "UPDATE", "DISABLE", "DELETE"],
     },
     safeEffectiveConfig: `model = "${model}"`,
     agentVersion: version,
@@ -150,11 +162,15 @@ describe("runtime store", () => {
     setActivePinia(createPinia());
     getAgentRuntimeConfigurationMock.mockReset();
     createRuntimeEnvironmentSetMock.mockReset();
+    deleteRuntimeEnvironmentMock.mockReset();
     getRoleImageRecipeMock.mockReset();
+    getRuntimeEnvironmentReadinessMock.mockReset();
     listRoleImageRecipesMock.mockReset();
     listRuntimeEnvironmentSetsMock.mockReset();
+    listRuntimeEnvironmentAgentsMock.mockReset();
     listRuntimeEnvironmentVersionsMock.mockReset();
     publishRuntimeEnvironmentVersionMock.mockReset();
+    setRuntimeEnvironmentEnabledMock.mockReset();
     mutateMock.mockReset();
     mutateMock.mockImplementation(
       async (request: (headers: Record<string, string>) => Promise<unknown>) =>
@@ -393,6 +409,76 @@ describe("runtime store", () => {
       expect.objectContaining({
         path: { environmentRef: "environment_main" },
         query: { pageSize: 30, pageToken: "cursor-2" },
+      }),
+    );
+  });
+
+  it("выполняет lifecycle с OCC и загружает exact readiness и bindings", async () => {
+    const environment = view("gpt-5.6-sol", 3).environment;
+    const disabled: RuntimeEnvironmentSet = {
+      ...environment,
+      version: 4,
+      state: "DISABLED",
+      nextActions: ["OPEN", "ENABLE", "DELETE"],
+    };
+    setRuntimeEnvironmentEnabledMock.mockReturnValueOnce(response(disabled));
+    getRuntimeEnvironmentReadinessMock.mockReturnValueOnce(
+      response({
+        environmentRef: environment.ref,
+        environmentVersion: disabled.version,
+        publishedVersionRef: disabled.currentVersion.ref,
+        publishedVersionDigest: disabled.currentVersion.digest,
+        ready: false,
+        blockers: ["environment_disabled"],
+        observedAt: "2026-08-30T10:00:00Z",
+      }),
+    );
+    listRuntimeEnvironmentAgentsMock.mockReturnValueOnce(
+      response({ items: [], nextPageToken: "" }),
+    );
+    deleteRuntimeEnvironmentMock.mockReturnValueOnce(
+      response({
+        ...disabled,
+        version: 5,
+        state: "DELETED" as const,
+        nextActions: [],
+      }),
+    );
+    const store = useRuntimeStore();
+
+    await store.setEnvironmentEnabled(environment, false);
+    await store.loadEnvironmentAgents(environment.ref);
+    await store.removeEnvironment(disabled);
+
+    expect(setRuntimeEnvironmentEnabledMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { environmentRef: environment.ref },
+        body: { enabled: false },
+        headers: {
+          "Idempotency-Key": "idem_1",
+          "If-Match": '"3"',
+          "X-CSRF-Token": "csrf_1",
+        },
+      }),
+    );
+    expect(store.environmentReadiness[environment.ref]).toMatchObject({
+      environmentVersion: 4,
+      ready: false,
+    });
+    expect(listRuntimeEnvironmentAgentsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { environmentRef: environment.ref },
+        query: { pageSize: 30 },
+      }),
+    );
+    expect(deleteRuntimeEnvironmentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { environmentRef: environment.ref },
+        headers: {
+          "Idempotency-Key": "idem_1",
+          "If-Match": '"3"',
+          "X-CSRF-Token": "csrf_1",
+        },
       }),
     );
   });

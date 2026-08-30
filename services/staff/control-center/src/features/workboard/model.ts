@@ -294,6 +294,7 @@ export function projectSchedules(
     ACTIVE: 1,
     PAUSED: 2,
     ARCHIVED: 3,
+    DELETED: 4,
   };
   return schedules
     .filter((schedule) => schedule.projectRef === projectRef)

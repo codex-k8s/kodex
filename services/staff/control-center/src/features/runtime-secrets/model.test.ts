@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canRuntimeSecretAction,
   maskedSecretHint,
   validateSecretValue,
   type RuntimeSecret,
@@ -15,6 +16,7 @@ const secret: RuntimeSecret = {
   valueType: "STRING",
   state: "ACTIVE",
   currentRevision: 2,
+  nextActions: ["ROTATE", "REVOKE", "REVEAL"],
   createdAt: "2026-08-29T08:00:00Z",
   updatedAt: "2026-08-29T09:00:00Z",
 };
@@ -34,5 +36,15 @@ describe("runtime secret model", () => {
     expect(validateSecretValue("STRING", "")).toBe("required");
     expect(validateSecretValue("JSON", "{")).toBe("invalid-json");
     expect(validateSecretValue("JSON", '{"enabled":true}')).toBeUndefined();
+  });
+
+  it("разрешает действие только по authoritative nextActions активного секрета", () => {
+    expect(canRuntimeSecretAction(secret, "REVEAL")).toBe(true);
+    expect(
+      canRuntimeSecretAction({ ...secret, nextActions: [] }, "REVEAL"),
+    ).toBe(false);
+    expect(
+      canRuntimeSecretAction({ ...secret, state: "REVOKED" }, "REVEAL"),
+    ).toBe(false);
   });
 });

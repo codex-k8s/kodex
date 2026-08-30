@@ -1,24 +1,30 @@
-import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  Artifact,
+  ArtifactImpact,
+} from "@/shared/api/generated/openapi/types.gen";
 
 export type FileKind = "ALL" | "TEXT" | "DOCUMENT" | "IMAGE";
 export type FileSource = "ALL" | Artifact["source"];
 export type FileCollectionMode = "ACTIVE" | "TRASH";
-export type FileTab = "FILES" | "RESULTS" | "TRASH";
+export type FileTab = "FILES" | "KNOWLEDGE" | "RESULTS" | "TRASH";
 
 export type ArtifactLifecycleAction = "DELETE" | "RESTORE" | "PURGE";
 export type ArtifactTrashBulkAction = "DELETE" | "RESTORE" | "PURGE" | "EMPTY";
 export type ArtifactLifecycleBlockReason =
   | "ACTION_NOT_ALLOWED"
-  | "CONTRACT_UNAVAILABLE";
+  | "IMPACT_BLOCKED"
+  | "IMPACT_UNAVAILABLE";
 
 export type ArtifactLifecycleState =
   | {
       action: ArtifactLifecycleAction;
       available: true;
+      impact?: ArtifactImpact;
     }
   | {
       action: ArtifactLifecycleAction;
       available: false;
+      impact?: ArtifactImpact;
       reason: ArtifactLifecycleBlockReason;
     };
 
@@ -28,8 +34,14 @@ export interface UploadQueueItem {
   file: File;
   id: string;
   problem?: string;
+  progress?: {
+    loadedBytes: number;
+    totalBytes: number;
+  };
   state: UploadQueueState;
 }
+
+export const uploadQueueConcurrency = 3;
 
 export type FileIconKind =
   | "archive"
@@ -71,6 +83,40 @@ const codeExtensions = new Set([
   "yaml",
   "yml",
 ]);
+const fileSources = [
+  "CONTROL_CENTER",
+  "INTERACTION_ATTACHMENT",
+] as const satisfies readonly Artifact["source"][];
+const knowledgeSources = [
+  "KNOWLEDGE_SOURCE",
+] as const satisfies readonly Artifact["source"][];
+const resultSources = [
+  "AGENT_RESULT",
+  "INTEGRATION_RESULT",
+] as const satisfies readonly Artifact["source"][];
+const allSources = [
+  ...fileSources,
+  ...knowledgeSources,
+  ...resultSources,
+] as const satisfies readonly Artifact["source"][];
+
+export function artifactSourcesForTab(
+  tab: FileTab,
+): readonly Artifact["source"][] {
+  if (tab === "FILES") return fileSources;
+  if (tab === "KNOWLEDGE") return knowledgeSources;
+  if (tab === "RESULTS") return resultSources;
+  return allSources;
+}
+
+export function artifactSourceKinds(
+  tab: FileTab,
+  source: FileSource,
+): Artifact["source"][] {
+  const available = artifactSourcesForTab(tab);
+  if (source === "ALL") return [...available];
+  return available.includes(source) ? [source] : [];
+}
 
 export function fileExtension(fileName: string): string {
   const extension = fileName.split(".").pop()?.trim().toLocaleLowerCase();
@@ -130,11 +176,7 @@ export function matchesArtifactFilters(
   const inTrash = artifact.lifecycleState !== "ACTIVE";
   if (options.tab === "TRASH" && !inTrash) return false;
   if (options.tab !== "TRASH" && inTrash) return false;
-  if (
-    options.tab === "RESULTS" &&
-    artifact.source !== "AGENT_RESULT" &&
-    artifact.source !== "INTEGRATION_RESULT"
-  )
+  if (!artifactSourcesForTab(options.tab).includes(artifact.source))
     return false;
   if (options.scanState !== "ALL" && artifact.scanState !== options.scanState)
     return false;
@@ -146,16 +188,44 @@ export function matchesArtifactFilters(
 export function artifactLifecycleState(
   artifact: Artifact,
   action: ArtifactLifecycleAction,
+  impact?: ArtifactImpact,
 ): ArtifactLifecycleState {
   const announcedByApi = (artifact.nextActions as readonly string[]).includes(
     action,
   );
-  if (announcedByApi) return { action, available: true };
-  return {
-    action,
-    available: false,
-    reason: "ACTION_NOT_ALLOWED",
-  };
+  if (!announcedByApi)
+    return {
+      action,
+      available: false,
+      reason: "ACTION_NOT_ALLOWED",
+    };
+  if (action === "RESTORE") return { action, available: true };
+  if (
+    !impact ||
+    impact.artifactRef !== artifact.ref ||
+    impact.artifactVersion !== artifact.version ||
+    impact.action !== action
+  )
+    return {
+      action,
+      available: false,
+      reason: "IMPACT_UNAVAILABLE",
+    };
+  if (!impact.permitted)
+    return {
+      action,
+      available: false,
+      impact,
+      reason: "IMPACT_BLOCKED",
+    };
+  return { action, available: true, impact };
+}
+
+export function artifactLifecycleAnnounced(
+  artifact: Artifact,
+  action: ArtifactLifecycleAction,
+): boolean {
+  return (artifact.nextActions as readonly string[]).includes(action);
 }
 
 export function trashBulkConfirmed(
@@ -175,6 +245,32 @@ export function createUploadQueueItems(
     id: createId(),
     state: "QUEUED",
   }));
+}
+
+export function nextUploadQueueItems(
+  items: readonly UploadQueueItem[],
+  concurrency = uploadQueueConcurrency,
+): UploadQueueItem[] {
+  const limit = Math.max(1, Math.floor(concurrency));
+  const active = items.filter((item) => item.state === "UPLOADING").length;
+  return items
+    .filter((item) => item.state === "QUEUED")
+    .slice(0, Math.max(0, limit - active));
+}
+
+export function uploadProgressPercent(
+  progress: UploadQueueItem["progress"],
+): number | undefined {
+  if (
+    !progress ||
+    !Number.isSafeInteger(progress.loadedBytes) ||
+    !Number.isSafeInteger(progress.totalBytes) ||
+    progress.loadedBytes < 0 ||
+    progress.totalBytes < 1 ||
+    progress.loadedBytes > progress.totalBytes
+  )
+    return undefined;
+  return Math.round((progress.loadedBytes / progress.totalBytes) * 100);
 }
 
 export function supportsInlinePreview(artifact: Artifact): boolean {

@@ -26,6 +26,7 @@ const labels: BreadcrumbLabels = {
   administration: "Администрирование",
   access: "Участники и доступ",
   audit: "Аудит и диагностика",
+  providers: "Учётные записи моделей",
 };
 
 describe("breadcrumbs", () => {
@@ -63,6 +64,15 @@ describe("breadcrumbs", () => {
     expect(buildBreadcrumbs({ routeName: "audit" }, labels)).toEqual([
       { label: "Администрирование", path: "/administration" },
       { label: "Аудит и диагностика" },
+    ]);
+  });
+
+  it("связывает учётные записи моделей с разделом администрирования", () => {
+    expect(
+      buildBreadcrumbs({ routeName: "provider-accounts" }, labels),
+    ).toEqual([
+      { label: "Администрирование", path: "/administration" },
+      { label: "Учётные записи моделей" },
     ]);
   });
 

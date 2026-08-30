@@ -25,6 +25,7 @@ export interface BreadcrumbLabels {
   integrations: string;
   decisions: string;
   administration: string;
+  providers: string;
   access: string;
   audit: string;
 }
@@ -185,6 +186,11 @@ export function buildBreadcrumbs(
       return [...project, current(labels.access)];
     case "administration":
       return [current(labels.administration)];
+    case "provider-accounts":
+      return [
+        { label: labels.administration, path: "/administration" },
+        current(labels.providers),
+      ];
     case "audit":
       return [
         { label: labels.administration, path: "/administration" },

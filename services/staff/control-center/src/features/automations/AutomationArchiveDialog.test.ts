@@ -24,6 +24,25 @@ const schedule = {
   input: { task: "Подготовить сводку" },
   sessionPolicy: "NEW_EACH_RUN",
   notificationPolicy: "CONTROL_CENTER_ONLY",
+  currentRevision: {
+    ref: "schedule_revision_4",
+    revision: 4,
+    digest: "a".repeat(64),
+    name: "Ежедневная сводка",
+    target: {
+      type: "AGENT",
+      ref: "agent_sales",
+      displayName: "Аналитик продаж",
+      version: 2,
+    },
+    preset: "DAILY",
+    cronExpression: "0 9 * * *",
+    timezone: "Europe/Saratov",
+    input: { task: "Подготовить сводку" },
+    sessionPolicy: "NEW_EACH_RUN",
+    notificationPolicy: "CONTROL_CENTER_ONLY",
+    createdAt: "2026-08-30T06:00:00Z",
+  },
   nextActions: ["EDIT", "DISABLE", "ARCHIVE"],
 } as Schedule;
 
@@ -56,5 +75,33 @@ describe("AutomationArchiveDialog", () => {
     expect(html).toContain("не безвозвратное удаление");
     expect(html).toContain("Переместить в архив");
     expect(html).not.toContain(">Удалить<");
+  });
+
+  it("для terminal delete показывает явное подтверждение и delete action", async () => {
+    const app = createSSRApp({
+      render: () =>
+        h(AutomationArchiveDialog, {
+          schedule,
+          title: "Удалить автоматизацию?",
+          description:
+            "Автоматизация будет окончательно удалена, история останется доступна только для чтения.",
+          cancelLabel: "Отмена",
+          confirmLabel: "Удалить",
+          kind: "DELETE",
+        }),
+    });
+    app.use(
+      createI18n({
+        legacy: false,
+        locale: "ru",
+        messages: { ru: { common: { close: "Закрыть" } } },
+      }),
+    );
+
+    const html = await renderToString(app);
+
+    expect(html).toContain("Удалить автоматизацию?");
+    expect(html).toContain("окончательно удалена");
+    expect(html).toContain("Удалить");
   });
 });

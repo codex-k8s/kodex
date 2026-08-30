@@ -133,6 +133,7 @@ const breadcrumbs = computed(() => {
     integrations: t("nav.integrations"),
     decisions: t("nav.decisions"),
     administration: t("nav.administration"),
+    providers: t("nav.providers"),
     access: t("nav.access"),
     audit: t("nav.audit"),
   };

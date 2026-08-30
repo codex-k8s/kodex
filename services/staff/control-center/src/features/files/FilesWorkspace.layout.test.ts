@@ -8,15 +8,23 @@ const source = readFileSync(
 );
 
 describe("FilesWorkspace contract", () => {
-  it("выводит корзину из route mode и не показывает ложный режим знаний", () => {
+  it("выводит корзину из route mode и разделяет файлы, знания и результаты", () => {
     expect(source).toContain("mode: FileCollectionMode");
     expect(source).toContain(':to="trashMode ? filesPath : trashPath"');
-    expect(source).not.toContain('value="KNOWLEDGE"');
+    expect(source).toContain('value="KNOWLEDGE"');
+    expect(source).toContain("artifactSourceKinds(collectionTab.value");
   });
 
   it("показывает массовое soft-delete как последовательные операции", () => {
     expect(source).toContain("mutateArtifactsSequentially");
     expect(source).toContain("@click=\"openSelectedBulk('DELETE')\"");
     expect(source).toContain("bulkReceipts");
+  });
+
+  it("не резервирует пустую details-колонку и показывает отменяемый progress", () => {
+    expect(source).toContain("files-workspace__layout--details");
+    expect(source).toContain("uploadArtifactItem");
+    expect(source).toContain("uploadProgressPercent(item.progress)");
+    expect(source).toContain("uploadControllers.get(id)?.abort()");
   });
 });

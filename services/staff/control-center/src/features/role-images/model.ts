@@ -1,4 +1,5 @@
 import type {
+  RoleImageArtifact,
   RoleImageBuild,
   RoleImageRecipe,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -49,6 +50,27 @@ export function canRequestBuild(recipe: RoleImageRecipe): boolean {
   return (
     recipe.state === "ACTIVE" && recipe.nextActions.includes("REQUEST_BUILD")
   );
+}
+
+export function canPromoteRoleImage(
+  recipe: RoleImageRecipe,
+  artifact?: RoleImageArtifact,
+): boolean {
+  return Boolean(
+    recipe.nextActions.includes("PROMOTE") &&
+    artifact?.admissionVerdict === "ACCEPTED" &&
+    artifact.provenanceSha256,
+  );
+}
+
+export function buildRevisionIdentity(build: RoleImageBuild): {
+  generation: number;
+  attempt: number;
+} {
+  return {
+    generation: build.recipeGeneration,
+    attempt: build.attempt,
+  };
 }
 
 export function roleImageState(

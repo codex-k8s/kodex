@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Eye, Plus, RotateCw, Search, ShieldCheck, ShieldX } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Eye, Search, ShieldCheck, ShieldX } from "@lucide/vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useSessionStore } from "@/features/session/store";
@@ -8,15 +8,9 @@ import AsyncState from "@/shared/ui/AsyncState.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
-import type {
-  RuntimeSecret,
-  RuntimeSecretCreateInput,
-  RuntimeSecretRotateInput,
-} from "./model";
-import { maskedSecretHint } from "./model";
+import type { RuntimeSecret } from "./model";
+import { canRuntimeSecretAction, maskedSecretHint } from "./model";
 import RuntimeSecretRevealDialog from "./RuntimeSecretRevealDialog.vue";
-import RuntimeSecretRevokeDialog from "./RuntimeSecretRevokeDialog.vue";
-import RuntimeSecretValueDialog from "./RuntimeSecretValueDialog.vue";
 import { useRuntimeSecretsStore } from "./store";
 
 const props = defineProps<{ projectRef: string }>();
@@ -24,73 +18,14 @@ const store = useRuntimeSecretsStore();
 const session = useSessionStore();
 const { locale } = useI18n();
 const search = ref("");
-const valueDialogOpen = ref(false);
-const rotateTarget = ref<RuntimeSecret>();
 const revealTarget = ref<RuntimeSecret>();
-const revokeTarget = ref<RuntimeSecret>();
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-
-const dialogBusy = computed(
-  () =>
-    store.busyRef === "create" ||
-    store.busyRef === rotateTarget.value?.ref ||
-    store.busyRef === revokeTarget.value?.ref,
-);
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(locale.value, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function openCreate(): void {
-  rotateTarget.value = undefined;
-  store.clearMutationProblem();
-  valueDialogOpen.value = true;
-}
-
-function openRotate(secret: RuntimeSecret): void {
-  rotateTarget.value = secret;
-  store.clearMutationProblem();
-  valueDialogOpen.value = true;
-}
-
-function closeValueDialog(): void {
-  if (dialogBusy.value) return;
-  valueDialogOpen.value = false;
-  rotateTarget.value = undefined;
-  store.clearMutationProblem();
-}
-
-async function create(input: RuntimeSecretCreateInput): Promise<void> {
-  try {
-    await store.create(input);
-    closeValueDialog();
-  } catch {
-    // Авторитетная ошибка отображается из состояния store.
-  }
-}
-
-async function rotate(input: RuntimeSecretRotateInput): Promise<void> {
-  if (!rotateTarget.value) return;
-  try {
-    await store.rotate(rotateTarget.value, input);
-    closeValueDialog();
-  } catch {
-    // Авторитетная ошибка отображается из состояния store.
-  }
-}
-
-async function revoke(): Promise<void> {
-  if (!revokeTarget.value) return;
-  try {
-    await store.revoke(revokeTarget.value);
-    revokeTarget.value = undefined;
-    store.clearMutationProblem();
-  } catch {
-    // Авторитетная ошибка отображается из состояния store.
-  }
 }
 
 function onScroll(event: Event): void {
@@ -107,7 +42,8 @@ function restoreReauthenticatedReveal(): void {
   const secretRef = session.pendingRuntimeSecretReveal(props.projectRef);
   if (!secretRef) return;
   const secret = store.items.find((item) => item.ref === secretRef);
-  if (secret) revealTarget.value = secret;
+  if (secret && canRuntimeSecretAction(secret, "REVEAL"))
+    revealTarget.value = secret;
 }
 
 watch(search, (value) => {
@@ -149,14 +85,6 @@ onBeforeUnmount(() => {
         <span>{{
           $t("runtimeSecrets.shown", { count: store.items.length })
         }}</span>
-        <button
-          class="button button--primary"
-          type="button"
-          @click="openCreate"
-        >
-          <Plus :size="16" aria-hidden="true" />
-          {{ $t("runtimeSecrets.create") }}
-        </button>
       </div>
     </header>
 
@@ -172,18 +100,6 @@ onBeforeUnmount(() => {
       "
       @retry="store.reload"
     >
-      <template #empty-action>
-        <button
-          v-if="!search"
-          class="button button--primary"
-          type="button"
-          @click="openCreate"
-        >
-          <Plus :size="16" aria-hidden="true" />
-          {{ $t("runtimeSecrets.create") }}
-        </button>
-      </template>
-
       <ProblemNotice
         v-if="store.problem && store.items.length"
         :problem="store.problem"
@@ -235,38 +151,10 @@ onBeforeUnmount(() => {
                     :aria-label="
                       $t('runtimeSecrets.revealNamed', { name: secret.name })
                     "
-                    :disabled="secret.state !== 'ACTIVE'"
+                    :disabled="!canRuntimeSecretAction(secret, 'REVEAL')"
                     @click="revealTarget = secret"
                   >
                     <Eye :size="17" aria-hidden="true" />
-                  </button>
-                  <button
-                    class="icon-button"
-                    type="button"
-                    :title="$t('runtimeSecrets.rotate')"
-                    :aria-label="
-                      $t('runtimeSecrets.rotateNamed', { name: secret.name })
-                    "
-                    :disabled="
-                      secret.state !== 'ACTIVE' || store.busyRef === secret.ref
-                    "
-                    @click="openRotate(secret)"
-                  >
-                    <RotateCw :size="17" aria-hidden="true" />
-                  </button>
-                  <button
-                    class="icon-button icon-button--danger"
-                    type="button"
-                    :title="$t('runtimeSecrets.revoke')"
-                    :aria-label="
-                      $t('runtimeSecrets.revokeNamed', { name: secret.name })
-                    "
-                    :disabled="
-                      secret.state !== 'ACTIVE' || store.busyRef === secret.ref
-                    "
-                    @click="revokeTarget = secret"
-                  >
-                    <ShieldX :size="17" aria-hidden="true" />
                   </button>
                 </div>
               </td>
@@ -291,28 +179,10 @@ onBeforeUnmount(() => {
       </div>
     </AsyncState>
   </section>
-
-  <RuntimeSecretValueDialog
-    v-if="valueDialogOpen"
-    :secret="rotateTarget"
-    :busy="dialogBusy"
-    :problem="store.mutationProblem"
-    @close="closeValueDialog"
-    @create="create"
-    @rotate="rotate"
-  />
   <RuntimeSecretRevealDialog
     v-if="revealTarget"
     :secret="revealTarget"
     @close="revealTarget = undefined"
-  />
-  <RuntimeSecretRevokeDialog
-    v-if="revokeTarget"
-    :secret="revokeTarget"
-    :busy="dialogBusy"
-    :problem="store.mutationProblem"
-    @close="revokeTarget = undefined"
-    @confirm="revoke"
   />
 </template>
 

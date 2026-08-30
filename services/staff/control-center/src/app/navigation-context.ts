@@ -13,7 +13,8 @@ export type NavigationSection =
   | "automations"
   | "runtime-environments"
   | "runtime-secrets"
-  | "project-access";
+  | "project-access"
+  | "provider-accounts";
 
 const routeSections: Readonly<Record<string, NavigationSection>> = {
   home: "home",
@@ -23,6 +24,7 @@ const routeSections: Readonly<Record<string, NavigationSection>> = {
   decisions: "decisions",
   integrations: "integrations",
   administration: "administration",
+  "provider-accounts": "administration",
   access: "administration",
   audit: "administration",
   project: "project",

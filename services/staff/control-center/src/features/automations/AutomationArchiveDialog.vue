@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Archive, CircleAlert } from "@lucide/vue";
+import { Archive, CircleAlert, Trash2 } from "@lucide/vue";
 
 import type { Schedule } from "@/shared/api/generated/openapi/types.gen";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -9,6 +9,7 @@ defineProps<{
   cancelLabel: string;
   confirmLabel: string;
   description: string;
+  kind?: "ARCHIVE" | "DELETE";
   schedule: Schedule;
   title: string;
 }>();
@@ -39,7 +40,8 @@ const emit = defineEmits<{ close: []; confirm: [] }>();
         :disabled="busy"
         @click="emit('confirm')"
       >
-        <Archive :size="16" aria-hidden="true" />
+        <Trash2 v-if="kind === 'DELETE'" :size="16" aria-hidden="true" />
+        <Archive v-else :size="16" aria-hidden="true" />
         {{ confirmLabel }}
       </button>
     </template>

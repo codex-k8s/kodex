@@ -6,6 +6,8 @@ import {
   loadRoleDefinitionOptions,
   loadRoleImageDependencies,
   loadRoleImagePage,
+  loadRoleImageRevisionPage,
+  promoteRoleImageArtifact,
   updateRoleImage,
 } from "@/features/role-images/api";
 import type { RoleImageRecipe } from "@/shared/api/generated/openapi/types.gen";
@@ -16,8 +18,10 @@ const api = vi.hoisted(() => ({
   getRoleImageRecipe: vi.fn(),
   listAgents: vi.fn(),
   listRoleEnvironments: vi.fn(),
+  listRoleImageRecipeRevisions: vi.fn(),
   listRoleImageRecipes: vi.fn(),
   listRuntimeEnvironmentSets: vi.fn(),
+  promoteRoleImage: vi.fn(),
   updateRoleImageRecipe: vi.fn(),
 }));
 const mutation = vi.hoisted(() => ({ mutate: vi.fn() }));
@@ -188,5 +192,52 @@ describe("role image API adapter", () => {
     await expect(
       loadRoleImageDependencies("project_1", "imgart_target"),
     ).resolves.toEqual([expect.objectContaining({ ref: "environment_1" })]);
+  });
+
+  it("читает immutable revisions и продвигает exact artifact по provenance", async () => {
+    api.listRoleImageRecipeRevisions.mockReturnValueOnce(
+      response({ items: [], nextPageToken: "page_2" }),
+    );
+    api.promoteRoleImage.mockReturnValueOnce(
+      response({
+        ref: "promotion_1",
+        recipeRef: recipe.ref,
+        imageArtifactRef: "artifact_1",
+        provenanceSha256: "b".repeat(64),
+        manifestDigest: `sha256:${"c".repeat(64)}`,
+        receiptSha256: "d".repeat(64),
+        state: "QUEUED",
+        createdAt: "2026-08-30T10:00:00Z",
+      }),
+    );
+
+    await loadRoleImageRevisionPage("project_1", recipe.ref, "page_1");
+    await promoteRoleImageArtifact(
+      "project_1",
+      recipe,
+      "artifact_1",
+      "b".repeat(64),
+    );
+
+    expect(api.listRoleImageRecipeRevisions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { projectRef: "project_1", recipeRef: recipe.ref },
+        query: { pageSize: 40, pageToken: "page_1" },
+      }),
+    );
+    expect(api.promoteRoleImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { projectRef: "project_1", recipeRef: recipe.ref },
+        body: {
+          imageArtifactRef: "artifact_1",
+          expectedProvenanceSha256: "b".repeat(64),
+        },
+        headers: {
+          "Idempotency-Key": "idem_1",
+          "If-Match": '"3"',
+          "X-CSRF-Token": "csrf_1",
+        },
+      }),
+    );
   });
 });

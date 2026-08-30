@@ -52,4 +52,22 @@ describe("RealtimeStatus", () => {
       `data-preserves-current-data="${state === "initial-loading" ? "false" : "true"}"`,
     );
   });
+
+  it("показывает безопасную диагностику в tooltip без второй индикации", async () => {
+    const app = createSSRApp({
+      render: () =>
+        h(RealtimeStatus, {
+          detail: "Соединение будет восстановлено автоматически",
+          labels,
+          state: "reconnecting",
+        }),
+    });
+
+    const html = await renderToString(app);
+
+    expect(html).toContain(
+      'title="Соединение будет восстановлено автоматически"',
+    );
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+  });
 });

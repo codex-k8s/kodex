@@ -5,6 +5,7 @@ import {
   scheduleInput,
   scheduleMatchesFilter,
   verifyScheduleCommandReadback,
+  verifyScheduleDeleteReadback,
   verifyScheduleReadback,
 } from "@/features/automations/model";
 import type { Schedule } from "@/shared/api/generated/openapi/types.gen";
@@ -29,7 +30,26 @@ function schedule(options: Partial<Schedule> = {}): Schedule {
     input: { task: "Собрать сводку", retained: { exact: true } },
     sessionPolicy: "NEW_EACH_RUN",
     notificationPolicy: "CONTROL_CENTER_ONLY",
-    nextActions: ["EDIT", "DISABLE"],
+    currentRevision: {
+      ref: "schedule_revision_3",
+      revision: 3,
+      digest: "a".repeat(64),
+      name: "Ежедневная сводка",
+      target: {
+        type: "AGENT",
+        ref: "agent_sales",
+        displayName: "Аналитик продаж",
+        version: 2,
+      },
+      preset: "WEEKDAYS",
+      cronExpression: "0 9 * * 1-5",
+      timezone: "Europe/Saratov",
+      input: { task: "Собрать сводку", retained: { exact: true } },
+      sessionPolicy: "NEW_EACH_RUN",
+      notificationPolicy: "CONTROL_CENTER_ONLY",
+      createdAt: "2026-08-30T06:00:00Z",
+    },
+    nextActions: ["EDIT", "DISABLE", "DELETE"],
     ...options,
   };
 }
@@ -51,16 +71,27 @@ describe("automations model", () => {
 
   it("принимает только совпавший authoritative readback", () => {
     const submitted = scheduleInput(schedule());
-    const mutation = schedule({ version: 4 });
-    expect(
-      verifyScheduleReadback(submitted, mutation, schedule({ version: 4 })),
-    ).toEqual(schedule({ version: 4 }));
+    const mutation = schedule({
+      version: 4,
+      currentRevision: {
+        ...schedule().currentRevision,
+        ref: "schedule_revision_4",
+        revision: 4,
+      },
+    });
+    expect(verifyScheduleReadback(submitted, mutation, mutation)).toEqual(
+      mutation,
+    );
 
     expect(() =>
       verifyScheduleReadback(
         submitted,
         mutation,
-        schedule({ version: 4, name: "Другое имя" }),
+        schedule({
+          version: 4,
+          name: "Другое имя",
+          currentRevision: mutation.currentRevision,
+        }),
       ),
     ).toThrow(AppProblem);
 
@@ -70,6 +101,7 @@ describe("automations model", () => {
         mutation,
         schedule({
           version: 4,
+          currentRevision: mutation.currentRevision,
           input: { retained: { exact: true }, task: "Собрать сводку" },
         }),
       ).version,
@@ -104,12 +136,30 @@ describe("automations model", () => {
     );
   });
 
+  it("принимает terminal delete только после authoritative DELETED readback", () => {
+    const deleted = schedule({
+      state: "DELETED",
+      version: 5,
+      nextActions: ["OPEN"],
+    });
+    expect(verifyScheduleDeleteReadback(deleted, deleted).state).toBe(
+      "DELETED",
+    );
+    expect(() =>
+      verifyScheduleDeleteReadback(
+        deleted,
+        schedule({ state: "ARCHIVED", version: 5, nextActions: ["OPEN"] }),
+      ),
+    ).toThrow(AppProblem);
+  });
+
   it("не путает права редактирования и архивации", () => {
     expect(scheduleCapabilities(schedule({ nextActions: ["EDIT"] }))).toEqual({
       canEdit: true,
       canPause: false,
       canEnable: false,
       canArchive: false,
+      canDelete: false,
     });
     expect(
       scheduleCapabilities(schedule({ nextActions: ["ARCHIVE"] })),
@@ -121,7 +171,7 @@ describe("automations model", () => {
       scheduleCapabilities(
         schedule({
           state: "ACTIVE",
-          nextActions: ["EDIT", "DISABLE", "ARCHIVE"],
+          nextActions: ["EDIT", "DISABLE", "ARCHIVE", "DELETE"],
         }),
       ),
     ).toEqual({
@@ -129,6 +179,7 @@ describe("automations model", () => {
       canPause: true,
       canEnable: false,
       canArchive: true,
+      canDelete: true,
     });
     expect(
       scheduleCapabilities(
@@ -142,6 +193,7 @@ describe("automations model", () => {
       canPause: false,
       canEnable: true,
       canArchive: true,
+      canDelete: false,
     });
     expect(
       scheduleCapabilities(
@@ -152,6 +204,7 @@ describe("automations model", () => {
       canPause: false,
       canEnable: false,
       canArchive: false,
+      canDelete: false,
     });
   });
 
@@ -171,5 +224,11 @@ describe("automations model", () => {
     expect(scheduleMatchesFilter(schedule({ state: "ARCHIVED" }), "ALL")).toBe(
       true,
     );
+    expect(
+      scheduleMatchesFilter(schedule({ state: "DELETED" }), "CURRENT"),
+    ).toBe(false);
+    expect(
+      scheduleMatchesFilter(schedule({ state: "DELETED" }), "DELETED"),
+    ).toBe(true);
   });
 });

@@ -1,10 +1,21 @@
 <script setup lang="ts">
-import { CircleAlert, Layers3, Plus, Search } from "@lucide/vue";
+import {
+  CircleAlert,
+  Layers3,
+  Plus,
+  PowerOff,
+  Search,
+  Trash2,
+} from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
 import { useRuntimeStore } from "@/features/runtime/store";
-import { compactIdentifier } from "@/features/runtime/environment-capabilities";
+import {
+  compactIdentifier,
+  hasEnvironmentAction,
+} from "@/features/runtime/environment-capabilities";
 import type { RuntimeEnvironmentSet } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import PageFrame from "@/shared/ui/PageFrame.vue";
@@ -12,6 +23,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const route = useRoute();
+const { t } = useI18n();
 const runtime = useRuntimeStore();
 const projectRef = computed(() => String(route.params.projectRef));
 const query = ref("");
@@ -26,6 +38,13 @@ const selected = computed(
     items.value.find((item) => item.ref === selectedRef.value) ??
     items.value[0],
 );
+const selectedReadiness = computed(() =>
+  selected.value ? runtime.environmentReadiness[selected.value.ref] : undefined,
+);
+const selectedAgents = computed(() =>
+  selected.value ? (runtime.environmentAgents[selected.value.ref] ?? []) : [],
+);
+const actionRef = ref("");
 let generation = 0;
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -68,6 +87,52 @@ async function load(reset = true): Promise<void> {
   }
 }
 
+function replaceItem(value: RuntimeEnvironmentSet): void {
+  const index = items.value.findIndex((item) => item.ref === value.ref);
+  if (index >= 0) items.value[index] = value;
+  else items.value.push(value);
+}
+
+async function loadOperationalState(environmentRef: string): Promise<void> {
+  await Promise.all([
+    runtime.loadEnvironmentReadiness(environmentRef),
+    runtime.loadEnvironmentAgents(environmentRef),
+  ]);
+}
+
+async function setEnabled(
+  environment: RuntimeEnvironmentSet,
+  enabled: boolean,
+): Promise<void> {
+  const action = enabled ? "ENABLE" : "DISABLE";
+  if (!hasEnvironmentAction(environment, action)) return;
+  actionRef.value = environment.ref;
+  problem.value = undefined;
+  try {
+    const saved = await runtime.setEnvironmentEnabled(environment, enabled);
+    replaceItem(saved);
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    actionRef.value = "";
+  }
+}
+
+async function remove(environment: RuntimeEnvironmentSet): Promise<void> {
+  if (!hasEnvironmentAction(environment, "DELETE")) return;
+  if (!window.confirm(`${t("common.delete")} «${environment.name}»?`)) return;
+  actionRef.value = environment.ref;
+  problem.value = undefined;
+  try {
+    const saved = await runtime.removeEnvironment(environment);
+    replaceItem(saved);
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    actionRef.value = "";
+  }
+}
+
 function onScroll(event: Event): void {
   const element = event.currentTarget as HTMLElement;
   if (
@@ -82,6 +147,13 @@ watch(query, () => {
   debounceTimer = setTimeout(() => void load(), 300);
 });
 watch(projectRef, () => void load());
+watch(
+  () => selected.value?.ref,
+  (value) => {
+    if (value) void loadOperationalState(value);
+  },
+  { immediate: true },
+);
 onMounted(() => void load());
 onBeforeUnmount(() => {
   generation += 1;
@@ -184,12 +256,47 @@ onBeforeUnmount(() => {
                 </td>
                 <td><StatusBadge :state="environment.state" /></td>
                 <td>
-                  <RouterLink
-                    class="button"
-                    :to="`/projects/${encodeURIComponent(projectRef)}/environments/${encodeURIComponent(environment.ref)}`"
-                  >
-                    {{ $t("common.open") }}
-                  </RouterLink>
+                  <div class="environment-row-actions">
+                    <RouterLink
+                      class="button"
+                      :to="`/projects/${encodeURIComponent(projectRef)}/environments/${encodeURIComponent(environment.ref)}`"
+                    >
+                      {{ $t("common.open") }}
+                    </RouterLink>
+                    <button
+                      v-if="hasEnvironmentAction(environment, 'DISABLE')"
+                      class="icon-button"
+                      type="button"
+                      :disabled="actionRef === environment.ref"
+                      :title="$t('common.disable')"
+                      :aria-label="$t('common.disable')"
+                      @click="setEnabled(environment, false)"
+                    >
+                      <PowerOff :size="16" aria-hidden="true" />
+                    </button>
+                    <button
+                      v-if="hasEnvironmentAction(environment, 'ENABLE')"
+                      class="icon-button"
+                      type="button"
+                      :disabled="actionRef === environment.ref"
+                      :title="$t('common.enable')"
+                      :aria-label="$t('common.enable')"
+                      @click="setEnabled(environment, true)"
+                    >
+                      <PowerOff :size="16" aria-hidden="true" />
+                    </button>
+                    <button
+                      v-if="hasEnvironmentAction(environment, 'DELETE')"
+                      class="icon-button icon-button--danger"
+                      type="button"
+                      :disabled="actionRef === environment.ref"
+                      :title="$t('common.delete')"
+                      :aria-label="$t('common.delete')"
+                      @click="remove(environment)"
+                    >
+                      <Trash2 :size="16" aria-hidden="true" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -277,6 +384,43 @@ onBeforeUnmount(() => {
               <strong>{{ $t("runtime.effectivePolicyPreview") }}</strong>
               <p>{{ $t("runtime.catalogCapabilityBoundary") }}</p>
             </div>
+          </section>
+          <section class="environment-lifecycle">
+            <h3>{{ $t("runtime.readiness") }}</h3>
+            <dl>
+              <div>
+                <dt>{{ $t("common.status") }}</dt>
+                <dd>
+                  <StatusBadge
+                    :state="
+                      selectedReadiness?.ready ? 'READY' : 'NEEDS_ATTENTION'
+                    "
+                  />
+                </dd>
+              </div>
+              <div>
+                <dt>{{ $t("agents.title") }}</dt>
+                <dd>{{ selectedAgents.length }}</dd>
+              </div>
+            </dl>
+            <p v-if="selectedReadiness?.blockers.length" class="secondary-text">
+              {{ $t("runtime.readinessState.NEEDS_ATTENTION") }} ·
+              {{ selectedReadiness.blockers.length }}
+            </p>
+            <div v-if="selectedAgents.length" class="chip-list">
+              <span v-for="agent in selectedAgents" :key="agent.ref">
+                {{ agent.name }}
+              </span>
+            </div>
+            <button
+              v-if="runtime.environmentAgentCursors[selected.ref]"
+              class="button"
+              type="button"
+              :disabled="runtime.loading[`environment-agents:${selected.ref}`]"
+              @click="runtime.loadEnvironmentAgents(selected.ref, false)"
+            >
+              {{ $t("roleImages.loadMore") }}
+            </button>
           </section>
           <section>
             <h3>{{ $t("runtime.secretDescriptorNames") }}</h3>
@@ -391,6 +535,11 @@ onBeforeUnmount(() => {
   text-align: left;
   cursor: pointer;
 }
+.environment-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .environment-table__row--selected {
   box-shadow: inset 3px 0 var(--accent);
   background: var(--accent-soft);
@@ -415,6 +564,12 @@ onBeforeUnmount(() => {
 }
 .environment-inspector dl {
   margin: 0;
+}
+.environment-lifecycle h3 {
+  margin-bottom: 8px;
+}
+.environment-lifecycle dl > div {
+  align-items: center;
 }
 .environment-inspector dl > div {
   display: grid;

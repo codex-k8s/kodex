@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   artifactLifecycleState,
+  artifactLifecycleAnnounced,
   artifactKind,
+  artifactSourceKinds,
   createUploadQueueItems,
   fileVisual,
   matchesArtifactFilters,
+  nextUploadQueueItems,
   supportsInlinePreview,
   trashBulkConfirmed,
+  uploadProgressPercent,
 } from "@/features/files/model";
 import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
 
@@ -103,6 +107,29 @@ describe("files model", () => {
     ).toBe(true);
   });
 
+  it("строит разделы только из существующего provenance", () => {
+    expect(artifactSourceKinds("FILES", "ALL")).toEqual([
+      "CONTROL_CENTER",
+      "INTERACTION_ATTACHMENT",
+    ]);
+    expect(artifactSourceKinds("KNOWLEDGE", "ALL")).toEqual([
+      "KNOWLEDGE_SOURCE",
+    ]);
+    expect(artifactSourceKinds("RESULTS", "ALL")).toEqual([
+      "AGENT_RESULT",
+      "INTEGRATION_RESULT",
+    ]);
+    expect(artifactSourceKinds("RESULTS", "CONTROL_CENTER")).toEqual([]);
+    expect(
+      matchesArtifactFilters(artifact({ source: "KNOWLEDGE_SOURCE" }), {
+        kind: "ALL",
+        scanState: "ALL",
+        source: "ALL",
+        tab: "KNOWLEDGE",
+      }),
+    ).toBe(true);
+  });
+
   it("разрешает только объявленные сервером lifecycle mutations", () => {
     expect(artifactLifecycleState(artifact(), "DELETE")).toEqual({
       action: "DELETE",
@@ -122,8 +149,67 @@ describe("files model", () => {
       ),
     ).toEqual({
       action: "DELETE",
+      available: false,
+      reason: "IMPACT_UNAVAILABLE",
+    });
+    expect(
+      artifactLifecycleState(
+        artifact({ nextActions: ["DELETE" as never] }),
+        "DELETE",
+        {
+          action: "DELETE",
+          activeRuns: [],
+          activeRunsTruncated: false,
+          activeRuntimeCount: 0,
+          artifactRef: "artifact_file",
+          artifactVersion: 1,
+          attachmentCount: 0,
+          bindingCount: 0,
+          blockers: [],
+          impactDigest: "a".repeat(64),
+          permitted: true,
+        },
+      ),
+    ).toMatchObject({
+      action: "DELETE",
       available: true,
     });
+    expect(
+      artifactLifecycleState(
+        artifact({ nextActions: ["DELETE" as never] }),
+        "DELETE",
+        {
+          action: "DELETE",
+          activeRuns: [
+            {
+              projectRef: "project_sales",
+              runRef: "run_active",
+              state: "RUNNING",
+              title: "Активный запуск",
+            },
+          ],
+          activeRunsTruncated: false,
+          activeRuntimeCount: 1,
+          artifactRef: "artifact_file",
+          artifactVersion: 1,
+          attachmentCount: 1,
+          bindingCount: 1,
+          blockers: ["ACTIVE_RUN_USES_ARTIFACT"],
+          impactDigest: "b".repeat(64),
+          permitted: false,
+        },
+      ),
+    ).toMatchObject({
+      action: "DELETE",
+      available: false,
+      reason: "IMPACT_BLOCKED",
+    });
+    expect(
+      artifactLifecycleAnnounced(
+        artifact({ nextActions: ["DELETE" as never] }),
+        "DELETE",
+      ),
+    ).toBe(true);
   });
 
   it("создаёт неограниченную по количеству очередь без потери порядка", () => {
@@ -148,6 +234,30 @@ describe("files model", () => {
       { id: "item-2", name: "two.txt", state: "QUEUED" },
       { id: "item-3", name: "three.txt", state: "QUEUED" },
     ]);
+  });
+
+  it("ограничивает число одновременных upload и проверяет progress", () => {
+    let sequence = 0;
+    const queued = createUploadQueueItems(
+      [
+        new File(["one"], "one.txt"),
+        new File(["two"], "two.txt"),
+        new File(["three"], "three.txt"),
+        new File(["four"], "four.txt"),
+      ],
+      () => `upload-${String((sequence += 1))}`,
+    );
+    const first = queued.shift();
+    if (!first) throw new Error("Upload queue fixture is empty");
+    const activeQueue = [{ ...first, state: "UPLOADING" as const }, ...queued];
+
+    expect(nextUploadQueueItems(activeQueue, 3).map((item) => item.id)).toEqual(
+      ["upload-2", "upload-3"],
+    );
+    expect(uploadProgressPercent({ loadedBytes: 3, totalBytes: 4 })).toBe(75);
+    expect(
+      uploadProgressPercent({ loadedBytes: 5, totalBytes: 4 }),
+    ).toBeUndefined();
   });
 
   it("не обещает inline preview для PDF без rendered-preview API", () => {

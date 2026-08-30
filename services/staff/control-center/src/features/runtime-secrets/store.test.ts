@@ -27,6 +27,7 @@ const secret: RuntimeSecret = {
   state: "ACTIVE",
   currentRevision: 2,
   displayHint: { prefix: "tok", suffix: "9z" },
+  nextActions: ["ROTATE", "REVOKE", "REVEAL"],
   createdAt: "2026-08-29T08:00:00Z",
   updatedAt: "2026-08-29T09:00:00Z",
 };

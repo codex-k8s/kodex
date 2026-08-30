@@ -1,46 +1,25 @@
-export type RuntimeSecretValueType = "STRING" | "BINARY" | "JSON";
-export type RuntimeSecretState = "ACTIVE" | "REVOKED";
+import type {
+  RuntimeSecret,
+  RuntimeSecretCreateInput,
+  RuntimeSecretDisplayHint,
+  RuntimeSecretPage,
+  RuntimeSecretReveal,
+  RuntimeSecretRotateInput,
+  RuntimeSecretValueType,
+} from "@/shared/api/generated/openapi/types.gen";
 
-export interface RuntimeSecretDisplayHint {
-  prefix: string;
-  suffix: string;
-}
+export type {
+  RuntimeSecret,
+  RuntimeSecretCreateInput,
+  RuntimeSecretDisplayHint,
+  RuntimeSecretPage,
+  RuntimeSecretReveal,
+  RuntimeSecretRotateInput,
+  RuntimeSecretValueType,
+};
 
-export interface RuntimeSecret {
-  ref: string;
-  version: number;
-  projectRef: string;
-  name: string;
-  description: string;
-  valueType: RuntimeSecretValueType;
-  state: RuntimeSecretState;
-  currentRevision: number;
-  displayHint?: RuntimeSecretDisplayHint;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface RuntimeSecretPage {
-  items: RuntimeSecret[];
-  nextPageToken: string;
-}
-
-export interface RuntimeSecretCreateInput {
-  name: string;
-  description: string;
-  valueType: RuntimeSecretValueType;
-  value: string;
-}
-
-export interface RuntimeSecretRotateInput {
-  valueType: RuntimeSecretValueType;
-  value: string;
-}
-
-export interface RuntimeSecretReveal {
-  value: string;
-  valueType: RuntimeSecretValueType;
-}
+export type RuntimeSecretState = RuntimeSecret["state"];
+export type RuntimeSecretAction = "ROTATE" | "REVOKE" | "REVEAL";
 
 const mask = "••••••";
 
@@ -48,6 +27,13 @@ export function maskedSecretHint(secret: RuntimeSecret): string {
   const prefix = (secret.displayHint?.prefix ?? "").slice(0, 6);
   const suffix = (secret.displayHint?.suffix ?? "").slice(-6);
   return `${prefix}${mask}${suffix}`;
+}
+
+export function canRuntimeSecretAction(
+  secret: Pick<RuntimeSecret, "nextActions" | "state">,
+  action: RuntimeSecretAction,
+): boolean {
+  return secret.state === "ACTIVE" && secret.nextActions.includes(action);
 }
 
 export function validateSecretValue(

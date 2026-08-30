@@ -169,6 +169,11 @@ export const router = createRouter({
       component: lazyPage(() => import("@/pages/AdministrationPage.vue")),
     },
     {
+      path: "/administration/providers",
+      name: "provider-accounts",
+      component: lazyPage(() => import("@/pages/ProviderAccountsPage.vue")),
+    },
+    {
       path: "/administration/audit",
       name: "audit",
       component: lazyPage(() => import("@/pages/AuditPage.vue")),

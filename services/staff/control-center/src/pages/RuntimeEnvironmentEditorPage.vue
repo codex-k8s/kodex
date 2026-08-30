@@ -7,6 +7,8 @@ import {
   KeyRound,
   Network,
   Plus,
+  Power,
+  PowerOff,
   ServerCog,
   ShieldCheck,
   Trash2,
@@ -18,6 +20,7 @@ import { useRoute, useRouter } from "vue-router";
 import {
   compactIdentifier,
   environmentReadiness,
+  hasEnvironmentAction,
   safeSecretReference,
 } from "@/features/runtime/environment-capabilities";
 import {
@@ -111,7 +114,22 @@ const imageArtifact = ref<RoleImageArtifact>();
 const imageLoading = ref(false);
 const imageProblem = ref<AppProblem>();
 const validation = computed(() => validateEnvironmentInput(input));
-const readiness = computed(() => environmentReadiness(input, current.value));
+const serverReadiness = computed(() =>
+  environmentRef.value
+    ? runtime.environmentReadiness[environmentRef.value]
+    : undefined,
+);
+const boundAgents = computed(() =>
+  environmentRef.value
+    ? (runtime.environmentAgents[environmentRef.value] ?? [])
+    : [],
+);
+const readiness = computed(() =>
+  environmentReadiness(input, current.value, serverReadiness.value),
+);
+const canPublish = computed(
+  () => !current.value || hasEnvironmentAction(current.value, "UPDATE"),
+);
 const secretPickerLabels = computed(() => ({
   label: t("runtime.chooseRuntimeSecret"),
   searchPlaceholder: t("runtime.searchRuntimeSecret"),
@@ -349,10 +367,14 @@ async function load(): Promise<void> {
   ]);
   sync();
   if (current.value)
-    await loadImageArtifact(
-      current.value.currentVersion.image.recipeRef,
-      current.value.currentVersion.image.artifactRef,
-    );
+    await Promise.all([
+      loadImageArtifact(
+        current.value.currentVersion.image.recipeRef,
+        current.value.currentVersion.image.artifactRef,
+      ),
+      runtime.loadEnvironmentReadiness(current.value.ref),
+      runtime.loadEnvironmentAgents(current.value.ref),
+    ]);
 }
 
 function currentOperation(): RuntimeEnvironmentPolicyDraftOperation {
@@ -442,13 +464,47 @@ async function save(): Promise<void> {
 }
 
 async function rollback(versionRef: string): Promise<void> {
-  if (!current.value) return;
+  if (!current.value || !hasEnvironmentAction(current.value, "ROLLBACK"))
+    return;
   busy.value = true;
   problem.value = undefined;
   try {
     const saved = await runtime.restoreEnvironment(current.value, versionRef);
     await runtime.loadEnvironmentVersions(saved.ref);
     sync(saved);
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function setEnabled(enabled: boolean): Promise<void> {
+  if (!current.value) return;
+  const action = enabled ? "ENABLE" : "DISABLE";
+  if (!hasEnvironmentAction(current.value, action)) return;
+  busy.value = true;
+  problem.value = undefined;
+  try {
+    const saved = await runtime.setEnvironmentEnabled(current.value, enabled);
+    sync(saved);
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function remove(): Promise<void> {
+  if (!current.value || !hasEnvironmentAction(current.value, "DELETE")) return;
+  if (!window.confirm(`${t("common.delete")} «${current.value.name}»?`)) return;
+  busy.value = true;
+  problem.value = undefined;
+  try {
+    await runtime.removeEnvironment(current.value);
+    await router.replace(
+      `/projects/${encodeURIComponent(projectRef.value)}/environments`,
+    );
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -483,6 +539,36 @@ onMounted(() => void initialize());
     :subtitle="$t('runtime.environmentEditorSubtitle')"
   >
     <template #actions>
+      <button
+        v-if="current && hasEnvironmentAction(current, 'DISABLE')"
+        class="button"
+        type="button"
+        :disabled="busy"
+        @click="setEnabled(false)"
+      >
+        <PowerOff :size="16" aria-hidden="true" />
+        {{ $t("common.disable") }}
+      </button>
+      <button
+        v-if="current && hasEnvironmentAction(current, 'ENABLE')"
+        class="button"
+        type="button"
+        :disabled="busy"
+        @click="setEnabled(true)"
+      >
+        <Power :size="16" aria-hidden="true" />
+        {{ $t("common.enable") }}
+      </button>
+      <button
+        v-if="current && hasEnvironmentAction(current, 'DELETE')"
+        class="button button--danger"
+        type="button"
+        :disabled="busy"
+        @click="remove"
+      >
+        <Trash2 :size="16" aria-hidden="true" />
+        {{ $t("common.delete") }}
+      </button>
       <RouterLink
         class="button"
         :to="`/projects/${encodeURIComponent(projectRef)}/environments`"
@@ -492,7 +578,7 @@ onMounted(() => void initialize());
       <button
         class="button button--primary"
         type="button"
-        :disabled="busy || validation.length > 0"
+        :disabled="busy || validation.length > 0 || !canPublish"
         @click="save"
       >
         {{ current ? $t("runtime.publishRevision") : $t("common.create") }}
@@ -1198,6 +1284,24 @@ onMounted(() => void initialize());
                 />
               </article>
             </div>
+            <section v-if="current" class="effective-preview">
+              <h3>{{ $t("agents.title") }} · {{ boundAgents.length }}</h3>
+              <div v-if="boundAgents.length" class="chip-list">
+                <span v-for="agent in boundAgents" :key="agent.ref">
+                  {{ agent.name }}
+                </span>
+              </div>
+              <p v-else class="secondary-text">{{ $t("common.empty") }}</p>
+              <button
+                v-if="runtime.environmentAgentCursors[current.ref]"
+                class="button"
+                type="button"
+                :disabled="runtime.loading[`environment-agents:${current.ref}`]"
+                @click="runtime.loadEnvironmentAgents(current.ref, false)"
+              >
+                {{ $t("roleImages.loadMore") }}
+              </button>
+            </section>
             <section class="effective-preview">
               <h3>{{ $t("runtime.safeEffectivePreview") }}</h3>
               <p>{{ $t("runtime.safeEffectivePreviewHelp") }}</p>
@@ -1316,7 +1420,11 @@ onMounted(() => void initialize());
                 <code>{{ compactIdentifier(version.digest) }}</code>
               </div>
               <button
-                v-if="version.ref !== current?.currentVersion.ref"
+                v-if="
+                  version.ref !== current?.currentVersion.ref &&
+                  current &&
+                  hasEnvironmentAction(current, 'ROLLBACK')
+                "
                 class="button"
                 type="button"
                 :disabled="busy"
@@ -1672,6 +1780,16 @@ code {
   display: grid;
   gap: 12px;
   padding-top: 4px;
+}
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip-list span {
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: var(--canvas);
 }
 .validation-list {
   padding: 12px 12px 12px 30px;

@@ -57,6 +57,7 @@ const ru = {
     members: "Участники",
     access: "Участники и доступ",
     audit: "Аудит и диагностика",
+    providers: "Учётные записи моделей",
   },
   common: {
     create: "Создать",
@@ -335,6 +336,8 @@ const ru = {
     accountCatalogUnavailable: "Добавление учётных записей пока недоступно",
     accountCatalogBlocker:
       "Текущий API возвращает назначенные записи, но не предоставляет безопасный каталог доступных provider accounts. Можно менять policy и веса текущего набора; ввод внутренних ref вручную запрещён.",
+    accountCatalogHelp:
+      "Выберите одну или несколько готовых записей. Внутренние идентификаторы вводить вручную нельзя.",
     environment: "Рабочее окружение",
     environmentHelp: "Версионируемый набор переменных и Secret descriptors",
     chooseEnvironment: "Выберите окружение",
@@ -1820,6 +1823,71 @@ const ru = {
       },
     },
   },
+  providers: {
+    title: "Учётные записи моделей",
+    subtitle:
+      "Авторизация нескольких учётных записей провайдеров и их готовность к новым сессиям",
+    definitions: "Доступные провайдеры",
+    create: "Добавить учётную запись",
+    definition: "Провайдер",
+    search: "Поиск учётных записей",
+    searchPlaceholder: "Название или безопасная подпись",
+    loadMore: "Показать ещё",
+    loadMoreProviders: "Показать ещё провайдеров",
+    emptyTitle: "Учётных записей пока нет",
+    emptyText:
+      "Добавьте учётную запись и завершите безопасную авторизацию перед запуском ИИ-сотрудника.",
+    externalAccountPending: "Внешняя учётная запись ещё не подтверждена",
+    authorize: "Авторизовать",
+    revoke: "Отозвать",
+    revokeTitle: "Отозвать учётную запись",
+    revokeConfirmation:
+      "Учётная запись «{name}» станет недоступна для новых запусков. Продолжить?",
+    authorizationTitle: "Авторизация: {name}",
+    authorizationMethod: "Способ авторизации",
+    methods: {
+      DEVICE_CODE: "Код устройства",
+      API_KEY: "API key",
+    },
+    deviceDescription:
+      "Kodex запросит одноразовый код. Откройте страницу провайдера и подтвердите нужную учётную запись.",
+    deviceInstructions:
+      "Откройте страницу провайдера, введите код и вернитесь сюда. Kodex проверяет результат через отдельный защищённый запрос.",
+    startDevice: "Получить код",
+    openVerification: "Открыть страницу авторизации",
+    userCode: "Одноразовый код",
+    copyCode: "Скопировать код",
+    expiresAt: "Код действует до {value}",
+    waitingAuthorization: "Ожидаем подтверждение провайдера…",
+    checkAuthorization: "Проверить сейчас",
+    authorized: "Учётная запись авторизована и готова к использованию.",
+    authorizationFailed:
+      "Провайдер не подтвердил авторизацию. Запросите новый код или проверьте API key.",
+    apiKey: "API key",
+    apiKeyPlaceholder: "Введите значение один раз",
+    apiKeyDescription:
+      "Значение передаётся только для материализации credential и не возвращается в интерфейс.",
+    apiKeySafety:
+      "После отправки поле будет очищено. Kodex не сохраняет и не показывает значение повторно.",
+    authorizeApiKey: "Авторизовать",
+    selectorLabel: "Учётные записи провайдера",
+    selectedCount: "Выбрано: {count}",
+    noEligibleAccounts:
+      "Нет готовых авторизованных учётных записей с выбранным провайдером.",
+    manageAccounts: "Управлять учётными записями",
+    removeSelection: "Убрать учётную запись {name}",
+    accountUnavailable: "Недоступная учётная запись",
+    accountUnavailableHelp:
+      "Сервер не вернул безопасное описание; запись нельзя использовать до восстановления готовности.",
+    blockers: {
+      PROVIDER_UNAVAILABLE: "Провайдер пока недоступен этой установке.",
+      AUTHORIZATION_UNAVAILABLE:
+        "Способ авторизации пока не готов к безопасной работе.",
+      RUNTIME_UNAVAILABLE:
+        "Материализация credential или runtime ещё не готова.",
+      UNKNOWN: "Конфигурация провайдера требует внимания администратора.",
+    },
+  },
   administration: {
     title: "Администрирование",
     subtitle: "Готовность core-платформы и необязательных адаптеров",
@@ -2130,6 +2198,7 @@ const en = {
     members: "Members",
     access: "Members and access",
     audit: "Audit and diagnostics",
+    providers: "Model accounts",
   },
   common: {
     ...ru.common,
@@ -2482,6 +2551,8 @@ const en = {
     accountCatalogUnavailable: "Adding accounts is not available yet",
     accountCatalogBlocker:
       "The current API returns assigned accounts but does not expose a safe provider account catalog. Policy and weights can be changed for the current set; entering internal refs is prohibited.",
+    accountCatalogHelp:
+      "Select one or more ready accounts. Internal identifiers cannot be entered manually.",
     environment: "Work environment",
     environmentHelp: "Versioned variables and Secret descriptors",
     chooseEnvironment: "Choose an environment",
@@ -3885,6 +3956,71 @@ const en = {
         emptyTitle: "Entity-scoped binding is unavailable",
         gap: "The current project membership accepts a flat permission list without agent refs or a versioned binding.",
       },
+    },
+  },
+  providers: {
+    ...ru.providers,
+    title: "Model accounts",
+    subtitle:
+      "Authorize multiple provider accounts and control their readiness for new sessions",
+    definitions: "Available providers",
+    create: "Add account",
+    definition: "Provider",
+    search: "Search accounts",
+    searchPlaceholder: "Name or safe label",
+    loadMore: "Show more",
+    loadMoreProviders: "Show more providers",
+    emptyTitle: "No provider accounts yet",
+    emptyText:
+      "Add an account and finish secure authorization before launching an AI employee.",
+    externalAccountPending: "External account is not confirmed yet",
+    authorize: "Authorize",
+    revoke: "Revoke",
+    revokeTitle: "Revoke provider account",
+    revokeConfirmation:
+      "The account “{name}” will become unavailable for new runs. Continue?",
+    authorizationTitle: "Authorization: {name}",
+    authorizationMethod: "Authorization method",
+    methods: {
+      DEVICE_CODE: "Device code",
+      API_KEY: "API key",
+    },
+    deviceDescription:
+      "Kodex will request a one-time code. Open the provider page and confirm the intended account.",
+    deviceInstructions:
+      "Open the provider page, enter the code and return here. Kodex observes the result through an explicit protected request.",
+    startDevice: "Get code",
+    openVerification: "Open authorization page",
+    userCode: "One-time code",
+    copyCode: "Copy code",
+    expiresAt: "Code expires at {value}",
+    waitingAuthorization: "Waiting for provider confirmation…",
+    checkAuthorization: "Check now",
+    authorized: "The account is authorized and ready to use.",
+    authorizationFailed:
+      "The provider did not confirm authorization. Request a new code or check the API key.",
+    apiKeyPlaceholder: "Enter the value once",
+    apiKeyDescription:
+      "The value is sent only to materialize the credential and is never returned to the UI.",
+    apiKeySafety:
+      "The field is cleared after submission. Kodex does not retain or show the value again.",
+    authorizeApiKey: "Authorize",
+    selectorLabel: "Provider accounts",
+    selectedCount: "Selected: {count}",
+    noEligibleAccounts:
+      "No ready authorized accounts are available for the selected provider.",
+    manageAccounts: "Manage provider accounts",
+    removeSelection: "Remove account {name}",
+    accountUnavailable: "Unavailable account",
+    accountUnavailableHelp:
+      "The server did not return a safe descriptor; this account cannot be used until readiness is restored.",
+    blockers: {
+      PROVIDER_UNAVAILABLE: "The provider is unavailable in this installation.",
+      AUTHORIZATION_UNAVAILABLE:
+        "The authorization method is not ready for secure use.",
+      RUNTIME_UNAVAILABLE:
+        "Credential materialization or runtime is not ready.",
+      UNKNOWN: "Provider configuration requires administrator attention.",
     },
   },
   administration: {

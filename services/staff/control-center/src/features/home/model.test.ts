@@ -67,6 +67,7 @@ function gate(
     requestedBy: { ref: "agent_sales", displayName: "Аналитик продаж" },
     state,
     allowedDecisions: ["APPROVE"],
+    decisionConsequences: [],
     openedAt: "2026-08-29T10:00:00Z",
     nextActions: ["RESOLVE_GATE"],
     ...options,

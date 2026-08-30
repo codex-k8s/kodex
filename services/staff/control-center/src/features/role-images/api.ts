@@ -5,8 +5,10 @@ import {
   getRoleImageRecipe,
   listAgents,
   listRoleEnvironments,
+  listRoleImageRecipeRevisions,
   listRoleImageRecipes,
   listRuntimeEnvironmentSets,
+  promoteRoleImage,
   updateRoleImageRecipe,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -17,7 +19,9 @@ import type {
   RoleImageRecipeCreateInput,
   RoleImageRecipeDetail,
   RoleImageRecipePage,
+  RoleImageRecipeRevisionPage,
   RoleImageRecipeUpdateInput,
+  RoleImagePromotionReceipt,
   RuntimeEnvironmentSet,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
@@ -69,6 +73,25 @@ export async function loadRoleImageDetail(
     await unwrap(
       getRoleImageRecipe({
         path: { projectRef, recipeRef },
+        signal: requestSignal(),
+      }),
+    )
+  ).data;
+}
+
+export async function loadRoleImageRevisionPage(
+  projectRef: string,
+  recipeRef: string,
+  pageToken?: string,
+): Promise<RoleImageRecipeRevisionPage> {
+  return (
+    await unwrap(
+      listRoleImageRecipeRevisions({
+        path: { projectRef, recipeRef },
+        query: {
+          pageSize: 40,
+          ...(pageToken ? { pageToken } : {}),
+        },
         signal: requestSignal(),
       }),
     )
@@ -206,6 +229,26 @@ export async function commandRoleImage(
         commandRoleImageRecipe({
           path: { projectRef, recipeRef: recipe.ref },
           body: { action },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      recipe.version,
+    )
+  ).data;
+}
+
+export async function promoteRoleImageArtifact(
+  projectRef: string,
+  recipe: RoleImageRecipe,
+  imageArtifactRef: string,
+  expectedProvenanceSha256: string,
+): Promise<RoleImagePromotionReceipt> {
+  return (
+    await mutate(
+      (headers) =>
+        promoteRoleImage({
+          path: { projectRef, recipeRef: recipe.ref },
+          body: { imageArtifactRef, expectedProvenanceSha256 },
           headers: versionedHeaders(headers),
           signal: requestSignal(),
         }),

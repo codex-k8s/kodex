@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   compactIdentifier,
   environmentReadiness,
+  hasEnvironmentAction,
   runtimeEnvironmentCapabilities,
   safeSecretReference,
 } from "@/features/runtime/environment-capabilities";
 import { defaultRuntimeEnvironmentPolicy } from "@/features/runtime/environment-form";
+import type { RuntimeEnvironmentSet } from "@/shared/api/generated/openapi/types.gen";
 
 function effectivePolicy() {
   return {
@@ -57,9 +59,9 @@ describe("runtime environment capabilities", () => {
       networkPolicy: "AVAILABLE",
       kubernetesRbac: "AVAILABLE",
       effectivePolicy: "AVAILABLE",
-      secretLifecycle: "UNAVAILABLE",
-      secretReveal: "UNAVAILABLE",
-      serverReadiness: "UNAVAILABLE",
+      secretLifecycle: "AVAILABLE",
+      secretReveal: "AVAILABLE",
+      serverReadiness: "AVAILABLE",
     });
   });
 
@@ -73,7 +75,7 @@ describe("runtime environment capabilities", () => {
       secretBindings: [],
       policy: defaultRuntimeEnvironmentPolicy(),
     };
-    const checks = environmentReadiness(input, {
+    const environment = {
       ref: "environment_docs",
       version: 3,
       projectRef: "project_main",
@@ -99,6 +101,18 @@ describe("runtime environment capabilities", () => {
         createdAt: "2026-08-29T12:00:00Z",
       },
       updatedAt: "2026-08-29T12:00:00Z",
+      ready: true,
+      readinessBlockers: [],
+      nextActions: ["OPEN", "UPDATE", "DISABLE", "DELETE"],
+    } satisfies RuntimeEnvironmentSet;
+    const checks = environmentReadiness(input, environment, {
+      environmentRef: environment.ref,
+      environmentVersion: environment.version,
+      publishedVersionRef: environment.currentVersion.ref,
+      publishedVersionDigest: environment.currentVersion.digest,
+      ready: true,
+      blockers: [],
+      observedAt: "2026-08-29T12:00:01Z",
     });
 
     expect(checks.map(({ key, state }) => ({ key, state }))).toEqual([
@@ -109,8 +123,10 @@ describe("runtime environment capabilities", () => {
       { key: "POLICY", state: "READY" },
       { key: "REVISION", state: "READY" },
       { key: "EFFECTIVE_POLICY", state: "READY" },
-      { key: "SERVER_READINESS", state: "UNAVAILABLE" },
+      { key: "SERVER_READINESS", state: "READY" },
     ]);
+    expect(hasEnvironmentAction(environment, "DISABLE")).toBe(true);
+    expect(hasEnvironmentAction(environment, "ENABLE")).toBe(false);
   });
 
   it("разделяет ошибку черновика policy и отсутствие effective policy", () => {

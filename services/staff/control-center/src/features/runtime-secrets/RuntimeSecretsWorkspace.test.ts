@@ -36,6 +36,7 @@ describe("RuntimeSecretsWorkspace", () => {
         state: "ACTIVE",
         currentRevision: 2,
         displayHint: { prefix: "tok", suffix: "9z" },
+        nextActions: ["ROTATE", "REVOKE", "REVEAL"],
         createdAt: "2026-08-29T08:00:00Z",
         updatedAt: "2026-08-29T09:00:00Z",
       },
@@ -86,5 +87,18 @@ describe("RuntimeSecretsWorkspace", () => {
     expect(html).toContain("tok••••••9z");
     expect(html).not.toContain("raw-secret-plaintext");
     expect(html).toContain("Показать значение секрета CRM_TOKEN");
+
+    const buttonTag = (label: string): string => {
+      const position = html.indexOf(label);
+      const start = html.lastIndexOf("<button", position);
+      return html.slice(start, html.indexOf(">", start) + 1);
+    };
+    expect(buttonTag("Показать значение секрета CRM_TOKEN")).not.toContain(
+      "disabled",
+    );
+    expect(html).not.toContain("secret.create");
+    expect(html).not.toContain("secret.rotate");
+    expect(html).not.toContain("secret.revoke");
+    expect(html).not.toContain("nextAction");
   });
 });

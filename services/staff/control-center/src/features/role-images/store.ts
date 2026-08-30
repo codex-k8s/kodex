@@ -9,6 +9,8 @@ import {
   loadRoleImageDependencies,
   loadRoleImageDetail,
   loadRoleImagePage,
+  loadRoleImageRevisionPage,
+  promoteRoleImageArtifact,
   type RoleDefinitionOption,
   updateRoleImage,
 } from "@/features/role-images/api";
@@ -17,9 +19,11 @@ import type {
   RoleImageArtifact,
   RoleImageBuild,
   RoleImageRecipe,
+  RoleImageRecipeRevision,
   RoleImageRecipeCommand,
   RoleImageRecipeCreateInput,
   RoleImageRecipeUpdateInput,
+  RoleImagePromotionReceipt,
   RuntimeEnvironmentSet,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -28,6 +32,13 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   const recipes = reactive<Record<string, RoleImageRecipe>>({});
   const builds = reactive<Record<string, RoleImageBuild[]>>({});
   const artifacts = reactive<Record<string, RoleImageArtifact | undefined>>({});
+  const revisions = reactive<Record<string, RoleImageRecipeRevision[]>>({});
+  const revisionNextPageToken = reactive<Record<string, string | undefined>>(
+    {},
+  );
+  const promotionReceipts = reactive<
+    Record<string, RoleImagePromotionReceipt | undefined>
+  >({});
   const dependencies = reactive<Record<string, RuntimeEnvironmentSet[]>>({});
   const projectRecipeRefs = reactive<Record<string, string[]>>({});
   const projectNextPageToken = reactive<Record<string, string | undefined>>({});
@@ -97,18 +108,50 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     try {
       const detail = await loadRoleImageDetail(projectRef, recipeRef);
       if (current !== detailGeneration) return;
-      const dependencyItems = detail.activeArtifact
-        ? await loadRoleImageDependencies(projectRef, detail.activeArtifact.ref)
-        : [];
+      const [dependencyItems, revisionPage] = await Promise.all([
+        detail.activeArtifact
+          ? loadRoleImageDependencies(projectRef, detail.activeArtifact.ref)
+          : Promise.resolve([]),
+        loadRoleImageRevisionPage(projectRef, recipeRef),
+      ]);
       if (current !== detailGeneration) return;
       recipes[detail.recipe.ref] = detail.recipe;
       builds[detail.recipe.ref] = detail.builds;
       artifacts[detail.recipe.ref] = detail.activeArtifact;
       dependencies[detail.recipe.ref] = dependencyItems;
+      revisions[detail.recipe.ref] = revisionPage.items;
+      revisionNextPageToken[detail.recipe.ref] = revisionPage.nextPageToken;
     } catch (error) {
       if (current === detailGeneration) problem.value = asProblem(error);
     } finally {
       if (current === detailGeneration) loadingDetail.value = false;
+    }
+  }
+
+  async function loadMoreRevisions(
+    projectRef: string,
+    recipeRef: string,
+  ): Promise<void> {
+    const pageToken = revisionNextPageToken[recipeRef];
+    if (!pageToken || loadingDetail.value) return;
+    loadingDetail.value = true;
+    problem.value = undefined;
+    try {
+      const page = await loadRoleImageRevisionPage(
+        projectRef,
+        recipeRef,
+        pageToken,
+      );
+      const merged = new Map(
+        (revisions[recipeRef] ?? []).map((item) => [item.ref, item]),
+      );
+      for (const item of page.items) merged.set(item.ref, item);
+      revisions[recipeRef] = [...merged.values()];
+      revisionNextPageToken[recipeRef] = page.nextPageToken;
+    } catch (error) {
+      problem.value = asProblem(error);
+    } finally {
+      loadingDetail.value = false;
     }
   }
 
@@ -190,6 +233,31 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     }
   }
 
+  async function promote(
+    projectRef: string,
+    recipe: RoleImageRecipe,
+    artifact: RoleImageArtifact,
+  ): Promise<RoleImagePromotionReceipt> {
+    mutating.value = true;
+    problem.value = undefined;
+    try {
+      const receipt = await promoteRoleImageArtifact(
+        projectRef,
+        recipe,
+        artifact.ref,
+        artifact.provenanceSha256,
+      );
+      promotionReceipts[recipe.ref] = receipt;
+      await loadDetail(projectRef, recipe.ref);
+      return receipt;
+    } catch (error) {
+      problem.value = asProblem(error);
+      throw error;
+    } finally {
+      mutating.value = false;
+    }
+  }
+
   function dispose(): void {
     catalogGeneration += 1;
     detailGeneration += 1;
@@ -199,6 +267,9 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     recipes,
     builds,
     artifacts,
+    revisions,
+    revisionNextPageToken,
+    promotionReceipts,
     dependencies,
     projectNextPageToken,
     roleDefinitions,
@@ -213,9 +284,11 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     catalog,
     loadCatalog,
     loadDetail,
+    loadMoreRevisions,
     loadSupportingCatalogs,
     create,
     update,
+    promote,
     command,
     dispose,
   };

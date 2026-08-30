@@ -1,7 +1,17 @@
 import { requestSignal } from "@/shared/api/client";
-import { client } from "@/shared/api/generated/openapi/client.gen";
-import type { Problem } from "@/shared/api/generated/openapi/types.gen";
-import { csrfToken, etag, idempotencyKey, mutate } from "@/shared/api/mutation";
+import {
+  createRuntimeSecret as createRuntimeSecretRequest,
+  listRuntimeSecrets,
+  revealRuntimeSecret as revealRuntimeSecretRequest,
+  revokeRuntimeSecret as revokeRuntimeSecretRequest,
+  rotateRuntimeSecret as rotateRuntimeSecretRequest,
+} from "@/shared/api/generated/openapi/sdk.gen";
+import {
+  csrfToken,
+  idempotencyKey,
+  mutate,
+  type MutationHeaders,
+} from "@/shared/api/mutation";
 import { AppProblem, asProblem, unwrap } from "@/shared/api/problem";
 
 import type {
@@ -12,11 +22,25 @@ import type {
   RuntimeSecretRotateInput,
 } from "./model";
 
-type ApiErrors = { default: Problem };
-type RuntimeSecretPageResponses = { 200: RuntimeSecretPage };
-type RuntimeSecretCreateResponses = { 201: RuntimeSecret };
-type RuntimeSecretResponses = { 200: RuntimeSecret };
-type RuntimeSecretRevealResponses = { 200: RuntimeSecretReveal };
+function mutationHeaders(headers: MutationHeaders): {
+  "Idempotency-Key": string;
+  "X-CSRF-Token": string;
+} {
+  return {
+    "Idempotency-Key": headers["Idempotency-Key"],
+    "X-CSRF-Token": headers["X-CSRF-Token"],
+  };
+}
+
+function versionedHeaders(headers: MutationHeaders): {
+  "Idempotency-Key": string;
+  "If-Match": string;
+  "X-CSRF-Token": string;
+} {
+  if (!headers["If-Match"])
+    throw new Error("Runtime secret version header is unavailable");
+  return { ...mutationHeaders(headers), "If-Match": headers["If-Match"] };
+}
 
 export async function loadRuntimeSecretPage(
   projectRef: string,
@@ -26,8 +50,7 @@ export async function loadRuntimeSecretPage(
 ): Promise<RuntimeSecretPage> {
   return (
     await unwrap(
-      client.get<RuntimeSecretPageResponses, ApiErrors>({
-        url: "/api/v1/projects/{projectRef}/runtime-secrets",
+      listRuntimeSecrets({
         path: { projectRef },
         query: {
           pageSize: 40,
@@ -46,15 +69,10 @@ export async function createRuntimeSecret(
 ): Promise<RuntimeSecret> {
   return (
     await mutate((headers) =>
-      client.post<RuntimeSecretCreateResponses, ApiErrors>({
-        url: "/api/v1/projects/{projectRef}/runtime-secrets",
+      createRuntimeSecretRequest({
         path: { projectRef },
         body: input,
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": headers["Idempotency-Key"],
-          "X-CSRF-Token": headers["X-CSRF-Token"],
-        },
+        headers: mutationHeaders(headers),
         signal: requestSignal(),
       }),
     )
@@ -68,16 +86,10 @@ export async function rotateRuntimeSecret(
   return (
     await mutate(
       (headers) =>
-        client.post<RuntimeSecretResponses, ApiErrors>({
-          url: "/api/v1/runtime-secrets/{secretRef}/rotations",
+        rotateRuntimeSecretRequest({
           path: { secretRef: secret.ref },
           body: input,
-          headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "If-Match": headers["If-Match"] ?? etag(secret.version),
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-          },
+          headers: versionedHeaders(headers),
           signal: requestSignal(),
         }),
       secret.version,
@@ -91,14 +103,9 @@ export async function revokeRuntimeSecret(
   return (
     await mutate(
       (headers) =>
-        client.delete<RuntimeSecretResponses, ApiErrors>({
-          url: "/api/v1/runtime-secrets/{secretRef}",
+        revokeRuntimeSecretRequest({
           path: { secretRef: secret.ref },
-          headers: {
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "If-Match": headers["If-Match"] ?? etag(secret.version),
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-          },
+          headers: versionedHeaders(headers),
           signal: requestSignal(),
         }),
       secret.version,
@@ -109,8 +116,7 @@ export async function revokeRuntimeSecret(
 export async function revealRuntimeSecret(
   secretRef: string,
 ): Promise<RuntimeSecretReveal> {
-  const result = await client.post<RuntimeSecretRevealResponses, ApiErrors>({
-    url: "/api/v1/runtime-secrets/{secretRef}/reveal",
+  const result = await revealRuntimeSecretRequest({
     path: { secretRef },
     cache: "no-store",
     headers: {

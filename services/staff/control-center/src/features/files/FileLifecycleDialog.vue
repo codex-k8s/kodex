@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { AlertTriangle, RotateCcw, Trash2 } from "@lucide/vue";
 import { computed } from "vue";
+import { RouterLink } from "vue-router";
 
 import type {
   ArtifactLifecycleAction,
@@ -18,6 +19,15 @@ const props = defineProps<{
     cancel: string;
     confirm: Record<ArtifactLifecycleAction, string>;
     description: Record<ArtifactLifecycleAction, string>;
+    impact: {
+      activeRuns: string;
+      activeRunsTruncated: string;
+      attachments: string;
+      bindings: string;
+      openRun: string;
+      summary: string;
+    };
+    impactBlocked: string;
     impactUnavailable: string;
     reason: Record<ArtifactLifecycleBlockReason, string>;
     title: Record<ArtifactLifecycleAction, string>;
@@ -27,6 +37,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{ close: []; confirm: [] }>();
 const destructive = computed(() => props.action !== "RESTORE");
+
+function runPath(run: { projectRef?: string; runRef: string }): string {
+  return run.projectRef
+    ? `/projects/${encodeURIComponent(run.projectRef)}/runs/${encodeURIComponent(run.runRef)}`
+    : `/runs/${encodeURIComponent(run.runRef)}`;
+}
 </script>
 
 <template>
@@ -59,9 +75,49 @@ const destructive = computed(() => props.action !== "RESTORE");
         <AlertTriangle :size="18" aria-hidden="true" />
         <div>
           <strong>{{ labels.reason[state.reason] }}</strong>
-          <p>{{ labels.impactUnavailable }}</p>
+          <p>
+            {{
+              state.reason === "IMPACT_UNAVAILABLE"
+                ? labels.impactUnavailable
+                : labels.impactBlocked
+            }}
+          </p>
         </div>
       </div>
+      <section v-if="state.impact" class="file-lifecycle-dialog__impact">
+        <strong>{{ labels.impact.summary }}</strong>
+        <dl>
+          <div>
+            <dt>{{ labels.impact.bindings }}</dt>
+            <dd>{{ state.impact.bindingCount }}</dd>
+          </div>
+          <div>
+            <dt>{{ labels.impact.attachments }}</dt>
+            <dd>{{ state.impact.attachmentCount }}</dd>
+          </div>
+          <div>
+            <dt>{{ labels.impact.activeRuns }}</dt>
+            <dd>{{ state.impact.activeRuntimeCount }}</dd>
+          </div>
+        </dl>
+        <ul v-if="state.impact.activeRuns.length > 0">
+          <li v-for="run in state.impact.activeRuns" :key="run.runRef">
+            <div>
+              <strong>{{ run.title }}</strong>
+              <small>{{ run.state }}</small>
+            </div>
+            <RouterLink class="button" :to="runPath(run)">
+              {{ labels.impact.openRun }}
+            </RouterLink>
+          </li>
+        </ul>
+        <p
+          v-if="state.impact.activeRunsTruncated"
+          class="file-lifecycle-dialog__truncated"
+        >
+          {{ labels.impact.activeRunsTruncated }}
+        </p>
+      </section>
     </div>
 
     <template #actions>
@@ -134,5 +190,60 @@ const destructive = computed(() => props.action !== "RESTORE");
 .file-lifecycle-dialog__notice p {
   margin: 4px 0 0;
   font-size: 0.82rem;
+}
+.file-lifecycle-dialog__impact {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.file-lifecycle-dialog__impact dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.file-lifecycle-dialog__impact dl div {
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--surface-muted, #f5f7fa);
+}
+.file-lifecycle-dialog__impact dt,
+.file-lifecycle-dialog__impact dd {
+  margin: 0;
+}
+.file-lifecycle-dialog__impact dt,
+.file-lifecycle-dialog__impact small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.file-lifecycle-dialog__impact ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.file-lifecycle-dialog__impact li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.file-lifecycle-dialog__impact li div {
+  display: grid;
+  min-width: 0;
+}
+.file-lifecycle-dialog__truncated {
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .file-lifecycle-dialog__impact dl {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

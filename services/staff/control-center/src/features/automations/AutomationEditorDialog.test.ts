@@ -32,6 +32,25 @@ const schedule = {
   input: { task: "Подготовить сводку", retained: { exact: true } },
   sessionPolicy: "CONTINUE_ONE",
   notificationPolicy: "CONTROL_CENTER_AND_OPTIONAL_CHANNELS",
+  currentRevision: {
+    ref: "schedule_revision_7",
+    revision: 7,
+    digest: "a".repeat(64),
+    name: "Ежедневная сводка",
+    target: {
+      type: "AGENT",
+      ref: agent.ref,
+      displayName: agent.name,
+      version: 2,
+    },
+    preset: "WEEKLY",
+    cronExpression: "30 9 * * 5",
+    timezone: "Europe/Saratov",
+    input: { task: "Подготовить сводку", retained: { exact: true } },
+    sessionPolicy: "CONTINUE_ONE",
+    notificationPolicy: "CONTROL_CENTER_AND_OPTIONAL_CHANNELS",
+    createdAt: "2026-08-30T06:00:00Z",
+  },
   nextActions: ["EDIT", "ENABLE", "ARCHIVE"],
 } as Schedule;
 

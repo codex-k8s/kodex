@@ -15,10 +15,12 @@ import { RouterLink } from "vue-router";
 
 import {
   deleteArtifactItem,
+  loadArtifactImpact,
   loadArtifactPage,
   mutateArtifactsSequentially,
   purgeArtifactItem,
   restoreArtifactItem,
+  uploadArtifactItem,
   type ArtifactBulkReceipt,
 } from "@/features/files/api";
 import FileLifecycleDialog from "@/features/files/FileLifecycleDialog.vue";
@@ -27,9 +29,13 @@ import FileTypeIcon from "@/features/files/FileTypeIcon.vue";
 import TrashBulkDialog from "@/features/files/TrashBulkDialog.vue";
 import {
   artifactLifecycleState,
+  artifactLifecycleAnnounced,
+  artifactSourceKinds,
+  artifactSourcesForTab,
   createUploadQueueItems,
-  matchesArtifactFilters,
+  nextUploadQueueItems,
   supportsInlinePreview,
+  uploadProgressPercent,
   type ArtifactLifecycleAction,
   type ArtifactLifecycleState,
   type ArtifactTrashBulkAction,
@@ -41,7 +47,10 @@ import {
   type UploadQueueItem,
 } from "@/features/files/model";
 import { usePlatformStore } from "@/features/platform/store";
-import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  Artifact,
+  ArtifactImpact,
+} from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -59,7 +68,7 @@ const props = defineProps<{
   mode: FileCollectionMode;
   initialArtifactRef?: string;
 }>();
-const maximumUploadBytes = 16 << 20;
+const maximumUploadBytes = 512 << 20;
 const maximumTextPreviewBytes = 256 << 10;
 const viewPreferenceKey = "kodex.files.view";
 const platform = usePlatformStore();
@@ -74,8 +83,10 @@ const source = ref<FileSource>("ALL");
 const viewMode = ref<ViewMode>("list");
 const selectedRef = ref(props.initialArtifactRef ?? "");
 const selectedRefs = ref<string[]>([]);
-const uploadBusy = ref(false);
 const uploadQueue = ref<UploadQueueItem[]>([]);
+const activeUploadCount = ref(0);
+const uploadControllers = new Map<string, AbortController>();
+const uploadRefreshPending = ref(false);
 const dragDepth = ref(0);
 const dragActive = computed(() => dragDepth.value > 0);
 const trashMode = computed(() => props.mode === "TRASH");
@@ -99,17 +110,27 @@ const lifecycleDialog = ref<{
 const bulkDialog = ref<{
   action: ArtifactTrashBulkAction;
   artifacts: Artifact[];
+  impacts: Record<string, ArtifactImpact>;
 }>();
 const bulkReceipts = ref<ArtifactBulkReceipt[]>([]);
 let uploadSequence = 0;
+let disposed = false;
+
+const collectionTab = computed<FileTab>(() =>
+  trashMode.value ? "TRASH" : activeTab.value,
+);
+const sourceOptions = computed(() =>
+  artifactSourcesForTab(collectionTab.value),
+);
 
 const collection = useAsyncEntityCollection(
   (request) =>
-    loadArtifactPage(
-      props.projectRef,
-      request,
-      trashMode.value ? "DELETED" : "ACTIVE",
-    ),
+    loadArtifactPage(props.projectRef, request, {
+      lifecycleState: trashMode.value ? "DELETED" : "ACTIVE",
+      sourceKinds: artifactSourceKinds(collectionTab.value, source.value),
+      ...(kind.value === "ALL" ? {} : { type: kind.value }),
+      ...(scanState.value === "ALL" ? {} : { scanState: scanState.value }),
+    }),
   { debounceMs: 250 },
 );
 const {
@@ -140,16 +161,7 @@ const agents = computed(() =>
 const loadedArtifacts = computed(() =>
   items.value.map((item) => item.artifact),
 );
-const filteredArtifacts = computed(() =>
-  loadedArtifacts.value.filter((artifact) =>
-    matchesArtifactFilters(artifact, {
-      kind: kind.value,
-      scanState: scanState.value,
-      source: source.value,
-      tab: trashMode.value ? "TRASH" : activeTab.value,
-    }),
-  ),
-);
+const filteredArtifacts = computed(() => loadedArtifacts.value);
 const selectedArtifact = computed(() =>
   loadedArtifacts.value.find((artifact) => artifact.ref === selectedRef.value),
 );
@@ -158,10 +170,11 @@ const selectedArtifacts = computed(() => {
   return loadedArtifacts.value.filter((artifact) => refs.has(artifact.ref));
 });
 const selectableArtifacts = computed(() =>
-  filteredArtifacts.value.filter(
-    (artifact) =>
-      artifactLifecycleState(artifact, trashMode.value ? "RESTORE" : "DELETE")
-        .available,
+  filteredArtifacts.value.filter((artifact) =>
+    artifactLifecycleAnnounced(
+      artifact,
+      trashMode.value ? "RESTORE" : "DELETE",
+    ),
   ),
 );
 const allVisibleSelected = computed(
@@ -169,6 +182,13 @@ const allVisibleSelected = computed(
     selectableArtifacts.value.length > 0 &&
     selectableArtifacts.value.every((artifact) =>
       selectedRefs.value.includes(artifact.ref),
+    ),
+);
+const canEmptyTrash = computed(
+  () =>
+    trashMode.value &&
+    loadedArtifacts.value.some((artifact) =>
+      artifactLifecycleAnnounced(artifact, "PURGE"),
     ),
 );
 const listProblem = computed(() =>
@@ -193,7 +213,10 @@ const custom = computed(() =>
   locale.value.startsWith("en")
     ? {
         actionUnavailable:
-          "The current API does not expose this operation. No file was changed.",
+          "This action is unavailable for the file. No file was changed.",
+        activeRunsTitle: "Affected active runs",
+        activeRunsUnavailable:
+          "The affected active runs cannot be checked right now, so destructive actions are disabled. Already materialized input is not silently revoked.",
         activeSelection: "Selected files",
         allFiles: "Files",
         bulkDeleteContract:
@@ -202,6 +225,7 @@ const custom = computed(() =>
         bulkResultTitle: "Operation results",
         bulkSucceeded: "Completed",
         cancel: "Cancel",
+        cancelUpload: "Cancel upload",
         clearSearch: "Clear search",
         confirmationHint:
           "Type the confirmation phrase exactly. This operation cannot be undone.",
@@ -215,8 +239,21 @@ const custom = computed(() =>
         grid: "Grid",
         impactUnavailable:
           "Already materialized inputs remain available to an active session; new turns no longer receive this file.",
+        impactBlocked:
+          "Resolve the listed dependencies or cancel the affected runs before retrying.",
+        impactPreflight:
+          "Dependencies and active runs are checked immediately before a destructive action.",
+        impact: {
+          activeRuns: "Active runs",
+          activeRunsTruncated: "Only the first affected runs are shown.",
+          attachments: "Immutable attachments",
+          bindings: "Employee bindings",
+          openRun: "Open and cancel",
+          summary: "Deletion impact",
+        },
         loaded: "Loaded",
         loadingMore: "Loading more…",
+        knowledgeSources: "Knowledge sources",
         purge: "Delete permanently",
         purgeDescription:
           "The exact object version will be removed from storage without recovery.",
@@ -236,7 +273,8 @@ const custom = computed(() =>
         selected: "Selected",
         sequentialHint:
           "Files are processed one by one. A failure does not roll back successful operations and is reported separately.",
-        uploadMore: "Add files",
+        uploadMore: "Upload",
+        uploadTooLarge: "The file must not exceed 512 MB.",
         uploading: "Uploading",
         uploadQueue: "Upload queue",
         viewFilter: "Collection",
@@ -256,9 +294,11 @@ const custom = computed(() =>
           },
           reason: {
             ACTION_NOT_ALLOWED:
-              "Your current permissions do not include this action.",
-            CONTRACT_UNAVAILABLE:
-              "The server announced the action, but this client has no generated command for it.",
+              "This action is unavailable for the file in its current state.",
+            IMPACT_BLOCKED:
+              "The file is still used by active or immutable resources.",
+            IMPACT_UNAVAILABLE:
+              "The impact on active runs could not be checked, so the action is disabled.",
           },
           title: {
             DELETE: "Move file to trash?",
@@ -289,7 +329,10 @@ const custom = computed(() =>
       }
     : {
         actionUnavailable:
-          "Текущий API не предоставляет эту операцию. Файл не был изменён.",
+          "Это действие сейчас недоступно для файла. Файл не был изменён.",
+        activeRunsTitle: "Затронутые активные запуски",
+        activeRunsUnavailable:
+          "Сейчас нельзя проверить затронутые активные запуски, поэтому необратимые действия отключены. Уже материализованный вход не отзывается скрыто.",
         activeSelection: "Выбранные файлы",
         allFiles: "Файлы",
         bulkDeleteContract:
@@ -298,6 +341,7 @@ const custom = computed(() =>
         bulkResultTitle: "Результаты операции",
         bulkSucceeded: "Выполнено",
         cancel: "Отмена",
+        cancelUpload: "Отменить загрузку",
         clearSearch: "Очистить поиск",
         confirmationHint:
           "Введите фразу подтверждения без изменений. Операцию нельзя отменить.",
@@ -311,8 +355,21 @@ const custom = computed(() =>
         grid: "Сетка",
         impactUnavailable:
           "Уже материализованный вход останется у активной сессии; новые ходы этот файл больше не получат.",
+        impactBlocked:
+          "Устраните указанные зависимости или отмените затронутые запуски и повторите действие.",
+        impactPreflight:
+          "Зависимости и активные запуски проверяются непосредственно перед необратимым действием.",
+        impact: {
+          activeRuns: "Активные запуски",
+          activeRunsTruncated: "Показаны только первые затронутые запуски.",
+          attachments: "Неизменяемые вложения",
+          bindings: "Привязки к сотрудникам",
+          openRun: "Открыть и отменить",
+          summary: "Влияние удаления",
+        },
         loaded: "Загружено",
         loadingMore: "Загружаем ещё…",
+        knowledgeSources: "Источники знаний",
         purge: "Удалить навсегда",
         purgeDescription:
           "Точная версия объекта будет удалена из хранилища без возможности восстановления.",
@@ -332,7 +389,8 @@ const custom = computed(() =>
         selected: "Выбрано",
         sequentialHint:
           "Файлы обрабатываются последовательно. Ошибка одного файла не отменяет успешные операции и показывается отдельно.",
-        uploadMore: "Добавить файлы",
+        uploadMore: "Загрузить",
+        uploadTooLarge: "Размер файла не должен превышать 512 МБ.",
         uploading: "Загружается",
         uploadQueue: "Очередь загрузки",
         viewFilter: "Раздел",
@@ -350,9 +408,12 @@ const custom = computed(() =>
             RESTORE: "Файл вернётся в прежнюю область Проекта.",
           },
           reason: {
-            ACTION_NOT_ALLOWED: "Текущие полномочия не содержат эту операцию.",
-            CONTRACT_UNAVAILABLE:
-              "Сервер объявил операцию, но в клиенте нет сгенерированной команды.",
+            ACTION_NOT_ALLOWED:
+              "Действие недоступно для файла в его текущем состоянии.",
+            IMPACT_BLOCKED:
+              "Файл используется активными или неизменяемыми ресурсами.",
+            IMPACT_UNAVAILABLE:
+              "Не удалось проверить влияние на активные запуски, поэтому действие отключено.",
           },
           title: {
             DELETE: "Переместить файл в корзину?",
@@ -397,6 +458,9 @@ watch(viewMode, (mode) => {
     window.localStorage.setItem(viewPreferenceKey, mode);
 });
 watch(activeTab, () => {
+  source.value = "ALL";
+});
+watch([activeTab, kind, scanState, source], () => {
   selectedRef.value = "";
   selectedRefs.value = [];
   refresh();
@@ -498,7 +562,7 @@ function replaceArtifact(artifact: Artifact): void {
 
 function updateUploadQueueItem(
   id: string,
-  update: Partial<Pick<UploadQueueItem, "problem" | "state">>,
+  update: Partial<Pick<UploadQueueItem, "problem" | "progress" | "state">>,
 ): void {
   uploadQueue.value = uploadQueue.value.map((item) =>
     item.id === id ? { ...item, ...update } : item,
@@ -507,6 +571,7 @@ function updateUploadQueueItem(
 
 function enqueueFiles(files: readonly File[]): void {
   if (!canUpload.value || files.length === 0) return;
+  if (!trashMode.value) activeTab.value = "FILES";
   operationProblem.value = undefined;
   validationMessage.value = "";
   const queued = createUploadQueueItems(files, () => {
@@ -516,48 +581,80 @@ function enqueueFiles(files: readonly File[]): void {
     item.file.size > maximumUploadBytes
       ? {
           ...item,
-          problem: t("files.uploadTooLarge"),
+          problem: custom.value.uploadTooLarge,
           state: "FAILED" as const,
         }
       : item,
   );
   uploadQueue.value = [...uploadQueue.value, ...queued];
-  void processUploadQueue();
+  processUploadQueue();
 }
 
-async function processUploadQueue(): Promise<void> {
-  if (uploadBusy.value) return;
-  uploadBusy.value = true;
-  let uploaded = false;
+async function uploadQueueItem(item: UploadQueueItem): Promise<void> {
+  const current = uploadQueue.value.find(
+    (candidate) => candidate.id === item.id,
+  );
+  if (!current || current.state !== "QUEUED") return;
+  const controller = new AbortController();
+  uploadControllers.set(item.id, controller);
+  activeUploadCount.value += 1;
+  updateUploadQueueItem(item.id, {
+    problem: undefined,
+    progress: { loadedBytes: 0, totalBytes: item.file.size },
+    state: "UPLOADING",
+  });
   try {
-    let next = uploadQueue.value.find((item) => item.state === "QUEUED");
-    while (next) {
-      updateUploadQueueItem(next.id, {
-        problem: undefined,
-        state: "UPLOADING",
-      });
-      try {
-        const artifact = await platform.uploadProjectArtifact(
-          props.projectRef,
-          next.file,
+    const artifact = await uploadArtifactItem(props.projectRef, item.file, {
+      signal: controller.signal,
+      onProgress: (progress) => {
+        const queued = uploadQueue.value.find(
+          (candidate) => candidate.id === item.id,
         );
-        selectedRef.value = artifact.ref;
-        activeTab.value = "FILES";
-        uploaded = true;
-        updateUploadQueueItem(next.id, { state: "SUCCEEDED" });
-      } catch (error) {
-        const problem = asProblem(error);
-        updateUploadQueueItem(next.id, {
-          problem: problem.detail || problem.title,
-          state: "FAILED",
-        });
-      }
-      next = uploadQueue.value.find((item) => item.state === "QUEUED");
+        if (queued?.state === "UPLOADING")
+          updateUploadQueueItem(item.id, { progress });
+      },
+    });
+    if (!uploadQueue.value.some((candidate) => candidate.id === item.id))
+      return;
+    selectedRef.value = artifact.ref;
+    uploadRefreshPending.value = true;
+    updateUploadQueueItem(item.id, {
+      progress: { loadedBytes: item.file.size, totalBytes: item.file.size },
+      state: "SUCCEEDED",
+    });
+  } catch (error) {
+    if (
+      !controller.signal.aborted &&
+      uploadQueue.value.some((candidate) => candidate.id === item.id)
+    ) {
+      const problem = asProblem(error);
+      updateUploadQueueItem(item.id, {
+        problem: problem.detail || problem.title || custom.value.failed,
+        progress: undefined,
+        state: "FAILED",
+      });
     }
   } finally {
-    uploadBusy.value = false;
-    if (uploaded) refresh();
+    if (uploadControllers.get(item.id) === controller)
+      uploadControllers.delete(item.id);
+    activeUploadCount.value = Math.max(0, activeUploadCount.value - 1);
+    processUploadQueue();
+    if (
+      !disposed &&
+      activeUploadCount.value === 0 &&
+      !uploadQueue.value.some((candidate) => candidate.state === "QUEUED") &&
+      uploadRefreshPending.value
+    ) {
+      uploadRefreshPending.value = false;
+      refresh();
+    }
   }
+}
+
+function processUploadQueue(): void {
+  if (disposed) return;
+  for (const item of nextUploadQueueItems(uploadQueue.value))
+    void uploadQueueItem(item);
 }
 
 function upload(event: Event): void {
@@ -593,14 +690,24 @@ function handleDrop(event: DragEvent): void {
 }
 
 function retryUpload(id: string): void {
-  updateUploadQueueItem(id, { problem: undefined, state: "QUEUED" });
-  void processUploadQueue();
+  updateUploadQueueItem(id, {
+    problem: undefined,
+    progress: undefined,
+    state: "QUEUED",
+  });
+  processUploadQueue();
 }
 
 function removeUpload(id: string): void {
-  uploadQueue.value = uploadQueue.value.filter(
-    (item) => item.id !== id || item.state === "UPLOADING",
-  );
+  if (
+    uploadQueue.value.some(
+      (item) => item.id === id && item.state === "UPLOADING",
+    )
+  )
+    uploadRefreshPending.value = true;
+  uploadQueue.value = uploadQueue.value.filter((item) => item.id !== id);
+  uploadControllers.get(id)?.abort();
+  processUploadQueue();
 }
 
 function clearFinishedUploads(): void {
@@ -609,15 +716,50 @@ function clearFinishedUploads(): void {
   );
 }
 
-function openLifecycleDialog(
+async function resolveLifecycleState(
   artifact: Artifact,
   action: ArtifactLifecycleAction,
-): void {
-  lifecycleDialog.value = {
-    action,
-    artifact,
-    state: artifactLifecycleState(artifact, action),
-  };
+): Promise<ArtifactLifecycleState> {
+  if (action === "RESTORE") return artifactLifecycleState(artifact, action);
+  try {
+    return artifactLifecycleState(
+      artifact,
+      action,
+      await loadArtifactImpact(artifact, action),
+    );
+  } catch {
+    return artifactLifecycleState(artifact, action);
+  }
+}
+
+async function openLifecycleDialog(
+  artifact: Artifact,
+  action: ArtifactLifecycleAction,
+): Promise<void> {
+  if (!artifactLifecycleAnnounced(artifact, action)) {
+    validationMessage.value = custom.value.actionUnavailable;
+    return;
+  }
+  contentBusy.value = true;
+  validationMessage.value = "";
+  try {
+    lifecycleDialog.value = {
+      action,
+      artifact,
+      state: await resolveLifecycleState(artifact, action),
+    };
+  } finally {
+    contentBusy.value = false;
+  }
+}
+
+function lifecycleBlockLabel(
+  artifact: Artifact,
+  action: ArtifactLifecycleAction,
+): string | undefined {
+  return artifactLifecycleAnnounced(artifact, action)
+    ? undefined
+    : custom.value.lifecycle.reason.ACTION_NOT_ALLOWED;
 }
 
 function toggleSelection(artifactRef: string, selected: boolean): void {
@@ -637,15 +779,55 @@ function toggleAllVisible(): void {
   selectedRefs.value = [...refs];
 }
 
-function openSelectedBulk(
+async function resolveBulkLifecycle(
+  artifacts: readonly Artifact[],
   action: Extract<ArtifactTrashBulkAction, "DELETE" | "RESTORE" | "PURGE">,
-): void {
-  const artifacts = selectedArtifacts.value.filter(
-    (artifact) => artifactLifecycleState(artifact, action).available,
+): Promise<
+  | {
+      available: true;
+      artifacts: Artifact[];
+      impacts: Record<string, ArtifactImpact>;
+    }
+  | { available: false; artifact: Artifact; state: ArtifactLifecycleState }
+> {
+  const permitted: Artifact[] = [];
+  const impacts: Record<string, ArtifactImpact> = {};
+  for (const artifact of artifacts) {
+    const state = await resolveLifecycleState(artifact, action);
+    if (!state.available) return { artifact, available: false, state };
+    permitted.push(artifact);
+    if (state.impact) impacts[artifact.ref] = state.impact;
+  }
+  return { artifacts: permitted, available: true, impacts };
+}
+
+async function openSelectedBulk(
+  action: Extract<ArtifactTrashBulkAction, "DELETE" | "RESTORE" | "PURGE">,
+): Promise<void> {
+  const artifacts = selectedArtifacts.value.filter((artifact) =>
+    artifactLifecycleAnnounced(artifact, action),
   );
   if (artifacts.length === 0) return;
-  bulkReceipts.value = [];
-  bulkDialog.value = { action, artifacts };
+  contentBusy.value = true;
+  try {
+    const result = await resolveBulkLifecycle(artifacts, action);
+    if (!result.available) {
+      lifecycleDialog.value = {
+        action,
+        artifact: result.artifact,
+        state: result.state,
+      };
+      return;
+    }
+    bulkReceipts.value = [];
+    bulkDialog.value = {
+      action,
+      artifacts: result.artifacts,
+      impacts: result.impacts,
+    };
+  } finally {
+    contentBusy.value = false;
+  }
 }
 
 async function loadEntireTrash(): Promise<Artifact[]> {
@@ -660,7 +842,10 @@ async function loadEntireTrash(): Promise<Artifact[]> {
     const page = await loadArtifactPage(
       props.projectRef,
       { cursor, query: "", signal: controller.signal },
-      "DELETED",
+      {
+        lifecycleState: "DELETED",
+        sourceKinds: artifactSourceKinds("TRASH", "ALL"),
+      },
     );
     artifacts.push(...page.items.map((item) => item.artifact));
     cursor = page.nextCursor ?? undefined;
@@ -672,13 +857,26 @@ async function openEmptyTrash(): Promise<void> {
   contentBusy.value = true;
   operationProblem.value = undefined;
   try {
-    const artifacts = (await loadEntireTrash()).filter(
-      (artifact) => artifactLifecycleState(artifact, "PURGE").available,
+    const artifacts = (await loadEntireTrash()).filter((artifact) =>
+      artifactLifecycleAnnounced(artifact, "PURGE"),
     );
     if (artifacts.length > 0) {
+      const result = await resolveBulkLifecycle(artifacts, "PURGE");
+      if (!result.available) {
+        lifecycleDialog.value = {
+          action: "PURGE",
+          artifact: result.artifact,
+          state: result.state,
+        };
+        return;
+      }
       bulkReceipts.value = [];
-      bulkDialog.value = { action: "EMPTY", artifacts };
-    }
+      bulkDialog.value = {
+        action: "EMPTY",
+        artifacts: result.artifacts,
+        impacts: result.impacts,
+      };
+    } else validationMessage.value = custom.value.actionUnavailable;
   } catch (error) {
     operationProblem.value = asProblem(error);
   } finally {
@@ -695,10 +893,17 @@ async function confirmBulkOperation(): Promise<void> {
     bulkReceipts.value = await mutateArtifactsSequentially(
       operation.artifacts,
       async (artifact) => {
-        if (operation.action === "DELETE") await deleteArtifactItem(artifact);
+        const impact = operation.impacts[artifact.ref];
+        if (operation.action === "DELETE") {
+          if (!impact) throw new Error("Artifact delete impact is unavailable");
+          await deleteArtifactItem(artifact, impact);
+        }
         else if (operation.action === "RESTORE")
           await restoreArtifactItem(artifact);
-        else await purgeArtifactItem(artifact);
+        else {
+          if (!impact) throw new Error("Artifact purge impact is unavailable");
+          await purgeArtifactItem(artifact, impact);
+        }
       },
     );
     bulkDialog.value = undefined;
@@ -723,11 +928,20 @@ async function confirmLifecycleOperation(): Promise<void> {
   operationProblem.value = undefined;
   validationMessage.value = "";
   try {
-    if (operation.action === "DELETE")
-      replaceArtifact(await deleteArtifactItem(operation.artifact));
+    if (operation.action === "DELETE") {
+      if (!operation.state.impact)
+        throw new Error("Artifact delete impact is unavailable");
+      replaceArtifact(
+        await deleteArtifactItem(operation.artifact, operation.state.impact),
+      );
+    }
     else if (operation.action === "RESTORE")
       replaceArtifact(await restoreArtifactItem(operation.artifact));
-    else await purgeArtifactItem(operation.artifact);
+    else {
+      if (!operation.state.impact)
+        throw new Error("Artifact purge impact is unavailable");
+      await purgeArtifactItem(operation.artifact, operation.state.impact);
+    }
     selectedRef.value = "";
     lifecycleDialog.value = undefined;
     refresh();
@@ -833,7 +1047,12 @@ onMounted(() => {
     platform.loadAgents(props.projectRef),
   ]);
 });
-onBeforeUnmount(clearPreview);
+onBeforeUnmount(() => {
+  disposed = true;
+  for (const controller of uploadControllers.values()) controller.abort();
+  uploadControllers.clear();
+  clearPreview();
+});
 </script>
 
 <template>
@@ -882,6 +1101,7 @@ onBeforeUnmount(clearPreview);
         <span class="sr-only">{{ custom.viewFilter }}</span>
         <select v-model="activeTab" :aria-label="custom.viewFilter">
           <option value="FILES">{{ $t("files.tab.FILES") }}</option>
+          <option value="KNOWLEDGE">{{ custom.knowledgeSources }}</option>
           <option value="RESULTS">{{ $t("files.tab.RESULTS") }}</option>
         </select>
       </label>
@@ -917,20 +1137,12 @@ onBeforeUnmount(clearPreview);
         <span class="sr-only">{{ $t("files.sourceFilter") }}</span>
         <select v-model="source" :aria-label="$t('files.sourceFilter')">
           <option value="ALL">{{ $t("files.allSources") }}</option>
-          <option value="CONTROL_CENTER">
-            {{ $t("files.source.CONTROL_CENTER") }}
-          </option>
-          <option value="AGENT_RESULT">
-            {{ $t("files.source.AGENT_RESULT") }}
-          </option>
-          <option value="INTEGRATION_RESULT">
-            {{ $t("files.source.INTEGRATION_RESULT") }}
-          </option>
-          <option value="KNOWLEDGE_SOURCE">
-            {{ $t("files.source.KNOWLEDGE_SOURCE") }}
-          </option>
-          <option value="INTERACTION_ATTACHMENT">
-            {{ $t("files.source.INTERACTION_ATTACHMENT") }}
+          <option
+            v-for="sourceOption in sourceOptions"
+            :key="sourceOption"
+            :value="sourceOption"
+          >
+            {{ $t(`files.source.${sourceOption}`) }}
           </option>
         </select>
       </label>
@@ -948,11 +1160,10 @@ onBeforeUnmount(clearPreview);
         v-if="canUpload && !trashMode"
         class="button button--primary"
         type="button"
-        :disabled="uploadBusy"
         @click="fileInput?.click()"
       >
         <Upload :size="16" aria-hidden="true" />
-        {{ uploadBusy ? $t("files.uploading") : custom.uploadMore }}
+        {{ custom.uploadMore }}
       </button>
     </div>
 
@@ -980,7 +1191,11 @@ onBeforeUnmount(clearPreview);
               {{ formatBytes(item.file.size) }} ·
               {{
                 item.state === "UPLOADING"
-                  ? custom.uploading
+                  ? `${custom.uploading}${
+                      uploadProgressPercent(item.progress) === undefined
+                        ? ""
+                        : ` ${uploadProgressPercent(item.progress)}%`
+                    }`
                   : item.state === "QUEUED"
                     ? custom.queued
                     : item.state === "FAILED"
@@ -988,6 +1203,11 @@ onBeforeUnmount(clearPreview);
                       : $t("states.CLEAN")
               }}
             </small>
+            <progress
+              v-if="item.state === 'UPLOADING'"
+              :value="item.progress?.loadedBytes"
+              :max="Math.max(1, item.file.size)"
+            ></progress>
           </span>
           <button
             v-if="item.state === 'FAILED'"
@@ -1000,16 +1220,23 @@ onBeforeUnmount(clearPreview);
             <RefreshCw :size="16" aria-hidden="true" />
           </button>
           <button
-            v-else-if="item.state !== 'UPLOADING'"
+            v-else
             class="icon-button"
             type="button"
-            :title="custom.removeFromQueue"
-            :aria-label="`${custom.removeFromQueue}: ${item.file.name}`"
+            :title="
+              item.state === 'UPLOADING'
+                ? custom.cancelUpload
+                : custom.removeFromQueue
+            "
+            :aria-label="`${
+              item.state === 'UPLOADING'
+                ? custom.cancelUpload
+                : custom.removeFromQueue
+            }: ${item.file.name}`"
             @click="removeUpload(item.id)"
           >
             <X :size="16" aria-hidden="true" />
           </button>
-          <span v-else class="upload-queue__spinner" aria-hidden="true"></span>
         </li>
       </ul>
     </section>
@@ -1068,7 +1295,8 @@ onBeforeUnmount(clearPreview);
           v-if="trashMode"
           class="button button--danger"
           type="button"
-          :disabled="contentBusy || items.length === 0"
+          :disabled="contentBusy || !canEmptyTrash"
+          :title="canEmptyTrash ? undefined : custom.actionUnavailable"
           @click="openEmptyTrash"
         >
           <Trash2 :size="16" aria-hidden="true" />
@@ -1143,7 +1371,12 @@ onBeforeUnmount(clearPreview);
       :empty-text="$t('files.emptyText')"
       @retry="refresh"
     >
-      <div class="files-workspace__layout">
+      <div
+        class="files-workspace__layout"
+        :class="{
+          'files-workspace__layout--details': Boolean(selectedArtifact),
+        }"
+      >
         <div
           ref="scrollRoot"
           class="files-workspace__scroll"
@@ -1212,26 +1445,83 @@ onBeforeUnmount(clearPreview);
                 </span>
                 <StatusBadge :state="artifact.scanState" />
               </button>
-              <button
-                class="icon-button file-collection-item__lifecycle"
-                :class="{
-                  'file-collection-item__lifecycle--danger': !trashMode,
-                }"
-                type="button"
-                :title="trashMode ? custom.restore : custom.delete"
-                :aria-label="`${
-                  trashMode ? custom.restore : custom.delete
-                }: ${artifact.fileName}`"
-                @click="
-                  openLifecycleDialog(
-                    artifact,
-                    trashMode ? 'RESTORE' : 'DELETE',
-                  )
-                "
-              >
-                <RotateCcw v-if="trashMode" :size="16" aria-hidden="true" />
-                <Trash2 v-else :size="16" aria-hidden="true" />
-              </button>
+              <div class="file-collection-item__actions">
+                <button
+                  class="icon-button"
+                  type="button"
+                  :title="$t('files.openPreview')"
+                  :aria-label="`${$t('files.openPreview')}: ${artifact.fileName}`"
+                  @click="openPreview(artifact)"
+                >
+                  <Eye :size="16" aria-hidden="true" />
+                </button>
+                <button
+                  class="icon-button"
+                  type="button"
+                  :disabled="
+                    contentBusy || !artifact.nextActions.includes('DOWNLOAD')
+                  "
+                  :title="
+                    artifact.nextActions.includes('DOWNLOAD')
+                      ? $t('common.download')
+                      : custom.actionUnavailable
+                  "
+                  :aria-label="`${$t('common.download')}: ${artifact.fileName}`"
+                  @click="download(artifact)"
+                >
+                  <Download :size="16" aria-hidden="true" />
+                </button>
+                <button
+                  class="icon-button"
+                  :class="{
+                    'file-collection-item__lifecycle--danger': !trashMode,
+                  }"
+                  type="button"
+                  :disabled="
+                    contentBusy ||
+                    Boolean(
+                      lifecycleBlockLabel(
+                        artifact,
+                        trashMode ? 'RESTORE' : 'DELETE',
+                      ),
+                    )
+                  "
+                  :title="
+                    lifecycleBlockLabel(
+                      artifact,
+                      trashMode ? 'RESTORE' : 'DELETE',
+                    ) || (trashMode ? custom.restore : custom.delete)
+                  "
+                  :aria-label="`${
+                    trashMode ? custom.restore : custom.delete
+                  }: ${artifact.fileName}`"
+                  @click="
+                    openLifecycleDialog(
+                      artifact,
+                      trashMode ? 'RESTORE' : 'DELETE',
+                    )
+                  "
+                >
+                  <RotateCcw v-if="trashMode" :size="16" aria-hidden="true" />
+                  <Trash2 v-else :size="16" aria-hidden="true" />
+                </button>
+                <button
+                  v-if="trashMode"
+                  class="icon-button file-collection-item__lifecycle--danger"
+                  type="button"
+                  :disabled="
+                    contentBusy ||
+                    Boolean(lifecycleBlockLabel(artifact, 'PURGE'))
+                  "
+                  :title="
+                    lifecycleBlockLabel(artifact, 'PURGE') || custom.purge
+                  "
+                  :aria-label="`${custom.purge}: ${artifact.fileName}`"
+                  @click="openLifecycleDialog(artifact, 'PURGE')"
+                >
+                  <Trash2 :size="16" aria-hidden="true" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1303,26 +1593,83 @@ onBeforeUnmount(clearPreview);
                   formatDate(artifact.createdAt)
                 }}</span>
               </button>
-              <button
-                class="icon-button file-collection-item__lifecycle"
-                :class="{
-                  'file-collection-item__lifecycle--danger': !trashMode,
-                }"
-                type="button"
-                :title="trashMode ? custom.restore : custom.delete"
-                :aria-label="`${
-                  trashMode ? custom.restore : custom.delete
-                }: ${artifact.fileName}`"
-                @click="
-                  openLifecycleDialog(
-                    artifact,
-                    trashMode ? 'RESTORE' : 'DELETE',
-                  )
-                "
-              >
-                <RotateCcw v-if="trashMode" :size="16" aria-hidden="true" />
-                <Trash2 v-else :size="16" aria-hidden="true" />
-              </button>
+              <div class="file-collection-item__actions">
+                <button
+                  class="icon-button"
+                  type="button"
+                  :title="$t('files.openPreview')"
+                  :aria-label="`${$t('files.openPreview')}: ${artifact.fileName}`"
+                  @click="openPreview(artifact)"
+                >
+                  <Eye :size="16" aria-hidden="true" />
+                </button>
+                <button
+                  class="icon-button"
+                  type="button"
+                  :disabled="
+                    contentBusy || !artifact.nextActions.includes('DOWNLOAD')
+                  "
+                  :title="
+                    artifact.nextActions.includes('DOWNLOAD')
+                      ? $t('common.download')
+                      : custom.actionUnavailable
+                  "
+                  :aria-label="`${$t('common.download')}: ${artifact.fileName}`"
+                  @click="download(artifact)"
+                >
+                  <Download :size="16" aria-hidden="true" />
+                </button>
+                <button
+                  class="icon-button"
+                  :class="{
+                    'file-collection-item__lifecycle--danger': !trashMode,
+                  }"
+                  type="button"
+                  :disabled="
+                    contentBusy ||
+                    Boolean(
+                      lifecycleBlockLabel(
+                        artifact,
+                        trashMode ? 'RESTORE' : 'DELETE',
+                      ),
+                    )
+                  "
+                  :title="
+                    lifecycleBlockLabel(
+                      artifact,
+                      trashMode ? 'RESTORE' : 'DELETE',
+                    ) || (trashMode ? custom.restore : custom.delete)
+                  "
+                  :aria-label="`${
+                    trashMode ? custom.restore : custom.delete
+                  }: ${artifact.fileName}`"
+                  @click="
+                    openLifecycleDialog(
+                      artifact,
+                      trashMode ? 'RESTORE' : 'DELETE',
+                    )
+                  "
+                >
+                  <RotateCcw v-if="trashMode" :size="16" aria-hidden="true" />
+                  <Trash2 v-else :size="16" aria-hidden="true" />
+                </button>
+                <button
+                  v-if="trashMode"
+                  class="icon-button file-collection-item__lifecycle--danger"
+                  type="button"
+                  :disabled="
+                    contentBusy ||
+                    Boolean(lifecycleBlockLabel(artifact, 'PURGE'))
+                  "
+                  :title="
+                    lifecycleBlockLabel(artifact, 'PURGE') || custom.purge
+                  "
+                  :aria-label="`${custom.purge}: ${artifact.fileName}`"
+                  @click="openLifecycleDialog(artifact, 'PURGE')"
+                >
+                  <Trash2 :size="16" aria-hidden="true" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1426,11 +1773,21 @@ onBeforeUnmount(clearPreview);
               >
             </label>
           </section>
+          <section class="file-details__impact">
+            <h3>{{ custom.activeRunsTitle }}</h3>
+            <p>{{ custom.impactPreflight }}</p>
+          </section>
           <button
-            v-if="selectedArtifact.nextActions.includes('DOWNLOAD')"
             class="button file-details__download"
             type="button"
-            :disabled="contentBusy"
+            :disabled="
+              contentBusy || !selectedArtifact.nextActions.includes('DOWNLOAD')
+            "
+            :title="
+              selectedArtifact.nextActions.includes('DOWNLOAD')
+                ? $t('common.download')
+                : custom.actionUnavailable
+            "
             @click="download(selectedArtifact)"
           >
             <Download :size="16" aria-hidden="true" />
@@ -1440,6 +1797,21 @@ onBeforeUnmount(clearPreview);
             class="button file-details__lifecycle"
             :class="trashMode ? '' : 'button--danger'"
             type="button"
+            :disabled="
+              contentBusy ||
+              Boolean(
+                lifecycleBlockLabel(
+                  selectedArtifact,
+                  trashMode ? 'RESTORE' : 'DELETE',
+                ),
+              )
+            "
+            :title="
+              lifecycleBlockLabel(
+                selectedArtifact,
+                trashMode ? 'RESTORE' : 'DELETE',
+              ) || (trashMode ? custom.restore : custom.delete)
+            "
             @click="
               openLifecycleDialog(
                 selectedArtifact,
@@ -1455,6 +1827,13 @@ onBeforeUnmount(clearPreview);
             v-if="trashMode"
             class="button button--danger file-details__lifecycle"
             type="button"
+            :disabled="
+              contentBusy ||
+              Boolean(lifecycleBlockLabel(selectedArtifact, 'PURGE'))
+            "
+            :title="
+              lifecycleBlockLabel(selectedArtifact, 'PURGE') || custom.purge
+            "
             @click="openLifecycleDialog(selectedArtifact, 'PURGE')"
           >
             <Trash2 :size="16" aria-hidden="true" />
@@ -1471,6 +1850,10 @@ onBeforeUnmount(clearPreview);
       :labels="custom.preview"
       :delete-label="trashMode ? custom.restore : custom.delete"
       :lifecycle-action="trashMode ? 'RESTORE' : 'DELETE'"
+      :lifecycle-available="
+        !lifecycleBlockLabel(selectedArtifact, trashMode ? 'RESTORE' : 'DELETE')
+      "
+      :action-unavailable-label="custom.actionUnavailable"
       :loading="contentBusy"
       :preview-text="previewText"
       :unavailable="previewUnavailable"
@@ -1494,6 +1877,8 @@ onBeforeUnmount(clearPreview);
         cancel: custom.cancel,
         confirm: custom.lifecycle.confirm,
         description: custom.lifecycle.description,
+        impact: custom.impact,
+        impactBlocked: custom.impactBlocked,
         impactUnavailable: custom.impactUnavailable,
         reason: custom.lifecycle.reason,
         title: custom.lifecycle.title,
@@ -1606,6 +1991,9 @@ onBeforeUnmount(clearPreview);
 .files-workspace__layout {
   display: grid;
   min-height: 540px;
+  grid-template-columns: minmax(0, 1fr);
+}
+.files-workspace__layout--details {
   grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
 }
 .upload-queue,
@@ -1664,13 +2052,12 @@ onBeforeUnmount(clearPreview);
   color: var(--muted);
   font-size: 0.74rem;
 }
-.upload-queue__spinner {
-  width: 17px;
-  height: 17px;
-  border: 2px solid var(--border-strong);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: upload-spin 0.8s linear infinite;
+.upload-queue progress {
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin-top: 5px;
+  accent-color: var(--accent);
 }
 .trash-toolbar {
   padding: 10px 14px;
@@ -1775,11 +2162,16 @@ onBeforeUnmount(clearPreview);
   text-align: left;
   cursor: pointer;
 }
-.file-collection-item__lifecycle {
+.file-collection-item__actions {
   position: absolute;
   z-index: 1;
   top: 9px;
   right: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.file-collection-item__actions .icon-button {
   border: 1px solid var(--border);
   background: var(--surface);
 }
@@ -1863,7 +2255,7 @@ onBeforeUnmount(clearPreview);
 .file-list-row {
   width: 100%;
   min-height: 64px;
-  padding: 8px 52px 8px 14px;
+  padding: 8px 152px 8px 14px;
   border: 0;
   border-bottom: 1px solid var(--hairline);
   background: var(--surface);
@@ -1874,6 +2266,11 @@ onBeforeUnmount(clearPreview);
 .file-list-row:hover,
 .file-list-row--selected {
   background: var(--accent-soft);
+}
+.files-list .file-collection-item__actions {
+  top: 50%;
+  flex-direction: row;
+  transform: translateY(-50%);
 }
 .file-list-row__identity {
   display: flex;
@@ -1946,7 +2343,8 @@ onBeforeUnmount(clearPreview);
   overflow-wrap: anywhere;
 }
 .file-details__preview,
-.file-details__bindings {
+.file-details__bindings,
+.file-details__impact {
   padding: 14px 0;
   border-top: 1px solid var(--border);
 }
@@ -1955,9 +2353,11 @@ onBeforeUnmount(clearPreview);
   font-size: 0.86rem;
 }
 .file-details__preview p,
-.file-details__bindings > p {
+.file-details__bindings > p,
+.file-details__impact p {
   color: var(--muted);
   font-size: 0.8rem;
+  line-height: 1.45;
 }
 .file-details__bindings label {
   display: grid;
@@ -1989,13 +2389,8 @@ onBeforeUnmount(clearPreview);
   justify-content: center;
   margin-top: 8px;
 }
-@keyframes upload-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 @media (max-width: 980px) {
-  .files-workspace__layout {
+  .files-workspace__layout--details {
     grid-template-columns: minmax(0, 1fr) minmax(220px, 250px);
   }
   .files-workspace__toolbar .desktop-only {
@@ -2053,7 +2448,7 @@ onBeforeUnmount(clearPreview);
     grid-template-columns: minmax(0, 1fr) auto;
     min-height: 76px;
     gap: 6px 10px;
-    padding: 10px 48px 10px 2px;
+    padding: 10px 154px 10px 2px;
   }
   .file-list-row__identity {
     grid-row: 1 / 3;
@@ -2071,6 +2466,9 @@ onBeforeUnmount(clearPreview);
     padding: 16px 0;
     border-top: 1px solid var(--border);
     border-left: 0;
+  }
+  .files-list .file-collection-item__actions {
+    right: 0;
   }
 }
 </style>

@@ -26,6 +26,11 @@ const downloadArtifactMock = vi.hoisted(() => vi.fn());
 const getArtifactMock = vi.hoisted(() =>
   vi.fn<typeof import("@/shared/api/generated/openapi/sdk.gen").getArtifact>(),
 );
+const getArtifactImpactMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").getArtifactImpact
+  >(),
+);
 const deleteArtifactMock = vi.hoisted(() =>
   vi.fn<
     typeof import("@/shared/api/generated/openapi/sdk.gen").deleteArtifact
@@ -57,6 +62,7 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   listAgentInstructionVersions: listAgentInstructionVersionsMock,
   downloadArtifact: downloadArtifactMock,
   getArtifact: getArtifactMock,
+  getArtifactImpact: getArtifactImpactMock,
   deleteArtifact: deleteArtifactMock,
   createIntegrationConnection: createIntegrationConnectionMock,
   configureIntegrationConnectionCredential:
@@ -257,6 +263,7 @@ describe("platform store", () => {
     listAgentInstructionVersionsMock.mockReset();
     downloadArtifactMock.mockReset();
     getArtifactMock.mockReset();
+    getArtifactImpactMock.mockReset();
     deleteArtifactMock.mockReset();
     createIntegrationConnectionMock.mockReset();
     configureIntegrationConnectionCredentialMock.mockReset();
@@ -607,6 +614,23 @@ describe("platform store", () => {
       error: undefined,
       response: new Response(null, { status: 200 }),
     });
+    getArtifactImpactMock.mockResolvedValue({
+      data: {
+        action: "DELETE",
+        activeRuns: [],
+        activeRunsTruncated: false,
+        activeRuntimeCount: 0,
+        artifactRef: active.ref,
+        artifactVersion: active.version,
+        attachmentCount: 0,
+        bindingCount: 0,
+        blockers: [],
+        impactDigest: "d".repeat(64),
+        permitted: true,
+      },
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
     deleteArtifactMock.mockResolvedValue({
       data: deleted,
       error: undefined,
@@ -620,9 +644,16 @@ describe("platform store", () => {
     expect(getArtifactMock).toHaveBeenCalledWith(
       expect.objectContaining({ path: { artifactRef: active.ref } }),
     );
+    expect(getArtifactImpactMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { artifactRef: active.ref },
+        query: { action: "DELETE" },
+      }),
+    );
     const deleteCall = deleteArtifactMock.mock.calls[0]?.[0];
     expect(deleteCall?.path).toEqual({ artifactRef: active.ref });
     expect(deleteCall?.headers["If-Match"]).toBe('"1"');
+    expect(deleteCall?.headers["X-Impact-Digest"]).toBe("d".repeat(64));
     expect(store.artifacts[active.ref]?.lifecycleState).toBe("DELETED");
   });
 
