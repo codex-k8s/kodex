@@ -12,6 +12,7 @@ ALTER TABLE control_plane.worker_grant_high_watermarks
             'interaction-gateway',
             'role-image-builder',
             'runtime-controller',
+            'secret-broker',
             'session-archive'
         ));
 
@@ -21,7 +22,7 @@ RESET ROLE;
 SET ROLE control_plane_owner;
 
 DELETE FROM control_plane.worker_grant_high_watermarks
-WHERE workload_id IN ('interaction-gateway', 'session-archive');
+WHERE workload_id IN ('interaction-gateway', 'secret-broker', 'session-archive');
 
 ALTER TABLE control_plane.worker_grant_high_watermarks
     DROP CONSTRAINT worker_grant_high_watermarks_workload_id_check,
