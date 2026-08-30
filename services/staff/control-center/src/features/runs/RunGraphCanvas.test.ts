@@ -4,6 +4,7 @@ import { createI18n } from "vue-i18n";
 import { describe, expect, it } from "vitest";
 
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
+import { createRunGraphFlowElements } from "@/features/runs/run-graph-flow";
 import type {
   RunEdge,
   RunNode,
@@ -75,6 +76,7 @@ async function render(): Promise<string> {
             zoomIn: "Увеличить масштаб",
             zoomOut: "Уменьшить масштаб",
             fitGraph: "Вместить",
+            minimap: "Мини-карта графа",
             waitingForActivity: "Ожидает начала работы",
             sessionNode: "Сессия",
             controlNode: "Контрольный этап",
@@ -115,6 +117,9 @@ describe("RunGraphCanvas", () => {
     expect(html).toContain('aria-level="1"');
     expect(html).toContain('aria-level="2"');
     expect(html).toContain('aria-selected="true"');
+    expect(html).toContain("vue-flow__controls");
+    expect(html).toContain("vue-flow__minimap");
+    expect(html).toContain("Мини-карта графа");
   });
 
   it("убирает подписи с рёбер и объясняет связи в легенде", async () => {
@@ -128,16 +133,45 @@ describe("RunGraphCanvas", () => {
     expect(html).not.toContain(">DELEGATED_TO<");
   });
 
-  it("отмечает будущие и активные узлы без подмены состояния", async () => {
-    const html = await render();
+  it("отмечает будущие и активные узлы без подмены состояния", () => {
+    const flow = createRunGraphFlowElements(nodes, edges, {
+      selectedRef: "node_agent",
+      futureRefs: new Set(["node_agent"]),
+      activeRefs: new Set(["node_root"]),
+      nodeAccessibleLabel: (node) => `${node.displayName} · ${node.state}`,
+      edgeAccessibleLabel: () => "Делегирование",
+    });
+    const root = flow.nodes.find((node) => node.id === "node_root");
+    const agent = flow.nodes.find((node) => node.id === "node_agent");
+    const edge = flow.edges[0];
 
-    expect(html).toContain("canvas-node--future");
-    expect(html).toContain("canvas-node--active");
-    expect(html).toContain("canvas-node__activity");
-    expect(html).toContain('data-node-future="true"');
-    expect(html).toContain('data-node-surface="session"');
-    expect(html).toContain('aria-busy="true"');
-    expect(html).toContain("Сессия");
-    expect(html).toContain("В очереди");
+    expect(root?.data).toMatchObject({ active: true, future: false });
+    expect(root?.class).toContain("run-flow-node--active");
+    expect(root?.domAttributes).toMatchObject({ "aria-busy": "true" });
+    expect(agent?.data).toMatchObject({
+      selected: true,
+      future: true,
+      surface: "session",
+    });
+    expect(agent?.class).toEqual(
+      expect.arrayContaining([
+        "run-flow-node--future",
+        "run-flow-node--selected",
+      ]),
+    );
+    expect(agent?.domAttributes).toMatchObject({
+      "data-node-future": "true",
+      "data-node-surface": "session",
+    });
+    expect(edge).toMatchObject({
+      type: "runEdge",
+      source: "node_root",
+      target: "node_agent",
+      data: {
+        accessibleLabel: "Делегирование",
+        color: "var(--accent)",
+      },
+    });
+    expect(edge).not.toHaveProperty("label");
   });
 });

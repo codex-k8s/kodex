@@ -16,6 +16,7 @@ export interface BreadcrumbLabels {
   runs: string;
   run: string;
   files: string;
+  filesTrash: string;
   automations: string;
   environments: string;
   environment: string;
@@ -132,6 +133,17 @@ export function buildBreadcrumbs(
       ];
     case "files":
       return [...project, current(labels.files)];
+    case "files-trash":
+      return [
+        ...project,
+        {
+          label: labels.files,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/files`
+            : "/projects",
+        },
+        current(labels.filesTrash),
+      ];
     case "automations":
       return [...project, current(labels.automations)];
     case "runtime-environments":

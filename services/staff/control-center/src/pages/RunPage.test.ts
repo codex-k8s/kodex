@@ -73,6 +73,7 @@ function messages() {
       zoomIn: "Увеличить",
       zoomOut: "Уменьшить",
       fitGraph: "Вместить",
+      minimap: "Мини-карта графа",
       waitingForActivity: "Ожидает начала работы",
       sessionNode: "Сессия",
       controlNode: "Контрольный этап",

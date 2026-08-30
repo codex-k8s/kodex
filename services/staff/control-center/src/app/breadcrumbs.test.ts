@@ -15,6 +15,7 @@ const labels: BreadcrumbLabels = {
   runs: "Запуски",
   run: "Запуск",
   files: "Файлы и знания",
+  filesTrash: "Корзина",
   automations: "Автоматизации",
   environments: "Окружения",
   environment: "Окружение",
@@ -119,6 +120,23 @@ describe("breadcrumbs", () => {
       { label: "Проекты", path: "/projects" },
       { label: "Продажи", path: "/projects/project_sales" },
       { label: "Секреты" },
+    ]);
+  });
+
+  it("показывает канонический deep link корзины внутри файлов Проекта", () => {
+    expect(
+      buildBreadcrumbs(
+        {
+          routeName: "files-trash",
+          project: { ref: "project_sales", name: "Продажи" },
+        },
+        labels,
+      ),
+    ).toEqual([
+      { label: "Проекты", path: "/projects" },
+      { label: "Продажи", path: "/projects/project_sales" },
+      { label: "Файлы и знания", path: "/projects/project_sales/files" },
+      { label: "Корзина" },
     ]);
   });
 

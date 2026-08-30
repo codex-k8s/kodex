@@ -34,6 +34,7 @@ vi.mock("@/shared/api/mutation", () => ({ mutate: mutateMock }));
 import {
   deleteArtifactItem,
   loadArtifactPage,
+  mutateArtifactsSequentially,
   purgeArtifactItem,
   restoreArtifactItem,
 } from "@/features/files/api";
@@ -143,5 +144,36 @@ describe("loadArtifactPage", () => {
         },
       }),
     );
+  });
+
+  it("последовательно обрабатывает каждый файл и возвращает отдельный receipt", async () => {
+    const first = artifact("artifact_one");
+    const second = artifact("artifact_two");
+    const third = artifact("artifact_three");
+    const command = vi.fn((current: Artifact) =>
+      current.ref === second.ref
+        ? Promise.reject(new Error("second failed"))
+        : Promise.resolve(),
+    );
+
+    const receipts = await mutateArtifactsSequentially(
+      [first, second, third],
+      command,
+    );
+
+    expect(command.mock.calls.map(([current]) => current.ref)).toEqual([
+      first.ref,
+      second.ref,
+      third.ref,
+    ]);
+    expect(receipts).toMatchObject([
+      { artifact: first, status: "SUCCEEDED" },
+      {
+        artifact: second,
+        problem: { code: "UNKNOWN", status: 0 },
+        status: "FAILED",
+      },
+      { artifact: third, status: "SUCCEEDED" },
+    ]);
   });
 });

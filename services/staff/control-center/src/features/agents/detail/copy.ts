@@ -10,7 +10,6 @@ export interface AgentDetailCopy {
   avatar: {
     preview: string;
     help: string;
-    generate: string;
     upload: string;
     remove: string;
     fallback: string;
@@ -93,7 +92,6 @@ const ru: AgentDetailCopy = {
   avatar: {
     preview: "Аватар сотрудника",
     help: "Изображение обрезается до квадрата и сохраняется как новая неизменяемая ревизия файла Проекта.",
-    generate: "Создать с Kodex",
     upload: "Загрузить изображение",
     remove: "Удалить аватар",
     fallback: "Используются инициалы",
@@ -183,7 +181,6 @@ const en: AgentDetailCopy = {
   avatar: {
     preview: "Employee avatar",
     help: "The image is cropped to a square and stored as a new immutable Project file revision.",
-    generate: "Create with Kodex",
     upload: "Upload image",
     remove: "Remove avatar",
     fallback: "Initials are used",

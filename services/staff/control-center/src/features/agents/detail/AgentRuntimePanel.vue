@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Save, ShieldCheck } from "@lucide/vue";
+import { Save, ServerOff, ShieldCheck } from "@lucide/vue";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -55,6 +55,12 @@ const form = reactive<AgentRuntimeConfigurationInput>({
   providerPolicyMode: "FIXED",
   providerAccounts: [],
 });
+const providerPolicyModes = ["FIXED", "LEAST_USED", "WEIGHTED"] as const;
+type ProviderPolicyMode = (typeof providerPolicyModes)[number];
+
+function isProviderPolicyMode(value: string): value is ProviderPolicyMode {
+  return providerPolicyModes.some((mode) => mode === value);
+}
 
 const availableRuntimes = computed(() => readyRuntimes(runtimes.value));
 const selectedRuntime = computed(
@@ -160,6 +166,13 @@ function chooseRuntime(event: Event): void {
   if (!selected) return;
   form.runtimeProfileRef = selected.ref;
   form.model = selected.model;
+  notify(runtimeDirty.value ? "DRAFT" : "APPLIED");
+}
+
+function chooseProviderPolicy(event: Event): void {
+  const value = eventValue(event);
+  if (!value || !isProviderPolicyMode(value)) return;
+  form.providerPolicyMode = value;
   notify(runtimeDirty.value ? "DRAFT" : "APPLIED");
 }
 
@@ -301,6 +314,23 @@ onMounted(() => void load());
               </option>
             </select>
           </label>
+          <label class="field">
+            <span>{{ $t("runtime.accountPolicy") }}</span>
+            <select
+              :value="form.providerPolicyMode"
+              :disabled="!canEdit || busy"
+              @change="chooseProviderPolicy"
+            >
+              <option
+                v-for="mode in providerPolicyModes"
+                :key="mode"
+                :value="mode"
+              >
+                {{ $t(`runtime.policy.${mode}`) }}
+              </option>
+            </select>
+            <small>{{ $t("runtime.accountPolicyHelp") }}</small>
+          </label>
         </div>
         <dl class="runtime-panel__summary">
           <div>
@@ -316,13 +346,25 @@ onMounted(() => void load());
             <dd>{{ form.providerAccounts.length }}</dd>
           </div>
         </dl>
+        <section class="runtime-panel__account-capability">
+          <ServerOff :size="18" aria-hidden="true" />
+          <div>
+            <strong>{{ $t("runtime.accountCatalogUnavailable") }}</strong>
+            <p>{{ $t("runtime.accountCatalogBlocker") }}</p>
+          </div>
+          <StatusBadge state="UNAVAILABLE" />
+        </section>
         <div v-if="canEdit" class="runtime-panel__actions">
           <span v-if="runtimeDirty">{{ $t("states.DRAFT") }}</span>
           <button
             class="button button--primary"
             type="button"
             :disabled="
-              busy || !runtimeDirty || !form.runtimeProfileRef || !form.model
+              busy ||
+              !runtimeDirty ||
+              !form.runtimeProfileRef ||
+              !form.model ||
+              !form.providerAccounts.length
             "
             @click="saveRuntime"
           >
@@ -442,6 +484,26 @@ onMounted(() => void load());
   margin: 4px 0 0;
   overflow-wrap: anywhere;
 }
+.runtime-panel__account-capability {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.runtime-panel__account-capability > svg {
+  margin-top: 2px;
+  color: var(--warning);
+}
+.runtime-panel__account-capability strong {
+  font-size: 0.84rem;
+}
+.runtime-panel__account-capability p {
+  margin-top: 4px;
+}
 .runtime-panel__actions,
 .overlay-panel__actions {
   display: flex;
@@ -465,6 +527,12 @@ onMounted(() => void load());
 @media (max-width: 640px) {
   .runtime-panel__summary {
     grid-template-columns: 1fr;
+  }
+  .runtime-panel__account-capability {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .runtime-panel__account-capability .status-badge {
+    grid-column: 2;
   }
 }
 </style>

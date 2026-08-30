@@ -191,10 +191,41 @@ const ru = {
     executor: "Исполнитель",
     executorUnavailable: "не передан API",
     resources: "Ресурсы Проекта",
+    projectCollections: "Разделы Проекта",
     resourceCount: "Всего: {count}",
     activeCount: "Активных: {count}",
     pendingCount: "Ожидают решения: {count}",
     openCollection: "Открыть список",
+    openCurrentWork: "Открыть текущую работу",
+    openDecisions: "Открыть ожидающие решения",
+    resourceUnavailable: "Данные этого раздела сейчас недоступны.",
+    noAutomations: "Автоматизации ещё не настроены.",
+    noEnvironments: "Окружения ещё не созданы.",
+    nextRun: "Следующий запуск: {date}",
+    moreEnvironments:
+      "Показаны последние окружения. Полный каталог доступен по ссылке «Все».",
+    coverage: {
+      title: "Покрытие источников внимания",
+      subtitle: "Эти состояния не входят в текущий Overview API",
+      unavailable: "Нет API",
+      capabilities: {
+        STOPPED_RUNS: {
+          title: "Остановленные запуски",
+          description:
+            "Платформа пока не передаёт отдельную выборку остановленных запусков.",
+        },
+        PROVIDER_AUTH_EXPIRY: {
+          title: "Авторизация провайдеров",
+          description:
+            "Срок действия авторизации учётных записей провайдера пока недоступен этому экрану.",
+        },
+        SESSION_CONTINUATION: {
+          title: "Продолжение сессий",
+          description:
+            "Overview API пока не возвращает список недавних сессий для продолжения.",
+        },
+      },
+    },
     projectActivity: "Активных запусков: {runs} · решений: {gates}",
     allProjectRuns: "Все запуски Проекта",
     allProjectFiles: "Все файлы Проекта",
@@ -245,6 +276,9 @@ const ru = {
     catalogGrid: "Карточки",
     catalogTable: "Таблица",
     catalogResetFilters: "Сбросить фильтры",
+    catalogLoaded: "Загружено: {count}",
+    catalogLoadMore: "Загрузить ещё",
+    catalogLoadingMore: "Загружаем следующую страницу…",
     updatedAt: "Изменён",
     validate: "Проверить инструкции",
     publish: "Опубликовать инструкции",
@@ -895,6 +929,7 @@ const ru = {
     zoomIn: "Увеличить масштаб",
     zoomOut: "Уменьшить масштаб",
     fitGraph: "Вместить",
+    minimap: "Мини-карта графа",
     waitingForActivity: "Ожидает начала работы",
     callback: "Ответ дочернего запуска",
     childRuns: "Дочерние запуски",
@@ -940,6 +975,7 @@ const ru = {
   files: {
     title: "Файлы и знания",
     subtitle: "Материалы для ИИ-сотрудников и результаты их работы",
+    trash: "Корзина",
     emptyTitle: "Файлов пока нет",
     emptyText:
       "Загрузите входной материал или запустите сотрудника, чтобы получить первый результат.",
@@ -948,7 +984,6 @@ const ru = {
     tabs: "Виды файлов",
     tab: {
       FILES: "Файлы",
-      KNOWLEDGE: "Источники знаний",
       RESULTS: "Результаты",
     },
     search: "Найти файл",
@@ -1524,6 +1559,8 @@ const ru = {
       SCHEDULE: "Автоматизация",
       INTEGRATION: "Интеграция",
       RUNTIME_ENVIRONMENT: "Рабочее окружение",
+      ROLE_IMAGE: "Образ роли",
+      SESSION: "Сессия",
       SECRET: "Секрет",
     },
     platformRoles: {
@@ -2297,10 +2334,41 @@ const en = {
     executor: "Executor",
     executorUnavailable: "not provided by API",
     resources: "Project resources",
+    projectCollections: "Project sections",
     resourceCount: "Total: {count}",
     activeCount: "Active: {count}",
     pendingCount: "Awaiting decision: {count}",
     openCollection: "Open list",
+    openCurrentWork: "Open current work",
+    openDecisions: "Open pending decisions",
+    resourceUnavailable: "This section is currently unavailable.",
+    noAutomations: "No automations have been configured yet.",
+    noEnvironments: "No runtime environments have been created yet.",
+    nextRun: "Next run: {date}",
+    moreEnvironments:
+      "Recent environments are shown. Open the full catalog through ‘All’.",
+    coverage: {
+      title: "Attention source coverage",
+      subtitle: "These states are not included in the current Overview API",
+      unavailable: "No API",
+      capabilities: {
+        STOPPED_RUNS: {
+          title: "Stopped runs",
+          description:
+            "The platform does not yet provide a dedicated stopped-run collection.",
+        },
+        PROVIDER_AUTH_EXPIRY: {
+          title: "Provider authorization",
+          description:
+            "Provider account authorization expiry is not available on this screen yet.",
+        },
+        SESSION_CONTINUATION: {
+          title: "Session continuation",
+          description:
+            "The Overview API does not yet return recent sessions that can be continued.",
+        },
+      },
+    },
     projectActivity: "Active runs: {runs} · decisions: {gates}",
     allProjectRuns: "All Project runs",
     allProjectFiles: "All Project files",
@@ -2352,6 +2420,9 @@ const en = {
     catalogGrid: "Cards",
     catalogTable: "Table",
     catalogResetFilters: "Reset filters",
+    catalogLoaded: "Loaded: {count}",
+    catalogLoadMore: "Load more",
+    catalogLoadingMore: "Loading the next page…",
     updatedAt: "Updated",
     validate: "Validate instructions",
     publish: "Publish instructions",
@@ -2936,6 +3007,7 @@ const en = {
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     fitGraph: "Fit",
+    minimap: "Graph minimap",
     waitingForActivity: "Waiting to start",
     callback: "Child run response",
     childRuns: "Child runs",
@@ -2981,6 +3053,7 @@ const en = {
   files: {
     ...ru.files,
     title: "Files and knowledge",
+    trash: "Trash",
     subtitle: "Materials for AI employees and the results of their work",
     emptyTitle: "No files yet",
     emptyText:
@@ -2990,7 +3063,6 @@ const en = {
     tabs: "File views",
     tab: {
       FILES: "Files",
-      KNOWLEDGE: "Knowledge sources",
       RESULTS: "Results",
     },
     search: "Find a file",
@@ -3551,6 +3623,8 @@ const en = {
       SCHEDULE: "Automation",
       INTEGRATION: "Integration",
       RUNTIME_ENVIRONMENT: "Runtime environment",
+      ROLE_IMAGE: "Role image",
+      SESSION: "Session",
       SECRET: "Secret",
     },
     platformRoles: {

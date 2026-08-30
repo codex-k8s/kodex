@@ -41,6 +41,7 @@ import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
 import type {
   AttachmentComposerHandle,
   AttachmentComposerState,
+  AttachmentUploadRequest,
 } from "@/shared/ui/attachment-composer";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
@@ -207,8 +208,15 @@ async function send(): Promise<void> {
   composer.value?.focus();
 }
 
-async function uploadAttachment(file: File): Promise<{ ref: string }> {
-  return platform.uploadAttachmentArtifact(props.projectRef, file);
+async function uploadAttachment(
+  file: File,
+  request: AttachmentUploadRequest,
+): Promise<{ ref: string }> {
+  return platform.uploadAttachmentArtifact(
+    props.projectRef,
+    file,
+    request.signal,
+  );
 }
 
 function handleComposerKeydown(event: KeyboardEvent): void {
@@ -561,6 +569,7 @@ onBeforeUnmount(() => {
                 ref="attachmentComposer"
                 compact
                 :upload="uploadAttachment"
+                :project-ref="projectRef"
                 :disabled="store.busy || !live"
                 @change="attachmentState = $event"
               />

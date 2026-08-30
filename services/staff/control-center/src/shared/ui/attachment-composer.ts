@@ -18,6 +18,17 @@ export interface AttachmentUploadQueueItem {
   state: AttachmentUploadState;
   artifactRef?: string;
   error?: string;
+  progress?: AttachmentUploadProgress;
+}
+
+export interface AttachmentUploadProgress {
+  loadedBytes: number;
+  totalBytes: number;
+}
+
+export interface AttachmentUploadRequest {
+  signal: AbortSignal;
+  onProgress: (progress: AttachmentUploadProgress) => void;
 }
 
 export interface AttachmentComposerState {
@@ -43,7 +54,10 @@ export interface AttachmentComposerHandle {
 }
 
 export interface AttachmentUploadQueueOptions {
-  upload: (file: File) => Promise<{ ref: string }>;
+  upload: (
+    file: File,
+    request: AttachmentUploadRequest,
+  ) => Promise<{ ref: string }>;
   disabled: () => boolean;
   formatError: (error: unknown) => string;
   reservedBytes?: () => number;
@@ -148,6 +162,7 @@ export function createAttachmentUploadQueue(
 ) {
   const items = ref<AttachmentUploadQueueItem[]>([]);
   const activeUploads = ref(0);
+  const controllers = new Map<string, AbortController>();
   const state = computed(() =>
     attachmentQueueState(items.value, options.reservedBytes?.() ?? 0),
   );
@@ -159,6 +174,7 @@ export function createAttachmentUploadQueue(
   }
 
   function remove(key: string): void {
+    controllers.get(key)?.abort();
     items.value = items.value.filter((item) => item.key !== key);
     process();
   }
@@ -168,31 +184,60 @@ export function createAttachmentUploadQueue(
     if (!item || item.state !== "FAILED") return;
     item.state = "QUEUED";
     item.error = undefined;
+    item.progress = undefined;
     process();
   }
 
   function clear(): void {
+    for (const controller of controllers.values()) controller.abort();
     items.value = [];
   }
 
   async function uploadItem(key: string): Promise<void> {
     const item = items.value.find((candidate) => candidate.key === key);
     if (!item || item.state !== "QUEUED") return;
+    const controller = new AbortController();
+    controllers.set(key, controller);
     item.state = "UPLOADING";
+    item.progress = undefined;
     activeUploads.value += 1;
     try {
-      const artifact = await options.upload(item.file);
+      const artifact = await options.upload(item.file, {
+        signal: controller.signal,
+        onProgress: (progress) => {
+          const current = items.value.find(
+            (candidate) => candidate.key === key,
+          );
+          if (
+            current !== item ||
+            current.state !== "UPLOADING" ||
+            !Number.isSafeInteger(progress.loadedBytes) ||
+            !Number.isSafeInteger(progress.totalBytes) ||
+            progress.loadedBytes < 0 ||
+            progress.totalBytes !== current.size ||
+            progress.loadedBytes > progress.totalBytes
+          )
+            return;
+          current.progress = {
+            loadedBytes: progress.loadedBytes,
+            totalBytes: progress.totalBytes,
+          };
+        },
+      });
       const current = items.value.find((candidate) => candidate.key === key);
-      if (!current) return;
+      if (current !== item) return;
       current.state = "UPLOADED";
       current.artifactRef = artifact.ref;
       current.error = undefined;
+      current.progress = undefined;
     } catch (error) {
       const current = items.value.find((candidate) => candidate.key === key);
-      if (!current) return;
+      if (current !== item) return;
       current.state = "FAILED";
       current.error = options.formatError(error);
+      current.progress = undefined;
     } finally {
+      if (controllers.get(key) === controller) controllers.delete(key);
       activeUploads.value = Math.max(0, activeUploads.value - 1);
       process();
     }

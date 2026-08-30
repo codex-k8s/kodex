@@ -35,7 +35,6 @@ import {
 } from "@/app/navigation-context";
 import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
 import { resolveAssistantContext } from "@/features/assistant/context";
-import { openAssistantWorkspace } from "@/features/assistant/events";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { useRuntimeStore } from "@/features/runtime/store";
@@ -113,6 +112,7 @@ const breadcrumbs = computed(() => {
     runs: t("nav.runs"),
     run: t("nav.run"),
     files: t("nav.files"),
+    filesTrash: t("files.trash"),
     automations: t("nav.automations"),
     environments: t("nav.environments"),
     environment: t("nav.environment"),
@@ -315,12 +315,6 @@ function changeLocale(value: SupportedLocale): void {
 
 function setOnline(): void {
   online.value = navigator.onLine;
-}
-
-function openAssistant(): void {
-  mobileOpen.value = false;
-  closeSearch("route");
-  openAssistantWorkspace();
 }
 
 watch(
@@ -535,19 +529,6 @@ onBeforeUnmount(() => {
       class="sidebar"
       :class="{ 'sidebar--open': mobileOpen }"
     >
-      <button class="assistant-entry" type="button" @click="openAssistant">
-        <span class="assistant-entry__mark" aria-hidden="true"
-          ><Bot :size="21"
-        /></span>
-        <span
-          ><strong>{{ $t("app.assistantShort") }}</strong
-          ><small>{{ $t("assistant.system") }}</small></span
-        >
-        <StatusBadge
-          v-if="platform.assistant"
-          :state="platform.assistant.runtimeState"
-        />
-      </button>
       <nav :aria-label="$t('app.navigation')">
         <RouterLink
           v-for="link in globalLinks"

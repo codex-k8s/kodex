@@ -76,7 +76,7 @@ describe("agent detail panels", () => {
     expect(html).toContain("Применён");
   });
 
-  it("рендерит monospace editor с gutter и безопасной подсветкой", async () => {
+  it("рендерит CodeMirror boundary без textarea-overlay", async () => {
     const html = await render(CodeEditorSurface, {
       modelValue: '# Роль\nmodel = "gpt-5.1"\n{{run.ref}}',
       language: "markdown",
@@ -84,10 +84,10 @@ describe("agent detail panels", () => {
       readonly: true,
     });
 
-    expect(html).toContain("code-editor__gutter");
-    expect(html).toContain("code-editor__token--variable");
-    expect(html).toContain("textarea");
-    expect(html).toContain("readonly");
+    expect(html).toContain("code-editor__viewport");
+    expect(html).toContain("code-editor--readonly");
+    expect(html).toContain("Markdown");
+    expect(html).not.toContain("textarea");
     expect(html).not.toContain("v-html");
   });
 
@@ -141,6 +141,7 @@ describe("agent detail panels", () => {
     expect(uploadButton).not.toContain("disabled");
     expect(html).not.toContain("avatar_asset:");
     expect(html).not.toContain('type="url"');
+    expect(html).not.toContain("Создать с Kodex");
   });
 
   it("показывает server-owned каталог переменных и использованные значения", async () => {

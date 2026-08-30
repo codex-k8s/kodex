@@ -2,10 +2,11 @@ import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
 
 export type FileKind = "ALL" | "TEXT" | "DOCUMENT" | "IMAGE";
 export type FileSource = "ALL" | Artifact["source"];
-export type FileTab = "FILES" | "KNOWLEDGE" | "RESULTS" | "TRASH";
+export type FileCollectionMode = "ACTIVE" | "TRASH";
+export type FileTab = "FILES" | "RESULTS" | "TRASH";
 
 export type ArtifactLifecycleAction = "DELETE" | "RESTORE" | "PURGE";
-export type ArtifactTrashBulkAction = "RESTORE" | "PURGE" | "EMPTY";
+export type ArtifactTrashBulkAction = "DELETE" | "RESTORE" | "PURGE" | "EMPTY";
 export type ArtifactLifecycleBlockReason =
   | "ACTION_NOT_ALLOWED"
   | "CONTRACT_UNAVAILABLE";
@@ -129,8 +130,6 @@ export function matchesArtifactFilters(
   const inTrash = artifact.lifecycleState !== "ACTIVE";
   if (options.tab === "TRASH" && !inTrash) return false;
   if (options.tab !== "TRASH" && inTrash) return false;
-  if (options.tab === "KNOWLEDGE" && artifact.agentBindings.length === 0)
-    return false;
   if (
     options.tab === "RESULTS" &&
     artifact.source !== "AGENT_RESULT" &&
@@ -164,7 +163,7 @@ export function trashBulkConfirmed(
   input: string,
   phrase: string,
 ): boolean {
-  return action === "RESTORE" || input.trim() === phrase;
+  return action === "RESTORE" || action === "DELETE" || input.trim() === phrase;
 }
 
 export function createUploadQueueItems(

@@ -85,6 +85,12 @@ export const router = createRouter({
       meta: { projectScoped: true },
     },
     {
+      path: "/projects/:projectRef/files/trash",
+      name: "files-trash",
+      component: lazyPage(() => import("@/pages/FilesPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
       path: "/projects/:projectRef/automations",
       name: "automations",
       component: lazyPage(() => import("@/pages/AutomationsPage.vue")),

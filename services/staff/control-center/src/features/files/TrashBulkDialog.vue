@@ -14,17 +14,20 @@ const props = defineProps<{
   count: number;
   labels: {
     cancel: string;
-    confirm: Record<"RESTORE" | "PURGE" | "EMPTY", string>;
+    confirm: Record<"DELETE" | "RESTORE" | "PURGE" | "EMPTY", string>;
     confirmationHint: string;
     confirmationPhrase: string;
-    description: Record<"RESTORE" | "PURGE" | "EMPTY", string>;
-    title: Record<"RESTORE" | "PURGE" | "EMPTY", string>;
+    description: Record<"DELETE" | "RESTORE" | "PURGE" | "EMPTY", string>;
+    executionHint: string;
+    title: Record<"DELETE" | "RESTORE" | "PURGE" | "EMPTY", string>;
   };
 }>();
 
 const emit = defineEmits<{ close: []; confirm: [] }>();
 const confirmation = ref("");
-const destructive = computed(() => props.action !== "RESTORE");
+const destructive = computed(
+  () => props.action === "PURGE" || props.action === "EMPTY",
+);
 const confirmed = computed(() =>
   trashBulkConfirmed(
     props.action,
@@ -62,6 +65,7 @@ watch(
           <strong>{{ count }}</strong>
           {{ labels.description[action] }}
         </p>
+        <p>{{ labels.executionHint }}</p>
         <div v-if="destructive" class="trash-bulk-dialog__warning">
           <AlertTriangle :size="18" aria-hidden="true" />
           <span>{{ labels.confirmationHint }}</span>

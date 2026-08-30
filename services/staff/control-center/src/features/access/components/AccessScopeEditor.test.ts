@@ -39,6 +39,8 @@ const messages = {
         SCHEDULE: "Автоматизация",
         INTEGRATION: "Интеграция",
         RUNTIME_ENVIRONMENT: "Рабочее окружение",
+        ROLE_IMAGE: "Образ роли",
+        SESSION: "Сессия",
         SECRET: "Секрет",
       },
     },

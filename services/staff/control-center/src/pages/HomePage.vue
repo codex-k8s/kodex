@@ -8,9 +8,14 @@ import { openAssistantWorkspace } from "@/features/assistant/events";
 import { usePlatformStore } from "@/features/platform/store";
 import ArtifactList from "@/features/workboard/components/ArtifactList.vue";
 import AttentionList from "@/features/workboard/components/AttentionList.vue";
+import CapabilityCoverageList from "@/features/workboard/components/CapabilityCoverageList.vue";
 import RunWorkItem from "@/features/workboard/components/RunWorkItem.vue";
 import WorkboardSection from "@/features/workboard/components/WorkboardSection.vue";
-import { collectAttention, projectArtifacts } from "@/features/workboard/model";
+import {
+  collectAttention,
+  homeCapabilityCoverage,
+  projectArtifacts,
+} from "@/features/workboard/model";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -29,6 +34,7 @@ const pendingGates = computed(() => platform.overview?.pendingGates ?? []);
 const attention = computed(() =>
   collectAttention(activeRuns.value, pendingGates.value),
 );
+const capabilityCoverage = homeCapabilityCoverage();
 const recentArtifacts = computed(() =>
   projectArtifacts(platform.overview?.recentArtifacts ?? []),
 );
@@ -118,45 +124,45 @@ onMounted(() => void refresh());
       </button>
     </template>
 
-    <div class="home-focus-grid">
-      <WorkboardSection
-        :title="$t('workboard.attention')"
-        :count="attention.length"
-        :loading="platform.loading.overview"
-        :refreshing="refreshing"
-        :ready="overviewReady"
-        :problem="platform.problems.overview"
-        :empty="attention.length === 0"
-        :empty-text="$t('workboard.noAttention')"
-        @retry="refreshOverview"
-      >
-        <template #action>
-          <RouterLink to="/decisions">{{ $t("common.all") }}</RouterLink>
-        </template>
-        <AttentionList :items="attention" />
-      </WorkboardSection>
+    <WorkboardSection
+      class="home-attention-section"
+      :title="$t('workboard.attention')"
+      :count="attention.length"
+      :loading="platform.loading.overview"
+      :refreshing="refreshing"
+      :ready="overviewReady"
+      :problem="platform.problems.overview"
+      @retry="refreshOverview"
+    >
+      <template #action>
+        <RouterLink to="/decisions">{{ $t("common.all") }}</RouterLink>
+      </template>
+      <AttentionList v-if="attention.length" :items="attention" />
+      <p v-else class="home-section-empty">{{ $t("workboard.noAttention") }}</p>
+      <CapabilityCoverageList :items="capabilityCoverage" />
+    </WorkboardSection>
 
-      <WorkboardSection
-        :title="$t('workboard.runningNow')"
-        :count="activeRuns.length"
-        :loading="platform.loading.overview"
-        :refreshing="refreshing"
-        :ready="overviewReady"
-        :problem="platform.problems.overview"
-        :empty="activeRuns.length === 0"
-        :empty-text="$t('workboard.noActiveRuns')"
-        @retry="refreshOverview"
-      >
-        <template #action>
-          <RouterLink to="/runs">{{ $t("common.all") }}</RouterLink>
-        </template>
-        <RunWorkItem
-          v-for="run in activeRuns.slice(0, 6)"
-          :key="run.ref"
-          :run="run"
-        />
-      </WorkboardSection>
-    </div>
+    <WorkboardSection
+      class="home-running-section"
+      :title="$t('workboard.runningNow')"
+      :count="activeRuns.length"
+      :loading="platform.loading.overview"
+      :refreshing="refreshing"
+      :ready="overviewReady"
+      :problem="platform.problems.overview"
+      :empty="activeRuns.length === 0"
+      :empty-text="$t('workboard.noActiveRuns')"
+      @retry="refreshOverview"
+    >
+      <template #action>
+        <RouterLink to="/runs">{{ $t("common.all") }}</RouterLink>
+      </template>
+      <RunWorkItem
+        v-for="run in activeRuns.slice(0, 6)"
+        :key="run.ref"
+        :run="run"
+      />
+    </WorkboardSection>
 
     <WorkboardSection
       class="home-project-section"
@@ -277,18 +283,24 @@ onMounted(() => void refresh());
 </template>
 
 <style scoped>
-.home-focus-grid,
 .home-support-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-top: 16px;
 }
 .home-support-grid {
   grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.55fr);
 }
+.home-attention-section,
+.home-running-section,
 .home-project-section {
   margin-top: 16px;
+}
+.home-section-empty {
+  margin: 0;
+  padding: 24px 16px;
+  color: var(--muted);
+  text-align: center;
 }
 .home-projects {
   display: grid;
@@ -372,7 +384,6 @@ onMounted(() => void refresh());
   flex-wrap: wrap;
 }
 @media (max-width: 980px) {
-  .home-focus-grid,
   .home-support-grid {
     grid-template-columns: 1fr;
   }

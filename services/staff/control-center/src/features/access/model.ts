@@ -40,11 +40,13 @@ export const accessResourceKinds: AccessResourceKind[] = [
   "AGENT",
   "WORKFLOW",
   "RUN",
+  "SESSION",
   "OWNER_GATE",
   "ARTIFACT",
   "SCHEDULE",
   "INTEGRATION",
   "RUNTIME_ENVIRONMENT",
+  "ROLE_IMAGE",
   "SECRET",
 ];
 

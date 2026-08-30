@@ -53,4 +53,14 @@ describe("AssistantWorkspace layout", () => {
       /\.assistant-composer\s*\{[\s\S]*?position:\s*sticky[\s\S]*?bottom:\s*0/,
     );
   });
+
+  it("передаёт точный Project context в файловый composer", () => {
+    const attachmentComposer = template.slice(
+      template.indexOf("<AttachmentComposer"),
+      template.indexOf("</footer>"),
+    );
+
+    expect(attachmentComposer).toContain(':project-ref="projectRef"');
+    expect(attachmentComposer).toContain(':upload="uploadAttachment"');
+  });
 });

@@ -1,37 +1,41 @@
 <script setup lang="ts">
+import { Background } from "@vue-flow/background";
+import { Controls } from "@vue-flow/controls";
+import {
+  VueFlow,
+  useVueFlow,
+  type GraphNode,
+  type NodeMouseEvent,
+} from "@vue-flow/core";
+import { MiniMap } from "@vue-flow/minimap";
 import {
   Bot,
   ListTree,
-  Maximize2,
-  Minus,
   Network,
   PlugZap,
-  Plus,
   UserRoundCheck,
   Workflow,
 } from "@lucide/vue";
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-} from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import type { Component } from "vue";
 import { useI18n } from "vue-i18n";
 
+import "@vue-flow/core/dist/style.css";
+import "@vue-flow/core/dist/theme-default.css";
+import "@vue-flow/controls/dist/style.css";
+import "@vue-flow/minimap/dist/style.css";
+
+import RunGraphEdge from "@/features/runs/RunGraphEdge.vue";
+import RunGraphNode from "@/features/runs/RunGraphNode.vue";
 import {
-  layoutRunGraph,
-  runGraphNodeHeight,
-  runGraphNodeWidth,
-} from "@/features/runs/run-graph-layout";
-import {
-  fitRunGraphView,
-  zoomRunGraphAtPoint,
-  type RunGraphPoint,
-  type RunGraphView,
-} from "@/features/runs/run-graph-viewport";
+  createRunGraphFlowElements,
+  runGraphFitViewOptions,
+  runGraphMaximumZoom,
+  runGraphMinimumZoom,
+  type RunGraphNodeData,
+} from "@/features/runs/run-graph-flow";
+import { layoutRunGraph } from "@/features/runs/run-graph-layout";
+import { runGraphViewportCommand } from "@/features/runs/run-graph-viewport";
 import type {
   RunEdge,
   RunNode,
@@ -52,28 +56,34 @@ const props = withDefaults(
     activeNodeRefs: () => [],
   },
 );
-const emit = defineEmits<{ select: [node: RunNode] }>();
+const emit = defineEmits<{
+  select: [node: RunNode];
+  details: [node: RunNode];
+}>();
 const { t } = useI18n();
 
-const minimumZoom = 0.3;
-const maximumZoom = 1.8;
-const zoomStep = 0.12;
-const view = ref<RunGraphView>({ x: 0, y: 0, scale: 1 });
+const flowId = "run-session-graph";
 const viewMode = ref<"graph" | "outline">("graph");
-const viewport = ref<HTMLElement>();
 const outline = ref<HTMLElement>();
 const userAdjustedView = ref(false);
-const pointerActive = ref(false);
+const programmaticViewportChange = ref(false);
 const futureRefs = computed(() => new Set(props.futureNodeRefs));
 const activeRefs = computed(() => new Set(props.activeNodeRefs));
-const activePointers = new Map<number, RunGraphPoint>();
-let resizeObserver: ResizeObserver | undefined;
-let suppressNodeClick = false;
-let clearClickTimer: number | undefined;
-
-const layout = computed(() => layoutRunGraph(props.nodes, props.edges));
 const nodeByRef = computed(
   () => new Map(props.nodes.map((node) => [node.ref, node])),
+);
+const layout = computed(() => layoutRunGraph(props.nodes, props.edges));
+const { fitView, getViewport, onInit, setViewport, zoomIn, zoomOut } =
+  useVueFlow(flowId);
+
+const flowElements = computed(() =>
+  createRunGraphFlowElements(props.nodes, props.edges, {
+    selectedRef: props.selectedRef,
+    futureRefs: futureRefs.value,
+    activeRefs: activeRefs.value,
+    nodeAccessibleLabel,
+    edgeAccessibleLabel,
+  }),
 );
 const runSignature = computed(() =>
   [...new Set(props.nodes.map((node) => node.runRef))].sort().join("\u0000"),
@@ -159,206 +169,85 @@ const outlineItems = computed(() => {
   }));
 });
 
-function fit(userInitiated = false): void {
-  const width = viewport.value?.clientWidth ?? 0;
-  const height = viewport.value?.clientHeight ?? 0;
-  if (!width || !height) return;
+onInit(() => {
+  void fit(false);
+});
+watch(runSignature, (current, previous) => {
+  if (current !== previous) userAdjustedView.value = false;
+});
+watch(graphSignature, () => {
+  if (!userAdjustedView.value) void nextTick(() => fit(false));
+});
+
+async function fit(userInitiated = true): Promise<void> {
   if (userInitiated) userAdjustedView.value = true;
-  view.value = fitRunGraphView(
-    { width: layout.value.width, height: layout.value.height },
-    { width, height },
-    minimumZoom,
-    Math.min(maximumZoom, 1.1),
-    width < 600 ? 18 : 32,
-  );
-}
-
-function viewportCenter(): RunGraphPoint {
-  return {
-    x: (viewport.value?.clientWidth ?? 0) / 2,
-    y: (viewport.value?.clientHeight ?? 0) / 2,
-  };
-}
-
-function setZoom(scale: number, point = viewportCenter()): void {
-  userAdjustedView.value = true;
-  view.value = zoomRunGraphAtPoint(
-    view.value,
-    scale,
-    point,
-    minimumZoom,
-    maximumZoom,
-  );
-}
-
-function changeZoom(delta: number): void {
-  setZoom(view.value.scale + delta);
+  programmaticViewportChange.value = true;
+  try {
+    await fitView(runGraphFitViewOptions);
+  } finally {
+    programmaticViewportChange.value = false;
+  }
 }
 
 function setViewMode(mode: "graph" | "outline"): void {
   viewMode.value = mode;
   if (mode === "graph" && !userAdjustedView.value) {
-    void nextTick(() => fit());
+    void nextTick(() => fit(false));
   }
 }
 
-function eventPoint(event: PointerEvent | WheelEvent): RunGraphPoint {
-  const bounds = viewport.value?.getBoundingClientRect();
-  return {
-    x: event.clientX - (bounds?.left ?? 0),
-    y: event.clientY - (bounds?.top ?? 0),
-  };
+function handleNodeClick(event: NodeMouseEvent): void {
+  emit("select", domainNode(event.node));
 }
 
-function handleWheel(event: WheelEvent): void {
-  const factor = Math.exp(-event.deltaY * 0.0014);
-  setZoom(view.value.scale * factor, eventPoint(event));
-}
-
-function handlePointerDown(event: PointerEvent): void {
-  if (event.pointerType === "mouse" && event.button !== 0) return;
-  if (clearClickTimer !== undefined) window.clearTimeout(clearClickTimer);
-  activePointers.set(event.pointerId, eventPoint(event));
-  pointerActive.value = true;
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-}
-
-function midpoint(points: RunGraphPoint[]): RunGraphPoint {
-  const first = points[0] ?? { x: 0, y: 0 };
-  const second = points[1] ?? first;
-  return {
-    x: (first.x + second.x) / 2,
-    y: (first.y + second.y) / 2,
-  };
-}
-
-function distance(points: RunGraphPoint[]): number {
-  const first = points[0] ?? { x: 0, y: 0 };
-  const second = points[1] ?? first;
-  return Math.hypot(first.x - second.x, first.y - second.y);
-}
-
-function handlePointerMove(event: PointerEvent): void {
-  const previous = activePointers.get(event.pointerId);
-  if (!previous) return;
-  const previousPoints = [...activePointers.values()];
-  const current = eventPoint(event);
-  activePointers.set(event.pointerId, current);
-
-  if (activePointers.size >= 2 && previousPoints.length >= 2) {
-    const nextPoints = [...activePointers.values()];
-    const previousMidpoint = midpoint(previousPoints);
-    const nextMidpoint = midpoint(nextPoints);
-    const previousDistance = distance(previousPoints);
-    const nextDistance = distance(nextPoints);
-    const translated = {
-      x: view.value.x + nextMidpoint.x - previousMidpoint.x,
-      y: view.value.y + nextMidpoint.y - previousMidpoint.y,
-      scale: view.value.scale,
-    };
-    view.value = zoomRunGraphAtPoint(
-      translated,
-      previousDistance
-        ? view.value.scale * (nextDistance / previousDistance)
-        : view.value.scale,
-      nextMidpoint,
-      minimumZoom,
-      maximumZoom,
-    );
-    userAdjustedView.value = true;
-    suppressNodeClick = true;
-    return;
-  }
-
-  const deltaX = current.x - previous.x;
-  const deltaY = current.y - previous.y;
-  if (!deltaX && !deltaY) return;
-  view.value = {
-    ...view.value,
-    x: view.value.x + deltaX,
-    y: view.value.y + deltaY,
-  };
-  userAdjustedView.value = true;
-  suppressNodeClick = true;
-}
-
-function handlePointerEnd(event: PointerEvent): void {
-  activePointers.delete(event.pointerId);
-  pointerActive.value = activePointers.size > 0;
-  const target = event.currentTarget as HTMLElement;
-  if (target.hasPointerCapture(event.pointerId)) {
-    target.releasePointerCapture(event.pointerId);
-  }
-  clearClickTimer = window.setTimeout(() => {
-    suppressNodeClick = false;
-  }, 0);
-}
-
-function handleNodeClick(event: MouseEvent, node: RunNode): void {
-  if (suppressNodeClick) {
-    event.preventDefault();
-    event.stopPropagation();
-    suppressNodeClick = false;
-    return;
-  }
+function handleNodeDoubleClick(event: NodeMouseEvent): void {
+  const node = domainNode(event.node);
   emit("select", node);
+  emit("details", node);
 }
 
-function handleViewportKeydown(event: KeyboardEvent): void {
-  const panDistance = event.shiftKey ? 96 : 42;
-  if (["+", "="].includes(event.key)) {
-    event.preventDefault();
-    changeZoom(zoomStep);
+function domainNode(node: GraphNode): RunNode {
+  return (node.data as RunGraphNodeData).node;
+}
+
+function markUserAdjusted(): void {
+  if (!programmaticViewportChange.value) userAdjustedView.value = true;
+}
+
+async function handleViewportKeydown(event: KeyboardEvent): Promise<void> {
+  if (
+    (event.target as Element | null)?.closest(
+      "button, a, input, textarea, select",
+    )
+  )
     return;
-  }
-  if (event.key === "-") {
-    event.preventDefault();
-    changeZoom(-zoomStep);
-    return;
-  }
-  if (event.key === "0") {
-    event.preventDefault();
-    fit(true);
-    return;
-  }
-  const delta: RunGraphPoint | undefined = {
-    ArrowLeft: { x: panDistance, y: 0 },
-    ArrowRight: { x: -panDistance, y: 0 },
-    ArrowUp: { x: 0, y: panDistance },
-    ArrowDown: { x: 0, y: -panDistance },
-  }[event.key];
-  if (!delta) return;
+  const command = runGraphViewportCommand(event);
+  if (!command) return;
   event.preventDefault();
   userAdjustedView.value = true;
-  view.value = {
-    ...view.value,
-    x: view.value.x + delta.x,
-    y: view.value.y + delta.y,
-  };
-}
 
-watch(runSignature, (current, previous) => {
-  if (current !== previous) userAdjustedView.value = false;
-});
-watch(graphSignature, () => {
-  if (!userAdjustedView.value) void nextTick(() => fit());
-});
-onMounted(() => {
-  resizeObserver = new ResizeObserver(() => {
-    if (!userAdjustedView.value) fit();
-  });
-  if (viewport.value) resizeObserver.observe(viewport.value);
-  void nextTick(() => fit());
-});
-onBeforeUnmount(() => {
-  resizeObserver?.disconnect();
-  if (clearClickTimer !== undefined) window.clearTimeout(clearClickTimer);
-});
-
-function compactDisplayName(displayName: string): string {
-  const characters = Array.from(displayName);
-  if (characters.length <= 44) return displayName;
-  return `${characters.slice(0, 27).join("")}…${characters.slice(-14).join("")}`;
+  switch (command.type) {
+    case "FIT":
+      await fit(true);
+      return;
+    case "ZOOM_IN":
+      await zoomIn({ duration: 120 });
+      return;
+    case "ZOOM_OUT":
+      await zoomOut({ duration: 120 });
+      return;
+    case "PAN": {
+      const viewport = getViewport();
+      await setViewport(
+        {
+          x: viewport.x + command.x,
+          y: viewport.y + command.y,
+          zoom: viewport.zoom,
+        },
+        { duration: 90 },
+      );
+    }
+  }
 }
 
 function edgeDisplayLabel(edge: RunEdge): string {
@@ -444,6 +333,26 @@ function moveOutlineFocus(event: KeyboardEvent): void {
   items[targetIndex]?.focus();
 }
 
+function miniMapNodeColor(node: GraphNode): string {
+  const data = node.data as RunGraphNodeData;
+  if (data.selected) return "var(--accent)";
+  if (data.future) return "var(--subtle)";
+  switch (data.node.state) {
+    case "RUNNING":
+      return "var(--accent)";
+    case "SUCCEEDED":
+      return "var(--success)";
+    case "FAILED":
+    case "CANCELLED":
+      return "var(--danger)";
+    case "WAITING":
+    case "QUEUED":
+      return "var(--warning)";
+    default:
+      return "var(--border-strong)";
+  }
+}
+
 function compareNodes(left: RunNode, right: RunNode): number {
   return (
     left.createdAt.localeCompare(right.createdAt) ||
@@ -456,6 +365,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
   <section
     class="graph-canvas-shell"
     :class="{ 'graph-canvas-shell--outline': viewMode === 'outline' }"
+    @keydown.capture="handleViewportKeydown"
   >
     <div
       class="graph-toolbar"
@@ -484,186 +394,74 @@ function compareNodes(left: RunNode, right: RunNode): number {
           <ListTree :size="18" aria-hidden="true" />
         </button>
       </div>
-      <div v-if="viewMode === 'graph'" class="graph-zoom-controls">
-        <button
-          class="icon-button"
-          type="button"
-          :aria-label="$t('runs.zoomOut')"
-          :title="$t('runs.zoomOut')"
-          :disabled="view.scale <= minimumZoom"
-          @click="changeZoom(-zoomStep)"
-        >
-          <Minus :size="17" aria-hidden="true" />
-        </button>
-        <output :aria-label="$t('runs.zoom')">
-          {{ Math.round(view.scale * 100) }}%
-        </output>
-        <button
-          class="icon-button"
-          type="button"
-          :aria-label="$t('runs.zoomIn')"
-          :title="$t('runs.zoomIn')"
-          :disabled="view.scale >= maximumZoom"
-          @click="changeZoom(zoomStep)"
-        >
-          <Plus :size="17" aria-hidden="true" />
-        </button>
-        <button
-          class="button button--ghost graph-fit-button"
-          type="button"
-          :aria-label="$t('runs.fitGraph')"
-          :title="$t('runs.fitGraph')"
-          @click="fit(true)"
-        >
-          <Maximize2 :size="16" aria-hidden="true" />
-          <span>{{ $t("runs.fitGraph") }}</span>
-        </button>
-      </div>
     </div>
 
     <div
-      ref="viewport"
+      v-show="viewMode === 'graph'"
       class="graph-viewport"
-      :class="{ 'graph-viewport--panning': pointerActive }"
       role="region"
       :aria-label="$t('runs.graph')"
       tabindex="0"
-      @wheel.prevent="handleWheel"
-      @pointerdown="handlePointerDown"
-      @pointermove="handlePointerMove"
-      @pointerup="handlePointerEnd"
-      @pointercancel="handlePointerEnd"
-      @keydown="handleViewportKeydown"
     >
-      <div
-        class="graph-surface"
-        :style="{
-          width: layout.width + 'px',
-          height: layout.height + 'px',
-          transform:
-            'translate3d(' +
-            view.x +
-            'px,' +
-            view.y +
-            'px,0) scale(' +
-            view.scale +
-            ')',
-        }"
+      <VueFlow
+        :id="flowId"
+        class="run-flow"
+        :nodes="flowElements.nodes"
+        :edges="flowElements.edges"
+        :min-zoom="runGraphMinimumZoom"
+        :max-zoom="runGraphMaximumZoom"
+        :nodes-draggable="false"
+        :nodes-connectable="false"
+        :elements-selectable="false"
+        :disable-keyboard-a11y="true"
+        :edges-updatable="false"
+        :delete-key-code="null"
+        :selection-key-code="null"
+        :multi-selection-key-code="null"
+        :select-nodes-on-drag="false"
+        :pan-on-drag="true"
+        :pan-on-scroll="false"
+        :zoom-on-scroll="true"
+        :zoom-on-pinch="true"
+        :zoom-on-double-click="false"
+        :prevent-scrolling="true"
+        :apply-default="false"
+        fit-view-on-init
+        @node-click="handleNodeClick"
+        @node-double-click="handleNodeDoubleClick"
+        @mini-map-node-click="handleNodeClick"
+        @mini-map-node-double-click="handleNodeDoubleClick"
+        @viewport-change-start="markUserAdjusted"
       >
-        <svg
-          class="graph-edges"
-          :viewBox="'0 0 ' + layout.width + ' ' + layout.height"
-          aria-hidden="true"
-        >
-          <defs>
-            <marker
-              v-for="edgeType in [
-                'DELEGATED_TO',
-                'CALLBACK_TO',
-                'RETRY_OF',
-                'CONTINUES',
-                'WAITING_FOR',
-              ]"
-              :id="`run-graph-arrow-${edgeType.toLowerCase()}`"
-              :key="edgeType"
-              :class="`graph-arrow graph-arrow--${edgeType.toLowerCase()}`"
-              markerWidth="9"
-              markerHeight="9"
-              refX="8"
-              refY="4.5"
-              orient="auto"
-            >
-              <path d="M 0 0 L 9 4.5 L 0 9 z" />
-            </marker>
-          </defs>
-          <g
-            v-for="item in layout.edges"
-            :key="item.edge.ref"
-            :data-edge-ref="item.edge.ref"
-            :data-edge-type="item.edge.type"
-          >
-            <title>{{ edgeAccessibleLabel(item.edge) }}</title>
-            <path
-              :d="item.path"
-              :class="'graph-edge graph-edge--' + item.edge.type.toLowerCase()"
-              :marker-end="`url(#run-graph-arrow-${item.edge.type.toLowerCase()})`"
-            />
-          </g>
-        </svg>
-        <button
-          v-for="item in layout.nodes"
-          :key="item.node.ref"
-          type="button"
-          class="canvas-node"
-          :data-node-ref="item.node.ref"
-          :data-node-type="item.node.type"
-          :data-node-surface="nodeSurface(item.node)"
-          :data-node-future="isFutureNode(item.node) || undefined"
-          :class="[
-            'canvas-node--' + item.node.state.toLowerCase(),
-            {
-              'canvas-node--selected': item.node.ref === selectedRef,
-              'canvas-node--future': isFutureNode(item.node),
-              'canvas-node--active': isActiveNode(item.node),
-              'canvas-node--session': nodeSurface(item.node) === 'session',
-              'canvas-node--control': nodeSurface(item.node) === 'control',
-            },
-          ]"
-          :style="{
-            left: item.x + 'px',
-            top: item.y + 'px',
-            width: runGraphNodeWidth + 'px',
-            height: runGraphNodeHeight + 'px',
-          }"
-          :aria-pressed="item.node.ref === selectedRef"
-          :aria-busy="isActiveNode(item.node) || undefined"
-          :aria-label="nodeAccessibleLabel(item.node)"
-          @click="handleNodeClick($event, item.node)"
-        >
-          <span class="canvas-node__heading">
-            <component
-              :is="nodeIcon(item.node.type)"
-              class="canvas-node__type"
-              :size="16"
-              aria-hidden="true"
-            />
-            <span class="canvas-node__kind">
-              {{
-                nodeSurface(item.node) === "session"
-                  ? $t("runs.sessionNode")
-                  : $t("runs.controlNode")
-              }}
-            </span>
-            <StatusBadge :state="item.node.state" />
-          </span>
-          <strong class="canvas-node__title" :title="item.node.displayName">
-            {{ compactDisplayName(item.node.displayName) }}
-          </strong>
-          <span class="canvas-node__role" :title="item.node.role">
-            {{ item.node.role || $t("runs.nodeTypes." + item.node.type) }}
-          </span>
-          <span
-            class="canvas-node__progress"
-            :title="item.node.progressSummary || item.node.inputSummary"
-          >
-            {{
-              item.node.progressSummary ||
-              item.node.inputSummary ||
-              $t("runs.waitingForActivity")
-            }}
-          </span>
-          <span
-            v-if="isActiveNode(item.node)"
-            class="canvas-node__activity"
-            aria-hidden="true"
-          >
-            <i /><i /><i />
-          </span>
-        </button>
-      </div>
+        <template #node-runNode="nodeProps">
+          <RunGraphNode v-bind="nodeProps" @select="emit('select', $event)" />
+        </template>
+        <template #edge-runEdge="edgeProps">
+          <RunGraphEdge v-bind="edgeProps" />
+        </template>
+        <Background :gap="24" :size="1" pattern-color="var(--hairline)" />
+        <Controls
+          position="top-right"
+          :show-interactive="false"
+          :fit-view-params="runGraphFitViewOptions"
+          @zoom-in="markUserAdjusted"
+          @zoom-out="markUserAdjusted"
+          @fit-view="markUserAdjusted"
+        />
+        <MiniMap
+          position="bottom-right"
+          pannable
+          zoomable
+          :node-color="miniMapNodeColor"
+          node-stroke-color="var(--surface)"
+          :node-border-radius="4"
+          :aria-label="$t('runs.minimap')"
+        />
+      </VueFlow>
     </div>
 
     <div
+      v-show="viewMode === 'outline'"
       ref="outline"
       class="graph-outline"
       role="tree"
@@ -685,6 +483,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
         }"
         @keydown="moveOutlineFocus"
         @click="emit('select', item.node)"
+        @dblclick="emit('details', item.node)"
       >
         <span class="graph-outline-node__body">
           <span class="graph-outline-node__heading">
@@ -729,12 +528,12 @@ function compareNodes(left: RunNode, right: RunNode): number {
           {{ $t("runs.callback") }}
         </span>
         <span class="graph-legend__item">
-          <i class="graph-legend__line graph-legend__line--retry_of" />
-          {{ $t("runs.retry") }}
-        </span>
-        <span class="graph-legend__item">
           <i class="graph-legend__line graph-legend__line--continues" />
           {{ $t("runs.continueTask") }}
+        </span>
+        <span class="graph-legend__item">
+          <i class="graph-legend__line graph-legend__line--retry_of" />
+          {{ $t("runs.retry") }}
         </span>
         <span class="graph-legend__item">
           <i class="graph-legend__line graph-legend__line--waiting_for" />
@@ -774,10 +573,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
   top: 14px;
   left: 14px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   min-height: 42px;
+  align-items: center;
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -785,8 +582,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
   box-shadow: 0 8px 24px rgba(16, 22, 30, 0.1);
   backdrop-filter: blur(8px);
 }
-.graph-view-switch,
-.graph-zoom-controls {
+.graph-view-switch {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -796,216 +592,72 @@ function compareNodes(left: RunNode, right: RunNode): number {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   color: var(--accent);
 }
-.graph-zoom-controls output {
-  min-width: 44px;
-  color: var(--muted);
-  font-size: 0.78rem;
-  text-align: center;
-}
-.graph-fit-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
 .graph-viewport {
   position: absolute;
   inset: 0;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background:
-    linear-gradient(var(--hairline) 1px, transparent 1px),
-    linear-gradient(90deg, var(--hairline) 1px, transparent 1px), var(--canvas);
-  background-size: 24px 24px;
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
+  background: var(--canvas);
 }
-.graph-viewport--panning {
-  cursor: grabbing;
-}
-.graph-surface {
-  position: absolute;
-  left: 0;
-  top: 0;
-  transform-origin: left top;
-  will-change: transform;
-}
-.graph-edges {
-  position: absolute;
-  inset: 0;
+.run-flow {
   width: 100%;
   height: 100%;
-  overflow: visible;
+  background: var(--canvas);
 }
-.graph-edge {
-  fill: none;
-  stroke: var(--border-strong);
-  stroke-width: 2;
+.run-flow :deep(.vue-flow__pane) {
+  cursor: grab;
 }
-.graph-edge--delegated_to {
-  stroke: var(--accent);
+.run-flow :deep(.vue-flow__pane.dragging) {
+  cursor: grabbing;
 }
-.graph-edge--callback_to {
-  stroke: var(--success);
-  stroke-dasharray: 9 5;
-}
-.graph-edge--retry_of {
-  stroke: var(--warning);
-  stroke-dasharray: 3 5;
-}
-.graph-edge--continues {
-  stroke: color-mix(in srgb, var(--accent) 58%, var(--muted));
-  stroke-width: 3;
-}
-.graph-edge--waiting_for {
-  stroke: var(--subtle);
-  stroke-dasharray: 6 5;
-}
-.graph-arrow path {
-  fill: var(--border-strong);
-}
-.graph-arrow--delegated_to path {
-  fill: var(--accent);
-}
-.graph-arrow--callback_to path {
-  fill: var(--success);
-}
-.graph-arrow--retry_of path {
-  fill: var(--warning);
-}
-.graph-arrow--waiting_for path {
-  fill: var(--subtle);
-}
-.canvas-node {
-  position: absolute;
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
-  align-content: stretch;
-  gap: 5px;
-  padding: 12px;
-  overflow: hidden;
-  border: 1px solid var(--border-strong);
-  border-left-width: 4px;
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 3px 12px rgba(16, 22, 30, 0.07);
-  color: var(--text);
-  text-align: left;
+.run-flow :deep(.vue-flow__node) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   cursor: pointer;
 }
-.canvas-node--running {
-  border-left-color: var(--accent);
+.run-flow :deep(.vue-flow__node:focus-visible) {
+  border-radius: 10px;
+  outline: 3px solid color-mix(in srgb, var(--accent) 48%, transparent);
+  outline-offset: 4px;
 }
-.canvas-node--waiting,
-.canvas-node--queued {
-  border-left-color: var(--warning);
+.run-flow :deep(.vue-flow__edge-path) {
+  fill: none;
 }
-.canvas-node--succeeded {
-  border-left-color: var(--success);
-}
-.canvas-node--failed,
-.canvas-node--cancelled {
-  border-left-color: var(--danger);
-}
-.canvas-node--session {
-  border-left: 3px solid var(--accent);
-}
-.canvas-node--control {
-  border-style: dashed;
-}
-.canvas-node--skipped {
-  border-left-color: var(--subtle);
-}
-.canvas-node--future {
-  border-style: dashed;
-  border-left-width: 2px;
-  background: color-mix(in srgb, var(--panel) 82%, transparent);
-  box-shadow: none;
-  opacity: 0.7;
-}
-.canvas-node--active::after {
-  position: absolute;
-  inset: 3px;
-  border: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  border-radius: 6px;
-  pointer-events: none;
-  content: "";
-  animation: run-node-pulse 1.8s ease-in-out infinite;
-}
-.canvas-node--selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
-  opacity: 1;
-}
-.canvas-node__heading {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 7px;
-}
-.canvas-node__kind,
-.canvas-node__title,
-.canvas-node__role,
-.canvas-node__progress {
+.run-flow :deep(.vue-flow__controls),
+.run-flow :deep(.vue-flow__minimap) {
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 8px 24px rgba(16, 22, 30, 0.1);
+  backdrop-filter: blur(8px);
 }
-.canvas-node__kind {
-  color: var(--subtle);
-  font-size: 0.67rem;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
+.run-flow :deep(.vue-flow__controls) {
+  top: 14px;
+  right: 14px;
 }
-.canvas-node__title {
-  display: -webkit-box;
-  overflow: hidden;
-  line-height: 1.25;
-  white-space: normal;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+.run-flow :deep(.vue-flow__controls-button) {
+  width: 34px;
+  height: 34px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
 }
-.canvas-node__type {
-  flex: none;
-  color: var(--accent);
+.run-flow :deep(.vue-flow__controls-button:hover) {
+  background: var(--panel);
 }
-.canvas-node__role,
-.canvas-node__progress {
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-.canvas-node__progress {
-  color: var(--text-secondary);
-}
-.canvas-node__activity {
-  position: absolute;
-  right: 10px;
-  bottom: 8px;
-  display: flex;
-  height: 10px;
-  align-items: end;
-  gap: 2px;
-}
-.canvas-node__activity i {
-  display: block;
-  width: 3px;
-  height: 4px;
-  border-radius: 2px 2px 0 0;
-  background: var(--accent);
-  animation: run-node-activity 1.1s ease-in-out infinite;
-}
-.canvas-node__activity i:nth-child(2) {
-  animation-delay: 0.16s;
-}
-.canvas-node__activity i:nth-child(3) {
-  animation-delay: 0.32s;
+.run-flow :deep(.vue-flow__minimap) {
+  right: 14px;
+  bottom: 14px;
+  width: 152px;
+  height: 104px;
 }
 .graph-outline {
   position: absolute;
   inset: 0;
-  display: none;
+  display: grid;
   align-content: start;
   min-width: 0;
   min-height: 0;
@@ -1014,20 +666,14 @@ function compareNodes(left: RunNode, right: RunNode): number {
   overflow: auto;
   background: var(--canvas);
 }
-.graph-canvas-shell--outline .graph-viewport {
-  display: none;
-}
-.graph-canvas-shell--outline .graph-outline {
-  display: grid;
-}
 .graph-outline-node {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
   width: calc(100% - min(calc(var(--tree-depth) * 18px), 72px));
   min-width: 0;
   min-height: 72px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
   margin-inline-start: min(calc(var(--tree-depth) * 18px), 72px);
   padding: 10px 12px;
   overflow: hidden;
@@ -1071,8 +717,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
 }
 .graph-outline-node__connection {
   display: inline-flex;
-  gap: 5px;
   align-items: baseline;
+  gap: 5px;
 }
 .graph-outline-node--selected {
   border-color: var(--accent);
@@ -1086,7 +732,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
   bottom: 14px;
   left: 14px;
   display: grid;
-  width: min(560px, calc(100% - 28px));
+  width: min(560px, calc(100% - 196px));
   gap: 8px;
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -1155,62 +801,36 @@ function compareNodes(left: RunNode, right: RunNode): number {
   border-color: var(--subtle);
   border-top-style: dashed;
 }
-@keyframes run-node-pulse {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-@keyframes run-node-activity {
-  0%,
-  100% {
-    height: 3px;
-    opacity: 0.45;
-  }
-  50% {
-    height: 10px;
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .canvas-node--active::after,
-  .canvas-node__activity i {
-    animation: none;
-    opacity: 0.75;
-  }
-}
 @media (max-width: 760px) {
   .graph-toolbar {
+    top: 8px;
+    left: 8px;
     min-height: 52px;
   }
-  .graph-toolbar .icon-button,
-  .graph-fit-button {
+  .graph-toolbar .icon-button {
     min-width: 38px;
     min-height: 38px;
   }
-  .graph-fit-button span {
-    display: none;
+  .run-flow :deep(.vue-flow__controls) {
+    top: 8px;
+    right: 8px;
+  }
+  .run-flow :deep(.vue-flow__minimap) {
+    right: 8px;
+    bottom: 8px;
+    width: 124px;
+    height: 82px;
   }
   .graph-outline-node {
     width: calc(100% - min(calc(var(--tree-depth) * 12px), 36px));
     margin-inline-start: min(calc(var(--tree-depth) * 12px), 36px);
   }
-  .graph-toolbar {
-    top: 8px;
-    left: 8px;
-    max-width: calc(100% - 16px);
-  }
   .graph-legend {
-    right: 8px;
+    right: 140px;
     bottom: 8px;
     left: 8px;
     width: auto;
-  }
-  .graph-legend__edges {
-    max-height: 52px;
+    max-height: 108px;
     overflow: auto;
   }
 }

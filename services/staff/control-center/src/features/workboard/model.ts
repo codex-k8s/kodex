@@ -3,6 +3,8 @@ import type {
   OwnerGate,
   Project,
   Run,
+  RuntimeEnvironmentSet,
+  Schedule,
 } from "@/shared/api/generated/openapi/types.gen";
 
 export type RunFilter = "ALL" | "ACTIVE" | "TERMINAL";
@@ -19,6 +21,17 @@ export type AttentionItem =
     };
 
 export type DecisionUrgency = "OVERDUE" | "SOON" | "NORMAL";
+
+export type HomeCapabilityKey =
+  | "STOPPED_RUNS"
+  | "PROVIDER_AUTH_EXPIRY"
+  | "SESSION_CONTINUATION";
+
+export interface HomeCapabilityCoverage {
+  key: HomeCapabilityKey;
+  availability: "UNAVAILABLE";
+  reason: "NOT_IN_OVERVIEW_API";
+}
 
 export interface DecisionInboxItem {
   gate: OwnerGate;
@@ -44,6 +57,20 @@ const activeStates = new Set<Run["state"]>([
   "WAITING_HUMAN",
   "CANCELLING",
 ]);
+
+const homeCapabilityKeys: HomeCapabilityKey[] = [
+  "STOPPED_RUNS",
+  "PROVIDER_AUTH_EXPIRY",
+  "SESSION_CONTINUATION",
+];
+
+export function homeCapabilityCoverage(): HomeCapabilityCoverage[] {
+  return homeCapabilityKeys.map((key) => ({
+    key,
+    availability: "UNAVAILABLE",
+    reason: "NOT_IN_OVERVIEW_API",
+  }));
+}
 
 export function isActiveRun(run: Run): boolean {
   return activeStates.has(run.state);
@@ -238,4 +265,40 @@ export function projectArtifacts(
   return artifacts
     .filter((artifact) => !projectRef || artifact.projectRef === projectRef)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export function projectSchedules(
+  schedules: Schedule[],
+  projectRef: string,
+): Schedule[] {
+  const stateOrder: Record<Schedule["state"], number> = {
+    NEEDS_ATTENTION: 0,
+    ACTIVE: 1,
+    PAUSED: 2,
+    ARCHIVED: 3,
+  };
+  return schedules
+    .filter((schedule) => schedule.projectRef === projectRef)
+    .sort((left, right) => {
+      const state = stateOrder[left.state] - stateOrder[right.state];
+      if (state !== 0) return state;
+      const leftRun = left.nextRunAt ?? "9999-12-31T23:59:59Z";
+      const rightRun = right.nextRunAt ?? "9999-12-31T23:59:59Z";
+      return (
+        leftRun.localeCompare(rightRun) || left.name.localeCompare(right.name)
+      );
+    });
+}
+
+export function projectRuntimeEnvironments(
+  environments: RuntimeEnvironmentSet[],
+  projectRef: string,
+): RuntimeEnvironmentSet[] {
+  return environments
+    .filter((environment) => environment.projectRef === projectRef)
+    .sort(
+      (left, right) =>
+        right.updatedAt.localeCompare(left.updatedAt) ||
+        left.name.localeCompare(right.name),
+    );
 }

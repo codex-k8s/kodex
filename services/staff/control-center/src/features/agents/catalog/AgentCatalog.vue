@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { Search, X } from "@lucide/vue";
-import { computed, ref } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
 
 import AgentCard from "@/features/agents/catalog/AgentCard.vue";
 import AgentTable from "@/features/agents/catalog/AgentTable.vue";
 import {
-  availableAgentRoles,
-  availableAgentStates,
-  filterAgentCatalog,
   toAgentCatalogItem,
   type AgentCatalogView,
-  type AgentStateFilter,
 } from "@/features/agents/catalog/model";
 import type { Agent } from "@/shared/api/generated/openapi/types.gen";
 import ViewModeToggle from "@/shared/ui/ViewModeToggle.vue";
@@ -20,32 +23,51 @@ const props = defineProps<{
   agents: Agent[];
   projectRef: string;
   view: AgentCatalogView;
+  query: string;
+  hasMore: boolean;
+  loadingMore: boolean;
 }>();
-const emit = defineEmits<{ "update:view": [view: AgentCatalogView] }>();
+const emit = defineEmits<{
+  "update:view": [view: AgentCatalogView];
+  "update:query": [query: string];
+  "load-more": [];
+}>();
 const { t } = useI18n();
-const query = ref("");
-const state = ref<AgentStateFilter>("ALL");
-const role = ref("");
-const items = computed(() => props.agents.map(toAgentCatalogItem));
-const states = computed(() => availableAgentStates(items.value));
-const roles = computed(() => availableAgentRoles(items.value));
-const visibleItems = computed(() =>
-  filterAgentCatalog(items.value, {
-    query: query.value,
-    role: role.value,
-    state: state.value,
-  }),
+const sentinel = ref<HTMLElement>();
+const items = computed(() =>
+  props.agents
+    .map(toAgentCatalogItem)
+    .sort((left, right) =>
+      left.name.localeCompare(right.name, "ru-RU", { sensitivity: "base" }),
+    ),
 );
-const hasFilters = computed(
-  () =>
-    Boolean(query.value.trim()) || state.value !== "ALL" || Boolean(role.value),
-);
+let observer: IntersectionObserver | undefined;
 
-function resetFilters(): void {
-  query.value = "";
-  state.value = "ALL";
-  role.value = "";
+function updateQuery(event: Event): void {
+  const target = event.currentTarget;
+  if (target instanceof HTMLInputElement) emit("update:query", target.value);
 }
+
+function requestNextPage(): void {
+  if (props.hasMore && !props.loadingMore) emit("load-more");
+}
+
+function bindObserver(): void {
+  observer?.disconnect();
+  observer = undefined;
+  if (!props.hasMore || !sentinel.value) return;
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) requestNextPage();
+  });
+  observer.observe(sentinel.value);
+}
+
+onMounted(() => bindObserver());
+watch(
+  () => [props.hasMore, props.loadingMore, sentinel.value] as const,
+  () => void nextTick(bindObserver),
+);
+onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <template>
@@ -55,43 +77,24 @@ function resetFilters(): void {
         <span class="sr-only">{{ t("agents.catalogSearch") }}</span>
         <Search :size="16" aria-hidden="true" />
         <input
-          v-model="query"
+          :value="query"
           type="search"
           :placeholder="t('agents.catalogSearchPlaceholder')"
+          @input="updateQuery"
         />
         <button
           v-if="query"
           type="button"
           :aria-label="t('agents.catalogClearSearch')"
           :title="t('agents.catalogClearSearch')"
-          @click="query = ''"
+          @click="emit('update:query', '')"
         >
           <X :size="15" aria-hidden="true" />
         </button>
       </label>
 
-      <label class="agent-catalog__filter">
-        <span>{{ t("common.status") }}</span>
-        <select v-model="state">
-          <option value="ALL">{{ t("common.all") }}</option>
-          <option v-for="value in states" :key="value" :value="value">
-            {{ t(`states.${value}`) }}
-          </option>
-        </select>
-      </label>
-
-      <label class="agent-catalog__filter">
-        <span>{{ t("agents.role") }}</span>
-        <select v-model="role">
-          <option value="">{{ t("common.all") }}</option>
-          <option v-for="value in roles" :key="value" :value="value">
-            {{ value }}
-          </option>
-        </select>
-      </label>
-
       <output class="agent-catalog__count" aria-live="polite">
-        {{ visibleItems.length }} / {{ items.length }}
+        {{ t("agents.catalogLoaded", { count: items.length }) }}
       </output>
 
       <ViewModeToggle
@@ -104,22 +107,14 @@ function resetFilters(): void {
       />
     </div>
 
-    <div v-if="visibleItems.length === 0" class="agent-catalog__empty">
+    <div v-if="items.length === 0" class="agent-catalog__empty">
       <p>{{ t("common.empty") }}</p>
-      <button
-        v-if="hasFilters"
-        class="button"
-        type="button"
-        @click="resetFilters"
-      >
-        {{ t("agents.catalogResetFilters") }}
-      </button>
     </div>
 
     <template v-else>
       <div class="agent-catalog__mobile-grid">
         <AgentCard
-          v-for="item in visibleItems"
+          v-for="item in items"
           :key="item.ref"
           :item="item"
           :to="`/projects/${projectRef}/agents/${item.ref}`"
@@ -128,15 +123,27 @@ function resetFilters(): void {
       <div class="agent-catalog__desktop-view">
         <div v-if="view === 'grid'" class="agent-catalog__grid">
           <AgentCard
-            v-for="item in visibleItems"
+            v-for="item in items"
             :key="item.ref"
             :item="item"
             :to="`/projects/${projectRef}/agents/${item.ref}`"
           />
         </div>
-        <AgentTable v-else :items="visibleItems" :project-ref="projectRef" />
+        <AgentTable v-else :items="items" :project-ref="projectRef" />
       </div>
     </template>
+
+    <div
+      v-if="hasMore || loadingMore"
+      ref="sentinel"
+      class="agent-catalog__pagination"
+      aria-live="polite"
+    >
+      <span v-if="loadingMore">{{ t("agents.catalogLoadingMore") }}</span>
+      <button v-else class="button" type="button" @click="requestNextPage">
+        {{ t("agents.catalogLoadMore") }}
+      </button>
+    </div>
   </section>
 </template>
 
@@ -148,9 +155,7 @@ function resetFilters(): void {
 }
 .agent-catalog__toolbar {
   display: grid;
-  grid-template-columns:
-    minmax(260px, 1fr) minmax(145px, 180px) minmax(160px, 210px)
-    auto auto;
+  grid-template-columns: minmax(260px, 1fr) auto auto;
   align-items: end;
   min-height: 48px;
   gap: 8px;
@@ -187,24 +192,6 @@ function resetFilters(): void {
   background: transparent;
   cursor: pointer;
 }
-.agent-catalog__filter {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-.agent-catalog__filter span {
-  color: var(--subtle);
-  font-size: 0.7rem;
-  font-weight: 500;
-}
-.agent-catalog__filter select {
-  width: 100%;
-  min-width: 0;
-  height: 36px;
-  padding-block: 5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .agent-catalog__count {
   min-width: 58px;
   padding-bottom: 8px;
@@ -236,14 +223,17 @@ function resetFilters(): void {
 .agent-catalog__empty p {
   margin: 0;
 }
+.agent-catalog__pagination {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
 @media (max-width: 1050px) {
   .agent-catalog__toolbar {
-    grid-template-columns:
-      minmax(240px, 1fr) repeat(2, minmax(140px, 190px))
-      auto;
-  }
-  .agent-catalog__count {
-    display: none;
+    grid-template-columns: minmax(240px, 1fr) auto auto;
   }
 }
 @media (max-width: 760px) {
@@ -254,8 +244,7 @@ function resetFilters(): void {
   .agent-catalog__search {
     grid-column: 1 / -1;
   }
-  .agent-catalog__search input,
-  .agent-catalog__filter select {
+  .agent-catalog__search input {
     height: 42px;
   }
   .agent-catalog__view,

@@ -7,6 +7,9 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 
 const route = useRoute();
 const projectRef = computed(() => String(route.params.projectRef));
+const mode = computed(() =>
+  route.name === "files-trash" ? "TRASH" : "ACTIVE",
+);
 const initialArtifactRef = computed(() =>
   typeof route.query.artifactRef === "string"
     ? route.query.artifactRef
@@ -21,8 +24,9 @@ const initialArtifactRef = computed(() =>
     :subtitle="$t('files.subtitle')"
   >
     <FilesWorkspace
-      :key="projectRef"
+      :key="`${projectRef}:${mode}`"
       :project-ref="projectRef"
+      :mode="mode"
       :initial-artifact-ref="initialArtifactRef"
     />
   </PageFrame>

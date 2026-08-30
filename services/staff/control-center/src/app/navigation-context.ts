@@ -34,6 +34,7 @@ const routeSections: Readonly<Record<string, NavigationSection>> = {
   "project-runs": "project-runs",
   "project-run": "project-runs",
   files: "files",
+  "files-trash": "files",
   automations: "automations",
   "runtime-environments": "runtime-environments",
   "runtime-environment-new": "runtime-environments",

@@ -425,6 +425,10 @@ function select(node: RunNode) {
   nodeInspectorOpen.value = true;
   mobilePane.value = "graph";
 }
+function openNodeDetails(node: RunNode): void {
+  select(node);
+  nodeDetailsOpen.value = true;
+}
 function openActivity(nodeRef?: string): void {
   activityNodeRef.value = nodeRef;
   activityOpen.value = true;
@@ -715,6 +719,7 @@ onBeforeUnmount(() => {
               :future-node-refs="futureNodeRefs"
               :active-node-refs="activeNodeRefs"
               @select="select"
+              @details="openNodeDetails"
             />
           </div>
         </section>

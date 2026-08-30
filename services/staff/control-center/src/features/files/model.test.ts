@@ -160,6 +160,7 @@ describe("files model", () => {
   });
 
   it("требует точную фразу для необратимых массовых операций", () => {
+    expect(trashBulkConfirmed("DELETE", "", "УДАЛИТЬ НАВСЕГДА")).toBe(true);
     expect(trashBulkConfirmed("RESTORE", "", "УДАЛИТЬ НАВСЕГДА")).toBe(true);
     expect(
       trashBulkConfirmed("PURGE", " удалить навсегда ", "УДАЛИТЬ НАВСЕГДА"),

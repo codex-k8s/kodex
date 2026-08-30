@@ -1,66 +1,32 @@
-export interface RunGraphViewportSize {
-  width: number;
-  height: number;
+export type RunGraphViewportCommand =
+  | { type: "FIT" }
+  | { type: "ZOOM_IN" }
+  | { type: "ZOOM_OUT" }
+  | { type: "PAN"; x: number; y: number };
+
+export interface RunGraphViewportKey {
+  key: string;
+  shiftKey?: boolean;
 }
 
-export interface RunGraphView {
-  x: number;
-  y: number;
-  scale: number;
-}
+export function runGraphViewportCommand(
+  event: RunGraphViewportKey,
+): RunGraphViewportCommand | undefined {
+  if (event.key === "+" || event.key === "=") return { type: "ZOOM_IN" };
+  if (event.key === "-") return { type: "ZOOM_OUT" };
+  if (event.key === "0") return { type: "FIT" };
 
-export interface RunGraphPoint {
-  x: number;
-  y: number;
-}
-
-export function clampRunGraphScale(
-  scale: number,
-  minimumScale: number,
-  maximumScale: number,
-): number {
-  return Math.min(maximumScale, Math.max(minimumScale, scale));
-}
-
-export function fitRunGraphView(
-  graph: RunGraphViewportSize,
-  viewport: RunGraphViewportSize,
-  minimumScale: number,
-  maximumScale: number,
-  padding = 32,
-): RunGraphView {
-  if (!graph.width || !graph.height || !viewport.width || !viewport.height) {
-    return { x: 0, y: 0, scale: 1 };
+  const distance = event.shiftKey ? 96 : 42;
+  switch (event.key) {
+    case "ArrowLeft":
+      return { type: "PAN", x: distance, y: 0 };
+    case "ArrowRight":
+      return { type: "PAN", x: -distance, y: 0 };
+    case "ArrowUp":
+      return { type: "PAN", x: 0, y: distance };
+    case "ArrowDown":
+      return { type: "PAN", x: 0, y: -distance };
+    default:
+      return undefined;
   }
-
-  const availableWidth = Math.max(1, viewport.width - padding * 2);
-  const availableHeight = Math.max(1, viewport.height - padding * 2);
-  const scale = clampRunGraphScale(
-    Math.min(availableWidth / graph.width, availableHeight / graph.height),
-    minimumScale,
-    maximumScale,
-  );
-
-  return {
-    x: (viewport.width - graph.width * scale) / 2,
-    y: (viewport.height - graph.height * scale) / 2,
-    scale,
-  };
-}
-
-export function zoomRunGraphAtPoint(
-  view: RunGraphView,
-  requestedScale: number,
-  point: RunGraphPoint,
-  minimumScale: number,
-  maximumScale: number,
-): RunGraphView {
-  const scale = clampRunGraphScale(requestedScale, minimumScale, maximumScale);
-  const ratio = scale / view.scale;
-
-  return {
-    x: point.x - (point.x - view.x) * ratio,
-    y: point.y - (point.y - view.y) * ratio,
-    scale,
-  };
 }

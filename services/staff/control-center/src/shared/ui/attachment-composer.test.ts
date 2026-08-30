@@ -7,6 +7,7 @@ import {
   attachmentQueueState,
   createAttachmentUploadQueue,
   stageAttachments,
+  type AttachmentUploadRequest,
   type AttachmentUploadQueueItem,
 } from "@/shared/ui/attachment-composer";
 
@@ -145,7 +146,12 @@ describe("attachment upload queue", () => {
     const firstUpload = deferred<{ ref: string }>();
     const secondUpload = deferred<{ ref: string }>();
     const upload = vi
-      .fn<(source: File) => Promise<{ ref: string }>>()
+      .fn<
+        (
+          source: File,
+          request: AttachmentUploadRequest,
+        ) => Promise<{ ref: string }>
+      >()
       .mockReturnValueOnce(firstUpload.promise)
       .mockReturnValueOnce(secondUpload.promise)
       .mockResolvedValueOnce({ ref: "art_c" });
@@ -175,7 +181,12 @@ describe("attachment upload queue", () => {
 
   it("показывает ошибку, позволяет retry и не включает удалённый ref в command", async () => {
     const upload = vi
-      .fn<(source: File) => Promise<{ ref: string }>>()
+      .fn<
+        (
+          source: File,
+          request: AttachmentUploadRequest,
+        ) => Promise<{ ref: string }>
+      >()
       .mockRejectedValueOnce(new Error("temporary"))
       .mockResolvedValueOnce({ ref: "art_retry" });
     const queue = createAttachmentUploadQueue({
@@ -202,7 +213,13 @@ describe("attachment upload queue", () => {
   });
 
   it("не начинает upload, пока aggregate превышает лимит", () => {
-    const upload = vi.fn<(source: File) => Promise<{ ref: string }>>();
+    const upload =
+      vi.fn<
+        (
+          source: File,
+          request: AttachmentUploadRequest,
+        ) => Promise<{ ref: string }>
+      >();
     const queue = createAttachmentUploadQueue({
       upload,
       disabled: () => false,
@@ -213,5 +230,88 @@ describe("attachment upload queue", () => {
 
     expect(upload).not.toHaveBeenCalled();
     expect(queue.state.value.overLimit).toBe(true);
+  });
+
+  it("прерывает активный upload при remove и игнорирует его позднее завершение", async () => {
+    const upload = deferred<{ ref: string }>();
+    let request: AttachmentUploadRequest | undefined;
+    const queue = createAttachmentUploadQueue({
+      upload: (_file, current) => {
+        request = current;
+        return upload.promise;
+      },
+      disabled: () => false,
+      formatError: () => "upload failed",
+    });
+
+    queue.enqueue([file("cancel.txt", 10)]);
+    const item = required(queue.items.value[0]);
+    expect(request?.signal.aborted).toBe(false);
+
+    queue.remove(item.key);
+    expect(request?.signal.aborted).toBe(true);
+    expect(queue.items.value).toEqual([]);
+
+    upload.resolve({ ref: "artifact_hidden" });
+    await flushQueue();
+    expect(queue.state.value.refs).toEqual([]);
+    expect(queue.state.value.ready).toBe(true);
+  });
+
+  it("показывает determinate progress только после реального byte callback", async () => {
+    const upload = deferred<{ ref: string }>();
+    let request: AttachmentUploadRequest | undefined;
+    const queue = createAttachmentUploadQueue({
+      upload: (_file, current) => {
+        request = current;
+        return upload.promise;
+      },
+      disabled: () => false,
+      formatError: () => "upload failed",
+    });
+
+    queue.enqueue([file("progress.txt", 10)]);
+    expect(queue.items.value[0]?.progress).toBeUndefined();
+
+    request?.onProgress({ loadedBytes: 4, totalBytes: 10 });
+    expect(queue.items.value[0]?.progress).toEqual({
+      loadedBytes: 4,
+      totalBytes: 10,
+    });
+
+    upload.resolve({ ref: "artifact_progress" });
+    await flushQueue();
+    expect(queue.items.value[0]?.progress).toBeUndefined();
+  });
+
+  it("не применяет поздний abort старой попытки к повторно добавленному файлу", async () => {
+    const firstUpload = deferred<{ ref: string }>();
+    const secondUpload = deferred<{ ref: string }>();
+    const upload = vi
+      .fn<
+        (
+          source: File,
+          request: AttachmentUploadRequest,
+        ) => Promise<{ ref: string }>
+      >()
+      .mockReturnValueOnce(firstUpload.promise)
+      .mockReturnValueOnce(secondUpload.promise);
+    const queue = createAttachmentUploadQueue({
+      upload,
+      disabled: () => false,
+      formatError: () => "upload failed",
+    });
+    const source = file("same.txt", 10);
+
+    queue.enqueue([source]);
+    queue.remove(required(queue.items.value[0]).key);
+    queue.enqueue([source]);
+    firstUpload.reject(new DOMException("Aborted", "AbortError"));
+    await flushQueue();
+
+    expect(queue.items.value[0]).toMatchObject({ state: "UPLOADING" });
+    secondUpload.resolve({ ref: "artifact_replacement" });
+    await flushQueue();
+    expect(queue.state.value.refs).toEqual(["artifact_replacement"]);
   });
 });

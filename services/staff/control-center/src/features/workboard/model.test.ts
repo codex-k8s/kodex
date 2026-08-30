@@ -8,12 +8,17 @@ import {
   filterRuns,
   groupDecisionInbox,
   groupRuns,
+  homeCapabilityCoverage,
+  projectRuntimeEnvironments,
+  projectSchedules,
   runExecutor,
 } from "@/features/workboard/model";
 import type {
   OwnerGate,
   Project,
   Run,
+  RuntimeEnvironmentSet,
+  Schedule,
 } from "@/shared/api/generated/openapi/types.gen";
 import { runPath } from "@/shared/routes";
 
@@ -105,7 +110,105 @@ const project: Project = {
   nextActions: [],
 };
 
+function schedule(
+  ref: string,
+  state: Schedule["state"],
+  options: Partial<Schedule> = {},
+): Schedule {
+  return {
+    ref,
+    version: 1,
+    projectRef: project.ref,
+    name: ref,
+    target: {
+      type: "AGENT",
+      ref: "agent_sales",
+      displayName: "Аналитик",
+      version: 1,
+    },
+    state,
+    preset: "DAILY",
+    timezone: "Europe/Saratov",
+    sessionPolicy: "NEW_EACH_RUN",
+    notificationPolicy: "CONTROL_CENTER_ONLY",
+    nextActions: [],
+    ...options,
+  };
+}
+
+function environment(
+  ref: string,
+  updatedAt: string,
+  projectRef = project.ref,
+): RuntimeEnvironmentSet {
+  return {
+    ref,
+    version: 1,
+    projectRef,
+    name: ref,
+    description: "Окружение",
+    state: "READY",
+    currentVersion: {} as RuntimeEnvironmentSet["currentVersion"],
+    updatedAt,
+  };
+}
+
 describe("workboard model", () => {
+  it("явно отмечает источники Home, отсутствующие в Overview API", () => {
+    expect(homeCapabilityCoverage()).toEqual([
+      {
+        key: "STOPPED_RUNS",
+        availability: "UNAVAILABLE",
+        reason: "NOT_IN_OVERVIEW_API",
+      },
+      {
+        key: "PROVIDER_AUTH_EXPIRY",
+        availability: "UNAVAILABLE",
+        reason: "NOT_IN_OVERVIEW_API",
+      },
+      {
+        key: "SESSION_CONTINUATION",
+        availability: "UNAVAILABLE",
+        reason: "NOT_IN_OVERVIEW_API",
+      },
+    ]);
+  });
+
+  it("выбирает автоматизации Проекта и поднимает требующие внимания", () => {
+    const values = projectSchedules(
+      [
+        schedule("later", "ACTIVE", {
+          nextRunAt: "2026-08-30T12:00:00Z",
+        }),
+        schedule("attention", "NEEDS_ATTENTION"),
+        schedule("other", "ACTIVE", { projectRef: "project_other" }),
+        schedule("sooner", "ACTIVE", {
+          nextRunAt: "2026-08-30T10:00:00Z",
+        }),
+      ],
+      project.ref,
+    );
+
+    expect(values.map((item) => item.ref)).toEqual([
+      "attention",
+      "sooner",
+      "later",
+    ]);
+  });
+
+  it("показывает только окружения Проекта от недавно изменённых", () => {
+    const values = projectRuntimeEnvironments(
+      [
+        environment("older", "2026-08-28T10:00:00Z"),
+        environment("other", "2026-08-30T10:00:00Z", "project_other"),
+        environment("newer", "2026-08-29T10:00:00Z"),
+      ],
+      project.ref,
+    );
+
+    expect(values.map((item) => item.ref)).toEqual(["newer", "older"]);
+  });
+
   it("группирует состояния в четыре канонические колонки", () => {
     const grouped = groupRuns([
       run("queued", "QUEUED"),

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Sparkles, Trash2, Upload } from "@lucide/vue";
+import { Trash2, Upload } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -150,14 +150,6 @@ function confirmAvatarRemoval(): void {
           @change="uploadAvatar"
         />
         <div class="profile-panel__avatar-actions">
-          <button
-            class="button"
-            type="button"
-            disabled
-            :title="$t('common.unavailable')"
-          >
-            <Sparkles :size="16" aria-hidden="true" />{{ copy.avatar.generate }}
-          </button>
           <button
             class="button"
             type="button"

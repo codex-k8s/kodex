@@ -8,7 +8,7 @@ import {
   Upload,
   X,
 } from "@lucide/vue";
-import { computed, ref, shallowRef, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
@@ -27,12 +27,16 @@ import {
   type AttachmentComposerHandle,
   type AttachmentComposerState,
   type ExistingAttachmentSelection,
+  type AttachmentUploadRequest,
 } from "@/shared/ui/attachment-composer";
 import type { AsyncEntityLoader } from "@/shared/ui/async-entity-picker";
 
 const props = withDefaults(
   defineProps<{
-    upload: (file: File) => Promise<{ ref: string }>;
+    upload: (
+      file: File,
+      request: AttachmentUploadRequest,
+    ) => Promise<{ ref: string }>;
     disabled?: boolean;
     compact?: boolean;
     reservedBytes?: number;
@@ -54,7 +58,7 @@ const knownExisting = shallowRef(
   new Map<string, AttachmentArtifactPickerItem>(),
 );
 const queue = createAttachmentUploadQueue({
-  upload: (file) => props.upload(file),
+  upload: (file, request) => props.upload(file, request),
   disabled: () => props.disabled,
   reservedBytes: () => props.reservedBytes,
   formatError: (error) =>
@@ -175,6 +179,8 @@ function clear(): void {
   existingRefs.value = [];
   knownExisting.value = new Map();
 }
+
+onBeforeUnmount(clear);
 
 defineExpose<AttachmentComposerHandle>({ clear });
 </script>
@@ -304,6 +310,8 @@ defineExpose<AttachmentComposerHandle>({ clear });
         <progress
           v-if="item.state === 'UPLOADING'"
           class="attachment-composer__progress"
+          :value="item.progress?.loadedBytes"
+          :max="item.progress?.totalBytes"
           :aria-label="t('attachments.uploading', { name: item.name })"
         />
         <Upload

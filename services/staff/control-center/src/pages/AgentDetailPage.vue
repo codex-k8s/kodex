@@ -6,7 +6,6 @@ import { useRoute, useRouter } from "vue-router";
 
 import InstructionHistory from "@/features/agents/components/InstructionHistory.vue";
 import AgentAccessPanel from "@/features/agents/detail/AgentAccessPanel.vue";
-import AgentApiGaps from "@/features/agents/detail/AgentApiGaps.vue";
 import AgentApplyState from "@/features/agents/detail/AgentApplyState.vue";
 import AvatarCropDialog from "@/features/agents/detail/AvatarCropDialog.vue";
 import AgentEnvironmentPanel from "@/features/agents/detail/AgentEnvironmentPanel.vue";
@@ -767,7 +766,6 @@ onMounted(() => void load());
         </section>
 
         <ProblemNotice v-if="problem" :problem="problem" compact />
-        <AgentApiGaps />
       </div>
     </AsyncState>
     <AvatarCropDialog

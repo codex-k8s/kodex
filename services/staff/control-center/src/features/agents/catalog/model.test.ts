@@ -3,9 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   agentInitials,
   agentStatusTone,
-  availableAgentRoles,
-  availableAgentStates,
-  filterAgentCatalog,
   parseAgentCatalogView,
   sameOriginAvatarUrl,
   toAgentCatalogItem,
@@ -62,48 +59,7 @@ describe("agent catalog model", () => {
     expect(agentStatusTone("DISABLED")).toBe("neutral");
   });
 
-  it("фильтрует только уже загруженную модель и ищет по содержательным полям", () => {
-    const source = [
-      toAgentCatalogItem(agent({ ref: "agent_sales", name: "Яна" })),
-      toAgentCatalogItem(
-        agent({
-          ref: "agent_docs",
-          name: "Борис",
-          purpose: "Готовит документы",
-          roleDefinitionName: "Редактор",
-          state: "RUNNING",
-        }),
-      ),
-    ];
-
-    expect(
-      filterAgentCatalog(source, {
-        query: "ДОКУМЕНТЫ",
-        role: "Редактор",
-        state: "RUNNING",
-      }).map((item) => item.ref),
-    ).toEqual(["agent_docs"]);
-    expect(
-      filterAgentCatalog(source, { query: "", role: "", state: "ALL" }).map(
-        (item) => item.name,
-      ),
-    ).toEqual(["Борис", "Яна"]);
-    expect(source.map((item) => item.name)).toEqual(["Яна", "Борис"]);
-  });
-
-  it("выводит только доступные состояния и роли в стабильном порядке", () => {
-    const items = [
-      toAgentCatalogItem(agent({ roleDefinitionName: "Редактор" })),
-      toAgentCatalogItem(
-        agent({ state: "RUNNING", roleDefinitionName: "Аналитик" }),
-      ),
-      toAgentCatalogItem(
-        agent({ state: "READY", roleDefinitionName: undefined }),
-      ),
-    ];
-
-    expect(availableAgentStates(items)).toEqual(["RUNNING", "READY"]);
-    expect(availableAgentRoles(items)).toEqual(["Аналитик", "Редактор"]);
+  it("строго разбирает сохранённый режим каталога", () => {
     expect(parseAgentCatalogView("list")).toBe("list");
     expect(parseAgentCatalogView("unknown")).toBe("grid");
     expect(parseAgentCatalogView(null)).toBe("grid");

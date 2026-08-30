@@ -1,14 +1,7 @@
 import type { Agent } from "@/shared/api/generated/openapi/types.gen";
 
 export type AgentCatalogView = "grid" | "list";
-export type AgentStateFilter = "ALL" | Agent["state"];
 export type AgentStatusTone = "success" | "accent" | "neutral";
-
-export interface AgentCatalogFilters {
-  query: string;
-  role: string;
-  state: AgentStateFilter;
-}
 
 export interface AgentCatalogItem {
   ref: string;
@@ -28,18 +21,6 @@ export interface AgentCatalogItem {
   runtimeReady: boolean;
   currentActivity?: string;
   updatedAt: string;
-}
-
-const catalogStates: ReadonlyArray<Agent["state"]> = [
-  "RUNNING",
-  "READY",
-  "DRAFT",
-  "DISABLED",
-  "ARCHIVED",
-];
-
-function normalized(value: string): string {
-  return value.trim().toLocaleLowerCase("ru-RU");
 }
 
 export function agentInitials(name: string): string {
@@ -95,47 +76,6 @@ export function toAgentCatalogItem(agent: Agent): AgentCatalogItem {
     currentActivity: agent.currentActivity,
     updatedAt: agent.updatedAt,
   };
-}
-
-export function filterAgentCatalog(
-  items: AgentCatalogItem[],
-  filters: AgentCatalogFilters,
-): AgentCatalogItem[] {
-  const query = normalized(filters.query);
-  return [...items]
-    .filter((item) => {
-      if (filters.state !== "ALL" && item.state !== filters.state) return false;
-      if (filters.role && item.role !== filters.role) return false;
-      if (!query) return true;
-      return normalized(
-        [
-          item.name,
-          item.purpose,
-          item.role,
-          item.roleDescription,
-          item.runtimeName,
-          item.runtimeProvider ?? "",
-          item.runtimeModel ?? "",
-        ].join(" "),
-      ).includes(query);
-    })
-    .sort((left, right) =>
-      left.name.localeCompare(right.name, "ru-RU", { sensitivity: "base" }),
-    );
-}
-
-export function availableAgentStates(
-  items: AgentCatalogItem[],
-): Array<Agent["state"]> {
-  const present = new Set(items.map((item) => item.state));
-  return catalogStates.filter((state) => present.has(state));
-}
-
-export function availableAgentRoles(items: AgentCatalogItem[]): string[] {
-  return [...new Set(items.map((item) => item.role).filter(Boolean))].sort(
-    (left, right) =>
-      left.localeCompare(right, "ru-RU", { sensitivity: "base" }),
-  );
 }
 
 export function parseAgentCatalogView(value: string | null): AgentCatalogView {

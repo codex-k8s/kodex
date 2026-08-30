@@ -6,6 +6,10 @@ import { useI18n } from "vue-i18n";
 import { createTemplateVariableLoader } from "@/features/agents/detail/api";
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
+import type {
+  CodeEditorCompletionItem,
+  CodeEditorCompletionProvider,
+} from "@/features/agents/detail/code-editor";
 import {
   extractTemplateVariables,
   templateVariableInsertion,
@@ -55,6 +59,19 @@ const variableLabels = computed(() => ({
 function insertVariable(item: TemplateVariablePickerItem): void {
   editor.value?.insertAtCursor(templateVariableInsertion(item.variable.name));
 }
+
+const completeVariables: CodeEditorCompletionProvider = async (
+  query,
+  signal,
+): Promise<CodeEditorCompletionItem[]> => {
+  const page = await loadVariables({ cursor: undefined, query, signal });
+  return page.items.map((item) => ({
+    label: item.variable.name,
+    apply: templateVariableInsertion(item.variable.name),
+    detail: `${item.scope} · ${item.variable.description}`,
+    type: "variable",
+  }));
+};
 </script>
 
 <template>
@@ -102,6 +119,7 @@ function insertVariable(item: TemplateVariablePickerItem): void {
           :readonly="!canEdit"
           :validation-messages="validationMessages"
           :min-lines="18"
+          :completion-provider="completeVariables"
           @update:model-value="emit('update:modelValue', $event)"
         />
         <section v-else class="instructions-panel__preview" aria-live="polite">

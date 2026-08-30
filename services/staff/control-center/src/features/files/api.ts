@@ -10,7 +10,7 @@ import type {
   ArtifactPurgeReceipt,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
-import { unwrap } from "@/shared/api/problem";
+import { asProblem, unwrap, type AppProblem } from "@/shared/api/problem";
 import type {
   AsyncEntityLoadRequest,
   AsyncEntityPage,
@@ -19,6 +19,28 @@ import type {
 
 export interface ArtifactListItem extends AsyncEntityPickerItem {
   artifact: Artifact;
+}
+
+export interface ArtifactBulkReceipt {
+  artifact: Artifact;
+  problem?: AppProblem;
+  status: "SUCCEEDED" | "FAILED";
+}
+
+export async function mutateArtifactsSequentially(
+  artifacts: readonly Artifact[],
+  command: (artifact: Artifact) => Promise<unknown>,
+): Promise<ArtifactBulkReceipt[]> {
+  const receipts: ArtifactBulkReceipt[] = [];
+  for (const artifact of artifacts) {
+    try {
+      await command(artifact);
+      receipts.push({ artifact, status: "SUCCEEDED" });
+    } catch (error) {
+      receipts.push({ artifact, problem: asProblem(error), status: "FAILED" });
+    }
+  }
+  return receipts;
 }
 
 export async function loadArtifactPage(

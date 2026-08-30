@@ -64,6 +64,8 @@ function binding(
 describe("enterprise RBAC UI model", () => {
   it("предлагает instance-level окружения и секреты из канонического каталога", () => {
     expect(accessResourceKinds).toContain("RUNTIME_ENVIRONMENT");
+    expect(accessResourceKinds).toContain("ROLE_IMAGE");
+    expect(accessResourceKinds).toContain("SESSION");
     expect(accessResourceKinds).toContain("SECRET");
   });
 
