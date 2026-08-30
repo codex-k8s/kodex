@@ -56,6 +56,14 @@ const runtimeOverlay = [
   'persistence = "none"',
 ].join("\n");
 const accessRoleName = `${environment.resourcePrefix} — точечный запуск сотрудника`;
+const retryableProviderTurnResults = new Map([
+  ["PROVIDERRESULTUNVERIFIABLE", "i18n:PROVIDER_RESULT_UNVERIFIABLE"],
+  ["PROVIDERRESULTUNKNOWN", "i18n:PROVIDER_RESULT_UNKNOWN"],
+  [
+    "PROVIDERRESPONSEINVALIDPROVIDERRESULTUNVERIFIABLE",
+    "PROVIDER_RESPONSE_INVALID / i18n:PROVIDER_RESULT_UNVERIFIABLE",
+  ],
+]);
 
 const initialRefs = loadDiscoveryRefs(environment.resourcePrefix);
 let projectRef = initialRefs.projectRef ?? "";
@@ -84,13 +92,107 @@ async function openKodex(page: Page, newConversation = false): Promise<void> {
     .click();
 }
 
+async function requestLatestKodexPlan(
+  page: Page,
+  prompt: string,
+  expectedText: string,
+): Promise<Locator> {
+  const dialog = page.getByRole("dialog", { name: "Kodex" });
+  const userMessages = dialog.locator("article.assistant-message--user");
+  const composer = dialog.getByRole("textbox", {
+    name: "Опишите, что нужно настроить или запустить",
+  });
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const userMessageCount = await userMessages.count();
+    await composer.fill(prompt);
+    await dialog.getByRole("button", { name: "Отправить помощнику" }).click();
+    await expect(userMessages).toHaveCount(userMessageCount + 1);
+    const currentUserMessage = userMessages.nth(userMessageCount);
+    const currentAssistantMessage = currentUserMessage.locator(
+      "xpath=following-sibling::article[contains(concat(' ', normalize-space(@class), ' '), ' assistant-message--assistant ')][1]",
+    );
+
+    const outcome = await waitForAssistantPlanAttempt(
+      page,
+      currentAssistantMessage,
+      expectedText,
+    );
+    if (outcome.planCard) return outcome.planCard;
+
+    const failedResult = outcome.failedResult ?? "UNKNOWN";
+    const retryableResult = retryableProviderResult(failedResult);
+    if (!retryableResult) {
+      throw new Error(
+        `System assistant turn failed without retry: ${failedResult}`,
+      );
+    }
+    test.info().annotations.push({
+      type: "provider-transient-retry",
+      description: `Provider turn attempt ${String(attempt)} failed with ${retryableResult}; retrying through a fresh user turn`,
+    });
+    if (attempt === 2) {
+      throw new Error(
+        `Retryable provider failure persisted after two user turns: ${retryableResult}`,
+      );
+    }
+  }
+
+  throw new Error("System assistant plan attempt ended without an outcome");
+}
+
+async function waitForAssistantPlanAttempt(
+  page: Page,
+  assistantMessage: Locator,
+  expectedText: string,
+): Promise<{ failedResult?: string; planCard?: Locator }> {
+  const deadline = Date.now() + 120_000;
+  const matchingPlan = assistantMessage
+    .locator(".assistant-plan-card")
+    .filter({ hasText: expectedText })
+    .first();
+  while (Date.now() < deadline) {
+    if ((await matchingPlan.count()) > 0 && (await matchingPlan.isVisible())) {
+      return { planCard: matchingPlan };
+    }
+
+    if ((await assistantMessage.count()) > 0) {
+      const state = await assistantMessage
+        .locator(".status-badge[data-state]")
+        .first()
+        .getAttribute("data-state");
+      const content = (
+        await assistantMessage.locator(".safe-markdown").innerText()
+      ).trim();
+      if (state === "FAILED") return { failedResult: content };
+      if (state === "COMPLETED") {
+        throw new Error(
+          `System assistant completed without the expected plan: ${content}`,
+        );
+      }
+    }
+    await page.waitForTimeout(250);
+  }
+  throw new Error(
+    `System assistant did not produce a terminal turn or plan containing ${expectedText}`,
+  );
+}
+
+function retryableProviderResult(renderedResult: string): string | undefined {
+  const normalized = renderedResult
+    .normalize("NFKC")
+    .replace(/[^A-Za-z]/g, "")
+    .toUpperCase();
+  return retryableProviderTurnResults.get(normalized);
+}
+
 async function applyLatestKodexPlan(
   page: Page,
+  prompt: string,
   expectedText: string,
 ): Promise<void> {
   const dialog = page.getByRole("dialog", { name: "Kodex" });
-  const planCard = dialog.locator(".assistant-plan-card").last();
-  await expect(planCard).toContainText(expectedText, { timeout: 120_000 });
+  const planCard = await requestLatestKodexPlan(page, prompt, expectedText);
   await planCard.getByRole("button", { name: "Открыть план" }).click();
   const validate = dialog.getByRole("button", { name: "Проверить ревизию" });
   if ((await validate.count()) > 0) {
@@ -293,11 +395,7 @@ test.describe("web-only fresh installation", () => {
       "Проект не связан с Git, Kubernetes, Mattermost или другой внешней интеграцией.",
       "Не создавай другие объекты.",
     ].join(" ");
-    await page
-      .getByPlaceholder("Опишите, что нужно настроить или запустить")
-      .fill(prompt);
-    await page.getByRole("button", { name: "Отправить помощнику" }).click();
-    await applyLatestKodexPlan(page, projectName);
+    await applyLatestKodexPlan(page, prompt, projectName);
 
     await gotoWithRetry(page, "/projects");
     const projectLink = page.getByRole("link", {
@@ -373,7 +471,9 @@ test.describe("web-only fresh installation", () => {
     await waitForTerminalSuccess(page);
     const usageBeforeReload = await readRunUsage(page, firstRunRef);
     assertValidMeasuredUsage(usageBeforeReload);
-    await expect(page.locator(".token-usage")).toContainText(
+    const renderedUsage = page.getByLabel("Использование токенов");
+    await expect(renderedUsage).toBeVisible();
+    await expect(renderedUsage).toContainText(
       new Intl.NumberFormat("ru-RU").format(usageBeforeReload.totalTokens),
     );
     await page.reload();
@@ -552,7 +652,10 @@ test.describe("web-only fresh installation", () => {
     }, coordinatorRef);
     expect(originalInstructions).not.toBe("");
     const updatedInstructions = `${originalInstructions}\nВторая опубликованная версия для проверки контролируемого отката.`;
-    await instructionsPanel.locator("textarea").fill(updatedInstructions);
+    const instructionsEditor = instructionsPanel.getByRole("textbox", {
+      name: "Markdown-шаблон инструкций",
+    });
+    await instructionsEditor.fill(updatedInstructions);
     const saveResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "POST" &&
@@ -629,9 +732,7 @@ test.describe("web-only fresh installation", () => {
 
     await expect(history.locator("li")).toHaveCount(initialVersionCount + 2);
     await expect(history.locator("li").first()).toContainText("Текущая");
-    await expect(instructionsPanel.locator("textarea")).toHaveValue(
-      originalInstructions,
-    );
+    await expect(instructionsEditor).toHaveText(originalInstructions);
     const publishedAfterRollback = await page.evaluate(async (agentRef) => {
       const response = await fetch(
         `/api/v1/agents/${encodeURIComponent(agentRef)}`,
@@ -668,11 +769,7 @@ test.describe("web-only fresh installation", () => {
         "Инструкции: оценивай факты, отмечай допущения и отвечай по-русски.",
         "Не запускай его и не меняй другие объекты.",
       ].join(" ");
-      await page
-        .getByPlaceholder("Опишите, что нужно настроить или запустить")
-        .fill(prompt);
-      await page.getByRole("button", { name: "Отправить помощнику" }).click();
-      await applyLatestKodexPlan(page, analystName);
+      await applyLatestKodexPlan(page, prompt, analystName);
 
       await gotoWithRetry(page, `/projects/${projectRef}/agents`);
       const analystLink = page.getByRole("link", {
@@ -718,14 +815,8 @@ test.describe("web-only fresh installation", () => {
     await expect(dialog).toContainText(projectName);
     const purpose =
       "Квалификация входящих лидов с явной проверкой полноты коммерческого предложения.";
-    await dialog
-      .getByPlaceholder("Опишите, что нужно настроить или запустить")
-      .fill(
-        `Для текущего Проекта измени только назначение на «${purpose}». Не меняй и не создавай другие объекты.`,
-      );
-    await dialog.getByRole("button", { name: "Отправить помощнику" }).click();
-    const planCard = dialog.locator(".assistant-plan-card").last();
-    await expect(planCard).toContainText(projectName, { timeout: 120_000 });
+    const prompt = `Для текущего Проекта измени только назначение на «${purpose}». Не меняй и не создавай другие объекты.`;
+    const planCard = await requestLatestKodexPlan(page, prompt, projectName);
     await expect(planCard).toContainText(purpose);
     await planCard.getByRole("button", { name: "Открыть план" }).click();
 
@@ -742,12 +833,11 @@ test.describe("web-only fresh installation", () => {
     await expect(
       operation.getByLabel("Описание и последствия"),
     ).not.toHaveValue("");
-    await expect(operation.locator(".assistant-plan-target")).toContainText(
-      projectName,
-    );
-    await expect(operation.locator("details")).toContainText(
-      "Текущее состояние",
-    );
+    const target = operation.getByRole("group", { name: "Объект" });
+    await expect(
+      target.getByRole("textbox", { name: "Название объекта" }),
+    ).toHaveValue(projectName);
+    await expect(operation.getByLabel("Текущее состояние")).not.toHaveValue("");
     const parameters = operation.getByLabel("Явные параметры операции, JSON");
     const after = operation.getByLabel("Состояние после операции, JSON");
     expect(JSON.parse(await parameters.inputValue())).toMatchObject({
@@ -775,6 +865,19 @@ test.describe("web-only fresh installation", () => {
       await page
         .getByLabel("Описание")
         .fill("Несекретное окружение для проверки следующей RuntimeRevision.");
+      await page.getByRole("button", { name: "Образ и инструменты" }).click();
+      await page
+        .getByRole("button", {
+          name: "Выберите собранный и promoted образ",
+        })
+        .click();
+      const imagePicker = page.getByRole("dialog", {
+        name: "Найти promoted образ",
+      });
+      const imageOption = imagePicker.getByRole("option").first();
+      await expect(imageOption).toBeVisible();
+      await imageOption.click();
+      await page.getByRole("button", { name: "Переменные" }).click();
       await page.getByRole("button", { name: "Добавить переменную" }).click();
       await page.getByLabel("Имя переменной").fill("E2E_MODE");
       await page.getByLabel("Несекретное значение").fill("redesign");
@@ -789,6 +892,7 @@ test.describe("web-only fresh installation", () => {
       await expect(page).toHaveURL(/\/environments\/[^/]+$/);
       runtimeEnvironmentRef = routeRef(page, "environments");
       persistRefs();
+      await page.getByRole("button", { name: "Переменные" }).click();
       await expect(page.getByLabel("Имя переменной")).toHaveValue("E2E_MODE");
     }
 
@@ -867,9 +971,9 @@ test.describe("web-only fresh installation", () => {
       runtimePanel.locator(".runtime-history > div"),
     ).not.toHaveCount(0);
 
-    const overlayEditor = runtimePanel
-      .locator(".toml-editor")
-      .filter({ hasText: "Черновик overlay" });
+    const overlayEditor = runtimePanel.getByRole("textbox", {
+      name: "Overlay config.toml",
+    });
     const readOverlayState = async (): Promise<{
       draftContent?: string;
       draftState?: string;
@@ -897,7 +1001,7 @@ test.describe("web-only fresh installation", () => {
     let overlayState = await readOverlayState();
     if (overlayState.publishedContent !== runtimeOverlay) {
       if (overlayState.draftContent !== runtimeOverlay) {
-        await overlayEditor.locator("textarea").fill(runtimeOverlay);
+        await overlayEditor.fill(runtimeOverlay);
         const draftCreation = page.waitForResponse(
           (response) =>
             response.request().method() === "POST" &&
@@ -935,12 +1039,12 @@ test.describe("web-only fresh installation", () => {
         .click();
       expect((await publication).status()).toBe(200);
     }
-    await expect(
-      runtimePanel
-        .locator(".toml-editor")
-        .filter({ hasText: "Безопасное представление" })
-        .locator("textarea"),
-    ).toHaveValue(/model_reasoning_effort = "high"/);
+    const effectiveConfig = runtimePanel.getByRole("textbox", {
+      name: "Безопасный effective config",
+    });
+    await expect(effectiveConfig).toContainText(
+      'model_reasoning_effort = "high"',
+    );
 
     const environmentPicker = runtimePanel.locator(
       ".runtime-row--picker [role=combobox]",
@@ -1042,10 +1146,10 @@ test.describe("web-only fresh installation", () => {
       name: new RegExp(uploadedFileName),
     });
     if ((await existing.count()) === 0) {
-      const uploadButton = page
-        .locator('button[type="button"]')
-        .filter({ hasText: "Загрузить файл" })
-        .first();
+      const uploadButton = page.getByRole("button", {
+        name: "Загрузить",
+        exact: true,
+      });
       await expect(uploadButton).toBeVisible();
       const uploadResponse = page.waitForResponse(
         (response) =>
@@ -1654,11 +1758,7 @@ test.describe("web-only fresh installation", () => {
         "Для второго этапа требуется решение человека с вариантами APPROVE, REJECT и REQUEST_CHANGES. Максимальная параллельность — 2, timeout Процесса — 7200 секунд.",
         "Не создавай и не меняй сотрудников, не запускай Процесс и не создавай другие объекты.",
       ].join(" ");
-      await page
-        .getByPlaceholder("Опишите, что нужно настроить или запустить")
-        .fill(prompt);
-      await page.getByRole("button", { name: "Отправить помощнику" }).click();
-      await applyLatestKodexPlan(page, workflowName);
+      await applyLatestKodexPlan(page, prompt, workflowName);
 
       await gotoWithRetry(page, `/projects/${projectRef}/workflows`);
       const workflowLink = page.getByRole("link", {
@@ -1732,16 +1832,17 @@ test.describe("web-only fresh installation", () => {
       await expectRunState(page, /В очереди|Выполняется/);
     }
     await expectRunState(page, "Ждёт решения");
-    await expect(page.locator(".canvas-node")).toHaveCount(6, {
+    const graphNodes = page
+      .getByRole("region", { name: "Граф выполнения" })
+      .locator('[role="button"][data-node-ref]');
+    await expect(graphNodes).toHaveCount(6, {
       timeout: 300_000,
     });
     await expect
       .poll(() =>
-        page
-          .locator(".canvas-node strong[title]")
-          .evaluateAll((labels) =>
-            labels.map((label) => label.getAttribute("title") ?? ""),
-          ),
+        graphNodes.evaluateAll((nodes) =>
+          nodes.map((node) => node.getAttribute("aria-label") ?? ""),
+        ),
       )
       .toEqual(expect.arrayContaining([analystName, writerName]));
     const authoritativeGraph = await page.evaluate(async (runRef) => {
@@ -1924,7 +2025,10 @@ test.describe("web-only fresh installation", () => {
     await page.getByRole("button", { name: "Отменить запуск" }).click();
     await expectRunState(page, "Отменён");
     await expect(
-      page.locator(".canvas-node").filter({ hasText: "Отменён" }).first(),
+      page
+        .getByRole("region", { name: "Граф выполнения" })
+        .getByRole("button", { name: /Сессия.*Отменён/ })
+        .first(),
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Повторить попытку" }).click();

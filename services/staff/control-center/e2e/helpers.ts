@@ -54,7 +54,7 @@ export async function waitForConnected(
   page: Page,
   timeout = 30_000,
 ): Promise<void> {
-  const connection = page.locator('.connection-badge[data-state="CONNECTED"]');
+  const connection = page.getByRole("status", { name: "Подключено" });
   await expect(connection).toBeVisible({ timeout });
 }
 
@@ -156,7 +156,8 @@ export async function waitForTerminalSuccess(page: Page): Promise<void> {
 
 export async function assertNoDuplicateGraphNodes(page: Page): Promise<void> {
   const refs = await page
-    .locator(".canvas-node")
+    .getByRole("region", { name: "Граф выполнения" })
+    .locator('[role="button"][data-node-ref]')
     .evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute("data-node-ref") ?? ""),
     );

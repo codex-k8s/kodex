@@ -35,10 +35,7 @@ test("mobile shell, помощник и граф доступны без гор�
     page.getByRole("navigation", { name: "Навигация Проекта" }),
   ).toBeVisible();
 
-  await page
-    .getByRole("button", { name: /^Помощник/ })
-    .first()
-    .click();
+  await page.getByRole("button", { name: "Открыть Kodex" }).click();
   await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
   await expect(
     page.getByLabel("Опишите, что нужно настроить или запустить"),
