@@ -497,10 +497,8 @@ OIDC_HOST="$oidc_host" yq -i '
   with(select(.kind == "Deployment");
     (.spec.template.spec.containers[] |
       select(.name == "internal-rpc-authority-issuer" or
-        .name == "internal-rpc-authority-verifier") | .env) =
-      (((.spec.template.spec.containers[] |
-        select(.name == "internal-rpc-authority-issuer" or
-          .name == "internal-rpc-authority-verifier") | .env // []) |
+        .name == "internal-rpc-authority-verifier") | .env) |=
+      (((. // []) |
         map(select(.name != "INTERNAL_RPC_AUTHORITY_READINESS_TIMEOUT"))) +
         [{"name":"INTERNAL_RPC_AUTHORITY_READINESS_TIMEOUT","value":"5s"}])
   )
@@ -904,6 +902,36 @@ yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center"
   fail 'frontend development workload is absent'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$output" >/dev/null ||
   fail 'Control Plane development workload is absent'
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  [
+    .[] |
+    select(.kind == "Deployment") as $deployment |
+    $deployment.spec.template.spec.containers[] |
+    select(
+      .name == "internal-rpc-authority-issuer" or
+      .name == "internal-rpc-authority-verifier"
+    ) as $container |
+    ($container.name | sub("^internal-rpc-authority-"; "")) as $role |
+    ("internal-rpc-authority-" + $deployment.metadata.name + "-" + $role + "-postgresql") as $expected |
+    ($container.env[] |
+      select(.name == "INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER") |
+      .valueFrom.secretKeyRef.name) as $identitySecret |
+    ($container.volumeMounts[] |
+      select(.mountPath == "/var/run/secrets/kodex/internal-rpc-authority/postgres") |
+      .name) as $databaseVolume |
+    ($deployment.spec.template.spec.volumes[] |
+      select(.name == $databaseVolume) |
+      .secret.secretName) as $databaseSecret |
+    select($identitySecret != $expected or $databaseSecret != $expected) |
+    {
+      workload: $deployment.metadata.name,
+      role: $role,
+      expected: $expected,
+      identitySecret: $identitySecret,
+      databaseSecret: $databaseSecret
+    }
+  ] | length == 0
+' >/dev/null || fail 'authority PostgreSQL identity render is inconsistent'
 yq -o=json -I=0 '.' "$output" | jq -s -e '
   any(.[]; .kind == "Namespace" and .metadata.name == "kodex-runtime") and
   any(.[];
