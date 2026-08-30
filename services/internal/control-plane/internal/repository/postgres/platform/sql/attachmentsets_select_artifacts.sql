@@ -20,8 +20,4 @@ JOIN control_plane.artifacts AS artifact
  AND artifact.ref = requested.ref
  AND artifact.scan_state = 'CLEAN'
  AND artifact.lifecycle_state = 'ACTIVE'
- AND (
-      NULLIF(@project_id, '') IS NOT NULL
-      OR artifact.created_by = @created_by::uuid
- )
 ORDER BY requested.position;

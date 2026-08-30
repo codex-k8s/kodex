@@ -6,6 +6,7 @@ export const attachmentUploadConcurrency = 2;
 export type AttachmentUploadState =
   | "QUEUED"
   | "UPLOADING"
+  | "SCANNING"
   | "UPLOADED"
   | "FAILED";
 
@@ -29,10 +30,10 @@ export interface AttachmentUploadProgress {
 export interface AttachmentUploadRequest {
   signal: AbortSignal;
   onProgress: (progress: AttachmentUploadProgress) => void;
+  onScanning: () => void;
 }
 
 export interface AttachmentComposerState {
-  refs: string[];
   count: number;
   uploadedCount: number;
   totalBytes: number;
@@ -40,6 +41,11 @@ export interface AttachmentComposerState {
   hasErrors: boolean;
   overLimit: boolean;
   ready: boolean;
+  attachmentSetRef?: string;
+}
+
+export interface AttachmentSelectionState extends AttachmentComposerState {
+  references: string[];
 }
 
 export interface ExistingAttachmentSelection {
@@ -51,6 +57,7 @@ export interface ExistingAttachmentSelection {
 
 export interface AttachmentComposerHandle {
   clear: () => void;
+  finalize: () => Promise<string | undefined>;
 }
 
 export interface AttachmentUploadQueueOptions {
@@ -91,19 +98,19 @@ export function stageAttachments(
 export function attachmentQueueState(
   items: readonly AttachmentUploadQueueItem[],
   reservedBytes = 0,
-): AttachmentComposerState {
+): AttachmentSelectionState {
   const totalBytes =
     reservedBytes + items.reduce((total, item) => total + item.size, 0);
   const refs = items.flatMap((item) =>
     item.state === "UPLOADED" && item.artifactRef ? [item.artifactRef] : [],
   );
-  const busy = items.some(
-    (item) => item.state === "QUEUED" || item.state === "UPLOADING",
+  const busy = items.some((item) =>
+    ["QUEUED", "UPLOADING", "SCANNING"].includes(item.state),
   );
   const hasErrors = items.some((item) => item.state === "FAILED");
   const overLimit = totalBytes > attachmentAggregateLimitBytes;
   return {
-    refs,
+    references: refs,
     count: items.length,
     uploadedCount: refs.length,
     totalBytes,
@@ -115,20 +122,20 @@ export function attachmentQueueState(
 }
 
 export function attachmentComposerState(
-  uploadState: AttachmentComposerState,
+  uploadState: AttachmentSelectionState,
   existing: readonly ExistingAttachmentSelection[],
-): AttachmentComposerState {
+): AttachmentSelectionState {
   const selected = new Map(existing.map((item) => [item.ref, item]));
-  const refs = [
+  const references = [
     ...selected.keys(),
-    ...uploadState.refs.filter((reference) => !selected.has(reference)),
+    ...uploadState.references.filter((reference) => !selected.has(reference)),
   ];
   const totalBytes =
     uploadState.totalBytes +
     [...selected.values()].reduce((total, item) => total + item.size, 0);
   const overLimit = totalBytes > attachmentAggregateLimitBytes;
   return {
-    refs,
+    references,
     count: uploadState.count + selected.size,
     uploadedCount: uploadState.uploadedCount + selected.size,
     totalBytes,
@@ -222,6 +229,15 @@ export function createAttachmentUploadQueue(
             loadedBytes: progress.loadedBytes,
             totalBytes: progress.totalBytes,
           };
+        },
+        onScanning: () => {
+          const current = items.value.find(
+            (candidate) => candidate.key === key,
+          );
+          if (current === item && current.state === "UPLOADING") {
+            current.state = "SCANNING";
+            current.progress = undefined;
+          }
         },
       });
       const current = items.value.find((candidate) => candidate.key === key);

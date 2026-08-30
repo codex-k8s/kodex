@@ -128,6 +128,14 @@ func artifactLifecycleState(value string) controlplanev1.ArtifactLifecycleState 
 	raw := controlplanev1.ArtifactLifecycleState_value["ARTIFACT_LIFECYCLE_STATE_"+value]
 	return controlplanev1.ArtifactLifecycleState(raw)
 }
+
+func attachmentSetState(value string) controlplanev1.AttachmentSetState {
+	return controlplanev1.AttachmentSetState(controlplanev1.AttachmentSetState_value["ATTACHMENT_SET_STATE_"+value])
+}
+
+func attachmentSetPurpose(value string) controlplanev1.AttachmentSetPurpose {
+	return controlplanev1.AttachmentSetPurpose(controlplanev1.AttachmentSetPurpose_value["ATTACHMENT_SET_PURPOSE_"+value])
+}
 func scheduleState(schedule entity.Schedule) controlplanev1.ScheduleState {
 	switch schedule.State {
 	case "ARCHIVED":
@@ -391,7 +399,7 @@ func usageFromProto(value *controlplanev1.TokenUsage) entity.TokenUsage {
 	return entity.TokenUsage{TotalTokens: value.GetTotalTokens(), InputTokens: value.GetInputTokens(), CachedInputTokens: value.GetCachedInputTokens(), CacheWriteInputTokens: value.GetCacheWriteInputTokens(), OutputTokens: value.GetOutputTokens(), ReasoningOutputTokens: value.GetReasoningOutputTokens(), ModelContextWindow: value.GetModelContextWindow()}
 }
 func castRun(value entity.Run) *controlplanev1.Run {
-	result := &controlplanev1.Run{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, SessionRef: value.SessionRef, RootRunRef: value.RootRunRef, ParentRunRef: value.ParentRunRef, RetryOfRunRef: value.RetryOfRunRef, Target: castRunTarget(value.Target), Title: value.Title, TitleSource: value.TitleSource, ActivitySummary: value.ActivitySummary, InputSummary: value.Task, State: runState(value.State), Source: runSource(value.Source), Initiator: &controlplanev1.UserSummary{DisplayName: value.InitiatorName}, Attempt: value.Attempt, GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, Usage: castTokenUsage(value.Usage), InputArtifactRefs: value.InputArtifactRefs, ArtifactRefs: value.ArtifactRefs, GateRefs: value.GateRefs, CreatedAt: timestamp(value.CreatedAt), StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
+	result := &controlplanev1.Run{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, SessionRef: value.SessionRef, RootRunRef: value.RootRunRef, ParentRunRef: value.ParentRunRef, RetryOfRunRef: value.RetryOfRunRef, Target: castRunTarget(value.Target), Title: value.Title, TitleSource: value.TitleSource, ActivitySummary: value.ActivitySummary, InputSummary: value.Task, State: runState(value.State), Source: runSource(value.Source), Initiator: &controlplanev1.UserSummary{DisplayName: value.InitiatorName}, Attempt: value.Attempt, GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, Usage: castTokenUsage(value.Usage), InputAttachmentSetRef: value.InputAttachmentSetRef, ArtifactRefs: value.ArtifactRefs, GateRefs: value.GateRefs, CreatedAt: timestamp(value.CreatedAt), StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
 	for _, incident := range value.Incidents {
 		result.Incidents = append(result.Incidents, castIncident(incident))
 	}
@@ -442,7 +450,7 @@ func castGraph(value entity.RunGraph) *controlplanev1.RunGraph {
 	return result
 }
 func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
-	gate := &controlplanev1.OwnerGate{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, NodeRef: value.NodeRef, Title: value.Title, ContextSummary: value.ContextSummary, ConsequencesSummary: value.Prompt, RequestedBy: &controlplanev1.UserSummary{Ref: value.RequestedByRef, DisplayName: value.RequestedByName}, State: gateState(value.State), AllowedDecisions: gateDecisions(value.AllowedDecisions), Decision: gateDecision(value.Decision), DecisionComment: value.DecisionComment, OpenedAt: timestamp(value.CreatedAt), DecidedAt: optionalTimestamp(value.ResolvedAt), ArtifactRefs: value.ArtifactRefs, NextActions: nextActions(value.NextActions)}
+	gate := &controlplanev1.OwnerGate{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, NodeRef: value.NodeRef, Title: value.Title, ContextSummary: value.ContextSummary, ConsequencesSummary: value.Prompt, RequestedBy: &controlplanev1.UserSummary{Ref: value.RequestedByRef, DisplayName: value.RequestedByName}, State: gateState(value.State), AllowedDecisions: gateDecisions(value.AllowedDecisions), Decision: gateDecision(value.Decision), DecisionComment: value.DecisionComment, OpenedAt: timestamp(value.CreatedAt), DecidedAt: optionalTimestamp(value.ResolvedAt), ResolutionAttachmentSetRef: value.ResolutionAttachmentSetRef, NextActions: nextActions(value.NextActions)}
 	if value.ResolvedByName != "" {
 		gate.DecidedBy = &controlplanev1.UserSummary{DisplayName: value.ResolvedByName}
 	}
@@ -450,6 +458,20 @@ func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
 }
 func castArtifact(value entity.Artifact) *controlplanev1.Artifact {
 	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, SessionRef: value.SessionRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: artifactSource(value.Source), Revision: int32(value.Revision), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions), Digest: value.Digest, LifecycleState: artifactLifecycleState(value.LifecycleState), DeletedAt: optionalTimestamp(value.DeletedAt), PurgeAfter: optionalTimestamp(value.PurgeAfter)}
+}
+func castAttachmentSet(value entity.AttachmentSet) *controlplanev1.AttachmentSet {
+	result := &controlplanev1.AttachmentSet{Ref: value.Ref, FamilyRef: value.FamilyRef, Revision: value.Revision,
+		Version: value.Version, ProjectRef: value.ProjectRef, State: attachmentSetState(value.State),
+		Purpose: attachmentSetPurpose(value.Purpose), Source: value.Source, ItemCount: value.ItemCount,
+		TotalSizeBytes: value.TotalSizeBytes, ManifestDigest: value.ManifestDigest, CreatedAt: timestamp(value.CreatedAt),
+		FinalizedAt: optionalTimestamp(value.FinalizedAt), Superseded: value.Superseded}
+	for _, item := range value.Items {
+		result.Items = append(result.Items, &controlplanev1.AttachmentSetItem{ArtifactRef: item.ArtifactRef,
+			ArtifactRevision: item.ArtifactRevision, ArtifactVersion: item.ArtifactVersion,
+			DisplayName: item.DisplayName, MediaType: item.MediaType, SizeBytes: item.SizeBytes,
+			Digest: item.Digest, Source: artifactSource(item.Source), Position: item.Position})
+	}
+	return result
 }
 func castSchedule(value entity.Schedule) *controlplanev1.Schedule {
 	return &controlplanev1.Schedule{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Target: castRunTarget(value.Target), State: scheduleState(value), Preset: value.Preset, CronExpression: value.CronExpression, Timezone: value.Timezone, Input: structure(value.Input), SessionPolicy: value.SessionPolicy, NotificationPolicy: value.NotificationPolicy, NextRunAt: optionalTimestamp(value.NextRunAt), NextActions: nextActions(value.NextActions), TimeOfDay: value.TimeOfDay, DayOfWeek: value.DayOfWeek}
@@ -576,7 +598,7 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 		TitleSource: value.TitleSource, TitleRevision: value.TitleRevision, ProjectRef: value.ProjectRef,
 		Context: context, UpdatedAt: timestamp(value.UpdatedAt)}
 	for index, turn := range value.Turns {
-		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: int64(index + 1), Role: turn.Actor, Content: turn.Content, State: turn.State, CreatedAt: timestamp(turn.CreatedAt)})
+		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: int64(index + 1), Role: turn.Actor, Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, CreatedAt: timestamp(turn.CreatedAt)})
 	}
 	if value.LatestPlan != nil {
 		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: value.LatestPlan.Ref, Sequence: int64(len(result.Turns) + 1), Role: "ASSISTANT", Content: value.LatestPlan.Summary, State: "COMPLETED", Plan: castPlan(value.LatestPlan), CreatedAt: timestamp(value.LatestPlan.CreatedAt)})

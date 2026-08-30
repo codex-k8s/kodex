@@ -75,6 +75,28 @@ var (
 	bootstrapComponentIntegrationInvocationEffectKeyQuery string
 )
 
+func finalizedAttachmentSetRef(t *testing.T, ctx context.Context, service *platformservice.Service,
+	principal value.Principal, projectRef, purpose, key string, artifactRefs ...string,
+) string {
+	t.Helper()
+	draft, err := service.Execute(ctx, command.Command{Kind: command.CreateAttachmentSetDraft, Principal: principal,
+		Mutation: value.Mutation{IdempotencyKey: key + "-draft"}, Payload: command.AttachmentSetDraftInput{
+			ProjectRef: projectRef, Purpose: purpose, ArtifactRefs: artifactRefs,
+		}})
+	if err != nil || draft.AttachmentSet == nil {
+		t.Fatalf("create attachment set draft: set=%#v err=%v", draft.AttachmentSet, err)
+	}
+	version := draft.AttachmentSet.Version
+	finalized, err := service.Execute(ctx, command.Command{Kind: command.FinalizeAttachmentSet, Principal: principal,
+		Mutation: value.Mutation{IdempotencyKey: key + "-finalize", ExpectedVersion: &version},
+		Payload:  command.AttachmentSetDraftInput{AttachmentSetRef: draft.AttachmentSet.Ref},
+	})
+	if err != nil || finalized.AttachmentSet == nil || finalized.AttachmentSet.State != "FINALIZED" {
+		t.Fatalf("finalize attachment set: set=%#v err=%v", finalized.AttachmentSet, err)
+	}
+	return finalized.AttachmentSet.Ref
+}
+
 func TestBootstrapComponent(t *testing.T) {
 	dsn := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")
 	if dsn == "" {
@@ -2120,11 +2142,13 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	if err != nil {
 		t.Fatalf("upload delegation artifact: %v", err)
 	}
+	workflowAttachmentSetRef := finalizedAttachmentSetRef(t, ctx, service, owner, project.Project.Ref,
+		"WORKFLOW_INPUT", "delegation-attachment-set", workflowArtifact.Ref)
 	if _, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "delegation-launch-without-files"}, Payload: command.LaunchRunInput{
 			ProjectRef: project.Project.Ref, Title: "Prepare campaign with artifact", Task: "Coordinate the attached campaign brief.",
 			Target: entity.RunTarget{Type: "WORKFLOW", Ref: publishedWorkflow.Workflow.Ref}, Input: map[string]any{"campaign": "Autumn"},
-			ArtifactRefs: []string{workflowArtifact.Ref},
+			AttachmentSetRef: workflowAttachmentSetRef,
 		}}); !errors.Is(err, domainerrs.ErrCapabilityRequired) {
 		t.Fatalf("launch workflow with artifact without Files capability: %v", err)
 	}
@@ -2357,10 +2381,12 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || uploaded.ScanState != "CLEAN" || uploaded.MediaType != "text/markdown" || uploaded.Revision != 1 || uploaded.Source != "CONTROL_CENTER" {
 		t.Fatalf("upload knowledge artifact: artifact=%#v err=%v", uploaded, err)
 	}
+	uploadedSetRef := finalizedAttachmentSetRef(t, ctx, service, owner, project.Project.Ref,
+		"RUN_INPUT", "lifecycle-attachment-set-without-capability", uploaded.Ref)
 	if _, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "lifecycle-launch-without-files"}, Payload: command.LaunchRunInput{
 			ProjectRef: project.Project.Ref, Title: "Answer with attachment", Task: "Use the attached support policy.",
-			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Agent.Ref}, ArtifactRefs: []string{uploaded.Ref},
+			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Agent.Ref}, AttachmentSetRef: uploadedSetRef,
 		}}); !errors.Is(err, domainerrs.ErrCapabilityRequired) {
 		t.Fatalf("launch agent with artifact without Files capability: %v", err)
 	}
@@ -2451,11 +2477,13 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	}); !errors.Is(err, domainerrs.ErrIdempotencyReuse) {
 		t.Fatalf("same artifact key with different content: %v", err)
 	}
+	runAttachmentSetRef := finalizedAttachmentSetRef(t, ctx, service, owner, project.Project.Ref,
+		"RUN_INPUT", "lifecycle-run-attachment-set", secondRevision.Ref)
 	launch, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "lifecycle-launch-1"}, Payload: command.LaunchRunInput{
 			ProjectRef: project.Project.Ref, Title: "Answer customer", TitleSource: "USER_EDITED", Task: "Prepare an answer about delivery status.",
 			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Agent.Ref}, Input: map[string]any{"ticket": "SUP-42"},
-			ArtifactRefs: []string{secondRevision.Ref},
+			AttachmentSetRef: runAttachmentSetRef,
 		}})
 	if err != nil || launch.Run == nil || launch.Graph == nil || launch.Run.State != "RUNNING" || launch.Run.TitleSource != "USER_EDITED" || len(launch.Graph.Nodes) != 2 {
 		t.Fatalf("launch direct run: run=%#v graph=%#v err=%v", launch.Run, launch.Graph, err)
@@ -2676,6 +2704,8 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if err != nil || assistantInput.ProjectRef != "" || assistantInput.ScanState != "CLEAN" {
 		t.Fatalf("upload organization-scoped assistant artifact: artifact=%#v err=%v", assistantInput, err)
 	}
+	assistantAttachmentSetRef := finalizedAttachmentSetRef(t, ctx, service, owner, "",
+		"ASSISTANT_MESSAGE", "assistant-attachment-set", assistantInput.Ref)
 	organizationArtifacts, _, err := service.ListArtifacts(ctx, owner, query.Filter{
 		Query: "organization-policy", ArtifactType: "TEXT", ScanState: "CLEAN", SourceKind: "CONTROL_CENTER", Page: query.Page{Size: 10},
 	})
@@ -2699,7 +2729,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	}
 	turn, err := service.Execute(ctx, command.Command{Kind: command.AddAssistantTurn, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-turn-1"}, Payload: command.AssistantTurnInput{
-			ConversationRef: created.Conversation.Ref, Content: "Create a sales project", ArtifactRefs: []string{assistantInput.Ref},
+			ConversationRef: created.Conversation.Ref, Content: "Create a sales project", AttachmentSetRef: assistantAttachmentSetRef,
 		}})
 	if err != nil || turn.Plan != nil {
 		t.Fatalf("queue assistant turn without keyword fallback: plan=%#v err=%v", turn.Plan, err)

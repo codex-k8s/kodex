@@ -118,6 +118,17 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "", resolvedAccessTarget{}, errs.ErrInvalid
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, permission, "ARTIFACT", payload.ArtifactRef, "")
+	case command.AttachmentSetDraftInput:
+		projectRef := payload.ProjectRef
+		if input.Kind != command.CreateAttachmentSetDraft {
+			if err := tx.QueryRow(ctx, queryAttachmentSetsProjectByRef, current.organizationID, payload.AttachmentSetRef).Scan(&projectRef); err != nil {
+				return "", resolvedAccessTarget{}, errs.ErrNotFound
+			}
+		}
+		if projectRef == "" {
+			return "organization.view", organization, nil
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "project.view", "PROJECT", projectRef, projectRef)
 	case command.ScheduleInput:
 		if input.Kind == command.CreateSchedule {
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)

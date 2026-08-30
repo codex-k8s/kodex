@@ -83,19 +83,33 @@ type RunnerAssistantContext struct {
 	AllowedOperations []string `json:"allowed_operations"`
 }
 
+// RunnerAttachmentSet связывает один finalized set с его точным местом в
+// RuntimeRevision. Scope и provenance назначаются control-plane.
+type RunnerAttachmentSet struct {
+	Ref            string `json:"ref"`
+	ManifestDigest string `json:"manifest_digest"`
+	Purpose        string `json:"purpose"`
+	Scope          string `json:"scope"`
+	Provenance     string `json:"provenance"`
+	TurnRef        string `json:"turn_ref,omitempty"`
+}
+
 // RunnerInputArtifact описывает exact версию входного либо knowledge artifact.
 // Байты передаются отдельно через execution-scoped callback и сверяются runner.
 type RunnerInputArtifact struct {
-	Ref       string `json:"ref"`
-	FileName  string `json:"file_name"`
-	MediaType string `json:"media_type"`
-	Digest    string `json:"digest"`
-	SizeBytes int64  `json:"size_bytes"`
-	Revision  int64  `json:"revision"`
-	Version   int64  `json:"version"`
-	Scope     string `json:"scope"`
-	Position  int64  `json:"position"`
-	Source    string `json:"source"`
+	Ref               string `json:"ref"`
+	FileName          string `json:"file_name"`
+	MediaType         string `json:"media_type"`
+	Digest            string `json:"digest"`
+	SizeBytes         int64  `json:"size_bytes"`
+	Revision          int64  `json:"revision"`
+	Version           int64  `json:"version"`
+	Scope             string `json:"scope"`
+	Position          int64  `json:"position"`
+	Source            string `json:"source"`
+	AttachmentSetRef  string `json:"attachment_set_ref,omitempty"`
+	AttachmentPurpose string `json:"attachment_purpose"`
+	Provenance        string `json:"provenance"`
 }
 
 // RunnerInput — immutable contract одного turn либо always-hot system runtime.
@@ -134,6 +148,7 @@ type RunnerInput struct {
 	AttachmentSetRef            string                    `json:"attachment_set_ref,omitempty"`
 	AttachmentSetManifestDigest string                    `json:"attachment_set_manifest_digest,omitempty"`
 	AttachmentContext           string                    `json:"attachment_context,omitempty"`
+	AttachmentSets              []RunnerAttachmentSet     `json:"attachment_sets,omitempty"`
 	InputArtifacts              []RunnerInputArtifact     `json:"input_artifacts,omitempty"`
 	Capabilities                []string                  `json:"capabilities,omitempty"`
 	Provider                    string                    `json:"provider"`
@@ -199,7 +214,7 @@ func (input RunnerInput) Validate() error {
 		!validSecretFile(input.ExecutionTicketFile) || !validSecretFile(input.ProviderAuthFile) ||
 		!validSecretFile(input.ProviderAuthSHA256File) || input.WorkspaceRoot != "/workspace" ||
 		input.OutboxRoot != "/workspace/.kodex/outbox" || input.CodexHome != "/workspace/.kodex/state/codex-home" ||
-		len(input.SessionContext) > 128 || len(input.DelegationTargets) > 128 || len(input.IntegrationGrants) > 256 ||
+		len(input.SessionContext) > 128 || len(input.DelegationTargets) > 128 || len(input.IntegrationGrants) > 256 || len(input.AttachmentSets) > 128 ||
 		len(input.BoundedInput) > 256 || len(input.CodexSessionID) > 255 ||
 		!validSessionContext(input.SessionContext) || !validIntegrationGrants(input.IntegrationGrants) ||
 		!validCapabilities(input.Capabilities) || ValidateRuntimeEnvironment(input.EnvironmentValues, input.SecretProjections) != nil ||
@@ -265,18 +280,21 @@ func (input RunnerInput) Validate() error {
 			seen[operation] = struct{}{}
 		}
 	}
-	hasInputAttachments, err := validateRunnerInputArtifacts(input.InputArtifacts)
+	currentSet, err := validateRunnerAttachmentSets(input.AttachmentSets, input.InputArtifacts)
 	if err != nil {
 		return err
 	}
-	if hasInputAttachments != (opaqueReferencePattern.MatchString(input.AttachmentSetRef) && sha256Pattern.MatchString(input.AttachmentSetManifestDigest)) {
+	if (currentSet != nil) != (opaqueReferencePattern.MatchString(input.AttachmentSetRef) && sha256Pattern.MatchString(input.AttachmentSetManifestDigest)) {
 		return errors.New("runner attachment set binding is invalid")
 	}
-	if !hasInputAttachments && (input.AttachmentSetRef != "" || input.AttachmentSetManifestDigest != "") {
+	if currentSet == nil && (input.AttachmentSetRef != "" || input.AttachmentSetManifestDigest != "") {
 		return errors.New("runner attachment set binding is invalid")
 	}
-	if hasInputAttachments && !containsString([]string{"ASSISTANT_MESSAGE", "SESSION_TURN", "RUN_INPUT", "WORKFLOW_INPUT", "OWNER_GATE_MESSAGE"}, input.AttachmentContext) ||
-		!hasInputAttachments && input.AttachmentContext != "" {
+	if currentSet != nil && (currentSet.Ref != input.AttachmentSetRef || currentSet.ManifestDigest != input.AttachmentSetManifestDigest || currentSet.Purpose != input.AttachmentContext) {
+		return errors.New("runner attachment set binding is invalid")
+	}
+	if currentSet != nil && !containsString([]string{"ASSISTANT_MESSAGE", "SESSION_TURN", "RUN_INPUT", "WORKFLOW_INPUT", "OWNER_GATE_MESSAGE"}, input.AttachmentContext) ||
+		currentSet == nil && input.AttachmentContext != "" {
 		return errors.New("runner attachment context is invalid")
 	}
 	return nil

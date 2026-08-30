@@ -40,7 +40,6 @@ function run(overrides: Partial<Run> = {}): Run {
       reasoningOutputTokens: 0,
       modelContextWindow: 0,
     },
-    inputArtifactRefs: [],
     artifactRefs: [],
     gateRefs: [],
     createdAt: "2026-08-28T10:00:00Z",

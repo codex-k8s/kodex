@@ -8,7 +8,6 @@ import {
   History,
   Play,
   Workflow as WorkflowIcon,
-  X,
 } from "@lucide/vue";
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -18,7 +17,6 @@ import {
   createArtifactPickerLoader,
   createSessionPickerLoader,
 } from "@/features/new-run/api";
-import FileTypeIcon from "@/features/new-run/components/FileTypeIcon.vue";
 import NewRunFilePicker, {
   type NewRunFilePickerLabels,
 } from "@/features/new-run/components/NewRunFilePicker.vue";
@@ -27,7 +25,6 @@ import NewRunSessionPicker, {
 } from "@/features/new-run/components/NewRunSessionPicker.vue";
 import NewRunSessionPolicy from "@/features/new-run/components/NewRunSessionPolicy.vue";
 import {
-  formatFileSize,
   formatTimestamp,
   type NewRunTargetType,
 } from "@/features/new-run/model";
@@ -43,6 +40,7 @@ import {
 import type {
   Agent,
   Artifact,
+  AttachmentSetPurpose,
   Run,
   Workflow,
   WorkflowInputField,
@@ -55,6 +53,7 @@ import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
 import type {
   AttachmentComposerHandle,
   AttachmentComposerState,
+  ExistingAttachmentSelection,
 } from "@/shared/ui/attachment-composer";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -77,7 +76,6 @@ const selectedArtifactItems = ref<Artifact[]>([]);
 const selectedSession = ref<Run>();
 const attachmentComposer = ref<AttachmentComposerHandle>();
 const attachmentState = ref<AttachmentComposerState>({
-  refs: [],
   count: 0,
   uploadedCount: 0,
   totalBytes: 0,
@@ -111,18 +109,18 @@ const selectedWorkflow = computed(() =>
     ? (selectedTarget.value as Workflow | undefined)
     : undefined,
 );
-const selectedArtifactRefs = computed(() =>
-  selectedArtifactItems.value.map((artifact) => artifact.ref),
+const attachmentSelections = computed<ExistingAttachmentSelection[]>(() =>
+  selectedArtifactItems.value.map((artifact) => ({
+    ref: artifact.ref,
+    name: artifact.fileName,
+    mediaType: artifact.mediaType,
+    size: artifact.sizeBytes,
+  })),
 );
-const selectedArtifactBytes = computed(() =>
-  selectedArtifactItems.value.reduce(
-    (total, artifact) => total + artifact.sizeBytes,
-    0,
-  ),
-);
-const inputArtifactRefs = computed(() => [
-  ...new Set([...selectedArtifactRefs.value, ...attachmentState.value.refs]),
-]);
+const attachmentPurpose = computed<AttachmentSetPurpose>(() => {
+  if (sessionMode.value === "CONTINUE") return "SESSION_TURN";
+  return form.targetType === "WORKFLOW" ? "WORKFLOW_INPUT" : "RUN_INPUT";
+});
 const artifactCapability = "platform.artifact.manage";
 const targetSupportsFiles = computed(() => {
   if (!selectedTarget.value) return false;
@@ -151,7 +149,7 @@ const canSubmit = computed(
     Boolean(canLaunch.value) &&
     realtime.platformState.state === "live" &&
     Boolean(selectedTarget.value) &&
-    Boolean(form.title.trim()) &&
+    (sessionMode.value === "CONTINUE" || Boolean(form.title.trim())) &&
     Boolean(form.task.trim()) &&
     attachmentState.value.ready &&
     (sessionMode.value === "NEW" || Boolean(form.sessionRef)),
@@ -315,16 +313,6 @@ function confirmArtifacts(artifacts: Artifact[]): void {
   filePickerOpen.value = false;
 }
 
-function removeArtifact(reference: string): void {
-  selectedArtifactItems.value = selectedArtifactItems.value.filter(
-    (artifact) => artifact.ref !== reference,
-  );
-}
-
-async function uploadAttachment(file: File): Promise<{ ref: string }> {
-  return platform.uploadProjectArtifact(projectRef.value, file);
-}
-
 function inputComponentType(field: WorkflowInputField): string {
   if (field.valueType === "NUMBER") return "number";
   if (field.valueType === "DATE") return "date";
@@ -349,18 +337,23 @@ async function submit(): Promise<void> {
   busy.value = true;
   problem.value = undefined;
   try {
-    const run = await platform.launch({
-      projectRef: projectRef.value,
-      targetRef: form.targetRef,
-      targetType: form.targetType,
-      title: form.title.trim(),
-      task: form.task.trim(),
-      ...(selectedWorkflow.value ? { input: workflowInput() } : {}),
-      artifactRefs: inputArtifactRefs.value,
-      ...(sessionMode.value === "CONTINUE"
-        ? { sessionRef: form.sessionRef }
-        : {}),
-    });
+    const attachmentSetRef = await attachmentComposer.value?.finalize();
+    const run =
+      sessionMode.value === "CONTINUE" && selectedSession.value
+        ? await platform.continueSession(selectedSession.value.sessionRef, {
+            runRef: selectedSession.value.ref,
+            task: form.task.trim(),
+            ...(attachmentSetRef ? { attachmentSetRef } : {}),
+          })
+        : await platform.launch({
+            projectRef: projectRef.value,
+            targetRef: form.targetRef,
+            targetType: form.targetType,
+            title: form.title.trim(),
+            task: form.task.trim(),
+            ...(selectedWorkflow.value ? { input: workflowInput() } : {}),
+            ...(attachmentSetRef ? { attachmentSetRef } : {}),
+          });
     await router.push(runPath(run.ref, projectRef.value));
   } catch (error) {
     problem.value = asProblem(error);
@@ -523,7 +516,7 @@ watch(
                 </small>
               </div>
 
-              <label class="field">
+              <label v-if="sessionMode === 'NEW'" class="field">
                 <span>
                   {{ $t("runs.runTitle") }}
                   <span class="required-mark" aria-hidden="true">*</span>
@@ -555,7 +548,7 @@ watch(
           </section>
 
           <section
-            v-if="selectedWorkflow?.inputFields.length"
+            v-if="sessionMode === 'NEW' && selectedWorkflow?.inputFields.length"
             class="panel new-run-section form-grid"
             aria-labelledby="new-run-workflow-input-title"
           >
@@ -714,9 +707,7 @@ watch(
               <div>
                 <h2 id="new-run-files-title">
                   {{ $t("runs.inputFiles") }}
-                  <span class="count-badge">{{
-                    inputArtifactRefs.length
-                  }}</span>
+                  <span class="count-badge">{{ attachmentState.count }}</span>
                 </h2>
                 <p>
                   {{
@@ -739,49 +730,17 @@ watch(
 
             <AttachmentComposer
               ref="attachmentComposer"
-              :upload="uploadAttachment"
+              :purpose="attachmentPurpose"
+              :project-ref="projectRef"
+              :external-selections="attachmentSelections"
               :disabled="busy || !targetSupportsFiles"
-              :reserved-bytes="selectedArtifactBytes"
               @change="attachmentState = $event"
             />
 
-            <div v-if="selectedArtifactItems.length" class="selected-files">
-              <div
-                v-for="artifact in selectedArtifactItems"
-                :key="artifact.ref"
-                class="selected-file"
-              >
-                <FileTypeIcon :artifact="artifact" />
-                <span class="selected-file__copy">
-                  <strong :title="artifact.fileName">{{
-                    artifact.fileName
-                  }}</strong>
-                  <small>
-                    {{ formatFileSize(artifact.sizeBytes, locale) }} ·
-                    {{ $t("common.version", { version: artifact.revision }) }} ·
-                    {{ formatTimestamp(artifact.createdAt, locale) }}
-                  </small>
-                </span>
-                <span class="selected-file__ready">
-                  <Check :size="14" aria-hidden="true" />
-                  {{ $t("runs.fileReady") }}
-                </span>
-                <button
-                  class="icon-action"
-                  type="button"
-                  :aria-label="
-                    $t('runs.newRun.files.remove', { name: artifact.fileName })
-                  "
-                  :title="
-                    $t('runs.newRun.files.remove', { name: artifact.fileName })
-                  "
-                  @click="removeArtifact(artifact.ref)"
-                >
-                  <X :size="17" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div v-else class="selected-files-empty">
+            <div
+              v-if="attachmentState.count === 0"
+              class="selected-files-empty"
+            >
               <Files :size="22" aria-hidden="true" />
               <span>{{ $t("runs.noInputFiles") }}</span>
             </div>
@@ -821,13 +780,13 @@ watch(
                 }}
               </dd>
             </div>
-            <div>
+            <div v-if="sessionMode === 'NEW'">
               <dt>{{ $t("runs.runTitle") }}</dt>
               <dd>{{ form.title || $t("common.noData") }}</dd>
             </div>
             <div>
               <dt>{{ $t("runs.inputFiles") }}</dt>
-              <dd>{{ selectedArtifactItems.length }}</dd>
+              <dd>{{ attachmentState.count }}</dd>
             </div>
             <div>
               <dt>{{ $t("runs.sessionPolicy") }}</dt>

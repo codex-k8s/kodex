@@ -185,6 +185,7 @@ type Repository interface {
 	GetOwnerGate(context.Context, value.Principal, string) (entity.OwnerGate, error)
 	ListArtifacts(context.Context, value.Principal, query.Filter) ([]entity.Artifact, string, error)
 	GetArtifact(context.Context, value.Principal, string) (entity.Artifact, error)
+	GetAttachmentSet(context.Context, value.Principal, string, query.Page) (entity.AttachmentSet, string, error)
 	UploadArtifact(context.Context, value.Principal, value.Mutation, ArtifactUpload) (entity.Artifact, error)
 	DownloadArtifact(context.Context, value.Principal, string, string) (ArtifactDownload, error)
 	PurgeArtifact(context.Context, value.Principal, value.Mutation, string) (string, error)

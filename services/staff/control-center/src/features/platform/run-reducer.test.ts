@@ -47,7 +47,6 @@ function rootRun(): Run {
       reasoningOutputTokens: 0,
       modelContextWindow: 0,
     },
-    inputArtifactRefs: [],
     artifactRefs: [],
     gateRefs: [],
     createdAt: occurredAt,

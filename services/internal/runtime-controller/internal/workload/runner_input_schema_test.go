@@ -91,6 +91,40 @@ func TestRunnerInputSchemaV6CarriesOnlySecretDescriptors(t *testing.T) {
 	}
 }
 
+func TestRunnerInputSchemaV6RejectsDetachedAttachmentLineage(t *testing.T) {
+	compiled, _, _ := loadRunnerInputSchema(t)
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	input, _, err := manager.BuildTurnInput(testExecution(false))
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	raw, err := runtimecontract.EncodeRunnerInput(input)
+	if err != nil {
+		t.Fatalf("EncodeRunnerInput() error = %v", err)
+	}
+
+	tests := map[string]func(map[string]any){
+		"missing turn lineage": func(object map[string]any) {
+			delete(object["attachment_sets"].([]any)[0].(map[string]any), "turn_ref")
+		},
+		"invalid set provenance": func(object map[string]any) {
+			object["attachment_sets"].([]any)[0].(map[string]any)["provenance"] = "SESSION_HISTORY"
+		},
+		"missing artifact set": func(object map[string]any) {
+			delete(object["input_artifacts"].([]any)[0].(map[string]any), "attachment_set_ref")
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			object := decodeJSONInstance(t, raw).(map[string]any)
+			mutate(object)
+			if err := compiled.Validate(object); err == nil {
+				t.Fatal("v6 schema accepted detached attachment provenance")
+			}
+		})
+	}
+}
+
 func loadRunnerInputSchema(t *testing.T) (*jsonschema.Resolved, map[string]json.RawMessage, []string) {
 	t.Helper()
 	root := filepath.Join("..", "..", "..", "..", "..")

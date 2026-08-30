@@ -977,7 +977,7 @@ export type Run = {
     safeErrorCode?: string;
     safeErrorMessage?: string;
     usage: TokenUsage;
-    inputArtifactRefs: Array<OpaqueRef>;
+    inputAttachmentSetRef?: OpaqueRef;
     artifactRefs: Array<OpaqueRef>;
     gateRefs: Array<OpaqueRef>;
     createdAt: Timestamp;
@@ -1107,7 +1107,7 @@ export type RunInput = {
     input?: {
         [key: string]: unknown;
     };
-    artifactRefs?: Array<OpaqueRef>;
+    attachmentSetRef?: OpaqueRef;
     sessionRef?: OpaqueRef;
 };
 
@@ -1120,7 +1120,7 @@ export type TurnInput = {
     runRef: OpaqueRef;
     nodeRef?: OpaqueRef;
     task: string;
-    artifactRefs?: Array<OpaqueRef>;
+    attachmentSetRef?: OpaqueRef;
 };
 
 export type RunPage = {
@@ -1152,14 +1152,14 @@ export type OwnerGate = {
     openedAt: Timestamp;
     expiresAt?: Timestamp;
     decidedAt?: Timestamp;
-    artifactRefs: Array<OpaqueRef>;
+    resolutionAttachmentSetRef?: OpaqueRef;
     nextActions: Array<NextAction>;
 };
 
 export type GateResolution = {
     decision: 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'CANCEL';
     comment?: string;
-    artifactRefs?: Array<OpaqueRef>;
+    attachmentSetRef?: OpaqueRef;
 };
 
 export type GateResolutionReceipt = {
@@ -1198,6 +1198,57 @@ export type ArtifactBindingInput = {
 export type ArtifactPage = {
     items: Array<Artifact>;
     nextPageToken?: string;
+};
+
+export type AttachmentSetPurpose = 'ASSISTANT_MESSAGE' | 'SESSION_TURN' | 'RUN_INPUT' | 'WORKFLOW_INPUT' | 'OWNER_GATE_MESSAGE';
+
+export type AttachmentSetItem = {
+    artifactRef: OpaqueRef;
+    artifactRevision: number;
+    artifactVersion: number;
+    displayName: string;
+    mediaType: string;
+    sizeBytes: number;
+    digest: string;
+    source: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
+    position: number;
+};
+
+export type AttachmentSet = {
+    ref: string;
+    familyRef: string;
+    revision: number;
+    version: number;
+    projectRef?: OpaqueRef;
+    state: 'DRAFT' | 'FINALIZED';
+    purpose: AttachmentSetPurpose;
+    source: 'CONTROL_CENTER' | 'SYSTEM_ASSISTANT' | 'RUNTIME';
+    itemCount: number;
+    totalSizeBytes: number;
+    manifestDigest?: string;
+    items: Array<AttachmentSetItem>;
+    createdAt: Timestamp;
+    finalizedAt?: Timestamp;
+    superseded: boolean;
+};
+
+export type AttachmentSetPage = {
+    attachmentSet: AttachmentSet;
+    nextPageToken?: string;
+};
+
+export type AttachmentSetDraftInput = {
+    purpose: AttachmentSetPurpose;
+    artifactRefs?: Array<OpaqueRef>;
+};
+
+export type AttachmentSetAddItemsInput = {
+    artifactRefs: Array<OpaqueRef>;
+    insertAfterPosition?: number;
+};
+
+export type AttachmentSetRemoveItemsInput = {
+    artifactRefs: Array<OpaqueRef>;
 };
 
 export type ArtifactPurgeReceipt = {
@@ -1405,6 +1456,7 @@ export type AssistantTurn = {
     content: string;
     state: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED';
     plan?: AssistantPlan;
+    attachmentSetRef?: OpaqueRef;
     createdAt: Timestamp;
 };
 
@@ -1552,6 +1604,8 @@ export type SessionRef = OpaqueRef;
 export type GateRef = OpaqueRef;
 
 export type ArtifactRef = OpaqueRef;
+
+export type AttachmentSetRef = string;
 
 export type ArtifactLifecycleStateQuery = 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
 
@@ -3866,6 +3920,192 @@ export type UploadArtifactResponses = {
 
 export type UploadArtifactResponse = UploadArtifactResponses[keyof UploadArtifactResponses];
 
+export type CreateAttachmentSetDraftData = {
+    body: AttachmentSetDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/attachment-sets';
+};
+
+export type CreateAttachmentSetDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateAttachmentSetDraftError = CreateAttachmentSetDraftErrors[keyof CreateAttachmentSetDraftErrors];
+
+export type CreateAttachmentSetDraftResponses = {
+    /**
+     * Создана первая append-only draft-ревизия набора
+     */
+    201: AttachmentSet;
+};
+
+export type CreateAttachmentSetDraftResponse = CreateAttachmentSetDraftResponses[keyof CreateAttachmentSetDraftResponses];
+
+export type CreateOrganizationAttachmentSetDraftData = {
+    body: AttachmentSetDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/attachment-sets';
+};
+
+export type CreateOrganizationAttachmentSetDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateOrganizationAttachmentSetDraftError = CreateOrganizationAttachmentSetDraftErrors[keyof CreateOrganizationAttachmentSetDraftErrors];
+
+export type CreateOrganizationAttachmentSetDraftResponses = {
+    /**
+     * Создана первая append-only draft-ревизия набора организационного помощника
+     */
+    201: AttachmentSet;
+};
+
+export type CreateOrganizationAttachmentSetDraftResponse = CreateOrganizationAttachmentSetDraftResponses[keyof CreateOrganizationAttachmentSetDraftResponses];
+
+export type GetAttachmentSetData = {
+    body?: never;
+    path: {
+        attachmentSetRef: string;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/attachment-sets/{attachmentSetRef}';
+};
+
+export type GetAttachmentSetErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetAttachmentSetError = GetAttachmentSetErrors[keyof GetAttachmentSetErrors];
+
+export type GetAttachmentSetResponses = {
+    /**
+     * Exact draft или finalized revision с bounded ordered page items
+     */
+    200: AttachmentSetPage;
+};
+
+export type GetAttachmentSetResponse = GetAttachmentSetResponses[keyof GetAttachmentSetResponses];
+
+export type AddAttachmentSetItemsData = {
+    body: AttachmentSetAddItemsInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        attachmentSetRef: string;
+    };
+    query?: never;
+    url: '/api/v1/attachment-sets/{attachmentSetRef}/items/additions';
+};
+
+export type AddAttachmentSetItemsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type AddAttachmentSetItemsError = AddAttachmentSetItemsErrors[keyof AddAttachmentSetItemsErrors];
+
+export type AddAttachmentSetItemsResponses = {
+    /**
+     * Создана новая draft-ревизия с добавленными ordered items
+     */
+    201: AttachmentSet;
+};
+
+export type AddAttachmentSetItemsResponse = AddAttachmentSetItemsResponses[keyof AddAttachmentSetItemsResponses];
+
+export type RemoveAttachmentSetItemsData = {
+    body: AttachmentSetRemoveItemsInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        attachmentSetRef: string;
+    };
+    query?: never;
+    url: '/api/v1/attachment-sets/{attachmentSetRef}/items/removals';
+};
+
+export type RemoveAttachmentSetItemsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RemoveAttachmentSetItemsError = RemoveAttachmentSetItemsErrors[keyof RemoveAttachmentSetItemsErrors];
+
+export type RemoveAttachmentSetItemsResponses = {
+    /**
+     * Создана новая draft-ревизия без удалённых items
+     */
+    201: AttachmentSet;
+};
+
+export type RemoveAttachmentSetItemsResponse = RemoveAttachmentSetItemsResponses[keyof RemoveAttachmentSetItemsResponses];
+
+export type FinalizeAttachmentSetData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        attachmentSetRef: string;
+    };
+    query?: never;
+    url: '/api/v1/attachment-sets/{attachmentSetRef}/finalization';
+};
+
+export type FinalizeAttachmentSetErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type FinalizeAttachmentSetError = FinalizeAttachmentSetErrors[keyof FinalizeAttachmentSetErrors];
+
+export type FinalizeAttachmentSetResponses = {
+    /**
+     * Создана immutable finalized-ревизия, пригодная для server-owned binding
+     */
+    201: AttachmentSet;
+};
+
+export type FinalizeAttachmentSetResponse = FinalizeAttachmentSetResponses[keyof FinalizeAttachmentSetResponses];
+
 export type ListOrganizationArtifactsData = {
     body?: never;
     path?: never;
@@ -4664,7 +4904,7 @@ export type UpdateAssistantConversationTitleResponse = UpdateAssistantConversati
 export type AddAssistantTurnData = {
     body: {
         content: string;
-        artifactRefs?: Array<OpaqueRef>;
+        attachmentSetRef?: OpaqueRef;
     };
     headers: {
         'Idempotency-Key': string;

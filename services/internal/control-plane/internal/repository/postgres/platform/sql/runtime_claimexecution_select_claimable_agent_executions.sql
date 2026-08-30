@@ -44,7 +44,56 @@ SELECT n.id::text,
        r.input,
        COALESCE(input_attachment_set.ref, ''),
        COALESCE(input_attachment_set.manifest_digest, ''),
-       COALESCE(input_attachment_set.context_kind, ''),
+       COALESCE(input_attachment_set.purpose, ''),
+       CASE WHEN 'platform.artifact.manage'=ANY(a.capabilities) THEN COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+               'ref', runtime_set.ref,
+               'manifestDigest', runtime_set.manifest_digest,
+               'purpose', runtime_set.purpose,
+               'scope', runtime_set.usage_scope,
+               'provenance', runtime_set.provenance,
+               'turnRef', runtime_set.turn_ref
+           ) ORDER BY runtime_set.scope_order, runtime_set.turn_number, runtime_set.ref)
+           FROM (
+               SELECT input_attachment_set.ref,
+                      input_attachment_set.manifest_digest,
+                      input_attachment_set.purpose,
+                      'INPUT'::text AS usage_scope,
+                      'CURRENT_TURN'::text AS provenance,
+                      COALESCE(t.ref, '') AS turn_ref,
+                      0::integer AS scope_order,
+                      COALESCE(t.turn_number, 0)::bigint AS turn_number
+               WHERE input_attachment_set.id IS NOT NULL
+                 AND input_attachment_set.state = 'FINALIZED'
+
+               UNION ALL
+
+               SELECT previous_set.ref,
+                      previous_set.manifest_digest,
+                      previous_set.purpose,
+                      'SESSION'::text,
+                      'SESSION_HISTORY'::text,
+                      previous_turn.ref,
+                      1::integer,
+                      previous_turn.turn_number
+               FROM LATERAL (
+                   SELECT DISTINCT ON (candidate.attachment_set_id)
+                          candidate.id,
+                          candidate.ref,
+                          candidate.turn_number,
+                          candidate.attachment_set_id
+                   FROM control_plane.session_turns AS candidate
+                   WHERE candidate.session_id = s.id
+                     AND candidate.attachment_set_id IS NOT NULL
+                     AND (t.id IS NULL OR candidate.id <> t.id)
+                   ORDER BY candidate.attachment_set_id, candidate.turn_number
+               ) AS previous_turn
+               JOIN control_plane.attachment_sets AS previous_set
+                 ON previous_set.id = previous_turn.attachment_set_id
+                AND previous_set.state = 'FINALIZED'
+               WHERE input_attachment_set.id IS NULL OR previous_set.id <> input_attachment_set.id
+           ) AS runtime_set
+       ), '[]'::jsonb) ELSE '[]'::jsonb END,
        CASE WHEN 'platform.artifact.manage'=ANY(a.capabilities) THEN COALESCE((
            SELECT jsonb_agg(jsonb_build_object(
                'ref', runtime_artifact.ref,
@@ -56,14 +105,16 @@ SELECT n.id::text,
                'version', runtime_artifact.version,
                'source', runtime_artifact.source,
                'scope', runtime_artifact.usage_scope,
-               'position', runtime_artifact.position
+               'position', runtime_artifact.position,
+               'attachmentSetRef', runtime_artifact.attachment_set_ref,
+               'attachmentPurpose', runtime_artifact.attachment_purpose,
+               'provenance', runtime_artifact.provenance
            ) ORDER BY runtime_artifact.scope_order,
+                      runtime_artifact.set_order,
                       runtime_artifact.position,
                       runtime_artifact.file_name,
                       runtime_artifact.ref)
            FROM (
-               SELECT DISTINCT ON (candidate.ref) candidate.*
-               FROM (
                    SELECT item.artifact_ref AS ref,
                           item.file_name,
                           item.media_type,
@@ -74,7 +125,11 @@ SELECT n.id::text,
                           artifact.source,
                           'INPUT'::text AS usage_scope,
                           item.position,
-                          0::integer AS scope_order
+                          0::integer AS scope_order,
+                          0::bigint AS set_order,
+                          input_attachment_set.ref AS attachment_set_ref,
+                          input_attachment_set.purpose AS attachment_purpose,
+                          'CURRENT_TURN'::text AS provenance
                    FROM control_plane.attachment_set_items AS item
                    JOIN control_plane.artifacts AS artifact ON artifact.id = item.artifact_id
                    JOIN control_plane.artifact_content AS content ON content.artifact_id = artifact.id
@@ -83,6 +138,7 @@ SELECT n.id::text,
                      AND artifact.lifecycle_state = 'ACTIVE'
                      AND artifact.revision = item.artifact_revision
                      AND artifact.version = item.artifact_version
+                     AND input_attachment_set.state = 'FINALIZED'
 
                    UNION ALL
 
@@ -95,23 +151,34 @@ SELECT n.id::text,
                           previous_item.artifact_version,
                           previous_artifact.source,
                           'SESSION'::text AS usage_scope,
-                          row_number() OVER (
-                              ORDER BY previous_turn.turn_number, previous_item.position,
-                                       previous_artifact.created_at, previous_artifact.ref
-                          ),
-                          1::integer AS scope_order
-                   FROM control_plane.session_turns AS previous_turn
+                          previous_item.position,
+                          1::integer AS scope_order,
+                          previous_turn.turn_number AS set_order,
+                          previous_set.ref AS attachment_set_ref,
+                          previous_set.purpose AS attachment_purpose,
+                          'SESSION_HISTORY'::text AS provenance
+                   FROM LATERAL (
+                       SELECT DISTINCT ON (candidate.attachment_set_id)
+                              candidate.id,
+                              candidate.ref,
+                              candidate.turn_number,
+                              candidate.attachment_set_id
+                       FROM control_plane.session_turns AS candidate
+                       WHERE candidate.session_id = s.id
+                         AND candidate.attachment_set_id IS NOT NULL
+                         AND (t.id IS NULL OR candidate.id <> t.id)
+                       ORDER BY candidate.attachment_set_id, candidate.turn_number
+                   ) AS previous_turn
                    JOIN control_plane.attachment_sets AS previous_set
                      ON previous_set.id = previous_turn.attachment_set_id
+                    AND previous_set.state = 'FINALIZED'
                    JOIN control_plane.attachment_set_items AS previous_item
                      ON previous_item.attachment_set_id = previous_set.id
                    JOIN control_plane.artifacts AS previous_artifact
                      ON previous_artifact.id = previous_item.artifact_id
                    JOIN control_plane.artifact_content AS previous_content
                      ON previous_content.artifact_id = previous_artifact.id
-                   WHERE previous_turn.session_id = s.id
-                     AND (t.id IS NULL OR previous_turn.id <> t.id)
-                     AND (input_attachment_set.id IS NULL OR previous_set.id <> input_attachment_set.id)
+                   WHERE (input_attachment_set.id IS NULL OR previous_set.id <> input_attachment_set.id)
                      AND previous_artifact.scan_state = 'CLEAN'
                      AND previous_artifact.lifecycle_state = 'ACTIVE'
                      AND previous_artifact.revision = previous_item.artifact_revision
@@ -129,7 +196,11 @@ SELECT n.id::text,
                           knowledge_artifact.source,
                           'KNOWLEDGE'::text AS usage_scope,
                           row_number() OVER (ORDER BY knowledge_binding.created_at, knowledge_artifact.ref),
-                          2::integer AS scope_order
+                          2::integer AS scope_order,
+                          0::bigint AS set_order,
+                          ''::text AS attachment_set_ref,
+                          'PROJECT_KNOWLEDGE'::text AS attachment_purpose,
+                          'PROJECT_BINDING'::text AS provenance
                    FROM control_plane.artifact_bindings AS knowledge_binding
                    JOIN control_plane.artifacts AS knowledge_artifact ON knowledge_artifact.id = knowledge_binding.artifact_id
                    JOIN control_plane.artifact_content AS knowledge_content ON knowledge_content.artifact_id = knowledge_artifact.id
@@ -139,8 +210,6 @@ SELECT n.id::text,
                      AND knowledge_artifact.project_id = r.project_id
                      AND knowledge_artifact.scan_state = 'CLEAN'
                      AND knowledge_artifact.lifecycle_state = 'ACTIVE'
-               ) AS candidate
-               ORDER BY candidate.ref, candidate.scope_order, candidate.position
            ) AS runtime_artifact
        ), '[]'::jsonb) ELSE '[]'::jsonb END,
        n.attempt,

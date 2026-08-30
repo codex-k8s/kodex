@@ -42,7 +42,6 @@ const run: Run = {
     reasoningOutputTokens: 0,
     modelContextWindow: 0,
   },
-  inputArtifactRefs: [],
   artifactRefs: [],
   gateRefs: [],
   createdAt: "2026-08-28T08:00:00Z",

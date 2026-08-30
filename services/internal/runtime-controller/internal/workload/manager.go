@@ -338,7 +338,7 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 	if err != nil {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
 	}
-	return input, binding, input.Validate()
+	return input, binding, validateRunnerInput(input)
 }
 
 func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionSnapshot) (runtimecontract.RunnerInput, ProviderSecretBinding, error) {
@@ -355,7 +355,39 @@ func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionS
 	if err != nil {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
 	}
-	return input, binding, input.Validate()
+	return input, binding, validateRunnerInput(input)
+}
+
+func validateRunnerInput(input runtimecontract.RunnerInput) error {
+	if err := input.Validate(); err != nil {
+		return err
+	}
+	for _, set := range input.AttachmentSets {
+		if set.TurnRef == "" || set.Provenance == "CURRENT_TURN" && set.TurnRef != input.TurnRef ||
+			set.Provenance == "SESSION_HISTORY" && set.TurnRef == input.TurnRef {
+			return errors.New("runtime attachment turn lineage is invalid")
+		}
+		artifacts := make([]runtimecontract.RunnerInputArtifact, 0)
+		for _, artifact := range input.InputArtifacts {
+			if artifact.AttachmentSetRef != set.Ref {
+				continue
+			}
+			canonicalArtifact := artifact
+			canonicalArtifact.Scope = runtimecontract.AttachmentScopeInput
+			canonicalArtifact.AttachmentSetRef = ""
+			canonicalArtifact.AttachmentPurpose = ""
+			canonicalArtifact.Provenance = ""
+			artifacts = append(artifacts, canonicalArtifact)
+		}
+		manifest, err := runtimecontract.BuildAttachmentManifest(set.Ref, set.Purpose, artifacts)
+		if err != nil || manifest.Digest != set.ManifestDigest {
+			return errors.New("runtime attachment manifest digest is invalid")
+		}
+	}
+	if _, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts); err != nil {
+		return errors.New("runtime workspace attachment manifest is invalid")
+	}
+	return nil
 }
 
 func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapshot, mode string) (runtimecontract.RunnerInput, error) {
@@ -566,6 +598,12 @@ func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision 
 	input.AttachmentSetRef = revision.GetAttachmentSetRef()
 	input.AttachmentSetManifestDigest = revision.GetAttachmentSetManifestDigest()
 	input.AttachmentContext = revision.GetAttachmentContext()
+	for _, set := range revision.GetAttachmentSets() {
+		input.AttachmentSets = append(input.AttachmentSets, runtimecontract.RunnerAttachmentSet{
+			Ref: set.GetRef(), ManifestDigest: set.GetManifestDigest(), Purpose: set.GetPurpose(),
+			Scope: set.GetScope(), Provenance: set.GetProvenance(), TurnRef: set.GetTurnRef(),
+		})
+	}
 	for _, runtimeArtifact := range revision.GetInputArtifacts() {
 		artifact := runtimeArtifact.GetArtifact()
 		if artifact == nil {
@@ -575,7 +613,8 @@ func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision 
 			Ref: artifact.GetRef(), FileName: artifact.GetFileName(), MediaType: artifact.GetMediaType(),
 			Digest: artifact.GetDigest(), SizeBytes: artifact.GetSizeBytes(), Revision: int64(artifact.GetRevision()),
 			Version: artifact.GetVersion(), Scope: runtimeArtifact.GetScope(), Position: runtimeArtifact.GetPosition(),
-			Source: runnerArtifactSource(artifact.GetSource()),
+			Source: runnerArtifactSource(artifact.GetSource()), AttachmentSetRef: runtimeArtifact.GetAttachmentSetRef(),
+			AttachmentPurpose: runtimeArtifact.GetAttachmentPurpose(), Provenance: runtimeArtifact.GetProvenance(),
 		})
 	}
 }

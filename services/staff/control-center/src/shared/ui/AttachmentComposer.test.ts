@@ -1,7 +1,7 @@
 import { createSSRApp, h } from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
 
@@ -17,24 +17,26 @@ const messages = {
       retry: "Повторить загрузку файла «{name}»",
       uploading: "Загружается файл «{name}»",
       uploadFailed: "Не удалось загрузить файл",
+      syncFailed: "Не удалось подготовить набор вложений",
       progress: "Подготовлено {uploaded} из {count}",
       aggregateLimit: "Превышен лимит",
       existing: {
-        choose: "Выбрать из Проекта",
-        title: "Файлы Проекта",
+        choose: "Выбрать загруженные",
+        title: "Доступные файлы",
         hint: "Поиск выполняется на сервере",
-        label: "Выбор файлов Проекта",
-        search: "Найти файл в Проекте",
+        label: "Выбор загруженных файлов",
+        search: "Найти файл",
         loading: "Загружаем файлы",
         loadingMore: "Загружаем ещё",
         empty: "Доступных проверенных файлов нет",
-        error: "Не удалось загрузить файлы Проекта",
+        error: "Не удалось загрузить доступные файлы",
         attached: "Добавлен во вложения",
-        detachHint: "Файл останется в Проекте",
+        detachHint: "Файл останется в хранилище",
       },
       states: {
         QUEUED: "В очереди",
         UPLOADING: "Загружается",
+        SCANNING: "Проверяется",
         UPLOADED: "Готов",
         FAILED: "Ошибка",
       },
@@ -48,7 +50,7 @@ describe("AttachmentComposer", () => {
       render: () =>
         h(AttachmentComposer, {
           projectRef: "project_1",
-          upload: vi.fn(),
+          purpose: "RUN_INPUT",
         }),
     });
     app.use(
@@ -64,7 +66,29 @@ describe("AttachmentComposer", () => {
     expect(html).toContain('class="attachment-composer');
     expect(html).toContain("Добавить файлы");
     expect(html).toContain("или перетащите сюда");
-    expect(html).toContain("Выбрать из Проекта");
+    expect(html).toContain("Выбрать загруженные");
     expect(html).not.toContain("Удалить файл");
+  });
+
+  it("оставляет вложения доступными глобальному assistant без Project", async () => {
+    const app = createSSRApp({
+      render: () =>
+        h(AttachmentComposer, {
+          purpose: "ASSISTANT_MESSAGE",
+        }),
+    });
+    app.use(
+      createI18n({
+        legacy: false,
+        locale: "ru",
+        messages,
+      }),
+    );
+
+    const html = await renderToString(app);
+
+    expect(html).toContain("Добавить файлы");
+    expect(html).toContain("Выбрать загруженные");
+    expect(html).not.toContain("disabled");
   });
 });

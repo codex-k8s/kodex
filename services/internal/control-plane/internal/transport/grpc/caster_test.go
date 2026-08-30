@@ -70,14 +70,14 @@ func TestCastRunPreservesArtifactAndGateReadback(t *testing.T) {
 	t.Parallel()
 
 	run := castRun(entity.Run{
-		InputArtifactRefs: []string{"art_input"},
-		ArtifactRefs:      []string{"art_output"},
-		GateRefs:          []string{"gat_review"},
-		TitleSource:       "USER_EDITED",
+		InputAttachmentSetRef: "aset_abcdefgh",
+		ArtifactRefs:          []string{"art_output"},
+		GateRefs:              []string{"gat_review"},
+		TitleSource:           "USER_EDITED",
 	})
 
-	if len(run.GetInputArtifactRefs()) != 1 || run.GetInputArtifactRefs()[0] != "art_input" {
-		t.Fatalf("run input artifacts were not cast: %v", run.GetInputArtifactRefs())
+	if run.GetInputAttachmentSetRef() != "aset_abcdefgh" {
+		t.Fatalf("run input attachment set was not cast: %q", run.GetInputAttachmentSetRef())
 	}
 	if len(run.GetArtifactRefs()) != 1 || run.GetArtifactRefs()[0] != "art_output" {
 		t.Fatalf("run artifacts were not cast: %v", run.GetArtifactRefs())

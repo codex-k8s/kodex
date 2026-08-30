@@ -52,6 +52,10 @@ const (
 	DeleteArtifact                Kind = "DELETE_ARTIFACT"
 	RestoreArtifact               Kind = "RESTORE_ARTIFACT"
 	PurgeArtifact                 Kind = "PURGE_ARTIFACT"
+	CreateAttachmentSetDraft      Kind = "CREATE_ATTACHMENT_SET_DRAFT"
+	AddAttachmentSetItems         Kind = "ADD_ATTACHMENT_SET_ITEMS"
+	RemoveAttachmentSetItems      Kind = "REMOVE_ATTACHMENT_SET_ITEMS"
+	FinalizeAttachmentSet         Kind = "FINALIZE_ATTACHMENT_SET"
 	CreateSchedule                Kind = "CREATE_SCHEDULE"
 	UpdateSchedule                Kind = "UPDATE_SCHEDULE"
 	SetScheduleEnabled            Kind = "SET_SCHEDULE_ENABLED"
@@ -144,25 +148,27 @@ type WorkflowInput struct {
 	Draft                                               *entity.WorkflowVersion
 }
 type LaunchRunInput struct {
-	ProjectRef, Title, TitleSource, Task, SessionRef, Source string
+	ProjectRef, Title, TitleSource, Task, SessionRef, Source, AttachmentSetRef, AttachmentPurpose string
 	Target                                                   entity.RunTarget
 	Input                                                    map[string]any
-	ArtifactRefs                                             []string
 }
 type SessionTurnInput struct {
-	SessionRef, RunRef, NodeRef, Task string
-	ArtifactRefs                      []string
+	SessionRef, RunRef, NodeRef, Task, AttachmentSetRef string
 }
 type RunCommandInput struct{ RunRef, Reason string }
 type GateResolutionInput struct {
-	GateRef, Decision, Comment string
-	ArtifactRefs               []string
+	GateRef, Decision, Comment, AttachmentSetRef string
 }
 type ArtifactBindingInput struct {
 	ArtifactRef, AgentRef string
 	Enabled               bool
 }
 type ArtifactLifecycleInput struct{ ArtifactRef string }
+type AttachmentSetDraftInput struct {
+	ProjectRef, Purpose, AttachmentSetRef string
+	ArtifactRefs                         []string
+	InsertAfterPosition                  int64
+}
 type ScheduleInput struct {
 	Ref, ProjectRef, Name, Preset, CronExpression, TimeOfDay, DayOfWeek, Timezone, SessionPolicy, NotificationPolicy string
 	Target                                                                                                           entity.RunTarget
@@ -185,8 +191,7 @@ type AssistantConversationInput struct {
 }
 type AssistantConversationTitleInput struct{ ConversationRef, Title string }
 type AssistantTurnInput struct {
-	ConversationRef, Content string
-	ArtifactRefs             []string
+	ConversationRef, Content, AttachmentSetRef string
 }
 type AssistantPlanInput struct {
 	PlanRef  string
@@ -290,6 +295,7 @@ type Result struct {
 	Graph                *entity.RunGraph
 	Gate                 *entity.OwnerGate
 	Artifact             *entity.Artifact
+	AttachmentSet        *entity.AttachmentSet
 	Schedule             *entity.Schedule
 	Connection           *entity.IntegrationConnection
 	Conversation         *entity.AssistantConversation

@@ -218,6 +218,7 @@ func (usage TokenUsage) Valid() bool {
 
 type Run struct {
 	Ref, ProjectRef, SessionRef, RootRunRef, ParentRunRef, RetryOfRunRef string
+	InputAttachmentSetRef                                               string
 	Title, Task, State, Source, ResultSummary, SafeErrorCode             string
 	SafeErrorMessage, InitiatorName, TitleSource, ActivitySummary        string
 	Target                                                               RunTarget
@@ -225,7 +226,7 @@ type Run struct {
 	GraphRevision, EventSequence, Version                                int64
 	Input                                                                map[string]any
 	Usage                                                                TokenUsage
-	InputArtifactRefs, ArtifactRefs, GateRefs, NextActions               []string
+	ArtifactRefs, GateRefs, NextActions                                  []string
 	Incidents                                                            []Incident
 	CreatedAt                                                            time.Time
 	StartedAt, FinishedAt                                                *time.Time
@@ -295,9 +296,10 @@ type RunGraph struct {
 
 type OwnerGate struct {
 	Ref, ProjectRef, RunRef, NodeRef, Title, Prompt, ContextSummary string
+	ResolutionAttachmentSetRef                                      string
 	State, Decision, DecisionComment, RequestedByRef                string
 	RequestedByName, ResolvedByName                                 string
-	AllowedDecisions, ArtifactRefs, NextActions                     []string
+	AllowedDecisions, NextActions                                   []string
 	Version                                                         int64
 	CreatedAt                                                       time.Time
 	ResolvedAt                                                      *time.Time
@@ -310,6 +312,21 @@ type Artifact struct {
 	Bindings, NextActions                                                     []string
 	CreatedAt                                                                 time.Time
 	DeletedAt, PurgeAfter                                                     *time.Time
+}
+
+type AttachmentSetItem struct {
+	ArtifactRef, DisplayName, MediaType, Digest, Source string
+	ArtifactRevision, ArtifactVersion, Position         int64
+	SizeBytes                                           int64
+}
+
+type AttachmentSet struct {
+	Ref, FamilyRef, ProjectRef, State, Purpose, Source, ManifestDigest string
+	Revision, Version, ItemCount, TotalSizeBytes                        int64
+	Items                                                               []AttachmentSetItem
+	CreatedAt                                                           time.Time
+	FinalizedAt                                                         *time.Time
+	Superseded                                                          bool
 }
 
 type Schedule struct {
@@ -440,8 +457,7 @@ type AssistantPlanReceipt struct {
 }
 
 type AssistantTurn struct {
-	Ref, Actor, ActorName, Content, State string
-	ArtifactRefs                          []string
+	Ref, Actor, ActorName, Content, State, AttachmentSetRef string
 	CreatedAt                             time.Time
 	CompletedAt                           *time.Time
 }

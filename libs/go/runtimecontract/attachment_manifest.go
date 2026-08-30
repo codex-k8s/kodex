@@ -64,6 +64,27 @@ type CanonicalAttachmentManifest struct {
 	Digest   string
 }
 
+type WorkspaceAttachmentSet struct {
+	Ref            string `json:"attachmentSetRef"`
+	ManifestDigest string `json:"manifestDigest"`
+	Purpose        string `json:"purpose"`
+	Scope          string `json:"scope"`
+	Provenance     string `json:"provenance"`
+	TurnRef        string `json:"turnRef,omitempty"`
+}
+
+type WorkspaceAttachmentManifest struct {
+	Schema         string                   `json:"schema"`
+	Version        int                      `json:"version"`
+	AttachmentSets []WorkspaceAttachmentSet `json:"attachmentSets"`
+	Files          []AttachmentManifestFile `json:"files"`
+}
+
+type CanonicalWorkspaceAttachmentManifest struct {
+	Manifest WorkspaceAttachmentManifest
+	Bytes    []byte
+}
+
 type attachmentManifestPayload struct {
 	Schema            string                   `json:"schema"`
 	Version           int                      `json:"version"`
@@ -161,18 +182,85 @@ func ArtifactWorkspacePath(attachmentSetRef string, artifact RunnerInputArtifact
 	}
 	name := fmt.Sprintf("%04d-%s", artifact.Position, normalizedWorkspaceBaseName(artifact.FileName))
 	switch artifact.Scope {
-	case AttachmentScopeInput:
-		if !opaqueReferencePattern.MatchString(attachmentSetRef) {
+	case AttachmentScopeInput, AttachmentScopeSession:
+		setRef := artifact.AttachmentSetRef
+		if setRef == "" {
+			setRef = attachmentSetRef
+		}
+		if !opaqueReferencePattern.MatchString(setRef) {
 			return "", errors.New("workspace attachment set path is invalid")
 		}
-		return filepath.ToSlash(filepath.Join("/workspace/input", attachmentSetRef, "files", name)), nil
-	case AttachmentScopeSession:
-		return filepath.ToSlash(filepath.Join("/workspace/session", name)), nil
+		return filepath.ToSlash(filepath.Join("/workspace/input", setRef, "files", name)), nil
 	case AttachmentScopeKnowledge:
 		return filepath.ToSlash(filepath.Join("/workspace/knowledge", name)), nil
 	default:
 		return "", errors.New("workspace artifact scope is invalid")
 	}
+}
+
+// BuildWorkspaceAttachmentManifest строит общий read-only каталог всех sets и
+// knowledge files, уже разрешённых одной RuntimeRevision.
+func BuildWorkspaceAttachmentManifest(sets []RunnerAttachmentSet, artifacts []RunnerInputArtifact) (CanonicalWorkspaceAttachmentManifest, error) {
+	if _, err := validateRunnerAttachmentSets(sets, artifacts); err != nil {
+		return CanonicalWorkspaceAttachmentManifest{}, err
+	}
+	orderedSets := append([]RunnerAttachmentSet(nil), sets...)
+	sort.Slice(orderedSets, func(left, right int) bool {
+		if orderedSets[left].Scope != orderedSets[right].Scope {
+			return attachmentScopeRank(orderedSets[left].Scope) < attachmentScopeRank(orderedSets[right].Scope)
+		}
+		if orderedSets[left].TurnRef != orderedSets[right].TurnRef {
+			return orderedSets[left].TurnRef < orderedSets[right].TurnRef
+		}
+		return orderedSets[left].Ref < orderedSets[right].Ref
+	})
+	manifestSets := make([]WorkspaceAttachmentSet, 0, len(orderedSets))
+	for _, set := range orderedSets {
+		manifestSets = append(manifestSets, WorkspaceAttachmentSet{
+			Ref: set.Ref, ManifestDigest: set.ManifestDigest, Purpose: set.Purpose,
+			Scope: set.Scope, Provenance: set.Provenance, TurnRef: set.TurnRef,
+		})
+	}
+	orderedArtifacts := append([]RunnerInputArtifact(nil), artifacts...)
+	sort.Slice(orderedArtifacts, func(left, right int) bool {
+		if orderedArtifacts[left].Scope != orderedArtifacts[right].Scope {
+			return attachmentScopeRank(orderedArtifacts[left].Scope) < attachmentScopeRank(orderedArtifacts[right].Scope)
+		}
+		if orderedArtifacts[left].AttachmentSetRef != orderedArtifacts[right].AttachmentSetRef {
+			return orderedArtifacts[left].AttachmentSetRef < orderedArtifacts[right].AttachmentSetRef
+		}
+		if orderedArtifacts[left].Position != orderedArtifacts[right].Position {
+			return orderedArtifacts[left].Position < orderedArtifacts[right].Position
+		}
+		return orderedArtifacts[left].Ref < orderedArtifacts[right].Ref
+	})
+	files := make([]AttachmentManifestFile, 0, len(orderedArtifacts))
+	paths := make(map[string]struct{}, len(orderedArtifacts))
+	for _, artifact := range orderedArtifacts {
+		path, err := ArtifactWorkspacePath("", artifact)
+		if err != nil {
+			return CanonicalWorkspaceAttachmentManifest{}, err
+		}
+		if _, duplicate := paths[path]; duplicate {
+			return CanonicalWorkspaceAttachmentManifest{}, errors.New("workspace attachment path is duplicated")
+		}
+		paths[path] = struct{}{}
+		files = append(files, AttachmentManifestFile{
+			ArtifactRef: artifact.Ref, Revision: artifact.Revision, Version: artifact.Version,
+			FileName: artifact.FileName, MediaType: artifact.MediaType, SizeBytes: artifact.SizeBytes,
+			SHA256: artifact.Digest, Position: artifact.Position, Scope: artifact.Scope,
+			Source: artifact.Source, Purpose: artifact.AttachmentPurpose, Path: path,
+		})
+	}
+	manifest := WorkspaceAttachmentManifest{
+		Schema: AttachmentManifestSchema, Version: AttachmentManifestVersion,
+		AttachmentSets: manifestSets, Files: files,
+	}
+	raw, err := json.Marshal(manifest)
+	if err != nil || len(raw) > 1<<20 {
+		return CanonicalWorkspaceAttachmentManifest{}, errors.New("encode workspace attachment manifest")
+	}
+	return CanonicalWorkspaceAttachmentManifest{Manifest: manifest, Bytes: raw}, nil
 }
 
 func validateRunnerInputArtifacts(artifacts []RunnerInputArtifact) (bool, error) {
@@ -205,6 +293,82 @@ func validateRunnerInputArtifacts(artifacts []RunnerInputArtifact) (bool, error)
 		artifactBytes += artifact.SizeBytes
 	}
 	return hasInput, nil
+}
+
+func validateRunnerAttachmentSets(sets []RunnerAttachmentSet, artifacts []RunnerInputArtifact) (*RunnerAttachmentSet, error) {
+	byRef := make(map[string]RunnerAttachmentSet, len(sets))
+	itemCounts := make(map[string]int, len(sets))
+	var current *RunnerAttachmentSet
+	for _, set := range sets {
+		if !opaqueReferencePattern.MatchString(set.Ref) || !sha256Pattern.MatchString(set.ManifestDigest) ||
+			!containsString(attachmentContexts, set.Purpose) ||
+			!containsString([]string{AttachmentScopeInput, AttachmentScopeSession}, set.Scope) ||
+			!containsString([]string{"CURRENT_TURN", "SESSION_HISTORY"}, set.Provenance) ||
+			(set.Scope == AttachmentScopeInput) != (set.Provenance == "CURRENT_TURN") {
+			return nil, errors.New("runner attachment set catalog is invalid")
+		}
+		if set.TurnRef != "" && !opaqueReferencePattern.MatchString(set.TurnRef) {
+			return nil, errors.New("runner attachment set catalog is invalid")
+		}
+		if _, duplicate := byRef[set.Ref]; duplicate {
+			return nil, errors.New("runner attachment set catalog is invalid")
+		}
+		byRef[set.Ref] = set
+		if set.Provenance == "CURRENT_TURN" {
+			if current != nil {
+				return nil, errors.New("runner attachment set catalog is invalid")
+			}
+			copy := set
+			current = &copy
+		}
+	}
+
+	artifactKeys := make(map[string]struct{}, len(artifacts))
+	positions := make(map[string]struct{}, len(artifacts))
+	var totalBytes int64
+	for _, artifact := range artifacts {
+		if !opaqueReferencePattern.MatchString(artifact.Ref) || !validArtifactFileName(artifact.FileName) ||
+			strings.TrimSpace(artifact.MediaType) == "" || len(artifact.MediaType) > 255 ||
+			!imageDigestPattern.MatchString(artifact.Digest) || artifact.SizeBytes < 0 ||
+			artifact.SizeBytes > MaximumInputArtifactBytes || artifact.Revision < 1 || artifact.Version < 1 ||
+			!containsString([]string{AttachmentScopeInput, AttachmentScopeSession, AttachmentScopeKnowledge}, artifact.Scope) || artifact.Position < 1 ||
+			!containsString([]string{"CONTROL_CENTER", "AGENT_RESULT", "INTEGRATION_RESULT", "KNOWLEDGE_SOURCE", "INTERACTION_ATTACHMENT"}, artifact.Source) {
+			return nil, errors.New("runner artifact catalog is invalid")
+		}
+		catalogKey := artifact.AttachmentSetRef
+		if artifact.Scope == AttachmentScopeKnowledge {
+			if artifact.AttachmentSetRef != "" || artifact.AttachmentPurpose != "PROJECT_KNOWLEDGE" || artifact.Provenance != "PROJECT_BINDING" {
+				return nil, errors.New("runner artifact provenance is invalid")
+			}
+			catalogKey = AttachmentScopeKnowledge
+		} else {
+			set, exists := byRef[artifact.AttachmentSetRef]
+			if !exists || artifact.Scope != set.Scope || artifact.AttachmentPurpose != set.Purpose || artifact.Provenance != set.Provenance {
+				return nil, errors.New("runner artifact provenance is invalid")
+			}
+			itemCounts[set.Ref]++
+		}
+		artifactKey := catalogKey + ":" + artifact.Ref
+		if _, duplicate := artifactKeys[artifactKey]; duplicate {
+			return nil, errors.New("runner artifact catalog is invalid")
+		}
+		artifactKeys[artifactKey] = struct{}{}
+		positionKey := catalogKey + ":" + strconv.FormatInt(artifact.Position, 10)
+		if _, duplicate := positions[positionKey]; duplicate {
+			return nil, errors.New("runner artifact catalog is invalid")
+		}
+		positions[positionKey] = struct{}{}
+		if totalBytes > MaximumInputArtifactTotal-artifact.SizeBytes {
+			return nil, errors.New("runner artifact catalog is invalid")
+		}
+		totalBytes += artifact.SizeBytes
+	}
+	for ref := range byRef {
+		if itemCounts[ref] == 0 {
+			return nil, errors.New("runner attachment set catalog is invalid")
+		}
+	}
+	return current, nil
 }
 
 func attachmentPurpose(attachmentContext, scope string) string {

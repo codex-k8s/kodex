@@ -58,7 +58,6 @@ const run: Run = {
     reasoningOutputTokens: 0,
     modelContextWindow: 0,
   },
-  inputArtifactRefs: [],
   artifactRefs: [],
   gateRefs: ["gat_offer"],
   createdAt: "2026-08-29T10:00:00Z",
@@ -78,7 +77,6 @@ const gate: OwnerGate = {
   state: "OPEN",
   allowedDecisions: ["APPROVE", "REQUEST_CHANGES", "REJECT"],
   openedAt: "2026-08-29T10:05:00Z",
-  artifactRefs: [],
   nextActions: ["RESOLVE_GATE"],
 };
 

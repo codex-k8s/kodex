@@ -68,7 +68,6 @@ function run(
       reasoningOutputTokens: 0,
       modelContextWindow: 0,
     },
-    inputArtifactRefs: [],
     artifactRefs: [],
     gateRefs: [],
     createdAt: "2026-08-28T10:00:00Z",
@@ -91,7 +90,6 @@ function gate(runRef: string): OwnerGate {
     state: "OPEN",
     allowedDecisions: ["APPROVE"],
     openedAt: "2026-08-28T10:05:00Z",
-    artifactRefs: [],
     nextActions: ["RESOLVE_GATE"],
   };
 }

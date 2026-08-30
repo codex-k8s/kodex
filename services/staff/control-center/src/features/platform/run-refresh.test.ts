@@ -37,7 +37,6 @@ function run(state: Run["state"], lastEventSequence: number): Run {
       reasoningOutputTokens: 0,
       modelContextWindow: 0,
     },
-    inputArtifactRefs: [],
     artifactRefs: [],
     gateRefs: [],
     incidents: [],

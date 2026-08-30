@@ -1,10 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
 
 const listArtifactsMock = vi.hoisted(() => vi.fn());
+const listOrganizationArtifactsMock = vi.hoisted(() => vi.fn());
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
   listArtifacts: listArtifactsMock,
+  listOrganizationArtifacts: listOrganizationArtifactsMock,
 }));
 vi.mock("@/shared/api/client", () => ({
   requestSignal: () => new AbortController().signal,
@@ -41,6 +43,11 @@ function artifact(overrides: Partial<Artifact> = {}): Artifact {
 }
 
 describe("createAttachmentArtifactLoader", () => {
+  beforeEach(() => {
+    listArtifactsMock.mockReset();
+    listOrganizationArtifactsMock.mockReset();
+  });
+
   it("передаёт Project, серверный поиск и cursor без storage credentials", async () => {
     listArtifactsMock.mockReturnValueOnce(
       response([artifact()], "artifact-page-3"),
@@ -76,6 +83,34 @@ describe("createAttachmentArtifactLoader", () => {
       nextCursor: "artifact-page-3",
     });
     expect(JSON.stringify(page)).not.toContain("credential");
+  });
+
+  it("использует organization-scoped список для глобального assistant", async () => {
+    const organizationArtifact = artifact({ ref: "artifact_organization" });
+    delete organizationArtifact.projectRef;
+    listOrganizationArtifactsMock.mockReturnValueOnce(
+      response([organizationArtifact]),
+    );
+    const loader = createAttachmentArtifactLoader();
+
+    const page = await loader({
+      query: "  context  ",
+      signal: new AbortController().signal,
+    });
+
+    expect(listOrganizationArtifactsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: {
+          lifecycleState: "ACTIVE",
+          pageSize: 40,
+          query: "context",
+        },
+      }),
+    );
+    expect(listArtifactsMock).not.toHaveBeenCalled();
+    expect(page.items.map((item) => item.id)).toEqual([
+      "artifact_organization",
+    ]);
   });
 
   it("пропускает страницу без CLEAN файлов и продолжает cursor-pagination", async () => {

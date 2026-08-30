@@ -11,10 +11,15 @@ func TestRunnerInputArtifactCatalogIsVersionBoundedAndUnique(t *testing.T) {
 	input.AttachmentSetRef = "aset_abcdefgh"
 	input.AttachmentSetManifestDigest = strings.Repeat("4", 64)
 	input.AttachmentContext = "RUN_INPUT"
+	input.AttachmentSets = []RunnerAttachmentSet{{
+		Ref: input.AttachmentSetRef, ManifestDigest: input.AttachmentSetManifestDigest,
+		Purpose: input.AttachmentContext, Scope: AttachmentScopeInput, Provenance: "CURRENT_TURN", TurnRef: input.TurnRef,
+	}}
 	input.InputArtifacts = []RunnerInputArtifact{{
 		Ref: "artifact_abcdefgh", FileName: "customer-brief.txt", MediaType: "text/plain",
 		Digest: "sha256:" + strings.Repeat("c", 64), SizeBytes: 128, Revision: 1, Version: 2,
-		Scope: "INPUT", Position: 1, Source: "CONTROL_CENTER",
+		Scope: "INPUT", Position: 1, Source: "CONTROL_CENTER", AttachmentSetRef: input.AttachmentSetRef,
+		AttachmentPurpose: input.AttachmentContext, Provenance: "CURRENT_TURN",
 	}}
 	if _, err := EncodeRunnerInput(input); err != nil {
 		t.Fatalf("EncodeRunnerInput() rejected a valid artifact catalog: %v", err)

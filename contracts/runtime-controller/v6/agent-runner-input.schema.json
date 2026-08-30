@@ -115,6 +115,11 @@
     "attachment_context": {
       "enum": ["ASSISTANT_MESSAGE", "SESSION_TURN", "RUN_INPUT", "WORKFLOW_INPUT", "OWNER_GATE_MESSAGE"]
     },
+    "attachment_sets": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/attachment_set"}
+    },
     "input_artifacts": {
       "type": "array",
       "items": {"$ref": "#/$defs/input_artifact"}
@@ -343,10 +348,33 @@
         }
       ]
     },
+    "attachment_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "manifest_digest", "purpose", "scope", "provenance", "turn_ref"],
+      "properties": {
+        "ref": {"$ref": "#/$defs/opaque_ref"},
+        "manifest_digest": {"$ref": "#/$defs/sha256"},
+        "purpose": {"enum": ["ASSISTANT_MESSAGE", "SESSION_TURN", "RUN_INPUT", "WORKFLOW_INPUT", "OWNER_GATE_MESSAGE"]},
+        "scope": {"enum": ["INPUT", "SESSION"]},
+        "provenance": {"enum": ["CURRENT_TURN", "SESSION_HISTORY"]},
+        "turn_ref": {"$ref": "#/$defs/opaque_ref"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"scope": {"const": "INPUT"}}, "required": ["scope"]},
+          "then": {"properties": {"provenance": {"const": "CURRENT_TURN"}}}
+        },
+        {
+          "if": {"properties": {"scope": {"const": "SESSION"}}, "required": ["scope"]},
+          "then": {"properties": {"provenance": {"const": "SESSION_HISTORY"}}}
+        }
+      ]
+    },
     "input_artifact": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ref", "file_name", "media_type", "digest", "size_bytes", "revision", "version", "scope", "position", "source"],
+      "required": ["ref", "file_name", "media_type", "digest", "size_bytes", "revision", "version", "scope", "position", "source", "attachment_purpose", "provenance"],
       "properties": {
         "ref": {"$ref": "#/$defs/opaque_ref"},
         "file_name": {
@@ -363,8 +391,37 @@
         "version": {"type": "integer", "minimum": 1},
         "scope": {"enum": ["INPUT", "SESSION", "KNOWLEDGE"]},
         "position": {"type": "integer", "minimum": 1},
-        "source": {"enum": ["CONTROL_CENTER", "AGENT_RESULT", "INTEGRATION_RESULT", "KNOWLEDGE_SOURCE", "INTERACTION_ATTACHMENT"]}
-      }
+        "source": {"enum": ["CONTROL_CENTER", "AGENT_RESULT", "INTEGRATION_RESULT", "KNOWLEDGE_SOURCE", "INTERACTION_ATTACHMENT"]},
+        "attachment_set_ref": {"$ref": "#/$defs/opaque_ref"},
+        "attachment_purpose": {"enum": ["ASSISTANT_MESSAGE", "SESSION_TURN", "RUN_INPUT", "WORKFLOW_INPUT", "OWNER_GATE_MESSAGE", "PROJECT_KNOWLEDGE"]},
+        "provenance": {"enum": ["CURRENT_TURN", "SESSION_HISTORY", "PROJECT_BINDING"]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"scope": {"const": "INPUT"}}, "required": ["scope"]},
+          "then": {
+            "required": ["attachment_set_ref"],
+            "properties": {"provenance": {"const": "CURRENT_TURN"}}
+          }
+        },
+        {
+          "if": {"properties": {"scope": {"const": "SESSION"}}, "required": ["scope"]},
+          "then": {
+            "required": ["attachment_set_ref"],
+            "properties": {"provenance": {"const": "SESSION_HISTORY"}}
+          }
+        },
+        {
+          "if": {"properties": {"scope": {"const": "KNOWLEDGE"}}, "required": ["scope"]},
+          "then": {
+            "not": {"required": ["attachment_set_ref"]},
+            "properties": {
+              "attachment_purpose": {"const": "PROJECT_KNOWLEDGE"},
+              "provenance": {"const": "PROJECT_BINDING"}
+            }
+          }
+        }
+      ]
     },
     "environment_name": {
       "type": "string",

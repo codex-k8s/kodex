@@ -178,7 +178,7 @@ describe("assistant workspace store", () => {
     expect(store.conversations).toHaveLength(2);
   });
 
-  it("передаёт загруженные artifact refs в сообщение помощнику", async () => {
+  it("передаёт finalized AttachmentSet в сообщение помощнику", async () => {
     const initial = conversation();
     appendTurnMock.mockResolvedValue({
       ...initial,
@@ -190,12 +190,13 @@ describe("assistant workspace store", () => {
     store.conversations = [initial];
     store.selectedRef = initial.ref;
 
-    await store.send("Изучи вложения", ["art_contract", "art_brief"]);
+    await store.send("Изучи вложения", "aset_contracts");
 
-    expect(appendTurnMock).toHaveBeenCalledWith("cnv_sales", "Изучи вложения", [
-      "art_contract",
-      "art_brief",
-    ]);
+    expect(appendTurnMock).toHaveBeenCalledWith(
+      "cnv_sales",
+      "Изучи вложения",
+      "aset_contracts",
+    );
   });
 
   it("применяет terminal ответ из realtime snapshot без polling", async () => {

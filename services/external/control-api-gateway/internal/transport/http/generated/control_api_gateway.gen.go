@@ -660,6 +660,99 @@ func (e AssistantTurnState) Valid() bool {
 	}
 }
 
+// Defines values for AttachmentSetSource.
+const (
+	AttachmentSetSourceCONTROLCENTER   AttachmentSetSource = "CONTROL_CENTER"
+	AttachmentSetSourceRUNTIME         AttachmentSetSource = "RUNTIME"
+	AttachmentSetSourceSYSTEMASSISTANT AttachmentSetSource = "SYSTEM_ASSISTANT"
+)
+
+// Valid indicates whether the value is a known member of the AttachmentSetSource enum.
+func (e AttachmentSetSource) Valid() bool {
+	switch e {
+	case AttachmentSetSourceCONTROLCENTER:
+		return true
+	case AttachmentSetSourceRUNTIME:
+		return true
+	case AttachmentSetSourceSYSTEMASSISTANT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AttachmentSetState.
+const (
+	AttachmentSetStateDRAFT     AttachmentSetState = "DRAFT"
+	AttachmentSetStateFINALIZED AttachmentSetState = "FINALIZED"
+)
+
+// Valid indicates whether the value is a known member of the AttachmentSetState enum.
+func (e AttachmentSetState) Valid() bool {
+	switch e {
+	case AttachmentSetStateDRAFT:
+		return true
+	case AttachmentSetStateFINALIZED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AttachmentSetItemSource.
+const (
+	AttachmentSetItemSourceAGENTRESULT           AttachmentSetItemSource = "AGENT_RESULT"
+	AttachmentSetItemSourceCONTROLCENTER         AttachmentSetItemSource = "CONTROL_CENTER"
+	AttachmentSetItemSourceINTEGRATIONRESULT     AttachmentSetItemSource = "INTEGRATION_RESULT"
+	AttachmentSetItemSourceINTERACTIONATTACHMENT AttachmentSetItemSource = "INTERACTION_ATTACHMENT"
+	AttachmentSetItemSourceKNOWLEDGESOURCE       AttachmentSetItemSource = "KNOWLEDGE_SOURCE"
+)
+
+// Valid indicates whether the value is a known member of the AttachmentSetItemSource enum.
+func (e AttachmentSetItemSource) Valid() bool {
+	switch e {
+	case AttachmentSetItemSourceAGENTRESULT:
+		return true
+	case AttachmentSetItemSourceCONTROLCENTER:
+		return true
+	case AttachmentSetItemSourceINTEGRATIONRESULT:
+		return true
+	case AttachmentSetItemSourceINTERACTIONATTACHMENT:
+		return true
+	case AttachmentSetItemSourceKNOWLEDGESOURCE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AttachmentSetPurpose.
+const (
+	AttachmentSetPurposeASSISTANTMESSAGE AttachmentSetPurpose = "ASSISTANT_MESSAGE"
+	AttachmentSetPurposeOWNERGATEMESSAGE AttachmentSetPurpose = "OWNER_GATE_MESSAGE"
+	AttachmentSetPurposeRUNINPUT         AttachmentSetPurpose = "RUN_INPUT"
+	AttachmentSetPurposeSESSIONTURN      AttachmentSetPurpose = "SESSION_TURN"
+	AttachmentSetPurposeWORKFLOWINPUT    AttachmentSetPurpose = "WORKFLOW_INPUT"
+)
+
+// Valid indicates whether the value is a known member of the AttachmentSetPurpose enum.
+func (e AttachmentSetPurpose) Valid() bool {
+	switch e {
+	case AttachmentSetPurposeASSISTANTMESSAGE:
+		return true
+	case AttachmentSetPurposeOWNERGATEMESSAGE:
+		return true
+	case AttachmentSetPurposeRUNINPUT:
+		return true
+	case AttachmentSetPurposeSESSIONTURN:
+		return true
+	case AttachmentSetPurposeWORKFLOWINPUT:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditEventOutcome.
 const (
 	AuditEventOutcomeFAILED    AuditEventOutcome = "FAILED"
@@ -1949,40 +2042,40 @@ func (e RunEdgeType) Valid() bool {
 
 // Defines values for RunEventMessageKind.
 const (
-	ARTIFACT            RunEventMessageKind = "ARTIFACT"
-	ASSISTANTMESSAGE    RunEventMessageKind = "ASSISTANT_MESSAGE"
-	FINALMESSAGE        RunEventMessageKind = "FINAL_MESSAGE"
-	INCIDENT            RunEventMessageKind = "INCIDENT"
-	INTERMEDIATEMESSAGE RunEventMessageKind = "INTERMEDIATE_MESSAGE"
-	OWNERGATE           RunEventMessageKind = "OWNER_GATE"
-	PLANUPDATE          RunEventMessageKind = "PLAN_UPDATE"
-	STATE               RunEventMessageKind = "STATE"
-	TOOLCALL            RunEventMessageKind = "TOOL_CALL"
-	USERMESSAGE         RunEventMessageKind = "USER_MESSAGE"
+	RunEventMessageKindARTIFACT            RunEventMessageKind = "ARTIFACT"
+	RunEventMessageKindASSISTANTMESSAGE    RunEventMessageKind = "ASSISTANT_MESSAGE"
+	RunEventMessageKindFINALMESSAGE        RunEventMessageKind = "FINAL_MESSAGE"
+	RunEventMessageKindINCIDENT            RunEventMessageKind = "INCIDENT"
+	RunEventMessageKindINTERMEDIATEMESSAGE RunEventMessageKind = "INTERMEDIATE_MESSAGE"
+	RunEventMessageKindOWNERGATE           RunEventMessageKind = "OWNER_GATE"
+	RunEventMessageKindPLANUPDATE          RunEventMessageKind = "PLAN_UPDATE"
+	RunEventMessageKindSTATE               RunEventMessageKind = "STATE"
+	RunEventMessageKindTOOLCALL            RunEventMessageKind = "TOOL_CALL"
+	RunEventMessageKindUSERMESSAGE         RunEventMessageKind = "USER_MESSAGE"
 )
 
 // Valid indicates whether the value is a known member of the RunEventMessageKind enum.
 func (e RunEventMessageKind) Valid() bool {
 	switch e {
-	case ARTIFACT:
+	case RunEventMessageKindARTIFACT:
 		return true
-	case ASSISTANTMESSAGE:
+	case RunEventMessageKindASSISTANTMESSAGE:
 		return true
-	case FINALMESSAGE:
+	case RunEventMessageKindFINALMESSAGE:
 		return true
-	case INCIDENT:
+	case RunEventMessageKindINCIDENT:
 		return true
-	case INTERMEDIATEMESSAGE:
+	case RunEventMessageKindINTERMEDIATEMESSAGE:
 		return true
-	case OWNERGATE:
+	case RunEventMessageKindOWNERGATE:
 		return true
-	case PLANUPDATE:
+	case RunEventMessageKindPLANUPDATE:
 		return true
-	case STATE:
+	case RunEventMessageKindSTATE:
 		return true
-	case TOOLCALL:
+	case RunEventMessageKindTOOLCALL:
 		return true
-	case USERMESSAGE:
+	case RunEventMessageKindUSERMESSAGE:
 		return true
 	default:
 		return false
@@ -3092,22 +3185,22 @@ func (e DownloadArtifactParamsPurpose) Valid() bool {
 
 // Defines values for ListArtifactsParamsLifecycleState.
 const (
-	ListArtifactsParamsLifecycleStateACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
-	ListArtifactsParamsLifecycleStateDELETED      ListArtifactsParamsLifecycleState = "DELETED"
-	ListArtifactsParamsLifecycleStatePURGED       ListArtifactsParamsLifecycleState = "PURGED"
-	ListArtifactsParamsLifecycleStatePURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
+	ACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
+	DELETED      ListArtifactsParamsLifecycleState = "DELETED"
+	PURGED       ListArtifactsParamsLifecycleState = "PURGED"
+	PURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsLifecycleState enum.
 func (e ListArtifactsParamsLifecycleState) Valid() bool {
 	switch e {
-	case ListArtifactsParamsLifecycleStateACTIVE:
+	case ACTIVE:
 		return true
-	case ListArtifactsParamsLifecycleStateDELETED:
+	case DELETED:
 		return true
-	case ListArtifactsParamsLifecycleStatePURGED:
+	case PURGED:
 		return true
-	case ListArtifactsParamsLifecycleStatePURGEPENDING:
+	case PURGEPENDING:
 		return true
 	default:
 		return false
@@ -3678,13 +3771,14 @@ type AssistantPlanTarget struct {
 
 // AssistantTurn defines model for AssistantTurn.
 type AssistantTurn struct {
-	Content   string             `json:"content"`
-	CreatedAt Timestamp          `json:"createdAt"`
-	Plan      *AssistantPlan     `json:"plan,omitempty"`
-	Ref       OpaqueRef          `json:"ref"`
-	Role      AssistantTurnRole  `json:"role"`
-	Sequence  int64              `json:"sequence"`
-	State     AssistantTurnState `json:"state"`
+	AttachmentSetRef *OpaqueRef         `json:"attachmentSetRef,omitempty"`
+	Content          string             `json:"content"`
+	CreatedAt        Timestamp          `json:"createdAt"`
+	Plan             *AssistantPlan     `json:"plan,omitempty"`
+	Ref              OpaqueRef          `json:"ref"`
+	Role             AssistantTurnRole  `json:"role"`
+	Sequence         int64              `json:"sequence"`
+	State            AssistantTurnState `json:"state"`
 }
 
 // AssistantTurnRole defines model for AssistantTurn.Role.
@@ -3692,6 +3786,73 @@ type AssistantTurnRole string
 
 // AssistantTurnState defines model for AssistantTurn.State.
 type AssistantTurnState string
+
+// AttachmentSet defines model for AttachmentSet.
+type AttachmentSet struct {
+	CreatedAt      Timestamp            `json:"createdAt"`
+	FamilyRef      string               `json:"familyRef"`
+	FinalizedAt    *Timestamp           `json:"finalizedAt,omitempty"`
+	ItemCount      int64                `json:"itemCount"`
+	Items          []AttachmentSetItem  `json:"items"`
+	ManifestDigest *string              `json:"manifestDigest,omitempty"`
+	ProjectRef     *OpaqueRef           `json:"projectRef,omitempty"`
+	Purpose        AttachmentSetPurpose `json:"purpose"`
+	Ref            string               `json:"ref"`
+	Revision       int64                `json:"revision"`
+	Source         AttachmentSetSource  `json:"source"`
+	State          AttachmentSetState   `json:"state"`
+	Superseded     bool                 `json:"superseded"`
+	TotalSizeBytes int64                `json:"totalSizeBytes"`
+	Version        int64                `json:"version"`
+}
+
+// AttachmentSetSource defines model for AttachmentSet.Source.
+type AttachmentSetSource string
+
+// AttachmentSetState defines model for AttachmentSet.State.
+type AttachmentSetState string
+
+// AttachmentSetAddItemsInput defines model for AttachmentSetAddItemsInput.
+type AttachmentSetAddItemsInput struct {
+	ArtifactRefs        []OpaqueRef `json:"artifactRefs"`
+	InsertAfterPosition *int64      `json:"insertAfterPosition,omitempty"`
+}
+
+// AttachmentSetDraftInput defines model for AttachmentSetDraftInput.
+type AttachmentSetDraftInput struct {
+	ArtifactRefs *[]OpaqueRef         `json:"artifactRefs,omitempty"`
+	Purpose      AttachmentSetPurpose `json:"purpose"`
+}
+
+// AttachmentSetItem defines model for AttachmentSetItem.
+type AttachmentSetItem struct {
+	ArtifactRef      OpaqueRef               `json:"artifactRef"`
+	ArtifactRevision int64                   `json:"artifactRevision"`
+	ArtifactVersion  int64                   `json:"artifactVersion"`
+	Digest           string                  `json:"digest"`
+	DisplayName      string                  `json:"displayName"`
+	MediaType        string                  `json:"mediaType"`
+	Position         int64                   `json:"position"`
+	SizeBytes        int64                   `json:"sizeBytes"`
+	Source           AttachmentSetItemSource `json:"source"`
+}
+
+// AttachmentSetItemSource defines model for AttachmentSetItem.Source.
+type AttachmentSetItemSource string
+
+// AttachmentSetPage defines model for AttachmentSetPage.
+type AttachmentSetPage struct {
+	AttachmentSet AttachmentSet `json:"attachmentSet"`
+	NextPageToken *string       `json:"nextPageToken,omitempty"`
+}
+
+// AttachmentSetPurpose defines model for AttachmentSetPurpose.
+type AttachmentSetPurpose string
+
+// AttachmentSetRemoveItemsInput defines model for AttachmentSetRemoveItemsInput.
+type AttachmentSetRemoveItemsInput struct {
+	ArtifactRefs []OpaqueRef `json:"artifactRefs"`
+}
 
 // AuditEvent defines model for AuditEvent.
 type AuditEvent struct {
@@ -3788,9 +3949,9 @@ type ExplainAccessResult struct {
 
 // GateResolution defines model for GateResolution.
 type GateResolution struct {
-	ArtifactRefs *[]OpaqueRef           `json:"artifactRefs,omitempty"`
-	Comment      *string                `json:"comment,omitempty"`
-	Decision     GateResolutionDecision `json:"decision"`
+	AttachmentSetRef *OpaqueRef             `json:"attachmentSetRef,omitempty"`
+	Comment          *string                `json:"comment,omitempty"`
+	Decision         GateResolutionDecision `json:"decision"`
 }
 
 // GateResolutionDecision defines model for GateResolution.Decision.
@@ -4049,25 +4210,25 @@ type Overview struct {
 
 // OwnerGate defines model for OwnerGate.
 type OwnerGate struct {
-	AllowedDecisions    []OwnerGateAllowedDecisions `json:"allowedDecisions"`
-	ArtifactRefs        []OpaqueRef                 `json:"artifactRefs"`
-	ConsequencesSummary string                      `json:"consequencesSummary"`
-	ContextSummary      string                      `json:"contextSummary"`
-	DecidedAt           *Timestamp                  `json:"decidedAt,omitempty"`
-	DecidedBy           *UserSummary                `json:"decidedBy,omitempty"`
-	Decision            *OwnerGateDecision          `json:"decision,omitempty"`
-	DecisionComment     *string                     `json:"decisionComment,omitempty"`
-	ExpiresAt           *Timestamp                  `json:"expiresAt,omitempty"`
-	NextActions         []NextAction                `json:"nextActions"`
-	NodeRef             OpaqueRef                   `json:"nodeRef"`
-	OpenedAt            Timestamp                   `json:"openedAt"`
-	ProjectRef          OpaqueRef                   `json:"projectRef"`
-	Ref                 OpaqueRef                   `json:"ref"`
-	RequestedBy         UserSummary                 `json:"requestedBy"`
-	RunRef              OpaqueRef                   `json:"runRef"`
-	State               OwnerGateState              `json:"state"`
-	Title               string                      `json:"title"`
-	Version             int64                       `json:"version"`
+	AllowedDecisions           []OwnerGateAllowedDecisions `json:"allowedDecisions"`
+	ConsequencesSummary        string                      `json:"consequencesSummary"`
+	ContextSummary             string                      `json:"contextSummary"`
+	DecidedAt                  *Timestamp                  `json:"decidedAt,omitempty"`
+	DecidedBy                  *UserSummary                `json:"decidedBy,omitempty"`
+	Decision                   *OwnerGateDecision          `json:"decision,omitempty"`
+	DecisionComment            *string                     `json:"decisionComment,omitempty"`
+	ExpiresAt                  *Timestamp                  `json:"expiresAt,omitempty"`
+	NextActions                []NextAction                `json:"nextActions"`
+	NodeRef                    OpaqueRef                   `json:"nodeRef"`
+	OpenedAt                   Timestamp                   `json:"openedAt"`
+	ProjectRef                 OpaqueRef                   `json:"projectRef"`
+	Ref                        OpaqueRef                   `json:"ref"`
+	RequestedBy                UserSummary                 `json:"requestedBy"`
+	ResolutionAttachmentSetRef *OpaqueRef                  `json:"resolutionAttachmentSetRef,omitempty"`
+	RunRef                     OpaqueRef                   `json:"runRef"`
+	State                      OwnerGateState              `json:"state"`
+	Title                      string                      `json:"title"`
+	Version                    int64                       `json:"version"`
 }
 
 // OwnerGateAllowedDecisions defines model for OwnerGate.AllowedDecisions.
@@ -4380,37 +4541,37 @@ type RoleImageRecipeUpdateInput struct {
 
 // Run defines model for Run.
 type Run struct {
-	ActivitySummary   string         `json:"activitySummary"`
-	ArtifactRefs      []OpaqueRef    `json:"artifactRefs"`
-	Attempt           int            `json:"attempt"`
-	CreatedAt         Timestamp      `json:"createdAt"`
-	CurrentActivity   *string        `json:"currentActivity,omitempty"`
-	FinishedAt        *Timestamp     `json:"finishedAt,omitempty"`
-	GateRefs          []OpaqueRef    `json:"gateRefs"`
-	GraphRevision     int64          `json:"graphRevision"`
-	Incidents         *[]Incident    `json:"incidents,omitempty"`
-	Initiator         UserSummary    `json:"initiator"`
-	InputArtifactRefs []OpaqueRef    `json:"inputArtifactRefs"`
-	InputSummary      *string        `json:"inputSummary,omitempty"`
-	LastEventSequence int64          `json:"lastEventSequence"`
-	NextActions       []NextAction   `json:"nextActions"`
-	ParentRunRef      *OpaqueRef     `json:"parentRunRef,omitempty"`
-	ProjectRef        OpaqueRef      `json:"projectRef"`
-	Ref               OpaqueRef      `json:"ref"`
-	ResultSummary     *string        `json:"resultSummary,omitempty"`
-	RetryOfRunRef     *OpaqueRef     `json:"retryOfRunRef,omitempty"`
-	RootRunRef        OpaqueRef      `json:"rootRunRef"`
-	SafeErrorCode     *string        `json:"safeErrorCode,omitempty"`
-	SafeErrorMessage  *string        `json:"safeErrorMessage,omitempty"`
-	SessionRef        OpaqueRef      `json:"sessionRef"`
-	Source            RunSource      `json:"source"`
-	StartedAt         *Timestamp     `json:"startedAt,omitempty"`
-	State             RunState       `json:"state"`
-	Target            RunTarget      `json:"target"`
-	Title             string         `json:"title"`
-	TitleSource       RunTitleSource `json:"titleSource"`
-	Usage             TokenUsage     `json:"usage"`
-	Version           int64          `json:"version"`
+	ActivitySummary       string         `json:"activitySummary"`
+	ArtifactRefs          []OpaqueRef    `json:"artifactRefs"`
+	Attempt               int            `json:"attempt"`
+	CreatedAt             Timestamp      `json:"createdAt"`
+	CurrentActivity       *string        `json:"currentActivity,omitempty"`
+	FinishedAt            *Timestamp     `json:"finishedAt,omitempty"`
+	GateRefs              []OpaqueRef    `json:"gateRefs"`
+	GraphRevision         int64          `json:"graphRevision"`
+	Incidents             *[]Incident    `json:"incidents,omitempty"`
+	Initiator             UserSummary    `json:"initiator"`
+	InputAttachmentSetRef *OpaqueRef     `json:"inputAttachmentSetRef,omitempty"`
+	InputSummary          *string        `json:"inputSummary,omitempty"`
+	LastEventSequence     int64          `json:"lastEventSequence"`
+	NextActions           []NextAction   `json:"nextActions"`
+	ParentRunRef          *OpaqueRef     `json:"parentRunRef,omitempty"`
+	ProjectRef            OpaqueRef      `json:"projectRef"`
+	Ref                   OpaqueRef      `json:"ref"`
+	ResultSummary         *string        `json:"resultSummary,omitempty"`
+	RetryOfRunRef         *OpaqueRef     `json:"retryOfRunRef,omitempty"`
+	RootRunRef            OpaqueRef      `json:"rootRunRef"`
+	SafeErrorCode         *string        `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage      *string        `json:"safeErrorMessage,omitempty"`
+	SessionRef            OpaqueRef      `json:"sessionRef"`
+	Source                RunSource      `json:"source"`
+	StartedAt             *Timestamp     `json:"startedAt,omitempty"`
+	State                 RunState       `json:"state"`
+	Target                RunTarget      `json:"target"`
+	Title                 string         `json:"title"`
+	TitleSource           RunTitleSource `json:"titleSource"`
+	Usage                 TokenUsage     `json:"usage"`
+	Version               int64          `json:"version"`
 }
 
 // RunSource defines model for Run.Source.
@@ -4532,14 +4693,14 @@ type RunGraph struct {
 
 // RunInput defines model for RunInput.
 type RunInput struct {
-	ArtifactRefs *[]OpaqueRef            `json:"artifactRefs,omitempty"`
-	Input        *map[string]interface{} `json:"input,omitempty"`
-	ProjectRef   OpaqueRef               `json:"projectRef"`
-	SessionRef   *OpaqueRef              `json:"sessionRef,omitempty"`
-	TargetRef    OpaqueRef               `json:"targetRef"`
-	TargetType   RunInputTargetType      `json:"targetType"`
-	Task         string                  `json:"task"`
-	Title        *string                 `json:"title,omitempty"`
+	AttachmentSetRef *OpaqueRef              `json:"attachmentSetRef,omitempty"`
+	Input            *map[string]interface{} `json:"input,omitempty"`
+	ProjectRef       OpaqueRef               `json:"projectRef"`
+	SessionRef       *OpaqueRef              `json:"sessionRef,omitempty"`
+	TargetRef        OpaqueRef               `json:"targetRef"`
+	TargetType       RunInputTargetType      `json:"targetType"`
+	Task             string                  `json:"task"`
+	Title            *string                 `json:"title,omitempty"`
 }
 
 // RunInputTargetType defines model for RunInput.TargetType.
@@ -5026,10 +5187,10 @@ type TokenUsage struct {
 
 // TurnInput defines model for TurnInput.
 type TurnInput struct {
-	ArtifactRefs *[]OpaqueRef `json:"artifactRefs,omitempty"`
-	NodeRef      *OpaqueRef   `json:"nodeRef,omitempty"`
-	RunRef       OpaqueRef    `json:"runRef"`
-	Task         string       `json:"task"`
+	AttachmentSetRef *OpaqueRef `json:"attachmentSetRef,omitempty"`
+	NodeRef          *OpaqueRef `json:"nodeRef,omitempty"`
+	RunRef           OpaqueRef  `json:"runRef"`
+	Task             string     `json:"task"`
 }
 
 // UserSummary defines model for UserSummary.
@@ -5174,6 +5335,9 @@ type ArtifactSourceKindQuery string
 
 // ArtifactTypeQuery defines model for ArtifactTypeQuery.
 type ArtifactTypeQuery string
+
+// AttachmentSetRef defines model for AttachmentSetRef.
+type AttachmentSetRef = string
 
 // ConnectionRef defines model for ConnectionRef.
 type ConnectionRef = OpaqueRef
@@ -5543,8 +5707,8 @@ type UpdateAssistantConversationTitleParams struct {
 
 // AddAssistantTurnJSONBody defines parameters for AddAssistantTurn.
 type AddAssistantTurnJSONBody struct {
-	ArtifactRefs *[]OpaqueRef `json:"artifactRefs,omitempty"`
-	Content      string       `json:"content"`
+	AttachmentSetRef *OpaqueRef `json:"attachmentSetRef,omitempty"`
+	Content          string     `json:"content"`
 }
 
 // AddAssistantTurnParams defines parameters for AddAssistantTurn.
@@ -5597,6 +5761,39 @@ type ValidateAssistantPlanJSONBody struct {
 
 // ValidateAssistantPlanParams defines parameters for ValidateAssistantPlan.
 type ValidateAssistantPlanParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CreateOrganizationAttachmentSetDraftParams defines parameters for CreateOrganizationAttachmentSetDraft.
+type CreateOrganizationAttachmentSetDraftParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// GetAttachmentSetParams defines parameters for GetAttachmentSet.
+type GetAttachmentSetParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// FinalizeAttachmentSetParams defines parameters for FinalizeAttachmentSet.
+type FinalizeAttachmentSetParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// AddAttachmentSetItemsParams defines parameters for AddAttachmentSetItems.
+type AddAttachmentSetItemsParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// RemoveAttachmentSetItemsParams defines parameters for RemoveAttachmentSetItems.
+type RemoveAttachmentSetItemsParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
@@ -5730,6 +5927,12 @@ type UploadArtifactParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 	XFileName      string         `json:"X-File-Name"`
+}
+
+// CreateAttachmentSetDraftParams defines parameters for CreateAttachmentSetDraft.
+type CreateAttachmentSetDraftParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
 // AddProjectMembershipParams defines parameters for AddProjectMembership.
@@ -6064,6 +6267,15 @@ type RejectAssistantPlanJSONRequestBody RejectAssistantPlanJSONBody
 // ValidateAssistantPlanJSONRequestBody defines body for ValidateAssistantPlan for application/json ContentType.
 type ValidateAssistantPlanJSONRequestBody ValidateAssistantPlanJSONBody
 
+// CreateOrganizationAttachmentSetDraftJSONRequestBody defines body for CreateOrganizationAttachmentSetDraft for application/json ContentType.
+type CreateOrganizationAttachmentSetDraftJSONRequestBody = AttachmentSetDraftInput
+
+// AddAttachmentSetItemsJSONRequestBody defines body for AddAttachmentSetItems for application/json ContentType.
+type AddAttachmentSetItemsJSONRequestBody = AttachmentSetAddItemsInput
+
+// RemoveAttachmentSetItemsJSONRequestBody defines body for RemoveAttachmentSetItems for application/json ContentType.
+type RemoveAttachmentSetItemsJSONRequestBody = AttachmentSetRemoveItemsInput
+
 // CreateIntegrationConnectionJSONRequestBody defines body for CreateIntegrationConnection for application/json ContentType.
 type CreateIntegrationConnectionJSONRequestBody = IntegrationConnectionInput
 
@@ -6087,6 +6299,9 @@ type UpdateProjectJSONRequestBody = ProjectInput
 
 // CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
 type CreateAgentJSONRequestBody = AgentInput
+
+// CreateAttachmentSetDraftJSONRequestBody defines body for CreateAttachmentSetDraft for application/json ContentType.
+type CreateAttachmentSetDraftJSONRequestBody = AttachmentSetDraftInput
 
 // AddProjectMembershipJSONRequestBody defines body for AddProjectMembership for application/json ContentType.
 type AddProjectMembershipJSONRequestBody = ProjectMembershipCreateInput
@@ -6310,6 +6525,21 @@ type ServerInterface interface {
 	// (POST /api/v1/assistant-plans/{planRef}/validation)
 	ValidateAssistantPlan(w http.ResponseWriter, r *http.Request, planRef PlanRef, params ValidateAssistantPlanParams)
 
+	// (POST /api/v1/attachment-sets)
+	CreateOrganizationAttachmentSetDraft(w http.ResponseWriter, r *http.Request, params CreateOrganizationAttachmentSetDraftParams)
+
+	// (GET /api/v1/attachment-sets/{attachmentSetRef})
+	GetAttachmentSet(w http.ResponseWriter, r *http.Request, attachmentSetRef AttachmentSetRef, params GetAttachmentSetParams)
+
+	// (POST /api/v1/attachment-sets/{attachmentSetRef}/finalization)
+	FinalizeAttachmentSet(w http.ResponseWriter, r *http.Request, attachmentSetRef AttachmentSetRef, params FinalizeAttachmentSetParams)
+
+	// (POST /api/v1/attachment-sets/{attachmentSetRef}/items/additions)
+	AddAttachmentSetItems(w http.ResponseWriter, r *http.Request, attachmentSetRef AttachmentSetRef, params AddAttachmentSetItemsParams)
+
+	// (POST /api/v1/attachment-sets/{attachmentSetRef}/items/removals)
+	RemoveAttachmentSetItems(w http.ResponseWriter, r *http.Request, attachmentSetRef AttachmentSetRef, params RemoveAttachmentSetItemsParams)
+
 	// (GET /api/v1/audit-events)
 	ListAuditEvents(w http.ResponseWriter, r *http.Request, params ListAuditEventsParams)
 
@@ -6378,6 +6608,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/projects/{projectRef}/artifacts)
 	UploadArtifact(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params UploadArtifactParams)
+
+	// (POST /api/v1/projects/{projectRef}/attachment-sets)
+	CreateAttachmentSetDraft(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateAttachmentSetDraftParams)
 
 	// (GET /api/v1/projects/{projectRef}/members)
 	ListProjectMemberships(w http.ResponseWriter, r *http.Request, projectRef ProjectRef)
@@ -10687,6 +10920,459 @@ func (siw *ServerInterfaceWrapper) ValidateAssistantPlan(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// CreateOrganizationAttachmentSetDraft operation middleware
+func (siw *ServerInterfaceWrapper) CreateOrganizationAttachmentSetDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateOrganizationAttachmentSetDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOrganizationAttachmentSetDraft(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAttachmentSet operation middleware
+func (siw *ServerInterfaceWrapper) GetAttachmentSet(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "attachmentSetRef" -------------
+	var attachmentSetRef AttachmentSetRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attachmentSetRef", r.PathValue("attachmentSetRef"), &attachmentSetRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attachmentSetRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAttachmentSetParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAttachmentSet(w, r, attachmentSetRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// FinalizeAttachmentSet operation middleware
+func (siw *ServerInterfaceWrapper) FinalizeAttachmentSet(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "attachmentSetRef" -------------
+	var attachmentSetRef AttachmentSetRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attachmentSetRef", r.PathValue("attachmentSetRef"), &attachmentSetRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attachmentSetRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params FinalizeAttachmentSetParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.FinalizeAttachmentSet(w, r, attachmentSetRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddAttachmentSetItems operation middleware
+func (siw *ServerInterfaceWrapper) AddAttachmentSetItems(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "attachmentSetRef" -------------
+	var attachmentSetRef AttachmentSetRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attachmentSetRef", r.PathValue("attachmentSetRef"), &attachmentSetRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attachmentSetRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddAttachmentSetItemsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddAttachmentSetItems(w, r, attachmentSetRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveAttachmentSetItems operation middleware
+func (siw *ServerInterfaceWrapper) RemoveAttachmentSetItems(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "attachmentSetRef" -------------
+	var attachmentSetRef AttachmentSetRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attachmentSetRef", r.PathValue("attachmentSetRef"), &attachmentSetRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attachmentSetRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveAttachmentSetItemsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveAttachmentSetItems(w, r, attachmentSetRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListAuditEvents operation middleware
 func (siw *ServerInterfaceWrapper) ListAuditEvents(w http.ResponseWriter, r *http.Request) {
 
@@ -12287,6 +12973,89 @@ func (siw *ServerInterfaceWrapper) UploadArtifact(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UploadArtifact(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAttachmentSetDraft operation middleware
+func (siw *ServerInterfaceWrapper) CreateAttachmentSetDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateAttachmentSetDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAttachmentSetDraft(w, r, projectRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16065,6 +16834,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/assistant-plans/{planRef}/draft", wrapper.UpdateAssistantPlanDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-plans/{planRef}/rejection", wrapper.RejectAssistantPlan)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-plans/{planRef}/validation", wrapper.ValidateAssistantPlan)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/attachment-sets", wrapper.CreateOrganizationAttachmentSetDraft)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/attachment-sets/{attachmentSetRef}", wrapper.GetAttachmentSet)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/attachment-sets/{attachmentSetRef}/finalization", wrapper.FinalizeAttachmentSet)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/attachment-sets/{attachmentSetRef}/items/additions", wrapper.AddAttachmentSetItems)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/attachment-sets/{attachmentSetRef}/items/removals", wrapper.RemoveAttachmentSetItems)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/audit-events", wrapper.ListAuditEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/bootstrap", wrapper.GetBootstrapState)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections", wrapper.ListIntegrationConnections)
@@ -16088,6 +16862,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/artifacts", wrapper.UploadArtifact)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/attachment-sets", wrapper.CreateAttachmentSetDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.ListProjectMemberships)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.AddProjectMembership)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members/{membershipRef}", wrapper.RemoveProjectMembership)

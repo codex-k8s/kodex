@@ -1,5 +1,8 @@
 import { requestSignal } from "@/shared/api/client";
-import { listArtifacts } from "@/shared/api/generated/openapi/sdk.gen";
+import {
+  listArtifacts,
+  listOrganizationArtifacts,
+} from "@/shared/api/generated/openapi/sdk.gen";
 import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
 import { unwrap } from "@/shared/api/problem";
 import type {
@@ -37,7 +40,7 @@ function toPickerItem(artifact: Artifact): AttachmentArtifactPickerItem {
 }
 
 export function createAttachmentArtifactLoader(
-  projectRef: string,
+  projectRef?: string,
 ): AsyncEntityLoader<AttachmentArtifactPickerItem> {
   return async ({ cursor, query, signal }) => {
     const visitedPageTokens = new Set(cursor ? [cursor] : []);
@@ -46,17 +49,23 @@ export function createAttachmentArtifactLoader(
     async function loadAttachablePage(
       pageToken?: string,
     ): Promise<AsyncEntityPage<AttachmentArtifactPickerItem>> {
+      const query = {
+        lifecycleState: "ACTIVE" as const,
+        pageSize: artifactPageSize,
+        ...(pageToken ? { pageToken } : {}),
+        ...(searchQuery ? { query: searchQuery } : {}),
+      };
       const response = await unwrap(
-        listArtifacts({
-          path: { projectRef },
-          query: {
-            lifecycleState: "ACTIVE",
-            pageSize: artifactPageSize,
-            ...(pageToken ? { pageToken } : {}),
-            ...(searchQuery ? { query: searchQuery } : {}),
-          },
-          signal: combinedSignal(signal),
-        }),
+        projectRef
+          ? listArtifacts({
+              path: { projectRef },
+              query,
+              signal: combinedSignal(signal),
+            })
+          : listOrganizationArtifacts({
+              query,
+              signal: combinedSignal(signal),
+            }),
       );
       const items = response.data.items.filter(isAttachable).map(toPickerItem);
       const candidateCursor = response.data.nextPageToken || null;

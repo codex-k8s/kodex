@@ -413,7 +413,7 @@ func renderInstructions(input model.Input) (string, error) {
 }
 
 func promptTemplateVariables(input model.Input) (map[string]any, error) {
-	manifest, err := runtimecontract.BuildAttachmentManifest(input.AttachmentSetRef, input.AttachmentContext, input.InputArtifacts)
+	manifest, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts)
 	if err != nil {
 		return nil, errors.New("build instruction attachment manifest")
 	}
@@ -491,15 +491,27 @@ func scopedManifestFiles(files []runtimecontract.AttachmentManifestFile, scope s
 }
 
 func materializeInputArtifacts(ctx context.Context, input model.Input, client *callback.Client) error {
-	inputArtifacts := scopedArtifacts(input.InputArtifacts, runtimecontract.AttachmentScopeInput)
-	directManifest, err := runtimecontract.BuildAttachmentManifest(input.AttachmentSetRef, input.AttachmentContext, inputArtifacts)
-	if err != nil {
-		return errors.New("build runtime attachment manifest")
+	setManifests := make(map[string]runtimecontract.CanonicalAttachmentManifest, len(input.AttachmentSets))
+	for _, set := range input.AttachmentSets {
+		setArtifacts := make([]runtimecontract.RunnerInputArtifact, 0)
+		for _, artifact := range input.InputArtifacts {
+			if artifact.AttachmentSetRef != set.Ref {
+				continue
+			}
+			canonicalArtifact := artifact
+			canonicalArtifact.Scope = runtimecontract.AttachmentScopeInput
+			canonicalArtifact.AttachmentSetRef = ""
+			canonicalArtifact.AttachmentPurpose = ""
+			canonicalArtifact.Provenance = ""
+			setArtifacts = append(setArtifacts, canonicalArtifact)
+		}
+		manifest, err := runtimecontract.BuildAttachmentManifest(set.Ref, set.Purpose, setArtifacts)
+		if err != nil || manifest.Digest != set.ManifestDigest {
+			return errors.New("runtime attachment manifest digest is invalid")
+		}
+		setManifests[set.Ref] = manifest
 	}
-	if len(inputArtifacts) > 0 && directManifest.Digest != input.AttachmentSetManifestDigest {
-		return errors.New("runtime attachment manifest digest is invalid")
-	}
-	workspaceManifest, err := runtimecontract.BuildAttachmentManifest(input.AttachmentSetRef, input.AttachmentContext, input.InputArtifacts)
+	workspaceManifest, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts)
 	if err != nil {
 		return errors.New("build runtime workspace manifest")
 	}
@@ -512,8 +524,8 @@ func materializeInputArtifacts(ctx context.Context, input model.Input, client *c
 	if err := resetWorkspaceDirectory(input.WorkspaceRoot, "session"); err != nil {
 		return err
 	}
-	if input.AttachmentSetRef != "" {
-		for _, relative := range []string{filepath.Join("input", input.AttachmentSetRef), filepath.Join("input", input.AttachmentSetRef, "files")} {
+	for _, set := range input.AttachmentSets {
+		for _, relative := range []string{filepath.Join("input", set.Ref), filepath.Join("input", set.Ref, "files")} {
 			if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
 				return err
 			}
@@ -532,17 +544,21 @@ func materializeInputArtifacts(ctx context.Context, input model.Input, client *c
 			return err
 		}
 	}
-	return writeInputManifests(input, directManifest, workspaceManifest)
+	return writeInputManifests(input, setManifests, workspaceManifest)
 }
 
-func writeInputManifests(input model.Input, direct, workspace runtimecontract.CanonicalAttachmentManifest) error {
-	if input.AttachmentSetRef != "" {
-		manifestPath := filepath.Join("input", input.AttachmentSetRef, "manifest.json")
-		if err := writeReadOnlyWorkspaceFile(input.WorkspaceRoot, manifestPath, direct.Bytes); err != nil {
+func writeInputManifests(input model.Input, sets map[string]runtimecontract.CanonicalAttachmentManifest, workspace runtimecontract.CanonicalWorkspaceAttachmentManifest) error {
+	for _, set := range input.AttachmentSets {
+		manifest, exists := sets[set.Ref]
+		if !exists {
+			return errors.New("runtime attachment manifest is missing")
+		}
+		manifestPath := filepath.Join("input", set.Ref, "manifest.json")
+		if err := writeReadOnlyWorkspaceFile(input.WorkspaceRoot, manifestPath, manifest.Bytes); err != nil {
 			return err
 		}
 		readme := []byte("This directory contains a read-only, server-owned AttachmentSet. Read manifest.json before using files.\n")
-		if err := writeReadOnlyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", input.AttachmentSetRef, "README.md"), readme); err != nil {
+		if err := writeReadOnlyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", set.Ref, "README.md"), readme); err != nil {
 			return err
 		}
 	}

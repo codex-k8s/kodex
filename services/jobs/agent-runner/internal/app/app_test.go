@@ -18,11 +18,48 @@ type nativeToolRecorderStub struct {
 }
 
 func runnerInputArtifact(ref, fileName, mediaType, scope string, position, version int64, source string) runtimecontract.RunnerInputArtifact {
-	return runtimecontract.RunnerInputArtifact{
+	artifact := runtimecontract.RunnerInputArtifact{
 		Ref: ref, FileName: fileName, MediaType: mediaType,
 		Digest: "sha256:" + strings.Repeat("a", 64), SizeBytes: 1,
 		Revision: 1, Version: version, Scope: scope, Position: position, Source: source,
 	}
+	if scope == runtimecontract.AttachmentScopeKnowledge {
+		artifact.AttachmentPurpose = "PROJECT_KNOWLEDGE"
+		artifact.Provenance = "PROJECT_BINDING"
+	}
+	return artifact
+}
+
+func bindAttachmentCatalog(input model.Input) model.Input {
+	for index := range input.InputArtifacts {
+		artifact := &input.InputArtifacts[index]
+		switch artifact.Scope {
+		case runtimecontract.AttachmentScopeInput:
+			artifact.AttachmentSetRef = input.AttachmentSetRef
+			artifact.AttachmentPurpose = input.AttachmentContext
+			artifact.Provenance = "CURRENT_TURN"
+		case runtimecontract.AttachmentScopeSession:
+			artifact.AttachmentSetRef = "aset_history1"
+			artifact.AttachmentPurpose = "SESSION_TURN"
+			artifact.Provenance = "SESSION_HISTORY"
+		}
+	}
+	if input.AttachmentSetRef != "" {
+		input.AttachmentSets = append(input.AttachmentSets, runtimecontract.RunnerAttachmentSet{
+			Ref: input.AttachmentSetRef, ManifestDigest: input.AttachmentSetManifestDigest,
+			Purpose: input.AttachmentContext, Scope: runtimecontract.AttachmentScopeInput, Provenance: "CURRENT_TURN",
+		})
+	}
+	for _, artifact := range input.InputArtifacts {
+		if artifact.Scope == runtimecontract.AttachmentScopeSession {
+			input.AttachmentSets = append(input.AttachmentSets, runtimecontract.RunnerAttachmentSet{
+				Ref: artifact.AttachmentSetRef, ManifestDigest: strings.Repeat("b", 64), Purpose: artifact.AttachmentPurpose,
+				Scope: runtimecontract.AttachmentScopeSession, Provenance: artifact.Provenance,
+			})
+			break
+		}
+	}
+	return input
 }
 
 func (stub *nativeToolRecorderStub) RecordNativeToolCall(_ context.Context, _ model.Input, call runtimecontract.NativeToolCall) error {
@@ -43,6 +80,7 @@ func TestBuildPromptExplainsBoundedFileAccessWithArtifactCapability(t *testing.T
 			{Ref: "artifact_ijklmnop", FileName: "terms.pdf", MediaType: "application/pdf", Scope: "INPUT", Position: 2, Source: "CONTROL_CENTER"},
 		},
 	}
+	input = bindAttachmentCatalog(input)
 	prompt, err := buildPrompt(input)
 	if err != nil {
 		t.Fatalf("buildPrompt() error = %v", err)
@@ -93,6 +131,8 @@ func TestRenderInstructionsExposesTypedFileScopes(t *testing.T) {
 			runnerInputArtifact("artifact_qrstuvwx", "policy.md", "text/markdown", runtimecontract.AttachmentScopeKnowledge, 1, 3, "KNOWLEDGE_SOURCE"),
 		},
 	}
+	input.AttachmentSetManifestDigest = strings.Repeat("a", 64)
+	input = bindAttachmentCatalog(input)
 	rendered, err := renderInstructions(input)
 	if err != nil {
 		t.Fatalf("renderInstructions() error = %v", err)
@@ -146,6 +186,8 @@ func TestRenderInstructionsMaterializesRunWorkflowAndProjectFileScopes(t *testin
 			runnerInputArtifact("artifact_ijklmnop", "knowledge.md", "text/markdown", runtimecontract.AttachmentScopeKnowledge, 1, 1, "KNOWLEDGE_SOURCE"),
 		},
 	}
+	input.AttachmentSetManifestDigest = strings.Repeat("a", 64)
+	input = bindAttachmentCatalog(input)
 	rendered, err := renderInstructions(input)
 	if err != nil {
 		t.Fatalf("renderInstructions() error = %v", err)
@@ -167,20 +209,36 @@ func TestWriteInputManifestsUsesCanonicalFullCatalog(t *testing.T) {
 			runnerInputArtifact("artifact_ijklmnop", "prior.txt", "text/plain", runtimecontract.AttachmentScopeSession, 1, 1, "INTERACTION_ATTACHMENT"),
 		},
 	}
+	input.AttachmentSetManifestDigest = strings.Repeat("a", 64)
+	input = bindAttachmentCatalog(input)
 	direct, err := runtimecontract.BuildAttachmentManifest(input.AttachmentSetRef, input.AttachmentContext,
 		scopedArtifacts(input.InputArtifacts, runtimecontract.AttachmentScopeInput))
 	if err != nil {
 		t.Fatalf("BuildAttachmentManifest(direct) error = %v", err)
 	}
-	workspace, err := runtimecontract.BuildAttachmentManifest(input.AttachmentSetRef, input.AttachmentContext, input.InputArtifacts)
+	workspace, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts)
 	if err != nil {
 		t.Fatalf("BuildAttachmentManifest(workspace) error = %v", err)
 	}
-	input.WorkspaceRoot = root
-	if err := os.MkdirAll(filepath.Join(root, "input", input.AttachmentSetRef), 0o750); err != nil {
-		t.Fatalf("MkdirAll() error = %v", err)
+	historyArtifacts := scopedArtifacts(input.InputArtifacts, runtimecontract.AttachmentScopeSession)
+	for index := range historyArtifacts {
+		historyArtifacts[index].Scope = runtimecontract.AttachmentScopeInput
+		historyArtifacts[index].AttachmentSetRef = ""
 	}
-	if err := writeInputManifests(input, direct, workspace); err != nil {
+	history, err := runtimecontract.BuildAttachmentManifest("aset_history1", "SESSION_TURN", historyArtifacts)
+	if err != nil {
+		t.Fatalf("BuildAttachmentManifest(history) error = %v", err)
+	}
+	input.WorkspaceRoot = root
+	for _, set := range input.AttachmentSets {
+		if err := os.MkdirAll(filepath.Join(root, "input", set.Ref), 0o750); err != nil {
+			t.Fatalf("MkdirAll() error = %v", err)
+		}
+	}
+	if err := writeInputManifests(input, map[string]runtimecontract.CanonicalAttachmentManifest{
+		input.AttachmentSetRef: direct,
+		"aset_history1":       history,
+	}, workspace); err != nil {
 		t.Fatalf("writeInputManifests() error = %v", err)
 	}
 	for path, expected := range map[string][]byte{
@@ -222,6 +280,7 @@ func TestMaterializeInputArtifactsRejectsManifestMismatchBeforeWorkspaceMutation
 			runnerInputArtifact("artifact_abcdefgh", "brief.txt", "text/plain", runtimecontract.AttachmentScopeInput, 1, 1, "CONTROL_CENTER"),
 		},
 	}
+	input = bindAttachmentCatalog(input)
 	if err := materializeInputArtifacts(context.Background(), input, nil); err == nil || !strings.Contains(err.Error(), "manifest digest") {
 		t.Fatalf("materializeInputArtifacts() error = %v", err)
 	}

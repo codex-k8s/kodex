@@ -39,6 +39,7 @@ service PlatformQueryService {
   rpc GetOwnerGate(GetOwnerGateRequest) returns (GetOwnerGateResponse);
   rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
   rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
+  rpc GetAttachmentSet(GetAttachmentSetRequest) returns (GetAttachmentSetResponse);
   rpc ListSchedules(ListSchedulesRequest) returns (ListSchedulesResponse);
   rpc GetSchedule(GetScheduleRequest) returns (GetScheduleResponse);
   rpc ListIntegrationDefinitions(ListIntegrationDefinitionsRequest) returns (ListIntegrationDefinitionsResponse);
@@ -95,6 +96,10 @@ service PlatformCommandService {
   rpc DeleteArtifact(DeleteArtifactRequest) returns (DeleteArtifactResponse);
   rpc RestoreArtifact(RestoreArtifactRequest) returns (RestoreArtifactResponse);
   rpc PurgeArtifact(PurgeArtifactRequest) returns (PurgeArtifactResponse);
+  rpc CreateAttachmentSetDraft(CreateAttachmentSetDraftRequest) returns (CreateAttachmentSetDraftResponse);
+  rpc AddAttachmentSetItems(AddAttachmentSetItemsRequest) returns (AddAttachmentSetItemsResponse);
+  rpc RemoveAttachmentSetItems(RemoveAttachmentSetItemsRequest) returns (RemoveAttachmentSetItemsResponse);
+  rpc FinalizeAttachmentSet(FinalizeAttachmentSetRequest) returns (FinalizeAttachmentSetResponse);
   rpc CreateSchedule(CreateScheduleRequest) returns (CreateScheduleResponse);
   rpc UpdateSchedule(UpdateScheduleRequest) returns (UpdateScheduleResponse);
   rpc SetScheduleEnabled(SetScheduleEnabledRequest) returns (SetScheduleEnabledResponse);
@@ -450,6 +455,21 @@ enum ArtifactType {
   ARTIFACT_TYPE_IMAGE = 3;
 }
 
+enum AttachmentSetState {
+  ATTACHMENT_SET_STATE_UNSPECIFIED = 0;
+  ATTACHMENT_SET_STATE_DRAFT = 1;
+  ATTACHMENT_SET_STATE_FINALIZED = 2;
+}
+
+enum AttachmentSetPurpose {
+  ATTACHMENT_SET_PURPOSE_UNSPECIFIED = 0;
+  ATTACHMENT_SET_PURPOSE_ASSISTANT_MESSAGE = 1;
+  ATTACHMENT_SET_PURPOSE_SESSION_TURN = 2;
+  ATTACHMENT_SET_PURPOSE_RUN_INPUT = 3;
+  ATTACHMENT_SET_PURPOSE_WORKFLOW_INPUT = 4;
+  ATTACHMENT_SET_PURPOSE_OWNER_GATE_MESSAGE = 5;
+}
+
 enum ScheduleState {
   SCHEDULE_STATE_UNSPECIFIED = 0;
   SCHEDULE_STATE_ACTIVE = 1;
@@ -707,14 +727,15 @@ message Run {
   // core_affected=false.
   repeated Incident incidents = 25;
   TokenUsage usage = 26;
-  // input_artifact_refs перечисляет server-resolved входные файлы запуска.
-  repeated string input_artifact_refs = 27;
+  reserved 27;
+  reserved "input_artifact_refs";
   // artifact_refs перечисляет доступные через отдельный owner API результаты.
   repeated string artifact_refs = 28;
   // gate_refs перечисляет долговечные Human Gate корневого запуска.
   repeated string gate_refs = 29;
   string title_source = 30;
   string activity_summary = 31;
+  string input_attachment_set_ref = 32;
 }
 
 message RunNode {
@@ -865,8 +886,10 @@ message OwnerGate {
   google.protobuf.Timestamp opened_at = 15;
   google.protobuf.Timestamp expires_at = 16;
   google.protobuf.Timestamp decided_at = 17;
-  repeated string artifact_refs = 18;
+  reserved 18;
+  reserved "artifact_refs";
   repeated NextAction next_actions = 19;
+  string resolution_attachment_set_ref = 20;
 }
 
 message Artifact {
@@ -889,6 +912,36 @@ message Artifact {
   ArtifactLifecycleState lifecycle_state = 17;
   google.protobuf.Timestamp deleted_at = 18;
   google.protobuf.Timestamp purge_after = 19;
+}
+
+message AttachmentSetItem {
+  string artifact_ref = 1;
+  int64 artifact_revision = 2;
+  int64 artifact_version = 3;
+  string display_name = 4;
+  string media_type = 5;
+  int64 size_bytes = 6;
+  string digest = 7;
+  ArtifactSource source = 8;
+  int64 position = 9;
+}
+
+message AttachmentSet {
+  string ref = 1;
+  string family_ref = 2;
+  int64 revision = 3;
+  int64 version = 4;
+  string project_ref = 5;
+  AttachmentSetState state = 6;
+  AttachmentSetPurpose purpose = 7;
+  string source = 8;
+  int64 item_count = 9;
+  int64 total_size_bytes = 10;
+  string manifest_digest = 11;
+  repeated AttachmentSetItem items = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp finalized_at = 14;
+  bool superseded = 15;
 }
 
 message Schedule {
@@ -1134,6 +1187,7 @@ message AssistantTurn {
   string state = 5;
   AssistantPlan plan = 6;
   google.protobuf.Timestamp created_at = 7;
+  string attachment_set_ref = 8;
 }
 
 message AssistantConversation {
@@ -1633,9 +1687,11 @@ message LaunchRunRequest {
   string title = 4;
   string task = 5;
   google.protobuf.Struct input = 6;
-  repeated string artifact_refs = 7;
+  reserved 7;
+  reserved "artifact_refs";
   string session_ref = 8;
   RunSource source = 9;
+  string attachment_set_ref = 10;
 }
 message LaunchRunResponse {
   Run run = 1;
@@ -1647,7 +1703,9 @@ message AddSessionTurnRequest {
   string run_ref = 3;
   string node_ref = 4;
   string task = 5;
-  repeated string artifact_refs = 6;
+  reserved 6;
+  reserved "artifact_refs";
+  string attachment_set_ref = 7;
 }
 message AddSessionTurnResponse {
   Run run = 1;
@@ -1692,7 +1750,9 @@ message ResolveOwnerGateRequest {
   string gate_ref = 2;
   OwnerGateDecision decision = 3;
   string comment = 4;
-  repeated string artifact_refs = 5;
+  reserved 5;
+  reserved "artifact_refs";
+  string attachment_set_ref = 6;
 }
 message ResolveOwnerGateResponse {
   OwnerGate gate = 1;
@@ -1719,6 +1779,49 @@ message GetArtifactRequest {
 }
 message GetArtifactResponse {
   Artifact artifact = 1;
+}
+
+message GetAttachmentSetRequest {
+  string attachment_set_ref = 1;
+  PageRequest page = 2;
+}
+message GetAttachmentSetResponse {
+  AttachmentSet attachment_set = 1;
+  PageInfo page = 2;
+}
+
+message CreateAttachmentSetDraftRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  AttachmentSetPurpose purpose = 3;
+  repeated string artifact_refs = 4;
+}
+message CreateAttachmentSetDraftResponse {
+  AttachmentSet attachment_set = 1;
+}
+message AddAttachmentSetItemsRequest {
+  MutationContext mutation = 1;
+  string attachment_set_ref = 2;
+  repeated string artifact_refs = 3;
+  int64 insert_after_position = 4;
+}
+message AddAttachmentSetItemsResponse {
+  AttachmentSet attachment_set = 1;
+}
+message RemoveAttachmentSetItemsRequest {
+  MutationContext mutation = 1;
+  string attachment_set_ref = 2;
+  repeated string artifact_refs = 3;
+}
+message RemoveAttachmentSetItemsResponse {
+  AttachmentSet attachment_set = 1;
+}
+message FinalizeAttachmentSetRequest {
+  MutationContext mutation = 1;
+  string attachment_set_ref = 2;
+}
+message FinalizeAttachmentSetResponse {
+  AttachmentSet attachment_set = 1;
 }
 message UploadArtifactMetadata {
   MutationContext mutation = 1;
@@ -1941,7 +2044,9 @@ message AddAssistantTurnRequest {
   MutationContext mutation = 1;
   string conversation_ref = 2;
   string content = 3;
-  repeated string artifact_refs = 4;
+  reserved 4;
+  reserved "artifact_refs";
+  string attachment_set_ref = 5;
 }
 message AddAssistantTurnResponse {
   AssistantConversation conversation = 1;
@@ -2081,12 +2186,25 @@ message RuntimeRevisionSnapshot {
   repeated RuntimeEnvironmentTool environment_tools = 54;
   RuntimeEnvironmentPolicy environment_policy = 55;
   RuntimeKubernetesAccess effective_kubernetes_access = 56;
+  repeated RuntimeAttachmentSet attachment_sets = 57;
 }
 
 message RuntimeInputArtifact {
   Artifact artifact = 1;
   string scope = 2;
   int64 position = 3;
+  string attachment_set_ref = 4;
+  string attachment_purpose = 5;
+  string provenance = 6;
+}
+
+message RuntimeAttachmentSet {
+  string ref = 1;
+  string manifest_digest = 2;
+  string purpose = 3;
+  string scope = 4;
+  string provenance = 5;
+  string turn_ref = 6;
 }
 
 message ProviderCredentialBinding {

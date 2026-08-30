@@ -391,6 +391,16 @@ func (service *Service) GetArtifact(ctx context.Context, p value.Principal, ref 
 	}
 	return service.repository.GetArtifact(ctx, p, ref)
 }
+func (service *Service) GetAttachmentSet(ctx context.Context, p value.Principal, ref string, page query.Page) (entity.AttachmentSet, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.AttachmentSet{}, "", err
+	}
+	if strings.TrimSpace(ref) == "" || page.Size < 0 || page.Size > 100 || len(page.Token) > 256 {
+		return entity.AttachmentSet{}, "", errs.ErrInvalid
+	}
+	return service.repository.GetAttachmentSet(ctx, p, ref, page)
+}
 func (service *Service) UploadArtifact(ctx context.Context, p value.Principal, mutation value.Mutation, input repository.ArtifactUpload) (entity.Artifact, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -773,7 +783,8 @@ func knownCommand(kind command.Kind) bool {
 		command.ValidateWorkflow, command.PublishWorkflow, command.ArchiveWorkflow,
 		command.LaunchRun, command.AddSessionTurn, command.CancelRun, command.RetryRun,
 		command.ResolveOwnerGate, command.ChangeArtifactBinding, command.DeleteArtifact,
-		command.RestoreArtifact, command.CreateSchedule,
+		command.RestoreArtifact, command.CreateAttachmentSetDraft, command.AddAttachmentSetItems,
+		command.RemoveAttachmentSetItems, command.FinalizeAttachmentSet, command.CreateSchedule,
 		command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.CreateConnection,
 		command.ConfigureConnectionCredential,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant,

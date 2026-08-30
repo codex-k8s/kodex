@@ -572,13 +572,13 @@ func assistantSchedule(input map[string]any) (command.ScheduleInput, error) {
 }
 
 func assistantRun(input map[string]any) (command.LaunchRunInput, error) {
-	if !onlyAssistantFields(input, "projectRef", "targetType", "targetRef", "title", "task", "input", "artifactRefs", "sessionRef") ||
+	if !onlyAssistantFields(input, "projectRef", "targetType", "targetRef", "title", "task", "input", "attachmentSetRef", "sessionRef") ||
 		!hasAssistantFields(input, "projectRef", "targetType", "targetRef", "title", "task", "input") {
 		return command.LaunchRunInput{}, errs.ErrInvalid
 	}
 	boundedInput, boundedInputOK := assistantObjectValue(input, "input")
 	payload := command.LaunchRunInput{ProjectRef: assistantString(input, "projectRef"), Title: assistantString(input, "title"), Task: assistantString(input, "task"),
-		SessionRef: assistantString(input, "sessionRef"), Source: "SYSTEM_ASSISTANT", Input: boundedInput, ArtifactRefs: assistantStrings(input, "artifactRefs"),
+		SessionRef: assistantString(input, "sessionRef"), Source: "SYSTEM_ASSISTANT", Input: boundedInput, AttachmentSetRef: assistantString(input, "attachmentSetRef"),
 		Target: entity.RunTarget{Type: assistantString(input, "targetType"), Ref: assistantString(input, "targetRef")}}
 	if !boundedInputOK || payload.ProjectRef == "" || !contains([]string{"AGENT", "WORKFLOW"}, payload.Target.Type) || payload.Target.Ref == "" || payload.Title == "" || len(payload.Title) > 240 ||
 		payload.Task == "" || len(payload.Task) > 32768 || !validBoundedRunInput(payload.Input) {

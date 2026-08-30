@@ -61,7 +61,7 @@ describe("AssistantWorkspace layout", () => {
     );
 
     expect(attachmentComposer).toContain(':project-ref="projectRef"');
-    expect(attachmentComposer).toContain(':upload="uploadAttachment"');
+    expect(attachmentComposer).toContain('purpose="ASSISTANT_MESSAGE"');
   });
 
   it("держит новый диалог видимым действием, а не пунктом history menu", () => {
@@ -76,7 +76,7 @@ describe("AssistantWorkspace layout", () => {
   });
 
   it("блокирует готовность composer до завершения server-side scan", () => {
-    expect(source).toContain("waitForCleanArtifact(artifact");
+    expect(source).toContain("attachmentComposer.value?.finalize()");
     expect(source).toContain("attachmentState.value.ready");
   });
 });

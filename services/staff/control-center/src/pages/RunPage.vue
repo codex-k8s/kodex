@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Activity } from "@lucide/vue";
 import {
+  type ComponentPublicInstance,
   computed,
   nextTick,
   onBeforeUnmount,
@@ -258,7 +259,6 @@ const turn = ref("");
 const comments = ref<Record<string, string>>({});
 const turnAttachmentComposer = ref<AttachmentComposerHandle>();
 const turnAttachmentState = ref<AttachmentComposerState>({
-  refs: [],
   count: 0,
   uploadedCount: 0,
   totalBytes: 0,
@@ -268,6 +268,7 @@ const turnAttachmentState = ref<AttachmentComposerState>({
   ready: true,
 });
 const gateAttachmentStates = ref<Record<string, AttachmentComposerState>>({});
+const gateAttachmentComposers = new Map<string, AttachmentComposerHandle>();
 const busy = ref(false);
 const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
@@ -354,13 +355,12 @@ async function continueRun() {
   busy.value = true;
   problem.value = undefined;
   try {
+    const attachmentSetRef = await turnAttachmentComposer.value?.finalize();
     const next = await platform.continueSession(run.value.sessionRef, {
       runRef: run.value.ref,
       nodeRef: selectedNode.value?.ref,
       task: turn.value.trim(),
-      ...(turnAttachmentState.value.refs.length
-        ? { artifactRefs: turnAttachmentState.value.refs }
-        : {}),
+      ...(attachmentSetRef ? { attachmentSetRef } : {}),
     });
     turn.value = "";
     turnAttachmentComposer.value?.clear();
@@ -386,11 +386,13 @@ async function decide(
   busy.value = true;
   problem.value = undefined;
   try {
-    const artifactRefs = gateAttachmentStates.value[gate.ref]?.refs ?? [];
+    const attachmentSetRef = await gateAttachmentComposers
+      .get(gate.ref)
+      ?.finalize();
     await platform.decide(gate, {
       decision,
       comment: comments.value[gate.ref]?.trim() || undefined,
-      ...(artifactRefs.length ? { artifactRefs } : {}),
+      ...(attachmentSetRef ? { attachmentSetRef } : {}),
     });
     Reflect.deleteProperty(comments.value, gate.ref);
     Reflect.deleteProperty(gateAttachmentStates.value, gate.ref);
@@ -401,9 +403,14 @@ async function decide(
     busy.value = false;
   }
 }
-async function uploadAttachment(file: File): Promise<{ ref: string }> {
-  if (!run.value) throw new Error("Run is unavailable");
-  return platform.uploadProjectArtifact(run.value.projectRef, file);
+function setGateAttachmentComposer(
+  gateRef: string,
+  component: Element | ComponentPublicInstance | null,
+): void {
+  const handle = component as AttachmentComposerHandle | null;
+  if (handle && typeof handle.finalize === "function")
+    gateAttachmentComposers.set(gateRef, handle);
+  else gateAttachmentComposers.delete(gateRef);
 }
 function gateAttachmentsReady(gateRef: string): boolean {
   return gateAttachmentStates.value[gateRef]?.ready ?? true;
@@ -609,8 +616,11 @@ onBeforeUnmount(() => {
               ><textarea v-model="comments[gate.ref]" maxlength="1000" />
             </label>
             <AttachmentComposer
+              :ref="
+                (component) => setGateAttachmentComposer(gate.ref, component)
+              "
               compact
-              :upload="uploadAttachment"
+              purpose="OWNER_GATE_MESSAGE"
               :project-ref="run?.projectRef"
               :disabled="busy"
               @change="gateAttachmentStates[gate.ref] = $event"
@@ -756,7 +766,7 @@ onBeforeUnmount(() => {
               <AttachmentComposer
                 ref="turnAttachmentComposer"
                 compact
-                :upload="uploadAttachment"
+                purpose="SESSION_TURN"
                 :project-ref="run.projectRef"
                 :disabled="busy"
                 @change="turnAttachmentState = $event"

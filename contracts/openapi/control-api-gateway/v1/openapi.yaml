@@ -21,6 +21,7 @@ tags:
   - name: Runs
   - name: Decisions
   - name: Artifacts
+  - name: AttachmentSets
   - name: Automations
   - name: Integrations
   - name: Assistant
@@ -1208,6 +1209,110 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Artifact' }
         default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/projects/{projectRef}/attachment-sets:
+    post:
+      tags: [AttachmentSets]
+      operationId: createAttachmentSetDraft
+      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttachmentSetDraftInput' }
+      responses:
+        '201':
+          description: Создана первая append-only draft-ревизия набора
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentSet' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/attachment-sets:
+    post:
+      tags: [AttachmentSets]
+      operationId: createOrganizationAttachmentSetDraft
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttachmentSetDraftInput' }
+      responses:
+        '201':
+          description: Создана первая append-only draft-ревизия набора организационного помощника
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentSet' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/attachment-sets/{attachmentSetRef}:
+    get:
+      tags: [AttachmentSets]
+      operationId: getAttachmentSet
+      parameters: [{ $ref: '#/components/parameters/AttachmentSetRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Exact draft или finalized revision с bounded ordered page items
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentSetPage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/attachment-sets/{attachmentSetRef}/items/additions:
+    post:
+      tags: [AttachmentSets]
+      operationId: addAttachmentSetItems
+      parameters: [{ $ref: '#/components/parameters/AttachmentSetRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttachmentSetAddItemsInput' }
+      responses:
+        '201':
+          description: Создана новая draft-ревизия с добавленными ordered items
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentSet' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/attachment-sets/{attachmentSetRef}/items/removals:
+    post:
+      tags: [AttachmentSets]
+      operationId: removeAttachmentSetItems
+      parameters: [{ $ref: '#/components/parameters/AttachmentSetRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttachmentSetRemoveItemsInput' }
+      responses:
+        '201':
+          description: Создана новая draft-ревизия без удалённых items
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentSet' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/attachment-sets/{attachmentSetRef}/finalization:
+    post:
+      tags: [AttachmentSets]
+      operationId: finalizeAttachmentSet
+      parameters: [{ $ref: '#/components/parameters/AttachmentSetRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '201':
+          description: Создана immutable finalized-ревизия, пригодная для server-owned binding
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentSet' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/artifacts:
     get:
       tags: [Artifacts]
@@ -1651,7 +1756,7 @@ paths:
               required: [content]
               properties:
                 content: { type: string, minLength: 1, maxLength: 32768 }
-                artifactRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
+                attachmentSetRef: { $ref: '#/components/schemas/OpaqueRef' }
       responses:
         '202':
           description: Turn поставлен в последовательную очередь warm session
@@ -2140,6 +2245,13 @@ components:
       in: path
       required: true
       schema: { $ref: '#/components/schemas/OpaqueRef' }
+    AttachmentSetRef:
+      name: attachmentSetRef
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^aset_[A-Za-z0-9_-]{8,89}$'
     ArtifactLifecycleStateQuery:
       name: lifecycleState
       in: query
@@ -3425,7 +3537,7 @@ components:
     Run:
       type: object
       additionalProperties: false
-      required: [ref, version, projectRef, sessionRef, rootRunRef, target, title, titleSource, activitySummary, state, source, initiator, attempt, graphRevision, lastEventSequence, usage, inputArtifactRefs, artifactRefs, gateRefs, createdAt, nextActions]
+      required: [ref, version, projectRef, sessionRef, rootRunRef, target, title, titleSource, activitySummary, state, source, initiator, attempt, graphRevision, lastEventSequence, usage, artifactRefs, gateRefs, createdAt, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -3450,7 +3562,7 @@ components:
         safeErrorCode: { type: string, maxLength: 80 }
         safeErrorMessage: { type: string, maxLength: 500 }
         usage: { $ref: '#/components/schemas/TokenUsage' }
-        inputArtifactRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        inputAttachmentSetRef: { $ref: '#/components/schemas/OpaqueRef' }
         artifactRefs: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/OpaqueRef' } }
         gateRefs: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/OpaqueRef' } }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
@@ -3594,7 +3706,7 @@ components:
         title: { type: string, maxLength: 240 }
         task: { type: string, minLength: 1, maxLength: 32768 }
         input: { type: object, maxProperties: 100, additionalProperties: true }
-        artifactRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        attachmentSetRef: { $ref: '#/components/schemas/OpaqueRef' }
         sessionRef: { $ref: '#/components/schemas/OpaqueRef' }
     RunCommand:
       type: object
@@ -3611,7 +3723,7 @@ components:
         runRef: { $ref: '#/components/schemas/OpaqueRef' }
         nodeRef: { $ref: '#/components/schemas/OpaqueRef' }
         task: { type: string, minLength: 1, maxLength: 32768 }
-        artifactRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        attachmentSetRef: { $ref: '#/components/schemas/OpaqueRef' }
     RunPage:
       type: object
       additionalProperties: false
@@ -3630,7 +3742,7 @@ components:
     OwnerGate:
       type: object
       additionalProperties: false
-      required: [ref, version, projectRef, runRef, nodeRef, title, contextSummary, consequencesSummary, requestedBy, state, allowedDecisions, artifactRefs, openedAt, nextActions]
+      required: [ref, version, projectRef, runRef, nodeRef, title, contextSummary, consequencesSummary, requestedBy, state, allowedDecisions, openedAt, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -3649,7 +3761,7 @@ components:
         openedAt: { $ref: '#/components/schemas/Timestamp' }
         expiresAt: { $ref: '#/components/schemas/Timestamp' }
         decidedAt: { $ref: '#/components/schemas/Timestamp' }
-        artifactRefs: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        resolutionAttachmentSetRef: { $ref: '#/components/schemas/OpaqueRef' }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
     GateResolution:
       type: object
@@ -3658,7 +3770,7 @@ components:
       properties:
         decision: { type: string, enum: [APPROVE, REJECT, REQUEST_CHANGES, CANCEL] }
         comment: { type: string, maxLength: 4000 }
-        artifactRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        attachmentSetRef: { $ref: '#/components/schemas/OpaqueRef' }
     GateResolutionReceipt:
       type: object
       additionalProperties: false
@@ -3705,6 +3817,84 @@ components:
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Artifact' } }
         nextPageToken: { type: string }
+    AttachmentSetPurpose:
+      type: string
+      enum: [ASSISTANT_MESSAGE, SESSION_TURN, RUN_INPUT, WORKFLOW_INPUT, OWNER_GATE_MESSAGE]
+    AttachmentSetItem:
+      type: object
+      additionalProperties: false
+      required: [artifactRef, artifactRevision, artifactVersion, displayName, mediaType, sizeBytes, digest, source, position]
+      properties:
+        artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
+        artifactRevision: { type: integer, format: int64, minimum: 1 }
+        artifactVersion: { type: integer, format: int64, minimum: 1 }
+        displayName: { type: string, minLength: 1, maxLength: 255 }
+        mediaType: { type: string, minLength: 1, maxLength: 255 }
+        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 536870912 }
+        digest: { type: string, pattern: '^sha256:[a-f0-9]{64}$' }
+        source: { type: string, enum: [CONTROL_CENTER, AGENT_RESULT, INTEGRATION_RESULT, KNOWLEDGE_SOURCE, INTERACTION_ATTACHMENT] }
+        position: { type: integer, format: int64, minimum: 1 }
+    AttachmentSet:
+      type: object
+      additionalProperties: false
+      required: [ref, familyRef, revision, version, state, purpose, source, itemCount, totalSizeBytes, items, createdAt, superseded]
+      properties:
+        ref: { type: string, pattern: '^aset_[A-Za-z0-9_-]{8,89}$' }
+        familyRef: { type: string, pattern: '^asetf_[A-Za-z0-9_-]{8,88}$' }
+        revision: { type: integer, format: int64, minimum: 1 }
+        version: { type: integer, format: int64, minimum: 1 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        state: { type: string, enum: [DRAFT, FINALIZED] }
+        purpose: { $ref: '#/components/schemas/AttachmentSetPurpose' }
+        source: { type: string, enum: [CONTROL_CENTER, SYSTEM_ASSISTANT, RUNTIME] }
+        itemCount: { type: integer, format: int64, minimum: 0 }
+        totalSizeBytes: { type: integer, format: int64, minimum: 0, maximum: 536870912 }
+        manifestDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AttachmentSetItem' } }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        finalizedAt: { $ref: '#/components/schemas/Timestamp' }
+        superseded: { type: boolean }
+    AttachmentSetPage:
+      type: object
+      additionalProperties: false
+      required: [attachmentSet]
+      properties:
+        attachmentSet: { $ref: '#/components/schemas/AttachmentSet' }
+        nextPageToken: { type: string, maxLength: 256 }
+    AttachmentSetDraftInput:
+      type: object
+      additionalProperties: false
+      required: [purpose]
+      properties:
+        purpose: { $ref: '#/components/schemas/AttachmentSetPurpose' }
+        artifactRefs:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/OpaqueRef' }
+    AttachmentSetAddItemsInput:
+      type: object
+      additionalProperties: false
+      required: [artifactRefs]
+      properties:
+        artifactRefs:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/OpaqueRef' }
+        insertAfterPosition: { type: integer, format: int64, minimum: 0 }
+    AttachmentSetRemoveItemsInput:
+      type: object
+      additionalProperties: false
+      required: [artifactRefs]
+      properties:
+        artifactRefs:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/OpaqueRef' }
     ArtifactPurgeReceipt:
       type: object
       additionalProperties: false
@@ -3934,6 +4124,7 @@ components:
         content: { type: string, maxLength: 32768 }
         state: { type: string, enum: [QUEUED, RUNNING, COMPLETED, FAILED] }
         plan: { $ref: '#/components/schemas/AssistantPlan' }
+        attachmentSetRef: { $ref: '#/components/schemas/OpaqueRef' }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
     AssistantConversation:
       type: object

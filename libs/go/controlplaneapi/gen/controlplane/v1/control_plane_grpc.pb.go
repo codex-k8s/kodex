@@ -44,6 +44,7 @@ const (
 	PlatformQueryService_GetOwnerGate_FullMethodName                          = "/controlplane.v1.PlatformQueryService/GetOwnerGate"
 	PlatformQueryService_ListArtifacts_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListArtifacts"
 	PlatformQueryService_GetArtifact_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetArtifact"
+	PlatformQueryService_GetAttachmentSet_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetAttachmentSet"
 	PlatformQueryService_ListSchedules_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListSchedules"
 	PlatformQueryService_GetSchedule_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetSchedule"
 	PlatformQueryService_ListIntegrationDefinitions_FullMethodName            = "/controlplane.v1.PlatformQueryService/ListIntegrationDefinitions"
@@ -92,6 +93,7 @@ type PlatformQueryServiceClient interface {
 	GetOwnerGate(ctx context.Context, in *GetOwnerGateRequest, opts ...grpc.CallOption) (*GetOwnerGateResponse, error)
 	ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error)
 	GetArtifact(ctx context.Context, in *GetArtifactRequest, opts ...grpc.CallOption) (*GetArtifactResponse, error)
+	GetAttachmentSet(ctx context.Context, in *GetAttachmentSetRequest, opts ...grpc.CallOption) (*GetAttachmentSetResponse, error)
 	ListSchedules(ctx context.Context, in *ListSchedulesRequest, opts ...grpc.CallOption) (*ListSchedulesResponse, error)
 	GetSchedule(ctx context.Context, in *GetScheduleRequest, opts ...grpc.CallOption) (*GetScheduleResponse, error)
 	ListIntegrationDefinitions(ctx context.Context, in *ListIntegrationDefinitionsRequest, opts ...grpc.CallOption) (*ListIntegrationDefinitionsResponse, error)
@@ -367,6 +369,16 @@ func (c *platformQueryServiceClient) GetArtifact(ctx context.Context, in *GetArt
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) GetAttachmentSet(ctx context.Context, in *GetAttachmentSetRequest, opts ...grpc.CallOption) (*GetAttachmentSetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAttachmentSetResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetAttachmentSet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) ListSchedules(ctx context.Context, in *ListSchedulesRequest, opts ...grpc.CallOption) (*ListSchedulesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSchedulesResponse)
@@ -548,6 +560,7 @@ type PlatformQueryServiceServer interface {
 	GetOwnerGate(context.Context, *GetOwnerGateRequest) (*GetOwnerGateResponse, error)
 	ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error)
 	GetArtifact(context.Context, *GetArtifactRequest) (*GetArtifactResponse, error)
+	GetAttachmentSet(context.Context, *GetAttachmentSetRequest) (*GetAttachmentSetResponse, error)
 	ListSchedules(context.Context, *ListSchedulesRequest) (*ListSchedulesResponse, error)
 	GetSchedule(context.Context, *GetScheduleRequest) (*GetScheduleResponse, error)
 	ListIntegrationDefinitions(context.Context, *ListIntegrationDefinitionsRequest) (*ListIntegrationDefinitionsResponse, error)
@@ -647,6 +660,9 @@ func (UnimplementedPlatformQueryServiceServer) ListArtifacts(context.Context, *L
 }
 func (UnimplementedPlatformQueryServiceServer) GetArtifact(context.Context, *GetArtifactRequest) (*GetArtifactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetArtifact not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetAttachmentSet(context.Context, *GetAttachmentSetRequest) (*GetAttachmentSetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAttachmentSet not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) ListSchedules(context.Context, *ListSchedulesRequest) (*ListSchedulesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSchedules not implemented")
@@ -1164,6 +1180,24 @@ func _PlatformQueryService_GetArtifact_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_GetAttachmentSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAttachmentSetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetAttachmentSet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetAttachmentSet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetAttachmentSet(ctx, req.(*GetAttachmentSetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_ListSchedules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListSchedulesRequest)
 	if err := dec(in); err != nil {
@@ -1542,6 +1576,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_GetArtifact_Handler,
 		},
 		{
+			MethodName: "GetAttachmentSet",
+			Handler:    _PlatformQueryService_GetAttachmentSet_Handler,
+		},
+		{
 			MethodName: "ListSchedules",
 			Handler:    _PlatformQueryService_ListSchedules_Handler,
 		},
@@ -1642,6 +1680,10 @@ const (
 	PlatformCommandService_DeleteArtifact_FullMethodName                           = "/controlplane.v1.PlatformCommandService/DeleteArtifact"
 	PlatformCommandService_RestoreArtifact_FullMethodName                          = "/controlplane.v1.PlatformCommandService/RestoreArtifact"
 	PlatformCommandService_PurgeArtifact_FullMethodName                            = "/controlplane.v1.PlatformCommandService/PurgeArtifact"
+	PlatformCommandService_CreateAttachmentSetDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/CreateAttachmentSetDraft"
+	PlatformCommandService_AddAttachmentSetItems_FullMethodName                    = "/controlplane.v1.PlatformCommandService/AddAttachmentSetItems"
+	PlatformCommandService_RemoveAttachmentSetItems_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RemoveAttachmentSetItems"
+	PlatformCommandService_FinalizeAttachmentSet_FullMethodName                    = "/controlplane.v1.PlatformCommandService/FinalizeAttachmentSet"
 	PlatformCommandService_CreateSchedule_FullMethodName                           = "/controlplane.v1.PlatformCommandService/CreateSchedule"
 	PlatformCommandService_UpdateSchedule_FullMethodName                           = "/controlplane.v1.PlatformCommandService/UpdateSchedule"
 	PlatformCommandService_SetScheduleEnabled_FullMethodName                       = "/controlplane.v1.PlatformCommandService/SetScheduleEnabled"
@@ -1708,6 +1750,10 @@ type PlatformCommandServiceClient interface {
 	DeleteArtifact(ctx context.Context, in *DeleteArtifactRequest, opts ...grpc.CallOption) (*DeleteArtifactResponse, error)
 	RestoreArtifact(ctx context.Context, in *RestoreArtifactRequest, opts ...grpc.CallOption) (*RestoreArtifactResponse, error)
 	PurgeArtifact(ctx context.Context, in *PurgeArtifactRequest, opts ...grpc.CallOption) (*PurgeArtifactResponse, error)
+	CreateAttachmentSetDraft(ctx context.Context, in *CreateAttachmentSetDraftRequest, opts ...grpc.CallOption) (*CreateAttachmentSetDraftResponse, error)
+	AddAttachmentSetItems(ctx context.Context, in *AddAttachmentSetItemsRequest, opts ...grpc.CallOption) (*AddAttachmentSetItemsResponse, error)
+	RemoveAttachmentSetItems(ctx context.Context, in *RemoveAttachmentSetItemsRequest, opts ...grpc.CallOption) (*RemoveAttachmentSetItemsResponse, error)
+	FinalizeAttachmentSet(ctx context.Context, in *FinalizeAttachmentSetRequest, opts ...grpc.CallOption) (*FinalizeAttachmentSetResponse, error)
 	CreateSchedule(ctx context.Context, in *CreateScheduleRequest, opts ...grpc.CallOption) (*CreateScheduleResponse, error)
 	UpdateSchedule(ctx context.Context, in *UpdateScheduleRequest, opts ...grpc.CallOption) (*UpdateScheduleResponse, error)
 	SetScheduleEnabled(ctx context.Context, in *SetScheduleEnabledRequest, opts ...grpc.CallOption) (*SetScheduleEnabledResponse, error)
@@ -2102,6 +2148,46 @@ func (c *platformCommandServiceClient) PurgeArtifact(ctx context.Context, in *Pu
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) CreateAttachmentSetDraft(ctx context.Context, in *CreateAttachmentSetDraftRequest, opts ...grpc.CallOption) (*CreateAttachmentSetDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateAttachmentSetDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateAttachmentSetDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) AddAttachmentSetItems(ctx context.Context, in *AddAttachmentSetItemsRequest, opts ...grpc.CallOption) (*AddAttachmentSetItemsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddAttachmentSetItemsResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_AddAttachmentSetItems_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RemoveAttachmentSetItems(ctx context.Context, in *RemoveAttachmentSetItemsRequest, opts ...grpc.CallOption) (*RemoveAttachmentSetItemsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveAttachmentSetItemsResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RemoveAttachmentSetItems_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) FinalizeAttachmentSet(ctx context.Context, in *FinalizeAttachmentSetRequest, opts ...grpc.CallOption) (*FinalizeAttachmentSetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FinalizeAttachmentSetResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_FinalizeAttachmentSet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformCommandServiceClient) CreateSchedule(ctx context.Context, in *CreateScheduleRequest, opts ...grpc.CallOption) (*CreateScheduleResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateScheduleResponse)
@@ -2364,6 +2450,10 @@ type PlatformCommandServiceServer interface {
 	DeleteArtifact(context.Context, *DeleteArtifactRequest) (*DeleteArtifactResponse, error)
 	RestoreArtifact(context.Context, *RestoreArtifactRequest) (*RestoreArtifactResponse, error)
 	PurgeArtifact(context.Context, *PurgeArtifactRequest) (*PurgeArtifactResponse, error)
+	CreateAttachmentSetDraft(context.Context, *CreateAttachmentSetDraftRequest) (*CreateAttachmentSetDraftResponse, error)
+	AddAttachmentSetItems(context.Context, *AddAttachmentSetItemsRequest) (*AddAttachmentSetItemsResponse, error)
+	RemoveAttachmentSetItems(context.Context, *RemoveAttachmentSetItemsRequest) (*RemoveAttachmentSetItemsResponse, error)
+	FinalizeAttachmentSet(context.Context, *FinalizeAttachmentSetRequest) (*FinalizeAttachmentSetResponse, error)
 	CreateSchedule(context.Context, *CreateScheduleRequest) (*CreateScheduleResponse, error)
 	UpdateSchedule(context.Context, *UpdateScheduleRequest) (*UpdateScheduleResponse, error)
 	SetScheduleEnabled(context.Context, *SetScheduleEnabledRequest) (*SetScheduleEnabledResponse, error)
@@ -2500,6 +2590,18 @@ func (UnimplementedPlatformCommandServiceServer) RestoreArtifact(context.Context
 }
 func (UnimplementedPlatformCommandServiceServer) PurgeArtifact(context.Context, *PurgeArtifactRequest) (*PurgeArtifactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PurgeArtifact not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateAttachmentSetDraft(context.Context, *CreateAttachmentSetDraftRequest) (*CreateAttachmentSetDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateAttachmentSetDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) AddAttachmentSetItems(context.Context, *AddAttachmentSetItemsRequest) (*AddAttachmentSetItemsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddAttachmentSetItems not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RemoveAttachmentSetItems(context.Context, *RemoveAttachmentSetItemsRequest) (*RemoveAttachmentSetItemsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveAttachmentSetItems not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) FinalizeAttachmentSet(context.Context, *FinalizeAttachmentSetRequest) (*FinalizeAttachmentSetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FinalizeAttachmentSet not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) CreateSchedule(context.Context, *CreateScheduleRequest) (*CreateScheduleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateSchedule not implemented")
@@ -3201,6 +3303,78 @@ func _PlatformCommandService_PurgeArtifact_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_CreateAttachmentSetDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateAttachmentSetDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateAttachmentSetDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateAttachmentSetDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateAttachmentSetDraft(ctx, req.(*CreateAttachmentSetDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_AddAttachmentSetItems_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddAttachmentSetItemsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).AddAttachmentSetItems(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_AddAttachmentSetItems_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).AddAttachmentSetItems(ctx, req.(*AddAttachmentSetItemsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RemoveAttachmentSetItems_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveAttachmentSetItemsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RemoveAttachmentSetItems(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RemoveAttachmentSetItems_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RemoveAttachmentSetItems(ctx, req.(*RemoveAttachmentSetItemsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_FinalizeAttachmentSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FinalizeAttachmentSetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).FinalizeAttachmentSet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_FinalizeAttachmentSet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).FinalizeAttachmentSet(ctx, req.(*FinalizeAttachmentSetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformCommandService_CreateSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateScheduleRequest)
 	if err := dec(in); err != nil {
@@ -3735,6 +3909,22 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PurgeArtifact",
 			Handler:    _PlatformCommandService_PurgeArtifact_Handler,
+		},
+		{
+			MethodName: "CreateAttachmentSetDraft",
+			Handler:    _PlatformCommandService_CreateAttachmentSetDraft_Handler,
+		},
+		{
+			MethodName: "AddAttachmentSetItems",
+			Handler:    _PlatformCommandService_AddAttachmentSetItems_Handler,
+		},
+		{
+			MethodName: "RemoveAttachmentSetItems",
+			Handler:    _PlatformCommandService_RemoveAttachmentSetItems_Handler,
+		},
+		{
+			MethodName: "FinalizeAttachmentSet",
+			Handler:    _PlatformCommandService_FinalizeAttachmentSet_Handler,
 		},
 		{
 			MethodName: "CreateSchedule",

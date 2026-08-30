@@ -23,7 +23,6 @@ import {
 } from "vue";
 import { useI18n } from "vue-i18n";
 
-import { waitForCleanArtifact } from "@/features/assistant/attachments";
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
 import { openAssistantEvent } from "@/features/assistant/events";
 import { useAssistantStore } from "@/features/assistant/store";
@@ -42,7 +41,6 @@ import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
 import type {
   AttachmentComposerHandle,
   AttachmentComposerState,
-  AttachmentUploadRequest,
 } from "@/shared/ui/attachment-composer";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
@@ -70,7 +68,6 @@ const openPlanRef = ref<string>();
 const activeView = ref<"CHAT" | "ACTIVITY">("CHAT");
 const attachmentComposer = ref<AttachmentComposerHandle>();
 const attachmentState = ref<AttachmentComposerState>({
-  refs: [],
   count: 0,
   uploadedCount: 0,
   totalBytes: 0,
@@ -205,28 +202,13 @@ async function saveTitle(): Promise<void> {
 async function send(): Promise<void> {
   const value = message.value.trim();
   if (!value || !canSend.value) return;
-  await store.send(value, attachmentState.value.refs);
+  const attachmentSetRef = await attachmentComposer.value?.finalize();
+  await store.send(value, attachmentSetRef);
   message.value = "";
   attachmentComposer.value?.clear();
   await nextTick();
   scrollToLatest();
   composer.value?.focus();
-}
-
-async function uploadAttachment(
-  file: File,
-  request: AttachmentUploadRequest,
-): Promise<{ ref: string }> {
-  const artifact = await platform.uploadAttachmentArtifact(
-    props.projectRef,
-    file,
-    request.signal,
-  );
-  const clean = await waitForCleanArtifact(artifact, {
-    signal: request.signal,
-    read: (artifactRef) => platform.readArtifact(artifactRef),
-  });
-  return { ref: clean.ref };
 }
 
 function scrollToLatest(): void {
@@ -600,7 +582,7 @@ onBeforeUnmount(() => {
               <AttachmentComposer
                 ref="attachmentComposer"
                 compact
-                :upload="uploadAttachment"
+                purpose="ASSISTANT_MESSAGE"
                 :project-ref="projectRef"
                 :disabled="store.busy || !live"
                 @change="attachmentState = $event"

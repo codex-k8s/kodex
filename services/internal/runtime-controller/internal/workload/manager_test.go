@@ -354,6 +354,137 @@ func TestBuildTurnInputCarriesExactEnvironmentImageAndSelectedTools(t *testing.T
 	}
 }
 
+func TestBuildTurnInputCarriesExactAttachmentProvenance(t *testing.T) {
+	t.Parallel()
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	execution := testExecution(false)
+	input, _, err := manager.BuildTurnInput(execution)
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	if len(input.AttachmentSets) != 1 || len(input.InputArtifacts) != 1 {
+		t.Fatalf("runner attachment catalog sizes = %d sets, %d artifacts", len(input.AttachmentSets), len(input.InputArtifacts))
+	}
+	set, artifact := input.AttachmentSets[0], input.InputArtifacts[0]
+	if set.Ref != input.AttachmentSetRef || set.ManifestDigest != input.AttachmentSetManifestDigest ||
+		set.Purpose != input.AttachmentContext || set.Scope != runtimecontract.AttachmentScopeInput ||
+		set.Provenance != "CURRENT_TURN" || set.TurnRef != input.TurnRef {
+		t.Fatalf("runner attachment set lost exact provenance: %#v", set)
+	}
+	if artifact.AttachmentSetRef != set.Ref || artifact.AttachmentPurpose != set.Purpose ||
+		artifact.Provenance != set.Provenance || artifact.Revision != 1 || artifact.Version != 1 ||
+		artifact.Source != "CONTROL_CENTER" || artifact.Scope != runtimecontract.AttachmentScopeInput {
+		t.Fatalf("runner artifact lost exact provenance: %#v", artifact)
+	}
+	workspace, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts)
+	if err != nil {
+		t.Fatalf("BuildWorkspaceAttachmentManifest() error = %v", err)
+	}
+	if len(workspace.Manifest.Files) != 1 {
+		t.Fatalf("workspace manifest files = %d, want 1", len(workspace.Manifest.Files))
+	}
+	file := workspace.Manifest.Files[0]
+	if file.ArtifactRef != artifact.Ref || file.Revision != artifact.Revision || file.Version != artifact.Version ||
+		file.Source != artifact.Source || file.Scope != artifact.Scope || file.Purpose != artifact.AttachmentPurpose ||
+		file.Path != "/workspace/input/aset_abcdefgh/files/0001-brief.txt" {
+		t.Fatalf("workspace manifest lost exact artifact identity: %#v", file)
+	}
+}
+
+func TestBuildTurnInputCarriesSessionHistoryTurnLineage(t *testing.T) {
+	t.Parallel()
+	execution := testExecution(false)
+	historySetRef := "aset_history1"
+	historyPurpose := "SESSION_TURN"
+	historyArtifact := &controlplanev1.RuntimeInputArtifact{
+		Artifact: &controlplanev1.Artifact{Ref: "artifact_history1", FileName: "prior.txt", MediaType: "text/plain", SizeBytes: 24, Digest: testArtifactDigest, Revision: 2, Version: 3, Source: controlplanev1.ArtifactSource_ARTIFACT_SOURCE_INTERACTION_ATTACHMENT},
+		Scope:    runtimecontract.AttachmentScopeSession, Position: 1, AttachmentSetRef: historySetRef,
+		AttachmentPurpose: historyPurpose, Provenance: "SESSION_HISTORY",
+	}
+	historyManifest, err := runtimecontract.BuildAttachmentManifest(historySetRef, historyPurpose, []runtimecontract.RunnerInputArtifact{{
+		Ref: historyArtifact.Artifact.Ref, FileName: historyArtifact.Artifact.FileName, MediaType: historyArtifact.Artifact.MediaType,
+		Digest: historyArtifact.Artifact.Digest, SizeBytes: historyArtifact.Artifact.SizeBytes, Revision: int64(historyArtifact.Artifact.Revision),
+		Version: historyArtifact.Artifact.Version, Scope: runtimecontract.AttachmentScopeInput,
+		Position: historyArtifact.Position, Source: "INTERACTION_ATTACHMENT",
+	}})
+	if err != nil {
+		t.Fatalf("BuildAttachmentManifest(history) error = %v", err)
+	}
+	execution.Revision.AttachmentSets = append(execution.Revision.AttachmentSets, &controlplanev1.RuntimeAttachmentSet{
+		Ref: historySetRef, ManifestDigest: historyManifest.Digest, Purpose: historyPurpose,
+		Scope: runtimecontract.AttachmentScopeSession, Provenance: "SESSION_HISTORY", TurnRef: "turn_history1",
+	})
+	execution.Revision.InputArtifacts = append(execution.Revision.InputArtifacts, historyArtifact)
+
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	input, _, err := manager.BuildTurnInput(execution)
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	if len(input.AttachmentSets) != 2 || len(input.InputArtifacts) != 2 {
+		t.Fatalf("runner attachment catalog sizes = %d sets, %d artifacts", len(input.AttachmentSets), len(input.InputArtifacts))
+	}
+	historySet, history := input.AttachmentSets[1], input.InputArtifacts[1]
+	if historySet.Ref != historySetRef || historySet.ManifestDigest != historyManifest.Digest ||
+		historySet.Scope != runtimecontract.AttachmentScopeSession || historySet.Provenance != "SESSION_HISTORY" ||
+		historySet.TurnRef != "turn_history1" || history.AttachmentSetRef != historySet.Ref ||
+		history.Scope != historySet.Scope || history.Provenance != historySet.Provenance {
+		t.Fatalf("runner session history lost exact turn lineage: set=%#v artifact=%#v", historySet, history)
+	}
+	workspace, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts)
+	if err != nil {
+		t.Fatalf("BuildWorkspaceAttachmentManifest() error = %v", err)
+	}
+	if got := workspace.Manifest.Files[1].Path; got != "/workspace/input/aset_history1/files/0001-prior.txt" {
+		t.Fatalf("history workspace path = %q", got)
+	}
+}
+
+func TestBuildTurnInputRejectsAttachmentProvenanceDrift(t *testing.T) {
+	t.Parallel()
+	tests := map[string]func(*controlplanev1.RuntimeRevisionSnapshot){
+		"manifest digest": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.AttachmentSets[0].ManifestDigest = strings.Repeat("f", 64)
+			revision.AttachmentSetManifestDigest = strings.Repeat("f", 64)
+		},
+		"artifact revision": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.InputArtifacts[0].Artifact.Revision++
+		},
+		"artifact version": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.InputArtifacts[0].Artifact.Version++
+		},
+		"artifact source": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.InputArtifacts[0].Artifact.Source = controlplanev1.ArtifactSource_ARTIFACT_SOURCE_AGENT_RESULT
+		},
+		"artifact scope": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.InputArtifacts[0].Scope = runtimecontract.AttachmentScopeSession
+		},
+		"artifact path": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.InputArtifacts[0].Artifact.FileName = "renamed.txt"
+		},
+		"attachment set": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.InputArtifacts[0].AttachmentSetRef = "aset_ijklmnop"
+		},
+		"turn lineage": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.AttachmentSets[0].TurnRef = ""
+		},
+		"wrong current turn lineage": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.AttachmentSets[0].TurnRef = "turn_ijklmnop"
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			execution := testExecution(false)
+			mutate(execution.Revision)
+			manager := newTestManager(t, fake.NewSimpleClientset())
+			if _, _, err := manager.BuildTurnInput(execution); err == nil {
+				t.Fatal("BuildTurnInput() accepted attachment provenance drift")
+			}
+		})
+	}
+}
+
 func TestBuildTurnInputSelectsCodexSandboxFromArtifactCapability(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -382,6 +513,7 @@ func TestBuildTurnInputSelectsCodexSandboxFromArtifactCapability(t *testing.T) {
 				execution.Revision.AttachmentSetRef = ""
 				execution.Revision.AttachmentSetManifestDigest = ""
 				execution.Revision.AttachmentContext = ""
+				execution.Revision.AttachmentSets = nil
 				execution.Revision.InputArtifacts = nil
 			}
 			manager := newTestManager(t, fake.NewSimpleClientset())
@@ -824,6 +956,21 @@ func testManagerConfig() Config {
 }
 
 func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
+	attachmentSetRef := "aset_abcdefgh"
+	attachmentPurpose := "RUN_INPUT"
+	artifact := &controlplanev1.RuntimeInputArtifact{
+		Artifact: &controlplanev1.Artifact{Ref: "artifact_abcdefgh", FileName: "brief.txt", MediaType: "text/plain", SizeBytes: 12, Digest: testArtifactDigest, Revision: 1, Version: 1, Source: controlplanev1.ArtifactSource_ARTIFACT_SOURCE_CONTROL_CENTER},
+		Scope:    runtimecontract.AttachmentScopeInput, Position: 1, AttachmentSetRef: attachmentSetRef,
+		AttachmentPurpose: attachmentPurpose, Provenance: "CURRENT_TURN",
+	}
+	manifest, err := runtimecontract.BuildAttachmentManifest(attachmentSetRef, attachmentPurpose, []runtimecontract.RunnerInputArtifact{{
+		Ref: artifact.Artifact.Ref, FileName: artifact.Artifact.FileName, MediaType: artifact.Artifact.MediaType,
+		Digest: artifact.Artifact.Digest, SizeBytes: artifact.Artifact.SizeBytes, Revision: int64(artifact.Artifact.Revision),
+		Version: artifact.Artifact.Version, Scope: artifact.Scope, Position: artifact.Position, Source: "CONTROL_CENTER",
+	}})
+	if err != nil {
+		panic(err)
+	}
 	execution := &controlplanev1.ClaimedExecution{
 		Run: &controlplanev1.Run{Ref: "run_abcdefgh", ProjectRef: "prj_abcdefgh"}, Node: &controlplanev1.RunNode{Ref: "node_abcdefgh"},
 		Revision: &controlplanev1.RuntimeRevisionSnapshot{
@@ -833,11 +980,12 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 			ImageReference: "registry.example/kodex/roles@" + testDigest, ImageManifestDigest: testDigest,
 			RoleRuntimeContractRevision: 1, RoleRuntimeContractSha256: testContractDigest,
 			Capabilities:     []*controlplanev1.PlatformCapability{{Key: runtimecontract.ArtifactCapability}},
-			AttachmentSetRef: "aset_abcdefgh", AttachmentSetManifestDigest: strings.Repeat("4", 64), AttachmentContext: "RUN_INPUT",
-			InputArtifacts: []*controlplanev1.RuntimeInputArtifact{{
-				Artifact: &controlplanev1.Artifact{Ref: "artifact_abcdefgh", FileName: "brief.txt", MediaType: "text/plain", SizeBytes: 12, Digest: testArtifactDigest, Revision: 1, Version: 1, Source: controlplanev1.ArtifactSource_ARTIFACT_SOURCE_CONTROL_CENTER},
-				Scope:    "INPUT", Position: 1,
+			AttachmentSetRef: attachmentSetRef, AttachmentSetManifestDigest: manifest.Digest, AttachmentContext: attachmentPurpose,
+			AttachmentSets: []*controlplanev1.RuntimeAttachmentSet{{
+				Ref: attachmentSetRef, ManifestDigest: manifest.Digest, Purpose: attachmentPurpose,
+				Scope: runtimecontract.AttachmentScopeInput, Provenance: "CURRENT_TURN", TurnRef: "turn_abcdefgh",
 			}},
+			InputArtifacts: []*controlplanev1.RuntimeInputArtifact{artifact},
 			ProviderCredential: &controlplanev1.ProviderCredentialBinding{
 				AccountRef: "pacc_abcdefgh", CredentialRevisionRef: "pcr_abcdefgh", CredentialRevision: 1,
 				SecretName: "runtime-provider-openai-default-r1", SecretUid: "10000000-0000-4000-8000-000000000001",
@@ -874,6 +1022,11 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 
 func testWarmRevision() *controlplanev1.RuntimeRevisionSnapshot {
 	execution := testExecution(true)
+	execution.Revision.AttachmentSetRef = ""
+	execution.Revision.AttachmentSetManifestDigest = ""
+	execution.Revision.AttachmentContext = ""
+	execution.Revision.AttachmentSets = nil
+	execution.Revision.InputArtifacts = nil
 	policy, err := runtimeEnvironmentPolicyFromProto(execution.Revision.GetEnvironmentPolicy())
 	if err != nil {
 		panic(err)

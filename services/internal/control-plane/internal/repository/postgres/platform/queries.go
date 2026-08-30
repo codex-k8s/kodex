@@ -651,7 +651,7 @@ func scanRun(row rowScanner, actorScoped bool) (entity.Run, error) {
 	var item entity.Run
 	var input, usage []byte
 	var canCancel, canLaunch bool
-	destinations := []any{&item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.TitleSource, &item.ActivitySummary, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputArtifactRefs, &item.ArtifactRefs, &item.GateRefs, &usage, &item.CreatedAt, &item.StartedAt, &item.FinishedAt}
+	destinations := []any{&item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.TitleSource, &item.ActivitySummary, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputAttachmentSetRef, &item.ArtifactRefs, &item.GateRefs, &usage, &item.CreatedAt, &item.StartedAt, &item.FinishedAt}
 	if actorScoped {
 		destinations = append(destinations, &canCancel, &canLaunch)
 	} else {
@@ -1062,7 +1062,7 @@ func (repository *Repository) ListOwnerGates(ctx context.Context, principal valu
 func scanGate(row rowScanner, actorScoped bool) (entity.OwnerGate, error) {
 	var item entity.OwnerGate
 	canResolve := true
-	destinations := []any{&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.Title, &item.Prompt, &item.ContextSummary, &item.RequestedByRef, &item.RequestedByName, &item.AllowedDecisions, &item.State, &item.Decision, &item.DecisionComment, &item.ResolvedByName, &item.Version, &item.CreatedAt, &item.ResolvedAt, &item.ArtifactRefs}
+	destinations := []any{&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.Title, &item.Prompt, &item.ContextSummary, &item.RequestedByRef, &item.RequestedByName, &item.AllowedDecisions, &item.State, &item.Decision, &item.DecisionComment, &item.ResolvedByName, &item.Version, &item.CreatedAt, &item.ResolvedAt, &item.ResolutionAttachmentSetRef}
 	if actorScoped {
 		canResolve = false
 		destinations = append(destinations, &canResolve)
@@ -1547,7 +1547,7 @@ func (repository *Repository) attachConversation(ctx context.Context, scope scop
 	defer rows.Close()
 	for rows.Next() {
 		var turn entity.AssistantTurn
-		if err := rows.Scan(&turn.Ref, &turn.Actor, &turn.ActorName, &turn.Content, &turn.State, &turn.ArtifactRefs, &turn.CreatedAt, &turn.CompletedAt); err != nil {
+		if err := rows.Scan(&turn.Ref, &turn.Actor, &turn.ActorName, &turn.Content, &turn.State, &turn.AttachmentSetRef, &turn.CreatedAt, &turn.CompletedAt); err != nil {
 			return errs.ErrUnavailable
 		}
 		item.Turns = append(item.Turns, turn)

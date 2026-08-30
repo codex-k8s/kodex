@@ -298,7 +298,7 @@ type claimableExecution struct {
 	environmentBindingVersion, runtimeEnvironmentVersion                             int64
 	attempt                                                                          int32
 	capabilities, knowledge                                                          []string
-	rawInput, rawArtifacts, rawIntegrationGrants, rawDelegationTargets               []byte
+	rawInput, rawAttachmentSets, rawArtifacts, rawIntegrationGrants, rawDelegationTargets []byte
 	rawSessionContext                                                                []byte
 	rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools                  []byte
 	rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy, rawKubernetesAccessProfile []byte
@@ -333,7 +333,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.providerSecretUID, &candidate.providerSecretResourceVersion,
 			&candidate.providerCredentialSHA256, &candidate.instructionRef, &candidate.instructionDigest,
 			&candidate.instructions, &candidate.capabilities, &candidate.knowledge, &candidate.rawInput,
-			&candidate.inputAttachmentSetRef, &candidate.inputAttachmentSetManifestDigest, &candidate.inputAttachmentContext, &candidate.rawArtifacts,
+			&candidate.inputAttachmentSetRef, &candidate.inputAttachmentSetManifestDigest, &candidate.inputAttachmentContext,
+			&candidate.rawAttachmentSets, &candidate.rawArtifacts,
 			&candidate.attempt, &candidate.generation, &candidate.turnRef, &candidate.stableKey,
 			&candidate.rawIntegrationGrants, &candidate.rawDelegationTargets, &candidate.callbackEdgeRef,
 			&candidate.rawSessionContext, &candidate.turnID, &candidate.agentID,
@@ -377,6 +378,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		capabilities, knowledge, rawInput := candidate.capabilities, candidate.knowledge, candidate.rawInput
 		inputAttachmentSetRef, inputAttachmentSetManifestDigest := candidate.inputAttachmentSetRef, candidate.inputAttachmentSetManifestDigest
 		inputAttachmentContext := candidate.inputAttachmentContext
+		rawAttachmentSets := candidate.rawAttachmentSets
 		rawArtifacts := candidate.rawArtifacts
 		attempt, generation, turnRef, stableKey := candidate.attempt, candidate.generation, candidate.turnRef, candidate.stableKey
 		rawIntegrationGrants, rawDelegationTargets := candidate.rawIntegrationGrants, candidate.rawDelegationTargets
@@ -412,6 +414,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		_ = jsonUnmarshal(rawIntegrationGrants, &integrationGrants)
 		var artifacts []map[string]any
 		_ = jsonUnmarshal(rawArtifacts, &artifacts)
+		var attachmentSets []map[string]string
+		_ = jsonUnmarshal(rawAttachmentSets, &attachmentSets)
 		var sessionContext []map[string]string
 		_ = jsonUnmarshal(rawSessionContext, &sessionContext)
 		var environmentValues []runtimecontract.RuntimeEnvironmentValue
@@ -475,6 +479,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			providerSecretUID, providerSecretResourceVersion, providerCredentialSHA256,
 			strings.Join(capabilities, ","), strings.Join(knowledge, ","),
 			integrationGrantsDigestHex, inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext,
+			string(rawAttachmentSets),
 			string(rawArtifacts), string(rawDelegationTargets), string(rawSessionContext), string(rawAssistantContext),
 			roleDefinitionRef, roleImageRecipeRef, roleImageArtifactRef, imageReference,
 			imageManifestDigest, roleRuntimeContractSHA256, hex.EncodeToString(inputDigest[:]),
@@ -509,6 +514,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"knowledgeArtifactRefs": knowledge, "artifacts": artifacts,
 			"attachmentSetRef": inputAttachmentSetRef, "attachmentSetManifestDigest": inputAttachmentSetManifestDigest,
 			"attachmentContext": inputAttachmentContext,
+			"attachmentSets": attachmentSets,
 			"delegationTargets": delegationTargets,
 			"callbackEdgeRef":   callbackEdgeRef, "sessionContext": sessionContext,
 			"input": inputMap, "inputDigest": hex.EncodeToString(inputDigest[:]),
@@ -806,7 +812,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectSessionsId, sessionID).Scan(&next); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, lease["runID"], next, nonEmptyResult(payload), artifactRefs, map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, lease["runID"], next, nonEmptyResult(payload), map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {

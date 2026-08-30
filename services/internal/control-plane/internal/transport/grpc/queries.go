@@ -404,6 +404,19 @@ func (server *Server) GetArtifact(ctx context.Context, request *controlplanev1.G
 	return &controlplanev1.GetArtifactResponse{Artifact: castArtifact(item)}, nil
 }
 
+func (server *Server) GetAttachmentSet(ctx context.Context, request *controlplanev1.GetAttachmentSetRequest) (*controlplanev1.GetAttachmentSetResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetAttachmentSet_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	item, next, err := server.service.GetAttachmentSet(ctx, p, request.GetAttachmentSetRef(), page(request.GetPage()))
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.GetAttachmentSetResponse{AttachmentSet: castAttachmentSet(item),
+		Page: &controlplanev1.PageInfo{NextPageToken: next}}, nil
+}
+
 func (server *Server) ListSchedules(ctx context.Context, request *controlplanev1.ListSchedulesRequest) (*controlplanev1.ListSchedulesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListSchedules_FullMethodName)
 	if err != nil {

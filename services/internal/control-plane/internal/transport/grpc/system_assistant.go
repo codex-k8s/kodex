@@ -55,7 +55,7 @@ func (server *Server) UpdateAssistantConversationTitle(ctx context.Context, requ
 }
 
 func (server *Server) AddAssistantTurn(ctx context.Context, request *controlplanev1.AddAssistantTurnRequest) (*controlplanev1.AddAssistantTurnResponse, error) {
-	payload := command.AssistantTurnInput{ConversationRef: request.GetConversationRef(), Content: request.GetContent(), ArtifactRefs: request.GetArtifactRefs()}
+	payload := command.AssistantTurnInput{ConversationRef: request.GetConversationRef(), Content: request.GetContent(), AttachmentSetRef: request.GetAttachmentSetRef()}
 	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_AddAssistantTurn_FullMethodName, command.AddAssistantTurn, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err

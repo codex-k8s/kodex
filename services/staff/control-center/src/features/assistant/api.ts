@@ -82,13 +82,13 @@ export async function renameConversation(
 export async function appendTurn(
   conversationRef: string,
   content: string,
-  artifactRefs: string[] = [],
+  attachmentSetRef?: string,
 ): Promise<AssistantConversation> {
   return (
     await mutate((headers) =>
       addAssistantTurn({
         path: { conversationRef },
-        body: { content, ...(artifactRefs.length ? { artifactRefs } : {}) },
+        body: { content, ...(attachmentSetRef ? { attachmentSetRef } : {}) },
         headers: {
           "Idempotency-Key": headers["Idempotency-Key"],
           "X-CSRF-Token": headers["X-CSRF-Token"],

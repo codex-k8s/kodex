@@ -150,7 +150,6 @@ describe("RunPage runtime presentation", () => {
         report: "Доступ к файлу ограничен",
         run_ref: "run_secret_internal_reference",
       }),
-      inputArtifactRefs: [],
       artifactRefs: [],
       gateRefs: [],
       createdAt: "2026-08-27T12:00:00Z",

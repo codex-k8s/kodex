@@ -594,3 +594,47 @@ SYSTEM_ROLE_RUNTIME_POLICY:
   other: System runtime policy
 SYSTEM_ROLE_RUNTIME_SECRETS:
   other: System runtime secrets
+ATTACHMENT_SET_DRAFT_CREATED:
+  other: Attachment set draft created
+ATTACHMENT_SET_DRAFT_REVISED:
+  other: Attachment set draft revised
+ATTACHMENT_SET_FINALIZED:
+  other: Attachment set finalized
+PERMISSION_ARTIFACT_BIND_NAME:
+  other: Bind artifacts
+PERMISSION_ARTIFACT_BIND_DESCRIPTION:
+  other: Bind assigned artifacts to permitted objects
+PERMISSION_ARTIFACT_DELETE_NAME:
+  other: Delete artifacts
+PERMISSION_ARTIFACT_DELETE_DESCRIPTION:
+  other: Move assigned artifacts to trash
+PERMISSION_ARTIFACT_RESTORE_NAME:
+  other: Restore artifacts
+PERMISSION_ARTIFACT_RESTORE_DESCRIPTION:
+  other: Restore assigned artifacts from trash
+PERMISSION_ARTIFACT_PURGE_NAME:
+  other: Permanently delete artifacts
+PERMISSION_ARTIFACT_PURGE_DESCRIPTION:
+  other: Permanently remove assigned artifacts
+PERMISSION_IMAGE_BUILD_NAME:
+  other: Build role images
+PERMISSION_IMAGE_BUILD_DESCRIPTION:
+  other: Start builds for assigned role images
+PERMISSION_IMAGE_PROMOTE_NAME:
+  other: Promote role images
+PERMISSION_IMAGE_PROMOTE_DESCRIPTION:
+  other: Promote verified versions of assigned role images
+PERMISSION_PROMPT_FULL_VIEW_NAME:
+  other: View full prompts
+PERMISSION_PROMPT_FULL_VIEW_DESCRIPTION:
+  other: Read fully materialized prompts for assigned runs
+PERMISSION_RUN_CANCEL_NAME:
+  other: Cancel runs
+PERMISSION_RUN_CANCEL_DESCRIPTION:
+  other: Cancel assigned runs in the permitted scope
+PERMISSION_SESSION_CANCEL_NAME:
+  other: Cancel sessions
+PERMISSION_SESSION_CANCEL_DESCRIPTION:
+  other: Cancel assigned sessions in the permitted scope
+SYSTEM_ROLE_EXACT_SENSITIVE_ACCESS:
+  other: System exact permissions for sensitive operations

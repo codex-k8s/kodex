@@ -20,12 +20,19 @@ import {
   type DecisionAction,
   type DecisionInboxItem,
 } from "@/features/workboard/model";
-import type { OwnerGate } from "@/shared/api/generated/openapi/types.gen";
+import { readAttachmentSet } from "@/shared/api/attachment-sets";
+import type {
+  AttachmentSet,
+  OwnerGate,
+} from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
-import type { AttachmentComposerState } from "@/shared/ui/attachment-composer";
+import type {
+  AttachmentComposerHandle,
+  AttachmentComposerState,
+} from "@/shared/ui/attachment-composer";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -40,6 +47,8 @@ const view = ref<"PENDING" | "HISTORY">("PENDING");
 const selectedRef = ref("");
 const comments = ref<Record<string, string>>({});
 const attachmentStates = ref<Record<string, AttachmentComposerState>>({});
+const selectedAttachmentComposer = ref<AttachmentComposerHandle>();
+const resolutionAttachmentSets = ref<Record<string, AttachmentSet>>({});
 const busyRef = ref("");
 const problem = ref<AppProblem>();
 
@@ -111,10 +120,20 @@ function runNodePath(item: DecisionInboxItem) {
   };
 }
 
-function artifactPath(gate: OwnerGate): string {
-  const first = gate.artifactRefs[0];
-  const prefix = `/projects/${encodeURIComponent(gate.projectRef)}/files`;
-  return first ? `${prefix}?artifactRef=${encodeURIComponent(first)}` : prefix;
+let attachmentLoadGeneration = 0;
+async function loadResolutionAttachments(gate?: OwnerGate): Promise<void> {
+  const generation = ++attachmentLoadGeneration;
+  if (!gate?.resolutionAttachmentSetRef) return;
+  try {
+    const attachmentSet = await readAttachmentSet(
+      gate.resolutionAttachmentSetRef,
+    );
+    if (generation === attachmentLoadGeneration)
+      resolutionAttachmentSets.value[gate.ref] = attachmentSet;
+  } catch (error) {
+    if (generation === attachmentLoadGeneration)
+      problem.value = asProblem(error);
+  }
 }
 
 async function decide(
@@ -129,12 +148,11 @@ async function decide(
   busyRef.value = gate.ref;
   problem.value = undefined;
   try {
+    const attachmentSetRef = await selectedAttachmentComposer.value?.finalize();
     await platform.decide(gate, {
       decision,
       comment: comments.value[gate.ref] ?? "",
-      ...(attachmentStates.value[gate.ref]?.refs.length
-        ? { artifactRefs: attachmentStates.value[gate.ref]?.refs ?? [] }
-        : {}),
+      ...(attachmentSetRef ? { attachmentSetRef } : {}),
     });
     Reflect.deleteProperty(comments.value, gate.ref);
     Reflect.deleteProperty(attachmentStates.value, gate.ref);
@@ -146,22 +164,17 @@ async function decide(
   }
 }
 
-async function uploadAttachment(
-  gate: OwnerGate,
-  file: File,
-): Promise<{ ref: string }> {
-  return platform.uploadProjectArtifact(gate.projectRef, file);
-}
-
-async function uploadSelectedAttachment(file: File): Promise<{ ref: string }> {
-  const item = selected.value;
-  if (!item) throw new Error("Owner Gate is unavailable");
-  return uploadAttachment(item.gate, file);
-}
-
 function attachmentsReady(gateRef: string): boolean {
   return attachmentStates.value[gateRef]?.ready ?? true;
 }
+
+watch(
+  () => selected.value?.gate,
+  (gate) => {
+    void loadResolutionAttachments(gate);
+  },
+  { immediate: true },
+);
 
 function decisionLabel(decision: DecisionAction): string {
   if (decision === "APPROVE") return t("common.approve");
@@ -404,16 +417,18 @@ onMounted(
                 }}
               </dt>
               <dd>
-                <RouterLink
-                  v-if="selected.gate.artifactRefs.length"
-                  :to="artifactPath(selected.gate)"
+                <span
+                  v-if="resolutionAttachmentSets[selected.gate.ref]"
+                  class="decision-attachment-summary"
                 >
                   {{
                     $t("decisions.evidenceCount", {
-                      count: selected.gate.artifactRefs.length,
+                      count:
+                        resolutionAttachmentSets[selected.gate.ref]
+                          ?.itemCount ?? 0,
                     })
                   }}
-                </RouterLink>
+                </span>
                 <span v-else>{{ $t("decisions.noEvidence") }}</span>
               </dd>
             </div>
@@ -466,7 +481,8 @@ onMounted(
               />
             </label>
             <AttachmentComposer
-              :upload="uploadSelectedAttachment"
+              ref="selectedAttachmentComposer"
+              purpose="OWNER_GATE_MESSAGE"
               :project-ref="selected.gate.projectRef"
               :disabled="busyRef === selected.gate.ref"
               @change="attachmentStates[selected.gate.ref] = $event"

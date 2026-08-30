@@ -15,6 +15,12 @@ import {
   createAttachmentArtifactLoader,
   type AttachmentArtifactPickerItem,
 } from "@/shared/api/attachment-artifacts";
+import { createAttachmentSetDraftStore } from "@/shared/api/attachment-set-store";
+import {
+  isAttachmentScopeAvailable,
+  uploadCleanAttachmentArtifact,
+} from "@/shared/api/attachment-sets";
+import type { AttachmentSetPurpose } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem } from "@/shared/api/problem";
 import AsyncEntityPicker, {
   type AsyncEntityPickerLabels,
@@ -27,23 +33,25 @@ import {
   type AttachmentComposerHandle,
   type AttachmentComposerState,
   type ExistingAttachmentSelection,
-  type AttachmentUploadRequest,
 } from "@/shared/ui/attachment-composer";
 import type { AsyncEntityLoader } from "@/shared/ui/async-entity-picker";
 
 const props = withDefaults(
   defineProps<{
-    upload: (
-      file: File,
-      request: AttachmentUploadRequest,
-    ) => Promise<{ ref: string }>;
+    purpose: AttachmentSetPurpose;
     disabled?: boolean;
     compact?: boolean;
     reservedBytes?: number;
     projectRef?: string;
     loadExisting?: AsyncEntityLoader<AttachmentArtifactPickerItem>;
+    externalSelections?: readonly ExistingAttachmentSelection[];
   }>(),
-  { disabled: false, compact: false, reservedBytes: 0 },
+  {
+    disabled: false,
+    compact: false,
+    reservedBytes: 0,
+    externalSelections: () => [],
+  },
 );
 const emit = defineEmits<{
   change: [state: AttachmentComposerState];
@@ -54,12 +62,32 @@ const input = ref<HTMLInputElement>();
 const dragDepth = ref(0);
 const existingPickerOpen = ref(false);
 const existingRefs = ref<string[]>([]);
+const storeRevision = ref(0);
 const knownExisting = shallowRef(
   new Map<string, AttachmentArtifactPickerItem>(),
 );
+const scopeAvailable = computed(() =>
+  isAttachmentScopeAvailable(props.projectRef, props.purpose),
+);
+const effectivelyDisabled = computed(
+  () => props.disabled || !scopeAvailable.value,
+);
+const attachmentSetStore = createAttachmentSetDraftStore({
+  projectRef: () => props.projectRef,
+  purpose: () => props.purpose,
+  changed: () => {
+    storeRevision.value += 1;
+  },
+});
 const queue = createAttachmentUploadQueue({
-  upload: (file, request) => props.upload(file, request),
-  disabled: () => props.disabled,
+  upload: (file, request) =>
+    uploadCleanAttachmentArtifact(
+      props.projectRef,
+      props.purpose,
+      file,
+      request,
+    ),
+  disabled: () => effectivelyDisabled.value,
   reservedBytes: () => props.reservedBytes,
   formatError: (error) =>
     asProblem(error).detail || t("attachments.uploadFailed"),
@@ -68,12 +96,12 @@ const { items, state: uploadState } = queue;
 const dragActive = computed(() => dragDepth.value > 0);
 const existingLoader = computed(() => {
   if (props.loadExisting) return props.loadExisting;
-  return props.projectRef
+  return scopeAvailable.value
     ? createAttachmentArtifactLoader(props.projectRef)
     : undefined;
 });
-const existingSelections = computed<ExistingAttachmentSelection[]>(() =>
-  existingRefs.value.flatMap((reference) => {
+const existingSelections = computed<ExistingAttachmentSelection[]>(() => {
+  const selected = existingRefs.value.flatMap((reference) => {
     const item = knownExisting.value.get(reference);
     return item
       ? [
@@ -85,10 +113,47 @@ const existingSelections = computed<ExistingAttachmentSelection[]>(() =>
           },
         ]
       : [];
-  }),
-);
-const state = computed(() =>
+  });
+  const merged = new Map(
+    [...props.externalSelections, ...selected].map((item) => [item.ref, item]),
+  );
+  return [...merged.values()];
+});
+const selectionState = computed(() =>
   attachmentComposerState(uploadState.value, existingSelections.value),
+);
+const draftState = computed(() => {
+  void storeRevision.value;
+  return attachmentSetStore.state();
+});
+const synchronized = computed(() => {
+  const current = draftState.value.references;
+  const desired = selectionState.value.references;
+  return (
+    current.length === desired.length &&
+    current.every((reference, index) => reference === desired[index])
+  );
+});
+const state = computed<AttachmentComposerState>(() => ({
+  count: selectionState.value.count,
+  uploadedCount: selectionState.value.uploadedCount,
+  totalBytes: selectionState.value.totalBytes,
+  busy: selectionState.value.busy || draftState.value.busy,
+  hasErrors: selectionState.value.hasErrors || Boolean(draftState.value.error),
+  overLimit: selectionState.value.overLimit,
+  ready:
+    selectionState.value.ready &&
+    !draftState.value.busy &&
+    !draftState.value.error &&
+    synchronized.value,
+  ...(draftState.value.attachmentSet?.state === "FINALIZED"
+    ? { attachmentSetRef: draftState.value.attachmentSet.ref }
+    : {}),
+}));
+const syncError = computed(() =>
+  draftState.value.error
+    ? asProblem(draftState.value.error).detail || t("attachments.syncFailed")
+    : "",
 );
 const existingPickerLabels = computed<AsyncEntityPickerLabels>(() => ({
   label: t("attachments.existing.label"),
@@ -100,15 +165,19 @@ const existingPickerLabels = computed<AsyncEntityPickerLabels>(() => ({
   retry: t("common.retry"),
 }));
 
-watch(state, (value) => emit("change", { ...value, refs: [...value.refs] }), {
+watch(state, (value) => emit("change", { ...value }), {
   immediate: true,
 });
 watch(
-  () => props.disabled,
-  (disabled) => {
-    if (!disabled) queue.process();
+  () => selectionState.value.references,
+  (references) => {
+    void attachmentSetStore.reconcile(references);
   },
+  { immediate: true },
 );
+watch(effectivelyDisabled, (disabled) => {
+  if (!disabled) queue.process();
+});
 watch(
   () => props.projectRef,
   (next, previous) => {
@@ -116,6 +185,15 @@ watch(
     existingPickerOpen.value = false;
     existingRefs.value = [];
     knownExisting.value = new Map();
+    queue.clear();
+    attachmentSetStore.reset();
+  },
+);
+watch(
+  () => props.purpose,
+  () => {
+    attachmentSetStore.reset();
+    void attachmentSetStore.reconcile(selectionState.value.references);
   },
 );
 watch(
@@ -134,7 +212,7 @@ function handleInput(event: Event): void {
 }
 
 function handleDragEnter(): void {
-  if (!props.disabled) dragDepth.value += 1;
+  if (!effectivelyDisabled.value) dragDepth.value += 1;
 }
 
 function handleDragLeave(): void {
@@ -143,7 +221,7 @@ function handleDragLeave(): void {
 
 function handleDrop(event: DragEvent): void {
   dragDepth.value = 0;
-  if (!props.disabled && event.dataTransfer?.files)
+  if (!effectivelyDisabled.value && event.dataTransfer?.files)
     enqueue(event.dataTransfer.files);
 }
 
@@ -178,11 +256,22 @@ function clear(): void {
   existingPickerOpen.value = false;
   existingRefs.value = [];
   knownExisting.value = new Map();
+  attachmentSetStore.reset();
+}
+
+async function finalize(): Promise<string | undefined> {
+  if (!state.value.ready)
+    throw new Error("AttachmentSet is not ready for finalization");
+  return attachmentSetStore.finalize();
+}
+
+function retrySync(): void {
+  void attachmentSetStore.retry();
 }
 
 onBeforeUnmount(clear);
 
-defineExpose<AttachmentComposerHandle>({ clear });
+defineExpose<AttachmentComposerHandle>({ clear, finalize });
 </script>
 
 <template>
@@ -203,14 +292,14 @@ defineExpose<AttachmentComposerHandle>({ clear });
       class="sr-only"
       type="file"
       multiple
-      :disabled="disabled"
+      :disabled="effectivelyDisabled"
       @change="handleInput"
     />
 
     <button
       class="attachment-composer__picker"
       type="button"
-      :disabled="disabled"
+      :disabled="effectivelyDisabled"
       @click="input?.click()"
     >
       <Paperclip :size="17" aria-hidden="true" />
@@ -222,7 +311,7 @@ defineExpose<AttachmentComposerHandle>({ clear });
       v-if="existingLoader"
       class="attachment-composer__existing-toggle"
       type="button"
-      :disabled="disabled"
+      :disabled="effectivelyDisabled"
       :aria-expanded="existingPickerOpen"
       @click="existingPickerOpen = !existingPickerOpen"
     >
@@ -242,7 +331,7 @@ defineExpose<AttachmentComposerHandle>({ clear });
         :model-value="existingRefs"
         :load-items="existingLoader"
         :labels="existingPickerLabels"
-        :disabled="disabled"
+        :disabled="effectivelyDisabled"
         multiple
         @update:model-value="updateExistingRefs"
         @select="rememberExisting"
@@ -359,6 +448,15 @@ defineExpose<AttachmentComposerHandle>({ clear });
     <p v-if="state.overLimit" class="attachment-composer__limit" role="alert">
       {{ t("attachments.aggregateLimit") }}
     </p>
+    <p v-if="!scopeAvailable" class="attachment-composer__limit" role="status">
+      {{ t("attachments.projectRequired") }}
+    </p>
+    <div v-if="syncError" class="attachment-composer__sync-error" role="alert">
+      <span>{{ syncError }}</span>
+      <button class="button" type="button" @click="retrySync">
+        {{ t("common.retry") }}
+      </button>
+    </div>
     <div v-if="dragActive" class="attachment-composer__drop">
       <Upload :size="24" aria-hidden="true" />
       <strong>{{ t("attachments.drop") }}</strong>
@@ -480,6 +578,14 @@ defineExpose<AttachmentComposerHandle>({ clear });
 }
 .attachment-composer__error,
 .attachment-composer__limit {
+  color: var(--danger);
+  font-size: 12px;
+}
+.attachment-composer__sync-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   color: var(--danger);
   font-size: 12px;
 }

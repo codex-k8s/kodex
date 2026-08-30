@@ -60,7 +60,7 @@ describe("attachment composer model", () => {
 
     expect(state.count).toBe(301);
     expect(state.uploadedCount).toBe(301);
-    expect(state.refs).toHaveLength(301);
+    expect(state.references).toHaveLength(301);
     expect(state.ready).toBe(true);
   });
 
@@ -73,10 +73,10 @@ describe("attachment composer model", () => {
       size: 10,
     };
 
-    expect(attachmentComposerState(base, [artifact]).refs).toEqual([
+    expect(attachmentComposerState(base, [artifact]).references).toEqual([
       "artifact_existing",
     ]);
-    expect(attachmentComposerState(base, []).refs).toEqual([]);
+    expect(attachmentComposerState(base, []).references).toEqual([]);
   });
 
   it("добавляет произвольное число файлов без count-limit и дедуплицирует browser descriptor", () => {
@@ -132,7 +132,7 @@ describe("attachment composer model", () => {
     ];
 
     expect(attachmentQueueState(items)).toMatchObject({
-      refs: ["art_a"],
+      references: ["art_a"],
       uploadedCount: 1,
       busy: false,
       hasErrors: true,
@@ -175,7 +175,7 @@ describe("attachment upload queue", () => {
     secondUpload.resolve({ ref: "art_b" });
     await flushQueue();
     await flushQueue();
-    expect(queue.state.value.refs).toEqual(["art_a", "art_b", "art_c"]);
+    expect(queue.state.value.references).toEqual(["art_a", "art_b", "art_c"]);
     expect(queue.state.value.ready).toBe(true);
   });
 
@@ -205,10 +205,10 @@ describe("attachment upload queue", () => {
     const item = required(queue.items.value[0]);
     queue.retry(item.key);
     await flushQueue();
-    expect(queue.state.value.refs).toEqual(["art_retry"]);
+    expect(queue.state.value.references).toEqual(["art_retry"]);
 
     queue.remove(required(queue.items.value[0]).key);
-    expect(queue.state.value.refs).toEqual([]);
+    expect(queue.state.value.references).toEqual([]);
     expect(queue.state.value.ready).toBe(true);
   });
 
@@ -254,7 +254,7 @@ describe("attachment upload queue", () => {
 
     upload.resolve({ ref: "artifact_hidden" });
     await flushQueue();
-    expect(queue.state.value.refs).toEqual([]);
+    expect(queue.state.value.references).toEqual([]);
     expect(queue.state.value.ready).toBe(true);
   });
 
@@ -312,6 +312,6 @@ describe("attachment upload queue", () => {
     expect(queue.items.value[0]).toMatchObject({ state: "UPLOADING" });
     secondUpload.resolve({ ref: "artifact_replacement" });
     await flushQueue();
-    expect(queue.state.value.refs).toEqual(["artifact_replacement"]);
+    expect(queue.state.value.references).toEqual(["artifact_replacement"]);
   });
 });

@@ -17,17 +17,16 @@ func manifestArtifact(ref, name, mediaType, scope string, position int64, source
 	}
 }
 
-func TestBuildAttachmentManifestIsCanonicalAndCoversAllScopes(t *testing.T) {
+func TestBuildAttachmentManifestIsCanonical(t *testing.T) {
 	artifacts := []RunnerInputArtifact{
-		manifestArtifact("artifact_qrstuvwx", "Правила 2026.md", "text/markdown", AttachmentScopeKnowledge, 1, "KNOWLEDGE_SOURCE"),
-		manifestArtifact("artifact_ijklmnop", "prior.txt", "text/plain", AttachmentScopeSession, 1, "INTERACTION_ATTACHMENT"),
+		manifestArtifact("artifact_ijklmnop", "requirements.md", "text/markdown", AttachmentScopeInput, 2, "CONTROL_CENTER"),
 		manifestArtifact("artifact_abcdefgh", "customer brief.txt", "text/plain", AttachmentScopeInput, 1, "CONTROL_CENTER"),
 	}
 	canonical, err := BuildAttachmentManifest("aset_abcdefgh", "SESSION_TURN", artifacts)
 	if err != nil {
 		t.Fatalf("BuildAttachmentManifest() error = %v", err)
 	}
-	reordered, err := BuildAttachmentManifest("aset_abcdefgh", "SESSION_TURN", []RunnerInputArtifact{artifacts[2], artifacts[0], artifacts[1]})
+	reordered, err := BuildAttachmentManifest("aset_abcdefgh", "SESSION_TURN", []RunnerInputArtifact{artifacts[1], artifacts[0]})
 	if err != nil {
 		t.Fatalf("BuildAttachmentManifest(reordered) error = %v", err)
 	}
@@ -36,21 +35,21 @@ func TestBuildAttachmentManifestIsCanonicalAndCoversAllScopes(t *testing.T) {
 	}
 	if canonical.Manifest.Schema != AttachmentManifestSchema || canonical.Manifest.Version != AttachmentManifestVersion ||
 		canonical.Manifest.AttachmentSetRef != "aset_abcdefgh" || canonical.Manifest.AttachmentContext != "SESSION_TURN" ||
-		canonical.Manifest.Digest != canonical.Digest || len(canonical.Manifest.Files) != 3 {
+		canonical.Manifest.Digest != canonical.Digest || len(canonical.Manifest.Files) != 2 {
 		t.Fatalf("unexpected manifest header: %#v", canonical.Manifest)
 	}
 	want := []struct {
 		scope, purpose, path string
+		position             int64
 	}{
-		{AttachmentScopeInput, "SESSION_TURN", "/workspace/input/aset_abcdefgh/files/0001-customer_brief.txt"},
-		{AttachmentScopeSession, "SESSION_INPUT", "/workspace/session/0001-prior.txt"},
-		{AttachmentScopeKnowledge, "PROJECT_KNOWLEDGE", "/workspace/knowledge/0001-________2026.md"},
+		{AttachmentScopeInput, "SESSION_TURN", "/workspace/input/aset_abcdefgh/files/0001-customer_brief.txt", 1},
+		{AttachmentScopeInput, "SESSION_TURN", "/workspace/input/aset_abcdefgh/files/0002-requirements.md", 2},
 	}
 	for index, expected := range want {
 		file := canonical.Manifest.Files[index]
 		if file.Scope != expected.scope || file.Purpose != expected.purpose || file.Path != expected.path ||
 			file.ArtifactRef == "" || file.Revision != 2 || file.Version != 3 || file.FileName == "" ||
-			file.MediaType == "" || file.SizeBytes != 42 || file.SHA256 == "" || file.Position != 1 || file.Source == "" {
+			file.MediaType == "" || file.SizeBytes != 42 || file.SHA256 == "" || file.Position != expected.position || file.Source == "" {
 			t.Fatalf("file[%d] = %#v", index, file)
 		}
 	}
@@ -89,15 +88,33 @@ func TestBuildAttachmentManifestRejectsTraversalAndDuplicates(t *testing.T) {
 	}
 }
 
-func TestBuildAttachmentManifestWithoutDirectSetSupportsSessionAndKnowledge(t *testing.T) {
-	manifest, err := BuildAttachmentManifest("", "", []RunnerInputArtifact{
-		manifestArtifact("artifact_abcdefgh", "prior.txt", "text/plain", AttachmentScopeSession, 1, "INTERACTION_ATTACHMENT"),
-		manifestArtifact("artifact_ijklmnop", "policy.md", "text/markdown", AttachmentScopeKnowledge, 1, "KNOWLEDGE_SOURCE"),
-	})
-	if err != nil {
-		t.Fatalf("BuildAttachmentManifest() error = %v", err)
+func TestBuildWorkspaceAttachmentManifestCoversCurrentSessionAndKnowledge(t *testing.T) {
+	sets := []RunnerAttachmentSet{
+		{Ref: "aset_abcdefgh", ManifestDigest: strings.Repeat("b", 64), Purpose: "RUN_INPUT", Scope: AttachmentScopeInput, Provenance: "CURRENT_TURN", TurnRef: "turn_abcdefgh"},
+		{Ref: "aset_ijklmnop", ManifestDigest: strings.Repeat("c", 64), Purpose: "SESSION_TURN", Scope: AttachmentScopeSession, Provenance: "SESSION_HISTORY", TurnRef: "turn_ijklmnop"},
 	}
-	if manifest.Manifest.AttachmentSetRef != "" || manifest.Manifest.AttachmentContext != "" || len(manifest.Manifest.Files) != 2 {
+	current := manifestArtifact("artifact_abcdefgh", "brief.txt", "text/plain", AttachmentScopeInput, 1, "CONTROL_CENTER")
+	current.AttachmentSetRef, current.AttachmentPurpose, current.Provenance = sets[0].Ref, sets[0].Purpose, sets[0].Provenance
+	history := manifestArtifact("artifact_ijklmnop", "prior.txt", "text/plain", AttachmentScopeSession, 1, "INTERACTION_ATTACHMENT")
+	history.AttachmentSetRef, history.AttachmentPurpose, history.Provenance = sets[1].Ref, sets[1].Purpose, sets[1].Provenance
+	knowledge := manifestArtifact("artifact_qrstuvwx", "policy.md", "text/markdown", AttachmentScopeKnowledge, 1, "KNOWLEDGE_SOURCE")
+	knowledge.AttachmentPurpose, knowledge.Provenance = "PROJECT_KNOWLEDGE", "PROJECT_BINDING"
+
+	manifest, err := BuildWorkspaceAttachmentManifest(sets, []RunnerInputArtifact{knowledge, history, current})
+	if err != nil {
+		t.Fatalf("BuildWorkspaceAttachmentManifest() error = %v", err)
+	}
+	if len(manifest.Manifest.AttachmentSets) != 2 || len(manifest.Manifest.Files) != 3 {
 		t.Fatalf("manifest = %#v", manifest.Manifest)
+	}
+	wantPaths := []string{
+		"/workspace/input/aset_abcdefgh/files/0001-brief.txt",
+		"/workspace/input/aset_ijklmnop/files/0001-prior.txt",
+		"/workspace/knowledge/0001-policy.md",
+	}
+	for index, expected := range wantPaths {
+		if manifest.Manifest.Files[index].Path != expected {
+			t.Fatalf("file[%d].path = %q, want %q", index, manifest.Manifest.Files[index].Path, expected)
+		}
 	}
 }

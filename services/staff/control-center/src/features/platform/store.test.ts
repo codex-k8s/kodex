@@ -165,7 +165,6 @@ function run(sequence: number): Run {
       reasoningOutputTokens: 0,
       modelContextWindow: 0,
     },
-    inputArtifactRefs: [],
     artifactRefs: [],
     gateRefs: [],
     incidents: [],

@@ -17,6 +17,48 @@ import (
 
 const maximumArtifactChunkBytes = 1 << 20
 
+func (server *Server) CreateAttachmentSetDraft(ctx context.Context, request *controlplanev1.CreateAttachmentSetDraftRequest) (*controlplanev1.CreateAttachmentSetDraftResponse, error) {
+	payload := command.AttachmentSetDraftInput{ProjectRef: request.GetProjectRef(),
+		Purpose: enumSuffix(request.GetPurpose(), "ATTACHMENT_SET_PURPOSE_"), ArtifactRefs: request.GetArtifactRefs()}
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateAttachmentSetDraft_FullMethodName,
+		command.CreateAttachmentSetDraft, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.CreateAttachmentSetDraftResponse{AttachmentSet: castAttachmentSet(*result.AttachmentSet)}, nil
+}
+
+func (server *Server) AddAttachmentSetItems(ctx context.Context, request *controlplanev1.AddAttachmentSetItemsRequest) (*controlplanev1.AddAttachmentSetItemsResponse, error) {
+	payload := command.AttachmentSetDraftInput{AttachmentSetRef: request.GetAttachmentSetRef(),
+		ArtifactRefs: request.GetArtifactRefs(), InsertAfterPosition: request.GetInsertAfterPosition()}
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_AddAttachmentSetItems_FullMethodName,
+		command.AddAttachmentSetItems, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.AddAttachmentSetItemsResponse{AttachmentSet: castAttachmentSet(*result.AttachmentSet)}, nil
+}
+
+func (server *Server) RemoveAttachmentSetItems(ctx context.Context, request *controlplanev1.RemoveAttachmentSetItemsRequest) (*controlplanev1.RemoveAttachmentSetItemsResponse, error) {
+	payload := command.AttachmentSetDraftInput{AttachmentSetRef: request.GetAttachmentSetRef(), ArtifactRefs: request.GetArtifactRefs()}
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RemoveAttachmentSetItems_FullMethodName,
+		command.RemoveAttachmentSetItems, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.RemoveAttachmentSetItemsResponse{AttachmentSet: castAttachmentSet(*result.AttachmentSet)}, nil
+}
+
+func (server *Server) FinalizeAttachmentSet(ctx context.Context, request *controlplanev1.FinalizeAttachmentSetRequest) (*controlplanev1.FinalizeAttachmentSetResponse, error) {
+	payload := command.AttachmentSetDraftInput{AttachmentSetRef: request.GetAttachmentSetRef()}
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_FinalizeAttachmentSet_FullMethodName,
+		command.FinalizeAttachmentSet, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.FinalizeAttachmentSetResponse{AttachmentSet: castAttachmentSet(*result.AttachmentSet)}, nil
+}
+
 func (server *Server) UploadArtifact(stream controlplanev1.PlatformCommandService_UploadArtifactServer) error {
 	p, err := principal(stream.Context(), controlplanev1.PlatformCommandService_UploadArtifact_FullMethodName)
 	if err != nil {

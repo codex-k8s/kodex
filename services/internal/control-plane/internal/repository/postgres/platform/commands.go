@@ -170,6 +170,9 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeArtifactBinding(ctx, tx, scope, input)
 	case command.DeleteArtifact, command.RestoreArtifact:
 		return repository.changeArtifactLifecycle(ctx, tx, scope, input)
+	case command.CreateAttachmentSetDraft, command.AddAttachmentSetItems,
+		command.RemoveAttachmentSetItems, command.FinalizeAttachmentSet:
+		return repository.changeAttachmentSet(ctx, tx, scope, input)
 	case command.CreateSchedule, command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule:
 		return repository.changeSchedule(ctx, tx, scope, input)
 	case command.CreateConnection, command.ConfigureConnectionCredential, command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
@@ -1256,7 +1259,22 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	if len(payload.ArtifactRefs) > 0 {
+	attachmentKind := "RUN_INPUT"
+	if payload.Target.Type == "WORKFLOW" {
+		attachmentKind = "WORKFLOW_INPUT"
+	}
+	attachmentPurpose := payload.AttachmentPurpose
+	if attachmentPurpose == "" {
+		attachmentPurpose = attachmentKind
+	}
+	if !contains(attachmentSetPurposes, attachmentPurpose) {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, attachmentPurpose)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if attachmentSet.ID != "" {
 		allowed, err := repository.agentsHaveCapabilities(ctx, tx, scope.organizationID, projectID, targetAgentRefs, []string{runtimecontract.ArtifactCapability})
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -1292,20 +1310,6 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	rawInput := asJSON(payload.Input)
-	artifactRefs := append([]string(nil), payload.ArtifactRefs...)
-	if artifactRefs == nil {
-		artifactRefs = []string{}
-	}
-	attachmentContext := "RUN_INPUT"
-	if payload.Target.Type == "WORKFLOW" {
-		attachmentContext = "WORKFLOW_INPUT"
-	} else if payload.SessionRef != "" {
-		attachmentContext = "SESSION_TURN"
-	}
-	attachmentSet, err := repository.sealAttachmentSet(ctx, tx, scope, projectID, artifactRefs, attachmentContext)
-	if err != nil {
-		return commandOutcome{}, err
-	}
 	var runID string
 	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunsRefProjectIdTargetType, pgx.StrictNamedArgs{
 		"run_ref":             runRef,
@@ -1320,14 +1324,12 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		"title_source":        titleSource,
 		"task":                payload.Task,
 		"input":               rawInput,
-		"input_artifact_refs": []string{},
 		"initiated_by":        scope.actorID,
 		"concurrency_limit":   runConcurrency,
 	}).Scan(&runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert launched run: %w", mapWriteError(err))
 	}
-	runAttachmentKind := attachmentContext
-	if err := repository.attachSetToRun(ctx, tx, scope, projectID, attachmentSet, runID, runRef, runAttachmentKind); err != nil {
+	if err := repository.attachSetToRun(ctx, tx, scope, projectID, attachmentSet, runID, attachmentKind); err != nil {
 		return commandOutcome{}, fmt.Errorf("bind run attachment set: %w", err)
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsRootRunId, runID); err != nil {
@@ -1339,10 +1341,10 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	turnRef, _ := newRef("trn")
 	var turnID string
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, runID, scope.actorRef, executionTask, []string{}).Scan(&turnID); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, runID, scope.actorRef, executionTask).Scan(&turnID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert initial session turn: %w", errs.ErrUnavailable)
 	}
-	if err := repository.attachSetToTurn(ctx, tx, scope, projectID, attachmentSet, turnID, turnRef, "SESSION_TURN"); err != nil {
+	if err := repository.attachSetToTurn(ctx, tx, scope, projectID, attachmentSet, turnID, "SESSION_TURN"); err != nil {
 		return commandOutcome{}, fmt.Errorf("bind turn attachment set: %w", err)
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
@@ -1839,7 +1841,7 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 	if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectSessionsOrganizationIdRefState, scope.organizationID, payload.SessionRef).Scan(&projectID, &projectRef, &targetType, &targetRef); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
-	launch := command.LaunchRunInput{ProjectRef: projectRef, Title: "i18n:SESSION_CONTINUATION", Task: payload.Task, SessionRef: payload.SessionRef, Source: "CONTROL_CENTER", Target: entity.RunTarget{Type: targetType, Ref: targetRef}, ArtifactRefs: payload.ArtifactRefs}
+	launch := command.LaunchRunInput{ProjectRef: projectRef, Title: "i18n:SESSION_CONTINUATION", Task: payload.Task, SessionRef: payload.SessionRef, Source: "CONTROL_CENTER", Target: entity.RunTarget{Type: targetType, Ref: targetRef}, AttachmentSetRef: payload.AttachmentSetRef, AttachmentPurpose: "SESSION_TURN"}
 	nested := input
 	nested.Kind = command.LaunchRun
 	nested.Payload = launch
@@ -1970,15 +1972,15 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	var targetType, targetRef, title, task, sessionRef, source string
 	var raw []byte
-	var artifacts []string
-	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsId, runID).Scan(&targetType, &targetRef, &title, &task, &sessionRef, &source, &raw, &artifacts); err != nil {
+	var attachmentSetRef, attachmentPurpose string
+	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsId, runID).Scan(&targetType, &targetRef, &title, &task, &sessionRef, &source, &raw, &attachmentSetRef, &attachmentPurpose); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var launchInput map[string]any
 	_ = json.Unmarshal(raw, &launchInput)
 	nested := input
 	nested.Kind = command.LaunchRun
-	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: title, Task: task, SessionRef: sessionRef, Source: source, Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: launchInput, ArtifactRefs: artifacts}
+	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: title, Task: task, SessionRef: sessionRef, Source: source, Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: launchInput, AttachmentSetRef: attachmentSetRef, AttachmentPurpose: attachmentPurpose}
 	outcome, err := repository.launchRun(ctx, tx, scope, nested)
 	if err != nil {
 		return commandOutcome{}, err
@@ -2044,11 +2046,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if !contains(allowed, payload.Decision) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
-	artifactRefs := append([]string(nil), payload.ArtifactRefs...)
-	if artifactRefs == nil {
-		artifactRefs = []string{}
-	}
-	attachmentSet, err := repository.sealAttachmentSet(ctx, tx, scope, projectID, artifactRefs, "OWNER_GATE_MESSAGE")
+	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, "OWNER_GATE_MESSAGE")
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -2080,7 +2078,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		if err != nil || tag.RowsAffected() != 1 {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		if err := repository.bindAttachmentSet(ctx, tx, scope, projectID, attachmentSet, "OWNER_GATE_MESSAGE", payload.GateRef); err != nil {
+		if err := repository.bindAttachmentSet(ctx, tx, scope, projectID, attachmentSet, "OWNER_GATE_MESSAGE", gateID); err != nil {
 			return commandOutcome{}, err
 		}
 	}
@@ -2113,7 +2111,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 			sessionID, predecessorRunID, scope.actorRef, truncate(comment, 2000)).Scan(&turnID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if err := repository.attachSetToTurn(ctx, tx, scope, projectID, attachmentSet, turnID, turnRef, "SESSION_TURN"); err != nil {
+		if err := repository.attachSetToTurn(ctx, tx, scope, projectID, attachmentSet, turnID, "SESSION_TURN"); err != nil {
 			return commandOutcome{}, err
 		}
 		if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateChangeRequestSession, sessionID); err != nil {

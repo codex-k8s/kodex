@@ -116,6 +116,14 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	result.AttachmentSetRef = mapString(values, "attachmentSetRef")
 	result.AttachmentSetManifestDigest = mapString(values, "attachmentSetManifestDigest")
 	result.AttachmentContext = mapString(values, "attachmentContext")
+	if sets, ok := values["attachmentSets"].([]map[string]string); ok {
+		for _, set := range sets {
+			result.AttachmentSets = append(result.AttachmentSets, &controlplanev1.RuntimeAttachmentSet{
+				Ref: set["ref"], ManifestDigest: set["manifestDigest"], Purpose: set["purpose"],
+				Scope: set["scope"], Provenance: set["provenance"], TurnRef: set["turnRef"],
+			})
+		}
+	}
 	if environmentValues, ok := values["environmentValues"].([]runtimecontract.RuntimeEnvironmentValue); ok {
 		for _, item := range environmentValues {
 			result.EnvironmentValues = append(result.EnvironmentValues, &controlplanev1.RuntimeEnvironmentValue{Name: item.Name, Value: item.Value})
@@ -180,9 +188,10 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 			}
 			result.Artifacts = append(result.Artifacts, item)
 			result.InputArtifacts = append(result.InputArtifacts, &controlplanev1.RuntimeInputArtifact{
-				Artifact: item,
-				Scope:    mapString(artifact, "scope"),
-				Position: mapInt64(artifact, "position"),
+				Artifact: item, Scope: mapString(artifact, "scope"), Position: mapInt64(artifact, "position"),
+				AttachmentSetRef: mapString(artifact, "attachmentSetRef"),
+				AttachmentPurpose: mapString(artifact, "attachmentPurpose"),
+				Provenance: mapString(artifact, "provenance"),
 			})
 		}
 	}

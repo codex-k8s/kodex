@@ -594,3 +594,47 @@ SYSTEM_ROLE_RUNTIME_POLICY:
   other: Системная политика среды выполнения
 SYSTEM_ROLE_RUNTIME_SECRETS:
   other: Системные секреты среды выполнения
+ATTACHMENT_SET_DRAFT_CREATED:
+  other: Черновик набора вложений создан
+ATTACHMENT_SET_DRAFT_REVISED:
+  other: Черновик набора вложений обновлён
+ATTACHMENT_SET_FINALIZED:
+  other: Набор вложений зафиксирован
+PERMISSION_ARTIFACT_BIND_NAME:
+  other: Привязка артефактов
+PERMISSION_ARTIFACT_BIND_DESCRIPTION:
+  other: Привязка назначенных артефактов к разрешённым объектам
+PERMISSION_ARTIFACT_DELETE_NAME:
+  other: Удаление артефактов
+PERMISSION_ARTIFACT_DELETE_DESCRIPTION:
+  other: Перемещение назначенных артефактов в корзину
+PERMISSION_ARTIFACT_RESTORE_NAME:
+  other: Восстановление артефактов
+PERMISSION_ARTIFACT_RESTORE_DESCRIPTION:
+  other: Восстановление назначенных артефактов из корзины
+PERMISSION_ARTIFACT_PURGE_NAME:
+  other: Окончательное удаление артефактов
+PERMISSION_ARTIFACT_PURGE_DESCRIPTION:
+  other: Безвозвратное удаление назначенных артефактов
+PERMISSION_IMAGE_BUILD_NAME:
+  other: Сборка образов ролей
+PERMISSION_IMAGE_BUILD_DESCRIPTION:
+  other: Запуск сборки назначенных образов ролей
+PERMISSION_IMAGE_PROMOTE_NAME:
+  other: Публикация образов ролей
+PERMISSION_IMAGE_PROMOTE_DESCRIPTION:
+  other: Публикация проверенных версий назначенных образов ролей
+PERMISSION_PROMPT_FULL_VIEW_NAME:
+  other: Просмотр полных промптов
+PERMISSION_PROMPT_FULL_VIEW_DESCRIPTION:
+  other: Чтение полностью материализованных промптов назначенных запусков
+PERMISSION_RUN_CANCEL_NAME:
+  other: Отмена запусков
+PERMISSION_RUN_CANCEL_DESCRIPTION:
+  other: Отмена назначенных запусков в разрешённой области
+PERMISSION_SESSION_CANCEL_NAME:
+  other: Отмена сессий
+PERMISSION_SESSION_CANCEL_DESCRIPTION:
+  other: Отмена назначенных сессий в разрешённой области
+SYSTEM_ROLE_EXACT_SENSITIVE_ACCESS:
+  other: Системные точные полномочия для чувствительных операций

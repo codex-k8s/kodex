@@ -380,7 +380,7 @@ func (server *Server) CreateRun(w http.ResponseWriter, r *http.Request, p genera
 	}
 	input, _ := structpb.NewStruct(valueOrEmpty(body.Input))
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Command.LaunchRun(r.Context(), &controlplanev1.LaunchRunRequest{Mutation: m, ProjectRef: body.ProjectRef, Target: targetProto(string(body.TargetType), body.TargetRef), Title: stringValue(body.Title), Task: body.Task, Input: input, ArtifactRefs: sliceOrEmpty(body.ArtifactRefs), SessionRef: stringValue(body.SessionRef), Source: controlplanev1.RunSource_RUN_SOURCE_CONTROL_CENTER})
+	response, err := server.control.Command.LaunchRun(r.Context(), &controlplanev1.LaunchRunRequest{Mutation: m, ProjectRef: body.ProjectRef, Target: targetProto(string(body.TargetType), body.TargetRef), Title: stringValue(body.Title), Task: body.Task, Input: input, AttachmentSetRef: stringValue(body.AttachmentSetRef), SessionRef: stringValue(body.SessionRef), Source: controlplanev1.RunSource_RUN_SOURCE_CONTROL_CENTER})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -430,7 +430,7 @@ func (server *Server) AddSessionTurn(w http.ResponseWriter, r *http.Request, ses
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Command.AddSessionTurn(r.Context(), &controlplanev1.AddSessionTurnRequest{Mutation: m, SessionRef: sessionRef, RunRef: body.RunRef, NodeRef: stringValue(body.NodeRef), Task: body.Task, ArtifactRefs: sliceOrEmpty(body.ArtifactRefs)})
+	response, err := server.control.Command.AddSessionTurn(r.Context(), &controlplanev1.AddSessionTurnRequest{Mutation: m, SessionRef: sessionRef, RunRef: body.RunRef, NodeRef: stringValue(body.NodeRef), Task: body.Task, AttachmentSetRef: stringValue(body.AttachmentSetRef)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -446,7 +446,7 @@ func (server *Server) ResolveOwnerGate(w http.ResponseWriter, r *http.Request, r
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.ResolveOwnerGate(r.Context(), &controlplanev1.ResolveOwnerGateRequest{Mutation: m, GateRef: ref, Decision: gateDecision(string(body.Decision)), Comment: stringValue(body.Comment), ArtifactRefs: sliceOrEmpty(body.ArtifactRefs)})
+	response, err := server.control.Command.ResolveOwnerGate(r.Context(), &controlplanev1.ResolveOwnerGateRequest{Mutation: m, GateRef: ref, Decision: gateDecision(string(body.Decision)), Comment: stringValue(body.Comment), AttachmentSetRef: stringValue(body.AttachmentSetRef)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

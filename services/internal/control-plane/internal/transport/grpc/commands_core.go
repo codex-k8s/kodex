@@ -220,7 +220,7 @@ func (server *Server) ArchiveWorkflow(ctx context.Context, request *controlplane
 
 func (server *Server) LaunchRun(ctx context.Context, request *controlplanev1.LaunchRunRequest) (*controlplanev1.LaunchRunResponse, error) {
 	titleSource := launchRunTitleSource(request.GetTitle())
-	payload := command.LaunchRunInput{ProjectRef: request.GetProjectRef(), Title: request.GetTitle(), TitleSource: titleSource, Task: request.GetTask(), SessionRef: request.GetSessionRef(), Source: enumSuffix(request.GetSource(), "RUN_SOURCE_"), Target: runTarget(request.GetTarget()), Input: asMap(request.GetInput()), ArtifactRefs: request.GetArtifactRefs()}
+	payload := command.LaunchRunInput{ProjectRef: request.GetProjectRef(), Title: request.GetTitle(), TitleSource: titleSource, Task: request.GetTask(), SessionRef: request.GetSessionRef(), Source: enumSuffix(request.GetSource(), "RUN_SOURCE_"), Target: runTarget(request.GetTarget()), Input: asMap(request.GetInput()), AttachmentSetRef: request.GetAttachmentSetRef()}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_LaunchRun_FullMethodName, command.LaunchRun, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err
@@ -236,7 +236,7 @@ func launchRunTitleSource(title string) string {
 }
 
 func (server *Server) AddSessionTurn(ctx context.Context, request *controlplanev1.AddSessionTurnRequest) (*controlplanev1.AddSessionTurnResponse, error) {
-	payload := command.SessionTurnInput{SessionRef: request.GetSessionRef(), RunRef: request.GetRunRef(), NodeRef: request.GetNodeRef(), Task: request.GetTask(), ArtifactRefs: request.GetArtifactRefs()}
+	payload := command.SessionTurnInput{SessionRef: request.GetSessionRef(), RunRef: request.GetRunRef(), NodeRef: request.GetNodeRef(), Task: request.GetTask(), AttachmentSetRef: request.GetAttachmentSetRef()}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_AddSessionTurn_FullMethodName, command.AddSessionTurn, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err
@@ -261,7 +261,7 @@ func (server *Server) RetryRun(ctx context.Context, request *controlplanev1.Retr
 }
 
 func (server *Server) ResolveOwnerGate(ctx context.Context, request *controlplanev1.ResolveOwnerGateRequest) (*controlplanev1.ResolveOwnerGateResponse, error) {
-	payload := command.GateResolutionInput{GateRef: request.GetGateRef(), Decision: enumSuffix(request.GetDecision(), "OWNER_GATE_DECISION_"), Comment: request.GetComment(), ArtifactRefs: request.GetArtifactRefs()}
+	payload := command.GateResolutionInput{GateRef: request.GetGateRef(), Decision: enumSuffix(request.GetDecision(), "OWNER_GATE_DECISION_"), Comment: request.GetComment(), AttachmentSetRef: request.GetAttachmentSetRef()}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ResolveOwnerGate_FullMethodName, command.ResolveOwnerGate, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err
