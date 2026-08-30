@@ -75,7 +75,7 @@ trap cleanup EXIT
 query_database() {
   local sql=$1
   kubectl -n kodex-system exec statefulset/kodex-postgresql -c postgresql -- \
-    psql --username=postgres --dbname=control_plane --no-align --tuples-only \
+    psql --username=postgres --dbname=control_plane --no-align --tuples-only --quiet \
       --set=ON_ERROR_STOP=1 --command "$sql" 2>/dev/null | sed '/^[[:space:]]*$/d'
 }
 

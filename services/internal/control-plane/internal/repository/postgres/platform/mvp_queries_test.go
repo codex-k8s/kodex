@@ -2,6 +2,7 @@ package platform
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -26,6 +27,12 @@ func TestProviderAccountActionsUseCanonicalNextActions(t *testing.T) {
 				t.Fatalf("provider account actions = %v, want %v", got, test.want)
 			}
 		})
+	}
+}
+
+func TestSynchronousPurgeKeepsTombstoneNameUnique(t *testing.T) {
+	if !strings.Contains(queryArtifactsPurgeFinalize, "file_name = 'purged-' || ref") {
+		t.Fatal("synchronous artifact purge reuses a shared tombstone file name")
 	}
 }
 

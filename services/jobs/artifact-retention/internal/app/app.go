@@ -215,7 +215,7 @@ func runRetentionLoop(processor *retention.Processor, metrics *retentionMetrics,
 					degraded = false
 				}
 			}
-			timer := time.NewTimer(idleBackoff.Next(err == nil && processed > 0))
+			timer := time.NewTimer(idleBackoff.Next(shouldResetRetentionBackoff(processed, err)))
 			select {
 			case <-ctx.Done():
 				if !timer.Stop() {
@@ -226,4 +226,8 @@ func runRetentionLoop(processor *retention.Processor, metrics *retentionMetrics,
 			}
 		}
 	}
+}
+
+func shouldResetRetentionBackoff(processed int, err error) bool {
+	return err != nil || processed > 0
 }

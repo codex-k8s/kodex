@@ -1,7 +1,7 @@
 -- name: finalize_tombstone :exec
 UPDATE control_plane.artifacts
 SET lifecycle_state = 'PURGED',
-    file_name = 'purged',
+    file_name = 'purged-' || ref,
     media_type = 'application/octet-stream',
     size_bytes = 0,
     digest = 'sha256:' || repeat('0', 64),

@@ -28,3 +28,9 @@ func TestFinalizationRequiresOwnerAndGenerationFence(t *testing.T) {
 		}
 	}
 }
+
+func TestFinalizationKeepsPurgedTombstoneNameUnique(t *testing.T) {
+	if !strings.Contains(queryFinalizeTombstone, "file_name = 'purged-' || ref") {
+		t.Fatal("artifact retention finalization reuses a shared tombstone file name")
+	}
+}

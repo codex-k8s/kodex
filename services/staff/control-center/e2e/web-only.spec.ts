@@ -2454,7 +2454,7 @@ test.describe("web-only fresh installation", () => {
     expect(restored.deletedAt).toBeUndefined();
     expect(restored.purgeAfter).toBeUndefined();
 
-    await page.getByRole("link", { name: "Все файлы", exact: true }).click();
+    await page.getByRole("link", { name: "Файлы", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/projects/${projectRef}/files$`));
     const deletedAgain = await operateArtifactLifecycle(
       page,
@@ -2500,7 +2500,7 @@ test.describe("web-only fresh installation", () => {
       purgeReceipt,
     );
 
-    await page.getByRole("link", { name: "Все файлы", exact: true }).click();
+    await page.getByRole("link", { name: "Файлы", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/projects/${projectRef}/files$`));
     const emptyTrashArtifact = await uploadFilesWorkspaceArtifact(
       page,
@@ -2547,7 +2547,7 @@ test.describe("web-only fresh installation", () => {
       emptyReceipt,
     );
 
-    await page.getByRole("link", { name: "Все файлы", exact: true }).click();
+    await page.getByRole("link", { name: "Файлы", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/projects/${projectRef}/files$`));
     const retentionArtifact = await uploadFilesWorkspaceArtifact(
       page,
