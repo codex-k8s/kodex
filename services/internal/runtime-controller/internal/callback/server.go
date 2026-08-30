@@ -252,6 +252,7 @@ func (server *Server) providerCredentialRefresh(writer http.ResponseWriter, requ
 		http.Error(writer, "invalid provider credential refresh", http.StatusBadRequest)
 		return
 	}
+	defer clear(payload.Authentication)
 	requestContext, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
 	defer cancel()
 	binding, err := server.manager.MaterializeProviderCredentialRefresh(requestContext, input, payload)

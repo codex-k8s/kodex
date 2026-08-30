@@ -1502,6 +1502,7 @@ func (manager *Manager) MaterializeProviderCredentialRefresh(ctx context.Context
 	if err != nil {
 		return ProviderSecretBinding{}, fmt.Errorf("%w: pinned provider credential is unavailable", ErrProviderCredentialRefreshRejected)
 	}
+	defer clear(oldAuthentication)
 	oldSnapshot, err := parseManagedChatGPTAuthentication(oldAuthentication)
 	if err != nil {
 		return ProviderSecretBinding{}, fmt.Errorf("%w: pinned provider credential is not managed OAuth", ErrProviderCredentialRefreshRejected)

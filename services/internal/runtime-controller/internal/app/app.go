@@ -10,7 +10,6 @@ import (
 	"os"
 	"time"
 
-	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
@@ -82,7 +81,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
 		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
 		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RequestTimeout,
-		Operations: runtimeOperations(),
+		Operations: controlplaneclient.RuntimeOperations(),
 	})
 	if err != nil {
 		return err
@@ -134,12 +133,6 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		serviceruntime.ShutdownOperation{Name: "runtime workers", Timeout: config.ShutdownTimeout, Run: workers.Wait},
 	)
 	return errors.Join(err, shutdownErr)
-}
-
-func runtimeOperations() map[string]string {
-	operations := controlplaneclient.RuntimeOperations()
-	operations["platform.runtime.provider-credential.refresh.commit"] = controlplanev1.RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName
-	return operations
 }
 
 func technicalServer(lifecycle context.Context, config Config, unit, assistant *serviceruntime.Readiness, metrics *sharedobservability.Metrics) *http.Server {
