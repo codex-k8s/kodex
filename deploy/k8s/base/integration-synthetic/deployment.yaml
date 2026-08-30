@@ -20,6 +20,7 @@ spec:
         app.kubernetes.io/component: integration-fixture
       annotations:
         kubectl.kubernetes.io/default-container: integration-synthetic
+        kodex.dev/fixture-contract-version: "3"
     spec:
       serviceAccountName: integration-synthetic
       automountServiceAccountToken: false

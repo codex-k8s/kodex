@@ -7,14 +7,23 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 )
 
-const listenAddress = ":8080"
+const (
+	defaultListenAddress = ":8080"
+	listenAddressEnv     = "KODEX_INTEGRATION_SYNTHETIC_LISTEN_ADDRESS"
+)
 
 func Run(lifecycleCtx, shutdownBaseCtx context.Context, output io.Writer) error {
 	logger := slog.New(slog.NewJSONHandler(output, nil))
 	handler := NewHandler(NewStore())
+	listenAddress, err := configuredListenAddress()
+	if err != nil {
+		return err
+	}
 	server := &http.Server{
 		Addr:              listenAddress,
 		Handler:           handler,
@@ -53,4 +62,20 @@ func Run(lifecycleCtx, shutdownBaseCtx context.Context, output io.Writer) error 
 	}
 	logger.InfoContext(shutdownBaseCtx, "integration synthetic fixture stopped")
 	return errors.Join(serveErr, shutdownErr)
+}
+
+func configuredListenAddress() (string, error) {
+	address := os.Getenv(listenAddressEnv)
+	if address == "" {
+		return defaultListenAddress, nil
+	}
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || host != "127.0.0.1" {
+		return "", errors.New("synthetic integration listen address is invalid")
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber < 1024 || portNumber > 65535 {
+		return "", errors.New("synthetic integration listen port is invalid")
+	}
+	return address, nil
 }

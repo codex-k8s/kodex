@@ -4,6 +4,7 @@ package integrationfixture
 import (
 	"crypto/sha256"
 	"errors"
+	"strconv"
 	"sync"
 )
 
@@ -15,7 +16,35 @@ const (
 var (
 	errIdempotencyConflict = errors.New("idempotency key conflicts with a different request")
 	errStoreCapacity       = errors.New("fixture store capacity is exhausted")
+	errResourceExists      = errors.New("synthetic resource already exists")
+	errResourceNotFound    = errors.New("synthetic resource is not found")
+	errVersionConflict     = errors.New("synthetic resource version conflicts")
+	errRetryableFault      = errors.New("synthetic retryable fault")
+	errTerminalFault       = errors.New("synthetic terminal fault")
 )
+
+type mutationAction string
+
+const (
+	mutationCreate mutationAction = "CREATE"
+	mutationUpdate mutationAction = "UPDATE"
+	mutationDelete mutationAction = "DELETE"
+)
+
+type faultMode string
+
+const (
+	faultNone          faultMode = "NONE"
+	faultRetryableOnce faultMode = "RETRYABLE_ONCE"
+	faultTerminal      faultMode = "TERMINAL"
+)
+
+type mutationInput struct {
+	Action           mutationAction
+	Value            string
+	ExpectedSequence int64
+	Fault            faultMode
+}
 
 // Projection является строгим provider readback журнала или одного effect.
 type Projection struct {
@@ -27,22 +56,29 @@ type Projection struct {
 }
 
 // DiagnosticProjection доступен только через local-only fixture и позволяет
-// E2E доказать provider effect и exact replay без записи в provider напрямую.
+// E2E доказать состояние ресурса, exact replay и fault classification.
 type DiagnosticProjection struct {
-	Journal             string `json:"journal"`
-	Count               int64  `json:"count"`
-	Value               string `json:"value"`
-	LastEffectKey       string `json:"last_effect_key"`
-	ReplayCount         int64  `json:"replay_count"`
-	LastReplayEffectKey string `json:"last_replay_effect_key"`
+	Journal               string `json:"journal"`
+	Exists                bool   `json:"exists"`
+	Sequence              int64  `json:"sequence"`
+	Count                 int64  `json:"count"`
+	Value                 string `json:"value"`
+	LastEffectKey         string `json:"last_effect_key"`
+	ReplayCount           int64  `json:"replay_count"`
+	LastReplayEffectKey   string `json:"last_replay_effect_key"`
+	RetryableFailureCount int64  `json:"retryable_failure_count"`
+	TerminalFailureCount  int64  `json:"terminal_failure_count"`
 }
 
 type journalState struct {
-	sequence            int64
-	value               string
-	lastEffectKey       string
-	replayCount         int64
-	lastReplayEffectKey string
+	exists                bool
+	sequence              int64
+	value                 string
+	lastEffectKey         string
+	replayCount           int64
+	lastReplayEffectKey   string
+	retryableFailureCount int64
+	terminalFailureCount  int64
 }
 
 type receipt struct {
@@ -50,17 +86,23 @@ type receipt struct {
 	projection    Projection
 }
 
+type faultAttempt struct {
+	requestDigest [sha256.Size]byte
+}
+
 // Store хранит ограниченное состояние одного disposable процесса.
 type Store struct {
-	mu       sync.Mutex
-	journals map[string]journalState
-	receipts map[string]receipt
+	mu            sync.Mutex
+	journals      map[string]journalState
+	receipts      map[string]receipt
+	faultAttempts map[string]faultAttempt
 }
 
 func NewStore() *Store {
 	return &Store{
-		journals: make(map[string]journalState),
-		receipts: make(map[string]receipt),
+		journals:      make(map[string]journalState),
+		receipts:      make(map[string]receipt),
+		faultAttempts: make(map[string]faultAttempt),
 	}
 }
 
@@ -71,7 +113,7 @@ func (store *Store) Read(journal, effectKey string) Projection {
 	state := store.journals[journal]
 	return Projection{
 		Journal: journal, EffectKey: effectKey, Sequence: state.sequence,
-		Value: state.value, Count: state.sequence,
+		Value: state.value, Count: activeCount(state),
 	}
 }
 
@@ -81,14 +123,16 @@ func (store *Store) ReadDiagnostic(journal string) DiagnosticProjection {
 
 	state := store.journals[journal]
 	return DiagnosticProjection{
-		Journal: journal, Count: state.sequence, Value: state.value,
-		LastEffectKey: state.lastEffectKey, ReplayCount: state.replayCount,
-		LastReplayEffectKey: state.lastReplayEffectKey,
+		Journal: journal, Exists: state.exists, Sequence: state.sequence,
+		Count: activeCount(state), Value: state.value, LastEffectKey: state.lastEffectKey,
+		ReplayCount: state.replayCount, LastReplayEffectKey: state.lastReplayEffectKey,
+		RetryableFailureCount: state.retryableFailureCount,
+		TerminalFailureCount:  state.terminalFailureCount,
 	}
 }
 
-func (store *Store) Append(journal, effectKey, value string) (Projection, bool, error) {
-	digest := requestDigest(journal, value)
+func (store *Store) Mutate(journal, effectKey string, input mutationInput) (Projection, bool, error) {
+	digest := mutationDigest(journal, input)
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
@@ -102,25 +146,94 @@ func (store *Store) Append(journal, effectKey, value string) (Projection, bool, 
 		store.journals[journal] = state
 		return stored.projection, true, nil
 	}
-	if len(store.receipts) >= maximumEffects {
-		return Projection{}, false, errStoreCapacity
-	}
 	state, exists := store.journals[journal]
 	if !exists && len(store.journals) >= maximumJournals {
 		return Projection{}, false, errStoreCapacity
 	}
-	state.sequence++
-	state.value = value
+	attempt, attempted := store.faultAttempts[effectKey]
+	if attempted && attempt.requestDigest != digest {
+		return Projection{}, false, errIdempotencyConflict
+	}
+	if input.Fault == faultTerminal {
+		if !attempted {
+			if len(store.faultAttempts) >= maximumEffects {
+				return Projection{}, false, errStoreCapacity
+			}
+			store.faultAttempts[effectKey] = faultAttempt{requestDigest: digest}
+		}
+		state.terminalFailureCount++
+		store.journals[journal] = state
+		return Projection{}, false, errTerminalFault
+	}
+	if input.Fault == faultRetryableOnce {
+		if !attempted {
+			if len(store.faultAttempts) >= maximumEffects {
+				return Projection{}, false, errStoreCapacity
+			}
+			store.faultAttempts[effectKey] = faultAttempt{requestDigest: digest}
+			state.retryableFailureCount++
+			store.journals[journal] = state
+			return Projection{}, false, errRetryableFault
+		}
+	}
+	if len(store.receipts) >= maximumEffects {
+		return Projection{}, false, errStoreCapacity
+	}
+
+	previousValue := state.value
+	switch input.Action {
+	case mutationCreate:
+		if state.exists {
+			return Projection{}, false, errResourceExists
+		}
+		state.exists = true
+		state.sequence++
+		state.value = input.Value
+	case mutationUpdate:
+		if !state.exists {
+			return Projection{}, false, errResourceNotFound
+		}
+		if state.sequence != input.ExpectedSequence {
+			return Projection{}, false, errVersionConflict
+		}
+		state.sequence++
+		state.value = input.Value
+	case mutationDelete:
+		if !state.exists {
+			return Projection{}, false, errResourceNotFound
+		}
+		if state.sequence != input.ExpectedSequence {
+			return Projection{}, false, errVersionConflict
+		}
+		state.exists = false
+		state.sequence++
+		state.value = ""
+	default:
+		return Projection{}, false, errTerminalFault
+	}
 	state.lastEffectKey = effectKey
 	store.journals[journal] = state
+	projectionValue := state.value
+	if input.Action == mutationDelete {
+		projectionValue = previousValue
+	}
 	projection := Projection{
 		Journal: journal, EffectKey: effectKey, Sequence: state.sequence,
-		Value: value, Count: state.sequence,
+		Value: projectionValue, Count: activeCount(state),
 	}
 	store.receipts[effectKey] = receipt{requestDigest: digest, projection: projection}
 	return projection, false, nil
 }
 
-func requestDigest(journal, value string) [sha256.Size]byte {
-	return sha256.Sum256([]byte(journal + "\x00" + value))
+func activeCount(state journalState) int64 {
+	if state.exists {
+		return 1
+	}
+	return 0
+}
+
+func mutationDigest(journal string, input mutationInput) [sha256.Size]byte {
+	payload := journal + "\x00" + string(input.Action) + "\x00" + input.Value + "\x00" +
+		strconv.FormatInt(input.ExpectedSequence, 10) + "\x00" + string(input.Fault)
+	return sha256.Sum256([]byte(payload))
 }

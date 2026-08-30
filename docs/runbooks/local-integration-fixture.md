@@ -4,7 +4,7 @@ title: Локальная проверка типизированных инте
 type: runbook
 status: approved
 owner: qa
-version: 2.0.0
+version: 2.1.0
 updated: 2026-08-29
 ---
 
@@ -29,11 +29,15 @@ idempotency или retry semantics нет: такие проверки обяз�
 4. ИИ-сотруднику выдаются только `synthetic.journal.read` и
    `synthetic.journal.write`.
 5. READ проходит через `invoke_integration` без побочного эффекта.
-6. WRITE не достигает provider до решения Human Gate; `REJECT` не создаёт
+6. Каждая CRUD-мутация synthetic journal использует `HUMAN_EACH_EFFECT`:
+   WRITE не достигает provider до решения Human Gate; `REJECT` не создаёт
    effect, `APPROVE` разрешает ровно один effect.
-7. Намеренно задержанный provider response приводит к повторной доставке после
+7. Fixture отдельно доказывает create/read/update/delete, OCC по
+   `expected_sequence`, отсутствие изменения при retryable и terminal ошибках,
+   exact replay и итоговый пустой readback после delete.
+8. Намеренно задержанный provider response приводит к повторной доставке после
    restart `integration-gateway`, но exact effect key не создаёт второй effect.
-8. Run events содержат единственный typed tool call и непустой audit ref.
+9. Run events содержат единственный typed tool call и непустой audit ref.
 
 ## Статические и render-проверки
 
@@ -43,7 +47,19 @@ idempotency или retry semantics нет: такие проверки обяз�
 
 Команда запускает Go race tests fixture/adapter, рендерит local Kustomize,
 проверяет security context, resources, exact ingress и отсутствие synthetic
-provider в production profiles.
+provider в production profiles. Внутри неё отдельный black-box entrypoint
+собирает и запускает реальный fixture binary только на `127.0.0.1`, проверяет
+health/readback, CRUD, exact replay, retryable/terminal classification и всегда
+останавливает процесс с удалением временных файлов:
+
+```bash
+./scripts/tests/integration-synthetic-fixture-e2e.sh
+```
+
+Fixture fault mode задаётся только типизированным полем `fault` со значениями
+`NONE`, `RETRYABLE_ONCE` или `TERMINAL`. `RETRYABLE_ONCE` один раз возвращает
+`503` с bounded `Retry-After`, затем принимает тот же exact effect. `TERMINAL`
+стабильно возвращает `422`. Оба ответа не изменяют provider state.
 
 ```bash
 cd services/staff/control-center
@@ -68,6 +84,11 @@ export KODEX_E2E_RESOURCE_PREFIX=local-integration-$(date +%s)
 export KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION
 ./scripts/tests/integration-deployed-e2e.sh
 ```
+
+Deployed сценарий является обязательным доказательством Human Gate: статическая
+проверка `approvalPolicy` в manifest не заменяет readback, что `REJECT` не
+создал effect, а `APPROVE` создал ровно один effect. Прямой black-box fixture
+entrypoint Human Gate не эмулирует и не обходит.
 
 Значение `KODEX_E2E_OWNER_PASSWORD` передаётся процессу из локального secret
 manager и не записывается в shell history, `.env`, Playwright artifacts или

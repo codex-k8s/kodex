@@ -150,14 +150,35 @@ func (handler *Handler) appendEntry(writer http.ResponseWriter, request *http.Re
 		writeError(writer, http.StatusBadRequest, "idempotency_key_invalid")
 		return
 	}
-	value, err := decodeEntryInput(request)
+	input, err := decodeMutationInput(request)
 	if err != nil {
 		writeError(writer, http.StatusBadRequest, "request_body_invalid")
 		return
 	}
-	projection, replayed, err := handler.store.Append(journal, effectKey, value)
+	projection, replayed, err := handler.store.Mutate(journal, effectKey, input)
 	if errors.Is(err, errIdempotencyConflict) {
 		writeError(writer, http.StatusConflict, "idempotency_key_conflict")
+		return
+	}
+	if errors.Is(err, errResourceExists) {
+		writeError(writer, http.StatusConflict, "resource_exists")
+		return
+	}
+	if errors.Is(err, errResourceNotFound) {
+		writeError(writer, http.StatusNotFound, "resource_not_found")
+		return
+	}
+	if errors.Is(err, errVersionConflict) {
+		writeError(writer, http.StatusPreconditionFailed, "version_conflict")
+		return
+	}
+	if errors.Is(err, errRetryableFault) {
+		writer.Header().Set("Retry-After", "0")
+		writeError(writer, http.StatusServiceUnavailable, "synthetic_retryable_error")
+		return
+	}
+	if errors.Is(err, errTerminalFault) {
+		writeError(writer, http.StatusUnprocessableEntity, "synthetic_terminal_error")
 		return
 	}
 	if errors.Is(err, errStoreCapacity) {
@@ -168,7 +189,7 @@ func (handler *Handler) appendEntry(writer http.ResponseWriter, request *http.Re
 		writeError(writer, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	if !replayed && strings.HasPrefix(value, replayFaultValuePrefix) && handler.replayDelay > 0 {
+	if !replayed && strings.HasPrefix(input.Value, replayFaultValuePrefix) && handler.replayDelay > 0 {
 		timer := time.NewTimer(handler.replayDelay)
 		defer timer.Stop()
 		select {
@@ -219,37 +240,85 @@ func journalPath(escapedPath string) (string, bool, bool) {
 	return journal, entries, true
 }
 
-func decodeEntryInput(request *http.Request) (string, error) {
+func decodeMutationInput(request *http.Request) (mutationInput, error) {
 	if request.Header.Get("Content-Encoding") != "" || len(request.Header.Values("Content-Type")) != 1 {
-		return "", errors.New("content headers are invalid")
+		return mutationInput{}, errors.New("content headers are invalid")
 	}
 	mediaType, parameters, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" || len(parameters) != 0 {
-		return "", errors.New("content type is invalid")
+		return mutationInput{}, errors.New("content type is invalid")
 	}
 	defer request.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(request.Body, maximumRequestBodySize+1))
 	if err != nil || len(body) == 0 || len(body) > maximumRequestBodySize || !utf8.Valid(body) {
-		return "", errors.New("request body is outside bounds")
+		return mutationInput{}, errors.New("request body is outside bounds")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	opening, err := decoder.Token()
-	if err != nil || opening != json.Delim('{') || !decoder.More() {
-		return "", errors.New("request body is invalid")
+	if err != nil || opening != json.Delim('{') {
+		return mutationInput{}, errors.New("request body is invalid")
 	}
-	key, err := decoder.Token()
-	if err != nil || key != "value" {
-		return "", errors.New("request field is invalid")
-	}
-	var value string
-	if err := decoder.Decode(&value); err != nil || !validBoundedString(value, maximumValueBytes) || decoder.More() {
-		return "", errors.New("request value is invalid")
+	input := mutationInput{Action: mutationCreate, Fault: faultNone}
+	seen := make(map[string]struct{}, 4)
+	for decoder.More() {
+		token, tokenErr := decoder.Token()
+		key, keyOK := token.(string)
+		if tokenErr != nil || !keyOK {
+			return mutationInput{}, errors.New("request field is invalid")
+		}
+		if _, exists := seen[key]; exists {
+			return mutationInput{}, errors.New("request field is duplicated")
+		}
+		seen[key] = struct{}{}
+		switch key {
+		case "action":
+			var action string
+			if decoder.Decode(&action) != nil {
+				return mutationInput{}, errors.New("request action is invalid")
+			}
+			input.Action = mutationAction(action)
+		case "value":
+			if decoder.Decode(&input.Value) != nil {
+				return mutationInput{}, errors.New("request value is invalid")
+			}
+		case "expected_sequence":
+			if decoder.Decode(&input.ExpectedSequence) != nil {
+				return mutationInput{}, errors.New("request sequence is invalid")
+			}
+		case "fault":
+			var fault string
+			if decoder.Decode(&fault) != nil {
+				return mutationInput{}, errors.New("request fault is invalid")
+			}
+			input.Fault = faultMode(fault)
+		default:
+			return mutationInput{}, errors.New("request field is unknown")
+		}
 	}
 	closing, err := decoder.Token()
 	if err != nil || closing != json.Delim('}') || !errors.Is(decoder.Decode(&struct{}{}), io.EOF) {
-		return "", errors.New("request body has trailing data")
+		return mutationInput{}, errors.New("request body has trailing data")
 	}
-	return value, nil
+	if !validMutationInput(input) {
+		return mutationInput{}, errors.New("request mutation is invalid")
+	}
+	return input, nil
+}
+
+func validMutationInput(input mutationInput) bool {
+	if input.Fault != faultNone && input.Fault != faultRetryableOnce && input.Fault != faultTerminal {
+		return false
+	}
+	switch input.Action {
+	case mutationCreate:
+		return input.ExpectedSequence == 0 && validBoundedString(input.Value, maximumValueBytes)
+	case mutationUpdate:
+		return input.ExpectedSequence > 0 && validBoundedString(input.Value, maximumValueBytes)
+	case mutationDelete:
+		return input.ExpectedSequence > 0 && input.Value == ""
+	default:
+		return false
+	}
 }
 
 func validBoundedString(value string, maximum int) bool {

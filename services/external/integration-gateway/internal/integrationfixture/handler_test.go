@@ -78,6 +78,63 @@ func TestWriteRetryReturnsExactReadbackAndConflictDoesNotMutate(t *testing.T) {
 	}
 }
 
+func TestCRUDWithVersionPreconditionsAndFaultClassification(t *testing.T) {
+	t.Parallel()
+	handler := NewHandler(NewStore())
+	handler.SetReady(true)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	endpoint := server.URL + "/v1/journals/crud/entries"
+	create := requestProjection(t, server.Client(), http.MethodPost, endpoint,
+		`{"action":"CREATE","value":"first"}`, mutationHeaders("eff-create"))
+	if create.Sequence != 1 || create.Count != 1 || create.Value != "first" {
+		t.Fatalf("create projection = %#v", create)
+	}
+	assertStatus(t, server.Client(), http.MethodPost, endpoint,
+		`{"action":"CREATE","value":"duplicate"}`, mutationHeaders("eff-duplicate"), http.StatusConflict)
+	assertStatus(t, server.Client(), http.MethodPost, endpoint,
+		`{"action":"UPDATE","value":"stale","expected_sequence":9}`, mutationHeaders("eff-stale"), http.StatusPreconditionFailed)
+	assertStatus(t, server.Client(), http.MethodPost, endpoint,
+		`{"action":"UPDATE","value":"retry","expected_sequence":1,"fault":"RETRYABLE_ONCE"}`,
+		mutationHeaders("eff-retry"), http.StatusServiceUnavailable)
+	current := requestProjection(t, server.Client(), http.MethodGet, server.URL+"/v1/journals/crud", "", nil)
+	if current.Sequence != 1 || current.Value != "first" || current.Count != 1 {
+		t.Fatalf("retryable failure mutated resource: %#v", current)
+	}
+	updated := requestProjection(t, server.Client(), http.MethodPost, endpoint,
+		`{"action":"UPDATE","value":"retry","expected_sequence":1,"fault":"RETRYABLE_ONCE"}`,
+		mutationHeaders("eff-retry"))
+	if updated.Sequence != 2 || updated.Value != "retry" || updated.Count != 1 {
+		t.Fatalf("update projection = %#v", updated)
+	}
+	assertStatus(t, server.Client(), http.MethodPost, endpoint,
+		`{"action":"DELETE","expected_sequence":2,"fault":"TERMINAL"}`,
+		mutationHeaders("eff-terminal"), http.StatusUnprocessableEntity)
+	assertStatus(t, server.Client(), http.MethodPost, endpoint,
+		`{"action":"DELETE","expected_sequence":1,"fault":"TERMINAL"}`,
+		mutationHeaders("eff-terminal"), http.StatusConflict)
+	current = requestProjection(t, server.Client(), http.MethodGet, server.URL+"/v1/journals/crud", "", nil)
+	if current.Sequence != 2 || current.Value != "retry" || current.Count != 1 {
+		t.Fatalf("terminal failure mutated resource: %#v", current)
+	}
+	deleted := requestProjection(t, server.Client(), http.MethodPost, endpoint,
+		`{"action":"DELETE","expected_sequence":2}`, mutationHeaders("eff-delete"))
+	if deleted.Sequence != 3 || deleted.Value != "retry" || deleted.Count != 0 {
+		t.Fatalf("delete projection = %#v", deleted)
+	}
+	current = requestProjection(t, server.Client(), http.MethodGet, server.URL+"/v1/journals/crud", "", nil)
+	if current.Sequence != 3 || current.Value != "" || current.Count != 0 {
+		t.Fatalf("deleted readback = %#v", current)
+	}
+	diagnostic := requestDiagnostic(t, server.Client(), server.URL+"/v1/diagnostics/journals/crud")
+	if diagnostic.Exists || diagnostic.Sequence != 3 || diagnostic.Count != 0 ||
+		diagnostic.RetryableFailureCount != 1 || diagnostic.TerminalFailureCount != 1 ||
+		diagnostic.LastEffectKey != "eff-delete" {
+		t.Fatalf("diagnostic projection = %#v", diagnostic)
+	}
+}
+
 func TestReplayDiagnosticProvesOneEffect(t *testing.T) {
 	t.Parallel()
 	handler := newHandler(NewStore(), time.Millisecond)
@@ -157,7 +214,7 @@ func TestConcurrentRetryCreatesOneEffect(t *testing.T) {
 	}
 }
 
-func TestConcurrentDistinctEffectsHaveOneSequenceEach(t *testing.T) {
+func TestConcurrentDistinctJournalsHaveOneSequenceEach(t *testing.T) {
 	t.Parallel()
 	store := NewStore()
 	const effects = 128
@@ -168,9 +225,12 @@ func TestConcurrentDistinctEffectsHaveOneSequenceEach(t *testing.T) {
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			projection, replayed, err := store.Append("ordered", fmt.Sprintf("eff-%03d", index), fmt.Sprintf("value-%03d", index))
+			journal := fmt.Sprintf("journal-%03d", index)
+			projection, replayed, err := store.Mutate(journal, fmt.Sprintf("eff-%03d", index), mutationInput{
+				Action: mutationCreate, Value: fmt.Sprintf("value-%03d", index), Fault: faultNone,
+			})
 			if err != nil || replayed {
-				t.Errorf("Append() error = %v, replayed = %v", err, replayed)
+				t.Errorf("Mutate() error = %v, replayed = %v", err, replayed)
 				return
 			}
 			sequences <- projection.Sequence
@@ -184,13 +244,17 @@ func TestConcurrentDistinctEffectsHaveOneSequenceEach(t *testing.T) {
 	}
 	sort.Ints(actual)
 	for index, sequence := range actual {
-		if sequence != index+1 {
+		if sequence != 1 {
 			t.Fatalf("sequence[%d] = %d", index, sequence)
 		}
 	}
-	if current := store.Read("ordered", ""); current.Count != effects || current.Sequence != effects {
-		t.Fatalf("final journal projection = %#v", current)
+	if current := store.Read("journal-000", ""); current.Count != 1 || current.Sequence != 1 {
+		t.Fatalf("journal projection = %#v", current)
 	}
+}
+
+func mutationHeaders(effectKey string) http.Header {
+	return http.Header{"Content-Type": {"application/json"}, "Idempotency-Key": {effectKey}}
 }
 
 func requestProjection(t *testing.T, client *http.Client, method, endpoint, body string, headers http.Header) Projection {

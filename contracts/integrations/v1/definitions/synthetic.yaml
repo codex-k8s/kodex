@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: synthetic
-  version: 2.0.0
+  version: 3.0.0
   origin: SHIPPED
 spec:
   name: Synthetic HTTP
@@ -45,8 +45,8 @@ spec:
         maxAttempts: 3
         retryBackoffMilliseconds: 100
     - key: synthetic.journal.write
-      name: Добавить запись в synthetic journal
-      description: Идемпотентно добавляет одну запись по exact effect key после Human Gate.
+      name: Изменить synthetic journal
+      description: Выполняет versioned create, update или delete по exact effect key после Human Gate.
       operation: synthetic.journal.write
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
@@ -54,13 +54,16 @@ spec:
         kind: SYNTHETIC_JOURNAL
         connectionFields: [journal]
       inputFields:
-        - {key: value, type: STRING, format: PLAIN, required: true, maximumLength: 4096}
+        - {key: action, type: STRING, format: IDENTIFIER, required: false, maximumLength: 16, allowedValues: [CREATE, UPDATE, DELETE]}
+        - {key: value, type: STRING, format: PLAIN, required: false, maximumLength: 4096}
+        - {key: expected_sequence, type: INTEGER, required: false, minimum: 1, maximum: 2147483647}
+        - {key: fault, type: STRING, format: IDENTIFIER, required: false, maximumLength: 32, allowedValues: [NONE, RETRYABLE_ONCE, TERMINAL]}
       outputFields:
         - {key: journal, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
         - {key: effect_key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
         - {key: sequence, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
         - {key: value, type: STRING, format: PLAIN, required: true, maximumLength: 4096}
-        - {key: count, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 1}
       execution:
         idempotency: PROVIDER_NATIVE
         timeoutSeconds: 5

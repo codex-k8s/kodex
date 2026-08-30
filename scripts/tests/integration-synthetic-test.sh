@@ -16,13 +16,31 @@ done
   env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 -race \
     ./internal/integrationfixture ./internal/integration
 )
+"$repository_root/scripts/tests/integration-synthetic-fixture-e2e.sh"
 
 temporary_directory=$(mktemp -d)
 trap 'rm -rf "$temporary_directory"' EXIT
 local_render="$temporary_directory/integration-synthetic.yaml"
-kubectl kustomize "$repository_root/deploy/k8s/overlays/local/integration-synthetic" >"$local_render"
+env KUBECONFIG=/dev/null kubectl kustomize "$repository_root/deploy/k8s/overlays/local/integration-synthetic" >"$local_render"
 local_json="$temporary_directory/integration-synthetic.json"
 yq -o=json -I=0 '.' "$local_render" | jq -s 'map(select(.kind != null))' >"$local_json"
+
+definition_json="$temporary_directory/synthetic-definition.json"
+yq -o=json -I=0 '.' "$repository_root/contracts/integrations/v1/definitions/synthetic.yaml" >"$definition_json"
+jq -e '
+  .metadata.version == "3.0.0" and
+  (.spec.healthCheck.operation == "synthetic.journal.read") and
+  any(.spec.capabilities[];
+    .key == "synthetic.journal.write" and
+    .risk == "WRITE" and
+    .approvalPolicy == "HUMAN_EACH_EFFECT" and
+    .execution.idempotency == "PROVIDER_NATIVE" and
+    .execution.maxAttempts == 3 and
+    any(.inputFields[];
+      .key == "action" and .allowedValues == ["CREATE", "UPDATE", "DELETE"]) and
+    any(.inputFields[];
+      .key == "fault" and .allowedValues == ["NONE", "RETRYABLE_ONCE", "TERMINAL"]))
+' "$definition_json" >/dev/null || fail 'synthetic CRUD, Human Gate or fault contract is invalid'
 
 jq -e '
   any(.[];
@@ -30,6 +48,7 @@ jq -e '
     .metadata.namespace == "kodex-system" and
     .metadata.labels["kodex.dev/local-only"] == "true" and
     .spec.replicas == 1 and .spec.strategy.type == "Recreate" and
+    .spec.template.metadata.annotations["kodex.dev/fixture-contract-version"] == "3" and
     .spec.template.spec.automountServiceAccountToken == false and
     .spec.template.spec.securityContext.runAsNonRoot == true and
     .spec.template.spec.securityContext.seccompProfile.type == "RuntimeDefault" and
@@ -59,7 +78,7 @@ jq -e '
 
 for profile in web-only web-with-mattermost; do
   profile_render="$temporary_directory/$profile.yaml"
-  kubectl kustomize "$repository_root/deploy/k8s/profiles/$profile" >"$profile_render"
+  env KUBECONFIG=/dev/null kubectl kustomize "$repository_root/deploy/k8s/profiles/$profile" >"$profile_render"
   if yq -o=json -I=0 '.' "$profile_render" | jq -s -e 'any(.[]; .kind == "Deployment" and .metadata.name == "integration-synthetic")' >/dev/null; then
     fail "integration-synthetic leaked into $profile"
   fi
