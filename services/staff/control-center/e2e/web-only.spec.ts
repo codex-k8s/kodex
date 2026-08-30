@@ -99,18 +99,24 @@ async function requestLatestKodexPlan(
 ): Promise<Locator> {
   const dialog = page.getByRole("dialog", { name: "Kodex" });
   const userMessages = dialog.locator("article.assistant-message--user");
+  const assistantMessages = dialog.locator(
+    "article.assistant-message--assistant",
+  );
   const composer = dialog.getByRole("textbox", {
     name: "Опишите, что нужно настроить или запустить",
   });
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const userMessageCount = await userMessages.count();
+    const assistantMessageCount = await assistantMessages.count();
     await composer.fill(prompt);
     await dialog.getByRole("button", { name: "Отправить помощнику" }).click();
     await expect(userMessages).toHaveCount(userMessageCount + 1);
-    const currentUserMessage = userMessages.nth(userMessageCount);
-    const currentAssistantMessage = currentUserMessage.locator(
-      "xpath=following-sibling::article[contains(concat(' ', normalize-space(@class), ' '), ' assistant-message--assistant ')][1]",
+    await expect(assistantMessages).toHaveCount(assistantMessageCount + 1, {
+      timeout: 120_000,
+    });
+    const currentAssistantMessage = assistantMessages.nth(
+      assistantMessageCount,
     );
 
     const outcome = await waitForAssistantPlanAttempt(
@@ -164,7 +170,9 @@ async function waitForAssistantPlanAttempt(
       const content = (
         await assistantMessage.locator(".safe-markdown").innerText()
       ).trim();
-      if (state === "FAILED") return { failedResult: content };
+      if (["FAILED", "BLOCKED", "CANCELLED"].includes(state ?? "")) {
+        return { failedResult: content };
+      }
       if (state === "COMPLETED") {
         throw new Error(
           `System assistant completed without the expected plan: ${content}`,

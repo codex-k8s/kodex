@@ -41,7 +41,13 @@ done
   fail 'current Kubernetes context mismatch'
 openssl x509 -in "$oidc_ca_file" -noout -checkend 3600 >/dev/null ||
   fail 'OIDC trust certificate is invalid or expires too soon'
-jq -e 'type == "object" and length > 0' "$provider_auth_file" >/dev/null ||
+jq -e '
+  type == "object" and
+  ((.auth_mode == "chatgpt" and (.tokens | type == "object")) or
+   (.auth_mode == "chatgptAuthTokens" and (.tokens | type == "object")) or
+   (.auth_mode == "apikey" and
+     (.OPENAI_API_KEY | type == "string" and length > 0)))
+' "$provider_auth_file" >/dev/null ||
   fail 'provider authorization JSON is invalid'
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)

@@ -66,11 +66,31 @@ func validateProviderAuthenticationPayload(auth []byte, expectedSHA256 string) e
 	if len(auth) == 0 || len(auth) > 1<<20 || len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
 		return ErrProviderAuthentication
 	}
+	var snapshot struct {
+		AuthMode     string          `json:"auth_mode"`
+		OpenAIAPIKey *string         `json:"OPENAI_API_KEY"`
+		Tokens       json.RawMessage `json:"tokens"`
+	}
+	if json.Unmarshal(trimmed, &snapshot) != nil || !supportedProviderAuthentication(snapshot.AuthMode, snapshot.OpenAIAPIKey, snapshot.Tokens) {
+		return ErrProviderAuthentication
+	}
 	digest := sha256.Sum256(auth)
 	if hex.EncodeToString(digest[:]) != expectedSHA256 {
 		return ErrProviderAuthentication
 	}
 	return nil
+}
+
+func supportedProviderAuthentication(mode string, apiKey *string, tokens json.RawMessage) bool {
+	switch mode {
+	case "chatgpt", "chatgptAuthTokens":
+		var value map[string]json.RawMessage
+		return len(tokens) > 0 && json.Unmarshal(tokens, &value) == nil && len(value) > 0
+	case "apikey":
+		return apiKey != nil && *apiKey != ""
+	default:
+		return false
+	}
 }
 
 func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcpSocket, mcpProxyToken string) (Result, error) {

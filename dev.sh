@@ -66,7 +66,7 @@ kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
 [[ "$context" != *prod* && "$context" != *production* ]] || fail 'production context is forbidden'
 
 if [[ "$command_name" == down ]]; then
-  for namespace in kodex-system identity; do
+  for namespace in kodex-runtime kodex-system identity kodex-trust; do
     kubectl get namespace "$namespace" >/dev/null 2>&1 || continue
     kubectl delete namespace "$namespace" --wait=false >/dev/null
     deadline=$((SECONDS + 600))
@@ -246,18 +246,24 @@ kubectl -n identity patch serverstransport sso-public --type=merge \
 
 "$repository_root/tools/install/materialize-nats-runtime-users.sh" \
   --context "$context" --material-directory "$material_directory"
-provider_auth=${KODEX_DEV_PROVIDER_AUTH_FILE:-"$state_directory/inputs/openai-auth.json"}
-if [[ ! -e "$provider_auth" && "$provider_auth" == "$state_directory/inputs/openai-auth.json" ]]; then
-  printf '%s\n' '{"auth_mode":"local-development","access_token":"not-configured"}' >"$provider_auth"
-  chmod 0600 "$provider_auth"
-fi
+default_provider_auth="$state_directory/provider-accounts/default-openai-codex/auth.json"
+provider_auth=${KODEX_DEV_PROVIDER_AUTH_FILE:-$default_provider_auth}
 [[ "$provider_auth" == /* && -f "$provider_auth" && ! -L "$provider_auth" ]] ||
-  fail 'provider authorization must be an absolute regular non-symlink file'
+  fail 'provider authorization is absent; set KODEX_DEV_PROVIDER_AUTH_FILE to a private Codex auth.json'
 [[ "$(stat -c '%u' "$provider_auth")" == "$(id -u)" &&
   $((8#$(stat -c '%a' "$provider_auth") & 8#077)) == 0 ]] ||
   fail 'provider authorization must be owned by the current user and private'
 [[ "$(stat -c '%s' "$provider_auth")" -le 1048576 ]] ||
   fail 'provider authorization exceeds the supported size'
+provider_validation_home=$(mktemp -d "$state_directory/.provider-validation.XXXXXX")
+chmod 0700 "$provider_validation_home"
+install -m 0600 "$provider_auth" "$provider_validation_home/auth.json"
+if ! CODEX_HOME="$provider_validation_home" HOME="$provider_validation_home" \
+  codex login status >/dev/null 2>&1; then
+  rm -rf -- "$provider_validation_home"
+  fail 'Codex does not recognize the provider authorization file'
+fi
+rm -rf -- "$provider_validation_home"
 "$repository_root/tools/install/materialize-secrets.sh" --context "$context" \
   --material-directory "$material_directory" \
   --oidc-ca-file "$state_directory/kodex-local-ca.crt" \
@@ -344,10 +350,15 @@ for metadata_file in "${provider_metadata[@]}"; do
   account_name=$(jq -er '.name' "$metadata_file") || fail 'provider account name is invalid'
   [[ "$account_key" == "$(basename -- "$(dirname -- "$metadata_file")")" ]] ||
     fail 'provider account metadata directory binding is invalid'
+  account_auth_file="$(dirname -- "$metadata_file")/auth.json"
+  if [[ "$account_key" == default-openai-codex ]] &&
+    [[ "$(realpath -e -- "$account_auth_file")" == "$(realpath -e -- "$provider_auth")" ]]; then
+    continue
+  fi
   "$repository_root/tools/dev/provider-account.sh" import \
     --kubeconfig "$kubeconfig" --context "$context" --state-directory "$state_directory" \
     --account-key "$account_key" --name "$account_name" \
-    --auth-file "$(dirname -- "$metadata_file")/auth.json"
+    --auth-file "$account_auth_file"
   restored_provider_accounts=$((restored_provider_accounts + 1))
 done
 if ((restored_provider_accounts > 0)); then

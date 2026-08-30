@@ -124,7 +124,7 @@ func TestPrepareHomeMaterializesOnlyBoundEnvironment(t *testing.T) {
 }
 
 func TestValidateProviderAuthenticationFailsClosed(t *testing.T) {
-	auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
+	auth := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"test-only"}}`)
 	digest := sha256.Sum256(auth)
 	if err := validateProviderAuthenticationPayload(auth, hex.EncodeToString(digest[:])); err != nil {
 		t.Fatalf("validateProviderAuthenticationPayload() error = %v", err)
@@ -132,7 +132,17 @@ func TestValidateProviderAuthenticationFailsClosed(t *testing.T) {
 	if err := validateProviderAuthenticationPayload(auth, "invalid"); !errors.Is(err, ErrProviderAuthentication) {
 		t.Fatalf("digest mismatch error = %v", err)
 	}
+	apiKeyAuth := []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"test-only"}`)
+	apiKeyDigest := sha256.Sum256(apiKeyAuth)
+	if err := validateProviderAuthenticationPayload(apiKeyAuth, hex.EncodeToString(apiKeyDigest[:])); err != nil {
+		t.Fatalf("API key snapshot error = %v", err)
+	}
 	if err := validateProviderAuthenticationPayload([]byte("not-json"), hex.EncodeToString(digest[:])); !errors.Is(err, ErrProviderAuthentication) {
 		t.Fatalf("malformed snapshot error = %v", err)
+	}
+	unsupported := []byte(`{"auth_mode":"local-development","access_token":"not-configured"}`)
+	unsupportedDigest := sha256.Sum256(unsupported)
+	if err := validateProviderAuthenticationPayload(unsupported, hex.EncodeToString(unsupportedDigest[:])); !errors.Is(err, ErrProviderAuthentication) {
+		t.Fatalf("unsupported authentication mode error = %v", err)
 	}
 }

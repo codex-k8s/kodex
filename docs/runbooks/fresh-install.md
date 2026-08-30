@@ -4,8 +4,8 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.1.0
-updated: 2026-08-28
+version: 2.1.1
+updated: 2026-08-30
 ---
 
 # Чистое развертывание Kodex
@@ -84,6 +84,21 @@ deny-by-default policy и bucket bootstrap Job. `tools/dev/deploy-local.sh`
 создаёт immutable `kodex-external-s3` из случайных credential files и никогда
 не печатает значения. Job создаёт `kodex-artifacts` до migrations и запуска
 control-plane; повторный apply выполняет exact Secret/job/readiness readback.
+
+Перед первым `dev.sh up` оператор передаёт приватный auth snapshot, который
+текущий Codex CLI подтверждает через `codex login status`:
+
+```bash
+KODEX_DEV_PROVIDER_AUTH_FILE="$HOME/.codex/auth.json" ./dev.sh up
+```
+
+После `provider-import --account-key default-openai-codex` последующие запуски
+автоматически используют
+`.kodex-dev/provider-accounts/default-openai-codex/auth.json`. Синтетический
+credential и режим `local-development` запрещены: они не создают ложный
+`AUTHORIZED` account и не позволяют объявить системного помощника готовым.
+`dev.sh down` удаляет только application namespaces `kodex-runtime`,
+`kodex-system`, `identity` и `kodex-trust`; общие контроллеры k3s сохраняются.
 
 ## 2. Подготовка `.kodex-env`
 

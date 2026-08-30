@@ -73,7 +73,8 @@ TLS-сертификата и финальный trusted E2E после отде
 - повторный отчёт:
   `.kodex-dev/e2e/final-proof-b-202608280553-report.json`.
 
-- [x] `LOCAL-01` Fresh reset удалил только `kodex-system` и `identity`, после
+- [x] `LOCAL-01` Fresh reset удалил только `kodex-runtime`, `kodex-system`,
+      `identity` и `kodex-trust`, после
       чего `dev.sh up` заново создал OIDC realm, owner, PostgreSQL, NATS,
       migrations, core workloads и Control Center; результат: `PASS`;
       evidence: `dev.sh down`, `dev.sh up`, финальный `dev.sh status`.
