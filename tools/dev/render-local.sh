@@ -886,6 +886,13 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
     .metadata.namespace == "kodex-runtime" and
     .subjects == [{"kind":"ServiceAccount","name":"secret-broker","namespace":"kodex-system"}]) and
   any(.[];
+    .kind == "Role" and .metadata.name == "secret-broker-runtime-secrets" and
+    .metadata.namespace == "kodex-runtime" and .rules == [{
+      "apiGroups":[""],
+      "resources":["secrets"],
+      "verbs":["get","list","create","delete"]
+    }]) and
+  any(.[];
     .kind == "Deployment" and .metadata.name == "runtime-controller" and
     .metadata.namespace == "kodex-system" and
     any(.spec.template.spec.containers[];
