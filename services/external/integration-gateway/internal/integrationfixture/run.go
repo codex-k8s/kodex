@@ -3,6 +3,7 @@ package integrationfixture
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -36,10 +37,10 @@ func Run(lifecycleCtx, shutdownBaseCtx context.Context, output io.Writer) error 
 	}
 	listener, err := (&net.ListenConfig{}).Listen(lifecycleCtx, "tcp", listenAddress)
 	if err != nil {
-		return errors.New("listen for synthetic integration requests")
+		return fmt.Errorf("listen for synthetic integration requests: %w", err)
 	}
 	handler.SetReady(true)
-	logger.InfoContext(lifecycleCtx, "integration synthetic fixture started")
+	logger.InfoContext(lifecycleCtx, "integration synthetic fixture started", "address", listener.Addr().String())
 	serveResult := make(chan error, 1)
 	go func() {
 		serveResult <- server.Serve(listener)
@@ -74,7 +75,7 @@ func configuredListenAddress() (string, error) {
 		return "", errors.New("synthetic integration listen address is invalid")
 	}
 	portNumber, err := strconv.Atoi(port)
-	if err != nil || portNumber < 1024 || portNumber > 65535 {
+	if err != nil || (portNumber != 0 && portNumber < 1024) || portNumber > 65535 {
 		return "", errors.New("synthetic integration listen port is invalid")
 	}
 	return address, nil

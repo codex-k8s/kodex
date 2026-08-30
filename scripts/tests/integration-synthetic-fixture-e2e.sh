@@ -13,13 +13,13 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 module_root="$repository_root/services/external/integration-gateway"
-port=${KODEX_SYNTHETIC_FIXTURE_E2E_PORT:-18083}
+port=${KODEX_SYNTHETIC_FIXTURE_E2E_PORT:-0}
 
 for command_name in curl go grep jq sed; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
-if [[ ! $port =~ ^[0-9]+$ ]] || ((port < 1024 || port > 65535)); then
-  fail 'KODEX_SYNTHETIC_FIXTURE_E2E_PORT must be between 1024 and 65535'
+if [[ ! $port =~ ^[0-9]+$ ]] || ((port != 0 && port < 1024 || port > 65535)); then
+  fail 'KODEX_SYNTHETIC_FIXTURE_E2E_PORT must be 0 or between 1024 and 65535'
 fi
 
 temporary_directory=$(mktemp -d)
@@ -41,11 +41,21 @@ fixture_binary="$temporary_directory/integration-synthetic"
 )
 KODEX_INTEGRATION_SYNTHETIC_LISTEN_ADDRESS="127.0.0.1:$port" "$fixture_binary" >"$fixture_log" 2>&1 &
 fixture_pid=$!
-origin="http://127.0.0.1:$port"
+origin=''
+if ((port != 0)); then
+  origin="http://127.0.0.1:$port"
+fi
 
 ready=false
 for _ in $(seq 1 80); do
-  if curl --silent --show-error --fail --max-time 1 "$origin/readyz" >/dev/null 2>&1; then
+  if [[ -z $origin ]]; then
+    address=$(jq -Rr 'fromjson? | select(.msg == "integration synthetic fixture started") | .address // empty' "$fixture_log" | sed -n '$p')
+    if [[ $address =~ ^127\.0\.0\.1:([0-9]+)$ ]] &&
+      ((BASH_REMATCH[1] >= 1024 && BASH_REMATCH[1] <= 65535)); then
+      origin="http://$address"
+    fi
+  fi
+  if [[ -n $origin ]] && curl --silent --show-error --fail --max-time 1 "$origin/readyz" >/dev/null 2>&1; then
     ready=true
     break
   fi
