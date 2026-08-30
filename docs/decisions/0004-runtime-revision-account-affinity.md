@@ -23,7 +23,8 @@ materialize-ит это как app-server `thread/start` либо `thread/resume
 
 Managed OAuth refresh внутри provider turn считается forward-only операционной
 ротацией той же учетной записи. Provider-sidecar передает обновленный snapshot
-runtime-controller по execution-scoped mTLS callback; runtime-controller
+изолированному credential-relay по закрытому UDS, а relay вызывает
+runtime-controller по execution-scoped mTLS callback. Runtime-controller
 создает следующую immutable Secret, а control-plane активирует ее только через
 lease/fence/generation и compare-and-swap с credential revision текущей
 `RuntimeRevision`. Уже выполняемый ход остается привязан к прежней revision;

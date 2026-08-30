@@ -192,8 +192,9 @@ type RunnerInput struct {
 }
 
 // RunnerProviderCredentialRefreshRequest передает обновленный managed OAuth
-// snapshot только по execution-scoped mTLS callback. Control-plane получает
-// исключительно метаданные созданной runtime-controller immutable Secret.
+// snapshot от provider к изолированному credential relay по UDS, а затем по
+// execution-scoped mTLS callback. Control-plane получает исключительно
+// метаданные созданной runtime-controller immutable Secret.
 type RunnerProviderCredentialRefreshRequest struct {
 	RuntimeRevisionDigest         string `json:"runtime_revision_digest"`
 	PreviousCredentialRevisionRef string `json:"previous_credential_revision_ref"`

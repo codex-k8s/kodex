@@ -99,10 +99,8 @@ execution-scoped opaque ticket в отдельном Secret и materialize-ит 
 `agent-runner` не claim-ит Turn повторно: он подтверждает уже выданную attempt
 через exact mTLS callback + ticket, запускает provider runtime, передаёт bounded
 progress, обслуживает разрешённые MCP servers/tools и завершает attempt через
-typed RPC. Provider process работает отдельным UID без Kubernetes token и
-общих platform credentials. Из authority material ему доступна только
-execution-scoped mTLS client identity и ticket для закрытого набора callback
-операций текущего lease.
+typed RPC. Provider process работает отдельным UID без Kubernetes token,
+execution ticket, mTLS private key и общих platform credentials.
 
 ## Ротация managed OAuth credential
 
@@ -110,11 +108,19 @@ Codex app-server может атомарно переписать свой file-
 успешного OAuth refresh. Provider-sidecar после каждого provider turn сравнивает
 точный SHA-256 файла с credential digest из `RuntimeRevision`. Неизменившийся
 файл удаляется вместе с execution workspace. Изменившийся snapshot до удаления
-передается в bounded callback
+передается по закрытому UDS отдельному `provider-credential-relay`, который
+вызывает bounded callback
 `/v1/executions/{lease}/provider-credential-refresh`.
 
-Runtime-controller принимает callback только по exact mTLS client identity,
-ticket, lease, fence, generation и runtime revision digest. Он повторно читает
+Provider и relay делят только отдельный socket `emptyDir`. Role runtime этот
+volume не монтирует. Relay работает отдельным UID, проверяет peer credentials и
+получает только execution ticket и callback mTLS identity; он не получает
+provider Secret, workspace, MCP authority или Kubernetes token. Provider не
+получает callback credentials, поэтому model-controlled shell или tool не может
+использовать их напрямую.
+
+Runtime-controller принимает callback только по exact relay mTLS client
+identity, ticket, lease, fence, generation и runtime revision digest. Он повторно читает
 закрепленную прежнюю immutable Secret, сверяет UID, resource version и SHA-256,
 разбирает старый и новый managed OAuth snapshot и требует совпадения non-empty
 provider account ID. API key и внешняя подмена логической учетной записи через

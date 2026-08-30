@@ -61,12 +61,13 @@ provider account ID обязан совпадать, а платформа пу�
   только пользователю с точным platform permission. Она атомарно публикует
   новую credential revision, запрещена во время активного хода привязанной
   Session и не разрешает произвольную подмену логической учётной записи.
-- Автоматический managed OAuth refresh передается provider-sidecar только по
-  execution-scoped mTLS callback с точным ticket. Runtime-controller повторно
-  сверяет прежнюю immutable Secret и логическую учетную запись, создает новую
-  immutable Secret, выполняет exact readback и передает control-plane только
-  name, UID, resource version и SHA-256. Raw token не попадает в PostgreSQL,
-  browser, Role runtime, prompt, event или лог.
+- Автоматический managed OAuth refresh передается provider-sidecar по закрытому
+  UDS отдельному credential-relay. Только relay получает execution-scoped mTLS
+  identity и ticket для callback; provider process и Role runtime их не видят.
+  Runtime-controller повторно сверяет прежнюю immutable Secret и логическую
+  учетную запись, создает новую immutable Secret, выполняет exact readback и
+  передает control-plane только name, UID, resource version и SHA-256. Raw token
+  не попадает в PostgreSQL, browser, Role runtime, prompt, event или лог.
 - Control-plane переключает текущую credential revision только по
   lease/fence/generation и compare-and-swap с точной прежней revision. Повтор
   с тем же Secret idempotent, а callback устаревшего хода закрыто отклоняется.

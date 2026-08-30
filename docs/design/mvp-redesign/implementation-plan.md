@@ -302,16 +302,17 @@ digest и локальным путём. Коллизии имён разреш�
 - При изменении окружения не мутировать активную Session задним числом: новый
   turn получает новую RuntimeRevision, а UI показывает различия.
 - Managed OAuth refresh фиксировать как следующую immutable credential
-  revision через provider-sidecar callback, runtime-controller Secret readback
-  и control-plane CAS. Rotating account выполняет один provider turn, API-key
-  account использует отдельный bounded concurrency limit.
+  revision через provider-sidecar, изолированный UDS credential-relay,
+  runtime-controller Secret readback и control-plane CAS. Rotating account
+  выполняет один provider turn, API-key account использует отдельный bounded
+  concurrency limit.
 
 Матрица OAuth lifecycle:
 
 | Переход            | Authority и condition                                                | Атомарный результат                                                     | Ошибка                            |
 | ------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------- |
 | `claim`            | authorized account, exact current credential, capacity под row lock  | immutable RuntimeRevision и CLAIMED lease                               | node остается QUEUED              |
-| `refresh detected` | provider-sidecar, exact execution ticket и изменившийся digest       | bounded callback с новым snapshot                                       | provider turn закрыто завершается |
+| `refresh detected` | provider-sidecar, изменившийся digest и peer-authenticated UDS relay | bounded callback с новым snapshot; ticket доступен только relay         | provider turn закрыто завершается |
 | `materialize`      | runtime-controller, old Secret UID/RV/SHA и same provider account ID | новая immutable Secret с exact readback                                 | current revision не меняется      |
 | `commit`           | control-plane, lease/fence/generation и CAS прежней revision         | новая credential revision и account current pointer в одной transaction | stale callback отклоняется        |
 | `retry callback`   | те же lease и exact Secret metadata                                  | идемпотентный readback уже активной revision                            | несовпадающий повтор отклоняется  |
