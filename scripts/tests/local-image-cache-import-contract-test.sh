@@ -11,13 +11,25 @@ fail() {
 for builder in build-local-runner.sh build-local-session-archive.sh build-local-backup-controller.sh; do
   path="$root/tools/dev/$builder"
   grep -Fq 'images import \' "$path" || fail "$builder does not import its cached OCI archive"
-  grep -Fq -- '--base-name "$repository" /image.oci.tar' "$path" ||
+  grep -Fq -- '--base-name "$repository" "$archive"' "$path" ||
     fail "$builder does not restore the exact repository tag from cache"
   import_line=$(grep -n -F 'images import \' "$path" | cut -d: -f1)
   tag_line=$(grep -n -F 'images tag --force' "$path" | cut -d: -f1)
   [[ "$import_line" =~ ^[0-9]+$ && "$tag_line" =~ ^[0-9]+$ && "$import_line" -lt "$tag_line" ]] ||
     fail "$builder tags the exact digest before restoring its source tag"
 done
+
+for builder in build-local-runner.sh build-local-session-archive.sh build-local-backup-controller.sh build-local-image-supply-chain.sh; do
+  path="$root/tools/dev/$builder"
+  grep -Fq '"$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"' "$path" ||
+    fail "$builder does not repair the Buildx builder for the current Docker context"
+done
+
+buildx_bootstrap="$root/tools/dev/ensure-local-buildx-builder.sh"
+grep -Fq "grep -Eq '^Status:[[:space:]]+running$'" "$buildx_bootstrap" ||
+  fail 'Buildx bootstrap does not verify the effective running status'
+grep -Fq 'docker context show' "$buildx_bootstrap" ||
+  fail 'Buildx bootstrap does not bind a replacement to the current Docker context'
 
 dev_script="$root/dev.sh"
 [[ $(grep -Fc '"$repository_root/tools/dev/build-local-session-archive.sh"' "$dev_script") -eq 2 ]] ||

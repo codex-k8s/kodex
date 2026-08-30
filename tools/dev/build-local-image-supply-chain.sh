@@ -35,10 +35,7 @@ docker buildx version >/dev/null 2>&1 || fail 'docker buildx is required'
 sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for local k3s image import'
 
 builder=kodex-local-dev
-if ! docker buildx inspect "$builder" >/dev/null 2>&1; then
-  docker buildx create --name "$builder" --driver docker-container >/dev/null
-fi
-docker buildx inspect "$builder" --bootstrap >/dev/null
+"$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
 
 install -d -m 0700 "$state_directory/cache/image-supply-chain"
 source_revision=$(git -C "$source_root" rev-parse HEAD)
