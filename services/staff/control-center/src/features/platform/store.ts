@@ -699,6 +699,7 @@ export const usePlatformStore = defineStore("platform", () => {
   async function uploadProjectArtifact(
     projectRef: string,
     file: File,
+    signal?: AbortSignal,
   ): Promise<Artifact> {
     const result = await mutate((headers) =>
       uploadArtifact({
@@ -708,14 +709,17 @@ export const usePlatformStore = defineStore("platform", () => {
           ...mutationHeaders(headers),
           "X-File-Name": file.name,
         },
-        signal: requestSignal(),
+        signal: requestSignal(signal),
       }),
     );
     upsert(artifacts, [result.data]);
     return result.data;
   }
 
-  async function uploadOrganizationArtifactFile(file: File): Promise<Artifact> {
+  async function uploadOrganizationArtifactFile(
+    file: File,
+    signal?: AbortSignal,
+  ): Promise<Artifact> {
     const result = await mutate((headers) =>
       uploadOrganizationArtifact({
         body: file,
@@ -723,7 +727,7 @@ export const usePlatformStore = defineStore("platform", () => {
           ...mutationHeaders(headers),
           "X-File-Name": file.name,
         },
-        signal: requestSignal(),
+        signal: requestSignal(signal),
       }),
     );
     upsert(artifacts, [result.data]);
@@ -733,10 +737,11 @@ export const usePlatformStore = defineStore("platform", () => {
   async function uploadAttachmentArtifact(
     projectRef: string | undefined,
     file: File,
+    signal?: AbortSignal,
   ): Promise<Artifact> {
     return projectRef
-      ? uploadProjectArtifact(projectRef, file)
-      : uploadOrganizationArtifactFile(file);
+      ? uploadProjectArtifact(projectRef, file, signal)
+      : uploadOrganizationArtifactFile(file, signal);
   }
 
   async function readArtifact(artifactRef: string): Promise<Artifact> {

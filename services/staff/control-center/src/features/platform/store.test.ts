@@ -65,7 +65,8 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   uploadOrganizationArtifact: uploadOrganizationArtifactMock,
 }));
 vi.mock("@/shared/api/client", () => ({
-  requestSignal: () => new AbortController().signal,
+  requestSignal: (parent?: AbortSignal) =>
+    parent ?? new AbortController().signal,
 }));
 
 import { usePlatformStore } from "@/features/platform/store";
@@ -560,16 +561,28 @@ describe("platform store", () => {
     const projectFile = new File(["project"], "project.txt", {
       type: "text/plain",
     });
-    await store.uploadAttachmentArtifact(undefined, organizationFile);
-    await store.uploadAttachmentArtifact("project_owner", projectFile);
+    const organizationController = new AbortController();
+    const projectController = new AbortController();
+    await store.uploadAttachmentArtifact(
+      undefined,
+      organizationFile,
+      organizationController.signal,
+    );
+    await store.uploadAttachmentArtifact(
+      "project_owner",
+      projectFile,
+      projectController.signal,
+    );
 
     const organizationCall = uploadOrganizationArtifactMock.mock.calls[0]?.[0];
     expect(organizationCall?.body).toBe(organizationFile);
     expect(organizationCall?.headers["X-File-Name"]).toBe("global.txt");
+    expect(organizationCall?.signal).toBe(organizationController.signal);
     const projectCall = uploadArtifactMock.mock.calls[0]?.[0];
     expect(projectCall?.path).toEqual({ projectRef: "project_owner" });
     expect(projectCall?.body).toBe(projectFile);
     expect(projectCall?.headers["X-File-Name"]).toBe("project.txt");
+    expect(projectCall?.signal).toBe(projectController.signal);
     expect(store.artifacts.artifact_organization).toEqual(organizationArtifact);
     expect(store.artifacts.artifact_project).toEqual(projectArtifact);
   });

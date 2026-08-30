@@ -31,6 +31,7 @@ export function configureApiClient(): void {
   projectInterceptorConfigured = true;
 }
 
-export function requestSignal(): AbortSignal {
-  return AbortSignal.timeout(runtimeConfig().requestTimeoutMs);
+export function requestSignal(parent?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(runtimeConfig().requestTimeoutMs);
+  return parent ? AbortSignal.any([parent, timeout]) : timeout;
 }
