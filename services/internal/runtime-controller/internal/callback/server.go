@@ -33,7 +33,10 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-const maximumRequestBytes = 16 << 20
+const (
+	maximumRequestBytes                          = 16 << 20
+	maximumProviderCredentialRefreshRequestBytes = ((runtimecontract.MaximumProviderAuthBytes + 2) / 3 * 4) + (16 << 10)
+)
 
 var progressCodePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{2,63}$`)
 
@@ -224,9 +227,77 @@ func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 		server.nativeToolCall(writer, request, parts[2])
+	case "provider-credential-refresh":
+		if request.Method != http.MethodPost {
+			http.NotFound(writer, request)
+			return
+		}
+		server.providerCredentialRefresh(writer, request, parts[2])
 	default:
 		http.NotFound(writer, request)
 	}
+}
+
+func (server *Server) providerCredentialRefresh(writer http.ResponseWriter, request *http.Request, leaseRef string) {
+	input, ok := server.authorize(request, leaseRef)
+	if !ok {
+		http.NotFound(writer, request)
+		return
+	}
+	var payload runtimecontract.RunnerProviderCredentialRefreshRequest
+	if decode(request, &payload, maximumProviderCredentialRefreshRequestBytes) != nil || payload.Validate() != nil ||
+		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest ||
+		payload.PreviousCredentialRevisionRef != input.ProviderCredentialRef ||
+		payload.PreviousContentSHA256 != input.ProviderCredentialSHA256 {
+		http.Error(writer, "invalid provider credential refresh", http.StatusBadRequest)
+		return
+	}
+	requestContext, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
+	defer cancel()
+	binding, err := server.manager.MaterializeProviderCredentialRefresh(requestContext, input, payload)
+	if errors.Is(err, workload.ErrProviderCredentialRefreshRejected) {
+		http.Error(writer, "provider credential refresh conflict", http.StatusConflict)
+		return
+	}
+	if err != nil {
+		server.logger.WarnContext(request.Context(), "provider credential refresh materialization failed", "failure_class", "kubernetes")
+		http.Error(writer, "provider credential refresh unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	response, err := server.control.Runtime.CommitProviderCredentialRefresh(requestContext, providerCredentialRefreshProjection(input, payload, binding))
+	if err != nil {
+		server.logger.WarnContext(request.Context(), "control-plane provider credential refresh request failed",
+			"grpc_code", status.Code(err).String(), "failure_class", controlFailureClass(err))
+		writeControlError(writer, err)
+		return
+	}
+	if !providerCredentialRefreshReadbackMatches(input, binding, response.GetProviderCredential()) {
+		http.Error(writer, "runtime owner unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	writer.WriteHeader(http.StatusNoContent)
+}
+
+func providerCredentialRefreshProjection(input runtimecontract.RunnerInput, payload runtimecontract.RunnerProviderCredentialRefreshRequest, binding workload.ProviderSecretBinding) *controlplanev1.CommitProviderCredentialRefreshRequest {
+	return &controlplanev1.CommitProviderCredentialRefreshRequest{
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "provider-credential-refresh:"+binding.ContentSHA256)},
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
+		PreviousCredentialRevisionRef: payload.PreviousCredentialRevisionRef,
+		PreviousContentSha256:         payload.PreviousContentSHA256,
+		SecretName:                    binding.Name,
+		SecretUid:                     binding.UID,
+		SecretResourceVersion:         binding.ResourceVersion,
+		ContentSha256:                 binding.ContentSHA256,
+	}
+}
+
+func providerCredentialRefreshReadbackMatches(input runtimecontract.RunnerInput, materialized workload.ProviderSecretBinding, actual *controlplanev1.ProviderCredentialBinding) bool {
+	return actual != nil && actual.GetAccountRef() == input.ProviderAccountRef &&
+		actual.GetCredentialRevisionRef() != "" && actual.GetCredentialRevisionRef() != input.ProviderCredentialRef &&
+		actual.GetCredentialRevision() == int64(input.ProviderCredentialRevision)+1 &&
+		actual.GetSecretName() == materialized.Name && actual.GetSecretUid() == materialized.UID &&
+		actual.GetSecretResourceVersion() == materialized.ResourceVersion &&
+		subtle.ConstantTimeCompare([]byte(actual.GetContentSha256()), []byte(materialized.ContentSHA256)) == 1
 }
 
 func (server *Server) nativeToolCall(writer http.ResponseWriter, request *http.Request, leaseRef string) {

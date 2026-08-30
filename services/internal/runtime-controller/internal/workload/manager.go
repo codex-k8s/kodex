@@ -8,8 +8,10 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"time"
@@ -33,24 +35,36 @@ import (
 )
 
 const (
-	managedLabel                = "runtime.kodex.dev/managed"
-	modeLabel                   = "runtime.kodex.dev/mode"
-	revisionAnnotation          = "runtime.kodex.dev/revision-digest"
-	configAnnotation            = "runtime.kodex.dev/config-digest"
-	environmentAnnotation       = "runtime.kodex.dev/environment-digest"
-	warmCompatibilityAnnotation = "runtime.kodex.dev/warm-compatibility-digest"
-	controllerAnnotation        = "runtime.kodex.dev/controller-pod-uid"
-	podAnnotation               = "runtime.kodex.dev/pod-name"
-	leaseAnnotation             = "runtime.kodex.dev/lease-ref"
-	resourcesAnnotation         = "runtime.kodex.dev/resources-digest"
-	volumesAnnotation           = "runtime.kodex.dev/volumes-digest"
-	networkAnnotation           = "runtime.kodex.dev/network-digest"
-	rbacProfileAnnotation       = "runtime.kodex.dev/rbac-profile-digest"
-	effectiveRBACAnnotation     = "runtime.kodex.dev/effective-rbac-digest"
-	executionHashLabel          = "runtime.kodex.dev/execution-hash"
-	inputKey                    = "runtime.json"
-	ticketKey                   = "token"
+	managedLabel                            = "runtime.kodex.dev/managed"
+	modeLabel                               = "runtime.kodex.dev/mode"
+	revisionAnnotation                      = "runtime.kodex.dev/revision-digest"
+	configAnnotation                        = "runtime.kodex.dev/config-digest"
+	environmentAnnotation                   = "runtime.kodex.dev/environment-digest"
+	warmCompatibilityAnnotation             = "runtime.kodex.dev/warm-compatibility-digest"
+	controllerAnnotation                    = "runtime.kodex.dev/controller-pod-uid"
+	podAnnotation                           = "runtime.kodex.dev/pod-name"
+	leaseAnnotation                         = "runtime.kodex.dev/lease-ref"
+	resourcesAnnotation                     = "runtime.kodex.dev/resources-digest"
+	volumesAnnotation                       = "runtime.kodex.dev/volumes-digest"
+	networkAnnotation                       = "runtime.kodex.dev/network-digest"
+	rbacProfileAnnotation                   = "runtime.kodex.dev/rbac-profile-digest"
+	effectiveRBACAnnotation                 = "runtime.kodex.dev/effective-rbac-digest"
+	providerSecretNameAnnotation            = "runtime.kodex.dev/provider-secret-name"
+	providerSecretUIDAnnotation             = "runtime.kodex.dev/provider-secret-uid"
+	providerSecretResourceVersionAnnotation = "runtime.kodex.dev/provider-secret-resource-version"
+	providerCredentialRefAnnotation         = "runtime.kodex.dev/provider-credential-ref"
+	providerCredentialDigestAnnotation      = "runtime.kodex.dev/provider-credential-digest"
+	providerAccountRefAnnotation            = "runtime.kodex.dev/provider-account-ref"
+	previousCredentialRefAnnotation         = "runtime.kodex.dev/previous-provider-credential-ref"
+	previousCredentialDigestAnnotation      = "runtime.kodex.dev/previous-provider-credential-digest"
+	executionHashLabel                      = "runtime.kodex.dev/execution-hash"
+	inputKey                                = "runtime.json"
+	ticketKey                               = "token"
 )
+
+// ErrProviderCredentialRefreshRejected отделяет stale/invalid lineage от
+// временной недоступности Kubernetes API.
+var ErrProviderCredentialRefreshRejected = errors.New("provider credential refresh is rejected")
 
 type Config struct {
 	Environment, ControlNamespace, RuntimeNamespace, ControllerPodUID, ControllerPodIP string
@@ -67,6 +81,15 @@ type Config struct {
 // не сериализуется в runtime.json, доступный role image.
 type ProviderSecretBinding struct {
 	Name, UID, ResourceVersion, ContentSHA256 string
+}
+
+type managedChatGPTAuthentication struct {
+	AuthMode string `json:"auth_mode"`
+	Tokens   struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		AccountID    string `json:"account_id"`
+	} `json:"tokens"`
 }
 
 type Manager struct {
@@ -659,7 +682,7 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 	if err := manager.ensureExecutionPolicy(ctx, input, podName); err != nil {
 		return err
 	}
-	if err := manager.ensureTicket(ctx, secretName, podName, "turn", input, token, environmentSecrets); err != nil {
+	if err := manager.ensureTicket(ctx, secretName, podName, "turn", input, token, environmentSecrets, &providerBinding); err != nil {
 		return err
 	}
 	pod := manager.runtimePod(input, providerBinding, secretName, podName, "turn")
@@ -909,7 +932,7 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		if ticketErr != nil {
 			return false, ticketErr
 		}
-		if ticketErr = manager.ensureTicket(ctx, secretName, podName, "warm", input, token, environmentSecrets); ticketErr != nil {
+		if ticketErr = manager.ensureTicket(ctx, secretName, podName, "warm", input, token, environmentSecrets, &providerBinding); ticketErr != nil {
 			return false, ticketErr
 		}
 		pod := manager.runtimePod(input, providerBinding, secretName, podName, "warm")
@@ -1003,7 +1026,38 @@ func (manager *Manager) RegisterWarmTurn(ctx context.Context, input runtimecontr
 	if input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil || token == "" {
 		return errors.New("warm turn registration is invalid")
 	}
-	return manager.ensureTicket(ctx, ticketName(input.LeaseRef), "system-assistant-warm", "warm-turn", input, token, nil)
+	binding, err := manager.warmProviderSecretBinding(ctx, input)
+	if err != nil {
+		return err
+	}
+	return manager.ensureTicket(ctx, ticketName(input.LeaseRef), "system-assistant-warm", "warm-turn", input, token, nil, &binding)
+}
+
+func (manager *Manager) warmProviderSecretBinding(ctx context.Context, input runtimecontract.RunnerInput) (ProviderSecretBinding, error) {
+	pod, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, "system-assistant-warm", metav1.GetOptions{})
+	if err != nil {
+		return ProviderSecretBinding{}, errors.New("read warm runtime Pod credential binding")
+	}
+	name := runtimeInputSecretName(pod)
+	if name == "" {
+		return ProviderSecretBinding{}, errors.New("warm runtime Pod credential binding is missing")
+	}
+	ticket, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return ProviderSecretBinding{}, errors.New("read warm runtime credential binding")
+	}
+	bound, err := runtimecontract.DecodeRunnerInput(ticket.Data[inputKey])
+	if err != nil || bound.Mode != runtimecontract.RunnerModeWarm ||
+		bound.ProviderAccountRef != input.ProviderAccountRef ||
+		bound.ProviderCredentialRef != input.ProviderCredentialRef ||
+		bound.ProviderCredentialSHA256 != input.ProviderCredentialSHA256 {
+		return ProviderSecretBinding{}, errors.New("warm runtime credential binding is invalid")
+	}
+	binding, err := providerSecretBindingFromTicket(ticket, bound)
+	if err != nil || manager.validateProviderSecret(ctx, input, binding) != nil {
+		return ProviderSecretBinding{}, errors.New("warm runtime provider credential is unavailable")
+	}
+	return binding, nil
 }
 
 func (manager *Manager) WarmTicket(ctx context.Context, revisionRef, revisionDigest string) (string, error) {
@@ -1132,7 +1186,7 @@ func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.
 	case corev1.PodFailed:
 		return "FAILED", nil
 	case corev1.PodRunning:
-		if !warmExecution && runtimePodTerminal(pod, "role-runtime", "provider-runtime") {
+		if !warmExecution && runtimePodTerminal(pod, "role-runtime", "provider-runtime", "provider-credential-relay") {
 			return "FAILED", nil
 		}
 		if podReady(pod) {
@@ -1176,7 +1230,7 @@ func canonicalRuntimeContainers(values []corev1.Container) []corev1.Container {
 	return result
 }
 
-func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode string, input runtimecontract.RunnerInput, token string, environmentSecrets map[string][]byte) error {
+func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode string, input runtimecontract.RunnerInput, token string, environmentSecrets map[string][]byte, providerBinding *ProviderSecretBinding) error {
 	raw, err := runtimecontract.EncodeRunnerInput(input)
 	if err != nil {
 		return err
@@ -1186,19 +1240,29 @@ func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode st
 	for key, value := range environmentSecrets {
 		data[key] = append([]byte(nil), value...)
 	}
+	annotations := map[string]string{
+		revisionAnnotation: input.RuntimeRevisionDigest, configAnnotation: input.RuntimeConfigDigest,
+		environmentAnnotation: input.RuntimeEnvironmentDigest, controllerAnnotation: manager.config.ControllerPodUID, podAnnotation: podName,
+		resourcesAnnotation: input.EnvironmentPolicy.ResourcesDigest, volumesAnnotation: input.EnvironmentPolicy.VolumesDigest,
+		networkAnnotation: input.EnvironmentPolicy.NetworkDigest, rbacProfileAnnotation: input.EnvironmentPolicy.RBACDigest,
+		effectiveRBACAnnotation: input.EffectiveKubernetesAccess.Digest,
+	}
+	if providerBinding != nil {
+		annotations[providerSecretNameAnnotation] = providerBinding.Name
+		annotations[providerSecretUIDAnnotation] = providerBinding.UID
+		annotations[providerSecretResourceVersionAnnotation] = providerBinding.ResourceVersion
+		annotations[providerAccountRefAnnotation] = input.ProviderAccountRef
+		annotations[providerCredentialRefAnnotation] = input.ProviderCredentialRef
+		annotations[providerCredentialDigestAnnotation] = providerBinding.ContentSHA256
+	}
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.RuntimeNamespace,
-		Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: map[string]string{
-			revisionAnnotation: input.RuntimeRevisionDigest, configAnnotation: input.RuntimeConfigDigest,
-			environmentAnnotation: input.RuntimeEnvironmentDigest, controllerAnnotation: manager.config.ControllerPodUID, podAnnotation: podName,
-			resourcesAnnotation: input.EnvironmentPolicy.ResourcesDigest, volumesAnnotation: input.EnvironmentPolicy.VolumesDigest,
-			networkAnnotation: input.EnvironmentPolicy.NetworkDigest, rbacProfileAnnotation: input.EnvironmentPolicy.RBACDigest,
-			effectiveRBACAnnotation: input.EffectiveKubernetesAccess.Digest,
-		}},
+		Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: annotations},
 		Immutable: &immutable, Type: corev1.SecretTypeOpaque, Data: data}
 	_, err = manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Create(ctx, secret, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		existing, getErr := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
 		if getErr != nil || existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest ||
+			!providerTicketBindingMatches(existing, input, providerBinding) ||
 			mode != "warm-turn" && !environmentProjectionMatches(input, existing.Data) ||
 			subtle.ConstantTimeCompare(existing.Data[ticketKey], []byte(token)) != 1 && mode == "warm-turn" {
 			return errors.New("existing runtime ticket conflicts with immutable execution")
@@ -1251,6 +1315,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		{Name: "callback-client", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientTLSSecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "provider-auth", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: providerBinding.Name, DefaultMode: int32Pointer(0o400)}}},
 		{Name: "provider-socket", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("8Mi"))}}},
+		{Name: "provider-credential-relay", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("8Mi"))}}},
 		{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("512Mi"))}}},
 		{Name: "provider-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("512Mi"))}}},
 	}
@@ -1300,9 +1365,26 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 			{Name: "provider-auth", MountPath: "/run/secrets/kodex/runtime/provider/auth.json", SubPath: "auth.json", ReadOnly: true},
 			{Name: "provider-auth", MountPath: "/run/secrets/kodex/runtime/provider/auth.sha256", SubPath: "auth.sha256", ReadOnly: true},
 			{Name: "provider-socket", MountPath: "/run/kodex/provider"},
+			{Name: "provider-credential-relay", MountPath: "/run/kodex/provider-credential-relay"},
 			{Name: "provider-tmp", MountPath: "/tmp"},
 		},
 		Resources: smallResources(), ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", "/run/kodex/provider/provider.sock"}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30}}
+	relay := corev1.Container{Name: "provider-credential-relay", Image: manager.config.DefaultRoleImageReference, ImagePullPolicy: corev1.PullIfNotPresent,
+		Args: []string{"runtime-provider-credential-relay"},
+		Env: []corev1.EnvVar{
+			{Name: "KODEX_RUNTIME_REVISION_FILE", Value: "/var/run/config/kodex/runtime/runtime.json"},
+			{Name: "OTEL_SDK_DISABLED", Value: "true"},
+			{Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment},
+		},
+		SecurityContext: restrictedSecurityContext(10003),
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true},
+			{Name: "runtime-input", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true},
+			{Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true},
+			{Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true},
+			{Name: "provider-credential-relay", MountPath: "/run/kodex/provider-credential-relay"},
+		},
+		Resources: smallResources(), ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", "/run/kodex/provider-credential-relay/relay.sock"}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30}}
 	for _, item := range input.EnvironmentValues {
 		provider.Env = append(provider.Env, corev1.EnvVar{Name: item.Name, Value: item.Value})
 	}
@@ -1331,7 +1413,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		Spec: corev1.PodSpec{ServiceAccountName: serviceAccountName, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(30),
 			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			InitContainers:  []corev1.Container{{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: initMounts, Resources: smallResources()}},
-			Containers:      []corev1.Container{role, provider}, Volumes: volumes}}
+			Containers:      []corev1.Container{role, provider, relay}, Volumes: volumes}}
 }
 
 func runtimePolicyResourceRequirements(policy runtimecontract.RuntimeResourcePolicy) corev1.ResourceRequirements {
@@ -1375,23 +1457,224 @@ func validPinnedImageReference(reference string) bool {
 }
 
 func (manager *Manager) validateProviderSecret(ctx context.Context, input runtimecontract.RunnerInput, binding ProviderSecretBinding) error {
+	_, err := manager.readProviderAuthentication(ctx, input, binding)
+	return err
+}
+
+func (manager *Manager) readProviderAuthentication(ctx context.Context, input runtimecontract.RunnerInput, binding ProviderSecretBinding) ([]byte, error) {
 	if !validDNSLabel(binding.Name) || binding.UID == "" || binding.ResourceVersion == "" ||
 		binding.ContentSHA256 != input.ProviderCredentialSHA256 {
-		return errors.New("provider credential binding is invalid")
+		return nil, errors.New("provider credential binding is invalid")
 	}
 	secret, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, binding.Name, metav1.GetOptions{})
 	if err != nil || secret.Immutable == nil || !*secret.Immutable || string(secret.UID) != binding.UID ||
 		secret.ResourceVersion != binding.ResourceVersion {
-		return errors.New("provider credential revision is unavailable")
+		return nil, errors.New("provider credential revision is unavailable")
 	}
 	authentication := secret.Data["auth.json"]
 	digestFile := strings.TrimSpace(string(secret.Data["auth.sha256"]))
 	digest := sha256.Sum256(authentication)
 	actual := hex.EncodeToString(digest[:])
 	if len(authentication) == 0 || len(authentication) > 1<<20 || digestFile != actual || actual != binding.ContentSHA256 {
-		return errors.New("provider credential revision digest is invalid")
+		return nil, errors.New("provider credential revision digest is invalid")
+	}
+	return append([]byte(nil), authentication...), nil
+}
+
+// MaterializeProviderCredentialRefresh создаёт только новую immutable Secret;
+// переключение current revision остаётся атомарной обязанностью control-plane.
+func (manager *Manager) MaterializeProviderCredentialRefresh(ctx context.Context, input runtimecontract.RunnerInput, request runtimecontract.RunnerProviderCredentialRefreshRequest) (ProviderSecretBinding, error) {
+	if input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil || request.Validate() != nil ||
+		request.RuntimeRevisionDigest != input.RuntimeRevisionDigest ||
+		request.PreviousCredentialRevisionRef != input.ProviderCredentialRef ||
+		request.PreviousContentSHA256 != input.ProviderCredentialSHA256 {
+		return ProviderSecretBinding{}, ErrProviderCredentialRefreshRejected
+	}
+	ticket, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, ticketName(input.LeaseRef), metav1.GetOptions{})
+	if err != nil {
+		return ProviderSecretBinding{}, errors.New("read runtime provider credential binding")
+	}
+	oldBinding, err := providerSecretBindingFromTicket(ticket, input)
+	if err != nil {
+		return ProviderSecretBinding{}, fmt.Errorf("%w: pinned provider credential binding is invalid", ErrProviderCredentialRefreshRejected)
+	}
+	oldAuthentication, err := manager.readProviderAuthentication(ctx, input, oldBinding)
+	if err != nil {
+		return ProviderSecretBinding{}, fmt.Errorf("%w: pinned provider credential is unavailable", ErrProviderCredentialRefreshRejected)
+	}
+	oldSnapshot, err := parseManagedChatGPTAuthentication(oldAuthentication)
+	if err != nil {
+		return ProviderSecretBinding{}, fmt.Errorf("%w: pinned provider credential is not managed OAuth", ErrProviderCredentialRefreshRejected)
+	}
+	newSnapshot, err := parseManagedChatGPTAuthentication(request.Authentication)
+	if err != nil || subtle.ConstantTimeCompare([]byte(oldSnapshot.Tokens.AccountID), []byte(newSnapshot.Tokens.AccountID)) != 1 {
+		return ProviderSecretBinding{}, fmt.Errorf("%w: refreshed provider account does not match", ErrProviderCredentialRefreshRejected)
+	}
+	digest := sha256.Sum256(request.Authentication)
+	contentSHA256 := hex.EncodeToString(digest[:])
+	if subtle.ConstantTimeCompare([]byte(contentSHA256), []byte(input.ProviderCredentialSHA256)) == 1 {
+		return ProviderSecretBinding{}, fmt.Errorf("%w: provider credential did not change", ErrProviderCredentialRefreshRejected)
+	}
+	name := providerCredentialRefreshSecretName(input.ProviderAccountRef, contentSHA256)
+	immutable := true
+	desired := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name, Namespace: manager.config.RuntimeNamespace,
+			Labels: map[string]string{managedLabel: "true", "app.kubernetes.io/part-of": "kodex", "app.kubernetes.io/managed-by": "runtime-controller"},
+			Annotations: map[string]string{
+				providerAccountRefAnnotation:       input.ProviderAccountRef,
+				previousCredentialRefAnnotation:    input.ProviderCredentialRef,
+				previousCredentialDigestAnnotation: input.ProviderCredentialSHA256,
+				providerCredentialDigestAnnotation: contentSHA256,
+			},
+		},
+		Immutable: &immutable,
+		Type:      corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"auth.json":   append([]byte(nil), request.Authentication...),
+			"auth.sha256": []byte(contentSHA256),
+		},
+	}
+	if _, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Create(ctx, desired, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return ProviderSecretBinding{}, errors.New("create refreshed provider credential Secret")
+	}
+	materialized, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return ProviderSecretBinding{}, errors.New("read back refreshed provider credential Secret")
+	}
+	return validateProviderCredentialRefreshReadback(materialized, desired, contentSHA256)
+}
+
+func parseManagedChatGPTAuthentication(authentication []byte) (managedChatGPTAuthentication, error) {
+	var snapshot managedChatGPTAuthentication
+	var root map[string]json.RawMessage
+	var tokens map[string]json.RawMessage
+	if len(authentication) == 0 || len(authentication) > runtimecontract.MaximumProviderAuthBytes || rejectDuplicateJSONKeys(authentication) != nil ||
+		json.Unmarshal(authentication, &root) != nil || json.Unmarshal(root["auth_mode"], &snapshot.AuthMode) != nil ||
+		json.Unmarshal(root["tokens"], &tokens) != nil ||
+		json.Unmarshal(tokens["account_id"], &snapshot.Tokens.AccountID) != nil ||
+		json.Unmarshal(tokens["access_token"], &snapshot.Tokens.AccessToken) != nil ||
+		json.Unmarshal(tokens["refresh_token"], &snapshot.Tokens.RefreshToken) != nil || snapshot.AuthMode != "chatgpt" ||
+		snapshot.Tokens.AccountID == "" || len(snapshot.Tokens.AccountID) > 512 ||
+		strings.TrimSpace(snapshot.Tokens.AccountID) != snapshot.Tokens.AccountID ||
+		snapshot.Tokens.AccessToken == "" || strings.TrimSpace(snapshot.Tokens.AccessToken) != snapshot.Tokens.AccessToken ||
+		snapshot.Tokens.RefreshToken == "" || strings.TrimSpace(snapshot.Tokens.RefreshToken) != snapshot.Tokens.RefreshToken {
+		return managedChatGPTAuthentication{}, errors.New("managed ChatGPT authentication is invalid")
+	}
+	return snapshot, nil
+}
+
+func rejectDuplicateJSONKeys(raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := consumeUniqueJSONValue(decoder); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return errors.New("managed ChatGPT authentication has trailing JSON")
 	}
 	return nil
+}
+
+func consumeUniqueJSONValue(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	delimiter, structured := token.(json.Delim)
+	if !structured {
+		return nil
+	}
+	switch delimiter {
+	case '{':
+		keys := make(map[string]struct{})
+		for decoder.More() {
+			keyToken, err := decoder.Token()
+			key, ok := keyToken.(string)
+			if err != nil || !ok {
+				return errors.New("managed ChatGPT authentication object is invalid")
+			}
+			if _, duplicate := keys[key]; duplicate {
+				return errors.New("managed ChatGPT authentication has duplicate keys")
+			}
+			keys[key] = struct{}{}
+			if err := consumeUniqueJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+	case '[':
+		for decoder.More() {
+			if err := consumeUniqueJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+	default:
+		return errors.New("managed ChatGPT authentication JSON is invalid")
+	}
+	closing, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	expected := json.Delim('}')
+	if delimiter == '[' {
+		expected = ']'
+	}
+	if closing != expected {
+		return errors.New("managed ChatGPT authentication JSON is invalid")
+	}
+	return nil
+}
+
+func providerCredentialRefreshSecretName(accountRef, digest string) string {
+	return "runtime-provider-refresh-" + shortHash(accountRef) + "-" + digest[:12]
+}
+
+func validateProviderCredentialRefreshReadback(actual, desired *corev1.Secret, digest string) (ProviderSecretBinding, error) {
+	if actual == nil || desired == nil || actual.Name != desired.Name || actual.Namespace != desired.Namespace ||
+		actual.UID == "" || actual.ResourceVersion == "" || actual.Immutable == nil || !*actual.Immutable ||
+		actual.Type != corev1.SecretTypeOpaque || len(actual.Data) != 2 ||
+		actual.Labels[managedLabel] != "true" || actual.Labels["app.kubernetes.io/part-of"] != "kodex" ||
+		actual.Labels["app.kubernetes.io/managed-by"] != "runtime-controller" ||
+		actual.Annotations[providerAccountRefAnnotation] != desired.Annotations[providerAccountRefAnnotation] ||
+		actual.Annotations[previousCredentialRefAnnotation] != desired.Annotations[previousCredentialRefAnnotation] ||
+		actual.Annotations[previousCredentialDigestAnnotation] != desired.Annotations[previousCredentialDigestAnnotation] ||
+		actual.Annotations[providerCredentialDigestAnnotation] != digest ||
+		subtle.ConstantTimeCompare(actual.Data["auth.json"], desired.Data["auth.json"]) != 1 ||
+		strings.TrimSpace(string(actual.Data["auth.sha256"])) != digest {
+		return ProviderSecretBinding{}, fmt.Errorf("%w: refreshed provider credential readback does not match", ErrProviderCredentialRefreshRejected)
+	}
+	computed := sha256.Sum256(actual.Data["auth.json"])
+	if subtle.ConstantTimeCompare([]byte(hex.EncodeToString(computed[:])), []byte(digest)) != 1 {
+		return ProviderSecretBinding{}, fmt.Errorf("%w: refreshed provider credential digest does not match", ErrProviderCredentialRefreshRejected)
+	}
+	return ProviderSecretBinding{Name: actual.Name, UID: string(actual.UID), ResourceVersion: actual.ResourceVersion, ContentSHA256: digest}, nil
+}
+
+func providerSecretBindingFromTicket(ticket *corev1.Secret, input runtimecontract.RunnerInput) (ProviderSecretBinding, error) {
+	if ticket == nil || ticket.Immutable == nil || !*ticket.Immutable ||
+		ticket.Annotations[providerAccountRefAnnotation] != input.ProviderAccountRef ||
+		ticket.Annotations[providerCredentialRefAnnotation] != input.ProviderCredentialRef ||
+		ticket.Annotations[providerCredentialDigestAnnotation] != input.ProviderCredentialSHA256 {
+		return ProviderSecretBinding{}, errors.New("runtime provider credential ticket binding is invalid")
+	}
+	binding := ProviderSecretBinding{
+		Name:            ticket.Annotations[providerSecretNameAnnotation],
+		UID:             ticket.Annotations[providerSecretUIDAnnotation],
+		ResourceVersion: ticket.Annotations[providerSecretResourceVersionAnnotation],
+		ContentSHA256:   ticket.Annotations[providerCredentialDigestAnnotation],
+	}
+	if !validDNSLabel(binding.Name) || binding.UID == "" || binding.ResourceVersion == "" || len(binding.ContentSHA256) != sha256.Size*2 {
+		return ProviderSecretBinding{}, errors.New("runtime provider credential ticket binding is incomplete")
+	}
+	return binding, nil
+}
+
+func providerTicketBindingMatches(ticket *corev1.Secret, input runtimecontract.RunnerInput, binding *ProviderSecretBinding) bool {
+	if binding == nil {
+		return true
+	}
+	actual, err := providerSecretBindingFromTicket(ticket, input)
+	return err == nil && actual == *binding
 }
 
 func (manager *Manager) materializeEnvironmentSecrets(ctx context.Context, input runtimecontract.RunnerInput) (map[string][]byte, error) {

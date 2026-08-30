@@ -16,8 +16,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 const testDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -90,6 +92,38 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	if !hasMount(pod.Spec.Containers[1], "provider-auth") {
 		t.Fatal("provider runtime has no provider authentication mount")
 	}
+	role := containerByName(t, pod.Spec.Containers, "role-runtime")
+	provider := containerByName(t, pod.Spec.Containers, "provider-runtime")
+	relay := containerByName(t, pod.Spec.Containers, "provider-credential-relay")
+	if relay.Image != testManagerConfig().DefaultRoleImageReference || relay.Image == provider.Image {
+		t.Fatalf("provider credential relay image = %q, provider image = %q", relay.Image, provider.Image)
+	}
+	if hasMount(role, "provider-credential-relay") || hasMount(role, "provider-auth") {
+		t.Fatal("role runtime can reach provider credential material")
+	}
+	if hasMount(provider, "callback-ca") || hasMount(provider, "callback-client") ||
+		hasMountAt(provider, "runtime-input", input.ExecutionTicketFile) {
+		t.Fatal("provider runtime received callback authority")
+	}
+	if !hasMount(provider, "provider-auth") || !hasMount(provider, "provider-socket") ||
+		!hasMount(provider, "provider-credential-relay") {
+		t.Fatal("provider runtime is missing an isolated provider or relay socket")
+	}
+	for _, forbidden := range []string{"provider-auth", "session", "provider-socket", "kube-api-access"} {
+		if hasMount(relay, forbidden) {
+			t.Fatalf("provider credential relay received forbidden mount %q", forbidden)
+		}
+	}
+	for _, required := range []string{"runtime-input", "callback-ca", "callback-client", "provider-credential-relay"} {
+		if !hasMount(relay, required) {
+			t.Fatalf("provider credential relay is missing mount %q", required)
+		}
+	}
+	if !hasMountAt(relay, "runtime-input", input.ExecutionTicketFile) || relay.SecurityContext == nil ||
+		relay.SecurityContext.RunAsUser == nil || *relay.SecurityContext.RunAsUser != 10003 ||
+		relay.SecurityContext.SeccompProfile == nil || relay.SecurityContext.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Fatalf("provider credential relay boundary is invalid: %#v", relay)
+	}
 	providerMounts := make(map[string]string)
 	for _, mount := range pod.Spec.Containers[1].VolumeMounts {
 		if mount.Name == "provider-auth" {
@@ -147,6 +181,15 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	}
 }
 
+func hasMountAt(container corev1.Container, volumeName, path string) bool {
+	for _, mount := range container.VolumeMounts {
+		if mount.Name == volumeName && mount.MountPath == path {
+			return true
+		}
+	}
+	return false
+}
+
 func TestManagerAcceptsOnlyDefaultOrValidExplicitStorageClass(t *testing.T) {
 	t.Parallel()
 	config := testManagerConfig()
@@ -180,6 +223,126 @@ func TestEnsureTurnRejectsProviderCredentialOutsideRuntimeRevision(t *testing.T)
 	if err := manager.EnsureTurn(context.Background(), input, binding); err == nil {
 		t.Fatal("EnsureTurn() accepted a provider Secret outside the immutable credential revision")
 	}
+}
+
+func TestMaterializeProviderCredentialRefreshCreatesImmutableRevisionIdempotently(t *testing.T) {
+	client, manager, input, payload := managedOAuthRefreshFixture(t)
+	client.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		created := action.(k8stesting.CreateAction).GetObject().(*corev1.Secret)
+		if strings.HasPrefix(created.Name, "runtime-provider-refresh-") {
+			created.UID = "30000000-0000-4000-8000-000000000001"
+			created.ResourceVersion = "17"
+		}
+		return false, nil, nil
+	})
+
+	first, err := manager.MaterializeProviderCredentialRefresh(context.Background(), input, payload)
+	if err != nil {
+		t.Fatalf("MaterializeProviderCredentialRefresh() error = %v", err)
+	}
+	second, err := manager.MaterializeProviderCredentialRefresh(context.Background(), input, payload)
+	if err != nil {
+		t.Fatalf("MaterializeProviderCredentialRefresh() repeat error = %v", err)
+	}
+	if first != second || first.UID == "" || first.ResourceVersion == "" || first.ContentSHA256 == input.ProviderCredentialSHA256 {
+		t.Fatalf("materialized binding is not stable: first=%#v second=%#v", first, second)
+	}
+	secret, err := client.CoreV1().Secrets("kodex-runtime").Get(context.Background(), first.Name, metav1.GetOptions{})
+	if err != nil || secret.Immutable == nil || !*secret.Immutable || len(secret.Data) != 2 ||
+		!bytes.Equal(secret.Data["auth.json"], payload.Authentication) ||
+		string(secret.Data["auth.sha256"]) != first.ContentSHA256 {
+		t.Fatalf("materialized Secret readback is invalid: name=%q uid=%q resource_version=%q err=%v",
+			first.Name, first.UID, first.ResourceVersion, err)
+	}
+	listed, err := client.CoreV1().Secrets("kodex-runtime").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("List(Secrets) error = %v", err)
+	}
+	count := 0
+	for _, item := range listed.Items {
+		if strings.HasPrefix(item.Name, "runtime-provider-refresh-") {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("refresh Secret count = %d, want 1", count)
+	}
+}
+
+func TestMaterializeProviderCredentialRefreshRejectsInvalidLineage(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*fake.Clientset, runtimecontract.RunnerInput, *runtimecontract.RunnerProviderCredentialRefreshRequest)
+	}{
+		{name: "different account", mutate: func(_ *fake.Clientset, _ runtimecontract.RunnerInput, request *runtimecontract.RunnerProviderCredentialRefreshRequest) {
+			request.Authentication = managedOAuthAuthentication("account-other", "access-new", "refresh-new")
+		}},
+		{name: "API key", mutate: func(_ *fake.Clientset, _ runtimecontract.RunnerInput, request *runtimecontract.RunnerProviderCredentialRefreshRequest) {
+			request.Authentication = []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"test-only"}`)
+		}},
+		{name: "duplicate security field", mutate: func(_ *fake.Clientset, _ runtimecontract.RunnerInput, request *runtimecontract.RunnerProviderCredentialRefreshRequest) {
+			request.Authentication = []byte(`{"auth_mode":"apikey","auth_mode":"chatgpt","tokens":{"account_id":"account-1","access_token":"access-new","refresh_token":"refresh-new"}}`)
+		}},
+		{name: "unchanged snapshot", mutate: func(_ *fake.Clientset, _ runtimecontract.RunnerInput, request *runtimecontract.RunnerProviderCredentialRefreshRequest) {
+			request.Authentication = managedOAuthAuthentication("account-1", "access-old", "refresh-old")
+		}},
+		{name: "stale previous revision", mutate: func(_ *fake.Clientset, _ runtimecontract.RunnerInput, request *runtimecontract.RunnerProviderCredentialRefreshRequest) {
+			request.PreviousCredentialRevisionRef = "pcr_stale123"
+		}},
+		{name: "missing pinned Secret", mutate: func(client *fake.Clientset, _ runtimecontract.RunnerInput, _ *runtimecontract.RunnerProviderCredentialRefreshRequest) {
+			_ = client.CoreV1().Secrets("kodex-runtime").Delete(context.Background(), "runtime-provider-openai-default-r1", metav1.DeleteOptions{})
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client, manager, input, payload := managedOAuthRefreshFixture(t)
+			test.mutate(client, input, &payload)
+			if _, err := manager.MaterializeProviderCredentialRefresh(context.Background(), input, payload); !errors.Is(err, ErrProviderCredentialRefreshRejected) {
+				t.Fatalf("MaterializeProviderCredentialRefresh() error = %v, want rejected", err)
+			}
+		})
+	}
+}
+
+func managedOAuthRefreshFixture(t *testing.T) (*fake.Clientset, *Manager, runtimecontract.RunnerInput, runtimecontract.RunnerProviderCredentialRefreshRequest) {
+	t.Helper()
+	client := fake.NewSimpleClientset()
+	manager, err := New(client, testManagerConfig())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	oldAuthentication := managedOAuthAuthentication("account-1", "access-old", "refresh-old")
+	oldDigest := sha256.Sum256(oldAuthentication)
+	oldDigestHex := hex.EncodeToString(oldDigest[:])
+	immutable := true
+	_, err = client.CoreV1().Secrets("kodex-runtime").Create(context.Background(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "runtime-provider-openai-default-r1", Namespace: "kodex-runtime",
+			UID: "10000000-0000-4000-8000-000000000001", ResourceVersion: "1"},
+		Immutable: &immutable,
+		Data:      map[string][]byte{"auth.json": oldAuthentication, "auth.sha256": []byte(oldDigestHex)},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("create managed OAuth fixture: %v", err)
+	}
+	execution := testExecution(false)
+	execution.Revision.ProviderCredential.ContentSha256 = oldDigestHex
+	input, binding, err := manager.BuildTurnInput(execution)
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+		t.Fatalf("EnsureTurn() error = %v", err)
+	}
+	return client, manager, input, runtimecontract.RunnerProviderCredentialRefreshRequest{
+		RuntimeRevisionDigest:         input.RuntimeRevisionDigest,
+		PreviousCredentialRevisionRef: input.ProviderCredentialRef,
+		PreviousContentSHA256:         input.ProviderCredentialSHA256,
+		Authentication:                managedOAuthAuthentication("account-1", "access-new", "refresh-new"),
+	}
+}
+
+func managedOAuthAuthentication(accountID, accessToken, refreshToken string) []byte {
+	return []byte(fmt.Sprintf(`{"auth_mode":"chatgpt","tokens":{"account_id":%q,"access_token":%q,"refresh_token":%q}}`, accountID, accessToken, refreshToken))
 }
 
 func TestEnsureTurnMaterializesExactEnvironmentSecretOutsideRunnerInput(t *testing.T) {
@@ -737,13 +900,13 @@ func TestEnsureWarmRotatesTerminalTicketAndDeletesStaleWarmTickets(t *testing.T)
 	}
 	secretName := manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest)
 	oldToken := strings.Repeat("a", 64)
-	if err := manager.ensureTicket(context.Background(), secretName, "system-assistant-warm", "warm", input, oldToken, nil); err != nil {
+	if err := manager.ensureTicket(context.Background(), secretName, "system-assistant-warm", "warm", input, oldToken, nil, &binding); err != nil {
 		t.Fatalf("ensureTicket() error = %v", err)
 	}
 	staleInput := input
 	staleInput.RuntimeRevisionRef = "runtime_revision_stale"
 	staleInput.RuntimeRevisionDigest = strings.Repeat("d", 64)
-	if err := manager.ensureTicket(context.Background(), manager.warmTicketName(staleInput.RuntimeRevisionRef, staleInput.RuntimeRevisionDigest), "system-assistant-warm", "warm", staleInput, strings.Repeat("b", 64), nil); err != nil {
+	if err := manager.ensureTicket(context.Background(), manager.warmTicketName(staleInput.RuntimeRevisionRef, staleInput.RuntimeRevisionDigest), "system-assistant-warm", "warm", staleInput, strings.Repeat("b", 64), nil, &binding); err != nil {
 		t.Fatalf("ensure stale ticket error = %v", err)
 	}
 	terminal := manager.runtimePod(input, binding, secretName, "system-assistant-warm", "warm")
