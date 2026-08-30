@@ -9,17 +9,26 @@ fail() {
 usage() {
   printf '%s\n' \
     'Usage: local-backup-restore-e2e.sh --context <exact-context>' \
-    '  --kubeconfig <path> --state-directory <path>' >&2
+    '  --kubeconfig <path> --state-directory <path>' \
+    '  [--backup-id <verified-backup-id>]' \
+    '  [--expected-object-key <canonical-session-archive-key>' \
+    '   --expected-object-file <private-file>]' >&2
 }
 
 context=""
 kubeconfig=""
 state_directory=""
+requested_backup_id=""
+expected_object_key=""
+expected_object_file=""
 while (($# > 0)); do
   case "$1" in
     --context) context=${2:-}; shift 2 ;;
     --kubeconfig) kubeconfig=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
+    --backup-id) requested_backup_id=${2:-}; shift 2 ;;
+    --expected-object-key) expected_object_key=${2:-}; shift 2 ;;
+    --expected-object-file) expected_object_file=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -34,6 +43,15 @@ confirmation=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION
   fail 'Kubernetes configuration is absent or unsafe'
 [[ "$state_directory" == /* && -d "$state_directory" && ! -L "$state_directory" ]] ||
   fail 'state directory is absent or unsafe'
+if [[ -n "$requested_backup_id" && ! "$requested_backup_id" =~ ^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{16}$ ]]; then
+  fail 'requested verified backup identifier is invalid'
+fi
+if [[ -n "$expected_object_key" || -n "$expected_object_file" ]]; then
+  [[ "$expected_object_key" =~ ^session-archive/v1/org_[a-z0-9]+/prj_[a-z0-9]+/ses_[a-z0-9]+/g[1-9][0-9]*/sat_[a-z0-9]+-a[1-9][0-9]*\.tar$ ]] ||
+    fail 'expected session archive object key is not canonical'
+  [[ "$expected_object_file" == /* && -f "$expected_object_file" && -s "$expected_object_file" &&
+    ! -L "$expected_object_file" ]] || fail 'expected session archive object file is absent or unsafe'
+fi
 for command_name in date go head jq kubectl sed seq sleep yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -78,8 +96,14 @@ trap cleanup EXIT
 
 status=$(kubectl -n kodex-system exec deployment/backup-controller -c backup-controller -- \
   wget -qO- http://127.0.0.1:9090/status 2>/dev/null) || fail 'backup-controller status is unavailable'
-backup_id=$(jq -er 'select(.state == "idle") | .lastVerifiedBackup | select(type == "string" and length > 0)' <<<"$status") ||
-  fail 'backup-controller has no verified backup ready for restore'
+if [[ -n "$requested_backup_id" ]]; then
+  jq -e 'select(.state == "idle")' <<<"$status" >/dev/null ||
+    fail 'backup-controller is not idle for the requested restore'
+  backup_id=$requested_backup_id
+else
+  backup_id=$(jq -er 'select(.state == "idle") | .lastVerifiedBackup | select(type == "string" and length > 0)' <<<"$status") ||
+    fail 'backup-controller has no verified backup ready for restore'
+fi
 
 credentials="$temporary_directory/credentials.json"
 kubectl -n kodex-system get secret/backup-controller-credentials -o json | \
@@ -243,6 +267,8 @@ done
   BACKUP_RESTORE_E2E_BACKUP_ID="$backup_id" \
   BACKUP_RESTORE_E2E_RESTORE_ID="$restore_id" \
   BACKUP_RESTORE_E2E_TARGET_PREFIX="$target_prefix" \
+  BACKUP_RESTORE_E2E_EXPECTED_OBJECT_KEY="$expected_object_key" \
+  BACKUP_RESTORE_E2E_EXPECTED_OBJECT_FILE="$expected_object_file" \
     go test ./internal/s3backup -run '^TestSeaweedFSBackupRestoreDrillReadbackE2E$' \
       -count=1 -timeout=2m
 )

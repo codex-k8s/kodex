@@ -1,7 +1,10 @@
 package s3backup
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/url"
 	"os"
@@ -14,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/configspec"
+	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/manifest"
 )
 
 func TestSeaweedFSBackupRestoreDrillReadbackE2E(t *testing.T) {
@@ -59,6 +63,27 @@ func TestSeaweedFSBackupRestoreDrillReadbackE2E(t *testing.T) {
 	if err != nil || drill.BackupID != backupID || drill.RestoreID != restoreID {
 		t.Fatal("immutable restore drill receipt readback failed")
 	}
+	expectedObjectKey := strings.TrimSpace(os.Getenv("BACKUP_RESTORE_E2E_EXPECTED_OBJECT_KEY"))
+	expectedObjectFile := strings.TrimSpace(os.Getenv("BACKUP_RESTORE_E2E_EXPECTED_OBJECT_FILE"))
+	if (expectedObjectKey == "") != (expectedObjectFile == "") {
+		t.Fatal("expected restore object input is incomplete")
+	}
+	var expectedObject []byte
+	if expectedObjectKey != "" {
+		if !canonicalSessionArchiveKey.MatchString(expectedObjectKey) {
+			t.Fatal("expected session archive object key is not canonical")
+		}
+		expectedObject = readPrivateE2EFile(t, expectedObjectFile, 4<<20)
+		source, exists := findPlatformObject(backup, "session-archives", expectedObjectKey)
+		if !exists {
+			t.Fatal("expected session archive object is absent from backup manifest")
+		}
+		digest := sha256.Sum256(expectedObject)
+		if source.Source.ChecksumSHA256 != "sha256:"+hex.EncodeToString(digest[:]) ||
+			source.Source.SizeBytes != int64(len(expectedObject)) {
+			t.Fatal("expected session archive manifest receipt mismatch")
+		}
+	}
 	target, err := NewClient(ctx, configspec.S3{
 		Name: "restore-fixture", Endpoint: endpoint, Region: "us-east-1",
 		Bucket: "kodex-restore-fixture", Prefix: targetPrefix,
@@ -71,6 +96,23 @@ func TestSeaweedFSBackupRestoreDrillReadbackE2E(t *testing.T) {
 	versions, err := target.listVersions(ctx, targetPrefix)
 	if err != nil || len(versions) != len(drill.Objects) {
 		t.Fatal("disposable restore object readback does not match receipt")
+	}
+	if expectedObjectKey != "" {
+		targetKey := targetPrefix + "/" + expectedObjectKey
+		var restored manifest.Receipt
+		for _, version := range versions {
+			if version.Key == targetKey {
+				restored, err = target.head(ctx, version.Key, version.VersionID)
+				break
+			}
+		}
+		if err != nil || !restored.Valid() {
+			t.Fatal("restored session archive receipt is unavailable")
+		}
+		readback, readErr := target.readBytes(ctx, restored, int64(len(expectedObject))+1)
+		if readErr != nil || !bytes.Equal(readback, expectedObject) {
+			t.Fatal("restored session archive exact-byte readback failed")
+		}
 	}
 	for _, version := range versions {
 		if _, err := target.api.DeleteObject(ctx, &s3.DeleteObjectInput{
