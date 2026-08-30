@@ -280,7 +280,7 @@ func (service *Service) indexPolicy() error {
 	}
 	for _, binding := range service.policy.Policy.OperationBindings {
 		producer, ok := service.producers[binding.ProducerID]
-		if !ok || binding.OperationID == "" || binding.CallerWorkloadID != producer.CallerWorkloadID || binding.CallerSPIFFEID != producer.CallerSPIFFEID || binding.Audience == "" || binding.FullMethod == "" || binding.Permission != binding.OperationID || !contains(producer.AllowedOperationIDs, binding.OperationID) {
+		if !ok || binding.OperationID == "" || binding.CallerWorkloadID != producer.CallerWorkloadID || binding.CallerSPIFFEID != producer.CallerSPIFFEID || binding.Audience == "" || binding.FullMethod == "" || binding.Permission == "" || !contains(producer.AllowedOperationIDs, binding.OperationID) {
 			return errors.New("authority proof operation binding is invalid")
 		}
 		if _, duplicate := service.bindings[binding.OperationID]; duplicate {
