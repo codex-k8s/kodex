@@ -74,6 +74,13 @@ export function readyRuntimes(
     );
 }
 
+export function runtimeSelectionByRef(
+  runtimes: readonly RuntimeSelection[],
+  runtimeRef: string,
+): RuntimeSelection | undefined {
+  return runtimes.find((runtime) => runtime.ref === runtimeRef);
+}
+
 export function runtimeProviders(
   runtimes: readonly RuntimeSelection[],
 ): string[] {

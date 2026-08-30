@@ -10,6 +10,7 @@ import {
   runtimeModels,
   runtimeProviders,
   runtimeRefForSelection,
+  runtimeSelectionByRef,
   runtimesForSelection,
   type ApplyBoundary,
 } from "@/features/agents/detail/model";
@@ -63,22 +64,36 @@ function isProviderPolicyMode(value: string): value is ProviderPolicyMode {
 }
 
 const availableRuntimes = computed(() => readyRuntimes(runtimes.value));
-const selectedRuntime = computed(
-  () =>
-    availableRuntimes.value.find(
-      (item) => item.ref === form.runtimeProfileRef,
-    ) ?? availableRuntimes.value[0],
+const selectedRuntime = computed(() =>
+  runtimeSelectionByRef(runtimes.value, form.runtimeProfileRef),
 );
 const providers = computed(() => runtimeProviders(availableRuntimes.value));
+const selectedProvider = computed(
+  () =>
+    selectedRuntime.value?.provider ?? view.value?.configuration.provider ?? "",
+);
 const models = computed(() =>
-  runtimeModels(availableRuntimes.value, selectedRuntime.value?.provider ?? ""),
+  runtimeModels(availableRuntimes.value, selectedProvider.value),
 );
 const matchingRuntimes = computed(() =>
   runtimesForSelection(
     availableRuntimes.value,
-    selectedRuntime.value?.provider ?? "",
+    selectedProvider.value,
     form.model,
   ),
+);
+const providerUnavailable = computed(
+  () =>
+    Boolean(selectedProvider.value) &&
+    !providers.value.includes(selectedProvider.value),
+);
+const modelUnavailable = computed(
+  () => Boolean(form.model) && !models.value.includes(form.model),
+);
+const runtimeUnavailable = computed(
+  () =>
+    Boolean(form.runtimeProfileRef) &&
+    !matchingRuntimes.value.some((item) => item.ref === form.runtimeProfileRef),
 );
 const runtimeDirty = computed(() => {
   const current = view.value?.configuration;
@@ -273,10 +288,17 @@ onMounted(() => void load());
           <label class="field">
             <span>{{ $t("agents.provider") }}</span>
             <select
-              :value="selectedRuntime?.provider"
+              :value="selectedProvider"
               :disabled="!canEdit || busy || providers.length === 0"
               @change="chooseProvider"
             >
+              <option
+                v-if="providerUnavailable"
+                :value="selectedProvider"
+                disabled
+              >
+                {{ selectedProvider }} · {{ copy.runtime.unavailableSelection }}
+              </option>
               <option
                 v-for="provider in providers"
                 :key="provider"
@@ -293,6 +315,9 @@ onMounted(() => void load());
               :disabled="!canEdit || busy || models.length === 0"
               @change="chooseModel"
             >
+              <option v-if="modelUnavailable" :value="form.model" disabled>
+                {{ form.model }} · {{ copy.runtime.unavailableSelection }}
+              </option>
               <option v-for="model in models" :key="model" :value="model">
                 {{ model }}
               </option>
@@ -305,6 +330,14 @@ onMounted(() => void load());
               :disabled="!canEdit || busy || matchingRuntimes.length === 0"
               @change="chooseRuntime"
             >
+              <option
+                v-if="runtimeUnavailable"
+                :value="form.runtimeProfileRef"
+                disabled
+              >
+                {{ form.runtimeProfileRef }} ·
+                {{ copy.runtime.unavailableSelection }}
+              </option>
               <option
                 v-for="item in matchingRuntimes"
                 :key="item.ref"
@@ -364,6 +397,7 @@ onMounted(() => void load());
               !runtimeDirty ||
               !form.runtimeProfileRef ||
               !form.model ||
+              !selectedRuntime?.ready ||
               !form.providerAccounts.length
             "
             @click="saveRuntime"

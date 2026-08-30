@@ -7,6 +7,7 @@ import {
   runtimeModels,
   runtimeProviders,
   runtimeRefForSelection,
+  runtimeSelectionByRef,
   runtimesForSelection,
   templateVariableInsertion,
   tokenizeCodeLine,
@@ -55,6 +56,10 @@ describe("agent detail model", () => {
       runtimeRefForSelection(runtimes, "openai-codex", "gpt-5.1-mini"),
     ).toBe("runtime_openai_small");
     expect(runtimeRefForSelection(runtimes, "other")).toBeUndefined();
+    expect(runtimeSelectionByRef(runtimes, "runtime_unready")).toEqual(
+      expect.objectContaining({ ready: false }),
+    );
+    expect(runtimeSelectionByRef(runtimes, "runtime_missing")).toBeUndefined();
   });
 
   it("выделяет переменные и синтаксические токены без HTML", () => {
@@ -79,13 +84,18 @@ describe("agent detail model", () => {
   it("вставляет server-owned template variable строго в текущее выделение", () => {
     const item = toTemplateVariablePickerItem({
       name: "project.ref",
-      valueType: "reference",
+      valueType: "OPAQUE_REF",
       description: "Ссылка Проекта",
       example: "{{ .project.ref }}",
       source: "PROJECT",
     });
 
     expect(item.scope).toBe("PROJECT");
+    expect(item.variable).toMatchObject({
+      valueType: "OPAQUE_REF",
+      example: "{{ .project.ref }}",
+      source: "PROJECT",
+    });
     expect(templateVariableInsertion(item.variable.name)).toBe(
       "{{project.ref}}",
     );

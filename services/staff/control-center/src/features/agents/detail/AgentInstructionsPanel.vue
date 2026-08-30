@@ -68,7 +68,14 @@ const completeVariables: CodeEditorCompletionProvider = async (
   return page.items.map((item) => ({
     label: item.variable.name,
     apply: templateVariableInsertion(item.variable.name),
-    detail: `${item.scope} · ${item.variable.description}`,
+    detail: [
+      item.scope,
+      item.variable.valueType,
+      item.variable.description,
+      item.variable.example,
+    ]
+      .filter(Boolean)
+      .join(" · "),
     type: "variable",
   }));
 };
@@ -181,6 +188,10 @@ const completeVariables: CodeEditorCompletionProvider = async (
               <span>
                 <strong>{{ item.variable.name }}</strong>
                 <small>{{ item.variable.description }}</small>
+                <small v-if="item.variable.example">
+                  {{ copy.instructions.variableExample }}:
+                  <code>{{ item.variable.example }}</code>
+                </small>
               </span>
               <span class="instructions-panel__variable-meta">
                 <code>{{ item.scope }}</code>
@@ -337,7 +348,10 @@ const completeVariables: CodeEditorCompletionProvider = async (
   min-width: 0;
   gap: 6px;
 }
-.instructions-panel__variable-option > span:first-child,
+.instructions-panel__variable-option > span:first-child {
+  display: grid;
+  gap: 3px;
+}
 .instructions-panel__variable-meta {
   display: flex;
   min-width: 0;
@@ -352,6 +366,10 @@ const completeVariables: CodeEditorCompletionProvider = async (
 .instructions-panel__variable-option small {
   color: var(--muted);
   font-size: 0.72rem;
+}
+.instructions-panel__variable-option small code {
+  color: inherit;
+  font-size: inherit;
 }
 .instructions-panel__variable-meta code {
   color: var(--accent-strong);

@@ -38,6 +38,7 @@ export interface AgentDetailCopy {
     saveOverlay: string;
     accountPolicy: string;
     accounts: string;
+    unavailableSelection: string;
   };
   instructions: {
     editor: string;
@@ -48,6 +49,7 @@ export interface AgentDetailCopy {
     variablesHelp: string;
     variableSearch: string;
     variableScope: string;
+    variableExample: string;
     insertVariable: string;
     usedVariables: string;
     noVariables: string;
@@ -122,6 +124,7 @@ const ru: AgentDetailCopy = {
     saveOverlay: "Сохранить overlay",
     accountPolicy: "Политика аккаунтов",
     accounts: "Аккаунты",
+    unavailableSelection: "Текущий выбор недоступен",
   },
   instructions: {
     editor: "Редактор",
@@ -133,6 +136,7 @@ const ru: AgentDetailCopy = {
       "Авторитетный каталог сгруппирован по scope. Выбор вставляет переменную в позицию курсора.",
     variableSearch: "Найти переменную по имени или описанию",
     variableScope: "Scope",
+    variableExample: "Пример",
     insertVariable: "Вставить переменную",
     usedVariables: "Переменные в тексте",
     noVariables: "В тексте нет шаблонных переменных",
@@ -210,6 +214,7 @@ const en: AgentDetailCopy = {
     saveOverlay: "Save overlay",
     accountPolicy: "Account policy",
     accounts: "Accounts",
+    unavailableSelection: "Current selection is unavailable",
   },
   instructions: {
     editor: "Editor",
@@ -221,6 +226,7 @@ const en: AgentDetailCopy = {
       "The authoritative catalog is grouped by scope. Selecting an item inserts it at the cursor.",
     variableSearch: "Find a variable by name or description",
     variableScope: "Scope",
+    variableExample: "Example",
     insertVariable: "Insert variable",
     usedVariables: "Variables used in text",
     noVariables: "The text does not use template variables",
