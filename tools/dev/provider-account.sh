@@ -52,9 +52,15 @@ export KUBECONFIG=$kubeconfig
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'Kubernetes context mismatch'
 [[ "$context" != *prod* && "$context" != *production* ]] || fail 'production context is forbidden'
 kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
+control_namespace=kodex-system
+runtime_namespace=kodex-runtime
+for namespace_name in "$control_namespace" "$runtime_namespace"; do
+  kubectl get "namespace/$namespace_name" >/dev/null 2>&1 ||
+    fail "required Kubernetes namespace is absent: $namespace_name"
+done
 
 if [[ "$command_name" == list ]]; then
-  kubectl -n kodex-system exec kodex-postgresql-0 -- psql -U postgres -d control_plane \
+  kubectl -n "$control_namespace" exec kodex-postgresql-0 -- psql -U postgres -d control_plane \
     -P pager=off -c "SELECT account.stable_key, account.name, account.state, account.enabled, revision.revision_number FROM control_plane.provider_accounts account LEFT JOIN control_plane.provider_credential_revisions revision ON revision.id = account.current_credential_revision_id ORDER BY account.created_at"
   exit 0
 fi
@@ -105,7 +111,7 @@ chmod 0700 "$temporary_directory"
 printf '%s\n' "$digest" >"$temporary_directory/auth.sha256"
 chmod 0600 "$temporary_directory/auth.sha256"
 
-if secret_json=$(kubectl -n kodex-system get "secret/$secret_name" -o json 2>/dev/null); then
+if secret_json=$(kubectl -n "$runtime_namespace" get "secret/$secret_name" -o json 2>/dev/null); then
   existing_digest=$(jq -jr '.data["auth.json"] | @base64d' <<<"$secret_json" | sha256sum | awk '{print $1}')
   jq -e --arg account_key "$account_key" '
     .immutable == true and .type == "Opaque" and
@@ -114,7 +120,7 @@ if secret_json=$(kubectl -n kodex-system get "secret/$secret_name" -o json 2>/de
   [[ "$existing_digest" == "$digest" ]] || fail 'existing immutable provider Secret digest differs'
 else
   manifest="$temporary_directory/provider-secret.json"
-  kubectl -n kodex-system create secret generic "$secret_name" \
+  kubectl -n "$runtime_namespace" create secret generic "$secret_name" \
     --from-file=auth.json="$auth_file" \
     --from-file=auth.sha256="$temporary_directory/auth.sha256" \
     --dry-run=client -o json | jq --arg account_key "$account_key" '
@@ -128,13 +134,13 @@ else
   kubectl create --field-manager=kodex-local-dev -f "$manifest" >/dev/null
 fi
 
-secret_uid=$(kubectl -n kodex-system get "secret/$secret_name" -o jsonpath='{.metadata.uid}')
-secret_resource_version=$(kubectl -n kodex-system get "secret/$secret_name" -o jsonpath='{.metadata.resourceVersion}')
+secret_uid=$(kubectl -n "$runtime_namespace" get "secret/$secret_name" -o jsonpath='{.metadata.uid}')
+secret_resource_version=$(kubectl -n "$runtime_namespace" get "secret/$secret_name" -o jsonpath='{.metadata.resourceVersion}')
 account_ref="pacc_${key_digest:0:24}"
 credential_digest=$(printf '%s\n%s\n%s\n' "$account_key" "$secret_uid" "$secret_resource_version" | sha256sum | awk '{print $1}')
 credential_ref="pcr_${credential_digest:0:24}"
 
-readback=$(kubectl -n kodex-system exec -i kodex-postgresql-0 -- \
+readback=$(kubectl -n "$control_namespace" exec -i kodex-postgresql-0 -- \
   psql -qAt -U postgres -d control_plane -P pager=off \
   -v account_ref="$account_ref" \
   -v stable_key="$account_key" \
@@ -150,7 +156,7 @@ IFS='|' read -r readback_key readback_revision readback_secret <<<"$readback"
   "$readback_secret" == "$secret_name" ]] || fail 'provider account database readback failed'
 
 if [[ "$account_key" == default-openai-codex ]]; then
-  kubectl -n kodex-system create configmap runtime-provider-openai-default-metadata \
+  kubectl -n "$control_namespace" create configmap runtime-provider-openai-default-metadata \
     --from-literal=secretName="$secret_name" \
     --from-literal=secretUID="$secret_uid" \
     --from-literal=secretResourceVersion="$secret_resource_version" \
@@ -163,6 +169,18 @@ if [[ "$account_key" == default-openai-codex ]]; then
       .metadata.annotations = {"kodex.dev/provider-account-key":$account_key}
     ' | kubectl apply --server-side --force-conflicts \
       --field-manager=kodex-local-dev -f - >/dev/null
+fi
+
+if legacy_secret=$(kubectl -n "$control_namespace" get "secret/$secret_name" -o json 2>/dev/null); then
+  jq -e --arg account_key "$account_key" '
+    .immutable == true and .type == "Opaque" and
+    .metadata.labels["app.kubernetes.io/managed-by"] == "kodex-local-dev" and
+    .metadata.annotations["kodex.dev/provider-account-key"] == $account_key and
+    ((.metadata.ownerReferences // []) | length == 0)
+  ' <<<"$legacy_secret" >/dev/null ||
+    fail 'legacy provider Secret in control namespace is not owned by local development'
+  kubectl -n "$control_namespace" delete "secret/$secret_name" \
+    --wait=true --timeout=3m >/dev/null
 fi
 
 metadata_file="$account_home/account.json"

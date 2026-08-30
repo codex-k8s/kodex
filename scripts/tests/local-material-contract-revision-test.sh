@@ -64,13 +64,31 @@ export PATH="$fake_bin:$PATH"
 export KUBECONFIG="$kubeconfig"
 export KODEX_TEST_CLUSTER_STATE="$cluster_state"
 
+create_material_fixture() {
+  local certificate_file
+  mkdir -p "$state_directory/material/nats"
+  printf 'digest\n' >"$state_directory/material/projections.sha256"
+  printf '3\n' >"$state_directory/material/nats/runtime-user-policy.version"
+  openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=fixture.local' \
+    -keyout "$temporary_directory/fixture.key" \
+    -out "$temporary_directory/fixture.crt" >/dev/null 2>&1
+  for certificate_file in \
+    node-pull/client.crt \
+    projections/kodex-buildkit-tls/server.crt \
+    projections/kodex-image-registry-pull/tls.crt \
+    projections/kodex-image-registry-promotion/tls.crt \
+    projections/role-image-builder-buildkit-client/tls.crt; do
+    mkdir -p "$state_directory/material/$(dirname -- "$certificate_file")"
+    cp "$temporary_directory/fixture.crt" \
+      "$state_directory/material/$certificate_file"
+  done
+}
+
 action=$("$fixture_root/tools/dev/reconcile-local-material.sh" \
   --context fixture-local --state-directory "$state_directory" --mode reconcile)
 [[ "$action" == create ]] || fail 'fresh state did not request material creation'
 
-mkdir -p "$state_directory/material/nats"
-printf 'digest\n' >"$state_directory/material/projections.sha256"
-printf '3\n' >"$state_directory/material/nats/runtime-user-policy.version"
+create_material_fixture
 "$fixture_root/tools/dev/reconcile-local-material.sh" \
   --context fixture-local --state-directory "$state_directory" --mode commit >/dev/null
 marker="$state_directory/material-contract-revision.json"
@@ -102,9 +120,7 @@ for preserved in credentials.env provider-accounts/default/auth.json cache/prese
   [[ -f "$state_directory/$preserved" ]] || fail "preserved local state was removed: $preserved"
 done
 
-mkdir -p "$state_directory/material/nats"
-printf 'digest\n' >"$state_directory/material/projections.sha256"
-printf '3\n' >"$state_directory/material/nats/runtime-user-policy.version"
+create_material_fixture
 "$fixture_root/tools/dev/reconcile-local-material.sh" \
   --context fixture-local --state-directory "$state_directory" --mode commit >/dev/null
 printf '%s\n' '{"metadata":{"labels":{"app.kubernetes.io/part-of":"unmanaged"}}}' \

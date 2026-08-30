@@ -15,6 +15,19 @@ grep -Fq 'canonical_auth_file="$account_home/auth.json"' "$provider_script" ||
   fail 'provider import does not retain a canonical private auth snapshot'
 grep -Fq '{version:1, accountKey:$account_key, name:$account_name}' "$provider_script" ||
   fail 'provider account metadata is not persisted'
+grep -Fq 'control_namespace=kodex-system' "$provider_script" ||
+  fail 'provider metadata does not declare the control namespace'
+grep -Fq 'runtime_namespace=kodex-runtime' "$provider_script" ||
+  fail 'provider credential does not declare the runtime namespace'
+grep -Fq 'kubectl -n "$runtime_namespace" create secret generic "$secret_name"' "$provider_script" ||
+  fail 'provider credential is not materialized in the runtime namespace'
+[[ $(grep -Fc 'kubectl -n "$runtime_namespace" get "secret/$secret_name"' "$provider_script") -eq 3 ]] ||
+  fail 'provider credential identity is not read back from the runtime namespace'
+if grep -Fq 'kubectl -n "$control_namespace" create secret generic "$secret_name"' "$provider_script"; then
+  fail 'provider credential is still materialized in the control namespace'
+fi
+grep -Fq 'legacy provider Secret in control namespace is not owned by local development' "$provider_script" ||
+  fail 'legacy provider credential cleanup is not ownership guarded'
 grep -Fq 'provider_auth=${KODEX_DEV_PROVIDER_AUTH_FILE:-"$state_directory/inputs/openai-auth.json"}' "$dev_script" ||
   fail 'immutable installation material is not separated from provider account revisions'
 grep -Fq 'provider_metadata=("$state_directory"/provider-accounts/*/account.json)' "$dev_script" ||
