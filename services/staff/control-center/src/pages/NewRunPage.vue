@@ -144,6 +144,15 @@ const targetSupportsFiles = computed(() => {
     )
   );
 });
+const workflowInputValid = computed(() => {
+  if (sessionMode.value !== "NEW") return true;
+  for (const field of selectedWorkflow.value?.inputFields ?? []) {
+    if (!field.required || field.valueType === "BOOLEAN") continue;
+    const value = inputValues[field.key];
+    if (value === undefined || String(value).trim() === "") return false;
+  }
+  return true;
+});
 const canSubmit = computed(
   () =>
     Boolean(canLaunch.value) &&
@@ -151,6 +160,7 @@ const canSubmit = computed(
     Boolean(selectedTarget.value) &&
     (sessionMode.value === "CONTINUE" || Boolean(form.title.trim())) &&
     Boolean(form.task.trim()) &&
+    workflowInputValid.value &&
     attachmentState.value.ready &&
     (sessionMode.value === "NEW" || Boolean(form.sessionRef)),
 );

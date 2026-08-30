@@ -74,6 +74,12 @@ var (
 	bootstrapComponentInsertSecondaryProviderQuery string
 	//go:embed testdata/sql/bootstrap_component_integration_invocation_effect_key.sql
 	bootstrapComponentIntegrationInvocationEffectKeyQuery string
+	//go:embed testdata/sql/bootstrap_component_runtime_provider_readback.sql
+	bootstrapComponentRuntimeProviderReadbackQuery string
+	//go:embed testdata/sql/bootstrap_component_provider_account_readback.sql
+	bootstrapComponentProviderAccountReadbackQuery string
+	//go:embed testdata/sql/bootstrap_component_rotate_provider_credential.sql
+	bootstrapComponentRotateProviderCredentialQuery string
 )
 
 func finalizedAttachmentSetRef(t *testing.T, ctx context.Context, service *platformservice.Service,
@@ -230,6 +236,9 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("runtime secret lifecycle is crash consistent", func(t *testing.T) {
 		testRuntimeSecretCrashConsistency(t, ctx, repository)
+	})
+	t.Run("provider auth rejection requires exact credential reauthorization", func(t *testing.T) {
+		testProviderAuthRejectionLifecycle(t, ctx, repository, pool)
 	})
 }
 
@@ -2433,6 +2442,142 @@ func graphNodeState(nodes []entity.RunNode, nodeType string) string {
 	return ""
 }
 
+func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
+	}, "control-api-gateway")
+	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
+	}, "runtime-controller")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct provider rejection service: %v", err)
+	}
+	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-rejection-project"}, Payload: command.ProjectInput{
+			Name: "Provider rejection", Purpose: "Verify exact provider credential failure isolation", Language: "en",
+		}})
+	if err != nil || project.Project == nil {
+		t.Fatalf("create provider rejection project: project=%#v err=%v", project.Project, err)
+	}
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "provider-rejection-agent", "Provider rejection specialist")
+
+	launchAndClaim := func(key string) map[string]any {
+		t.Helper()
+		launched, launchErr := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: key + "-launch"}, Payload: command.LaunchRunInput{
+				ProjectRef: project.Project.Ref, Title: "Provider rejection " + key,
+				Task: "Verify provider credential isolation.", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref},
+			}})
+		if launchErr != nil || launched.Run == nil {
+			t.Fatalf("launch %s provider rejection run: run=%#v err=%v", key, launched.Run, launchErr)
+		}
+		claimed, claimErr := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: key + "-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-provider-rejection", Limit: 1}})
+		if claimErr != nil || len(claimed.RuntimeItems) != 1 || stringMap(claimed.RuntimeItems[0], "runRef") != launched.Run.Ref {
+			t.Fatalf("claim %s provider rejection run: claims=%#v err=%v", key, claimed.RuntimeItems, claimErr)
+		}
+		return claimed.RuntimeItems[0]
+	}
+	completeRejected := func(key string, lease map[string]any) {
+		t.Helper()
+		completed, completeErr := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: key + "-complete"}, Payload: command.CompleteExecutionInput{
+				LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
+				Success: false, SafeErrorCode: "PROVIDER_AUTH_REJECTED", ResultSummary: "Provider authentication was rejected.",
+				Usage: turnUsageFixture(),
+			}})
+		if completeErr != nil || completed.Run == nil || completed.Run.State != "FAILED" {
+			t.Fatalf("complete %s rejected provider run: run=%#v err=%v", key, completed.Run, completeErr)
+		}
+	}
+	providerForRevision := func(runtimeRevisionID string) (string, string) {
+		t.Helper()
+		var accountID, credentialID string
+		if readErr := pool.QueryRow(ctx, bootstrapComponentRuntimeProviderReadbackQuery, runtimeRevisionID).Scan(&accountID, &credentialID); readErr != nil {
+			t.Fatalf("read runtime provider revision: %v", readErr)
+		}
+		return accountID, credentialID
+	}
+	accountState := func(accountID string) (string, string, int64) {
+		t.Helper()
+		var state, credentialID string
+		var version int64
+		if readErr := pool.QueryRow(ctx, bootstrapComponentProviderAccountReadbackQuery, accountID).Scan(&state, &credentialID, &version); readErr != nil {
+			t.Fatalf("read provider account state: %v", readErr)
+		}
+		return state, credentialID, version
+	}
+	rotate := func(accountID, secretUID, resourceVersion, digest string) string {
+		t.Helper()
+		var credentialID string
+		if rotateErr := pool.QueryRow(ctx, bootstrapComponentRotateProviderCredentialQuery,
+			accountID, secretUID, resourceVersion, digest).Scan(&credentialID); rotateErr != nil {
+			t.Fatalf("rotate provider credential: %v", rotateErr)
+		}
+		return credentialID
+	}
+
+	staleLease := launchAndClaim("stale")
+	accountID, staleCredentialID := providerForRevision(stringMap(staleLease, "runtimeRevisionID"))
+	_, currentCredentialID, versionBeforeRotation := accountState(accountID)
+	if currentCredentialID != staleCredentialID {
+		t.Fatalf("runtime revision did not pin the current credential: runtime=%s current=%s", staleCredentialID, currentCredentialID)
+	}
+	rotatedCredentialID := rotate(accountID, "40000000-0000-4000-8000-000000000001", "reauth-1", strings.Repeat("d", 64))
+	completeRejected("stale", staleLease)
+	state, currentCredentialID, versionAfterStale := accountState(accountID)
+	if state != "AUTHORIZED" || currentCredentialID != rotatedCredentialID || versionAfterStale != versionBeforeRotation+1 {
+		t.Fatalf("stale rejection disabled a rotated credential: state=%s credential=%s version=%d", state, currentCredentialID, versionAfterStale)
+	}
+
+	currentLease := launchAndClaim("current")
+	currentAccountID, runtimeCredentialID := providerForRevision(stringMap(currentLease, "runtimeRevisionID"))
+	if currentAccountID != accountID || runtimeCredentialID != rotatedCredentialID {
+		t.Fatalf("new runtime did not pin the rotated credential: account=%s credential=%s", currentAccountID, runtimeCredentialID)
+	}
+	completeRejected("current", currentLease)
+	state, currentCredentialID, rejectedVersion := accountState(accountID)
+	if state != "REAUTHORIZATION_REQUIRED" || currentCredentialID != rotatedCredentialID || rejectedVersion != versionAfterStale+1 {
+		t.Fatalf("current rejection did not require reauthorization: state=%s credential=%s version=%d", state, currentCredentialID, rejectedVersion)
+	}
+	ownerScope, err := repository.resolveScope(ctx, owner)
+	if err != nil {
+		t.Fatalf("resolve provider rejection owner scope: %v", err)
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin rejected provider selection: %v", err)
+	}
+	if _, selectErr := repository.selectProviderAccountForAgent(ctx, tx, ownerScope.organizationID, agent.Ref); !errors.Is(selectErr, domainerrs.ErrConflict) {
+		_ = tx.Rollback(ctx)
+		t.Fatalf("rejected provider remained selectable: %v", selectErr)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatalf("rollback rejected provider selection: %v", err)
+	}
+
+	finalCredentialID := rotate(accountID, "40000000-0000-4000-8000-000000000002", "reauth-2", strings.Repeat("e", 64))
+	state, currentCredentialID, finalVersion := accountState(accountID)
+	if state != "AUTHORIZED" || currentCredentialID != finalCredentialID || finalVersion != rejectedVersion+1 {
+		t.Fatalf("new credential did not restore provider account: state=%s credential=%s version=%d", state, currentCredentialID, finalVersion)
+	}
+	tx, err = pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin restored provider selection: %v", err)
+	}
+	selectedAccountID, selectErr := repository.selectProviderAccountForAgent(ctx, tx, ownerScope.organizationID, agent.Ref)
+	if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+		t.Fatalf("rollback restored provider selection: %v", rollbackErr)
+	}
+	if selectErr != nil || selectedAccountID != accountID {
+		t.Fatalf("reauthorized provider was not selected: account=%s err=%v", selectedAccountID, selectErr)
+	}
+}
+
 func createLifecycleAgent(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, key, name string) entity.Agent {
 	t.Helper()
 	result, err := service.Execute(ctx, command.Command{Kind: command.CreateAgent, Principal: owner,
@@ -2856,17 +3001,18 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("read queued assistant run descriptor: %v", err)
 	}
 	queuedImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "DELETE")
-	if err != nil || queuedImpact.Permitted || queuedImpact.ActiveRuntimeCount != 1 || queuedImpact.ActiveRunsTruncated ||
+	if err != nil || !queuedImpact.Permitted || queuedImpact.ActiveRuntimeCount != 1 || queuedImpact.ActiveRunsTruncated ||
 		len(queuedImpact.ActiveRuns) != 1 || queuedImpact.ActiveRuns[0].RunRef != queuedRunRef ||
 		queuedImpact.ActiveRuns[0].Title != queuedRunTitle || queuedImpact.ActiveRuns[0].State != queuedRunState ||
-		!contains(queuedImpact.Blockers, "ACTIVE_RUN_USES_ARTIFACT") {
+		len(queuedImpact.Blockers) != 0 {
 		t.Fatalf("queued assistant input impact: impact=%#v err=%v", queuedImpact, err)
 	}
-	if _, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
+	deletedInput, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-before-claim-1", ExpectedVersion: &queuedInputVersion},
 		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref, ImpactDigest: queuedImpact.Digest},
-	}); !errors.Is(err, domainerrs.ErrConflict) {
-		t.Fatalf("queued assistant input was soft-deleted before claim: %v", err)
+	})
+	if err != nil || deletedInput.Artifact == nil || deletedInput.Artifact.LifecycleState != "DELETED" {
+		t.Fatalf("soft-delete queued assistant input: artifact=%#v err=%v", deletedInput.Artifact, err)
 	}
 	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-claim-1"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
@@ -2928,19 +3074,6 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		}})
 	if err != nil || completed.Run == nil || completed.Run.State != "SUCCEEDED" || len(completed.CreatedRefs) != 1 {
 		t.Fatalf("complete direct assistant execution: run=%#v err=%v", completed.Run, err)
-	}
-	deleteImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "DELETE")
-	if err != nil || !deleteImpact.Permitted || deleteImpact.ActiveRuntimeCount != 0 ||
-		len(deleteImpact.ActiveRuns) != 0 || deleteImpact.ActiveRunsTruncated {
-		t.Fatalf("terminal assistant input delete impact: impact=%#v err=%v", deleteImpact, err)
-	}
-	inputVersion := assistantInput.Version
-	deletedInput, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-1", ExpectedVersion: &inputVersion},
-		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref, ImpactDigest: deleteImpact.Digest},
-	})
-	if err != nil || deletedInput.Artifact == nil || deletedInput.Artifact.LifecycleState != "DELETED" {
-		t.Fatalf("soft-delete terminal assistant input: artifact=%#v err=%v", deletedInput.Artifact, err)
 	}
 	purgeImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "PURGE")
 	if err != nil || purgeImpact.Permitted || purgeImpact.AttachmentCount < 1 ||

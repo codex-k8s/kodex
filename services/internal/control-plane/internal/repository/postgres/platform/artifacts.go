@@ -799,9 +799,6 @@ func (repository *Repository) artifactImpactTx(ctx context.Context, tx pgx.Tx, c
 		if lifecycleState != "ACTIVE" {
 			blockers = append(blockers, "ARTIFACT_NOT_ACTIVE")
 		}
-		if activeRuntimeCount > 0 {
-			blockers = append(blockers, "ACTIVE_RUN_USES_ARTIFACT")
-		}
 	} else {
 		if lifecycleState != "DELETED" {
 			blockers = append(blockers, "ARTIFACT_NOT_DELETED")

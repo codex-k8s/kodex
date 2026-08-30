@@ -274,35 +274,35 @@ func toolCapabilityMatches(tool, capability string, integration, systemAssistant
 }
 
 type claimableExecution struct {
-	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef                 string
-	initiatorRef                                                                     string
-	sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision               string
-	provider, model, providerAccountID, providerAccountRef                           string
-	providerCredentialID, providerCredentialRef                                      string
-	providerSecretName, providerSecretUID, providerSecretResourceVersion             string
-	providerCredentialSHA256, instructionRef, instructionDigest, instructions        string
-	turnRef, stableKey, callbackEdgeRef, turnID, agentID                             string
-	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef       string
-	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest   string
-	roleRuntimeContractSHA256                                                        string
-	runtimeConfigID, runtimeConfigRef, runtimeConfigDigest                           string
-	providerPolicyID, providerPolicyRef, providerPolicyDigest, providerPolicyMode    string
-	configOverlayID, configOverlayRef, configOverlayDigest, configOverlay            string
-	environmentBindingID, environmentBindingRef, environmentBindingDigest            string
-	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest            string
-	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext  string
-	codexSessionID                                                                   string
-	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration          int64
-	roleRuntimeContractRevision                                                      int64
-	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                int64
-	environmentBindingVersion, runtimeEnvironmentVersion                             int64
-	attempt                                                                          int32
-	capabilities, knowledge                                                          []string
+	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef                      string
+	initiatorRef                                                                          string
+	sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision                    string
+	provider, model, providerAccountID, providerAccountRef                                string
+	providerCredentialID, providerCredentialRef                                           string
+	providerSecretName, providerSecretUID, providerSecretResourceVersion                  string
+	providerCredentialSHA256, instructionRef, instructionDigest, instructions             string
+	turnRef, stableKey, callbackEdgeRef, turnID, agentID                                  string
+	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef            string
+	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest        string
+	roleRuntimeContractSHA256                                                             string
+	runtimeConfigID, runtimeConfigRef, runtimeConfigDigest                                string
+	providerPolicyID, providerPolicyRef, providerPolicyDigest, providerPolicyMode         string
+	configOverlayID, configOverlayRef, configOverlayDigest, configOverlay                 string
+	environmentBindingID, environmentBindingRef, environmentBindingDigest                 string
+	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                 string
+	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext       string
+	codexSessionID                                                                        string
+	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration               int64
+	roleRuntimeContractRevision                                                           int64
+	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                     int64
+	environmentBindingVersion, runtimeEnvironmentVersion                                  int64
+	attempt                                                                               int32
+	capabilities, knowledge                                                               []string
 	rawInput, rawAttachmentSets, rawArtifacts, rawIntegrationGrants, rawDelegationTargets []byte
-	rawSessionContext                                                                []byte
-	rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools                  []byte
-	rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy, rawKubernetesAccessProfile []byte
-	resourcesDigest, volumesDigest, networkDigest, rbacDigest                        string
+	rawSessionContext                                                                     []byte
+	rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools                       []byte
+	rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy, rawKubernetesAccessProfile      []byte
+	resourcesDigest, volumesDigest, networkDigest, rbacDigest                             string
 }
 
 func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -514,7 +514,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"knowledgeArtifactRefs": knowledge, "artifacts": artifacts,
 			"attachmentSetRef": inputAttachmentSetRef, "attachmentSetManifestDigest": inputAttachmentSetManifestDigest,
 			"attachmentContext": inputAttachmentContext,
-			"attachmentSets": attachmentSets,
+			"attachmentSets":    attachmentSets,
 			"delegationTargets": delegationTargets,
 			"callbackEdgeRef":   callbackEdgeRef, "sessionContext": sessionContext,
 			"input": inputMap, "inputDigest": hex.EncodeToString(inputDigest[:]),
@@ -688,6 +688,14 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	var lockedRootID string
 	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionLockRootRun, lease["rootRunID"]).Scan(&lockedRootID); err != nil || lockedRootID != stringMap(lease, "rootRunID") {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if !payload.Success && payload.SafeErrorCode == "PROVIDER_AUTH_REJECTED" {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionMarkProviderReauthorizationRequired, pgx.StrictNamedArgs{
+			"organization_id":     scope.organizationID,
+			"runtime_revision_id": lease["runtimeRevisionID"],
+		}); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 	}
 	if len(payload.Artifacts) > 0 {
 		var allowed bool

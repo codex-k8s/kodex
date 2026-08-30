@@ -194,15 +194,14 @@ describe("files model", () => {
           artifactVersion: 1,
           attachmentCount: 1,
           bindingCount: 1,
-          blockers: ["ACTIVE_RUN_USES_ARTIFACT"],
+          blockers: [],
           impactDigest: "b".repeat(64),
-          permitted: false,
+          permitted: true,
         },
       ),
     ).toMatchObject({
       action: "DELETE",
-      available: false,
-      reason: "IMPACT_BLOCKED",
+      available: true,
     });
     expect(
       artifactLifecycleAnnounced(

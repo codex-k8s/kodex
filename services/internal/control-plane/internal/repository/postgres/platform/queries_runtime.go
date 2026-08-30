@@ -39,6 +39,8 @@ var (
 	queryRuntimeCompleteexecutionSelectAgentCapability string
 	//go:embed sql/runtime_completeexecution_lock_root_run.sql
 	queryRuntimeCompleteexecutionLockRootRun string
+	//go:embed sql/runtime_completeexecution_mark_provider_reauthorization_required.sql
+	queryRuntimeCompleteexecutionMarkProviderReauthorizationRequired string
 	//go:embed sql/runtime_completeexecution_update_run_usage.sql
 	queryRuntimeCompleteexecutionUpdateRunUsage string
 	//go:embed sql/runtime_completeexecution_update_root_usage.sql

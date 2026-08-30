@@ -113,7 +113,7 @@ async function render(): Promise<string> {
           automations: { title: "Автоматизации" },
           runtime: { environmentsTitle: "Окружения" },
           workboard: {
-            projectCollections: "Разделы Проекта",
+            projectCollections: "Ресурсы Проекта",
             resourceCount: "Всего: {count}",
             openCurrentWork: "Открыть текущую работу",
             openDecisions: "Открыть ожидающие решения",

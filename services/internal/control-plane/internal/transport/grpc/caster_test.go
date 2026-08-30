@@ -172,15 +172,21 @@ func TestCastConversationUsesPublicAssistantTurnShape(t *testing.T) {
 
 	conversation := castConversation(entity.AssistantConversation{
 		Ref: "cnv-example", ProjectRef: "prj-example",
+		Turns: []entity.AssistantTurn{{
+			Ref: "trn-example", Actor: "SYSTEM_ASSISTANT", Content: "План подготовлен", State: "COMPLETED",
+		}},
 		LatestPlan: &entity.AssistantPlan{
 			Ref: "pln-example", ConversationRef: "cnv-example", ProjectRef: "prj-example",
 			State: "DRAFT", Summary: "План готов", Version: 1, Revision: 1,
 		},
 	})
-	if len(conversation.GetTurns()) != 1 {
-		t.Fatalf("assistant plan turn count = %d, want 1", len(conversation.GetTurns()))
+	if len(conversation.GetTurns()) != 2 {
+		t.Fatalf("assistant turn count = %d, want 2", len(conversation.GetTurns()))
 	}
-	turn := conversation.GetTurns()[0]
+	if turn := conversation.GetTurns()[0]; turn.GetRole() != "ASSISTANT" || turn.GetContent() != "План подготовлен" {
+		t.Fatalf("system assistant turn leaked internal role: %#v", turn)
+	}
+	turn := conversation.GetTurns()[1]
 	if turn.GetRole() != "ASSISTANT" || turn.GetState() != "COMPLETED" {
 		t.Fatalf("assistant plan turn = role %q state %q", turn.GetRole(), turn.GetState())
 	}

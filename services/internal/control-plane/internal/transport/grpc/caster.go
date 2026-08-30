@@ -598,12 +598,23 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 		TitleSource: value.TitleSource, TitleRevision: value.TitleRevision, ProjectRef: value.ProjectRef,
 		Context: context, UpdatedAt: timestamp(value.UpdatedAt)}
 	for index, turn := range value.Turns {
-		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: int64(index + 1), Role: turn.Actor, Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, CreatedAt: timestamp(turn.CreatedAt)})
+		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: int64(index + 1), Role: publicAssistantTurnRole(turn.Actor), Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, CreatedAt: timestamp(turn.CreatedAt)})
 	}
 	if value.LatestPlan != nil {
 		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: value.LatestPlan.Ref, Sequence: int64(len(result.Turns) + 1), Role: "ASSISTANT", Content: value.LatestPlan.Summary, State: "COMPLETED", Plan: castPlan(value.LatestPlan), CreatedAt: timestamp(value.LatestPlan.CreatedAt)})
 	}
 	return result
+}
+
+func publicAssistantTurnRole(role string) string {
+	switch role {
+	case "USER", "ASSISTANT", "SYSTEM_RECEIPT":
+		return role
+	case "SYSTEM_ASSISTANT":
+		return "ASSISTANT"
+	default:
+		return "SYSTEM_RECEIPT"
+	}
 }
 
 func castPlanReceipt(value *entity.AssistantPlanReceipt) *controlplanev1.AssistantPlanReceipt {

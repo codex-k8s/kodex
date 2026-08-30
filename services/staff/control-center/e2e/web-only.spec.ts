@@ -910,7 +910,7 @@ test.describe("web-only fresh installation", () => {
       const imageOption = imagePicker.getByRole("option").first();
       await expect(imageOption).toBeVisible();
       await imageOption.click();
-      await page.getByRole("button", { name: "Переменные" }).click();
+      await page.getByRole("tab", { name: "Переменные", exact: true }).click();
       await page.getByRole("button", { name: "Добавить переменную" }).click();
       await page.getByLabel("Имя переменной").fill("E2E_MODE");
       await page.getByLabel("Несекретное значение").fill("redesign");
@@ -925,7 +925,7 @@ test.describe("web-only fresh installation", () => {
       await expect(page).toHaveURL(/\/environments\/[^/]+$/);
       runtimeEnvironmentRef = routeRef(page, "environments");
       persistRefs();
-      await page.getByRole("button", { name: "Переменные" }).click();
+      await page.getByRole("tab", { name: "Переменные", exact: true }).click();
       await expect(page.getByLabel("Имя переменной")).toHaveValue("E2E_MODE");
     }
 
@@ -1341,9 +1341,11 @@ test.describe("web-only fresh installation", () => {
     await expect(artifactOption).toHaveAttribute("aria-selected", "true");
     await filePicker.locator(".overlay-panel__footer .button--primary").click();
     await expect(filePicker).toHaveCount(0);
-    await expect(page.locator(".selected-file")).toContainText(
-      uploadedFileName,
-    );
+    await expect(
+      page
+        .getByRole("region", { name: /Входные файлы/ })
+        .getByText(uploadedFileName, { exact: true }),
+    ).toBeVisible();
 
     const sessionReadback = await page.evaluate(
       async ({ initialRef, continuedRef }) => {
@@ -1485,11 +1487,18 @@ test.describe("web-only fresh installation", () => {
       await dialog.getByLabel("Название").fill(automationName);
       await dialog.getByLabel("Тип цели").selectOption("AGENT");
       await dialog.getByRole("button", { name: "Цель", exact: true }).click();
-      const targetPicker = dialog.getByRole("dialog", {
+      const targetPicker = page.getByRole("dialog", {
         name: "Цель",
         exact: true,
       });
-      await targetPicker.getByRole("combobox").fill(analystName);
+      await expect(targetPicker).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(targetPicker).toHaveCount(0);
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole("button", { name: "Цель", exact: true }).click();
+      await targetPicker
+        .getByRole("combobox", { name: "Выберите цель" })
+        .fill(analystName);
       await targetPicker
         .getByRole("option", { name: new RegExp(analystName) })
         .click();
@@ -1799,6 +1808,7 @@ test.describe("web-only fresh installation", () => {
         `В текущем Проекте создай ровно один Процесс с точным названием «${workflowName}».`,
         `Назначение: параллельно оценить лид и подготовить предложение с решением владельца. Координатор — существующий сотрудник «${coordinatorName}».`,
         `Добавь ровно два независимых параллельных этапа в одной группе: «Оценка лида» выполняет существующий сотрудник «${analystName}» с заданием оценить исходные данные лида и вернуть структурированный вывод; «Коммерческое предложение» выполняет существующий сотрудник «${writerName}» с заданием подготовить черновик предложения только по исходным данным лида. Ни один параллельный этап не должен ожидать результат другого.`,
+        "Добавь обязательное LONG_TEXT поле входных данных с точным названием «Исходные данные лида».",
         "Для второго этапа требуется решение человека с вариантами APPROVE, REJECT и REQUEST_CHANGES. Максимальная параллельность — 2, timeout Процесса — 7200 секунд.",
         "Не создавай и не меняй сотрудников, не запускай Процесс и не создавай другие объекты.",
       ].join(" ");
@@ -1866,8 +1876,23 @@ test.describe("web-only fresh installation", () => {
           "Квалифицируй лид производственной компании и подготовь предложение. После завершения этапов и предусмотренного Процессом решения владельца собери итоговый ответ.",
         );
       await page
+        .getByLabel("Исходные данные лида")
+        .fill(
+          "Компания: производственное предприятие; потребность: автоматизация продаж.",
+        );
+      const launchResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname === "/api/v1/runs",
+      );
+      await page
         .getByRole("button", { name: "Запустить", exact: true })
         .click();
+      const launched = await launchResponse;
+      expect(
+        launched.status(),
+        await mutationFailureDiagnostic(launched, page),
+      ).toBe(201);
       await expect
         .poll(() => routeRef(page, "runs"), { timeout: 30_000 })
         .not.toBe("new");
@@ -2992,6 +3017,29 @@ async function deleteArtifactAtVersion(
         .find((part) => part.startsWith(prefix))
         ?.slice(prefix.length);
       if (!csrf) throw new Error("CSRF token is unavailable");
+      const impactResponse = await fetch(
+        `/api/v1/artifacts/${encodeURIComponent(ref)}/impact?action=DELETE`,
+      );
+      if (!impactResponse.ok) {
+        throw new Error(
+          `artifact impact failed: ${String(impactResponse.status)} ${await impactResponse.text()}`,
+        );
+      }
+      const impact = (await impactResponse.json()) as {
+        artifactRef: string;
+        artifactVersion: number;
+        impactDigest: string;
+        permitted: boolean;
+      };
+      if (
+        !impact.permitted ||
+        impact.artifactRef !== ref ||
+        impact.artifactVersion !== expectedVersion
+      ) {
+        throw new Error(
+          `artifact impact does not permit delete: ${JSON.stringify(impact)}`,
+        );
+      }
       const response = await fetch(
         `/api/v1/artifacts/${encodeURIComponent(ref)}`,
         {
@@ -2999,12 +3047,15 @@ async function deleteArtifactAtVersion(
           headers: {
             "Idempotency-Key": crypto.randomUUID(),
             "If-Match": `"${String(expectedVersion)}"`,
+            "X-Impact-Digest": impact.impactDigest,
             "X-CSRF-Token": decodeURIComponent(csrf),
           },
         },
       );
       if (!response.ok) {
-        throw new Error(`artifact delete failed: ${String(response.status)}`);
+        throw new Error(
+          `artifact delete failed: ${String(response.status)} ${await response.text()}`,
+        );
       }
       return (await response.json()) as ArtifactReadback;
     },

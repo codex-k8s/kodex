@@ -67,7 +67,7 @@ describe("FileLifecycleDialog", () => {
           },
           state: {
             action: "DELETE",
-            available: false,
+            available: true,
             impact: {
               action: "DELETE",
               activeRuns: [
@@ -84,11 +84,10 @@ describe("FileLifecycleDialog", () => {
               artifactVersion: artifact.version,
               attachmentCount: 1,
               bindingCount: 1,
-              blockers: ["ACTIVE_RUN_USES_ARTIFACT"],
+              blockers: [],
               impactDigest: "b".repeat(64),
-              permitted: false,
+              permitted: true,
             },
-            reason: "IMPACT_BLOCKED",
           },
         }),
     });
@@ -121,7 +120,7 @@ describe("FileLifecycleDialog", () => {
     expect(html).toContain("Проверка договора");
     expect(html).toContain("Открыть и отменить");
     expect(html).toContain("/projects/project_sales/runs/run_contract_review");
-    expect(html).toContain("disabled");
+    expect(html).not.toContain("disabled");
     expect(html).not.toContain("ACTIVE_RUN_USES_ARTIFACT");
   });
 });

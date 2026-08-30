@@ -75,6 +75,14 @@ const panelStyle = computed<CSSProperties>(() => ({
     ? { width: `${anchor.value.getBoundingClientRect().width.toString()}px` }
     : {}),
 }));
+const teleportTarget = computed<string | HTMLElement>(() => {
+  if (props.teleportTo !== "body" || typeof document === "undefined")
+    return props.teleportTo;
+  return (
+    anchor.value?.closest<HTMLElement>('[role="dialog"][aria-modal="true"]') ??
+    document.body
+  );
+});
 
 function updatePosition(): void {
   if (!props.open || !anchor.value || !panel.value) return;
@@ -124,6 +132,7 @@ function handlePointerDown(event: PointerEvent): void {
 function handleKeydown(event: KeyboardEvent): void {
   if (!props.open || event.key !== "Escape" || !props.closeOnEscape) return;
   event.preventDefault();
+  event.stopPropagation();
   requestClose("escape");
 }
 
@@ -193,7 +202,7 @@ onBeforeUnmount(() => {
   >
     <slot name="trigger" :open="open" :toggle="toggle" :attrs="triggerAttrs" />
   </span>
-  <Teleport :to="teleportTo">
+  <Teleport :to="teleportTarget">
     <div
       v-if="open"
       :id="popoverId"
