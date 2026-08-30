@@ -48,18 +48,9 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
 	objectKey := artifactObjectKey(scope.organizationRef, scope.actorRef, input.ProjectRef, ref, input.Digest)
-	contentDigest := sha256.New()
-	stream := &countingReader{reader: io.TeeReader(input.Reader, contentDigest)}
-	objectReceipt, err := repository.objects.Put(ctx, objectstorage.PutInput{
-		Key: objectKey, MediaType: input.MediaType, Digest: input.Digest,
-		SizeBytes: input.SizeBytes, Body: stream,
-	})
+	objectReceipt, err := repository.putArtifactObject(ctx, objectKey, input)
 	if err != nil {
-		return entity.Artifact{}, mapObjectStorageError(err)
-	}
-	if stream.read != input.SizeBytes || "sha256:"+hex.EncodeToString(contentDigest.Sum(nil)) != input.Digest {
-		repository.cleanupPreparedObjects(ctx, []objectstorage.Receipt{objectReceipt}, false)
-		return entity.Artifact{}, errs.ErrConflict
+		return entity.Artifact{}, err
 	}
 	keepObject := false
 	defer func() {
@@ -167,15 +158,44 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	return item, nil
 }
 
-type countingReader struct {
-	reader io.Reader
-	read   int64
+func (repository *Repository) putArtifactObject(
+	ctx context.Context,
+	objectKey string,
+	input platformrepo.ArtifactUpload,
+) (objectstorage.Receipt, error) {
+	if _, err := input.Reader.Seek(0, io.SeekStart); err != nil {
+		return objectstorage.Receipt{}, errs.ErrInvalid
+	}
+	receipt, err := repository.objects.Put(ctx, objectstorage.PutInput{
+		Key: objectKey, MediaType: input.MediaType, Digest: input.Digest,
+		SizeBytes: input.SizeBytes, Body: input.Reader,
+	})
+	if err != nil {
+		return objectstorage.Receipt{}, mapObjectStorageError(err)
+	}
+	if err := verifyArtifactReader(input.Reader, input.SizeBytes, input.Digest); err != nil {
+		repository.cleanupPreparedObjects(ctx, []objectstorage.Receipt{receipt}, false)
+		return objectstorage.Receipt{}, err
+	}
+	return receipt, nil
 }
 
-func (reader *countingReader) Read(target []byte) (int, error) {
-	count, err := reader.reader.Read(target)
-	reader.read += int64(count)
-	return count, err
+func verifyArtifactReader(reader platformrepo.ArtifactReader, sizeBytes int64, digest string) error {
+	if _, err := reader.Seek(0, io.SeekStart); err != nil {
+		return errs.ErrUnavailable
+	}
+	contentDigest := sha256.New()
+	read, err := io.Copy(contentDigest, io.LimitReader(reader, maximumArtifactBytes+1))
+	if _, seekErr := reader.Seek(0, io.SeekStart); seekErr != nil {
+		return errs.ErrUnavailable
+	}
+	if err != nil {
+		return errs.ErrUnavailable
+	}
+	if read != sizeBytes || "sha256:"+hex.EncodeToString(contentDigest.Sum(nil)) != digest {
+		return errs.ErrConflict
+	}
+	return nil
 }
 
 func (repository *Repository) preflightArtifactUpload(

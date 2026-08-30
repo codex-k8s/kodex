@@ -9,6 +9,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
 	github.com/codex-k8s/kodex/libs/go/eventing v0.0.0
 	github.com/codex-k8s/kodex/libs/go/i18n v0.0.0
+	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcverifier v0.0.0
 	github.com/codex-k8s/kodex/libs/go/secretbrokerapi v0.0.0
@@ -29,7 +30,6 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0 // indirect
-	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/oidcidentity v0.0.0 // indirect
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/getsentry/sentry-go v0.48.0 // indirect

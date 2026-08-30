@@ -26,23 +26,14 @@ func (repository *Repository) syncOIDCGroups(ctx context.Context, tx pgx.Tx, org
 	if input.ExternalSessionRevision == 0 {
 		return nil
 	}
-	if input.ExternalIssuer == "" || len(input.ExternalGroups) > 100 {
-		return errs.ErrForbidden
+	desiredGroups, err := normalizedOIDCGroups(input)
+	if err != nil {
+		return err
 	}
-	desiredGroups := make([]string, 0, len(input.ExternalGroups))
-	seen := make(map[string]struct{}, len(input.ExternalGroups))
-	for _, groupName := range input.ExternalGroups {
-		groupName = strings.TrimSpace(groupName)
-		if groupName == "" || len([]rune(groupName)) > 200 || strings.ContainsAny(groupName, "\r\n\x00") {
-			return errs.ErrForbidden
-		}
-		if _, duplicate := seen[groupName]; duplicate {
-			continue
-		}
-		seen[groupName] = struct{}{}
-		desiredGroups = append(desiredGroups, groupName)
+	matches, err := repository.oidcGroupsMatch(ctx, tx, organizationID, subjectID, input.ExternalSessionRevision, desiredGroups)
+	if err != nil || matches {
+		return err
 	}
-	sort.Strings(desiredGroups)
 	var locked int
 	if err := tx.QueryRow(ctx, queryAccessSyncLockSubject, pgx.NamedArgs{
 		"organization_id": organizationID, "subject_id": subjectID,
@@ -51,33 +42,9 @@ func (repository *Repository) syncOIDCGroups(ctx context.Context, tx pgx.Tx, org
 	} else if err != nil || locked != 1 {
 		return errs.ErrUnavailable
 	}
-	rows, err := tx.Query(ctx, queryAccessSyncListMemberships, pgx.NamedArgs{
-		"organization_id": organizationID, "subject_id": subjectID,
-	})
-	if err != nil {
-		return errs.ErrUnavailable
-	}
-	currentGroups := make([]string, 0, len(desiredGroups))
-	currentRevision := input.ExternalSessionRevision
-	for rows.Next() {
-		var groupName string
-		var sessionRevision uint64
-		if err := rows.Scan(&groupName, &sessionRevision); err != nil {
-			rows.Close()
-			return errs.ErrUnavailable
-		}
-		currentGroups = append(currentGroups, groupName)
-		if sessionRevision != input.ExternalSessionRevision {
-			currentRevision = 0
-		}
-	}
-	if rows.Err() != nil {
-		rows.Close()
-		return errs.ErrUnavailable
-	}
-	rows.Close()
-	if currentRevision == input.ExternalSessionRevision && slicesEqual(currentGroups, desiredGroups) {
-		return nil
+	matches, err = repository.oidcGroupsMatch(ctx, tx, organizationID, subjectID, input.ExternalSessionRevision, desiredGroups)
+	if err != nil || matches {
+		return err
 	}
 	if _, err := tx.Exec(ctx, queryAccessSyncReplaceMemberships, pgx.NamedArgs{
 		"organization_id": organizationID, "subject_id": subjectID,
@@ -106,6 +73,62 @@ func (repository *Repository) syncOIDCGroups(ctx context.Context, tx pgx.Tx, org
 		}
 	}
 	return nil
+}
+
+func normalizedOIDCGroups(input platformrepo.ProofPrincipalInput) ([]string, error) {
+	if input.ExternalIssuer == "" || len(input.ExternalGroups) > 100 {
+		return nil, errs.ErrForbidden
+	}
+	desiredGroups := make([]string, 0, len(input.ExternalGroups))
+	seen := make(map[string]struct{}, len(input.ExternalGroups))
+	for _, groupName := range input.ExternalGroups {
+		groupName = strings.TrimSpace(groupName)
+		if groupName == "" || len([]rune(groupName)) > 200 || strings.ContainsAny(groupName, "\r\n\x00") {
+			return nil, errs.ErrForbidden
+		}
+		if _, duplicate := seen[groupName]; duplicate {
+			continue
+		}
+		seen[groupName] = struct{}{}
+		desiredGroups = append(desiredGroups, groupName)
+	}
+	sort.Strings(desiredGroups)
+	return desiredGroups, nil
+}
+
+func (repository *Repository) oidcGroupsMatch(
+	ctx context.Context,
+	tx pgx.Tx,
+	organizationID, subjectID string,
+	sessionRevision uint64,
+	desiredGroups []string,
+) (bool, error) {
+	rows, err := tx.Query(ctx, queryAccessSyncListMemberships, pgx.NamedArgs{
+		"organization_id": organizationID, "subject_id": subjectID,
+	})
+	if err != nil {
+		return false, errs.ErrUnavailable
+	}
+	currentGroups := make([]string, 0, len(desiredGroups))
+	currentRevision := sessionRevision
+	for rows.Next() {
+		var groupName string
+		var currentSessionRevision uint64
+		if err := rows.Scan(&groupName, &currentSessionRevision); err != nil {
+			rows.Close()
+			return false, errs.ErrUnavailable
+		}
+		currentGroups = append(currentGroups, groupName)
+		if currentSessionRevision != sessionRevision {
+			currentRevision = 0
+		}
+	}
+	if rows.Err() != nil {
+		rows.Close()
+		return false, errs.ErrUnavailable
+	}
+	rows.Close()
+	return currentRevision == sessionRevision && slicesEqual(currentGroups, desiredGroups), nil
 }
 
 func slicesEqual(left, right []string) bool {

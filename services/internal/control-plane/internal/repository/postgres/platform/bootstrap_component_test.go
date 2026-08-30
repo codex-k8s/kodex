@@ -546,6 +546,25 @@ func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, reposito
 	`, owner.ActorID, groupedOwner.ExternalGroups[0], groupedOwner.ExternalSessionRevision).Scan(&synchronizedMemberships); err != nil || synchronizedMemberships != 1 {
 		t.Fatalf("concurrent OIDC group synchronization readback: memberships=%d err=%v", synchronizedMemberships, err)
 	}
+	blocker, err := repository.pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin unchanged OIDC group blocker: %v", err)
+	}
+	if _, err := blocker.Exec(ctx, `
+		UPDATE control_plane.subjects SET updated_at = updated_at WHERE id = $1::uuid
+	`, owner.ActorID); err != nil {
+		_ = blocker.Rollback(ctx)
+		t.Fatalf("lock unchanged OIDC subject: %v", err)
+	}
+	fastPathContext, cancelFastPath := context.WithTimeout(ctx, 750*time.Millisecond)
+	_, fastPathErr := repository.ResolveProofAuthority(fastPathContext, groupedOwner)
+	cancelFastPath()
+	if rollbackErr := blocker.Rollback(ctx); rollbackErr != nil {
+		t.Fatalf("release unchanged OIDC group blocker: %v", rollbackErr)
+	}
+	if fastPathErr != nil {
+		t.Fatalf("unchanged OIDC groups waited for subject lock: %v", fastPathErr)
+	}
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatalf("construct enterprise access service: %v", err)

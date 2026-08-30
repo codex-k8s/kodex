@@ -2,9 +2,11 @@ package httptransport
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
@@ -39,6 +41,11 @@ func writeRPCProblem(writer http.ResponseWriter, err error) {
 		statusCode, name = http.StatusConflict, "STATE_CONFLICT"
 	case codes.ResourceExhausted:
 		statusCode, name, retryable = http.StatusTooManyRequests, "RATE_LIMITED", true
+	case codes.Canceled:
+		var localAuthorityFailure *authorityclient.LocalAuthorityError
+		if errors.As(err, &localAuthorityFailure) {
+			statusCode, name, retryable = http.StatusServiceUnavailable, "UNAVAILABLE", true
+		}
 	case codes.Unavailable:
 		statusCode, name, retryable = http.StatusServiceUnavailable, "UNAVAILABLE", true
 	case codes.DeadlineExceeded:

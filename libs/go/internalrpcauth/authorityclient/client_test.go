@@ -27,6 +27,11 @@ type fakeVerifier struct {
 	request  *internalrpcauthorityv1.VerifyAuthorizationContextRequest
 }
 
+type fakeIssuer struct {
+	response *internalrpcauthorityv1.IssueAuthorizationContextResponse
+	calls    int
+}
+
 type fakeOperationResolver map[string]string
 
 func (resolver fakeOperationResolver) OperationID(fullMethod string) (string, bool) {
@@ -37,6 +42,29 @@ func (resolver fakeOperationResolver) OperationID(fullMethod string) (string, bo
 type failingProofProvider struct {
 	err           error
 	correlationID string
+}
+
+type scriptedProofProvider struct {
+	errors          []error
+	calls           int
+	retryWasBounded bool
+}
+
+func (provider *scriptedProofProvider) AuthorityProof(
+	ctx context.Context,
+	_, _ string,
+) (string, string, error) {
+	provider.calls++
+	if provider.calls == 2 {
+		deadline, ok := ctx.Deadline()
+		remaining := time.Until(deadline)
+		provider.retryWasBounded = ok && remaining > 0 && remaining <= proofRetryTimeout
+	}
+	index := provider.calls - 1
+	if index < len(provider.errors) && provider.errors[index] != nil {
+		return "", "correlation", provider.errors[index]
+	}
+	return "proof", "correlation", nil
 }
 
 func (provider failingProofProvider) AuthorityProof(
@@ -54,6 +82,23 @@ func (verifier *fakeVerifier) VerifyAuthorizationContext(
 ) (*internalrpcauthorityv1.VerifyAuthorizationContextResponse, error) {
 	verifier.request = request
 	return verifier.response, nil
+}
+
+func (issuer *fakeIssuer) IssueAuthorizationContext(
+	context.Context,
+	*internalrpcauthorityv1.IssueAuthorizationContextRequest,
+	...grpc.CallOption,
+) (*internalrpcauthorityv1.IssueAuthorizationContextResponse, error) {
+	issuer.calls++
+	return issuer.response, nil
+}
+
+func (*fakeIssuer) CheckReadiness(
+	context.Context,
+	*internalrpcauthorityv1.AuthorizationIssuerServiceCheckReadinessRequest,
+	...grpc.CallOption,
+) (*internalrpcauthorityv1.AuthorizationIssuerServiceCheckReadinessResponse, error) {
+	return nil, nil
 }
 
 func (*fakeVerifier) CheckReadiness(
@@ -140,6 +185,7 @@ func TestIssuerInterceptorClassifiesLocalProofFailure(t *testing.T) {
 	}{
 		{name: "transient", err: status.Error(codes.Unavailable, "private resolver failure"), code: codes.Unavailable},
 		{name: "deadline", err: status.Error(codes.DeadlineExceeded, "private resolver failure"), code: codes.DeadlineExceeded},
+		{name: "canceled", err: status.Error(codes.Canceled, "private resolver failure"), code: codes.Canceled},
 		{name: "rejected", err: status.Error(codes.PermissionDenied, "private resolver failure"), code: codes.Unauthenticated},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -163,6 +209,80 @@ func TestIssuerInterceptorClassifiesLocalProofFailure(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthorityProofRetriesOneBoundedTransientAttempt(t *testing.T) {
+	t.Parallel()
+
+	for _, code := range []codes.Code{codes.Canceled, codes.DeadlineExceeded, codes.Unavailable} {
+		t.Run(code.String(), func(t *testing.T) {
+			provider := &scriptedProofProvider{errors: []error{status.Error(code, "transient")}}
+			proof, _, err := authorityProofWithRetry(t.Context(), provider, "operation", "/example.v1.Service/Method")
+			if err != nil || proof != "proof" || provider.calls != 2 || !provider.retryWasBounded {
+				t.Fatalf("proof retry: proof=%q err=%v calls=%d bounded=%t", proof, err, provider.calls, provider.retryWasBounded)
+			}
+		})
+	}
+}
+
+func TestAuthorityProofStopsAfterSecondTransientFailure(t *testing.T) {
+	t.Parallel()
+
+	provider := &scriptedProofProvider{errors: []error{
+		status.Error(codes.Canceled, "first transient"),
+		status.Error(codes.Unavailable, "second transient"),
+	}}
+	_, _, err := authorityProofWithRetry(t.Context(), provider, "operation", "/example.v1.Service/Method")
+	if status.Code(err) != codes.Unavailable || provider.calls != 2 || !provider.retryWasBounded {
+		t.Fatalf("second transient result: err=%v calls=%d bounded=%t", err, provider.calls, provider.retryWasBounded)
+	}
+}
+
+func TestIssuerInterceptorOpensDownstreamOnlyAfterSuccessfulProofRetry(t *testing.T) {
+	t.Parallel()
+
+	const method = "/example.v1.Service/Method"
+	provider := &scriptedProofProvider{errors: []error{status.Error(codes.Canceled, "transient")}}
+	issuer := &fakeIssuer{response: &internalrpcauthorityv1.IssueAuthorizationContextResponse{CompactJws: "issued"}}
+	interceptor := IssuerUnaryClientInterceptor(issuer, fakeOperationResolver{method: "example.read"}, provider)
+	invocations := 0
+	err := interceptor(t.Context(), method, nil, nil, nil,
+		func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
+			invocations++
+			return nil
+		},
+	)
+	if err != nil || provider.calls != 2 || issuer.calls != 1 || invocations != 1 {
+		t.Fatalf("interceptor retry: err=%v proof_calls=%d issuer_calls=%d downstream_calls=%d", err, provider.calls, issuer.calls, invocations)
+	}
+}
+
+func TestAuthorityProofDoesNotRetryRejectedOrCanceledRequest(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name string
+		ctx  context.Context
+		err  error
+	}{
+		{name: "permission denied", ctx: t.Context(), err: status.Error(codes.PermissionDenied, "rejected")},
+		{name: "unauthenticated", ctx: t.Context(), err: status.Error(codes.Unauthenticated, "rejected")},
+		{name: "request canceled", ctx: canceledContext(), err: status.Error(codes.Canceled, "request canceled")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			provider := &scriptedProofProvider{errors: []error{test.err}}
+			_, _, _ = authorityProofWithRetry(test.ctx, provider, "operation", "/example.v1.Service/Method")
+			if provider.calls != 1 {
+				t.Fatalf("non-retryable proof calls = %d, want 1", provider.calls)
+			}
+		})
+	}
+}
+
+func canceledContext() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return ctx
 }
 
 func testCertificate(t *testing.T) *x509.Certificate {
