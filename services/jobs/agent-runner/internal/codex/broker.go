@@ -46,6 +46,12 @@ type brokerResponse struct {
 	OK     bool   `json:"ok"`
 }
 
+type providerAuthenticationSnapshot struct {
+	AuthMode     string          `json:"auth_mode"`
+	OpenAIAPIKey *string         `json:"OPENAI_API_KEY"`
+	Tokens       json.RawMessage `json:"tokens"`
+}
+
 type providerExecutor func(context.Context, model.Input, []byte, string) (Result, error)
 type providerCredentialRefreshCommitter func(context.Context, model.Input, runtimecontract.RunnerProviderCredentialRefreshRequest) error
 
@@ -79,19 +85,20 @@ func validateProviderAuthenticationPayload(auth []byte, expectedSHA256 string) e
 }
 
 func validateProviderAuthentication(auth []byte) error {
+	_, err := providerAuthenticationMode(auth)
+	return err
+}
+
+func providerAuthenticationMode(auth []byte) (string, error) {
 	trimmed := bytes.TrimSpace(auth)
 	if len(auth) == 0 || len(auth) > 1<<20 || len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
-		return ErrProviderAuthentication
+		return "", ErrProviderAuthentication
 	}
-	var snapshot struct {
-		AuthMode     string          `json:"auth_mode"`
-		OpenAIAPIKey *string         `json:"OPENAI_API_KEY"`
-		Tokens       json.RawMessage `json:"tokens"`
-	}
+	var snapshot providerAuthenticationSnapshot
 	if json.Unmarshal(trimmed, &snapshot) != nil || !supportedProviderAuthentication(snapshot.AuthMode, snapshot.OpenAIAPIKey, snapshot.Tokens) {
-		return ErrProviderAuthentication
+		return "", ErrProviderAuthentication
 	}
-	return nil
+	return snapshot.AuthMode, nil
 }
 
 func supportedProviderAuthentication(mode string, apiKey *string, tokens json.RawMessage) bool {
@@ -287,12 +294,18 @@ func readProviderCredentialRefresh(input model.Input, path string) ([]byte, bool
 		clear(authentication)
 		return nil, false, errors.New("refreshed provider authentication content is invalid")
 	}
-	if validateProviderAuthentication(authentication) != nil {
+	mode, modeErr := providerAuthenticationMode(authentication)
+	if modeErr != nil {
 		clear(authentication)
 		return nil, false, errors.New("refreshed provider authentication is invalid")
 	}
 	digest := sha256.Sum256(authentication)
-	return authentication, hex.EncodeToString(digest[:]) != input.ProviderCredentialSHA256, nil
+	changed := hex.EncodeToString(digest[:]) != input.ProviderCredentialSHA256
+	if changed && mode == "apikey" {
+		clear(authentication)
+		return nil, false, errors.New("provider API-key authentication changed unexpectedly")
+	}
+	return authentication, changed, nil
 }
 
 type providerMCPBridge struct {

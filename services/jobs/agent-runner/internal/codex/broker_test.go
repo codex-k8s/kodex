@@ -33,6 +33,30 @@ func TestExecuteProviderTurnSkipsRefreshForUnchangedAPIKey(t *testing.T) {
 	assertRemoved(t, authPath)
 }
 
+func TestExecuteProviderTurnRejectsChangedAPIKeyWithoutRelay(t *testing.T) {
+	original := []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"old-key"}`)
+	changed := []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"new-key"}`)
+	input, authPath := providerTurnFixture(t, original)
+	called := false
+	_, err := executeProviderTurn(context.Background(), input, []byte("task"), strings.Repeat("a", 64),
+		func(context.Context, model.Input, []byte, string) (Result, error) {
+			if err := os.WriteFile(authPath, changed, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			return Result{Outcome: "SUCCEEDED"}, nil
+		}, func(context.Context, model.Input, runtimecontract.RunnerProviderCredentialRefreshRequest) error {
+			called = true
+			return nil
+		})
+	if err == nil || err.Error() != "provider API-key authentication changed unexpectedly" {
+		t.Fatalf("executeProviderTurn() error = %v", err)
+	}
+	if called {
+		t.Fatal("changed API-key authentication reached OAuth credential relay")
+	}
+	assertRemoved(t, authPath)
+}
+
 func TestExecuteProviderTurnCommitsChangedAuthenticationAfterSafeFailure(t *testing.T) {
 	original := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"old","refresh_token":"old"}}`)
 	rotated := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"new","refresh_token":"new"}}`)

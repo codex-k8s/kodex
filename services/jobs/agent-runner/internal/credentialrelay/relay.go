@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	SocketPath          = "/run/kodex/credential-relay/relay.sock"
+	SocketPath          = "/run/kodex/provider-credential-relay/relay.sock"
 	maximumRequestBytes = 2 << 20
 	maximumAckBytes     = 256
 	providerUID         = 10002
@@ -54,10 +54,14 @@ func Commit(ctx context.Context, input model.Input, refresh runtimecontract.Runn
 		return errors.New("provider credential relay is unavailable")
 	}
 	defer connection.Close()
+	uid, err := peerUID(connection)
+	if err != nil || !authorizedRelayUID(uid) {
+		return errors.New("provider credential relay peer is unauthorized")
+	}
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = connection.SetDeadline(deadline)
 	}
-	if _, err := connection.Write(raw); err != nil {
+	if err := writeFull(connection, raw); err != nil {
 		return errors.New("write provider credential relay request")
 	}
 	unixConnection, ok := connection.(*net.UnixConn)
@@ -189,6 +193,24 @@ func peerUID(connection net.Conn) (uint32, error) {
 
 func authorizedProviderUID(uid uint32) bool {
 	return uid == providerUID
+}
+
+func authorizedRelayUID(uid uint32) bool {
+	return uid == relayUID
+}
+
+func writeFull(writer io.Writer, payload []byte) error {
+	for len(payload) > 0 {
+		written, err := writer.Write(payload)
+		if err != nil {
+			return err
+		}
+		if written <= 0 || written > len(payload) {
+			return io.ErrShortWrite
+		}
+		payload = payload[written:]
+	}
+	return nil
 }
 
 func decodeEOF(decoder *json.Decoder) bool {

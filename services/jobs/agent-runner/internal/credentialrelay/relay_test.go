@@ -3,6 +3,8 @@ package credentialrelay
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -41,6 +43,26 @@ func TestPeerUIDReadsUnixPeerAndAuthorizationAllowsOnlyProvider(t *testing.T) {
 	}
 	if !authorizedProviderUID(providerUID) || authorizedProviderUID(10001) || authorizedProviderUID(relayUID) {
 		t.Fatal("provider relay accepted a non-provider peer UID")
+	}
+	if !authorizedRelayUID(relayUID) || authorizedRelayUID(providerUID) || authorizedRelayUID(10001) {
+		t.Fatal("provider client accepted a non-relay peer UID")
+	}
+}
+
+func TestWriteFullHandlesPartialWrites(t *testing.T) {
+	want := bytes.Repeat([]byte("credential-relay-payload"), 1024)
+	writer := &partialWriter{maximum: 7}
+	if err := writeFull(writer, want); err != nil {
+		t.Fatalf("writeFull() error = %v", err)
+	}
+	if !bytes.Equal(writer.buffer.Bytes(), want) || writer.calls < 2 {
+		t.Fatalf("writeFull() calls = %d, bytes = %d", writer.calls, writer.buffer.Len())
+	}
+}
+
+func TestWriteFullRejectsZeroLengthWrite(t *testing.T) {
+	if err := writeFull(zeroWriter{}, []byte("payload")); !errors.Is(err, io.ErrShortWrite) {
+		t.Fatalf("writeFull() error = %v", err)
 	}
 }
 
@@ -106,3 +128,21 @@ func validRelayFixture() (model.Input, request) {
 	}}
 	return input, payload
 }
+
+type partialWriter struct {
+	buffer  bytes.Buffer
+	maximum int
+	calls   int
+}
+
+func (writer *partialWriter) Write(payload []byte) (int, error) {
+	writer.calls++
+	if len(payload) > writer.maximum {
+		payload = payload[:writer.maximum]
+	}
+	return writer.buffer.Write(payload)
+}
+
+type zeroWriter struct{}
+
+func (zeroWriter) Write([]byte) (int, error) { return 0, nil }
