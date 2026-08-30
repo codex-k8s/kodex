@@ -97,7 +97,7 @@ async function openKodex(page: Page, newConversation = false): Promise<void> {
   const created = await creation;
   expect(created.status(), await created.text()).toBe(201);
   const conversation = (await created.json()) as { ref?: string };
-  expect(conversation.ref).toMatch(/^aconv_[A-Za-z0-9_-]+$/);
+  expect(conversation.ref).toMatch(/^cnv_[A-Za-z0-9_-]+$/);
   await expect(dialog).toHaveAttribute(
     "data-conversation-ref",
     conversation.ref ?? "",
@@ -307,7 +307,9 @@ async function exerciseAttachmentComposer(
       failedItem.locator(".attachment-composer__ready"),
     ).toBeVisible();
     await failedItem
-      .getByRole("button", { name: `Убрать файл «${failedName}»` })
+      .getByRole("button", {
+        name: `Убрать загруженный файл «${failedName}» из вложений`,
+      })
       .click();
     await expect(failedItem).toHaveCount(0);
   } finally {
@@ -344,7 +346,9 @@ async function exerciseAttachmentComposer(
     droppedItem.locator(".attachment-composer__ready"),
   ).toBeVisible();
   await droppedItem
-    .getByRole("button", { name: `Убрать файл «${droppedName}»` })
+    .getByRole("button", {
+      name: `Убрать загруженный файл «${droppedName}» из вложений`,
+    })
     .click();
   await expect(droppedItem).toHaveCount(0);
 
@@ -612,14 +616,13 @@ test.describe("web-only fresh installation", () => {
       continuationResponse.status(),
       await mutationFailureDiagnostic(continuationResponse, page),
     ).toBe(201);
-    const continuationRequest = continuationResponse
-      .request()
-      .postDataJSON() as {
-      artifactRefs?: string[];
-    };
-    expect(continuationRequest.artifactRefs).toEqual([
-      continuationAttachment.ref,
-    ]);
+    const continuationAttachmentSet = await readRequestAttachmentSet(
+      page,
+      continuationResponse,
+    );
+    expect(
+      continuationAttachmentSet.items.map((item) => item.artifactRef),
+    ).toEqual([continuationAttachment.ref]);
     const continuationWorkspace = (await continuationResponse.json()) as {
       run?: { ref?: string };
     };
@@ -1411,10 +1414,8 @@ test.describe("web-only fresh installation", () => {
       launched.status(),
       await mutationFailureDiagnostic(launched, page),
     ).toBe(201);
-    const launchRequest = launched.request().postDataJSON() as {
-      artifactRefs?: string[];
-    };
-    expect(launchRequest.artifactRefs).toEqual(
+    const launchAttachmentSet = await readRequestAttachmentSet(page, launched);
+    expect(launchAttachmentSet.items.map((item) => item.artifactRef)).toEqual(
       expect.arrayContaining([uploadedArtifactRef, newRunAttachment.ref]),
     );
     await expectRunState(page, /В очереди|Выполняется/);
@@ -2018,10 +2019,13 @@ test.describe("web-only fresh installation", () => {
       .click();
     const resolved = await resolutionResponse;
     expect(resolved.status(), await resolved.text()).toBe(200);
-    const resolutionRequest = resolved.request().postDataJSON() as {
-      artifactRefs?: string[];
-    };
-    expect(resolutionRequest.artifactRefs).toEqual([evidence.ref]);
+    const resolutionAttachmentSet = await readRequestAttachmentSet(
+      page,
+      resolved,
+    );
+    expect(
+      resolutionAttachmentSet.items.map((item) => item.artifactRef),
+    ).toEqual([evidence.ref]);
     const resolvedGate = (await resolved.json()) as {
       gate?: { artifactRefs?: string[]; state?: string };
     };
@@ -2829,11 +2833,56 @@ interface ArtifactReadback {
   readonly version: number;
 }
 
+interface AttachmentSetReadback {
+  readonly items: Array<{
+    readonly artifactRef: string;
+    readonly artifactRevision: number;
+    readonly artifactVersion: number;
+  }>;
+  readonly ref: string;
+  readonly state: "DRAFT" | "FINALIZED";
+}
+
+async function readRequestAttachmentSet(
+  page: Page,
+  response: Response,
+): Promise<AttachmentSetReadback> {
+  const request = response.request().postDataJSON() as {
+    attachmentSetRef?: string;
+  };
+  expect(request.attachmentSetRef).toMatch(/^aset_[A-Za-z0-9_-]+$/);
+  const attachmentSet = await page.evaluate(async (ref) => {
+    const read = await fetch(
+      `/api/v1/attachment-sets/${encodeURIComponent(ref ?? "")}?pageSize=100`,
+    );
+    if (!read.ok) {
+      throw new Error(`attachment set readback failed: ${String(read.status)}`);
+    }
+    const body = (await read.json()) as {
+      attachmentSet: AttachmentSetReadback;
+    };
+    return body.attachmentSet;
+  }, request.attachmentSetRef);
+  expect(attachmentSet.ref).toBe(request.attachmentSetRef);
+  expect(attachmentSet.state).toBe("FINALIZED");
+  expect(
+    attachmentSet.items.every(
+      (item) => item.artifactRevision > 0 && item.artifactVersion > 0,
+    ),
+  ).toBe(true);
+  return attachmentSet;
+}
+
 async function uploadFilesWorkspaceArtifact(
   page: Page,
   fileName: string,
   content: string,
 ): Promise<ArtifactReadback> {
+  const uploadButton = page
+    .locator(".files-workspace")
+    .getByRole("button", { name: "Загрузить", exact: true });
+  await expect(uploadButton).toBeVisible();
+  await expect(uploadButton).toBeEnabled();
   const response = page.waitForResponse(
     (candidate) =>
       candidate.request().method() === "POST" &&

@@ -1068,6 +1068,7 @@ onBeforeUnmount(() => {
       class="sr-only"
       type="file"
       multiple
+      :disabled="!canUpload || trashMode"
       accept=".txt,.md,.markdown,.csv,.json,.pdf,.png,.jpg,.jpeg,.gif,.webp,.docx,.xlsx,.pptx"
       :aria-label="$t('common.upload')"
       @change="upload"

@@ -97,6 +97,35 @@ func TestNormalizeArtifactLifecycleState(t *testing.T) {
 	}
 }
 
+func TestMessageMapNormalizesAttachmentSetEnumsToOpenAPIValues(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.AttachmentSet{
+		Ref:     "aset-example",
+		State:   controlplanev1.AttachmentSetState_ATTACHMENT_SET_STATE_FINALIZED,
+		Purpose: controlplanev1.AttachmentSetPurpose_ATTACHMENT_SET_PURPOSE_SESSION_TURN,
+		Source:  "CONTROL_CENTER",
+		Items: []*controlplanev1.AttachmentSetItem{{
+			ArtifactRef: "art-example",
+			Source:      controlplanev1.ArtifactSource_ARTIFACT_SOURCE_INTERACTION_ATTACHMENT,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["state"] != "FINALIZED" || value["purpose"] != "SESSION_TURN" {
+		t.Fatalf("attachment set enums are not public: %#v", value)
+	}
+	items, ok := value["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("attachment set items are invalid: %#v", value)
+	}
+	item, ok := items[0].(map[string]any)
+	if !ok || item["source"] != "INTERACTION_ATTACHMENT" {
+		t.Fatalf("attachment item source is not public: %#v", value)
+	}
+}
+
 func TestNormalizeEnumCollections(t *testing.T) {
 	t.Parallel()
 	value := map[string]any{"nextActions": []any{"NEXT_ACTION_OPEN", "NEXT_ACTION_CREATE_PROJECT"}}

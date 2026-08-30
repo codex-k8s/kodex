@@ -55,6 +55,7 @@ async function bootstrap(): Promise<void> {
 
 bootstrap().catch((error: unknown) => {
   document.documentElement.lang = i18n.global.locale.value;
+  document.documentElement.dataset.kodexBootstrap = "failed";
   document.body.textContent = i18n.global.t("errors.default");
   console.error("Control Center bootstrap failed", error);
 });

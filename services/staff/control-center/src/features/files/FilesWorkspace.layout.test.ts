@@ -27,4 +27,8 @@ describe("FilesWorkspace contract", () => {
     expect(source).toContain("uploadProgressPercent(item.progress)");
     expect(source).toContain("uploadControllers.get(id)?.abort()");
   });
+
+  it("не принимает выбор файла до загрузки capability Проекта", () => {
+    expect(source).toContain(':disabled="!canUpload || trashMode"');
+  });
 });

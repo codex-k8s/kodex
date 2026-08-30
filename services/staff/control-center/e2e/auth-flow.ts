@@ -10,6 +10,7 @@ const maxTransitions = 5;
 
 type AuthSurface =
   | "authenticated-ui"
+  | "application-failure"
   | "frontend-sign-in"
   | "identity-provider"
   | "pending";
@@ -47,6 +48,14 @@ export async function authenticateOwner(
     frontendOIDCAttempts,
   });
   for (let transition = 0; transition < maxTransitions; transition += 1) {
+    if (surface === "application-failure") {
+      throw authenticationError(
+        page,
+        "the Control Center bootstrap failed",
+        identitySubmissions,
+        frontendOIDCAttempts,
+      );
+    }
     if (surface === "authenticated-ui") {
       if (
         frontendOIDCAttempts < 1 ||
@@ -295,6 +304,11 @@ async function hasBlankApplicationDocument(page: Page): Promise<boolean> {
 
 async function detectAuthSurface(page: Page): Promise<AuthSurface> {
   try {
+    if (
+      (await page.locator('html[data-kodex-bootstrap="failed"]').count()) > 0
+    ) {
+      return "application-failure";
+    }
     if (await page.locator(".app-shell").isVisible()) {
       return "authenticated-ui";
     }

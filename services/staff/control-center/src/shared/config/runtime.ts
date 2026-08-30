@@ -16,6 +16,8 @@ export interface RuntimeConfig {
 }
 
 let loadedConfig: Readonly<RuntimeConfig> | undefined;
+const retryableRuntimeConfigStatuses = new Set([502, 503, 504]);
+const runtimeConfigRetryDelaysMs = [150, 500] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -139,14 +141,43 @@ function parseConfig(value: unknown): RuntimeConfig {
 
 export async function loadRuntimeConfig(): Promise<Readonly<RuntimeConfig>> {
   if (loadedConfig) return loadedConfig;
-  const response = await fetch("/config/runtime-config.json", {
-    cache: "no-store",
-    credentials: "same-origin",
-    headers: { Accept: "application/json" },
+  for (let attempt = 0; ; attempt += 1) {
+    let response: Response;
+    try {
+      response = await fetch("/config/runtime-config.json", {
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+    } catch (error) {
+      if (!(error instanceof TypeError) || !hasRuntimeConfigRetry(attempt))
+        throw error;
+      await waitBeforeRuntimeConfigRetry(attempt);
+      continue;
+    }
+    if (!response.ok) {
+      if (
+        retryableRuntimeConfigStatuses.has(response.status) &&
+        hasRuntimeConfigRetry(attempt)
+      ) {
+        await waitBeforeRuntimeConfigRetry(attempt);
+        continue;
+      }
+      throw new Error("Runtime config request failed");
+    }
+    loadedConfig = Object.freeze(parseConfig(await response.json()));
+    return loadedConfig;
+  }
+}
+
+function hasRuntimeConfigRetry(attempt: number): boolean {
+  return attempt < runtimeConfigRetryDelaysMs.length;
+}
+
+async function waitBeforeRuntimeConfigRetry(attempt: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, runtimeConfigRetryDelaysMs[attempt]);
   });
-  if (!response.ok) throw new Error("Runtime config request failed");
-  loadedConfig = Object.freeze(parseConfig(await response.json()));
-  return loadedConfig;
 }
 
 export function runtimeConfig(): Readonly<RuntimeConfig> {

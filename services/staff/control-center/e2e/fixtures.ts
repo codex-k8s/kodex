@@ -114,9 +114,7 @@ export const test = base.extend<{
         { timeout: 100_000 },
       );
       void browserDiagnostics;
-      await browserDiagnostics.withExpectedNetworkInterruption(page, () =>
-        authenticateOwner(page, undefined, { mode: "warm" }),
-      );
+      await authenticateOwner(page, undefined, { mode: "warm" });
       expect((await sessionResponse).status()).toBe(204);
       await use(true);
     },

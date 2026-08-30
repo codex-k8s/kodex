@@ -62,8 +62,7 @@ export function resolveRunSessionSelection(
   return (
     nodes.find((node) => node.state === "RUNNING")?.ref ??
     nodes.find(
-      (node) =>
-        node.state === "SUCCEEDED" && (node.artifactRefs?.length ?? 0) > 0,
+      (node) => node.state === "SUCCEEDED" && node.artifactRefs.length > 0,
     )?.ref ??
     nodes.find((node) => node.state === "SUCCEEDED")?.ref ??
     nodes[0]?.ref
