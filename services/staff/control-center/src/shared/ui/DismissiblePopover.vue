@@ -32,6 +32,8 @@ const props = withDefaults(
     focusOnOpen?: boolean;
     closeOnEscape?: boolean;
     closeOnOutside?: boolean;
+    block?: boolean;
+    contained?: boolean;
     teleportTo?: string;
   }>(),
   {
@@ -131,9 +133,11 @@ function startListening(): void {
   document.addEventListener("keydown", handleKeydown, true);
   window.addEventListener("resize", updatePosition);
   window.addEventListener("scroll", updatePosition, true);
-  resizeObserver = new ResizeObserver(updatePosition);
-  if (anchor.value) resizeObserver.observe(anchor.value);
-  if (panel.value) resizeObserver.observe(panel.value);
+  if (typeof ResizeObserver !== "undefined") {
+    resizeObserver = new ResizeObserver(updatePosition);
+    if (anchor.value) resizeObserver.observe(anchor.value);
+    if (panel.value) resizeObserver.observe(panel.value);
+  }
   listening = true;
 }
 
@@ -182,7 +186,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <span ref="anchor" class="dismissible-popover__anchor">
+  <span
+    ref="anchor"
+    class="dismissible-popover__anchor"
+    :class="{ 'dismissible-popover__anchor--block': block }"
+  >
     <slot name="trigger" :open="open" :toggle="toggle" :attrs="triggerAttrs" />
   </span>
   <Teleport :to="teleportTo">
@@ -191,7 +199,10 @@ onBeforeUnmount(() => {
       :id="popoverId"
       ref="panel"
       class="dismissible-popover"
-      :class="`dismissible-popover--${width}`"
+      :class="[
+        `dismissible-popover--${width}`,
+        { 'dismissible-popover--contained': contained },
+      ]"
       :role="role"
       :aria-label="ariaLabel"
       :style="panelStyle"
@@ -208,6 +219,10 @@ onBeforeUnmount(() => {
   min-width: 0;
   max-width: 100%;
 }
+.dismissible-popover__anchor--block {
+  display: flex;
+  width: 100%;
+}
 .dismissible-popover {
   position: fixed;
   z-index: 1100;
@@ -221,6 +236,11 @@ onBeforeUnmount(() => {
   background: var(--surface);
   box-shadow: 0 12px 32px rgb(16 22 30 / 18%);
   color: var(--text);
+}
+.dismissible-popover--contained {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .dismissible-popover--sm {
   width: min(240px, calc(100vw - 16px));

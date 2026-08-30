@@ -5,6 +5,8 @@ export type RealtimeStatusState =
   | "reconnecting"
   | "offline";
 
+export type RealtimeStatusLabels = Record<RealtimeStatusState, string>;
+
 export type RealtimeStatusTone =
   | "neutral"
   | "success"

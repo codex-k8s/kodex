@@ -66,6 +66,22 @@ describe("calculatePopoverPosition", () => {
     expect(position.top).toBe(224);
     expect(position.maxHeight).toBe(416);
   });
+
+  it("учитывает end alignment и ограничивает высоту доступным viewport", () => {
+    const position = calculatePopoverPosition({
+      anchor: { bottom: 84, left: 240, right: 304, top: 52, width: 64 },
+      panelHeight: 600,
+      panelWidth: 280,
+      placement: "bottom-end",
+      viewportHeight: 300,
+      viewportWidth: 320,
+    });
+
+    expect(position.left).toBe(24);
+    expect(position.side).toBe("bottom");
+    expect(position.maxHeight).toBe(202);
+    expect(position.top).toBe(90);
+  });
 });
 
 describe("DismissiblePopover", () => {
@@ -74,7 +90,13 @@ describe("DismissiblePopover", () => {
       render: () =>
         h(
           DismissiblePopover,
-          { ariaLabel: "Доступные действия", open: true, role: "menu" },
+          {
+            ariaLabel: "Доступные действия",
+            block: true,
+            contained: true,
+            open: true,
+            role: "menu",
+          },
           {
             default: () => h("button", { type: "button" }, "Действие"),
             trigger: ({ attrs }: { attrs: Record<string, unknown> }) =>
@@ -89,7 +111,9 @@ describe("DismissiblePopover", () => {
 
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain('aria-haspopup="menu"');
+    expect(html).toContain("dismissible-popover__anchor--block");
     expect(teleported).toContain('role="menu"');
     expect(teleported).toContain('aria-label="Доступные действия"');
+    expect(teleported).toContain("dismissible-popover--contained");
   });
 });

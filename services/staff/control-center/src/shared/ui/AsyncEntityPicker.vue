@@ -14,16 +14,7 @@ import {
   RefreshCw,
   Search,
 } from "@lucide/vue";
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  useId,
-  watch,
-  type CSSProperties,
-} from "vue";
+import { computed, ref, useId, watch } from "vue";
 
 import {
   nearScrollEnd,
@@ -34,6 +25,7 @@ import {
   type AsyncEntityOptionPage,
   type AsyncEntityPickerItem,
 } from "@/shared/ui/async-entity-picker";
+import DismissiblePopover from "@/shared/ui/DismissiblePopover.vue";
 
 export interface AsyncEntityPickerLabels {
   label: string;
@@ -76,15 +68,10 @@ defineSlots<{ option?(props: { item: T; selected: boolean }): unknown }>();
 
 const inline = props.loadItems !== undefined;
 const pickerId = `async-picker-${useId()}`;
-const triggerRoot = ref<HTMLElement>();
-const trigger = ref<HTMLButtonElement>();
-const searchInput = ref<HTMLInputElement>();
-const popover = ref<HTMLElement>();
 const list = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const open = ref(false);
 const activeIndex = ref(-1);
-const popoverStyle = ref<CSSProperties>({});
 
 const loader: AsyncEntityLoader<PickerEntry> = async (request) => {
   if (props.loadItems) {
@@ -146,6 +133,9 @@ const copy = computed<AsyncEntityPickerLabels>(
       retry: "",
     },
 );
+const popoverLabel = computed(
+  () => props.searchPlaceholder ?? props.placeholder ?? copy.value.label,
+);
 const selectedIds = computed<readonly string[]>(() => {
   if (Array.isArray(props.modelValue))
     return props.modelValue.filter(
@@ -193,6 +183,11 @@ function isOption(
 function isSelected(item: PickerEntry): boolean {
   return selectedIds.value.includes(item.id);
 }
+function secondaryText(item: PickerEntry): string {
+  return [item.description, item.meta, item.disabledReason]
+    .filter((value): value is string => Boolean(value))
+    .join(" · ");
+}
 function chooseInline(item: PickerEntry): void {
   if (props.disabled || item.disabled) return;
   if (props.multiple) {
@@ -207,7 +202,7 @@ function chooseDropdown(item: PickerEntry): void {
   if (props.disabled || item.disabled || !isOption(item.source)) return;
   emit("update:modelValue", item.source.ref);
   emit("select", item.source as S);
-  close(true);
+  close();
 }
 function moveActive(direction: 1 | -1): void {
   if (!items.value.length) return;
@@ -224,11 +219,6 @@ function moveActive(direction: 1 | -1): void {
   }
 }
 function handleListKeydown(event: KeyboardEvent, dropdown: boolean): void {
-  if (event.key === "Escape" && dropdown) {
-    event.preventDefault();
-    close(true);
-    return;
-  }
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
     moveActive(event.key === "ArrowDown" ? 1 : -1);
@@ -246,71 +236,18 @@ function handleScroll(event: Event): void {
   if (target instanceof HTMLElement && hasMore.value && nearScrollEnd(target))
     void loadMore();
 }
-function updatePopoverPosition(): void {
-  if (!open.value || !trigger.value) return;
-  const rect = trigger.value.getBoundingClientRect();
-  const gap = 12;
-  const width = Math.min(
-    Math.max(rect.width, 320),
-    window.innerWidth - gap * 2,
-  );
-  const left = Math.min(
-    Math.max(gap, rect.left),
-    window.innerWidth - width - gap,
-  );
-  const below = window.innerHeight - rect.bottom - gap;
-  const aboveRoom = rect.top - gap;
-  const above = below < 240 && aboveRoom > below;
-  const maxHeight = Math.max(180, Math.min(420, above ? aboveRoom : below));
-  popoverStyle.value = {
-    left: `${String(left)}px`,
-    maxHeight: `${String(maxHeight)}px`,
-    top: above
-      ? `${String(Math.max(gap, rect.top - maxHeight - 6))}px`
-      : `${String(rect.bottom + 6)}px`,
-    width: `${String(width)}px`,
-  };
-}
-function toggle(): void {
-  if (props.disabled) return;
-  if (open.value) return close(false);
-  open.value = true;
-  refresh();
-  void nextTick(() => {
-    updatePopoverPosition();
-    searchInput.value?.focus();
-  });
-}
-function close(restoreFocus: boolean): void {
+function close(): void {
   open.value = false;
   activeIndex.value = -1;
-  if (restoreFocus) void nextTick(() => trigger.value?.focus());
 }
-function handleTriggerKeydown(event: KeyboardEvent): void {
-  if (event.key === "Escape") return close(true);
-  if (!open.value && ["Enter", " ", "ArrowDown"].includes(event.key)) {
-    event.preventDefault();
-    toggle();
+function handlePopoverOpen(value: boolean): void {
+  open.value = value;
+  if (value) {
+    refresh();
+  } else {
+    activeIndex.value = -1;
   }
 }
-function handleDocumentPointerDown(event: PointerEvent): void {
-  const target = event.target as Node;
-  if (!triggerRoot.value?.contains(target) && !popover.value?.contains(target))
-    close(false);
-}
-
-onMounted(() => {
-  if (inline) return;
-  document.addEventListener("pointerdown", handleDocumentPointerDown);
-  window.addEventListener("resize", updatePopoverPosition);
-  window.addEventListener("scroll", updatePopoverPosition, true);
-});
-onBeforeUnmount(() => {
-  if (inline) return;
-  document.removeEventListener("pointerdown", handleDocumentPointerDown);
-  window.removeEventListener("resize", updatePopoverPosition);
-  window.removeEventListener("scroll", updatePopoverPosition, true);
-});
 </script>
 
 <template>
@@ -396,10 +333,14 @@ onBeforeUnmount(() => {
             name="option"
             :item="item.source as T"
             :selected="isSelected(item)"
-            ><span class="async-picker__option-copy"
+            ><span
+              class="async-picker__option-copy"
+              :class="{
+                'async-picker__option-copy--single': !secondaryText(item),
+              }"
               ><strong>{{ item.label }}</strong
-              ><small v-if="item.description">{{
-                item.description
+              ><small v-if="secondaryText(item)">{{
+                secondaryText(item)
               }}</small></span
             ></slot
           ><Check v-if="isSelected(item)" :size="17" aria-hidden="true" />
@@ -431,37 +372,39 @@ onBeforeUnmount(() => {
       </template>
     </div>
   </section>
-  <div
-    v-else
-    ref="triggerRoot"
-    class="async-picker"
-    @keydown="handleTriggerKeydown"
-  >
-    <button
-      ref="trigger"
-      class="async-picker__trigger"
-      type="button"
-      role="combobox"
-      aria-haspopup="listbox"
-      :aria-controls="`${pickerId}-listbox`"
-      :aria-expanded="open"
-      :disabled="disabled"
-      @click="toggle"
+  <div v-else class="async-picker">
+    <DismissiblePopover
+      :open="open"
+      :ariaLabel="popoverLabel"
+      role="dialog"
+      placement="bottom-start"
+      width="lg"
+      block
+      contained
+      @update:open="handlePopoverOpen"
     >
-      <span v-if="selectedOption" class="async-picker__selection"
-        ><strong>{{ selectedOption.title }}</strong
-        ><small v-if="selectedOption.description">{{
-          selectedOption.description
-        }}</small></span
-      ><span v-else class="async-picker__placeholder">{{ placeholder }}</span
-      ><ChevronDown :size="17" aria-hidden="true" />
-    </button>
-    <Teleport to="body">
+      <template #trigger="{ toggle, attrs }">
+        <button
+          v-bind="attrs"
+          class="async-picker__trigger"
+          type="button"
+          :disabled="disabled"
+          @click="toggle"
+          @keydown.down.prevent="handlePopoverOpen(true)"
+        >
+          <span v-if="selectedOption" class="async-picker__selection"
+            ><strong>{{ selectedOption.title }}</strong
+            ><small v-if="selectedOption.description">{{
+              selectedOption.description
+            }}</small></span
+          ><span v-else class="async-picker__placeholder">{{
+            placeholder
+          }}</span
+          ><ChevronDown :size="17" aria-hidden="true" />
+        </button>
+      </template>
       <section
-        v-if="open"
-        ref="popover"
         class="async-picker__popover"
-        :style="popoverStyle"
         @keydown="handleListKeydown($event, true)"
       >
         <label class="async-picker__search"
@@ -469,12 +412,15 @@ onBeforeUnmount(() => {
             searchPlaceholder
           }}</span
           ><input
-            ref="searchInput"
             v-model="query"
             type="search"
             :placeholder="searchPlaceholder"
+            role="combobox"
             :aria-controls="`${pickerId}-listbox`"
             :aria-activedescendant="activeDescendant"
+            aria-autocomplete="list"
+            aria-expanded="true"
+            aria-haspopup="listbox"
         /></label>
         <div
           :id="`${pickerId}-listbox`"
@@ -505,7 +451,11 @@ onBeforeUnmount(() => {
               {{ $t("common.retry") }}
             </button>
           </div>
-          <div v-else-if="phase === 'empty'" class="async-picker__state">
+          <div
+            v-else-if="phase === 'empty'"
+            class="async-picker__state"
+            role="status"
+          >
             {{ $t("common.empty") }}
           </div>
           <template v-else>
@@ -526,15 +476,16 @@ onBeforeUnmount(() => {
               @mouseenter="activeIndex = index"
               @click="chooseDropdown(item)"
             >
-              <span class="async-picker__option-copy"
+              <span
+                class="async-picker__option-copy"
+                :class="{
+                  'async-picker__option-copy--single': !secondaryText(item),
+                }"
                 ><strong>{{ item.label }}</strong
-                ><small v-if="item.description">{{
-                  item.description
+                ><small v-if="secondaryText(item)">{{
+                  secondaryText(item)
                 }}</small></span
-              ><small v-if="item.meta">{{ item.meta }}</small
-              ><small v-if="item.disabledReason" class="async-picker__reason">{{
-                item.disabledReason
-              }}</small>
+              >
             </button>
             <div
               ref="sentinel"
@@ -575,7 +526,7 @@ onBeforeUnmount(() => {
           }}<span v-if="hasMore">{{ $t("runtime.pickerScroll") }}</span>
         </footer>
       </section>
-    </Teleport>
+    </DismissiblePopover>
   </div>
 </template>
 
@@ -629,15 +580,12 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 .async-picker__popover {
-  position: fixed;
-  z-index: 80;
   display: flex;
+  width: 100%;
+  min-height: 0;
+  max-height: inherit;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 18px 40px rgba(16, 22, 30, 0.18);
 }
 .async-picker__search {
   display: flex;
@@ -692,21 +640,21 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
   opacity: 0.58;
 }
-.async-picker__reason {
-  color: var(--warning) !important;
-}
 .async-picker__option-copy strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow-wrap: anywhere;
+}
+.async-picker__option-copy small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.async-picker__option-copy small {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
+.async-picker__option-copy--single strong {
   -webkit-line-clamp: 2;
-  overflow-wrap: anywhere;
 }
 .async-picker__state {
   display: flex;

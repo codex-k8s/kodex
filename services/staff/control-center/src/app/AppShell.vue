@@ -16,6 +16,7 @@ import {
   Settings,
   UsersRound,
   Workflow,
+  X,
 } from "@lucide/vue";
 import {
   computed,
@@ -33,6 +34,7 @@ import {
   activeNavigationSection,
   routeProjectRef,
 } from "@/app/navigation-context";
+import { resolveShellRealtimeState } from "@/app/realtime-presentation";
 import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
 import { resolveAssistantContext } from "@/features/assistant/context";
 import { usePlatformStore } from "@/features/platform/store";
@@ -47,6 +49,8 @@ import {
 } from "@/shared/locale";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import CurrentUserSummary from "@/shared/ui/CurrentUserSummary.vue";
+import RealtimeStatus from "@/shared/ui/RealtimeStatus.vue";
+import type { RealtimeStatusLabels } from "@/shared/ui/realtime-status";
 import {
   useDismissibleLayer,
   type DismissibleLayerCloseReason,
@@ -67,6 +71,7 @@ const searchInput = ref<HTMLInputElement>();
 const searchOpen = ref(false);
 const mobileSearchOpen = ref(false);
 const searchRoot = ref<HTMLElement>();
+const realtimeStarted = ref(false);
 let disposed = false;
 
 const projectRef = computed(() => routeProjectRef(route.params));
@@ -77,13 +82,20 @@ const project = computed(() =>
 const pendingCount = computed(
   () => platform.gateList.filter((item) => item.state === "OPEN").length,
 );
-const connectionState = computed(() => {
-  if (!online.value || realtime.platformState.state === "offline")
-    return "DEGRADED";
-  if (realtime.platformState.state === "live") return "CONNECTED";
-  if (realtime.platformState.state === "recovering") return "RECOVERING";
-  return "CONNECTING";
-});
+const realtimeState = computed(() =>
+  resolveShellRealtimeState({
+    online: online.value,
+    started: realtimeStarted.value,
+    streamState: realtime.platformState.state,
+  }),
+);
+const realtimeLabels = computed<RealtimeStatusLabels>(() => ({
+  "initial-loading": t("states.CONNECTING"),
+  live: t("states.CONNECTED"),
+  "background-refresh": t("states.TESTING"),
+  reconnecting: t("app.reconnecting"),
+  offline: online.value ? t("states.NOT_CONNECTED") : t("app.offline"),
+}));
 const breadcrumbs = computed(() => {
   const agentRef =
     typeof route.params.agentRef === "string"
@@ -346,7 +358,10 @@ onMounted(() => {
     platform.loadGates(),
     platform.loadBootstrap(),
   ]).finally(() => {
-    if (!disposed) realtime.openPlatform();
+    if (!disposed) {
+      realtimeStarted.value = true;
+      realtime.openPlatform();
+    }
   });
 });
 onBeforeUnmount(() => {
@@ -380,27 +395,6 @@ onBeforeUnmount(() => {
           <img src="/logo.png" alt="" /> </span
         ><span>Kodex</span>
       </RouterLink>
-      <div class="topbar-project-switcher desktop-only">
-        <label class="sr-only" for="topbar-project-switcher">{{
-          $t("app.project")
-        }}</label>
-        <FolderKanban :size="17" aria-hidden="true" />
-        <select
-          id="topbar-project-switcher"
-          :value="projectRef ?? ''"
-          :title="project?.name ?? $t('app.chooseProject')"
-          @change="changeProject"
-        >
-          <option value="">{{ $t("app.chooseProject") }}</option>
-          <option
-            v-for="item in platform.projectList"
-            :key="item.ref"
-            :value="item.ref"
-          >
-            {{ item.name }}
-          </option>
-        </select>
-      </div>
       <div ref="searchRoot" class="global-search-wrap">
         <form
           class="global-search"
@@ -436,7 +430,7 @@ onBeforeUnmount(() => {
               :aria-label="$t('app.closeSearch')"
               @click="closeSearch('programmatic')"
             >
-              ×
+              <X :size="18" aria-hidden="true" />
             </button>
           </header>
           <p v-if="search.trim().length < 2" class="muted">
@@ -489,10 +483,11 @@ onBeforeUnmount(() => {
             pendingCount
           }}</span>
         </RouterLink>
-        <StatusBadge
-          class="connection-badge"
-          :state="connectionState"
-          aria-live="polite"
+        <RealtimeStatus
+          class="connection-status"
+          :state="realtimeState"
+          :labels="realtimeLabels"
+          :detail="realtime.platformState.problemTitle"
         />
         <CurrentUserSummary
           v-if="platform.bootstrap"
@@ -505,17 +500,6 @@ onBeforeUnmount(() => {
         />
       </div>
     </header>
-
-    <div v-if="!online" class="offline-banner" role="status">
-      {{ $t("app.offline") }}
-    </div>
-    <div
-      v-else-if="realtime.platformState.problemTitle"
-      class="offline-banner"
-      role="status"
-    >
-      {{ realtime.platformState.problemTitle }}
-    </div>
 
     <button
       v-if="mobileOpen"
@@ -543,7 +527,7 @@ onBeforeUnmount(() => {
           ><span v-if="link.count" class="count-badge">{{ link.count }}</span>
         </RouterLink>
       </nav>
-      <div class="project-switcher project-switcher--sidebar mobile-only">
+      <div class="project-switcher project-switcher--sidebar">
         <label for="sidebar-project-switcher">{{ $t("app.project") }}</label>
         <select
           id="sidebar-project-switcher"

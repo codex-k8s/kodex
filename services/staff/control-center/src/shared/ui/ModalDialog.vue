@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { X } from "@lucide/vue";
 import { nextTick, onBeforeUnmount, onMounted, ref, useId } from "vue";
 
 import {
@@ -66,6 +67,7 @@ onBeforeUnmount(() => {
       :class="`modal--${size}`"
       role="dialog"
       aria-modal="true"
+      :aria-busy="busy || undefined"
       :aria-labelledby="titleId"
       tabindex="-1"
       @keydown="handleKeydown"
@@ -79,7 +81,7 @@ onBeforeUnmount(() => {
           :disabled="busy"
           @click="emit('close')"
         >
-          ×
+          <X :size="18" aria-hidden="true" />
         </button>
       </header>
       <div class="modal__body"><slot /></div>
@@ -124,11 +126,19 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
 }
 .modal__body {
+  width: 100%;
   min-width: 0;
   min-height: 0;
+  max-width: 100%;
   flex: 1 1 auto;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+.modal__body > * {
+  min-width: 0;
+  max-width: 100%;
 }
 @media (max-width: 520px) {
   .modal {
@@ -137,6 +147,7 @@ onBeforeUnmount(() => {
     max-height: 88dvh;
   }
   .modal--full {
+    width: 100vw;
     height: 100dvh;
     max-height: 100dvh;
     border-radius: 0;

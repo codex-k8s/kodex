@@ -94,10 +94,18 @@ describe("useAsyncEntityCollection", () => {
     await vi.advanceTimersByTimeAsync(0);
     await nextTick();
     expect(collection.hasMore.value).toBe(true);
+    expect(loader).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ cursor: undefined, query: "каталог" }),
+    );
 
     const firstAppend = collection.loadMore();
     const duplicateAppend = collection.loadMore();
     expect(loader).toHaveBeenCalledTimes(2);
+    expect(loader).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ cursor: "cursor-2", query: "каталог" }),
+    );
     append.resolve({
       items: [
         { id: "one", label: "Один обновлён", revision: 2 },
@@ -260,6 +268,6 @@ describe("AsyncEntityPicker", () => {
     expect(html).toContain("Офисные документы");
     expect(html).toContain("rev 4 · готово");
     expect(html).not.toContain("renv_internal_ref");
-    expect(html).toContain('role="combobox"');
+    expect(html).toContain('aria-haspopup="dialog"');
   });
 });

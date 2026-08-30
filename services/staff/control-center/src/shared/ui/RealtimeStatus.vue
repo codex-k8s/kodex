@@ -5,16 +5,16 @@ import type { Component } from "vue";
 
 import {
   realtimeStatusPresentation,
+  type RealtimeStatusLabels,
   type RealtimeStatusState,
 } from "@/shared/ui/realtime-status";
-
-export type RealtimeStatusLabels = Record<RealtimeStatusState, string>;
 
 const props = withDefaults(
   defineProps<{
     state: RealtimeStatusState;
     labels: RealtimeStatusLabels;
     compact?: boolean;
+    detail?: string;
   }>(),
   { compact: false },
 );
@@ -35,7 +35,7 @@ const icon = computed<Component>(() => {
     role="status"
     aria-live="polite"
     :aria-label="labels[state]"
-    :title="compact ? labels[state] : undefined"
+    :title="detail || (compact ? labels[state] : undefined)"
     :data-state="state"
     :data-preserves-current-data="presentation.preservesCurrentData"
   >
