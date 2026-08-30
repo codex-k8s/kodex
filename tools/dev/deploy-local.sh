@@ -40,6 +40,7 @@ done
   fail 'production context is forbidden'
 
 namespace=kodex-system
+runtime_namespace=kodex-runtime
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 object_storage_secret_name=""
 temporary_directory=$(mktemp -d)
@@ -568,21 +569,21 @@ verify_local_backup_controller() {
 wait_warm_runtime() {
   local pod=system-assistant-warm deadline=$((SECONDS + 300))
   while ((SECONDS < deadline)); do
-    kubectl -n "$namespace" get "pod/$pod" >/dev/null 2>&1 && break
+    kubectl -n "$runtime_namespace" get "pod/$pod" >/dev/null 2>&1 && break
     sleep 2
   done
-  kubectl -n "$namespace" get "pod/$pod" >/dev/null 2>&1 ||
+  kubectl -n "$runtime_namespace" get "pod/$pod" >/dev/null 2>&1 ||
     fail 'local warm runtime Pod was not materialized'
-  if kubectl -n "$namespace" wait --for=condition=Ready "pod/$pod" --timeout=5m >/dev/null; then
+  if kubectl -n "$runtime_namespace" wait --for=condition=Ready "pod/$pod" --timeout=5m >/dev/null; then
     return
   fi
-  kubectl -n "$namespace" get "pod/$pod" -o wide >&2 || true
-  kubectl -n "$namespace" describe "pod/$pod" >&2 || true
+  kubectl -n "$runtime_namespace" get "pod/$pod" -o wide >&2 || true
+  kubectl -n "$runtime_namespace" describe "pod/$pod" >&2 || true
   while IFS= read -r container; do
     [[ -n "$container" ]] || continue
     printf '%s\n' "--- $pod/$container ---" >&2
-    kubectl -n "$namespace" logs "pod/$pod" -c "$container" --tail=200 >&2 || true
-  done < <(kubectl -n "$namespace" get "pod/$pod" \
+    kubectl -n "$runtime_namespace" logs "pod/$pod" -c "$container" --tail=200 >&2 || true
+  done < <(kubectl -n "$runtime_namespace" get "pod/$pod" \
     -o jsonpath='{range .spec.initContainers[*]}{.name}{"\n"}{end}{range .spec.containers[*]}{.name}{"\n"}{end}')
   fail 'local warm runtime Pod is unavailable'
 }
