@@ -6,6 +6,7 @@ import {
   canConfigureCredential,
   definitionRequiresCredential,
   executeConnectionSetup,
+  prepareConnectionConfiguration,
   type PendingCredentialSetup,
 } from "@/features/integrations/connection-setup";
 import IntegrationApprovalPanel from "@/features/integrations/ui/IntegrationApprovalPanel.vue";
@@ -46,8 +47,11 @@ const credentialRequired = ref(false);
 const credentialValue = ref("");
 const pendingCredential = ref<PendingCredentialSetup>();
 const commandRef = ref("");
+const commandAction = ref<"TEST" | "ENABLE" | "DISABLE">();
+const operationSuccess = ref("");
 const grantConnectionRef = ref("");
 const targetsLoading = ref(false);
+const formSubmitted = ref(false);
 
 const form = reactive({
   definitionKey: "",
@@ -94,6 +98,12 @@ const selectedDefinition = computed(
 );
 const requiresCredential = computed(() =>
   definitionRequiresCredential(selectedDefinition.value),
+);
+const preparedConfiguration = computed(() =>
+  prepareConnectionConfiguration(
+    selectedDefinition.value?.configurationFields ?? [],
+    form.configuration,
+  ),
 );
 const credentialProblemKey = computed(() => {
   switch (problem.value?.kind) {
@@ -144,7 +154,9 @@ function openConnection(definitionKey: string): void {
   pendingCredential.value = undefined;
   credentialStepFailed.value = false;
   credentialRequired.value = false;
+  formSubmitted.value = false;
   problem.value = undefined;
+  operationSuccess.value = "";
   dialog.value = true;
 }
 
@@ -156,6 +168,7 @@ function closeConnectionDialog(force = false): void {
   pendingCredential.value = undefined;
   credentialStepFailed.value = false;
   credentialRequired.value = false;
+  formSubmitted.value = false;
   problem.value = undefined;
   form.definitionKey = "";
   form.name = "";
@@ -195,6 +208,7 @@ async function openCredential(
     };
     credentialStepFailed.value = false;
     credentialRequired.value = false;
+    formSubmitted.value = false;
     dialog.value = true;
   } catch (error) {
     problem.value = asProblem(error);
@@ -203,13 +217,12 @@ async function openCredential(
   }
 }
 
-function configurationValue(field: IntegrationConfigurationField): unknown {
-  const raw = form.configuration[field.key]?.trim() ?? "";
-  if (field.valueType !== "STRING_LIST") return raw;
-  return raw
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item, index, values) => item && values.indexOf(item) === index);
+function configurationProblem(field: IntegrationConfigurationField): string {
+  const code = preparedConfiguration.value.problems[field.key];
+  if (code === "REQUIRED") return "Заполните обязательное поле.";
+  if (code === "INVALID_HTTPS_URL")
+    return "Укажите полный URL с протоколом https://.";
+  return "";
 }
 
 async function submit(): Promise<void> {
@@ -217,6 +230,12 @@ async function submit(): Promise<void> {
   if (
     !definition?.available ||
     (dialogMode.value === "CREATE" && !canCreateConnection.value)
+  )
+    return;
+  formSubmitted.value = true;
+  if (
+    dialogMode.value === "CREATE" &&
+    Object.keys(preparedConfiguration.value.problems).length
   )
     return;
   if (requiresCredential.value && !credentialValue.value.trim()) {
@@ -227,19 +246,10 @@ async function submit(): Promise<void> {
   problem.value = undefined;
   credentialStepFailed.value = false;
   credentialRequired.value = false;
+  const oneTimeCredential = credentialValue.value;
+  credentialValue.value = "";
   try {
-    const publicConfiguration: Record<string, unknown> = {};
-    if (dialogMode.value === "CREATE") {
-      for (const field of definition.configurationFields) {
-        const value = configurationValue(field);
-        if (
-          (typeof value === "string" && value !== "") ||
-          (Array.isArray(value) && value.length > 0)
-        ) {
-          publicConfiguration[field.key] = value;
-        }
-      }
-    }
+    const publicConfiguration = preparedConfiguration.value.value;
     const outcome = await executeConnectionSetup(
       {
         connection: {
@@ -249,7 +259,7 @@ async function submit(): Promise<void> {
             ? { publicConfiguration }
             : {}),
         },
-        credentialValue: credentialValue.value,
+        credentialValue: oneTimeCredential,
         requiresCredential: requiresCredential.value,
         ...(pendingCredential.value
           ? { pending: pendingCredential.value }
@@ -275,10 +285,12 @@ async function submit(): Promise<void> {
       return;
     }
     activeSection.value = "CONNECTIONS";
+    operationSuccess.value = `Подключение «${outcome.connection.name}» сохранено.`;
     closeConnectionDialog(true);
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
+    credentialValue.value = "";
     busy.value = false;
   }
 }
@@ -289,13 +301,22 @@ async function command(
 ): Promise<void> {
   if (!connection.nextActions.includes(action)) return;
   commandRef.value = connection.ref;
+  commandAction.value = action;
   problem.value = undefined;
+  operationSuccess.value = "";
   try {
-    await platform.changeConnection(connection, action);
+    const updated = await platform.changeConnection(connection, action);
+    operationSuccess.value =
+      action === "TEST"
+        ? `Проверка «${updated.name}» завершена: ${updated.lastTestOutcome ?? updated.state}.`
+        : action === "ENABLE"
+          ? `Подключение «${updated.name}» включено.`
+          : `Подключение «${updated.name}» отключено.`;
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
     commandRef.value = "";
+    commandAction.value = undefined;
   }
 }
 
@@ -416,6 +437,13 @@ onBeforeUnmount(() => {
       />
 
       <ProblemNotice v-if="problem && !dialog" :problem="problem" compact />
+      <div
+        v-if="operationSuccess && !dialog"
+        class="operation-success"
+        role="status"
+      >
+        {{ operationSuccess }}
+      </div>
 
       <AsyncState
         v-if="activeSection !== 'APPROVALS'"
@@ -428,6 +456,7 @@ onBeforeUnmount(() => {
           :connections="connections"
           :definitions="platform.definitions"
           :busy-ref="commandRef"
+          :busy-action="commandAction"
           @command="command"
           @credential="openCredential"
           @grants="openGrants"
@@ -505,6 +534,7 @@ onBeforeUnmount(() => {
             >
               {{ capability.name }} ·
               {{ $t("integrations.risk." + capability.risk) }}
+              · <code>{{ capability.resourceKind }}</code>
               <strong v-if="capability.approvalRequired">Human Gate</strong>
             </span>
           </div>
@@ -527,9 +557,24 @@ onBeforeUnmount(() => {
             :required="field.required"
             :placeholder="field.placeholder"
             :maxlength="field.valueType === 'URL' ? 2048 : 500"
+            :aria-invalid="
+              formSubmitted &&
+              Boolean(preparedConfiguration.problems[field.key])
+            "
             autocomplete="off"
           />
-          <small>{{ field.help }}</small>
+          <small>
+            {{ field.help }}
+            <template v-if="field.valueType === 'STRING_LIST'">
+              Значения разделяются запятыми.
+            </template>
+          </small>
+          <small
+            v-if="formSubmitted && configurationProblem(field)"
+            class="field-error"
+          >
+            {{ configurationProblem(field) }}
+          </small>
         </label>
         <section
           v-if="dialogMode === 'CREDENTIAL'"
@@ -605,9 +650,11 @@ onBeforeUnmount(() => {
           :disabled="busy"
         >
           {{
-            pendingCredential
-              ? $t("integrations.retryCredential")
-              : $t("integrations.connect")
+            busy
+              ? "Сохраняем…"
+              : pendingCredential
+                ? $t("integrations.retryCredential")
+                : $t("integrations.connect")
           }}
         </button>
       </template>
@@ -621,6 +668,14 @@ onBeforeUnmount(() => {
 }
 .integration-page > :deep(.problem-notice) {
   margin-bottom: 14px;
+}
+.operation-success {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--success) 32%, var(--border));
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: var(--success-soft);
 }
 .credential-boundary {
   display: grid;

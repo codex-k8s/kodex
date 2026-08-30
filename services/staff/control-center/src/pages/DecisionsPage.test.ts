@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { usePlatformStore } from "@/features/platform/store";
 import DecisionsPage from "@/pages/DecisionsPage.vue";
 import type {
+  AuditEvent,
   OwnerGate,
   Project,
   Run,
@@ -80,6 +81,21 @@ const gate: OwnerGate = {
   nextActions: ["RESOLVE_GATE"],
 };
 
+const auditEvent: AuditEvent = {
+  ref: "aud_gate_opened",
+  projectRef: project.ref,
+  initiator: { ref: "usr_owner", displayName: "Владелец" },
+  executor: "control-plane",
+  source: "CONTROL_CENTER",
+  action: "OWNER_GATE_OPENED",
+  resourceType: "OWNER_GATE",
+  resourceRef: gate.ref,
+  resourceName: gate.title,
+  outcome: "SUCCEEDED",
+  safeSummary: "Запрос решения зарегистрирован",
+  occurredAt: "2026-08-29T10:05:00Z",
+};
+
 describe("DecisionsPage", () => {
   it("показывает сгруппированный контекст и ведёт на точный узел запуска", async () => {
     const pinia = createPinia();
@@ -97,6 +113,7 @@ describe("DecisionsPage", () => {
     platform.projects[project.ref] = project;
     platform.runs[run.ref] = run;
     platform.gates[gate.ref] = gate;
+    platform.auditEvents = [auditEvent];
     const i18n = createI18n({
       legacy: false,
       locale: "ru",
@@ -107,6 +124,8 @@ describe("DecisionsPage", () => {
             approve: "Одобрить",
             reject: "Отклонить",
             requestChanges: "Запросить изменения",
+            cancel: "Отменить",
+            unknownStatus: "Неизвестно",
           },
           decisions: {
             title: "Решения",
@@ -148,7 +167,13 @@ describe("DecisionsPage", () => {
             actionsUnavailable: "Ответ недоступен",
             actionsUnavailableText: "Нет разрешённого действия",
           },
-          states: { OPEN: "Открыто", CLEAN: "Проверен" },
+          states: {
+            OPEN: "Открыто",
+            CLEAN: "Проверен",
+            APPROVED: "Одобрено",
+            CHANGES_REQUESTED: "Нужны изменения",
+            REJECTED: "Отклонено",
+          },
         },
       },
     });
@@ -169,6 +194,15 @@ describe("DecisionsPage", () => {
     expect(html).toContain("Согласование коммерческого предложения");
     expect(html).toContain("nod_offer_gate");
     expect(html).toContain("nodeRef=nod_offer_gate");
+    expect(html).toContain("ses_offer");
+    expect(html).toContain("Инициатор Run");
+    expect(html).toContain("Запрос решения зарегистрирован");
+    expect(html).toContain("OWNER_GATE_OPENED · SUCCEEDED");
+    expect(html.match(/type="radio"/g)).toHaveLength(3);
+    expect(html).toContain('data-state="APPROVED"');
+    expect(html).toContain('data-state="CHANGES_REQUESTED"');
+    expect(html).toContain('data-state="REJECTED"');
+    expect(html.match(/Комментарий обязателен/g)).toHaveLength(2);
     expect(html.match(/button--primary/g)).toHaveLength(1);
     expect(html).toContain("Запросить изменения");
     expect(html).toContain("Отклонить");

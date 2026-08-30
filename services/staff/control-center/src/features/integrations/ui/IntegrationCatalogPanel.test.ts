@@ -59,10 +59,26 @@ function githubDefinition(): IntegrationDefinition {
         operation: "github.repository.read",
         approvalPolicy: "NONE",
         resourceKind: "GITHUB_REPOSITORY",
-        inputFields: [],
+        inputFields: [
+          {
+            key: "ref",
+            label: "Ревизия",
+            help: "Exact branch or commit",
+            valueType: "TEXT",
+            required: true,
+          },
+        ],
       },
     ],
-    configurationFields: [],
+    configurationFields: [
+      {
+        key: "base_url",
+        label: "Адрес API",
+        help: "HTTPS origin",
+        valueType: "URL",
+        required: true,
+      },
+    ],
     schemaVersion: "integrations.kodex.io/v1",
     definitionVersion: "1.0.0",
     origin: "SHIPPED",
@@ -95,5 +111,10 @@ describe("IntegrationCatalogPanel", () => {
     }
     expect(html).not.toContain("YAML · API —");
     expect(html.match(/<button[^>]*disabled/g)).toBeNull();
+    expect(html).toContain("Схема подключения");
+    expect(html).toContain("Адрес API");
+    expect(html).toContain("GITHUB_REPOSITORY");
+    expect(html).toContain("NONE");
+    expect(html).toContain("Ревизия");
   });
 });

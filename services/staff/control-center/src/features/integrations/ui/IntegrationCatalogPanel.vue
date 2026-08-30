@@ -11,6 +11,7 @@ import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type { IntegrationPackagePresentation } from "@/features/integrations/ui/model";
+import type { IntegrationConfigurationField } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 defineProps<{
@@ -31,6 +32,12 @@ const expandedKey = ref("");
 
 function toggleDetails(key: string): void {
   expandedKey.value = expandedKey.value === key ? "" : key;
+}
+
+function fieldType(field: IntegrationConfigurationField): string {
+  if (field.valueType === "URL") return "URL";
+  if (field.valueType === "STRING_LIST") return "список строк";
+  return "строка";
 }
 </script>
 
@@ -80,7 +87,6 @@ function toggleDetails(key: string): void {
         </select>
       </label>
     </div>
-
     <div v-if="packages.length" class="package-grid">
       <article v-for="item in packages" :key="item.key" class="package-card">
         <header class="package-card__heading">
@@ -154,9 +160,10 @@ function toggleDetails(key: string): void {
         </div>
 
         <section
-          v-if="expandedKey === item.key"
+          v-show="expandedKey === item.key"
           class="package-details"
           :aria-label="t('integrationsRedesign.packageDetails')"
+          :aria-hidden="expandedKey !== item.key"
         >
           <div class="manifest-facts">
             <span>
@@ -170,6 +177,33 @@ function toggleDetails(key: string): void {
               {{ item.definition.digest.slice(0, 12) }}…
             </span>
           </div>
+          <section class="configuration-schema">
+            <h4>Схема подключения</h4>
+            <dl
+              v-if="item.definition.configurationFields.length"
+              class="field-schema"
+            >
+              <div
+                v-for="field in item.definition.configurationFields"
+                :key="field.key"
+              >
+                <dt>
+                  <strong>{{ field.label }}</strong>
+                  <code>{{ field.key }}</code>
+                </dt>
+                <dd>
+                  <span class="type-token">{{ fieldType(field) }}</span>
+                  <span>{{
+                    field.required ? "обязательное" : "необязательное"
+                  }}</span>
+                  <span>{{ field.help }}</span>
+                </dd>
+              </div>
+            </dl>
+            <p v-else class="schema-empty">
+              Публичная конфигурация для подключения не требуется.
+            </p>
+          </section>
           <ul class="capability-list">
             <li
               v-for="capability in item.definition.capabilities"
@@ -183,7 +217,39 @@ function toggleDetails(key: string): void {
                 </span>
               </div>
               <p>{{ capability.description }}</p>
-              <code>{{ capability.operation }}</code>
+              <dl class="capability-policy">
+                <div>
+                  <dt>Operation</dt>
+                  <dd class="mono">{{ capability.operation }}</dd>
+                </div>
+                <div>
+                  <dt>Resource scope</dt>
+                  <dd class="mono">{{ capability.resourceKind }}</dd>
+                </div>
+                <div>
+                  <dt>Approval policy</dt>
+                  <dd class="mono">{{ capability.approvalPolicy }}</dd>
+                </div>
+              </dl>
+              <section class="capability-inputs">
+                <h5>Входные поля</h5>
+                <dl v-if="capability.inputFields.length" class="field-schema">
+                  <div v-for="field in capability.inputFields" :key="field.key">
+                    <dt>
+                      <strong>{{ field.label }}</strong>
+                      <code>{{ field.key }}</code>
+                    </dt>
+                    <dd>
+                      <span class="type-token">{{ fieldType(field) }}</span>
+                      <span>{{
+                        field.required ? "обязательное" : "необязательное"
+                      }}</span>
+                      <span>{{ field.help }}</span>
+                    </dd>
+                  </div>
+                </dl>
+                <p v-else class="schema-empty">Входные поля отсутствуют.</p>
+              </section>
             </li>
           </ul>
         </section>
@@ -265,8 +331,14 @@ function toggleDetails(key: string): void {
 }
 .panel-heading p,
 .package-description,
-.catalog-empty p {
+.catalog-empty p,
+.projection-note,
+.schema-empty {
   color: var(--muted);
+}
+.projection-note {
+  margin: -6px 1px 0;
+  font-size: 0.76rem;
 }
 .result-count,
 .package-meta,
@@ -376,6 +448,60 @@ function toggleDetails(key: string): void {
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
+.configuration-schema,
+.capability-inputs {
+  display: grid;
+  gap: 7px;
+}
+.configuration-schema h4,
+.capability-inputs h5,
+.schema-empty {
+  margin: 0;
+}
+.configuration-schema h4 {
+  font-size: 0.84rem;
+}
+.capability-inputs h5 {
+  font-size: 0.76rem;
+}
+.field-schema,
+.capability-policy {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.field-schema > div {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.65fr) minmax(0, 1.35fr);
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.field-schema dt,
+.field-schema dd {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  margin: 0;
+}
+.field-schema code,
+.field-schema dd {
+  overflow-wrap: anywhere;
+  font-size: 0.72rem;
+}
+.field-schema dd {
+  color: var(--muted);
+}
+.type-token {
+  width: fit-content;
+  padding: 2px 5px;
+  border-radius: 5px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-family: var(--font-mono);
+}
 .manifest-facts {
   flex-wrap: wrap;
   color: var(--muted);
@@ -415,6 +541,26 @@ function toggleDetails(key: string): void {
   overflow-wrap: anywhere;
   color: var(--text-secondary);
   font-size: 0.72rem;
+}
+.capability-policy {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.capability-policy > div {
+  min-width: 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--hairline);
+}
+.capability-policy dt {
+  color: var(--subtle);
+  font-size: 0.68rem;
+}
+.capability-policy dd {
+  overflow-wrap: anywhere;
+  margin: 3px 0 0;
+  font-size: 0.7rem;
+}
+.schema-empty {
+  font-size: 0.76rem;
 }
 .capability-heading {
   flex-wrap: wrap;
@@ -482,6 +628,10 @@ function toggleDetails(key: string): void {
   }
   .package-card__actions .button {
     flex: 1;
+  }
+  .field-schema > div,
+  .capability-policy {
+    grid-template-columns: 1fr;
   }
 }
 </style>

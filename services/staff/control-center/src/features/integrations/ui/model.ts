@@ -41,6 +41,49 @@ export interface IntegrationGrantPresentation {
   connection: IntegrationConnection;
 }
 
+export interface IntegrationPublicConfigurationEntry {
+  key: string;
+  label: string;
+  value: string;
+}
+
+const sensitiveConfigurationKey =
+  /(^|_)(secret|token|password|credential|api_key)(_|$)/i;
+
+export function publicIntegrationConfiguration(
+  connection: IntegrationConnection,
+  definition?: IntegrationDefinition,
+): IntegrationPublicConfigurationEntry[] {
+  const credentialKey = definition?.credentialSecretKey?.trim().toLowerCase();
+  return Object.entries(connection.publicConfiguration)
+    .filter(([key]) => {
+      const normalized = key.trim().toLowerCase();
+      return (
+        normalized !== credentialKey && !sensitiveConfigurationKey.test(key)
+      );
+    })
+    .map(([key, value]) => {
+      const field = definition?.configurationFields.find(
+        (item) => item.key === key,
+      );
+      const rendered = Array.isArray(value)
+        ? value.map(String).join(", ")
+        : typeof value === "string" || typeof value === "number"
+          ? String(value)
+          : typeof value === "boolean"
+            ? value
+              ? "true"
+              : "false"
+            : "—";
+      return {
+        key,
+        label: field?.label ?? key,
+        value: rendered.length > 160 ? rendered.slice(0, 157) + "…" : rendered,
+      };
+    })
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
 export function buildIntegrationPackages(
   definitions: readonly IntegrationDefinition[],
   connections: readonly IntegrationConnection[],

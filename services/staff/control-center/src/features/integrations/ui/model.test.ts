@@ -6,6 +6,7 @@ import {
   filterIntegrationPackages,
   flattenIntegrationGrants,
   integrationCategories,
+  publicIntegrationConfiguration,
 } from "@/features/integrations/ui/model";
 import type {
   IntegrationConnection,
@@ -182,5 +183,36 @@ describe("integrations presentation model", () => {
 
     expect(connectionAllows(source, "TEST")).toBe(true);
     expect(connectionAllows(source, "DISABLE")).toBe(false);
+  });
+
+  it("никогда не визуализирует secret-like поля из publicConfiguration", () => {
+    const sourceDefinition = definition("github", {
+      credentialSecretKey: "token",
+      configurationFields: [
+        {
+          key: "owner",
+          label: "Владелец",
+          help: "Организация или пользователь",
+          valueType: "TEXT",
+          required: true,
+        },
+      ],
+    });
+    const source = connection("github-main", "github", {
+      publicConfiguration: {
+        owner: "example-org",
+        token: "must-not-render",
+        api_key: "must-not-render-either",
+        enabled: true,
+      },
+    });
+
+    expect(publicIntegrationConfiguration(source, sourceDefinition)).toEqual([
+      { key: "enabled", label: "enabled", value: "true" },
+      { key: "owner", label: "Владелец", value: "example-org" },
+    ]);
+    expect(
+      JSON.stringify(publicIntegrationConfiguration(source, sourceDefinition)),
+    ).not.toContain("must-not-render");
   });
 });

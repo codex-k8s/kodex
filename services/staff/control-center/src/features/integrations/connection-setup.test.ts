@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   canConfigureCredential,
   executeConnectionSetup,
+  prepareConnectionConfiguration,
 } from "@/features/integrations/connection-setup";
 import type {
   IntegrationConnection,
@@ -52,6 +53,48 @@ function connection(
 }
 
 describe("двухфазная настройка подключения", () => {
+  it("типизированно сериализует публичную конфигурацию и валидирует URL", () => {
+    const fields: IntegrationDefinition["configurationFields"] = [
+      {
+        key: "base_url",
+        label: "Адрес API",
+        help: "HTTPS endpoint",
+        valueType: "URL",
+        required: true,
+      },
+      {
+        key: "labels",
+        label: "Метки",
+        help: "Список меток",
+        valueType: "STRING_LIST",
+        required: false,
+      },
+    ];
+
+    expect(
+      prepareConnectionConfiguration(fields, {
+        base_url: "not a url",
+        labels: "release, urgent, release",
+      }),
+    ).toEqual({
+      value: { labels: ["release", "urgent"] },
+      problems: { base_url: "INVALID_HTTPS_URL" },
+    });
+    expect(prepareConnectionConfiguration(fields, {})).toEqual({
+      value: {},
+      problems: { base_url: "REQUIRED" },
+    });
+    expect(
+      prepareConnectionConfiguration(fields, {
+        base_url: "https://example.invalid",
+        labels: "",
+      }),
+    ).toEqual({
+      value: { base_url: "https://example.invalid" },
+      problems: {},
+    });
+  });
+
   it("создаёт metadata один раз и повторяет только credential с тем же ключом", async () => {
     const rawCredential = "test-only-secret-value";
     const created = connection(4);

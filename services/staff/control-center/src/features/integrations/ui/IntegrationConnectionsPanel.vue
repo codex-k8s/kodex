@@ -2,24 +2,31 @@
 import {
   FlaskConical,
   KeyRound,
+  LoaderCircle,
+  Pencil,
   Power,
   PowerOff,
   ShieldCheck,
+  Trash2,
 } from "@lucide/vue";
 import { useI18n } from "vue-i18n";
 
 import { canConfigureCredential } from "@/features/integrations/connection-setup";
-import { connectionAllows } from "@/features/integrations/ui/model";
+import {
+  connectionAllows,
+  publicIntegrationConfiguration,
+} from "@/features/integrations/ui/model";
 import type {
   IntegrationConnection,
   IntegrationDefinition,
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
-const props = defineProps<{
+defineProps<{
   connections: readonly IntegrationConnection[];
   definitions: Readonly<Record<string, IntegrationDefinition>>;
   busyRef: string;
+  busyAction?: "TEST" | "ENABLE" | "DISABLE";
 }>();
 
 const emit = defineEmits<{
@@ -32,29 +39,6 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-
-function publicConfiguration(
-  connection: IntegrationConnection,
-): Array<{ key: string; label: string; value: string }> {
-  const definition = props.definitions[connection.definitionKey];
-  return Object.entries(connection.publicConfiguration)
-    .map(([key, value]) => {
-      const field = definition?.configurationFields.find(
-        (item) => item.key === key,
-      );
-      const rendered = Array.isArray(value)
-        ? value.join(", ")
-        : typeof value === "string"
-          ? value
-          : JSON.stringify(value);
-      return {
-        key,
-        label: field?.label ?? key,
-        value: rendered.length > 160 ? rendered.slice(0, 157) + "…" : rendered,
-      };
-    })
-    .sort((left, right) => left.label.localeCompare(right.label));
-}
 </script>
 
 <template>
@@ -72,7 +56,6 @@ function publicConfiguration(
         })
       }}</span>
     </header>
-
     <div v-if="connections.length" class="connection-grid" role="list">
       <article
         v-for="connection in connections"
@@ -123,11 +106,19 @@ function publicConfiguration(
         </section>
 
         <dl
-          v-if="publicConfiguration(connection).length"
+          v-if="
+            publicIntegrationConfiguration(
+              connection,
+              definitions[connection.definitionKey],
+            ).length
+          "
           class="public-configuration"
         >
           <div
-            v-for="entry in publicConfiguration(connection)"
+            v-for="entry in publicIntegrationConfiguration(
+              connection,
+              definitions[connection.definitionKey],
+            )"
             :key="entry.key"
           >
             <dt>{{ entry.label }}</dt>
@@ -135,9 +126,21 @@ function publicConfiguration(
           </div>
         </dl>
 
-        <p v-if="connection.lastTestOutcome" class="last-test">
-          {{ t("integrations.lastTest") }}: {{ connection.lastTestOutcome }}
-        </p>
+        <div
+          v-if="connection.lastTestOutcome || connection.lastTestedAt"
+          class="last-test"
+        >
+          <strong>{{ t("integrations.lastTest") }}</strong>
+          <span v-if="connection.lastTestOutcome">{{
+            connection.lastTestOutcome
+          }}</span>
+          <time
+            v-if="connection.lastTestedAt"
+            :datetime="connection.lastTestedAt"
+          >
+            {{ new Date(connection.lastTestedAt).toLocaleString() }}
+          </time>
+        </div>
 
         <div class="connection-capabilities">
           <span
@@ -147,6 +150,7 @@ function publicConfiguration(
           >
             <strong>{{ capability.name }}</strong>
             {{ t("integrations.risk." + capability.risk) }}
+            <code>{{ capability.resourceKind }}</code>
             <ShieldCheck
               v-if="capability.approvalRequired"
               :size="12"
@@ -189,15 +193,27 @@ function publicConfiguration(
             class="button"
             type="button"
             :disabled="busyRef === connection.ref"
+            :aria-busy="busyRef === connection.ref"
             @click="emit('command', connection, 'TEST')"
           >
-            <FlaskConical :size="15" aria-hidden="true" />
-            {{ t("common.test") }}
+            <LoaderCircle
+              v-if="busyRef === connection.ref && busyAction === 'TEST'"
+              class="spin"
+              :size="15"
+              aria-hidden="true"
+            />
+            <FlaskConical v-else :size="15" aria-hidden="true" />
+            {{
+              busyRef === connection.ref && busyAction === "TEST"
+                ? "Проверяем…"
+                : t("common.test")
+            }}
           </button>
           <button
             v-if="connectionAllows(connection, 'MANAGE_GRANTS')"
             class="button"
             type="button"
+            :disabled="busyRef === connection.ref"
             @click="emit('grants', connection)"
           >
             <ShieldCheck :size="15" aria-hidden="true" />
@@ -208,20 +224,60 @@ function publicConfiguration(
             class="button"
             type="button"
             :disabled="busyRef === connection.ref"
+            :aria-busy="busyRef === connection.ref"
             @click="emit('command', connection, 'ENABLE')"
           >
-            <Power :size="15" aria-hidden="true" />
-            {{ t("common.enable") }}
+            <LoaderCircle
+              v-if="busyRef === connection.ref && busyAction === 'ENABLE'"
+              class="spin"
+              :size="15"
+              aria-hidden="true"
+            />
+            <Power v-else :size="15" aria-hidden="true" />
+            {{
+              busyRef === connection.ref && busyAction === "ENABLE"
+                ? "Включаем…"
+                : t("common.enable")
+            }}
           </button>
           <button
             v-if="connectionAllows(connection, 'DISABLE')"
             class="button button--danger"
             type="button"
             :disabled="busyRef === connection.ref"
+            :aria-busy="busyRef === connection.ref"
             @click="emit('command', connection, 'DISABLE')"
           >
-            <PowerOff :size="15" aria-hidden="true" />
-            {{ t("common.disable") }}
+            <LoaderCircle
+              v-if="busyRef === connection.ref && busyAction === 'DISABLE'"
+              class="spin"
+              :size="15"
+              aria-hidden="true"
+            />
+            <PowerOff v-else :size="15" aria-hidden="true" />
+            {{
+              busyRef === connection.ref && busyAction === "DISABLE"
+                ? "Отключаем…"
+                : t("common.disable")
+            }}
+          </button>
+          <button
+            class="button"
+            type="button"
+            disabled
+            title="Изменение подключения пока недоступно"
+          >
+            <Pencil :size="15" aria-hidden="true" />
+            {{ t("common.edit") }}
+          </button>
+          <button
+            class="button button--danger"
+            type="button"
+            disabled
+            title="Удаление подключения пока недоступно"
+          >
+            <Trash2 :size="15" aria-hidden="true" />
+            {{ t("common.delete") }}
           </button>
         </footer>
       </article>
@@ -263,6 +319,11 @@ function publicConfiguration(
 .connection-empty h3,
 .connection-empty p {
   margin-bottom: 0;
+}
+.projection-note {
+  margin: -6px 1px 0;
+  color: var(--muted);
+  font-size: 0.76rem;
 }
 .panel-heading p,
 .connection-main p,
@@ -309,8 +370,18 @@ function publicConfiguration(
   font-size: 0.7rem;
 }
 .last-test {
-  margin: 9px 0 0;
+  display: grid;
+  gap: 2px;
+  margin-top: 9px;
+  color: var(--muted);
   font-size: 0.8rem;
+}
+.last-test strong {
+  color: var(--text-secondary);
+}
+.last-test time {
+  color: var(--subtle);
+  font-size: 0.72rem;
 }
 .credential-state {
   justify-content: space-between;
@@ -371,6 +442,9 @@ function publicConfiguration(
 .connection-capabilities strong {
   color: var(--text-secondary);
 }
+.connection-capabilities code {
+  font-size: 0.68rem;
+}
 .connection-facts {
   align-items: stretch;
   margin-top: 12px;
@@ -394,6 +468,17 @@ function publicConfiguration(
   margin-top: auto;
   padding-top: 16px;
   border-top: 1px solid var(--hairline);
+}
+.connection-actions .button {
+  min-width: 112px;
+}
+.spin {
+  animation: connection-spin 0.8s linear infinite;
+}
+@keyframes connection-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .connection-empty {
   display: grid;

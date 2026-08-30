@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import {
   CalendarClock,
+  CheckCircle2,
   ExternalLink,
   FileStack,
   FolderKanban,
+  History,
+  LoaderCircle,
+  MessageSquareWarning,
   ShieldQuestion,
   UserRound,
 } from "@lucide/vue";
@@ -43,14 +47,20 @@ const { locale, t } = useI18n();
 const projectFilter = ref(
   typeof route.query.projectRef === "string" ? route.query.projectRef : "",
 );
+let preferredGateRef =
+  typeof route.query.gateRef === "string" ? route.query.gateRef : "";
 const view = ref<"PENDING" | "HISTORY">("PENDING");
-const selectedRef = ref("");
+const selectedRef = ref(preferredGateRef);
 const comments = ref<Record<string, string>>({});
+const decisionDrafts = ref<Record<string, DecisionAction>>({});
+const validationMessages = ref<Record<string, string>>({});
 const attachmentStates = ref<Record<string, AttachmentComposerState>>({});
 const selectedAttachmentComposer = ref<AttachmentComposerHandle>();
 const resolutionAttachmentSets = ref<Record<string, AttachmentSet>>({});
 const busyRef = ref("");
 const problem = ref<AppProblem>();
+const successMessage = ref("");
+let pageMounted = false;
 
 const inbox = computed(() =>
   decisionInbox(
@@ -81,6 +91,19 @@ const selectedActions = computed(() =>
     ? decisionActionLayout(selected.value.gate)
     : { primary: undefined, secondary: [] },
 );
+const selectedDecision = computed(() => {
+  if (!selected.value) return undefined;
+  return (
+    decisionDrafts.value[selected.value.gate.ref] ??
+    selectedActions.value.primary
+  );
+});
+const selectedAuditEvents = computed(() => {
+  if (!selected.value) return [];
+  return platform.auditEvents
+    .filter((event) => event.resourceRef === selected.value?.gate.ref)
+    .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
+});
 const projectsWithGates = computed(() => {
   const refs = new Set(
     platform.gateList
@@ -95,11 +118,20 @@ const projectsWithGates = computed(() => {
 watch(
   visibleItems,
   (items) => {
-    if (!items.some((item) => item.gate.ref === selectedRef.value))
-      selectedRef.value = items[0]?.gate.ref ?? "";
+    if (items.some((item) => item.gate.ref === selectedRef.value)) return;
+    const preferred = items.find((item) => item.gate.ref === preferredGateRef);
+    selectedRef.value = preferred?.gate.ref ?? items[0]?.gate.ref ?? "";
+    if (items.length) preferredGateRef = "";
   },
   { immediate: true },
 );
+
+watch(projectFilter, (value) => {
+  if (!pageMounted) return;
+  preferredGateRef = "";
+  selectedRef.value = "";
+  void platform.loadGates(value || undefined);
+});
 
 function formatDate(value?: string): string {
   if (!value) return "";
@@ -136,25 +168,99 @@ async function loadResolutionAttachments(gate?: OwnerGate): Promise<void> {
   }
 }
 
-async function decide(
+async function loadGateAudit(gate?: OwnerGate): Promise<void> {
+  if (!gate) return;
+  await platform.loadAudit(gate.projectRef, gate.ref);
+}
+
+function decisionOutcomeState(decision: DecisionAction): OwnerGate["state"] {
+  if (decision === "APPROVE") return "APPROVED";
+  if (decision === "REQUEST_CHANGES") return "CHANGES_REQUESTED";
+  if (decision === "REJECT") return "REJECTED";
+  return "CANCELLED";
+}
+
+function decisionConsequence(
   gate: OwnerGate,
-  decision: "APPROVE" | "REJECT" | "REQUEST_CHANGES" | "CANCEL",
-): Promise<void> {
+  decision: DecisionAction,
+): string {
+  if (decision === "APPROVE")
+    return (
+      gate.consequencesSummary.trim() || t("decisions.consequencesUnavailable")
+    );
+  if (decision === "REQUEST_CHANGES")
+    return "Gate перейдёт в CHANGES_REQUESTED. Следующий переход Run не представлен текущей проекцией.";
+  if (decision === "REJECT")
+    return "Gate перейдёт в REJECTED. Закрытие или продолжение Run не представлены текущей проекцией.";
+  return "Gate перейдёт в CANCELLED. Дальнейший lifecycle Run не представлен текущей проекцией.";
+}
+
+function requiresDecisionComment(decision?: DecisionAction): boolean {
+  return decision === "REQUEST_CHANGES" || decision === "REJECT";
+}
+
+function decisionCommentLabel(decision?: DecisionAction): string {
+  if (decision === "REQUEST_CHANGES") return "Что нужно изменить";
+  if (decision === "REJECT") return "Причина отклонения";
+  if (decision === "CANCEL") return "Причина отмены";
+  return "Комментарий к одобрению";
+}
+
+function decisionCommentPlaceholder(decision?: DecisionAction): string {
+  if (decision === "REQUEST_CHANGES")
+    return "Перечислите проверяемые изменения, необходимые для повторного решения";
+  if (decision === "REJECT")
+    return "Укажите причину, которая будет записана в аудит";
+  return t("decisions.commentPlaceholder");
+}
+
+function selectDecision(gate: OwnerGate, decision: DecisionAction): void {
+  decisionDrafts.value[gate.ref] = decision;
+  Reflect.deleteProperty(validationMessages.value, gate.ref);
+}
+
+function clearValidation(gateRef: string): void {
+  Reflect.deleteProperty(validationMessages.value, gateRef);
+}
+
+async function decide(gate: OwnerGate): Promise<void> {
+  const decision =
+    decisionDrafts.value[gate.ref] ?? decisionActionLayout(gate).primary;
   if (
+    !decision ||
     !gate.nextActions.includes("RESOLVE_GATE") ||
     !gate.allowedDecisions.includes(decision)
   )
     return;
+  const comment = comments.value[gate.ref]?.trim() ?? "";
+  if (requiresDecisionComment(decision) && !comment) {
+    validationMessages.value[gate.ref] =
+      decision === "REQUEST_CHANGES"
+        ? "Опишите необходимые изменения."
+        : "Укажите причину отклонения.";
+    return;
+  }
+  if (!attachmentsReady(gate.ref)) {
+    validationMessages.value[gate.ref] =
+      "Дождитесь загрузки вложений или исправьте ошибку файла.";
+    return;
+  }
   busyRef.value = gate.ref;
   problem.value = undefined;
+  successMessage.value = "";
+  Reflect.deleteProperty(validationMessages.value, gate.ref);
   try {
     const attachmentSetRef = await selectedAttachmentComposer.value?.finalize();
     await platform.decide(gate, {
       decision,
-      comment: comments.value[gate.ref] ?? "",
+      ...(comment ? { comment } : {}),
       ...(attachmentSetRef ? { attachmentSetRef } : {}),
     });
+    selectedAttachmentComposer.value?.clear();
+    successMessage.value = `${decisionLabel(decision)}: решение «${gate.title}» применено.`;
     Reflect.deleteProperty(comments.value, gate.ref);
+    Reflect.deleteProperty(decisionDrafts.value, gate.ref);
+    Reflect.deleteProperty(validationMessages.value, gate.ref);
     Reflect.deleteProperty(attachmentStates.value, gate.ref);
   } catch (error) {
     problem.value = asProblem(error);
@@ -171,7 +277,12 @@ function attachmentsReady(gateRef: string): boolean {
 watch(
   () => selected.value?.gate,
   (gate) => {
+    if (gate && !decisionDrafts.value[gate.ref]) {
+      const primary = decisionActionLayout(gate).primary;
+      if (primary) decisionDrafts.value[gate.ref] = primary;
+    }
     void loadResolutionAttachments(gate);
+    if (pageMounted) void loadGateAudit(gate);
   },
   { immediate: true },
 );
@@ -183,18 +294,23 @@ function decisionLabel(decision: DecisionAction): string {
   return t("common.cancel");
 }
 
-function secondaryActionClass(decision: DecisionAction): string[] {
-  return ["button", ...(decision === "REJECT" ? ["button--danger"] : [])];
+function submitActionClass(decision?: DecisionAction): string[] {
+  return [
+    "button",
+    decision === "REJECT" || decision === "CANCEL"
+      ? "button--danger"
+      : "button--primary",
+  ];
 }
 
-onMounted(
-  () =>
-    void Promise.all([
-      platform.loadGates(),
-      platform.loadProjects(),
-      platform.loadRuns(),
-    ]),
-);
+onMounted(() => {
+  pageMounted = true;
+  void Promise.all([
+    platform.loadGates(projectFilter.value || undefined),
+    platform.loadProjects(),
+    platform.loadRuns(),
+  ]).then(() => loadGateAudit(selected.value?.gate));
+});
 </script>
 
 <template>
@@ -249,6 +365,10 @@ onMounted(
     </div>
 
     <ProblemNotice v-if="problem" :problem="problem" compact />
+    <div v-if="successMessage" class="decision-success" role="status">
+      <CheckCircle2 :size="18" aria-hidden="true" />
+      <span>{{ successMessage }}</span>
+    </div>
     <AsyncState
       :loading="
         platform.loading.gates ||
@@ -313,13 +433,23 @@ onMounted(
                       ? item.gate.contextSummary
                       : $t("decisions.questionUnavailable")
                   }}</span>
+                  <small
+                    v-if="item.hasConsequences"
+                    class="decision-row__impact"
+                  >
+                    Последствия: {{ item.gate.consequencesSummary }}
+                  </small>
                   <small>
                     {{ item.gate.requestedBy.displayName }} ·
                     {{ formatDate(item.gate.openedAt) }}
+                    <template v-if="item.gate.expiresAt">
+                      · срок {{ formatDate(item.gate.expiresAt) }}
+                    </template>
                   </small>
                   <small class="decision-row__route">
                     {{ item.run?.target.displayName }} ·
                     {{ item.run?.title ?? $t("decisions.runUnavailable") }} ·
+                    {{ item.run?.sessionRef ?? "Session недоступна" }} ·
                     {{ item.gate.nodeRef }}
                   </small>
                 </span>
@@ -358,7 +488,7 @@ onMounted(
             <div>
               <dt>
                 <ExternalLink :size="15" aria-hidden="true" />{{
-                  $t("decisions.process")
+                  $t("decisions.run")
                 }}
               </dt>
               <dd>
@@ -367,7 +497,20 @@ onMounted(
                 </span>
                 <RouterLink :to="runNodePath(selected)">
                   {{ selected.run?.title ?? $t("decisions.runUnavailable") }}
-                  · {{ selected.gate.nodeRef }}
+                </RouterLink>
+              </dd>
+            </div>
+            <div>
+              <dt>Session</dt>
+              <dd>
+                <code>{{ selected.run?.sessionRef ?? "не представлена" }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Node</dt>
+              <dd>
+                <RouterLink :to="runNodePath(selected)">
+                  <code>{{ selected.gate.nodeRef }}</code>
                 </RouterLink>
               </dd>
             </div>
@@ -378,6 +521,12 @@ onMounted(
                 }}
               </dt>
               <dd>{{ selected.gate.requestedBy.displayName }}</dd>
+            </div>
+            <div>
+              <dt><UserRound :size="15" aria-hidden="true" />Инициатор Run</dt>
+              <dd>
+                {{ selected.run?.initiator.displayName ?? "не представлен" }}
+              </dd>
             </div>
             <div>
               <dt>
@@ -413,7 +562,9 @@ onMounted(
             <div>
               <dt>
                 <FileStack :size="15" aria-hidden="true" />{{
-                  $t("decisions.evidence")
+                  view === "HISTORY"
+                    ? "Вложения к решению"
+                    : "Вложения к запросу"
                 }}
               </dt>
               <dd>
@@ -429,7 +580,10 @@ onMounted(
                     })
                   }}
                 </span>
-                <span v-else>{{ $t("decisions.noEvidence") }}</span>
+                <span v-else-if="view === 'HISTORY'">{{
+                  $t("decisions.noEvidence")
+                }}</span>
+                <span v-else>Вложения исходного запроса не представлены</span>
               </dd>
             </div>
           </dl>
@@ -455,6 +609,37 @@ onMounted(
             </p>
           </section>
 
+          <section
+            class="decision-audit"
+            aria-labelledby="decision-audit-title"
+          >
+            <header>
+              <h3 id="decision-audit-title">
+                <History :size="16" aria-hidden="true" /> Аудит
+              </h3>
+              <span v-if="platform.loading.audit">Загружаем…</span>
+              <span v-else>{{ selectedAuditEvents.length }}</span>
+            </header>
+            <ProblemNotice
+              v-if="platform.problems.audit"
+              :problem="platform.problems.audit"
+              compact
+            />
+            <ol v-else-if="selectedAuditEvents.length">
+              <li v-for="event in selectedAuditEvents" :key="event.ref">
+                <time :datetime="event.occurredAt">{{
+                  formatDate(event.occurredAt)
+                }}</time>
+                <strong>{{ event.initiator.displayName }}</strong>
+                <span>{{ event.safeSummary }}</span>
+                <code>{{ event.action }} · {{ event.outcome }}</code>
+              </li>
+            </ol>
+            <p v-else-if="!platform.loading.audit" class="audit-unavailable">
+              События аудита для этого решения не найдены.
+            </p>
+          </section>
+
           <section v-if="view === 'HISTORY'" class="decision-copy">
             <h3>{{ $t("decisions.outcome") }}</h3>
             <p>
@@ -472,47 +657,101 @@ onMounted(
           </section>
 
           <template v-if="selected.canResolve">
+            <fieldset
+              class="decision-options"
+              :disabled="busyRef === selected.gate.ref"
+            >
+              <legend>Разрешённые варианты и последствия</legend>
+              <label
+                v-for="decision in selected.gate.allowedDecisions"
+                :key="decision"
+                class="decision-option"
+                :class="{
+                  'decision-option--selected': selectedDecision === decision,
+                  'decision-option--danger':
+                    decision === 'REJECT' || decision === 'CANCEL',
+                }"
+              >
+                <input
+                  type="radio"
+                  :name="`decision-${selected.gate.ref}`"
+                  :value="decision"
+                  :checked="selectedDecision === decision"
+                  @change="selectDecision(selected.gate, decision)"
+                />
+                <span class="decision-option__copy">
+                  <strong>{{ decisionLabel(decision) }}</strong>
+                  <span>{{
+                    decisionConsequence(selected.gate, decision)
+                  }}</span>
+                  <small v-if="requiresDecisionComment(decision)">
+                    Комментарий обязателен
+                  </small>
+                </span>
+                <StatusBadge :state="decisionOutcomeState(decision)" />
+              </label>
+            </fieldset>
             <label class="field decision-comment">
-              <span>{{ $t("decisions.comment") }}</span>
+              <span>
+                {{ decisionCommentLabel(selectedDecision) }}
+                <strong v-if="requiresDecisionComment(selectedDecision)">
+                  обязательно
+                </strong>
+              </span>
               <textarea
                 v-model="comments[selected.gate.ref]"
-                maxlength="2000"
-                :placeholder="$t('decisions.commentPlaceholder')"
+                maxlength="4000"
+                :required="requiresDecisionComment(selectedDecision)"
+                :disabled="busyRef === selected.gate.ref"
+                :aria-invalid="Boolean(validationMessages[selected.gate.ref])"
+                :placeholder="decisionCommentPlaceholder(selectedDecision)"
+                @input="clearValidation(selected.gate.ref)"
               />
             </label>
             <AttachmentComposer
+              :key="selected.gate.ref"
               ref="selectedAttachmentComposer"
               purpose="OWNER_GATE_MESSAGE"
               :project-ref="selected.gate.projectRef"
               :disabled="busyRef === selected.gate.ref"
               @change="attachmentStates[selected.gate.ref] = $event"
             />
+            <div
+              v-if="validationMessages[selected.gate.ref]"
+              class="decision-validation"
+              role="alert"
+            >
+              <MessageSquareWarning :size="17" aria-hidden="true" />
+              {{ validationMessages[selected.gate.ref] }}
+            </div>
             <div class="decision-actions">
               <button
-                v-if="selectedActions.primary"
-                class="button button--primary"
+                v-if="selectedDecision"
+                :class="submitActionClass(selectedDecision)"
                 type="button"
                 :disabled="
                   busyRef === selected.gate.ref ||
                   !attachmentsReady(selected.gate.ref)
                 "
-                @click="decide(selected.gate, selectedActions.primary)"
+                :aria-busy="busyRef === selected.gate.ref"
+                @click="decide(selected.gate)"
               >
-                {{ decisionLabel(selectedActions.primary) }}
+                <LoaderCircle
+                  v-if="busyRef === selected.gate.ref"
+                  class="decision-spin"
+                  :size="16"
+                  aria-hidden="true"
+                />
+                {{
+                  busyRef === selected.gate.ref
+                    ? "Применяем решение…"
+                    : decisionLabel(selectedDecision)
+                }}
               </button>
-              <button
-                v-for="decision in selectedActions.secondary"
-                :key="decision"
-                :class="secondaryActionClass(decision)"
-                type="button"
-                :disabled="
-                  busyRef === selected.gate.ref ||
-                  !attachmentsReady(selected.gate.ref)
-                "
-                @click="decide(selected.gate, decision)"
-              >
-                {{ decisionLabel(decision) }}
-              </button>
+              <span>
+                Решение применится с версией {{ selected.gate.version }} и будет
+                записано в аудит.
+              </span>
             </div>
           </template>
           <div v-else class="decision-unavailable" role="status">
@@ -569,6 +808,21 @@ onMounted(
 }
 .decision-toolbar__count {
   color: var(--muted);
+}
+.decision-success {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--success) 32%, var(--border));
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: var(--success-soft);
+}
+.decision-success svg {
+  flex: 0 0 auto;
+  color: var(--success);
 }
 .decision-inbox {
   display: grid;
@@ -644,6 +898,13 @@ onMounted(
 .decision-row__copy small {
   color: var(--subtle);
 }
+.decision-row__copy .decision-row__impact {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
 .decision-row__copy .decision-row__route {
   overflow: hidden;
   color: var(--muted);
@@ -712,6 +973,9 @@ onMounted(
   margin: 5px 0 0;
   overflow-wrap: anywhere;
 }
+.decision-meta code {
+  overflow-wrap: anywhere;
+}
 .decision-target {
   color: var(--muted);
   font-size: 0.82rem;
@@ -739,17 +1003,156 @@ onMounted(
   border-left: 3px solid var(--warning);
   background: var(--warning-soft);
 }
+.decision-audit {
+  display: grid;
+  gap: 9px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.decision-audit > header,
+.decision-audit h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.decision-audit > header {
+  justify-content: space-between;
+}
+.decision-audit h3,
+.decision-audit p {
+  margin: 0;
+}
+.decision-audit > header > span,
+.audit-unavailable {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.decision-audit ol {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.decision-audit li {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) minmax(120px, 0.4fr) minmax(0, 1fr);
+  gap: 5px 10px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  font-size: 0.78rem;
+}
+.decision-audit li time {
+  color: var(--muted);
+}
+.decision-audit li code {
+  grid-column: 1 / -1;
+  color: var(--subtle);
+  font-size: 0.7rem;
+}
+.decision-options {
+  display: grid;
+  gap: 7px;
+  margin: 18px 0 0;
+  padding: 0;
+  border: 0;
+}
+.decision-options legend {
+  margin-bottom: 7px;
+  font-weight: 600;
+}
+.decision-option {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.decision-option--selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.decision-option--selected.decision-option--danger {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.decision-option input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+}
+.decision-option__copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.decision-option__copy > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.decision-option__copy small {
+  color: var(--danger);
+  font-size: 0.7rem;
+}
 .decision-comment {
   margin-top: 18px;
+}
+.decision-comment > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.decision-comment > span strong {
+  color: var(--danger);
+  font-size: 0.72rem;
 }
 .decision-comment textarea {
   min-height: 92px;
 }
+.decision-validation {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 32%, var(--border));
+  border-radius: 7px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  font-size: 0.8rem;
+}
+.decision-validation svg {
+  flex: 0 0 auto;
+}
 .decision-actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+}
+.decision-actions .button {
+  min-width: 190px;
+}
+.decision-actions > span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.decision-spin {
+  animation: decision-spin 0.8s linear infinite;
+}
+@keyframes decision-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .decision-unavailable {
   margin-top: 18px;
@@ -803,6 +1206,21 @@ onMounted(
   }
   .decision-meta {
     grid-template-columns: 1fr;
+  }
+  .decision-audit li,
+  .decision-option {
+    grid-template-columns: 1fr;
+  }
+  .decision-option input {
+    position: absolute;
+    opacity: 0;
+  }
+  .decision-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .decision-actions .button {
+    width: 100%;
   }
 }
 </style>
