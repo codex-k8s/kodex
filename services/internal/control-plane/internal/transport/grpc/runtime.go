@@ -189,9 +189,9 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 			result.Artifacts = append(result.Artifacts, item)
 			result.InputArtifacts = append(result.InputArtifacts, &controlplanev1.RuntimeInputArtifact{
 				Artifact: item, Scope: mapString(artifact, "scope"), Position: mapInt64(artifact, "position"),
-				AttachmentSetRef: mapString(artifact, "attachmentSetRef"),
+				AttachmentSetRef:  mapString(artifact, "attachmentSetRef"),
 				AttachmentPurpose: mapString(artifact, "attachmentPurpose"),
-				Provenance: mapString(artifact, "provenance"),
+				Provenance:        mapString(artifact, "provenance"),
 			})
 		}
 	}
@@ -299,6 +299,37 @@ func (server *Server) ReportExecutionProgress(ctx context.Context, request *cont
 		}
 	}
 	return response, nil
+}
+
+func (server *Server) CommitProviderCredentialRefresh(ctx context.Context, request *controlplanev1.CommitProviderCredentialRefreshRequest) (*controlplanev1.CommitProviderCredentialRefreshResponse, error) {
+	payload := providerCredentialRefreshInput(request)
+	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName,
+		command.CommitProviderCredentialRefresh, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.CommitProviderCredentialRefreshResponse{ProviderCredential: castProviderCredential(result.Runtime)}, nil
+}
+
+func providerCredentialRefreshInput(request *controlplanev1.CommitProviderCredentialRefreshRequest) command.ProviderCredentialRefreshInput {
+	return command.ProviderCredentialRefreshInput{
+		LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(),
+		PreviousCredentialRevisionRef: request.GetPreviousCredentialRevisionRef(),
+		PreviousContentSHA256:         request.GetPreviousContentSha256(), SecretName: request.GetSecretName(),
+		SecretUID: request.GetSecretUid(), SecretResourceVersion: request.GetSecretResourceVersion(),
+		ContentSHA256: request.GetContentSha256(),
+	}
+}
+
+func castProviderCredential(values map[string]any) *controlplanev1.ProviderCredentialBinding {
+	return &controlplanev1.ProviderCredentialBinding{
+		AccountRef:            mapString(values, "providerAccountRef"),
+		CredentialRevisionRef: mapString(values, "providerCredentialRevisionRef"),
+		CredentialRevision:    mapInt64(values, "providerCredentialRevisionNumber"),
+		SecretName:            mapString(values, "providerSecretName"), SecretUid: mapString(values, "providerSecretUID"),
+		SecretResourceVersion: mapString(values, "providerSecretResourceVersion"),
+		ContentSha256:         mapString(values, "providerCredentialSHA256"),
+	}
 }
 
 func (server *Server) CompleteExecution(ctx context.Context, request *controlplanev1.CompleteExecutionRequest) (*controlplanev1.CompleteExecutionResponse, error) {

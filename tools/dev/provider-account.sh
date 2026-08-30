@@ -91,6 +91,18 @@ permissions=$(stat -c '%a' "$auth_file")
 jq -e 'type == "object" and length > 0' "$auth_file" >/dev/null || fail 'authorization JSON is invalid'
 CODEX_HOME="$(dirname -- "$auth_file")" codex login status >/dev/null ||
   fail 'Codex does not recognize the authorization file'
+stored_auth_mode=$(jq -r '.auth_mode // ""' "$auth_file")
+case "$stored_auth_mode" in
+  chatgpt)
+    authorization_mode=managed-chatgpt-oauth
+    max_concurrent_executions=1
+    ;;
+  apikey|api-key)
+    authorization_mode=api-key
+    max_concurrent_executions=32
+    ;;
+  *) fail 'Codex authorization mode is unsupported' ;;
+esac
 
 install -d -m 0700 "$account_home"
 canonical_auth_file="$account_home/auth.json"
@@ -113,23 +125,31 @@ chmod 0600 "$temporary_directory/auth.sha256"
 
 if secret_json=$(kubectl -n "$runtime_namespace" get "secret/$secret_name" -o json 2>/dev/null); then
   existing_digest=$(jq -jr '.data["auth.json"] | @base64d' <<<"$secret_json" | sha256sum | awk '{print $1}')
-  jq -e --arg account_key "$account_key" '
+  jq -e --arg account_key "$account_key" --arg authorization_mode "$authorization_mode" '
     .immutable == true and .type == "Opaque" and
-    .metadata.annotations["kodex.dev/provider-account-key"] == $account_key
+    .metadata.annotations["kodex.dev/provider-account-key"] == $account_key and
+    (.metadata.annotations["kodex.dev/provider-authorization-mode"] // $authorization_mode) == $authorization_mode
   ' <<<"$secret_json" >/dev/null || fail 'existing provider Secret contract is invalid'
   [[ "$existing_digest" == "$digest" ]] || fail 'existing immutable provider Secret digest differs'
+  if [[ $(jq -r '.metadata.annotations["kodex.dev/provider-authorization-mode"] // ""' <<<"$secret_json") == "" ]]; then
+    kubectl -n "$runtime_namespace" annotate "secret/$secret_name" \
+      "kodex.dev/provider-authorization-mode=$authorization_mode" >/dev/null
+  fi
 else
   manifest="$temporary_directory/provider-secret.json"
   kubectl -n "$runtime_namespace" create secret generic "$secret_name" \
     --from-file=auth.json="$auth_file" \
     --from-file=auth.sha256="$temporary_directory/auth.sha256" \
-    --dry-run=client -o json | jq --arg account_key "$account_key" '
+    --dry-run=client -o json | jq --arg account_key "$account_key" --arg authorization_mode "$authorization_mode" '
       .immutable = true |
       .metadata.labels = {
         "app.kubernetes.io/part-of":"kodex",
         "app.kubernetes.io/managed-by":"kodex-local-dev"
       } |
-      .metadata.annotations = {"kodex.dev/provider-account-key":$account_key}
+      .metadata.annotations = {
+        "kodex.dev/provider-account-key":$account_key,
+        "kodex.dev/provider-authorization-mode":$authorization_mode
+      }
     ' >"$manifest"
   kubectl create --field-manager=kodex-local-dev -f "$manifest" >/dev/null
 fi
@@ -160,6 +180,7 @@ readback=$(kubectl -n "$control_namespace" exec -i kodex-postgresql-0 -- \
   -v account_ref="$account_ref" \
   -v stable_key="$account_key" \
   -v account_name="$account_name" \
+  -v max_concurrent_executions="$max_concurrent_executions" \
   -v credential_ref="$credential_ref" \
   -v secret_name="$secret_name" \
   -v secret_uid="$secret_uid" \
@@ -200,8 +221,8 @@ fi
 
 metadata_file="$account_home/account.json"
 temporary_metadata=$(mktemp "$account_home/.account.json.XXXXXX")
-jq -n --arg account_key "$account_key" --arg account_name "$account_name" '
-  {version:1, accountKey:$account_key, name:$account_name}
+jq -n --arg account_key "$account_key" --arg account_name "$account_name" --arg authorization_mode "$authorization_mode" '
+  {version:1, accountKey:$account_key, name:$account_name, authorizationMode:$authorization_mode}
 ' >"$temporary_metadata"
 chmod 0600 "$temporary_metadata"
 mv -f -- "$temporary_metadata" "$metadata_file"

@@ -7,6 +7,10 @@ var (
 	queryRuntimeClaimexecutionExpireStaleLeases string
 	//go:embed sql/runtime_claimexecution_select_claimable_agent_executions.sql
 	queryRuntimeClaimExecutionSelectClaimableAgentExecutions string
+	//go:embed sql/runtime_claimexecution_lock_provider_account.sql
+	queryRuntimeClaimexecutionLockProviderAccount string
+	//go:embed sql/runtime_claimexecution_count_active_provider_leases.sql
+	queryRuntimeClaimexecutionCountActiveProviderLeases string
 	//go:embed sql/runtime_claimexecution_insert_runtime_revision.sql
 	queryRuntimeClaimExecutionInsertRuntimeRevision string
 	//go:embed sql/runtime_claimexecution_select_assistant_context.sql
@@ -25,6 +29,16 @@ var (
 	queryRuntimeRenewexecutionUpdateRuntimeLeasesExpiresAtUpdatedAt string
 	//go:embed sql/runtime_reportprogress_update_run_nodes_progress_summary_version.sql
 	queryRuntimeReportprogressUpdateRunNodesProgressSummaryVersion string
+	//go:embed sql/runtime_commitprovidercredentialrefresh_lock_provider_account.sql
+	queryRuntimeCommitprovidercredentialrefreshLockProviderAccount string
+	//go:embed sql/runtime_commitprovidercredentialrefresh_select_pinned_credential.sql
+	queryRuntimeCommitprovidercredentialrefreshSelectPinnedCredential string
+	//go:embed sql/runtime_commitprovidercredentialrefresh_select_existing_revision.sql
+	queryRuntimeCommitprovidercredentialrefreshSelectExistingRevision string
+	//go:embed sql/runtime_commitprovidercredentialrefresh_insert_revision.sql
+	queryRuntimeCommitprovidercredentialrefreshInsertRevision string
+	//go:embed sql/runtime_commitprovidercredentialrefresh_activate_revision.sql
+	queryRuntimeCommitprovidercredentialrefreshActivateRevision string
 	//go:embed sql/runtime_completeexecution_update_runtime_leases_state_updated_at.sql
 	queryRuntimeCompleteexecutionUpdateRuntimeLeasesStateUpdatedAt string
 	//go:embed sql/runtime_completeexecution_update_run_nodes_state_progress_summary_safe_error_code.sql

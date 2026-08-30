@@ -115,6 +115,8 @@ const (
 	RevokeAccessBinding           Kind = "REVOKE_ACCESS_BINDING"
 )
 
+const CommitProviderCredentialRefresh Kind = "COMMIT_PROVIDER_CREDENTIAL_REFRESH"
+
 type Command struct {
 	Kind      Kind
 	Principal value.Principal
@@ -234,6 +236,11 @@ type LeaseInput struct {
 	Generation                        int64
 	Limit                             int32
 	Progress                          string
+}
+type ProviderCredentialRefreshInput struct {
+	LeaseRef, Fence, PreviousCredentialRevisionRef, PreviousContentSHA256 string
+	SecretName, SecretUID, SecretResourceVersion, ContentSHA256           string
+	Generation                                                            int64
 }
 type CompleteExecutionInput struct {
 	LeaseRef, Fence, ResultSummary, SafeErrorCode string

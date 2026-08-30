@@ -4,9 +4,9 @@ BEGIN;
 
 INSERT INTO control_plane.provider_accounts
     (ref, organization_id, definition_key, stable_key, name,
-     external_account_masked, state, enabled, created_by)
+     external_account_masked, state, enabled, max_concurrent_executions, created_by)
 SELECT :'account_ref', organization.id, 'openai-codex', :'stable_key',
-       :'account_name', '', 'AUTHORIZED', true, subject.id
+       :'account_name', '', 'AUTHORIZED', true, :'max_concurrent_executions'::integer, subject.id
 FROM control_plane.organizations organization
 JOIN control_plane.subjects subject
   ON subject.organization_id = organization.id
@@ -17,6 +17,7 @@ ON CONFLICT (ref) DO UPDATE
 SET name = EXCLUDED.name,
     state = 'AUTHORIZED',
     enabled = true,
+    max_concurrent_executions = EXCLUDED.max_concurrent_executions,
     version = control_plane.provider_accounts.version + 1,
     updated_at = clock_timestamp()
 WHERE control_plane.provider_accounts.organization_id = EXCLUDED.organization_id
@@ -24,7 +25,16 @@ WHERE control_plane.provider_accounts.organization_id = EXCLUDED.organization_id
   AND control_plane.provider_accounts.stable_key = EXCLUDED.stable_key
   AND (control_plane.provider_accounts.name IS DISTINCT FROM EXCLUDED.name
     OR control_plane.provider_accounts.state IS DISTINCT FROM 'AUTHORIZED'
-    OR control_plane.provider_accounts.enabled IS DISTINCT FROM true);
+    OR control_plane.provider_accounts.enabled IS DISTINCT FROM true
+    OR control_plane.provider_accounts.max_concurrent_executions IS DISTINCT FROM EXCLUDED.max_concurrent_executions);
+
+SELECT account.id AS locked_provider_account_id
+FROM control_plane.provider_accounts account
+WHERE account.ref = :'account_ref'
+  AND account.definition_key = 'openai-codex'
+  AND account.stable_key = :'stable_key'
+FOR UPDATE
+\gset
 
 INSERT INTO control_plane.provider_credential_revisions
     (ref, organization_id, provider_account_id, revision_number,

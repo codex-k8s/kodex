@@ -177,6 +177,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("provider credential legacy repair creates an immutable next revision", func(t *testing.T) {
 		testProviderCredentialLegacyRepair(t, ctx, repository, pool)
 	})
+	t.Run("provider credential refresh is fenced idempotent and capacity bounded", func(t *testing.T) {
+		testProviderCredentialRefreshAndCapacity(t, ctx, repository, pool)
+	})
 	t.Run("provider account actions follow exact application access", func(t *testing.T) {
 		testProviderAccountApplicationAccess(t, ctx, repository)
 	})
@@ -2440,6 +2443,128 @@ func graphNodeState(nodes []entity.RunNode, nodeType string) string {
 		}
 	}
 	return ""
+}
+
+func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
+	}, "control-api-gateway")
+	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
+	}, "runtime-controller")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct provider refresh service: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE control_plane.provider_accounts SET max_concurrent_executions = 1`); err != nil {
+		t.Fatalf("configure serialized provider account: %v", err)
+	}
+	defer func() {
+		if _, restoreErr := pool.Exec(context.WithoutCancel(ctx), `UPDATE control_plane.provider_accounts SET max_concurrent_executions = 32`); restoreErr != nil {
+			t.Errorf("restore provider account capacity: %v", restoreErr)
+		}
+	}()
+
+	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-refresh-project"}, Payload: command.ProjectInput{
+			Name: "Provider refresh", Purpose: "Verify serialized OAuth credential refresh", Language: "en",
+		}})
+	if err != nil || project.Project == nil {
+		t.Fatalf("create provider refresh project: project=%#v err=%v", project.Project, err)
+	}
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "provider-refresh-agent", "Provider refresh specialist")
+	for index := 1; index <= 2; index++ {
+		launched, launchErr := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "provider-refresh-launch-" + leftPad(index, 2)},
+			Payload: command.LaunchRunInput{ProjectRef: project.Project.Ref, Title: "Provider refresh run",
+				Task: "Verify provider refresh serialization.", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}},
+		})
+		if launchErr != nil || launched.Run == nil {
+			t.Fatalf("launch provider refresh run %d: run=%#v err=%v", index, launched.Run, launchErr)
+		}
+	}
+	type claimResult struct {
+		result command.Result
+		err    error
+	}
+	start := make(chan struct{})
+	results := make(chan claimResult, 2)
+	for _, key := range []string{"provider-refresh-claim-a", "provider-refresh-claim-b"} {
+		key := key
+		go func() {
+			<-start
+			result, claimErr := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+				Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.LeaseInput{WorkloadInstance: key, Limit: 1}})
+			results <- claimResult{result: result, err: claimErr}
+		}()
+	}
+	close(start)
+	var firstLease map[string]any
+	claimedCount := 0
+	for range 2 {
+		claim := <-results
+		if claim.err != nil {
+			t.Fatalf("concurrent provider claim failed: %v", claim.err)
+		}
+		claimedCount += len(claim.result.RuntimeItems)
+		if len(claim.result.RuntimeItems) == 1 {
+			firstLease = claim.result.RuntimeItems[0]
+		}
+	}
+	if claimedCount != 1 || firstLease == nil {
+		t.Fatalf("serialized provider account produced %d concurrent claims", claimedCount)
+	}
+
+	refresh := command.ProviderCredentialRefreshInput{
+		LeaseRef: stringMap(firstLease, "leaseRef"), Fence: stringMap(firstLease, "fence"), Generation: firstLease["generation"].(int64),
+		PreviousCredentialRevisionRef: stringMap(firstLease, "providerCredentialRevisionRef"),
+		PreviousContentSHA256:         stringMap(firstLease, "providerCredentialSHA256"),
+		SecretName:                    "runtime-provider-refresh-component-a", SecretUID: "50000000-0000-4000-8000-000000000001",
+		SecretResourceVersion: "refresh-1", ContentSHA256: strings.Repeat("a", 64),
+	}
+	if refresh.PreviousContentSHA256 == refresh.ContentSHA256 {
+		refresh.ContentSHA256 = strings.Repeat("b", 64)
+	}
+	committed, err := service.Execute(ctx, command.Command{Kind: command.CommitProviderCredentialRefresh, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "provider-refresh-commit"}, Payload: refresh})
+	if err != nil || stringMap(committed.Runtime, "providerCredentialRevisionRef") == "" ||
+		stringMap(committed.Runtime, "providerCredentialSHA256") != refresh.ContentSHA256 {
+		t.Fatalf("commit provider credential refresh: binding=%#v err=%v", committed.Runtime, err)
+	}
+	committedRef := stringMap(committed.Runtime, "providerCredentialRevisionRef")
+	repeated, err := service.Execute(ctx, command.Command{Kind: command.CommitProviderCredentialRefresh, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "provider-refresh-repeat"}, Payload: refresh})
+	if err != nil || stringMap(repeated.Runtime, "providerCredentialRevisionRef") != committedRef {
+		t.Fatalf("repeat provider credential refresh: binding=%#v err=%v", repeated.Runtime, err)
+	}
+	var exactRevisionCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FROM control_plane.provider_credential_revisions
+		WHERE ref = $1 AND secret_uid = $2::uuid AND secret_resource_version = $3 AND content_sha256 = $4
+	`, committedRef, refresh.SecretUID, refresh.SecretResourceVersion, refresh.ContentSHA256).Scan(&exactRevisionCount); err != nil || exactRevisionCount != 1 {
+		t.Fatalf("provider credential refresh was not immutable and idempotent: count=%d err=%v", exactRevisionCount, err)
+	}
+	late := refresh
+	late.SecretUID = "50000000-0000-4000-8000-000000000002"
+	late.SecretResourceVersion = "refresh-2"
+	late.ContentSHA256 = strings.Repeat("c", 64)
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CommitProviderCredentialRefresh, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "provider-refresh-late"}, Payload: late}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("late provider credential callback was not rejected: %v", err)
+	}
+
+	completeClaimedExecution(t, ctx, service, worker, firstLease, "provider-refresh-first", false)
+	second, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "provider-refresh-claim-after-release"},
+		Payload:  command.LeaseInput{WorkloadInstance: "provider-refresh-after-release", Limit: 1}})
+	if err != nil || len(second.RuntimeItems) != 1 ||
+		stringMap(second.RuntimeItems[0], "providerCredentialRevisionRef") != committedRef {
+		t.Fatalf("claim after provider capacity release: claims=%#v err=%v", second.RuntimeItems, err)
+	}
+	completeClaimedExecution(t, ctx, service, worker, second.RuntimeItems[0], "provider-refresh-second", false)
 }
 
 func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {

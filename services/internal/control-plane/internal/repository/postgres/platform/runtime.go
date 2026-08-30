@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -74,6 +76,8 @@ func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, sc
 		return repository.renewExecution(ctx, tx, scope, input)
 	case command.ReportExecutionProgress:
 		return repository.reportProgress(ctx, tx, scope, input)
+	case command.CommitProviderCredentialRefresh:
+		return repository.commitProviderCredentialRefresh(ctx, tx, scope, input)
 	case command.CompleteExecution:
 		return repository.completeExecution(ctx, tx, scope, input)
 	case command.DelegateExecution:
@@ -361,9 +365,36 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	}
 	rows.Close()
 
+	providerAccountCapacity := make(map[string]int64)
+	providerAccountIDs := make([]string, 0)
+	for _, candidate := range claimable {
+		if _, exists := providerAccountCapacity[candidate.providerAccountID]; exists {
+			continue
+		}
+		providerAccountCapacity[candidate.providerAccountID] = 0
+		providerAccountIDs = append(providerAccountIDs, candidate.providerAccountID)
+	}
+	sort.Strings(providerAccountIDs)
+	for _, providerAccountID := range providerAccountIDs {
+		var maximumConcurrentExecutions int64
+		if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionLockProviderAccount,
+			providerAccountID, scope.organizationID).Scan(&maximumConcurrentExecutions); err != nil {
+			return commandOutcome{}, fmt.Errorf("lock provider account claim capacity: %w", errs.ErrUnavailable)
+		}
+		providerAccountCapacity[providerAccountID] = maximumConcurrentExecutions
+	}
+
 	var items []map[string]any
 	var firstProjectID, firstProjectRef, firstRunRef string
 	for _, candidate := range claimable {
+		var activeExecutions int64
+		if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionCountActiveProviderLeases,
+			candidate.providerAccountID, scope.organizationID).Scan(&activeExecutions); err != nil {
+			return commandOutcome{}, fmt.Errorf("count active provider account leases: %w", errs.ErrUnavailable)
+		}
+		if activeExecutions >= providerAccountCapacity[candidate.providerAccountID] {
+			continue
+		}
 		nodeID, nodeRef, runID, runRef := candidate.nodeID, candidate.nodeRef, candidate.runID, candidate.runRef
 		rootRunID, projectID, projectRef := candidate.rootRunID, candidate.projectID, candidate.projectRef
 		sessionID, sessionRef, task, agentRef := candidate.sessionID, candidate.sessionRef, candidate.task, candidate.agentRef
@@ -587,6 +618,130 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		}
 	}
 	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: firstRunRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED"}, nil
+}
+
+func (repository *Repository) commitProviderCredentialRefresh(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {
+	payload, ok := input.Payload.(command.ProviderCredentialRefreshInput)
+	if !ok || !validProviderCredentialRefresh(payload) {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	lease, err := repository.lease(ctx, tx, machineScope, command.LeaseInput{
+		LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation,
+	}, true)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+
+	var accountID, currentCredentialID string
+	if err := tx.QueryRow(ctx, queryRuntimeCommitprovidercredentialrefreshLockProviderAccount,
+		machineScope.organizationID, lease["runtimeRevisionID"]).Scan(&accountID, &currentCredentialID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrNotFound
+		}
+		return commandOutcome{}, fmt.Errorf("lock provider account for credential refresh: %w", errs.ErrUnavailable)
+	}
+
+	var accountRef, pinnedCredentialID, pinnedCredentialRef, pinnedContentSHA256 string
+	if err := tx.QueryRow(ctx, queryRuntimeCommitprovidercredentialrefreshSelectPinnedCredential,
+		machineScope.organizationID, lease["runtimeRevisionID"], accountID).Scan(
+		&accountRef, &pinnedCredentialID, &pinnedCredentialRef, &pinnedContentSHA256,
+	); err != nil {
+		return commandOutcome{}, fmt.Errorf("read pinned provider credential: %w", errs.ErrUnavailable)
+	}
+	if payload.PreviousCredentialRevisionRef != pinnedCredentialRef || payload.PreviousContentSHA256 != pinnedContentSHA256 {
+		return commandOutcome{}, errs.ErrConflict
+	}
+
+	var existingCredentialID, existingCredentialRef, existingSecretName, existingSecretUID string
+	var existingSecretResourceVersion, existingContentSHA256 string
+	var existingRevisionNumber int64
+	existingErr := tx.QueryRow(ctx, queryRuntimeCommitprovidercredentialrefreshSelectExistingRevision,
+		accountID, payload.SecretUID, payload.SecretResourceVersion).Scan(
+		&existingCredentialID, &existingCredentialRef, &existingRevisionNumber, &existingSecretName,
+		&existingSecretUID, &existingSecretResourceVersion, &existingContentSHA256,
+	)
+	if existingErr == nil {
+		if existingSecretName != payload.SecretName || existingSecretUID != payload.SecretUID ||
+			existingSecretResourceVersion != payload.SecretResourceVersion || existingContentSHA256 != payload.ContentSHA256 ||
+			currentCredentialID != existingCredentialID {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		return providerCredentialRefreshOutcome(lease, accountRef, existingCredentialRef, existingRevisionNumber,
+			existingSecretName, existingSecretUID, existingSecretResourceVersion, existingContentSHA256), nil
+	}
+	if !errors.Is(existingErr, pgx.ErrNoRows) {
+		return commandOutcome{}, fmt.Errorf("read existing provider credential refresh: %w", errs.ErrUnavailable)
+	}
+	if currentCredentialID != pinnedCredentialID {
+		return commandOutcome{}, errs.ErrConflict
+	}
+
+	credentialRef, err := newRef("pcr")
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	var credentialID string
+	var revisionNumber int64
+	if err := tx.QueryRow(ctx, queryRuntimeCommitprovidercredentialrefreshInsertRevision, pgx.StrictNamedArgs{
+		"ref": credentialRef, "organization_id": machineScope.organizationID, "provider_account_id": accountID,
+		"secret_name": payload.SecretName, "secret_uid": payload.SecretUID,
+		"secret_resource_version": payload.SecretResourceVersion, "content_sha256": payload.ContentSHA256,
+	}).Scan(&credentialID, &revisionNumber); err != nil {
+		return commandOutcome{}, fmt.Errorf("insert provider credential refresh revision: %w", errs.ErrConflict)
+	}
+	tag, err := tx.Exec(ctx, queryRuntimeCommitprovidercredentialrefreshActivateRevision,
+		accountID, pinnedCredentialID, credentialID)
+	if err != nil {
+		return commandOutcome{}, fmt.Errorf("activate provider credential refresh revision: %w", errs.ErrUnavailable)
+	}
+	if tag.RowsAffected() != 1 {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	return providerCredentialRefreshOutcome(lease, accountRef, credentialRef, revisionNumber,
+		payload.SecretName, payload.SecretUID, payload.SecretResourceVersion, payload.ContentSHA256), nil
+}
+
+func validProviderCredentialRefresh(input command.ProviderCredentialRefreshInput) bool {
+	if input.LeaseRef == "" || input.Fence == "" || input.Generation < 1 ||
+		len(input.PreviousCredentialRevisionRef) < 8 || len(input.PreviousCredentialRevisionRef) > 96 ||
+		len(input.PreviousContentSHA256) != 64 || len(input.ContentSHA256) != 64 ||
+		len(input.SecretName) < 1 || len(input.SecretName) > 63 ||
+		len(input.SecretResourceVersion) < 1 || len(input.SecretResourceVersion) > 128 {
+		return false
+	}
+	secretUID, err := uuid.Parse(input.SecretUID)
+	if err != nil || secretUID.String() != input.SecretUID {
+		return false
+	}
+	for _, digest := range []string{input.PreviousContentSHA256, input.ContentSHA256} {
+		if _, err := hex.DecodeString(digest); err != nil || strings.ToLower(digest) != digest {
+			return false
+		}
+	}
+	for index, character := range input.SecretName {
+		if character >= 'a' && character <= 'z' || character >= '0' && character <= '9' ||
+			character == '-' && index > 0 && index < len(input.SecretName)-1 {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func providerCredentialRefreshOutcome(lease map[string]any, accountRef, credentialRef string, revisionNumber int64,
+	secretName, secretUID, secretResourceVersion, contentSHA256 string,
+) commandOutcome {
+	return commandOutcome{
+		result: command.Result{Runtime: map[string]any{
+			"providerAccountRef": accountRef, "providerCredentialRevisionRef": credentialRef,
+			"providerCredentialRevisionNumber": revisionNumber, "providerSecretName": secretName,
+			"providerSecretUID": secretUID, "providerSecretResourceVersion": secretResourceVersion,
+			"providerCredentialSHA256": contentSHA256,
+		}},
+		projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"),
+		resourceKind: "PROVIDER_ACCOUNT", resourceRef: accountRef,
+		summary: "i18n:PROVIDER_CREDENTIAL_REFRESH_COMMITTED",
+	}
 }
 
 func jsonUnmarshal(raw []byte, target any) error { return json.Unmarshal(raw, target) }

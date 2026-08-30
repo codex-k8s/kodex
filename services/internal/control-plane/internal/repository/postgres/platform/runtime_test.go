@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
@@ -45,6 +46,34 @@ func TestRuntimeRevisionDigestBindsEnvironmentImageAndTools(t *testing.T) {
 	}
 	if runtimeRevisionDigest(changedToolsDigest, "fixed-runtime-input") == baseline {
 		t.Fatal("selected tools change did not change RuntimeRevision digest")
+	}
+}
+
+func TestProviderCredentialRefreshValidationRequiresExactImmutableSecretBinding(t *testing.T) {
+	t.Parallel()
+	valid := command.ProviderCredentialRefreshInput{
+		LeaseRef: "lea_abcdefgh", Fence: "fnc_abcdefgh", Generation: 1,
+		PreviousCredentialRevisionRef: "pcr_previous1", PreviousContentSHA256: strings.Repeat("a", 64),
+		SecretName: "runtime-provider-refresh-1", SecretUID: "10000000-0000-4000-8000-000000000010",
+		SecretResourceVersion: "42", ContentSHA256: strings.Repeat("b", 64),
+	}
+	if !validProviderCredentialRefresh(valid) {
+		t.Fatalf("valid provider credential refresh was rejected: %#v", valid)
+	}
+	for name, mutate := range map[string]func(*command.ProviderCredentialRefreshInput){
+		"uppercase digest": func(input *command.ProviderCredentialRefreshInput) { input.ContentSHA256 = strings.Repeat("B", 64) },
+		"invalid uid":      func(input *command.ProviderCredentialRefreshInput) { input.SecretUID = "not-a-uuid" },
+		"invalid secret":   func(input *command.ProviderCredentialRefreshInput) { input.SecretName = "Invalid_Secret" },
+		"missing fence":    func(input *command.ProviderCredentialRefreshInput) { input.Fence = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			input := valid
+			mutate(&input)
+			if validProviderCredentialRefresh(input) {
+				t.Fatalf("invalid provider credential refresh was accepted: %#v", input)
+			}
+		})
 	}
 }
 

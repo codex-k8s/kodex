@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
@@ -68,5 +69,38 @@ func TestCastClaimPreservesAuthoritativeProjectBinding(t *testing.T) {
 	})
 	if claim.GetRun().GetProjectRef() != "prj_abcdefgh" {
 		t.Fatalf("project binding потерян: %q", claim.GetRun().GetProjectRef())
+	}
+}
+
+func TestProviderCredentialRefreshTransportPreservesExactCASBinding(t *testing.T) {
+	t.Parallel()
+
+	request := &controlplanev1.CommitProviderCredentialRefreshRequest{
+		LeaseRef: "lea_abcdefgh", Fence: "fnc_abcdefgh", Generation: 3,
+		PreviousCredentialRevisionRef: "pcr_previous1", PreviousContentSha256: strings.Repeat("a", 64),
+		SecretName: "runtime-provider-refresh-1", SecretUid: "10000000-0000-4000-8000-000000000010",
+		SecretResourceVersion: "42", ContentSha256: strings.Repeat("b", 64),
+	}
+	payload := providerCredentialRefreshInput(request)
+	if payload.LeaseRef != request.GetLeaseRef() || payload.Fence != request.GetFence() ||
+		payload.Generation != request.GetGeneration() ||
+		payload.PreviousCredentialRevisionRef != request.GetPreviousCredentialRevisionRef() ||
+		payload.PreviousContentSHA256 != request.GetPreviousContentSha256() ||
+		payload.SecretName != request.GetSecretName() || payload.SecretUID != request.GetSecretUid() ||
+		payload.SecretResourceVersion != request.GetSecretResourceVersion() ||
+		payload.ContentSHA256 != request.GetContentSha256() {
+		t.Fatalf("transport lost provider credential CAS fields: %#v", payload)
+	}
+
+	binding := castProviderCredential(map[string]any{
+		"providerAccountRef": "pacc_abcdefgh", "providerCredentialRevisionRef": "pcr_next1234",
+		"providerCredentialRevisionNumber": int64(7), "providerSecretName": request.GetSecretName(),
+		"providerSecretUID": request.GetSecretUid(), "providerSecretResourceVersion": request.GetSecretResourceVersion(),
+		"providerCredentialSHA256": request.GetContentSha256(),
+	})
+	if binding.GetAccountRef() != "pacc_abcdefgh" || binding.GetCredentialRevisionRef() != "pcr_next1234" ||
+		binding.GetCredentialRevision() != 7 || binding.GetSecretUid() != request.GetSecretUid() ||
+		binding.GetContentSha256() != request.GetContentSha256() {
+		t.Fatalf("transport returned incomplete provider credential binding: %#v", binding)
 	}
 }
