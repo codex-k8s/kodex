@@ -34,7 +34,7 @@ case "$mode" in reconcile|commit) ;; *) fail 'mode is invalid' ;; esac
   fail 'state directory must be owned by the current user and private'
 [[ "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
   fail 'production context is forbidden'
-for command_name in jq kubectl sha256sum stat; do
+for command_name in jq kubectl openssl sha256sum stat; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'Kubernetes context mismatch'
@@ -91,6 +91,22 @@ if [[ -f "$marker" && ! -L "$marker" && -d "$material_directory" &&
   actual_revision=$(jq -cS . "$marker" 2>/dev/null || true)
   expected_canonical=$(jq -cS . <<<"$expected_revision")
   [[ "$actual_revision" == "$expected_canonical" ]] && revision_matches=true
+fi
+if [[ "$revision_matches" == true ]]; then
+  certificate_files=(
+    "$material_directory/node-pull/client.crt"
+    "$material_directory/projections/kodex-buildkit-tls/server.crt"
+    "$material_directory/projections/kodex-image-registry-pull/tls.crt"
+    "$material_directory/projections/kodex-image-registry-promotion/tls.crt"
+    "$material_directory/projections/role-image-builder-buildkit-client/tls.crt"
+  )
+  for certificate_file in "${certificate_files[@]}"; do
+    if [[ ! -f "$certificate_file" || -L "$certificate_file" ]] ||
+      ! openssl x509 -in "$certificate_file" -noout -checkend 900 >/dev/null 2>&1; then
+      revision_matches=false
+      break
+    fi
+  done
 fi
 if [[ "$revision_matches" == true ]]; then
   printf 'reuse\n'

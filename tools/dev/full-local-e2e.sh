@@ -15,7 +15,7 @@ usage() {
 }
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-kubeconfig=${KODEX_DEV_KUBECONFIG:-/home/s/.kube/kodex-dev-local}
+kubeconfig=${KODEX_DEV_KUBECONFIG:-"$HOME/.kube/kodex-dev-local"}
 context=""
 state_directory="$repository_root/.kodex-dev"
 resource_prefix="full-local-e2e-$(date -u +%Y%m%d%H%M%S)"
@@ -205,6 +205,11 @@ fi
 run_phase browser-auth-and-full-e2e "$repository_root/dev.sh" e2e \
   "${common_arguments[@]}" --resource-prefix "$resource_prefix" \
   --run-timeout-ms "$run_timeout_ms"
+run_phase role-image-build-admit-promote-runtime-readback env \
+  KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+  "$repository_root/scripts/tests/local-role-image-supply-chain-e2e.sh" \
+  "${common_arguments[@]}" --resource-prefix "$resource_prefix" \
+  --timeout-seconds "$((run_timeout_ms / 1000))"
 run_phase session-archive-write-restore-delete-readback env \
   KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
   "$repository_root/scripts/tests/local-session-archive-e2e.sh" \

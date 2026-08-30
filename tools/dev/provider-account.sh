@@ -20,7 +20,7 @@ command_name=${1:-}
 shift
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-kubeconfig=${KODEX_DEV_KUBECONFIG:-/home/s/.kube/kodex-dev-local}
+kubeconfig=${KODEX_DEV_KUBECONFIG:-"$HOME/.kube/kodex-dev-local"}
 context=${KODEX_DEV_KUBE_CONTEXT:-default}
 state_directory="$repository_root/.kodex-dev"
 account_key=""

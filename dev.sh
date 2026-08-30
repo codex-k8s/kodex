@@ -33,7 +33,7 @@ case "$command_name" in
     exec "$(dirname -- "${BASH_SOURCE[0]}")/tools/dev/provider-account.sh" list "$@"
     ;;
 esac
-kubeconfig=${KODEX_DEV_KUBECONFIG:-/home/s/.kube/kodex-dev-local}
+kubeconfig=${KODEX_DEV_KUBECONFIG:-"$HOME/.kube/kodex-dev-local"}
 context=${KODEX_DEV_KUBE_CONTEXT:-default}
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 state_directory="$repository_root/.kodex-dev"
@@ -92,6 +92,13 @@ public_host="control.$dns_suffix"
 oidc_host="sso.$dns_suffix"
 grafana_host="grafana.$dns_suffix"
 headlamp_host="headlamp.$dns_suffix"
+registry_host="registry.$dns_suffix"
+promoted_pull_host="pull.$dns_suffix"
+keycloak_origin_arguments=(
+  --public-origin "https://$public_host"
+  --grafana-origin "https://$grafana_host"
+  --headlamp-origin "https://$headlamp_host"
+)
 
 credentials_file="$state_directory/credentials.env"
 if [[ ! -e "$credentials_file" ]]; then
@@ -120,7 +127,7 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
       --source-root "$repository_root" --state-directory "$state_directory"
   fi
   "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
-    --render "$state_directory/render.yaml"
+    --render "$state_directory/render.yaml" --state-directory "$state_directory"
   if [[ "$command_name" == status ]]; then
     printf 'Control Center: https://%s\nCredentials: %s\n' "$public_host" "$credentials_file"
     exit 0
@@ -200,8 +207,8 @@ if [[ ! -d "$material_directory" ]]; then
   chmod 0600 "$registry_username" "$registry_password"
   "$repository_root/tools/install/generate-material.sh" \
     --output-directory "$material_directory" \
-    --release-registry-host registry.local.kodex \
-    --promoted-pull-host pull.local.kodex \
+    --release-registry-host "$registry_host" \
+    --promoted-pull-host "$promoted_pull_host" \
     --release-registry-username-file "$registry_username" \
     --release-registry-password-file "$registry_password"
 fi
@@ -235,8 +242,7 @@ kubectl label namespace identity app.kubernetes.io/part-of=kodex kodex.dev/capab
 kubectl -n identity patch serverstransport sso-public --type=merge \
   -p '{"spec":{"rootCAsSecrets":["sso-public-tls"]}}' >/dev/null
 "$repository_root/tools/deploy/configure-keycloak.sh" --context "$context" --mode apply \
-  --public-origin "https://$public_host" --grafana-origin "https://$grafana_host" \
-  --headlamp-origin "https://$headlamp_host"
+  "${keycloak_origin_arguments[@]}"
 
 "$repository_root/tools/install/materialize-nats-runtime-users.sh" \
   --context "$context" --material-directory "$material_directory"
@@ -259,6 +265,10 @@ fi
 "$repository_root/tools/dev/reconcile-local-material.sh" --context "$context" \
   --state-directory "$state_directory" --mode commit >/dev/null
 
+"$repository_root/tools/dev/configure-local-node-registry.sh" --mode apply \
+  --context "$context" --material-directory "$material_directory" \
+  --promoted-pull-host "$promoted_pull_host"
+
 "$repository_root/tools/dev/build-local-runner.sh" \
   --source-root "$repository_root" --state-directory "$state_directory"
 runner_image=$(<"$state_directory/agent-runner-image")
@@ -268,6 +278,15 @@ session_archive_image=$(<"$state_directory/session-archive-image")
 "$repository_root/tools/dev/build-local-backup-controller.sh" \
   --source-root "$repository_root" --state-directory "$state_directory"
 backup_controller_image=$(<"$state_directory/backup-controller-image")
+"$repository_root/tools/dev/build-local-image-supply-chain.sh" \
+  --source-root "$repository_root" --state-directory "$state_directory"
+role_image_builder_image=$(<"$state_directory/role-image-builder-image")
+image_admission_image=$(<"$state_directory/image-admission-image")
+image_admission_tools_image=$(<"$state_directory/image-admission-tools-image")
+authority_image=$(<"$state_directory/internal-rpc-authority-image")
+role_image_input_manifest_digest=$(jq -er '.manifestDigest' "$state_directory/role-image-input.json")
+role_image_input_payload_sha256=$(jq -er '.payloadSha256' "$state_directory/role-image-input.json")
+role_image_input_source_sha256=$(jq -er '.sourceSha256' "$state_directory/role-image-input.json")
 
 api_service_ip=$(kubectl -n default get service kubernetes -o jsonpath='{.spec.clusterIP}')
 api_endpoint_slices=$(kubectl -n default get endpointslice \
@@ -297,9 +316,17 @@ api_endpoint_port=$(jq -er '
   --kubernetes-endpoint-port "$api_endpoint_port" \
   --runner-image "$runner_image" \
   --session-archive-image "$session_archive_image" \
-  --backup-controller-image "$backup_controller_image"
+  --backup-controller-image "$backup_controller_image" \
+  --promoted-pull-host "$promoted_pull_host" \
+  --role-image-builder-image "$role_image_builder_image" \
+  --image-admission-image "$image_admission_image" \
+  --image-admission-tools-image "$image_admission_tools_image" \
+  --authority-image "$authority_image" \
+  --role-image-input-manifest-digest "$role_image_input_manifest_digest" \
+  --role-image-input-payload-sha256 "$role_image_input_payload_sha256" \
+  --role-image-input-source-sha256 "$role_image_input_source_sha256"
 "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode apply \
-  --render "$state_directory/render.yaml"
+  --render "$state_directory/render.yaml" --state-directory "$state_directory"
 
 provider_metadata=("$state_directory"/provider-accounts/*/account.json)
 restored_provider_accounts=0
@@ -325,12 +352,11 @@ for metadata_file in "${provider_metadata[@]}"; do
 done
 if ((restored_provider_accounts > 0)); then
   "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
-    --render "$state_directory/render.yaml"
+    --render "$state_directory/render.yaml" --state-directory "$state_directory"
 fi
 
 "$repository_root/tools/deploy/configure-keycloak.sh" --context "$context" --mode readback \
-  --public-origin "https://$public_host" --grafana-origin "https://$grafana_host" \
-  --headlamp-origin "https://$headlamp_host"
+  "${keycloak_origin_arguments[@]}"
 
 printf '%s\n' \
   'Kodex local development is ready' \

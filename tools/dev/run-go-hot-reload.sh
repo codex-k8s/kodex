@@ -25,16 +25,40 @@ repository_root=/workspace
 module_root="$repository_root/$module"
 test -r "$module_root/go.mod" || fail 'Go module is absent'
 
+gomodcache=${GOMODCACHE:-$(go env GOMODCACHE)}
+gopath=${GOPATH:-$(go env GOPATH)}
+gocache=${GOCACHE:-/go/build-cache/$name}
+gotmpdir=${GOTMPDIR:-$gocache/tmp}
+home=${HOME:-$gocache/home}
+for writable_directory in \
+  "$gomodcache" \
+  "$gomodcache/cache/download/sumdb/sum.golang.org" \
+  "$gopath/pkg/sumdb/sum.golang.org" \
+  "$gocache" \
+  "$gotmpdir" \
+  "$home" \
+  /go/tools; do
+  mkdir -p -- "$writable_directory" || fail "cannot create writable Go path: $writable_directory"
+  test -w "$writable_directory" || fail "Go path is not writable: $writable_directory"
+done
+
 air_version=${KODEX_DEV_AIR_VERSION:-v1.63.4}
 air_binary=/go/tools/air
-if [ ! -x "$air_binary" ]; then
+air_is_usable() {
+  [ -x "$air_binary" ] && "$air_binary" -v >/dev/null 2>&1
+}
+if ! air_is_usable; then
   install_lock=/go/tools/.air-install.lock
   while ! mkdir "$install_lock" 2>/dev/null; do sleep 1; done
-  if [ ! -x "$air_binary" ]; then
-    GOBIN=/go/tools GOWORK=off go install "github.com/air-verse/air@$air_version"
+  if ! air_is_usable; then
+    rm -f -- "$air_binary"
+    CGO_ENABLED=0 GOBIN=/go/tools GOMODCACHE="$gomodcache" GOCACHE="$gocache" \
+      GOTMPDIR="$gotmpdir" HOME="$home" GOWORK=off \
+      go install "github.com/air-verse/air@$air_version"
   fi
   rmdir "$install_lock"
 fi
+air_is_usable || fail 'Air executable is unavailable'
 
 runtime_root="/tmp/kodex-dev-$name"
 config="$runtime_root/air.toml"

@@ -7,17 +7,21 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --context <exact-context> --mode apply|readback --render <path>\n' "$0" >&2
+  printf '%s\n' \
+    'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
+    '  --render <path> --state-directory <path>' >&2
 }
 
 context=""
 mode=""
 render=""
+state_directory=""
 while (($# > 0)); do
   case "$1" in
     --context) context=${2:-}; shift 2 ;;
     --mode) mode=${2:-}; shift 2 ;;
     --render) render=${2:-}; shift 2 ;;
+    --state-directory) state_directory=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -26,12 +30,17 @@ done
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
 [[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
-for command_name in jq kubectl openssl sha256sum yq; do
+[[ "$state_directory" == /* && "$state_directory" != / && -d "$state_directory" &&
+  ! -L "$state_directory" ]] || fail 'state directory is invalid'
+for command_name in docker jq kubectl openssl sha256sum yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'Kubernetes context mismatch'
+[[ "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
+  fail 'production context is forbidden'
 
 namespace=kodex-system
+script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 object_storage_secret_name=""
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
@@ -48,6 +57,69 @@ apply_render() {
   local name=$1 expression=$2 output
   output=$(filter_render "$name" "$expression")
   kubectl apply --server-side --force-conflicts --field-manager=kodex-local-dev -f "$output" >/dev/null
+}
+
+apply_image_admission_crd() {
+  local output="$temporary_directory/image-admission-crd.yaml"
+  yq 'select(.kind == "CustomResourceDefinition" and
+    .metadata.name == "imageadmissionpolicyparameters.supplychain.kodex.dev")' \
+    "$render" >"$output"
+  [[ -s "$output" ]] || fail 'image admission policy CRD is absent from local render'
+  kubectl apply --server-side --force-conflicts --field-manager=kodex-local-dev \
+    -f "$output" >/dev/null
+  kubectl wait --for=condition=Established \
+    customresourcedefinition/imageadmissionpolicyparameters.supplychain.kodex.dev \
+    --timeout=3m >/dev/null || fail 'image admission policy CRD is not Established'
+}
+
+reconcile_local_immutable_image_admission_policy() {
+  local desired current desired_digest current_digest
+  desired=$(yq -o=json -I=0 '
+    select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "kodex-image-admission-policy")
+  ' "$render")
+  [[ -n "$desired" && "$desired" != null ]] ||
+    fail 'local immutable image admission ConfigMap is absent'
+  current=$(kubectl -n "$namespace" get \
+    configmap/kodex-image-admission-policy -o json 2>/dev/null || true)
+  if [[ -n "$current" ]]; then
+    desired_digest=$(jq -Sc '{immutable,data,annotations:.metadata.annotations}' \
+      <<<"$desired" | sha256sum | awk '{print $1}')
+    current_digest=$(jq -Sc '{immutable,data,annotations:.metadata.annotations}' \
+      <<<"$current" | sha256sum | awk '{print $1}')
+    if [[ "$current_digest" != "$desired_digest" ]]; then
+      jq -e '
+        .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+        .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
+      ' <<<"$current" >/dev/null ||
+        fail 'immutable image admission ConfigMap is not owned by the local Kodex profile'
+      kubectl -n "$namespace" delete configmap/kodex-image-admission-policy \
+        --wait=true --timeout=2m >/dev/null
+    fi
+  fi
+
+  desired=$(yq -o=json -I=0 '
+    select(.apiVersion == "supplychain.kodex.dev/v1alpha1" and
+      .kind == "ImageAdmissionPolicyParameters" and
+      .metadata.namespace == "kodex-system" and
+      .metadata.name == "kodex-image-admission-policy")
+  ' "$render")
+  [[ -n "$desired" && "$desired" != null ]] ||
+    fail 'local ImageAdmissionPolicyParameters is absent'
+  current=$(kubectl -n "$namespace" get \
+    imageadmissionpolicyparameters/kodex-image-admission-policy -o json 2>/dev/null || true)
+  [[ -n "$current" ]] || return 0
+  desired_digest=$(jq -Sc '.spec' <<<"$desired" | sha256sum | awk '{print $1}')
+  current_digest=$(jq -Sc '.spec' <<<"$current" | sha256sum | awk '{print $1}')
+  [[ "$current_digest" != "$desired_digest" ]] || return 0
+  jq -e '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
+  ' <<<"$current" >/dev/null ||
+    fail 'immutable image admission policy is not owned by the local Kodex profile'
+  kubectl -n "$namespace" delete \
+    imageadmissionpolicyparameters/kodex-image-admission-policy \
+    --wait=true --timeout=2m >/dev/null
 }
 
 reconcile_local_mutable_configmaps() {
@@ -554,14 +626,114 @@ wait_stable_workloads() {
   fail 'local workloads did not retain a stable Ready state'
 }
 
+readback_local_image_supply_chain() {
+  local expected_policy actual_policy policy_resource expected_digest actual_digest
+  local target_registry promoted_pull_host resource name
+  expected_policy=$(yq -o=json -I=0 '
+    select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "kodex-image-admission-policy") | .data
+  ' "$render")
+  [[ -n "$expected_policy" && "$expected_policy" != null ]] ||
+    fail 'rendered image admission policy is absent'
+  actual_policy=$(kubectl -n "$namespace" get \
+    configmap/kodex-image-admission-policy -o json | jq -cS '.data') ||
+    fail 'image admission policy ConfigMap is absent'
+  expected_digest=$(jq -cS . <<<"$expected_policy" | sha256sum | awk '{print $1}')
+  actual_digest=$(jq -cS . <<<"$actual_policy" | sha256sum | awk '{print $1}')
+  [[ "$actual_digest" == "$expected_digest" ]] ||
+    fail 'image admission policy ConfigMap readback mismatch'
+
+  policy_resource=$(kubectl -n "$namespace" get \
+    imageadmissionpolicyparameters/kodex-image-admission-policy -o json) ||
+    fail 'ImageAdmissionPolicyParameters is absent'
+  actual_digest=$(jq -cS '.spec' <<<"$policy_resource" | sha256sum | awk '{print $1}')
+  [[ "$actual_digest" == "$expected_digest" ]] ||
+    fail 'immutable image admission policy readback mismatch'
+  jq -e '
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    (.spec.orchestrationRevision | test("^[a-f0-9]{40}$")) and
+    (.spec.toolsImage | test("@sha256:[a-f0-9]{64}$")) and
+    (.spec.admissionImage | test("@sha256:[a-f0-9]{64}$")) and
+    (.spec.authorityImage | test("@sha256:[a-f0-9]{64}$")) and
+    (.spec.nodeReadbackImage | test("@sha256:[a-f0-9]{64}$")) and
+    (.spec.trustedRoleBaseDigest | test("^sha256:[a-f0-9]{64}$")) and
+    (.spec.pullCredentialGeneration | tonumber) > 0 and
+    (.spec.policyRevision | tonumber) > 0 and
+    ([.spec.toolsImage,.spec.admissionImage,.spec.authorityImage,
+      .spec.nodeReadbackImage,.spec.trustedRoleBaseDigest,.spec.policySHA256,
+      .spec.frontendSHA256,.spec.toolchainSHA256,
+      .spec.roleRuntimeContractSHA256] |
+      all(test("0{64}") | not))
+  ' <<<"$policy_resource" >/dev/null || fail 'image admission policy is unresolved'
+
+  for resource in \
+    customresourcedefinition/imageadmissionpolicyparameters.supplychain.kodex.dev \
+    validatingadmissionpolicy/kodex-image-admission-controller-jobs \
+    validatingadmissionpolicybinding/kodex-image-admission-controller-jobs \
+    validatingadmissionpolicy/kodex-image-admission-controller-workspaces \
+    validatingadmissionpolicybinding/kodex-image-admission-controller-workspaces; do
+    kubectl get "$resource" >/dev/null 2>&1 ||
+      fail "cluster-scoped image supply-chain resource is absent: $resource"
+  done
+  for name in kodex-image-registry-pull kodex-image-registry-push \
+    kodex-image-registry-promotion kodex-image-registry-staging-read \
+    kodex-image-registry-evidence kodex-buildkit image-admission-controller \
+    role-image-builder; do
+    kubectl -n "$namespace" get "deployment/$name" >/dev/null 2>&1 ||
+      fail "image supply-chain Deployment is absent: $name"
+  done
+  for name in kodex-image-registry-pull kodex-image-registry-push \
+    kodex-image-registry-promotion kodex-image-registry-staging-read \
+    kodex-image-registry-evidence kodex-buildkit image-admission-controller \
+    role-image-builder; do
+    kubectl -n "$namespace" get "service/$name" >/dev/null 2>&1 ||
+      fail "image supply-chain Service is absent: $name"
+  done
+  for name in kodex-image-registry-staging kodex-image-registry-promoted; do
+    kubectl -n "$namespace" get "persistentvolumeclaim/$name" >/dev/null 2>&1 ||
+      fail "image supply-chain PVC is absent: $name"
+  done
+
+  kubectl -n "$namespace" get deployment/kodex-buildkit -o json | jq -e '
+    .spec.replicas == 1 and .status.readyReplicas == 1 and
+    .spec.template.spec.hostUsers == false and
+    any(.spec.template.spec.containers[];
+      .name == "buildkitd" and .securityContext.privileged == true and
+      .securityContext.runAsUser == 0 and
+      any(.args[]; . == "--config=/var/run/config/kodex/buildkit/buildkitd.toml"))
+  ' >/dev/null || fail 'BuildKit user-namespace/readiness contract failed'
+
+  target_registry=$(kubectl -n "$namespace" get \
+    configmap/internal-rpc-authority-publisher-target-registry \
+    -o jsonpath='{.data.key-delivery-targets\.yaml}')
+  yq -e '
+    [.targets[] | select(
+      (.workload_id == "image-admission" and
+       .service_account == "image-admission") or
+      (.workload_id == "image-promotion" and
+       .service_account == "image-promotion") or
+      (.workload_id == "role-image-builder" and
+       .service_account == "role-image-builder")
+    )] | length == 3
+  ' <<<"$target_registry" >/dev/null ||
+    fail 'image supply-chain authority targets readback failed'
+
+  promoted_pull_host=$(jq -er '.pullRegistryHost' <<<"$expected_policy")
+  "$script_directory/configure-local-node-registry.sh" --mode readback \
+    --context "$context" --material-directory "$state_directory/material" \
+    --promoted-pull-host "$promoted_pull_host" >/dev/null
+}
+
 if [[ "$mode" == apply ]]; then
   ensure_local_object_storage_secret
   ensure_local_backup_controller_secret
   ensure_seed_secrets
+  apply_image_admission_crd
+  reconcile_local_immutable_image_admission_policy
   reconcile_local_mutable_configmaps
   apply_render foundation '
     select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "Job" and
-      .kind != "Secret")
+      .kind != "Secret" and .kind != "CustomResourceDefinition")
   '
   wait_certificates
   apply_render statefulsets 'select(.kind == "StatefulSet")'
@@ -581,8 +753,29 @@ if [[ "$mode" == apply ]]; then
   apply_render authority-publisher '
     select(.kind == "Deployment" and .metadata.name == "internal-rpc-authority-publisher")
   '
+  apply_render image-registry-workloads '
+    select(.kind == "Deployment" and
+      (.metadata.name | test("^kodex-image-registry-(pull|push|promotion|staging-read|evidence)$")))
+  '
+  "$script_directory/seed-local-image-supply-chain.sh" --context "$context" \
+    --state-directory "$state_directory" --render "$render"
+  apply_render buildkit-workload '
+    select(.kind == "Deployment" and .metadata.name == "kodex-buildkit")
+  '
+  kubectl -n "$namespace" rollout status deployment/kodex-buildkit --timeout=15m >/dev/null ||
+    fail 'local BuildKit is unavailable after registry seed'
+  apply_render image-admission-workloads '
+    select(.kind == "Deployment" and
+      (.metadata.name == "image-admission-controller" or
+       .metadata.name == "role-image-builder"))
+  '
   apply_render application-workloads '
-    select(.kind == "Deployment" and .metadata.name != "internal-rpc-authority-publisher")
+    select(.kind == "Deployment" and
+      .metadata.name != "internal-rpc-authority-publisher" and
+      .metadata.name != "kodex-buildkit" and
+      .metadata.name != "image-admission-controller" and
+      .metadata.name != "role-image-builder" and
+      (.metadata.name | test("^kodex-image-registry-") | not))
   '
 else
   discover_local_object_storage_secret
@@ -621,6 +814,7 @@ kubectl -n "$namespace" get endpointslice \
   ' >/dev/null || fail 'SeaweedFS S3 EndpointSlice readback failed'
 
 readback_session_archive
+readback_local_image_supply_chain
 
 wait_warm_runtime
 wait_stable_workloads
