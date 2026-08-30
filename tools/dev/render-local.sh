@@ -368,6 +368,36 @@ ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
     .data.roleRuntimeContractRevision = "1" |
     .data.roleRuntimeContractSHA256 = strenv(SOURCE_DIGEST)
   ) |
+  # The local profile replaces an immutable ConfigMap under the same name.
+  # Materialize the exact values into the controller Pod template so kubelet
+  # cannot start it from a stale ConfigMap cache after that replacement.
+  with(select(.kind == "Deployment" and .metadata.name == "runtime-controller");
+    .spec.template.metadata.annotations."kodex.dev/runtime-admission-policy-sha256" =
+      strenv(SOURCE_DIGEST) |
+    with(.spec.template.spec.containers[] | select(.name == "runtime-controller");
+      (.env[] | select(.name ==
+        "RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY")) = {
+          "name":"RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY",
+          "value":(strenv(PROMOTED_PULL_HOST) + "/kodex/roles")
+        } |
+      (.env[] | select(.name ==
+        "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE")) = {
+          "name":"RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE",
+          "value":(strenv(PROMOTED_PULL_HOST) + "/kodex/agent-runner@" +
+            strenv(RUNNER_DIGEST))
+        } |
+      (.env[] | select(.name ==
+        "RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION")) = {
+          "name":"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION",
+          "value":"1"
+        } |
+      (.env[] | select(.name ==
+        "RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256")) = {
+          "name":"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256",
+          "value":strenv(SOURCE_DIGEST)
+        }
+    )
+  ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime");
     .data.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256 = strenv(ADMISSION_TOOLS_SHA256)
   ) |

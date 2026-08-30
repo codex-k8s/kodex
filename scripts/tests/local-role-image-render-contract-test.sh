@@ -84,6 +84,7 @@ render="$temporary_directory/render.yaml"
   --image-admission-image registry.local.kodex/kodex/image-admission@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee \
   --image-admission-tools-image registry.local.kodex/kodex/image-admission-tools@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
   --authority-image registry.local.kodex/kodex/internal-rpc-authority@sha256:1111111111111111111111111111111111111111111111111111111111111111 \
+  --authority-source-revision 1 \
   --role-image-input-manifest-digest sha256:2222222222222222222222222222222222222222222222222222222222222222 \
   --role-image-input-payload-sha256 3333333333333333333333333333333333333333333333333333333333333333 \
   --role-image-input-source-sha256 4444444444444444444444444444444444444444444444444444444444444444 \
@@ -100,6 +101,8 @@ policy_json=$(yq -o=json -I=0 '
 ' "$render")
 [[ -n "$policy_json" && "$policy_json" != null ]] || fail 'rendered owner intent is absent'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
+  (first(.[] | select(.kind == "ConfigMap" and
+    .metadata.name == "kodex-image-admission-policy")) | .data) as $policy |
   any(.[ ];
     .kind == "Deployment" and .metadata.name == "runtime-controller" and
     .spec.template.metadata.annotations["kodex.dev/controller-image"] ==
@@ -110,7 +113,25 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
         select(.name == "internal-rpc-authority-issuer") | .image] | first) and
     all(.spec.template.metadata.annotations["kodex.dev/controller-image"],
         .spec.template.metadata.annotations["kodex.dev/authority-image"];
-      test("@sha256:[a-f0-9]{64}$")))
+      test("@sha256:[a-f0-9]{64}$")) and
+    .spec.template.metadata.annotations[
+      "kodex.dev/runtime-admission-policy-sha256"] == $policy.policySHA256 and
+    ([.spec.template.spec.containers[] |
+      select(.name == "runtime-controller") | .env[] |
+      select(.name == "RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY") |
+      .value] | first) == $policy.promotedPullRepository and
+    ([.spec.template.spec.containers[] |
+      select(.name == "runtime-controller") | .env[] |
+      select(.name == "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE") |
+      .value] | first) == $policy.nodeReadbackImage and
+    ([.spec.template.spec.containers[] |
+      select(.name == "runtime-controller") | .env[] |
+      select(.name == "RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION") |
+      .value] | first) == $policy.roleRuntimeContractRevision and
+    ([.spec.template.spec.containers[] |
+      select(.name == "runtime-controller") | .env[] |
+      select(.name == "RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256") |
+      .value] | first) == $policy.roleRuntimeContractSHA256)
 ' >/dev/null || fail 'runtime-controller annotations do not match effective hot-reload images'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   any(.[];

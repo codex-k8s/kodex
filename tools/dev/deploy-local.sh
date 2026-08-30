@@ -628,7 +628,7 @@ wait_stable_workloads() {
 }
 
 readback_local_image_supply_chain() {
-  local expected_policy actual_policy policy_resource expected_digest actual_digest
+  local expected_policy actual_policy policy_resource controller expected_digest actual_digest
   local target_registry promoted_pull_host resource name
   expected_policy=$(yq -o=json -I=0 '
     select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
@@ -650,6 +650,29 @@ readback_local_image_supply_chain() {
   actual_digest=$(jq -cS '.spec' <<<"$policy_resource" | sha256sum | awk '{print $1}')
   [[ "$actual_digest" == "$expected_digest" ]] ||
     fail 'immutable image admission policy readback mismatch'
+  controller=$(kubectl -n "$namespace" get deployment/runtime-controller -o json) ||
+    fail 'runtime-controller Deployment is absent'
+  jq -e --argjson policy "$expected_policy" '
+    .spec.template.metadata.annotations[
+      "kodex.dev/runtime-admission-policy-sha256"] == $policy.policySHA256 and
+    ([.spec.template.spec.containers[] |
+      select(.name == "runtime-controller") | .env[] |
+      select(.name == "RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY") |
+      .value] | first) == $policy.promotedPullRepository and
+    ([.spec.template.spec.containers[] |
+      select(.name == "runtime-controller") | .env[] |
+      select(.name == "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE") |
+      .value] | first) == $policy.nodeReadbackImage and
+    ([.spec.template.spec.containers[] |
+      select(.name == "runtime-controller") | .env[] |
+      select(.name == "RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION") |
+      .value] | first) == $policy.roleRuntimeContractRevision and
+    ([.spec.template.spec.containers[] |
+      select(.name == "runtime-controller") | .env[] |
+      select(.name == "RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256") |
+      .value] | first) == $policy.roleRuntimeContractSHA256
+  ' <<<"$controller" >/dev/null ||
+    fail 'runtime-controller materialization config readback mismatch'
   jq -e '
     .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
     (.spec.orchestrationRevision | test("^[a-f0-9]{40}$")) and
