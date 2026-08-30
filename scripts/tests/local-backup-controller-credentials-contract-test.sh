@@ -19,6 +19,8 @@ grep -Fq 'kodex.dev/backup-credentials-sha256' "$deploy" ||
   fail 'session archive object store must be included exactly once'
 [[ $(grep -Fc 'name: "session-archives"' "$deploy") -eq 1 ]] ||
   fail 'session archive object store identity must be stable'
+[[ $(grep -Fc 'prefix: "session-archive/v1"' "$deploy") -eq 1 ]] ||
+  fail 'session archive object store must use the canonical immutable prefix'
 grep -Fq 'NOREPLICATION BYPASSRLS' \
   "$root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" ||
   fail 'backup reader does not have the required bounded BYPASSRLS role'
