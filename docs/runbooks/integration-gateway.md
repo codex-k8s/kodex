@@ -4,8 +4,8 @@ title: Диагностика integration-gateway
 type: runbook
 status: approved
 owner: sre
-version: 3.2.0
-updated: 2026-08-28
+version: 3.3.0
+updated: 2026-08-29
 ---
 
 # Диагностика integration-gateway
@@ -14,9 +14,10 @@ updated: 2026-08-28
 
 Gateway обязан стартовать и быть Ready при нуле connections и credentials.
 Shipped definitions загружаются локально и сверяются по версии/digest с
-control-plane. GitHub, synthetic fixture и Mattermost не являются startup
-dependency. Отсутствующая или disabled integration отображается как capability
-unavailable, но не как отказ платформы.
+control-plane. В каталог входят GitHub, GitLab, Jira, Confluence, электронная
+почта, synthetic fixture и Mattermost. Ни один внешний provider не является
+startup dependency. UI показывает только definitions из server readback:
+отсутствующий package не подменяется локальной placeholder-карточкой.
 
 ## MCP admission
 
@@ -68,13 +69,40 @@ Gateway сверяет все metadata, читает ровно указанны
 ## Exact egress
 
 GitHub adapter имеет фиксированный endpoint `https://api.github.com/` и идёт
-только через `egress-gateway.kodex-system.svc.cluster.local:8080`. Shared policy
-разрешает exact FQDN `api.github.com:443`; runtime NetworkPolicy разрешает
-только pod `egress-gateway` с component `platform-egress` на `8080/TCP`.
+только через `egress-gateway.kodex-system.svc.cluster.local:8080`. GitLab,
+Jira, Confluence и email bridge получают exact HTTPS origin из проверенного
+Connection config и используют тот же proxy. Shared policy должна разрешать
+каждый exact FQDN на `443`; wildcard и разрешение произвольного Internet egress
+запрещены. Runtime NetworkPolicy разрешает только pod `egress-gateway` с
+component `platform-egress` на `8080/TCP`.
 Synthetic adapter принимает только
 `integration-synthetic.kodex-system.svc.cluster.local:8080`, а NetworkPolicy —
 только pod labels `integration-synthetic`/`integration-fixture`. Redirect
 запрещён.
+
+`networkDestinations` package является декларацией требуемой границы, но не
+расширяет egress policy само по себе. Перед активацией Connection SRE добавляет
+exact hostname из approved config в materialized policy и проверяет итоговый
+render. Пока этого не сделано, операция test обязана вернуть безопасный
+`INTEGRATION_UNAVAILABLE`.
+
+## Shipped provider profiles
+
+| Package | Read path | Effects после Human Gate | Особенности |
+| --- | --- | --- | --- |
+| GitHub | repository metadata | create/update issue | fixed `api.github.com`, exact owner/repository |
+| GitLab | project, file, issue, merge request, pipeline | issue, note, branch, commit, merge request, retry pipeline | REST v4 от configured HTTPS origin |
+| Jira | project, bounded issue search/read | create, comment, limited update, link | Cloud REST v3, BASIC или BEARER; текст материализуется в ADF |
+| Confluence | space, bounded page search/read | draft create, OCC update | Cloud REST v2; update требует exact expected version |
+| Email | bridge health | text message send | HTTPS bridge обязан поддерживать native idempotency key |
+| Synthetic | journal read | journal write | только disposable local E2E |
+| Mattermost | interaction capabilities | interaction effects | выполняет optional `interaction-gateway` |
+
+Для Jira и Confluence при BASIC auth `username` обязателен и credential value
+содержит API token. При BEARER `username` не используется. GitLab принимает
+token как bearer credential. UI и API никогда не возвращают credential value;
+диагностика показывает только masked state, время и локализованный safe outcome
+последней проверки.
 
 ## Изолированный GitHub fixture
 
@@ -183,6 +211,7 @@ make test-integration-deployed-e2e-check
 | `INTEGRATION_UNAVAILABLE` | проверить exact egress host/SNI и provider status |
 | `INTEGRATION_REQUEST_REJECTED` | проверить typed input и provider resource state |
 | `INTEGRATION_RESPONSE_INVALID` | считать effect неизвестным и сверить authoritative provider state/receipt |
+| `INTEGRATION_CAPABILITY_UNSUPPORTED` | сверить package version/digest и наличие закрытого adapter operation |
 | replay или fence conflict | не повторять вручную; сверить authoritative receipt |
 
 Secret values, provider bodies и MCP bearer не печатаются. Ошибка возвращает
@@ -191,3 +220,16 @@ stable key; локализованный пользовательский тек
 Frontend и browser E2E проверяются parent-волной #992. Локальная проверка
 использует отдельный private fixture repository и bot token с минимальными
 правами; production repository и credentials в этот контур не входят.
+
+## Ограничения live-проверки
+
+- Без test credentials и approved exact egress hosts выполняются schema, unit и
+  synthetic contract checks, но не provider live calls.
+- GitLab `base_url` в текущем профиле является origin; installations под URL
+  prefix не поддерживаются.
+- Jira и Confluence проверены по Cloud REST contracts. Отличающиеся Server/Data
+  Center API требуют отдельного package/adapter version.
+- Email package не является SMTP client: нужен HTTPS bridge с контрактом
+  `/v1/health` и `/v1/messages`.
+- Provider mutation с неизвестным сетевым исходом не повторяется вручную:
+  сначала сверяется authoritative provider state и invocation receipt.

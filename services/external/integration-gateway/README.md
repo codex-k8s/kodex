@@ -4,8 +4,8 @@ title: Integration gateway
 type: service
 status: approved
 owner: backend
-version: 2.1.0
-updated: 2026-08-28
+version: 2.2.0
+updated: 2026-08-29
 ---
 
 # integration-gateway
@@ -21,17 +21,42 @@ approval policy, input и resource scope. Gateway принимает тольк�
 `definition_version`, `definition_digest`, grant scope и immutable input
 digest.
 
-Поставляются adapters:
+Поставляются семь schema-versioned packages:
 
 - synthetic HTTP journal: read и идемпотентный write по exact effect key;
 - GitHub: repository metadata read и create/update issue только в exact
   `owner/repository` Connection scope через `https://api.github.com`;
+- GitLab: metadata, repository file, issues, merge requests, branches, commit и
+  pipeline в exact `base_url/project_path` scope;
+- Jira: project, bounded issue search/read, create, comment, limited update и
+  issue link в exact `base_url/project_key` scope;
+- Confluence: space, bounded page search/read, draft create и OCC update в exact
+  `base_url/space_id` scope;
+- электронная почта: health и отправка текстового письма через
+  provider-neutral HTTPS bridge с provider-native idempotency;
 - Mattermost остаётся за отдельным необязательным `interaction-gateway`.
 
+Package также объявляет типизированные output fields, exact network
+destinations и health operation. Универсального HTTP passthrough нет: неизвестная
+операция, поле, adapter, resource scope или provider response отклоняется до
+выдачи результата.
+
 Credential claim содержит только revision ref, Kubernetes Secret
-`namespace/name#key`, Secret UID, `resourceVersion` и content SHA-256. Token
-читается из server-mounted Secret непосредственно перед GitHub вызовом,
+`namespace/name#key`, Secret UID, `resourceVersion` и content SHA-256. Credential
+читается из server-mounted Secret непосредственно перед provider-вызовом,
 проверяется по digest и не возвращается в API, логи, audit или result.
+
+Все внешние HTTPS-вызовы идут через `egress-gateway`. Configured `base_url`
+принимается только как HTTPS origin без userinfo, query, fragment, IP literal и
+нестандартного порта. Оператор установки обязан материализовать каждый exact
+FQDN в policy egress gateway; отсутствие host в policy является штатным
+fail-closed отказом подключения. Redirect запрещён.
+
+READ повторяется только на bounded network/`429`/`502`/`503`/`504` отказах.
+Provider mutation без нативной идемпотентности автоматически не повторяется
+после неоднозначного сетевого исхода; immutable invocation receipt защищает от
+повторного выполнения уже подтверждённого effect. Email bridge обязан принимать
+`Idempotency-Key` и возвращать один provider receipt для exact retry.
 
 READ invocation может быть claim-нут сразу. WRITE, SENSITIVE и DESTRUCTIVE
 сначала атомарно создают отдельный Human Gate и остаются недоступны worker до

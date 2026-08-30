@@ -2,7 +2,6 @@
 import {
   ChevronDown,
   FileCode2,
-  LockKeyhole,
   PackageCheck,
   Plus,
   Search,
@@ -92,16 +91,13 @@ function toggleDetails(key: string): void {
             <h3>{{ item.name }}</h3>
             <span class="package-meta">
               {{ item.category }} ·
-              <template v-if="item.source === 'SERVER_DEFINITION'">
-                {{
-                  t(
-                    item.builtIn
-                      ? "integrationsRedesign.firstParty"
-                      : "integrationsRedesign.customPackage",
-                  )
-                }}
-              </template>
-              <template v-else>YAML · API —</template>
+              {{
+                t(
+                  item.builtIn
+                    ? "integrationsRedesign.firstParty"
+                    : "integrationsRedesign.customPackage",
+                )
+              }}
             </span>
           </div>
           <StatusBadge
@@ -120,7 +116,7 @@ function toggleDetails(key: string): void {
         <p class="package-description">
           {{ item.description || t("integrations.unavailable") }}
         </p>
-        <div v-if="item.definition" class="package-facts">
+        <div class="package-facts">
           <span>{{
             t("integrationsRedesign.connectionCount", {
               count: item.connectionCount,
@@ -142,7 +138,7 @@ function toggleDetails(key: string): void {
         </div>
         <div class="capability-preview">
           <span
-            v-for="capability in item.definition?.capabilities.slice(0, 3)"
+            v-for="capability in item.definition.capabilities.slice(0, 3)"
             :key="capability.key"
             class="capability-token"
           >
@@ -150,10 +146,10 @@ function toggleDetails(key: string): void {
             {{ t(`integrations.risk.${capability.risk}`) }}
           </span>
           <span
-            v-if="(item.definition?.capabilities.length ?? 0) > 3"
+            v-if="item.definition.capabilities.length > 3"
             class="capability-more"
           >
-            +{{ (item.definition?.capabilities.length ?? 0) - 3 }}
+            +{{ item.definition.capabilities.length - 3 }}
           </span>
         </div>
 
@@ -162,45 +158,34 @@ function toggleDetails(key: string): void {
           class="package-details"
           :aria-label="t('integrationsRedesign.packageDetails')"
         >
-          <template v-if="item.definition">
-            <div class="manifest-facts">
-              <span>
-                <FileCode2 :size="14" aria-hidden="true" />
-                {{ item.definition.schemaVersion }} · v{{
-                  item.definition.definitionVersion
-                }}
-              </span>
-              <span class="mono">{{ item.definition.adapter }}</span>
-              <span class="mono package-digest" :title="item.definition.digest">
-                {{ item.definition.digest.slice(0, 12) }}…
-              </span>
-            </div>
-            <ul class="capability-list">
-              <li
-                v-for="capability in item.definition.capabilities"
-                :key="capability.key"
-              >
-                <div class="capability-heading">
-                  <strong>{{ capability.name }}</strong>
-                  <span>{{ t("integrations.risk." + capability.risk) }}</span>
-                  <span
-                    v-if="capability.approvalRequired"
-                    class="approval-fact"
-                  >
-                    <ShieldCheck :size="13" aria-hidden="true" /> Human Gate
-                  </span>
-                </div>
-                <p>{{ capability.description }}</p>
-                <code>{{ capability.operation }}</code>
-              </li>
-            </ul>
-          </template>
-          <div v-else class="unavailable-details">
-            <LockKeyhole :size="16" aria-hidden="true" />
-            <span>{{
-              t("integrationsRedesign.packageDetailsUnavailable")
-            }}</span>
+          <div class="manifest-facts">
+            <span>
+              <FileCode2 :size="14" aria-hidden="true" />
+              {{ item.definition.schemaVersion }} · v{{
+                item.definition.definitionVersion
+              }}
+            </span>
+            <span class="mono">{{ item.definition.adapter }}</span>
+            <span class="mono package-digest" :title="item.definition.digest">
+              {{ item.definition.digest.slice(0, 12) }}…
+            </span>
           </div>
+          <ul class="capability-list">
+            <li
+              v-for="capability in item.definition.capabilities"
+              :key="capability.key"
+            >
+              <div class="capability-heading">
+                <strong>{{ capability.name }}</strong>
+                <span>{{ t("integrations.risk." + capability.risk) }}</span>
+                <span v-if="capability.approvalRequired" class="approval-fact">
+                  <ShieldCheck :size="13" aria-hidden="true" /> Human Gate
+                </span>
+              </div>
+              <p>{{ capability.description }}</p>
+              <code>{{ capability.operation }}</code>
+            </li>
+          </ul>
         </section>
 
         <footer class="package-card__actions">

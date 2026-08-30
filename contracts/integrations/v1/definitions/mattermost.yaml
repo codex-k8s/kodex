@@ -2,58 +2,76 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: mattermost
-  version: 1.0.0
+  version: 2.0.0
   origin: SHIPPED
 spec:
   name: Mattermost
-  description: Существующее подключение каналов, принадлежащее interaction-gateway.
+  description: Необязательное подключение каналов, принадлежащее interaction-gateway и не влияющее на core readiness.
   category: communications
   adapter: MATTERMOST_INTERACTION
   credential:
     secretKey: token
+    kind: TOKEN
   configurationFields:
-    - key: base_url
-      type: STRING
-      required: true
-      maximumLength: 2048
-    - key: team_name
-      type: STRING
-      required: true
-      maximumLength: 100
-    - key: channel_name
-      type: STRING
-      required: true
-      maximumLength: 100
+    - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
+    - {key: team_name, type: STRING, format: IDENTIFIER, required: true, maximumLength: 100}
+    - {key: channel_name, type: STRING, format: IDENTIFIER, required: true, maximumLength: 100}
+  networkDestinations:
+    - key: mattermost_api
+      source: CONFIGURATION
+      configurationField: base_url
+      port: 443
+      tls: REQUIRED
+  healthCheck:
+    operation: mattermost.inbound
+    timeoutSeconds: 15
+    maxAttempts: 2
   capabilities:
     - key: mattermost.inbound
+      name: Получать входящие сообщения
+      description: Принимает разрешённые сообщения через optional interaction adapter.
       operation: mattermost.inbound
       risk: READ
       approvalPolicy: NONE
-      resourceScope:
-        kind: MATTERMOST_CHANNEL
-        connectionFields: [base_url, team_name, channel_name]
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields: []
+      outputFields:
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 15, maxAttempts: 2, retryBackoffMilliseconds: 250}
     - key: mattermost.notifications
+      name: Отправлять уведомления
+      description: Отправляет разрешённое уведомление после Human Gate.
       operation: mattermost.notifications
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      resourceScope:
-        kind: MATTERMOST_CHANNEL
-        connectionFields: [base_url, team_name, channel_name]
-      inputFields: []
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      outputFields:
+        - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
+      execution: {idempotency: PROVIDER_NATIVE, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
     - key: mattermost.result_mirror
+      name: Зеркалировать результат
+      description: Публикует безопасный итог Run в разрешённый канал после Human Gate.
       operation: mattermost.result_mirror
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      resourceScope:
-        kind: MATTERMOST_CHANNEL
-        connectionFields: [base_url, team_name, channel_name]
-      inputFields: []
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      outputFields:
+        - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
+      execution: {idempotency: PROVIDER_NATIVE, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
     - key: mattermost.gate_decisions
+      name: Принимать решения Human Gate
+      description: Передаёт решение из разрешённого канала в единый owner lifecycle.
       operation: mattermost.gate_decisions
       risk: SENSITIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      resourceScope:
-        kind: MATTERMOST_CHANNEL
-        connectionFields: [base_url, team_name, channel_name]
-      inputFields: []
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: decision_ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
+        - {key: decision, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32, allowedValues: [APPROVE, REJECT, CANCEL]}
+      outputFields:
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}

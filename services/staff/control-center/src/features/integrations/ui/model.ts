@@ -23,8 +23,7 @@ export interface IntegrationPackagePresentation {
   connectionCount: number;
   healthyConnectionCount: number;
   canConnect: boolean;
-  definition?: IntegrationDefinition;
-  source: "SERVER_DEFINITION" | "EXPECTED_YAML";
+  definition: IntegrationDefinition;
 }
 
 export interface IntegrationGrantPresentation {
@@ -42,78 +41,39 @@ export interface IntegrationGrantPresentation {
   connection: IntegrationConnection;
 }
 
-interface ExpectedIntegrationPackage {
-  key: string;
-  name: string;
-  category: string;
-}
-
-const expectedYamlPackages: readonly ExpectedIntegrationPackage[] = [
-  { key: "github", name: "GitHub", category: "source-control" },
-  { key: "gitlab", name: "GitLab", category: "source-control" },
-  { key: "jira", name: "Jira", category: "work-management" },
-  { key: "confluence", name: "Confluence", category: "knowledge" },
-  { key: "email", name: "Email", category: "communications" },
-  { key: "custom-http", name: "Custom HTTP", category: "automation" },
-];
-
 export function buildIntegrationPackages(
   definitions: readonly IntegrationDefinition[],
   connections: readonly IntegrationConnection[],
   canCreateConnection: boolean,
 ): IntegrationPackagePresentation[] {
-  const serverPackages = definitions.map((definition) => {
-    const packageConnections = connections.filter(
-      (connection) => connection.definitionKey === definition.key,
-    );
-    return {
-      key: definition.key,
-      name: definition.name,
-      description: definition.description,
-      category: definition.category,
-      builtIn: definition.builtIn,
-      available: definition.available,
-      capabilityCount: definition.capabilities.length,
-      approvalCapabilityCount: definition.capabilities.filter(
-        (capability) => capability.approvalRequired,
-      ).length,
-      connectionCount: packageConnections.length,
-      healthyConnectionCount: packageConnections.filter(
-        (connection) => connection.state === "CONNECTED",
-      ).length,
-      canConnect: canCreateConnection && definition.available,
-      definition,
-      source: "SERVER_DEFINITION" as const,
-    };
-  });
-
-  const packagesByKey = new Map(
-    serverPackages.map((item) => [item.key, item] as const),
-  );
-  const expected = expectedYamlPackages.map(
-    (item): IntegrationPackagePresentation =>
-      packagesByKey.get(item.key) ?? {
-        ...item,
-        description: "",
-        builtIn: true,
-        available: false,
-        capabilityCount: 0,
-        approvalCapabilityCount: 0,
-        connectionCount: 0,
-        healthyConnectionCount: 0,
-        canConnect: false,
-        source: "EXPECTED_YAML",
-      },
-  );
-  const expectedKeys = new Set(expectedYamlPackages.map((item) => item.key));
-  const additional = serverPackages
-    .filter((item) => !expectedKeys.has(item.key))
+  return definitions
+    .map((definition): IntegrationPackagePresentation => {
+      const packageConnections = connections.filter(
+        (connection) => connection.definitionKey === definition.key,
+      );
+      return {
+        key: definition.key,
+        name: definition.name,
+        description: definition.description,
+        category: definition.category,
+        builtIn: definition.builtIn,
+        available: definition.available,
+        capabilityCount: definition.capabilities.length,
+        approvalCapabilityCount: definition.capabilities.filter(
+          (capability) => capability.approvalRequired,
+        ).length,
+        connectionCount: packageConnections.length,
+        healthyConnectionCount: packageConnections.filter(
+          (connection) => connection.state === "CONNECTED",
+        ).length,
+        canConnect: canCreateConnection && definition.available,
+        definition,
+      };
+    })
     .sort((left, right) => {
       if (left.builtIn !== right.builtIn) return left.builtIn ? -1 : 1;
       return left.name.localeCompare(right.name);
     });
-
-  return [...expected, ...additional];
 }
 
 export function integrationCategories(
@@ -137,7 +97,7 @@ export function filterIntegrationPackages(
       item.name,
       item.description,
       item.category,
-      ...(item.definition?.capabilities ?? []).flatMap((capability) => [
+      ...item.definition.capabilities.flatMap((capability) => [
         capability.name,
         capability.description,
         capability.key,

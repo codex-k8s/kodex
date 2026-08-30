@@ -1,0 +1,45 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: email
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: Электронная почта
+  description: Отправка писем через provider-neutral HTTPS bridge с нативной идемпотентностью.
+  category: communications
+  adapter: EMAIL_HTTPS
+  credential: {secretKey: token, kind: TOKEN}
+  configurationFields:
+    - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
+    - {key: from_address, type: STRING, format: EMAIL, required: true, maximumLength: 320}
+  networkDestinations:
+    - {key: email_bridge, source: CONFIGURATION, configurationField: base_url, port: 443, tls: REQUIRED}
+  healthCheck: {operation: email.delivery.health.read, timeoutSeconds: 15, maxAttempts: 3}
+  capabilities:
+    - key: email.delivery.health.read
+      name: Проверить готовность доставки
+      description: Проверяет готовность HTTPS bridge без отправки сообщения.
+      operation: email.delivery.health.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: EMAIL_SENDER, connectionFields: [base_url, from_address]}
+      inputFields: []
+      outputFields:
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 15, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: email.message.send
+      name: Отправить письмо
+      description: Отправляет одно текстовое письмо после Human Gate с provider-native idempotency key.
+      operation: email.message.send
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: EMAIL_SENDER, connectionFields: [base_url, from_address]}
+      inputFields:
+        - {key: to, type: STRING, format: EMAIL, required: true, maximumLength: 320}
+        - {key: subject, type: STRING, format: PLAIN, required: true, maximumLength: 998}
+        - {key: body_text, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      outputFields:
+        - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+      execution: {idempotency: PROVIDER_NATIVE, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 500}

@@ -64,13 +64,14 @@ type SafeError struct{ Code string }
 func (err *SafeError) Error() string { return err.Code }
 
 type Adapter struct {
-	credentials      *credentialfs.Store
-	definitions      map[string]integrationpackage.Package
-	githubHTTPClient *http.Client
-	githubBaseURL    *url.URL
-	syntheticClient  *http.Client
-	syntheticBaseURL *url.URL
-	timeout          time.Duration
+	credentials        *credentialfs.Store
+	definitions        map[string]integrationpackage.Package
+	githubHTTPClient   *http.Client
+	githubBaseURL      *url.URL
+	providerHTTPClient *http.Client
+	syntheticClient    *http.Client
+	syntheticBaseURL   *url.URL
+	timeout            time.Duration
 }
 
 func New(config Config) (*Adapter, error) {
@@ -101,10 +102,19 @@ func New(config Config) (*Adapter, error) {
 		TLSHandshakeTimeout:   5 * time.Second,
 		ResponseHeaderTimeout: config.Timeout,
 	}
+	providerTransport := githubTransport.Clone()
+	providerTransport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS13}
 	return &Adapter{
 		credentials: credentials, definitions: definitions,
 		githubHTTPClient: &http.Client{Transport: githubTransport, Timeout: config.Timeout},
 		githubBaseURL:    mustURL(githubAPIBaseURL),
+		providerHTTPClient: &http.Client{
+			Transport: providerTransport,
+			Timeout:   config.Timeout,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return errors.New("provider redirect is forbidden")
+			},
+		},
 		syntheticClient: &http.Client{
 			Timeout: config.Timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -196,6 +206,14 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 		defer cleanup()
 		_, response, providerErr := client.Repositories.Get(ctx, configuration["owner"], configuration["repository"])
 		err = githubError(response, providerErr)
+	case "GITLAB":
+		err = adapter.testGitLab(ctx, request, configuration)
+	case "JIRA":
+		err = adapter.testJira(ctx, request, configuration)
+	case "CONFLUENCE":
+		err = adapter.testConfluence(ctx, request, configuration)
+	case "EMAIL_HTTPS":
+		err = adapter.testEmail(ctx, request, configuration)
 	default:
 		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
@@ -213,15 +231,30 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 		result, err = adapter.executeSynthetic(ctx, request, configuration, canonicalInput)
 	case "GITHUB":
 		result, err = adapter.executeGitHub(ctx, request, configuration, canonicalInput)
+	case "GITLAB":
+		result, err = adapter.executeGitLab(ctx, request, capability, configuration, canonicalInput)
+	case "JIRA":
+		result, err = adapter.executeJira(ctx, request, capability, configuration, canonicalInput)
+	case "CONFLUENCE":
+		result, err = adapter.executeConfluence(ctx, request, capability, configuration, canonicalInput)
+	case "EMAIL_HTTPS":
+		result, err = adapter.executeEmail(ctx, request, capability, configuration, canonicalInput)
 	default:
 		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
 	if err != nil {
 		return Result{}, err
 	}
+	canonicalOutput, err := capability.ValidateOutput([]byte(result.Summary))
+	if err != nil {
+		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	result.Summary = string(canonicalOutput)
+	responseDigest := sha256.Sum256(canonicalOutput)
+	result.Receipt.ResponseDigest = hex.EncodeToString(responseDigest[:])
 	if capability.Operation != request.Operation || result.Receipt.EffectKey != request.EffectKey ||
 		result.Receipt.InputDigest != request.InputDigest || result.Receipt.ProviderEffectRef == "" ||
-		len(result.Receipt.ResponseDigest) != sha256.Size*2 || result.Summary == "" || len(result.Summary) > 2000 {
+		len(result.Receipt.ResponseDigest) != sha256.Size*2 || result.Summary == "" || len(result.Summary) > maximumResponseBytes {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	return result, nil
@@ -291,9 +324,9 @@ func (adapter *Adapter) executeSynthetic(ctx context.Context, request Request, c
 	}
 	var projection struct {
 		Journal   string `json:"journal"`
-		EffectKey string `json:"effect_key"`
-		Sequence  int64  `json:"sequence"`
-		Value     string `json:"value"`
+		EffectKey string `json:"effect_key,omitempty"`
+		Sequence  int64  `json:"sequence,omitempty"`
+		Value     string `json:"value,omitempty"`
 		Count     int64  `json:"count"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(response))
@@ -302,7 +335,15 @@ func (adapter *Adapter) executeSynthetic(ctx context.Context, request Request, c
 		projection.Journal != journal || request.Operation == "synthetic.journal.write" && projection.EffectKey != request.EffectKey {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
-	summary, err := json.Marshal(projection)
+	var summary []byte
+	if request.Operation == "synthetic.journal.read" {
+		summary, err = json.Marshal(struct {
+			Journal string `json:"journal"`
+			Count   int64  `json:"count"`
+		}{Journal: projection.Journal, Count: projection.Count})
+	} else {
+		summary, err = json.Marshal(projection)
+	}
 	if err != nil {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
@@ -352,9 +393,12 @@ func (adapter *Adapter) executeGitHub(ctx context.Context, request Request, conf
 			return Result{}, err
 		}
 		projection := struct {
-			Name, FullName, DefaultBranch, Visibility string
-			Private, Archived                         bool
-		}{provider.GetName(), provider.GetFullName(), provider.GetDefaultBranch(), provider.GetVisibility(), provider.GetPrivate(), provider.GetArchived()}
+			FullName      string `json:"full_name"`
+			DefaultBranch string `json:"default_branch"`
+			Visibility    string `json:"visibility"`
+			Private       bool   `json:"private"`
+			Archived      bool   `json:"archived"`
+		}{provider.GetFullName(), provider.GetDefaultBranch(), provider.GetVisibility(), provider.GetPrivate(), provider.GetArchived()}
 		summary, marshalErr := json.Marshal(projection)
 		if marshalErr != nil || provider.GetID() == 0 || provider.GetFullName() != owner+"/"+repository {
 			return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}

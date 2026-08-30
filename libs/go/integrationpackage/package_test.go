@@ -11,11 +11,11 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(definitions) != 3 {
-		t.Fatalf("LoadShipped() returned %d definitions; want 3", len(definitions))
+	if len(definitions) != 7 {
+		t.Fatalf("LoadShipped() returned %d definitions; want 7", len(definitions))
 	}
 	github := definitions["github"]
-	if github.Digest == "" || github.Metadata.Version != "1.0.0" || github.Spec.Credential.SecretKey != "token" {
+	if github.Digest == "" || github.Metadata.Version != "2.0.0" || github.Spec.Credential.SecretKey != "token" {
 		t.Fatalf("GitHub definition metadata is incomplete: %#v", github)
 	}
 	for _, key := range []string{"github.repository.metadata.read", "github.issue.create", "github.issue.update"} {
@@ -26,6 +26,56 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	write, _ := definitions["synthetic"].Capability("synthetic.journal.write")
 	if write.Risk != "WRITE" || write.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
 		t.Fatalf("synthetic write policy = %s/%s", write.Risk, write.ApprovalPolicy)
+	}
+	for _, key := range []string{"gitlab", "jira", "confluence", "email", "mattermost", "synthetic"} {
+		definition := definitions[key]
+		if definition.Digest == "" || definition.Spec.HealthCheck.Operation == "" || len(definition.Spec.NetworkDestinations) == 0 {
+			t.Fatalf("definition %q does not have an executable boundary: %#v", key, definition.Spec)
+		}
+	}
+}
+
+func TestTypedOutput(t *testing.T) {
+	t.Parallel()
+	definitions, err := LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	capability, ok := definitions["email"].Capability("email.message.send")
+	if !ok {
+		t.Fatal("email.message.send capability is missing")
+	}
+	canonical, err := capability.ValidateOutput([]byte(`{"status":"accepted","message_id":"msg-7"}`))
+	if err != nil || string(canonical) != `{"message_id":"msg-7","status":"accepted"}` {
+		t.Fatalf("ValidateOutput() = %s, %v", canonical, err)
+	}
+	for _, invalid := range []string{
+		`{"status":"accepted"}`,
+		`{"message_id":"msg-7","status":"accepted","token":"secret"}`,
+		`{"message_id":"msg-7","status":"accepted\nunsafe"}`,
+	} {
+		if _, err := capability.ValidateOutput([]byte(invalid)); err == nil {
+			t.Fatalf("ValidateOutput() accepted %s", invalid)
+		}
+	}
+}
+
+func TestConfigurationRejectsUnsafeProviderOrigin(t *testing.T) {
+	t.Parallel()
+	definitions, err := LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitlab := definitions["gitlab"]
+	for _, origin := range []string{
+		"http://gitlab.example.com",
+		"https://127.0.0.1",
+		"https://user@gitlab.example.com",
+		"https://gitlab.example.com/api/v4",
+	} {
+		if err := gitlab.ValidateConfiguration(map[string]string{"base_url": origin, "project_path": "org/project"}); err == nil {
+			t.Fatalf("ValidateConfiguration() accepted unsafe origin %q", origin)
+		}
 	}
 }
 

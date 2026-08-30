@@ -9,6 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/mail"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -44,26 +47,46 @@ type Metadata struct {
 }
 
 type Spec struct {
-	Name                string       `yaml:"name" json:"name"`
-	Description         string       `yaml:"description" json:"description"`
-	Category            string       `yaml:"category" json:"category"`
-	Adapter             string       `yaml:"adapter" json:"adapter"`
-	Credential          *Credential  `yaml:"credential,omitempty" json:"credential,omitempty"`
-	ConfigurationFields []Field      `yaml:"configurationFields" json:"configurationFields"`
-	Capabilities        []Capability `yaml:"capabilities" json:"capabilities"`
+	Name                string               `yaml:"name" json:"name"`
+	Description         string               `yaml:"description" json:"description"`
+	Category            string               `yaml:"category" json:"category"`
+	Adapter             string               `yaml:"adapter" json:"adapter"`
+	Credential          *Credential          `yaml:"credential,omitempty" json:"credential,omitempty"`
+	ConfigurationFields []Field              `yaml:"configurationFields" json:"configurationFields"`
+	NetworkDestinations []NetworkDestination `yaml:"networkDestinations" json:"networkDestinations"`
+	HealthCheck         HealthCheck          `yaml:"healthCheck" json:"healthCheck"`
+	Capabilities        []Capability         `yaml:"capabilities" json:"capabilities"`
 }
 
 type Credential struct {
 	SecretKey string `yaml:"secretKey" json:"secretKey"`
+	Kind      string `yaml:"kind" json:"kind"`
 }
 
 type Field struct {
-	Key           string `yaml:"key" json:"key"`
-	Type          string `yaml:"type" json:"type"`
-	Required      bool   `yaml:"required" json:"required"`
-	MaximumLength int    `yaml:"maximumLength,omitempty" json:"maximumLength,omitempty"`
-	Minimum       int64  `yaml:"minimum,omitempty" json:"minimum,omitempty"`
-	Maximum       int64  `yaml:"maximum,omitempty" json:"maximum,omitempty"`
+	Key           string   `yaml:"key" json:"key"`
+	Type          string   `yaml:"type" json:"type"`
+	Format        string   `yaml:"format,omitempty" json:"format,omitempty"`
+	Required      bool     `yaml:"required" json:"required"`
+	MaximumLength int      `yaml:"maximumLength,omitempty" json:"maximumLength,omitempty"`
+	Minimum       int64    `yaml:"minimum,omitempty" json:"minimum,omitempty"`
+	Maximum       int64    `yaml:"maximum,omitempty" json:"maximum,omitempty"`
+	AllowedValues []string `yaml:"allowedValues,omitempty" json:"allowedValues,omitempty"`
+}
+
+type NetworkDestination struct {
+	Key                string `yaml:"key" json:"key"`
+	Source             string `yaml:"source" json:"source"`
+	Hostname           string `yaml:"hostname,omitempty" json:"hostname,omitempty"`
+	ConfigurationField string `yaml:"configurationField,omitempty" json:"configurationField,omitempty"`
+	Port               int    `yaml:"port" json:"port"`
+	TLS                string `yaml:"tls" json:"tls"`
+}
+
+type HealthCheck struct {
+	Operation      string `yaml:"operation" json:"operation"`
+	TimeoutSeconds int    `yaml:"timeoutSeconds" json:"timeoutSeconds"`
+	MaxAttempts    int    `yaml:"maxAttempts" json:"maxAttempts"`
 }
 
 type ResourceScope struct {
@@ -73,11 +96,22 @@ type ResourceScope struct {
 
 type Capability struct {
 	Key            string        `yaml:"key" json:"key"`
+	Name           string        `yaml:"name" json:"name"`
+	Description    string        `yaml:"description" json:"description"`
 	Operation      string        `yaml:"operation" json:"operation"`
 	Risk           string        `yaml:"risk" json:"risk"`
 	ApprovalPolicy string        `yaml:"approvalPolicy" json:"approvalPolicy"`
 	ResourceScope  ResourceScope `yaml:"resourceScope" json:"resourceScope"`
 	InputFields    []Field       `yaml:"inputFields" json:"inputFields"`
+	OutputFields   []Field       `yaml:"outputFields" json:"outputFields"`
+	Execution      Execution     `yaml:"execution" json:"execution"`
+}
+
+type Execution struct {
+	Idempotency              string `yaml:"idempotency" json:"idempotency"`
+	TimeoutSeconds           int    `yaml:"timeoutSeconds" json:"timeoutSeconds"`
+	MaxAttempts              int    `yaml:"maxAttempts" json:"maxAttempts"`
+	RetryBackoffMilliseconds int    `yaml:"retryBackoffMilliseconds" json:"retryBackoffMilliseconds"`
 }
 
 func Parse(raw []byte) (Package, error) {
@@ -160,7 +194,7 @@ func (definition Package) ValidateConfiguration(configuration map[string]string)
 	}
 	for key, raw := range configuration {
 		field, exists := fields[key]
-		if !exists || validateStringValue(field, raw) != nil {
+		if !exists || validateStringValue(field, raw, false) != nil {
 			return errors.New("integration configuration is invalid")
 		}
 	}
@@ -187,34 +221,43 @@ func (capability Capability) ResourceScopeValues(configuration map[string]string
 
 // ValidateInput принимает только одно JSON object с закрытым набором primitive fields.
 func (capability Capability) ValidateInput(raw []byte) ([]byte, error) {
+	return validateObject(raw, capability.InputFields, "input")
+}
+
+// ValidateOutput принимает только безопасную проекцию с закрытым набором полей.
+func (capability Capability) ValidateOutput(raw []byte) ([]byte, error) {
+	return validateObject(raw, capability.OutputFields, "output")
+}
+
+func validateObject(raw []byte, declared []Field, kind string) ([]byte, error) {
 	values, err := decodeJSONObject(raw)
 	if err != nil {
-		return nil, errors.New("integration input is invalid")
+		return nil, fmt.Errorf("integration %s is invalid", kind)
 	}
-	fields := make(map[string]Field, len(capability.InputFields))
-	for _, field := range capability.InputFields {
+	fields := make(map[string]Field, len(declared))
+	for _, field := range declared {
 		fields[field.Key] = field
 	}
 	normalized := make(map[string]any, len(values))
 	for key, rawValue := range values {
 		field, exists := fields[key]
 		if !exists {
-			return nil, errors.New("integration input contains unknown field")
+			return nil, fmt.Errorf("integration %s contains unknown field", kind)
 		}
 		value, valueErr := decodeFieldValue(field, rawValue)
 		if valueErr != nil {
-			return nil, errors.New("integration input field is invalid")
+			return nil, fmt.Errorf("integration %s field is invalid", kind)
 		}
 		normalized[key] = value
 	}
-	for _, field := range capability.InputFields {
+	for _, field := range declared {
 		if _, exists := values[field.Key]; field.Required && !exists {
-			return nil, errors.New("integration input required field is missing")
+			return nil, fmt.Errorf("integration %s required field is missing", kind)
 		}
 	}
 	canonical, err := json.Marshal(normalized)
 	if err != nil {
-		return nil, errors.New("encode canonical integration input")
+		return nil, fmt.Errorf("encode canonical integration %s", kind)
 	}
 	return canonical, nil
 }
@@ -257,7 +300,7 @@ func decodeFieldValue(field Field, raw json.RawMessage) (any, error) {
 	switch field.Type {
 	case "STRING":
 		var value string
-		if json.Unmarshal(raw, &value) != nil || validateStringValue(field, value) != nil {
+		if json.Unmarshal(raw, &value) != nil || validateStringValue(field, value, true) != nil {
 			return nil, errors.New("string field is invalid")
 		}
 		return value, nil
@@ -284,9 +327,41 @@ func decodeFieldValue(field Field, raw json.RawMessage) (any, error) {
 	}
 }
 
-func validateStringValue(field Field, value string) error {
-	if value == "" || len(value) > field.MaximumLength || strings.ContainsAny(value, "\x00\r\n") {
+func validateStringValue(field Field, value string, allowPlainMultiline bool) error {
+	if value == "" || len(value) > field.MaximumLength || strings.ContainsRune(value, '\x00') ||
+		strings.ContainsRune(value, '\r') || (!allowPlainMultiline || field.Format != "PLAIN") && strings.ContainsRune(value, '\n') {
 		return errors.New("string field is outside bounds")
+	}
+	if len(field.AllowedValues) > 0 && !contains(field.AllowedValues, value) {
+		return errors.New("string field is outside allowed values")
+	}
+	switch field.Format {
+	case "", "PLAIN":
+	case "IDENTIFIER":
+		for _, character := range value {
+			if character < 0x21 || character > 0x7e {
+				return errors.New("identifier field is invalid")
+			}
+		}
+	case "HTTPS_ORIGIN", "HTTPS_URL":
+		parsed, err := url.Parse(value)
+		if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil ||
+			parsed.Fragment != "" || (parsed.Port() != "" && parsed.Port() != "443") || net.ParseIP(parsed.Hostname()) != nil ||
+			!validHostname(strings.ToLower(parsed.Hostname())) || parsed.Hostname() != strings.ToLower(parsed.Hostname()) ||
+			(field.Format == "HTTPS_ORIGIN" && (parsed.RawQuery != "" || parsed.Path != "" && parsed.Path != "/")) {
+			return errors.New("HTTPS URL field is invalid")
+		}
+	case "EMAIL":
+		parsed, err := mail.ParseAddress(value)
+		if err != nil || parsed.Address != value || !strings.Contains(value, "@") {
+			return errors.New("email field is invalid")
+		}
+	case "HOST":
+		if net.ParseIP(value) != nil || !validHostname(value) {
+			return errors.New("host field is invalid")
+		}
+	default:
+		return errors.New("string field format is invalid")
 	}
 	return nil
 }
@@ -295,26 +370,64 @@ func validate(result *Package) error {
 	if result.APIVersion != APIVersion || result.Kind != Kind || result.Metadata.Origin != Origin ||
 		!validKey(result.Metadata.Key) || !versionPattern.MatchString(result.Metadata.Version) || len(result.Metadata.Version) > 32 ||
 		len(result.Spec.Name) == 0 || len(result.Spec.Name) > 120 || len(result.Spec.Description) == 0 || len(result.Spec.Description) > 500 ||
-		!validKey(result.Spec.Category) || !oneOf(result.Spec.Adapter, "SYNTHETIC_HTTP", "GITHUB", "MATTERMOST_INTERACTION") ||
-		len(result.Spec.ConfigurationFields) > 16 || len(result.Spec.Capabilities) == 0 || len(result.Spec.Capabilities) > 32 {
+		!validKey(result.Spec.Category) || !oneOf(result.Spec.Adapter, "SYNTHETIC_HTTP", "GITHUB", "GITLAB", "JIRA", "CONFLUENCE", "EMAIL_HTTPS", "MATTERMOST_INTERACTION") ||
+		len(result.Spec.ConfigurationFields) > 24 || len(result.Spec.NetworkDestinations) == 0 || len(result.Spec.NetworkDestinations) > 16 ||
+		len(result.Spec.Capabilities) == 0 || len(result.Spec.Capabilities) > 48 {
 		return errors.New("integration package metadata or bounds are invalid")
 	}
-	if result.Spec.Credential != nil && !validKey(result.Spec.Credential.SecretKey) {
+	if result.Spec.Credential != nil && (!validKey(result.Spec.Credential.SecretKey) || !oneOf(result.Spec.Credential.Kind, "TOKEN", "PASSWORD")) {
 		return errors.New("integration package credential is invalid")
 	}
 	configurationKeys, err := validateFields(result.Spec.ConfigurationFields)
 	if err != nil {
 		return err
 	}
+	configurationByKey := make(map[string]Field, len(result.Spec.ConfigurationFields))
+	for _, field := range result.Spec.ConfigurationFields {
+		configurationByKey[field.Key] = field
+	}
+	destinationKeys := map[string]struct{}{}
+	for _, destination := range result.Spec.NetworkDestinations {
+		if !validKey(destination.Key) || !oneOf(destination.Source, "STATIC", "CONFIGURATION") ||
+			destination.Port < 1 || destination.Port > 65535 || !oneOf(destination.TLS, "REQUIRED", "NONE") {
+			return errors.New("integration package network destination is invalid")
+		}
+		if _, exists := destinationKeys[destination.Key]; exists {
+			return errors.New("integration package network destination key is duplicated")
+		}
+		destinationKeys[destination.Key] = struct{}{}
+		switch destination.Source {
+		case "STATIC":
+			if destination.ConfigurationField != "" || !validHostname(destination.Hostname) {
+				return errors.New("integration package static network destination is invalid")
+			}
+		case "CONFIGURATION":
+			field, exists := configurationByKey[destination.ConfigurationField]
+			if destination.Hostname != "" || !exists || field.Type != "STRING" || !oneOf(field.Format, "HTTPS_ORIGIN", "HOST") {
+				return errors.New("integration package configured network destination is invalid")
+			}
+		}
+		if (destination.TLS == "REQUIRED" && destination.Port != 443) ||
+			(destination.TLS == "NONE" && destination.Port == 443) {
+			return errors.New("integration package network TLS policy is invalid")
+		}
+	}
 	capabilityKeys := map[string]struct{}{}
+	capabilityOperations := map[string]Capability{}
 	for _, capability := range result.Spec.Capabilities {
-		if !validKey(capability.Key) || !validKey(capability.Operation) ||
+		if !validKey(capability.Key) || len(capability.Name) == 0 || len(capability.Name) > 120 ||
+			len(capability.Description) == 0 || len(capability.Description) > 500 || !validKey(capability.Operation) ||
 			!oneOf(capability.Risk, "READ", "WRITE", "SENSITIVE", "DESTRUCTIVE") ||
 			!oneOf(capability.ApprovalPolicy, "NONE", "HUMAN_EACH_EFFECT") ||
 			(capability.Risk == "READ") != (capability.ApprovalPolicy == "NONE") ||
-			!oneOf(capability.ResourceScope.Kind, "SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "MATTERMOST_CHANNEL") ||
+			!oneOf(capability.ResourceScope.Kind, "SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "GITLAB_PROJECT", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "MATTERMOST_CHANNEL") ||
 			len(capability.ResourceScope.ConnectionFields) == 0 || len(capability.ResourceScope.ConnectionFields) > 8 ||
-			len(capability.InputFields) > 16 {
+			len(capability.InputFields) > 24 || len(capability.OutputFields) == 0 || len(capability.OutputFields) > 24 ||
+			!oneOf(capability.Execution.Idempotency, "READ_ONLY", "EFFECT_KEY", "PROVIDER_NATIVE") ||
+			capability.Execution.TimeoutSeconds < 1 || capability.Execution.TimeoutSeconds > 120 ||
+			capability.Execution.MaxAttempts < 1 || capability.Execution.MaxAttempts > 4 ||
+			capability.Execution.RetryBackoffMilliseconds < 50 || capability.Execution.RetryBackoffMilliseconds > 5000 ||
+			(capability.Risk == "READ") != (capability.Execution.Idempotency == "READ_ONLY") {
 			return errors.New("integration package capability is invalid")
 		}
 		if _, exists := capabilityKeys[capability.Key]; exists {
@@ -334,6 +447,18 @@ func validate(result *Package) error {
 		if _, err := validateFields(capability.InputFields); err != nil {
 			return err
 		}
+		if _, err := validateFields(capability.OutputFields); err != nil {
+			return err
+		}
+		if _, exists := capabilityOperations[capability.Operation]; exists {
+			return errors.New("integration package operation is duplicated")
+		}
+		capabilityOperations[capability.Operation] = capability
+	}
+	healthCapability, exists := capabilityOperations[result.Spec.HealthCheck.Operation]
+	if !exists || healthCapability.Risk != "READ" || result.Spec.HealthCheck.TimeoutSeconds < 1 ||
+		result.Spec.HealthCheck.TimeoutSeconds > 60 || result.Spec.HealthCheck.MaxAttempts < 1 || result.Spec.HealthCheck.MaxAttempts > 3 {
+		return errors.New("integration package health check is invalid")
 	}
 	return nil
 }
@@ -342,12 +467,25 @@ func validateFields(fields []Field) (map[string]struct{}, error) {
 	keys := make(map[string]struct{}, len(fields))
 	for _, field := range fields {
 		if !validKey(field.Key) || !oneOf(field.Type, "STRING", "INTEGER", "BOOLEAN") ||
+			(field.Format != "" && !oneOf(field.Format, "PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "EMAIL", "HOST", "IDENTIFIER")) ||
 			field.MaximumLength < 0 || field.MaximumLength > 65536 || field.Minimum < 0 || field.Maximum < 0 ||
 			(field.Maximum != 0 && field.Maximum < field.Minimum) ||
 			(field.Type == "STRING" && field.MaximumLength == 0) ||
 			(field.Type != "STRING" && field.MaximumLength != 0) ||
-			(field.Type != "INTEGER" && (field.Minimum != 0 || field.Maximum != 0)) {
+			(field.Type != "INTEGER" && (field.Minimum != 0 || field.Maximum != 0)) ||
+			(field.Type != "STRING" && (field.Format != "" || len(field.AllowedValues) > 0)) ||
+			len(field.AllowedValues) > 32 {
 			return nil, errors.New("integration package field is invalid")
+		}
+		seenValues := map[string]struct{}{}
+		for _, allowed := range field.AllowedValues {
+			if allowed == "" || len(allowed) > 120 || strings.ContainsAny(allowed, "\x00\r\n") {
+				return nil, errors.New("integration package allowed field value is invalid")
+			}
+			if _, exists := seenValues[allowed]; exists {
+				return nil, errors.New("integration package allowed field value is duplicated")
+			}
+			seenValues[allowed] = struct{}{}
 		}
 		if _, exists := keys[field.Key]; exists {
 			return nil, errors.New("integration package field key is duplicated")
@@ -387,6 +525,32 @@ func rejectUnsafeYAML(node *yaml.Node) error {
 }
 
 func validKey(value string) bool { return len(value) <= 120 && keyPattern.MatchString(value) }
+
+func validHostname(value string) bool {
+	if value == "" || len(value) > 253 || value != strings.ToLower(value) || net.ParseIP(value) != nil || strings.HasPrefix(value, ".") || strings.HasSuffix(value, ".") {
+		return false
+	}
+	for _, label := range strings.Split(value, ".") {
+		if label == "" || len(label) > 63 || strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
+			return false
+		}
+		for _, character := range label {
+			if (character < 'a' || character > 'z') && (character < '0' || character > '9') && character != '-' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func contains(values []string, candidate string) bool {
+	for _, value := range values {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
+}
 
 func oneOf(value string, allowed ...string) bool {
 	for _, candidate := range allowed {

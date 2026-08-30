@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -153,6 +154,64 @@ func TestOutcomeExposesOnlySafeCode(t *testing.T) {
 	}
 }
 
+func TestEmailRetriesHealthAndUsesProviderNativeIdempotency(t *testing.T) {
+	t.Parallel()
+	adapter := testAdapter(t)
+	credential := testCredential(t, adapter, "email-token")
+	requests := 0
+	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		if request.URL.Host != "email.example.test" || request.Header.Get("Authorization") != "Bearer email-token" {
+			t.Fatalf("unexpected provider request: %s %q", request.URL, request.Header.Get("Authorization"))
+		}
+		status, body := http.StatusOK, `{"status":"ready"}`
+		if request.Method == http.MethodGet && requests == 1 {
+			status, body = http.StatusServiceUnavailable, `{"error":"temporarily unavailable"}`
+		}
+		if request.Method == http.MethodPost {
+			if request.Header.Get("Idempotency-Key") == "" {
+				t.Fatal("email send does not carry the effect key")
+			}
+			body = `{"message_id":"msg-1","status":"accepted","provider_debug":"must-not-leak"}`
+		}
+		return &http.Response{StatusCode: status, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}, nil
+	})}
+
+	health := invocationRequest(t, adapter.definitions["email"], "email.delivery.health.read", map[string]any{}, credential)
+	if result, err := adapter.Execute(t.Context(), health); err != nil || result.Summary != `{"status":"ready"}` || requests != 2 {
+		t.Fatalf("email health = %#v, %v, requests=%d", result, err, requests)
+	}
+	send := invocationRequest(t, adapter.definitions["email"], "email.message.send", map[string]any{
+		"to": "recipient@example.test", "subject": "Hello", "body_text": "Body",
+	}, credential)
+	result, err := adapter.Execute(t.Context(), send)
+	if err != nil || !strings.Contains(result.Summary, `"message_id":"msg-1"`) || strings.Contains(result.Summary, "provider_debug") {
+		t.Fatalf("email send = %#v, %v", result, err)
+	}
+	if send.Risk != "SENSITIVE" || send.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
+		t.Fatalf("email send policy = %s/%s", send.Risk, send.ApprovalPolicy)
+	}
+}
+
+func TestGitLabMetadataUsesExactProjectScope(t *testing.T) {
+	t.Parallel()
+	adapter := testAdapter(t)
+	credential := testCredential(t, adapter, "gitlab-token")
+	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Method != http.MethodGet || request.URL.Host != "gitlab.example.test" ||
+			request.URL.EscapedPath() != "/api/v4/projects/group%2Fproject" {
+			t.Fatalf("unexpected GitLab request: %s %s", request.Method, request.URL)
+		}
+		body := `{"id":7,"path_with_namespace":"group/project","default_branch":"main","visibility":"private","archived":false}`
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}, nil
+	})}
+	invocation := invocationRequest(t, adapter.definitions["gitlab"], "gitlab.project.metadata.read", map[string]any{}, credential)
+	result, err := adapter.Execute(t.Context(), invocation)
+	if err != nil || !strings.Contains(result.Summary, `"path_with_namespace":"group/project"`) {
+		t.Fatalf("GitLab metadata = %#v, %v", result, err)
+	}
+}
+
 func testAdapter(t *testing.T) *Adapter {
 	t.Helper()
 	root := t.TempDir()
@@ -167,7 +226,8 @@ func testAdapter(t *testing.T) *Adapter {
 	return &Adapter{
 		credentials: store, definitions: definitions, timeout: 10 * time.Second,
 		githubHTTPClient: &http.Client{Timeout: 10 * time.Second}, githubBaseURL: mustURL(githubAPIBaseURL),
-		syntheticClient: &http.Client{Timeout: 10 * time.Second}, syntheticBaseURL: mustURL("http://" + syntheticServiceHost + ":8080"),
+		providerHTTPClient: &http.Client{Timeout: 10 * time.Second},
+		syntheticClient:    &http.Client{Timeout: 10 * time.Second}, syntheticBaseURL: mustURL("http://" + syntheticServiceHost + ":8080"),
 	}
 }
 
@@ -180,6 +240,16 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 	configuration := map[string]string{"journal": "main"}
 	if definition.Metadata.Key == "github" {
 		configuration = map[string]string{"owner": "acme", "repository": "repo"}
+	}
+	switch definition.Metadata.Key {
+	case "gitlab":
+		configuration = map[string]string{"base_url": "https://gitlab.example.test", "project_path": "group/project"}
+	case "jira":
+		configuration = map[string]string{"base_url": "https://jira.example.test", "auth_scheme": "BEARER", "project_key": "OPS", "issue_type": "Task"}
+	case "confluence":
+		configuration = map[string]string{"base_url": "https://confluence.example.test", "auth_scheme": "BEARER", "space_id": "42"}
+	case "email":
+		configuration = map[string]string{"base_url": "https://email.example.test", "from_address": "sender@example.test"}
 	}
 	scope, err := capability.ResourceScopeValues(configuration)
 	if err != nil {
@@ -234,4 +304,10 @@ func mustParseURL(t *testing.T, raw string) *url.URL {
 		t.Fatal(err)
 	}
 	return parsed
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
 }

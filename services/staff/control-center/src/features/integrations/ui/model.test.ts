@@ -83,28 +83,13 @@ describe("integrations presentation model", () => {
       false,
     );
 
-    expect(packages.map((item) => item.key)).toEqual([
-      "github",
-      "gitlab",
-      "jira",
-      "confluence",
-      "email",
-      "custom-http",
-      "custom",
-    ]);
+    expect(packages.map((item) => item.key)).toEqual(["github", "custom"]);
     expect(packages[0]).toMatchObject({
       connectionCount: 2,
       healthyConnectionCount: 1,
       canConnect: false,
     });
-    expect(packages[1]).toMatchObject({
-      key: "gitlab",
-      source: "EXPECTED_YAML",
-      available: false,
-      canConnect: false,
-    });
-    expect(packages[1]?.definition).toBeUndefined();
-    expect(packages[6]?.canConnect).toBe(false);
+    expect(packages[1]?.canConnect).toBe(false);
   });
 
   it("фильтрует каталог по категории и capability", () => {
@@ -132,14 +117,7 @@ describe("integrations presentation model", () => {
       true,
     );
 
-    expect(integrationCategories(packages)).toEqual([
-      "automation",
-      "communications",
-      "development",
-      "knowledge",
-      "source-control",
-      "tasks",
-    ]);
+    expect(integrationCategories(packages)).toEqual(["development", "tasks"]);
     expect(filterIntegrationPackages(packages, "поиск", "tasks")).toHaveLength(
       1,
     );

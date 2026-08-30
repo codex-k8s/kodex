@@ -72,7 +72,7 @@ function githubDefinition(): IntegrationDefinition {
 }
 
 describe("IntegrationCatalogPanel", () => {
-  it("не выдаёт отсутствующие YAML packages за доступные подключения", async () => {
+  it("показывает только определения, подтверждённые сервером", async () => {
     const packages = buildIntegrationPackages([githubDefinition()], [], true);
     const app = createSSRApp({
       render: () =>
@@ -89,17 +89,11 @@ describe("IntegrationCatalogPanel", () => {
 
     const html = await renderToString(app);
 
-    for (const name of [
-      "GitHub",
-      "GitLab",
-      "Jira",
-      "Confluence",
-      "Email",
-      "Custom HTTP",
-    ]) {
-      expect(html).toContain(name);
+    expect(html).toContain("GitHub");
+    for (const missing of ["GitLab", "Jira", "Confluence", "Email"]) {
+      expect(html).not.toContain(missing);
     }
-    expect(html).toContain("YAML · API —");
-    expect(html.match(/<button[^>]*disabled/g)).toHaveLength(5);
+    expect(html).not.toContain("YAML · API —");
+    expect(html.match(/<button[^>]*disabled/g)).toBeNull();
   });
 });
