@@ -47,6 +47,13 @@ spec:
     - from:
         - podSelector:
             matchLabels:
+              app.kubernetes.io/name: artifact-retention
+              app.kubernetes.io/component: retention-job
+      ports:
+        - {protocol: TCP, port: 8333}
+    - from:
+        - podSelector:
+            matchLabels:
               session-archive.kodex.dev/managed: "true"
       ports:
         - {protocol: TCP, port: 8333}

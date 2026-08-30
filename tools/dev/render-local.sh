@@ -562,14 +562,18 @@ patch_go_init_container() {
       (.spec.template.spec.initContainers[] | select(.name == strenv(CONTAINER))) |= (
         .image = strenv(GO_IMAGE) |
         .imagePullPolicy = "IfNotPresent" |
-        .command = ["/workspace/tools/dev/run-go-command.sh"] |
-        .args = [strenv(MODULE),strenv(PACKAGE)] |
+        .command = ["/workspace/tools/dev/run-authority-socket-init.sh"] |
+        .args = [] |
         .workingDir = ("/workspace/" + strenv(MODULE)) |
         .resources = {"requests":{"cpu":"25m","memory":"64Mi"}} |
         .securityContext.runAsNonRoot = false |
         .securityContext.runAsUser = 0 |
         .securityContext.runAsGroup = 0 |
         .securityContext.readOnlyRootFilesystem = false |
+        .securityContext.capabilities = {
+          "drop":["ALL"],
+          "add":["SETUID","SETGID"]
+        } |
         .volumeMounts = (((.volumeMounts // []) |
           map(select(.name != "dev-source" and .name != "dev-go-mod" and .name != "dev-go-sumdb" and
             .name != "dev-go-build" and .name != "dev-go-tools"))) +
@@ -682,20 +686,6 @@ for workload in control-plane secret-broker control-api-gateway runtime-controll
   patch_go_init_container "$workload" internal-rpc-authority-socket-init \
     services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-socket-init
 done
-
-yq -i '
-  with(select(.kind == "Deployment");
-    (.spec.template.spec.initContainers[]? |
-      select(.name == "internal-rpc-authority-socket-init")) |= (
-        .command = ["/workspace/tools/dev/run-authority-socket-init.sh"] |
-        .args = [] |
-        .securityContext.capabilities = {
-          "drop":["ALL"],
-          "add":["SETUID","SETGID"]
-        }
-      )
-  )
-' "$render"
 
 patch_go_job internal-rpc-authority-migrate migrate services/internal/internal-rpc-authority ./cmd/cli up
 patch_go_job control-plane-migrate migrate services/internal/control-plane ./cmd/cli up
@@ -949,8 +939,16 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
     any(.spec.ingress[];
       any(.from[]?;
         .podSelector.matchLabels["session-archive.kodex.dev/managed"] == "true") and
+      any(.ports[]?; .protocol == "TCP" and .port == 8333))) and
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "seaweedfs-exact-local-paths" and
+    any(.spec.ingress[];
+      any(.from[]?;
+        .podSelector.matchLabels["app.kubernetes.io/name"] == "artifact-retention" and
+        .podSelector.matchLabels["app.kubernetes.io/component"] == "retention-job") and
       any(.ports[]?; .protocol == "TCP" and .port == 8333)))
-' >/dev/null || fail 'session-archive local object storage network path is absent'
+' >/dev/null || fail 'local object storage network paths are incomplete'
 BACKUP_CONTROLLER_IMAGE="$backup_controller_image" yq -e '
   select(.kind == "Deployment" and .metadata.name == "backup-controller") |
   .spec.template.spec.containers[] | select(.name == "backup-controller") |
