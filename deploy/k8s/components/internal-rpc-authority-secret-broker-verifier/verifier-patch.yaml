@@ -55,10 +55,10 @@ spec:
             - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn}
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER
               valueFrom: {secretKeyRef: {name: internal-rpc-authority-secret-broker-verifier-postgresql, key: username}}
-          ports: [{name: verifier-metrics, containerPort: 9092, protocol: TCP}]
-          startupProbe: {httpGet: {path: /healthz, port: verifier-metrics}, periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 60}
-          readinessProbe: {httpGet: {path: /readyz, port: verifier-metrics}, periodSeconds: 5, timeoutSeconds: 3}
-          livenessProbe: {httpGet: {path: /healthz, port: verifier-metrics}, periodSeconds: 10, timeoutSeconds: 2}
+          ports: [{name: verify-metrics, containerPort: 9092, protocol: TCP}]
+          startupProbe: {httpGet: {path: /healthz, port: verify-metrics}, periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 60}
+          readinessProbe: {httpGet: {path: /readyz, port: verify-metrics}, periodSeconds: 5, timeoutSeconds: 3}
+          livenessProbe: {httpGet: {path: /healthz, port: verify-metrics}, periodSeconds: 10, timeoutSeconds: 2}
           resources:
             requests: {cpu: 25m, memory: 32Mi}
             limits: {cpu: 250m, memory: 128Mi}

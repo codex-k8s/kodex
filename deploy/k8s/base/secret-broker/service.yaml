@@ -22,7 +22,7 @@ spec:
       port: 9091
       targetPort: auth-metrics
       protocol: TCP
-    - name: verifier-metrics
+    - name: verify-metrics
       port: 9092
-      targetPort: verifier-metrics
+      targetPort: verify-metrics
       protocol: TCP

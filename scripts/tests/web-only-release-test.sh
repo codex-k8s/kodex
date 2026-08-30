@@ -122,7 +122,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       .["app.kubernetes.io/name"] == "control-plane") and
       any(.ports[]; .protocol == "TCP" and .port == 8443))) and
   any(.[]; .kind == "Service" and .metadata.name == "secret-broker" and
-    any(.spec.ports[]; .name == "verifier-metrics" and .port == 9092)) and
+    any(.spec.ports[]; .name == "verify-metrics" and .port == 9092)) and
   any(.[]; .kind == "Role" and .metadata.name == "internal-rpc-authority-publisher" and
     (["internal-rpc-authority-control-plane-issuer-key",
       "internal-rpc-authority-control-plane-issuer-readback-credential",
