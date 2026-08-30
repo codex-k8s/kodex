@@ -2102,6 +2102,7 @@ const (
 	PlatformCommandService_RestoreArtifact_FullMethodName                          = "/controlplane.v1.PlatformCommandService/RestoreArtifact"
 	PlatformCommandService_PurgeArtifact_FullMethodName                            = "/controlplane.v1.PlatformCommandService/PurgeArtifact"
 	PlatformCommandService_CreateAttachmentSetDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/CreateAttachmentSetDraft"
+	PlatformCommandService_CreateOrganizationAttachmentSetDraft_FullMethodName     = "/controlplane.v1.PlatformCommandService/CreateOrganizationAttachmentSetDraft"
 	PlatformCommandService_AddAttachmentSetItems_FullMethodName                    = "/controlplane.v1.PlatformCommandService/AddAttachmentSetItems"
 	PlatformCommandService_RemoveAttachmentSetItems_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RemoveAttachmentSetItems"
 	PlatformCommandService_FinalizeAttachmentSet_FullMethodName                    = "/controlplane.v1.PlatformCommandService/FinalizeAttachmentSet"
@@ -2180,13 +2181,14 @@ type PlatformCommandServiceClient interface {
 	RetryRun(ctx context.Context, in *RetryRunRequest, opts ...grpc.CallOption) (*RetryRunResponse, error)
 	ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error)
 	UploadArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error)
-	UploadOrganizationArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error)
+	UploadOrganizationArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse], error)
 	DownloadArtifact(ctx context.Context, in *DownloadArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactResponse], error)
 	ChangeArtifactBinding(ctx context.Context, in *ChangeArtifactBindingRequest, opts ...grpc.CallOption) (*ChangeArtifactBindingResponse, error)
 	DeleteArtifact(ctx context.Context, in *DeleteArtifactRequest, opts ...grpc.CallOption) (*DeleteArtifactResponse, error)
 	RestoreArtifact(ctx context.Context, in *RestoreArtifactRequest, opts ...grpc.CallOption) (*RestoreArtifactResponse, error)
 	PurgeArtifact(ctx context.Context, in *PurgeArtifactRequest, opts ...grpc.CallOption) (*PurgeArtifactResponse, error)
 	CreateAttachmentSetDraft(ctx context.Context, in *CreateAttachmentSetDraftRequest, opts ...grpc.CallOption) (*CreateAttachmentSetDraftResponse, error)
+	CreateOrganizationAttachmentSetDraft(ctx context.Context, in *CreateOrganizationAttachmentSetDraftRequest, opts ...grpc.CallOption) (*CreateOrganizationAttachmentSetDraftResponse, error)
 	AddAttachmentSetItems(ctx context.Context, in *AddAttachmentSetItemsRequest, opts ...grpc.CallOption) (*AddAttachmentSetItemsResponse, error)
 	RemoveAttachmentSetItems(ctx context.Context, in *RemoveAttachmentSetItemsRequest, opts ...grpc.CallOption) (*RemoveAttachmentSetItemsResponse, error)
 	FinalizeAttachmentSet(ctx context.Context, in *FinalizeAttachmentSetRequest, opts ...grpc.CallOption) (*FinalizeAttachmentSetResponse, error)
@@ -2557,18 +2559,18 @@ func (c *platformCommandServiceClient) UploadArtifact(ctx context.Context, opts 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PlatformCommandService_UploadArtifactClient = grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse]
 
-func (c *platformCommandServiceClient) UploadOrganizationArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error) {
+func (c *platformCommandServiceClient) UploadOrganizationArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[1], PlatformCommandService_UploadOrganizationArtifact_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[UploadArtifactRequest, UploadArtifactResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type PlatformCommandService_UploadOrganizationArtifactClient = grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse]
+type PlatformCommandService_UploadOrganizationArtifactClient = grpc.ClientStreamingClient[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse]
 
 func (c *platformCommandServiceClient) DownloadArtifact(ctx context.Context, in *DownloadArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -2633,6 +2635,16 @@ func (c *platformCommandServiceClient) CreateAttachmentSetDraft(ctx context.Cont
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateAttachmentSetDraftResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_CreateAttachmentSetDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateOrganizationAttachmentSetDraft(ctx context.Context, in *CreateOrganizationAttachmentSetDraftRequest, opts ...grpc.CallOption) (*CreateOrganizationAttachmentSetDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateOrganizationAttachmentSetDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateOrganizationAttachmentSetDraft_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3048,13 +3060,14 @@ type PlatformCommandServiceServer interface {
 	RetryRun(context.Context, *RetryRunRequest) (*RetryRunResponse, error)
 	ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error)
 	UploadArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error
-	UploadOrganizationArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error
+	UploadOrganizationArtifact(grpc.ClientStreamingServer[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse]) error
 	DownloadArtifact(*DownloadArtifactRequest, grpc.ServerStreamingServer[DownloadArtifactResponse]) error
 	ChangeArtifactBinding(context.Context, *ChangeArtifactBindingRequest) (*ChangeArtifactBindingResponse, error)
 	DeleteArtifact(context.Context, *DeleteArtifactRequest) (*DeleteArtifactResponse, error)
 	RestoreArtifact(context.Context, *RestoreArtifactRequest) (*RestoreArtifactResponse, error)
 	PurgeArtifact(context.Context, *PurgeArtifactRequest) (*PurgeArtifactResponse, error)
 	CreateAttachmentSetDraft(context.Context, *CreateAttachmentSetDraftRequest) (*CreateAttachmentSetDraftResponse, error)
+	CreateOrganizationAttachmentSetDraft(context.Context, *CreateOrganizationAttachmentSetDraftRequest) (*CreateOrganizationAttachmentSetDraftResponse, error)
 	AddAttachmentSetItems(context.Context, *AddAttachmentSetItemsRequest) (*AddAttachmentSetItemsResponse, error)
 	RemoveAttachmentSetItems(context.Context, *RemoveAttachmentSetItemsRequest) (*RemoveAttachmentSetItemsResponse, error)
 	FinalizeAttachmentSet(context.Context, *FinalizeAttachmentSetRequest) (*FinalizeAttachmentSetResponse, error)
@@ -3198,7 +3211,7 @@ func (UnimplementedPlatformCommandServiceServer) ResolveOwnerGate(context.Contex
 func (UnimplementedPlatformCommandServiceServer) UploadArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error {
 	return status.Error(codes.Unimplemented, "method UploadArtifact not implemented")
 }
-func (UnimplementedPlatformCommandServiceServer) UploadOrganizationArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error {
+func (UnimplementedPlatformCommandServiceServer) UploadOrganizationArtifact(grpc.ClientStreamingServer[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse]) error {
 	return status.Error(codes.Unimplemented, "method UploadOrganizationArtifact not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) DownloadArtifact(*DownloadArtifactRequest, grpc.ServerStreamingServer[DownloadArtifactResponse]) error {
@@ -3218,6 +3231,9 @@ func (UnimplementedPlatformCommandServiceServer) PurgeArtifact(context.Context, 
 }
 func (UnimplementedPlatformCommandServiceServer) CreateAttachmentSetDraft(context.Context, *CreateAttachmentSetDraftRequest) (*CreateAttachmentSetDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateAttachmentSetDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateOrganizationAttachmentSetDraft(context.Context, *CreateOrganizationAttachmentSetDraftRequest) (*CreateOrganizationAttachmentSetDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateOrganizationAttachmentSetDraft not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) AddAttachmentSetItems(context.Context, *AddAttachmentSetItemsRequest) (*AddAttachmentSetItemsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddAttachmentSetItems not implemented")
@@ -3918,11 +3934,11 @@ func _PlatformCommandService_UploadArtifact_Handler(srv interface{}, stream grpc
 type PlatformCommandService_UploadArtifactServer = grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]
 
 func _PlatformCommandService_UploadOrganizationArtifact_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(PlatformCommandServiceServer).UploadOrganizationArtifact(&grpc.GenericServerStream[UploadArtifactRequest, UploadArtifactResponse]{ServerStream: stream})
+	return srv.(PlatformCommandServiceServer).UploadOrganizationArtifact(&grpc.GenericServerStream[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type PlatformCommandService_UploadOrganizationArtifactServer = grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]
+type PlatformCommandService_UploadOrganizationArtifactServer = grpc.ClientStreamingServer[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse]
 
 func _PlatformCommandService_DownloadArtifact_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(DownloadArtifactRequest)
@@ -4021,6 +4037,24 @@ func _PlatformCommandService_CreateAttachmentSetDraft_Handler(srv interface{}, c
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).CreateAttachmentSetDraft(ctx, req.(*CreateAttachmentSetDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CreateOrganizationAttachmentSetDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateOrganizationAttachmentSetDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateOrganizationAttachmentSetDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateOrganizationAttachmentSetDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateOrganizationAttachmentSetDraft(ctx, req.(*CreateOrganizationAttachmentSetDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4841,6 +4875,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateAttachmentSetDraft",
 			Handler:    _PlatformCommandService_CreateAttachmentSetDraft_Handler,
+		},
+		{
+			MethodName: "CreateOrganizationAttachmentSetDraft",
+			Handler:    _PlatformCommandService_CreateOrganizationAttachmentSetDraft_Handler,
 		},
 		{
 			MethodName: "AddAttachmentSetItems",

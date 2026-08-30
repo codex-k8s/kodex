@@ -110,6 +110,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.artifacts.upload":                        controlplanev1.PlatformCommandService_UploadArtifact_FullMethodName,
 		"platform.command.organization-artifacts.upload":           controlplanev1.PlatformCommandService_UploadOrganizationArtifact_FullMethodName,
 		"platform.command.attachment-sets.create-draft":            controlplanev1.PlatformCommandService_CreateAttachmentSetDraft_FullMethodName,
+		"platform.command.organization-attachment-sets.create":     controlplanev1.PlatformCommandService_CreateOrganizationAttachmentSetDraft_FullMethodName,
 		"platform.command.attachment-sets.add-items":               controlplanev1.PlatformCommandService_AddAttachmentSetItems_FullMethodName,
 		"platform.command.attachment-sets.remove-items":            controlplanev1.PlatformCommandService_RemoveAttachmentSetItems_FullMethodName,
 		"platform.command.attachment-sets.finalize":                controlplanev1.PlatformCommandService_FinalizeAttachmentSet_FullMethodName,

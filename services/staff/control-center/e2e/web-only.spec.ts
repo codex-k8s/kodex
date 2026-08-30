@@ -2912,6 +2912,8 @@ async function operateArtifactLifecycle(
       : `/api/v1/artifacts/${artifactRef}/restore`;
   const method = action === "DELETE" ? "DELETE" : "POST";
   const actionLabel = action === "DELETE" ? "В корзину" : "Восстановить";
+  const confirmationLabel =
+    action === "DELETE" ? "Переместить в корзину" : "Восстановить";
   const dialogTitle =
     action === "DELETE" ? "Переместить файл в корзину?" : "Восстановить файл?";
   const artifactItem = page
@@ -2941,7 +2943,9 @@ async function operateArtifactLifecycle(
       candidate.request().method() === method &&
       new URL(candidate.url()).pathname === path,
   );
-  await dialog.getByRole("button", { name: actionLabel, exact: true }).click();
+  await dialog
+    .getByRole("button", { name: confirmationLabel, exact: true })
+    .click();
   const mutation = await response;
   expect(mutation.status(), await mutation.text()).toBe(200);
   return (await mutation.json()) as ArtifactReadback;

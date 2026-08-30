@@ -18,6 +18,9 @@ import (
 const maximumArtifactChunkBytes = 1 << 20
 
 func (server *Server) CreateAttachmentSetDraft(ctx context.Context, request *controlplanev1.CreateAttachmentSetDraftRequest) (*controlplanev1.CreateAttachmentSetDraftResponse, error) {
+	if request.GetProjectRef() == "" {
+		return nil, status.Error(codes.InvalidArgument, "attachment set project scope is required")
+	}
 	payload := command.AttachmentSetDraftInput{ProjectRef: request.GetProjectRef(),
 		Purpose: enumSuffix(request.GetPurpose(), "ATTACHMENT_SET_PURPOSE_"), ArtifactRefs: request.GetArtifactRefs()}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateAttachmentSetDraft_FullMethodName,
@@ -26,6 +29,17 @@ func (server *Server) CreateAttachmentSetDraft(ctx context.Context, request *con
 		return nil, err
 	}
 	return &controlplanev1.CreateAttachmentSetDraftResponse{AttachmentSet: castAttachmentSet(*result.AttachmentSet)}, nil
+}
+
+func (server *Server) CreateOrganizationAttachmentSetDraft(ctx context.Context, request *controlplanev1.CreateOrganizationAttachmentSetDraftRequest) (*controlplanev1.CreateOrganizationAttachmentSetDraftResponse, error) {
+	payload := command.AttachmentSetDraftInput{
+		Purpose: enumSuffix(request.GetPurpose(), "ATTACHMENT_SET_PURPOSE_"), ArtifactRefs: request.GetArtifactRefs()}
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateOrganizationAttachmentSetDraft_FullMethodName,
+		command.CreateAttachmentSetDraft, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.CreateOrganizationAttachmentSetDraftResponse{AttachmentSet: castAttachmentSet(*result.AttachmentSet)}, nil
 }
 
 func (server *Server) AddAttachmentSetItems(ctx context.Context, request *controlplanev1.AddAttachmentSetItemsRequest) (*controlplanev1.AddAttachmentSetItemsResponse, error) {
@@ -64,7 +78,36 @@ func (server *Server) UploadArtifact(stream controlplanev1.PlatformCommandServic
 }
 
 func (server *Server) UploadOrganizationArtifact(stream controlplanev1.PlatformCommandService_UploadOrganizationArtifactServer) error {
-	return server.uploadArtifact(stream, controlplanev1.PlatformCommandService_UploadOrganizationArtifact_FullMethodName, false)
+	return server.uploadArtifact(organizationArtifactUploadServer{stream: stream}, controlplanev1.PlatformCommandService_UploadOrganizationArtifact_FullMethodName, false)
+}
+
+type organizationArtifactUploadServer struct {
+	stream controlplanev1.PlatformCommandService_UploadOrganizationArtifactServer
+}
+
+func (server organizationArtifactUploadServer) Context() context.Context {
+	return server.stream.Context()
+}
+
+func (server organizationArtifactUploadServer) Recv() (*controlplanev1.UploadArtifactRequest, error) {
+	request, err := server.stream.Recv()
+	if err != nil {
+		return nil, err
+	}
+	converted := &controlplanev1.UploadArtifactRequest{}
+	switch part := request.GetPart().(type) {
+	case *controlplanev1.UploadOrganizationArtifactRequest_Metadata:
+		converted.Part = &controlplanev1.UploadArtifactRequest_Metadata{Metadata: part.Metadata}
+	case *controlplanev1.UploadOrganizationArtifactRequest_Chunk:
+		converted.Part = &controlplanev1.UploadArtifactRequest_Chunk{Chunk: part.Chunk}
+	case *controlplanev1.UploadOrganizationArtifactRequest_Commit:
+		converted.Part = &controlplanev1.UploadArtifactRequest_Commit{Commit: part.Commit}
+	}
+	return converted, nil
+}
+
+func (server organizationArtifactUploadServer) SendAndClose(response *controlplanev1.UploadArtifactResponse) error {
+	return server.stream.SendAndClose(&controlplanev1.UploadOrganizationArtifactResponse{Artifact: response.GetArtifact()})
 }
 
 type artifactUploadServer interface {

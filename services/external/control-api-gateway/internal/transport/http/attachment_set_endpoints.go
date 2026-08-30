@@ -40,7 +40,7 @@ func (server *Server) CreateOrganizationAttachmentSetDraft(writer http.ResponseW
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.CreateAttachmentSetDraft(request.Context(), &controlplanev1.CreateAttachmentSetDraftRequest{
+	response, err := server.control.Command.CreateOrganizationAttachmentSetDraft(request.Context(), &controlplanev1.CreateOrganizationAttachmentSetDraftRequest{
 		Mutation: mutation, Purpose: attachmentSetPurposeProto(string(body.Purpose)),
 		ArtifactRefs: sliceOrEmpty(body.ArtifactRefs),
 	})

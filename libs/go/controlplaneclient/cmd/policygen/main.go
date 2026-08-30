@@ -174,14 +174,15 @@ func main() {
 
 func permissionForOperation(operationID string) string {
 	permissions := map[string]string{
-		"platform.command.organization-artifacts.upload":   "platform.command.artifacts.upload",
-		"platform.query.runtime-secrets.list":              "secret.view",
-		"platform.query.runtime-secrets.get":               "secret.view",
-		"platform.command.runtime-secrets.create":          "secret.create",
-		"platform.command.runtime-secrets.rotate":          "secret.rotate",
-		"platform.command.runtime-secrets.reveal":          "secret.reveal",
-		"platform.command.runtime-secrets.revoke":          "secret.revoke",
-		"platform.runtime-secrets.materialization.recover": "platform.runtime-secrets.operations.recover",
+		"platform.command.organization-artifacts.upload":       "platform.command.artifacts.upload",
+		"platform.command.organization-attachment-sets.create": "platform.command.attachment-sets.create-draft",
+		"platform.query.runtime-secrets.list":                  "secret.view",
+		"platform.query.runtime-secrets.get":                   "secret.view",
+		"platform.command.runtime-secrets.create":              "secret.create",
+		"platform.command.runtime-secrets.rotate":              "secret.rotate",
+		"platform.command.runtime-secrets.reveal":              "secret.reveal",
+		"platform.command.runtime-secrets.revoke":              "secret.revoke",
+		"platform.runtime-secrets.materialization.recover":     "platform.runtime-secrets.operations.recover",
 	}
 	if permission := permissions[operationID]; permission != "" {
 		return permission

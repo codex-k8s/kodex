@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
@@ -12,6 +13,15 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+func TestCreateAttachmentSetDraftRejectsMissingProject(t *testing.T) {
+	t.Parallel()
+	server := &Server{}
+	_, err := server.CreateAttachmentSetDraft(context.Background(), &controlplanev1.CreateAttachmentSetDraftRequest{})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("status = %v, err=%v", status.Code(err), err)
+	}
+}
 
 func TestReceiveArtifactUploadSpoolsBeyondLegacyLimit(t *testing.T) {
 	t.Parallel()

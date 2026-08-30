@@ -737,7 +737,11 @@ func (server *Server) uploadArtifact(w http.ResponseWriter, r *http.Request, upl
 	var stream artifactUploadClient
 	var err error
 	if upload.projectRef == "" {
-		stream, err = server.control.Command.UploadOrganizationArtifact(r.Context())
+		var organizationStream controlplanev1.PlatformCommandService_UploadOrganizationArtifactClient
+		organizationStream, err = server.control.Command.UploadOrganizationArtifact(r.Context())
+		if err == nil {
+			stream = organizationArtifactUploadClient{stream: organizationStream}
+		}
 	} else {
 		stream, err = server.control.Command.UploadArtifact(r.Context())
 	}
@@ -777,6 +781,31 @@ func (server *Server) uploadArtifact(w http.ResponseWriter, r *http.Request, upl
 		return
 	}
 	writeMessage(w, http.StatusCreated, response, "artifact", "")
+}
+
+type organizationArtifactUploadClient struct {
+	stream controlplanev1.PlatformCommandService_UploadOrganizationArtifactClient
+}
+
+func (client organizationArtifactUploadClient) Send(request *controlplanev1.UploadArtifactRequest) error {
+	converted := &controlplanev1.UploadOrganizationArtifactRequest{}
+	switch part := request.GetPart().(type) {
+	case *controlplanev1.UploadArtifactRequest_Metadata:
+		converted.Part = &controlplanev1.UploadOrganizationArtifactRequest_Metadata{Metadata: part.Metadata}
+	case *controlplanev1.UploadArtifactRequest_Chunk:
+		converted.Part = &controlplanev1.UploadOrganizationArtifactRequest_Chunk{Chunk: part.Chunk}
+	case *controlplanev1.UploadArtifactRequest_Commit:
+		converted.Part = &controlplanev1.UploadOrganizationArtifactRequest_Commit{Commit: part.Commit}
+	}
+	return client.stream.Send(converted)
+}
+
+func (client organizationArtifactUploadClient) CloseAndRecv() (*controlplanev1.UploadArtifactResponse, error) {
+	response, err := client.stream.CloseAndRecv()
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.UploadArtifactResponse{Artifact: response.GetArtifact()}, nil
 }
 
 func forwardArtifactBody(reader io.Reader, declaredSize int64, send func([]byte) error) (int64, string, error) {

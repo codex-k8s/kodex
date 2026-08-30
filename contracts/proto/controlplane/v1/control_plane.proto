@@ -104,13 +104,14 @@ service PlatformCommandService {
   rpc RetryRun(RetryRunRequest) returns (RetryRunResponse);
   rpc ResolveOwnerGate(ResolveOwnerGateRequest) returns (ResolveOwnerGateResponse);
   rpc UploadArtifact(stream UploadArtifactRequest) returns (UploadArtifactResponse);
-  rpc UploadOrganizationArtifact(stream UploadArtifactRequest) returns (UploadArtifactResponse);
+  rpc UploadOrganizationArtifact(stream UploadOrganizationArtifactRequest) returns (UploadOrganizationArtifactResponse);
   rpc DownloadArtifact(DownloadArtifactRequest) returns (stream DownloadArtifactResponse);
   rpc ChangeArtifactBinding(ChangeArtifactBindingRequest) returns (ChangeArtifactBindingResponse);
   rpc DeleteArtifact(DeleteArtifactRequest) returns (DeleteArtifactResponse);
   rpc RestoreArtifact(RestoreArtifactRequest) returns (RestoreArtifactResponse);
   rpc PurgeArtifact(PurgeArtifactRequest) returns (PurgeArtifactResponse);
   rpc CreateAttachmentSetDraft(CreateAttachmentSetDraftRequest) returns (CreateAttachmentSetDraftResponse);
+  rpc CreateOrganizationAttachmentSetDraft(CreateOrganizationAttachmentSetDraftRequest) returns (CreateOrganizationAttachmentSetDraftResponse);
   rpc AddAttachmentSetItems(AddAttachmentSetItemsRequest) returns (AddAttachmentSetItemsResponse);
   rpc RemoveAttachmentSetItems(RemoveAttachmentSetItemsRequest) returns (RemoveAttachmentSetItemsResponse);
   rpc FinalizeAttachmentSet(FinalizeAttachmentSetRequest) returns (FinalizeAttachmentSetResponse);
@@ -1906,6 +1907,14 @@ message CreateAttachmentSetDraftRequest {
 message CreateAttachmentSetDraftResponse {
   AttachmentSet attachment_set = 1;
 }
+message CreateOrganizationAttachmentSetDraftRequest {
+  MutationContext mutation = 1;
+  AttachmentSetPurpose purpose = 2;
+  repeated string artifact_refs = 3;
+}
+message CreateOrganizationAttachmentSetDraftResponse {
+  AttachmentSet attachment_set = 1;
+}
 message AddAttachmentSetItemsRequest {
   MutationContext mutation = 1;
   string attachment_set_ref = 2;
@@ -1950,6 +1959,16 @@ message UploadArtifactRequest {
   }
 }
 message UploadArtifactResponse {
+  Artifact artifact = 1;
+}
+message UploadOrganizationArtifactRequest {
+  oneof part {
+    UploadArtifactMetadata metadata = 1;
+    bytes chunk = 2;
+    UploadArtifactCommit commit = 3;
+  }
+}
+message UploadOrganizationArtifactResponse {
   Artifact artifact = 1;
 }
 enum ArtifactDownloadPurpose {
