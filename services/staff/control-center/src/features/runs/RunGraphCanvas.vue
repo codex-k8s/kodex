@@ -458,6 +458,10 @@ function compareNodes(left: RunNode, right: RunNode): number {
           :aria-label="$t('runs.minimap')"
         />
       </VueFlow>
+      <div v-if="!nodes.length" class="graph-empty" role="status">
+        <Network :size="24" aria-hidden="true" />
+        <p>{{ $t("runs.noEvents") }}</p>
+      </div>
     </div>
 
     <div
@@ -513,7 +517,11 @@ function compareNodes(left: RunNode, right: RunNode): number {
       </button>
     </div>
 
-    <aside class="graph-legend" :aria-label="$t('runs.connections')">
+    <aside
+      v-if="nodes.length"
+      class="graph-legend"
+      :aria-label="$t('runs.connections')"
+    >
       <header>
         <Network :size="16" aria-hidden="true" />
         <strong>{{ $t("runs.connections") }}</strong>
@@ -544,10 +552,6 @@ function compareNodes(left: RunNode, right: RunNode): number {
         <span class="graph-legend__item">
           <i class="graph-legend__node graph-legend__node--session" />
           {{ $t("runs.sessionNode") }}
-        </span>
-        <span class="graph-legend__item">
-          <i class="graph-legend__node graph-legend__node--control" />
-          {{ $t("runs.controlNode") }}
         </span>
         <StatusBadge state="RUNNING" />
         <StatusBadge state="WAITING" />
@@ -633,6 +637,22 @@ function compareNodes(left: RunNode, right: RunNode): number {
   background: color-mix(in srgb, var(--surface) 94%, transparent);
   box-shadow: 0 8px 24px rgba(16, 22, 30, 0.1);
   backdrop-filter: blur(8px);
+}
+.graph-empty {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  place-items: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+  pointer-events: none;
+}
+.graph-empty p {
+  margin: 0;
 }
 .run-flow :deep(.vue-flow__controls) {
   top: 14px;
@@ -779,9 +799,6 @@ function compareNodes(left: RunNode, right: RunNode): number {
 .graph-legend__node--session {
   border-left: 3px solid var(--accent);
 }
-.graph-legend__node--control {
-  border-style: dashed;
-}
 .graph-legend__line--delegated_to {
   border-color: var(--accent);
 }
@@ -803,13 +820,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
 }
 @media (max-width: 760px) {
   .graph-toolbar {
-    top: 8px;
-    left: 8px;
-    min-height: 52px;
-  }
-  .graph-toolbar .icon-button {
-    min-width: 38px;
-    min-height: 38px;
+    display: none;
   }
   .run-flow :deep(.vue-flow__controls) {
     top: 8px;

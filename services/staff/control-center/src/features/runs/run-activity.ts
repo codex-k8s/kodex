@@ -1,3 +1,4 @@
+import { indexRunSessionOwnership } from "@/features/runs/run-session-graph";
 import type {
   Artifact,
   Run,
@@ -26,10 +27,10 @@ export interface RunActivityItem {
   artifact?: Artifact;
 }
 
-const agentMessageTypes = new Set<RunEvent["type"]>([
-  "TURN_STARTED",
-  "TURN_PROGRESS",
-  "TURN_COMPLETED",
+const agentMessageKinds = new Set<RunEvent["messageKind"]>([
+  "ASSISTANT_MESSAGE",
+  "INTERMEDIATE_MESSAGE",
+  "FINAL_MESSAGE",
 ]);
 
 export function buildRunActivityItems(
@@ -39,27 +40,32 @@ export function buildRunActivityItems(
   initiatorSummary?: string,
 ): RunActivityItem[] {
   const nodeByRef = new Map(nodes.map((node) => [node.ref, node]));
-  const items: RunActivityItem[] = [
-    {
+  const sessionOwnership = indexRunSessionOwnership(nodes);
+  const items: RunActivityItem[] = [];
+  if (initiatorSummary?.trim()) {
+    items.push({
       id: `initiator-${run.ref}`,
       kind: "initiator",
       actor: run.initiator.displayName,
-      summary: initiatorSummary,
+      summary: initiatorSummary.trim(),
       occurredAt: run.createdAt,
-    },
-  ];
+    });
+  }
 
   for (const event of [...events].sort(
     (left, right) => left.sequence - right.sequence,
   )) {
-    const node = event.nodeRef ? nodeByRef.get(event.nodeRef) : undefined;
+    const sessionNodeRef = event.nodeRef
+      ? sessionOwnership.get(event.nodeRef)
+      : undefined;
+    const node = sessionNodeRef ? nodeByRef.get(sessionNodeRef) : undefined;
     const kind: RunActivityItem["kind"] = event.toolCall
       ? "tool"
-      : event.actor?.kind === "USER"
+      : event.actor?.kind === "USER" || event.messageKind === "USER_MESSAGE"
         ? "initiator"
-        : event.actor?.kind === "AGENT" ||
-            event.actor?.kind === "SYSTEM_ASSISTANT" ||
-            agentMessageTypes.has(event.type)
+        : agentMessageKinds.has(event.messageKind) ||
+            event.actor?.kind === "AGENT" ||
+            event.actor?.kind === "SYSTEM_ASSISTANT"
           ? "agent"
           : "system";
     items.push({
@@ -74,7 +80,7 @@ export function buildRunActivityItems(
             : (node?.displayName ?? run.title)),
       summary: event.displaySummary,
       progress: event.displayProgress,
-      nodeRef: event.nodeRef,
+      nodeRef: sessionNodeRef,
       occurredAt: event.occurredAt,
       sequence: event.sequence,
       state: event.nodeState ?? event.runState,

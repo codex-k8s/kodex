@@ -13,6 +13,7 @@ import type { Component } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type {
+  Agent,
   Artifact,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -22,12 +23,16 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
-const props = defineProps<{
-  node: RunNode;
-  nodes: RunNode[];
-  artifacts: Artifact[];
-  projectRef: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    node: RunNode;
+    nodes: RunNode[];
+    artifacts: Artifact[];
+    projectRef: string;
+    agent?: Agent;
+  }>(),
+  { agent: undefined },
+);
 const emit = defineEmits<{
   close: [];
   activity: [nodeRef: string];
@@ -69,13 +74,19 @@ function formatDate(value: string): string {
   <section class="run-node-inspector" :aria-label="$t('runs.context')">
     <header class="run-node-inspector__header">
       <span class="run-node-inspector__icon">
-        <component :is="nodeIcon(node.type)" :size="20" aria-hidden="true" />
+        <img v-if="agent?.avatarUrl" :src="agent.avatarUrl" :alt="agent.name" />
+        <component
+          :is="nodeIcon(node.type)"
+          v-else
+          :size="20"
+          aria-hidden="true"
+        />
       </span>
       <div>
         <h2>{{ node.displayName }}</h2>
         <p>
           {{ $t(sessionNode ? "runs.sessionNode" : "runs.controlNode") }} ·
-          {{ node.role || $t(`runs.nodeTypes.${node.type}`) }}
+          {{ agent?.name || node.role || $t(`runs.nodeTypes.${node.type}`) }}
         </p>
       </div>
       <StatusBadge :state="node.state" />
@@ -111,6 +122,10 @@ function formatDate(value: string): string {
       </div>
 
       <dl class="run-node-inspector__metadata">
+        <div v-if="agent">
+          <dt>{{ $t("agents.profile") }}</dt>
+          <dd>{{ agent.name }}</dd>
+        </div>
         <div>
           <dt>{{ $t("runs.attempt", { attempt: node.attempt }) }}</dt>
           <dd>{{ node.attempt }}</dd>
@@ -233,6 +248,11 @@ function formatDate(value: string): string {
   border-radius: 8px;
   color: var(--accent);
   background: var(--panel);
+}
+.run-node-inspector__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .run-node-inspector__close {
   display: none;

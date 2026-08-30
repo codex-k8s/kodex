@@ -5,7 +5,11 @@ import { describe, expect, it } from "vitest";
 
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
-import type { Run, RunNode } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  Artifact,
+  Run,
+  RunNode,
+} from "@/shared/api/generated/openapi/types.gen";
 
 const run: Run = {
   ref: "run_example",
@@ -61,6 +65,33 @@ const node: RunNode = {
   startedAt: "2026-08-29T08:00:02Z",
   nextActions: [],
 };
+const toolNode: RunNode = {
+  ...node,
+  ref: "nod_tool",
+  parentNodeRef: node.ref,
+  type: "EXTERNAL_ACTION",
+  displayName: "Поиск по файлам",
+  artifactRefs: ["art_report"],
+};
+
+const artifact: Artifact = {
+  ref: "art_report",
+  version: 1,
+  projectRef: run.projectRef,
+  runRef: run.ref,
+  fileName: "report.md",
+  mediaType: "text/markdown",
+  sizeBytes: 2048,
+  digest: "sha256:example",
+  scanState: "CLEAN",
+  source: "AGENT_RESULT",
+  revision: 1,
+  lifecycleState: "ACTIVE",
+  agentBindings: [],
+  previewAvailable: true,
+  createdAt: "2026-08-29T08:00:05Z",
+  nextActions: ["DOWNLOAD"],
+};
 
 const event: PresentedRunEvent = {
   ref: "evt_progress",
@@ -102,6 +133,7 @@ const toolEvent: PresentedRunEvent = {
   ref: "evt_tool",
   sequence: 3,
   type: "TOOL_CALL_RECORDED",
+  nodeRef: toolNode.ref,
   summary: "Проверен источник",
   displaySummary: "Проверен источник",
   messageKind: "TOOL_CALL",
@@ -124,9 +156,9 @@ describe("RunSessionDetailsDialog", () => {
         h(RunSessionDetailsDialog, {
           run,
           node,
-          nodes: [node],
+          nodes: [node, toolNode],
           events: [toolEvent, userEvent, event],
-          artifacts: [],
+          artifacts: [artifact],
         }),
     });
     app.use(
@@ -161,6 +193,7 @@ describe("RunSessionDetailsDialog", () => {
               noNodeActivity: "Сообщений пока нет",
               toolParameters: "Безопасные параметры",
               toolResult: "Безопасный результат",
+              toolDuration: "Длительность: {duration} мс",
               sessionNode: "Сессия",
               controlNode: "Контрольный этап",
               runContext: "Контекст запуска",
@@ -173,6 +206,7 @@ describe("RunSessionDetailsDialog", () => {
             states: {
               RUNNING: "Выполняется",
               SUCCEEDED: "Завершено",
+              CLEAN: "Проверен",
             },
           },
         },
@@ -190,7 +224,6 @@ describe("RunSessionDetailsDialog", () => {
     expect(html).toContain(
       "Полностью отрендеренные инструкции недоступны текущему API.",
     );
-    expect(html).toContain("Пусто");
     expect(html).toContain("Собираю подтверждённые факты");
     expect(html).toContain("session-details__workspace");
     expect(html).toContain("session-details__event--agent");
@@ -198,6 +231,8 @@ describe("RunSessionDetailsDialog", () => {
     expect(html).toContain("session-details__event--tool");
     expect(html).toContain("project_files.search");
     expect(html).toContain("Найдено 4 подтверждённых фрагмента");
+    expect(html).toContain("180 мс");
+    expect(html).toContain("report.md");
     expect(html.indexOf("Собираю подтверждённые факты")).toBeLessThan(
       html.indexOf("Добавь сравнение с прошлым кварталом"),
     );

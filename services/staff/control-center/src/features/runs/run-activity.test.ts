@@ -61,6 +61,7 @@ const events: PresentedRunEvent[] = [
     runRef: run.ref,
     sequence: 2,
     type: "TURN_PROGRESS",
+    messageKind: "INTERMEDIATE_MESSAGE",
     nodeRef: node.ref,
     summary: "ignored",
     displaySummary: "Собираю подтверждённые факты",
@@ -104,8 +105,8 @@ describe("buildRunActivityItems", () => {
   it("не выдумывает отсутствующие tool-call события", () => {
     const items = buildRunActivityItems(run, [node], events);
 
-    expect(items).toHaveLength(2);
-    expect(items.some((item) => "tool" in item)).toBe(false);
+    expect(items).toHaveLength(1);
+    expect(items.some((item) => item.kind === "tool")).toBe(false);
   });
 
   it("выделяет нормализованный tool call в самостоятельный блок", () => {
@@ -137,7 +138,7 @@ describe("buildRunActivityItems", () => {
 
     const items = buildRunActivityItems(run, [node], [toolEvent]);
 
-    expect(items[1]).toMatchObject({
+    expect(items[0]).toMatchObject({
       kind: "tool",
       actor: "Аналитик продаж",
       toolCall: { tool: "project_files.search" },
@@ -175,9 +176,46 @@ describe("buildRunActivityItems", () => {
 
     const items = buildRunActivityItems(run, [node], [artifactEvent]);
 
-    expect(items[1]).toMatchObject({
+    expect(items[0]).toMatchObject({
       artifactRef: "art_report",
       artifact: { fileName: "report.md", scanState: "CLEAN" },
+    });
+  });
+
+  it("помещает tool call дочернего control node в timeline Session", () => {
+    const toolNode: RunNode = {
+      ...node,
+      ref: "nod_tool",
+      parentNodeRef: node.ref,
+      type: "EXTERNAL_ACTION",
+      displayName: "Поиск по файлам",
+    };
+    const [firstEvent] = events;
+    if (!firstEvent) throw new Error("test event fixture is required");
+    const toolEvent: PresentedRunEvent = {
+      ...firstEvent,
+      ref: "evt_tool_child",
+      nodeRef: toolNode.ref,
+      type: "TOOL_CALL_RECORDED",
+      messageKind: "TOOL_CALL",
+      toolCall: {
+        ref: "trn_tool_child",
+        tool: "project_files.search",
+        safeParameters: {},
+        state: "SUCCEEDED",
+        durationMs: 80,
+        safeResult: "",
+        auditRef: "evt_audit_child",
+      },
+    };
+
+    const items = buildRunActivityItems(run, [node, toolNode], [toolEvent]);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: "tool",
+      nodeRef: node.ref,
+      toolCall: { tool: "project_files.search" },
     });
   });
 });

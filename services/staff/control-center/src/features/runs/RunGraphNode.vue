@@ -139,7 +139,7 @@ function nodeIcon(type: RunNode["type"]): Component {
   border-left-color: var(--danger);
 }
 .run-node--session {
-  border-left: 3px solid var(--accent);
+  border-left-width: 3px;
 }
 .run-node--control {
   border-style: dashed;

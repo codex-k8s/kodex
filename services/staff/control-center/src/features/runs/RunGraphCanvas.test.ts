@@ -137,7 +137,7 @@ describe("RunGraphCanvas", () => {
     const flow = createRunGraphFlowElements(nodes, edges, {
       selectedRef: "node_agent",
       futureRefs: new Set(["node_agent"]),
-      activeRefs: new Set(["node_root"]),
+      activeRefs: new Set(["node_root", "node_agent"]),
       nodeAccessibleLabel: (node) => `${node.displayName} · ${node.state}`,
       edgeAccessibleLabel: () => "Делегирование",
     });
@@ -149,6 +149,7 @@ describe("RunGraphCanvas", () => {
     expect(root?.class).toContain("run-flow-node--active");
     expect(root?.domAttributes).toMatchObject({ "aria-busy": "true" });
     expect(agent?.data).toMatchObject({
+      active: false,
       selected: true,
       future: true,
       surface: "session",
@@ -163,6 +164,7 @@ describe("RunGraphCanvas", () => {
       "data-node-future": "true",
       "data-node-surface": "session",
     });
+    expect(agent?.domAttributes?.["aria-busy"]).toBeUndefined();
     expect(edge).toMatchObject({
       type: "runEdge",
       source: "node_root",

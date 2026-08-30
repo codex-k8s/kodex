@@ -4,6 +4,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
+import { indexRunSessionOwnership } from "@/features/runs/run-session-graph";
 import type {
   Agent,
   Artifact,
@@ -26,38 +27,71 @@ const props = withDefaults(
   }>(),
   { agent: undefined },
 );
-defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; download: [artifact: Artifact] }>();
 const { locale } = useI18n();
 
 const parentNode = computed(() =>
   props.nodes.find((candidate) => candidate.ref === props.node.parentNodeRef),
 );
+const sessionOwnership = computed(() => indexRunSessionOwnership(props.nodes));
+const ownedNodeRefs = computed(
+  () =>
+    new Set(
+      [...sessionOwnership.value.entries()]
+        .filter(([, sessionRef]) => sessionRef === props.node.ref)
+        .map(([nodeRef]) => nodeRef),
+    ),
+);
 const nodeEvents = computed(() =>
   props.events
-    .filter((event) => event.nodeRef === props.node.ref)
+    .filter((event) => event.nodeRef && ownedNodeRefs.value.has(event.nodeRef))
     .sort((left, right) => left.sequence - right.sequence),
 );
 const nodeArtifacts = computed(() => {
-  const refs = new Set(props.node.artifactRefs);
+  const refs = new Set(
+    props.nodes
+      .filter((node) => ownedNodeRefs.value.has(node.ref))
+      .flatMap((node) => node.artifactRefs),
+  );
   return props.artifacts.filter((artifact) => refs.has(artifact.ref));
 });
 const sessionNode = computed(
   () =>
     props.node.type === "ROOT_PROCESS" || props.node.type === "AGENT_EXECUTION",
 );
+const usageItems = computed(() => {
+  const usage = props.run.usage;
+  if (usage.totalTokens === 0 && usage.modelContextWindow === 0) return [];
+  return [
+    ["total", usage.totalTokens],
+    ["input", usage.inputTokens],
+    ["cached", usage.cachedInputTokens],
+    ["output", usage.outputTokens],
+    ["reasoning", usage.reasoningOutputTokens],
+    ["contextWindow", usage.modelContextWindow],
+  ] as const;
+});
 
 function formatDate(value?: string): string {
   return value ? new Date(value).toLocaleString(locale.value) : "";
+}
+
+function formatTokenCount(value: number): string {
+  return new Intl.NumberFormat(locale.value).format(value);
 }
 
 function eventKind(
   event: PresentedRunEvent,
 ): "user" | "agent" | "tool" | "system" {
   if (event.toolCall) return "tool";
-  if (event.actor?.kind === "USER") return "user";
+  if (event.actor?.kind === "USER" || event.messageKind === "USER_MESSAGE")
+    return "user";
   if (
     event.actor?.kind === "AGENT" ||
-    event.actor?.kind === "SYSTEM_ASSISTANT"
+    event.actor?.kind === "SYSTEM_ASSISTANT" ||
+    event.messageKind === "ASSISTANT_MESSAGE" ||
+    event.messageKind === "INTERMEDIATE_MESSAGE" ||
+    event.messageKind === "FINAL_MESSAGE"
   ) {
     return "agent";
   }
@@ -183,16 +217,53 @@ function eventKind(
             </p>
           </section>
 
+          <section v-if="usageItems.length" class="session-details__section">
+            <h3>{{ $t("runs.usage.title") }}</h3>
+            <dl>
+              <div v-for="item in usageItems" :key="item[0]">
+                <dt>{{ $t(`runs.usage.${item[0]}`) }}</dt>
+                <dd>{{ formatTokenCount(item[1]) }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section v-if="run.resultSummary" class="session-details__section">
+            <h3>{{ $t("common.result") }}</h3>
+            <SafeMarkdown :content="run.resultSummary" />
+          </section>
+
+          <section
+            v-if="run.incidents?.length"
+            class="session-details__section"
+          >
+            <h3>{{ $t("runs.incidents") }}</h3>
+            <div class="session-details__incidents">
+              <article v-for="incident in run.incidents" :key="incident.ref">
+                <div>
+                  <strong>{{ incident.safeSummary }}</strong>
+                  <p>{{ incident.safeNextStep }}</p>
+                </div>
+                <StatusBadge :state="incident.severity" />
+              </article>
+            </div>
+          </section>
+
           <section class="session-details__section">
             <h3>{{ $t("runs.artifacts") }}</h3>
             <div v-if="nodeArtifacts.length" class="session-details__files">
-              <div v-for="artifact in nodeArtifacts" :key="artifact.ref">
+              <button
+                v-for="artifact in nodeArtifacts"
+                :key="artifact.ref"
+                type="button"
+                :disabled="!artifact.nextActions.includes('DOWNLOAD')"
+                @click="emit('download', artifact)"
+              >
                 <span>{{ artifact.fileName }}</span>
                 <small
                   >{{ artifact.mediaType }} · v{{ artifact.revision }}</small
                 >
                 <StatusBadge :state="artifact.scanState" />
-              </div>
+              </button>
             </div>
             <p v-else class="session-details__unavailable">
               {{ $t("common.empty") }}
@@ -213,6 +284,7 @@ function eventKind(
               v-for="event in nodeEvents"
               :key="event.ref"
               :class="`session-details__event--${eventKind(event)}`"
+              :data-message-kind="event.messageKind"
             >
               <span class="session-details__event-icon" aria-hidden="true">
                 <Wrench v-if="event.toolCall" :size="16" />
@@ -255,18 +327,27 @@ function eventKind(
                 />
                 <section v-if="event.toolCall" class="session-details__tool">
                   <strong>{{ event.toolCall.tool }}</strong>
-                  <details
-                    v-if="Object.keys(event.toolCall.safeParameters).length"
-                  >
+                  <details>
                     <summary>{{ $t("runs.toolParameters") }}</summary>
                     <SafeStructuredData
                       :value="event.toolCall.safeParameters"
                     />
                   </details>
-                  <details v-if="event.toolCall.safeResult">
+                  <details>
                     <summary>{{ $t("runs.toolResult") }}</summary>
-                    <SafeMarkdown :content="event.toolCall.safeResult" />
+                    <SafeMarkdown
+                      v-if="event.toolCall.safeResult"
+                      :content="event.toolCall.safeResult"
+                    />
+                    <p v-else>{{ $t("common.noData") }}</p>
                   </details>
+                  <small class="session-details__tool-duration">
+                    {{
+                      $t("runs.toolDuration", {
+                        duration: event.toolCall.durationMs,
+                      })
+                    }}
+                  </small>
                 </section>
               </article>
             </li>
@@ -401,15 +482,42 @@ function eventKind(
 .session-details__files {
   display: grid;
 }
-.session-details__files > div {
+.session-details__incidents {
   display: grid;
+  gap: 8px;
+}
+.session-details__incidents article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--warning-soft);
+}
+.session-details__incidents p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.session-details__files > button {
+  display: grid;
+  width: 100%;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 3px 10px;
   padding: 8px 0;
+  border: 0;
   border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.session-details__files > div:last-child {
+.session-details__files > button:last-child {
   border-bottom: 0;
+}
+.session-details__files > button:disabled {
+  cursor: default;
 }
 .session-details__files span {
   overflow: hidden;
@@ -496,6 +604,13 @@ function eventKind(
 .session-details__event--agent article {
   border-left: 3px solid var(--success);
 }
+.session-details__event--agent[data-message-kind="INTERMEDIATE_MESSAGE"]
+  article {
+  border-left-color: var(--accent);
+}
+.session-details__event--agent[data-message-kind="FINAL_MESSAGE"] article {
+  background: color-mix(in srgb, var(--success) 5%, var(--surface));
+}
 .session-details__event--tool article {
   border-left: 3px solid var(--warning);
   background: color-mix(in srgb, var(--warning-soft) 55%, var(--surface));
@@ -538,6 +653,10 @@ function eventKind(
   margin-top: 9px;
   padding-top: 9px;
   border-top: 1px solid var(--border);
+}
+.session-details__tool-duration {
+  color: var(--subtle);
+  font-size: 0.72rem;
 }
 @media (max-width: 760px) {
   .session-details__workspace {

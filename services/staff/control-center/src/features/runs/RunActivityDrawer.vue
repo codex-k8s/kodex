@@ -5,7 +5,6 @@ import {
   CircleDot,
   Download,
   FileText,
-  Info,
   UserRound,
   Wrench,
   X,
@@ -17,6 +16,7 @@ import {
   buildRunActivityItems,
   type PresentedRunEvent,
 } from "@/features/runs/run-activity";
+import { isRunSessionNode } from "@/features/runs/run-session-graph";
 import type {
   Artifact,
   Run,
@@ -44,6 +44,7 @@ const props = withDefaults(
 const emit = defineEmits<{ close: []; download: [artifact: Artifact] }>();
 const { locale } = useI18n();
 const selectedNodeRef = ref("");
+const sessionNodes = computed(() => props.nodes.filter(isRunSessionNode));
 
 const artifactsByRef = computed(
   () => new Map(props.artifacts.map((artifact) => [artifact.ref, artifact])),
@@ -69,24 +70,6 @@ const filteredItems = computed(() =>
         (item) => !item.nodeRef || item.nodeRef === selectedNodeRef.value,
       )
     : items.value,
-);
-const recordedToolNodeRefs = computed(
-  () =>
-    new Set(
-      props.events
-        .filter((event) => event.toolCall && event.nodeRef)
-        .map((event) => event.nodeRef ?? ""),
-    ),
-);
-const unrecordedToolNodes = computed(() =>
-  props.nodes.filter(
-    (node) =>
-      node.type === "EXTERNAL_ACTION" &&
-      !recordedToolNodeRefs.value.has(node.ref) &&
-      (!selectedNodeRef.value ||
-        node.ref === selectedNodeRef.value ||
-        node.parentNodeRef === selectedNodeRef.value),
-  ),
 );
 
 watch(
@@ -160,7 +143,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
         <span class="sr-only">{{ $t("runs.context") }}</span>
         <select v-model="selectedNodeRef">
           <option value="">{{ $t("common.all") }}</option>
-          <option v-for="node in nodes" :key="node.ref" :value="node.ref">
+          <option
+            v-for="node in sessionNodes"
+            :key="node.ref"
+            :value="node.ref"
+          >
             {{ node.displayName }}
           </option>
         </select>
@@ -175,6 +162,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
           :key="item.id"
           class="run-activity-item"
           :class="`run-activity-item--${item.kind}`"
+          :data-message-kind="item.messageKind"
         >
           <span class="run-activity-item__icon" aria-hidden="true">
             <UserRound v-if="item.kind === 'initiator'" :size="17" />
@@ -186,7 +174,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
           <article class="run-activity-item__content">
             <header>
               <strong>{{ item.actor }}</strong>
-              <StatusBadge v-if="item.state" :state="item.state" />
+              <StatusBadge
+                v-if="item.state && item.kind !== 'tool'"
+                :state="item.state"
+              />
               <time :datetime="item.occurredAt">
                 {{ formatTime(item.occurredAt) }}
                 <template v-if="item.sequence">
@@ -235,13 +226,19 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
                 :content="item.summary"
                 class="run-activity-item__message"
               />
-              <details v-if="Object.keys(item.toolCall.safeParameters).length">
+              <details>
                 <summary>{{ $t("runs.toolParameters") }}</summary>
                 <SafeStructuredData :value="item.toolCall.safeParameters" />
               </details>
-              <details v-if="item.toolCall.safeResult">
+              <details>
                 <summary>{{ $t("runs.toolResult") }}</summary>
-                <SafeMarkdown :content="item.toolCall.safeResult" />
+                <SafeMarkdown
+                  v-if="item.toolCall.safeResult"
+                  :content="item.toolCall.safeResult"
+                />
+                <p v-else class="run-activity-item__empty">
+                  {{ $t("common.noData") }}
+                </p>
               </details>
               <small>
                 {{
@@ -280,25 +277,6 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
         <Activity :size="24" aria-hidden="true" />
         <p>{{ $t("runs.noNodeActivity") }}</p>
       </div>
-
-      <section
-        v-if="unrecordedToolNodes.length"
-        class="run-activity-unavailable"
-      >
-        <header>
-          <Wrench :size="17" aria-hidden="true" />
-          <strong>{{ $t("runs.nodeTypes.EXTERNAL_ACTION") }}</strong>
-          <Info :size="15" aria-hidden="true" />
-        </header>
-        <article v-for="node in unrecordedToolNodes" :key="node.ref">
-          <div>
-            <strong>{{ node.displayName }}</strong>
-            <p>{{ node.progressSummary || node.inputSummary }}</p>
-          </div>
-          <StatusBadge :state="node.state" />
-          <small>{{ $t("common.unavailable") }}</small>
-        </article>
-      </section>
     </div>
     <footer v-if="$slots.composer" class="run-activity-drawer__composer">
       <slot name="composer" />
@@ -427,6 +405,14 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
 .run-activity-item--agent .run-activity-item__content {
   border-left: 3px solid var(--success);
 }
+.run-activity-item--agent[data-message-kind="INTERMEDIATE_MESSAGE"]
+  .run-activity-item__content {
+  border-left-color: var(--accent);
+}
+.run-activity-item--agent[data-message-kind="FINAL_MESSAGE"]
+  .run-activity-item__content {
+  background: color-mix(in srgb, var(--success) 5%, var(--surface));
+}
 .run-activity-item--tool .run-activity-item__content {
   border-left: 3px solid var(--warning);
   background: color-mix(in srgb, var(--warning-soft) 55%, var(--surface));
@@ -530,36 +516,6 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
 .run-tool-event small {
   color: var(--subtle);
   font-size: 0.72rem;
-}
-.run-activity-unavailable {
-  display: grid;
-  gap: 8px;
-  margin-top: 14px;
-  padding: 12px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 8px;
-  background: var(--panel);
-}
-.run-activity-unavailable > header {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.run-activity-unavailable > article {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-.run-activity-unavailable p {
-  margin: 3px 0 0;
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-.run-activity-unavailable small {
-  grid-column: 1 / -1;
-  color: var(--subtle);
 }
 .run-activity-drawer__composer {
   flex: 0 0 auto;

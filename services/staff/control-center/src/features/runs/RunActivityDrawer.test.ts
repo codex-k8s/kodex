@@ -81,6 +81,7 @@ const event: PresentedRunEvent = {
   runRef: run.ref,
   sequence: 1,
   type: "TURN_PROGRESS",
+  messageKind: "INTERMEDIATE_MESSAGE",
   nodeRef: node.ref,
   summary: "Собираю данные",
   displaySummary: "Собираю данные",
@@ -104,6 +105,7 @@ async function render(
   nodes: RunNode[] = [node],
   events: PresentedRunEvent[] = [event],
   artifacts: Artifact[] = [],
+  initialNodeRef?: string,
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
@@ -114,6 +116,7 @@ async function render(
         events,
         artifacts,
         initiatorSummary: run.inputSummary ?? "",
+        initialNodeRef,
       }),
   });
   app.use(
@@ -159,13 +162,12 @@ describe("RunActivityDrawer", () => {
     expect(html).not.toContain("run-tool-event");
   });
 
-  it("показывает EXTERNAL_ACTION отдельным tool-call блоком", async () => {
+  it("не выдумывает tool-call блок из одного EXTERNAL_ACTION node", async () => {
     const html = await render([node, toolNode]);
 
-    expect(html).toContain("Поиск по файлам");
-    expect(html).toContain("Найдено 4 фрагмента");
-    expect(html).toContain("Завершено");
-    expect(html).toContain("Функция временно недоступна");
+    expect(html).not.toContain("Поиск по файлам");
+    expect(html).not.toContain("Найдено 4 фрагмента");
+    expect(html).not.toContain("run-tool-event");
   });
 
   it("показывает параметры и результат записанного tool call", async () => {
@@ -173,6 +175,7 @@ describe("RunActivityDrawer", () => {
       ...event,
       ref: "evt_tool",
       type: "TOOL_CALL_RECORDED",
+      nodeRef: toolNode.ref,
       messageKind: "TOOL_CALL",
       actor: {
         kind: "AGENT",
@@ -190,13 +193,14 @@ describe("RunActivityDrawer", () => {
       },
     };
 
-    const html = await render([node], [toolEvent]);
+    const html = await render([node, toolNode], [toolEvent], [], node.ref);
 
     expect(html).toContain("run-activity-item--tool");
     expect(html).toContain("project_files.search");
     expect(html).toContain("квартальный отчёт");
     expect(html).toContain("Найдено 4 фрагмента");
     expect(html).toContain("Безопасный результат");
+    expect(html).toContain("Длительность: 240 мс");
   });
 
   it("показывает безопасное описание файла из события", async () => {

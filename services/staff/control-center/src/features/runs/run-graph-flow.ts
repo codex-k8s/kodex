@@ -78,7 +78,8 @@ export function createRunGraphFlowElements(
   return {
     nodes: layout.nodes.map(({ node, x, y }) => {
       const future = isFutureNode(node, options.futureRefs);
-      const active = options.activeRefs.has(node.ref);
+      const active =
+        node.state === "RUNNING" && options.activeRefs.has(node.ref);
       const selected = node.ref === options.selectedRef;
       const surface = nodeSurface(node);
 
