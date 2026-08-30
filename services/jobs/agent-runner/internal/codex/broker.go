@@ -19,14 +19,17 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/credentialrelay"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
 	"golang.org/x/sys/unix"
 )
 
 const (
-	ProviderSocketPath = "/run/kodex/provider/provider.sock"
-	maximumBrokerBytes = 4 << 20
+	ProviderSocketPath           = "/run/kodex/provider/provider.sock"
+	maximumBrokerBytes           = 4 << 20
+	providerRefreshCommitTimeout = 40 * time.Second
 )
 
 var ErrProviderAuthentication = errors.New("Codex provider authentication is unavailable")
@@ -42,6 +45,9 @@ type brokerResponse struct {
 	Result Result `json:"result"`
 	OK     bool   `json:"ok"`
 }
+
+type providerExecutor func(context.Context, model.Input, []byte, string) (Result, error)
+type providerCredentialRefreshCommitter func(context.Context, model.Input, runtimecontract.RunnerProviderCredentialRefreshRequest) error
 
 // ExecuteViaBroker передаёт provider-only данные отдельному UID по UDS.
 // Ни app-server, ни запускаемый им shell не получают authority mounts runner.
@@ -62,6 +68,17 @@ func readProviderAuthentication(input model.Input) ([]byte, error) {
 }
 
 func validateProviderAuthenticationPayload(auth []byte, expectedSHA256 string) error {
+	if validateProviderAuthentication(auth) != nil {
+		return ErrProviderAuthentication
+	}
+	digest := sha256.Sum256(auth)
+	if hex.EncodeToString(digest[:]) != expectedSHA256 {
+		return ErrProviderAuthentication
+	}
+	return nil
+}
+
+func validateProviderAuthentication(auth []byte) error {
 	trimmed := bytes.TrimSpace(auth)
 	if len(auth) == 0 || len(auth) > 1<<20 || len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
 		return ErrProviderAuthentication
@@ -72,10 +89,6 @@ func validateProviderAuthenticationPayload(auth []byte, expectedSHA256 string) e
 		Tokens       json.RawMessage `json:"tokens"`
 	}
 	if json.Unmarshal(trimmed, &snapshot) != nil || !supportedProviderAuthentication(snapshot.AuthMode, snapshot.OpenAIAPIKey, snapshot.Tokens) {
-		return ErrProviderAuthentication
-	}
-	digest := sha256.Sum256(auth)
-	if hex.EncodeToString(digest[:]) != expectedSHA256 {
 		return ErrProviderAuthentication
 	}
 	return nil
@@ -200,6 +213,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	if err != nil {
 		return err
 	}
+	defer clear(auth)
 	expectedDigest, err := pinnedProviderDigest(request.Input)
 	if err != nil {
 		return err
@@ -222,8 +236,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	if err := PrepareHomeWithAuth(request.Input, bridge.URL(), auth); err != nil {
 		return err
 	}
-	defer os.Remove(filepath.Join(request.Input.CodexHome, "auth.json"))
-	result, err := executeLocal(ctx, request.Input, request.Prompt, request.MCPProxyToken)
+	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, executeLocal, credentialrelay.Commit)
 	if err != nil {
 		return err
 	}
@@ -231,6 +244,55 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 		log.Printf("Codex provider turn completed with safe failure code: %s", result.FailureCode)
 	}
 	return json.NewEncoder(connection).Encode(brokerResponse{Result: result, OK: true})
+}
+
+func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string,
+	execute providerExecutor, commit providerCredentialRefreshCommitter,
+) (Result, error) {
+	authenticationPath := filepath.Join(input.CodexHome, "auth.json")
+	defer os.Remove(authenticationPath)
+	result, executionErr := execute(ctx, input, prompt, mcpProxyToken)
+	authentication, changed, err := readProviderCredentialRefresh(input, authenticationPath)
+	if err != nil {
+		return Result{}, err
+	}
+	defer clear(authentication)
+	if changed {
+		payload := runtimecontract.RunnerProviderCredentialRefreshRequest{
+			RuntimeRevisionDigest:         input.RuntimeRevisionDigest,
+			PreviousCredentialRevisionRef: input.ProviderCredentialRef,
+			PreviousContentSHA256:         input.ProviderCredentialSHA256,
+			Authentication:                authentication,
+		}
+		commitContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), providerRefreshCommitTimeout)
+		defer cancel()
+		if err := commit(commitContext, input, payload); err != nil {
+			return Result{}, errors.New("commit refreshed provider authentication")
+		}
+	}
+	return result, executionErr
+}
+
+func readProviderCredentialRefresh(input model.Input, path string) ([]byte, bool, error) {
+	file, info, err := openProtectedFile(input.WorkspaceRoot, path)
+	if err != nil {
+		return nil, false, errors.New("read refreshed provider authentication")
+	}
+	defer file.Close()
+	if info.Size() <= 0 || info.Size() > runtimecontract.MaximumProviderAuthBytes {
+		return nil, false, errors.New("refreshed provider authentication metadata is invalid")
+	}
+	authentication, err := io.ReadAll(io.LimitReader(file, runtimecontract.MaximumProviderAuthBytes+1))
+	if err != nil || int64(len(authentication)) != info.Size() || len(authentication) > runtimecontract.MaximumProviderAuthBytes {
+		clear(authentication)
+		return nil, false, errors.New("refreshed provider authentication content is invalid")
+	}
+	if validateProviderAuthentication(authentication) != nil {
+		clear(authentication)
+		return nil, false, errors.New("refreshed provider authentication is invalid")
+	}
+	digest := sha256.Sum256(authentication)
+	return authentication, hex.EncodeToString(digest[:]) != input.ProviderCredentialSHA256, nil
 }
 
 type providerMCPBridge struct {

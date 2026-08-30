@@ -140,6 +140,63 @@ func TestRecordNativeToolCallRejectsUnsafeParametersBeforeTransport(t *testing.T
 	}
 }
 
+func TestCommitProviderCredentialRefreshUsesExecutionScopedCallback(t *testing.T) {
+	var captured runtimecontract.RunnerProviderCredentialRefreshRequest
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost || request.URL.Path != "/v1/executions/lease_abcdefgh/provider-credential-refresh" ||
+			request.Header.Get("Authorization") != "Bearer ticket" {
+			http.NotFound(writer, request)
+			return
+		}
+		decoder := json.NewDecoder(request.Body)
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&captured) != nil {
+			http.Error(writer, "invalid", http.StatusBadRequest)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket"}
+	input := validWarmTurnFixture()
+	payload := runtimecontract.RunnerProviderCredentialRefreshRequest{
+		RuntimeRevisionDigest:         input.RuntimeRevisionDigest,
+		PreviousCredentialRevisionRef: input.ProviderCredentialRef,
+		PreviousContentSHA256:         input.ProviderCredentialSHA256,
+		Authentication:                []byte(`{"auth_mode":"chatgpt","tokens":{"refresh_token":"rotated"}}`),
+	}
+	if err := client.CommitProviderCredentialRefresh(context.Background(), input, payload); err != nil {
+		t.Fatalf("CommitProviderCredentialRefresh() error = %v", err)
+	}
+	if captured.RuntimeRevisionDigest != payload.RuntimeRevisionDigest ||
+		captured.PreviousCredentialRevisionRef != payload.PreviousCredentialRevisionRef ||
+		captured.PreviousContentSHA256 != payload.PreviousContentSHA256 ||
+		string(captured.Authentication) != string(payload.Authentication) {
+		t.Fatal("captured payload metadata does not match request")
+	}
+}
+
+func TestCommitProviderCredentialRefreshRejectsInvalidPayloadBeforeTransport(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket"}
+	if err := client.CommitProviderCredentialRefresh(context.Background(), validWarmTurnFixture(), runtimecontract.RunnerProviderCredentialRefreshRequest{}); err == nil {
+		t.Fatal("invalid provider credential refresh was accepted")
+	}
+	if called {
+		t.Fatal("invalid provider credential refresh reached transport")
+	}
+}
+
 func validWarmTurnFixture() runtimecontract.RunnerInput {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
 	image := runtimecontract.RuntimeEnvironmentImage{ArtifactRef: "imgart_abcdefgh", RecipeRef: "imgrec_abcdefgh",

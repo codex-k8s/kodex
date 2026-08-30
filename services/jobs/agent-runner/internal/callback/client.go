@@ -73,6 +73,13 @@ func (client *Client) RecordNativeToolCall(ctx context.Context, input model.Inpu
 	return client.post(ctx, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/native-tool-call", payload)
 }
 
+func (client *Client) CommitProviderCredentialRefresh(ctx context.Context, input model.Input, payload runtimecontract.RunnerProviderCredentialRefreshRequest) error {
+	if err := payload.Validate(); err != nil {
+		return errors.New("validate provider credential refresh callback: " + err.Error())
+	}
+	return client.post(ctx, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/provider-credential-refresh", payload)
+}
+
 func (client *Client) WriteArtifact(ctx context.Context, input model.Input, artifact runtimecontract.RunnerInputArtifact, destination io.Writer) error {
 	endpoint := *client.base
 	endpoint.Path = "/v1/executions/" + url.PathEscape(input.LeaseRef) + "/artifacts/" + url.PathEscape(artifact.Ref)
@@ -156,6 +163,7 @@ func (client *Client) post(ctx context.Context, path string, payload any) error 
 	if err != nil || len(raw) > runtimecontract.MaximumCompletionBytes+1<<20 {
 		return errors.New("encode runtime callback request")
 	}
+	defer clear(raw)
 	endpoint := *client.base
 	endpoint.Path = path
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(raw))
