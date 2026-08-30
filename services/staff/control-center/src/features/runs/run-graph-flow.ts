@@ -111,6 +111,7 @@ export function createRunGraphFlowElements(
           "data-node-ref": node.ref,
           "data-node-type": node.type,
           "data-node-surface": surface,
+          "data-node-state": node.state,
           "data-node-future": future ? "true" : undefined,
         },
         data: {

@@ -570,6 +570,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
   height: 100%;
   min-width: 0;
   min-height: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 .graph-toolbar {
   position: absolute;
@@ -603,10 +605,12 @@ function compareNodes(left: RunNode, right: RunNode): number {
   min-height: 0;
   overflow: hidden;
   background: var(--canvas);
+  touch-action: none;
 }
 .run-flow {
   width: 100%;
   height: 100%;
+  max-width: 100%;
   background: var(--canvas);
 }
 .run-flow :deep(.vue-flow__pane) {
@@ -820,7 +824,11 @@ function compareNodes(left: RunNode, right: RunNode): number {
 }
 @media (max-width: 760px) {
   .graph-toolbar {
-    display: none;
+    top: 8px;
+    bottom: auto;
+    left: 8px;
+    min-height: 40px;
+    padding: 4px;
   }
   .run-flow :deep(.vue-flow__controls) {
     top: 8px;

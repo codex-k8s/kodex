@@ -4,6 +4,7 @@ import { computed } from "vue";
 import type { Component } from "vue";
 
 import {
+  realtimeConnectionState,
   realtimeStatusPresentation,
   type RealtimeStatusLabels,
   type RealtimeStatusState,
@@ -20,6 +21,7 @@ const props = withDefaults(
 );
 
 const presentation = computed(() => realtimeStatusPresentation(props.state));
+const connectionState = computed(() => realtimeConnectionState(props.state));
 const icon = computed<Component>(() => {
   if (props.state === "offline") return WifiOff;
   if (props.state === "live") return Wifi;
@@ -36,7 +38,8 @@ const icon = computed<Component>(() => {
     aria-live="polite"
     :aria-label="labels[state]"
     :title="detail || (compact ? labels[state] : undefined)"
-    :data-state="state"
+    :data-state="connectionState"
+    :data-presentation-state="state"
     :data-preserves-current-data="presentation.preservesCurrentData"
   >
     <component

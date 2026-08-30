@@ -163,6 +163,7 @@ describe("RunGraphCanvas", () => {
     expect(agent?.domAttributes).toMatchObject({
       "data-node-future": "true",
       "data-node-surface": "session",
+      "data-node-state": "QUEUED",
     });
     expect(agent?.domAttributes?.["aria-busy"]).toBeUndefined();
     expect(edge).toMatchObject({
@@ -175,5 +176,27 @@ describe("RunGraphCanvas", () => {
       },
     });
     expect(edge).not.toHaveProperty("label");
+  });
+
+  it("сохраняет terminal cancel как публичное состояние canvas-ноды", () => {
+    const root = nodes[0];
+    const agent = nodes[1];
+    if (!root || !agent) {
+      throw new Error("Run graph fixture must contain root and agent nodes");
+    }
+    const cancelled = { ...agent, state: "CANCELLED" as const };
+    const flow = createRunGraphFlowElements([root, cancelled], edges, {
+      futureRefs: new Set(),
+      activeRefs: new Set(),
+      nodeAccessibleLabel: (node) => `${node.displayName} · ${node.state}`,
+      edgeAccessibleLabel: () => "Делегирование",
+    });
+    const cancelledNode = flow.nodes.find((node) => node.id === cancelled.ref);
+
+    expect(cancelledNode?.class).toContain("run-flow-node--cancelled");
+    expect(cancelledNode?.domAttributes).toMatchObject({
+      "data-node-state": "CANCELLED",
+    });
+    expect(cancelledNode?.ariaLabel).toContain("CANCELLED");
   });
 });

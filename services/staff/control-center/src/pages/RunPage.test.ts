@@ -242,6 +242,8 @@ describe("RunPage runtime presentation", () => {
     expect(html).toContain("run-page-body");
     expect(html).toContain("run-workspace");
     expect(html).toContain("run-canvas-summary");
+    expect(html).toContain("token-usage");
+    expect(html).toContain(new Intl.NumberFormat("ru").format(1700));
     expect(html).toContain("graph-legend");
     expect(html).not.toContain("run-bottom");
     expect(html).not.toContain("MODEL_REQUEST_RUNNING");

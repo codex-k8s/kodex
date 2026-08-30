@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import RealtimeStatus from "@/shared/ui/RealtimeStatus.vue";
 import {
+  realtimeConnectionState,
   realtimeStatusPresentation,
   type RealtimeStatusState,
 } from "@/shared/ui/realtime-status";
@@ -29,6 +30,14 @@ describe("realtimeStatusPresentation", () => {
       expect(realtimeStatusPresentation(state).preservesCurrentData).toBe(true);
     }
   });
+
+  it("связывает presentation с каноническим состоянием соединения", () => {
+    expect(realtimeConnectionState("initial-loading")).toBe("CONNECTING");
+    expect(realtimeConnectionState("live")).toBe("CONNECTED");
+    expect(realtimeConnectionState("background-refresh")).toBe("RECOVERING");
+    expect(realtimeConnectionState("reconnecting")).toBe("RECOVERING");
+    expect(realtimeConnectionState("offline")).toBe("DISCONNECTED");
+  });
 });
 
 describe("RealtimeStatus", () => {
@@ -46,7 +55,9 @@ describe("RealtimeStatus", () => {
     const html = await renderToString(app);
 
     expect(html).toContain('role="status"');
-    expect(html).toContain(`data-state="${state}"`);
+    expect(html).toContain('class="realtime-status');
+    expect(html).toContain(`data-state="${realtimeConnectionState(state)}"`);
+    expect(html).toContain(`data-presentation-state="${state}"`);
     expect(html).toContain(labels[state]);
     expect(html).toContain(
       `data-preserves-current-data="${state === "initial-loading" ? "false" : "true"}"`,

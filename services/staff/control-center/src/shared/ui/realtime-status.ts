@@ -5,6 +5,12 @@ export type RealtimeStatusState =
   | "reconnecting"
   | "offline";
 
+export type RealtimeConnectionState =
+  | "CONNECTING"
+  | "CONNECTED"
+  | "RECOVERING"
+  | "DISCONNECTED";
+
 export type RealtimeStatusLabels = Record<RealtimeStatusState, string>;
 
 export type RealtimeStatusTone =
@@ -51,8 +57,25 @@ const presentationByState: Record<
   },
 };
 
+const connectionStateByPresentation: Record<
+  RealtimeStatusState,
+  RealtimeConnectionState
+> = {
+  "initial-loading": "CONNECTING",
+  live: "CONNECTED",
+  "background-refresh": "RECOVERING",
+  reconnecting: "RECOVERING",
+  offline: "DISCONNECTED",
+};
+
 export function realtimeStatusPresentation(
   state: RealtimeStatusState,
 ): RealtimeStatusPresentation {
   return presentationByState[state];
+}
+
+export function realtimeConnectionState(
+  state: RealtimeStatusState,
+): RealtimeConnectionState {
+  return connectionStateByPresentation[state];
 }

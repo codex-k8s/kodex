@@ -21,6 +21,7 @@ import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
+import RunTokenUsage from "@/features/runs/RunTokenUsage.vue";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
 import {
   indexRunSessionOwnership,
@@ -708,6 +709,7 @@ onBeforeUnmount(() => {
             >
               ● {{ $t("runs.live") }} · #{{ sessionGraph.sequence }}
             </span>
+            <RunTokenUsage :usage="run.usage" compact />
           </aside>
 
           <section id="run-graph-panel" class="graph-panel">
@@ -806,9 +808,11 @@ onBeforeUnmount(() => {
 }
 .run-page.run-page {
   display: flex;
+  max-width: 100%;
   height: calc(100dvh - 148px);
   min-height: 640px;
   flex-direction: column;
+  overflow: hidden;
 }
 .run-page :deep(.page-header) {
   flex: 0 0 auto;
@@ -819,7 +823,8 @@ onBeforeUnmount(() => {
   min-width: 0;
   min-height: 520px;
   flex: 1 1 auto;
-  margin: 0 -24px -36px;
+  margin: 0 calc(var(--page-frame-gutter) * -1) -36px;
+  overflow: hidden;
 }
 .run-notices {
   position: absolute;
@@ -1015,7 +1020,7 @@ onBeforeUnmount(() => {
   }
   .run-page-body {
     min-height: 480px;
-    margin: 0 -14px;
+    margin: 0 calc(var(--page-frame-gutter) * -1);
   }
   .run-notices {
     top: 118px;
@@ -1078,11 +1083,6 @@ onBeforeUnmount(() => {
     border-top: 1px solid var(--border);
     border-left: 0;
     border-radius: 8px 8px 0 0;
-  }
-}
-@media (max-width: 520px) {
-  .run-page-body {
-    margin-inline: -10px;
   }
 }
 </style>
