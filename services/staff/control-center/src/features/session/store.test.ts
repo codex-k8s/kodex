@@ -203,6 +203,21 @@ describe("session renewal lifecycle", () => {
     expect(oidc.removeUser).toHaveBeenCalledOnce();
   });
 
+  test("объединяет параллельную обработку одного OIDC callback", async () => {
+    const session = useSessionStore();
+
+    const first = session.completeLogin();
+    const second = session.completeLogin();
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { kind: "login" },
+      { kind: "login" },
+    ]);
+    expect(oidc.signinRedirectCallback).toHaveBeenCalledOnce();
+    expect(api.createOwnerSession).toHaveBeenCalledOnce();
+    expect(oidc.removeUser).toHaveBeenCalledOnce();
+  });
+
   test("запрашивает fresh OIDC login с max_age=0 и operation state", async () => {
     const session = useSessionStore();
 

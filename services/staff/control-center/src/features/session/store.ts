@@ -101,6 +101,7 @@ export const useSessionStore = defineStore("session", () => {
   );
   const pendingRuntimeSecretRevealState = ref<PendingRuntimeSecretReveal>();
   let generation = 0;
+  let loginCompletionRequest: Promise<LoginCompletion> | undefined;
   let renewalTimer: number | undefined;
   let renewalRequest: Promise<void> | undefined;
   let renewalController: AbortController | undefined;
@@ -225,7 +226,7 @@ export const useSessionStore = defineStore("session", () => {
     }
   }
 
-  async function completeLogin(): Promise<LoginCompletion> {
+  async function performLoginCompletion(): Promise<LoginCompletion> {
     const current = ++generation;
     phase.value = "checking";
     problem.value = undefined;
@@ -312,6 +313,18 @@ export const useSessionStore = defineStore("session", () => {
         callbackUser.refresh_token = undefined;
       }
       await manager.removeUser();
+    }
+  }
+
+  async function completeLogin(): Promise<LoginCompletion> {
+    if (loginCompletionRequest) return await loginCompletionRequest;
+    const pending = performLoginCompletion();
+    loginCompletionRequest = pending;
+    try {
+      return await pending;
+    } finally {
+      if (loginCompletionRequest === pending)
+        loginCompletionRequest = undefined;
     }
   }
 
