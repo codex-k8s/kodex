@@ -88,7 +88,12 @@ read_authority_snapshot_revision() {
     printf '0\n'
     return
   fi
-  [[ -n "$encoded" ]] || fail 'local authority snapshot is empty'
+  if [[ -z "$encoded" ]]; then
+    # A seed Secret can survive an interrupted first apply before the publisher
+    # materializes revision 1. Treat only that empty seed as uninitialized.
+    printf '0\n'
+    return
+  fi
   compact=$(printf '%s' "$encoded" | base64 --decode 2>/dev/null) ||
     fail 'local authority snapshot encoding is invalid'
   IFS=. read -r _ payload _ <<<"$compact"
