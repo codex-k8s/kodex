@@ -3,6 +3,8 @@
 export interface PlatformResyncEnvelope {
   type: "PLATFORM_RESYNC_REQUIRED";
   requestRef: string;
-  currentSequence: number;
+  streamKind: "PLATFORM";
+  streamRef: "PLATFORM";
+  cursor: number;
   reason: "AUTHORITATIVE_READ_REQUIRED";
 }

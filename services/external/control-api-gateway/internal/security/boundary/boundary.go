@@ -327,7 +327,7 @@ func withProjectReference(ctx context.Context, request *http.Request) (context.C
 }
 
 func isRealtimePath(path string) bool {
-	return path == "/api/v1/platform/stream" || strings.HasPrefix(path, "/api/v1/runs/") && strings.HasSuffix(path, "/stream")
+	return path == "/api/v1/session/stream"
 }
 
 func exactProjectPathReference(request *http.Request) (string, error) {

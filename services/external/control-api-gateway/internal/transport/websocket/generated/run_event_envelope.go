@@ -2,10 +2,11 @@
 
 package generated
 
-type EventEnvelope struct {
+type RunEventEnvelope struct {
 	Type       string   `json:"type"`
 	RequestRef string   `json:"requestRef"`
-	RunRef     string   `json:"runRef"`
-	Sequence   int64    `json:"sequence"`
+	StreamKind string   `json:"streamKind"`
+	StreamRef  string   `json:"streamRef"`
+	Cursor     int64    `json:"cursor"`
 	Event      RunEvent `json:"event"`
 }

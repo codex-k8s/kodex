@@ -2,8 +2,9 @@
 
 package generated
 
-type ResumeEnvelope struct {
+type SubscribeRunEnvelope struct {
 	Type          string `json:"type"`
 	RequestRef    string `json:"requestRef"`
+	RunRef        string `json:"runRef"`
 	AfterSequence int64  `json:"afterSequence"`
 }

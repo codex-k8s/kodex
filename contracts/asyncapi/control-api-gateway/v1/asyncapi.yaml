@@ -1,134 +1,105 @@
 asyncapi: 3.0.0
 info:
-  title: Kodex resumable owner streams
-  version: 2.3.0
+  title: Kodex browser session stream
+  version: 3.0.0
   description: |
-    Защищённые owner-scoped WebSocket потоки запуска и общей конфигурации.
-    Run stream восстанавливает упорядоченные deltas через авторитетный
-    control-plane event store. Platform stream передаёт только безопасные
-    invalidation-сигналы без project/aggregate refs; после разрыва клиент
-    перечитывает доступные ему bounded read models через owner HTTP API.
-    Gateway получает bounded wake-сигналы из NATS и не становится владельцем
-    состояния. Периодическая сверка с авторитетным cursor/event store
-    восстанавливает пропуск после reconnect NATS, даже если browser WebSocket
-    не разрывался.
+    Один защищённый owner-scoped WebSocket обслуживает platform invalidation и
+    bounded набор точных Run subscriptions одной browser session. Gateway
+    проверяет каждый Run через авторитетный GetRunGraph, получает из NATS только
+    bounded wake-сигналы и восстанавливает cursor из control-plane event store.
+    Ошибка или gap одного Run не закрывает и не повреждает остальные streams.
 defaultContentType: application/json
 servers:
   owner:
     host: control-center.kodex.local
     pathname: /api/v1
     protocol: wss
-    security: [{ $ref: '#/components/securitySchemes/OwnerSession' }]
+    security: [{ $ref: "#/components/securitySchemes/OwnerSession" }]
     x-origin-policy: EXACT_HTTPS_ALLOWLIST
     x-channel-subprotocols:
-      runStream: [kodex.run.v1, csrf.<csrf-token>]
-      platformStream: [kodex.platform.v1, csrf.<csrf-token>]
+      sessionStream: [kodex.session.v1, csrf.<csrf-token>]
     x-locale-query:
       name: locale
       values: [ru, en]
       fallback: VERIFIED_ACCEPT_LANGUAGE
       purpose: Локализация безопасного Problem.title в выбранной пользователем локали.
 channels:
-  runStream:
-    address: /runs/{runRef}/stream
-    parameters:
-      runRef:
-        description: Непрозрачный ref из авторитетного readback; не является authority.
+  sessionStream:
+    address: /session/stream
     messages:
-      resume: { $ref: '#/components/messages/Resume' }
-      snapshot: { $ref: '#/components/messages/Snapshot' }
-      event: { $ref: '#/components/messages/Event' }
-      ready: { $ref: '#/components/messages/Ready' }
-      resync: { $ref: '#/components/messages/Resync' }
-      heartbeat: { $ref: '#/components/messages/Heartbeat' }
-      problem: { $ref: '#/components/messages/Problem' }
-  platformStream:
-    address: /platform/stream
-    messages:
-      resume: { $ref: '#/components/messages/Resume' }
-      invalidated: { $ref: '#/components/messages/PlatformInvalidated' }
-      ready: { $ref: '#/components/messages/PlatformReady' }
-      resync: { $ref: '#/components/messages/PlatformResync' }
-      heartbeat: { $ref: '#/components/messages/PlatformHeartbeat' }
-      problem: { $ref: '#/components/messages/Problem' }
+      sessionResume: { $ref: "#/components/messages/SessionResume" }
+      subscribeRun: { $ref: "#/components/messages/SubscribeRun" }
+      unsubscribeRun: { $ref: "#/components/messages/UnsubscribeRun" }
+      sessionReady: { $ref: "#/components/messages/SessionReady" }
+      invalidated: { $ref: "#/components/messages/PlatformInvalidated" }
+      platformReady: { $ref: "#/components/messages/PlatformReady" }
+      platformResync: { $ref: "#/components/messages/PlatformResync" }
+      runSnapshot: { $ref: "#/components/messages/RunSnapshot" }
+      runEvent: { $ref: "#/components/messages/RunEvent" }
+      runReady: { $ref: "#/components/messages/RunReady" }
+      runResync: { $ref: "#/components/messages/RunResync" }
+      runUnsubscribed: { $ref: "#/components/messages/RunUnsubscribed" }
+      streamHeartbeat: { $ref: "#/components/messages/StreamHeartbeat" }
+      streamProblem: { $ref: "#/components/messages/StreamProblem" }
+      sessionProblem: { $ref: "#/components/messages/SessionProblem" }
 operations:
-  resumeRunStream:
+  receiveSessionCommands:
     action: receive
-    channel: { $ref: '#/channels/runStream' }
-    messages: [{ $ref: '#/channels/runStream/messages/resume' }]
-    summary: Запросить продолжение после последней непрерывно применённой sequence.
-    x-authority: VERIFIED_OWNER_SESSION_AND_CONTROL_PLANE_RUN_ELIGIBILITY
-    x-rate-limit: OWNER_AND_RUN_SCOPED
-  publishRunStream:
-    action: send
-    channel: { $ref: '#/channels/runStream' }
+    channel: { $ref: "#/channels/sessionStream" }
     messages:
-      - { $ref: '#/channels/runStream/messages/snapshot' }
-      - { $ref: '#/channels/runStream/messages/event' }
-      - { $ref: '#/channels/runStream/messages/ready' }
-      - { $ref: '#/channels/runStream/messages/resync' }
-      - { $ref: '#/channels/runStream/messages/heartbeat' }
-      - { $ref: '#/channels/runStream/messages/problem' }
-    summary: Передать snapshot, ordered deltas и управляемое восстановление.
+      - { $ref: "#/channels/sessionStream/messages/sessionResume" }
+      - { $ref: "#/channels/sessionStream/messages/subscribeRun" }
+      - { $ref: "#/channels/sessionStream/messages/unsubscribeRun" }
+    summary: Инициализировать browser session и изменять bounded Run subscriptions.
+    x-authority: VERIFIED_OWNER_SESSION_AND_EXACT_CONTROL_PLANE_RUN_ELIGIBILITY
+    x-rate-limit: OWNER_SESSION_AND_RUN_SCOPED
+  publishSessionStream:
+    action: send
+    channel: { $ref: "#/channels/sessionStream" }
+    messages:
+      - { $ref: "#/channels/sessionStream/messages/sessionReady" }
+      - { $ref: "#/channels/sessionStream/messages/invalidated" }
+      - { $ref: "#/channels/sessionStream/messages/platformReady" }
+      - { $ref: "#/channels/sessionStream/messages/platformResync" }
+      - { $ref: "#/channels/sessionStream/messages/runSnapshot" }
+      - { $ref: "#/channels/sessionStream/messages/runEvent" }
+      - { $ref: "#/channels/sessionStream/messages/runReady" }
+      - { $ref: "#/channels/sessionStream/messages/runResync" }
+      - { $ref: "#/channels/sessionStream/messages/runUnsubscribed" }
+      - { $ref: "#/channels/sessionStream/messages/streamHeartbeat" }
+      - { $ref: "#/channels/sessionStream/messages/streamProblem" }
+      - { $ref: "#/channels/sessionStream/messages/sessionProblem" }
+    summary: Мультиплексировать platform и точные Run streams одним writer.
     x-source:
-      initialSnapshot: controlplane.v1.PlatformQueryService.GetRunGraph
-      catchUp: controlplane.v1.PlatformQueryService.ListRunEvents
-      liveWakeSignal: CORE_NATS_CONTROL_PLANE_RUN_EVENTS
-      durableSource: CONTROL_PLANE_RUN_EVENT_STORE
+      platformCursor: controlplane.v1.PlatformQueryService.GetPlatformEventCursor
+      runEligibilityAndSnapshot: controlplane.v1.PlatformQueryService.GetRunGraph
+      runCatchUp: controlplane.v1.PlatformQueryService.ListRunEvents
+      liveWakeSignal: CORE_NATS_CONTROL_PLANE_PLATFORM_AND_RUN_EVENTS
+      durableRunSource: CONTROL_PLANE_RUN_EVENT_STORE
     x-delivery:
       mode: AT_LEAST_ONCE
-      orderingKey: rootRunRef
-      sequenceField: sequence
-      duplicate: CLIENT_IGNORES_SEQUENCE_NOT_GREATER_THAN_APPLIED
-      gap: CLIENT_SENDS_RESUME
-      unavailableCatchUp: SERVER_SENDS_LOCALIZED_PROBLEM_AND_CLOSES_1013
-      reconnect: CLIENT_SENDS_LAST_APPLIED_SEQUENCE
-      missedWakeSignal: HEARTBEAT_CATCH_UP_FROM_CONTROL_PLANE
-      unavailableRange: SERVER_SENDS_RESYNC_THEN_FRESH_AUTHORITATIVE_SNAPSHOT
-      overflow: COALESCED_WAKE_SIGNAL_THEN_AUTHORITATIVE_CATCH_UP
-      progress: COALESCED_AND_BOUNDED
+      orderingKey: streamKind+streamRef
+      cursorField: cursor
+      duplicate: CLIENT_IGNORES_CURSOR_NOT_GREATER_THAN_APPLIED
+      runGap: SERVER_RESYNCS_ONLY_THE_AFFECTED_RUN
+      reconnect: CLIENT_SENDS_PLATFORM_CURSOR_AND_ALL_ACTIVE_RUN_CURSORS
+      missedWakeSignal: HEARTBEAT_READS_AUTHORITATIVE_CURSOR_OR_EVENT_STORE
+      overflow: SESSION_FAILS_CLOSED_WITH_1013
+      maximumRunSubscriptions: 32
       maximumFrameBytes: 65536
     x-redaction:
+      forwarded: [eventName, kind, cursor, streamKind, streamRef]
       forbidden:
         - secret values
         - raw provider payloads
         - raw stdout or stderr
         - arbitrary tool payloads
         - file bodies
-  resumePlatformStream:
-    action: receive
-    channel: { $ref: '#/channels/platformStream' }
-    messages: [{ $ref: '#/channels/platformStream/messages/resume' }]
-    summary: Продолжить после последней применённой org sequence.
-    x-authority: VERIFIED_OWNER_SESSION_AND_CONTROL_PLANE_ORGANIZATION_ELIGIBILITY
-    x-rate-limit: OWNER_SCOPED
-  publishPlatformStream:
-    action: send
-    channel: { $ref: '#/channels/platformStream' }
-    messages:
-      - { $ref: '#/channels/platformStream/messages/invalidated' }
-      - { $ref: '#/channels/platformStream/messages/ready' }
-      - { $ref: '#/channels/platformStream/messages/resync' }
-      - { $ref: '#/channels/platformStream/messages/heartbeat' }
-      - { $ref: '#/channels/platformStream/messages/problem' }
-    summary: Передать ordered invalidation без раскрытия чужих project metadata.
-    x-source:
-      cursor: controlplane.v1.PlatformQueryService.GetPlatformEventCursor
-      liveWakeSignal: CORE_NATS_CONTROL_PLANE_PLATFORM_EVENTS
-      state: OWNER_HTTP_API_AUTHORITATIVE_READS
-    x-delivery:
-      mode: AT_LEAST_ONCE
-      orderingKey: organizationRef
-      sequenceField: sequence
-      duplicate: CLIENT_IGNORES_SEQUENCE_NOT_GREATER_THAN_APPLIED
-      gap: SERVER_READS_AUTHORITATIVE_CURSOR_AND_CLIENT_RELOADS_AUTHORIZED_BOUNDED_READ_MODELS
-      reconnect: CLIENT_SENDS_LAST_APPLIED_SEQUENCE
-      missedWakeSignal: HEARTBEAT_CURSOR_CHECK_THEN_AUTHORITATIVE_RESYNC
-      overflow: AUTHORITATIVE_CURSOR_RESYNC
-      maximumFrameBytes: 65536
-    x-redaction:
-      forwarded: [eventName, kind, sequence]
-      forbidden: [organizationRef, projectRef, aggregateRef, safeSummary, secret values, arbitrary event data]
+        - organizationRef
+        - projectRef
+        - aggregateRef
+        - safeSummary
+        - arbitrary event data
 components:
   securitySchemes:
     OwnerSession:
@@ -136,201 +107,376 @@ components:
       in: cookie
       name: __Host-kodex-session
   messages:
-    Resume:
-      name: resume
+    SessionResume:
+      name: session_resume
       contentType: application/json
-      payload: { $ref: '#/components/schemas/ResumeEnvelope' }
-    Snapshot:
-      name: graph_snapshot
+      payload: { $ref: "#/components/schemas/SessionResumeEnvelope" }
+    SubscribeRun:
+      name: subscribe_run
       contentType: application/json
-      payload: { $ref: '#/components/schemas/SnapshotEnvelope' }
-    Event:
+      payload: { $ref: "#/components/schemas/SubscribeRunEnvelope" }
+    UnsubscribeRun:
+      name: unsubscribe_run
+      contentType: application/json
+      payload: { $ref: "#/components/schemas/UnsubscribeRunEnvelope" }
+    SessionReady:
+      name: session_ready
+      contentType: application/json
+      payload: { $ref: "#/components/schemas/SessionReadyEnvelope" }
+    RunSnapshot:
+      name: run_graph_snapshot
+      contentType: application/json
+      payload: { $ref: "#/components/schemas/RunSnapshotEnvelope" }
+    RunEvent:
       name: run_event
       contentType: application/json
-      payload: { $ref: '#/components/schemas/EventEnvelope' }
-    Ready:
-      name: stream_ready
+      payload: { $ref: "#/components/schemas/RunEventEnvelope" }
+    RunReady:
+      name: run_stream_ready
       contentType: application/json
-      payload: { $ref: '#/components/schemas/ReadyEnvelope' }
-    Resync:
-      name: resync_required
+      payload: { $ref: "#/components/schemas/RunReadyEnvelope" }
+    RunResync:
+      name: run_resync_required
       contentType: application/json
-      payload: { $ref: '#/components/schemas/ResyncEnvelope' }
-    Heartbeat:
-      name: heartbeat
+      payload: { $ref: "#/components/schemas/RunResyncEnvelope" }
+    RunUnsubscribed:
+      name: run_unsubscribed
       contentType: application/json
-      payload: { $ref: '#/components/schemas/HeartbeatEnvelope' }
-    Problem:
-      name: problem
-      contentType: application/problem+json
-      payload: { $ref: '#/components/schemas/ProblemEnvelope' }
+      payload: { $ref: "#/components/schemas/RunUnsubscribedEnvelope" }
     PlatformInvalidated:
       name: platform_invalidated
       contentType: application/json
-      payload: { $ref: '#/components/schemas/PlatformInvalidatedEnvelope' }
+      payload: { $ref: "#/components/schemas/PlatformInvalidatedEnvelope" }
     PlatformReady:
-      name: platform_stream_ready
+      name: platform_ready
       contentType: application/json
-      payload: { $ref: '#/components/schemas/PlatformReadyEnvelope' }
+      payload: { $ref: "#/components/schemas/PlatformReadyEnvelope" }
     PlatformResync:
       name: platform_resync_required
       contentType: application/json
-      payload: { $ref: '#/components/schemas/PlatformResyncEnvelope' }
-    PlatformHeartbeat:
-      name: platform_heartbeat
+      payload: { $ref: "#/components/schemas/PlatformResyncEnvelope" }
+    StreamHeartbeat:
+      name: stream_heartbeat
       contentType: application/json
-      payload: { $ref: '#/components/schemas/PlatformHeartbeatEnvelope' }
+      payload: { $ref: "#/components/schemas/StreamHeartbeatEnvelope" }
+    StreamProblem:
+      name: stream_problem
+      contentType: application/problem+json
+      payload: { $ref: "#/components/schemas/StreamProblemEnvelope" }
+    SessionProblem:
+      name: session_problem
+      contentType: application/problem+json
+      payload: { $ref: "#/components/schemas/SessionProblemEnvelope" }
   schemas:
     OpaqueRef:
       type: string
-      pattern: '^[A-Za-z0-9_-]{8,96}$'
+      pattern: "^[A-Za-z0-9_-]{8,96}$"
     Timestamp:
       type: string
       format: date-time
-    ResumeEnvelope:
+    StreamKind:
+      type: string
+      enum: [PLATFORM, RUN]
+    RunResumeCursor:
       type: object
       additionalProperties: false
-      required: [type, requestRef, afterSequence]
+      required: [runRef, afterSequence]
       properties:
-        type: { type: string, const: RESUME }
-        requestRef: { $ref: '#/components/schemas/OpaqueRef' }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
         afterSequence: { type: integer, format: int64, minimum: 0 }
-    SnapshotEnvelope:
+    StreamCursor:
       type: object
       additionalProperties: false
-      required: [type, requestRef, runRef, sequence, snapshot]
+      required: [streamKind, streamRef, cursor]
       properties:
-        type: { type: string, const: GRAPH_SNAPSHOT }
-        requestRef: { $ref: '#/components/schemas/OpaqueRef' }
-        runRef: { $ref: '#/components/schemas/OpaqueRef' }
-        sequence: { type: integer, format: int64, minimum: 0 }
-        snapshot:
-          $ref: '#/components/schemas/RunGraph'
-    EventEnvelope:
+        streamKind: { $ref: "#/components/schemas/StreamKind" }
+        streamRef: { $ref: "#/components/schemas/OpaqueRef" }
+        cursor: { type: integer, format: int64, minimum: 0 }
+    SessionResumeEnvelope:
       type: object
       additionalProperties: false
-      required: [type, requestRef, runRef, sequence, event]
+      required: [type, requestRef, platformAfterSequence, runs]
+      properties:
+        type: { type: string, const: SESSION_RESUME }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        platformAfterSequence: { type: integer, format: int64, minimum: 0 }
+        runs:
+          type: array
+          maxItems: 32
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/RunResumeCursor" }
+    SubscribeRunEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, requestRef, runRef, afterSequence]
+      properties:
+        type: { type: string, const: SUBSCRIBE_RUN }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        afterSequence: { type: integer, format: int64, minimum: 0 }
+    UnsubscribeRunEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, requestRef, runRef]
+      properties:
+        type: { type: string, const: UNSUBSCRIBE_RUN }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+    SessionReadyEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, requestRef, streams]
+      properties:
+        type: { type: string, const: SESSION_READY }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streams:
+          type: array
+          maxItems: 33
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/StreamCursor" }
+    RunSnapshotEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, requestRef, streamKind, streamRef, cursor, snapshot]
+      properties:
+        type: { type: string, const: RUN_GRAPH_SNAPSHOT }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamKind: { type: string, const: RUN }
+        streamRef: { $ref: "#/components/schemas/OpaqueRef" }
+        cursor: { type: integer, format: int64, minimum: 0 }
+        snapshot: { $ref: "#/components/schemas/RunGraph" }
+    RunEventEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, requestRef, streamKind, streamRef, cursor, event]
       properties:
         type: { type: string, const: RUN_EVENT }
-        requestRef: { $ref: '#/components/schemas/OpaqueRef' }
-        runRef: { $ref: '#/components/schemas/OpaqueRef' }
-        sequence: { type: integer, format: int64, minimum: 1 }
-        event:
-          $ref: '#/components/schemas/RunEvent'
-    ReadyEnvelope:
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamKind: { type: string, const: RUN }
+        streamRef: { $ref: "#/components/schemas/OpaqueRef" }
+        cursor: { type: integer, format: int64, minimum: 1 }
+        event: { $ref: "#/components/schemas/RunEvent" }
+    RunReadyEnvelope:
       type: object
       additionalProperties: false
-      required: [type, requestRef, runRef, latestSequence]
+      required: [type, requestRef, streamKind, streamRef, cursor]
       properties:
-        type: { type: string, const: STREAM_READY }
-        requestRef: { $ref: '#/components/schemas/OpaqueRef' }
-        runRef: { $ref: '#/components/schemas/OpaqueRef' }
-        latestSequence: { type: integer, format: int64, minimum: 0 }
-    ResyncEnvelope:
+        type: { type: string, const: RUN_READY }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamKind: { type: string, const: RUN }
+        streamRef: { $ref: "#/components/schemas/OpaqueRef" }
+        cursor: { type: integer, format: int64, minimum: 0 }
+    RunResyncEnvelope:
       type: object
       additionalProperties: false
-      required: [type, requestRef, runRef, expectedAfterSequence, reason]
+      required:
+        [
+          type,
+          requestRef,
+          streamKind,
+          streamRef,
+          cursor,
+          requestedAfterCursor,
+          reason,
+        ]
       properties:
-        type: { type: string, const: RESYNC_REQUIRED }
-        requestRef: { $ref: '#/components/schemas/OpaqueRef' }
-        runRef: { $ref: '#/components/schemas/OpaqueRef' }
-        expectedAfterSequence: { type: integer, format: int64, minimum: 0 }
-        reason: { $ref: '#/components/schemas/ResyncReason' }
-    HeartbeatEnvelope:
+        type: { type: string, const: RUN_RESYNC_REQUIRED }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamKind: { type: string, const: RUN }
+        streamRef: { $ref: "#/components/schemas/OpaqueRef" }
+        cursor: { type: integer, format: int64, minimum: 0 }
+        requestedAfterCursor: { type: integer, format: int64, minimum: 0 }
+        reason: { $ref: "#/components/schemas/ResyncReason" }
+    RunUnsubscribedEnvelope:
       type: object
       additionalProperties: false
-      required: [type, serverTime, latestSequence]
+      required: [type, requestRef, streamKind, streamRef, cursor]
       properties:
-        type: { type: string, const: HEARTBEAT }
-        serverTime: { $ref: '#/components/schemas/Timestamp' }
-        latestSequence: { type: integer, format: int64, minimum: 0 }
-    ProblemEnvelope:
-      type: object
-      additionalProperties: false
-      required: [type, status, code, title, retryable]
-      properties:
-        type: { type: string, const: PROBLEM }
-        status: { type: integer, minimum: 400, maximum: 599 }
-        code: { $ref: '#/components/schemas/ProblemCode' }
-        title: { type: string, maxLength: 200 }
-        retryable: { type: boolean }
+        type: { type: string, const: RUN_UNSUBSCRIBED }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamKind: { type: string, const: RUN }
+        streamRef: { $ref: "#/components/schemas/OpaqueRef" }
+        cursor: { type: integer, format: int64, minimum: 0 }
     PlatformInvalidatedEnvelope:
       type: object
       additionalProperties: false
-      required: [type, requestRef, sequence, eventName, kind]
+      required:
+        [type, requestRef, streamKind, streamRef, cursor, eventName, kind]
       properties:
         type: { type: string, const: PLATFORM_INVALIDATED }
-        requestRef: { $ref: '#/components/schemas/OpaqueRef' }
-        sequence: { type: integer, format: int64, minimum: 1 }
-        eventName: { $ref: '#/components/schemas/PlatformEventName' }
-        kind: { $ref: '#/components/schemas/PlatformResourceKind' }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamKind: { type: string, const: PLATFORM }
+        streamRef: { type: string, const: PLATFORM }
+        cursor: { type: integer, format: int64, minimum: 1 }
+        eventName: { $ref: "#/components/schemas/PlatformEventName" }
+        kind: { $ref: "#/components/schemas/PlatformResourceKind" }
     PlatformReadyEnvelope:
       type: object
       additionalProperties: false
-      required: [type, requestRef, latestSequence]
+      required: [type, requestRef, streamKind, streamRef, cursor]
       properties:
-        type: { type: string, const: PLATFORM_STREAM_READY }
-        requestRef: { $ref: '#/components/schemas/OpaqueRef' }
-        latestSequence: { type: integer, format: int64, minimum: 0 }
+        type: { type: string, const: PLATFORM_READY }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamKind: { type: string, const: PLATFORM }
+        streamRef: { type: string, const: PLATFORM }
+        cursor: { type: integer, format: int64, minimum: 0 }
     PlatformResyncEnvelope:
       type: object
       additionalProperties: false
-      required: [type, requestRef, currentSequence, reason]
+      required: [type, requestRef, streamKind, streamRef, cursor, reason]
       properties:
         type: { type: string, const: PLATFORM_RESYNC_REQUIRED }
-        requestRef: { $ref: '#/components/schemas/OpaqueRef' }
-        currentSequence: { type: integer, format: int64, minimum: 0 }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamKind: { type: string, const: PLATFORM }
+        streamRef: { type: string, const: PLATFORM }
+        cursor: { type: integer, format: int64, minimum: 0 }
         reason: { type: string, const: AUTHORITATIVE_READ_REQUIRED }
-    PlatformHeartbeatEnvelope:
+    StreamHeartbeatEnvelope:
       type: object
       additionalProperties: false
-      required: [type, serverTime, latestSequence]
+      required: [type, streamKind, streamRef, cursor, serverTime]
       properties:
-        type: { type: string, const: PLATFORM_HEARTBEAT }
-        serverTime: { $ref: '#/components/schemas/Timestamp' }
-        latestSequence: { type: integer, format: int64, minimum: 0 }
+        type: { type: string, const: STREAM_HEARTBEAT }
+        streamKind: { $ref: "#/components/schemas/StreamKind" }
+        streamRef: { $ref: "#/components/schemas/OpaqueRef" }
+        cursor: { type: integer, format: int64, minimum: 0 }
+        serverTime: { $ref: "#/components/schemas/Timestamp" }
+    StreamProblemEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          type,
+          requestRef,
+          streamKind,
+          streamRef,
+          cursor,
+          status,
+          code,
+          title,
+          retryable,
+        ]
+      properties:
+        type: { type: string, const: STREAM_PROBLEM }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamKind: { $ref: "#/components/schemas/StreamKind" }
+        streamRef: { $ref: "#/components/schemas/OpaqueRef" }
+        cursor: { type: integer, format: int64, minimum: 0 }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        code: { $ref: "#/components/schemas/ProblemCode" }
+        title: { type: string, maxLength: 200 }
+        retryable: { type: boolean }
+    SessionProblemEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, requestRef, status, code, title, retryable]
+      properties:
+        type: { type: string, const: SESSION_PROBLEM }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        code: { $ref: "#/components/schemas/ProblemCode" }
+        title: { type: string, maxLength: 200 }
+        retryable: { type: boolean }
     PlatformEventName:
       type: string
-      enum: [PROJECT_CHANGED, AGENT_CHANGED, ARTIFACT_CHANGED, INSTRUCTIONS_PUBLISHED, WORKFLOW_CHANGED, SCHEDULE_CHANGED, INTEGRATION_CONNECTION_CHANGED, INTEGRATION_GRANT_CHANGED, MEMBERSHIP_CHANGED, PLATFORM_MEMBERSHIP_CHANGED, SYSTEM_ASSISTANT_CHANGED, ROLE_IMAGE_RECIPE_CHANGED, RUN_CHANGED]
+      enum:
+        [
+          PROJECT_CHANGED,
+          AGENT_CHANGED,
+          ARTIFACT_CHANGED,
+          INSTRUCTIONS_PUBLISHED,
+          WORKFLOW_CHANGED,
+          SCHEDULE_CHANGED,
+          INTEGRATION_CONNECTION_CHANGED,
+          INTEGRATION_GRANT_CHANGED,
+          MEMBERSHIP_CHANGED,
+          PLATFORM_MEMBERSHIP_CHANGED,
+          SYSTEM_ASSISTANT_CHANGED,
+          ROLE_IMAGE_RECIPE_CHANGED,
+          RUN_CHANGED,
+        ]
     PlatformResourceKind:
       type: string
-      enum: [PROJECT, AGENT, ARTIFACT, INSTRUCTIONS, WORKFLOW, SCHEDULE, INTEGRATION_CONNECTION, INTEGRATION_GRANT, MEMBERSHIP, PLATFORM_MEMBERSHIP, SYSTEM_ASSISTANT, ROLE_IMAGE_RECIPE, RUN]
+      enum:
+        [
+          PROJECT,
+          AGENT,
+          ARTIFACT,
+          INSTRUCTIONS,
+          WORKFLOW,
+          SCHEDULE,
+          INTEGRATION_CONNECTION,
+          INTEGRATION_GRANT,
+          MEMBERSHIP,
+          PLATFORM_MEMBERSHIP,
+          SYSTEM_ASSISTANT,
+          ROLE_IMAGE_RECIPE,
+          RUN,
+        ]
     ResyncReason:
       type: string
-      enum: [RETENTION_EXPIRED, GAP_DETECTED, PROJECTION_RECOVERED]
+      enum:
+        [
+          RETENTION_EXPIRED,
+          GAP_DETECTED,
+          PROJECTION_RECOVERED,
+          AUTHORITATIVE_READ_REQUIRED,
+        ]
     ProblemCode:
       type: string
-      enum: [INTERNAL, INVALID_RESUME, PLATFORM_UNAVAILABLE, RUN_UNAVAILABLE, STREAM_UNAVAILABLE]
+      enum:
+        [
+          INTERNAL,
+          INVALID_COMMAND,
+          SESSION_EXPIRED,
+          SESSION_REPLACED,
+          PLATFORM_UNAVAILABLE,
+          RUN_UNAVAILABLE,
+          STREAM_UNAVAILABLE,
+          BACKPRESSURE_EXCEEDED,
+        ]
     RunGraph:
       type: object
       additionalProperties: false
       required: [runRef, revision, sequence, nodes, edges]
       properties:
-        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
         revision: { type: integer, format: int64, minimum: 1 }
         sequence: { type: integer, format: int64, minimum: 0 }
         nodes:
           type: array
           maxItems: 2000
-          items: { $ref: '#/components/schemas/RunNode' }
+          items: { $ref: "#/components/schemas/RunNode" }
         edges:
           type: array
           maxItems: 4000
-          items: { $ref: '#/components/schemas/RunEdge' }
+          items: { $ref: "#/components/schemas/RunEdge" }
     RunNode:
       type: object
       additionalProperties: false
-      required: [ref, runRef, type, state, displayName, attempt, artifactRefs, childRunRefs, createdAt, nextActions]
+      required:
+        [
+          ref,
+          runRef,
+          type,
+          state,
+          displayName,
+          attempt,
+          artifactRefs,
+          childRunRefs,
+          createdAt,
+          nextActions,
+        ]
       properties:
-        ref: { $ref: '#/components/schemas/OpaqueRef' }
-        runRef: { $ref: '#/components/schemas/OpaqueRef' }
-        parentNodeRef: { $ref: '#/components/schemas/OpaqueRef' }
-        type: { $ref: '#/components/schemas/RunNodeType' }
-        state: { $ref: '#/components/schemas/RunNodeState' }
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        parentNodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        type: { $ref: "#/components/schemas/RunNodeType" }
+        state: { $ref: "#/components/schemas/RunNodeState" }
         displayName: { type: string, maxLength: 160 }
         role: { type: string, maxLength: 500 }
-        agentRef: { $ref: '#/components/schemas/OpaqueRef' }
-        turnRef: { $ref: '#/components/schemas/OpaqueRef' }
+        agentRef: { $ref: "#/components/schemas/OpaqueRef" }
+        turnRef: { $ref: "#/components/schemas/OpaqueRef" }
         attempt: { type: integer, minimum: 1 }
         inputSummary: { type: string, maxLength: 2000 }
         progressSummary: { type: string, maxLength: 2000 }
@@ -341,41 +487,73 @@ components:
         artifactRefs:
           type: array
           maxItems: 500
-          items: { $ref: '#/components/schemas/OpaqueRef' }
+          items: { $ref: "#/components/schemas/OpaqueRef" }
         childRunRefs:
           type: array
           maxItems: 500
-          items: { $ref: '#/components/schemas/OpaqueRef' }
+          items: { $ref: "#/components/schemas/OpaqueRef" }
         callbackSummary: { type: string, maxLength: 2000 }
         safeErrorCode: { type: string, maxLength: 100 }
         safeErrorMessage: { type: string, maxLength: 2000 }
-        createdAt: { $ref: '#/components/schemas/Timestamp' }
-        startedAt: { $ref: '#/components/schemas/Timestamp' }
-        finishedAt: { $ref: '#/components/schemas/Timestamp' }
+        createdAt: { $ref: "#/components/schemas/Timestamp" }
+        startedAt: { $ref: "#/components/schemas/Timestamp" }
+        finishedAt: { $ref: "#/components/schemas/Timestamp" }
         nextActions:
           type: array
           maxItems: 12
           uniqueItems: true
-          items: { $ref: '#/components/schemas/NextAction' }
+          items: { $ref: "#/components/schemas/NextAction" }
     RunNodeType:
       type: string
       enum: [ROOT_PROCESS, AGENT_EXECUTION, HUMAN_GATE, EXTERNAL_ACTION]
     RunNodeState:
       type: string
-      enum: [PLANNED, QUEUED, RUNNING, WAITING, SUCCEEDED, FAILED, CANCELLED, SKIPPED]
+      enum:
+        [
+          PLANNED,
+          QUEUED,
+          RUNNING,
+          WAITING,
+          SUCCEEDED,
+          FAILED,
+          CANCELLED,
+          SKIPPED,
+        ]
     NextAction:
       type: string
-      enum: [OPEN, EDIT, ARCHIVE, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, MANAGE_GRANTS, APPLY_PLAN, RECOVER]
+      enum:
+        [
+          OPEN,
+          EDIT,
+          ARCHIVE,
+          ENABLE,
+          DISABLE,
+          VALIDATE,
+          PUBLISH,
+          ROLLBACK,
+          LAUNCH,
+          ADD_TURN,
+          CANCEL,
+          RETRY,
+          RESOLVE_GATE,
+          DOWNLOAD,
+          BIND,
+          TEST,
+          REVOKE,
+          MANAGE_GRANTS,
+          APPLY_PLAN,
+          RECOVER,
+        ]
     RunEdge:
       type: object
       additionalProperties: false
       required: [ref, runRef, sourceNodeRef, targetNodeRef, type, label]
       properties:
-        ref: { $ref: '#/components/schemas/OpaqueRef' }
-        runRef: { $ref: '#/components/schemas/OpaqueRef' }
-        sourceNodeRef: { $ref: '#/components/schemas/OpaqueRef' }
-        targetNodeRef: { $ref: '#/components/schemas/OpaqueRef' }
-        type: { $ref: '#/components/schemas/RunEdgeType' }
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        sourceNodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        targetNodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        type: { $ref: "#/components/schemas/RunEdgeType" }
         label: { type: string, maxLength: 160 }
     RunEdgeType:
       type: string
@@ -383,7 +561,16 @@ components:
     TokenUsage:
       type: object
       additionalProperties: false
-      required: [totalTokens, inputTokens, cachedInputTokens, cacheWriteInputTokens, outputTokens, reasoningOutputTokens, modelContextWindow]
+      required:
+        [
+          totalTokens,
+          inputTokens,
+          cachedInputTokens,
+          cacheWriteInputTokens,
+          outputTokens,
+          reasoningOutputTokens,
+          modelContextWindow,
+        ]
       properties:
         totalTokens: { type: integer, format: int64, minimum: 0 }
         inputTokens: { type: integer, format: int64, minimum: 0 }
@@ -395,66 +582,89 @@ components:
     RunDelta:
       type: object
       additionalProperties: false
-      required: [ref, version, state, graphRevision, lastEventSequence, usage, artifactRefs, gateRefs, nextActions]
+      required:
+        [
+          ref,
+          version,
+          state,
+          graphRevision,
+          lastEventSequence,
+          usage,
+          artifactRefs,
+          gateRefs,
+          nextActions,
+        ]
       properties:
-        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        state: { $ref: '#/components/schemas/RunState' }
+        state: { $ref: "#/components/schemas/RunState" }
         graphRevision: { type: integer, format: int64, minimum: 1 }
         lastEventSequence: { type: integer, format: int64, minimum: 1 }
         resultSummary: { type: string, maxLength: 4000 }
         safeErrorCode: { type: string, maxLength: 80 }
         safeErrorMessage: { type: string, maxLength: 500 }
-        usage: { $ref: '#/components/schemas/TokenUsage' }
+        usage: { $ref: "#/components/schemas/TokenUsage" }
         artifactRefs:
           type: array
           maxItems: 200
-          items: { $ref: '#/components/schemas/OpaqueRef' }
+          items: { $ref: "#/components/schemas/OpaqueRef" }
         gateRefs:
           type: array
           maxItems: 200
-          items: { $ref: '#/components/schemas/OpaqueRef' }
-        startedAt: { $ref: '#/components/schemas/Timestamp' }
-        finishedAt: { $ref: '#/components/schemas/Timestamp' }
+          items: { $ref: "#/components/schemas/OpaqueRef" }
+        startedAt: { $ref: "#/components/schemas/Timestamp" }
+        finishedAt: { $ref: "#/components/schemas/Timestamp" }
         nextActions:
           type: array
           maxItems: 12
           uniqueItems: true
-          items: { $ref: '#/components/schemas/NextAction' }
+          items: { $ref: "#/components/schemas/NextAction" }
     RunEvent:
       type: object
       additionalProperties: false
-      required: [ref, runRef, sequence, graphRevision, type, summary, actor, messageKind, occurredAt, run]
+      required:
+        [
+          ref,
+          runRef,
+          sequence,
+          graphRevision,
+          type,
+          summary,
+          actor,
+          messageKind,
+          occurredAt,
+          run,
+        ]
       properties:
-        ref: { $ref: '#/components/schemas/OpaqueRef' }
-        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
         sequence: { type: integer, format: int64, minimum: 1 }
-        type: { $ref: '#/components/schemas/RunEventType' }
-        nodeRef: { $ref: '#/components/schemas/OpaqueRef' }
-        edgeRef: { $ref: '#/components/schemas/OpaqueRef' }
-        gateRef: { $ref: '#/components/schemas/OpaqueRef' }
-        artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
+        type: { $ref: "#/components/schemas/RunEventType" }
+        nodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        edgeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        gateRef: { $ref: "#/components/schemas/OpaqueRef" }
+        artifactRef: { $ref: "#/components/schemas/OpaqueRef" }
         summary: { type: string, maxLength: 2000 }
         progress: { type: string, maxLength: 2000 }
-        runState: { $ref: '#/components/schemas/RunState' }
-        nodeState: { $ref: '#/components/schemas/RunNodeState' }
-        occurredAt: { $ref: '#/components/schemas/Timestamp' }
+        runState: { $ref: "#/components/schemas/RunState" }
+        nodeState: { $ref: "#/components/schemas/RunNodeState" }
+        occurredAt: { $ref: "#/components/schemas/Timestamp" }
         graphRevision: { type: integer, format: int64, minimum: 1 }
-        run: { $ref: '#/components/schemas/RunDelta' }
-        node: { $ref: '#/components/schemas/RunNode' }
-        edge: { $ref: '#/components/schemas/RunEdge' }
-        gate: { $ref: '#/components/schemas/OwnerGate' }
-        artifact: { $ref: '#/components/schemas/Artifact' }
-        incident: { $ref: '#/components/schemas/Incident' }
-        actor: { $ref: '#/components/schemas/RunEventActor' }
-        messageKind: { $ref: '#/components/schemas/RunEventMessageKind' }
-        toolCall: { $ref: '#/components/schemas/RunToolCall' }
+        run: { $ref: "#/components/schemas/RunDelta" }
+        node: { $ref: "#/components/schemas/RunNode" }
+        edge: { $ref: "#/components/schemas/RunEdge" }
+        gate: { $ref: "#/components/schemas/OwnerGate" }
+        artifact: { $ref: "#/components/schemas/Artifact" }
+        incident: { $ref: "#/components/schemas/Incident" }
+        actor: { $ref: "#/components/schemas/RunEventActor" }
+        messageKind: { $ref: "#/components/schemas/RunEventMessageKind" }
+        toolCall: { $ref: "#/components/schemas/RunToolCall" }
     RunEventActor:
       type: object
       additionalProperties: false
       required: [kind, ref, name]
       properties:
-        kind: { $ref: '#/components/schemas/RunEventActorKind' }
+        kind: { $ref: "#/components/schemas/RunEventActorKind" }
         ref: { type: string, maxLength: 96 }
         name: { type: string, maxLength: 300 }
     RunEventActorKind:
@@ -462,62 +672,122 @@ components:
       enum: [USER, AGENT, SYSTEM_ASSISTANT, PLATFORM, INTEGRATION]
     RunEventMessageKind:
       type: string
-      enum: [STATE, USER_MESSAGE, ASSISTANT_MESSAGE, INTERMEDIATE_MESSAGE, FINAL_MESSAGE, TOOL_CALL, PLAN_UPDATE, ARTIFACT, INCIDENT, OWNER_GATE]
+      enum:
+        [
+          STATE,
+          USER_MESSAGE,
+          ASSISTANT_MESSAGE,
+          INTERMEDIATE_MESSAGE,
+          FINAL_MESSAGE,
+          TOOL_CALL,
+          PLAN_UPDATE,
+          ARTIFACT,
+          INCIDENT,
+          OWNER_GATE,
+        ]
     RunToolCall:
       type: object
       additionalProperties: false
-      required: [ref, tool, safeParameters, state, durationMs, safeResult, auditRef]
+      required:
+        [ref, tool, safeParameters, state, durationMs, safeResult, auditRef]
       properties:
-        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
         tool: { type: string, maxLength: 120 }
-        safeParameters: { type: object, maxProperties: 32, additionalProperties: true }
+        safeParameters:
+          { type: object, maxProperties: 32, additionalProperties: true }
         capabilityRef: { type: string, maxLength: 160 }
-        grantRef: { $ref: '#/components/schemas/OpaqueRef' }
-        state: { $ref: '#/components/schemas/RunToolCallState' }
-        durationMs: { type: integer, format: int64, minimum: 0, maximum: 86400000 }
+        grantRef: { $ref: "#/components/schemas/OpaqueRef" }
+        state: { $ref: "#/components/schemas/RunToolCallState" }
+        durationMs:
+          { type: integer, format: int64, minimum: 0, maximum: 86400000 }
         safeResult: { type: string, maxLength: 2000 }
-        auditRef: { $ref: '#/components/schemas/OpaqueRef' }
+        auditRef: { $ref: "#/components/schemas/OpaqueRef" }
     RunToolCallState:
       type: string
       enum: [SUCCEEDED, FAILED]
     RunEventType:
       type: string
-      enum: [RUN_CREATED, RUN_STATE_CHANGED, RUN_METADATA_UPDATED, NODE_ADDED, NODE_STATE_CHANGED, EDGE_ADDED, TURN_QUEUED, TURN_STARTED, TURN_PROGRESS, TURN_COMPLETED, DELEGATION_CREATED, CALLBACK_DELIVERED, OWNER_GATE_OPENED, OWNER_GATE_RESOLVED, ARTIFACT_AVAILABLE, INCIDENT_LINKED, TOOL_CALL_RECORDED, PLAN_UPDATED]
+      enum:
+        [
+          RUN_CREATED,
+          RUN_STATE_CHANGED,
+          RUN_METADATA_UPDATED,
+          NODE_ADDED,
+          NODE_STATE_CHANGED,
+          EDGE_ADDED,
+          TURN_QUEUED,
+          TURN_STARTED,
+          TURN_PROGRESS,
+          TURN_COMPLETED,
+          DELEGATION_CREATED,
+          CALLBACK_DELIVERED,
+          OWNER_GATE_OPENED,
+          OWNER_GATE_RESOLVED,
+          ARTIFACT_AVAILABLE,
+          INCIDENT_LINKED,
+          TOOL_CALL_RECORDED,
+          PLAN_UPDATED,
+        ]
     RunState:
       type: string
-      enum: [QUEUED, RUNNING, WAITING_HUMAN, CANCELLING, SUCCEEDED, FAILED, CANCELLED]
+      enum:
+        [
+          QUEUED,
+          RUNNING,
+          WAITING_HUMAN,
+          CANCELLING,
+          SUCCEEDED,
+          FAILED,
+          CANCELLED,
+        ]
     OwnerGate:
       type: object
       additionalProperties: false
-      required: [ref, version, projectRef, runRef, nodeRef, title, contextSummary, consequencesSummary, requestedBy, state, allowedDecisions, artifactRefs, openedAt, nextActions]
+      required:
+        [
+          ref,
+          version,
+          projectRef,
+          runRef,
+          nodeRef,
+          title,
+          contextSummary,
+          consequencesSummary,
+          requestedBy,
+          state,
+          allowedDecisions,
+          artifactRefs,
+          openedAt,
+          nextActions,
+        ]
       properties:
-        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
-        runRef: { $ref: '#/components/schemas/OpaqueRef' }
-        nodeRef: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        nodeRef: { $ref: "#/components/schemas/OpaqueRef" }
         title: { type: string, maxLength: 240 }
         contextSummary: { type: string, maxLength: 4000 }
         consequencesSummary: { type: string, maxLength: 2000 }
-        requestedBy: { $ref: '#/components/schemas/UserSummary' }
-        state: { $ref: '#/components/schemas/OwnerGateState' }
+        requestedBy: { $ref: "#/components/schemas/UserSummary" }
+        state: { $ref: "#/components/schemas/OwnerGateState" }
         allowedDecisions:
           type: array
           uniqueItems: true
-          items: { $ref: '#/components/schemas/OwnerGateDecision' }
-        decision: { $ref: '#/components/schemas/OwnerGateDecision' }
+          items: { $ref: "#/components/schemas/OwnerGateDecision" }
+        decision: { $ref: "#/components/schemas/OwnerGateDecision" }
         decisionComment: { type: string, maxLength: 4000 }
-        openedAt: { $ref: '#/components/schemas/Timestamp' }
-        decidedAt: { $ref: '#/components/schemas/Timestamp' }
+        openedAt: { $ref: "#/components/schemas/Timestamp" }
+        decidedAt: { $ref: "#/components/schemas/Timestamp" }
         artifactRefs:
           type: array
           maxItems: 100
-          items: { $ref: '#/components/schemas/OpaqueRef' }
+          items: { $ref: "#/components/schemas/OpaqueRef" }
         nextActions:
           type: array
           maxItems: 12
           uniqueItems: true
-          items: { $ref: '#/components/schemas/NextAction' }
+          items: { $ref: "#/components/schemas/NextAction" }
     OwnerGateState:
       type: string
       enum: [OPEN, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED, EXPIRED]
@@ -529,55 +799,88 @@ components:
       additionalProperties: false
       required: [ref, displayName]
       properties:
-        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
         displayName: { type: string, maxLength: 160 }
     Artifact:
       type: object
       additionalProperties: false
-      required: [ref, version, projectRef, fileName, mediaType, sizeBytes, scanState, source, revision, agentBindings, previewAvailable, createdAt, nextActions]
+      required:
+        [
+          ref,
+          version,
+          projectRef,
+          fileName,
+          mediaType,
+          sizeBytes,
+          scanState,
+          source,
+          revision,
+          agentBindings,
+          previewAvailable,
+          createdAt,
+          nextActions,
+        ]
       properties:
-        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
-        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
         fileName: { type: string, maxLength: 255 }
         mediaType: { type: string, maxLength: 160 }
-        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 1073741824 }
-        scanState: { $ref: '#/components/schemas/ArtifactScanState' }
-        source: { $ref: '#/components/schemas/ArtifactSource' }
+        sizeBytes:
+          { type: integer, format: int64, minimum: 0, maximum: 1073741824 }
+        scanState: { $ref: "#/components/schemas/ArtifactScanState" }
+        source: { $ref: "#/components/schemas/ArtifactSource" }
         revision: { type: integer, minimum: 1 }
         agentBindings:
           type: array
           maxItems: 200
           items: { type: string, maxLength: 240 }
         previewAvailable: { type: boolean }
-        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        createdAt: { $ref: "#/components/schemas/Timestamp" }
         nextActions:
           type: array
           maxItems: 12
           uniqueItems: true
-          items: { $ref: '#/components/schemas/NextAction' }
+          items: { $ref: "#/components/schemas/NextAction" }
     ArtifactScanState:
       type: string
       enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED]
     ArtifactSource:
       type: string
-      enum: [CONTROL_CENTER, AGENT_RESULT, INTEGRATION_RESULT, KNOWLEDGE_SOURCE, INTERACTION_ATTACHMENT]
+      enum:
+        [
+          CONTROL_CENTER,
+          AGENT_RESULT,
+          INTEGRATION_RESULT,
+          KNOWLEDGE_SOURCE,
+          INTERACTION_ATTACHMENT,
+        ]
     Incident:
       type: object
       additionalProperties: false
-      required: [ref, category, severity, state, safeSummary, safeNextStep, coreAffected, createdAt]
+      required:
+        [
+          ref,
+          category,
+          severity,
+          state,
+          safeSummary,
+          safeNextStep,
+          coreAffected,
+          createdAt,
+        ]
       properties:
-        ref: { $ref: '#/components/schemas/OpaqueRef' }
-        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
-        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
         category: { type: string, maxLength: 80 }
-        severity: { $ref: '#/components/schemas/IncidentSeverity' }
-        state: { $ref: '#/components/schemas/IncidentState' }
+        severity: { $ref: "#/components/schemas/IncidentSeverity" }
+        state: { $ref: "#/components/schemas/IncidentState" }
         safeSummary: { type: string, maxLength: 1000 }
         safeNextStep: { type: string, maxLength: 1000 }
         coreAffected: { type: boolean }
-        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        createdAt: { $ref: "#/components/schemas/Timestamp" }
     IncidentSeverity:
       type: string
       enum: [INFO, WARNING, ERROR, CRITICAL]

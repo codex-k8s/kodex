@@ -6,7 +6,9 @@ import type { PlatformResourceKind } from "./PlatformResourceKind";
 export interface PlatformInvalidatedEnvelope {
   type: "PLATFORM_INVALIDATED";
   requestRef: string;
-  sequence: number;
+  streamKind: "PLATFORM";
+  streamRef: "PLATFORM";
+  cursor: number;
   eventName: PlatformEventName;
   kind: PlatformResourceKind;
 }

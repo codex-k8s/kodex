@@ -25,13 +25,12 @@ import (
 const maximumJSONBody = 1 << 20
 
 type Server struct {
-	control          *controlplaneclient.Client
-	secrets          secretbrokerv1.SecretBrokerServiceClient
-	boundary         *boundary.Boundary
-	logger           *slog.Logger
-	realtime         http.Handler
-	platformRealtime http.Handler
-	texts            *texti18n.Localizer
+	control  *controlplaneclient.Client
+	secrets  secretbrokerv1.SecretBrokerServiceClient
+	boundary *boundary.Boundary
+	logger   *slog.Logger
+	realtime http.Handler
+	texts    *texti18n.Localizer
 }
 
 func New(control *controlplaneclient.Client, security *boundary.Boundary, logger *slog.Logger, texts *texti18n.Localizer) (*Server, error) {
@@ -49,18 +48,14 @@ func (server *Server) AttachSecretBroker(client secretbrokerv1.SecretBrokerServi
 	return nil
 }
 
-func (server *Server) AttachRealtime(run, platform http.Handler) {
-	server.realtime = run
-	server.platformRealtime = platform
+func (server *Server) AttachRealtime(session http.Handler) {
+	server.realtime = session
 }
 
 func (server *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	if server.realtime != nil {
-		mux.Handle("GET /api/v1/runs/{runRef}/stream", server.realtime)
-	}
-	if server.platformRealtime != nil {
-		mux.Handle("GET /api/v1/platform/stream", server.platformRealtime)
+		mux.Handle("GET /api/v1/session/stream", server.realtime)
 	}
 	generated.HandlerWithOptions(server, generated.StdHTTPServerOptions{BaseRouter: mux, ErrorHandlerFunc: func(writer http.ResponseWriter, _ *http.Request, _ error) {
 		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)

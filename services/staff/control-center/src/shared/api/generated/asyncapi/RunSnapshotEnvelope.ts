@@ -2,10 +2,11 @@
 
 import type { RunGraph } from "./RunGraph";
 
-export interface SnapshotEnvelope {
-  type: "GRAPH_SNAPSHOT";
+export interface RunSnapshotEnvelope {
+  type: "RUN_GRAPH_SNAPSHOT";
   requestRef: string;
-  runRef: string;
-  sequence: number;
+  streamKind: "RUN";
+  streamRef: string;
+  cursor: number;
   snapshot: RunGraph;
 }

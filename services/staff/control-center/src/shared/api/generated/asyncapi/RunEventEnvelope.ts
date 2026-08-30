@@ -2,10 +2,11 @@
 
 import type { RunEvent } from "./RunEvent";
 
-export interface EventEnvelope {
+export interface RunEventEnvelope {
   type: "RUN_EVENT";
   requestRef: string;
-  runRef: string;
-  sequence: number;
+  streamKind: "RUN";
+  streamRef: string;
+  cursor: number;
   event: RunEvent;
 }

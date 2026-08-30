@@ -154,7 +154,7 @@ func TestProjectReferenceBinding(t *testing.T) {
 		wantErr   bool
 	}{
 		{name: "HTTP header", method: http.MethodGet, path: "/api/v1/runs", header: projectID, wantBound: true},
-		{name: "run stream uses run eligibility", method: http.MethodGet, path: "/api/v1/runs/run_12345678/stream"},
+		{name: "session stream resolves run eligibility in commands", method: http.MethodGet, path: "/api/v1/session/stream"},
 		{name: "exact project update path", method: http.MethodPut, path: "/api/v1/projects/" + projectID, wantBound: true},
 		{name: "exact project delete path", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, wantBound: true},
 		{name: "matching exact project header", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: projectID, wantBound: true},
@@ -184,21 +184,18 @@ func TestProjectReferenceBinding(t *testing.T) {
 }
 
 func TestRealtimePathClassification(t *testing.T) {
+	if !isRealtimePath("/api/v1/session/stream") {
+		t.Fatal("session stream was not classified as realtime")
+	}
 	for _, path := range []string{
 		"/api/v1/runs/run_12345678/stream",
 		"/api/v1/platform/stream",
-	} {
-		if !isRealtimePath(path) {
-			t.Fatalf("realtime path was not classified: %s", path)
-		}
-	}
-	for _, path := range []string{
+		"/api/v1/session/stream/extra",
 		"/api/v1/runs",
-		"/api/v1/platform/stream/extra",
 		"/api/v1/platform",
 	} {
 		if isRealtimePath(path) {
-			t.Fatalf("ordinary HTTP path was classified as realtime: %s", path)
+			t.Fatalf("ordinary or legacy HTTP path was classified as realtime: %s", path)
 		}
 	}
 }
@@ -269,8 +266,7 @@ func TestSessionRenewalRunsOnlyAfterCompleteSecurityBoundary(t *testing.T) {
 	}
 
 	realtimeRequest := authenticatedRequest(http.MethodGet, csrf)
-	realtimeRequest.SetPathValue("runRef", "run_12345678")
-	realtimeRequest.URL.Path = "/api/v1/runs/run_12345678/stream"
+	realtimeRequest.URL.Path = "/api/v1/session/stream"
 	beforeRealtime := store.renewCalls
 	realtimeResponse := httptest.NewRecorder()
 	security.Middleware(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {

@@ -18,8 +18,10 @@ Owner-facing HTTP/WebSocket boundary для production Control Center.
 - требует semantic `Idempotency-Key` и `If-Match` для применимых mutations;
 - преобразует OpenAPI requests в generated control-plane gRPC clients;
 - нормализует typed domain errors в стабильный HTTP/error contract;
-- авторизует Run stream через тот же control-plane owner rule, что HTTP;
-- доставляет authoritative graph snapshot и ordered resumable deltas.
+- авторизует каждую Run subscription через тот же control-plane owner rule,
+  что HTTP;
+- одним owner session socket доставляет platform invalidations, authoritative
+  graph snapshots и ordered resumable Run deltas.
 
 Gateway не читает PostgreSQL, не вычисляет permissions, lifecycle, terminal
 state или `nextActions`, не владеет event store и не обращается к Mattermost.
@@ -27,10 +29,13 @@ Actor/organization/project/lineage не принимаются из browser payl
 
 ## Realtime
 
-`WSS /api/v1/runs/{runRef}/stream` сначала отдаёт snapshot + current sequence,
-затем bounded `RunEvent` deltas. Client передаёт `afterSequence`; duplicate
-игнорируется, gap восстанавливается catch-up либо новым snapshot. Raw stdout,
-stderr, Codex JSONL, provider payload, secret и file body запрещены.
+`WSS /api/v1/session/stream` является единственным browser realtime transport.
+Client передаёт platform cursor и bounded список Run cursors, а затем динамически
+подписывает и отписывает Runs в том же socket. Каждая Run получает собственные
+snapshot/catch-up/deltas и восстанавливает gap независимо от остальных потоков.
+Duplicate игнорируется, slow client закрывается по bounded backpressure и
+возобновляется с сохранённых cursors. Raw stdout, stderr, Codex JSONL, provider
+payload, secret и file body запрещены.
 
 ## Локализация ошибок
 

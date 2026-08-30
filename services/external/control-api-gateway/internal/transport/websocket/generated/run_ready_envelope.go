@@ -2,7 +2,7 @@
 
 package generated
 
-type PlatformReadyEnvelope struct {
+type RunReadyEnvelope struct {
 	Type       string `json:"type"`
 	RequestRef string `json:"requestRef"`
 	StreamKind string `json:"streamKind"`

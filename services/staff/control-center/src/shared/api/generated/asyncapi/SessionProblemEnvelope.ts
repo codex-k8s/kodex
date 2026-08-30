@@ -2,8 +2,9 @@
 
 import type { ProblemCode } from "./ProblemCode";
 
-export interface ProblemEnvelope {
-  type: "PROBLEM";
+export interface SessionProblemEnvelope {
+  type: "SESSION_PROBLEM";
+  requestRef: string;
   status: number;
   code: ProblemCode;
   title: string;
