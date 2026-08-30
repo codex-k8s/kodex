@@ -463,6 +463,9 @@ for resolver_contract in \
   rg -Fq "$resolver_contract" "$repository_root/tools/install/prepare-host.sh" ||
     fail "bare-metal k3s resolver contract is absent: $resolver_contract"
 done
+rg -Fq -- '--retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 15' \
+  "$repository_root/tools/install/prepare-host.sh" ||
+  fail 'bare-metal artifact downloads do not tolerate transient network failures'
 
 identity_inputs="$temporary_directory/identity-inputs"
 identity_material="$temporary_directory/identity-material"

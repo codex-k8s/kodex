@@ -151,6 +151,7 @@ download_artifact() {
   url=$(jq -er --arg name "$name" '.artifacts[] | select(.name == $name) | .url' "$lock_file")
   expected_sha=$(jq -er --arg name "$name" '.artifacts[] | select(.name == $name) | .sha256' "$lock_file")
   curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+    --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 15 \
     "$url" --output "$output"
   actual_sha=$(sha256sum "$output" | awk '{print $1}')
   [[ "$actual_sha" == "$expected_sha" ]] || fail "artifact digest mismatch: $name"
