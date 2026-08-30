@@ -137,7 +137,7 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
   if [[ ! -x "$frontend_directory/node_modules/.bin/playwright" ]]; then
     npm --prefix "$frontend_directory" ci
   fi
-  if [[ "$command_name" == e2e ]]; then
+  if [[ "$command_name" == smoke || "$command_name" == e2e ]]; then
     KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
       "$repository_root/tools/dev/prepare-e2e-oidc-group.sh" --context "$context" \
       --state-directory "$state_directory"

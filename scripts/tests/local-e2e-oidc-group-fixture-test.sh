@@ -55,6 +55,7 @@ expect_guard_failure production-context \
   env KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
   bash "$fixture_script" --context production-cluster --state-directory "$state_directory"
 
+# shellcheck disable=SC2016
 fixture_reference='"$repository_root/tools/dev/prepare-e2e-oidc-group.sh"'
 [[ $(grep -Fc "$fixture_reference" "$dev_script") -eq 1 ]] ||
   fail 'dev.sh must invoke the OIDC fixture exactly once'
@@ -62,10 +63,13 @@ fixture_line=$(grep -Fn "$fixture_reference" "$dev_script" | cut -d: -f1)
 [[ "$fixture_line" =~ ^[0-9]+$ && "$fixture_line" -ge 3 ]] ||
   fail 'OIDC fixture invocation line is unavailable'
 fixture_block=$(sed -n "$((fixture_line - 2)),$((fixture_line + 1))p" "$dev_script")
-grep -Fq 'if [[ "$command_name" == e2e ]]; then' <<<"$fixture_block" ||
-  fail 'OIDC fixture invocation is not guarded by the e2e command'
+# shellcheck disable=SC2016
+grep -Fq 'if [[ "$command_name" == smoke || "$command_name" == e2e ]]; then' \
+  <<<"$fixture_block" ||
+  fail 'OIDC fixture invocation is not guarded by the smoke and e2e commands'
 grep -Fq 'KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION' \
   <<<"$fixture_block" || fail 'dev.sh does not confirm the disposable fixture explicitly'
+# shellcheck disable=SC2016
 grep -Fq -- '--state-directory "$state_directory"' <<<"$fixture_block" ||
   fail 'dev.sh does not bind the fixture to the selected state directory'
 
