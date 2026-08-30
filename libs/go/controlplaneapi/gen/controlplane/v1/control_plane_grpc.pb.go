@@ -5836,6 +5836,7 @@ const (
 	RuntimeWorkService_ReadExecutionArtifact_FullMethodName             = "/controlplane.v1.RuntimeWorkService/ReadExecutionArtifact"
 	RuntimeWorkService_RenewExecution_FullMethodName                    = "/controlplane.v1.RuntimeWorkService/RenewExecution"
 	RuntimeWorkService_ReportExecutionProgress_FullMethodName           = "/controlplane.v1.RuntimeWorkService/ReportExecutionProgress"
+	RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName   = "/controlplane.v1.RuntimeWorkService/CommitProviderCredentialRefresh"
 	RuntimeWorkService_CompleteExecution_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
 	RuntimeWorkService_DelegateExecution_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
 	RuntimeWorkService_ProposeAssistantPlan_FullMethodName              = "/controlplane.v1.RuntimeWorkService/ProposeAssistantPlan"
@@ -5862,6 +5863,7 @@ type RuntimeWorkServiceClient interface {
 	ReadExecutionArtifact(ctx context.Context, in *ReadExecutionArtifactRequest, opts ...grpc.CallOption) (*ReadExecutionArtifactResponse, error)
 	RenewExecution(ctx context.Context, in *RenewExecutionRequest, opts ...grpc.CallOption) (*RenewExecutionResponse, error)
 	ReportExecutionProgress(ctx context.Context, in *ReportExecutionProgressRequest, opts ...grpc.CallOption) (*ReportExecutionProgressResponse, error)
+	CommitProviderCredentialRefresh(ctx context.Context, in *CommitProviderCredentialRefreshRequest, opts ...grpc.CallOption) (*CommitProviderCredentialRefreshResponse, error)
 	CompleteExecution(ctx context.Context, in *CompleteExecutionRequest, opts ...grpc.CallOption) (*CompleteExecutionResponse, error)
 	DelegateExecution(ctx context.Context, in *DelegateExecutionRequest, opts ...grpc.CallOption) (*DelegateExecutionResponse, error)
 	ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error)
@@ -5922,6 +5924,16 @@ func (c *runtimeWorkServiceClient) ReportExecutionProgress(ctx context.Context, 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReportExecutionProgressResponse)
 	err := c.cc.Invoke(ctx, RuntimeWorkService_ReportExecutionProgress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) CommitProviderCredentialRefresh(ctx context.Context, in *CommitProviderCredentialRefreshRequest, opts ...grpc.CallOption) (*CommitProviderCredentialRefreshResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommitProviderCredentialRefreshResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -6096,6 +6108,7 @@ type RuntimeWorkServiceServer interface {
 	ReadExecutionArtifact(context.Context, *ReadExecutionArtifactRequest) (*ReadExecutionArtifactResponse, error)
 	RenewExecution(context.Context, *RenewExecutionRequest) (*RenewExecutionResponse, error)
 	ReportExecutionProgress(context.Context, *ReportExecutionProgressRequest) (*ReportExecutionProgressResponse, error)
+	CommitProviderCredentialRefresh(context.Context, *CommitProviderCredentialRefreshRequest) (*CommitProviderCredentialRefreshResponse, error)
 	CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error)
 	DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error)
 	ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error)
@@ -6133,6 +6146,9 @@ func (UnimplementedRuntimeWorkServiceServer) RenewExecution(context.Context, *Re
 }
 func (UnimplementedRuntimeWorkServiceServer) ReportExecutionProgress(context.Context, *ReportExecutionProgressRequest) (*ReportExecutionProgressResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportExecutionProgress not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) CommitProviderCredentialRefresh(context.Context, *CommitProviderCredentialRefreshRequest) (*CommitProviderCredentialRefreshResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CommitProviderCredentialRefresh not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompleteExecution not implemented")
@@ -6271,6 +6287,24 @@ func _RuntimeWorkService_ReportExecutionProgress_Handler(srv interface{}, ctx co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeWorkServiceServer).ReportExecutionProgress(ctx, req.(*ReportExecutionProgressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_CommitProviderCredentialRefresh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CommitProviderCredentialRefreshRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).CommitProviderCredentialRefresh(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).CommitProviderCredentialRefresh(ctx, req.(*CommitProviderCredentialRefreshRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -6585,6 +6619,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportExecutionProgress",
 			Handler:    _RuntimeWorkService_ReportExecutionProgress_Handler,
+		},
+		{
+			MethodName: "CommitProviderCredentialRefresh",
+			Handler:    _RuntimeWorkService_CommitProviderCredentialRefresh_Handler,
 		},
 		{
 			MethodName: "CompleteExecution",

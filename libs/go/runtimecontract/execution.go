@@ -26,6 +26,7 @@ const (
 	MaximumCompletionFiles    = 32
 	MaximumSessionSourceBytes = 64 << 20
 	MaximumProgressTextBytes  = 2 << 10
+	MaximumProviderAuthBytes  = 1 << 20
 	ArtifactCapability        = "platform.artifact.manage"
 )
 
@@ -188,6 +189,28 @@ type RunnerInput struct {
 	WorkspaceRoot               string                    `json:"workspace_root"`
 	OutboxRoot                  string                    `json:"outbox_root"`
 	CodexHome                   string                    `json:"codex_home"`
+}
+
+// RunnerProviderCredentialRefreshRequest передает обновленный managed OAuth
+// snapshot только по execution-scoped mTLS callback. Control-plane получает
+// исключительно метаданные созданной runtime-controller immutable Secret.
+type RunnerProviderCredentialRefreshRequest struct {
+	RuntimeRevisionDigest         string `json:"runtime_revision_digest"`
+	PreviousCredentialRevisionRef string `json:"previous_credential_revision_ref"`
+	PreviousContentSHA256         string `json:"previous_content_sha256"`
+	Authentication                []byte `json:"authentication"`
+}
+
+func (request RunnerProviderCredentialRefreshRequest) Validate() error {
+	trimmed := bytes.TrimSpace(request.Authentication)
+	if !sha256Pattern.MatchString(request.RuntimeRevisionDigest) ||
+		!opaqueReferencePattern.MatchString(request.PreviousCredentialRevisionRef) ||
+		!sha256Pattern.MatchString(request.PreviousContentSHA256) ||
+		len(request.Authentication) == 0 || len(request.Authentication) > MaximumProviderAuthBytes ||
+		len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
+		return errors.New("provider credential refresh request is invalid")
+	}
+	return nil
 }
 
 func (input RunnerInput) Validate() error {

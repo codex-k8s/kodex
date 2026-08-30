@@ -181,6 +181,7 @@ service RuntimeWorkService {
   rpc ReadExecutionArtifact(ReadExecutionArtifactRequest) returns (ReadExecutionArtifactResponse);
   rpc RenewExecution(RenewExecutionRequest) returns (RenewExecutionResponse);
   rpc ReportExecutionProgress(ReportExecutionProgressRequest) returns (ReportExecutionProgressResponse);
+  rpc CommitProviderCredentialRefresh(CommitProviderCredentialRefreshRequest) returns (CommitProviderCredentialRefreshResponse);
   rpc CompleteExecution(CompleteExecutionRequest) returns (CompleteExecutionResponse);
   rpc DelegateExecution(DelegateExecutionRequest) returns (DelegateExecutionResponse);
   rpc ProposeAssistantPlan(ProposeAssistantPlanRequest) returns (ProposeAssistantPlanResponse);
@@ -3889,4 +3890,20 @@ message ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest {
 message ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse {
   ProviderCredentialDescriptor credential = 1;
   string external_account_masked = 2;
+}
+
+message CommitProviderCredentialRefreshRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string previous_credential_revision_ref = 5;
+  string previous_content_sha256 = 6;
+  string secret_name = 7;
+  string secret_uid = 8;
+  string secret_resource_version = 9;
+  string content_sha256 = 10;
+}
+message CommitProviderCredentialRefreshResponse {
+  ProviderCredentialBinding provider_credential = 1;
 }
