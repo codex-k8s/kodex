@@ -47,7 +47,7 @@ const inputProblem = ref("");
 type EditorTarget =
   | { kind: "SUMMARY" }
   | {
-      kind: "OPERATION_SUMMARY" | "PARAMETERS" | "AFTER";
+      kind: "OPERATION_SUMMARY" | "PARAMETERS" | "BEFORE" | "AFTER";
       operationIndex: number;
     };
 const editorTarget = ref<EditorTarget>();
@@ -68,9 +68,12 @@ const exactRevisionValidated = computed(
     props.plan.state === "VALID" &&
     props.plan.validatedRevision === props.plan.revision,
 );
+const editable = computed(
+  () => !props.busy && !["APPLIED", "REJECTED"].includes(props.plan.state),
+);
 const canSave = computed(
   () =>
-    !props.busy &&
+    editable.value &&
     summary.value.trim().length > 0 &&
     selectedCount.value > 0 &&
     !["APPLIED", "REJECTED"].includes(props.plan.state),
@@ -87,9 +90,7 @@ const canApply = computed(
     exactRevisionValidated.value &&
     props.plan.nextActions.includes("APPLY_PLAN"),
 );
-const canReject = computed(
-  () => !props.busy && !["APPLIED", "REJECTED"].includes(props.plan.state),
-);
+const canReject = computed(() => editable.value);
 
 function save(): void {
   inputProblem.value = "";
@@ -108,6 +109,7 @@ const editorValue = computed(() => {
   if (!operation) return "";
   if (target.kind === "OPERATION_SUMMARY") return operation.value.summary;
   if (target.kind === "PARAMETERS") return operation.parametersText;
+  if (target.kind === "BEFORE") return operation.beforeText;
   return operation.afterText;
 });
 const editorTitle = computed(() => {
@@ -117,10 +119,12 @@ const editorTitle = computed(() => {
   if (target.kind === "OPERATION_SUMMARY")
     return t("assistant.planEditor.operationSummary");
   if (target.kind === "PARAMETERS") return t("assistant.planEditor.parameters");
+  if (target.kind === "BEFORE") return t("assistant.planEditor.before");
   return t("assistant.planEditor.after");
 });
 const editorLanguage = computed<"json" | "text">(() =>
   editorTarget.value?.kind === "PARAMETERS" ||
+  editorTarget.value?.kind === "BEFORE" ||
   editorTarget.value?.kind === "AFTER"
     ? "json"
     : "text",
@@ -135,9 +139,17 @@ function saveEditor(value: string): void {
     if (!operation) return;
     if (target.kind === "OPERATION_SUMMARY") operation.value.summary = value;
     else if (target.kind === "PARAMETERS") operation.parametersText = value;
+    else if (target.kind === "BEFORE") operation.beforeText = value;
     else operation.afterText = value;
   }
   editorTarget.value = undefined;
+}
+
+function optionalNumber(event: Event): number | undefined {
+  const value = (event.target as HTMLInputElement).value;
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined;
 }
 </script>
 
@@ -253,7 +265,7 @@ function saveEditor(value: string): void {
               <input
                 v-model="operation.value.selected"
                 type="checkbox"
-                :disabled="busy || !operation.value.permitted"
+                :disabled="!editable || !operation.value.permitted"
               />
               <span class="assistant-operation-kind">
                 {{ operationActionLabel(operation.value.action) }}
@@ -264,12 +276,27 @@ function saveEditor(value: string): void {
             >
           </header>
 
+          <dl class="assistant-plan-operation__identity">
+            <div>
+              <dt>type</dt>
+              <dd>{{ operation.value.type }}</dd>
+            </div>
+            <div>
+              <dt>action</dt>
+              <dd>{{ operation.value.action }}</dd>
+            </div>
+            <div>
+              <dt>permitted</dt>
+              <dd>{{ operation.value.permitted }}</dd>
+            </div>
+          </dl>
+
           <label class="field">
             <span>{{ $t("assistant.planEditor.operationTitle") }}</span>
             <input
               v-model="operation.value.title"
               maxlength="300"
-              :disabled="busy"
+              :disabled="!editable"
             />
           </label>
           <div class="field">
@@ -294,26 +321,63 @@ function saveEditor(value: string): void {
               v-model="operation.value.summary"
               rows="2"
               maxlength="2000"
-              :disabled="busy"
+              :disabled="!editable"
               :aria-label="$t('assistant.planEditor.operationSummary')"
             />
           </div>
 
-          <dl class="assistant-plan-target">
-            <div>
-              <dt>{{ $t("assistant.planEditor.target") }}</dt>
-              <dd>{{ operation.value.target.name }}</dd>
-            </div>
-            <div v-if="operation.value.expectedVersion">
-              <dt>{{ $t("assistant.planEditor.expectedVersion") }}</dt>
-              <dd>{{ operation.value.expectedVersion }}</dd>
-            </div>
-          </dl>
+          <fieldset class="assistant-plan-target">
+            <legend>{{ $t("assistant.planEditor.target") }}</legend>
+            <label class="field">
+              <span>kind</span>
+              <input
+                v-model="operation.value.target.kind"
+                maxlength="120"
+                :disabled="!editable"
+              />
+            </label>
+            <label class="field">
+              <span>name</span>
+              <input
+                v-model="operation.value.target.name"
+                maxlength="300"
+                :disabled="!editable"
+              />
+            </label>
+            <label class="field">
+              <span>ref</span>
+              <input
+                v-model="operation.value.target.ref"
+                maxlength="300"
+                :disabled="!editable"
+              />
+            </label>
+            <label class="field">
+              <span>version</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                :value="operation.value.target.version"
+                :disabled="!editable"
+                @input="operation.value.target.version = optionalNumber($event)"
+              />
+            </label>
+            <label class="field">
+              <span>{{ $t("assistant.planEditor.expectedVersion") }}</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                :value="operation.value.expectedVersion"
+                :disabled="!editable"
+                @input="
+                  operation.value.expectedVersion = optionalNumber($event)
+                "
+              />
+            </label>
+          </fieldset>
 
-          <details v-if="Object.keys(operation.value.before).length">
-            <summary>{{ $t("assistant.planEditor.before") }}</summary>
-            <SafeStructuredData :value="operation.value.before" />
-          </details>
           <div class="field field--code">
             <span class="assistant-field-label">
               <span>{{ $t("assistant.planEditor.parameters") }}</span>
@@ -333,32 +397,58 @@ function saveEditor(value: string): void {
               v-model="operation.parametersText"
               rows="4"
               spellcheck="false"
-              :disabled="busy"
+              :disabled="!editable"
               :aria-label="$t('assistant.planEditor.parameters')"
             />
           </div>
-          <div class="field field--code">
-            <span class="assistant-field-label">
-              <span>{{ $t("assistant.planEditor.after") }}</span>
-              <button
-                class="icon-button"
-                type="button"
-                :aria-label="$t('assistant.planEditor.openFieldEditor')"
-                :title="$t('assistant.planEditor.openFieldEditor')"
-                @click.prevent="
-                  editorTarget = { kind: 'AFTER', operationIndex: index }
-                "
-              >
-                <Maximize2 :size="15" aria-hidden="true" />
-              </button>
-            </span>
-            <textarea
-              v-model="operation.afterText"
-              rows="4"
-              spellcheck="false"
-              :disabled="busy"
-              :aria-label="$t('assistant.planEditor.after')"
-            />
+          <div class="assistant-plan-transition">
+            <div class="field field--code">
+              <span class="assistant-field-label">
+                <span>{{ $t("assistant.planEditor.before") }}</span>
+                <button
+                  class="icon-button"
+                  type="button"
+                  :disabled="!editable"
+                  :aria-label="$t('assistant.planEditor.openFieldEditor')"
+                  :title="$t('assistant.planEditor.openFieldEditor')"
+                  @click.prevent="
+                    editorTarget = { kind: 'BEFORE', operationIndex: index }
+                  "
+                >
+                  <Maximize2 :size="15" aria-hidden="true" />
+                </button>
+              </span>
+              <textarea
+                v-model="operation.beforeText"
+                rows="5"
+                spellcheck="false"
+                :disabled="!editable"
+                :aria-label="$t('assistant.planEditor.before')"
+              />
+            </div>
+            <div class="field field--code">
+              <span class="assistant-field-label">
+                <span>{{ $t("assistant.planEditor.after") }}</span>
+                <button
+                  class="icon-button"
+                  type="button"
+                  :aria-label="$t('assistant.planEditor.openFieldEditor')"
+                  :title="$t('assistant.planEditor.openFieldEditor')"
+                  @click.prevent="
+                    editorTarget = { kind: 'AFTER', operationIndex: index }
+                  "
+                >
+                  <Maximize2 :size="15" aria-hidden="true" />
+                </button>
+              </span>
+              <textarea
+                v-model="operation.afterText"
+                rows="4"
+                spellcheck="false"
+                :disabled="!editable"
+                :aria-label="$t('assistant.planEditor.after')"
+              />
+            </div>
           </div>
           <p v-if="operation.value.unavailableReason" class="field-error">
             {{ operation.value.unavailableReason }}
@@ -434,7 +524,7 @@ function saveEditor(value: string): void {
       :model-value="editorValue"
       :language="editorLanguage"
       :object-required="editorLanguage === 'json'"
-      :busy="busy"
+      :busy="busy || !editable"
       @close="editorTarget = undefined"
       @save="saveEditor"
     />
@@ -565,29 +655,51 @@ function saveEditor(value: string): void {
   color: var(--subtle);
   font-size: 0.78rem;
 }
-.assistant-plan-target {
+.assistant-plan-operation__identity {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   margin: 0;
-  padding: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--panel);
 }
-.assistant-plan-target div {
-  min-width: 0;
-}
-.assistant-plan-target dt {
-  color: var(--subtle);
+.assistant-plan-operation__identity dt,
+.assistant-plan-operation__identity dd {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
 }
-.assistant-plan-target dd {
-  margin: 2px 0 0;
-  overflow-wrap: anywhere;
+.assistant-plan-operation__identity dt {
+  color: var(--subtle);
+}
+.assistant-plan-operation__identity dd {
+  margin: 3px 0 0;
+}
+.assistant-plan-target {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.assistant-plan-target legend {
+  padding-inline: 4px;
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 .field--code textarea {
   font-family: var(--font-mono);
   font-size: 0.78rem;
+}
+.assistant-plan-transition {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 .assistant-validation-list,
 .field-error {
@@ -609,6 +721,10 @@ function saveEditor(value: string): void {
     width: 100%;
   }
   .assistant-plan-target {
+    grid-template-columns: 1fr;
+  }
+  .assistant-plan-operation__identity,
+  .assistant-plan-transition {
     grid-template-columns: 1fr;
   }
 }

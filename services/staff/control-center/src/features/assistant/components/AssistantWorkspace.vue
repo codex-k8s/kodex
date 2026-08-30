@@ -23,6 +23,7 @@ import {
 } from "vue";
 import { useI18n } from "vue-i18n";
 
+import { waitForCleanArtifact } from "@/features/assistant/attachments";
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
 import { openAssistantEvent } from "@/features/assistant/events";
 import { useAssistantStore } from "@/features/assistant/store";
@@ -80,6 +81,7 @@ const attachmentState = ref<AttachmentComposerState>({
 });
 const panel = ref<HTMLElement>();
 const composer = ref<HTMLTextAreaElement>();
+const chatLog = ref<HTMLElement>();
 const historyMenu = ref<HTMLElement>();
 const fab = ref<HTMLButtonElement>();
 
@@ -178,6 +180,8 @@ async function startConversation(): Promise<void> {
   openPlanRef.value = undefined;
   attachmentComposer.value?.clear();
   await store.startConversation();
+  await nextTick();
+  composer.value?.focus();
 }
 
 function conversationDisplayTitle(title: string): string {
@@ -205,6 +209,7 @@ async function send(): Promise<void> {
   message.value = "";
   attachmentComposer.value?.clear();
   await nextTick();
+  scrollToLatest();
   composer.value?.focus();
 }
 
@@ -212,11 +217,20 @@ async function uploadAttachment(
   file: File,
   request: AttachmentUploadRequest,
 ): Promise<{ ref: string }> {
-  return platform.uploadAttachmentArtifact(
+  const artifact = await platform.uploadAttachmentArtifact(
     props.projectRef,
     file,
     request.signal,
   );
+  const clean = await waitForCleanArtifact(artifact, {
+    signal: request.signal,
+    read: (artifactRef) => platform.readArtifact(artifactRef),
+  });
+  return { ref: clean.ref };
+}
+
+function scrollToLatest(): void {
+  chatLog.value?.scrollTo({ top: chatLog.value.scrollHeight });
 }
 
 function handleComposerKeydown(event: KeyboardEvent): void {
@@ -279,10 +293,20 @@ watch(
 );
 watch(
   () => store.selectedConversation?.ref,
-  () => {
+  async () => {
     titleEditing.value = false;
     openPlanRef.value = undefined;
     store.clearReceipt();
+    await nextTick();
+    scrollToLatest();
+  },
+);
+watch(
+  () => store.selectedConversation?.turns.length,
+  async () => {
+    if (!open.value || openPlanRef.value) return;
+    await nextTick();
+    scrollToLatest();
   },
 );
 
@@ -340,7 +364,7 @@ onBeforeUnmount(() => {
           :state="store.assistant.runtimeState"
         />
         <button
-          class="icon-button assistant-new-conversation"
+          class="assistant-new-conversation"
           type="button"
           :aria-label="$t('assistant.newConversation')"
           :title="$t('assistant.newConversation')"
@@ -348,16 +372,19 @@ onBeforeUnmount(() => {
           @click="startConversation"
         >
           <Plus :size="19" aria-hidden="true" />
+          <span>{{ $t("assistant.newConversation") }}</span>
         </button>
         <div ref="historyMenu" class="assistant-history">
           <button
-            class="icon-button"
+            class="icon-button assistant-history__toggle"
             type="button"
             :aria-label="$t('assistant.history')"
             :aria-expanded="historyOpen"
+            aria-haspopup="menu"
             @click="historyOpen = !historyOpen"
           >
             <History :size="18" aria-hidden="true" />
+            <span>{{ $t("assistant.history") }}</span>
             <ChevronDown :size="14" aria-hidden="true" />
           </button>
           <section
@@ -488,7 +515,12 @@ onBeforeUnmount(() => {
               </template>
             </section>
 
-            <section class="assistant-chat-log" role="log" aria-live="polite">
+            <section
+              ref="chatLog"
+              class="assistant-chat-log"
+              role="log"
+              aria-live="polite"
+            >
               <ProblemNotice
                 v-if="store.problem"
                 :problem="store.problem"
@@ -655,8 +687,8 @@ onBeforeUnmount(() => {
   right: 0;
   bottom: 0;
   display: flex;
-  width: clamp(520px, 42vw, 640px);
-  max-width: calc(100vw - 64px);
+  width: clamp(720px, 62vw, 1040px);
+  max-width: calc(100vw - 32px);
   height: 100dvh;
   min-width: 0;
   flex-direction: column;
@@ -721,12 +753,37 @@ onBeforeUnmount(() => {
   width: auto;
   padding-inline: 8px;
 }
+.assistant-new-conversation {
+  display: inline-flex;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.assistant-new-conversation:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.assistant-new-conversation:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.assistant-history__toggle span {
+  font-size: 0.82rem;
+}
 .assistant-history__menu {
   position: absolute;
   z-index: 3;
   top: calc(100% + 8px);
   right: 0;
-  width: 360px;
+  width: 420px;
+  max-width: calc(100vw - 32px);
   max-height: min(480px, calc(100vh - 120px));
   overflow: auto;
   border: 1px solid var(--border);
@@ -765,9 +822,11 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 .assistant-history__menu strong {
+  display: -webkit-box;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 .assistant-history__menu small {
   color: var(--subtle);
@@ -854,7 +913,7 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 .assistant-message {
-  width: min(86%, 620px);
+  width: min(86%, 760px);
   margin-bottom: 14px;
   padding: 12px;
   border: 1px solid var(--border);
@@ -1009,6 +1068,20 @@ onBeforeUnmount(() => {
   .assistant-drawer__header {
     gap: 8px;
     padding-top: 14px;
+  }
+  .assistant-new-conversation,
+  .assistant-history__toggle {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    justify-content: center;
+    padding: 0;
+  }
+  .assistant-new-conversation span,
+  .assistant-history__toggle span,
+  .assistant-history__toggle svg:last-child,
+  .assistant-drawer__header > :deep(.status-badge) {
+    display: none;
   }
   .assistant-history__menu {
     position: fixed;

@@ -5,6 +5,7 @@ import type {
 
 export interface EditablePlanOperation {
   value: AssistantPlanOperationInput;
+  beforeText: string;
   parametersText: string;
   afterText: string;
 }
@@ -49,6 +50,7 @@ export function editableOperations(
 ): EditablePlanOperation[] {
   return operations.map((operation) => ({
     value: cloneOperation(operation),
+    beforeText: prettyJSON(operation.before),
     parametersText: prettyJSON(operation.parameters),
     afterText: prettyJSON(operation.after),
   }));
@@ -67,6 +69,7 @@ export function operationInputs(
   return operations.map((operation) => ({
     ...cloneOperation(operation.value),
     parameters: parseObject(operation.parametersText),
+    before: parseObject(operation.beforeText),
     after: parseObject(operation.afterText),
   }));
 }

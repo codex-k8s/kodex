@@ -29,9 +29,9 @@ describe("AssistantWorkspace layout", () => {
     expect(headerMarkup).toContain(":aria-label=\"$t('common.close')\"");
   });
 
-  it("ограничивает desktop drawer диапазоном D12-A", () => {
-    expect(styles).toMatch(/width:\s*clamp\(520px,\s*42vw,\s*640px\)/);
-    expect(styles).toMatch(/max-width:\s*calc\(100vw\s*-\s*64px\)/);
+  it("даёт desktop drawer достаточно места для истории и agent detail", () => {
+    expect(styles).toMatch(/width:\s*clamp\(720px,\s*62vw,\s*1040px\)/);
+    expect(styles).toMatch(/max-width:\s*calc\(100vw\s*-\s*32px\)/);
   });
 
   it("переключает drawer в mobile bottom sheet", () => {
@@ -62,5 +62,21 @@ describe("AssistantWorkspace layout", () => {
 
     expect(attachmentComposer).toContain(':project-ref="projectRef"');
     expect(attachmentComposer).toContain(':upload="uploadAttachment"');
+  });
+
+  it("держит новый диалог видимым действием, а не пунктом history menu", () => {
+    const header = template.slice(
+      template.indexOf('<header class="assistant-drawer__header">'),
+      template.indexOf("<AssistantPlanEditor"),
+    );
+
+    expect(header).toContain('class="assistant-new-conversation"');
+    expect(header).toContain('{{ $t("assistant.newConversation") }}');
+    expect(header).toContain('class="icon-button assistant-history__toggle"');
+  });
+
+  it("блокирует готовность composer до завершения server-side scan", () => {
+    expect(source).toContain("waitForCleanArtifact(artifact");
+    expect(source).toContain("attachmentState.value.ready");
   });
 });

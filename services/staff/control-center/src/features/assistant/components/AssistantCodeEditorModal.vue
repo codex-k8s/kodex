@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { StreamLanguage } from "@codemirror/language";
+import { json } from "@codemirror/legacy-modes/mode/javascript";
+import { Compartment, EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
+import { basicSetup } from "codemirror";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
-import {
-  tokenizeAssistantCodeLine,
-  validateAssistantObjectJSON,
-} from "@/features/assistant/code-editor";
+import { validateAssistantObjectJSON } from "@/features/assistant/code-editor";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 
 const props = withDefaults(
@@ -19,75 +21,123 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ close: []; save: [value: string] }>();
 const draft = ref(props.modelValue);
-const editor = ref<HTMLTextAreaElement>();
-const highlight = ref<HTMLElement>();
-const gutter = ref<HTMLElement>();
+const editorRoot = ref<HTMLElement>();
+const editableConfiguration = new Compartment();
+const languageConfiguration = new Compartment();
+let view: EditorView | undefined;
 
 watch(
   () => props.modelValue,
-  (value) => (draft.value = value),
+  (value) => {
+    draft.value = value;
+    if (!view || value === view.state.doc.toString()) return;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: value },
+    });
+  },
 );
 
-const lines = computed(() => draft.value.replace(/\r\n?/g, "\n").split("\n"));
-const highlightedLines = computed(() =>
-  lines.value.map((line) => tokenizeAssistantCodeLine(line, props.language)),
-);
 const valid = computed(
   () => !props.objectRequired || validateAssistantObjectJSON(draft.value),
 );
 
-function syncScroll(): void {
-  if (!editor.value) return;
-  if (highlight.value) {
-    highlight.value.scrollLeft = editor.value.scrollLeft;
-    highlight.value.scrollTop = editor.value.scrollTop;
-  }
-  if (gutter.value) gutter.value.scrollTop = editor.value.scrollTop;
+function editableExtension() {
+  return [
+    EditorState.readOnly.of(props.busy),
+    EditorView.editable.of(!props.busy),
+    EditorView.contentAttributes.of({
+      "aria-label": props.title,
+      spellcheck: "false",
+    }),
+  ];
+}
+
+function languageExtension() {
+  return props.language === "json" ? StreamLanguage.define(json) : [];
 }
 
 function save(): void {
   if (valid.value && !props.busy) emit("save", draft.value);
 }
+
+const theme = EditorView.theme({
+  "&": {
+    height: "min(68vh, 720px)",
+    minHeight: "420px",
+    backgroundColor: "var(--surface)",
+    color: "var(--text)",
+    fontSize: "13px",
+  },
+  "&.cm-focused": {
+    outline: "2px solid color-mix(in srgb, var(--accent) 42%, transparent)",
+    outlineOffset: "-2px",
+  },
+  ".cm-scroller": {
+    fontFamily: "var(--font-mono)",
+    lineHeight: "1.6",
+  },
+  ".cm-content": { padding: "14px 0", caretColor: "var(--text)" },
+  ".cm-gutters": {
+    backgroundColor: "var(--panel)",
+    borderRight: "1px solid var(--border)",
+    color: "var(--subtle)",
+  },
+  ".cm-activeLine, .cm-activeLineGutter": {
+    backgroundColor: "color-mix(in srgb, var(--accent-soft) 46%, transparent)",
+  },
+  ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
+    backgroundColor: "color-mix(in srgb, var(--accent) 24%, transparent)",
+  },
+});
+
+onMounted(() => {
+  if (!editorRoot.value) return;
+  view = new EditorView({
+    parent: editorRoot.value,
+    doc: draft.value,
+    extensions: [
+      basicSetup,
+      EditorState.tabSize.of(2),
+      EditorView.lineWrapping,
+      theme,
+      editableConfiguration.of(editableExtension()),
+      languageConfiguration.of(languageExtension()),
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged) draft.value = update.state.doc.toString();
+      }),
+    ],
+  });
+});
+
+watch(
+  () => [props.busy, props.title],
+  () =>
+    view?.dispatch({
+      effects: editableConfiguration.reconfigure(editableExtension()),
+    }),
+);
+watch(
+  () => props.language,
+  () =>
+    view?.dispatch({
+      effects: languageConfiguration.reconfigure(languageExtension()),
+    }),
+);
+onBeforeUnmount(() => {
+  view?.destroy();
+  view = undefined;
+});
 </script>
 
 <template>
   <Teleport to="body">
     <div class="assistant-code-editor-layer">
       <ModalDialog :title="title" size="xl" :busy="busy" @close="emit('close')">
-        <div class="assistant-code-editor">
-          <pre
-            ref="gutter"
-            class="assistant-code-editor__gutter"
-            aria-hidden="true"
-          ><span
-        v-for="(_, index) in lines"
-        :key="index"
-      >{{ index + 1 }}</span></pre>
-          <div class="assistant-code-editor__stack">
-            <pre
-              ref="highlight"
-              class="assistant-code-editor__highlight"
-              aria-hidden="true"
-            ><code><span
-          v-for="(line, lineIndex) in highlightedLines"
-          :key="lineIndex"
-          class="assistant-code-editor__line"
-        ><span
-          v-for="(token, tokenIndex) in line"
-          :key="tokenIndex"
-          :class="`assistant-code-editor__token--${token.tone}`"
-        >{{ token.text }}</span>{{ lineIndex < highlightedLines.length - 1 ? "\n" : "" }}</span></code></pre>
-            <textarea
-              ref="editor"
-              v-model="draft"
-              class="assistant-code-editor__input"
-              :aria-label="title"
-              :aria-invalid="!valid || undefined"
-              spellcheck="false"
-              @scroll="syncScroll"
-            />
-          </div>
-        </div>
+        <div
+          ref="editorRoot"
+          class="assistant-code-editor"
+          :class="{ 'assistant-code-editor--invalid': !valid }"
+        />
         <p v-if="!valid" class="field-error" role="alert">
           {{ $t("assistant.planEditor.jsonError") }}
         </p>
@@ -125,90 +175,20 @@ function save(): void {
   pointer-events: auto;
 }
 .assistant-code-editor {
-  display: grid;
-  min-height: min(64vh, 680px);
-  grid-template-columns: 52px minmax(0, 1fr);
+  min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: var(--panel);
 }
-.assistant-code-editor__gutter,
-.assistant-code-editor__highlight,
-.assistant-code-editor__input {
-  padding-block: 16px;
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre;
-}
-.assistant-code-editor__gutter {
-  display: flex;
-  overflow: hidden;
-  flex-direction: column;
-  padding-inline: 10px;
-  border-right: 1px solid var(--border);
-  color: var(--subtle);
-  text-align: right;
-  user-select: none;
-}
-.assistant-code-editor__stack {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-.assistant-code-editor__highlight,
-.assistant-code-editor__input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  padding-inline: 16px;
-  overflow: auto;
-}
-.assistant-code-editor__highlight {
-  pointer-events: none;
-  color: var(--text);
-}
-.assistant-code-editor__input {
-  z-index: 1;
-  resize: none;
-  outline: 0;
-  background: transparent;
-  caret-color: var(--text);
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-}
-.assistant-code-editor__input::selection {
-  background: color-mix(in srgb, var(--accent) 28%, transparent);
-}
-.assistant-code-editor__input:focus-visible {
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 42%, transparent);
-}
-.assistant-code-editor__token--key {
-  color: var(--accent-strong);
-  font-weight: 600;
-}
-.assistant-code-editor__token--string {
-  color: var(--success);
-}
-.assistant-code-editor__token--number {
-  color: var(--warning);
-}
-.assistant-code-editor__token--keyword {
-  color: var(--danger);
+.assistant-code-editor--invalid {
+  border-color: var(--danger);
 }
 .field-error {
   margin: 10px 0 0;
 }
 @media (max-width: 640px) {
-  .assistant-code-editor {
-    min-height: 62vh;
-    grid-template-columns: 38px minmax(0, 1fr);
+  .assistant-code-editor :deep(.cm-editor) {
+    min-height: 56vh;
   }
 }
 </style>

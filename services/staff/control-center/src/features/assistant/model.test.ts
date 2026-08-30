@@ -45,6 +45,7 @@ describe("assistant plan editor model", () => {
       name: "Корпоративные продажи",
       language: "ru",
     });
+    first.beforeText = JSON.stringify({ lifecycle: "DRAFT" });
 
     expect(operationInputs(editable)).toEqual([
       {
@@ -53,6 +54,7 @@ describe("assistant plan editor model", () => {
           name: "Корпоративные продажи",
           language: "ru",
         },
+        before: { lifecycle: "DRAFT" },
       },
     ]);
   });
@@ -65,6 +67,19 @@ describe("assistant plan editor model", () => {
     first.afterText = "[]";
 
     expect(() => operationInputs(editable)).toThrow("JSON_OBJECT_REQUIRED");
+  });
+
+  it("не скрывает редактируемое исходное состояние операции", () => {
+    const editable = editableOperations([operation()]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    first.beforeText = JSON.stringify({ lifecycle: "ACTIVE", version: 7 });
+
+    expect(operationInputs(editable)[0]?.before).toEqual({
+      lifecycle: "ACTIVE",
+      version: 7,
+    });
   });
 
   it("показывает archive как явное удаление", () => {
