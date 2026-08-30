@@ -855,7 +855,7 @@ if yq -e '
   fail 'local workload contains an unresolved image digest'
 fi
 yq -o=json -I=0 '.' "$output" | jq -s -e '
-  any(.[ ];
+  any(.[];
     .kind == "Deployment" and .metadata.name == "runtime-controller" and
     (.spec.template.metadata.annotations["kodex.dev/controller-image"] |
       test("@sha256:[a-f0-9]{64}$")) and
@@ -999,6 +999,12 @@ yq -e 'select(.kind == "Job" and .metadata.name == "seaweedfs-bucket-bootstrap")
   fail 'SeaweedFS bucket bootstrap is absent'
 yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "control-plane-local-object-storage-egress")' "$output" >/dev/null ||
   fail 'Control Plane local object storage egress is absent'
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  any(.[];
+    .kind == "NetworkPolicy" and .metadata.name == "control-plane-exact-runtime-paths" and
+    ([.spec.ingress[0].from[]? | .podSelector.matchLabels["app.kubernetes.io/name"] // empty] |
+      index("secret-broker") != null and index("interaction-gateway") != null))
+' >/dev/null || fail 'Control Plane internal caller ingress is incomplete'
 
 PROMOTED_PULL_HOST="$promoted_pull_host" \
 ROLE_IMAGE_BUILDER_IMAGE="$role_image_builder_image" \

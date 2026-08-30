@@ -3,6 +3,7 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
@@ -31,7 +32,10 @@ func (owner *Owner) Check(ctx context.Context) error {
 		return err
 	}
 	result, err := owner.client.RuntimeSecrets.CheckRuntimeSecretWorkReadiness(ctx, &controlplanev1.CheckRuntimeSecretWorkReadinessRequest{})
-	if err != nil || !result.GetReady() {
+	if err != nil {
+		return fmt.Errorf("check runtime secret owner readiness: %w", err)
+	}
+	if !result.GetReady() {
 		return errors.New("runtime secret owner is unavailable")
 	}
 	return nil

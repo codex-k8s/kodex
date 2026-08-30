@@ -607,6 +607,12 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
     select(.kind == "ServiceAccount" and .metadata.name == "agent-runner");
     .metadata.namespace == "kodex-runtime")
 ' >/dev/null || fail 'release runtime namespace boundary is invalid'
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  any(.[];
+    .kind == "NetworkPolicy" and .metadata.name == "control-plane-exact-runtime-paths" and
+    ([.spec.ingress[0].from[]? | .podSelector.matchLabels["app.kubernetes.io/name"] // empty] |
+      index("secret-broker") != null and index("interaction-gateway") != null))
+' >/dev/null || fail 'release Control Plane internal caller ingress is incomplete'
 
 allowed_images="$temporary_directory/allowed-images.txt"
 jq -r '.images[].pull_ref,.external_images[].pull_ref' "$lock_file" >"$allowed_images"

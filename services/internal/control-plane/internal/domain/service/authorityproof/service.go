@@ -338,14 +338,14 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 			WorkloadID: producer.CallerWorkloadID, Revision: grant.Revision,
 			IssuedAt: time.Unix(grant.IssuedAt, 0), ExpiresAt: time.Unix(grant.ExpiresAt, 0),
 		}); err != nil {
-			return ResolveResult{}, err
+			return ResolveResult{}, fmt.Errorf("accept worker grant: %w", err)
 		}
 		principal.ExternalActorID, principal.ExternalTenantID = "kodex-system-subject", "kodex-installation"
 		callerCredentialRevision = grant.Revision
 	}
 	resolved, err := service.owner.ResolveProofAuthority(ctx, principal)
 	if err != nil {
-		return ResolveResult{}, err
+		return ResolveResult{}, fmt.Errorf("resolve proof authority: %w", err)
 	}
 	if actorReference == "" {
 		actorReference = resolved.ActorID
@@ -363,7 +363,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	}
 	revision, err := service.owner.NextAuthorityProofRevision(ctx)
 	if err != nil {
-		return ResolveResult{}, err
+		return ResolveResult{}, fmt.Errorf("advance authority proof revision: %w", err)
 	}
 	now := service.now().UTC().Truncate(time.Second)
 	expiresAt := now.Add(time.Duration(producer.AuthorityProofMaxAgeSeconds) * time.Second)
