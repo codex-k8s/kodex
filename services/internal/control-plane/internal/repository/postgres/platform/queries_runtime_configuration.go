@@ -53,6 +53,8 @@ var (
 	queryRuntimeConfigurationResolveBootstrapImage string
 	//go:embed sql/runtime_configuration__materialize_system_image.sql
 	queryRuntimeConfigurationMaterializeSystemImage string
+	//go:embed sql/runtime_configuration__activate_system_image.sql
+	queryRuntimeConfigurationActivateSystemImage string
 	//go:embed sql/runtime_configuration__activate_environment.sql
 	queryRuntimeConfigurationActivateEnvironment string
 	//go:embed sql/runtime_configuration__select_provider_account.sql

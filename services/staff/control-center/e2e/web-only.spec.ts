@@ -86,10 +86,24 @@ async function openKodex(page: Page, newConversation = false): Promise<void> {
   const dialog = page.getByRole("dialog", { name: "Kodex" });
   await expect(dialog).toBeVisible();
   if (!newConversation) return;
-  await dialog.getByRole("button", { name: "История диалогов" }).click();
+  const creation = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/v1/assistant-conversations",
+  );
   await dialog
     .getByRole("button", { name: "Новый диалог", exact: true })
     .click();
+  const created = await creation;
+  expect(created.status(), await created.text()).toBe(201);
+  const conversation = (await created.json()) as { ref?: string };
+  expect(conversation.ref).toMatch(/^aconv_[A-Za-z0-9_-]+$/);
+  await expect(dialog).toHaveAttribute(
+    "data-conversation-ref",
+    conversation.ref ?? "",
+  );
+  await expect(dialog).toHaveAttribute("aria-busy", "false");
+  await expect(dialog.locator("article.assistant-message")).toHaveCount(0);
 }
 
 async function requestLatestKodexPlan(
@@ -287,7 +301,8 @@ async function exerciseAttachmentComposer(
         name: `Повторить загрузку файла «${failedName}»`,
       })
       .click();
-    expect((await retryResponse).status()).toBe(201);
+    const retriedUpload = await retryResponse;
+    expect(retriedUpload.status(), await retriedUpload.text()).toBe(201);
     await expect(
       failedItem.locator(".attachment-composer__ready"),
     ).toBeVisible();
@@ -488,12 +503,17 @@ test.describe("web-only fresh installation", () => {
     await waitForConnected(page);
     await expectRunState(page, "Завершён");
     expect(await readRunUsage(page, firstRunRef)).toEqual(usageBeforeReload);
-    await expect(
-      page.getByRole("heading", { name: "Результаты и файлы" }),
-    ).toBeVisible();
-
-    const artifact = page
-      .locator(".artifact-row")
+    await expect(page.getByLabel("Контекст узла")).toContainText(
+      "lead-plan.txt",
+    );
+    await page
+      .getByRole("button", { name: "Ход работы", exact: true })
+      .first()
+      .click();
+    const activity = page.getByRole("dialog", { name: "Ход работы" });
+    await expect(activity).toBeVisible();
+    const artifact = activity
+      .locator(".run-file-event")
       .filter({ hasText: "lead-plan.txt" })
       .first();
     await expect(artifact).toBeVisible();
@@ -534,7 +554,7 @@ test.describe("web-only fresh installation", () => {
           );
         }),
         page.waitForEvent("download"),
-        artifact.click(),
+        artifact.getByRole("button", { name: "Скачать" }).click(),
       ]);
       expect(artifactContent.status(), await artifactContent.text()).toBe(200);
       download = browserDownload;
@@ -557,18 +577,16 @@ test.describe("web-only fresh installation", () => {
     }
     expect(download.suggestedFilename()).toBe("lead-plan.txt");
 
-    const continuation = page.getByRole("heading", {
-      name: "Продолжить сессию",
-    });
+    const continuation = activity.locator("form.run-continuation");
     await expect(continuation).toBeVisible();
     const initialSessionRef = await readRunSessionRef(page, firstRunRef);
     const continuationAttachment = await exerciseAttachmentComposer(
       page,
-      page.locator(".run-continuation .attachment-composer"),
+      continuation.locator(".attachment-composer"),
       `/api/v1/projects/${projectRef}/artifacts`,
       "session-continuation",
     );
-    await page
+    await continuation
       .getByLabel("Дополнительное задание")
       .fill(
         [
@@ -586,7 +604,9 @@ test.describe("web-only fresh installation", () => {
           `/api/v1/sessions/${encodeURIComponent(initialSessionRef)}/turns`
       );
     });
-    await page.getByRole("button", { name: "Отправить", exact: true }).click();
+    await continuation
+      .getByRole("button", { name: "Отправить", exact: true })
+      .click();
     const continuationResponse = await continuationResponsePromise;
     expect(
       continuationResponse.status(),
@@ -641,9 +661,7 @@ test.describe("web-only fresh installation", () => {
     );
     await waitForAgentVersionReadback(page, coordinatorRef);
     await page.getByRole("tab", { name: "Инструкции" }).click();
-    const instructionsPanel = page.locator("article.panel").filter({
-      has: page.getByRole("heading", { name: "Инструкции", exact: true }),
-    });
+    const instructionsPanel = page.locator("#agent-panel-instructions");
     const history = instructionsPanel.locator(".instruction-history");
     await expect.poll(() => history.locator("li").count()).toBeGreaterThan(0);
     const initialVersionCount = await history.locator("li").count();
@@ -661,7 +679,8 @@ test.describe("web-only fresh installation", () => {
     expect(originalInstructions).not.toBe("");
     const updatedInstructions = `${originalInstructions}\nВторая опубликованная версия для проверки контролируемого отката.`;
     const instructionsEditor = instructionsPanel.getByRole("textbox", {
-      name: "Markdown-шаблон инструкций",
+      name: "Инструкции",
+      exact: true,
     });
     await instructionsEditor.fill(updatedInstructions);
     const saveResponse = page.waitForResponse(
@@ -670,7 +689,9 @@ test.describe("web-only fresh installation", () => {
         new URL(response.url()).pathname ===
           `/api/v1/agents/${coordinatorRef}/instruction-drafts`,
     );
-    await instructionsPanel.getByRole("button", { name: "Сохранить" }).click();
+    await instructionsPanel
+      .getByRole("button", { name: "Сохранить черновик", exact: true })
+      .click();
     const savedDraft = await saveResponse;
     expect(
       savedDraft.status(),
@@ -876,11 +897,12 @@ test.describe("web-only fresh installation", () => {
       await page.getByRole("button", { name: "Образ и инструменты" }).click();
       await page
         .getByRole("button", {
-          name: "Выберите собранный и promoted образ",
+          name: "Exact image revision и digest",
+          exact: true,
         })
         .click();
       const imagePicker = page.getByRole("dialog", {
-        name: "Найти promoted образ",
+        name: "Exact image revision и digest",
       });
       const imageOption = imagePicker.getByRole("option").first();
       await expect(imageOption).toBeVisible();
@@ -1266,7 +1288,9 @@ test.describe("web-only fresh installation", () => {
       `/projects/${projectRef}/runs/new?targetType=AGENT&targetRef=${encodeURIComponent(coordinatorRef)}`,
     );
     await expect(page.locator(".project-context")).toContainText(projectName);
-    await expect(page.getByLabel("Цель")).toHaveValue(coordinatorRef);
+    await expect(
+      page.getByRole("button", { name: "Цель", exact: true }),
+    ).toContainText(coordinatorName);
 
     const newRunAttachment = await exerciseAttachmentComposer(
       page,
@@ -1276,9 +1300,8 @@ test.describe("web-only fresh installation", () => {
     );
 
     const chooseFiles = page
-      .locator("#new-run-files-title")
-      .locator("xpath=ancestor::section[1]")
-      .getByRole("button");
+      .getByRole("region", { name: /Входные файлы/ })
+      .getByRole("button", { name: "Выбрать файлы", exact: true });
     await expect(chooseFiles).toBeEnabled();
     await chooseFiles.click();
     const filePicker = page.getByRole("dialog", {
@@ -1460,7 +1483,15 @@ test.describe("web-only fresh installation", () => {
       const dialog = page.getByRole("dialog", { name: "Новая автоматизация" });
       await dialog.getByLabel("Название").fill(automationName);
       await dialog.getByLabel("Тип цели").selectOption("AGENT");
-      await dialog.getByLabel("Цель").selectOption({ label: analystName });
+      await dialog.getByRole("button", { name: "Цель", exact: true }).click();
+      const targetPicker = dialog.getByRole("dialog", {
+        name: "Цель",
+        exact: true,
+      });
+      await targetPicker.getByRole("combobox").fill(analystName);
+      await targetPicker
+        .getByRole("option", { name: new RegExp(analystName) })
+        .click();
       const triggerAt = new Date(Date.now() + 75_000);
       const saratovHour = (triggerAt.getUTCHours() + 4) % 24;
       const timeOfDay = `${String(saratovHour).padStart(2, "0")}:${String(
@@ -1649,11 +1680,15 @@ test.describe("web-only fresh installation", () => {
       `/projects/${projectRef}/runs/new?targetType=AGENT&targetRef=${encodeURIComponent(analystRef)}`,
     );
     await expect(page.getByLabel("Задание")).toBeVisible();
-    const chooseFiles = page
-      .locator("#new-run-files-title")
-      .locator("xpath=ancestor::section[1]")
-      .getByRole("button");
-    await expect(chooseFiles).toBeDisabled();
+    const filesSection = page.getByRole("region", {
+      name: /Входные файлы/,
+    });
+    await expect(
+      filesSection.getByRole("button", {
+        name: "Выбрать файлы",
+        exact: true,
+      }),
+    ).toBeDisabled();
     await expect(page.locator("#main-content")).toContainText(
       "Сначала выдайте всем выбранным ИИ-сотрудникам возможность «Файлы»",
     );
@@ -2830,15 +2865,33 @@ async function operateArtifactLifecycle(
   const actionLabel = action === "DELETE" ? "В корзину" : "Восстановить";
   const dialogTitle =
     action === "DELETE" ? "Переместить файл в корзину?" : "Восстановить файл?";
+  const artifactItem = page
+    .locator(`[data-artifact-ref="${artifactRef}"]`)
+    .first();
+  await expect(artifactItem).toBeVisible();
+  const impact =
+    action === "DELETE"
+      ? page.waitForResponse(
+          (candidate) =>
+            candidate.request().method() === "GET" &&
+            new URL(candidate.url()).pathname ===
+              `/api/v1/artifacts/${artifactRef}/impact`,
+        )
+      : undefined;
+  await artifactItem
+    .getByRole("button", { name: `${actionLabel}: ${fileName}`, exact: true })
+    .click();
+  if (impact) {
+    const impactResponse = await impact;
+    expect(impactResponse.status(), await impactResponse.text()).toBe(200);
+  }
+  const dialog = page.getByRole("dialog", { name: dialogTitle });
+  await expect(dialog).toBeVisible();
   const response = page.waitForResponse(
     (candidate) =>
       candidate.request().method() === method &&
       new URL(candidate.url()).pathname === path,
   );
-  await page
-    .getByRole("button", { name: `${actionLabel}: ${fileName}`, exact: true })
-    .click();
-  const dialog = page.getByRole("dialog", { name: dialogTitle });
   await dialog.getByRole("button", { name: actionLabel, exact: true }).click();
   const mutation = await response;
   expect(mutation.status(), await mutation.text()).toBe(200);

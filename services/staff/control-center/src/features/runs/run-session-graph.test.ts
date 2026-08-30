@@ -134,4 +134,17 @@ describe("run session graph", () => {
       resolveRunSessionSelection([root, agent], ownership, root.ref, tool.ref),
     ).toBe(agent.ref);
   });
+
+  it("после reload выбирает завершенную Session с результатами", () => {
+    const root = node("node_root", "ROOT_PROCESS");
+    root.state = "SUCCEEDED";
+    const agent = node("node_agent", "AGENT_EXECUTION", root.ref);
+    agent.state = "SUCCEEDED";
+    agent.artifactRefs = ["art_result"];
+    const ownership = indexRunSessionOwnership([root, agent]);
+
+    expect(resolveRunSessionSelection([root, agent], ownership)).toBe(
+      agent.ref,
+    );
+  });
 });

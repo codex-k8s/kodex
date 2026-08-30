@@ -121,7 +121,7 @@ func main() {
 		worker("image-promotion", "control-plane.image-promotion", controlplaneclient.ImagePromotionOperations()),
 		worker("secret-broker", "control-plane.secret-broker", controlplaneclient.SecretBrokerOperations()),
 	}
-	value := document{Version: 1, PolicyRevision: 39, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 40, Policy: policy{
 		TrustDomain: "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
 	}}
@@ -174,6 +174,7 @@ func main() {
 
 func permissionForOperation(operationID string) string {
 	permissions := map[string]string{
+		"platform.command.organization-artifacts.upload":   "platform.command.artifacts.upload",
 		"platform.query.runtime-secrets.list":              "secret.view",
 		"platform.query.runtime-secrets.get":               "secret.view",
 		"platform.command.runtime-secrets.create":          "secret.create",

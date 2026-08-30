@@ -360,7 +360,7 @@ func TestRevocationStoreFailureRejectsBrowserSession(t *testing.T) {
 	response := httptest.NewRecorder()
 	called := false
 	security.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })).ServeHTTP(response, request)
-	if called || response.Code != http.StatusUnauthorized || revocations.checked != claims.SessionID {
+	if called || response.Code != http.StatusServiceUnavailable || revocations.checked != claims.SessionID {
 		t.Fatalf("request passed unavailable revocation store: called=%t status=%d", called, response.Code)
 	}
 }

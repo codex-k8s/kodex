@@ -104,6 +104,7 @@ service PlatformCommandService {
   rpc RetryRun(RetryRunRequest) returns (RetryRunResponse);
   rpc ResolveOwnerGate(ResolveOwnerGateRequest) returns (ResolveOwnerGateResponse);
   rpc UploadArtifact(stream UploadArtifactRequest) returns (UploadArtifactResponse);
+  rpc UploadOrganizationArtifact(stream UploadArtifactRequest) returns (UploadArtifactResponse);
   rpc DownloadArtifact(DownloadArtifactRequest) returns (stream DownloadArtifactResponse);
   rpc ChangeArtifactBinding(ChangeArtifactBindingRequest) returns (ChangeArtifactBindingResponse);
   rpc DeleteArtifact(DeleteArtifactRequest) returns (DeleteArtifactResponse);

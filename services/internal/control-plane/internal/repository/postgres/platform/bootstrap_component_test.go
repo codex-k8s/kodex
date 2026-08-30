@@ -19,6 +19,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -323,6 +324,18 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, createdProject.Project.Ref,
 		"runtime-configuration-agent-create", "Runtime configuration specialist")
+	roleImagePrincipal, err := repository.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatalf("resolve role image principal: %v", err)
+	}
+	recipes, _, err := repository.List(ctx, roleImagePrincipal, roleimagerepo.Filter{
+		ProjectRef: createdProject.Project.Ref,
+		Page:       query.Page{Size: 20},
+	})
+	if err != nil || len(recipes) != 1 || recipes[0].ActiveImageArtifactRef == "" ||
+		recipes[0].PromotedImageReference != repository.roleImages.DefaultImageReference {
+		t.Fatalf("bootstrap role image is not active and promoted: recipes=%#v err=%v", recipes, err)
+	}
 	current, err := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
 	if err != nil {
 		t.Fatalf("read initial runtime configuration: %v", err)

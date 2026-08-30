@@ -51,6 +51,32 @@ func TestReceiveArtifactUploadRejectsDigestMismatchAndOversize(t *testing.T) {
 	}
 }
 
+func TestValidateArtifactUploadScope(t *testing.T) {
+	t.Parallel()
+	project := &controlplanev1.UploadArtifactMetadata{ProjectRef: "prj_test", RunRef: "run_test"}
+	organization := &controlplanev1.UploadArtifactMetadata{}
+	if err := validateArtifactUploadScope(project, true); err != nil {
+		t.Fatalf("project upload scope rejected: %v", err)
+	}
+	if err := validateArtifactUploadScope(organization, false); err != nil {
+		t.Fatalf("organization upload scope rejected: %v", err)
+	}
+	for name, test := range map[string]struct {
+		metadata        *controlplanev1.UploadArtifactMetadata
+		projectRequired bool
+	}{
+		"project without project":   {metadata: organization, projectRequired: true},
+		"organization with project": {metadata: project, projectRequired: false},
+		"organization with run":     {metadata: &controlplanev1.UploadArtifactMetadata{RunRef: "run_test"}, projectRequired: false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateArtifactUploadScope(test.metadata, test.projectRequired); status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("status = %v, err=%v", status.Code(err), err)
+			}
+		})
+	}
+}
+
 type generatedArtifactUploadStream struct {
 	size, sent int64
 	value      byte

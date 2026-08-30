@@ -2095,6 +2095,7 @@ const (
 	PlatformCommandService_RetryRun_FullMethodName                                 = "/controlplane.v1.PlatformCommandService/RetryRun"
 	PlatformCommandService_ResolveOwnerGate_FullMethodName                         = "/controlplane.v1.PlatformCommandService/ResolveOwnerGate"
 	PlatformCommandService_UploadArtifact_FullMethodName                           = "/controlplane.v1.PlatformCommandService/UploadArtifact"
+	PlatformCommandService_UploadOrganizationArtifact_FullMethodName               = "/controlplane.v1.PlatformCommandService/UploadOrganizationArtifact"
 	PlatformCommandService_DownloadArtifact_FullMethodName                         = "/controlplane.v1.PlatformCommandService/DownloadArtifact"
 	PlatformCommandService_ChangeArtifactBinding_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ChangeArtifactBinding"
 	PlatformCommandService_DeleteArtifact_FullMethodName                           = "/controlplane.v1.PlatformCommandService/DeleteArtifact"
@@ -2179,6 +2180,7 @@ type PlatformCommandServiceClient interface {
 	RetryRun(ctx context.Context, in *RetryRunRequest, opts ...grpc.CallOption) (*RetryRunResponse, error)
 	ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error)
 	UploadArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error)
+	UploadOrganizationArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error)
 	DownloadArtifact(ctx context.Context, in *DownloadArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactResponse], error)
 	ChangeArtifactBinding(ctx context.Context, in *ChangeArtifactBindingRequest, opts ...grpc.CallOption) (*ChangeArtifactBindingResponse, error)
 	DeleteArtifact(ctx context.Context, in *DeleteArtifactRequest, opts ...grpc.CallOption) (*DeleteArtifactResponse, error)
@@ -2555,9 +2557,22 @@ func (c *platformCommandServiceClient) UploadArtifact(ctx context.Context, opts 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PlatformCommandService_UploadArtifactClient = grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse]
 
+func (c *platformCommandServiceClient) UploadOrganizationArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[1], PlatformCommandService_UploadOrganizationArtifact_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[UploadArtifactRequest, UploadArtifactResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PlatformCommandService_UploadOrganizationArtifactClient = grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse]
+
 func (c *platformCommandServiceClient) DownloadArtifact(ctx context.Context, in *DownloadArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[1], PlatformCommandService_DownloadArtifact_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[2], PlatformCommandService_DownloadArtifact_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3033,6 +3048,7 @@ type PlatformCommandServiceServer interface {
 	RetryRun(context.Context, *RetryRunRequest) (*RetryRunResponse, error)
 	ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error)
 	UploadArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error
+	UploadOrganizationArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error
 	DownloadArtifact(*DownloadArtifactRequest, grpc.ServerStreamingServer[DownloadArtifactResponse]) error
 	ChangeArtifactBinding(context.Context, *ChangeArtifactBindingRequest) (*ChangeArtifactBindingResponse, error)
 	DeleteArtifact(context.Context, *DeleteArtifactRequest) (*DeleteArtifactResponse, error)
@@ -3181,6 +3197,9 @@ func (UnimplementedPlatformCommandServiceServer) ResolveOwnerGate(context.Contex
 }
 func (UnimplementedPlatformCommandServiceServer) UploadArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error {
 	return status.Error(codes.Unimplemented, "method UploadArtifact not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) UploadOrganizationArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error {
+	return status.Error(codes.Unimplemented, "method UploadOrganizationArtifact not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) DownloadArtifact(*DownloadArtifactRequest, grpc.ServerStreamingServer[DownloadArtifactResponse]) error {
 	return status.Error(codes.Unimplemented, "method DownloadArtifact not implemented")
@@ -3897,6 +3916,13 @@ func _PlatformCommandService_UploadArtifact_Handler(srv interface{}, stream grpc
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PlatformCommandService_UploadArtifactServer = grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]
+
+func _PlatformCommandService_UploadOrganizationArtifact_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(PlatformCommandServiceServer).UploadOrganizationArtifact(&grpc.GenericServerStream[UploadArtifactRequest, UploadArtifactResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PlatformCommandService_UploadOrganizationArtifactServer = grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]
 
 func _PlatformCommandService_DownloadArtifact_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(DownloadArtifactRequest)
@@ -4969,6 +4995,11 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "UploadArtifact",
 			Handler:       _PlatformCommandService_UploadArtifact_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "UploadOrganizationArtifact",
+			Handler:       _PlatformCommandService_UploadOrganizationArtifact_Handler,
 			ClientStreams: true,
 		},
 		{

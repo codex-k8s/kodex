@@ -897,8 +897,7 @@ async function confirmBulkOperation(): Promise<void> {
         if (operation.action === "DELETE") {
           if (!impact) throw new Error("Artifact delete impact is unavailable");
           await deleteArtifactItem(artifact, impact);
-        }
-        else if (operation.action === "RESTORE")
+        } else if (operation.action === "RESTORE")
           await restoreArtifactItem(artifact);
         else {
           if (!impact) throw new Error("Artifact purge impact is unavailable");
@@ -934,8 +933,7 @@ async function confirmLifecycleOperation(): Promise<void> {
       replaceArtifact(
         await deleteArtifactItem(operation.artifact, operation.state.impact),
       );
-    }
-    else if (operation.action === "RESTORE")
+    } else if (operation.action === "RESTORE")
       replaceArtifact(await restoreArtifactItem(operation.artifact));
     else {
       if (!operation.state.impact)
@@ -1400,6 +1398,7 @@ onBeforeUnmount(() => {
               :key="artifact.ref"
               class="file-collection-item file-collection-item--tile"
               role="listitem"
+              :data-artifact-ref="artifact.ref"
             >
               <label
                 class="file-collection-item__select"
@@ -1541,6 +1540,7 @@ onBeforeUnmount(() => {
                 'file-collection-item--selectable': true,
               }"
               role="listitem"
+              :data-artifact-ref="artifact.ref"
             >
               <label
                 class="file-collection-item__select"

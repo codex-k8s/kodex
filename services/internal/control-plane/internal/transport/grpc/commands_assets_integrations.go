@@ -60,7 +60,21 @@ func (server *Server) FinalizeAttachmentSet(ctx context.Context, request *contro
 }
 
 func (server *Server) UploadArtifact(stream controlplanev1.PlatformCommandService_UploadArtifactServer) error {
-	p, err := principal(stream.Context(), controlplanev1.PlatformCommandService_UploadArtifact_FullMethodName)
+	return server.uploadArtifact(stream, controlplanev1.PlatformCommandService_UploadArtifact_FullMethodName, true)
+}
+
+func (server *Server) UploadOrganizationArtifact(stream controlplanev1.PlatformCommandService_UploadOrganizationArtifactServer) error {
+	return server.uploadArtifact(stream, controlplanev1.PlatformCommandService_UploadOrganizationArtifact_FullMethodName, false)
+}
+
+type artifactUploadServer interface {
+	artifactUploadStream
+	Context() context.Context
+	SendAndClose(*controlplanev1.UploadArtifactResponse) error
+}
+
+func (server *Server) uploadArtifact(stream artifactUploadServer, fullMethod string, projectRequired bool) error {
+	p, err := principal(stream.Context(), fullMethod)
 	if err != nil {
 		return err
 	}
@@ -70,6 +84,9 @@ func (server *Server) UploadArtifact(stream controlplanev1.PlatformCommandServic
 	}
 	defer upload.close()
 	metadata := upload.metadata
+	if err := validateArtifactUploadScope(metadata, projectRequired); err != nil {
+		return err
+	}
 	artifact, err := server.service.UploadArtifact(stream.Context(), p, mutation(metadata.GetMutation()), repository.ArtifactUpload{
 		ProjectRef: metadata.GetProjectRef(), RunRef: metadata.GetRunRef(), FileName: metadata.GetFileName(),
 		MediaType: metadata.GetMediaType(), SizeBytes: metadata.GetSizeBytes(), Digest: "sha256:" + upload.sha256,
@@ -79,6 +96,14 @@ func (server *Server) UploadArtifact(stream controlplanev1.PlatformCommandServic
 		return transportError(err)
 	}
 	return stream.SendAndClose(&controlplanev1.UploadArtifactResponse{Artifact: castArtifact(artifact)})
+}
+
+func validateArtifactUploadScope(metadata *controlplanev1.UploadArtifactMetadata, projectRequired bool) error {
+	if metadata == nil || projectRequired && metadata.GetProjectRef() == "" ||
+		!projectRequired && (metadata.GetProjectRef() != "" || metadata.GetRunRef() != "") {
+		return status.Error(codes.InvalidArgument, "artifact upload scope is invalid")
+	}
+	return nil
 }
 
 type artifactUploadStream interface {

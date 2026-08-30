@@ -108,6 +108,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.runs.retry":                              controlplanev1.PlatformCommandService_RetryRun_FullMethodName,
 		"platform.command.owner-gates.resolve":                     controlplanev1.PlatformCommandService_ResolveOwnerGate_FullMethodName,
 		"platform.command.artifacts.upload":                        controlplanev1.PlatformCommandService_UploadArtifact_FullMethodName,
+		"platform.command.organization-artifacts.upload":           controlplanev1.PlatformCommandService_UploadOrganizationArtifact_FullMethodName,
 		"platform.command.attachment-sets.create-draft":            controlplanev1.PlatformCommandService_CreateAttachmentSetDraft_FullMethodName,
 		"platform.command.attachment-sets.add-items":               controlplanev1.PlatformCommandService_AddAttachmentSetItems_FullMethodName,
 		"platform.command.attachment-sets.remove-items":            controlplanev1.PlatformCommandService_RemoveAttachmentSetItems_FullMethodName,

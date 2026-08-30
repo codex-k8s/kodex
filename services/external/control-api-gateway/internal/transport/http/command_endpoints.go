@@ -716,6 +716,11 @@ type artifactUploadRequest struct {
 	idempotencyKey string
 }
 
+type artifactUploadClient interface {
+	Send(*controlplanev1.UploadArtifactRequest) error
+	CloseAndRecv() (*controlplanev1.UploadArtifactResponse, error)
+}
+
 func (server *Server) uploadArtifact(w http.ResponseWriter, r *http.Request, upload artifactUploadRequest) {
 	if r.ContentLength < 0 {
 		writeLocalProblem(w, http.StatusLengthRequired, "CONTENT_LENGTH_REQUIRED", false)
@@ -729,7 +734,13 @@ func (server *Server) uploadArtifact(w http.ResponseWriter, r *http.Request, upl
 	if !ok {
 		return
 	}
-	stream, err := server.control.Command.UploadArtifact(r.Context())
+	var stream artifactUploadClient
+	var err error
+	if upload.projectRef == "" {
+		stream, err = server.control.Command.UploadOrganizationArtifact(r.Context())
+	} else {
+		stream, err = server.control.Command.UploadArtifact(r.Context())
+	}
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

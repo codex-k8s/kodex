@@ -52,6 +52,7 @@ const props = defineProps<{
   disabled?: boolean;
   debounceMs?: number;
   selected?: S;
+  triggerLabel?: string;
   loadPage?: (
     query: string,
     cursor: string | undefined,
@@ -134,7 +135,7 @@ const copy = computed<AsyncEntityPickerLabels>(
     },
 );
 const popoverLabel = computed(
-  () => props.searchPlaceholder ?? props.placeholder ?? copy.value.label,
+  () => props.triggerLabel ?? props.placeholder ?? copy.value.label,
 );
 const selectedIds = computed<readonly string[]>(() => {
   if (Array.isArray(props.modelValue))
@@ -388,6 +389,7 @@ function handlePopoverOpen(value: boolean): void {
           v-bind="attrs"
           class="async-picker__trigger"
           type="button"
+          :aria-label="popoverLabel"
           :disabled="disabled"
           @click="toggle"
           @keydown.down.prevent="handlePopoverOpen(true)"

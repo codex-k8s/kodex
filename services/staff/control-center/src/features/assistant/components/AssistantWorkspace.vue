@@ -335,6 +335,8 @@ onBeforeUnmount(() => {
       role="dialog"
       aria-modal="true"
       :aria-label="$t('assistant.title')"
+      :aria-busy="store.busy"
+      :data-conversation-ref="store.selectedConversation?.ref"
       tabindex="-1"
       @keydown="handleKeydown"
     >

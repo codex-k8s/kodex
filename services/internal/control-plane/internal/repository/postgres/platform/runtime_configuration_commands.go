@@ -145,6 +145,20 @@ func (repository *Repository) ensureBootstrapRuntimeEnvironmentImage(
 	if err != nil {
 		return "", entity.RuntimeEnvironmentImage{}, nil, errs.ErrUnavailable
 	}
+	var activatedRecipeID string
+	err = tx.QueryRow(ctx, queryRuntimeConfigurationActivateSystemImage, pgx.StrictNamedArgs{
+		"organization_id":   organizationID,
+		"project_id":        projectID,
+		"recipe_ref":        image.image.RecipeRef,
+		"artifact_id":       image.id,
+		"artifact_ref":      image.image.ArtifactRef,
+		"recipe_generation": image.image.RecipeGeneration,
+		"image_reference":   image.image.Reference,
+		"manifest_digest":   image.image.Digest,
+	}).Scan(&activatedRecipeID)
+	if err != nil || activatedRecipeID == "" {
+		return "", entity.RuntimeEnvironmentImage{}, nil, errs.ErrUnavailable
+	}
 	return image.id, image.image, emptyTools, nil
 }
 

@@ -59,7 +59,15 @@ export function resolveRunSessionSelection(
   if (requestedSessionRef && visibleRefs.has(requestedSessionRef))
     return requestedSessionRef;
   if (currentRef && visibleRefs.has(currentRef)) return currentRef;
-  return nodes.find((node) => node.state === "RUNNING")?.ref ?? nodes[0]?.ref;
+  return (
+    nodes.find((node) => node.state === "RUNNING")?.ref ??
+    nodes.find(
+      (node) =>
+        node.state === "SUCCEEDED" && (node.artifactRefs?.length ?? 0) > 0,
+    )?.ref ??
+    nodes.find((node) => node.state === "SUCCEEDED")?.ref ??
+    nodes[0]?.ref
+  );
 }
 
 function sessionEdge(edge: RunEdge, nodeRefs: ReadonlySet<string>): boolean {

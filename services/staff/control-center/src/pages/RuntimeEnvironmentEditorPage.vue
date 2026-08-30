@@ -797,6 +797,7 @@ onMounted(() => void initialize());
                 v-model="input.imageArtifactRef"
                 :selected="selectedImage"
                 :load-page="loadImagePage"
+                :trigger-label="$t('runtime.exactImage')"
                 :placeholder="$t('runtime.choosePromotedImage')"
                 :search-placeholder="$t('runtime.searchPromotedImage')"
                 @select="selectImage"

@@ -246,6 +246,7 @@ describe("AsyncEntityPicker", () => {
         description: "rev 4 · готово",
       },
       loadPage: vi.fn(),
+      triggerLabel: "Рабочее окружение",
       placeholder: "Выберите окружение",
       searchPlaceholder: "Поиск окружений",
     });
@@ -269,5 +270,6 @@ describe("AsyncEntityPicker", () => {
     expect(html).toContain("rev 4 · готово");
     expect(html).not.toContain("renv_internal_ref");
     expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).toContain('aria-label="Рабочее окружение"');
   });
 });

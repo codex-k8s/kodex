@@ -206,6 +206,7 @@ function submit(): void {
               v-model="form.targetRef"
               :load-page="targetLoader"
               :selected="selectedTargetOption"
+              :trigger-label="$t('common.target')"
               :placeholder="$t('automations.chooseTarget')"
               :search-placeholder="$t('automations.chooseTarget')"
               @select="selectTarget"

@@ -495,6 +495,7 @@ watch(
                   v-model="form.targetRef"
                   :load-page="targetLoader"
                   :selected="selectedTargetOption"
+                  :trigger-label="$t('common.target')"
                   :placeholder="$t('runs.chooseTarget')"
                   :search-placeholder="$t('runs.chooseTarget')"
                   @select="selectTarget"

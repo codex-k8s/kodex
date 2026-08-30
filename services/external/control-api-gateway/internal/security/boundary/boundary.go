@@ -27,13 +27,14 @@ const (
 )
 
 var (
-	ErrRateLimited                 = errors.New("owner rate limit exceeded")
-	ErrUnauthenticated             = errors.New("owner credential cannot establish session")
-	ErrSessionPurposeInvalid       = errors.New("owner session purpose is invalid")
-	ErrFreshAuthenticationRequired = errors.New("fresh owner authentication is required")
-	ErrElevationRequired           = errors.New("runtime secret reveal elevation is required")
-	ErrElevationConsumed           = errors.New("runtime secret reveal elevation is already consumed")
-	ErrElevationUnavailable        = errors.New("runtime secret reveal elevation store is unavailable")
+	ErrRateLimited                  = errors.New("owner rate limit exceeded")
+	ErrUnauthenticated              = errors.New("owner credential cannot establish session")
+	ErrSessionPurposeInvalid        = errors.New("owner session purpose is invalid")
+	ErrFreshAuthenticationRequired  = errors.New("fresh owner authentication is required")
+	ErrElevationRequired            = errors.New("runtime secret reveal elevation is required")
+	ErrElevationConsumed            = errors.New("runtime secret reveal elevation is already consumed")
+	ErrElevationUnavailable         = errors.New("runtime secret reveal elevation store is unavailable")
+	ErrSessionValidationUnavailable = errors.New("owner session validation store is unavailable")
 )
 
 type (
@@ -482,7 +483,10 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 		return Identity{}, session.Claims{}, time.Time{}, err
 	}
 	revoked, err := boundary.revocations.Revoked(request.Context(), claims.SessionID)
-	if err != nil || revoked {
+	if err != nil {
+		return Identity{}, session.Claims{}, time.Time{}, ErrSessionValidationUnavailable
+	}
+	if revoked {
 		return Identity{}, session.Claims{}, time.Time{}, errors.New("owner session is revoked")
 	}
 	principal, err := boundary.verifier.VerifyToken(request.Context(), claims.Bearer)
@@ -531,7 +535,7 @@ func SetOwnerSessionCookies(writer http.ResponseWriter, claims session.Claims, e
 }
 
 func authenticationProblem(err error) (int, string, bool) {
-	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) {
+	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) || errors.Is(err, ErrSessionValidationUnavailable) {
 		return http.StatusServiceUnavailable, "UNAVAILABLE", true
 	}
 	return http.StatusUnauthorized, "UNAUTHENTICATED", false

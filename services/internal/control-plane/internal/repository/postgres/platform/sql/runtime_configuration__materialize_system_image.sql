@@ -110,14 +110,6 @@ WITH current_agent AS (
     UNION ALL
     SELECT * FROM existing_artifact
     LIMIT 1
-), activated AS (
-    UPDATE control_plane.role_image_recipes active_recipe
-    SET active_image_artifact_id = artifact.id,
-        updated_at = clock_timestamp()
-    FROM artifact
-    WHERE active_recipe.id = artifact.recipe_id
-      AND active_recipe.active_image_artifact_id IS DISTINCT FROM artifact.id
-    RETURNING active_recipe.id
 )
 SELECT artifact.id::text,
        artifact.ref,
@@ -127,4 +119,3 @@ SELECT artifact.id::text,
        artifact.manifest_digest
 FROM artifact
 JOIN recipe ON recipe.id = artifact.recipe_id
-LEFT JOIN activated ON activated.id = recipe.id

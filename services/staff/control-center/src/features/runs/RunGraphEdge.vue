@@ -26,6 +26,8 @@ const style = computed(() => ({
 <template>
   <BaseEdge
     :id="id"
+    :data-edge-ref="data.edge.ref"
+    :data-edge-type="data.edge.type"
     :path="path"
     :marker-end="markerEnd"
     :style="style"
