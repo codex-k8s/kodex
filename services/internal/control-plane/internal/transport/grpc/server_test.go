@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -29,4 +30,33 @@ func TestTransportErrorDistinguishesMissingCapabilityFromConcurrentConflict(t *t
 			}
 		})
 	}
+}
+
+func TestTransportErrorPreservesAuthenticationBoundary(t *testing.T) {
+	t.Parallel()
+
+	unauthenticated := transportError(errs.ErrUnauthorized)
+	if actual := status.Code(unauthenticated); actual != codes.Unauthenticated {
+		t.Fatalf("ordinary authentication code = %s, want %s", actual, codes.Unauthenticated)
+	}
+	if actual := errorInfoReason(unauthenticated); actual != "" {
+		t.Fatalf("ordinary authentication unexpectedly contains reason %q", actual)
+	}
+
+	freshAuthentication := transportError(errs.ErrFreshAuthenticationRequired)
+	if actual := status.Code(freshAuthentication); actual != codes.PermissionDenied {
+		t.Fatalf("fresh authentication code = %s, want %s", actual, codes.PermissionDenied)
+	}
+	if actual := errorInfoReason(freshAuthentication); actual != freshAuthenticationRequiredReason {
+		t.Fatalf("fresh authentication reason = %q, want %q", actual, freshAuthenticationRequiredReason)
+	}
+}
+
+func errorInfoReason(err error) string {
+	for _, detail := range status.Convert(err).Details() {
+		if info, ok := detail.(*errdetails.ErrorInfo); ok && info.GetDomain() == controlPlaneErrorDomain {
+			return info.GetReason()
+		}
+	}
+	return ""
 }

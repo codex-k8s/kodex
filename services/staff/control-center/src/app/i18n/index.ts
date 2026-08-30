@@ -84,6 +84,9 @@ const ru = {
       "У вашей роли нет разрешения на это действие в выбранном проекте.",
     conflict: "Состояние уже изменилось. Показано актуальное решение.",
     unavailable: "Функция временно недоступна",
+    available: "Доступно",
+    disabled: "Отключено",
+    yes: "Да",
     name: "Название",
     description: "Описание",
     delete: "Удалить",
@@ -335,6 +338,13 @@ const ru = {
     secretDescriptors: "Secret descriptors",
     environmentEditorSubtitle: "Публикация создаёт новую неизменяемую ревизию",
     publishRevision: "Опубликовать ревизию",
+    reauthCompleted: "Свежая OIDC-аутентификация завершена",
+    reauthExplicitSaveRequired:
+      "Черновик восстановлен. Проверьте параметры и явно повторите создание или публикацию.",
+    restoredImageSelection:
+      "Выбор восстановлен после OIDC-аутентификации; точные сведения загрузятся после публикации.",
+    restoredSecretSelection:
+      "Ссылка на секрет восстановлена после OIDC-аутентификации.",
     environmentGeneral: "Основные параметры",
     environmentGeneralHelp:
       "Название и назначение видны сотрудникам при выборе окружения.",
@@ -429,15 +439,83 @@ const ru = {
     resourcesAndAccessHelp:
       "Effective policy должен вычисляться сервером в пределах полномочий пользователя и admission policy.",
     resources: "Requests и limits",
+    resourcesHelp:
+      "Значения задаются целыми millicores и MiB в пределах admission policy платформы.",
+    cpuRequest: "CPU request, millicores",
+    cpuLimit: "CPU limit, millicores",
+    cpuRequestRange: "От 100 до 8 000",
+    cpuLimitRange: "От request до 16 000",
+    memoryRequest: "Memory request, MiB",
+    memoryLimit: "Memory limit, MiB",
+    memoryRequestRange: "От 128 до 32 768 MiB",
+    memoryLimitRange: "От request до 65 536 MiB",
+    ephemeralStorageRequest: "Ephemeral storage request, MiB",
+    ephemeralStorageLimit: "Ephemeral storage limit, MiB",
+    ephemeralStorageRequestRange: "От 256 до 20 480 MiB",
+    ephemeralStorageLimitRange: "От request до 102 400 MiB",
     resourcesUnavailable:
       "Typed resource profile отсутствует в текущем RuntimeEnvironment API.",
+    ephemeralVolumes: "Временные тома",
+    ephemeralVolumesHelp:
+      "Только execution-scoped disk или memory emptyDir. Mount path назначает платформа.",
+    addVolume: "Добавить том",
+    noEphemeralVolumes: "Дополнительные временные тома не настроены.",
+    volumeKind: "Тип тома",
+    volumeKindLabel: {
+      EPHEMERAL_DISK: "Временный диск",
+      EPHEMERAL_MEMORY: "Память (tmpfs)",
+    },
+    volumeSize: "Размер, MiB",
+    mountPath: "Итоговый mount path",
     networkPolicy: "Сетевая политика",
+    networkPolicyHelp:
+      "Deny-by-default включён всегда. UI показывает только закрытый реестр разрешённых назначений.",
+    networkDestination: {
+      DNS: "DNS",
+      PROVIDER_PROXY: "Provider proxy",
+      RUNTIME_CALLBACK: "Runtime callback",
+      KUBERNETES_API: "Kubernetes API",
+    },
+    networkDestinationHelp: {
+      DNS: "Разрешение имён через DNS кластера, TCP/UDP 53.",
+      PROVIDER_PROXY:
+        "Вызовы провайдера только через платформенный proxy, TCP 8080.",
+      RUNTIME_CALLBACK:
+        "Возврат событий выполнения в runtime-controller, TCP 8444.",
+      KUBERNETES_API:
+        "Добавляется только вместе с профилем чтения собственного execution, TCP 443.",
+    },
+    mandatoryDestination: "Обязательно",
+    scopedAccessEnabled: "Scoped доступ",
     networkPolicyUnavailable:
       "API не предоставляет typed destinations и итоговый NetworkPolicy preview.",
     kubernetesRbac: "Scoped Kubernetes RBAC",
+    kubernetesRbacHelp:
+      "Профиль не выдаёт произвольный доступ и ограничен объектами текущего execution.",
+    readOwnExecution: "Разрешить чтение собственного execution",
+    readOwnExecutionHelp:
+      "READ_OWN_EXECUTION: только точные Pod и Pod logs, назначенные текущему запуску.",
+    kubernetesAccessBoundary:
+      "ServiceAccount, resourceNames и namespace kodex-runtime назначает сервер. List, watch, exec и доступ к Secret не выдаются.",
     kubernetesRbacUnavailable:
       "API не возвращает workload identity, RBAC profile и effective grants.",
     effectivePolicyPreview: "Effective policy preview",
+    effectivePolicyPreviewHelp:
+      "Черновик отправляется как typed policy; после публикации ниже показывается авторитетная нормализованная policy сервера.",
+    serverCalculated: "Рассчитано сервером",
+    afterPublish: "После публикации",
+    effectivePolicyAfterPublish:
+      "Digest-ы, точные egress rules и mount paths появятся после первой публикации.",
+    denyByDefault: "Deny-by-default",
+    kubernetesNamespace: "Runtime namespace",
+    effectiveEgressRules: "Egress rules",
+    effectiveVolumes: "Тома",
+    policyDigest: {
+      resources: "Resources digest",
+      volumes: "Volumes digest",
+      network: "Network digest",
+      rbac: "RBAC digest",
+    },
     effectivePolicyUnavailable:
       "Авторитетный preview ресурсов, сети и RBAC пока недоступен; UI не строит его по догадке.",
     catalogCapabilityBoundary:
@@ -450,7 +528,9 @@ const ru = {
       SECRET_REFS: "Immutable Secret references",
       IMAGE: "Exact promoted image",
       TOOLS: "Разрешённые verified tools",
+      POLICY: "Typed resource, volume, network и RBAC policy",
       REVISION: "Опубликованная immutable revision",
+      EFFECTIVE_POLICY: "Авторитетная effective policy",
       SERVER_READINESS: "Server-side readiness",
     },
     readinessState: {
@@ -477,6 +557,41 @@ const ru = {
         "Это имя зарезервировано платформой или средой выполнения.",
       duplicateVariable: "Имена переменных в окружении не должны повторяться.",
       secretBindingRequired: "Выберите секрет Проекта.",
+      nameTooLong: "Название окружения не должно превышать 120 символов.",
+      descriptionTooLong: "Описание не должно превышать 1 000 символов.",
+      collectionLimit: "В одном разделе допускается не более 128 элементов.",
+      toolNameTooLong: "Название инструмента не должно превышать 160 символов.",
+      toolDescriptionTooLong:
+        "Описание инструмента не должно превышать 500 символов.",
+      toolUsageHintTooLong:
+        "Подсказка инструмента не должна превышать 500 символов.",
+      cpuRequestRange:
+        "CPU request должен быть целым числом от 100 до 8 000 millicores.",
+      cpuLimitRange:
+        "CPU limit должен быть целым числом от 100 до 16 000 millicores.",
+      cpuLimitBelowRequest: "CPU limit не может быть меньше CPU request.",
+      memoryRequestRange:
+        "Memory request должен быть целым числом от 128 до 32 768 MiB.",
+      memoryLimitRange:
+        "Memory limit должен быть целым числом от 128 до 65 536 MiB.",
+      memoryLimitBelowRequest:
+        "Memory limit не может быть меньше memory request.",
+      ephemeralStorageRequestRange:
+        "Ephemeral storage request должен быть целым числом от 256 до 20 480 MiB.",
+      ephemeralStorageLimitRange:
+        "Ephemeral storage limit должен быть целым числом от 256 до 102 400 MiB.",
+      ephemeralStorageLimitBelowRequest:
+        "Ephemeral storage limit не может быть меньше request.",
+      volumeLimit: "Допускается не более 16 временных томов.",
+      volumeName: "Имя тома должно быть DNS-label длиной до 32 символов.",
+      reservedVolumeName: "Это имя тома зарезервировано платформой.",
+      duplicateVolume: "Имена временных томов не должны повторяться.",
+      volumeKind: "Разрешены только EPHEMERAL_DISK и EPHEMERAL_MEMORY.",
+      volumeSizeRange:
+        "Размер тома должен быть целым числом от 16 до 10 240 MiB.",
+      kubernetesAccess: "Неизвестный профиль Kubernetes доступа.",
+      networkDestinations:
+        "Сеть должна содержать DNS, provider proxy и runtime callback, а Kubernetes API — только при READ_OWN_EXECUTION.",
       secretDescriptorRequired:
         "Заполните все обязательные поля Secret descriptor.",
       sha256: "SHA-256 должен содержать 64 строчные шестнадцатеричные цифры.",
@@ -1385,9 +1500,6 @@ const ru = {
       operationCondition: "Конкретная операция",
       operationConditionHint:
         "Операция задаётся typed permission из закреплённой версии роли, а не произвольной строкой.",
-      environmentCondition: "Конкретное окружение",
-      environmentUnavailable:
-        "Недоступно: RuntimeEnvironment ещё отсутствует в AccessResourceKind и не отправляется на сервер.",
       values: {
         ORGANIZATION: "Организация",
         PROJECT: "Проект",
@@ -1411,6 +1523,8 @@ const ru = {
       ARTIFACT: "Файл",
       SCHEDULE: "Автоматизация",
       INTEGRATION: "Интеграция",
+      RUNTIME_ENVIRONMENT: "Рабочее окружение",
+      SECRET: "Секрет",
     },
     platformRoles: {
       OWNER: "Владелец",
@@ -2005,6 +2119,9 @@ const en = {
       "Your role does not allow this action in the selected project.",
     conflict: "State has already changed. Current decision is shown.",
     unavailable: "Temporarily unavailable",
+    available: "Available",
+    disabled: "Disabled",
+    yes: "Yes",
     name: "Name",
     description: "Description",
     delete: "Delete",
@@ -2329,6 +2446,13 @@ const en = {
     secretDescriptors: "Secret descriptors",
     environmentEditorSubtitle: "Publishing creates a new immutable revision",
     publishRevision: "Publish revision",
+    reauthCompleted: "Fresh OIDC authentication completed",
+    reauthExplicitSaveRequired:
+      "The draft was restored. Review it and explicitly create or publish again.",
+    restoredImageSelection:
+      "Selection restored after OIDC authentication; exact details will load after publishing.",
+    restoredSecretSelection:
+      "Secret reference restored after OIDC authentication.",
     environmentGeneral: "General settings",
     environmentGeneralHelp:
       "The name and purpose are shown when selecting the environment.",
@@ -2423,15 +2547,83 @@ const en = {
     resourcesAndAccessHelp:
       "The server must calculate effective policy within user grants and installation admission policy.",
     resources: "Requests and limits",
+    resourcesHelp:
+      "Values use integer millicores and MiB within the platform admission policy.",
+    cpuRequest: "CPU request, millicores",
+    cpuLimit: "CPU limit, millicores",
+    cpuRequestRange: "100 to 8,000",
+    cpuLimitRange: "Request to 16,000",
+    memoryRequest: "Memory request, MiB",
+    memoryLimit: "Memory limit, MiB",
+    memoryRequestRange: "128 to 32,768 MiB",
+    memoryLimitRange: "Request to 65,536 MiB",
+    ephemeralStorageRequest: "Ephemeral storage request, MiB",
+    ephemeralStorageLimit: "Ephemeral storage limit, MiB",
+    ephemeralStorageRequestRange: "256 to 20,480 MiB",
+    ephemeralStorageLimitRange: "Request to 102,400 MiB",
     resourcesUnavailable:
       "A typed resource profile is absent from the current RuntimeEnvironment API.",
+    ephemeralVolumes: "Ephemeral volumes",
+    ephemeralVolumesHelp:
+      "Execution-scoped disk or memory emptyDir only. The platform assigns each mount path.",
+    addVolume: "Add volume",
+    noEphemeralVolumes: "No additional ephemeral volumes configured.",
+    volumeKind: "Volume kind",
+    volumeKindLabel: {
+      EPHEMERAL_DISK: "Ephemeral disk",
+      EPHEMERAL_MEMORY: "Memory (tmpfs)",
+    },
+    volumeSize: "Size, MiB",
+    mountPath: "Effective mount path",
     networkPolicy: "Network policy",
+    networkPolicyHelp:
+      "Deny-by-default is always enabled. The UI exposes only the closed destination registry.",
+    networkDestination: {
+      DNS: "DNS",
+      PROVIDER_PROXY: "Provider proxy",
+      RUNTIME_CALLBACK: "Runtime callback",
+      KUBERNETES_API: "Kubernetes API",
+    },
+    networkDestinationHelp: {
+      DNS: "Name resolution through cluster DNS on TCP/UDP 53.",
+      PROVIDER_PROXY:
+        "Provider calls only through the platform proxy on TCP 8080.",
+      RUNTIME_CALLBACK:
+        "Execution events returned to runtime-controller on TCP 8444.",
+      KUBERNETES_API:
+        "Added only with read access to the current execution on TCP 443.",
+    },
+    mandatoryDestination: "Required",
+    scopedAccessEnabled: "Scoped access",
     networkPolicyUnavailable:
       "The API does not expose typed destinations or final NetworkPolicy preview.",
     kubernetesRbac: "Scoped Kubernetes RBAC",
+    kubernetesRbacHelp:
+      "The profile grants no arbitrary access and is limited to current execution objects.",
+    readOwnExecution: "Allow reading the current execution",
+    readOwnExecutionHelp:
+      "READ_OWN_EXECUTION: exact Pods and Pod logs assigned to the current run only.",
+    kubernetesAccessBoundary:
+      "The server assigns ServiceAccount, resourceNames and the kodex-runtime namespace. List, watch, exec and Secret access are not granted.",
     kubernetesRbacUnavailable:
       "The API does not return workload identity, RBAC profile or effective grants.",
     effectivePolicyPreview: "Effective policy preview",
+    effectivePolicyPreviewHelp:
+      "The draft is sent as typed policy; after publishing this view shows the authoritative normalized server policy.",
+    serverCalculated: "Calculated by server",
+    afterPublish: "After publishing",
+    effectivePolicyAfterPublish:
+      "Digests, exact egress rules and mount paths appear after the first publication.",
+    denyByDefault: "Deny-by-default",
+    kubernetesNamespace: "Runtime namespace",
+    effectiveEgressRules: "Egress rules",
+    effectiveVolumes: "Volumes",
+    policyDigest: {
+      resources: "Resources digest",
+      volumes: "Volumes digest",
+      network: "Network digest",
+      rbac: "RBAC digest",
+    },
     effectivePolicyUnavailable:
       "Authoritative resources, network and RBAC preview is unavailable; the UI does not infer it.",
     catalogCapabilityBoundary:
@@ -2444,7 +2636,9 @@ const en = {
       SECRET_REFS: "Immutable Secret references",
       IMAGE: "Exact promoted image",
       TOOLS: "Allowed verified tools",
+      POLICY: "Typed resource, volume, network and RBAC policy",
       REVISION: "Published immutable revision",
+      EFFECTIVE_POLICY: "Authoritative effective policy",
       SERVER_READINESS: "Server-side readiness",
     },
     readinessState: {
@@ -2471,6 +2665,39 @@ const en = {
         "This name is reserved by the platform or runtime environment.",
       duplicateVariable: "Variable names must be unique within an environment.",
       secretBindingRequired: "Choose a Project secret.",
+      nameTooLong: "Environment names must not exceed 120 characters.",
+      descriptionTooLong: "Descriptions must not exceed 1,000 characters.",
+      collectionLimit: "A section can contain at most 128 items.",
+      toolNameTooLong: "Tool names must not exceed 160 characters.",
+      toolDescriptionTooLong:
+        "Tool descriptions must not exceed 500 characters.",
+      toolUsageHintTooLong: "Tool usage hints must not exceed 500 characters.",
+      cpuRequestRange:
+        "CPU request must be an integer from 100 to 8,000 millicores.",
+      cpuLimitRange:
+        "CPU limit must be an integer from 100 to 16,000 millicores.",
+      cpuLimitBelowRequest: "CPU limit cannot be lower than CPU request.",
+      memoryRequestRange:
+        "Memory request must be an integer from 128 to 32,768 MiB.",
+      memoryLimitRange:
+        "Memory limit must be an integer from 128 to 65,536 MiB.",
+      memoryLimitBelowRequest:
+        "Memory limit cannot be lower than memory request.",
+      ephemeralStorageRequestRange:
+        "Ephemeral storage request must be an integer from 256 to 20,480 MiB.",
+      ephemeralStorageLimitRange:
+        "Ephemeral storage limit must be an integer from 256 to 102,400 MiB.",
+      ephemeralStorageLimitBelowRequest:
+        "Ephemeral storage limit cannot be lower than its request.",
+      volumeLimit: "At most 16 ephemeral volumes are allowed.",
+      volumeName: "Volume names must be DNS labels up to 32 characters.",
+      reservedVolumeName: "This volume name is reserved by the platform.",
+      duplicateVolume: "Ephemeral volume names must be unique.",
+      volumeKind: "Only EPHEMERAL_DISK and EPHEMERAL_MEMORY are allowed.",
+      volumeSizeRange: "Volume size must be an integer from 16 to 10,240 MiB.",
+      kubernetesAccess: "Unknown Kubernetes access profile.",
+      networkDestinations:
+        "Network policy must include DNS, provider proxy and runtime callback; Kubernetes API is allowed only with READ_OWN_EXECUTION.",
       secretDescriptorRequired:
         "Complete all required Secret descriptor fields.",
       sha256: "SHA-256 must contain 64 lowercase hexadecimal digits.",
@@ -3300,9 +3527,6 @@ const en = {
       operationCondition: "Exact operation",
       operationConditionHint:
         "The operation is the typed permission from the pinned role version, not an arbitrary string.",
-      environmentCondition: "Exact environment",
-      environmentUnavailable:
-        "Unavailable: RuntimeEnvironment is not yet part of AccessResourceKind and is not sent to the server.",
       values: {
         ORGANIZATION: "Organization",
         PROJECT: "Project",
@@ -3326,6 +3550,8 @@ const en = {
       ARTIFACT: "File",
       SCHEDULE: "Automation",
       INTEGRATION: "Integration",
+      RUNTIME_ENVIRONMENT: "Runtime environment",
+      SECRET: "Secret",
     },
     platformRoles: {
       OWNER: "Owner",

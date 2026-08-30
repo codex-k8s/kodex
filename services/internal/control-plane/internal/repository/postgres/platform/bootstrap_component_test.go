@@ -193,6 +193,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("runtime environment create rejects a missing exact image", func(t *testing.T) {
 		testRuntimeEnvironmentRejectsMissingImage(t, ctx, repository)
 	})
+	t.Run("runtime environment privileged admission requires fresh authentication and permission", func(t *testing.T) {
+		testRuntimeEnvironmentPrivilegedAdmission(t, ctx, repository)
+	})
 	t.Run("runtime configuration publish validates canonical provider accounts", func(t *testing.T) {
 		testRuntimeConfigurationPublish(t, ctx, repository)
 	})
@@ -273,6 +276,132 @@ func testRuntimeEnvironmentRejectsMissingImage(t *testing.T, ctx context.Context
 		}})
 	if !errors.Is(err, domainerrs.ErrInvalid) || created.RuntimeEnvironment != nil {
 		t.Fatalf("environment without exact promoted image was accepted: environment=%#v err=%v", created.RuntimeEnvironment, err)
+	}
+}
+
+func testRuntimeEnvironmentPrivilegedAdmission(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	now := time.Now().UTC()
+	ownerInput := platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Runtime environment reauthentication owner", CallerWorkload: "control-api-gateway",
+		Operation: "platform.command.runtime-environments.create",
+	}
+	owner := resolvedTestPrincipal(t, ctx, repository, ownerInput, "control-api-gateway")
+	owner.CredentialAuthenticatedAt = now
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct runtime environment reauthentication service: %v", err)
+	}
+	createdProject, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-reauth-project-create"},
+		Payload:  command.ProjectInput{Name: "Runtime environment reauthentication", Language: "en"}})
+	if err != nil || createdProject.Project == nil {
+		t.Fatalf("create runtime environment reauthentication project: project=%#v err=%v", createdProject.Project, err)
+	}
+	project := *createdProject.Project
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Ref,
+		"runtime-environment-reauth-agent-create", "Runtime environment reauthentication agent")
+	configuration, err := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
+	if err != nil || configuration.Environment.Ref == "" {
+		t.Fatalf("read bootstrap runtime environment: configuration=%#v err=%v", configuration, err)
+	}
+	privilegedPolicy := privilegedRuntimeEnvironmentPolicy(t)
+
+	create := func(key string, principal value.Principal, policy runtimecontract.RuntimeEnvironmentPolicy) error {
+		_, executeErr := service.Execute(ctx, command.Command{Kind: command.CreateRuntimeEnvironment, Principal: principal,
+			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.RuntimeEnvironmentInput{
+				ProjectRef: project.Ref, Name: "Privileged component environment", Description: "Fresh authentication component scenario",
+				Policy: policy,
+			}})
+		return executeErr
+	}
+
+	for _, test := range []struct {
+		name            string
+		authenticatedAt time.Time
+	}{
+		{name: "zero", authenticatedAt: time.Time{}},
+		{name: "stale", authenticatedAt: now.Add(-5*time.Minute - time.Second)},
+		{name: "future", authenticatedAt: now.Add(31 * time.Second)},
+	} {
+		principal := owner
+		principal.CredentialAuthenticatedAt = test.authenticatedAt
+		if executeErr := create("runtime-environment-reauth-create-"+test.name, principal, privilegedPolicy); !errors.Is(executeErr, domainerrs.ErrFreshAuthenticationRequired) {
+			t.Fatalf("%s create authentication error = %v, want fresh authentication required", test.name, executeErr)
+		}
+	}
+	if executeErr := create("runtime-environment-reauth-create-fresh", owner, privilegedPolicy); !errors.Is(executeErr, domainerrs.ErrInvalid) {
+		t.Fatalf("fresh privileged create did not reach image validation: %v", executeErr)
+	}
+
+	staleOwner := owner
+	staleOwner.CredentialAuthenticatedAt = now.Add(-6 * time.Minute)
+	expectedVersion := configuration.Environment.Version
+	publish := func(key string, principal value.Principal) error {
+		_, executeErr := service.Execute(ctx, command.Command{Kind: command.PublishRuntimeEnvironment, Principal: principal,
+			Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &expectedVersion}, Payload: command.RuntimeEnvironmentInput{
+				Ref: configuration.Environment.Ref, Name: configuration.Environment.Name, Description: configuration.Environment.Description,
+				Policy: privilegedPolicy,
+			}})
+		return executeErr
+	}
+	if executeErr := publish("runtime-environment-reauth-publish-stale", staleOwner); !errors.Is(executeErr, domainerrs.ErrFreshAuthenticationRequired) {
+		t.Fatalf("stale publish authentication error = %v, want fresh authentication required", executeErr)
+	}
+	if executeErr := publish("runtime-environment-reauth-publish-fresh", owner); !errors.Is(executeErr, domainerrs.ErrInvalid) {
+		t.Fatalf("fresh privileged publish did not reach image validation: %v", executeErr)
+	}
+
+	candidateInput := platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000009992", ExternalTenantID: ownerInput.ExternalTenantID,
+		ExternalDisplayName: "Runtime environment project manager", CallerWorkload: "control-api-gateway",
+		Operation: "platform.command.runtime-environments.create",
+	}
+	if _, resolveErr := repository.ResolveProofAuthority(ctx, candidateInput); !errors.Is(resolveErr, domainerrs.ErrForbidden) {
+		t.Fatalf("unbound runtime environment candidate received authority: %v", resolveErr)
+	}
+	subjects, _, err := service.ListAccessSubjects(ctx, owner, query.Filter{
+		Query: candidateInput.ExternalDisplayName, Page: query.Page{Size: 20},
+	}, "USER")
+	if err != nil || len(subjects) != 1 {
+		t.Fatalf("list runtime environment candidate: subjects=%#v err=%v", subjects, err)
+	}
+	roleResult, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessRole, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-project-manager-role"}, Payload: command.AccessRoleInput{
+			Name: "Runtime environment project manager", PermissionKeys: []string{"project.manage"},
+			AllowedScopes: []string{"PROJECT"}, ChangeComment: "component fresh authentication scenario",
+		}})
+	if err != nil || roleResult.AccessRole == nil {
+		t.Fatalf("create runtime environment project manager role: role=%#v err=%v", roleResult.AccessRole, err)
+	}
+	bindingResult, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessBinding, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-project-manager-binding"}, Payload: command.AccessBindingInput{
+			SubjectKind: "USER", SubjectRef: subjects[0].Ref, RoleVersionRef: roleResult.AccessRole.CurrentVersion.Ref,
+			Scope: entity.AccessScope{Kind: "PROJECT", ProjectRef: project.Ref},
+		}})
+	if err != nil || bindingResult.AccessBinding == nil {
+		t.Fatalf("bind runtime environment project manager: binding=%#v err=%v", bindingResult.AccessBinding, err)
+	}
+	authority, err := repository.ResolveProofAuthority(ctx, candidateInput)
+	if err != nil {
+		t.Fatalf("resolve runtime environment project manager: %v", err)
+	}
+	candidate := value.Principal{
+		ActorID: authority.ActorID, AuthorityTenant: authority.OrganizationID, Permission: candidateInput.Operation,
+		CorrelationRef: "runtime-environment-project-manager", CallerWorkload: "control-api-gateway",
+		CredentialRevision: 1, CredentialAuthenticatedAt: now,
+	}
+	if executeErr := create("runtime-environment-project-manager-default", candidate, runtimecontract.DefaultRuntimeEnvironmentPolicy()); !errors.Is(executeErr, domainerrs.ErrInvalid) {
+		t.Fatalf("project manager did not reach ordinary image validation: %v", executeErr)
+	}
+	if executeErr := create("runtime-environment-project-manager-privileged", candidate, privilegedPolicy); !errors.Is(executeErr, domainerrs.ErrNotFound) {
+		t.Fatalf("project manager without privileged permission received unexpected result: %v", executeErr)
+	}
+	staleCandidate := candidate
+	staleCandidate.CredentialAuthenticatedAt = now.Add(-6 * time.Minute)
+	if executeErr := create("runtime-environment-project-manager-stale", staleCandidate, privilegedPolicy); !errors.Is(executeErr, domainerrs.ErrNotFound) {
+		t.Fatalf("project manager without privileged permission received a reauthentication oracle: %v", executeErr)
 	}
 }
 
@@ -735,7 +864,7 @@ func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, re
 		t.Fatalf("construct integration service: %v", err)
 	}
 	definitions, actions, err := service.ListIntegrationDefinitions(ctx, owner, "")
-	if err != nil || len(definitions) != 3 {
+	if err != nil || len(definitions) != 7 {
 		t.Fatalf("list integration definitions: definitions=%d err=%v", len(definitions), err)
 	}
 	if !contains(actions, "CREATE_CONNECTION") {
@@ -2699,7 +2828,7 @@ func assertBootstrapReadback(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	}
 	if organizationCount != 1 || ownerContractCount != 1 || systemAssistantCount != 1 ||
 		corePromptCount != 1 || assistantRuntimeCount != 1 || capabilityCount != 8 ||
-		integrationDefinitionCount != 3 || providerDefinitionCount != 1 || providerAccountCount != 1 ||
+		integrationDefinitionCount != 7 || providerDefinitionCount != 1 || providerAccountCount != 1 ||
 		providerCredentialRevisionCount != 1 || completedBootstrapCount != 1 {
 		t.Fatalf("unexpected bootstrap state: organization=%d owner_contract=%d assistant=%d core_prompt=%d runtime=%d capabilities=%d integrations=%d provider_definitions=%d provider_accounts=%d provider_credentials=%d completed=%d",
 			organizationCount, ownerContractCount, systemAssistantCount, corePromptCount,

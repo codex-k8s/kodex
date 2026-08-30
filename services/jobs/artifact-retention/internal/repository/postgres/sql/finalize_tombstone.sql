@@ -1,4 +1,4 @@
--- name: artifact_retention_finalize_tombstone :exec
+-- name: finalize_tombstone :exec
 UPDATE control_plane.artifacts
 SET lifecycle_state = 'PURGED',
     file_name = 'purged',

@@ -92,10 +92,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		ControllerPodUID: config.PodUID, ControllerPodIP: config.PodIP,
 		CallbackTLSServerName: config.CallbackTLSServerName, CallbackClientCASecret: config.CallbackClientCASecret,
 		CallbackClientTLSSecret: config.CallbackClientTLSSecret, ProviderHTTPSProxy: config.ProviderHTTPSProxy,
-		StorageClass: config.StorageClass, SessionPVCSize: config.SessionPVCSize, RunnerServiceAccount: config.RunnerServiceAccount,
+		KubernetesAPIServiceIP: config.KubernetesAPIServiceIP,
+		StorageClass:           config.StorageClass, SessionPVCSize: config.SessionPVCSize, RunnerServiceAccount: config.RunnerServiceAccount,
 		PromotedRoleImageRepository: config.PromotedRoleImageRepository, RoleRuntimeContractRevision: config.RoleRuntimeContractRevision,
 		DefaultRoleImageReference: config.DefaultRoleImageReference,
-		RoleRuntimeContractSHA256: config.RoleRuntimeContractSHA256, TurnCPUMilli: config.TurnCPUMilli, TurnMemoryBytes: config.TurnMemoryBytes,
+		RoleRuntimeContractSHA256: config.RoleRuntimeContractSHA256,
 	})
 	if err != nil {
 		return err

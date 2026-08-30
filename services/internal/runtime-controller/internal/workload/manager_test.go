@@ -213,7 +213,11 @@ func TestEnsureTurnMaterializesExactEnvironmentSecretOutsideRunnerInput(t *testi
 		SecretResourceVersion: source.ResourceVersion, ContentSHA256: digestHex,
 	}}
 	image, tools := runtimeEnvironmentContract(execution.Revision)
-	environmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(values, projections, image, tools)
+	policy, policyErr := runtimeEnvironmentPolicyFromProto(execution.Revision.GetEnvironmentPolicy())
+	if policyErr != nil {
+		t.Fatalf("runtimeEnvironmentPolicyFromProto() error = %v", policyErr)
+	}
+	environmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(values, projections, image, tools, policy)
 	if err != nil {
 		t.Fatalf("RuntimeEnvironmentDigest() error = %v", err)
 	}
@@ -290,7 +294,11 @@ func TestEnsureTurnRejectsStaleEnvironmentSecretRevision(t *testing.T) {
 		ContentSHA256: hex.EncodeToString(digest[:]),
 	}}
 	image, tools := runtimeEnvironmentContract(execution.Revision)
-	environmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(nil, projections, image, tools)
+	policy, policyErr := runtimeEnvironmentPolicyFromProto(execution.Revision.GetEnvironmentPolicy())
+	if policyErr != nil {
+		t.Fatalf("runtimeEnvironmentPolicyFromProto() error = %v", policyErr)
+	}
+	environmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(nil, projections, image, tools, policy)
 	if err != nil {
 		t.Fatalf("RuntimeEnvironmentDigest() error = %v", err)
 	}
@@ -495,7 +503,7 @@ func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 func TestWarmCompatibilityIgnoresTurnIdentityButRejectsRuntimeDrift(t *testing.T) {
 	t.Parallel()
 	manager := newTestManager(t, fake.NewSimpleClientset())
-	warm, _, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	warm, _, err := manager.BuildWarmInput(testWarmRevision())
 	if err != nil {
 		t.Fatalf("BuildWarmInput() error = %v", err)
 	}
@@ -531,7 +539,7 @@ func TestWarmCompatibilityIgnoresTurnIdentityButRejectsRuntimeDrift(t *testing.T
 func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
-	input, binding, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	input, binding, err := manager.BuildWarmInput(testWarmRevision())
 	if err != nil {
 		t.Fatalf("BuildWarmInput() error = %v", err)
 	}
@@ -559,7 +567,7 @@ func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
 func TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
-	input, binding, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	input, binding, err := manager.BuildWarmInput(testWarmRevision())
 	if err != nil {
 		t.Fatalf("BuildWarmInput() error = %v", err)
 	}
@@ -591,7 +599,7 @@ func TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime(t *testing.T) {
 func TestEnsureWarmRotatesTerminalTicketAndDeletesStaleWarmTickets(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
-	input, binding, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	input, binding, err := manager.BuildWarmInput(testWarmRevision())
 	if err != nil {
 		t.Fatalf("BuildWarmInput() error = %v", err)
 	}
@@ -635,7 +643,7 @@ func TestEnsureWarmRotatesTerminalTicketAndDeletesStaleWarmTickets(t *testing.T)
 func TestEnsureWarmReplacesTicketFromPreviousControllerInstance(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
-	input, binding, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	input, binding, err := manager.BuildWarmInput(testWarmRevision())
 	if err != nil {
 		t.Fatalf("BuildWarmInput() error = %v", err)
 	}
@@ -671,7 +679,7 @@ func TestEnsureWarmReplacesTicketFromPreviousControllerInstance(t *testing.T) {
 func TestEnsureWarmReplacesTicketWithStaleCallbackAddress(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
-	input, binding, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	input, binding, err := manager.BuildWarmInput(testWarmRevision())
 	if err != nil {
 		t.Fatalf("BuildWarmInput() error = %v", err)
 	}
@@ -721,6 +729,65 @@ func TestEnsureTurnRejectsExistingPodFromAnotherRevision(t *testing.T) {
 	}
 }
 
+func TestEnsureTurnAcceptsAPIServerContainerDefaults(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, binding, err := manager.BuildTurnInput(testExecution(false))
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+		t.Fatalf("EnsureTurn(first) error = %v", err)
+	}
+	pod, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), turnPodName(input.LeaseRef), metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get(runtime Pod) error = %v", err)
+	}
+	applyDefaults := func(containers []corev1.Container) {
+		for index := range containers {
+			containers[index].TerminationMessagePath = "/dev/termination-log"
+			containers[index].TerminationMessagePolicy = corev1.TerminationMessageReadFile
+			for portIndex := range containers[index].Ports {
+				containers[index].Ports[portIndex].Protocol = corev1.ProtocolTCP
+			}
+			for _, probe := range []*corev1.Probe{containers[index].StartupProbe, containers[index].ReadinessProbe, containers[index].LivenessProbe} {
+				if probe != nil {
+					probe.SuccessThreshold = 1
+				}
+			}
+		}
+	}
+	applyDefaults(pod.Spec.InitContainers)
+	applyDefaults(pod.Spec.Containers)
+	if _, err := client.CoreV1().Pods("kodex-runtime").Update(context.Background(), pod, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("Update(defaulted runtime Pod) error = %v", err)
+	}
+	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+		t.Fatalf("EnsureTurn(defaulted existing Pod) error = %v", err)
+	}
+}
+
+func TestCleanupStaleTurnsRemovesOrphanedExecutionPolicy(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, _, err := manager.BuildTurnInput(testExecution(false))
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	if err := manager.ensureExecutionPolicy(context.Background(), input, runtimecontract.RuntimeTurnPodName(input.LeaseRef)); err != nil {
+		t.Fatalf("ensureExecutionPolicy() error = %v", err)
+	}
+	if err := manager.CleanupStaleTurns(context.Background()); err != nil {
+		t.Fatalf("CleanupStaleTurns() error = %v", err)
+	}
+	if _, err := client.CoreV1().ServiceAccounts("kodex-runtime").Get(context.Background(), input.EffectiveKubernetesAccess.ServiceAccountName, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("orphaned execution ServiceAccount survived cleanup: %v", err)
+	}
+	if _, err := client.NetworkingV1().NetworkPolicies("kodex-runtime").Get(context.Background(), runtimecontract.RuntimeNetworkPolicyName(input.LeaseRef), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("orphaned execution NetworkPolicy survived cleanup: %v", err)
+	}
+}
+
 func newTestManager(t *testing.T, client *fake.Clientset) *Manager {
 	t.Helper()
 	manager, err := New(client, testManagerConfig())
@@ -746,12 +813,13 @@ func testManagerConfig() Config {
 		ControllerPodUID: "controller-pod-uid", ControllerPodIP: "10.0.0.10",
 		CallbackTLSServerName:  "runtime-controller-callback.kodex-system.svc.cluster.local",
 		CallbackClientCASecret: "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
-		ProviderHTTPSProxy: "http://egress-gateway.kodex-system.svc:8080",
-		StorageClass:       "", SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner",
+		ProviderHTTPSProxy:     "http://egress-gateway.kodex-system.svc:8080",
+		KubernetesAPIServiceIP: "10.43.0.1",
+		StorageClass:           "", SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner",
 		PromotedRoleImageRepository: "registry.example/kodex/roles",
 		DefaultRoleImageReference:   "registry.example/kodex/agent-runner@" + testDefaultDigest,
 		RoleRuntimeContractRevision: 1,
-		RoleRuntimeContractSHA256:   testContractDigest, TurnCPUMilli: 2000, TurnMemoryBytes: 4 << 30,
+		RoleRuntimeContractSHA256:   testContractDigest,
 	}
 }
 
@@ -793,9 +861,85 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 			Name: "GitHub CLI", Command: "gh", Description: "Работа с GitHub", UsageHint: "Используй gh api",
 		}}
 	}
+	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
+	serviceAccountName := runtimecontract.RuntimeServiceAccountName(execution.Lease.Ref)
+	podName := runtimecontract.RuntimeTurnPodName(execution.Lease.Ref)
+	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, serviceAccountName, podName)
+	execution.Revision.EnvironmentPolicy = testRuntimeEnvironmentPolicyProto(policy)
+	execution.Revision.EffectiveKubernetesAccess = testRuntimeKubernetesAccessProto(access)
 	image, tools := runtimeEnvironmentContract(execution.Revision)
-	execution.Revision.RuntimeEnvironmentDigest, _ = runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, tools)
+	execution.Revision.RuntimeEnvironmentDigest, _ = runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, tools, policy)
 	return execution
+}
+
+func testWarmRevision() *controlplanev1.RuntimeRevisionSnapshot {
+	execution := testExecution(true)
+	policy, err := runtimeEnvironmentPolicyFromProto(execution.Revision.GetEnvironmentPolicy())
+	if err != nil {
+		panic(err)
+	}
+	access, err := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, "agent-runner", "system-assistant-warm")
+	if err != nil {
+		panic(err)
+	}
+	execution.Revision.EffectiveKubernetesAccess = testRuntimeKubernetesAccessProto(access)
+	return execution.Revision
+}
+
+func testRuntimeEnvironmentPolicyProto(policy runtimecontract.RuntimeEnvironmentPolicy) *controlplanev1.RuntimeEnvironmentPolicy {
+	result := &controlplanev1.RuntimeEnvironmentPolicy{
+		Resources: &controlplanev1.RuntimeResourcePolicy{
+			CpuRequestMilli: policy.Resources.CPURequestMilli, CpuLimitMilli: policy.Resources.CPULimitMilli,
+			MemoryRequestMib: policy.Resources.MemoryRequestMiB, MemoryLimitMib: policy.Resources.MemoryLimitMiB,
+			EphemeralStorageRequestMib: policy.Resources.EphemeralStorageRequestMiB,
+			EphemeralStorageLimitMib:   policy.Resources.EphemeralStorageLimitMiB,
+		},
+		Network: &controlplanev1.RuntimeNetworkPolicy{DenyByDefault: policy.Network.DenyByDefault},
+		KubernetesAccess: &controlplanev1.RuntimeKubernetesAccessProfile{
+			Kind: controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE, Namespace: policy.KubernetesAccess.Namespace,
+		},
+		ResourcesDigest: policy.ResourcesDigest, VolumesDigest: policy.VolumesDigest,
+		NetworkDigest: policy.NetworkDigest, RbacDigest: policy.RBACDigest,
+	}
+	if policy.KubernetesAccess.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
+		result.KubernetesAccess.Kind = controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
+	}
+	for _, volume := range policy.Volumes {
+		kind := controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK
+		if volume.Kind == runtimecontract.RuntimeVolumeEphemeralMemory {
+			kind = controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_MEMORY
+		}
+		result.Volumes = append(result.Volumes, &controlplanev1.RuntimeVolume{Name: volume.Name, Kind: kind, SizeMib: volume.SizeMiB, MountPath: volume.MountPath})
+	}
+	for _, egress := range policy.Network.Egress {
+		destination := map[string]controlplanev1.RuntimeNetworkDestination{
+			runtimecontract.RuntimeEgressDNS:             controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS,
+			runtimecontract.RuntimeEgressRuntimeCallback: controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK,
+			runtimecontract.RuntimeEgressProviderProxy:   controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY,
+			runtimecontract.RuntimeEgressKubernetesAPI:   controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API,
+		}[egress.Destination]
+		protocol := controlplanev1.RuntimeNetworkProtocol_RUNTIME_NETWORK_PROTOCOL_TCP
+		if egress.Protocol == runtimecontract.RuntimeProtocolUDP {
+			protocol = controlplanev1.RuntimeNetworkProtocol_RUNTIME_NETWORK_PROTOCOL_UDP
+		}
+		result.Network.Egress = append(result.Network.Egress, &controlplanev1.RuntimeNetworkEgress{Destination: destination, Protocol: protocol, Port: egress.Port})
+	}
+	return result
+}
+
+func testRuntimeKubernetesAccessProto(access runtimecontract.RuntimeKubernetesAccess) *controlplanev1.RuntimeKubernetesAccess {
+	profileKind := controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE
+	if access.Profile.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
+		profileKind = controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
+	}
+	result := &controlplanev1.RuntimeKubernetesAccess{Profile: &controlplanev1.RuntimeKubernetesAccessProfile{
+		Kind: profileKind, Namespace: access.Profile.Namespace,
+	}, ServiceAccountName: access.ServiceAccountName, Digest: access.Digest}
+	for _, rule := range access.Rules {
+		result.Rules = append(result.Rules, &controlplanev1.RuntimeKubernetesRule{ApiGroup: rule.APIGroup, Resource: rule.Resource,
+			Verbs: append([]string(nil), rule.Verbs...), ResourceNames: append([]string(nil), rule.ResourceNames...)})
+	}
+	return result
 }
 
 func runtimeEnvironmentContract(revision *controlplanev1.RuntimeRevisionSnapshot) (runtimecontract.RuntimeEnvironmentImage, []runtimecontract.RuntimeEnvironmentTool) {

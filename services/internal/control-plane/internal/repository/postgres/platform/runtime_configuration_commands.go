@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -31,7 +32,8 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 	if err != nil {
 		return err
 	}
-	environmentDigest, err := runtimeEnvironmentConfigurationDigest(nil, nil, image, nil)
+	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
+	coreDigest, environmentDigest, err := runtimeEnvironmentConfigurationDigests(nil, nil, image, nil, policy)
 	if err != nil {
 		return errors.New("compute bootstrap runtime environment digest")
 	}
@@ -49,7 +51,11 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 		"binding_ref": bindingRef, "runtime_profile_ref": runtime.Ref, "provider": runtime.Provider,
 		"model": runtime.Model, "created_by": createdBy,
 		"environment_image_artifact_id": imageArtifactID, "environment_selected_tools": selectedTools,
-		"environment_digest": environmentDigest,
+		"environment_core_digest": coreDigest, "environment_digest": environmentDigest,
+		"environment_resource_policy": asJSON(policy.Resources), "environment_volume_policy": asJSON(policy.Volumes),
+		"environment_network_policy": asJSON(policy.Network), "environment_kubernetes_access_profile": asJSON(policy.KubernetesAccess),
+		"environment_resources_digest": policy.ResourcesDigest, "environment_volumes_digest": policy.VolumesDigest,
+		"environment_network_digest": policy.NetworkDigest, "environment_rbac_digest": policy.RBACDigest,
 	}).Scan(&updatedAgentID, &runtimeEnvironmentID, &runtimeEnvironmentVersionID)
 	if err != nil {
 		return fmt.Errorf("bootstrap agent runtime configuration: %w", err)
@@ -367,12 +373,16 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	if input.Kind == command.CreateRuntimeEnvironment {
-		if payload.ProjectRef == "" || strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 160 || len(payload.Description) > 2000 {
+		if payload.ProjectRef == "" || strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 120 || len(payload.Description) > 1000 {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
 		if projectID == "" {
 			return commandOutcome{}, errs.ErrNotFound
+		}
+		policy, policyErr := repository.admitRuntimeEnvironmentPolicy(ctx, tx, scope, payload.ProjectRef, "", payload.Policy)
+		if policyErr != nil {
+			return commandOutcome{}, policyErr
 		}
 		values, secrets, contractValues, contractSecrets, err := repository.resolveEnvironmentPayload(
 			ctx, tx, scope.organizationID, projectID, payload.Values, payload.SecretBindings)
@@ -384,7 +394,7 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		if resolveErr != nil {
 			return commandOutcome{}, resolveErr
 		}
-		digest, digestErr := runtimeEnvironmentConfigurationDigest(contractValues, contractSecrets, image, normalizedTools)
+		coreDigest, digest, digestErr := runtimeEnvironmentConfigurationDigests(contractValues, contractSecrets, image, normalizedTools, policy)
 		if digestErr != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
@@ -396,6 +406,10 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 			"project_id": projectID, "name": strings.TrimSpace(payload.Name), "description": strings.TrimSpace(payload.Description),
 			"created_by": scope.actorID, "non_secret_values": values, "secret_descriptors": secrets, "digest": digest,
 			"image_artifact_id": imageArtifactID, "selected_tools": selectedTools,
+			"core_digest": coreDigest, "resource_policy": asJSON(policy.Resources), "volume_policy": asJSON(policy.Volumes),
+			"network_policy": asJSON(policy.Network), "kubernetes_access_profile": asJSON(policy.KubernetesAccess),
+			"resources_digest": policy.ResourcesDigest, "volumes_digest": policy.VolumesDigest,
+			"network_digest": policy.NetworkDigest, "rbac_digest": policy.RBACDigest,
 		}).Scan(&environmentID, &environmentVersionID, &created)
 		if createErr != nil {
 			return commandOutcome{}, fmt.Errorf("create runtime environment storage: %w", mapWriteError(createErr))
@@ -434,8 +448,12 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 	versionRef, _ := newRef("renvv")
 	var changed string
 	if input.Kind == command.PublishRuntimeEnvironment {
-		if strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 160 || len(payload.Description) > 2000 {
+		if strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 120 || len(payload.Description) > 1000 {
 			return commandOutcome{}, errs.ErrInvalid
+		}
+		policy, policyErr := repository.admitRuntimeEnvironmentPolicy(ctx, tx, scope, projectRef, payload.Ref, payload.Policy)
+		if policyErr != nil {
+			return commandOutcome{}, policyErr
 		}
 		values, secrets, contractValues, contractSecrets, payloadErr := repository.resolveEnvironmentPayload(
 			ctx, tx, scope.organizationID, projectID, payload.Values, payload.SecretBindings)
@@ -447,7 +465,7 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		if resolveErr != nil {
 			return commandOutcome{}, resolveErr
 		}
-		digest, digestErr := runtimeEnvironmentConfigurationDigest(contractValues, contractSecrets, image, normalizedTools)
+		coreDigest, digest, digestErr := runtimeEnvironmentConfigurationDigests(contractValues, contractSecrets, image, normalizedTools, policy)
 		if digestErr != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
@@ -456,6 +474,10 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 			"version_number": currentRevision + 1, "parent_version_id": currentVersionID,
 			"non_secret_values": values, "secret_descriptors": secrets, "digest": digest, "created_by": scope.actorID,
 			"image_artifact_id": imageArtifactID, "selected_tools": selectedTools,
+			"core_digest": coreDigest, "resource_policy": asJSON(policy.Resources), "volume_policy": asJSON(policy.Volumes),
+			"network_policy": asJSON(policy.Network), "kubernetes_access_profile": asJSON(policy.KubernetesAccess),
+			"resources_digest": policy.ResourcesDigest, "volumes_digest": policy.VolumesDigest,
+			"network_digest": policy.NetworkDigest, "rbac_digest": policy.RBACDigest,
 			"name": strings.TrimSpace(payload.Name), "description": strings.TrimSpace(payload.Description),
 		}).Scan(&changed)
 	} else if input.Kind == command.RollbackRuntimeEnvironment && payload.PublishedVersionRef != "" {
@@ -668,22 +690,72 @@ func (repository *Repository) resolveEnvironmentPayload(
 	return encodedValues, encodedSecrets, contractValues, contractSecrets, nil
 }
 
-func runtimeEnvironmentConfigurationDigest(
+func runtimeEnvironmentConfigurationDigests(
 	values []runtimecontract.RuntimeEnvironmentValue,
 	secrets []runtimecontract.RuntimeSecretProjection,
 	image entity.RuntimeEnvironmentImage,
 	tools []entity.RuntimeEnvironmentTool,
-) (string, error) {
+	policy runtimecontract.RuntimeEnvironmentPolicy,
+) (string, string, error) {
 	contractTools := make([]runtimecontract.RuntimeEnvironmentTool, 0, len(tools))
 	for _, tool := range tools {
 		contractTools = append(contractTools, runtimecontract.RuntimeEnvironmentTool{
 			Name: tool.Name, Command: tool.Command, Description: tool.Description, UsageHint: tool.UsageHint,
 		})
 	}
-	return runtimecontract.RuntimeEnvironmentDigest(values, secrets, runtimecontract.RuntimeEnvironmentImage{
+	contractImage := runtimecontract.RuntimeEnvironmentImage{
 		ArtifactRef: image.ArtifactRef, RecipeRef: image.RecipeRef, RecipeGeneration: image.RecipeGeneration,
 		Reference: image.Reference, Digest: image.Digest,
-	}, contractTools)
+	}
+	coreDigest, err := runtimecontract.RuntimeEnvironmentCoreDigest(values, secrets, contractImage, contractTools)
+	if err != nil {
+		return "", "", err
+	}
+	digest, err := runtimecontract.RuntimeEnvironmentDigest(values, secrets, contractImage, contractTools, policy)
+	return coreDigest, digest, err
+}
+
+func (repository *Repository) admitRuntimeEnvironmentPolicy(
+	ctx context.Context,
+	tx pgx.Tx,
+	current scope,
+	projectRef string,
+	environmentRef string,
+	policy runtimecontract.RuntimeEnvironmentPolicy,
+) (runtimecontract.RuntimeEnvironmentPolicy, error) {
+	normalized, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(policy)
+	if err != nil {
+		return runtimecontract.RuntimeEnvironmentPolicy{}, errs.ErrInvalid
+	}
+	if normalized.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
+		resourceKind, resourceRef := "RUNTIME_ENVIRONMENT", environmentRef
+		if environmentRef == "" {
+			resourceKind, resourceRef = "PROJECT", projectRef
+		}
+		target, resolveErr := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
+			ProjectRef: projectRef, ResourceKind: resourceKind, ResourceRef: resourceRef,
+		})
+		if resolveErr != nil {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, resolveErr
+		}
+		if accessErr := repository.requireAccess(ctx, tx, current, "environment.privileged.manage", target); accessErr != nil {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, accessErr
+		}
+		now := time.Now().UTC()
+		if !runtimeEnvironmentAuthenticationIsFresh(current.credentialAuthenticatedAt, now) {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, errs.ErrFreshAuthenticationRequired
+		}
+	}
+	return normalized, nil
+}
+
+func runtimeEnvironmentAuthenticationIsFresh(authenticatedAt, now time.Time) bool {
+	if authenticatedAt.IsZero() || now.IsZero() {
+		return false
+	}
+	authenticatedAt = authenticatedAt.UTC()
+	now = now.UTC()
+	return !authenticatedAt.After(now.Add(30*time.Second)) && now.Sub(authenticatedAt) <= 5*time.Minute
 }
 
 func validProviderPolicy(mode string, candidates []entity.ProviderAccountCandidate) bool {

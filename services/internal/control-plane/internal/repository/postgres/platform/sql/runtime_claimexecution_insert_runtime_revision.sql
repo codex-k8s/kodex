@@ -56,6 +56,11 @@ INSERT INTO control_plane.runtime_revisions (
     environment_binding_ref,
     environment_binding_version,
     environment_binding_digest,
+    runtime_resources_digest,
+    runtime_volumes_digest,
+    runtime_network_digest,
+    runtime_rbac_profile_digest,
+    effective_kubernetes_access_digest,
     revision_digest,
     safe_snapshot
 )
@@ -117,6 +122,11 @@ VALUES (
     $55,
     $56,
     $57,
-    $58
+    $58,
+    $59,
+    $60,
+    $61,
+    $62,
+    $63
 )
 RETURNING id::text;

@@ -153,8 +153,9 @@ func validRunnerInputFixture() RunnerInput {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
 	image := RuntimeEnvironmentImage{ArtifactRef: "imgart_abcdefgh", RecipeRef: "imgrec_abcdefgh",
 		RecipeGeneration: 1, Reference: "registry.example/roles@" + imageDigest, Digest: imageDigest}
-	environmentDigest, _ := RuntimeEnvironmentDigest(nil, nil, image, nil)
-	return RunnerInput{
+	policy := DefaultRuntimeEnvironmentPolicy()
+	environmentDigest, _ := RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
+	input := RunnerInput{
 		Schema: RunnerInputSchemaV6, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
 		RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh", SessionRef: "session_abcdefgh",
 		TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,
@@ -172,6 +173,7 @@ func validRunnerInputFixture() RunnerInput {
 		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
 		RuntimeEnvironmentDigest: environmentDigest,
+		EnvironmentPolicy:        policy,
 		EnvironmentBindingRef:    "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
 		CodexSandbox: "read-only", CodexApprovalPolicy: "never",
 		CallbackURL: "https://10.0.0.10:8444", CallbackTLS: RuntimeTLSBinding{
@@ -185,4 +187,7 @@ func validRunnerInputFixture() RunnerInput {
 		ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
 		WorkspaceRoot:          "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
 	}
+	input.EffectiveKubernetesAccess, _ = RuntimeKubernetesAccessForExecution(policy.KubernetesAccess,
+		RuntimeServiceAccountName(input.LeaseRef), RuntimeTurnPodName(input.LeaseRef))
+	return input
 }

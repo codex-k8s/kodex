@@ -1,4 +1,4 @@
--- name: artifact_retention_lock_claim :one
+-- name: lock_claim :one
 SELECT artifact.organization_id::text,
        COALESCE(artifact.project_id::text, ''),
        artifact.ref

@@ -8,9 +8,13 @@ import { computed, ref } from "vue";
 
 import {
   consumeOidcIntent,
+  createRuntimeEnvironmentPolicyIntent,
   createRuntimeSecretRevealIntent,
-  runtimeSecretRevealIntentStorageKey,
+  oidcReauthIntentStorageKey,
+  recordRuntimeEnvironmentPolicyReauthCompletion,
+  runtimeEnvironmentPolicyReauthCompletionStorageKey,
   type OidcIntent,
+  type RuntimeEnvironmentPolicyOperation,
 } from "./reauth";
 
 import { requestSignal } from "@/shared/api/client";
@@ -47,7 +51,7 @@ const ownerSessionRetryDelaysMs = [250, 500, 1_000] as const;
 const runtimeSecretRevealPendingLifetimeMs = 5 * 60 * 1000;
 
 export interface LoginCompletion {
-  readonly kind: "login" | "runtime-secret";
+  readonly kind: "login" | "runtime-secret" | "runtime-environment-policy";
   readonly returnPath?: string;
 }
 
@@ -111,7 +115,10 @@ export const useSessionStore = defineStore("session", () => {
     generation += 1;
     revision.value = 0;
     window.sessionStorage.removeItem(sessionRevisionKey);
-    window.sessionStorage.removeItem(runtimeSecretRevealIntentStorageKey);
+    window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
+    window.sessionStorage.removeItem(
+      runtimeEnvironmentPolicyReauthCompletionStorageKey,
+    );
     pendingRuntimeSecretRevealState.value = undefined;
     phase.value = "unauthenticated";
   }
@@ -152,7 +159,10 @@ export const useSessionStore = defineStore("session", () => {
   }
 
   async function beginLogin(): Promise<void> {
-    window.sessionStorage.removeItem(runtimeSecretRevealIntentStorageKey);
+    window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
+    window.sessionStorage.removeItem(
+      runtimeEnvironmentPolicyReauthCompletionStorageKey,
+    );
     pendingRuntimeSecretRevealState.value = undefined;
     await oidcManager().signinRedirect();
   }
@@ -166,8 +176,11 @@ export const useSessionStore = defineStore("session", () => {
       input.secretRef,
     );
     pendingRuntimeSecretRevealState.value = undefined;
+    window.sessionStorage.removeItem(
+      runtimeEnvironmentPolicyReauthCompletionStorageKey,
+    );
     window.sessionStorage.setItem(
-      runtimeSecretRevealIntentStorageKey,
+      oidcReauthIntentStorageKey,
       JSON.stringify(intent),
     );
     try {
@@ -177,7 +190,37 @@ export const useSessionStore = defineStore("session", () => {
         state: intent,
       });
     } catch (error) {
-      window.sessionStorage.removeItem(runtimeSecretRevealIntentStorageKey);
+      window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
+      throw error;
+    }
+  }
+
+  async function beginRuntimeEnvironmentPolicyReauth(input: {
+    environmentRef?: string;
+    operation: RuntimeEnvironmentPolicyOperation;
+    projectRef: string;
+  }): Promise<void> {
+    const intent = createRuntimeEnvironmentPolicyIntent(
+      input.projectRef,
+      input.operation,
+      input.environmentRef,
+    );
+    pendingRuntimeSecretRevealState.value = undefined;
+    window.sessionStorage.removeItem(
+      runtimeEnvironmentPolicyReauthCompletionStorageKey,
+    );
+    window.sessionStorage.setItem(
+      oidcReauthIntentStorageKey,
+      JSON.stringify(intent),
+    );
+    try {
+      await oidcManager().signinRedirect({
+        max_age: 0,
+        prompt: "login",
+        state: intent,
+      });
+    } catch (error) {
+      window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
       throw error;
     }
   }
@@ -245,6 +288,13 @@ export const useSessionStore = defineStore("session", () => {
           projectRef: intent.projectRef,
           secretRef: intent.secretRef,
         };
+        return { kind: intent.kind, returnPath: intent.returnPath };
+      }
+      if (intent.kind === "runtime-environment-policy") {
+        recordRuntimeEnvironmentPolicyReauthCompletion(
+          intent,
+          window.sessionStorage,
+        );
         return { kind: intent.kind, returnPath: intent.returnPath };
       }
       return { kind: "login" };
@@ -369,6 +419,7 @@ export const useSessionStore = defineStore("session", () => {
     probe,
     beginLogin,
     beginRuntimeSecretRevealReauth,
+    beginRuntimeEnvironmentPolicyReauth,
     completeLogin,
     pendingRuntimeSecretReveal,
     hasPendingRuntimeSecretReveal,

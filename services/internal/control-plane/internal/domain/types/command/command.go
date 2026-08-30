@@ -2,6 +2,7 @@
 package command
 
 import (
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
@@ -133,6 +134,7 @@ type RuntimeEnvironmentInput struct {
 	Values                                                                    []entity.RuntimeEnvironmentValue
 	SecretBindings                                                            []entity.RuntimeSecretBinding
 	Tools                                                                     []entity.RuntimeEnvironmentTool
+	Policy                                                                    runtimecontract.RuntimeEnvironmentPolicy
 }
 type RuntimeEnvironmentBindingInput struct {
 	AgentRef, EnvironmentRef string

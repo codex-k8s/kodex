@@ -15,9 +15,15 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
+)
+
+const (
+	controlPlaneErrorDomain           = "kodex.control-plane"
+	freshAuthenticationRequiredReason = "FRESH_AUTHENTICATION_REQUIRED"
 )
 
 type Server struct {
@@ -198,6 +204,8 @@ func transportError(err error) error {
 		return status.Error(codes.InvalidArgument, "request is invalid")
 	case errors.Is(err, errs.ErrUnauthorized):
 		return status.Error(codes.Unauthenticated, "authentication is required")
+	case errors.Is(err, errs.ErrFreshAuthenticationRequired):
+		return statusErrorWithReason(codes.PermissionDenied, "fresh authentication is required", freshAuthenticationRequiredReason)
 	case errors.Is(err, errs.ErrForbidden):
 		return status.Error(codes.PermissionDenied, "operation is not permitted")
 	case errors.Is(err, errs.ErrNotFound):
@@ -219,4 +227,13 @@ func transportError(err error) error {
 	default:
 		return status.Error(codes.Internal, "control-plane operation failed")
 	}
+}
+
+func statusErrorWithReason(code codes.Code, message, reason string) error {
+	base := status.New(code, message)
+	withDetails, err := base.WithDetails(&errdetails.ErrorInfo{Reason: reason, Domain: controlPlaneErrorDomain})
+	if err != nil {
+		return base.Err()
+	}
+	return withDetails.Err()
 }

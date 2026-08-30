@@ -484,6 +484,10 @@ enum IntegrationResourceKind {
   INTEGRATION_RESOURCE_KIND_SYNTHETIC_JOURNAL = 1;
   INTEGRATION_RESOURCE_KIND_GITHUB_REPOSITORY = 2;
   INTEGRATION_RESOURCE_KIND_MATTERMOST_CHANNEL = 3;
+  INTEGRATION_RESOURCE_KIND_GITLAB_PROJECT = 4;
+  INTEGRATION_RESOURCE_KIND_JIRA_PROJECT = 5;
+  INTEGRATION_RESOURCE_KIND_CONFLUENCE_SPACE = 6;
+  INTEGRATION_RESOURCE_KIND_EMAIL_SENDER = 7;
 }
 
 // IntegrationDefinitionOrigin фиксирует источник immutable definition revision.
@@ -2065,6 +2069,8 @@ message RuntimeRevisionSnapshot {
   string attachment_context = 52;
   int64 role_image_recipe_generation = 53;
   repeated RuntimeEnvironmentTool environment_tools = 54;
+  RuntimeEnvironmentPolicy environment_policy = 55;
+  RuntimeKubernetesAccess effective_kubernetes_access = 56;
 }
 
 message RuntimeInputArtifact {
@@ -2770,8 +2776,12 @@ message ListRuntimeSecretsResponse {
   repeated RuntimeSecret secrets = 1;
   PageInfo page = 2;
 }
-message GetRuntimeSecretRequest { string secret_ref = 1; }
-message GetRuntimeSecretResponse { RuntimeSecret secret = 1; }
+message GetRuntimeSecretRequest {
+  string secret_ref = 1;
+}
+message GetRuntimeSecretResponse {
+  RuntimeSecret secret = 1;
+}
 
 message PrepareCreateRuntimeSecretRequest {
   MutationContext mutation = 1;
@@ -2783,7 +2793,9 @@ message PrepareCreateRuntimeSecretRequest {
   // вычисляется после строгого base64 decode.
   string expected_content_sha256 = 6;
 }
-message PrepareCreateRuntimeSecretResponse { RuntimeSecretOperationReceipt operation = 1; }
+message PrepareCreateRuntimeSecretResponse {
+  RuntimeSecretOperationReceipt operation = 1;
+}
 
 message PrepareRotateRuntimeSecretRequest {
   MutationContext mutation = 1;
@@ -2791,19 +2803,25 @@ message PrepareRotateRuntimeSecretRequest {
   RuntimeSecretValueType value_type = 3;
   string expected_content_sha256 = 4;
 }
-message PrepareRotateRuntimeSecretResponse { RuntimeSecretOperationReceipt operation = 1; }
+message PrepareRotateRuntimeSecretResponse {
+  RuntimeSecretOperationReceipt operation = 1;
+}
 
 message PrepareRevealRuntimeSecretRequest {
   MutationContext mutation = 1;
   string secret_ref = 2;
 }
-message PrepareRevealRuntimeSecretResponse { RuntimeSecretOperationReceipt operation = 1; }
+message PrepareRevealRuntimeSecretResponse {
+  RuntimeSecretOperationReceipt operation = 1;
+}
 
 message PrepareRevokeRuntimeSecretRequest {
   MutationContext mutation = 1;
   string secret_ref = 2;
 }
-message PrepareRevokeRuntimeSecretResponse { RuntimeSecretOperationReceipt operation = 1; }
+message PrepareRevokeRuntimeSecretResponse {
+  RuntimeSecretOperationReceipt operation = 1;
+}
 
 message RuntimeSecretOperationReceipt {
   string operation_grant = 1;
@@ -2816,9 +2834,13 @@ message RuntimeSecretOperationReceipt {
 }
 
 message CheckRuntimeSecretWorkReadinessRequest {}
-message CheckRuntimeSecretWorkReadinessResponse { bool ready = 1; }
+message CheckRuntimeSecretWorkReadinessResponse {
+  bool ready = 1;
+}
 
-message ListRuntimeSecretRecoveryWorkRequest { PageRequest page = 1; }
+message ListRuntimeSecretRecoveryWorkRequest {
+  PageRequest page = 1;
+}
 message RuntimeSecretRecoveryWork {
   string operation_ref = 1;
   RuntimeSecretOperationKind kind = 2;
@@ -2883,7 +2905,9 @@ message CompleteRuntimeSecretOperationRequest {
   string claimant_id = 3;
   int64 claim_generation = 4;
 }
-message CompleteRuntimeSecretOperationResponse { RuntimeSecret secret = 1; }
+message CompleteRuntimeSecretOperationResponse {
+  RuntimeSecret secret = 1;
+}
 
 message FailRuntimeSecretOperationRequest {
   string operation_ref = 1;
@@ -2957,6 +2981,7 @@ message CreateRuntimeEnvironmentSetRequest {
   repeated RuntimeSecretBinding secret_bindings = 6;
   string image_artifact_ref = 7;
   repeated RuntimeEnvironmentTool tools = 8;
+  RuntimeEnvironmentPolicyInput policy = 9;
 }
 message CreateRuntimeEnvironmentSetResponse {
   RuntimeEnvironmentSet environment = 1;
@@ -2970,6 +2995,7 @@ message PublishRuntimeEnvironmentVersionRequest {
   repeated RuntimeSecretBinding secret_bindings = 6;
   string image_artifact_ref = 7;
   repeated RuntimeEnvironmentTool tools = 8;
+  RuntimeEnvironmentPolicyInput policy = 9;
 }
 message PublishRuntimeEnvironmentVersionResponse {
   RuntimeEnvironmentSet environment = 1;
@@ -3065,6 +3091,103 @@ message RuntimeEnvironmentVersion {
   google.protobuf.Timestamp created_at = 7;
   RuntimeEnvironmentImage image = 8;
   repeated RuntimeEnvironmentTool tools = 9;
+  RuntimeEnvironmentPolicy policy = 10;
+}
+
+enum RuntimeVolumeKind {
+  RUNTIME_VOLUME_KIND_UNSPECIFIED = 0;
+  RUNTIME_VOLUME_KIND_EPHEMERAL_DISK = 1;
+  RUNTIME_VOLUME_KIND_EPHEMERAL_MEMORY = 2;
+}
+
+enum RuntimeNetworkDestination {
+  RUNTIME_NETWORK_DESTINATION_UNSPECIFIED = 0;
+  RUNTIME_NETWORK_DESTINATION_DNS = 1;
+  RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK = 2;
+  RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY = 3;
+  RUNTIME_NETWORK_DESTINATION_KUBERNETES_API = 4;
+}
+
+enum RuntimeNetworkProtocol {
+  RUNTIME_NETWORK_PROTOCOL_UNSPECIFIED = 0;
+  RUNTIME_NETWORK_PROTOCOL_TCP = 1;
+  RUNTIME_NETWORK_PROTOCOL_UDP = 2;
+}
+
+enum RuntimeKubernetesAccessKind {
+  RUNTIME_KUBERNETES_ACCESS_KIND_UNSPECIFIED = 0;
+  RUNTIME_KUBERNETES_ACCESS_KIND_NONE = 1;
+  RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION = 2;
+}
+
+message RuntimeResourcePolicy {
+  int64 cpu_request_milli = 1;
+  int64 cpu_limit_milli = 2;
+  int64 memory_request_mib = 3;
+  int64 memory_limit_mib = 4;
+  int64 ephemeral_storage_request_mib = 5;
+  int64 ephemeral_storage_limit_mib = 6;
+}
+
+message RuntimeVolumeInput {
+  string name = 1;
+  RuntimeVolumeKind kind = 2;
+  int64 size_mib = 3;
+}
+
+message RuntimeVolume {
+  string name = 1;
+  RuntimeVolumeKind kind = 2;
+  int64 size_mib = 3;
+  string mount_path = 4;
+}
+
+message RuntimeEnvironmentPolicyInput {
+  RuntimeResourcePolicy resources = 1;
+  repeated RuntimeVolumeInput volumes = 2;
+  repeated RuntimeNetworkDestination network_destinations = 3;
+  RuntimeKubernetesAccessKind kubernetes_access = 4;
+}
+
+message RuntimeNetworkEgress {
+  RuntimeNetworkDestination destination = 1;
+  RuntimeNetworkProtocol protocol = 2;
+  int32 port = 3;
+}
+
+message RuntimeNetworkPolicy {
+  bool deny_by_default = 1;
+  repeated RuntimeNetworkEgress egress = 2;
+}
+
+message RuntimeKubernetesAccessProfile {
+  RuntimeKubernetesAccessKind kind = 1;
+  string namespace = 2;
+}
+
+message RuntimeKubernetesRule {
+  string api_group = 1;
+  string resource = 2;
+  repeated string verbs = 3;
+  repeated string resource_names = 4;
+}
+
+message RuntimeKubernetesAccess {
+  RuntimeKubernetesAccessProfile profile = 1;
+  string service_account_name = 2;
+  repeated RuntimeKubernetesRule rules = 3;
+  string digest = 4;
+}
+
+message RuntimeEnvironmentPolicy {
+  RuntimeResourcePolicy resources = 1;
+  repeated RuntimeVolume volumes = 2;
+  RuntimeNetworkPolicy network = 3;
+  RuntimeKubernetesAccessProfile kubernetes_access = 4;
+  string resources_digest = 5;
+  string volumes_digest = 6;
+  string network_digest = 7;
+  string rbac_digest = 8;
 }
 
 message RuntimeEnvironmentImage {

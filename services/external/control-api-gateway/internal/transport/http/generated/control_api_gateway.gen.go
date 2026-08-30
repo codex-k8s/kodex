@@ -92,15 +92,17 @@ func (e AccessExplanationStepCode) Valid() bool {
 
 // Defines values for AccessResourceKind.
 const (
-	AccessResourceKindAGENT        AccessResourceKind = "AGENT"
-	AccessResourceKindARTIFACT     AccessResourceKind = "ARTIFACT"
-	AccessResourceKindINTEGRATION  AccessResourceKind = "INTEGRATION"
-	AccessResourceKindORGANIZATION AccessResourceKind = "ORGANIZATION"
-	AccessResourceKindOWNERGATE    AccessResourceKind = "OWNER_GATE"
-	AccessResourceKindPROJECT      AccessResourceKind = "PROJECT"
-	AccessResourceKindRUN          AccessResourceKind = "RUN"
-	AccessResourceKindSCHEDULE     AccessResourceKind = "SCHEDULE"
-	AccessResourceKindWORKFLOW     AccessResourceKind = "WORKFLOW"
+	AccessResourceKindAGENT              AccessResourceKind = "AGENT"
+	AccessResourceKindARTIFACT           AccessResourceKind = "ARTIFACT"
+	AccessResourceKindINTEGRATION        AccessResourceKind = "INTEGRATION"
+	AccessResourceKindORGANIZATION       AccessResourceKind = "ORGANIZATION"
+	AccessResourceKindOWNERGATE          AccessResourceKind = "OWNER_GATE"
+	AccessResourceKindPROJECT            AccessResourceKind = "PROJECT"
+	AccessResourceKindRUN                AccessResourceKind = "RUN"
+	AccessResourceKindRUNTIMEENVIRONMENT AccessResourceKind = "RUNTIME_ENVIRONMENT"
+	AccessResourceKindSCHEDULE           AccessResourceKind = "SCHEDULE"
+	AccessResourceKindSECRET             AccessResourceKind = "SECRET"
+	AccessResourceKindWORKFLOW           AccessResourceKind = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the AccessResourceKind enum.
@@ -120,7 +122,11 @@ func (e AccessResourceKind) Valid() bool {
 		return true
 	case AccessResourceKindRUN:
 		return true
+	case AccessResourceKindRUNTIMEENVIRONMENT:
+		return true
 	case AccessResourceKindSCHEDULE:
+		return true
+	case AccessResourceKindSECRET:
 		return true
 	case AccessResourceKindWORKFLOW:
 		return true
@@ -830,7 +836,11 @@ func (e IntegrationCapabilityApprovalPolicy) Valid() bool {
 
 // Defines values for IntegrationCapabilityResourceKind.
 const (
+	IntegrationCapabilityResourceKindCONFLUENCESPACE   IntegrationCapabilityResourceKind = "CONFLUENCE_SPACE"
+	IntegrationCapabilityResourceKindEMAILSENDER       IntegrationCapabilityResourceKind = "EMAIL_SENDER"
 	IntegrationCapabilityResourceKindGITHUBREPOSITORY  IntegrationCapabilityResourceKind = "GITHUB_REPOSITORY"
+	IntegrationCapabilityResourceKindGITLABPROJECT     IntegrationCapabilityResourceKind = "GITLAB_PROJECT"
+	IntegrationCapabilityResourceKindJIRAPROJECT       IntegrationCapabilityResourceKind = "JIRA_PROJECT"
 	IntegrationCapabilityResourceKindMATTERMOSTCHANNEL IntegrationCapabilityResourceKind = "MATTERMOST_CHANNEL"
 	IntegrationCapabilityResourceKindSYNTHETICJOURNAL  IntegrationCapabilityResourceKind = "SYNTHETIC_JOURNAL"
 )
@@ -838,7 +848,15 @@ const (
 // Valid indicates whether the value is a known member of the IntegrationCapabilityResourceKind enum.
 func (e IntegrationCapabilityResourceKind) Valid() bool {
 	switch e {
+	case IntegrationCapabilityResourceKindCONFLUENCESPACE:
+		return true
+	case IntegrationCapabilityResourceKindEMAILSENDER:
+		return true
 	case IntegrationCapabilityResourceKindGITHUBREPOSITORY:
+		return true
+	case IntegrationCapabilityResourceKindGITLABPROJECT:
+		return true
+	case IntegrationCapabilityResourceKindJIRAPROJECT:
 		return true
 	case IntegrationCapabilityResourceKindMATTERMOSTCHANNEL:
 		return true
@@ -944,7 +962,11 @@ func (e IntegrationConnectionCommandAction) Valid() bool {
 
 // Defines values for IntegrationDefinitionAdapter.
 const (
+	CONFLUENCE            IntegrationDefinitionAdapter = "CONFLUENCE"
+	EMAILHTTPS            IntegrationDefinitionAdapter = "EMAIL_HTTPS"
 	GITHUB                IntegrationDefinitionAdapter = "GITHUB"
+	GITLAB                IntegrationDefinitionAdapter = "GITLAB"
+	JIRA                  IntegrationDefinitionAdapter = "JIRA"
 	MATTERMOSTINTERACTION IntegrationDefinitionAdapter = "MATTERMOST_INTERACTION"
 	SYNTHETICHTTP         IntegrationDefinitionAdapter = "SYNTHETIC_HTTP"
 )
@@ -952,7 +974,15 @@ const (
 // Valid indicates whether the value is a known member of the IntegrationDefinitionAdapter enum.
 func (e IntegrationDefinitionAdapter) Valid() bool {
 	switch e {
+	case CONFLUENCE:
+		return true
+	case EMAILHTTPS:
+		return true
 	case GITHUB:
+		return true
+	case GITLAB:
+		return true
+	case JIRA:
 		return true
 	case MATTERMOSTINTERACTION:
 		return true
@@ -1022,7 +1052,11 @@ func (e IntegrationGrantRisk) Valid() bool {
 
 // Defines values for IntegrationResourceScopeKind.
 const (
+	IntegrationResourceScopeKindCONFLUENCESPACE   IntegrationResourceScopeKind = "CONFLUENCE_SPACE"
+	IntegrationResourceScopeKindEMAILSENDER       IntegrationResourceScopeKind = "EMAIL_SENDER"
 	IntegrationResourceScopeKindGITHUBREPOSITORY  IntegrationResourceScopeKind = "GITHUB_REPOSITORY"
+	IntegrationResourceScopeKindGITLABPROJECT     IntegrationResourceScopeKind = "GITLAB_PROJECT"
+	IntegrationResourceScopeKindJIRAPROJECT       IntegrationResourceScopeKind = "JIRA_PROJECT"
 	IntegrationResourceScopeKindMATTERMOSTCHANNEL IntegrationResourceScopeKind = "MATTERMOST_CHANNEL"
 	IntegrationResourceScopeKindSYNTHETICJOURNAL  IntegrationResourceScopeKind = "SYNTHETIC_JOURNAL"
 )
@@ -1030,7 +1064,15 @@ const (
 // Valid indicates whether the value is a known member of the IntegrationResourceScopeKind enum.
 func (e IntegrationResourceScopeKind) Valid() bool {
 	switch e {
+	case IntegrationResourceScopeKindCONFLUENCESPACE:
+		return true
+	case IntegrationResourceScopeKindEMAILSENDER:
+		return true
 	case IntegrationResourceScopeKindGITHUBREPOSITORY:
+		return true
+	case IntegrationResourceScopeKindGITLABPROJECT:
+		return true
+	case IntegrationResourceScopeKindJIRAPROJECT:
 		return true
 	case IntegrationResourceScopeKindMATTERMOSTCHANNEL:
 		return true
@@ -2217,6 +2259,96 @@ func (e RunToolCallState) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeKubernetesAccessKind.
+const (
+	NONE             RuntimeKubernetesAccessKind = "NONE"
+	READOWNEXECUTION RuntimeKubernetesAccessKind = "READ_OWN_EXECUTION"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeKubernetesAccessKind enum.
+func (e RuntimeKubernetesAccessKind) Valid() bool {
+	switch e {
+	case NONE:
+		return true
+	case READOWNEXECUTION:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeKubernetesAccessProfileNamespace.
+const (
+	KodexRuntime RuntimeKubernetesAccessProfileNamespace = "kodex-runtime"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeKubernetesAccessProfileNamespace enum.
+func (e RuntimeKubernetesAccessProfileNamespace) Valid() bool {
+	switch e {
+	case KodexRuntime:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeNetworkDestination.
+const (
+	DNS             RuntimeNetworkDestination = "DNS"
+	KUBERNETESAPI   RuntimeNetworkDestination = "KUBERNETES_API"
+	PROVIDERPROXY   RuntimeNetworkDestination = "PROVIDER_PROXY"
+	RUNTIMECALLBACK RuntimeNetworkDestination = "RUNTIME_CALLBACK"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeNetworkDestination enum.
+func (e RuntimeNetworkDestination) Valid() bool {
+	switch e {
+	case DNS:
+		return true
+	case KUBERNETESAPI:
+		return true
+	case PROVIDERPROXY:
+		return true
+	case RUNTIMECALLBACK:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeNetworkPolicyDenyByDefault.
+const (
+	RuntimeNetworkPolicyDenyByDefaultTrue RuntimeNetworkPolicyDenyByDefault = true
+)
+
+// Valid indicates whether the value is a known member of the RuntimeNetworkPolicyDenyByDefault enum.
+func (e RuntimeNetworkPolicyDenyByDefault) Valid() bool {
+	switch e {
+	case RuntimeNetworkPolicyDenyByDefaultTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeNetworkProtocol.
+const (
+	TCP RuntimeNetworkProtocol = "TCP"
+	UDP RuntimeNetworkProtocol = "UDP"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeNetworkProtocol enum.
+func (e RuntimeNetworkProtocol) Valid() bool {
+	switch e {
+	case TCP:
+		return true
+	case UDP:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RuntimeSecretState.
 const (
 	RuntimeSecretStateACTIVE  RuntimeSecretState = "ACTIVE"
@@ -2250,6 +2382,24 @@ func (e RuntimeSecretValueType) Valid() bool {
 	case JSON:
 		return true
 	case STRING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeVolumeKind.
+const (
+	EPHEMERALDISK   RuntimeVolumeKind = "EPHEMERAL_DISK"
+	EPHEMERALMEMORY RuntimeVolumeKind = "EPHEMERAL_MEMORY"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeVolumeKind enum.
+func (e RuntimeVolumeKind) Valid() bool {
+	switch e {
+	case EPHEMERALDISK:
+		return true
+	case EPHEMERALMEMORY:
 		return true
 	default:
 		return false
@@ -2552,13 +2702,13 @@ func (e SystemAssistantRuntimeState) Valid() bool {
 
 // Defines values for SystemAssistantSystem.
 const (
-	True SystemAssistantSystem = true
+	SystemAssistantSystemTrue SystemAssistantSystem = true
 )
 
 // Valid indicates whether the value is a known member of the SystemAssistantSystem enum.
 func (e SystemAssistantSystem) Valid() bool {
 	switch e {
-	case True:
+	case SystemAssistantSystemTrue:
 		return true
 	default:
 		return false
@@ -4228,18 +4378,39 @@ type RuntimeEnvironmentImage struct {
 
 // RuntimeEnvironmentInput defines model for RuntimeEnvironmentInput.
 type RuntimeEnvironmentInput struct {
-	Description      string                    `json:"description"`
-	ImageArtifactRef OpaqueRef                 `json:"imageArtifactRef"`
-	Name             string                    `json:"name"`
-	SecretBindings   []RuntimeSecretBinding    `json:"secretBindings"`
-	Tools            []RuntimeEnvironmentTool  `json:"tools"`
-	Values           []RuntimeEnvironmentValue `json:"values"`
+	Description      string                        `json:"description"`
+	ImageArtifactRef OpaqueRef                     `json:"imageArtifactRef"`
+	Name             string                        `json:"name"`
+	Policy           RuntimeEnvironmentPolicyInput `json:"policy"`
+	SecretBindings   []RuntimeSecretBinding        `json:"secretBindings"`
+	Tools            []RuntimeEnvironmentTool      `json:"tools"`
+	Values           []RuntimeEnvironmentValue     `json:"values"`
 }
 
 // RuntimeEnvironmentPage defines model for RuntimeEnvironmentPage.
 type RuntimeEnvironmentPage struct {
 	Items         []RuntimeEnvironmentSet `json:"items"`
 	NextPageToken *string                 `json:"nextPageToken,omitempty"`
+}
+
+// RuntimeEnvironmentPolicy defines model for RuntimeEnvironmentPolicy.
+type RuntimeEnvironmentPolicy struct {
+	KubernetesAccess RuntimeKubernetesAccessProfile `json:"kubernetesAccess"`
+	Network          RuntimeNetworkPolicy           `json:"network"`
+	NetworkDigest    string                         `json:"networkDigest"`
+	RbacDigest       string                         `json:"rbacDigest"`
+	Resources        RuntimeResourcePolicy          `json:"resources"`
+	ResourcesDigest  string                         `json:"resourcesDigest"`
+	Volumes          []RuntimeVolume                `json:"volumes"`
+	VolumesDigest    string                         `json:"volumesDigest"`
+}
+
+// RuntimeEnvironmentPolicyInput defines model for RuntimeEnvironmentPolicyInput.
+type RuntimeEnvironmentPolicyInput struct {
+	KubernetesAccess    RuntimeKubernetesAccessKind `json:"kubernetesAccess"`
+	NetworkDestinations []RuntimeNetworkDestination `json:"networkDestinations"`
+	Resources           RuntimeResourcePolicy       `json:"resources"`
+	Volumes             []RuntimeVolumeInput        `json:"volumes"`
 }
 
 // RuntimeEnvironmentRollbackInput defines model for RuntimeEnvironmentRollbackInput.
@@ -4278,6 +4449,7 @@ type RuntimeEnvironmentVersion struct {
 	CreatedAt         Timestamp                 `json:"createdAt"`
 	Digest            string                    `json:"digest"`
 	Image             RuntimeEnvironmentImage   `json:"image"`
+	Policy            RuntimeEnvironmentPolicy  `json:"policy"`
 	Ref               OpaqueRef                 `json:"ref"`
 	Revision          int64                     `json:"revision"`
 	SecretDescriptors []RuntimeSecretDescriptor `json:"secretDescriptors"`
@@ -4290,6 +4462,50 @@ type RuntimeEnvironmentVersion struct {
 type RuntimeEnvironmentVersionPage struct {
 	Items         []RuntimeEnvironmentVersion `json:"items"`
 	NextPageToken *string                     `json:"nextPageToken,omitempty"`
+}
+
+// RuntimeKubernetesAccessKind defines model for RuntimeKubernetesAccessKind.
+type RuntimeKubernetesAccessKind string
+
+// RuntimeKubernetesAccessProfile defines model for RuntimeKubernetesAccessProfile.
+type RuntimeKubernetesAccessProfile struct {
+	Kind      RuntimeKubernetesAccessKind             `json:"kind"`
+	Namespace RuntimeKubernetesAccessProfileNamespace `json:"namespace"`
+}
+
+// RuntimeKubernetesAccessProfileNamespace defines model for RuntimeKubernetesAccessProfile.Namespace.
+type RuntimeKubernetesAccessProfileNamespace string
+
+// RuntimeNetworkDestination defines model for RuntimeNetworkDestination.
+type RuntimeNetworkDestination string
+
+// RuntimeNetworkEgress defines model for RuntimeNetworkEgress.
+type RuntimeNetworkEgress struct {
+	Destination RuntimeNetworkDestination `json:"destination"`
+	Port        int32                     `json:"port"`
+	Protocol    RuntimeNetworkProtocol    `json:"protocol"`
+}
+
+// RuntimeNetworkPolicy defines model for RuntimeNetworkPolicy.
+type RuntimeNetworkPolicy struct {
+	DenyByDefault RuntimeNetworkPolicyDenyByDefault `json:"denyByDefault"`
+	Egress        []RuntimeNetworkEgress            `json:"egress"`
+}
+
+// RuntimeNetworkPolicyDenyByDefault defines model for RuntimeNetworkPolicy.DenyByDefault.
+type RuntimeNetworkPolicyDenyByDefault bool
+
+// RuntimeNetworkProtocol defines model for RuntimeNetworkProtocol.
+type RuntimeNetworkProtocol string
+
+// RuntimeResourcePolicy defines model for RuntimeResourcePolicy.
+type RuntimeResourcePolicy struct {
+	CpuLimitMilli              int64 `json:"cpuLimitMilli"`
+	CpuRequestMilli            int64 `json:"cpuRequestMilli"`
+	EphemeralStorageLimitMib   int64 `json:"ephemeralStorageLimitMib"`
+	EphemeralStorageRequestMib int64 `json:"ephemeralStorageRequestMib"`
+	MemoryLimitMib             int64 `json:"memoryLimitMib"`
+	MemoryRequestMib           int64 `json:"memoryRequestMib"`
 }
 
 // RuntimeSecret defines model for RuntimeSecret.
@@ -4371,6 +4587,24 @@ type RuntimeSelection struct {
 	Ref      OpaqueRef `json:"ref"`
 	Revision string    `json:"revision"`
 }
+
+// RuntimeVolume defines model for RuntimeVolume.
+type RuntimeVolume struct {
+	Kind      RuntimeVolumeKind `json:"kind"`
+	MountPath string            `json:"mountPath"`
+	Name      string            `json:"name"`
+	SizeMib   int64             `json:"sizeMib"`
+}
+
+// RuntimeVolumeInput defines model for RuntimeVolumeInput.
+type RuntimeVolumeInput struct {
+	Kind    RuntimeVolumeKind `json:"kind"`
+	Name    string            `json:"name"`
+	SizeMib int64             `json:"sizeMib"`
+}
+
+// RuntimeVolumeKind defines model for RuntimeVolumeKind.
+type RuntimeVolumeKind string
 
 // Schedule defines model for Schedule.
 type Schedule struct {

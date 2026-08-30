@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -161,6 +160,8 @@ type RunnerInput struct {
 	EnvironmentBindingDigest    string                    `json:"environment_binding_digest"`
 	EnvironmentValues           []RuntimeEnvironmentValue `json:"environment_values,omitempty"`
 	SecretProjections           []RuntimeSecretProjection `json:"secret_projections,omitempty"`
+	EnvironmentPolicy           RuntimeEnvironmentPolicy  `json:"environment_policy"`
+	EffectiveKubernetesAccess   RuntimeKubernetesAccess   `json:"effective_kubernetes_access"`
 	CodexSandbox                string                    `json:"codex_sandbox"`
 	CodexApprovalPolicy         string                    `json:"codex_approval_policy"`
 	CodexSessionID              string                    `json:"codex_session_id,omitempty"`
@@ -210,7 +211,14 @@ func (input RunnerInput) Validate() error {
 	if err != nil || canonicalOverlay != input.ConfigOverlay || overlayDigest != input.ConfigOverlayDigest {
 		return errors.New("runner config overlay binding is invalid")
 	}
-	environmentDigest, err := RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections, input.EnvironmentImage, input.EnvironmentTools)
+	normalizedPolicy, policyErr := NormalizeRuntimeEnvironmentPolicy(input.EnvironmentPolicy)
+	if policyErr != nil || normalizedPolicy.ResourcesDigest != input.EnvironmentPolicy.ResourcesDigest ||
+		normalizedPolicy.VolumesDigest != input.EnvironmentPolicy.VolumesDigest || normalizedPolicy.NetworkDigest != input.EnvironmentPolicy.NetworkDigest ||
+		normalizedPolicy.RBACDigest != input.EnvironmentPolicy.RBACDigest || ValidateRuntimeKubernetesAccess(input.EffectiveKubernetesAccess) != nil ||
+		input.EffectiveKubernetesAccess.Profile != normalizedPolicy.KubernetesAccess {
+		return errors.New("runner environment policy binding is invalid")
+	}
+	environmentDigest, err := RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections, input.EnvironmentImage, input.EnvironmentTools, normalizedPolicy)
 	if err != nil || environmentDigest != input.RuntimeEnvironmentDigest {
 		return errors.New("runner environment binding is invalid")
 	}
@@ -257,35 +265,9 @@ func (input RunnerInput) Validate() error {
 			seen[operation] = struct{}{}
 		}
 	}
-	artifactRefs := make(map[string]struct{}, len(input.InputArtifacts))
-	artifactPositions := make(map[string]struct{}, len(input.InputArtifacts))
-	var artifactBytes int64
-	hasInputAttachments := false
-	for _, artifact := range input.InputArtifacts {
-		if !opaqueReferencePattern.MatchString(artifact.Ref) || !validArtifactFileName(artifact.FileName) ||
-			strings.TrimSpace(artifact.MediaType) == "" || len(artifact.MediaType) > 255 ||
-			!imageDigestPattern.MatchString(artifact.Digest) || artifact.SizeBytes < 0 ||
-			artifact.SizeBytes > MaximumInputArtifactBytes || artifact.Revision < 1 || artifact.Version < 1 ||
-			!containsString([]string{"INPUT", "SESSION", "KNOWLEDGE"}, artifact.Scope) || artifact.Position < 1 ||
-			!containsString([]string{"CONTROL_CENTER", "AGENT_RESULT", "INTEGRATION_RESULT", "KNOWLEDGE_SOURCE", "INTERACTION_ATTACHMENT"}, artifact.Source) {
-			return errors.New("runner artifact catalog is invalid")
-		}
-		if _, exists := artifactRefs[artifact.Ref]; exists {
-			return errors.New("runner artifact catalog is invalid")
-		}
-		artifactRefs[artifact.Ref] = struct{}{}
-		positionKey := artifact.Scope + ":" + strconv.FormatInt(artifact.Position, 10)
-		if _, exists := artifactPositions[positionKey]; exists {
-			return errors.New("runner artifact catalog is invalid")
-		}
-		artifactPositions[positionKey] = struct{}{}
-		if artifact.Scope == "INPUT" {
-			hasInputAttachments = true
-		}
-		artifactBytes += artifact.SizeBytes
-		if artifactBytes > MaximumInputArtifactTotal {
-			return errors.New("runner artifact catalog is invalid")
-		}
+	hasInputAttachments, err := validateRunnerInputArtifacts(input.InputArtifacts)
+	if err != nil {
+		return err
 	}
 	if hasInputAttachments != (opaqueReferencePattern.MatchString(input.AttachmentSetRef) && sha256Pattern.MatchString(input.AttachmentSetManifestDigest)) {
 		return errors.New("runner attachment set binding is invalid")
@@ -418,6 +400,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		EnvironmentBindingDigest    string
 		EnvironmentValues           []RuntimeEnvironmentValue
 		SecretProjections           []RuntimeSecretProjection
+		EnvironmentPolicy           RuntimeEnvironmentPolicy
 	}{
 		ImageReference: input.ImageReference, ImageManifestDigest: input.ImageManifestDigest,
 		EnvironmentImage: input.EnvironmentImage, EnvironmentTools: input.EnvironmentTools,
@@ -435,6 +418,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		RuntimeEnvironmentRef: input.RuntimeEnvironmentRef, RuntimeEnvironmentVersion: input.RuntimeEnvironmentVersion, RuntimeEnvironmentDigest: input.RuntimeEnvironmentDigest,
 		EnvironmentBindingRef: input.EnvironmentBindingRef, EnvironmentBindingVersion: input.EnvironmentBindingVersion, EnvironmentBindingDigest: input.EnvironmentBindingDigest,
 		EnvironmentValues: input.EnvironmentValues, SecretProjections: input.SecretProjections,
+		EnvironmentPolicy: input.EnvironmentPolicy,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {

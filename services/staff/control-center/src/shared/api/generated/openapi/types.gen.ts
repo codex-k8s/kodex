@@ -24,7 +24,7 @@ export type AccessSubjectKind = 'USER' | 'OIDC_GROUP' | 'SERVICE';
 
 export type AccessScopeKind = 'ORGANIZATION' | 'PROJECT' | 'RESOURCE_KIND' | 'RESOURCE_INSTANCE';
 
-export type AccessResourceKind = 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN' | 'OWNER_GATE' | 'ARTIFACT' | 'SCHEDULE' | 'INTEGRATION';
+export type AccessResourceKind = 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN' | 'OWNER_GATE' | 'ARTIFACT' | 'SCHEDULE' | 'INTEGRATION' | 'RUNTIME_ENVIRONMENT' | 'SECRET';
 
 export type AccessRoleKind = 'SYSTEM' | 'CUSTOM';
 
@@ -575,6 +575,7 @@ export type RuntimeEnvironmentVersion = {
     createdAt: Timestamp;
     image: RuntimeEnvironmentImage;
     tools: Array<RuntimeEnvironmentTool>;
+    policy: RuntimeEnvironmentPolicy;
 };
 
 export type RuntimeEnvironmentImage = {
@@ -590,6 +591,70 @@ export type RuntimeEnvironmentTool = {
     command: string;
     description: string;
     usageHint: string;
+};
+
+export type RuntimeVolumeKind = 'EPHEMERAL_DISK' | 'EPHEMERAL_MEMORY';
+
+export type RuntimeNetworkDestination = 'DNS' | 'RUNTIME_CALLBACK' | 'PROVIDER_PROXY' | 'KUBERNETES_API';
+
+export type RuntimeNetworkProtocol = 'TCP' | 'UDP';
+
+export type RuntimeKubernetesAccessKind = 'NONE' | 'READ_OWN_EXECUTION';
+
+export type RuntimeResourcePolicy = {
+    cpuRequestMilli: number;
+    cpuLimitMilli: number;
+    memoryRequestMib: number;
+    memoryLimitMib: number;
+    ephemeralStorageRequestMib: number;
+    ephemeralStorageLimitMib: number;
+};
+
+export type RuntimeVolumeInput = {
+    name: string;
+    kind: RuntimeVolumeKind;
+    sizeMib: number;
+};
+
+export type RuntimeVolume = {
+    name: string;
+    kind: RuntimeVolumeKind;
+    sizeMib: number;
+    mountPath: string;
+};
+
+export type RuntimeEnvironmentPolicyInput = {
+    resources: RuntimeResourcePolicy;
+    volumes: Array<RuntimeVolumeInput>;
+    networkDestinations: Array<RuntimeNetworkDestination>;
+    kubernetesAccess: RuntimeKubernetesAccessKind;
+};
+
+export type RuntimeNetworkEgress = {
+    destination: RuntimeNetworkDestination;
+    protocol: RuntimeNetworkProtocol;
+    port: number;
+};
+
+export type RuntimeNetworkPolicy = {
+    denyByDefault: true;
+    egress: Array<RuntimeNetworkEgress>;
+};
+
+export type RuntimeKubernetesAccessProfile = {
+    kind: RuntimeKubernetesAccessKind;
+    namespace: 'kodex-runtime';
+};
+
+export type RuntimeEnvironmentPolicy = {
+    resources: RuntimeResourcePolicy;
+    volumes: Array<RuntimeVolume>;
+    network: RuntimeNetworkPolicy;
+    kubernetesAccess: RuntimeKubernetesAccessProfile;
+    resourcesDigest: string;
+    volumesDigest: string;
+    networkDigest: string;
+    rbacDigest: string;
 };
 
 export type RuntimeEnvironmentSet = {
@@ -610,6 +675,7 @@ export type RuntimeEnvironmentInput = {
     tools: Array<RuntimeEnvironmentTool>;
     values: Array<RuntimeEnvironmentValue>;
     secretBindings: Array<RuntimeSecretBinding>;
+    policy: RuntimeEnvironmentPolicyInput;
 };
 
 export type RuntimeEnvironmentRollbackInput = {
@@ -1188,7 +1254,7 @@ export type IntegrationCapability = {
     approvalRequired: boolean;
     operation: string;
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
-    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL';
+    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER';
     inputFields: Array<IntegrationConfigurationField>;
 };
 
@@ -1214,12 +1280,12 @@ export type IntegrationDefinition = {
     definitionVersion: string;
     origin: 'SHIPPED';
     digest: string;
-    adapter: 'SYNTHETIC_HTTP' | 'GITHUB' | 'MATTERMOST_INTERACTION';
+    adapter: 'SYNTHETIC_HTTP' | 'GITHUB' | 'GITLAB' | 'JIRA' | 'CONFLUENCE' | 'EMAIL_HTTPS' | 'MATTERMOST_INTERACTION';
     credentialSecretKey?: string;
 };
 
 export type IntegrationResourceScope = {
-    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL';
+    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER';
     values: {
         [key: string]: string;
     };

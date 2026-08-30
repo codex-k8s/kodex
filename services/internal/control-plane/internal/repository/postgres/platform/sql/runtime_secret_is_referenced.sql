@@ -1,3 +1,4 @@
+-- name: runtime_secret_is_referenced :one
 SELECT EXISTS (
     SELECT 1
     FROM control_plane.runtime_environment_sets environment

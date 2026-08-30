@@ -274,32 +274,35 @@ func toolCapabilityMatches(tool, capability string, integration, systemAssistant
 }
 
 type claimableExecution struct {
-	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef                string
-	sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision              string
-	provider, model, providerAccountID, providerAccountRef                          string
-	providerCredentialID, providerCredentialRef                                     string
-	providerSecretName, providerSecretUID, providerSecretResourceVersion            string
-	providerCredentialSHA256, instructionRef, instructionDigest, instructions       string
-	turnRef, stableKey, callbackEdgeRef, turnID, agentID                            string
-	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef      string
-	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest  string
-	roleRuntimeContractSHA256                                                       string
-	runtimeConfigID, runtimeConfigRef, runtimeConfigDigest                          string
-	providerPolicyID, providerPolicyRef, providerPolicyDigest, providerPolicyMode   string
-	configOverlayID, configOverlayRef, configOverlayDigest, configOverlay           string
-	environmentBindingID, environmentBindingRef, environmentBindingDigest           string
-	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest           string
-	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext string
-	codexSessionID                                                                  string
-	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration         int64
-	roleRuntimeContractRevision                                                     int64
-	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion               int64
-	environmentBindingVersion, runtimeEnvironmentVersion                            int64
-	attempt                                                                         int32
-	capabilities, knowledge                                                         []string
-	rawInput, rawArtifacts, rawIntegrationGrants, rawDelegationTargets              []byte
-	rawSessionContext                                                               []byte
-	rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools                 []byte
+	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef                 string
+	initiatorRef                                                                     string
+	sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision               string
+	provider, model, providerAccountID, providerAccountRef                           string
+	providerCredentialID, providerCredentialRef                                      string
+	providerSecretName, providerSecretUID, providerSecretResourceVersion             string
+	providerCredentialSHA256, instructionRef, instructionDigest, instructions        string
+	turnRef, stableKey, callbackEdgeRef, turnID, agentID                             string
+	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef       string
+	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest   string
+	roleRuntimeContractSHA256                                                        string
+	runtimeConfigID, runtimeConfigRef, runtimeConfigDigest                           string
+	providerPolicyID, providerPolicyRef, providerPolicyDigest, providerPolicyMode    string
+	configOverlayID, configOverlayRef, configOverlayDigest, configOverlay            string
+	environmentBindingID, environmentBindingRef, environmentBindingDigest            string
+	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest            string
+	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext  string
+	codexSessionID                                                                   string
+	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration          int64
+	roleRuntimeContractRevision                                                      int64
+	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                int64
+	environmentBindingVersion, runtimeEnvironmentVersion                             int64
+	attempt                                                                          int32
+	capabilities, knowledge                                                          []string
+	rawInput, rawArtifacts, rawIntegrationGrants, rawDelegationTargets               []byte
+	rawSessionContext                                                                []byte
+	rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools                  []byte
+	rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy, rawKubernetesAccessProfile []byte
+	resourcesDigest, volumesDigest, networkDigest, rbacDigest                        string
 }
 
 func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -322,7 +325,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	for rows.Next() {
 		candidate := claimableExecution{}
 		if err := rows.Scan(&candidate.nodeID, &candidate.nodeRef, &candidate.runID, &candidate.runRef,
-			&candidate.rootRunID, &candidate.projectID, &candidate.projectRef, &candidate.sessionID,
+			&candidate.rootRunID, &candidate.projectID, &candidate.projectRef, &candidate.initiatorRef, &candidate.sessionID,
 			&candidate.sessionRef, &candidate.task, &candidate.agentRef, &candidate.runtimeKey,
 			&candidate.runtimeRevision, &candidate.provider, &candidate.model, &candidate.providerAccountID,
 			&candidate.providerAccountRef, &candidate.providerCredentialID, &candidate.providerCredentialRef,
@@ -345,6 +348,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.environmentBindingID, &candidate.environmentBindingRef, &candidate.environmentBindingVersion, &candidate.environmentBindingDigest,
 			&candidate.runtimeEnvironmentID, &candidate.runtimeEnvironmentRef, &candidate.runtimeEnvironmentVersion, &candidate.runtimeEnvironmentDigest,
 			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
+			&candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
+			&candidate.resourcesDigest, &candidate.volumesDigest, &candidate.networkDigest, &candidate.rbacDigest,
 			&candidate.codexSessionID); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
@@ -396,6 +401,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		}
 		fenceDigest := sha256.Sum256([]byte(fence))
 		leaseRef, _ := newRef("lea")
+		podName := runtimecontract.RuntimeTurnPodName(leaseRef)
+		serviceAccountName := runtimecontract.RuntimeServiceAccountName(leaseRef)
 		inputDigest := sha256.Sum256(rawInput)
 		var inputMap map[string]any
 		_ = jsonUnmarshal(rawInput, &inputMap)
@@ -416,6 +423,30 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
+		environmentPolicy, err := decodeRuntimeEnvironmentPolicy(candidate.rawResourcePolicy, candidate.rawVolumePolicy,
+			candidate.rawNetworkPolicy, candidate.rawKubernetesAccessProfile, candidate.resourcesDigest,
+			candidate.volumesDigest, candidate.networkDigest, candidate.rbacDigest)
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		effectiveKubernetesAccess, err := runtimecontract.RuntimeKubernetesAccessForExecution(
+			environmentPolicy.KubernetesAccess, serviceAccountName, podName)
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if environmentPolicy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
+			if projectRef == "" || candidate.initiatorRef == "" {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			initiatorScope := scope
+			initiatorScope.actorRef = candidate.initiatorRef
+			target, resolveErr := repository.resolveAccessTarget(ctx, tx, scope.organizationID, entity.AccessScope{
+				ProjectRef: projectRef, ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: runtimeEnvironmentRef,
+			})
+			if resolveErr != nil || repository.requireAccess(ctx, tx, initiatorScope, "environment.privileged.manage", target) != nil {
+				return commandOutcome{}, errs.ErrNotFound
+			}
+		}
 		environmentImage := runtimecontract.RuntimeEnvironmentImage{
 			ArtifactRef: roleImageArtifactRef, RecipeRef: roleImageRecipeRef, RecipeGeneration: roleImageRecipeGeneration,
 			Reference: imageReference, Digest: imageManifestDigest,
@@ -424,7 +455,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if err != nil || canonicalOverlay != configOverlay || verifiedOverlayDigest != configOverlayDigest {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(environmentValues, secretProjections, environmentImage, environmentTools)
+		verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(environmentValues, secretProjections, environmentImage, environmentTools, environmentPolicy)
 		if err != nil || verifiedEnvironmentDigest != runtimeEnvironmentDigest {
 			return commandOutcome{}, errs.ErrConflict
 		}
@@ -451,6 +482,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			providerPolicyRef, strconv.FormatInt(providerPolicyVersion, 10), providerPolicyDigest,
 			configOverlayRef, strconv.FormatInt(configOverlayVersion, 10), configOverlayDigest,
 			runtimeEnvironmentRef, strconv.FormatInt(runtimeEnvironmentVersion, 10),
+			environmentPolicy.ResourcesDigest, environmentPolicy.VolumesDigest, environmentPolicy.NetworkDigest,
+			environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest,
 			environmentBindingRef, strconv.FormatInt(environmentBindingVersion, 10), environmentBindingDigest,
 			codexSessionID,
 		)
@@ -494,6 +527,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"environmentBindingRef": environmentBindingRef, "environmentBindingVersion": environmentBindingVersion, "environmentBindingDigest": environmentBindingDigest,
 			"environmentValues": environmentValues, "secretProjections": secretProjections,
 			"environmentImage": environmentImage, "environmentTools": environmentTools,
+			"environmentPolicy": environmentPolicy, "effectiveKubernetesAccess": effectiveKubernetesAccess,
 			"codexSessionID": codexSessionID,
 		}
 		if len(assistantContext) != 0 {
@@ -519,6 +553,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			providerPolicyRef, providerPolicyVersion, providerPolicyDigest, configOverlayRef, configOverlayVersion,
 			configOverlayDigest, runtimeEnvironmentRef, runtimeEnvironmentVersion, runtimeEnvironmentDigest,
 			environmentBindingRef, environmentBindingVersion, environmentBindingDigest,
+			environmentPolicy.ResourcesDigest, environmentPolicy.VolumesDigest, environmentPolicy.NetworkDigest,
+			environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest,
 			revisionDigestHex, rawSnapshot).Scan(&runtimeRevisionID); err != nil {
 			return commandOutcome{}, fmt.Errorf("insert runtime revision: %w", errs.ErrConflict)
 		}
@@ -863,7 +899,11 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event, CreatedRefs: artifactRefs}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN_NODE", resourceRef: stringMap(lease, "nodeRef"), summary: "i18n:RUNTIME_EXECUTION_COMPLETED"}, nil
+	outcome := commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event, CreatedRefs: artifactRefs}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN_NODE", resourceRef: stringMap(lease, "nodeRef"), summary: "i18n:RUNTIME_EXECUTION_COMPLETED"}
+	if targetType == "SYSTEM_ASSISTANT" {
+		outcome.platformEvent = "SYSTEM_ASSISTANT_CHANGED"
+	}
+	return outcome, nil
 }
 
 type storedRunUsage struct {

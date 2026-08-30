@@ -135,6 +135,14 @@ ServiceAccount не являются полями окружения. Control-pl
 типизированные profiles в exact resources и сохраняет их canonical digests в
 `RuntimeRevision`.
 
+Создание или публикация окружения с Kubernetes access является privileged
+операцией. Помимо exact `environment.privileged.manage` для Project либо
+конкретного `RuntimeEnvironment`, control-plane требует свежий OIDC `auth_time`.
+Истёкшее окно возвращает отдельный `FRESH_AUTHENTICATION_REQUIRED`, не завершает
+обычную browser session и не выполняет команду автоматически: Control Center
+сохраняет bounded черновик, проводит OIDC re-authentication, восстанавливает
+форму и ждёт повторного явного подтверждения пользователя.
+
 Image build для каждого инструмента фиксирует `name`, canonical command,
 executable path, version/probe и result digest в подписанном tool manifest.
 Окружение может выбрать только элементы этого manifest. Перед запуском provider
@@ -263,6 +271,15 @@ resources, immutable input binding и execution ticket Secret. Admission так�
 этого ticket в `provider-runtime`. Mutable image, extra container, raw
 user-supplied Kubernetes policy, broad token, host access и privileged fallback
 запрещены.
+
+Policy выбирает все создаваемые runtime-controller объекты по проверенной
+ServiceAccount identity и namespace, а обязательные labels проверяет внутри
+правил: отсутствие label не может отключить admission. Kubernetes API egress
+сверяется с installation-owned `ConfigMap` parameter и exact `/32`; отсутствие
+параметра закрывает materialization. Startup reconciliation постранично
+перечисляет execution Pods, tickets, ServiceAccounts, Roles, RoleBindings и
+NetworkPolicies и удаляет сироты, не принадлежащие активной попытке текущего
+controller generation.
 
 Прежние role images, mutable environment records, старый runner input,
 неверсионированные Secret bindings и fallback на старый Pod contract не

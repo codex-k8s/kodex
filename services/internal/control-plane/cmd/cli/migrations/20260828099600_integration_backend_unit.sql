@@ -6,7 +6,9 @@ ALTER TABLE control_plane.integration_definitions
     ADD COLUMN definition_version text NOT NULL DEFAULT '1.0.0',
     ADD COLUMN origin text NOT NULL DEFAULT 'SHIPPED' CHECK (origin = 'SHIPPED'),
     ADD COLUMN digest text NOT NULL DEFAULT repeat('0', 64) CHECK (digest ~ '^[a-f0-9]{64}$'),
-    ADD COLUMN adapter text NOT NULL CHECK (adapter IN ('SYNTHETIC_HTTP', 'GITHUB', 'MATTERMOST_INTERACTION')),
+    ADD COLUMN adapter text NOT NULL CHECK (adapter IN (
+        'SYNTHETIC_HTTP', 'GITHUB', 'GITLAB', 'JIRA', 'CONFLUENCE', 'EMAIL_HTTPS', 'MATTERMOST_INTERACTION'
+    )),
     ADD COLUMN credential_secret_key text;
 
 ALTER TABLE control_plane.integration_connections
@@ -35,7 +37,10 @@ ALTER TABLE control_plane.integration_connections
 
 ALTER TABLE control_plane.integration_grants
     ADD COLUMN risk text NOT NULL DEFAULT 'READ' CHECK (risk IN ('READ', 'WRITE', 'SENSITIVE', 'DESTRUCTIVE')),
-    ADD COLUMN resource_kind text NOT NULL DEFAULT 'SYNTHETIC_JOURNAL' CHECK (resource_kind IN ('SYNTHETIC_JOURNAL', 'GITHUB_REPOSITORY', 'MATTERMOST_CHANNEL')),
+    ADD COLUMN resource_kind text NOT NULL DEFAULT 'SYNTHETIC_JOURNAL' CHECK (resource_kind IN (
+        'SYNTHETIC_JOURNAL', 'GITHUB_REPOSITORY', 'GITLAB_PROJECT', 'JIRA_PROJECT',
+        'CONFLUENCE_SPACE', 'EMAIL_SENDER', 'MATTERMOST_CHANNEL'
+    )),
     ADD COLUMN resource_scope jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(resource_scope) = 'object' AND octet_length(resource_scope::text) <= 4096),
     ADD COLUMN resource_scope_digest text NOT NULL DEFAULT repeat('0', 64) CHECK (resource_scope_digest ~ '^[a-f0-9]{64}$'),
     ADD COLUMN definition_version text NOT NULL DEFAULT '1.0.0',
@@ -47,7 +52,10 @@ ALTER TABLE control_plane.integration_invocations
     ADD COLUMN definition_digest text NOT NULL DEFAULT repeat('0', 64) CHECK (definition_digest ~ '^[a-f0-9]{64}$'),
     ADD COLUMN risk text NOT NULL DEFAULT 'READ' CHECK (risk IN ('READ', 'WRITE', 'SENSITIVE', 'DESTRUCTIVE')),
     ADD COLUMN approval_policy text NOT NULL DEFAULT 'NONE' CHECK (approval_policy IN ('NONE', 'HUMAN_EACH_EFFECT')),
-    ADD COLUMN resource_kind text NOT NULL DEFAULT 'SYNTHETIC_JOURNAL' CHECK (resource_kind IN ('SYNTHETIC_JOURNAL', 'GITHUB_REPOSITORY', 'MATTERMOST_CHANNEL')),
+    ADD COLUMN resource_kind text NOT NULL DEFAULT 'SYNTHETIC_JOURNAL' CHECK (resource_kind IN (
+        'SYNTHETIC_JOURNAL', 'GITHUB_REPOSITORY', 'GITLAB_PROJECT', 'JIRA_PROJECT',
+        'CONFLUENCE_SPACE', 'EMAIL_SENDER', 'MATTERMOST_CHANNEL'
+    )),
     ADD COLUMN resource_scope jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(resource_scope) = 'object' AND octet_length(resource_scope::text) <= 4096),
     ADD COLUMN resource_scope_digest text NOT NULL DEFAULT repeat('0', 64) CHECK (resource_scope_digest ~ '^[a-f0-9]{64}$'),
     ADD COLUMN effect_key text NOT NULL DEFAULT '';

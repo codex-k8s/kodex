@@ -42,6 +42,8 @@
     "environment_binding_ref",
     "environment_binding_version",
     "environment_binding_digest",
+    "environment_policy",
+    "effective_kubernetes_access",
     "codex_sandbox",
     "codex_approval_policy",
     "callback_url",
@@ -155,6 +157,8 @@
       "maxItems": 128,
       "items": {"$ref": "#/$defs/secret_projection"}
     },
+    "environment_policy": {"$ref": "#/$defs/environment_policy"},
+    "effective_kubernetes_access": {"$ref": "#/$defs/effective_kubernetes_access"},
     "codex_sandbox": {"enum": ["read-only", "workspace-write"]},
     "codex_approval_policy": {"enum": ["untrusted", "on-request", "never"]},
     "codex_session_id": {"type": "string", "maxLength": 255},
@@ -410,6 +414,122 @@
         "command": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$"},
         "description": {"type": "string", "minLength": 1, "maxLength": 500},
         "usage_hint": {"type": "string", "maxLength": 500}
+      }
+    },
+    "resource_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cpu_request_milli",
+        "cpu_limit_milli",
+        "memory_request_mib",
+        "memory_limit_mib",
+        "ephemeral_storage_request_mib",
+        "ephemeral_storage_limit_mib"
+      ],
+      "properties": {
+        "cpu_request_milli": {"type": "integer", "minimum": 100, "maximum": 8000},
+        "cpu_limit_milli": {"type": "integer", "minimum": 100, "maximum": 16000},
+        "memory_request_mib": {"type": "integer", "minimum": 128, "maximum": 32768},
+        "memory_limit_mib": {"type": "integer", "minimum": 128, "maximum": 65536},
+        "ephemeral_storage_request_mib": {"type": "integer", "minimum": 256, "maximum": 20480},
+        "ephemeral_storage_limit_mib": {"type": "integer", "minimum": 256, "maximum": 102400}
+      }
+    },
+    "runtime_volume": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "size_mib", "mount_path"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z](?:[a-z0-9-]{0,30}[a-z0-9])?$"},
+        "kind": {"enum": ["EPHEMERAL_DISK", "EPHEMERAL_MEMORY"]},
+        "size_mib": {"type": "integer", "minimum": 16, "maximum": 10240},
+        "mount_path": {"type": "string", "pattern": "^/workspace/\\.kodex/volumes/[a-z](?:[a-z0-9-]{0,30}[a-z0-9])?$"}
+      }
+    },
+    "network_egress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["destination", "protocol", "port"],
+      "properties": {
+        "destination": {"enum": ["DNS", "RUNTIME_CALLBACK", "PROVIDER_PROXY", "KUBERNETES_API"]},
+        "protocol": {"enum": ["TCP", "UDP"]},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535}
+      }
+    },
+    "network_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deny_by_default", "egress"],
+      "properties": {
+        "deny_by_default": {"const": true},
+        "egress": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/network_egress"}
+        }
+      }
+    },
+    "kubernetes_access_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "namespace"],
+      "properties": {
+        "kind": {"enum": ["NONE", "READ_OWN_EXECUTION"]},
+        "namespace": {"const": "kodex-runtime"}
+      }
+    },
+    "environment_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resources",
+        "volumes",
+        "network",
+        "kubernetes_access",
+        "resources_digest",
+        "volumes_digest",
+        "network_digest",
+        "rbac_digest"
+      ],
+      "properties": {
+        "resources": {"$ref": "#/$defs/resource_policy"},
+        "volumes": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/runtime_volume"}},
+        "network": {"$ref": "#/$defs/network_policy"},
+        "kubernetes_access": {"$ref": "#/$defs/kubernetes_access_profile"},
+        "resources_digest": {"$ref": "#/$defs/sha256"},
+        "volumes_digest": {"$ref": "#/$defs/sha256"},
+        "network_digest": {"$ref": "#/$defs/sha256"},
+        "rbac_digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "kubernetes_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api_group", "resource", "verbs", "resource_names"],
+      "properties": {
+        "api_group": {"const": ""},
+        "resource": {"enum": ["pods", "pods/log"]},
+        "verbs": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"const": "get"}},
+        "resource_names": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {"type": "string", "pattern": "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"}
+        }
+      }
+    },
+    "effective_kubernetes_access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "service_account_name", "rules", "digest"],
+      "properties": {
+        "profile": {"$ref": "#/$defs/kubernetes_access_profile"},
+        "service_account_name": {"type": "string", "pattern": "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"},
+        "rules": {"type": "array", "maxItems": 2, "items": {"$ref": "#/$defs/kubernetes_rule"}},
+        "digest": {"$ref": "#/$defs/sha256"}
       }
     },
     "secret_projection": {

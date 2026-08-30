@@ -1,4 +1,4 @@
--- name: runtime_secret_operation_fail :execrows
+-- name: runtime_secret_operation_fail :exec
 UPDATE control_plane.runtime_secret_operations
 SET state = 'FAILED', terminal_error_code = @failure_code,
     terminal_at = clock_timestamp(), updated_at = clock_timestamp()

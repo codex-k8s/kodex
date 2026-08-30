@@ -4,6 +4,8 @@ import (
 	"context"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -163,8 +165,12 @@ func domainEnvironment(values []*controlplanev1.RuntimeEnvironmentValue, secrets
 
 func (server *Server) CreateRuntimeEnvironmentSet(ctx context.Context, request *controlplanev1.CreateRuntimeEnvironmentSetRequest) (*controlplanev1.CreateRuntimeEnvironmentSetResponse, error) {
 	values, secrets, tools := domainEnvironment(request.GetValues(), request.GetSecretBindings(), request.GetTools())
+	policy, err := domainRuntimeEnvironmentPolicy(request.GetPolicy())
+	if err != nil {
+		return nil, transportError(errs.ErrInvalid)
+	}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentSet_FullMethodName,
-		command.CreateRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretBindings: secrets, Tools: tools})
+		command.CreateRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretBindings: secrets, Tools: tools, Policy: policy})
 	if err != nil {
 		return nil, err
 	}
@@ -172,12 +178,77 @@ func (server *Server) CreateRuntimeEnvironmentSet(ctx context.Context, request *
 }
 func (server *Server) PublishRuntimeEnvironmentVersion(ctx context.Context, request *controlplanev1.PublishRuntimeEnvironmentVersionRequest) (*controlplanev1.PublishRuntimeEnvironmentVersionResponse, error) {
 	values, secrets, tools := domainEnvironment(request.GetValues(), request.GetSecretBindings(), request.GetTools())
+	policy, err := domainRuntimeEnvironmentPolicy(request.GetPolicy())
+	if err != nil {
+		return nil, transportError(errs.ErrInvalid)
+	}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_PublishRuntimeEnvironmentVersion_FullMethodName,
-		command.PublishRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{Ref: request.GetEnvironmentRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretBindings: secrets, Tools: tools})
+		command.PublishRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{Ref: request.GetEnvironmentRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretBindings: secrets, Tools: tools, Policy: policy})
 	if err != nil {
 		return nil, err
 	}
 	return &controlplanev1.PublishRuntimeEnvironmentVersionResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}, nil
+}
+
+func domainRuntimeEnvironmentPolicy(input *controlplanev1.RuntimeEnvironmentPolicyInput) (runtimecontract.RuntimeEnvironmentPolicy, error) {
+	if input == nil || input.GetResources() == nil {
+		return runtimecontract.RuntimeEnvironmentPolicy{}, errs.ErrInvalid
+	}
+	resources := input.GetResources()
+	volumes := make([]runtimecontract.RuntimeVolume, 0, len(input.GetVolumes()))
+	for _, volume := range input.GetVolumes() {
+		volumes = append(volumes, runtimecontract.RuntimeVolume{Name: volume.GetName(), Kind: domainRuntimeVolumeKind(volume.GetKind()), SizeMiB: volume.GetSizeMib()})
+	}
+	destinations := make([]string, 0, len(input.GetNetworkDestinations()))
+	for _, destination := range input.GetNetworkDestinations() {
+		destinations = append(destinations, domainRuntimeNetworkDestination(destination))
+	}
+	return runtimecontract.RuntimeEnvironmentPolicyFromInput(runtimecontract.RuntimeEnvironmentPolicyInput{
+		Resources: runtimecontract.RuntimeResourcePolicy{
+			CPURequestMilli: resources.GetCpuRequestMilli(), CPULimitMilli: resources.GetCpuLimitMilli(),
+			MemoryRequestMiB: resources.GetMemoryRequestMib(), MemoryLimitMiB: resources.GetMemoryLimitMib(),
+			EphemeralStorageRequestMiB: resources.GetEphemeralStorageRequestMib(),
+			EphemeralStorageLimitMiB:   resources.GetEphemeralStorageLimitMib(),
+		}, Volumes: volumes, NetworkDestinations: destinations,
+		KubernetesAccess: domainRuntimeKubernetesAccessKind(input.GetKubernetesAccess()),
+	})
+}
+
+func domainRuntimeVolumeKind(value controlplanev1.RuntimeVolumeKind) string {
+	switch value {
+	case controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK:
+		return runtimecontract.RuntimeVolumeEphemeralDisk
+	case controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_MEMORY:
+		return runtimecontract.RuntimeVolumeEphemeralMemory
+	default:
+		return ""
+	}
+}
+
+func domainRuntimeNetworkDestination(value controlplanev1.RuntimeNetworkDestination) string {
+	switch value {
+	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS:
+		return runtimecontract.RuntimeEgressDNS
+	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK:
+		return runtimecontract.RuntimeEgressRuntimeCallback
+	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY:
+		return runtimecontract.RuntimeEgressProviderProxy
+	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API:
+		return runtimecontract.RuntimeEgressKubernetesAPI
+	default:
+		return ""
+	}
+}
+
+func domainRuntimeKubernetesAccessKind(value controlplanev1.RuntimeKubernetesAccessKind) string {
+	switch value {
+	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE:
+		return runtimecontract.RuntimeKubernetesAccessNone
+	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION:
+		return runtimecontract.RuntimeKubernetesAccessReadOwnExecution
+	default:
+		return ""
+	}
 }
 func (server *Server) RollbackRuntimeEnvironment(ctx context.Context, request *controlplanev1.RollbackRuntimeEnvironmentRequest) (*controlplanev1.RollbackRuntimeEnvironmentResponse, error) {
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RollbackRuntimeEnvironment_FullMethodName,

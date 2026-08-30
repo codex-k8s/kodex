@@ -2213,7 +2213,7 @@ components:
       enum: [ORGANIZATION, PROJECT, RESOURCE_KIND, RESOURCE_INSTANCE]
     AccessResourceKind:
       type: string
-      enum: [ORGANIZATION, PROJECT, AGENT, WORKFLOW, RUN, OWNER_GATE, ARTIFACT, SCHEDULE, INTEGRATION]
+      enum: [ORGANIZATION, PROJECT, AGENT, WORKFLOW, RUN, OWNER_GATE, ARTIFACT, SCHEDULE, INTEGRATION, RUNTIME_ENVIRONMENT, SECRET]
     AccessRoleKind:
       type: string
       enum: [SYSTEM, CUSTOM]
@@ -2894,7 +2894,7 @@ components:
     RuntimeEnvironmentVersion:
       type: object
       additionalProperties: false
-      required: [ref, version, revision, image, tools, values, secretDescriptors, digest, createdAt]
+      required: [ref, version, revision, image, tools, values, secretDescriptors, policy, digest, createdAt]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -2905,6 +2905,7 @@ components:
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         image: { $ref: '#/components/schemas/RuntimeEnvironmentImage' }
         tools: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeEnvironmentTool' } }
+        policy: { $ref: '#/components/schemas/RuntimeEnvironmentPolicy' }
     RuntimeEnvironmentImage:
       type: object
       additionalProperties: false
@@ -2924,6 +2925,95 @@ components:
         command: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$' }
         description: { type: string, minLength: 1, maxLength: 500 }
         usageHint: { type: string, maxLength: 500 }
+    RuntimeVolumeKind:
+      type: string
+      enum: [EPHEMERAL_DISK, EPHEMERAL_MEMORY]
+    RuntimeNetworkDestination:
+      type: string
+      enum: [DNS, RUNTIME_CALLBACK, PROVIDER_PROXY, KUBERNETES_API]
+    RuntimeNetworkProtocol:
+      type: string
+      enum: [TCP, UDP]
+    RuntimeKubernetesAccessKind:
+      type: string
+      enum: [NONE, READ_OWN_EXECUTION]
+    RuntimeResourcePolicy:
+      type: object
+      additionalProperties: false
+      required: [cpuRequestMilli, cpuLimitMilli, memoryRequestMib, memoryLimitMib, ephemeralStorageRequestMib, ephemeralStorageLimitMib]
+      properties:
+        cpuRequestMilli: { type: integer, format: int64, minimum: 100, maximum: 8000 }
+        cpuLimitMilli: { type: integer, format: int64, minimum: 100, maximum: 16000 }
+        memoryRequestMib: { type: integer, format: int64, minimum: 128, maximum: 32768 }
+        memoryLimitMib: { type: integer, format: int64, minimum: 128, maximum: 65536 }
+        ephemeralStorageRequestMib: { type: integer, format: int64, minimum: 256, maximum: 20480 }
+        ephemeralStorageLimitMib: { type: integer, format: int64, minimum: 256, maximum: 102400 }
+    RuntimeVolumeInput:
+      type: object
+      additionalProperties: false
+      required: [name, kind, sizeMib]
+      properties:
+        name: { type: string, pattern: '^[a-z](?:[a-z0-9-]{0,30}[a-z0-9])?$' }
+        kind: { $ref: '#/components/schemas/RuntimeVolumeKind' }
+        sizeMib: { type: integer, format: int64, minimum: 16, maximum: 10240 }
+    RuntimeVolume:
+      type: object
+      additionalProperties: false
+      required: [name, kind, sizeMib, mountPath]
+      properties:
+        name: { type: string, pattern: '^[a-z](?:[a-z0-9-]{0,30}[a-z0-9])?$' }
+        kind: { $ref: '#/components/schemas/RuntimeVolumeKind' }
+        sizeMib: { type: integer, format: int64, minimum: 16, maximum: 10240 }
+        mountPath: { type: string, pattern: '^/workspace/\.kodex/volumes/[a-z](?:[a-z0-9-]{0,30}[a-z0-9])?$' }
+    RuntimeEnvironmentPolicyInput:
+      type: object
+      additionalProperties: false
+      required: [resources, volumes, networkDestinations, kubernetesAccess]
+      properties:
+        resources: { $ref: '#/components/schemas/RuntimeResourcePolicy' }
+        volumes: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/RuntimeVolumeInput' } }
+        networkDestinations:
+          type: array
+          minItems: 3
+          maxItems: 4
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/RuntimeNetworkDestination' }
+        kubernetesAccess: { $ref: '#/components/schemas/RuntimeKubernetesAccessKind' }
+    RuntimeNetworkEgress:
+      type: object
+      additionalProperties: false
+      required: [destination, protocol, port]
+      properties:
+        destination: { $ref: '#/components/schemas/RuntimeNetworkDestination' }
+        protocol: { $ref: '#/components/schemas/RuntimeNetworkProtocol' }
+        port: { type: integer, format: int32, minimum: 1, maximum: 65535 }
+    RuntimeNetworkPolicy:
+      type: object
+      additionalProperties: false
+      required: [denyByDefault, egress]
+      properties:
+        denyByDefault: { type: boolean, enum: [true] }
+        egress: { type: array, minItems: 4, maxItems: 5, items: { $ref: '#/components/schemas/RuntimeNetworkEgress' } }
+    RuntimeKubernetesAccessProfile:
+      type: object
+      additionalProperties: false
+      required: [kind, namespace]
+      properties:
+        kind: { $ref: '#/components/schemas/RuntimeKubernetesAccessKind' }
+        namespace: { type: string, enum: [kodex-runtime] }
+    RuntimeEnvironmentPolicy:
+      type: object
+      additionalProperties: false
+      required: [resources, volumes, network, kubernetesAccess, resourcesDigest, volumesDigest, networkDigest, rbacDigest]
+      properties:
+        resources: { $ref: '#/components/schemas/RuntimeResourcePolicy' }
+        volumes: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/RuntimeVolume' } }
+        network: { $ref: '#/components/schemas/RuntimeNetworkPolicy' }
+        kubernetesAccess: { $ref: '#/components/schemas/RuntimeKubernetesAccessProfile' }
+        resourcesDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        volumesDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        networkDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        rbacDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
     RuntimeEnvironmentSet:
       type: object
       additionalProperties: false
@@ -2940,7 +3030,7 @@ components:
     RuntimeEnvironmentInput:
       type: object
       additionalProperties: false
-      required: [name, description, imageArtifactRef, tools, values, secretBindings]
+      required: [name, description, imageArtifactRef, tools, values, secretBindings, policy]
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
@@ -2948,6 +3038,7 @@ components:
         tools: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeEnvironmentTool' } }
         values: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeEnvironmentValue' } }
         secretBindings: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeSecretBinding' } }
+        policy: { $ref: '#/components/schemas/RuntimeEnvironmentPolicyInput' }
     RuntimeEnvironmentRollbackInput:
       type: object
       additionalProperties: false
@@ -3643,7 +3734,7 @@ components:
         approvalRequired: { type: boolean }
         operation: { type: string, minLength: 1, maxLength: 120 }
         approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
-        resourceKind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL] }
+        resourceKind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER] }
         inputFields: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/IntegrationConfigurationField' } }
     IntegrationConfigurationField:
       type: object
@@ -3673,14 +3764,14 @@ components:
         definitionVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+\.[0-9]+$', maxLength: 32 }
         origin: { type: string, enum: [SHIPPED] }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
-        adapter: { type: string, enum: [SYNTHETIC_HTTP, GITHUB, MATTERMOST_INTERACTION] }
+        adapter: { type: string, enum: [SYNTHETIC_HTTP, GITHUB, GITLAB, JIRA, CONFLUENCE, EMAIL_HTTPS, MATTERMOST_INTERACTION] }
         credentialSecretKey: { type: string, maxLength: 120 }
     IntegrationResourceScope:
       type: object
       additionalProperties: false
       required: [kind, values, digest]
       properties:
-        kind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL] }
+        kind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER] }
         values:
           type: object
           maxProperties: 8

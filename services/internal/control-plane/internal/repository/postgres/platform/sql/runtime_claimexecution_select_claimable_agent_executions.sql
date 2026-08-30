@@ -6,6 +6,7 @@ SELECT n.id::text,
        r.root_run_id::text,
        COALESCE(r.project_id::text, ''),
        COALESCE(p.ref, ''),
+       initiator.ref,
        r.session_id::text,
        s.ref,
        COALESCE(t.content,r.task),
@@ -321,10 +322,19 @@ SELECT n.id::text,
        runtime_environment.non_secret_values,
        runtime_environment.secret_descriptors,
        runtime_environment.selected_tools,
+       runtime_environment.resource_policy,
+       runtime_environment.volume_policy,
+       runtime_environment.network_policy,
+       runtime_environment.kubernetes_access_profile,
+       runtime_environment.resources_digest,
+       runtime_environment.volumes_digest,
+       runtime_environment.network_digest,
+       runtime_environment.rbac_digest,
        COALESCE(session_storage.codex_session_id::text, '')
 FROM control_plane.run_nodes n
 JOIN control_plane.runs r ON r.id = n.run_id
 JOIN control_plane.runs root ON root.id = r.root_run_id
+JOIN control_plane.subjects initiator ON initiator.id = root.initiated_by
 LEFT JOIN control_plane.projects p ON p.id = r.project_id
 JOIN control_plane.sessions s ON s.id = r.session_id
 LEFT JOIN control_plane.session_storage session_storage ON session_storage.session_id = s.id

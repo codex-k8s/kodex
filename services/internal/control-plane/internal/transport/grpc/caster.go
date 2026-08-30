@@ -5,6 +5,7 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -203,7 +204,7 @@ func castRuntimeEnvironmentVersion(value entity.RuntimeEnvironmentVersion) *cont
 		Digest: value.Digest, CreatedAt: timestamp(value.CreatedAt), Image: &controlplanev1.RuntimeEnvironmentImage{
 			ArtifactRef: value.Image.ArtifactRef, RecipeRef: value.Image.RecipeRef, RecipeGeneration: value.Image.RecipeGeneration,
 			Reference: value.Image.Reference, Digest: value.Image.Digest,
-		}}
+		}, Policy: castRuntimeEnvironmentPolicy(value.Policy)}
 	for _, item := range value.Values {
 		result.Values = append(result.Values, &controlplanev1.RuntimeEnvironmentValue{Name: item.Name, Value: item.Value})
 	}
@@ -217,6 +218,68 @@ func castRuntimeEnvironmentVersion(value entity.RuntimeEnvironmentVersion) *cont
 		result.Tools = append(result.Tools, &controlplanev1.RuntimeEnvironmentTool{Name: item.Name, Command: item.Command, Description: item.Description, UsageHint: item.UsageHint})
 	}
 	return result
+}
+
+func castRuntimeEnvironmentPolicy(value runtimecontract.RuntimeEnvironmentPolicy) *controlplanev1.RuntimeEnvironmentPolicy {
+	result := &controlplanev1.RuntimeEnvironmentPolicy{
+		Resources: &controlplanev1.RuntimeResourcePolicy{
+			CpuRequestMilli: value.Resources.CPURequestMilli, CpuLimitMilli: value.Resources.CPULimitMilli,
+			MemoryRequestMib: value.Resources.MemoryRequestMiB, MemoryLimitMib: value.Resources.MemoryLimitMiB,
+			EphemeralStorageRequestMib: value.Resources.EphemeralStorageRequestMiB,
+			EphemeralStorageLimitMib:   value.Resources.EphemeralStorageLimitMiB,
+		}, Network: &controlplanev1.RuntimeNetworkPolicy{DenyByDefault: value.Network.DenyByDefault},
+		KubernetesAccess: &controlplanev1.RuntimeKubernetesAccessProfile{
+			Kind: castRuntimeKubernetesAccessKind(value.KubernetesAccess.Kind), Namespace: value.KubernetesAccess.Namespace,
+		}, ResourcesDigest: value.ResourcesDigest, VolumesDigest: value.VolumesDigest,
+		NetworkDigest: value.NetworkDigest, RbacDigest: value.RBACDigest,
+	}
+	for _, volume := range value.Volumes {
+		result.Volumes = append(result.Volumes, &controlplanev1.RuntimeVolume{
+			Name: volume.Name, Kind: castRuntimeVolumeKind(volume.Kind), SizeMib: volume.SizeMiB, MountPath: volume.MountPath,
+		})
+	}
+	for _, egress := range value.Network.Egress {
+		result.Network.Egress = append(result.Network.Egress, &controlplanev1.RuntimeNetworkEgress{
+			Destination: castRuntimeNetworkDestination(egress.Destination), Protocol: castRuntimeNetworkProtocol(egress.Protocol), Port: egress.Port,
+		})
+	}
+	return result
+}
+
+func castRuntimeVolumeKind(value string) controlplanev1.RuntimeVolumeKind {
+	if value == runtimecontract.RuntimeVolumeEphemeralMemory {
+		return controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_MEMORY
+	}
+	return controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK
+}
+
+func castRuntimeNetworkDestination(value string) controlplanev1.RuntimeNetworkDestination {
+	switch value {
+	case runtimecontract.RuntimeEgressDNS:
+		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS
+	case runtimecontract.RuntimeEgressRuntimeCallback:
+		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK
+	case runtimecontract.RuntimeEgressProviderProxy:
+		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY
+	case runtimecontract.RuntimeEgressKubernetesAPI:
+		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API
+	default:
+		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_UNSPECIFIED
+	}
+}
+
+func castRuntimeNetworkProtocol(value string) controlplanev1.RuntimeNetworkProtocol {
+	if value == runtimecontract.RuntimeProtocolUDP {
+		return controlplanev1.RuntimeNetworkProtocol_RUNTIME_NETWORK_PROTOCOL_UDP
+	}
+	return controlplanev1.RuntimeNetworkProtocol_RUNTIME_NETWORK_PROTOCOL_TCP
+}
+
+func castRuntimeKubernetesAccessKind(value string) controlplanev1.RuntimeKubernetesAccessKind {
+	if value == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
+		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
+	}
+	return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE
 }
 func castRuntimeEnvironment(value entity.RuntimeEnvironmentSet) *controlplanev1.RuntimeEnvironmentSet {
 	return &controlplanev1.RuntimeEnvironmentSet{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef,

@@ -137,6 +137,21 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 			})
 		}
 	}
+	if policy, ok := values["environmentPolicy"].(runtimecontract.RuntimeEnvironmentPolicy); ok {
+		result.EnvironmentPolicy = castRuntimeEnvironmentPolicy(policy)
+	}
+	if access, ok := values["effectiveKubernetesAccess"].(runtimecontract.RuntimeKubernetesAccess); ok {
+		result.EffectiveKubernetesAccess = &controlplanev1.RuntimeKubernetesAccess{
+			Profile: &controlplanev1.RuntimeKubernetesAccessProfile{
+				Kind: castRuntimeKubernetesAccessKind(access.Profile.Kind), Namespace: access.Profile.Namespace,
+			}, ServiceAccountName: access.ServiceAccountName, Digest: access.Digest,
+		}
+		for _, rule := range access.Rules {
+			result.EffectiveKubernetesAccess.Rules = append(result.EffectiveKubernetesAccess.Rules,
+				&controlplanev1.RuntimeKubernetesRule{ApiGroup: rule.APIGroup, Resource: rule.Resource,
+					Verbs: append([]string(nil), rule.Verbs...), ResourceNames: append([]string(nil), rule.ResourceNames...)})
+		}
+	}
 	profileRevision := mapString(values, "profileRevision")
 	if profileRevision == "" {
 		profileRevision = mapString(values, "runtimeRevision")

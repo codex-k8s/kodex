@@ -4,6 +4,8 @@ INVALID_REQUEST:
   other: Check the request data
 UNAUTHENTICATED:
   other: Sign in to continue
+FRESH_AUTHENTICATION_REQUIRED:
+  other: Sign in again to confirm this privileged action
 PERMISSION_DENIED:
   other: You do not have permission for this action
 NOT_FOUND:
@@ -546,3 +548,49 @@ SESSION_ARCHIVE_TASK_READY:
   other: Session archive task scheduled for retry
 SESSION_ARCHIVE_TASK_DEAD_LETTER:
   other: Session archive task stopped after exhausting retries
+ARTIFACT_DELETED:
+  other: File moved to trash
+ARTIFACT_RESTORED:
+  other: File restored from trash
+ARTIFACT_PURGED:
+  other: File permanently deleted
+PERMISSION_ENVIRONMENT_PRIVILEGED_MANAGE_NAME:
+  other: Manage privileged environments
+PERMISSION_ENVIRONMENT_PRIVILEGED_MANAGE_DESCRIPTION:
+  other: Configure runtime Kubernetes access within the runtime's own Pod boundary
+PERMISSION_SECRET_VIEW_NAME:
+  other: View secrets
+PERMISSION_SECRET_VIEW_DESCRIPTION:
+  other: Read safe hints and metadata for assigned secrets
+PERMISSION_SECRET_CREATE_NAME:
+  other: Create secrets
+PERMISSION_SECRET_CREATE_DESCRIPTION:
+  other: Create secrets in the assigned scope
+PERMISSION_SECRET_ROTATE_NAME:
+  other: Rotate secrets
+PERMISSION_SECRET_ROTATE_DESCRIPTION:
+  other: Create a new version of an assigned secret
+PERMISSION_SECRET_REVEAL_NAME:
+  other: Reveal secrets
+PERMISSION_SECRET_REVEAL_DESCRIPTION:
+  other: Retrieve an assigned secret value once with an audit record
+PERMISSION_SECRET_REVOKE_NAME:
+  other: Revoke secrets
+PERMISSION_SECRET_REVOKE_DESCRIPTION:
+  other: Prevent further use of an assigned secret
+RUNTIME_SECRET_CREATED:
+  other: Runtime secret created
+RUNTIME_SECRET_ROTATED:
+  other: Runtime secret rotated
+RUNTIME_SECRET_REVEALED:
+  other: Runtime secret value revealed
+RUNTIME_SECRET_REVOKED:
+  other: Runtime secret revoked
+RUNTIME_SECRET_OPERATION_FAILED:
+  other: Runtime secret operation failed
+SYSTEM_BASE_ROLE_IMAGE:
+  other: System base role image
+SYSTEM_ROLE_RUNTIME_POLICY:
+  other: System runtime policy
+SYSTEM_ROLE_RUNTIME_SECRETS:
+  other: System runtime secrets

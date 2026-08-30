@@ -268,6 +268,46 @@ describe("session renewal lifecycle", () => {
     ).toBe(false);
   });
 
+  test("для политики окружения создаёт обычную owner session без secret elevation", async () => {
+    const session = useSessionStore();
+    await session.beginRuntimeEnvironmentPolicyReauth({
+      environmentRef: "environment_main",
+      operation: "PUBLISH",
+      projectRef: "project_sales",
+    });
+    const redirect = oidc.signinRedirect.mock.calls[0]?.[0] as {
+      max_age?: unknown;
+      prompt?: unknown;
+      state?: unknown;
+    };
+    expect(redirect).toMatchObject({ max_age: 0, prompt: "login" });
+    expect(redirect.state).toMatchObject({
+      environmentRef: "environment_main",
+      kind: "runtime-environment-policy",
+      operation: "PUBLISH",
+      projectRef: "project_sales",
+      returnPath: "/projects/project_sales/environments/environment_main",
+    });
+    oidc.signinRedirectCallback.mockResolvedValue({
+      access_token: "fresh-owner-access-token",
+      state: redirect.state,
+    });
+
+    await expect(session.completeLogin()).resolves.toEqual({
+      kind: "runtime-environment-policy",
+      returnPath: "/projects/project_sales/environments/environment_main",
+    });
+    expect(
+      requestBody(api.createOwnerSession.mock.calls[0] ?? []),
+    ).toBeUndefined();
+    expect(
+      session.hasPendingRuntimeSecretReveal(
+        "project_sales",
+        "environment_main",
+      ),
+    ).toBe(false);
+  });
+
   test("отклоняет подменённый return path до создания owner session", async () => {
     const session = useSessionStore();
     await session.beginRuntimeSecretRevealReauth({

@@ -6,6 +6,39 @@ import {
   runtimeEnvironmentCapabilities,
   safeSecretReference,
 } from "@/features/runtime/environment-capabilities";
+import { defaultRuntimeEnvironmentPolicy } from "@/features/runtime/environment-form";
+
+function effectivePolicy() {
+  return {
+    resources: defaultRuntimeEnvironmentPolicy().resources,
+    volumes: [],
+    network: {
+      denyByDefault: true as const,
+      egress: [
+        { destination: "DNS" as const, protocol: "TCP" as const, port: 53 },
+        { destination: "DNS" as const, protocol: "UDP" as const, port: 53 },
+        {
+          destination: "PROVIDER_PROXY" as const,
+          protocol: "TCP" as const,
+          port: 8080,
+        },
+        {
+          destination: "RUNTIME_CALLBACK" as const,
+          protocol: "TCP" as const,
+          port: 8444,
+        },
+      ],
+    },
+    kubernetesAccess: {
+      kind: "NONE" as const,
+      namespace: "kodex-runtime" as const,
+    },
+    resourcesDigest: "1".repeat(64),
+    volumesDigest: "2".repeat(64),
+    networkDigest: "3".repeat(64),
+    rbacDigest: "4".repeat(64),
+  };
+}
 
 describe("runtime environment capabilities", () => {
   it("не объявляет отсутствующие API доступными", () => {
@@ -20,10 +53,10 @@ describe("runtime environment capabilities", () => {
       secretReferences: "AVAILABLE",
       imageBinding: "AVAILABLE",
       verifiedTools: "AVAILABLE",
-      resources: "UNAVAILABLE",
-      networkPolicy: "UNAVAILABLE",
-      kubernetesRbac: "UNAVAILABLE",
-      effectivePolicy: "UNAVAILABLE",
+      resources: "AVAILABLE",
+      networkPolicy: "AVAILABLE",
+      kubernetesRbac: "AVAILABLE",
+      effectivePolicy: "AVAILABLE",
       secretLifecycle: "UNAVAILABLE",
       secretReveal: "UNAVAILABLE",
       serverReadiness: "UNAVAILABLE",
@@ -38,6 +71,7 @@ describe("runtime environment capabilities", () => {
       tools: [],
       values: [{ name: "OUTPUT_FORMAT", value: "markdown" }],
       secretBindings: [],
+      policy: defaultRuntimeEnvironmentPolicy(),
     };
     const checks = environmentReadiness(input, {
       ref: "environment_docs",
@@ -60,6 +94,7 @@ describe("runtime environment capabilities", () => {
           digest: "b".repeat(64),
         },
         tools: [],
+        policy: effectivePolicy(),
         digest: "a".repeat(64),
         createdAt: "2026-08-29T12:00:00Z",
       },
@@ -71,9 +106,39 @@ describe("runtime environment capabilities", () => {
       { key: "SECRET_REFS", state: "READY" },
       { key: "IMAGE", state: "READY" },
       { key: "TOOLS", state: "READY" },
+      { key: "POLICY", state: "READY" },
       { key: "REVISION", state: "READY" },
+      { key: "EFFECTIVE_POLICY", state: "READY" },
       { key: "SERVER_READINESS", state: "UNAVAILABLE" },
     ]);
+  });
+
+  it("разделяет ошибку черновика policy и отсутствие effective policy", () => {
+    const policy = defaultRuntimeEnvironmentPolicy();
+    policy.resources.cpuLimitMilli = 100;
+
+    const checks = environmentReadiness({
+      name: "Документы",
+      description: "",
+      imageArtifactRef: "imgart_documents",
+      tools: [],
+      values: [],
+      secretBindings: [],
+      policy,
+    });
+
+    expect(checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "POLICY",
+          state: "NEEDS_ATTENTION",
+        }),
+        expect.objectContaining({
+          key: "EFFECTIVE_POLICY",
+          state: "NEEDS_ATTENTION",
+        }),
+      ]),
+    );
   });
 
   it("строит только безопасное представление ссылки на секрет", () => {

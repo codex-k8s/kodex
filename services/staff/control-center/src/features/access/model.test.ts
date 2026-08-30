@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  accessResourceKinds,
   isExactAgentScope,
   membershipForSubject,
   roleInput,
@@ -61,6 +62,11 @@ function binding(
 }
 
 describe("enterprise RBAC UI model", () => {
+  it("предлагает instance-level окружения и секреты из канонического каталога", () => {
+    expect(accessResourceKinds).toContain("RUNTIME_ENVIRONMENT");
+    expect(accessResourceKinds).toContain("SECRET");
+  });
+
   it("создаёт обязательную точную область одного ИИ-сотрудника", () => {
     const scope = toAccessScope({
       kind: "RESOURCE_INSTANCE",

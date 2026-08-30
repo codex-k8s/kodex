@@ -228,10 +228,6 @@ watch(
           <span>{{ $t("access.scope.operationCondition") }}</span>
           <small>{{ $t("access.scope.operationConditionHint") }}</small>
         </li>
-        <li class="unavailable">
-          <span>{{ $t("access.scope.environmentCondition") }}</span>
-          <small>{{ $t("access.scope.environmentUnavailable") }}</small>
-        </li>
       </ul>
     </aside>
   </div>
@@ -272,10 +268,6 @@ watch(
 .contract-boundary li small {
   margin-top: 3px;
   color: var(--muted);
-}
-.contract-boundary li.unavailable {
-  color: var(--warning);
-  background: var(--warning-soft);
 }
 @media (max-width: 720px) {
   .scope-editor {

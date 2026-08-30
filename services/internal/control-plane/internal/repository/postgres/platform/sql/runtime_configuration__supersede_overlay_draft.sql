@@ -1,4 +1,4 @@
--- name: runtime_configuration__supersede_overlay_draft :execrows
+-- name: runtime_configuration__supersede_overlay_draft :exec
 UPDATE control_plane.agent_config_overlay_versions
 SET state = 'SUPERSEDED'
 WHERE agent_id = $1::uuid

@@ -1,4 +1,4 @@
--- name: artifact_retention_upsert_service_subject :one
+-- name: upsert_service_subject :one
 INSERT INTO control_plane.subjects (
     organization_id,
     ref,

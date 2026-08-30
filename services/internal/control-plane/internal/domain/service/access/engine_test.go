@@ -58,6 +58,36 @@ func TestEvaluateRestrictsOrganizationIntegrationInstance(t *testing.T) {
 	}
 }
 
+func TestEnvironmentPrivilegedManageIsScopedToProjectAndEnvironment(t *testing.T) {
+	t.Parallel()
+	definition, present := Permission("environment.privileged.manage")
+	if !present {
+		t.Fatal("environment privileged permission is absent from the closed registry")
+	}
+	if definition.Risk != "ADMIN" || definition.OwnerConditionSupported {
+		t.Fatalf("environment privileged permission metadata = %#v", definition)
+	}
+	if !contains(definition.AllowedScopes, "PROJECT") || !contains(definition.AllowedScopes, "RESOURCE_INSTANCE") ||
+		!contains(definition.ResourceKinds, "PROJECT") || !contains(definition.ResourceKinds, "RUNTIME_ENVIRONMENT") {
+		t.Fatalf("environment privileged permission scope = %#v", definition)
+	}
+
+	subject := entity.AccessSubject{Ref: "usr_owner", Kind: "USER", Active: true}
+	binding := entity.AccessBinding{
+		Ref: "abnd_environment", State: "ACTIVE", Subject: subject,
+		RoleVersion: entity.AccessRoleVersion{PermissionKeys: []string{"environment.privileged.manage"}},
+		Scope:       entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: "prj_a", ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: "renv_a"},
+	}
+	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	if decision := Evaluate(subject, "environment.privileged.manage", binding.Scope, "", []entity.AccessBinding{binding}, now); !decision.Allowed {
+		t.Fatalf("exact RuntimeEnvironment permission was rejected: %#v", decision)
+	}
+	other := entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: "prj_a", ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: "renv_b"}
+	if decision := Evaluate(subject, "environment.privileged.manage", other, "", []entity.AccessBinding{binding}, now); decision.Allowed {
+		t.Fatalf("RuntimeEnvironment permission escaped its exact instance: %#v", decision)
+	}
+}
+
 func TestValidateScopeRequiresProjectForProjectOwnedResourceInstance(t *testing.T) {
 	if err := ValidateScope(entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: "agt_a"}); err == nil {
 		t.Fatal("project-owned agent scope without project was accepted")

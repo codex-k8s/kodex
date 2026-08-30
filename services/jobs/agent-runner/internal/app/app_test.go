@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,6 +15,14 @@ import (
 type nativeToolRecorderStub struct {
 	calls []runtimecontract.NativeToolCall
 	err   error
+}
+
+func runnerInputArtifact(ref, fileName, mediaType, scope string, position, version int64, source string) runtimecontract.RunnerInputArtifact {
+	return runtimecontract.RunnerInputArtifact{
+		Ref: ref, FileName: fileName, MediaType: mediaType,
+		Digest: "sha256:" + strings.Repeat("a", 64), SizeBytes: 1,
+		Revision: 1, Version: version, Scope: scope, Position: position, Source: source,
+	}
 }
 
 func (stub *nativeToolRecorderStub) RecordNativeToolCall(_ context.Context, _ model.Input, call runtimecontract.NativeToolCall) error {
@@ -78,9 +88,9 @@ func TestRenderInstructionsExposesTypedFileScopes(t *testing.T) {
 		ProjectRef: "prj_abcdefgh", SessionRef: "ses_abcdefgh", RunRef: "run_abcdefgh",
 		AttachmentSetRef: "aset_abcdefgh", AttachmentContext: "SESSION_TURN",
 		InputArtifacts: []runtimecontract.RunnerInputArtifact{
-			{Ref: "artifact_abcdefgh", FileName: "new.txt", MediaType: "text/plain", Scope: "INPUT", Position: 1, Source: "CONTROL_CENTER", Version: 2},
-			{Ref: "artifact_ijklmnop", FileName: "prior.txt", MediaType: "text/plain", Scope: "SESSION", Position: 1, Source: "CONTROL_CENTER", Version: 1},
-			{Ref: "artifact_qrstuvwx", FileName: "policy.md", MediaType: "text/markdown", Scope: "KNOWLEDGE", Position: 1, Source: "KNOWLEDGE_SOURCE", Version: 3},
+			runnerInputArtifact("artifact_abcdefgh", "new.txt", "text/plain", runtimecontract.AttachmentScopeInput, 1, 2, "CONTROL_CENTER"),
+			runnerInputArtifact("artifact_ijklmnop", "prior.txt", "text/plain", runtimecontract.AttachmentScopeSession, 1, 1, "CONTROL_CENTER"),
+			runnerInputArtifact("artifact_qrstuvwx", "policy.md", "text/markdown", runtimecontract.AttachmentScopeKnowledge, 1, 3, "KNOWLEDGE_SOURCE"),
 		},
 	}
 	rendered, err := renderInstructions(input)
@@ -132,8 +142,8 @@ func TestRenderInstructionsMaterializesRunWorkflowAndProjectFileScopes(t *testin
 {{range .project.files}}{{.name}};{{end}}`,
 		AttachmentSetRef: "aset_abcdefgh", AttachmentContext: "WORKFLOW_INPUT",
 		InputArtifacts: []runtimecontract.RunnerInputArtifact{
-			{Ref: "artifact_abcdefgh", FileName: "workflow.txt", MediaType: "text/plain", Scope: "INPUT", Position: 1},
-			{Ref: "artifact_ijklmnop", FileName: "knowledge.md", MediaType: "text/markdown", Scope: "KNOWLEDGE", Position: 1},
+			runnerInputArtifact("artifact_abcdefgh", "workflow.txt", "text/plain", runtimecontract.AttachmentScopeInput, 1, 1, "CONTROL_CENTER"),
+			runnerInputArtifact("artifact_ijklmnop", "knowledge.md", "text/markdown", runtimecontract.AttachmentScopeKnowledge, 1, 1, "KNOWLEDGE_SOURCE"),
 		},
 	}
 	rendered, err := renderInstructions(input)
@@ -143,6 +153,81 @@ func TestRenderInstructionsMaterializesRunWorkflowAndProjectFileScopes(t *testin
 	for _, expected := range []string{"workflow.txt;", "knowledge.md;"} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("rendered scopes do not contain %q: %s", expected, rendered)
+		}
+	}
+}
+
+func TestWriteInputManifestsUsesCanonicalFullCatalog(t *testing.T) {
+	root := t.TempDir()
+	input := model.Input{
+		WorkspaceRoot: "/workspace", AttachmentSetRef: "aset_abcdefgh", AttachmentContext: "RUN_INPUT",
+		InputArtifacts: []runtimecontract.RunnerInputArtifact{
+			runnerInputArtifact("artifact_qrstuvwx", "policy.md", "text/markdown", runtimecontract.AttachmentScopeKnowledge, 1, 1, "KNOWLEDGE_SOURCE"),
+			runnerInputArtifact("artifact_abcdefgh", "brief.txt", "text/plain", runtimecontract.AttachmentScopeInput, 1, 2, "CONTROL_CENTER"),
+			runnerInputArtifact("artifact_ijklmnop", "prior.txt", "text/plain", runtimecontract.AttachmentScopeSession, 1, 1, "INTERACTION_ATTACHMENT"),
+		},
+	}
+	direct, err := runtimecontract.BuildAttachmentManifest(input.AttachmentSetRef, input.AttachmentContext,
+		scopedArtifacts(input.InputArtifacts, runtimecontract.AttachmentScopeInput))
+	if err != nil {
+		t.Fatalf("BuildAttachmentManifest(direct) error = %v", err)
+	}
+	workspace, err := runtimecontract.BuildAttachmentManifest(input.AttachmentSetRef, input.AttachmentContext, input.InputArtifacts)
+	if err != nil {
+		t.Fatalf("BuildAttachmentManifest(workspace) error = %v", err)
+	}
+	input.WorkspaceRoot = root
+	if err := os.MkdirAll(filepath.Join(root, "input", input.AttachmentSetRef), 0o750); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := writeInputManifests(input, direct, workspace); err != nil {
+		t.Fatalf("writeInputManifests() error = %v", err)
+	}
+	for path, expected := range map[string][]byte{
+		filepath.Join(root, "input", input.AttachmentSetRef, "manifest.json"): direct.Bytes,
+		filepath.Join(root, "input", "manifest.json"):                         workspace.Bytes,
+	} {
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatalf("ReadFile(%s) error = %v", path, readErr)
+		}
+		if string(raw) != string(expected) {
+			t.Fatalf("manifest %s differs from canonical bytes", path)
+		}
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			t.Fatalf("Stat(%s) error = %v", path, statErr)
+		}
+		if info.Mode().Perm() != 0o440 {
+			t.Fatalf("manifest %s mode = %v", path, info.Mode().Perm())
+		}
+	}
+}
+
+func TestMaterializeInputArtifactsRejectsManifestMismatchBeforeWorkspaceMutation(t *testing.T) {
+	root := t.TempDir()
+	for _, directory := range []string{"input", "session", "knowledge"} {
+		path := filepath.Join(root, directory)
+		if err := os.MkdirAll(path, 0o750); err != nil {
+			t.Fatalf("MkdirAll(%s) error = %v", path, err)
+		}
+		if err := os.WriteFile(filepath.Join(path, "sentinel"), []byte("preserve"), 0o640); err != nil {
+			t.Fatalf("WriteFile(%s) error = %v", path, err)
+		}
+	}
+	input := model.Input{
+		WorkspaceRoot: root, AttachmentSetRef: "aset_abcdefgh", AttachmentContext: "RUN_INPUT",
+		AttachmentSetManifestDigest: strings.Repeat("f", 64),
+		InputArtifacts: []runtimecontract.RunnerInputArtifact{
+			runnerInputArtifact("artifact_abcdefgh", "brief.txt", "text/plain", runtimecontract.AttachmentScopeInput, 1, 1, "CONTROL_CENTER"),
+		},
+	}
+	if err := materializeInputArtifacts(context.Background(), input, nil); err == nil || !strings.Contains(err.Error(), "manifest digest") {
+		t.Fatalf("materializeInputArtifacts() error = %v", err)
+	}
+	for _, directory := range []string{"input", "session", "knowledge"} {
+		if raw, err := os.ReadFile(filepath.Join(root, directory, "sentinel")); err != nil || string(raw) != "preserve" {
+			t.Fatalf("workspace %s changed before digest validation: raw=%q err=%v", directory, raw, err)
 		}
 	}
 }

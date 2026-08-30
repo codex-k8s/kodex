@@ -1,4 +1,4 @@
--- name: runtime_secret_operation_reissue :execrows
+-- name: runtime_secret_operation_reissue :exec
 UPDATE control_plane.runtime_secret_operations
 SET state = 'PREPARED', token_digest = @token_digest,
     grant_expires_at = @grant_expires_at, claimant_id = NULL,

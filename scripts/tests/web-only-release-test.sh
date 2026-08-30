@@ -113,16 +113,41 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .spec.validationActions == ["Deny"]) and
   any($resources[];
     .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "runtime-execution-service-account" and
+    .spec.failurePolicy == "Fail" and
+    ([.spec.matchConditions[].expression] | join(" ") | contains(
+      "system:serviceaccount:kodex-system:runtime-controller")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime-sa-[a-f0-9]{16}"))) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "runtime-execution-network-policy" and
+    .spec.failurePolicy == "Fail" and
+    .spec.paramKind == {"apiVersion":"v1","kind":"ConfigMap"} and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "params.data['\''kubernetes-api-service-cidr'\'']"))) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "runtime-execution-network-policy" and
+    .spec.paramRef.name == "runtime-materialization-admission-parameters" and
+    .spec.paramRef.namespace == "kodex-system" and
+    .spec.paramRef.parameterNotFoundAction == "Deny") and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicy" and
     .metadata.name == "runtime-role-pod-exact-secret-projection" and
     .spec.failurePolicy == "Fail" and
     ([.spec.validations[].expression] | join(" ") | contains(
-      "object.spec.serviceAccountName == '\''agent-runner'\''")) and
+      "runtime-sa-[a-f0-9]{16}")) and
     ([.spec.validations[].expression] | join(" ") | contains(
       "item.valueFrom.secretKeyRef.name")) and
     ([.spec.validations[].expression] | join(" ") | contains(
       "container.name != '\''provider-runtime'\''")) and
     ([.spec.validations[].expression] | join(" ") | contains(
-      "mount.subPath in ['\''runtime.json'\'', '\''token'\'']"))) and
+      "mount.subPath in ['\''runtime.json'\'', '\''token'\'']")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "container.securityContext.allowPrivilegeEscalation == false")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "compareTo(quantity('\''100m'\''))"))) and
   any($resources[];
     .kind == "ValidatingAdmissionPolicyBinding" and
     .metadata.name == "runtime-role-pod-exact-secret-projection" and
@@ -223,10 +248,10 @@ postgres_clients="$temporary_directory/postgres-clients"
 postgres_allowed_clients="$temporary_directory/postgres-allowed-clients"
 yq -o=json -I=0 '.' "$render" | jq -sr '
   .[] |
-  if .kind == "CronJob" then .spec.jobTemplate.spec.template
+  (if .kind == "CronJob" then .spec.jobTemplate.spec.template
   elif (.kind == "Deployment" or .kind == "StatefulSet" or
     .kind == "DaemonSet" or .kind == "Job") then .spec.template
-  else empty end as $template |
+  else empty end) as $template |
   select(any($template.spec.containers[]?.env[]?;
     (.name // "") | test("POSTGRES.*DSN_FILE$"))) |
   $template.metadata.labels["app.kubernetes.io/name"]

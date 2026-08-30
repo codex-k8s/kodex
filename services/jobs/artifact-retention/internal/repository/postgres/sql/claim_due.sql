@@ -1,4 +1,4 @@
--- name: artifact_retention_claim_due :many
+-- name: claim_due :many
 WITH candidate AS (
     SELECT artifact.id,
            content.object_key,

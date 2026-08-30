@@ -39,6 +39,7 @@ var definitions = []entity.PermissionDefinition{
 	permission("schedule.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"SCHEDULE"}, false),
 	permission("integration.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"INTEGRATION"}, false),
 	permission("integration.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"INTEGRATION"}, false),
+	permission("environment.privileged.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "RUNTIME_ENVIRONMENT"}, false),
 	permission("secret.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "SECRET"}, false),
 	permission("secret.create", "WRITE", []string{"ORGANIZATION", "PROJECT"}, []string{"PROJECT"}, false),
 	permission("secret.rotate", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"SECRET"}, false),
@@ -253,7 +254,7 @@ func knownScope(value string) bool {
 func knownResourceKind(value string) bool {
 	return value == "ORGANIZATION" || value == "PROJECT" || value == "AGENT" || value == "WORKFLOW" || value == "RUN" ||
 		value == "OWNER_GATE" || value == "ARTIFACT" || value == "SCHEDULE" || value == "INTEGRATION" ||
-		value == "SECRET"
+		value == "RUNTIME_ENVIRONMENT" || value == "SECRET"
 }
 func contains(values []string, expected string) bool {
 	for _, value := range values {

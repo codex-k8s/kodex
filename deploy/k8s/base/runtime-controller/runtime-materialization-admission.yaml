@@ -11,18 +11,20 @@ spec:
         operations: [CREATE, UPDATE]
         resources: [secrets]
   matchConditions:
-    - name: managed-runtime-ticket
+    - name: runtime-controller-ticket
       expression: >-
         object.metadata.namespace == 'kodex-runtime' &&
-        has(object.metadata.labels) &&
-        'runtime.kodex.dev/managed' in object.metadata.labels &&
-        object.metadata.labels['runtime.kodex.dev/managed'] == 'true' &&
-        'runtime.kodex.dev/mode' in object.metadata.labels &&
-        object.metadata.labels['runtime.kodex.dev/mode'] in
-          ['turn', 'warm', 'warm-turn']
+        request.userInfo.username ==
+          'system:serviceaccount:kodex-system:runtime-controller'
   validations:
     - expression: request.operation == 'CREATE'
       message: runtime execution tickets are immutable and cannot be updated
+    - expression: >-
+        has(object.metadata.labels) &&
+        object.metadata.labels['runtime.kodex.dev/managed'] == 'true' &&
+        object.metadata.labels['runtime.kodex.dev/mode'] in
+          ['turn', 'warm', 'warm-turn']
+      message: runtime execution ticket labels are invalid
     - expression: >-
         request.userInfo.username ==
         'system:serviceaccount:kodex-system:runtime-controller'
@@ -55,7 +57,14 @@ spec:
         'runtime.kodex.dev/controller-pod-uid' in object.metadata.annotations &&
         size(object.metadata.annotations['runtime.kodex.dev/controller-pod-uid']) > 0 &&
         'runtime.kodex.dev/pod-name' in object.metadata.annotations &&
-        size(object.metadata.annotations['runtime.kodex.dev/pod-name']) > 0
+        size(object.metadata.annotations['runtime.kodex.dev/pod-name']) > 0 &&
+        ['runtime.kodex.dev/resources-digest',
+         'runtime.kodex.dev/volumes-digest',
+         'runtime.kodex.dev/network-digest',
+         'runtime.kodex.dev/rbac-profile-digest',
+         'runtime.kodex.dev/effective-rbac-digest'].all(key,
+           key in object.metadata.annotations &&
+           object.metadata.annotations[key].matches('^[a-f0-9]{64}$'))
       message: runtime execution ticket is not pinned to exact runtime revisions
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -65,6 +74,235 @@ metadata:
 spec:
   policyName: runtime-execution-ticket-exact-projection
   validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kodex-runtime
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: runtime-execution-service-account
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [serviceaccounts]
+  matchConditions:
+    - name: runtime-controller-service-account
+      expression: >-
+        object.metadata.namespace == 'kodex-runtime' &&
+        request.userInfo.username ==
+          'system:serviceaccount:kodex-system:runtime-controller'
+  validations:
+    - expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:kodex-system:runtime-controller'
+      message: only runtime-controller may create execution ServiceAccounts
+    - expression: >-
+        has(object.metadata.labels) &&
+        object.metadata.labels['runtime.kodex.dev/managed'] == 'true' &&
+        object.metadata.labels['runtime.kodex.dev/mode'] == 'turn' &&
+        object.metadata.labels['runtime.kodex.dev/execution-hash'].matches('^[a-f0-9]{16}$')
+      message: execution ServiceAccount labels are invalid
+    - expression: >-
+        object.metadata.name.matches('^runtime-sa-[a-f0-9]{16}$') &&
+        has(object.automountServiceAccountToken) &&
+        object.automountServiceAccountToken == false &&
+        object.metadata.name.endsWith(
+          object.metadata.labels['runtime.kodex.dev/execution-hash'])
+      message: execution ServiceAccount identity is invalid
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: runtime-execution-service-account
+spec:
+  policyName: runtime-execution-service-account
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kodex-runtime
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: runtime-execution-rbac
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [rbac.authorization.k8s.io]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [roles, rolebindings]
+  matchConditions:
+    - name: runtime-controller-rbac
+      expression: >-
+        object.metadata.namespace == 'kodex-runtime' &&
+        request.userInfo.username ==
+          'system:serviceaccount:kodex-system:runtime-controller'
+  validations:
+    - expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:kodex-system:runtime-controller'
+      message: only runtime-controller may create execution RBAC
+    - expression: >-
+        has(object.metadata.labels) &&
+        object.metadata.labels['runtime.kodex.dev/managed'] == 'true' &&
+        object.metadata.labels['runtime.kodex.dev/mode'] == 'turn' &&
+        object.metadata.labels['runtime.kodex.dev/execution-hash'].matches('^[a-f0-9]{16}$')
+      message: execution RBAC labels are invalid
+    - expression: >-
+        object.kind == 'RoleBinding' ||
+        (object.metadata.name.matches('^runtime-role-[a-f0-9]{16}$') &&
+         object.metadata.name.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']) &&
+         size(object.rules) == 2 &&
+         object.rules.all(rule,
+           size(rule.apiGroups) == 1 && rule.apiGroups[0] == '' &&
+           size(rule.verbs) == 1 && rule.verbs[0] == 'get' &&
+           size(rule.resourceNames) == 1 &&
+           rule.resourceNames[0].matches('^runtime-turn-[a-f0-9]{16}$') &&
+           rule.resourceNames[0].endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']) &&
+           size(rule.resources) == 1 &&
+           rule.resources[0] in ['pods', 'pods/log']))
+      message: execution Role may read only its exact Pod and logs
+    - expression: >-
+        object.kind == 'Role' ||
+        (object.metadata.name.matches('^runtime-rb-[a-f0-9]{16}$') &&
+         object.metadata.name.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']) &&
+         size(object.subjects) == 1 &&
+         object.subjects[0].kind == 'ServiceAccount' &&
+         object.subjects[0].namespace == 'kodex-runtime' &&
+         object.subjects[0].name.matches('^runtime-sa-[a-f0-9]{16}$') &&
+         object.subjects[0].name.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']) &&
+         object.roleRef.apiGroup == 'rbac.authorization.k8s.io' &&
+         object.roleRef.kind == 'Role' &&
+         object.roleRef.name.matches('^runtime-role-[a-f0-9]{16}$') &&
+         object.roleRef.name.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']))
+      message: execution RoleBinding identity is invalid
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: runtime-execution-rbac
+spec:
+  policyName: runtime-execution-rbac
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kodex-runtime
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: runtime-execution-network-policy
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: v1
+    kind: ConfigMap
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [networking.k8s.io]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [networkpolicies]
+  matchConditions:
+    - name: runtime-controller-network-policy
+      expression: >-
+        object.metadata.namespace == 'kodex-runtime' &&
+        request.userInfo.username ==
+          'system:serviceaccount:kodex-system:runtime-controller'
+  validations:
+    - expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:kodex-system:runtime-controller'
+      message: only runtime-controller may create execution NetworkPolicies
+    - expression: >-
+        has(object.metadata.labels) &&
+        object.metadata.labels['runtime.kodex.dev/managed'] == 'true' &&
+        object.metadata.labels['runtime.kodex.dev/mode'] == 'turn' &&
+        object.metadata.labels['runtime.kodex.dev/execution-hash'].matches('^[a-f0-9]{16}$')
+      message: execution NetworkPolicy labels are invalid
+    - expression: >-
+        object.metadata.name.matches('^runtime-net-[a-f0-9]{16}$') &&
+        object.metadata.name.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']) &&
+        size(object.spec.policyTypes) == 1 &&
+        object.spec.policyTypes[0] == 'Egress' &&
+        !has(object.spec.ingress) &&
+        size(object.spec.podSelector.matchLabels) == 3 &&
+        object.spec.podSelector.matchLabels['runtime.kodex.dev/managed'] == 'true' &&
+        object.spec.podSelector.matchLabels['runtime.kodex.dev/mode'] == 'turn' &&
+        object.spec.podSelector.matchLabels['runtime.kodex.dev/execution-hash'] ==
+          object.metadata.labels['runtime.kodex.dev/execution-hash']
+      message: execution NetworkPolicy selector is not exact
+    - expression: >-
+        size(object.spec.egress) >= 4 && size(object.spec.egress) <= 5 &&
+        object.spec.egress.all(rule,
+          size(rule.to) == 1 && size(rule.ports) == 1 &&
+          ((rule.ports[0].port == 53 &&
+            rule.ports[0].protocol in ['TCP', 'UDP'] &&
+            has(rule.to[0].namespaceSelector) &&
+            size(rule.to[0].namespaceSelector.matchLabels) == 1 &&
+            rule.to[0].namespaceSelector.matchLabels['kubernetes.io/metadata.name'] == 'kube-system' &&
+            has(rule.to[0].podSelector) &&
+            size(rule.to[0].podSelector.matchLabels) == 1 &&
+            rule.to[0].podSelector.matchLabels['k8s-app'] == 'kube-dns' &&
+            !has(rule.to[0].ipBlock)) ||
+           (rule.ports[0].port == 8444 &&
+            rule.ports[0].protocol == 'TCP' &&
+            has(rule.to[0].namespaceSelector) &&
+            size(rule.to[0].namespaceSelector.matchLabels) == 1 &&
+            rule.to[0].namespaceSelector.matchLabels['kubernetes.io/metadata.name'] == 'kodex-system' &&
+            has(rule.to[0].podSelector) &&
+            size(rule.to[0].podSelector.matchLabels) == 2 &&
+            rule.to[0].podSelector.matchLabels['app.kubernetes.io/name'] == 'runtime-controller' &&
+            rule.to[0].podSelector.matchLabels['app.kubernetes.io/component'] == 'internal-controller' &&
+            !has(rule.to[0].ipBlock)) ||
+           (rule.ports[0].port == 8080 &&
+            rule.ports[0].protocol == 'TCP' &&
+            has(rule.to[0].namespaceSelector) &&
+            size(rule.to[0].namespaceSelector.matchLabels) == 1 &&
+            rule.to[0].namespaceSelector.matchLabels['kubernetes.io/metadata.name'] == 'kodex-system' &&
+            has(rule.to[0].podSelector) &&
+            size(rule.to[0].podSelector.matchLabels) == 2 &&
+            rule.to[0].podSelector.matchLabels['app.kubernetes.io/name'] == 'egress-gateway' &&
+            rule.to[0].podSelector.matchLabels['app.kubernetes.io/component'] == 'platform-egress' &&
+            !has(rule.to[0].ipBlock)) ||
+           (rule.ports[0].port == 443 &&
+            rule.ports[0].protocol == 'TCP' &&
+            has(rule.to[0].ipBlock) &&
+            rule.to[0].ipBlock.cidr ==
+              params.data['kubernetes-api-service-cidr'] &&
+            !has(rule.to[0].ipBlock.except) &&
+            !has(rule.to[0].namespaceSelector) &&
+            !has(rule.to[0].podSelector)))) &&
+        size(object.spec.egress.filter(rule,
+          rule.ports[0].port == 53 && rule.ports[0].protocol == 'TCP')) == 1 &&
+        size(object.spec.egress.filter(rule,
+          rule.ports[0].port == 53 && rule.ports[0].protocol == 'UDP')) == 1 &&
+        size(object.spec.egress.filter(rule, rule.ports[0].port == 8080)) == 1 &&
+        size(object.spec.egress.filter(rule, rule.ports[0].port == 8444)) == 1 &&
+        size(object.spec.egress.filter(rule, rule.ports[0].port == 443)) <= 1
+      message: execution NetworkPolicy contains a wildcard or unsupported egress rule
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: runtime-execution-network-policy
+spec:
+  policyName: runtime-execution-network-policy
+  validationActions: [Deny]
+  paramRef:
+    name: runtime-materialization-admission-parameters
+    namespace: kodex-system
+    parameterNotFoundAction: Deny
   matchResources:
     namespaceSelector:
       matchLabels:
@@ -83,14 +321,11 @@ spec:
         operations: [CREATE]
         resources: [pods]
   matchConditions:
-    - name: managed-role-runtime
+    - name: runtime-controller-role-pod
       expression: >-
         object.metadata.namespace == 'kodex-runtime' &&
-        has(object.metadata.labels) &&
-        'runtime.kodex.dev/managed' in object.metadata.labels &&
-        object.metadata.labels['runtime.kodex.dev/managed'] == 'true' &&
-        'app.kubernetes.io/component' in object.metadata.labels &&
-        object.metadata.labels['app.kubernetes.io/component'] == 'role-runtime'
+        request.userInfo.username ==
+          'system:serviceaccount:kodex-system:runtime-controller'
   variables:
     - name: ticketVolumes
       expression: >-
@@ -104,16 +339,136 @@ spec:
       expression: >-
         object.spec.containers.filter(container,
           container.name == 'provider-runtime')
+    - name: roleContainers
+      expression: >-
+        object.spec.containers.filter(container,
+          container.name == 'role-runtime')
+    - name: kubeAccessVolumes
+      expression: >-
+        object.spec.volumes.filter(volume,
+          volume.name == 'kube-api-access')
   validations:
     - expression: >-
         request.userInfo.username ==
         'system:serviceaccount:kodex-system:runtime-controller'
       message: only runtime-controller may create managed role Pods
     - expression: >-
-        object.spec.serviceAccountName == 'agent-runner' &&
+        has(object.metadata.labels) &&
+        object.metadata.labels['runtime.kodex.dev/managed'] == 'true' &&
+        object.metadata.labels['app.kubernetes.io/name'] == 'agent-runner' &&
+        object.metadata.labels['app.kubernetes.io/component'] == 'role-runtime' &&
+        object.metadata.labels['runtime.kodex.dev/mode'] in ['turn', 'warm']
+      message: managed role Pod labels are invalid
+    - expression: >-
+        ((object.metadata.labels['runtime.kodex.dev/mode'] == 'warm' &&
+          object.metadata.name == 'system-assistant-warm' &&
+          object.spec.serviceAccountName == 'agent-runner') ||
+         (object.metadata.labels['runtime.kodex.dev/mode'] == 'turn' &&
+          object.metadata.name.matches('^runtime-turn-[a-f0-9]{16}$') &&
+          object.metadata.name.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']) &&
+          object.spec.serviceAccountName.matches('^runtime-sa-[a-f0-9]{16}$') &&
+          object.spec.serviceAccountName.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']))) &&
         has(object.spec.automountServiceAccountToken) &&
         object.spec.automountServiceAccountToken == false
       message: managed role Pod service account boundary is invalid
+    - expression: >-
+        size(object.spec.containers) == 2 &&
+        size(variables.roleContainers) == 1 &&
+        size(variables.providerContainers) == 1 &&
+        has(object.spec.initContainers) &&
+        size(object.spec.initContainers) == 1 &&
+        object.spec.initContainers[0].name == 'workspace-init'
+      message: managed role Pod container set is invalid
+    - expression: >-
+        object.spec.restartPolicy == 'Never' &&
+        has(object.spec.enableServiceLinks) &&
+        object.spec.enableServiceLinks == false &&
+        object.spec.terminationGracePeriodSeconds == 30 &&
+        (!has(object.spec.hostNetwork) || object.spec.hostNetwork == false) &&
+        (!has(object.spec.hostPID) || object.spec.hostPID == false) &&
+        (!has(object.spec.hostIPC) || object.spec.hostIPC == false) &&
+        (!has(object.spec.shareProcessNamespace) ||
+          object.spec.shareProcessNamespace == false) &&
+        has(object.spec.securityContext) &&
+        object.spec.securityContext.runAsNonRoot == true &&
+        object.spec.securityContext.fsGroup == 29000 &&
+        has(object.spec.securityContext.seccompProfile) &&
+        object.spec.securityContext.seccompProfile.type == 'RuntimeDefault'
+      message: managed role Pod security boundary is invalid
+    - expression: >-
+        variables.allContainers.all(container,
+          container.image.matches('^.+@sha256:[a-f0-9]{64}$') &&
+          container.image == variables.roleContainers[0].image &&
+          container.imagePullPolicy == 'IfNotPresent' &&
+          (!has(container.command) || size(container.command) == 0)) &&
+        size(variables.roleContainers[0].args) == 1 &&
+        variables.roleContainers[0].args[0] ==
+          (object.metadata.labels['runtime.kodex.dev/mode'] == 'warm'
+            ? 'runtime-warm' : 'runtime-session') &&
+        size(variables.providerContainers[0].args) == 1 &&
+        variables.providerContainers[0].args[0] == 'runtime-provider' &&
+        size(object.spec.initContainers[0].args) == 1 &&
+        object.spec.initContainers[0].args[0] == 'runtime-init-workspace'
+      message: managed role Pod image or process contract is invalid
+    - expression: >-
+        variables.allContainers.all(container,
+          has(container.securityContext) &&
+          container.securityContext.runAsNonRoot == true &&
+          container.securityContext.allowPrivilegeEscalation == false &&
+          container.securityContext.readOnlyRootFilesystem == true &&
+          (!has(container.securityContext.privileged) ||
+            container.securityContext.privileged == false) &&
+          has(container.securityContext.capabilities) &&
+          (!has(container.securityContext.capabilities.add) ||
+            size(container.securityContext.capabilities.add) == 0) &&
+          size(container.securityContext.capabilities.drop) == 1 &&
+          container.securityContext.capabilities.drop[0] == 'ALL') &&
+        variables.roleContainers[0].securityContext.runAsUser == 10001 &&
+        variables.roleContainers[0].securityContext.runAsGroup == 10001 &&
+        variables.roleContainers[0].securityContext.seccompProfile.type ==
+          'RuntimeDefault' &&
+        object.spec.initContainers[0].securityContext.runAsUser == 10001 &&
+        object.spec.initContainers[0].securityContext.runAsGroup == 10001 &&
+        object.spec.initContainers[0].securityContext.seccompProfile.type ==
+          'RuntimeDefault' &&
+        variables.providerContainers[0].securityContext.runAsUser == 10002 &&
+        variables.providerContainers[0].securityContext.runAsGroup == 10002 &&
+        variables.providerContainers[0].securityContext.seccompProfile.type ==
+          'Unconfined' &&
+        variables.providerContainers[0].securityContext.appArmorProfile.type ==
+          'Unconfined'
+      message: managed role Pod container securityContext is invalid
+    - expression: >-
+        size(variables.roleContainers[0].resources.requests) == 3 &&
+        size(variables.roleContainers[0].resources.limits) == 3 &&
+        quantity(string(variables.roleContainers[0].resources.requests.cpu)).compareTo(quantity('100m')) >= 0 &&
+        quantity(string(variables.roleContainers[0].resources.requests.cpu)).compareTo(quantity('8')) <= 0 &&
+        quantity(string(variables.roleContainers[0].resources.limits.cpu)).compareTo(
+          quantity(string(variables.roleContainers[0].resources.requests.cpu))) >= 0 &&
+        quantity(string(variables.roleContainers[0].resources.limits.cpu)).compareTo(quantity('16')) <= 0 &&
+        quantity(string(variables.roleContainers[0].resources.requests.memory)).compareTo(quantity('128Mi')) >= 0 &&
+        quantity(string(variables.roleContainers[0].resources.requests.memory)).compareTo(quantity('32Gi')) <= 0 &&
+        quantity(string(variables.roleContainers[0].resources.limits.memory)).compareTo(
+          quantity(string(variables.roleContainers[0].resources.requests.memory))) >= 0 &&
+        quantity(string(variables.roleContainers[0].resources.limits.memory)).compareTo(quantity('64Gi')) <= 0 &&
+        quantity(string(variables.roleContainers[0].resources.requests['ephemeral-storage'])).compareTo(
+          quantity('256Mi')) >= 0 &&
+        quantity(string(variables.roleContainers[0].resources.requests['ephemeral-storage'])).compareTo(
+          quantity('20Gi')) <= 0 &&
+        quantity(string(variables.roleContainers[0].resources.limits['ephemeral-storage'])).compareTo(
+          quantity(string(variables.roleContainers[0].resources.requests['ephemeral-storage']))) >= 0 &&
+        quantity(string(variables.roleContainers[0].resources.limits['ephemeral-storage'])).compareTo(
+          quantity('100Gi')) <= 0
+      message: managed role Pod resources are outside the approved policy
+    - expression: >-
+        [variables.providerContainers[0], object.spec.initContainers[0]].all(container,
+          size(container.resources.requests) == 2 &&
+          size(container.resources.limits) == 2 &&
+          quantity(string(container.resources.requests.cpu)).compareTo(quantity('25m')) == 0 &&
+          quantity(string(container.resources.requests.memory)).compareTo(quantity('64Mi')) == 0 &&
+          quantity(string(container.resources.limits.cpu)).compareTo(quantity('500m')) == 0 &&
+          quantity(string(container.resources.limits.memory)).compareTo(quantity('256Mi')) == 0)
+      message: managed runtime support container resources are invalid
     - expression: >-
         has(object.metadata.annotations) &&
         'runtime.kodex.dev/revision-digest' in object.metadata.annotations &&
@@ -124,7 +479,14 @@ spec:
           .matches('^[a-f0-9]{64}$') &&
         'runtime.kodex.dev/environment-digest' in object.metadata.annotations &&
         object.metadata.annotations['runtime.kodex.dev/environment-digest']
-          .matches('^[a-f0-9]{64}$')
+          .matches('^[a-f0-9]{64}$') &&
+        ['runtime.kodex.dev/resources-digest',
+         'runtime.kodex.dev/volumes-digest',
+         'runtime.kodex.dev/network-digest',
+         'runtime.kodex.dev/rbac-profile-digest',
+         'runtime.kodex.dev/effective-rbac-digest'].all(key,
+           key in object.metadata.annotations &&
+           object.metadata.annotations[key].matches('^[a-f0-9]{64}$'))
       message: managed role Pod is not pinned to exact runtime revisions
     - expression: >-
         size(variables.ticketVolumes) == 1 &&
@@ -149,6 +511,60 @@ spec:
               !(has(item.valueFrom) && has(item.valueFrom.secretKeyRef))))
       message: Secret environment projections are restricted to provider runtime
     - expression: >-
+        size(variables.roleContainers[0].env) == 3 &&
+        variables.roleContainers[0].env.all(item, !has(item.valueFrom)) &&
+        size(variables.roleContainers[0].env.filter(item,
+          item.name == 'KODEX_RUNTIME_REVISION_FILE' &&
+          item.value == '/var/run/config/kodex/runtime/runtime.json')) == 1 &&
+        size(variables.roleContainers[0].env.filter(item,
+          item.name == 'OTEL_SDK_DISABLED' && item.value == 'true')) == 1 &&
+        size(variables.roleContainers[0].env.filter(item,
+          item.name == 'DEPLOYMENT_ENVIRONMENT' &&
+          item.value == object.metadata.labels['kodex.dev/environment'])) == 1 &&
+        (!has(object.spec.initContainers[0].env) ||
+          size(object.spec.initContainers[0].env) == 0)
+      message: role runtime server-owned environment is invalid
+    - expression: >-
+        size(variables.providerContainers[0].env) <= 135 &&
+        variables.providerContainers[0].env.all(item,
+          size(variables.providerContainers[0].env.filter(other,
+            other.name == item.name)) == 1) &&
+        size(variables.providerContainers[0].env.filter(item,
+          item.name == 'HOME' && item.value == '/tmp' && !has(item.valueFrom))) == 1 &&
+        size(variables.providerContainers[0].env.filter(item,
+          item.name == 'CODEX_HOME' &&
+          item.value == '/workspace/.kodex/state/codex-home' &&
+          !has(item.valueFrom))) == 1 &&
+        size(variables.providerContainers[0].env.filter(item,
+          item.name == 'HTTPS_PROXY' && item.value ==
+            'http://egress-gateway.kodex-system.svc:8080' && !has(item.valueFrom))) == 1 &&
+        size(variables.providerContainers[0].env.filter(item,
+          item.name == 'HTTP_PROXY' && item.value ==
+            'http://egress-gateway.kodex-system.svc:8080' && !has(item.valueFrom))) == 1 &&
+        size(variables.providerContainers[0].env.filter(item,
+          item.name == 'NO_PROXY' && item.value == '127.0.0.1,localhost' &&
+          !has(item.valueFrom))) == 1 &&
+        size(variables.providerContainers[0].env.filter(item,
+          item.name == 'OTEL_SDK_DISABLED' && item.value == 'true' &&
+          !has(item.valueFrom))) == 1 &&
+        size(variables.providerContainers[0].env.filter(item,
+          item.name == 'DEPLOYMENT_ENVIRONMENT' &&
+          item.value == object.metadata.labels['kodex.dev/environment'] &&
+          !has(item.valueFrom))) == 1
+      message: provider runtime server-owned environment is invalid
+    - expression: >-
+        variables.providerContainers[0].env.all(item,
+          item.name in ['HOME', 'CODEX_HOME', 'HTTPS_PROXY', 'HTTP_PROXY',
+            'NO_PROXY', 'OTEL_SDK_DISABLED', 'DEPLOYMENT_ENVIRONMENT'] ||
+          (item.name.matches('^[A-Z_][A-Z0-9_]{0,126}$') &&
+           !['KODEX_', 'CODEX_', 'OPENAI_', 'OTEL_', 'AWS_', 'AZURE_',
+             'GOOGLE_', 'KUBERNETES_'].exists(prefix, item.name.startsWith(prefix)) &&
+           !(item.name in ['PATH', 'PWD', 'SHELL', 'USER', 'LOGNAME',
+             'TMPDIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR']) &&
+           ((has(item.valueFrom) && has(item.valueFrom.secretKeyRef)) ||
+            (!has(item.valueFrom) && size(item.value) <= 8192))))
+      message: provider runtime contains an unsupported environment variable
+    - expression: >-
         variables.allContainers.all(container,
           !has(container.volumeMounts) ||
           container.volumeMounts.filter(mount,
@@ -157,6 +573,136 @@ spec:
               mount.subPath in ['runtime.json', 'token'] &&
               has(mount.readOnly) && mount.readOnly == true))
       message: runtime ticket files must use exact read-only subPath mounts
+    - expression: >-
+        object.spec.volumes.all(volume,
+          volume.name in ['session', 'runtime-input', 'callback-ca',
+            'callback-client', 'provider-auth', 'provider-socket', 'tmp',
+            'provider-tmp', 'kube-api-access'] ||
+          (volume.name.matches('^environment-[a-f0-9]{16}$') &&
+           has(volume.emptyDir) && !has(volume.hostPath) &&
+           !has(volume.persistentVolumeClaim) && !has(volume.secret) &&
+           !has(volume.configMap)))
+      message: managed role Pod contains an unsupported runtime volume source
+    - expression: >-
+        size(object.spec.volumes.filter(volume,
+          volume.name == 'session' && has(volume.persistentVolumeClaim) &&
+          volume.persistentVolumeClaim.claimName.matches('^runtime-session-[a-f0-9]{16}$') &&
+          !has(volume.hostPath) && !has(volume.secret) && !has(volume.configMap) &&
+          !has(volume.projected) && !has(volume.emptyDir))) == 1 &&
+        size(object.spec.volumes.filter(volume,
+          volume.name == 'runtime-input' && has(volume.secret) &&
+          volume.secret.secretName.startsWith('runtime-ticket-') &&
+          !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
+          !has(volume.configMap) && !has(volume.projected) && !has(volume.emptyDir))) == 1 &&
+        size(object.spec.volumes.filter(volume,
+          volume.name == 'callback-ca' && has(volume.secret) &&
+          volume.secret.secretName == 'runtime-execution-client-tls' &&
+          !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
+          !has(volume.configMap) && !has(volume.projected) && !has(volume.emptyDir))) == 1 &&
+        size(object.spec.volumes.filter(volume,
+          volume.name == 'callback-client' && has(volume.secret) &&
+          volume.secret.secretName == 'runtime-execution-client-tls' &&
+          !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
+          !has(volume.configMap) && !has(volume.projected) && !has(volume.emptyDir))) == 1 &&
+        size(object.spec.volumes.filter(volume,
+          volume.name == 'provider-auth' && has(volume.secret) &&
+          !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
+          !has(volume.configMap) && !has(volume.projected) && !has(volume.emptyDir))) == 1 &&
+        ['provider-socket', 'tmp', 'provider-tmp'].all(name,
+          size(object.spec.volumes.filter(volume,
+            volume.name == name && has(volume.emptyDir) &&
+            !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
+            !has(volume.secret) && !has(volume.configMap) &&
+            !has(volume.projected))) == 1)
+      message: managed role Pod system volume source is invalid
+    - expression: >-
+        variables.allContainers.all(container,
+          !has(container.volumeMounts) || container.volumeMounts.all(mount,
+            !mount.name.matches('^environment-[a-f0-9]{16}$') ||
+            mount.mountPath.startsWith('/workspace/.kodex/volumes/')))
+      message: runtime environment volume mount path is outside the closed workspace catalog
+    - expression: >-
+        variables.providerContainers[0].volumeMounts.all(mount,
+          mount.name in ['session', 'runtime-input', 'provider-auth',
+            'provider-socket', 'provider-tmp']) &&
+        size(variables.providerContainers[0].volumeMounts.filter(mount,
+          mount.name == 'session' && mount.mountPath == '/workspace')) == 1 &&
+        size(variables.providerContainers[0].volumeMounts.filter(mount,
+          mount.name == 'runtime-input' && mount.subPath == 'runtime.json' &&
+          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(variables.providerContainers[0].volumeMounts.filter(mount,
+          mount.name == 'provider-auth' && mount.subPath in
+            ['auth.json', 'auth.sha256'] && has(mount.readOnly) &&
+          mount.readOnly == true)) == 2 &&
+        size(variables.providerContainers[0].volumeMounts.filter(mount,
+          mount.name == 'provider-socket' &&
+          mount.mountPath == '/run/kodex/provider')) == 1 &&
+        size(variables.providerContainers[0].volumeMounts.filter(mount,
+          mount.name == 'provider-tmp' && mount.mountPath == '/tmp')) == 1 &&
+        variables.roleContainers[0].volumeMounts.all(mount,
+          mount.name in ['session', 'runtime-input', 'callback-ca',
+            'callback-client', 'provider-socket', 'tmp', 'kube-api-access'] ||
+          mount.name.matches('^environment-[a-f0-9]{16}$')) &&
+        size(variables.roleContainers[0].volumeMounts.filter(mount,
+          mount.name == 'session' && mount.mountPath == '/workspace')) == 1 &&
+        size(variables.roleContainers[0].volumeMounts.filter(mount,
+          mount.name == 'runtime-input' && mount.subPath == 'runtime.json' &&
+          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(variables.roleContainers[0].volumeMounts.filter(mount,
+          mount.name == 'runtime-input' && mount.subPath == 'token' &&
+          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(variables.roleContainers[0].volumeMounts.filter(mount,
+          mount.name == 'callback-ca' &&
+          mount.mountPath == '/var/run/config/kodex/runtime/callback' &&
+          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(variables.roleContainers[0].volumeMounts.filter(mount,
+          mount.name == 'callback-client' &&
+          mount.mountPath == '/var/run/secrets/kodex/runtime/callback-client' &&
+          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(variables.roleContainers[0].volumeMounts.filter(mount,
+          mount.name == 'provider-socket' &&
+          mount.mountPath == '/run/kodex/provider')) == 1 &&
+        size(variables.roleContainers[0].volumeMounts.filter(mount,
+          mount.name == 'tmp' && mount.mountPath == '/tmp')) == 1 &&
+        object.spec.initContainers[0].volumeMounts.all(mount,
+          mount.name in ['session', 'runtime-input', 'tmp']) &&
+        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+          mount.name == 'session' && mount.mountPath == '/workspace')) == 1 &&
+        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+          mount.name == 'runtime-input' && mount.subPath == 'runtime.json' &&
+          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+          mount.name == 'tmp' && mount.mountPath == '/tmp')) == 1
+      message: managed role Pod authority mount boundary is invalid
+    - expression: >-
+        size(variables.kubeAccessVolumes) <= 1 &&
+        (size(variables.kubeAccessVolumes) == 0 ||
+         (object.metadata.labels['runtime.kodex.dev/mode'] == 'turn' &&
+          has(variables.kubeAccessVolumes[0].projected) &&
+          size(variables.kubeAccessVolumes[0].projected.sources) == 3 &&
+          size(variables.kubeAccessVolumes[0].projected.sources.filter(source,
+            has(source.serviceAccountToken) &&
+            source.serviceAccountToken.path == 'token' &&
+            source.serviceAccountToken.expirationSeconds == 3600 &&
+            !has(source.serviceAccountToken.audience))) == 1 &&
+          size(variables.kubeAccessVolumes[0].projected.sources.filter(source,
+            has(source.configMap) && source.configMap.name == 'kube-root-ca.crt' &&
+            size(source.configMap.items) == 1 &&
+            source.configMap.items[0].key == 'ca.crt' &&
+            source.configMap.items[0].path == 'ca.crt')) == 1 &&
+          size(variables.kubeAccessVolumes[0].projected.sources.filter(source,
+            has(source.downwardAPI) && size(source.downwardAPI.items) == 1 &&
+            source.downwardAPI.items[0].path == 'namespace' &&
+            source.downwardAPI.items[0].fieldRef.fieldPath == 'metadata.namespace')) == 1 &&
+          size(variables.roleContainers[0].volumeMounts.filter(mount,
+            mount.name == 'kube-api-access' &&
+            mount.mountPath == '/var/run/secrets/kubernetes.io/serviceaccount' &&
+            has(mount.readOnly) && mount.readOnly == true)) == 1)) &&
+        variables.providerContainers[0].volumeMounts.all(mount,
+          mount.name != 'kube-api-access') &&
+        object.spec.initContainers[0].volumeMounts.all(mount,
+          mount.name != 'kube-api-access')
+      message: Kubernetes API credential projection is not execution scoped
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

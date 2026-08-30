@@ -46,7 +46,16 @@ SELECT a.ref,
        environment_binding.version,
        environment_binding.digest,
        runtime_environment.non_secret_values,
-       runtime_environment.secret_descriptors
+       runtime_environment.secret_descriptors,
+       runtime_environment.core_digest,
+       runtime_environment.resource_policy,
+       runtime_environment.volume_policy,
+       runtime_environment.network_policy,
+       runtime_environment.kubernetes_access_profile,
+       runtime_environment.resources_digest,
+       runtime_environment.volumes_digest,
+       runtime_environment.network_digest,
+       runtime_environment.rbac_digest
 FROM control_plane.assistant_runtime ar
 JOIN control_plane.agents a ON a.id = ar.agent_id
 JOIN control_plane.sessions session ON session.ref = ar.system_session_ref

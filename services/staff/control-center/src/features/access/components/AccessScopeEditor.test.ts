@@ -21,8 +21,6 @@ const messages = {
         contractBoundary: "Граница контракта",
         operationCondition: "Конкретная операция",
         operationConditionHint: "Операция задаётся полномочием.",
-        environmentCondition: "Конкретное окружение",
-        environmentUnavailable: "Недоступно текущим API.",
         values: {
           ORGANIZATION: "Организация",
           PROJECT: "Проект",
@@ -40,13 +38,15 @@ const messages = {
         ARTIFACT: "Файл",
         SCHEDULE: "Автоматизация",
         INTEGRATION: "Интеграция",
+        RUNTIME_ENVIRONMENT: "Рабочее окружение",
+        SECRET: "Секрет",
       },
     },
   },
 };
 
 describe("AccessScopeEditor", () => {
-  it("использует реальные workflow options и честно отмечает отсутствующий environment scope", async () => {
+  it("использует реальные workflow options без устаревшего environment blocker", async () => {
     const app = createSSRApp({
       render: () =>
         h(AccessScopeEditor, {
@@ -99,7 +99,6 @@ describe("AccessScopeEditor", () => {
     const html = await renderToString(app);
 
     expect(html).toContain("Квалификация лида");
-    expect(html).toContain("Конкретное окружение");
-    expect(html).toContain("Недоступно текущим API");
+    expect(html).not.toContain("Недоступно текущим API");
   });
 });

@@ -4,6 +4,8 @@ INVALID_REQUEST:
   other: Проверьте данные запроса
 UNAUTHENTICATED:
   other: Войдите, чтобы продолжить
+FRESH_AUTHENTICATION_REQUIRED:
+  other: Войдите повторно, чтобы подтвердить это привилегированное действие
 PERMISSION_DENIED:
   other: У вас нет прав на это действие
 NOT_FOUND:
@@ -546,3 +548,49 @@ SESSION_ARCHIVE_TASK_READY:
   other: Задача архива сессии запланирована для повтора
 SESSION_ARCHIVE_TASK_DEAD_LETTER:
   other: Задача архива сессии остановлена после исчерпания попыток
+ARTIFACT_DELETED:
+  other: Файл перемещён в корзину
+ARTIFACT_RESTORED:
+  other: Файл восстановлен из корзины
+ARTIFACT_PURGED:
+  other: Файл окончательно удалён
+PERMISSION_ENVIRONMENT_PRIVILEGED_MANAGE_NAME:
+  other: Привилегированное управление окружением
+PERMISSION_ENVIRONMENT_PRIVILEGED_MANAGE_DESCRIPTION:
+  other: Настройка Kubernetes-доступа среды выполнения в пределах её собственного Pod
+PERMISSION_SECRET_VIEW_NAME:
+  other: Просмотр секретов
+PERMISSION_SECRET_VIEW_DESCRIPTION:
+  other: Чтение безопасных масок и метаданных назначенных секретов
+PERMISSION_SECRET_CREATE_NAME:
+  other: Создание секретов
+PERMISSION_SECRET_CREATE_DESCRIPTION:
+  other: Создание секретов в назначенной области
+PERMISSION_SECRET_ROTATE_NAME:
+  other: Ротация секретов
+PERMISSION_SECRET_ROTATE_DESCRIPTION:
+  other: Создание новой версии назначенного секрета
+PERMISSION_SECRET_REVEAL_NAME:
+  other: Раскрытие секретов
+PERMISSION_SECRET_REVEAL_DESCRIPTION:
+  other: Однократное получение полного значения назначенного секрета с аудитом
+PERMISSION_SECRET_REVOKE_NAME:
+  other: Отзыв секретов
+PERMISSION_SECRET_REVOKE_DESCRIPTION:
+  other: Закрытие дальнейшего использования назначенного секрета
+RUNTIME_SECRET_CREATED:
+  other: Runtime-секрет создан
+RUNTIME_SECRET_ROTATED:
+  other: Runtime-секрет ротирован
+RUNTIME_SECRET_REVEALED:
+  other: Значение runtime-секрета раскрыто
+RUNTIME_SECRET_REVOKED:
+  other: Runtime-секрет отозван
+RUNTIME_SECRET_OPERATION_FAILED:
+  other: Операция с runtime-секретом не выполнена
+SYSTEM_BASE_ROLE_IMAGE:
+  other: Базовый системный образ роли
+SYSTEM_ROLE_RUNTIME_POLICY:
+  other: Системная политика среды выполнения
+SYSTEM_ROLE_RUNTIME_SECRETS:
+  other: Системные секреты среды выполнения

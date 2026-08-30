@@ -77,6 +77,14 @@ FROM (
   WHERE @resource_kind = 'INTEGRATION' AND connection.organization_id = @organization_id::uuid
     AND connection.ref = @resource_ref
   UNION ALL
+  SELECT environment.id::text, project.id::text, project.ref, owner_subject.ref,
+         jsonb_build_object('PROJECT', project.ref)
+  FROM control_plane.runtime_environment_sets environment
+  JOIN control_plane.projects project ON project.id = environment.project_id
+  JOIN control_plane.subjects owner_subject ON owner_subject.id = environment.created_by
+  WHERE @resource_kind = 'RUNTIME_ENVIRONMENT' AND environment.organization_id = @organization_id::uuid
+    AND environment.ref = @resource_ref AND environment.state = 'ACTIVE'
+  UNION ALL
   SELECT secret.id::text, project.id::text, project.ref, owner_subject.ref,
          jsonb_build_object('PROJECT', project.ref)
   FROM control_plane.runtime_secrets secret

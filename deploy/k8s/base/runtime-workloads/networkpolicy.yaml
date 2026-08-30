@@ -9,13 +9,14 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: runtime-controller-agent-runner-exact-paths
+  name: runtime-controller-warm-runner-exact-paths
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: agent-runner
       app.kubernetes.io/component: role-runtime
       runtime.kodex.dev/managed: "true"
+      runtime.kodex.dev/mode: warm
   policyTypes: [Ingress, Egress]
   ingress: []
   egress:

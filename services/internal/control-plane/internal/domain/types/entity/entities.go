@@ -1,7 +1,11 @@
 // Package entity содержит универсальную web-first предметную модель.
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+)
 
 type Project struct {
 	Ref, Name, Purpose, Language, Lifecycle string
@@ -116,6 +120,7 @@ type RuntimeEnvironmentVersion struct {
 	Tools             []RuntimeEnvironmentTool
 	Values            []RuntimeEnvironmentValue
 	SecretDescriptors []RuntimeSecretDescriptor
+	Policy            runtimecontract.RuntimeEnvironmentPolicy
 	CreatedAt         time.Time
 }
 

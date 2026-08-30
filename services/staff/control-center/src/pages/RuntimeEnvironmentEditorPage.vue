@@ -21,21 +21,40 @@ import {
   safeSecretReference,
 } from "@/features/runtime/environment-capabilities";
 import {
+  defaultRuntimeEnvironmentPolicy,
+  editableRuntimeEnvironmentPolicy,
   editableSecretBindings,
+  emptyRuntimeVolume,
   emptySecretBinding,
+  mandatoryRuntimeNetworkDestinations,
+  normalizeRuntimeEnvironmentInput,
+  runtimeResourceBounds,
+  runtimeVolumeBounds,
+  setRuntimeKubernetesAccess,
   validateEnvironmentInput,
 } from "@/features/runtime/environment-form";
+import {
+  consumeRuntimeEnvironmentPolicyDraft,
+  createRuntimeEnvironmentPolicyDraft,
+  discardRuntimeEnvironmentPolicyDraft,
+  requiresRuntimeEnvironmentPolicyReauth,
+  storeRuntimeEnvironmentPolicyDraft,
+  type RuntimeEnvironmentPolicyDraftOperation,
+} from "@/features/runtime/environment-reauth-draft";
 import { useRuntimeStore } from "@/features/runtime/store";
 import { loadRuntimeSecretPage } from "@/features/runtime-secrets/api";
 import {
   maskedSecretHint,
   type RuntimeSecret,
 } from "@/features/runtime-secrets/model";
+import { consumeRuntimeEnvironmentPolicyReauthCompletion } from "@/features/session/reauth";
+import { useSessionStore } from "@/features/session/store";
 import type {
   RoleImageArtifact,
   RoleImageArtifactTool,
   RuntimeEnvironmentInput,
   RuntimeEnvironmentSet,
+  RuntimeKubernetesAccessKind,
   RuntimeSecretBinding,
   RuntimeSecretDescriptor,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -59,6 +78,7 @@ const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const runtime = useRuntimeStore();
+const session = useSessionStore();
 const projectRef = computed(() => String(route.params.projectRef));
 const environmentRef = computed(() => {
   const value = route.params.environmentRef;
@@ -74,6 +94,7 @@ const versions = computed(() =>
 );
 const busy = ref(false);
 const problem = ref<AppProblem>();
+const reauthRestored = ref(false);
 const activeSection = ref<EditorSection>("GENERAL");
 const input = reactive<RuntimeEnvironmentInput>({
   name: "",
@@ -82,6 +103,7 @@ const input = reactive<RuntimeEnvironmentInput>({
   tools: [],
   values: [],
   secretBindings: [],
+  policy: defaultRuntimeEnvironmentPolicy(),
 });
 const selectedSecrets = reactive<Record<string, AsyncEntityOption>>({});
 const selectedImage = ref<AsyncEntityOption>();
@@ -104,6 +126,7 @@ const versionDigest = computed(() =>
     ? compactIdentifier(current.value.currentVersion.digest)
     : undefined,
 );
+const publishedPolicy = computed(() => current.value?.currentVersion.policy);
 const sections: readonly { id: EditorSection; icon: typeof Boxes }[] = [
   { id: "GENERAL", icon: ServerCog },
   { id: "IMAGE_TOOLS", icon: Boxes },
@@ -129,6 +152,42 @@ function sync(value = current.value): void {
   input.secretBindings = editableSecretBindings(
     value.currentVersion.secretDescriptors,
   );
+  input.policy = editableRuntimeEnvironmentPolicy(value.currentVersion.policy);
+}
+
+function applyRestoredInput(value: RuntimeEnvironmentInput): void {
+  input.name = value.name;
+  input.description = value.description;
+  input.imageArtifactRef = value.imageArtifactRef;
+  input.tools = value.tools.map((item) => ({ ...item }));
+  input.values = value.values.map((item) => ({ ...item }));
+  input.secretBindings = value.secretBindings.map((item) => ({ ...item }));
+  input.policy = {
+    resources: { ...value.policy.resources },
+    volumes: value.policy.volumes.map((item) => ({ ...item })),
+    networkDestinations: [...value.policy.networkDestinations],
+    kubernetesAccess: value.policy.kubernetesAccess,
+  };
+
+  if (selectedImage.value?.ref !== value.imageArtifactRef) {
+    selectedImage.value = {
+      ref: value.imageArtifactRef,
+      title: value.imageArtifactRef,
+      description: t("runtime.restoredImageSelection"),
+    };
+    imageArtifact.value = undefined;
+  }
+  for (const key of Object.keys(selectedSecrets))
+    Reflect.deleteProperty(selectedSecrets, key);
+  for (const binding of value.secretBindings) {
+    if (binding.secretRef && !currentDescriptor(binding)) {
+      selectedSecrets[binding.secretRef] = {
+        ref: binding.secretRef,
+        title: binding.secretRef,
+        description: t("runtime.restoredSecretSelection"),
+      };
+    }
+  }
 }
 
 async function loadImageArtifact(
@@ -264,6 +323,24 @@ function addSecret(): void {
   input.secretBindings.push(emptySecretBinding());
 }
 
+function addVolume(): void {
+  if (input.policy.volumes.length < runtimeVolumeBounds.maxItems)
+    input.policy.volumes.push(emptyRuntimeVolume());
+}
+
+function toggleKubernetesAccess(event: Event): void {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLInputElement)) return;
+  const access: RuntimeKubernetesAccessKind = target.checked
+    ? "READ_OWN_EXECUTION"
+    : "NONE";
+  setRuntimeKubernetesAccess(input.policy, access);
+}
+
+function volumeMountPath(name: string): string {
+  return name ? `/workspace/.kodex/volumes/${name}` : "—";
+}
+
 async function load(): Promise<void> {
   if (!environmentRef.value) return;
   await Promise.all([
@@ -278,33 +355,50 @@ async function load(): Promise<void> {
     );
 }
 
+function currentOperation(): RuntimeEnvironmentPolicyDraftOperation {
+  return current.value ? "PUBLISH" : "CREATE";
+}
+
+function restoreAfterFreshAuthentication(): void {
+  const operation = currentOperation();
+  const expected = {
+    ...(environmentRef.value ? { environmentRef: environmentRef.value } : {}),
+    ...(current.value ? { expectedVersion: current.value.version } : {}),
+    operation,
+    projectRef: projectRef.value,
+  };
+  const completed = consumeRuntimeEnvironmentPolicyReauthCompletion(
+    window.sessionStorage,
+    expected,
+  );
+  if (!completed) return;
+  const restored = consumeRuntimeEnvironmentPolicyDraft(
+    window.sessionStorage,
+    expected,
+  );
+  applyRestoredInput(restored);
+  reauthRestored.value = true;
+}
+
+async function initialize(): Promise<void> {
+  await load();
+  try {
+    restoreAfterFreshAuthentication();
+  } catch (error) {
+    problem.value = asProblem(error);
+  }
+}
+
 async function save(): Promise<void> {
   if (validation.value.length) return;
   busy.value = true;
   problem.value = undefined;
   try {
-    const payload: RuntimeEnvironmentInput = {
-      name: input.name.trim(),
-      description: input.description.trim(),
-      imageArtifactRef: input.imageArtifactRef,
-      tools: input.tools.map((item) => ({
-        name: item.name.trim(),
-        command: item.command,
-        description: item.description.trim(),
-        usageHint: item.usageHint.trim(),
-      })),
-      values: input.values.map((item) => ({
-        name: item.name.trim(),
-        value: item.value,
-      })),
-      secretBindings: input.secretBindings.map((item) => ({
-        name: item.name.trim(),
-        secretRef: item.secretRef,
-      })),
-    };
+    const payload = normalizeRuntimeEnvironmentInput(input);
     const saved = current.value
       ? await runtime.publishEnvironment(current.value, payload)
       : await runtime.createEnvironment(projectRef.value, payload);
+    reauthRestored.value = false;
     if (!environmentRef.value) {
       await router.replace(
         `/projects/${encodeURIComponent(projectRef.value)}/environments/${encodeURIComponent(saved.ref)}`,
@@ -314,7 +408,34 @@ async function save(): Promise<void> {
       sync(saved);
     }
   } catch (error) {
-    problem.value = asProblem(error);
+    const normalized = asProblem(error);
+    if (!requiresRuntimeEnvironmentPolicyReauth(normalized)) {
+      problem.value = normalized;
+      return;
+    }
+    const operation = currentOperation();
+    try {
+      const draft = createRuntimeEnvironmentPolicyDraft({
+        ...(environmentRef.value
+          ? { environmentRef: environmentRef.value }
+          : {}),
+        ...(current.value ? { expectedVersion: current.value.version } : {}),
+        form: input,
+        operation,
+        projectRef: projectRef.value,
+      });
+      storeRuntimeEnvironmentPolicyDraft(draft, window.sessionStorage);
+      await session.beginRuntimeEnvironmentPolicyReauth({
+        ...(environmentRef.value
+          ? { environmentRef: environmentRef.value }
+          : {}),
+        operation,
+        projectRef: projectRef.value,
+      });
+    } catch (reauthError) {
+      discardRuntimeEnvironmentPolicyDraft(window.sessionStorage);
+      problem.value = asProblem(reauthError);
+    }
   } finally {
     busy.value = false;
   }
@@ -352,8 +473,8 @@ function onVersionScroll(event: Event): void {
     void runtime.loadEnvironmentVersions(environmentRef.value, false);
 }
 
-watch(environmentRef, () => void load());
-onMounted(() => void load());
+watch(environmentRef, () => void initialize());
+onMounted(() => void initialize());
 </script>
 
 <template>
@@ -377,6 +498,14 @@ onMounted(() => void load());
         {{ current ? $t("runtime.publishRevision") : $t("common.create") }}
       </button>
     </template>
+
+    <aside v-if="reauthRestored" class="reauth-restored" role="status">
+      <ShieldCheck :size="18" aria-hidden="true" />
+      <div>
+        <strong>{{ $t("runtime.reauthCompleted") }}</strong>
+        <p>{{ $t("runtime.reauthExplicitSaveRequired") }}</p>
+      </div>
+    </aside>
 
     <AsyncState
       :loading="
@@ -734,45 +863,295 @@ onMounted(() => void load());
                 <h2>{{ $t("runtime.resourcesAndAccess") }}</h2>
                 <p>{{ $t("runtime.resourcesAndAccessHelp") }}</p>
               </div>
+              <StatusBadge state="AVAILABLE" :label="$t('common.available')" />
             </div>
-            <div class="capability-list">
-              <article class="capability-row">
+
+            <section class="policy-group">
+              <div class="section-header">
+                <div>
+                  <h3>{{ $t("runtime.resources") }}</h3>
+                  <p>{{ $t("runtime.resourcesHelp") }}</p>
+                </div>
                 <Cpu :size="20" aria-hidden="true" />
+              </div>
+              <div class="resource-grid">
+                <label class="field">
+                  <span>{{ $t("runtime.cpuRequest") }}</span>
+                  <input
+                    v-model.number="input.policy.resources.cpuRequestMilli"
+                    type="number"
+                    :min="runtimeResourceBounds.cpuRequestMilli.min"
+                    :max="runtimeResourceBounds.cpuRequestMilli.max"
+                    step="100"
+                  />
+                  <small>{{ $t("runtime.cpuRequestRange") }}</small>
+                </label>
+                <label class="field">
+                  <span>{{ $t("runtime.cpuLimit") }}</span>
+                  <input
+                    v-model.number="input.policy.resources.cpuLimitMilli"
+                    type="number"
+                    :min="runtimeResourceBounds.cpuLimitMilli.min"
+                    :max="runtimeResourceBounds.cpuLimitMilli.max"
+                    step="100"
+                  />
+                  <small>{{ $t("runtime.cpuLimitRange") }}</small>
+                </label>
+                <label class="field">
+                  <span>{{ $t("runtime.memoryRequest") }}</span>
+                  <input
+                    v-model.number="input.policy.resources.memoryRequestMib"
+                    type="number"
+                    :min="runtimeResourceBounds.memoryRequestMib.min"
+                    :max="runtimeResourceBounds.memoryRequestMib.max"
+                    step="128"
+                  />
+                  <small>{{ $t("runtime.memoryRequestRange") }}</small>
+                </label>
+                <label class="field">
+                  <span>{{ $t("runtime.memoryLimit") }}</span>
+                  <input
+                    v-model.number="input.policy.resources.memoryLimitMib"
+                    type="number"
+                    :min="runtimeResourceBounds.memoryLimitMib.min"
+                    :max="runtimeResourceBounds.memoryLimitMib.max"
+                    step="128"
+                  />
+                  <small>{{ $t("runtime.memoryLimitRange") }}</small>
+                </label>
+                <label class="field">
+                  <span>{{ $t("runtime.ephemeralStorageRequest") }}</span>
+                  <input
+                    v-model.number="
+                      input.policy.resources.ephemeralStorageRequestMib
+                    "
+                    type="number"
+                    :min="runtimeResourceBounds.ephemeralStorageRequestMib.min"
+                    :max="runtimeResourceBounds.ephemeralStorageRequestMib.max"
+                    step="256"
+                  />
+                  <small>{{
+                    $t("runtime.ephemeralStorageRequestRange")
+                  }}</small>
+                </label>
+                <label class="field">
+                  <span>{{ $t("runtime.ephemeralStorageLimit") }}</span>
+                  <input
+                    v-model.number="
+                      input.policy.resources.ephemeralStorageLimitMib
+                    "
+                    type="number"
+                    :min="runtimeResourceBounds.ephemeralStorageLimitMib.min"
+                    :max="runtimeResourceBounds.ephemeralStorageLimitMib.max"
+                    step="256"
+                  />
+                  <small>{{ $t("runtime.ephemeralStorageLimitRange") }}</small>
+                </label>
+              </div>
+            </section>
+
+            <section class="policy-group">
+              <div class="section-header">
                 <div>
-                  <strong>{{ $t("runtime.resources") }}</strong>
-                  <p>{{ $t("runtime.resourcesUnavailable") }}</p>
+                  <h3>{{ $t("runtime.ephemeralVolumes") }}</h3>
+                  <p>{{ $t("runtime.ephemeralVolumesHelp") }}</p>
                 </div>
-                <StatusBadge
-                  state="UNAVAILABLE"
-                  :label="$t('common.unavailable')"
-                />
-              </article>
-              <article class="capability-row">
+                <button
+                  class="button"
+                  type="button"
+                  :disabled="
+                    input.policy.volumes.length >= runtimeVolumeBounds.maxItems
+                  "
+                  @click="addVolume"
+                >
+                  <Plus :size="15" aria-hidden="true" />
+                  {{ $t("runtime.addVolume") }}
+                </button>
+              </div>
+              <div v-if="input.policy.volumes.length" class="volume-list">
+                <article
+                  v-for="(volume, index) in input.policy.volumes"
+                  :key="index"
+                  class="volume-row"
+                >
+                  <label class="field">
+                    <span>{{ $t("common.name") }}</span>
+                    <input
+                      v-model="volume.name"
+                      placeholder="workspace-cache"
+                    />
+                  </label>
+                  <label class="field">
+                    <span>{{ $t("runtime.volumeKind") }}</span>
+                    <select v-model="volume.kind">
+                      <option value="EPHEMERAL_DISK">
+                        {{ $t("runtime.volumeKindLabel.EPHEMERAL_DISK") }}
+                      </option>
+                      <option value="EPHEMERAL_MEMORY">
+                        {{ $t("runtime.volumeKindLabel.EPHEMERAL_MEMORY") }}
+                      </option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>{{ $t("runtime.volumeSize") }}</span>
+                    <input
+                      v-model.number="volume.sizeMib"
+                      type="number"
+                      :min="runtimeVolumeBounds.minSizeMib"
+                      :max="runtimeVolumeBounds.maxSizeMib"
+                      step="16"
+                    />
+                  </label>
+                  <div class="volume-mount">
+                    <span>{{ $t("runtime.mountPath") }}</span>
+                    <code>{{ volumeMountPath(volume.name) }}</code>
+                  </div>
+                  <button
+                    class="icon-button icon-button--danger"
+                    type="button"
+                    :aria-label="$t('common.delete')"
+                    @click="input.policy.volumes.splice(index, 1)"
+                  >
+                    <Trash2 :size="16" aria-hidden="true" />
+                  </button>
+                </article>
+              </div>
+              <p v-else class="secondary-text">
+                {{ $t("runtime.noEphemeralVolumes") }}
+              </p>
+            </section>
+
+            <section class="policy-group">
+              <div class="section-header">
+                <div>
+                  <h3>{{ $t("runtime.networkPolicy") }}</h3>
+                  <p>{{ $t("runtime.networkPolicyHelp") }}</p>
+                </div>
                 <Network :size="20" aria-hidden="true" />
+              </div>
+              <div class="destination-list">
+                <article
+                  v-for="destination in mandatoryRuntimeNetworkDestinations"
+                  :key="destination"
+                  class="destination-row"
+                >
+                  <div>
+                    <strong>{{
+                      $t(`runtime.networkDestination.${destination}`)
+                    }}</strong>
+                    <p>
+                      {{ $t(`runtime.networkDestinationHelp.${destination}`) }}
+                    </p>
+                  </div>
+                  <StatusBadge
+                    state="REQUIRED"
+                    :label="$t('runtime.mandatoryDestination')"
+                  />
+                </article>
+                <article class="destination-row">
+                  <div>
+                    <strong>{{
+                      $t("runtime.networkDestination.KUBERNETES_API")
+                    }}</strong>
+                    <p>
+                      {{ $t("runtime.networkDestinationHelp.KUBERNETES_API") }}
+                    </p>
+                  </div>
+                  <StatusBadge
+                    :state="
+                      input.policy.kubernetesAccess === 'READ_OWN_EXECUTION'
+                        ? 'AVAILABLE'
+                        : 'DISABLED'
+                    "
+                    :label="
+                      input.policy.kubernetesAccess === 'READ_OWN_EXECUTION'
+                        ? $t('runtime.scopedAccessEnabled')
+                        : $t('common.disabled')
+                    "
+                  />
+                </article>
+              </div>
+            </section>
+
+            <section class="policy-group">
+              <div class="section-header">
                 <div>
-                  <strong>{{ $t("runtime.networkPolicy") }}</strong>
-                  <p>{{ $t("runtime.networkPolicyUnavailable") }}</p>
+                  <h3>{{ $t("runtime.kubernetesRbac") }}</h3>
+                  <p>{{ $t("runtime.kubernetesRbacHelp") }}</p>
                 </div>
-                <StatusBadge
-                  state="UNAVAILABLE"
-                  :label="$t('common.unavailable')"
-                />
-              </article>
-              <article class="capability-row">
                 <ShieldCheck :size="20" aria-hidden="true" />
+              </div>
+              <label class="access-toggle">
+                <input
+                  type="checkbox"
+                  :checked="
+                    input.policy.kubernetesAccess === 'READ_OWN_EXECUTION'
+                  "
+                  @change="toggleKubernetesAccess"
+                />
+                <span>
+                  <strong>{{ $t("runtime.readOwnExecution") }}</strong>
+                  <small>{{ $t("runtime.readOwnExecutionHelp") }}</small>
+                </span>
+              </label>
+              <p class="boundary-note" role="note">
+                <CircleAlert :size="17" aria-hidden="true" />
+                {{ $t("runtime.kubernetesAccessBoundary") }}
+              </p>
+            </section>
+
+            <div class="effective-preview">
+              <div class="section-header">
                 <div>
-                  <strong>{{ $t("runtime.kubernetesRbac") }}</strong>
-                  <p>{{ $t("runtime.kubernetesRbacUnavailable") }}</p>
+                  <h3>{{ $t("runtime.effectivePolicyPreview") }}</h3>
+                  <p>{{ $t("runtime.effectivePolicyPreviewHelp") }}</p>
                 </div>
                 <StatusBadge
-                  state="UNAVAILABLE"
-                  :label="$t('common.unavailable')"
+                  :state="publishedPolicy ? 'PUBLISHED' : 'DRAFT'"
+                  :label="
+                    publishedPolicy
+                      ? $t('runtime.serverCalculated')
+                      : $t('runtime.afterPublish')
+                  "
                 />
-              </article>
-            </div>
-            <div class="effective-preview">
-              <h3>{{ $t("runtime.effectivePolicyPreview") }}</h3>
-              <p>{{ $t("runtime.effectivePolicyUnavailable") }}</p>
+              </div>
+              <template v-if="publishedPolicy">
+                <dl class="policy-summary">
+                  <div>
+                    <dt>{{ $t("runtime.denyByDefault") }}</dt>
+                    <dd>{{ $t("common.yes") }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ $t("runtime.kubernetesNamespace") }}</dt>
+                    <dd><code>kodex-runtime</code></dd>
+                  </div>
+                  <div>
+                    <dt>{{ $t("runtime.effectiveEgressRules") }}</dt>
+                    <dd>{{ publishedPolicy.network.egress.length }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ $t("runtime.effectiveVolumes") }}</dt>
+                    <dd>{{ publishedPolicy.volumes.length }}</dd>
+                  </div>
+                </dl>
+                <div class="digest-grid">
+                  <div
+                    v-for="(digest, key) in {
+                      resources: publishedPolicy.resourcesDigest,
+                      volumes: publishedPolicy.volumesDigest,
+                      network: publishedPolicy.networkDigest,
+                      rbac: publishedPolicy.rbacDigest,
+                    }"
+                    :key="key"
+                  >
+                    <span>{{ $t(`runtime.policyDigest.${key}`) }}</span>
+                    <code>{{ compactIdentifier(digest) }}</code>
+                  </div>
+                </div>
+              </template>
+              <p v-else class="secondary-text">
+                {{ $t("runtime.effectivePolicyAfterPublish") }}
+              </p>
             </div>
           </section>
 
@@ -857,10 +1236,36 @@ onMounted(() => void load());
                   <dt>{{ $t("runtime.verifiedTools") }}</dt>
                   <dd>{{ input.tools.length }}</dd>
                 </div>
+                <div>
+                  <dt>{{ $t("runtime.resources") }}</dt>
+                  <dd>
+                    {{ input.policy.resources.cpuRequestMilli }}/{{
+                      input.policy.resources.cpuLimitMilli
+                    }}m CPU · {{ input.policy.resources.memoryRequestMib }}/{{
+                      input.policy.resources.memoryLimitMib
+                    }}
+                    MiB
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ $t("runtime.ephemeralVolumes") }}</dt>
+                  <dd>{{ input.policy.volumes.length }}</dd>
+                </div>
+                <div>
+                  <dt>{{ $t("runtime.networkPolicy") }}</dt>
+                  <dd>
+                    {{ $t("runtime.denyByDefault") }} ·
+                    {{ input.policy.networkDestinations.length }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ $t("runtime.kubernetesRbac") }}</dt>
+                  <dd>{{ input.policy.kubernetesAccess }}</dd>
+                </div>
               </dl>
-              <p class="boundary-note" role="note">
+              <p v-if="!publishedPolicy" class="boundary-note" role="note">
                 <CircleAlert :size="17" aria-hidden="true" />
-                {{ $t("runtime.effectivePolicyUnavailable") }}
+                {{ $t("runtime.effectivePolicyAfterPublish") }}
               </p>
             </section>
           </section>
@@ -942,6 +1347,20 @@ onMounted(() => void load());
 </template>
 
 <style scoped>
+.reauth-restored {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--success-border, #9ed5b3);
+  border-radius: 7px;
+  background: var(--success-soft, #edf8f1);
+  color: var(--text);
+}
+.reauth-restored p {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+}
 .environment-tabs {
   display: flex;
   overflow-x: auto;
@@ -1023,9 +1442,101 @@ onMounted(() => void load());
 }
 .environment-fields,
 .capability-list,
-.readiness-list {
+.readiness-list,
+.volume-list,
+.destination-list {
   display: grid;
   gap: 10px;
+}
+.policy-group {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--hairline);
+}
+.policy-group:last-of-type {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.resource-grid .field small,
+.access-toggle small,
+.volume-mount span {
+  color: var(--text-secondary);
+}
+.volume-row {
+  display: grid;
+  grid-template-columns:
+    minmax(160px, 1fr) minmax(150px, 0.72fr) minmax(120px, 0.5fr)
+    minmax(210px, 1fr) 36px;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.volume-mount {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  align-self: center;
+}
+.volume-mount code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.destination-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.destination-row p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+}
+.access-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.access-toggle > span {
+  display: grid;
+  gap: 4px;
+}
+.policy-summary,
+.digest-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.digest-grid > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.digest-grid span {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
 }
 .environment-field-row {
   display: grid;
@@ -1212,6 +1723,12 @@ code {
   .environment-editor-layout {
     grid-template-columns: 1fr;
   }
+  .volume-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .volume-row .icon-button {
+    justify-self: end;
+  }
 }
 @media (max-width: 700px) {
   .environment-field-row,
@@ -1219,7 +1736,11 @@ code {
   .safe-summary,
   .secret-safe-meta,
   .effective-preview dl,
-  .tool-fields {
+  .tool-fields,
+  .resource-grid,
+  .volume-row,
+  .policy-summary,
+  .digest-grid {
     grid-template-columns: 1fr;
   }
   .tool-fields .field--wide {

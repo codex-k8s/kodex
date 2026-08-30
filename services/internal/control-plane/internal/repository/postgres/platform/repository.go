@@ -318,7 +318,8 @@ func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Contex
 		capabilities := make([]entity.IntegrationCapability, 0, len(definition.Spec.Capabilities))
 		for _, capability := range definition.Spec.Capabilities {
 			capabilities = append(capabilities, entity.IntegrationCapability{
-				Key: capability.Key, Name: capability.Key, Operation: capability.Operation, Risk: capability.Risk,
+				Key: capability.Key, Name: capability.Name, Description: capability.Description,
+				Operation: capability.Operation, Risk: capability.Risk,
 				ApprovalPolicy: capability.ApprovalPolicy, ResourceKind: capability.ResourceScope.Kind,
 				InputFields: integrationConfigurationFields(capability.InputFields),
 			})
@@ -351,8 +352,12 @@ func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Contex
 func integrationConfigurationFields(fields []integrationpackage.Field) []entity.IntegrationConfigurationField {
 	result := make([]entity.IntegrationConfigurationField, 0, len(fields))
 	for _, field := range fields {
+		valueType := "TEXT"
+		if field.Format == "HTTPS_ORIGIN" || field.Format == "HTTPS_URL" {
+			valueType = "URL"
+		}
 		result = append(result, entity.IntegrationConfigurationField{
-			Key: field.Key, Label: field.Key, ValueType: field.Type, Required: field.Required,
+			Key: field.Key, Label: field.Key, ValueType: valueType, Required: field.Required,
 		})
 	}
 	return result
@@ -532,7 +537,10 @@ func defaultProviderAccountID(ctx context.Context, tx pgx.Tx, organizationID str
 	return providerAccountID, nil
 }
 
-type scope struct{ organizationID, organizationRef, actorID, actorRef, actorName, role, correlationRef string }
+type scope struct {
+	organizationID, organizationRef, actorID, actorRef, actorName, role, correlationRef string
+	credentialAuthenticatedAt                                                           time.Time
+}
 
 func (repository *Repository) ResolvePrincipal(ctx context.Context, principal value.Principal) (value.Principal, error) {
 	if uuid.Validate(principal.ActorID) != nil || uuid.Validate(principal.AuthorityTenant) != nil {
@@ -789,6 +797,7 @@ func (repository *Repository) resolveScope(ctx context.Context, principal value.
 		return scope{}, errs.ErrUnavailable
 	}
 	result.correlationRef = principal.CorrelationRef
+	result.credentialAuthenticatedAt = principal.CredentialAuthenticatedAt
 	return result, nil
 }
 

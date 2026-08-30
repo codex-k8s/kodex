@@ -11,6 +11,7 @@ SELECT artifact.id::text,
        artifact.media_type,
        artifact.size_bytes,
        artifact.digest,
+       artifact.source,
        requested.position
 FROM requested
 JOIN control_plane.artifacts AS artifact

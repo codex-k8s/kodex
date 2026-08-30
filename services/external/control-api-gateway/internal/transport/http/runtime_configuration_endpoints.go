@@ -176,6 +176,7 @@ func (server *Server) CreateRuntimeEnvironmentSet(writer http.ResponseWriter, re
 		Mutation: mutation, ProjectRef: projectRef, Name: body.Name, Description: body.Description,
 		ImageArtifactRef: body.ImageArtifactRef, Values: runtimeEnvironmentValues(body.Values),
 		SecretBindings: runtimeSecretBindings(body.SecretBindings), Tools: runtimeEnvironmentTools(body.Tools),
+		Policy: runtimeEnvironmentPolicyInput(body.Policy),
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
@@ -197,6 +198,7 @@ func (server *Server) PublishRuntimeEnvironmentVersion(writer http.ResponseWrite
 		Mutation: mutation, EnvironmentRef: environmentRef, Name: body.Name, Description: body.Description,
 		ImageArtifactRef: body.ImageArtifactRef, Values: runtimeEnvironmentValues(body.Values),
 		SecretBindings: runtimeSecretBindings(body.SecretBindings), Tools: runtimeEnvironmentTools(body.Tools),
+		Policy: runtimeEnvironmentPolicyInput(body.Policy),
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
@@ -267,4 +269,59 @@ func runtimeEnvironmentTools(input []generated.RuntimeEnvironmentTool) []*contro
 		result = append(result, &controlplanev1.RuntimeEnvironmentTool{Name: item.Name, Command: item.Command, Description: item.Description, UsageHint: item.UsageHint})
 	}
 	return result
+}
+
+func runtimeEnvironmentPolicyInput(input generated.RuntimeEnvironmentPolicyInput) *controlplanev1.RuntimeEnvironmentPolicyInput {
+	result := &controlplanev1.RuntimeEnvironmentPolicyInput{Resources: &controlplanev1.RuntimeResourcePolicy{
+		CpuRequestMilli: input.Resources.CpuRequestMilli, CpuLimitMilli: input.Resources.CpuLimitMilli,
+		MemoryRequestMib: input.Resources.MemoryRequestMib, MemoryLimitMib: input.Resources.MemoryLimitMib,
+		EphemeralStorageRequestMib: input.Resources.EphemeralStorageRequestMib,
+		EphemeralStorageLimitMib:   input.Resources.EphemeralStorageLimitMib,
+	}, KubernetesAccess: runtimeKubernetesAccessKind(string(input.KubernetesAccess))}
+	for _, volume := range input.Volumes {
+		result.Volumes = append(result.Volumes, &controlplanev1.RuntimeVolumeInput{
+			Name: volume.Name, Kind: runtimeVolumeKind(string(volume.Kind)), SizeMib: volume.SizeMib,
+		})
+	}
+	for _, destination := range input.NetworkDestinations {
+		result.NetworkDestinations = append(result.NetworkDestinations, runtimeNetworkDestination(string(destination)))
+	}
+	return result
+}
+
+func runtimeVolumeKind(value string) controlplanev1.RuntimeVolumeKind {
+	switch value {
+	case "EPHEMERAL_DISK":
+		return controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK
+	case "EPHEMERAL_MEMORY":
+		return controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_MEMORY
+	default:
+		return controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_UNSPECIFIED
+	}
+}
+
+func runtimeNetworkDestination(value string) controlplanev1.RuntimeNetworkDestination {
+	switch value {
+	case "DNS":
+		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS
+	case "RUNTIME_CALLBACK":
+		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK
+	case "PROVIDER_PROXY":
+		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY
+	case "KUBERNETES_API":
+		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API
+	default:
+		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_UNSPECIFIED
+	}
+}
+
+func runtimeKubernetesAccessKind(value string) controlplanev1.RuntimeKubernetesAccessKind {
+	switch value {
+	case "NONE":
+		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE
+	case "READ_OWN_EXECUTION":
+		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
+	default:
+		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_UNSPECIFIED
+	}
 }

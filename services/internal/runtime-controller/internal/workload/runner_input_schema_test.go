@@ -31,7 +31,7 @@ func TestRunnerInputSchemaV6MatchesRuntimePayload(t *testing.T) {
 	}
 	validateRunnerInputSchema(t, compiled, turn)
 
-	warm, _, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	warm, _, err := manager.BuildWarmInput(testWarmRevision())
 	if err != nil {
 		t.Fatalf("BuildWarmInput() error = %v", err)
 	}

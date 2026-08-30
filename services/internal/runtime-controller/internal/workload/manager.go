@@ -18,6 +18,9 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,6 +41,13 @@ const (
 	warmCompatibilityAnnotation = "runtime.kodex.dev/warm-compatibility-digest"
 	controllerAnnotation        = "runtime.kodex.dev/controller-pod-uid"
 	podAnnotation               = "runtime.kodex.dev/pod-name"
+	leaseAnnotation             = "runtime.kodex.dev/lease-ref"
+	resourcesAnnotation         = "runtime.kodex.dev/resources-digest"
+	volumesAnnotation           = "runtime.kodex.dev/volumes-digest"
+	networkAnnotation           = "runtime.kodex.dev/network-digest"
+	rbacProfileAnnotation       = "runtime.kodex.dev/rbac-profile-digest"
+	effectiveRBACAnnotation     = "runtime.kodex.dev/effective-rbac-digest"
+	executionHashLabel          = "runtime.kodex.dev/execution-hash"
 	inputKey                    = "runtime.json"
 	ticketKey                   = "token"
 )
@@ -47,10 +57,10 @@ type Config struct {
 	CallbackTLSServerName, CallbackClientCASecret, CallbackClientTLSSecret             string
 	StorageClass, SessionPVCSize, RunnerServiceAccount                                 string
 	ProviderHTTPSProxy                                                                 string
+	KubernetesAPIServiceIP                                                             string
 	PromotedRoleImageRepository, DefaultRoleImageReference                             string
 	RoleRuntimeContractSHA256                                                          string
 	RoleRuntimeContractRevision                                                        uint64
-	TurnCPUMilli, TurnMemoryBytes                                                      int64
 }
 
 // ProviderSecretBinding остаётся только внутри trusted runtime-controller и
@@ -86,11 +96,12 @@ func New(client kubernetes.Interface, config Config) (*Manager, error) {
 		config.CallbackTLSServerName == "" || config.CallbackClientCASecret == "" ||
 		config.CallbackClientTLSSecret == "" ||
 		config.ProviderHTTPSProxy == "" ||
+		net.ParseIP(config.KubernetesAPIServiceIP) == nil ||
 		(config.StorageClass != "" && !validDNSSubdomain(config.StorageClass)) ||
 		config.RunnerServiceAccount == "" ||
 		config.PromotedRoleImageRepository == "" || config.RoleRuntimeContractRevision == 0 ||
 		!validPinnedImageReference(config.DefaultRoleImageReference) ||
-		len(config.RoleRuntimeContractSHA256) != sha256.Size*2 || config.TurnCPUMilli < 100 || config.TurnMemoryBytes < 128<<20 {
+		len(config.RoleRuntimeContractSHA256) != sha256.Size*2 {
 		return nil, errors.New("Kubernetes runtime manager configuration is invalid")
 	}
 	return &Manager{client: client, config: config, pvcRequest: pvcRequest}, nil
@@ -152,21 +163,147 @@ func (manager *Manager) RunAsLeader(ctx context.Context, run func(context.Contex
 
 func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 	selector := labels.Set{managedLabel: "true", modeLabel: "turn"}.AsSelector().String()
-	pods, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector, Limit: 256})
-	if err != nil {
-		return errors.New("list retained runtime turn pods")
-	}
 	var result error
-	for index := range pods.Items {
-		pod := &pods.Items[index]
-		if pod.Annotations[controllerAnnotation] == manager.config.ControllerPodUID {
-			continue
+	activeHashes := make(map[string]struct{})
+	continueToken := ""
+	for {
+		pods, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: selector, Limit: 256, Continue: continueToken,
+		})
+		if err != nil {
+			return errors.New("list retained runtime turn pods")
 		}
-		if err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Delete(ctx, pod.Name, metav1.DeleteOptions{GracePeriodSeconds: int64Pointer(0)}); err != nil && !apierrors.IsNotFound(err) {
-			result = errors.Join(result, errors.New("delete stale runtime turn pod"))
+		for index := range pods.Items {
+			pod := &pods.Items[index]
+			if pod.Annotations[controllerAnnotation] == manager.config.ControllerPodUID {
+				if executionHash := pod.Labels[executionHashLabel]; len(executionHash) == 16 {
+					activeHashes[executionHash] = struct{}{}
+				}
+				continue
+			}
+			if err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Delete(ctx, pod.Name, metav1.DeleteOptions{GracePeriodSeconds: int64Pointer(0)}); err != nil && !apierrors.IsNotFound(err) {
+				result = errors.Join(result, errors.New("delete stale runtime turn pod"))
+			}
+			if err := manager.deleteExecutionPolicyByHash(ctx, pod.Labels[executionHashLabel]); err != nil {
+				result = errors.Join(result, err)
+			}
 		}
+		if pods.Continue == "" {
+			break
+		}
+		continueToken = pods.Continue
+	}
+	orphaned, orphanErr := manager.orphanedExecutionPolicyHashes(ctx, selector, activeHashes)
+	if orphanErr != nil {
+		result = errors.Join(result, orphanErr)
+	}
+	for executionHash := range orphaned {
+		if err := manager.deleteExecutionPolicyByHash(ctx, executionHash); err != nil {
+			result = errors.Join(result, err)
+		}
+	}
+	continueToken = ""
+	for {
+		tickets, ticketErr := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: selector, Limit: 256, Continue: continueToken,
+		})
+		if ticketErr != nil {
+			result = errors.Join(result, errors.New("list retained runtime turn tickets"))
+			break
+		}
+		for index := range tickets.Items {
+			ticket := &tickets.Items[index]
+			executionHash := strings.TrimPrefix(ticket.Annotations[podAnnotation], "runtime-turn-")
+			_, active := activeHashes[executionHash]
+			if ticket.Annotations[controllerAnnotation] == manager.config.ControllerPodUID && active {
+				continue
+			}
+			if err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Delete(ctx, ticket.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+				result = errors.Join(result, errors.New("delete stale runtime turn ticket"))
+			}
+		}
+		if tickets.Continue == "" {
+			break
+		}
+		continueToken = tickets.Continue
 	}
 	return result
+}
+
+func (manager *Manager) orphanedExecutionPolicyHashes(ctx context.Context, selector string, active map[string]struct{}) (map[string]struct{}, error) {
+	orphaned := make(map[string]struct{})
+	inspect := func(metadata metav1.ObjectMeta) {
+		executionHash := metadata.Labels[executionHashLabel]
+		_, isActive := active[executionHash]
+		if len(executionHash) == 16 && (metadata.Annotations[controllerAnnotation] != manager.config.ControllerPodUID || !isActive) {
+			orphaned[executionHash] = struct{}{}
+		}
+	}
+	continueToken := ""
+	for {
+		accounts, err := manager.client.CoreV1().ServiceAccounts(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: selector, Limit: 256, Continue: continueToken,
+		})
+		if err != nil {
+			return nil, errors.New("list runtime execution ServiceAccounts")
+		}
+		for index := range accounts.Items {
+			inspect(accounts.Items[index].ObjectMeta)
+		}
+		if accounts.Continue == "" {
+			break
+		}
+		continueToken = accounts.Continue
+	}
+	continueToken = ""
+	for {
+		roles, err := manager.client.RbacV1().Roles(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: selector, Limit: 256, Continue: continueToken,
+		})
+		if err != nil {
+			return nil, errors.New("list runtime execution Roles")
+		}
+		for index := range roles.Items {
+			inspect(roles.Items[index].ObjectMeta)
+		}
+		if roles.Continue == "" {
+			break
+		}
+		continueToken = roles.Continue
+	}
+	continueToken = ""
+	for {
+		bindings, err := manager.client.RbacV1().RoleBindings(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: selector, Limit: 256, Continue: continueToken,
+		})
+		if err != nil {
+			return nil, errors.New("list runtime execution RoleBindings")
+		}
+		for index := range bindings.Items {
+			inspect(bindings.Items[index].ObjectMeta)
+		}
+		if bindings.Continue == "" {
+			break
+		}
+		continueToken = bindings.Continue
+	}
+	continueToken = ""
+	for {
+		policies, err := manager.client.NetworkingV1().NetworkPolicies(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: selector, Limit: 256, Continue: continueToken,
+		})
+		if err != nil {
+			return nil, errors.New("list runtime execution NetworkPolicies")
+		}
+		for index := range policies.Items {
+			inspect(policies.Items[index].ObjectMeta)
+		}
+		if policies.Continue == "" {
+			break
+		}
+		continueToken = policies.Continue
+	}
+	return orphaned, nil
 }
 
 func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecution) (runtimecontract.RunnerInput, ProviderSecretBinding, error) {
@@ -175,7 +312,10 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, errors.New("claimed execution is incomplete")
 	}
 	revision := execution.GetRevision()
-	input := manager.baseInput(revision, runtimecontract.RunnerModeTurn)
+	input, err := manager.baseInput(revision, runtimecontract.RunnerModeTurn)
+	if err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+	}
 	input.RunRef, input.NodeRef, input.SessionRef, input.TurnRef = execution.GetRun().GetRef(), execution.GetNode().GetRef(), revision.GetSessionRef(), revision.GetTurnRef()
 	input.ProjectRef = execution.GetRun().GetProjectRef()
 	input.AgentRef, input.Attempt = revision.GetAgentRef(), revision.GetAttempt()
@@ -205,7 +345,10 @@ func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionS
 	if revision == nil || revision.GetRuntime() == nil || !revision.GetSystemAssistant() {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, errors.New("warm runtime revision is invalid")
 	}
-	input := manager.baseInput(revision, runtimecontract.RunnerModeWarm)
+	input, err := manager.baseInput(revision, runtimecontract.RunnerModeWarm)
+	if err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+	}
 	input.SessionRef, input.AgentRef = revision.GetSessionRef(), revision.GetAgentRef()
 	manager.addCatalog(&input, revision)
 	binding, err := providerSecretBinding(revision)
@@ -215,7 +358,15 @@ func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionS
 	return input, binding, input.Validate()
 }
 
-func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapshot, mode string) runtimecontract.RunnerInput {
+func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapshot, mode string) (runtimecontract.RunnerInput, error) {
+	environmentPolicy, err := runtimeEnvironmentPolicyFromProto(revision.GetEnvironmentPolicy())
+	if err != nil {
+		return runtimecontract.RunnerInput{}, err
+	}
+	effectiveAccess, err := runtimeKubernetesAccessFromProto(revision.GetEffectiveKubernetesAccess())
+	if err != nil {
+		return runtimecontract.RunnerInput{}, err
+	}
 	input := runtimecontract.RunnerInput{
 		Schema: runtimecontract.RunnerInputSchemaV6, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
 		RuntimeRevisionRef: revision.GetRef(), RuntimeRevisionVersion: revision.GetVersion(), RuntimeRevisionDigest: revision.GetRevisionDigest(),
@@ -247,6 +398,8 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		EnvironmentBindingRef:      revision.GetEnvironmentBindingRef(),
 		EnvironmentBindingVersion:  revision.GetEnvironmentBindingVersion(),
 		EnvironmentBindingDigest:   revision.GetEnvironmentBindingDigest(),
+		EnvironmentPolicy:          environmentPolicy,
+		EffectiveKubernetesAccess:  effectiveAccess,
 		CodexSandbox:               "read-only", CodexApprovalPolicy: "never",
 		CallbackURL: "https://" + net.JoinHostPort(manager.config.ControllerPodIP, "8444"),
 		CallbackTLS: runtimecontract.RuntimeTLSBinding{ServerName: manager.config.CallbackTLSServerName,
@@ -270,7 +423,115 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 			Name: item.GetName(), Command: item.GetCommand(), Description: item.GetDescription(), UsageHint: item.GetUsageHint(),
 		})
 	}
-	return input
+	return input, nil
+}
+
+func runtimeEnvironmentPolicyFromProto(value *controlplanev1.RuntimeEnvironmentPolicy) (runtimecontract.RuntimeEnvironmentPolicy, error) {
+	if value == nil || value.GetResources() == nil || value.GetNetwork() == nil || value.GetKubernetesAccess() == nil {
+		return runtimecontract.RuntimeEnvironmentPolicy{}, errors.New("runtime environment policy is incomplete")
+	}
+	resources := value.GetResources()
+	policy := runtimecontract.RuntimeEnvironmentPolicy{
+		Resources: runtimecontract.RuntimeResourcePolicy{
+			CPURequestMilli: resources.GetCpuRequestMilli(), CPULimitMilli: resources.GetCpuLimitMilli(),
+			MemoryRequestMiB: resources.GetMemoryRequestMib(), MemoryLimitMiB: resources.GetMemoryLimitMib(),
+			EphemeralStorageRequestMiB: resources.GetEphemeralStorageRequestMib(),
+			EphemeralStorageLimitMiB:   resources.GetEphemeralStorageLimitMib(),
+		},
+		Network: runtimecontract.RuntimeNetworkPolicy{DenyByDefault: value.GetNetwork().GetDenyByDefault()},
+		KubernetesAccess: runtimecontract.RuntimeKubernetesAccessProfile{
+			Kind:      runtimeKubernetesAccessKind(value.GetKubernetesAccess().GetKind()),
+			Namespace: value.GetKubernetesAccess().GetNamespace(),
+		},
+		ResourcesDigest: value.GetResourcesDigest(), VolumesDigest: value.GetVolumesDigest(),
+		NetworkDigest: value.GetNetworkDigest(), RBACDigest: value.GetRbacDigest(),
+	}
+	for _, volume := range value.GetVolumes() {
+		policy.Volumes = append(policy.Volumes, runtimecontract.RuntimeVolume{
+			Name: volume.GetName(), Kind: runtimeVolumeKind(volume.GetKind()), SizeMiB: volume.GetSizeMib(), MountPath: volume.GetMountPath(),
+		})
+	}
+	for _, egress := range value.GetNetwork().GetEgress() {
+		policy.Network.Egress = append(policy.Network.Egress, runtimecontract.RuntimeNetworkEgress{
+			Destination: runtimeNetworkDestination(egress.GetDestination()), Protocol: runtimeNetworkProtocol(egress.GetProtocol()), Port: egress.GetPort(),
+		})
+	}
+	normalized, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(policy)
+	if err != nil || normalized.ResourcesDigest != policy.ResourcesDigest || normalized.VolumesDigest != policy.VolumesDigest ||
+		normalized.NetworkDigest != policy.NetworkDigest || normalized.RBACDigest != policy.RBACDigest {
+		return runtimecontract.RuntimeEnvironmentPolicy{}, errors.New("runtime environment policy digest mismatch")
+	}
+	return normalized, nil
+}
+
+func runtimeKubernetesAccessFromProto(value *controlplanev1.RuntimeKubernetesAccess) (runtimecontract.RuntimeKubernetesAccess, error) {
+	if value == nil || value.GetProfile() == nil {
+		return runtimecontract.RuntimeKubernetesAccess{}, errors.New("effective Kubernetes access is incomplete")
+	}
+	access := runtimecontract.RuntimeKubernetesAccess{
+		Profile: runtimecontract.RuntimeKubernetesAccessProfile{
+			Kind: runtimeKubernetesAccessKind(value.GetProfile().GetKind()), Namespace: value.GetProfile().GetNamespace(),
+		},
+		ServiceAccountName: value.GetServiceAccountName(), Rules: []runtimecontract.RuntimeKubernetesRule{}, Digest: value.GetDigest(),
+	}
+	for _, rule := range value.GetRules() {
+		access.Rules = append(access.Rules, runtimecontract.RuntimeKubernetesRule{
+			APIGroup: rule.GetApiGroup(), Resource: rule.GetResource(), Verbs: append([]string(nil), rule.GetVerbs()...),
+			ResourceNames: append([]string(nil), rule.GetResourceNames()...),
+		})
+	}
+	if err := runtimecontract.ValidateRuntimeKubernetesAccess(access); err != nil {
+		return runtimecontract.RuntimeKubernetesAccess{}, err
+	}
+	return access, nil
+}
+
+func runtimeVolumeKind(value controlplanev1.RuntimeVolumeKind) string {
+	switch value {
+	case controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK:
+		return runtimecontract.RuntimeVolumeEphemeralDisk
+	case controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_MEMORY:
+		return runtimecontract.RuntimeVolumeEphemeralMemory
+	default:
+		return ""
+	}
+}
+
+func runtimeNetworkDestination(value controlplanev1.RuntimeNetworkDestination) string {
+	switch value {
+	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS:
+		return runtimecontract.RuntimeEgressDNS
+	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK:
+		return runtimecontract.RuntimeEgressRuntimeCallback
+	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY:
+		return runtimecontract.RuntimeEgressProviderProxy
+	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API:
+		return runtimecontract.RuntimeEgressKubernetesAPI
+	default:
+		return ""
+	}
+}
+
+func runtimeNetworkProtocol(value controlplanev1.RuntimeNetworkProtocol) string {
+	switch value {
+	case controlplanev1.RuntimeNetworkProtocol_RUNTIME_NETWORK_PROTOCOL_TCP:
+		return runtimecontract.RuntimeProtocolTCP
+	case controlplanev1.RuntimeNetworkProtocol_RUNTIME_NETWORK_PROTOCOL_UDP:
+		return runtimecontract.RuntimeProtocolUDP
+	default:
+		return ""
+	}
+}
+
+func runtimeKubernetesAccessKind(value controlplanev1.RuntimeKubernetesAccessKind) string {
+	switch value {
+	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE:
+		return runtimecontract.RuntimeKubernetesAccessNone
+	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION:
+		return runtimecontract.RuntimeKubernetesAccessReadOwnExecution
+	default:
+		return ""
+	}
 }
 
 func providerSecretBinding(revision *controlplanev1.RuntimeRevisionSnapshot) (ProviderSecretBinding, error) {
@@ -355,7 +616,10 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 		return err
 	}
 	secretName := ticketName(input.LeaseRef)
-	podName := turnPodName(input.LeaseRef)
+	podName := runtimecontract.RuntimeTurnPodName(input.LeaseRef)
+	if err := manager.ensureExecutionPolicy(ctx, input, podName); err != nil {
+		return err
+	}
 	if err := manager.ensureTicket(ctx, secretName, podName, "turn", input, token, environmentSecrets); err != nil {
 		return err
 	}
@@ -363,7 +627,7 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 	_, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, pod, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		existing, getErr := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
-		if getErr != nil || existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest || existing.Spec.Containers[0].Image != input.ImageReference {
+		if getErr != nil || !runtimePodMatches(existing, pod) {
 			return errors.New("existing runtime turn pod conflicts with immutable revision")
 		}
 		return nil
@@ -374,8 +638,199 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 	return nil
 }
 
+func (manager *Manager) ensureExecutionPolicy(ctx context.Context, input runtimecontract.RunnerInput, podName string) error {
+	if input.EffectiveKubernetesAccess.ServiceAccountName != runtimecontract.RuntimeServiceAccountName(input.LeaseRef) ||
+		input.EnvironmentPolicy.KubernetesAccess != input.EffectiveKubernetesAccess.Profile ||
+		runtimecontract.ValidateRuntimeKubernetesAccess(input.EffectiveKubernetesAccess) != nil {
+		return errors.New("effective Kubernetes access does not match execution identity")
+	}
+	metadata := manager.executionMetadata(input)
+	serviceAccount := &corev1.ServiceAccount{ObjectMeta: metadata, AutomountServiceAccountToken: boolPointer(false)}
+	serviceAccount.Name = input.EffectiveKubernetesAccess.ServiceAccountName
+	if err := manager.ensureServiceAccount(ctx, serviceAccount); err != nil {
+		return err
+	}
+	if input.EffectiveKubernetesAccess.Profile.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
+		role := manager.executionRole(input)
+		if err := manager.ensureRole(ctx, role); err != nil {
+			return err
+		}
+		binding := manager.executionRoleBinding(input)
+		if err := manager.ensureRoleBinding(ctx, binding); err != nil {
+			return err
+		}
+	} else if err := manager.ensureExecutionRBACAbsent(ctx, input); err != nil {
+		return err
+	}
+	networkPolicy, err := manager.executionNetworkPolicy(input, podName)
+	if err != nil {
+		return err
+	}
+	return manager.ensureNetworkPolicy(ctx, networkPolicy)
+}
+
+func (manager *Manager) executionMetadata(input runtimecontract.RunnerInput) metav1.ObjectMeta {
+	return metav1.ObjectMeta{Namespace: manager.config.RuntimeNamespace,
+		Labels: map[string]string{managedLabel: "true", modeLabel: "turn", executionHashLabel: shortHash(input.LeaseRef)},
+		Annotations: map[string]string{
+			revisionAnnotation: input.RuntimeRevisionDigest, leaseAnnotation: input.LeaseRef, controllerAnnotation: manager.config.ControllerPodUID,
+			resourcesAnnotation: input.EnvironmentPolicy.ResourcesDigest, volumesAnnotation: input.EnvironmentPolicy.VolumesDigest,
+			networkAnnotation: input.EnvironmentPolicy.NetworkDigest, rbacProfileAnnotation: input.EnvironmentPolicy.RBACDigest,
+			effectiveRBACAnnotation: input.EffectiveKubernetesAccess.Digest,
+		},
+	}
+}
+
+func (manager *Manager) executionRole(input runtimecontract.RunnerInput) *rbacv1.Role {
+	metadata := manager.executionMetadata(input)
+	metadata.Name = runtimecontract.RuntimeRoleName(input.LeaseRef)
+	rules := make([]rbacv1.PolicyRule, 0, len(input.EffectiveKubernetesAccess.Rules))
+	for _, rule := range input.EffectiveKubernetesAccess.Rules {
+		rules = append(rules, rbacv1.PolicyRule{APIGroups: []string{rule.APIGroup}, Resources: []string{rule.Resource},
+			Verbs: append([]string(nil), rule.Verbs...), ResourceNames: append([]string(nil), rule.ResourceNames...)})
+	}
+	return &rbacv1.Role{ObjectMeta: metadata, Rules: rules}
+}
+
+func (manager *Manager) executionRoleBinding(input runtimecontract.RunnerInput) *rbacv1.RoleBinding {
+	metadata := manager.executionMetadata(input)
+	metadata.Name = runtimecontract.RuntimeRoleBindingName(input.LeaseRef)
+	return &rbacv1.RoleBinding{ObjectMeta: metadata,
+		Subjects: []rbacv1.Subject{{Kind: rbacv1.ServiceAccountKind, Name: input.EffectiveKubernetesAccess.ServiceAccountName, Namespace: manager.config.RuntimeNamespace}},
+		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: runtimecontract.RuntimeRoleName(input.LeaseRef)},
+	}
+}
+
+func (manager *Manager) executionNetworkPolicy(input runtimecontract.RunnerInput, podName string) (*networkingv1.NetworkPolicy, error) {
+	if podName != runtimecontract.RuntimeTurnPodName(input.LeaseRef) {
+		return nil, errors.New("runtime network policy Pod identity is invalid")
+	}
+	metadata := manager.executionMetadata(input)
+	metadata.Name = runtimecontract.RuntimeNetworkPolicyName(input.LeaseRef)
+	policy := &networkingv1.NetworkPolicy{ObjectMeta: metadata, Spec: networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{managedLabel: "true", modeLabel: "turn", executionHashLabel: shortHash(input.LeaseRef)}},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+	}}
+	for _, item := range input.EnvironmentPolicy.Network.Egress {
+		protocol := corev1.Protocol(item.Protocol)
+		port := intstr.FromInt32(item.Port)
+		rule := networkingv1.NetworkPolicyEgressRule{Ports: []networkingv1.NetworkPolicyPort{{Protocol: &protocol, Port: &port}}}
+		switch item.Destination {
+		case runtimecontract.RuntimeEgressDNS:
+			rule.To = []networkingv1.NetworkPolicyPeer{{
+				NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": "kube-system"}},
+				PodSelector:       &metav1.LabelSelector{MatchLabels: map[string]string{"k8s-app": "kube-dns"}},
+			}}
+		case runtimecontract.RuntimeEgressRuntimeCallback:
+			rule.To = []networkingv1.NetworkPolicyPeer{{
+				NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": manager.config.ControlNamespace}},
+				PodSelector:       &metav1.LabelSelector{MatchLabels: map[string]string{"app.kubernetes.io/name": "runtime-controller", "app.kubernetes.io/component": "internal-controller"}},
+			}}
+		case runtimecontract.RuntimeEgressProviderProxy:
+			rule.To = []networkingv1.NetworkPolicyPeer{{
+				NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": manager.config.ControlNamespace}},
+				PodSelector:       &metav1.LabelSelector{MatchLabels: map[string]string{"app.kubernetes.io/name": "egress-gateway", "app.kubernetes.io/component": "platform-egress"}},
+			}}
+		case runtimecontract.RuntimeEgressKubernetesAPI:
+			rule.To = []networkingv1.NetworkPolicyPeer{{IPBlock: &networkingv1.IPBlock{CIDR: manager.config.KubernetesAPIServiceIP + "/32"}}}
+		default:
+			return nil, errors.New("runtime network destination is unsupported")
+		}
+		policy.Spec.Egress = append(policy.Spec.Egress, rule)
+	}
+	return policy, nil
+}
+
+func (manager *Manager) ensureServiceAccount(ctx context.Context, desired *corev1.ServiceAccount) error {
+	_, err := manager.client.CoreV1().ServiceAccounts(manager.config.RuntimeNamespace).Create(ctx, desired, metav1.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		existing, getErr := manager.client.CoreV1().ServiceAccounts(manager.config.RuntimeNamespace).Get(ctx, desired.Name, metav1.GetOptions{})
+		if getErr != nil || !managedMetadataMatches(existing.ObjectMeta, desired.ObjectMeta) ||
+			!apiequality.Semantic.DeepEqual(existing.AutomountServiceAccountToken, desired.AutomountServiceAccountToken) {
+			return errors.New("existing runtime ServiceAccount conflicts with immutable revision")
+		}
+		return nil
+	}
+	if err != nil {
+		return errors.New("create runtime ServiceAccount")
+	}
+	return nil
+}
+
+func (manager *Manager) ensureRole(ctx context.Context, desired *rbacv1.Role) error {
+	_, err := manager.client.RbacV1().Roles(manager.config.RuntimeNamespace).Create(ctx, desired, metav1.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		existing, getErr := manager.client.RbacV1().Roles(manager.config.RuntimeNamespace).Get(ctx, desired.Name, metav1.GetOptions{})
+		if getErr != nil || !managedMetadataMatches(existing.ObjectMeta, desired.ObjectMeta) || !apiequality.Semantic.DeepEqual(existing.Rules, desired.Rules) {
+			return errors.New("existing runtime Role conflicts with immutable revision")
+		}
+		return nil
+	}
+	if err != nil {
+		return errors.New("create runtime Role")
+	}
+	return nil
+}
+
+func (manager *Manager) ensureRoleBinding(ctx context.Context, desired *rbacv1.RoleBinding) error {
+	_, err := manager.client.RbacV1().RoleBindings(manager.config.RuntimeNamespace).Create(ctx, desired, metav1.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		existing, getErr := manager.client.RbacV1().RoleBindings(manager.config.RuntimeNamespace).Get(ctx, desired.Name, metav1.GetOptions{})
+		if getErr != nil || !managedMetadataMatches(existing.ObjectMeta, desired.ObjectMeta) ||
+			!apiequality.Semantic.DeepEqual(existing.Subjects, desired.Subjects) || existing.RoleRef != desired.RoleRef {
+			return errors.New("existing runtime RoleBinding conflicts with immutable revision")
+		}
+		return nil
+	}
+	if err != nil {
+		return errors.New("create runtime RoleBinding")
+	}
+	return nil
+}
+
+func (manager *Manager) ensureNetworkPolicy(ctx context.Context, desired *networkingv1.NetworkPolicy) error {
+	_, err := manager.client.NetworkingV1().NetworkPolicies(manager.config.RuntimeNamespace).Create(ctx, desired, metav1.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		existing, getErr := manager.client.NetworkingV1().NetworkPolicies(manager.config.RuntimeNamespace).Get(ctx, desired.Name, metav1.GetOptions{})
+		if getErr != nil || !managedMetadataMatches(existing.ObjectMeta, desired.ObjectMeta) || !apiequality.Semantic.DeepEqual(existing.Spec, desired.Spec) {
+			return errors.New("existing runtime NetworkPolicy conflicts with immutable revision")
+		}
+		return nil
+	}
+	if err != nil {
+		return errors.New("create runtime NetworkPolicy")
+	}
+	return nil
+}
+
+func (manager *Manager) ensureExecutionRBACAbsent(ctx context.Context, input runtimecontract.RunnerInput) error {
+	if _, err := manager.client.RbacV1().Roles(manager.config.RuntimeNamespace).Get(ctx, runtimecontract.RuntimeRoleName(input.LeaseRef), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		return errors.New("runtime Role exists for a no-access execution")
+	}
+	if _, err := manager.client.RbacV1().RoleBindings(manager.config.RuntimeNamespace).Get(ctx, runtimecontract.RuntimeRoleBindingName(input.LeaseRef), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		return errors.New("runtime RoleBinding exists for a no-access execution")
+	}
+	return nil
+}
+
+func managedMetadataMatches(existing, desired metav1.ObjectMeta) bool {
+	for key, value := range desired.Labels {
+		if existing.Labels[key] != value {
+			return false
+		}
+	}
+	for key, value := range desired.Annotations {
+		if existing.Annotations[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
 func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding) (bool, error) {
-	if input.Mode != runtimecontract.RunnerModeWarm || input.Validate() != nil || manager.validateImage(input) != nil {
+	if input.Mode != runtimecontract.RunnerModeWarm || input.Validate() != nil || manager.validateImage(input) != nil ||
+		input.EnvironmentPolicy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone ||
+		input.EffectiveKubernetesAccess.ServiceAccountName != manager.config.RunnerServiceAccount {
 		return false, errors.New("warm runtime input is invalid")
 	}
 	if err := manager.validateProviderSecret(ctx, input, providerBinding); err != nil {
@@ -557,9 +1012,11 @@ func (manager *Manager) ResolveTurn(ctx context.Context, leaseRef, token string)
 func (manager *Manager) DeleteTurn(ctx context.Context, leaseRef string) error {
 	secretName := ticketName(leaseRef)
 	secret, _ := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, secretName, metav1.GetOptions{})
-	podName := ""
+	podName := runtimecontract.RuntimeTurnPodName(leaseRef)
 	if secret != nil {
-		podName = secret.Annotations[podAnnotation]
+		if boundName := secret.Annotations[podAnnotation]; boundName != "" {
+			podName = boundName
+		}
 	}
 	var result error
 	if podName != "" && podName != "system-assistant-warm" {
@@ -570,11 +1027,48 @@ func (manager *Manager) DeleteTurn(ctx context.Context, leaseRef string) error {
 	if err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		result = errors.Join(result, errors.New("delete completed runtime ticket"))
 	}
+	if err := manager.deleteExecutionPolicy(ctx, leaseRef); err != nil {
+		result = errors.Join(result, err)
+	}
+	return result
+}
+
+func (manager *Manager) deleteExecutionPolicy(ctx context.Context, leaseRef string) error {
+	return manager.deleteExecutionPolicyByHash(ctx, shortHash(leaseRef))
+}
+
+func (manager *Manager) deleteExecutionPolicyByHash(ctx context.Context, executionHash string) error {
+	if len(executionHash) != 16 {
+		return errors.New("runtime execution identity is unavailable for policy cleanup")
+	}
+	var result error
+	deletions := []struct {
+		name   string
+		remove func(string) error
+	}{
+		{name: "runtime-net-" + executionHash, remove: func(name string) error {
+			return manager.client.NetworkingV1().NetworkPolicies(manager.config.RuntimeNamespace).Delete(ctx, name, metav1.DeleteOptions{})
+		}},
+		{name: "runtime-rb-" + executionHash, remove: func(name string) error {
+			return manager.client.RbacV1().RoleBindings(manager.config.RuntimeNamespace).Delete(ctx, name, metav1.DeleteOptions{})
+		}},
+		{name: "runtime-role-" + executionHash, remove: func(name string) error {
+			return manager.client.RbacV1().Roles(manager.config.RuntimeNamespace).Delete(ctx, name, metav1.DeleteOptions{})
+		}},
+		{name: "runtime-sa-" + executionHash, remove: func(name string) error {
+			return manager.client.CoreV1().ServiceAccounts(manager.config.RuntimeNamespace).Delete(ctx, name, metav1.DeleteOptions{})
+		}},
+	}
+	for _, deletion := range deletions {
+		if err := deletion.remove(deletion.name); err != nil && !apierrors.IsNotFound(err) {
+			result = errors.Join(result, errors.New("delete completed runtime execution policy"))
+		}
+	}
 	return result
 }
 
 func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.RunnerInput, warmExecution bool) (string, error) {
-	podName := turnPodName(input.LeaseRef)
+	podName := runtimecontract.RuntimeTurnPodName(input.LeaseRef)
 	if warmExecution {
 		podName = "system-assistant-warm"
 	}
@@ -613,6 +1107,36 @@ func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.
 	}
 }
 
+func runtimePodMatches(existing, desired *corev1.Pod) bool {
+	if existing == nil || desired == nil || !managedMetadataMatches(existing.ObjectMeta, desired.ObjectMeta) ||
+		existing.Spec.ServiceAccountName != desired.Spec.ServiceAccountName ||
+		!apiequality.Semantic.DeepEqual(existing.Spec.AutomountServiceAccountToken, desired.Spec.AutomountServiceAccountToken) ||
+		!apiequality.Semantic.DeepEqual(canonicalRuntimeContainers(existing.Spec.InitContainers), canonicalRuntimeContainers(desired.Spec.InitContainers)) ||
+		!apiequality.Semantic.DeepEqual(canonicalRuntimeContainers(existing.Spec.Containers), canonicalRuntimeContainers(desired.Spec.Containers)) ||
+		!apiequality.Semantic.DeepEqual(existing.Spec.Volumes, desired.Spec.Volumes) {
+		return false
+	}
+	return true
+}
+
+func canonicalRuntimeContainers(values []corev1.Container) []corev1.Container {
+	result := make([]corev1.Container, len(values))
+	for index := range values {
+		result[index] = *values[index].DeepCopy()
+		result[index].TerminationMessagePath = ""
+		result[index].TerminationMessagePolicy = ""
+		for portIndex := range result[index].Ports {
+			result[index].Ports[portIndex].Protocol = ""
+		}
+		for _, probe := range []*corev1.Probe{result[index].StartupProbe, result[index].ReadinessProbe, result[index].LivenessProbe} {
+			if probe != nil {
+				probe.SuccessThreshold = 0
+			}
+		}
+	}
+	return result
+}
+
 func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode string, input runtimecontract.RunnerInput, token string, environmentSecrets map[string][]byte) error {
 	raw, err := runtimecontract.EncodeRunnerInput(input)
 	if err != nil {
@@ -627,6 +1151,9 @@ func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode st
 		Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: map[string]string{
 			revisionAnnotation: input.RuntimeRevisionDigest, configAnnotation: input.RuntimeConfigDigest,
 			environmentAnnotation: input.RuntimeEnvironmentDigest, controllerAnnotation: manager.config.ControllerPodUID, podAnnotation: podName,
+			resourcesAnnotation: input.EnvironmentPolicy.ResourcesDigest, volumesAnnotation: input.EnvironmentPolicy.VolumesDigest,
+			networkAnnotation: input.EnvironmentPolicy.NetworkDigest, rbacProfileAnnotation: input.EnvironmentPolicy.RBACDigest,
+			effectiveRBACAnnotation: input.EffectiveKubernetesAccess.Digest,
 		}},
 		Immutable: &immutable, Type: corev1.SecretTypeOpaque, Data: data}
 	_, err = manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Create(ctx, secret, metav1.CreateOptions{})
@@ -688,16 +1215,41 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("512Mi"))}}},
 		{Name: "provider-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("512Mi"))}}},
 	}
-	baseMounts := []corev1.VolumeMount{{Name: "session", MountPath: "/workspace"}, {Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true}, {Name: "runtime-input", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true}, {Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true}, {Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true}, {Name: "provider-socket", MountPath: "/run/kodex/provider"}, {Name: "tmp", MountPath: "/tmp"}}
-	requests := corev1.ResourceList{corev1.ResourceCPU: *resource.NewMilliQuantity(manager.config.TurnCPUMilli, resource.DecimalSI), corev1.ResourceMemory: *resource.NewQuantity(manager.config.TurnMemoryBytes, resource.BinarySI)}
+	roleMounts := []corev1.VolumeMount{{Name: "session", MountPath: "/workspace"}, {Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true}, {Name: "runtime-input", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true}, {Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true}, {Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true}, {Name: "provider-socket", MountPath: "/run/kodex/provider"}, {Name: "tmp", MountPath: "/tmp"}}
+	initMounts := []corev1.VolumeMount{{Name: "session", MountPath: "/workspace"}, {Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true}, {Name: "tmp", MountPath: "/tmp"}}
+	for _, item := range input.EnvironmentPolicy.Volumes {
+		volumeName := "environment-" + shortHash(item.Name)
+		source := &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(*resource.NewQuantity(item.SizeMiB<<20, resource.BinarySI))}
+		if item.Kind == runtimecontract.RuntimeVolumeEphemeralMemory {
+			source.Medium = corev1.StorageMediumMemory
+		}
+		volumes = append(volumes, corev1.Volume{Name: volumeName, VolumeSource: corev1.VolumeSource{EmptyDir: source}})
+		roleMounts = append(roleMounts, corev1.VolumeMount{Name: volumeName, MountPath: item.MountPath})
+	}
+	serviceAccountName := manager.config.RunnerServiceAccount
+	if mode == "turn" {
+		serviceAccountName = input.EffectiveKubernetesAccess.ServiceAccountName
+	}
+	if mode == "turn" && input.EffectiveKubernetesAccess.Profile.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
+		expirationSeconds := int64(3600)
+		volumes = append(volumes, corev1.Volume{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{
+			DefaultMode: int32Pointer(0o440), Sources: []corev1.VolumeProjection{
+				{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Path: "token", ExpirationSeconds: &expirationSeconds}},
+				{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}, Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}},
+				{DownwardAPI: &corev1.DownwardAPIProjection{Items: []corev1.DownwardAPIVolumeFile{{Path: "namespace", FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.namespace"}}}}},
+			},
+		}}})
+		roleMounts = append(roleMounts, corev1.VolumeMount{Name: "kube-api-access", MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true})
+	}
+	resources := runtimePolicyResourceRequirements(input.EnvironmentPolicy.Resources)
 	role := corev1.Container{Name: "role-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: roleArgs,
 		Env: []corev1.EnvVar{
 			{Name: "KODEX_RUNTIME_REVISION_FILE", Value: "/var/run/config/kodex/runtime/runtime.json"},
 			{Name: "OTEL_SDK_DISABLED", Value: "true"},
 			{Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment},
 		},
-		Ports: []corev1.ContainerPort{{Name: "runtime-health", ContainerPort: 9090}}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: baseMounts,
-		Resources:    corev1.ResourceRequirements{Requests: requests, Limits: requests},
+		Ports: []corev1.ContainerPort{{Name: "runtime-health", ContainerPort: 9090}}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: roleMounts,
+		Resources:    resources,
 		StartupProbe: httpProbe("/readyz", "runtime-health", 2, 60), ReadinessProbe: httpProbe("/readyz", "runtime-health", 5, 3), LivenessProbe: httpProbe("/healthz", "runtime-health", 10, 3)}
 	provider := corev1.Container{Name: "provider-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-provider"},
 		Env: []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: input.CodexHome},
@@ -721,18 +1273,40 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		}}})
 	}
 	annotations := map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, configAnnotation: input.RuntimeConfigDigest,
-		environmentAnnotation: input.RuntimeEnvironmentDigest, controllerAnnotation: manager.config.ControllerPodUID}
+		environmentAnnotation: input.RuntimeEnvironmentDigest, controllerAnnotation: manager.config.ControllerPodUID,
+		resourcesAnnotation: input.EnvironmentPolicy.ResourcesDigest, volumesAnnotation: input.EnvironmentPolicy.VolumesDigest,
+		networkAnnotation: input.EnvironmentPolicy.NetworkDigest, rbacProfileAnnotation: input.EnvironmentPolicy.RBACDigest,
+		effectiveRBACAnnotation: input.EffectiveKubernetesAccess.Digest}
+	labels := map[string]string{managedLabel: "true", modeLabel: mode, "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment}
+	if mode == "turn" {
+		annotations[leaseAnnotation] = input.LeaseRef
+		labels[executionHashLabel] = shortHash(input.LeaseRef)
+	}
 	if mode == "warm" {
 		compatibility, _ := runtimecontract.WarmCompatibilityDigest(input)
 		annotations[warmCompatibilityAnnotation] = compatibility
 	}
 	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: manager.config.RuntimeNamespace,
-		Labels:      map[string]string{managedLabel: "true", modeLabel: mode, "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment},
+		Labels:      labels,
 		Annotations: annotations},
-		Spec: corev1.PodSpec{ServiceAccountName: manager.config.RunnerServiceAccount, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(30),
+		Spec: corev1.PodSpec{ServiceAccountName: serviceAccountName, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(30),
 			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
-			InitContainers:  []corev1.Container{{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: baseMounts, Resources: smallResources()}},
+			InitContainers:  []corev1.Container{{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: initMounts, Resources: smallResources()}},
 			Containers:      []corev1.Container{role, provider}, Volumes: volumes}}
+}
+
+func runtimePolicyResourceRequirements(policy runtimecontract.RuntimeResourcePolicy) corev1.ResourceRequirements {
+	requests := corev1.ResourceList{
+		corev1.ResourceCPU:              *resource.NewMilliQuantity(policy.CPURequestMilli, resource.DecimalSI),
+		corev1.ResourceMemory:           *resource.NewQuantity(policy.MemoryRequestMiB<<20, resource.BinarySI),
+		corev1.ResourceEphemeralStorage: *resource.NewQuantity(policy.EphemeralStorageRequestMiB<<20, resource.BinarySI),
+	}
+	limits := corev1.ResourceList{
+		corev1.ResourceCPU:              *resource.NewMilliQuantity(policy.CPULimitMilli, resource.DecimalSI),
+		corev1.ResourceMemory:           *resource.NewQuantity(policy.MemoryLimitMiB<<20, resource.BinarySI),
+		corev1.ResourceEphemeralStorage: *resource.NewQuantity(policy.EphemeralStorageLimitMiB<<20, resource.BinarySI),
+	}
+	return corev1.ResourceRequirements{Requests: requests, Limits: limits}
 }
 
 func (manager *Manager) validateImage(input runtimecontract.RunnerInput) error {
@@ -875,7 +1449,7 @@ func (manager *Manager) warmTicketName(revisionRef, revisionDigest string) strin
 	return ticketName("warm-" + revisionRef + "|" + revisionDigest + "|" + manager.config.ControllerPodUID + "|" + manager.config.ControllerPodIP)
 }
 func ticketName(value string) string                             { return "runtime-ticket-" + shortHash(value) }
-func turnPodName(value string) string                            { return "runtime-turn-" + shortHash(value) }
+func turnPodName(value string) string                            { return runtimecontract.RuntimeTurnPodName(value) }
 func int64Pointer(value int64) *int64                            { return &value }
 func int32Pointer(value int32) *int32                            { return &value }
 func boolPointer(value bool) *bool                               { return &value }

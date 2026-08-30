@@ -1,3 +1,4 @@
+-- name: runtime_secret_resolve_binding :one
 SELECT secret.ref,
        revision.namespace,
        revision.revision,

@@ -44,6 +44,8 @@ export const accessResourceKinds: AccessResourceKind[] = [
   "ARTIFACT",
   "SCHEDULE",
   "INTEGRATION",
+  "RUNTIME_ENVIRONMENT",
+  "SECRET",
 ];
 
 export interface ScopeDraft {

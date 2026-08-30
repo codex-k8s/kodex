@@ -26,7 +26,7 @@ async function restartLogin(): Promise<void> {
 onMounted(async () => {
   try {
     const completion = await session.completeLogin();
-    if (completion.kind === "runtime-secret") {
+    if (completion.kind !== "login") {
       await router.replace(callbackReturnPath(completion));
       return;
     }

@@ -1,4 +1,4 @@
--- name: artifact_retention_insert_audit_event :exec
+-- name: insert_audit_event :exec
 INSERT INTO control_plane.audit_events (
     ref,
     organization_id,

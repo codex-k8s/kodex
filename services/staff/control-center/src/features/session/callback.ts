@@ -4,7 +4,7 @@ export function callbackReturnPath(
   completion: LoginCompletion,
   onboardingComplete?: boolean,
 ): string {
-  if (completion.kind === "runtime-secret") {
+  if (completion.kind !== "login") {
     if (!completion.returnPath)
       throw new Error("OIDC re-auth return path is unavailable");
     return completion.returnPath;

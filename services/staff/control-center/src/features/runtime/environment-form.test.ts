@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  defaultRuntimeEnvironmentPolicy,
+  editableRuntimeEnvironmentPolicy,
   editableSecretBindings,
   emptySecretBinding,
+  setRuntimeKubernetesAccess,
   validateEnvironmentInput,
 } from "@/features/runtime/environment-form";
 
@@ -28,6 +31,7 @@ describe("runtime environment form", () => {
             secretRef: "secret_provider_token",
           },
         ],
+        policy: defaultRuntimeEnvironmentPolicy(),
       }),
     ).toEqual([]);
   });
@@ -59,6 +63,7 @@ describe("runtime environment form", () => {
         { name: "KODEX_INTERNAL", value: "forbidden" },
       ],
       secretBindings: [binding],
+      policy: defaultRuntimeEnvironmentPolicy(),
     });
 
     expect(problems.map((item) => item.message)).toEqual(
@@ -96,5 +101,122 @@ describe("runtime environment form", () => {
         secretRef: "secret_provider_token",
       },
     ]);
+  });
+
+  it("создаёт безопасную policy по умолчанию и связывает Kubernetes API с scoped RBAC", () => {
+    const policy = defaultRuntimeEnvironmentPolicy();
+
+    expect(policy).toEqual({
+      resources: {
+        cpuRequestMilli: 2000,
+        cpuLimitMilli: 2000,
+        memoryRequestMib: 4096,
+        memoryLimitMib: 4096,
+        ephemeralStorageRequestMib: 1024,
+        ephemeralStorageLimitMib: 4096,
+      },
+      volumes: [],
+      networkDestinations: ["DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK"],
+      kubernetesAccess: "NONE",
+    });
+
+    setRuntimeKubernetesAccess(policy, "READ_OWN_EXECUTION");
+    expect(policy.networkDestinations).toEqual([
+      "DNS",
+      "PROVIDER_PROXY",
+      "RUNTIME_CALLBACK",
+      "KUBERNETES_API",
+    ]);
+    setRuntimeKubernetesAccess(policy, "NONE");
+    expect(policy.networkDestinations).not.toContain("KUBERNETES_API");
+  });
+
+  it("преобразует effective policy только в редактируемые поля", () => {
+    expect(
+      editableRuntimeEnvironmentPolicy({
+        resources: defaultRuntimeEnvironmentPolicy().resources,
+        volumes: [
+          {
+            name: "workspace-cache",
+            kind: "EPHEMERAL_DISK",
+            sizeMib: 2048,
+            mountPath: "/workspace/.kodex/volumes/workspace-cache",
+          },
+        ],
+        network: {
+          denyByDefault: true,
+          egress: [
+            { destination: "DNS", protocol: "TCP", port: 53 },
+            { destination: "DNS", protocol: "UDP", port: 53 },
+            { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8080 },
+            { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
+            { destination: "KUBERNETES_API", protocol: "TCP", port: 443 },
+          ],
+        },
+        kubernetesAccess: {
+          kind: "READ_OWN_EXECUTION",
+          namespace: "kodex-runtime",
+        },
+        resourcesDigest: "a".repeat(64),
+        volumesDigest: "b".repeat(64),
+        networkDigest: "c".repeat(64),
+        rbacDigest: "d".repeat(64),
+      }),
+    ).toEqual({
+      resources: defaultRuntimeEnvironmentPolicy().resources,
+      volumes: [
+        {
+          name: "workspace-cache",
+          kind: "EPHEMERAL_DISK",
+          sizeMib: 2048,
+        },
+      ],
+      networkDestinations: [
+        "DNS",
+        "PROVIDER_PROXY",
+        "RUNTIME_CALLBACK",
+        "KUBERNETES_API",
+      ],
+      kubernetesAccess: "READ_OWN_EXECUTION",
+    });
+  });
+
+  it("закрыто отклоняет policy вне admission ranges и несогласованную сеть", () => {
+    const policy = defaultRuntimeEnvironmentPolicy();
+    policy.resources.cpuRequestMilli = 99;
+    policy.resources.cpuLimitMilli = 50;
+    policy.resources.memoryLimitMib = 64;
+    policy.resources.ephemeralStorageLimitMib = 128;
+    policy.volumes = [
+      { name: "tmp", kind: "EPHEMERAL_MEMORY", sizeMib: 8 },
+      { name: "tmp", kind: "EPHEMERAL_DISK", sizeMib: 1024 },
+    ];
+    policy.networkDestinations.push("KUBERNETES_API");
+
+    const problems = validateEnvironmentInput({
+      name: "Окружение",
+      description: "",
+      imageArtifactRef: "imgart_main",
+      tools: [],
+      values: [],
+      secretBindings: [],
+      policy,
+    });
+
+    expect(problems.map((item) => item.message)).toEqual(
+      expect.arrayContaining([
+        "runtime.errors.cpuRequestRange",
+        "runtime.errors.cpuLimitRange",
+        "runtime.errors.cpuLimitBelowRequest",
+        "runtime.errors.memoryLimitRange",
+        "runtime.errors.memoryLimitBelowRequest",
+        "runtime.errors.ephemeralStorageLimitRange",
+        "runtime.errors.ephemeralStorageLimitBelowRequest",
+        "runtime.errors.reservedVolumeName",
+        "runtime.errors.duplicateVolume",
+        "runtime.errors.volumeSizeRange",
+        "runtime.errors.networkDestinations",
+      ]),
+    );
   });
 });

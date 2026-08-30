@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   AgentRuntimeConfigurationView,
+  RuntimeEnvironmentPolicy,
   RuntimeEnvironmentPage,
   RuntimeEnvironmentVersionPage,
 } from "@/shared/api/generated/openapi/types.gen";
+import { defaultRuntimeEnvironmentPolicy } from "@/features/runtime/environment-form";
 
 const getAgentRuntimeConfigurationMock = vi.hoisted(() => vi.fn());
 const createRuntimeEnvironmentSetMock = vi.hoisted(() => vi.fn());
@@ -23,6 +25,25 @@ const runtimeImage = {
   reference: "registry.example/runtime@sha256:" + "f".repeat(64),
   digest: "f".repeat(64),
 };
+
+const runtimePolicy = {
+  resources: defaultRuntimeEnvironmentPolicy().resources,
+  volumes: [],
+  network: {
+    denyByDefault: true,
+    egress: [
+      { destination: "DNS", protocol: "TCP", port: 53 },
+      { destination: "DNS", protocol: "UDP", port: 53 },
+      { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8080 },
+      { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
+    ],
+  },
+  kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },
+  resourcesDigest: "1".repeat(64),
+  volumesDigest: "2".repeat(64),
+  networkDigest: "3".repeat(64),
+  rbacDigest: "4".repeat(64),
+} satisfies RuntimeEnvironmentPolicy;
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   ...(await importOriginal<
@@ -109,6 +130,7 @@ function view(model: string, version: number): AgentRuntimeConfigurationView {
         secretDescriptors: [],
         image: runtimeImage,
         tools: [],
+        policy: runtimePolicy,
         digest: "e".repeat(64),
         createdAt: "2026-08-28T08:00:00Z",
       },
@@ -294,6 +316,7 @@ describe("runtime store", () => {
           secretRef: "secret_github_token",
         },
       ],
+      policy: defaultRuntimeEnvironmentPolicy(),
     };
     const environment = view("gpt-5.6-sol", 3).environment;
     createRuntimeEnvironmentSetMock.mockResolvedValueOnce(
@@ -330,6 +353,7 @@ describe("runtime store", () => {
       secretDescriptors: [],
       image: runtimeImage,
       tools: [],
+      policy: runtimePolicy,
       digest: "a".repeat(64),
       createdAt: "2026-08-29T12:00:00Z",
     };
@@ -348,6 +372,7 @@ describe("runtime store", () => {
           secretDescriptors: [],
           image: runtimeImage,
           tools: [],
+          policy: runtimePolicy,
           digest: "b".repeat(64),
           createdAt: "2026-08-29T11:00:00Z",
         },

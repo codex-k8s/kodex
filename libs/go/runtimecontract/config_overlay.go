@@ -253,7 +253,27 @@ func ValidateRuntimeEnvironment(values []RuntimeEnvironmentValue, secrets []Runt
 	return nil
 }
 
-func RuntimeEnvironmentDigest(values []RuntimeEnvironmentValue, secrets []RuntimeSecretProjection, image RuntimeEnvironmentImage, tools []RuntimeEnvironmentTool) (string, error) {
+func RuntimeEnvironmentDigest(values []RuntimeEnvironmentValue, secrets []RuntimeSecretProjection, image RuntimeEnvironmentImage, tools []RuntimeEnvironmentTool, policies ...RuntimeEnvironmentPolicy) (string, error) {
+	coreDigest, err := RuntimeEnvironmentCoreDigest(values, secrets, image, tools)
+	if err != nil {
+		return "", err
+	}
+	policy := DefaultRuntimeEnvironmentPolicy()
+	if len(policies) > 1 {
+		return "", errors.New("runtime environment policy cardinality is invalid")
+	}
+	if len(policies) == 1 {
+		policy = policies[0]
+	}
+	normalized, err := NormalizeRuntimeEnvironmentPolicy(policy)
+	if err != nil {
+		return "", err
+	}
+	return digestParts("runtime-environment-v2", coreDigest, normalized.ResourcesDigest,
+		normalized.VolumesDigest, normalized.NetworkDigest, normalized.RBACDigest), nil
+}
+
+func RuntimeEnvironmentCoreDigest(values []RuntimeEnvironmentValue, secrets []RuntimeSecretProjection, image RuntimeEnvironmentImage, tools []RuntimeEnvironmentTool) (string, error) {
 	if err := ValidateRuntimeEnvironment(values, secrets); err != nil {
 		return "", err
 	}
@@ -281,8 +301,8 @@ func RuntimeEnvironmentDigest(values []RuntimeEnvironmentValue, secrets []Runtim
 	for _, item := range tools {
 		payload.WriteString("tool\x00" + item.Name + "\x00" + item.Command + "\x00" + item.Description + "\x00" + item.UsageHint + "\x00")
 	}
-	digest := sha256.Sum256(payload.Bytes())
-	return hex.EncodeToString(digest[:]), nil
+	coreDigest := sha256.Sum256(payload.Bytes())
+	return hex.EncodeToString(coreDigest[:]), nil
 }
 
 func validateRuntimeEnvironmentImage(image RuntimeEnvironmentImage) error {
