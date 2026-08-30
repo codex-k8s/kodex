@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   collectAttention,
+  decisionActionLayout,
   decisionHistory,
   decisionInbox,
   decisionUrgency,
@@ -367,16 +368,25 @@ describe("workboard model", () => {
     ).toEqual(["gate_soon", "gate_normal"]);
   });
 
-  it("связывает решение с авторитетным запуском и группирует контекст", () => {
+  it("связывает решение с авторитетным запуском и группирует по срочности и Проекту", () => {
     const currentRun = run("run_current", "WAITING_HUMAN", {
       title: "Согласование предложения",
     });
+    const secondRun = run("run_second", "WAITING_HUMAN", {
+      title: "Согласование договора",
+    });
     const items = decisionInbox(
-      [gate(currentRun.ref)],
+      [
+        gate(currentRun.ref),
+        {
+          ...gate(secondRun.ref),
+          ref: "gate_second",
+        },
+      ],
       [project],
       undefined,
       new Date("2026-08-28T10:00:00Z"),
-      [currentRun],
+      [currentRun, secondRun],
     );
     const groups = groupDecisionInbox(items);
 
@@ -384,8 +394,31 @@ describe("workboard model", () => {
     expect(groups).toHaveLength(1);
     expect(groups[0]).toMatchObject({
       project: { name: "Продажи" },
-      run: { title: "Согласование предложения" },
-      items: [{ gate: { ref: "gate_owner" } }],
+      items: [
+        { gate: { ref: "gate_owner" } },
+        { gate: { ref: "gate_second" } },
+      ],
+    });
+  });
+
+  it("выбирает ровно одно основное действие и сохраняет безопасный порядок остальных", () => {
+    const actions = decisionActionLayout({
+      ...gate("run_actions"),
+      allowedDecisions: ["REJECT", "APPROVE", "REQUEST_CHANGES"],
+    });
+
+    expect(actions).toEqual({
+      primary: "APPROVE",
+      secondary: ["REQUEST_CHANGES", "REJECT"],
+    });
+    expect(
+      decisionActionLayout({
+        ...gate("run_without_approve"),
+        allowedDecisions: ["REJECT", "REQUEST_CHANGES"],
+      }),
+    ).toEqual({
+      primary: "REQUEST_CHANGES",
+      secondary: ["REJECT"],
     });
   });
 

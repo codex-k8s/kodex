@@ -13,9 +13,11 @@ import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
 import {
+  decisionActionLayout,
   decisionHistory,
   decisionInbox,
   groupDecisionInbox,
+  type DecisionAction,
   type DecisionInboxItem,
 } from "@/features/workboard/model";
 import type { OwnerGate } from "@/shared/api/generated/openapi/types.gen";
@@ -30,7 +32,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const platform = usePlatformStore();
 const route = useRoute();
-const { locale } = useI18n();
+const { locale, t } = useI18n();
 const projectFilter = ref(
   typeof route.query.projectRef === "string" ? route.query.projectRef : "",
 );
@@ -64,6 +66,11 @@ const visibleItems = computed(() =>
 const groups = computed(() => groupDecisionInbox(visibleItems.value));
 const selected = computed(() =>
   visibleItems.value.find((item) => item.gate.ref === selectedRef.value),
+);
+const selectedActions = computed(() =>
+  selected.value
+    ? decisionActionLayout(selected.value.gate)
+    : { primary: undefined, secondary: [] },
 );
 const projectsWithGates = computed(() => {
   const refs = new Set(
@@ -154,6 +161,17 @@ async function uploadSelectedAttachment(file: File): Promise<{ ref: string }> {
 
 function attachmentsReady(gateRef: string): boolean {
   return attachmentStates.value[gateRef]?.ready ?? true;
+}
+
+function decisionLabel(decision: DecisionAction): string {
+  if (decision === "APPROVE") return t("common.approve");
+  if (decision === "REQUEST_CHANGES") return t("common.requestChanges");
+  if (decision === "REJECT") return t("common.reject");
+  return t("common.cancel");
+}
+
+function secondaryActionClass(decision: DecisionAction): string[] {
+  return ["button", ...(decision === "REJECT" ? ["button--danger"] : [])];
 }
 
 onMounted(
@@ -256,9 +274,9 @@ onMounted(
               <strong>
                 {{ group.project?.name ?? $t("decisions.projectUnavailable") }}
               </strong>
-              <span>{{
-                group.run?.title ?? $t("decisions.runUnavailable")
-              }}</span>
+              <span class="decision-group-header__count">
+                {{ group.items.length }}
+              </span>
             </header>
             <div role="list">
               <button
@@ -285,6 +303,11 @@ onMounted(
                   <small>
                     {{ item.gate.requestedBy.displayName }} ·
                     {{ formatDate(item.gate.openedAt) }}
+                  </small>
+                  <small class="decision-row__route">
+                    {{ item.run?.target.displayName }} ·
+                    {{ item.run?.title ?? $t("decisions.runUnavailable") }} ·
+                    {{ item.gate.nodeRef }}
                   </small>
                 </span>
                 <span class="decision-row__status">
@@ -326,8 +349,12 @@ onMounted(
                 }}
               </dt>
               <dd>
+                <span v-if="selected.run" class="decision-target">
+                  {{ selected.run.target.displayName }}
+                </span>
                 <RouterLink :to="runNodePath(selected)">
-                  {{ selected.run?.title ?? $t("decisions.openNode") }}
+                  {{ selected.run?.title ?? $t("decisions.runUnavailable") }}
+                  · {{ selected.gate.nodeRef }}
                 </RouterLink>
               </dd>
             </div>
@@ -354,11 +381,20 @@ onMounted(
                 }}
               </dt>
               <dd>
-                {{
-                  selected.gate.expiresAt
-                    ? formatDate(selected.gate.expiresAt)
-                    : $t("decisions.noDeadline")
-                }}
+                <span>
+                  {{
+                    selected.gate.expiresAt
+                      ? formatDate(selected.gate.expiresAt)
+                      : $t("decisions.noDeadline")
+                  }}
+                </span>
+                <span
+                  v-if="view === 'PENDING'"
+                  class="decision-deadline-urgency"
+                  :class="`decision-urgency--${selected.urgency.toLowerCase()}`"
+                >
+                  {{ $t(`decisions.urgency.${selected.urgency}`) }}
+                </span>
               </dd>
             </div>
             <div>
@@ -437,42 +473,29 @@ onMounted(
             />
             <div class="decision-actions">
               <button
-                v-if="selected.gate.allowedDecisions.includes('APPROVE')"
+                v-if="selectedActions.primary"
                 class="button button--primary"
                 type="button"
                 :disabled="
                   busyRef === selected.gate.ref ||
                   !attachmentsReady(selected.gate.ref)
                 "
-                @click="decide(selected.gate, 'APPROVE')"
+                @click="decide(selected.gate, selectedActions.primary)"
               >
-                {{ $t("common.approve") }}
+                {{ decisionLabel(selectedActions.primary) }}
               </button>
               <button
-                v-if="
-                  selected.gate.allowedDecisions.includes('REQUEST_CHANGES')
-                "
-                class="button"
+                v-for="decision in selectedActions.secondary"
+                :key="decision"
+                :class="secondaryActionClass(decision)"
                 type="button"
                 :disabled="
                   busyRef === selected.gate.ref ||
                   !attachmentsReady(selected.gate.ref)
                 "
-                @click="decide(selected.gate, 'REQUEST_CHANGES')"
+                @click="decide(selected.gate, decision)"
               >
-                {{ $t("common.requestChanges") }}
-              </button>
-              <button
-                v-if="selected.gate.allowedDecisions.includes('REJECT')"
-                class="button button--danger"
-                type="button"
-                :disabled="
-                  busyRef === selected.gate.ref ||
-                  !attachmentsReady(selected.gate.ref)
-                "
-                @click="decide(selected.gate, 'REJECT')"
-              >
-                {{ $t("common.reject") }}
+                {{ decisionLabel(decision) }}
               </button>
             </div>
           </template>
@@ -533,8 +556,8 @@ onMounted(
 }
 .decision-inbox {
   display: grid;
-  min-height: 620px;
-  grid-template-columns: minmax(330px, 0.78fr) minmax(0, 1.22fr);
+  min-height: min(720px, calc(100vh - 230px));
+  grid-template-columns: minmax(360px, 440px) minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -550,20 +573,17 @@ onMounted(
 }
 .decision-group-header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 5px 8px;
   padding: 11px 14px;
   border-bottom: 1px solid var(--hairline);
   background: var(--panel);
 }
-.decision-group-header > span:last-child {
-  grid-column: 1 / -1;
-  overflow: hidden;
+.decision-group-header__count {
   color: var(--muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
 }
 .decision-row {
   display: grid;
@@ -607,6 +627,12 @@ onMounted(
 }
 .decision-row__copy small {
   color: var(--subtle);
+}
+.decision-row__copy .decision-row__route {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .decision-row__status {
   display: grid;
@@ -665,8 +691,20 @@ onMounted(
   font-size: 0.74rem;
 }
 .decision-meta dd {
+  display: grid;
+  gap: 4px;
   margin: 5px 0 0;
   overflow-wrap: anywhere;
+}
+.decision-target {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.decision-deadline-urgency {
+  width: fit-content;
+  color: var(--warning);
+  font-size: 0.76rem;
+  font-weight: 700;
 }
 .decision-copy {
   padding: 16px 0 0;
@@ -711,6 +749,7 @@ onMounted(
 @media (max-width: 900px) {
   .decision-inbox {
     grid-template-columns: 1fr;
+    min-height: 0;
   }
   .decision-list {
     max-height: 360px;
@@ -739,6 +778,9 @@ onMounted(
   .decision-row__status {
     grid-column: 2;
     justify-items: start;
+  }
+  .decision-row__copy .decision-row__route {
+    white-space: normal;
   }
   .decision-detail {
     padding: 16px;

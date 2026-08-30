@@ -47,8 +47,14 @@ export interface DecisionInboxGroup {
   key: string;
   urgency: DecisionUrgency;
   project?: Project;
-  run?: Run;
   items: DecisionInboxItem[];
+}
+
+export type DecisionAction = OwnerGate["allowedDecisions"][number];
+
+export interface DecisionActionLayout {
+  primary?: DecisionAction;
+  secondary: DecisionAction[];
 }
 
 const activeStates = new Set<Run["state"]>([
@@ -242,20 +248,32 @@ export function groupDecisionInbox(
 ): DecisionInboxGroup[] {
   const groups = new Map<string, DecisionInboxGroup>();
   for (const item of items) {
-    const key = [item.urgency, item.gate.projectRef, item.gate.runRef].join(
-      ":",
-    );
+    const key = [item.urgency, item.gate.projectRef].join(":");
     const group = groups.get(key) ?? {
       key,
       urgency: item.urgency,
       project: item.project,
-      run: item.run,
       items: [],
     };
     group.items.push(item);
     groups.set(key, group);
   }
   return [...groups.values()];
+}
+
+export function decisionActionLayout(gate: OwnerGate): DecisionActionLayout {
+  const priority: DecisionAction[] = [
+    "APPROVE",
+    "REQUEST_CHANGES",
+    "REJECT",
+    "CANCEL",
+  ];
+  const allowed = new Set(gate.allowedDecisions);
+  const ordered = priority.filter((decision) => allowed.has(decision));
+  return {
+    primary: ordered[0],
+    secondary: ordered.slice(1),
+  };
 }
 
 export function projectArtifacts(

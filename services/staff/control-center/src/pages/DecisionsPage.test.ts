@@ -168,6 +168,11 @@ describe("DecisionsPage", () => {
       "После одобрения агент отправит предложение клиенту.",
     );
     expect(html).toContain("Менеджер продаж");
+    expect(html).toContain("Согласование коммерческого предложения");
+    expect(html).toContain("nod_offer_gate");
     expect(html).toContain("nodeRef=nod_offer_gate");
+    expect(html.match(/button--primary/g)).toHaveLength(1);
+    expect(html).toContain("Запросить изменения");
+    expect(html).toContain("Отклонить");
   });
 });
