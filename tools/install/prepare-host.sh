@@ -36,6 +36,50 @@ lock_file="$script_directory/components.lock.json"
 ipv6_ingress_bridge_script="$script_directory/configure-ipv6-ingress-bridge.sh"
 pod_cidr=10.42.0.0/16
 service_cidr=10.43.0.0/16
+k3s_resolver_file=/etc/rancher/k3s/resolv.conf
+
+configure_k3s_resolver() {
+  local source_file temporary_file nameserver_count
+  source_file=/run/systemd/resolve/resolv.conf
+  [[ -r "$source_file" ]] || source_file=/etc/resolv.conf
+  temporary_file=$(mktemp)
+  awk '
+    $1 == "nameserver" &&
+    $2 !~ /^127\./ &&
+    $2 != "::1" &&
+    !seen[$2]++ &&
+    count < 3 {
+      print "nameserver " $2
+      count++
+    }
+  ' "$source_file" >"$temporary_file"
+  nameserver_count=$(wc -l <"$temporary_file")
+  [[ "$nameserver_count" -ge 1 ]] || {
+    rm -f -- "$temporary_file"
+    fail 'no non-loopback upstream DNS server is available for k3s'
+  }
+  {
+    printf '%s\n' '# Managed by Kodex. Host search domains are intentionally excluded.'
+    cat -- "$temporary_file"
+    printf '%s\n' 'options timeout:2 attempts:2'
+  } | install -m 0644 /dev/stdin "$k3s_resolver_file"
+  rm -f -- "$temporary_file"
+}
+
+readback_k3s_resolver() {
+  [[ -f "$k3s_resolver_file" && ! -L "$k3s_resolver_file" ]] ||
+    fail 'dedicated k3s resolver file is absent'
+  awk '
+    $1 == "search" || $1 == "domain" { exit 1 }
+    $1 == "nameserver" {
+      if ($2 ~ /^127\./ || $2 == "::1" || seen[$2]++) exit 1
+      count++
+    }
+    END { if (count < 1 || count > 3) exit 1 }
+  ' "$k3s_resolver_file" || fail 'dedicated k3s resolver is unsafe'
+  grep -Fxq "resolv-conf: \"$k3s_resolver_file\"" /etc/rancher/k3s/config.yaml ||
+    fail 'k3s does not use the dedicated resolver file'
+}
 
 remove_legacy_firewall() {
   systemctl disable --now nftables >/dev/null 2>&1 || true
@@ -145,9 +189,11 @@ EOF
   chmod 0755 /usr/local/bin/kubectl
   ln -sfn /usr/local/bin/k3s /usr/local/bin/crictl
   mkdir -p /etc/rancher/k3s /var/lib/rancher/k3s
+  configure_k3s_resolver
   cat >/etc/rancher/k3s/config.yaml <<EOF
 write-kubeconfig-mode: "0600"
 secrets-encryption: true
+resolv-conf: "$k3s_resolver_file"
 disable:
   - traefik
 tls-san:
@@ -205,6 +251,7 @@ for _ in $(seq 1 120); do
 done
 [[ "$api_ready" == true ]] || fail 'Kubernetes API did not become ready'
 [[ "$node_ready" == true ]] || fail 'no ready Kubernetes node became available'
+readback_k3s_resolver
 readback_firewall
 if [[ "$mode" == apply ]]; then
   "$ipv6_ingress_bridge_script" --mode apply \

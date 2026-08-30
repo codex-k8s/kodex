@@ -453,6 +453,16 @@ rg -Fq '  - traefik' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal k3s does not disable the bundled Traefik release'
 rg -Fq 'systemctl restart k3s' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal host apply does not activate changed k3s configuration'
+for resolver_contract in \
+  'k3s_resolver_file=/etc/rancher/k3s/resolv.conf' \
+  'source_file=/run/systemd/resolve/resolv.conf' \
+  'configure_k3s_resolver' \
+  'resolv-conf: "$k3s_resolver_file"' \
+  'readback_k3s_resolver' \
+  "\$1 == \"search\" || \$1 == \"domain\""; do
+  rg -Fq "$resolver_contract" "$repository_root/tools/install/prepare-host.sh" ||
+    fail "bare-metal k3s resolver contract is absent: $resolver_contract"
+done
 
 identity_inputs="$temporary_directory/identity-inputs"
 identity_material="$temporary_directory/identity-material"
