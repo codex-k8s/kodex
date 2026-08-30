@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -218,12 +219,20 @@ func (server *Server) ArchiveWorkflow(ctx context.Context, request *controlplane
 }
 
 func (server *Server) LaunchRun(ctx context.Context, request *controlplanev1.LaunchRunRequest) (*controlplanev1.LaunchRunResponse, error) {
-	payload := command.LaunchRunInput{ProjectRef: request.GetProjectRef(), Title: request.GetTitle(), Task: request.GetTask(), SessionRef: request.GetSessionRef(), Source: enumSuffix(request.GetSource(), "RUN_SOURCE_"), Target: runTarget(request.GetTarget()), Input: asMap(request.GetInput()), ArtifactRefs: request.GetArtifactRefs()}
+	titleSource := launchRunTitleSource(request.GetTitle())
+	payload := command.LaunchRunInput{ProjectRef: request.GetProjectRef(), Title: request.GetTitle(), TitleSource: titleSource, Task: request.GetTask(), SessionRef: request.GetSessionRef(), Source: enumSuffix(request.GetSource(), "RUN_SOURCE_"), Target: runTarget(request.GetTarget()), Input: asMap(request.GetInput()), ArtifactRefs: request.GetArtifactRefs()}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_LaunchRun_FullMethodName, command.LaunchRun, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err
 	}
 	return &controlplanev1.LaunchRunResponse{Run: castRun(*result.Run), Graph: castGraph(*result.Graph)}, nil
+}
+
+func launchRunTitleSource(title string) string {
+	if strings.TrimSpace(title) == "" {
+		return "SERVER_DEFAULT"
+	}
+	return "USER_EDITED"
 }
 
 func (server *Server) AddSessionTurn(ctx context.Context, request *controlplanev1.AddSessionTurnRequest) (*controlplanev1.AddSessionTurnResponse, error) {

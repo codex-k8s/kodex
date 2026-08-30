@@ -73,6 +73,7 @@ func TestCastRunPreservesArtifactAndGateReadback(t *testing.T) {
 		InputArtifactRefs: []string{"art_input"},
 		ArtifactRefs:      []string{"art_output"},
 		GateRefs:          []string{"gat_review"},
+		TitleSource:       "USER_EDITED",
 	})
 
 	if len(run.GetInputArtifactRefs()) != 1 || run.GetInputArtifactRefs()[0] != "art_input" {
@@ -83,6 +84,9 @@ func TestCastRunPreservesArtifactAndGateReadback(t *testing.T) {
 	}
 	if len(run.GetGateRefs()) != 1 || run.GetGateRefs()[0] != "gat_review" {
 		t.Fatalf("run gates were not cast: %v", run.GetGateRefs())
+	}
+	if run.GetTitleSource() != "USER_EDITED" {
+		t.Fatalf("run title source was not cast: %q", run.GetTitleSource())
 	}
 }
 

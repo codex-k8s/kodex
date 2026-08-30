@@ -24,7 +24,7 @@ export type AccessSubjectKind = 'USER' | 'OIDC_GROUP' | 'SERVICE';
 
 export type AccessScopeKind = 'ORGANIZATION' | 'PROJECT' | 'RESOURCE_KIND' | 'RESOURCE_INSTANCE';
 
-export type AccessResourceKind = 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN' | 'OWNER_GATE' | 'ARTIFACT' | 'SCHEDULE' | 'INTEGRATION' | 'RUNTIME_ENVIRONMENT' | 'SECRET';
+export type AccessResourceKind = 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN' | 'SESSION' | 'OWNER_GATE' | 'ARTIFACT' | 'SCHEDULE' | 'INTEGRATION' | 'RUNTIME_ENVIRONMENT' | 'ROLE_IMAGE' | 'SECRET';
 
 export type AccessRoleKind = 'SYSTEM' | 'CUSTOM';
 
@@ -1102,7 +1102,7 @@ export type RunInput = {
     projectRef: OpaqueRef;
     targetRef: OpaqueRef;
     targetType: 'AGENT' | 'WORKFLOW';
-    title: string;
+    title?: string;
     task: string;
     input?: {
         [key: string]: unknown;
@@ -1554,6 +1554,12 @@ export type GateRef = OpaqueRef;
 export type ArtifactRef = OpaqueRef;
 
 export type ArtifactLifecycleStateQuery = 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
+
+export type ArtifactTypeQuery = 'TEXT' | 'DOCUMENT' | 'IMAGE';
+
+export type ArtifactScanStateQuery = 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+
+export type ArtifactSourceKindQuery = 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
 
 export type ScheduleRef = OpaqueRef;
 
@@ -3795,6 +3801,9 @@ export type ListArtifactsData = {
     query?: {
         runRef?: OpaqueRef;
         lifecycleState?: 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
+        type?: 'TEXT' | 'DOCUMENT' | 'IMAGE';
+        scanState?: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+        sourceKind?: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
         query?: string;
         pageSize?: number;
         pageToken?: string;
@@ -3856,6 +3865,39 @@ export type UploadArtifactResponses = {
 };
 
 export type UploadArtifactResponse = UploadArtifactResponses[keyof UploadArtifactResponses];
+
+export type ListOrganizationArtifactsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        lifecycleState?: 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
+        type?: 'TEXT' | 'DOCUMENT' | 'IMAGE';
+        scanState?: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+        sourceKind?: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/artifacts';
+};
+
+export type ListOrganizationArtifactsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationArtifactsError = ListOrganizationArtifactsErrors[keyof ListOrganizationArtifactsErrors];
+
+export type ListOrganizationArtifactsResponses = {
+    /**
+     * Файлы организационного помощника текущего владельца
+     */
+    200: ArtifactPage;
+};
+
+export type ListOrganizationArtifactsResponse = ListOrganizationArtifactsResponses[keyof ListOrganizationArtifactsResponses];
 
 export type UploadOrganizationArtifactData = {
     /**

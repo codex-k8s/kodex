@@ -1103,14 +1103,38 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 	if !contains([]string{"ACTIVE", "DELETED", "PURGE_PENDING", "PURGED"}, lifecycleState) {
 		return nil, "", errs.ErrInvalid
 	}
+	artifactType := strings.TrimSpace(filter.ArtifactType)
+	if artifactType != "" && !contains([]string{"TEXT", "DOCUMENT", "IMAGE"}, artifactType) {
+		return nil, "", errs.ErrInvalid
+	}
+	scanState := strings.TrimSpace(filter.ScanState)
+	if scanState != "" && !contains([]string{"PENDING", "SCANNING", "CLEAN", "QUARANTINED", "FAILED"}, scanState) {
+		return nil, "", errs.ErrInvalid
+	}
+	sourceKind := strings.TrimSpace(filter.SourceKind)
+	if sourceKind != "" && !contains([]string{"CONTROL_CENTER", "AGENT_RESULT", "INTEGRATION_RESULT", "KNOWLEDGE_SOURCE", "INTERACTION_ATTACHMENT"}, sourceKind) {
+		return nil, "", errs.ErrInvalid
+	}
 	cursorCreatedAt, cursorRef, err := decodeArtifactCursor(filter.Page.Token)
 	if err != nil {
 		return nil, "", err
 	}
 	limit := boundedPage(filter.Page)
-	rows, err := repository.pool.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId,
-		scope.organizationID, filter.ProjectRef, filter.ResourceRef, scope.role, scope.actorID,
-		strings.TrimSpace(filter.Query), lifecycleState, cursorCreatedAt, cursorRef, limit+1)
+	rows, err := repository.pool.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+		"project_ref":     strings.TrimSpace(filter.ProjectRef),
+		"run_ref":         strings.TrimSpace(filter.ResourceRef),
+		"role":            scope.role,
+		"actor_id":        scope.actorID,
+		"query":           strings.TrimSpace(filter.Query),
+		"lifecycle_state": lifecycleState,
+		"artifact_type":   artifactType,
+		"scan_state":      scanState,
+		"source_kind":     sourceKind,
+		"cursor_created":  cursorCreatedAt,
+		"cursor_ref":      cursorRef,
+		"limit":           limit + 1,
+	})
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}

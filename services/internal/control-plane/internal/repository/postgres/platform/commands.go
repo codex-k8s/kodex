@@ -1281,8 +1281,15 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	runRef, _ := newRef("run")
 	title := strings.TrimSpace(payload.Title)
+	titleSource := strings.TrimSpace(payload.TitleSource)
 	if title == "" {
 		title = targetName + ": " + truncate(payload.Task, 120)
+		titleSource = "SERVER_DEFAULT"
+	} else if titleSource == "" {
+		titleSource = "SERVER_DEFAULT"
+	}
+	if !contains([]string{"SERVER_DEFAULT", "AGENT_PROPOSED", "USER_EDITED"}, titleSource) {
+		return commandOutcome{}, errs.ErrInvalid
 	}
 	rawInput := asJSON(payload.Input)
 	artifactRefs := append([]string(nil), payload.ArtifactRefs...)
@@ -1310,6 +1317,7 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		"target_ref":          payload.Target.Ref,
 		"source":              source,
 		"title":               title,
+		"title_source":        titleSource,
 		"task":                payload.Task,
 		"input":               rawInput,
 		"input_artifact_refs": []string{},

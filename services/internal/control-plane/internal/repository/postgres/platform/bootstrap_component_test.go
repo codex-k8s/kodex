@@ -554,7 +554,7 @@ func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, reposito
 			}})
 	}
 	allowed, err := launch("enterprise-launch-agent-a", projectA, agentA)
-	if err != nil || allowed.Run == nil {
+	if err != nil || allowed.Run == nil || allowed.Run.TitleSource != "SERVER_DEFAULT" || strings.TrimSpace(allowed.Run.Title) == "" {
 		t.Fatalf("exact agent launch was denied: run=%#v err=%v", allowed.Run, err)
 	}
 	if _, err := launch("enterprise-launch-agent-b", projectA, agentB); !errors.Is(err, domainerrs.ErrNotFound) {
@@ -2377,6 +2377,30 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || quarantined.ScanState != "QUARANTINED" {
 		t.Fatalf("quarantine executable artifact: artifact=%#v err=%v", quarantined, err)
 	}
+	cleanArtifacts, cleanNext, err := service.ListArtifacts(ctx, owner, query.Filter{
+		ProjectRef: project.Project.Ref, Query: "support-policy", ArtifactType: "TEXT", ScanState: "CLEAN",
+		SourceKind: "CONTROL_CENTER", Page: query.Page{Size: 1},
+	})
+	if err != nil || cleanNext != "" || len(cleanArtifacts) != 1 || cleanArtifacts[0].Ref != uploaded.Ref {
+		t.Fatalf("server-side artifact filters were not applied before limit: artifacts=%#v next=%q err=%v", cleanArtifacts, cleanNext, err)
+	}
+	firstPage, nextPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
+		ProjectRef: project.Project.Ref, Page: query.Page{Size: 1},
+	})
+	if err != nil || len(firstPage) != 1 || firstPage[0].Ref != quarantined.Ref || nextPageToken == "" {
+		t.Fatalf("first artifact cursor page is unstable: artifacts=%#v next=%q err=%v", firstPage, nextPageToken, err)
+	}
+	secondPage, finalPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
+		ProjectRef: project.Project.Ref, Page: query.Page{Size: 1, Token: nextPageToken},
+	})
+	if err != nil || len(secondPage) != 1 || secondPage[0].Ref != uploaded.Ref || finalPageToken != "" {
+		t.Fatalf("second artifact cursor page is unstable: artifacts=%#v next=%q err=%v", secondPage, finalPageToken, err)
+	}
+	if _, _, err := service.ListArtifacts(ctx, owner, query.Filter{
+		ProjectRef: project.Project.Ref, ArtifactType: "EXECUTABLE", Page: query.Page{Size: 1},
+	}); !errors.Is(err, domainerrs.ErrInvalid) {
+		t.Fatalf("unknown artifact type was accepted: %v", err)
+	}
 	if _, err := service.DownloadArtifact(ctx, owner, quarantined.Ref, "DOWNLOAD"); !errors.Is(err, domainerrs.ErrForbidden) {
 		t.Fatalf("download quarantined artifact must be forbidden: %v", err)
 	}
@@ -2426,11 +2450,11 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	}
 	launch, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "lifecycle-launch-1"}, Payload: command.LaunchRunInput{
-			ProjectRef: project.Project.Ref, Title: "Answer customer", Task: "Prepare an answer about delivery status.",
+			ProjectRef: project.Project.Ref, Title: "Answer customer", TitleSource: "USER_EDITED", Task: "Prepare an answer about delivery status.",
 			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Agent.Ref}, Input: map[string]any{"ticket": "SUP-42"},
 			ArtifactRefs: []string{secondRevision.Ref},
 		}})
-	if err != nil || launch.Run == nil || launch.Graph == nil || launch.Run.State != "RUNNING" || len(launch.Graph.Nodes) != 2 {
+	if err != nil || launch.Run == nil || launch.Graph == nil || launch.Run.State != "RUNNING" || launch.Run.TitleSource != "USER_EDITED" || len(launch.Graph.Nodes) != 2 {
 		t.Fatalf("launch direct run: run=%#v graph=%#v err=%v", launch.Run, launch.Graph, err)
 	}
 	readRun, readGraph, err := service.GetRunGraph(ctx, owner, launch.Run.Ref)
@@ -2648,6 +2672,12 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	})
 	if err != nil || assistantInput.ProjectRef != "" || assistantInput.ScanState != "CLEAN" {
 		t.Fatalf("upload organization-scoped assistant artifact: artifact=%#v err=%v", assistantInput, err)
+	}
+	organizationArtifacts, _, err := service.ListArtifacts(ctx, owner, query.Filter{
+		Query: "organization-policy", ArtifactType: "TEXT", ScanState: "CLEAN", SourceKind: "CONTROL_CENTER", Page: query.Page{Size: 10},
+	})
+	if err != nil || len(organizationArtifacts) != 1 || organizationArtifacts[0].Ref != assistantInput.Ref || organizationArtifacts[0].ProjectRef != "" {
+		t.Fatalf("list organization-scoped artifacts: artifacts=%#v err=%v", organizationArtifacts, err)
 	}
 	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
 	if err != nil {

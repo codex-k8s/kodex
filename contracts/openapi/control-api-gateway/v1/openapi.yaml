@@ -1173,7 +1173,7 @@ paths:
     get:
       tags: [Artifacts]
       operationId: listArtifacts
-      parameters: [{ $ref: '#/components/parameters/RunRefQuery' }, { $ref: '#/components/parameters/ArtifactLifecycleStateQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters: [{ $ref: '#/components/parameters/RunRefQuery' }, { $ref: '#/components/parameters/ArtifactLifecycleStateQuery' }, { $ref: '#/components/parameters/ArtifactTypeQuery' }, { $ref: '#/components/parameters/ArtifactScanStateQuery' }, { $ref: '#/components/parameters/ArtifactSourceKindQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
       responses:
         '200':
           description: Файлы и результаты
@@ -1209,6 +1209,17 @@ paths:
               schema: { $ref: '#/components/schemas/Artifact' }
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/artifacts:
+    get:
+      tags: [Artifacts]
+      operationId: listOrganizationArtifacts
+      parameters: [{ $ref: '#/components/parameters/ArtifactLifecycleStateQuery' }, { $ref: '#/components/parameters/ArtifactTypeQuery' }, { $ref: '#/components/parameters/ArtifactScanStateQuery' }, { $ref: '#/components/parameters/ArtifactSourceKindQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Файлы организационного помощника текущего владельца
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArtifactPage' }
+        default: { $ref: '#/components/responses/Problem' }
     post:
       tags: [Artifacts]
       operationId: uploadOrganizationArtifact
@@ -2137,6 +2148,27 @@ components:
         type: string
         enum: [ACTIVE, DELETED, PURGE_PENDING, PURGED]
         default: ACTIVE
+    ArtifactTypeQuery:
+      name: type
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [TEXT, DOCUMENT, IMAGE]
+    ArtifactScanStateQuery:
+      name: scanState
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED]
+    ArtifactSourceKindQuery:
+      name: sourceKind
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [CONTROL_CENTER, AGENT_RESULT, INTEGRATION_RESULT, KNOWLEDGE_SOURCE, INTERACTION_ATTACHMENT]
     ScheduleRef:
       name: scheduleRef
       in: path
@@ -2213,7 +2245,7 @@ components:
       enum: [ORGANIZATION, PROJECT, RESOURCE_KIND, RESOURCE_INSTANCE]
     AccessResourceKind:
       type: string
-      enum: [ORGANIZATION, PROJECT, AGENT, WORKFLOW, RUN, OWNER_GATE, ARTIFACT, SCHEDULE, INTEGRATION, RUNTIME_ENVIRONMENT, SECRET]
+      enum: [ORGANIZATION, PROJECT, AGENT, WORKFLOW, RUN, SESSION, OWNER_GATE, ARTIFACT, SCHEDULE, INTEGRATION, RUNTIME_ENVIRONMENT, ROLE_IMAGE, SECRET]
     AccessRoleKind:
       type: string
       enum: [SYSTEM, CUSTOM]
@@ -3554,12 +3586,12 @@ components:
     RunInput:
       type: object
       additionalProperties: false
-      required: [projectRef, targetRef, targetType, title, task]
+      required: [projectRef, targetRef, targetType, task]
       properties:
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
         targetRef: { $ref: '#/components/schemas/OpaqueRef' }
         targetType: { type: string, enum: [AGENT, WORKFLOW] }
-        title: { type: string, minLength: 1, maxLength: 240 }
+        title: { type: string, maxLength: 240 }
         task: { type: string, minLength: 1, maxLength: 32768 }
         input: { type: object, maxProperties: 100, additionalProperties: true }
         artifactRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }

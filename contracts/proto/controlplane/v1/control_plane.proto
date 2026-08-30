@@ -443,6 +443,13 @@ enum ArtifactLifecycleState {
   ARTIFACT_LIFECYCLE_STATE_PURGED = 4;
 }
 
+enum ArtifactType {
+  ARTIFACT_TYPE_UNSPECIFIED = 0;
+  ARTIFACT_TYPE_TEXT = 1;
+  ARTIFACT_TYPE_DOCUMENT = 2;
+  ARTIFACT_TYPE_IMAGE = 3;
+}
+
 enum ScheduleState {
   SCHEDULE_STATE_UNSPECIFIED = 0;
   SCHEDULE_STATE_ACTIVE = 1;
@@ -1699,6 +1706,9 @@ message ListArtifactsRequest {
   PageRequest page = 3;
   string query = 4;
   ArtifactLifecycleState lifecycle_state = 5;
+  ArtifactType type = 6;
+  ArtifactScanState scan_state = 7;
+  ArtifactSource source_kind = 8;
 }
 message ListArtifactsResponse {
   repeated Artifact artifacts = 1;

@@ -187,17 +187,20 @@ func (AccessScopeKind) EnumDescriptor() ([]byte, []int) {
 type AccessResourceKind int32
 
 const (
-	AccessResourceKind_ACCESS_RESOURCE_KIND_UNSPECIFIED  AccessResourceKind = 0
-	AccessResourceKind_ACCESS_RESOURCE_KIND_ORGANIZATION AccessResourceKind = 1
-	AccessResourceKind_ACCESS_RESOURCE_KIND_PROJECT      AccessResourceKind = 2
-	AccessResourceKind_ACCESS_RESOURCE_KIND_AGENT        AccessResourceKind = 3
-	AccessResourceKind_ACCESS_RESOURCE_KIND_WORKFLOW     AccessResourceKind = 4
-	AccessResourceKind_ACCESS_RESOURCE_KIND_RUN          AccessResourceKind = 5
-	AccessResourceKind_ACCESS_RESOURCE_KIND_OWNER_GATE   AccessResourceKind = 6
-	AccessResourceKind_ACCESS_RESOURCE_KIND_ARTIFACT     AccessResourceKind = 7
-	AccessResourceKind_ACCESS_RESOURCE_KIND_SCHEDULE     AccessResourceKind = 8
-	AccessResourceKind_ACCESS_RESOURCE_KIND_INTEGRATION  AccessResourceKind = 9
-	AccessResourceKind_ACCESS_RESOURCE_KIND_SECRET       AccessResourceKind = 10
+	AccessResourceKind_ACCESS_RESOURCE_KIND_UNSPECIFIED         AccessResourceKind = 0
+	AccessResourceKind_ACCESS_RESOURCE_KIND_ORGANIZATION        AccessResourceKind = 1
+	AccessResourceKind_ACCESS_RESOURCE_KIND_PROJECT             AccessResourceKind = 2
+	AccessResourceKind_ACCESS_RESOURCE_KIND_AGENT               AccessResourceKind = 3
+	AccessResourceKind_ACCESS_RESOURCE_KIND_WORKFLOW            AccessResourceKind = 4
+	AccessResourceKind_ACCESS_RESOURCE_KIND_RUN                 AccessResourceKind = 5
+	AccessResourceKind_ACCESS_RESOURCE_KIND_OWNER_GATE          AccessResourceKind = 6
+	AccessResourceKind_ACCESS_RESOURCE_KIND_ARTIFACT            AccessResourceKind = 7
+	AccessResourceKind_ACCESS_RESOURCE_KIND_SCHEDULE            AccessResourceKind = 8
+	AccessResourceKind_ACCESS_RESOURCE_KIND_INTEGRATION         AccessResourceKind = 9
+	AccessResourceKind_ACCESS_RESOURCE_KIND_SECRET              AccessResourceKind = 10
+	AccessResourceKind_ACCESS_RESOURCE_KIND_RUNTIME_ENVIRONMENT AccessResourceKind = 11
+	AccessResourceKind_ACCESS_RESOURCE_KIND_ROLE_IMAGE          AccessResourceKind = 12
+	AccessResourceKind_ACCESS_RESOURCE_KIND_SESSION             AccessResourceKind = 13
 )
 
 // Enum value maps for AccessResourceKind.
@@ -214,19 +217,25 @@ var (
 		8:  "ACCESS_RESOURCE_KIND_SCHEDULE",
 		9:  "ACCESS_RESOURCE_KIND_INTEGRATION",
 		10: "ACCESS_RESOURCE_KIND_SECRET",
+		11: "ACCESS_RESOURCE_KIND_RUNTIME_ENVIRONMENT",
+		12: "ACCESS_RESOURCE_KIND_ROLE_IMAGE",
+		13: "ACCESS_RESOURCE_KIND_SESSION",
 	}
 	AccessResourceKind_value = map[string]int32{
-		"ACCESS_RESOURCE_KIND_UNSPECIFIED":  0,
-		"ACCESS_RESOURCE_KIND_ORGANIZATION": 1,
-		"ACCESS_RESOURCE_KIND_PROJECT":      2,
-		"ACCESS_RESOURCE_KIND_AGENT":        3,
-		"ACCESS_RESOURCE_KIND_WORKFLOW":     4,
-		"ACCESS_RESOURCE_KIND_RUN":          5,
-		"ACCESS_RESOURCE_KIND_OWNER_GATE":   6,
-		"ACCESS_RESOURCE_KIND_ARTIFACT":     7,
-		"ACCESS_RESOURCE_KIND_SCHEDULE":     8,
-		"ACCESS_RESOURCE_KIND_INTEGRATION":  9,
-		"ACCESS_RESOURCE_KIND_SECRET":       10,
+		"ACCESS_RESOURCE_KIND_UNSPECIFIED":         0,
+		"ACCESS_RESOURCE_KIND_ORGANIZATION":        1,
+		"ACCESS_RESOURCE_KIND_PROJECT":             2,
+		"ACCESS_RESOURCE_KIND_AGENT":               3,
+		"ACCESS_RESOURCE_KIND_WORKFLOW":            4,
+		"ACCESS_RESOURCE_KIND_RUN":                 5,
+		"ACCESS_RESOURCE_KIND_OWNER_GATE":          6,
+		"ACCESS_RESOURCE_KIND_ARTIFACT":            7,
+		"ACCESS_RESOURCE_KIND_SCHEDULE":            8,
+		"ACCESS_RESOURCE_KIND_INTEGRATION":         9,
+		"ACCESS_RESOURCE_KIND_SECRET":              10,
+		"ACCESS_RESOURCE_KIND_RUNTIME_ENVIRONMENT": 11,
+		"ACCESS_RESOURCE_KIND_ROLE_IMAGE":          12,
+		"ACCESS_RESOURCE_KIND_SESSION":             13,
 	}
 )
 
@@ -3478,7 +3487,7 @@ const file_controlplane_v1_access_proto_rawDesc = "" +
 	"\x1eACCESS_SCOPE_KIND_ORGANIZATION\x10\x01\x12\x1d\n" +
 	"\x19ACCESS_SCOPE_KIND_PROJECT\x10\x02\x12#\n" +
 	"\x1fACCESS_SCOPE_KIND_RESOURCE_KIND\x10\x03\x12'\n" +
-	"#ACCESS_SCOPE_KIND_RESOURCE_INSTANCE\x10\x04*\x96\x03\n" +
+	"#ACCESS_SCOPE_KIND_RESOURCE_INSTANCE\x10\x04*\x8b\x04\n" +
 	"\x12AccessResourceKind\x12$\n" +
 	" ACCESS_RESOURCE_KIND_UNSPECIFIED\x10\x00\x12%\n" +
 	"!ACCESS_RESOURCE_KIND_ORGANIZATION\x10\x01\x12 \n" +
@@ -3491,7 +3500,10 @@ const file_controlplane_v1_access_proto_rawDesc = "" +
 	"\x1dACCESS_RESOURCE_KIND_SCHEDULE\x10\b\x12$\n" +
 	" ACCESS_RESOURCE_KIND_INTEGRATION\x10\t\x12\x1f\n" +
 	"\x1bACCESS_RESOURCE_KIND_SECRET\x10\n" +
-	"*l\n" +
+	"\x12,\n" +
+	"(ACCESS_RESOURCE_KIND_RUNTIME_ENVIRONMENT\x10\v\x12#\n" +
+	"\x1fACCESS_RESOURCE_KIND_ROLE_IMAGE\x10\f\x12 \n" +
+	"\x1cACCESS_RESOURCE_KIND_SESSION\x10\r*l\n" +
 	"\x0eAccessRoleKind\x12 \n" +
 	"\x1cACCESS_ROLE_KIND_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17ACCESS_ROLE_KIND_SYSTEM\x10\x01\x12\x1b\n" +

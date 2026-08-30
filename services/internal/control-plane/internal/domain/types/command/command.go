@@ -144,10 +144,10 @@ type WorkflowInput struct {
 	Draft                                               *entity.WorkflowVersion
 }
 type LaunchRunInput struct {
-	ProjectRef, Title, Task, SessionRef, Source string
-	Target                                      entity.RunTarget
-	Input                                       map[string]any
-	ArtifactRefs                                []string
+	ProjectRef, Title, TitleSource, Task, SessionRef, Source string
+	Target                                                   entity.RunTarget
+	Input                                                    map[string]any
+	ArtifactRefs                                             []string
 }
 type SessionTurnInput struct {
 	SessionRef, RunRef, NodeRef, Task string

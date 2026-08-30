@@ -8,6 +8,7 @@ type Page struct {
 
 type Filter struct {
 	ProjectRef, ResourceRef, Query, State, Category, Action, Outcome string
+	ArtifactType, ScanState, SourceKind                              string
 	States                                                           []string
 	AfterSequence                                                    int64
 	Limit                                                            int32

@@ -299,11 +299,11 @@ func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope sc
 	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey); err != nil {
 		return artifactPurgeReceipt{}, errs.ErrUnavailable
 	}
-	_, target, err := repository.resolveCommandTarget(ctx, tx, scope, "artifact.manage", "ARTIFACT", artifactRef, "")
+	_, target, err := repository.resolveCommandTarget(ctx, tx, scope, "artifact.purge", "ARTIFACT", artifactRef, "")
 	if err != nil {
 		return artifactPurgeReceipt{}, err
 	}
-	if err := repository.requireAccess(ctx, tx, scope, "artifact.manage", target); err != nil {
+	if err := repository.requireAccess(ctx, tx, scope, "artifact.purge", target); err != nil {
 		return artifactPurgeReceipt{}, errs.ErrNotFound
 	}
 	var storedDigest string

@@ -30,15 +30,22 @@ var definitions = []entity.PermissionDefinition{
 	permission("workflow.launch", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"WORKFLOW"}, false),
 	permission("run.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"RUN"}, false),
 	permission("run.cancel.own", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"RUN"}, true),
-	permission("run.cancel.any", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"RUN"}, false),
+	permission("run.cancel", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"RUN"}, false),
+	permission("session.cancel", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"SESSION"}, false),
+	permission("prompt.full.view", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"RUN", "SESSION"}, false),
 	permission("gate.resolve", "APPROVE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"OWNER_GATE"}, false),
 	permission("artifact.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("artifact.download", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
-	permission("artifact.manage", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
+	permission("artifact.bind", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
+	permission("artifact.delete", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
+	permission("artifact.restore", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
+	permission("artifact.purge", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("schedule.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"SCHEDULE"}, false),
 	permission("schedule.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"SCHEDULE"}, false),
 	permission("integration.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"INTEGRATION"}, false),
 	permission("integration.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"INTEGRATION"}, false),
+	permission("image.build", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "ROLE_IMAGE"}, false),
+	permission("image.promote", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ROLE_IMAGE"}, false),
 	permission("environment.privileged.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "RUNTIME_ENVIRONMENT"}, false),
 	permission("secret.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "SECRET"}, false),
 	permission("secret.create", "WRITE", []string{"ORGANIZATION", "PROJECT"}, []string{"PROJECT"}, false),
@@ -254,7 +261,7 @@ func knownScope(value string) bool {
 func knownResourceKind(value string) bool {
 	return value == "ORGANIZATION" || value == "PROJECT" || value == "AGENT" || value == "WORKFLOW" || value == "RUN" ||
 		value == "OWNER_GATE" || value == "ARTIFACT" || value == "SCHEDULE" || value == "INTEGRATION" ||
-		value == "RUNTIME_ENVIRONMENT" || value == "SECRET"
+		value == "RUNTIME_ENVIRONMENT" || value == "ROLE_IMAGE" || value == "SESSION" || value == "SECRET"
 }
 func contains(values []string, expected string) bool {
 	for _, value := range values {

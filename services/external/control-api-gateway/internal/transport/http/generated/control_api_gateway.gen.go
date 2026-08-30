@@ -98,10 +98,12 @@ const (
 	AccessResourceKindORGANIZATION       AccessResourceKind = "ORGANIZATION"
 	AccessResourceKindOWNERGATE          AccessResourceKind = "OWNER_GATE"
 	AccessResourceKindPROJECT            AccessResourceKind = "PROJECT"
+	AccessResourceKindROLEIMAGE          AccessResourceKind = "ROLE_IMAGE"
 	AccessResourceKindRUN                AccessResourceKind = "RUN"
 	AccessResourceKindRUNTIMEENVIRONMENT AccessResourceKind = "RUNTIME_ENVIRONMENT"
 	AccessResourceKindSCHEDULE           AccessResourceKind = "SCHEDULE"
 	AccessResourceKindSECRET             AccessResourceKind = "SECRET"
+	AccessResourceKindSESSION            AccessResourceKind = "SESSION"
 	AccessResourceKindWORKFLOW           AccessResourceKind = "WORKFLOW"
 )
 
@@ -120,6 +122,8 @@ func (e AccessResourceKind) Valid() bool {
 		return true
 	case AccessResourceKindPROJECT:
 		return true
+	case AccessResourceKindROLEIMAGE:
+		return true
 	case AccessResourceKindRUN:
 		return true
 	case AccessResourceKindRUNTIMEENVIRONMENT:
@@ -127,6 +131,8 @@ func (e AccessResourceKind) Valid() bool {
 	case AccessResourceKindSCHEDULE:
 		return true
 	case AccessResourceKindSECRET:
+		return true
+	case AccessResourceKindSESSION:
 		return true
 	case AccessResourceKindWORKFLOW:
 		return true
@@ -2243,16 +2249,16 @@ func (e RunTargetType) Valid() bool {
 
 // Defines values for RunToolCallState.
 const (
-	FAILED    RunToolCallState = "FAILED"
-	SUCCEEDED RunToolCallState = "SUCCEEDED"
+	RunToolCallStateFAILED    RunToolCallState = "FAILED"
+	RunToolCallStateSUCCEEDED RunToolCallState = "SUCCEEDED"
 )
 
 // Valid indicates whether the value is a known member of the RunToolCallState enum.
 func (e RunToolCallState) Valid() bool {
 	switch e {
-	case FAILED:
+	case RunToolCallStateFAILED:
 		return true
-	case SUCCEEDED:
+	case RunToolCallStateSUCCEEDED:
 		return true
 	default:
 		return false
@@ -2792,28 +2798,28 @@ func (e WorkflowInputFieldValueType) Valid() bool {
 
 // Defines values for WorkflowInputFieldInputValueType.
 const (
-	BOOLEAN  WorkflowInputFieldInputValueType = "BOOLEAN"
-	DATE     WorkflowInputFieldInputValueType = "DATE"
-	LONGTEXT WorkflowInputFieldInputValueType = "LONG_TEXT"
-	NUMBER   WorkflowInputFieldInputValueType = "NUMBER"
-	SELECT   WorkflowInputFieldInputValueType = "SELECT"
-	TEXT     WorkflowInputFieldInputValueType = "TEXT"
+	WorkflowInputFieldInputValueTypeBOOLEAN  WorkflowInputFieldInputValueType = "BOOLEAN"
+	WorkflowInputFieldInputValueTypeDATE     WorkflowInputFieldInputValueType = "DATE"
+	WorkflowInputFieldInputValueTypeLONGTEXT WorkflowInputFieldInputValueType = "LONG_TEXT"
+	WorkflowInputFieldInputValueTypeNUMBER   WorkflowInputFieldInputValueType = "NUMBER"
+	WorkflowInputFieldInputValueTypeSELECT   WorkflowInputFieldInputValueType = "SELECT"
+	WorkflowInputFieldInputValueTypeTEXT     WorkflowInputFieldInputValueType = "TEXT"
 )
 
 // Valid indicates whether the value is a known member of the WorkflowInputFieldInputValueType enum.
 func (e WorkflowInputFieldInputValueType) Valid() bool {
 	switch e {
-	case BOOLEAN:
+	case WorkflowInputFieldInputValueTypeBOOLEAN:
 		return true
-	case DATE:
+	case WorkflowInputFieldInputValueTypeDATE:
 		return true
-	case LONGTEXT:
+	case WorkflowInputFieldInputValueTypeLONGTEXT:
 		return true
-	case NUMBER:
+	case WorkflowInputFieldInputValueTypeNUMBER:
 		return true
-	case SELECT:
+	case WorkflowInputFieldInputValueTypeSELECT:
 		return true
-	case TEXT:
+	case WorkflowInputFieldInputValueTypeTEXT:
 		return true
 	default:
 		return false
@@ -2892,6 +2898,180 @@ func (e ArtifactLifecycleStateQuery) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactScanStateQuery.
+const (
+	ArtifactScanStateQueryCLEAN       ArtifactScanStateQuery = "CLEAN"
+	ArtifactScanStateQueryFAILED      ArtifactScanStateQuery = "FAILED"
+	ArtifactScanStateQueryPENDING     ArtifactScanStateQuery = "PENDING"
+	ArtifactScanStateQueryQUARANTINED ArtifactScanStateQuery = "QUARANTINED"
+	ArtifactScanStateQuerySCANNING    ArtifactScanStateQuery = "SCANNING"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactScanStateQuery enum.
+func (e ArtifactScanStateQuery) Valid() bool {
+	switch e {
+	case ArtifactScanStateQueryCLEAN:
+		return true
+	case ArtifactScanStateQueryFAILED:
+		return true
+	case ArtifactScanStateQueryPENDING:
+		return true
+	case ArtifactScanStateQueryQUARANTINED:
+		return true
+	case ArtifactScanStateQuerySCANNING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactSourceKindQuery.
+const (
+	ArtifactSourceKindQueryAGENTRESULT           ArtifactSourceKindQuery = "AGENT_RESULT"
+	ArtifactSourceKindQueryCONTROLCENTER         ArtifactSourceKindQuery = "CONTROL_CENTER"
+	ArtifactSourceKindQueryINTEGRATIONRESULT     ArtifactSourceKindQuery = "INTEGRATION_RESULT"
+	ArtifactSourceKindQueryINTERACTIONATTACHMENT ArtifactSourceKindQuery = "INTERACTION_ATTACHMENT"
+	ArtifactSourceKindQueryKNOWLEDGESOURCE       ArtifactSourceKindQuery = "KNOWLEDGE_SOURCE"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactSourceKindQuery enum.
+func (e ArtifactSourceKindQuery) Valid() bool {
+	switch e {
+	case ArtifactSourceKindQueryAGENTRESULT:
+		return true
+	case ArtifactSourceKindQueryCONTROLCENTER:
+		return true
+	case ArtifactSourceKindQueryINTEGRATIONRESULT:
+		return true
+	case ArtifactSourceKindQueryINTERACTIONATTACHMENT:
+		return true
+	case ArtifactSourceKindQueryKNOWLEDGESOURCE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactTypeQuery.
+const (
+	ArtifactTypeQueryDOCUMENT ArtifactTypeQuery = "DOCUMENT"
+	ArtifactTypeQueryIMAGE    ArtifactTypeQuery = "IMAGE"
+	ArtifactTypeQueryTEXT     ArtifactTypeQuery = "TEXT"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactTypeQuery enum.
+func (e ArtifactTypeQuery) Valid() bool {
+	switch e {
+	case ArtifactTypeQueryDOCUMENT:
+		return true
+	case ArtifactTypeQueryIMAGE:
+		return true
+	case ArtifactTypeQueryTEXT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListOrganizationArtifactsParamsLifecycleState.
+const (
+	ListOrganizationArtifactsParamsLifecycleStateACTIVE       ListOrganizationArtifactsParamsLifecycleState = "ACTIVE"
+	ListOrganizationArtifactsParamsLifecycleStateDELETED      ListOrganizationArtifactsParamsLifecycleState = "DELETED"
+	ListOrganizationArtifactsParamsLifecycleStatePURGED       ListOrganizationArtifactsParamsLifecycleState = "PURGED"
+	ListOrganizationArtifactsParamsLifecycleStatePURGEPENDING ListOrganizationArtifactsParamsLifecycleState = "PURGE_PENDING"
+)
+
+// Valid indicates whether the value is a known member of the ListOrganizationArtifactsParamsLifecycleState enum.
+func (e ListOrganizationArtifactsParamsLifecycleState) Valid() bool {
+	switch e {
+	case ListOrganizationArtifactsParamsLifecycleStateACTIVE:
+		return true
+	case ListOrganizationArtifactsParamsLifecycleStateDELETED:
+		return true
+	case ListOrganizationArtifactsParamsLifecycleStatePURGED:
+		return true
+	case ListOrganizationArtifactsParamsLifecycleStatePURGEPENDING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListOrganizationArtifactsParamsType.
+const (
+	ListOrganizationArtifactsParamsTypeDOCUMENT ListOrganizationArtifactsParamsType = "DOCUMENT"
+	ListOrganizationArtifactsParamsTypeIMAGE    ListOrganizationArtifactsParamsType = "IMAGE"
+	ListOrganizationArtifactsParamsTypeTEXT     ListOrganizationArtifactsParamsType = "TEXT"
+)
+
+// Valid indicates whether the value is a known member of the ListOrganizationArtifactsParamsType enum.
+func (e ListOrganizationArtifactsParamsType) Valid() bool {
+	switch e {
+	case ListOrganizationArtifactsParamsTypeDOCUMENT:
+		return true
+	case ListOrganizationArtifactsParamsTypeIMAGE:
+		return true
+	case ListOrganizationArtifactsParamsTypeTEXT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListOrganizationArtifactsParamsScanState.
+const (
+	ListOrganizationArtifactsParamsScanStateCLEAN       ListOrganizationArtifactsParamsScanState = "CLEAN"
+	ListOrganizationArtifactsParamsScanStateFAILED      ListOrganizationArtifactsParamsScanState = "FAILED"
+	ListOrganizationArtifactsParamsScanStatePENDING     ListOrganizationArtifactsParamsScanState = "PENDING"
+	ListOrganizationArtifactsParamsScanStateQUARANTINED ListOrganizationArtifactsParamsScanState = "QUARANTINED"
+	ListOrganizationArtifactsParamsScanStateSCANNING    ListOrganizationArtifactsParamsScanState = "SCANNING"
+)
+
+// Valid indicates whether the value is a known member of the ListOrganizationArtifactsParamsScanState enum.
+func (e ListOrganizationArtifactsParamsScanState) Valid() bool {
+	switch e {
+	case ListOrganizationArtifactsParamsScanStateCLEAN:
+		return true
+	case ListOrganizationArtifactsParamsScanStateFAILED:
+		return true
+	case ListOrganizationArtifactsParamsScanStatePENDING:
+		return true
+	case ListOrganizationArtifactsParamsScanStateQUARANTINED:
+		return true
+	case ListOrganizationArtifactsParamsScanStateSCANNING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListOrganizationArtifactsParamsSourceKind.
+const (
+	ListOrganizationArtifactsParamsSourceKindAGENTRESULT           ListOrganizationArtifactsParamsSourceKind = "AGENT_RESULT"
+	ListOrganizationArtifactsParamsSourceKindCONTROLCENTER         ListOrganizationArtifactsParamsSourceKind = "CONTROL_CENTER"
+	ListOrganizationArtifactsParamsSourceKindINTEGRATIONRESULT     ListOrganizationArtifactsParamsSourceKind = "INTEGRATION_RESULT"
+	ListOrganizationArtifactsParamsSourceKindINTERACTIONATTACHMENT ListOrganizationArtifactsParamsSourceKind = "INTERACTION_ATTACHMENT"
+	ListOrganizationArtifactsParamsSourceKindKNOWLEDGESOURCE       ListOrganizationArtifactsParamsSourceKind = "KNOWLEDGE_SOURCE"
+)
+
+// Valid indicates whether the value is a known member of the ListOrganizationArtifactsParamsSourceKind enum.
+func (e ListOrganizationArtifactsParamsSourceKind) Valid() bool {
+	switch e {
+	case ListOrganizationArtifactsParamsSourceKindAGENTRESULT:
+		return true
+	case ListOrganizationArtifactsParamsSourceKindCONTROLCENTER:
+		return true
+	case ListOrganizationArtifactsParamsSourceKindINTEGRATIONRESULT:
+		return true
+	case ListOrganizationArtifactsParamsSourceKindINTERACTIONATTACHMENT:
+		return true
+	case ListOrganizationArtifactsParamsSourceKindKNOWLEDGESOURCE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DownloadArtifactParamsPurpose.
 const (
 	DOWNLOAD DownloadArtifactParamsPurpose = "DOWNLOAD"
@@ -2912,22 +3092,97 @@ func (e DownloadArtifactParamsPurpose) Valid() bool {
 
 // Defines values for ListArtifactsParamsLifecycleState.
 const (
-	ACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
-	DELETED      ListArtifactsParamsLifecycleState = "DELETED"
-	PURGED       ListArtifactsParamsLifecycleState = "PURGED"
-	PURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
+	ListArtifactsParamsLifecycleStateACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
+	ListArtifactsParamsLifecycleStateDELETED      ListArtifactsParamsLifecycleState = "DELETED"
+	ListArtifactsParamsLifecycleStatePURGED       ListArtifactsParamsLifecycleState = "PURGED"
+	ListArtifactsParamsLifecycleStatePURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsLifecycleState enum.
 func (e ListArtifactsParamsLifecycleState) Valid() bool {
 	switch e {
-	case ACTIVE:
+	case ListArtifactsParamsLifecycleStateACTIVE:
 		return true
-	case DELETED:
+	case ListArtifactsParamsLifecycleStateDELETED:
 		return true
-	case PURGED:
+	case ListArtifactsParamsLifecycleStatePURGED:
 		return true
-	case PURGEPENDING:
+	case ListArtifactsParamsLifecycleStatePURGEPENDING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListArtifactsParamsType.
+const (
+	ListArtifactsParamsTypeDOCUMENT ListArtifactsParamsType = "DOCUMENT"
+	ListArtifactsParamsTypeIMAGE    ListArtifactsParamsType = "IMAGE"
+	ListArtifactsParamsTypeTEXT     ListArtifactsParamsType = "TEXT"
+)
+
+// Valid indicates whether the value is a known member of the ListArtifactsParamsType enum.
+func (e ListArtifactsParamsType) Valid() bool {
+	switch e {
+	case ListArtifactsParamsTypeDOCUMENT:
+		return true
+	case ListArtifactsParamsTypeIMAGE:
+		return true
+	case ListArtifactsParamsTypeTEXT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListArtifactsParamsScanState.
+const (
+	ListArtifactsParamsScanStateCLEAN       ListArtifactsParamsScanState = "CLEAN"
+	ListArtifactsParamsScanStateFAILED      ListArtifactsParamsScanState = "FAILED"
+	ListArtifactsParamsScanStatePENDING     ListArtifactsParamsScanState = "PENDING"
+	ListArtifactsParamsScanStateQUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
+	ListArtifactsParamsScanStateSCANNING    ListArtifactsParamsScanState = "SCANNING"
+)
+
+// Valid indicates whether the value is a known member of the ListArtifactsParamsScanState enum.
+func (e ListArtifactsParamsScanState) Valid() bool {
+	switch e {
+	case ListArtifactsParamsScanStateCLEAN:
+		return true
+	case ListArtifactsParamsScanStateFAILED:
+		return true
+	case ListArtifactsParamsScanStatePENDING:
+		return true
+	case ListArtifactsParamsScanStateQUARANTINED:
+		return true
+	case ListArtifactsParamsScanStateSCANNING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListArtifactsParamsSourceKind.
+const (
+	AGENTRESULT           ListArtifactsParamsSourceKind = "AGENT_RESULT"
+	CONTROLCENTER         ListArtifactsParamsSourceKind = "CONTROL_CENTER"
+	INTEGRATIONRESULT     ListArtifactsParamsSourceKind = "INTEGRATION_RESULT"
+	INTERACTIONATTACHMENT ListArtifactsParamsSourceKind = "INTERACTION_ATTACHMENT"
+	KNOWLEDGESOURCE       ListArtifactsParamsSourceKind = "KNOWLEDGE_SOURCE"
+)
+
+// Valid indicates whether the value is a known member of the ListArtifactsParamsSourceKind enum.
+func (e ListArtifactsParamsSourceKind) Valid() bool {
+	switch e {
+	case AGENTRESULT:
+		return true
+	case CONTROLCENTER:
+		return true
+	case INTEGRATIONRESULT:
+		return true
+	case INTERACTIONATTACHMENT:
+		return true
+	case KNOWLEDGESOURCE:
 		return true
 	default:
 		return false
@@ -4284,7 +4539,7 @@ type RunInput struct {
 	TargetRef    OpaqueRef               `json:"targetRef"`
 	TargetType   RunInputTargetType      `json:"targetType"`
 	Task         string                  `json:"task"`
-	Title        string                  `json:"title"`
+	Title        *string                 `json:"title,omitempty"`
 }
 
 // RunInputTargetType defines model for RunInput.TargetType.
@@ -4911,6 +5166,15 @@ type ArtifactLifecycleStateQuery string
 // ArtifactRef defines model for ArtifactRef.
 type ArtifactRef = OpaqueRef
 
+// ArtifactScanStateQuery defines model for ArtifactScanStateQuery.
+type ArtifactScanStateQuery string
+
+// ArtifactSourceKindQuery defines model for ArtifactSourceKindQuery.
+type ArtifactSourceKindQuery string
+
+// ArtifactTypeQuery defines model for ArtifactTypeQuery.
+type ArtifactTypeQuery string
+
 // ConnectionRef defines model for ConnectionRef.
 type ConnectionRef = OpaqueRef
 
@@ -5182,6 +5446,29 @@ type BindAgentRuntimeEnvironmentParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ListOrganizationArtifactsParams defines parameters for ListOrganizationArtifacts.
+type ListOrganizationArtifactsParams struct {
+	LifecycleState *ListOrganizationArtifactsParamsLifecycleState `form:"lifecycleState,omitempty" json:"lifecycleState,omitempty"`
+	Type           *ListOrganizationArtifactsParamsType           `form:"type,omitempty" json:"type,omitempty"`
+	ScanState      *ListOrganizationArtifactsParamsScanState      `form:"scanState,omitempty" json:"scanState,omitempty"`
+	SourceKind     *ListOrganizationArtifactsParamsSourceKind     `form:"sourceKind,omitempty" json:"sourceKind,omitempty"`
+	Query          *Query                                         `form:"query,omitempty" json:"query,omitempty"`
+	PageSize       *PageSize                                      `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken      *PageToken                                     `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ListOrganizationArtifactsParamsLifecycleState defines parameters for ListOrganizationArtifacts.
+type ListOrganizationArtifactsParamsLifecycleState string
+
+// ListOrganizationArtifactsParamsType defines parameters for ListOrganizationArtifacts.
+type ListOrganizationArtifactsParamsType string
+
+// ListOrganizationArtifactsParamsScanState defines parameters for ListOrganizationArtifacts.
+type ListOrganizationArtifactsParamsScanState string
+
+// ListOrganizationArtifactsParamsSourceKind defines parameters for ListOrganizationArtifacts.
+type ListOrganizationArtifactsParamsSourceKind string
+
 // UploadOrganizationArtifactParams defines parameters for UploadOrganizationArtifact.
 type UploadOrganizationArtifactParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -5417,6 +5704,9 @@ type CreateAgentParams struct {
 type ListArtifactsParams struct {
 	RunRef         *RunRefQuery                       `form:"runRef,omitempty" json:"runRef,omitempty"`
 	LifecycleState *ListArtifactsParamsLifecycleState `form:"lifecycleState,omitempty" json:"lifecycleState,omitempty"`
+	Type           *ListArtifactsParamsType           `form:"type,omitempty" json:"type,omitempty"`
+	ScanState      *ListArtifactsParamsScanState      `form:"scanState,omitempty" json:"scanState,omitempty"`
+	SourceKind     *ListArtifactsParamsSourceKind     `form:"sourceKind,omitempty" json:"sourceKind,omitempty"`
 	Query          *Query                             `form:"query,omitempty" json:"query,omitempty"`
 	PageSize       *PageSize                          `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken      *PageToken                         `form:"pageToken,omitempty" json:"pageToken,omitempty"`
@@ -5424,6 +5714,15 @@ type ListArtifactsParams struct {
 
 // ListArtifactsParamsLifecycleState defines parameters for ListArtifacts.
 type ListArtifactsParamsLifecycleState string
+
+// ListArtifactsParamsType defines parameters for ListArtifacts.
+type ListArtifactsParamsType string
+
+// ListArtifactsParamsScanState defines parameters for ListArtifacts.
+type ListArtifactsParamsScanState string
+
+// ListArtifactsParamsSourceKind defines parameters for ListArtifacts.
+type ListArtifactsParamsSourceKind string
 
 // UploadArtifactParams defines parameters for UploadArtifact.
 type UploadArtifactParams struct {
@@ -5962,6 +6261,9 @@ type ServerInterface interface {
 
 	// (PUT /api/v1/agents/{agentRef}/runtime-environment-binding)
 	BindAgentRuntimeEnvironment(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params BindAgentRuntimeEnvironmentParams)
+
+	// (GET /api/v1/artifacts)
+	ListOrganizationArtifacts(w http.ResponseWriter, r *http.Request, params ListOrganizationArtifactsParams)
 
 	// (POST /api/v1/artifacts)
 	UploadOrganizationArtifact(w http.ResponseWriter, r *http.Request, params UploadOrganizationArtifactParams)
@@ -8941,6 +9243,123 @@ func (siw *ServerInterfaceWrapper) BindAgentRuntimeEnvironment(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// ListOrganizationArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganizationArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganizationArtifactsParams
+
+	// ------------- Optional query parameter "lifecycleState" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "lifecycleState", r.URL.Query(), &params.LifecycleState, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lifecycleState"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lifecycleState", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "scanState" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scanState", r.URL.Query(), &params.ScanState, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scanState"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scanState", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sourceKind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sourceKind", r.URL.Query(), &params.SourceKind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sourceKind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceKind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganizationArtifacts(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // UploadOrganizationArtifact operation middleware
 func (siw *ServerInterfaceWrapper) UploadOrganizationArtifact(w http.ResponseWriter, r *http.Request) {
 
@@ -11665,6 +12084,45 @@ func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lifecycleState"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lifecycleState", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "scanState" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scanState", r.URL.Query(), &params.ScanState, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scanState"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scanState", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sourceKind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sourceKind", r.URL.Query(), &params.SourceKind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sourceKind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceKind", Err: err})
 		}
 		return
 	}
@@ -15591,6 +16049,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-configuration", wrapper.PublishAgentRuntimeConfiguration)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-configuration/versions", wrapper.ListAgentRuntimeConfigurationVersions)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-environment-binding", wrapper.BindAgentRuntimeEnvironment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts", wrapper.ListOrganizationArtifacts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/artifacts", wrapper.UploadOrganizationArtifact)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}", wrapper.DeleteArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}", wrapper.GetArtifact)

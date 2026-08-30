@@ -54,11 +54,11 @@ func (repository *Repository) validateAvatarArtifact(
 	if err != nil || canonical == "" {
 		return canonical, err
 	}
-	_, target, err := repository.resolveCommandTarget(ctx, tx, current, "artifact.manage", "ARTIFACT", artifactRef, "")
+	_, target, err := repository.resolveCommandTarget(ctx, tx, current, "artifact.bind", "ARTIFACT", artifactRef, "")
 	if err != nil {
 		return "", errs.ErrInvalid
 	}
-	if err := repository.requireAccess(ctx, tx, current, "artifact.manage", target); err != nil {
+	if err := repository.requireAccess(ctx, tx, current, "artifact.bind", target); err != nil {
 		return "", errs.ErrNotFound
 	}
 	var storedRef string

@@ -54,7 +54,7 @@ func TestWorkflowDraftPreservesBoundedInputFields(t *testing.T) {
 	key := "priority"
 	fields := []generated.WorkflowInputFieldInput{{
 		Key: &key, Label: "Приоритет", Description: "Выберите срочность",
-		ValueType: generated.SELECT, Required: true, Options: []string{"Обычный", "Высокий"},
+		ValueType: generated.WorkflowInputFieldInputValueTypeSELECT, Required: true, Options: []string{"Обычный", "Высокий"},
 	}}
 	draft := workflowDraft(generated.WorkflowInput{
 		Name: "Обработка обращения", Purpose: "Подготовить ответ", CoordinatorAgentRef: "agt-coordinator",

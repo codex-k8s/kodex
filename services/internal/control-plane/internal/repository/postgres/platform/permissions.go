@@ -96,7 +96,7 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "run.view", "RUN", payload.RunRef, "")
 	case command.RunCommandInput:
-		permission := "run.cancel.any"
+		permission := "run.cancel"
 		if input.Kind == command.RetryRun {
 			permission = "run.view"
 		}
@@ -104,9 +104,20 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 	case command.GateResolutionInput:
 		return repository.resolveCommandTarget(ctx, tx, current, "gate.resolve", "OWNER_GATE", payload.GateRef, "")
 	case command.ArtifactBindingInput:
-		return repository.resolveCommandTarget(ctx, tx, current, "artifact.manage", "ARTIFACT", payload.ArtifactRef, "")
+		return repository.resolveCommandTarget(ctx, tx, current, "artifact.bind", "ARTIFACT", payload.ArtifactRef, "")
 	case command.ArtifactLifecycleInput:
-		return repository.resolveCommandTarget(ctx, tx, current, "artifact.manage", "ARTIFACT", payload.ArtifactRef, "")
+		permission := ""
+		switch input.Kind {
+		case command.DeleteArtifact:
+			permission = "artifact.delete"
+		case command.RestoreArtifact:
+			permission = "artifact.restore"
+		case command.PurgeArtifact:
+			permission = "artifact.purge"
+		default:
+			return "", resolvedAccessTarget{}, errs.ErrInvalid
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, permission, "ARTIFACT", payload.ArtifactRef, "")
 	case command.ScheduleInput:
 		if input.Kind == command.CreateSchedule {
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)

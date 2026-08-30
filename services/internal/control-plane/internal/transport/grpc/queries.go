@@ -366,7 +366,22 @@ func (server *Server) ListArtifacts(ctx context.Context, request *controlplanev1
 	if request.GetLifecycleState() != controlplanev1.ArtifactLifecycleState_ARTIFACT_LIFECYCLE_STATE_UNSPECIFIED {
 		lifecycleState = enumSuffix(request.GetLifecycleState(), "ARTIFACT_LIFECYCLE_STATE_")
 	}
-	items, next, err := server.service.ListArtifacts(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), ResourceRef: request.GetRunRef(), Query: request.GetQuery(), State: lifecycleState, Page: page(request.GetPage())})
+	artifactType := ""
+	if request.GetType() != controlplanev1.ArtifactType_ARTIFACT_TYPE_UNSPECIFIED {
+		artifactType = enumSuffix(request.GetType(), "ARTIFACT_TYPE_")
+	}
+	scanState := ""
+	if request.GetScanState() != controlplanev1.ArtifactScanState_ARTIFACT_SCAN_STATE_UNSPECIFIED {
+		scanState = enumSuffix(request.GetScanState(), "ARTIFACT_SCAN_STATE_")
+	}
+	sourceKind := ""
+	if request.GetSourceKind() != controlplanev1.ArtifactSource_ARTIFACT_SOURCE_UNSPECIFIED {
+		sourceKind = enumSuffix(request.GetSourceKind(), "ARTIFACT_SOURCE_")
+	}
+	items, next, err := server.service.ListArtifacts(ctx, p, query.Filter{
+		ProjectRef: request.GetProjectRef(), ResourceRef: request.GetRunRef(), Query: request.GetQuery(),
+		State: lifecycleState, ArtifactType: artifactType, ScanState: scanState, SourceKind: sourceKind, Page: page(request.GetPage()),
+	})
 	if err != nil {
 		return nil, transportError(err)
 	}

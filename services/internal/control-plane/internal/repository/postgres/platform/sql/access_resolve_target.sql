@@ -40,6 +40,18 @@ FROM (
   WHERE @resource_kind = 'RUN' AND run.organization_id = @organization_id::uuid
     AND run.ref = @resource_ref
   UNION ALL
+  SELECT session.id::text, COALESCE(project.id::text, ''), COALESCE(project.ref, ''), owner_subject.ref,
+         jsonb_strip_nulls(jsonb_build_object(
+           'PROJECT', project.ref,
+           'AGENT', CASE WHEN session.target_type = 'AGENT' THEN session.target_ref END,
+           'WORKFLOW', CASE WHEN session.target_type = 'WORKFLOW' THEN session.target_ref END
+         ))
+  FROM control_plane.sessions session
+  LEFT JOIN control_plane.projects project ON project.id = session.project_id
+  JOIN control_plane.subjects owner_subject ON owner_subject.id = session.created_by
+  WHERE @resource_kind = 'SESSION' AND session.organization_id = @organization_id::uuid
+    AND session.ref = @resource_ref
+  UNION ALL
   SELECT gate.id::text, p.id::text, p.ref, owner_subject.ref,
          jsonb_build_object('PROJECT', p.ref, 'RUN', run.ref)
   FROM control_plane.owner_gates gate
@@ -76,6 +88,14 @@ FROM (
   JOIN control_plane.subjects owner_subject ON owner_subject.id = connection.created_by
   WHERE @resource_kind = 'INTEGRATION' AND connection.organization_id = @organization_id::uuid
     AND connection.ref = @resource_ref
+  UNION ALL
+  SELECT recipe.id::text, project.id::text, project.ref, owner_subject.ref,
+         jsonb_build_object('PROJECT', project.ref)
+  FROM control_plane.role_image_recipes recipe
+  JOIN control_plane.projects project ON project.id = recipe.project_id
+  JOIN control_plane.subjects owner_subject ON owner_subject.id = recipe.created_by
+  WHERE @resource_kind = 'ROLE_IMAGE' AND recipe.organization_id = @organization_id::uuid
+    AND recipe.ref = @resource_ref AND recipe.state = 'ACTIVE'
   UNION ALL
   SELECT environment.id::text, project.id::text, project.ref, owner_subject.ref,
          jsonb_build_object('PROJECT', project.ref)

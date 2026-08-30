@@ -88,6 +88,37 @@ func TestEnvironmentPrivilegedManageIsScopedToProjectAndEnvironment(t *testing.T
 	}
 }
 
+func TestSensitivePermissionsAreSeparatedByExactResource(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		permission string
+		resource   string
+	}{
+		{permission: "run.cancel", resource: "RUN"},
+		{permission: "session.cancel", resource: "SESSION"},
+		{permission: "prompt.full.view", resource: "SESSION"},
+		{permission: "artifact.delete", resource: "ARTIFACT"},
+		{permission: "artifact.restore", resource: "ARTIFACT"},
+		{permission: "artifact.purge", resource: "ARTIFACT"},
+		{permission: "image.build", resource: "ROLE_IMAGE"},
+		{permission: "image.promote", resource: "ROLE_IMAGE"},
+	}
+	for _, test := range tests {
+		t.Run(test.permission, func(t *testing.T) {
+			definition, present := Permission(test.permission)
+			if !present || !contains(definition.ResourceKinds, test.resource) {
+				t.Fatalf("permission %q does not cover %q: %#v", test.permission, test.resource, definition)
+			}
+		})
+	}
+	if _, present := Permission("run.cancel.any"); present {
+		t.Fatal("broad run.cancel.any permission must not remain in the registry")
+	}
+	if _, present := Permission("artifact.manage"); present {
+		t.Fatal("broad artifact.manage permission must not remain in the registry")
+	}
+}
+
 func TestValidateScopeRequiresProjectForProjectOwnedResourceInstance(t *testing.T) {
 	if err := ValidateScope(entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: "agt_a"}); err == nil {
 		t.Fatal("project-owned agent scope without project was accepted")
