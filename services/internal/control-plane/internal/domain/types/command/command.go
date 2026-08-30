@@ -23,6 +23,8 @@ const (
 	UpdateAgent                   Kind = "UPDATE_AGENT"
 	SetAgentEnabled               Kind = "SET_AGENT_ENABLED"
 	ArchiveAgent                  Kind = "ARCHIVE_AGENT"
+	SetAgentAvatar                Kind = "SET_AGENT_AVATAR"
+	RemoveAgentAvatar             Kind = "REMOVE_AGENT_AVATAR"
 	CreateInstructions            Kind = "CREATE_INSTRUCTION_DRAFT"
 	ValidateInstructions          Kind = "VALIDATE_INSTRUCTION_DRAFT"
 	PublishInstructions           Kind = "PUBLISH_INSTRUCTION_DRAFT"
@@ -35,7 +37,10 @@ const (
 	CreateRuntimeEnvironment      Kind = "CREATE_RUNTIME_ENVIRONMENT_SET"
 	PublishRuntimeEnvironment     Kind = "PUBLISH_RUNTIME_ENVIRONMENT_VERSION"
 	RollbackRuntimeEnvironment    Kind = "ROLLBACK_RUNTIME_ENVIRONMENT"
+	SetRuntimeEnvironmentEnabled  Kind = "SET_RUNTIME_ENVIRONMENT_ENABLED"
+	DeleteRuntimeEnvironment      Kind = "DELETE_RUNTIME_ENVIRONMENT"
 	BindAgentRuntimeEnvironment   Kind = "BIND_AGENT_RUNTIME_ENVIRONMENT"
+	PromoteRoleImage              Kind = "PROMOTE_ROLE_IMAGE"
 	ChangeAgentCapability         Kind = "CHANGE_AGENT_CAPABILITY"
 	ChangeAgentGrant              Kind = "CHANGE_AGENT_GRANT"
 	CreateWorkflow                Kind = "CREATE_WORKFLOW"
@@ -60,7 +65,16 @@ const (
 	UpdateSchedule                Kind = "UPDATE_SCHEDULE"
 	SetScheduleEnabled            Kind = "SET_SCHEDULE_ENABLED"
 	ArchiveSchedule               Kind = "ARCHIVE_SCHEDULE"
+	DeleteSchedule                Kind = "DELETE_SCHEDULE"
+	CreateProviderAccount         Kind = "CREATE_PROVIDER_ACCOUNT"
+	StartProviderDeviceAuth       Kind = "START_PROVIDER_DEVICE_AUTHORIZATION"
+	AuthorizeProviderAPIKey       Kind = "AUTHORIZE_PROVIDER_API_KEY"
+	RefreshProviderAuthorization  Kind = "REFRESH_PROVIDER_AUTHORIZATION"
+	RevokeProviderAccount         Kind = "REVOKE_PROVIDER_ACCOUNT"
+	SetProviderAccountEnabled     Kind = "SET_PROVIDER_ACCOUNT_ENABLED"
 	CreateConnection              Kind = "CREATE_INTEGRATION_CONNECTION"
+	UpdateConnection              Kind = "UPDATE_INTEGRATION_CONNECTION"
+	DeleteConnection              Kind = "DELETE_INTEGRATION_CONNECTION"
 	ConfigureConnectionCredential Kind = "CONFIGURE_INTEGRATION_CONNECTION_CREDENTIAL"
 	TestConnection                Kind = "TEST_INTEGRATION_CONNECTION"
 	SetConnectionEnabled          Kind = "SET_INTEGRATION_CONNECTION_ENABLED"
@@ -126,6 +140,7 @@ type AgentBindingInput struct {
 	AgentRef, BindingRef string
 	Enabled              bool
 }
+type AgentAvatarInput struct{ AgentRef, ArtifactRef string }
 type AgentRuntimeConfigurationInput struct {
 	AgentRef, RuntimeProfileRef, Model, ProviderPolicyMode string
 	ProviderAccounts                                       []entity.ProviderAccountCandidate
@@ -143,14 +158,21 @@ type RuntimeEnvironmentInput struct {
 type RuntimeEnvironmentBindingInput struct {
 	AgentRef, EnvironmentRef string
 }
+type RuntimeEnvironmentLifecycleInput struct {
+	EnvironmentRef string
+	Enabled        bool
+}
+type RoleImagePromotionInput struct {
+	RecipeRef, ImageArtifactRef, ExpectedProvenanceSHA256 string
+}
 type WorkflowInput struct {
 	Ref, ProjectRef, Name, Purpose, CoordinatorAgentRef string
 	Draft                                               *entity.WorkflowVersion
 }
 type LaunchRunInput struct {
 	ProjectRef, Title, TitleSource, Task, SessionRef, Source, AttachmentSetRef, AttachmentPurpose string
-	Target                                                   entity.RunTarget
-	Input                                                    map[string]any
+	Target                                                                                        entity.RunTarget
+	Input                                                                                         map[string]any
 }
 type SessionTurnInput struct {
 	SessionRef, RunRef, NodeRef, Task, AttachmentSetRef string
@@ -163,17 +185,22 @@ type ArtifactBindingInput struct {
 	ArtifactRef, AgentRef string
 	Enabled               bool
 }
-type ArtifactLifecycleInput struct{ ArtifactRef string }
+type ArtifactLifecycleInput struct{ ArtifactRef, ImpactDigest string }
 type AttachmentSetDraftInput struct {
 	ProjectRef, Purpose, AttachmentSetRef string
-	ArtifactRefs                         []string
-	InsertAfterPosition                  int64
+	ArtifactRefs                          []string
+	InsertAfterPosition                   int64
 }
 type ScheduleInput struct {
 	Ref, ProjectRef, Name, Preset, CronExpression, TimeOfDay, DayOfWeek, Timezone, SessionPolicy, NotificationPolicy string
 	Target                                                                                                           entity.RunTarget
 	Input                                                                                                            map[string]any
 	Enabled                                                                                                          bool
+}
+type ProviderAccountInput struct {
+	AccountRef, DefinitionKey, Name string
+	APIKey                          []byte
+	Enabled                         bool
 }
 type ConnectionInput struct {
 	Ref, DefinitionKey, Name, MaterializationRef string
@@ -309,4 +336,6 @@ type Result struct {
 	RuntimeItems         []map[string]any
 	AccessRole           *entity.AccessRole
 	AccessBinding        *entity.AccessBinding
+	ProviderAccount      *entity.ProviderAccount
+	PromotionReceipt     *entity.RoleImagePromotionReceipt
 }

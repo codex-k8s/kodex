@@ -129,6 +129,16 @@ type RuntimeEnvironmentSet struct {
 	Version                                   int64
 	CurrentVersion                            RuntimeEnvironmentVersion
 	UpdatedAt                                 time.Time
+	Ready                                     bool
+	ReadinessBlockers, NextActions            []string
+}
+
+type RuntimeEnvironmentReadiness struct {
+	EnvironmentRef, PublishedVersionRef, PublishedVersionDigest string
+	EnvironmentVersion                                          int64
+	Ready                                                       bool
+	Blockers                                                    []string
+	ObservedAt                                                  time.Time
 }
 
 type AgentRuntimeEnvironmentBinding struct {
@@ -148,6 +158,37 @@ type AgentRuntimeConfigurationView struct {
 
 type TemplateVariable struct {
 	Name, Type, Description, Example, Source string
+	Collection                               bool
+	ItemType, RangeExample                   string
+	ItemFields                               []TemplateVariableField
+}
+
+type TemplateVariableField struct{ Name, Type, Description string }
+
+type ProviderDefinition struct {
+	Key, Name, Description, DefaultModelID string
+	AuthorizationMethods, ModelIDs         []string
+	Available, Ready                       bool
+	ReadinessBlockers                      []string
+}
+
+type ProviderAuthorization struct {
+	Ref, Method, State, VerificationURI, UserCode, SafeFailureCode string
+	ExpiresAt                                                      *time.Time
+}
+
+type ProviderAccount struct {
+	Ref, DefinitionKey, Name, ExternalAccountMasked, State string
+	Version                                                int64
+	Enabled, Ready                                         bool
+	Authorization                                          *ProviderAuthorization
+	NextActions                                            []string
+	CreatedAt, UpdatedAt                                   time.Time
+}
+
+type AgentAvatar struct {
+	Source, ArtifactRef, ContentPath string
+	ArtifactRevision                 int64
 }
 
 type Agent struct {
@@ -161,6 +202,7 @@ type Agent struct {
 	PublishedInstructionVersions                                      []InstructionVersion
 	CreatedAt, UpdatedAt                                              time.Time
 	NextActions                                                       []string
+	Avatar                                                            AgentAvatar
 }
 
 type WorkflowInputField struct {
@@ -218,7 +260,7 @@ func (usage TokenUsage) Valid() bool {
 
 type Run struct {
 	Ref, ProjectRef, SessionRef, RootRunRef, ParentRunRef, RetryOfRunRef string
-	InputAttachmentSetRef                                               string
+	InputAttachmentSetRef                                                string
 	Title, Task, State, Source, ResultSummary, SafeErrorCode             string
 	SafeErrorMessage, InitiatorName, TitleSource, ActivitySummary        string
 	Target                                                               RunTarget
@@ -303,6 +345,21 @@ type OwnerGate struct {
 	Version                                                         int64
 	CreatedAt                                                       time.Time
 	ResolvedAt                                                      *time.Time
+	SourceAttachmentSetRef                                          string
+	DecisionConsequences                                            []OwnerGateDecisionConsequence
+	IntegrationIntent                                               *IntegrationIntent
+}
+
+type OwnerGateDecisionConsequence struct {
+	Decision, SafeSummary                  string
+	ExecutesExternalEffect, TerminalForRun bool
+}
+
+type IntegrationIntent struct {
+	ConnectionRef, ConnectionName, DefinitionKey, CapabilityKey, Operation, EffectKey string
+	ResourceKind, ResourceScopeDigest                                                 string
+	ResourceScope                                                                     map[string]string
+	EffectPreview                                                                     map[string]any
 }
 
 type Artifact struct {
@@ -314,6 +371,23 @@ type Artifact struct {
 	DeletedAt, PurgeAfter                                                     *time.Time
 }
 
+type ArtifactImpact struct {
+	ArtifactRef, Action, Digest                       string
+	ArtifactVersion                                   int64
+	BindingCount, AttachmentCount, ActiveRuntimeCount int64
+	Blockers                                          []string
+	Permitted                                         bool
+	ActiveRuns                                        []ArtifactImpactRun
+	ActiveRunsTruncated                               bool
+}
+
+type ArtifactImpactRun struct {
+	RunRef     string `json:"runRef"`
+	Title      string `json:"title"`
+	State      string `json:"state"`
+	ProjectRef string `json:"projectRef"`
+}
+
 type AttachmentSetItem struct {
 	ArtifactRef, DisplayName, MediaType, Digest, Source string
 	ArtifactRevision, ArtifactVersion, Position         int64
@@ -322,11 +396,11 @@ type AttachmentSetItem struct {
 
 type AttachmentSet struct {
 	Ref, FamilyRef, ProjectRef, State, Purpose, Source, ManifestDigest string
-	Revision, Version, ItemCount, TotalSizeBytes                        int64
-	Items                                                               []AttachmentSetItem
-	CreatedAt                                                           time.Time
-	FinalizedAt                                                         *time.Time
-	Superseded                                                          bool
+	Revision, Version, ItemCount, TotalSizeBytes                       int64
+	Items                                                              []AttachmentSetItem
+	CreatedAt                                                          time.Time
+	FinalizedAt                                                        *time.Time
+	Superseded                                                         bool
 }
 
 type Schedule struct {
@@ -339,6 +413,22 @@ type Schedule struct {
 	NextRunAt, LastRunAt                                                          *time.Time
 	CreatedAt, UpdatedAt                                                          time.Time
 	NextActions                                                                   []string
+	CurrentRevision                                                               ScheduleRevision
+	ContinueSessionRef                                                            string
+}
+
+type ScheduleRevision struct {
+	Ref, Digest, Name, Preset, CronExpression, Timezone, SessionPolicy, NotificationPolicy string
+	Revision                                                                               int64
+	Target                                                                                 RunTarget
+	Input                                                                                  map[string]any
+	CreatedAt                                                                              time.Time
+}
+
+type ScheduleRunOccurrence struct {
+	ScheduleRef, ScheduleRevisionRef string
+	ScheduleRevision                 int64
+	Run                              Run
 }
 
 type IntegrationCapability struct {
@@ -347,12 +437,17 @@ type IntegrationCapability struct {
 }
 
 type IntegrationConfigurationField struct {
-	Key         string `json:"key"`
-	Label       string `json:"label"`
-	Help        string `json:"help"`
-	ValueType   string `json:"valueType"`
-	Placeholder string `json:"placeholder,omitempty"`
-	Required    bool   `json:"required"`
+	Key           string   `json:"key"`
+	Label         string   `json:"label"`
+	Help          string   `json:"help"`
+	ValueType     string   `json:"valueType"`
+	Placeholder   string   `json:"placeholder,omitempty"`
+	Format        string   `json:"format,omitempty"`
+	AllowedValues []string `json:"allowedValues,omitempty"`
+	Minimum       *int64   `json:"minimum,omitempty"`
+	Maximum       *int64   `json:"maximum,omitempty"`
+	MaximumLength int32    `json:"maximumLength,omitempty"`
+	Required      bool     `json:"required"`
 }
 
 type IntegrationDefinition struct {
@@ -391,6 +486,7 @@ type IntegrationConnection struct {
 	LastTestedAt                                                            *time.Time
 	CreatedAt, UpdatedAt                                                    time.Time
 	NextActions                                                             []string
+	LifecycleState                                                          string
 }
 
 type AssistantContextDescriptor struct {
@@ -458,8 +554,8 @@ type AssistantPlanReceipt struct {
 
 type AssistantTurn struct {
 	Ref, Actor, ActorName, Content, State, AttachmentSetRef string
-	CreatedAt                             time.Time
-	CompletedAt                           *time.Time
+	CreatedAt                                               time.Time
+	CompletedAt                                             *time.Time
 }
 
 type AssistantConversation struct {

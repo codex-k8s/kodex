@@ -466,10 +466,17 @@ func (repository *Repository) requireAccess(ctx context.Context, tx pgx.Tx, curr
 	var resolved resolvedAccessTarget
 	switch value := target.(type) {
 	case entity.AccessScope:
-		var err error
-		resolved, err = repository.resolveAccessTarget(ctx, tx, current.organizationID, value)
-		if err != nil {
-			return err
+		if value.Kind == "RESOURCE_KIND" {
+			if err := access.ValidateScope(value); err != nil {
+				return errs.ErrInvalid
+			}
+			resolved.scope = value
+		} else {
+			var err error
+			resolved, err = repository.resolveAccessTarget(ctx, tx, current.organizationID, value)
+			if err != nil {
+				return err
+			}
 		}
 	case resolvedAccessTarget:
 		resolved = value
@@ -584,6 +591,8 @@ func visibilityPermission(kind string) string {
 		return "integration.view"
 	case "SECRET":
 		return "secret.view"
+	case "PROVIDER_ACCOUNT":
+		return "provider.account.view"
 	default:
 		return ""
 	}

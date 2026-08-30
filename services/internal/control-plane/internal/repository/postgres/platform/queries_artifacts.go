@@ -45,6 +45,8 @@ var (
 	queryArtifactsLifecycleSoftDelete string
 	//go:embed sql/artifacts_lifecycle_restore.sql
 	queryArtifactsLifecycleRestore string
+	//go:embed sql/artifacts_impact.sql
+	queryArtifactsImpact string
 	//go:embed sql/artifacts_purge_select_artifact_content_for_update.sql
 	queryArtifactsPurgeSelectArtifactContentForUpdate string
 	//go:embed sql/artifacts_purge_mark_pending.sql

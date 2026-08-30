@@ -120,3 +120,17 @@ type ImagePromotionAuthorization struct {
 	AuthorizationToken     string
 	AuthorizationExpiresAt time.Time
 }
+
+type RoleImageRecipeRevision struct {
+	Ref, RecipeRef, SpecSHA256, ProvenanceSHA256, SourceSHA256 string
+	ImmutableBuildSHA256, ImageArtifactRef, ManifestDigest     string
+	PromotedReference, PromotionReceiptSHA256                  string
+	Revision, RecipeVersion, RecipeGeneration                  uint64
+	CreatedAt                                                  time.Time
+}
+
+type RoleImagePromotionReceipt struct {
+	Ref, RecipeRef, ImageArtifactRef, ProvenanceSHA256, ManifestDigest string
+	ReceiptSHA256, State                                               string
+	CreatedAt                                                          time.Time
+}

@@ -103,7 +103,14 @@ FROM (
   JOIN control_plane.projects project ON project.id = environment.project_id
   JOIN control_plane.subjects owner_subject ON owner_subject.id = environment.created_by
   WHERE @resource_kind = 'RUNTIME_ENVIRONMENT' AND environment.organization_id = @organization_id::uuid
-    AND environment.ref = @resource_ref AND environment.state = 'ACTIVE'
+    AND environment.ref = @resource_ref AND environment.state <> 'DELETED'
+  UNION ALL
+  SELECT account.id::text, '' AS project_id, '' AS project_ref, owner_subject.ref,
+         '{}'::jsonb
+  FROM control_plane.provider_accounts account
+  JOIN control_plane.subjects owner_subject ON owner_subject.id = account.created_by
+  WHERE @resource_kind = 'PROVIDER_ACCOUNT' AND account.organization_id = @organization_id::uuid
+    AND account.ref = @resource_ref
   UNION ALL
   SELECT secret.id::text, project.id::text, project.ref, owner_subject.ref,
          jsonb_build_object('PROJECT', project.ref)

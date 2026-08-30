@@ -5,6 +5,8 @@ import _ "embed"
 var (
 	//go:embed sql/configuration_changeschedule_insert_schedules_ref_project_id_target_type.sql
 	queryConfigurationChangescheduleInsertSchedulesRefProjectIdTargetType string
+	//go:embed sql/configuration_changeschedule_insert_schedule_revision.sql
+	queryConfigurationChangescheduleInsertScheduleRevision string
 	//go:embed sql/configuration_changeschedule_update_schedules_name_target_type_target_ref.sql
 	queryConfigurationChangescheduleUpdateSchedulesNameTargetTypeTargetRef string
 	//go:embed sql/configuration_changeschedule_update_schedules_enabled_version_updated_at.sql

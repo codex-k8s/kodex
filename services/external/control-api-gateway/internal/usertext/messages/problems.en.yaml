@@ -604,6 +604,38 @@ PERMISSION_ARTIFACT_BIND_NAME:
   other: Bind artifacts
 PERMISSION_ARTIFACT_BIND_DESCRIPTION:
   other: Bind assigned artifacts to permitted objects
+PERMISSION_ARTIFACT_UPLOAD_NAME:
+  other: Upload artifacts
+PERMISSION_ARTIFACT_UPLOAD_DESCRIPTION:
+  other: Upload artifacts into a permitted scope
+PERMISSION_AGENT_AVATAR_MANAGE_NAME:
+  other: Manage AI employee avatars
+PERMISSION_AGENT_AVATAR_MANAGE_DESCRIPTION:
+  other: Set and remove a prepared image artifact for an assigned AI employee
+PERMISSION_PROVIDER_ACCOUNT_VIEW_NAME:
+  other: View provider accounts
+PERMISSION_PROVIDER_ACCOUNT_VIEW_DESCRIPTION:
+  other: View safe provider account descriptors and states without credential values
+PERMISSION_PROVIDER_ACCOUNT_MANAGE_NAME:
+  other: Manage provider accounts
+PERMISSION_PROVIDER_ACCOUNT_MANAGE_DESCRIPTION:
+  other: Create, enable, and disable assigned provider accounts
+PERMISSION_PROVIDER_ACCOUNT_AUTHORIZE_NAME:
+  other: Authorize provider accounts
+PERMISSION_PROVIDER_ACCOUNT_AUTHORIZE_DESCRIPTION:
+  other: Start and refresh authorization for assigned provider accounts
+PERMISSION_PROVIDER_ACCOUNT_REVOKE_NAME:
+  other: Revoke provider accounts
+PERMISSION_PROVIDER_ACCOUNT_REVOKE_DESCRIPTION:
+  other: Revoke active authorization for assigned provider accounts
+PERMISSION_RUNTIME_ENVIRONMENT_DISABLE_NAME:
+  other: Disable runtime environments
+PERMISSION_RUNTIME_ENVIRONMENT_DISABLE_DESCRIPTION:
+  other: Disable an assigned runtime environment after usage checks
+PERMISSION_RUNTIME_ENVIRONMENT_DELETE_NAME:
+  other: Delete runtime environments
+PERMISSION_RUNTIME_ENVIRONMENT_DELETE_DESCRIPTION:
+  other: Delete a disabled runtime environment without active bindings
 PERMISSION_ARTIFACT_DELETE_NAME:
   other: Delete artifacts
 PERMISSION_ARTIFACT_DELETE_DESCRIPTION:
@@ -638,3 +670,5 @@ PERMISSION_SESSION_CANCEL_DESCRIPTION:
   other: Cancel assigned sessions in the permitted scope
 SYSTEM_ROLE_EXACT_SENSITIVE_ACCESS:
   other: System exact permissions for sensitive operations
+SYSTEM_ROLE_MVP_BACKEND_LIFECYCLES:
+  other: System permissions for product backend lifecycles

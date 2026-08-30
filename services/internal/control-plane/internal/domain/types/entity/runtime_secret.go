@@ -13,6 +13,7 @@ type RuntimeSecret struct {
 	DisplayHint                                                     *RuntimeSecretDisplayHint
 	CurrentRevisionDescriptor                                       *RuntimeSecretRevisionDescriptor
 	CreatedAt, UpdatedAt                                            time.Time
+	NextActions                                                     []string
 }
 
 type RuntimeSecretOperation struct {

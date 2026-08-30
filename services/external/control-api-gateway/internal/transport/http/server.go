@@ -98,8 +98,12 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 	}
 	var purpose *boundary.SessionPurpose
 	if body != nil && body.Purpose != nil {
+		secretRef := ""
+		if body.Purpose.SecretRef != nil {
+			secretRef = *body.Purpose.SecretRef
+		}
 		purpose = &boundary.SessionPurpose{
-			Kind: string(body.Purpose.Kind), ProjectRef: body.Purpose.ProjectRef, SecretRef: body.Purpose.SecretRef,
+			Kind: string(body.Purpose.Kind), ProjectRef: body.Purpose.ProjectRef, SecretRef: secretRef,
 		}
 	}
 	claims, encoded, csrf, err := server.boundary.IssueSession(principal, bearer, purpose)

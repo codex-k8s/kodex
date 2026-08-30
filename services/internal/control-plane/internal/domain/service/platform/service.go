@@ -204,6 +204,20 @@ func (service *Service) GetRuntimeEnvironment(ctx context.Context, p value.Princ
 	}
 	return service.repository.GetRuntimeEnvironment(ctx, p, ref)
 }
+func (service *Service) GetRuntimeEnvironmentReadiness(ctx context.Context, p value.Principal, ref string) (entity.RuntimeEnvironmentReadiness, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.RuntimeEnvironmentReadiness{}, err
+	}
+	return service.repository.GetRuntimeEnvironmentReadiness(ctx, p, ref)
+}
+func (service *Service) ListRuntimeEnvironmentAgents(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Agent, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListRuntimeEnvironmentAgents(ctx, p, filter)
+}
 func (service *Service) ListRuntimeEnvironmentVersions(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.RuntimeEnvironmentVersion, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -278,6 +292,37 @@ func (service *Service) ListTemplateVariables(ctx context.Context, p value.Princ
 		return nil, "", err
 	}
 	return service.repository.ListTemplateVariables(ctx, p, filter)
+}
+func (service *Service) ListProviderDefinitions(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.ProviderDefinition, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListProviderDefinitions(ctx, p, filter)
+}
+func (service *Service) ListProviderAccounts(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.ProviderAccount, string, []string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	return service.repository.ListProviderAccounts(ctx, p, filter)
+}
+func (service *Service) GetProviderAccount(ctx context.Context, p value.Principal, ref string) (entity.ProviderAccount, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.ProviderAccount{}, err
+	}
+	if strings.TrimSpace(ref) == "" {
+		return entity.ProviderAccount{}, errs.ErrInvalid
+	}
+	return service.repository.GetProviderAccount(ctx, p, ref)
+}
+func (service *Service) ListRoleImageRecipeRevisions(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.RoleImageRecipeRevision, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListRoleImageRecipeRevisions(ctx, p, filter)
 }
 func (service *Service) ListAgentInstructionVersions(ctx context.Context, p value.Principal, ref string, page query.Page) ([]entity.InstructionVersion, string, error) {
 	p, err := service.principal(ctx, p)
@@ -391,6 +436,18 @@ func (service *Service) GetArtifact(ctx context.Context, p value.Principal, ref 
 	}
 	return service.repository.GetArtifact(ctx, p, ref)
 }
+func (service *Service) GetArtifactImpact(ctx context.Context, p value.Principal, ref, action string) (entity.ArtifactImpact, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.ArtifactImpact{}, err
+	}
+	ref = strings.TrimSpace(ref)
+	action = strings.TrimSpace(action)
+	if ref == "" || action != "DELETE" && action != "PURGE" {
+		return entity.ArtifactImpact{}, errs.ErrInvalid
+	}
+	return service.repository.GetArtifactImpact(ctx, p, ref, action)
+}
 func (service *Service) GetAttachmentSet(ctx context.Context, p value.Principal, ref string, page query.Page) (entity.AttachmentSet, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -444,21 +501,22 @@ func (service *Service) UploadArtifact(ctx context.Context, p value.Principal, m
 	return service.repository.UploadArtifact(ctx, p, mutation, input)
 }
 
-func (service *Service) PurgeArtifact(ctx context.Context, p value.Principal, mutation value.Mutation, artifactRef string) (string, error) {
+func (service *Service) PurgeArtifact(ctx context.Context, p value.Principal, mutation value.Mutation, artifactRef, impactDigest string) (string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return "", err
 	}
 	artifactRef = strings.TrimSpace(artifactRef)
-	if artifactRef == "" || mutation.ExpectedVersion == nil || strings.TrimSpace(mutation.IdempotencyKey) == "" {
+	impactDigest = strings.TrimSpace(impactDigest)
+	if artifactRef == "" || impactDigest == "" || mutation.ExpectedVersion == nil || strings.TrimSpace(mutation.IdempotencyKey) == "" {
 		return "", errs.ErrInvalid
 	}
 	mutation.Operation = "artifact.purge"
 	mutation.IntentDigest = digest(struct {
-		ArtifactRef     string
-		ExpectedVersion int64
-	}{ArtifactRef: artifactRef, ExpectedVersion: *mutation.ExpectedVersion})
-	return service.repository.PurgeArtifact(ctx, p, mutation, artifactRef)
+		ArtifactRef, ImpactDigest string
+		ExpectedVersion           int64
+	}{ArtifactRef: artifactRef, ImpactDigest: impactDigest, ExpectedVersion: *mutation.ExpectedVersion})
+	return service.repository.PurgeArtifact(ctx, p, mutation, artifactRef, impactDigest)
 }
 func (service *Service) DownloadArtifact(ctx context.Context, p value.Principal, ref, purpose string) (repository.ArtifactDownload, error) {
 	p, err := service.principal(ctx, p)
@@ -498,12 +556,26 @@ func (service *Service) GetSchedule(ctx context.Context, p value.Principal, ref 
 	}
 	return service.repository.GetSchedule(ctx, p, ref)
 }
-func (service *Service) ListIntegrationDefinitions(ctx context.Context, p value.Principal, category string) ([]entity.IntegrationDefinition, []string, error) {
+func (service *Service) ListScheduleRevisions(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.ScheduleRevision, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", err
 	}
-	return service.repository.ListIntegrationDefinitions(ctx, p, category)
+	return service.repository.ListScheduleRevisions(ctx, p, filter)
+}
+func (service *Service) ListScheduleRuns(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.ScheduleRunOccurrence, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListScheduleRuns(ctx, p, filter)
+}
+func (service *Service) ListIntegrationDefinitions(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.IntegrationDefinition, string, []string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	return service.repository.ListIntegrationDefinitions(ctx, p, filter)
 }
 func (service *Service) ListIntegrationConnections(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.IntegrationConnection, string, error) {
 	p, err := service.principal(ctx, p)

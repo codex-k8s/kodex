@@ -604,6 +604,38 @@ PERMISSION_ARTIFACT_BIND_NAME:
   other: Привязка артефактов
 PERMISSION_ARTIFACT_BIND_DESCRIPTION:
   other: Привязка назначенных артефактов к разрешённым объектам
+PERMISSION_ARTIFACT_UPLOAD_NAME:
+  other: Загрузка артефактов
+PERMISSION_ARTIFACT_UPLOAD_DESCRIPTION:
+  other: Загрузка артефактов в разрешённую область
+PERMISSION_AGENT_AVATAR_MANAGE_NAME:
+  other: Управление аватаром ИИ-сотрудника
+PERMISSION_AGENT_AVATAR_MANAGE_DESCRIPTION:
+  other: Установка и удаление готового image artifact для назначенного ИИ-сотрудника
+PERMISSION_PROVIDER_ACCOUNT_VIEW_NAME:
+  other: Просмотр provider accounts
+PERMISSION_PROVIDER_ACCOUNT_VIEW_DESCRIPTION:
+  other: Просмотр безопасных описателей и состояний provider accounts без credential values
+PERMISSION_PROVIDER_ACCOUNT_MANAGE_NAME:
+  other: Управление provider accounts
+PERMISSION_PROVIDER_ACCOUNT_MANAGE_DESCRIPTION:
+  other: Создание, включение и отключение назначенных provider accounts
+PERMISSION_PROVIDER_ACCOUNT_AUTHORIZE_NAME:
+  other: Авторизация provider accounts
+PERMISSION_PROVIDER_ACCOUNT_AUTHORIZE_DESCRIPTION:
+  other: Запуск и обновление авторизации назначенных provider accounts
+PERMISSION_PROVIDER_ACCOUNT_REVOKE_NAME:
+  other: Отзыв provider accounts
+PERMISSION_PROVIDER_ACCOUNT_REVOKE_DESCRIPTION:
+  other: Отзыв активной авторизации назначенных provider accounts
+PERMISSION_RUNTIME_ENVIRONMENT_DISABLE_NAME:
+  other: Отключение runtime environment
+PERMISSION_RUNTIME_ENVIRONMENT_DISABLE_DESCRIPTION:
+  other: Отключение назначенного runtime environment после проверки использования
+PERMISSION_RUNTIME_ENVIRONMENT_DELETE_NAME:
+  other: Удаление runtime environment
+PERMISSION_RUNTIME_ENVIRONMENT_DELETE_DESCRIPTION:
+  other: Удаление отключённого runtime environment без активных привязок
 PERMISSION_ARTIFACT_DELETE_NAME:
   other: Удаление артефактов
 PERMISSION_ARTIFACT_DELETE_DESCRIPTION:
@@ -638,3 +670,5 @@ PERMISSION_SESSION_CANCEL_DESCRIPTION:
   other: Отмена назначенных сессий в разрешённой области
 SYSTEM_ROLE_EXACT_SENSITIVE_ACCESS:
   other: Системные точные полномочия для чувствительных операций
+SYSTEM_ROLE_MVP_BACKEND_LIFECYCLES:
+  other: Системные полномочия продуктовых backend lifecycle

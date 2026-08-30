@@ -392,6 +392,31 @@ func (server *Server) ListArtifacts(ctx context.Context, request *controlplanev1
 	return response, nil
 }
 
+func (server *Server) GetArtifactImpact(ctx context.Context, request *controlplanev1.GetArtifactImpactRequest) (*controlplanev1.GetArtifactImpactResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetArtifactImpact_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	action := enumSuffix(request.GetAction(), "ARTIFACT_IMPACT_ACTION_")
+	impact, err := server.service.GetArtifactImpact(ctx, p, request.GetArtifactRef(), action)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ArtifactImpact{
+		ArtifactRef: impact.ArtifactRef, ArtifactVersion: impact.ArtifactVersion,
+		Action: request.GetAction(), ImpactDigest: impact.Digest, BindingCount: impact.BindingCount,
+		AttachmentCount: impact.AttachmentCount, ActiveRuntimeCount: impact.ActiveRuntimeCount,
+		Blockers: impact.Blockers, Permitted: impact.Permitted, ActiveRunsTruncated: impact.ActiveRunsTruncated,
+	}
+	for _, run := range impact.ActiveRuns {
+		response.ActiveRuns = append(response.ActiveRuns, &controlplanev1.ArtifactImpactRun{
+			RunRef: run.RunRef, Title: run.Title,
+			State: runState(run.State), ProjectRef: run.ProjectRef,
+		})
+	}
+	return &controlplanev1.GetArtifactImpactResponse{Impact: response}, nil
+}
+
 func (server *Server) GetArtifact(ctx context.Context, request *controlplanev1.GetArtifactRequest) (*controlplanev1.GetArtifactResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetArtifact_FullMethodName)
 	if err != nil {
@@ -450,11 +475,16 @@ func (server *Server) ListIntegrationDefinitions(ctx context.Context, request *c
 	if err != nil {
 		return nil, err
 	}
-	items, actions, err := server.service.ListIntegrationDefinitions(ctx, p, request.GetCategory())
+	items, next, actions, err := server.service.ListIntegrationDefinitions(ctx, p, query.Filter{
+		Category: request.GetCategory(), Query: request.GetQuery(), Page: page(request.GetPage()),
+	})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListIntegrationDefinitionsResponse{NextActions: nextActions(actions), CoreReady: true}
+	response := &controlplanev1.ListIntegrationDefinitionsResponse{
+		NextActions: nextActions(actions), CoreReady: true,
+		Page: &controlplanev1.PageInfo{NextPageToken: next},
+	}
 	for _, item := range items {
 		response.Definitions = append(response.Definitions, castDefinition(item))
 	}
@@ -466,7 +496,9 @@ func (server *Server) ListIntegrationConnections(ctx context.Context, request *c
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListIntegrationConnections(ctx, p, query.Filter{Category: request.GetDefinitionKey(), Page: page(request.GetPage())})
+	items, next, err := server.service.ListIntegrationConnections(ctx, p, query.Filter{
+		Category: request.GetDefinitionKey(), Query: request.GetQuery(), Page: page(request.GetPage()),
+	})
 	if err != nil {
 		return nil, transportError(err)
 	}

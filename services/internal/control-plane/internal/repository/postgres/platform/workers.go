@@ -298,6 +298,7 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 	}
 	type dueSchedule struct {
 		id, ref, preset, cron, timezone, name, targetType, targetRef string
+		currentRevisionID                                            string
 		input                                                        []byte
 		scheduledFor                                                 time.Time
 		version                                                      int64
@@ -305,7 +306,7 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 	due := make([]dueSchedule, 0, limit)
 	for rows.Next() {
 		var item dueSchedule
-		if err := rows.Scan(&item.id, &item.ref, &item.scheduledFor, &item.version, &item.preset, &item.cron, &item.timezone, &item.name, &item.targetType, &item.targetRef, &item.input); err != nil {
+		if err := rows.Scan(&item.id, &item.ref, &item.scheduledFor, &item.version, &item.preset, &item.cron, &item.timezone, &item.name, &item.targetType, &item.targetRef, &item.input, &item.currentRevisionID); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
 		}
@@ -335,7 +336,7 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 		digest := sha256.Sum256([]byte(fence))
 		inputDigest := sha256.Sum256(item.input)
 		expires := time.Now().UTC().Add(30 * time.Second)
-		if _, err := tx.Exec(ctx, queryWorkersClaimdueschedulesInsertScheduleOccurrencesRefScheduleIdState, occurrenceRef, scope.organizationID, item.id, item.scheduledFor, item.version, item.targetType, item.targetRef, item.name, item.input, hex.EncodeToString(inputDigest[:]), leaseRef, hex.EncodeToString(digest[:]), instance, expires); err != nil {
+		if _, err := tx.Exec(ctx, queryWorkersClaimdueschedulesInsertScheduleOccurrencesRefScheduleIdState, occurrenceRef, scope.organizationID, item.id, item.scheduledFor, item.version, item.targetType, item.targetRef, item.name, item.input, hex.EncodeToString(inputDigest[:]), leaseRef, hex.EncodeToString(digest[:]), instance, expires, item.currentRevisionID); err != nil {
 			return nil, mapWriteError(err)
 		}
 		result = append(result, map[string]any{"scheduleRef": item.ref, "occurrenceRef": occurrenceRef, "scheduledFor": item.scheduledFor, "leaseRef": leaseRef, "fence": fence, "generation": int64(1), "expiresAt": expires, "scheduleVersion": item.version, "inputDigest": hex.EncodeToString(inputDigest[:])})

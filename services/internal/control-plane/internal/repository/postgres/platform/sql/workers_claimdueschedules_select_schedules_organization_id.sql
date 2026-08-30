@@ -9,7 +9,8 @@ SELECT s.id::text,
        s.name,
        s.target_type,
        s.target_ref,
-       s.input
+       s.input,
+       s.current_revision_id::text
 FROM control_plane.schedules s
 WHERE s.organization_id = $1::uuid
   AND s.lifecycle_state = 'ACTIVE'

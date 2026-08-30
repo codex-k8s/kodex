@@ -174,10 +174,14 @@ func assertAvatarUpdateError(t *testing.T, ctx context.Context, service *platfor
 
 func deleteAvatarArtifact(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, artifact entity.Artifact, key string) {
 	t.Helper()
+	impact, err := service.GetArtifactImpact(ctx, owner, artifact.Ref, "DELETE")
+	if err != nil || !impact.Permitted {
+		t.Fatalf("preflight avatar artifact delete: impact=%#v err=%v", impact, err)
+	}
 	version := artifact.Version
 	result, err := service.Execute(ctx, command.Command{
 		Kind: command.DeleteArtifact, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &version},
-		Payload: command.ArtifactLifecycleInput{ArtifactRef: artifact.Ref},
+		Payload: command.ArtifactLifecycleInput{ArtifactRef: artifact.Ref, ImpactDigest: impact.Digest},
 	})
 	if err != nil || result.Artifact == nil || result.Artifact.LifecycleState != "DELETED" {
 		t.Fatalf("soft-delete avatar artifact: artifact=%#v err=%v", result.Artifact, err)

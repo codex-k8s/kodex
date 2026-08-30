@@ -170,6 +170,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("provider credential legacy repair creates an immutable next revision", func(t *testing.T) {
 		testProviderCredentialLegacyRepair(t, ctx, repository, pool)
 	})
+	t.Run("provider account actions follow exact application access", func(t *testing.T) {
+		testProviderAccountApplicationAccess(t, ctx, repository)
+	})
 	t.Run("OIDC candidate receives project membership without internal identifiers", func(t *testing.T) {
 		testProjectMembershipCandidate(t, ctx, repository)
 	})
@@ -227,6 +230,76 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("runtime secret lifecycle is crash consistent", func(t *testing.T) {
 		testRuntimeSecretCrashConsistency(t, ctx, repository)
 	})
+}
+
+func testProviderAccountApplicationAccess(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	ownerInput := platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Provider account owner", CallerWorkload: "control-api-gateway",
+		Operation: "platform.query.provider-accounts.list",
+	}
+	owner := resolvedTestPrincipal(t, ctx, repository, ownerInput, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct provider account access service: %v", err)
+	}
+	ownerItems, _, ownerActions, err := service.ListProviderAccounts(ctx, owner, query.Filter{Page: query.Page{Size: 20}})
+	if err != nil || len(ownerItems) == 0 || !reflect.DeepEqual(ownerActions, []string{"CREATE_CONNECTION"}) ||
+		!contains(ownerItems[0].NextActions, "REVOKE") {
+		t.Fatalf("owner provider account actions: items=%#v actions=%v err=%v", ownerItems, ownerActions, err)
+	}
+	providerAccess, err := service.QueryEffectiveAccess(ctx, owner, "", entity.AccessScope{
+		Kind: "RESOURCE_INSTANCE", ResourceKind: "PROVIDER_ACCOUNT", ResourceRef: ownerItems[0].Ref,
+	}, []string{"provider.account.view"}, time.Time{})
+	if err != nil || len(providerAccess.Decisions) != 1 || !providerAccess.Decisions[0].Allowed {
+		t.Fatalf("resolve provider account effective access: access=%#v err=%v", providerAccess, err)
+	}
+
+	candidateInput := platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000009993", ExternalTenantID: ownerInput.ExternalTenantID,
+		ExternalDisplayName: "Provider account viewer", CallerWorkload: "control-api-gateway",
+		Operation: "platform.query.provider-accounts.list",
+	}
+	if _, resolveErr := repository.ResolveProofAuthority(ctx, candidateInput); !errors.Is(resolveErr, domainerrs.ErrForbidden) {
+		t.Fatalf("unbound provider account viewer received authority: %v", resolveErr)
+	}
+	subjects, _, err := service.ListAccessSubjects(ctx, owner, query.Filter{
+		Query: candidateInput.ExternalDisplayName, Page: query.Page{Size: 20},
+	}, "USER")
+	if err != nil || len(subjects) != 1 {
+		t.Fatalf("list provider account viewer subject: subjects=%#v err=%v", subjects, err)
+	}
+	roleResult, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessRole, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-account-viewer-role"}, Payload: command.AccessRoleInput{
+			Name: "Provider account viewer", PermissionKeys: []string{"provider.account.view"},
+			AllowedScopes: []string{"RESOURCE_KIND"}, ChangeComment: "component provider account RBAC scenario",
+		}})
+	if err != nil || roleResult.AccessRole == nil {
+		t.Fatalf("create provider account viewer role: role=%#v err=%v", roleResult.AccessRole, err)
+	}
+	bindingResult, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessBinding, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-account-viewer-binding"}, Payload: command.AccessBindingInput{
+			SubjectKind: "USER", SubjectRef: subjects[0].Ref, RoleVersionRef: roleResult.AccessRole.CurrentVersion.Ref,
+			Scope: entity.AccessScope{Kind: "RESOURCE_KIND", ResourceKind: "PROVIDER_ACCOUNT"},
+		}})
+	if err != nil || bindingResult.AccessBinding == nil {
+		t.Fatalf("bind provider account viewer: binding=%#v err=%v", bindingResult.AccessBinding, err)
+	}
+	viewer := resolvedTestPrincipal(t, ctx, repository, candidateInput, "control-api-gateway")
+	viewerItems, _, viewerActions, err := service.ListProviderAccounts(ctx, viewer, query.Filter{Page: query.Page{Size: 20}})
+	if err != nil || len(viewerItems) != len(ownerItems) || len(viewerActions) != 0 {
+		t.Fatalf("viewer provider account collection: items=%#v actions=%v err=%v", viewerItems, viewerActions, err)
+	}
+	for _, item := range viewerItems {
+		if !reflect.DeepEqual(item.NextActions, []string{"OPEN"}) {
+			t.Fatalf("viewer provider account %q actions=%v, want [OPEN]", item.Ref, item.NextActions)
+		}
+	}
+	viewerItem, err := service.GetProviderAccount(ctx, viewer, viewerItems[0].Ref)
+	if err != nil || !reflect.DeepEqual(viewerItem.NextActions, []string{"OPEN"}) {
+		t.Fatalf("viewer provider account detail: item=%#v err=%v", viewerItem, err)
+	}
 }
 
 func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, repository *Repository) {
@@ -888,7 +961,7 @@ func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, re
 	if err != nil {
 		t.Fatalf("construct integration service: %v", err)
 	}
-	definitions, actions, err := service.ListIntegrationDefinitions(ctx, owner, "")
+	definitions, _, actions, err := service.ListIntegrationDefinitions(ctx, owner, query.Filter{})
 	if err != nil || len(definitions) != 7 {
 		t.Fatalf("list integration definitions: definitions=%d err=%v", len(definitions), err)
 	}
@@ -2740,9 +2813,26 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("assistant turn returned incomplete conversation: %#v", turn.Conversation)
 	}
 	queuedInputVersion := assistantInput.Version
+	var queuedRunRef, queuedRunTitle, queuedRunState string
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT ref, title, state
+		FROM control_plane.runs
+		WHERE organization_id = $1::uuid AND session_id = $2::uuid
+		ORDER BY created_at DESC, ref DESC
+		LIMIT 1
+	`, ownerScope.organizationID, sessionID).Scan(&queuedRunRef, &queuedRunTitle, &queuedRunState); err != nil {
+		t.Fatalf("read queued assistant run descriptor: %v", err)
+	}
+	queuedImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "DELETE")
+	if err != nil || queuedImpact.Permitted || queuedImpact.ActiveRuntimeCount != 1 || queuedImpact.ActiveRunsTruncated ||
+		len(queuedImpact.ActiveRuns) != 1 || queuedImpact.ActiveRuns[0].RunRef != queuedRunRef ||
+		queuedImpact.ActiveRuns[0].Title != queuedRunTitle || queuedImpact.ActiveRuns[0].State != queuedRunState ||
+		!contains(queuedImpact.Blockers, "ACTIVE_RUN_USES_ARTIFACT") {
+		t.Fatalf("queued assistant input impact: impact=%#v err=%v", queuedImpact, err)
+	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-before-claim-1", ExpectedVersion: &queuedInputVersion},
-		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref},
+		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref, ImpactDigest: queuedImpact.Digest},
 	}); !errors.Is(err, domainerrs.ErrConflict) {
 		t.Fatalf("queued assistant input was soft-deleted before claim: %v", err)
 	}
@@ -2759,14 +2849,6 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if !ok || len(artifactCatalog) != 1 || stringMap(artifactCatalog[0], "ref") != assistantInput.Ref {
 		t.Fatalf("assistant runtime lost organization attachment snapshot: %#v", lease["artifacts"])
 	}
-	inputVersion := assistantInput.Version
-	deletedInput, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-1", ExpectedVersion: &inputVersion},
-		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref},
-	})
-	if err != nil || deletedInput.Artifact == nil || deletedInput.Artifact.LifecycleState != "DELETED" {
-		t.Fatalf("soft-delete claimed assistant input: artifact=%#v err=%v", deletedInput.Artifact, err)
-	}
 	runtimeInput, err := service.ReadExecutionArtifact(ctx, runtimeReader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), assistantInput.Ref)
 	if err != nil {
 		t.Fatalf("read soft-deleted artifact from existing runtime snapshot: %v", err)
@@ -2775,29 +2857,6 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	closeErr := runtimeInput.Reader.Close()
 	if readErr != nil || closeErr != nil || string(runtimeInputBody) != assistantInputBody {
 		t.Fatalf("read assistant snapshot body=%q read_err=%v close_err=%v", string(runtimeInputBody), readErr, closeErr)
-	}
-	deletedVersion := deletedInput.Artifact.Version
-	restoredInput, err := service.Execute(ctx, command.Command{Kind: command.RestoreArtifact, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-restore-1", ExpectedVersion: &deletedVersion},
-		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref},
-	})
-	if err != nil || restoredInput.Artifact == nil || restoredInput.Artifact.LifecycleState != "ACTIVE" {
-		t.Fatalf("restore assistant input: artifact=%#v err=%v", restoredInput.Artifact, err)
-	}
-	restoredVersion := restoredInput.Artifact.Version
-	deletedAgain, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-2", ExpectedVersion: &restoredVersion},
-		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref},
-	})
-	if err != nil || deletedAgain.Artifact == nil || deletedAgain.Artifact.LifecycleState != "DELETED" {
-		t.Fatalf("soft-delete restored assistant input: artifact=%#v err=%v", deletedAgain.Artifact, err)
-	}
-	deletedAgainVersion := deletedAgain.Artifact.Version
-	if _, err := service.PurgeArtifact(ctx, owner, value.Mutation{IdempotencyKey: "assistant-artifact-purge-1", ExpectedVersion: &deletedAgainVersion}, assistantInput.Ref); err != nil {
-		t.Fatalf("purge assistant input: %v", err)
-	}
-	if _, err := service.ReadExecutionArtifact(ctx, runtimeReader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), assistantInput.Ref); !errors.Is(err, domainerrs.ErrNotFound) {
-		t.Fatalf("purged assistant input remained readable from runtime snapshot: %v", err)
 	}
 	planResult, err := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-plan-1"}, Payload: command.ProposeAssistantPlanInput{
@@ -2837,6 +2896,30 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		}})
 	if err != nil || completed.Run == nil || completed.Run.State != "SUCCEEDED" || len(completed.CreatedRefs) != 1 {
 		t.Fatalf("complete direct assistant execution: run=%#v err=%v", completed.Run, err)
+	}
+	deleteImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "DELETE")
+	if err != nil || !deleteImpact.Permitted || deleteImpact.ActiveRuntimeCount != 0 ||
+		len(deleteImpact.ActiveRuns) != 0 || deleteImpact.ActiveRunsTruncated {
+		t.Fatalf("terminal assistant input delete impact: impact=%#v err=%v", deleteImpact, err)
+	}
+	inputVersion := assistantInput.Version
+	deletedInput, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-1", ExpectedVersion: &inputVersion},
+		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref, ImpactDigest: deleteImpact.Digest},
+	})
+	if err != nil || deletedInput.Artifact == nil || deletedInput.Artifact.LifecycleState != "DELETED" {
+		t.Fatalf("soft-delete terminal assistant input: artifact=%#v err=%v", deletedInput.Artifact, err)
+	}
+	purgeImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "PURGE")
+	if err != nil || purgeImpact.Permitted || purgeImpact.AttachmentCount < 1 ||
+		purgeImpact.ActiveRuntimeCount != int64(len(purgeImpact.ActiveRuns)) || purgeImpact.ActiveRunsTruncated ||
+		!contains(purgeImpact.Blockers, "ARTIFACT_HAS_IMMUTABLE_ATTACHMENTS") {
+		t.Fatalf("immutable assistant attachment purge impact: impact=%#v err=%v", purgeImpact, err)
+	}
+	if _, err := service.PurgeArtifact(ctx, owner,
+		value.Mutation{IdempotencyKey: "assistant-artifact-purge-1", ExpectedVersion: &deletedInput.Artifact.Version},
+		assistantInput.Ref, purgeImpact.Digest); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("purge immutable assistant attachment returned %v", err)
 	}
 	assistantOutput, err := service.DownloadArtifact(ctx, owner, completed.CreatedRefs[0], "DOWNLOAD")
 	if err != nil {

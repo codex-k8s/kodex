@@ -36,17 +36,25 @@ var definitions = []entity.PermissionDefinition{
 	permission("gate.resolve", "APPROVE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"OWNER_GATE"}, false),
 	permission("artifact.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("artifact.download", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
+	permission("artifact.upload", "WRITE", []string{"ORGANIZATION", "PROJECT"}, []string{"ORGANIZATION", "PROJECT", "ARTIFACT"}, false),
 	permission("artifact.bind", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("artifact.delete", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("artifact.restore", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("artifact.purge", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("schedule.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"SCHEDULE"}, false),
 	permission("schedule.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"SCHEDULE"}, false),
+	permission("agent.avatar.manage", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"AGENT"}, false),
 	permission("integration.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"INTEGRATION"}, false),
 	permission("integration.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"INTEGRATION"}, false),
 	permission("image.build", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "ROLE_IMAGE"}, false),
 	permission("image.promote", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ROLE_IMAGE"}, false),
 	permission("environment.privileged.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "RUNTIME_ENVIRONMENT"}, false),
+	permission("runtime.environment.disable", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"RUNTIME_ENVIRONMENT"}, false),
+	permission("runtime.environment.delete", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"RUNTIME_ENVIRONMENT"}, false),
+	permission("provider.account.view", "READ", []string{"ORGANIZATION", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROVIDER_ACCOUNT"}, false),
+	permission("provider.account.manage", "ADMIN", []string{"ORGANIZATION", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROVIDER_ACCOUNT"}, false),
+	permission("provider.account.authorize", "ADMIN", []string{"ORGANIZATION", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROVIDER_ACCOUNT"}, false),
+	permission("provider.account.revoke", "ADMIN", []string{"ORGANIZATION", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROVIDER_ACCOUNT"}, false),
 	permission("secret.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "SECRET"}, false),
 	permission("secret.create", "WRITE", []string{"ORGANIZATION", "PROJECT"}, []string{"PROJECT"}, false),
 	permission("secret.rotate", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"SECRET"}, false),
@@ -141,7 +149,8 @@ func ValidateScope(scope entity.AccessScope) error {
 			return errors.New("resource-kind scope is incomplete")
 		}
 	case "RESOURCE_INSTANCE":
-		organizationScoped := scope.ResourceKind == "INTEGRATION" || scope.ResourceKind == "ARTIFACT" && scope.ProjectRef == ""
+		organizationScoped := scope.ResourceKind == "INTEGRATION" || scope.ResourceKind == "PROVIDER_ACCOUNT" ||
+			scope.ResourceKind == "ARTIFACT" && scope.ProjectRef == ""
 		if scope.ResourceKind == "" || scope.ResourceKind == "ORGANIZATION" || scope.ResourceRef == "" ||
 			!knownResourceKind(scope.ResourceKind) || organizationScoped && scope.ProjectRef != "" ||
 			!organizationScoped && scope.ProjectRef == "" {
@@ -261,7 +270,8 @@ func knownScope(value string) bool {
 func knownResourceKind(value string) bool {
 	return value == "ORGANIZATION" || value == "PROJECT" || value == "AGENT" || value == "WORKFLOW" || value == "RUN" ||
 		value == "OWNER_GATE" || value == "ARTIFACT" || value == "SCHEDULE" || value == "INTEGRATION" ||
-		value == "RUNTIME_ENVIRONMENT" || value == "ROLE_IMAGE" || value == "SESSION" || value == "SECRET"
+		value == "RUNTIME_ENVIRONMENT" || value == "ROLE_IMAGE" || value == "SESSION" || value == "SECRET" ||
+		value == "PROVIDER_ACCOUNT"
 }
 func contains(values []string, expected string) bool {
 	for _, value := range values {

@@ -11,9 +11,12 @@ export type OwnerSessionCreateInput = {
 };
 
 export type OwnerSessionPurpose = {
-    kind: 'RUNTIME_SECRET_REVEAL';
+    kind: 'RUNTIME_SECRET_CREATE' | 'RUNTIME_SECRET_ROTATE' | 'RUNTIME_SECRET_REVOKE' | 'RUNTIME_SECRET_REVEAL';
     projectRef: OpaqueRef;
-    secretRef: OpaqueRef;
+    /**
+     * Обязателен для ROTATE, REVOKE и REVEAL; отсутствует для CREATE
+     */
+    secretRef?: OpaqueRef;
 };
 
 export type Timestamp = string;
@@ -233,7 +236,7 @@ export type SimulateAccessResult = {
     evaluatedAt: Timestamp;
 };
 
-export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING';
+export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING' | 'CONFIGURE_CREDENTIAL' | 'ROTATE' | 'REVEAL' | 'PROMOTE' | 'DELETE';
 
 export type Problem = {
     type: string;
@@ -386,6 +389,7 @@ export type Agent = {
     purpose: string;
     roleDescription: string;
     avatarUrl?: string;
+    avatar?: AgentAvatar;
     state: 'DRAFT' | 'READY' | 'RUNNING' | 'DISABLED' | 'ARCHIVED';
     enabled: boolean;
     system: boolean;
@@ -413,12 +417,26 @@ export type AgentInput = {
      * Непрозрачный ref роли из авторитетного каталога; при отсутствии сервер атомарно создаёт роль агента
      */
     roleDefinitionRef?: OpaqueRef;
-    avatarUrl?: string;
     /**
      * Непрозрачный ref из runtime catalog; при отсутствии сервер выбирает безопасный default
      */
     runtimeRef?: OpaqueRef;
     initialInstructions?: string;
+};
+
+export type AgentAvatar = {
+    source: 'FALLBACK' | 'ARTIFACT';
+    artifactRef?: OpaqueRef;
+    artifactRevision?: number;
+    contentPath: string;
+};
+
+export type AgentAvatarInput = {
+    artifactRef: OpaqueRef;
+};
+
+export type EnabledInput = {
+    enabled: boolean;
 };
 
 export type RuntimeSelection = {
@@ -521,6 +539,7 @@ export type RuntimeSecret = {
     state: 'ACTIVE' | 'REVOKED';
     currentRevision: number;
     displayHint?: RuntimeSecretDisplayHint;
+    nextActions: Array<NextAction>;
     createdAt: Timestamp;
     updatedAt: Timestamp;
 };
@@ -663,9 +682,22 @@ export type RuntimeEnvironmentSet = {
     projectRef: OpaqueRef;
     name: string;
     description: string;
-    state: string;
+    state: 'ACTIVE' | 'DISABLED' | 'DELETED';
     currentVersion: RuntimeEnvironmentVersion;
     updatedAt: Timestamp;
+    ready: boolean;
+    readinessBlockers: Array<string>;
+    nextActions: Array<NextAction>;
+};
+
+export type RuntimeEnvironmentReadiness = {
+    environmentRef: OpaqueRef;
+    environmentVersion: number;
+    publishedVersionRef: OpaqueRef;
+    publishedVersionDigest: string;
+    ready: boolean;
+    blockers: Array<string>;
+    observedAt: Timestamp;
 };
 
 export type RuntimeEnvironmentInput = {
@@ -721,15 +753,71 @@ export type RuntimeEnvironmentVersionPage = {
 
 export type TemplateVariable = {
     name: string;
-    valueType: string;
+    valueType: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP' | 'OBJECT' | 'COLLECTION';
     description: string;
     example: string;
-    source: string;
+    source: 'SYSTEM' | 'USER' | 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'ENVIRONMENT' | 'RUNTIME' | 'TOOLS' | 'INPUT_FILES' | 'SESSION_FILES' | 'RUN_FILES' | 'WORKFLOW_FILES' | 'PROJECT_FILES';
+    collection: boolean;
+    itemValueType?: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP' | 'OBJECT';
+    itemFields: Array<TemplateVariableField>;
+    rangeExample?: string;
+};
+
+export type TemplateVariableField = {
+    name: string;
+    valueType: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP';
+    description: string;
 };
 
 export type TemplateVariablePage = {
     items: Array<TemplateVariable>;
     nextPageToken?: string;
+};
+
+export type ProviderDefinition = {
+    key: 'openai-codex';
+    name: string;
+    description: string;
+    authorizationMethods: Array<'DEVICE_CODE' | 'API_KEY'>;
+    modelIds: Array<string>;
+    defaultModelId: string;
+    available: boolean;
+    ready: boolean;
+    readinessBlockers: Array<string>;
+};
+
+export type ProviderDefinitionPage = {
+    items: Array<ProviderDefinition>;
+    nextPageToken: string;
+};
+
+export type PromptTemplateInput = {
+    template: string;
+};
+
+export type PromptTemplatePreviewInput = PromptTemplateInput & {
+    targetKind?: 'SYNTHETIC' | 'SESSION' | 'RUN';
+    targetRef?: OpaqueRef;
+    includeFullMaterialization?: boolean;
+};
+
+export type PromptTemplateDiagnostic = {
+    severity: 'ERROR' | 'WARNING';
+    code: string;
+    message: string;
+    line: number;
+    column: number;
+};
+
+export type PromptTemplateValidation = {
+    valid: boolean;
+    diagnostics: Array<PromptTemplateDiagnostic>;
+};
+
+export type PromptTemplatePreview = {
+    safePreview: string;
+    fullMaterializedPrompt?: string;
+    diagnostics: Array<PromptTemplateDiagnostic>;
 };
 
 export type RoleEnvironmentPlatform = {
@@ -836,18 +924,58 @@ export type RoleImageArtifact = {
     recipeRef: OpaqueRef;
     recipeGeneration: number;
     manifestDigest: string;
-    promotedReference: string;
+    provenanceSha256: string;
+    promotedReference?: string;
     admissionVerdict: 'ACCEPTED' | 'REJECTED';
     sbomSha256?: string;
     vulnerabilityEvidenceSha256?: string;
     tools: Array<RoleImageArtifactTool>;
-    promotedAt: Timestamp;
+    promotedAt?: Timestamp;
+    promotionReceiptSha256?: string;
 };
 
 export type RoleImageRecipeCommandReceipt = {
     recipe: RoleImageRecipe;
     imageBuild?: RoleImageBuild;
     reused: boolean;
+};
+
+export type RoleImageRecipeRevision = {
+    ref: OpaqueRef;
+    recipeRef: OpaqueRef;
+    revision: number;
+    recipeVersion: number;
+    recipeGeneration: number;
+    specSha256: string;
+    provenanceSha256: string;
+    sourceSha256: string;
+    immutableBuildSha256: string;
+    imageArtifactRef: OpaqueRef;
+    manifestDigest: string;
+    promotedReference?: string;
+    promotionReceiptSha256: string;
+    createdAt: Timestamp;
+};
+
+export type RoleImageRecipeRevisionPage = {
+    items: Array<RoleImageRecipeRevision>;
+    nextPageToken: string;
+};
+
+export type RoleImagePromotionInput = {
+    imageArtifactRef: OpaqueRef;
+    expectedProvenanceSha256: string;
+};
+
+export type RoleImagePromotionReceipt = {
+    ref: OpaqueRef;
+    recipeRef: OpaqueRef;
+    imageArtifactRef: OpaqueRef;
+    provenanceSha256: string;
+    manifestDigest: string;
+    receiptSha256: string;
+    state: 'QUEUED' | 'PROMOTING' | 'PROMOTED' | 'FAILED';
+    createdAt: Timestamp;
 };
 
 export type WorkflowInputField = {
@@ -1153,7 +1281,30 @@ export type OwnerGate = {
     expiresAt?: Timestamp;
     decidedAt?: Timestamp;
     resolutionAttachmentSetRef?: OpaqueRef;
+    sourceAttachmentSetRef?: OpaqueRef;
+    decisionConsequences: Array<OwnerGateDecisionConsequence>;
+    integrationIntent?: IntegrationIntent;
     nextActions: Array<NextAction>;
+};
+
+export type OwnerGateDecisionConsequence = {
+    decision: 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'CANCEL';
+    safeSummary: string;
+    executesExternalEffect: boolean;
+    terminalForRun: boolean;
+};
+
+export type IntegrationIntent = {
+    connectionRef: OpaqueRef;
+    connectionName: string;
+    definitionKey: string;
+    capabilityKey: string;
+    operation: string;
+    resourceScope: IntegrationResourceScope;
+    effectPreview: {
+        [key: string]: unknown;
+    };
+    effectKey: string;
 };
 
 export type GateResolution = {
@@ -1256,13 +1407,37 @@ export type ArtifactPurgeReceipt = {
     lifecycleState: 'PURGED';
 };
 
+export type ArtifactImpact = {
+    artifactRef: OpaqueRef;
+    artifactVersion: number;
+    action: 'DELETE' | 'PURGE';
+    impactDigest: string;
+    bindingCount: number;
+    attachmentCount: number;
+    activeRuntimeCount: number;
+    /**
+     * Безопасная bounded-проекция active Runs; порядок createdAt DESC, runRef DESC.
+     */
+    activeRuns: Array<ArtifactImpactRun>;
+    activeRunsTruncated: boolean;
+    blockers: Array<string>;
+    permitted: boolean;
+};
+
+export type ArtifactImpactRun = {
+    runRef: OpaqueRef;
+    title: string;
+    state: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING';
+    projectRef?: OpaqueRef;
+};
+
 export type Schedule = {
     ref: OpaqueRef;
     version: number;
     projectRef: OpaqueRef;
     name: string;
     target: RunTarget;
-    state: 'ACTIVE' | 'PAUSED' | 'NEEDS_ATTENTION' | 'ARCHIVED';
+    state: 'ACTIVE' | 'PAUSED' | 'NEEDS_ATTENTION' | 'ARCHIVED' | 'DELETED';
     preset: string;
     cronExpression?: string;
     timeOfDay?: string;
@@ -1276,6 +1451,42 @@ export type Schedule = {
     nextRunAt?: Timestamp;
     lastOutcome?: string;
     nextActions: Array<NextAction>;
+    currentRevision: ScheduleRevision;
+    continueSessionRef?: OpaqueRef;
+};
+
+export type ScheduleRevision = {
+    ref: OpaqueRef;
+    revision: number;
+    digest: string;
+    name: string;
+    target: RunTarget;
+    preset: string;
+    cronExpression: string;
+    timezone: string;
+    input: {
+        [key: string]: unknown;
+    };
+    sessionPolicy: 'NEW_EACH_RUN' | 'CONTINUE_ONE';
+    notificationPolicy: 'CONTROL_CENTER_ONLY' | 'CONTROL_CENTER_AND_OPTIONAL_CHANNELS';
+    createdAt: Timestamp;
+};
+
+export type ScheduleRevisionPage = {
+    items: Array<ScheduleRevision>;
+    nextPageToken: string;
+};
+
+export type ScheduleRunOccurrence = {
+    scheduleRef: OpaqueRef;
+    scheduleRevisionRef: OpaqueRef;
+    scheduleRevision: number;
+    run: Run;
+};
+
+export type ScheduleRunOccurrencePage = {
+    items: Array<ScheduleRunOccurrence>;
+    nextPageToken: string;
 };
 
 export type ScheduleInput = {
@@ -1297,6 +1508,46 @@ export type ScheduleCommand = {
     action: 'ENABLE' | 'PAUSE' | 'ARCHIVE';
 };
 
+export type ProviderAuthorization = {
+    ref: OpaqueRef;
+    method: 'DEVICE_CODE' | 'API_KEY';
+    state: 'PENDING' | 'AUTHORIZED' | 'EXPIRED' | 'FAILED';
+    verificationUri?: string;
+    userCode?: string;
+    expiresAt?: Timestamp;
+    safeFailureCode?: string;
+};
+
+export type ProviderAccount = {
+    ref: OpaqueRef;
+    version: number;
+    definitionKey: 'openai-codex';
+    name: string;
+    externalAccountMasked: string;
+    state: 'PENDING_AUTHORIZATION' | 'AUTHORIZED' | 'REAUTHORIZATION_REQUIRED' | 'REVOKED' | 'DISABLED';
+    enabled: boolean;
+    ready: boolean;
+    authorization?: ProviderAuthorization;
+    nextActions: Array<NextAction>;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+};
+
+export type ProviderAccountPage = {
+    items: Array<ProviderAccount>;
+    nextPageToken: string;
+    nextActions: Array<NextAction>;
+};
+
+export type ProviderAccountCreateInput = {
+    definitionKey: 'openai-codex';
+    name: string;
+};
+
+export type ProviderApiKeyInput = {
+    apiKey: string;
+};
+
 export type IntegrationCapability = {
     key: string;
     name: string;
@@ -1313,9 +1564,14 @@ export type IntegrationConfigurationField = {
     key: string;
     label: string;
     help: string;
-    valueType: 'TEXT' | 'URL' | 'STRING_LIST';
+    valueType: 'TEXT' | 'URL' | 'STRING_LIST' | 'INTEGER' | 'BOOLEAN';
     required: boolean;
     placeholder?: string;
+    allowedValues?: Array<string>;
+    format?: string;
+    minimum?: number;
+    maximum?: number;
+    maximumLength?: number;
 };
 
 export type IntegrationDefinition = {
@@ -1365,7 +1621,7 @@ export type IntegrationConnection = {
     version: number;
     definitionKey: string;
     name: string;
-    state: 'NOT_CONNECTED' | 'TESTING' | 'CONNECTED' | 'DEGRADED' | 'DISABLED';
+    state: 'NOT_CONNECTED' | 'TESTING' | 'CONNECTED' | 'DEGRADED' | 'DISABLED' | 'DELETED';
     credentialsConfigured: boolean;
     credentialsHint: string;
     lastTestedAt?: Timestamp;
@@ -1378,12 +1634,21 @@ export type IntegrationConnection = {
     publicConfiguration: {
         [key: string]: unknown;
     };
+    createdAt?: Timestamp;
+    updatedAt?: Timestamp;
 };
 
 export type IntegrationConnectionInput = {
     definitionKey: string;
     name: string;
     publicConfiguration?: {
+        [key: string]: unknown;
+    };
+};
+
+export type IntegrationConnectionUpdateInput = {
+    name: string;
+    publicConfiguration: {
         [key: string]: unknown;
     };
 };
@@ -1605,6 +1870,11 @@ export type GateRef = OpaqueRef;
 
 export type ArtifactRef = OpaqueRef;
 
+/**
+ * Digest свежего server-side impact/preflight для exact action и artifact version
+ */
+export type ImpactDigest = string;
+
 export type AttachmentSetRef = string;
 
 export type ArtifactLifecycleStateQuery = 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
@@ -1618,6 +1888,8 @@ export type ArtifactSourceKindQuery = 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEG
 export type ScheduleRef = OpaqueRef;
 
 export type ConnectionRef = OpaqueRef;
+
+export type ProviderAccountRef = OpaqueRef;
 
 export type ConversationRef = OpaqueRef;
 
@@ -2434,6 +2706,97 @@ export type UpdateAgentResponses = {
 
 export type UpdateAgentResponse = UpdateAgentResponses[keyof UpdateAgentResponses];
 
+export type RemoveAgentAvatarData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/avatar';
+};
+
+export type RemoveAgentAvatarErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RemoveAgentAvatarError = RemoveAgentAvatarErrors[keyof RemoveAgentAvatarErrors];
+
+export type RemoveAgentAvatarResponses = {
+    /**
+     * Пользовательский avatar удалён, активирован server-generated fallback
+     */
+    200: Agent;
+};
+
+export type RemoveAgentAvatarResponse = RemoveAgentAvatarResponses[keyof RemoveAgentAvatarResponses];
+
+export type SetAgentAvatarData = {
+    body: AgentAvatarInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/avatar';
+};
+
+export type SetAgentAvatarErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SetAgentAvatarError = SetAgentAvatarErrors[keyof SetAgentAvatarErrors];
+
+export type SetAgentAvatarResponses = {
+    /**
+     * Готовый image Artifact привязан как avatar
+     */
+    200: Agent;
+};
+
+export type SetAgentAvatarResponse = SetAgentAvatarResponses[keyof SetAgentAvatarResponses];
+
+export type GetAgentAvatarContentData = {
+    body?: never;
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/avatar/content';
+};
+
+export type GetAgentAvatarContentErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetAgentAvatarContentError = GetAgentAvatarContentErrors[keyof GetAgentAvatarContentErrors];
+
+export type GetAgentAvatarContentResponses = {
+    /**
+     * Готовое изображение либо deterministic server fallback
+     */
+    200: Blob | File;
+};
+
+export type GetAgentAvatarContentResponse = GetAgentAvatarContentResponses[keyof GetAgentAvatarContentResponses];
+
 export type ListAgentInstructionVersionsData = {
     body?: never;
     path: {
@@ -2904,6 +3267,399 @@ export type ListTemplateVariablesResponses = {
 
 export type ListTemplateVariablesResponse = ListTemplateVariablesResponses[keyof ListTemplateVariablesResponses];
 
+export type ListProviderDefinitionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/provider-definitions';
+};
+
+export type ListProviderDefinitionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListProviderDefinitionsError = ListProviderDefinitionsErrors[keyof ListProviderDefinitionsErrors];
+
+export type ListProviderDefinitionsResponses = {
+    /**
+     * Безопасный server-owned каталог providers и способов авторизации
+     */
+    200: ProviderDefinitionPage;
+};
+
+export type ListProviderDefinitionsResponse = ListProviderDefinitionsResponses[keyof ListProviderDefinitionsResponses];
+
+export type ListProviderAccountsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        definitionKey?: 'openai-codex';
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/provider-accounts';
+};
+
+export type ListProviderAccountsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListProviderAccountsError = ListProviderAccountsErrors[keyof ListProviderAccountsErrors];
+
+export type ListProviderAccountsResponses = {
+    /**
+     * Provider accounts текущей organization без credential values
+     */
+    200: ProviderAccountPage;
+};
+
+export type ListProviderAccountsResponse = ListProviderAccountsResponses[keyof ListProviderAccountsResponses];
+
+export type CreateProviderAccountData = {
+    body: ProviderAccountCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/provider-accounts';
+};
+
+export type CreateProviderAccountErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateProviderAccountError = CreateProviderAccountErrors[keyof CreateProviderAccountErrors];
+
+export type CreateProviderAccountResponses = {
+    /**
+     * Provider account descriptor создан
+     */
+    201: ProviderAccount;
+};
+
+export type CreateProviderAccountResponse = CreateProviderAccountResponses[keyof CreateProviderAccountResponses];
+
+export type GetProviderAccountData = {
+    body?: never;
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}';
+};
+
+export type GetProviderAccountErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetProviderAccountError = GetProviderAccountErrors[keyof GetProviderAccountErrors];
+
+export type GetProviderAccountResponses = {
+    /**
+     * Provider account status и pending authorization descriptor
+     */
+    200: ProviderAccount;
+};
+
+export type GetProviderAccountResponse = GetProviderAccountResponses[keyof GetProviderAccountResponses];
+
+export type StartProviderAccountDeviceAuthorizationData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/device-authorization';
+};
+
+export type StartProviderAccountDeviceAuthorizationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type StartProviderAccountDeviceAuthorizationError = StartProviderAccountDeviceAuthorizationErrors[keyof StartProviderAccountDeviceAuthorizationErrors];
+
+export type StartProviderAccountDeviceAuthorizationResponses = {
+    /**
+     * Device authorization начата; повторный GET наблюдает pending state
+     */
+    202: ProviderAccount;
+};
+
+export type StartProviderAccountDeviceAuthorizationResponse = StartProviderAccountDeviceAuthorizationResponses[keyof StartProviderAccountDeviceAuthorizationResponses];
+
+export type AuthorizeProviderAccountApiKeyData = {
+    body: ProviderApiKeyInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/api-key-authorization';
+};
+
+export type AuthorizeProviderAccountApiKeyErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type AuthorizeProviderAccountApiKeyError = AuthorizeProviderAccountApiKeyErrors[keyof AuthorizeProviderAccountApiKeyErrors];
+
+export type AuthorizeProviderAccountApiKeyResponses = {
+    /**
+     * API key materialized вне БД; ответ содержит только descriptor/status
+     */
+    200: ProviderAccount;
+};
+
+export type AuthorizeProviderAccountApiKeyResponse = AuthorizeProviderAccountApiKeyResponses[keyof AuthorizeProviderAccountApiKeyResponses];
+
+export type RefreshProviderAccountAuthorizationData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/authorization-refresh';
+};
+
+export type RefreshProviderAccountAuthorizationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RefreshProviderAccountAuthorizationError = RefreshProviderAccountAuthorizationErrors[keyof RefreshProviderAccountAuthorizationErrors];
+
+export type RefreshProviderAccountAuthorizationResponses = {
+    /**
+     * Pending authorization observed or authorized account refreshed
+     */
+    200: ProviderAccount;
+};
+
+export type RefreshProviderAccountAuthorizationResponse = RefreshProviderAccountAuthorizationResponses[keyof RefreshProviderAccountAuthorizationResponses];
+
+export type RevokeProviderAccountData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/revocation';
+};
+
+export type RevokeProviderAccountErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevokeProviderAccountError = RevokeProviderAccountErrors[keyof RevokeProviderAccountErrors];
+
+export type RevokeProviderAccountResponses = {
+    /**
+     * Account revoked and removed from runtime eligibility
+     */
+    200: ProviderAccount;
+};
+
+export type RevokeProviderAccountResponse = RevokeProviderAccountResponses[keyof RevokeProviderAccountResponses];
+
+export type SetProviderAccountEnabledData = {
+    body: EnabledInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/enabled';
+};
+
+export type SetProviderAccountEnabledErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SetProviderAccountEnabledError = SetProviderAccountEnabledErrors[keyof SetProviderAccountEnabledErrors];
+
+export type SetProviderAccountEnabledResponses = {
+    /**
+     * Runtime eligibility изменена без изменения credential revision
+     */
+    200: ProviderAccount;
+};
+
+export type SetProviderAccountEnabledResponse = SetProviderAccountEnabledResponses[keyof SetProviderAccountEnabledResponses];
+
+export type ListPromptTemplateVariablesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/prompt-templates/catalog';
+};
+
+export type ListPromptTemplateVariablesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListPromptTemplateVariablesError = ListPromptTemplateVariablesErrors[keyof ListPromptTemplateVariablesErrors];
+
+export type ListPromptTemplateVariablesResponses = {
+    /**
+     * Типизированный каталог разрешённых Go template namespaces без secrets
+     */
+    200: TemplateVariablePage;
+};
+
+export type ListPromptTemplateVariablesResponse = ListPromptTemplateVariablesResponses[keyof ListPromptTemplateVariablesResponses];
+
+export type ValidatePromptTemplateData = {
+    body: PromptTemplateInput;
+    headers: {
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/prompt-templates/validation';
+};
+
+export type ValidatePromptTemplateErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidatePromptTemplateError = ValidatePromptTemplateErrors[keyof ValidatePromptTemplateErrors];
+
+export type ValidatePromptTemplateResponses = {
+    /**
+     * Строгая синтаксическая и namespace-проверка
+     */
+    200: PromptTemplateValidation;
+};
+
+export type ValidatePromptTemplateResponse = ValidatePromptTemplateResponses[keyof ValidatePromptTemplateResponses];
+
+export type PreviewPromptTemplateData = {
+    body: PromptTemplatePreviewInput;
+    headers: {
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/prompt-templates/preview';
+};
+
+export type PreviewPromptTemplateErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PreviewPromptTemplateError = PreviewPromptTemplateErrors[keyof PreviewPromptTemplateErrors];
+
+export type PreviewPromptTemplateResponses = {
+    /**
+     * Synthetic safe preview; полный prompt только с exact prompt.full.view
+     */
+    200: PromptTemplatePreview;
+};
+
+export type PreviewPromptTemplateResponse = PreviewPromptTemplateResponses[keyof PreviewPromptTemplateResponses];
+
+export type DeleteRuntimeEnvironmentData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}';
+};
+
+export type DeleteRuntimeEnvironmentErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DeleteRuntimeEnvironmentError = DeleteRuntimeEnvironmentErrors[keyof DeleteRuntimeEnvironmentErrors];
+
+export type DeleteRuntimeEnvironmentResponses = {
+    /**
+     * Неиспользуемый environment terminally deleted с сохранением immutable revisions
+     */
+    200: RuntimeEnvironmentSet;
+};
+
+export type DeleteRuntimeEnvironmentResponse = DeleteRuntimeEnvironmentResponses[keyof DeleteRuntimeEnvironmentResponses];
+
 export type GetRuntimeEnvironmentSetData = {
     body?: never;
     path: {
@@ -2930,6 +3686,96 @@ export type GetRuntimeEnvironmentSetResponses = {
 };
 
 export type GetRuntimeEnvironmentSetResponse = GetRuntimeEnvironmentSetResponses[keyof GetRuntimeEnvironmentSetResponses];
+
+export type SetRuntimeEnvironmentEnabledData = {
+    body: EnabledInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}/enabled';
+};
+
+export type SetRuntimeEnvironmentEnabledErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SetRuntimeEnvironmentEnabledError = SetRuntimeEnvironmentEnabledErrors[keyof SetRuntimeEnvironmentEnabledErrors];
+
+export type SetRuntimeEnvironmentEnabledResponses = {
+    /**
+     * Runtime environment lifecycle изменён
+     */
+    200: RuntimeEnvironmentSet;
+};
+
+export type SetRuntimeEnvironmentEnabledResponse = SetRuntimeEnvironmentEnabledResponses[keyof SetRuntimeEnvironmentEnabledResponses];
+
+export type GetRuntimeEnvironmentReadinessData = {
+    body?: never;
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}/readiness';
+};
+
+export type GetRuntimeEnvironmentReadinessErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeEnvironmentReadinessError = GetRuntimeEnvironmentReadinessErrors[keyof GetRuntimeEnvironmentReadinessErrors];
+
+export type GetRuntimeEnvironmentReadinessResponses = {
+    /**
+     * Readiness exact published revision и зависимостей
+     */
+    200: RuntimeEnvironmentReadiness;
+};
+
+export type GetRuntimeEnvironmentReadinessResponse = GetRuntimeEnvironmentReadinessResponses[keyof GetRuntimeEnvironmentReadinessResponses];
+
+export type ListRuntimeEnvironmentAgentsData = {
+    body?: never;
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-environments/{environmentRef}/agents';
+};
+
+export type ListRuntimeEnvironmentAgentsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRuntimeEnvironmentAgentsError = ListRuntimeEnvironmentAgentsErrors[keyof ListRuntimeEnvironmentAgentsErrors];
+
+export type ListRuntimeEnvironmentAgentsResponses = {
+    /**
+     * Cursor-список ИИ-сотрудников, использующих environment
+     */
+    200: AgentPage;
+};
+
+export type ListRuntimeEnvironmentAgentsResponse = ListRuntimeEnvironmentAgentsResponses[keyof ListRuntimeEnvironmentAgentsResponses];
 
 export type ListRuntimeEnvironmentVersionsData = {
     body?: never;
@@ -3390,6 +4236,70 @@ export type CommandRoleImageRecipeResponses = {
 
 export type CommandRoleImageRecipeResponse = CommandRoleImageRecipeResponses[keyof CommandRoleImageRecipeResponses];
 
+export type ListRoleImageRecipeRevisionsData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+        recipeRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/revisions';
+};
+
+export type ListRoleImageRecipeRevisionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRoleImageRecipeRevisionsError = ListRoleImageRecipeRevisionsErrors[keyof ListRoleImageRecipeRevisionsErrors];
+
+export type ListRoleImageRecipeRevisionsResponses = {
+    /**
+     * Immutable recipe/build/promotion history
+     */
+    200: RoleImageRecipeRevisionPage;
+};
+
+export type ListRoleImageRecipeRevisionsResponse = ListRoleImageRecipeRevisionsResponses[keyof ListRoleImageRecipeRevisionsResponses];
+
+export type PromoteRoleImageData = {
+    body: RoleImagePromotionInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+        recipeRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/promotions';
+};
+
+export type PromoteRoleImageErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PromoteRoleImageError = PromoteRoleImageErrors[keyof PromoteRoleImageErrors];
+
+export type PromoteRoleImageResponses = {
+    /**
+     * Exact admitted artifact поставлен на promotion по совпавшему provenance digest
+     */
+    202: RoleImagePromotionReceipt;
+};
+
+export type PromoteRoleImageResponse = PromoteRoleImageResponses[keyof PromoteRoleImageResponses];
+
 export type ListWorkflowsData = {
     body?: never;
     path: {
@@ -3779,6 +4689,7 @@ export type ListOwnerGatesResponses = {
      */
     200: {
         items: Array<OwnerGate>;
+        nextPageToken: string;
     };
 };
 
@@ -4175,6 +5086,10 @@ export type UploadOrganizationArtifactResponse = UploadOrganizationArtifactRespo
 export type DeleteArtifactData = {
     body?: never;
     headers: {
+        /**
+         * Digest свежего server-side impact/preflight для exact action и artifact version
+         */
+        'X-Impact-Digest': string;
         'If-Match': string;
         'Idempotency-Key': string;
         'X-CSRF-Token': string;
@@ -4266,6 +5181,10 @@ export type RestoreArtifactResponse = RestoreArtifactResponses[keyof RestoreArti
 export type PurgeArtifactData = {
     body?: never;
     headers: {
+        /**
+         * Digest свежего server-side impact/preflight для exact action и artifact version
+         */
+        'X-Impact-Digest': string;
         'If-Match': string;
         'Idempotency-Key': string;
         'X-CSRF-Token': string;
@@ -4294,6 +5213,35 @@ export type PurgeArtifactResponses = {
 };
 
 export type PurgeArtifactResponse = PurgeArtifactResponses[keyof PurgeArtifactResponses];
+
+export type GetArtifactImpactData = {
+    body?: never;
+    path: {
+        artifactRef: OpaqueRef;
+    };
+    query: {
+        action: 'DELETE' | 'PURGE';
+    };
+    url: '/api/v1/artifacts/{artifactRef}/impact';
+};
+
+export type GetArtifactImpactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetArtifactImpactError = GetArtifactImpactErrors[keyof GetArtifactImpactErrors];
+
+export type GetArtifactImpactResponses = {
+    /**
+     * Server-side impact/preflight для exact lifecycle action
+     */
+    200: ArtifactImpact;
+};
+
+export type GetArtifactImpactResponse = GetArtifactImpactResponses[keyof GetArtifactImpactResponses];
 
 export type DownloadArtifactData = {
     body?: never;
@@ -4361,7 +5309,11 @@ export type ListSchedulesData = {
     path: {
         projectRef: OpaqueRef;
     };
-    query?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
     url: '/api/v1/projects/{projectRef}/schedules';
 };
 
@@ -4380,6 +5332,7 @@ export type ListSchedulesResponses = {
      */
     200: {
         items: Array<Schedule>;
+        nextPageToken: string;
     };
 };
 
@@ -4415,6 +5368,38 @@ export type CreateScheduleResponses = {
 };
 
 export type CreateScheduleResponse = CreateScheduleResponses[keyof CreateScheduleResponses];
+
+export type DeleteScheduleData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        scheduleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/schedules/{scheduleRef}';
+};
+
+export type DeleteScheduleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DeleteScheduleError = DeleteScheduleErrors[keyof DeleteScheduleErrors];
+
+export type DeleteScheduleResponses = {
+    /**
+     * Расписание terminally deleted, immutable revisions и run history сохранены
+     */
+    200: Schedule;
+};
+
+export type DeleteScheduleResponse = DeleteScheduleResponses[keyof DeleteScheduleResponses];
 
 export type GetScheduleData = {
     body?: never;
@@ -4475,6 +5460,66 @@ export type UpdateScheduleResponses = {
 
 export type UpdateScheduleResponse = UpdateScheduleResponses[keyof UpdateScheduleResponses];
 
+export type ListScheduleRevisionsData = {
+    body?: never;
+    path: {
+        scheduleRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/schedules/{scheduleRef}/revisions';
+};
+
+export type ListScheduleRevisionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListScheduleRevisionsError = ListScheduleRevisionsErrors[keyof ListScheduleRevisionsErrors];
+
+export type ListScheduleRevisionsResponses = {
+    /**
+     * Immutable revision history
+     */
+    200: ScheduleRevisionPage;
+};
+
+export type ListScheduleRevisionsResponse = ListScheduleRevisionsResponses[keyof ListScheduleRevisionsResponses];
+
+export type ListScheduleRunsData = {
+    body?: never;
+    path: {
+        scheduleRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/schedules/{scheduleRef}/runs';
+};
+
+export type ListScheduleRunsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListScheduleRunsError = ListScheduleRunsErrors[keyof ListScheduleRunsErrors];
+
+export type ListScheduleRunsResponses = {
+    /**
+     * Cursor run history этой автоматизации
+     */
+    200: ScheduleRunOccurrencePage;
+};
+
+export type ListScheduleRunsResponse = ListScheduleRunsResponses[keyof ListScheduleRunsResponses];
+
 export type CommandScheduleData = {
     body: ScheduleCommand;
     headers: {
@@ -4512,6 +5557,9 @@ export type ListIntegrationDefinitionsData = {
     path?: never;
     query?: {
         category?: string;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
     };
     url: '/api/v1/integration-definitions';
 };
@@ -4533,6 +5581,7 @@ export type ListIntegrationDefinitionsResponses = {
         items: Array<IntegrationDefinition>;
         coreReady: boolean;
         nextActions: Array<NextAction>;
+        nextPageToken: string;
     };
 };
 
@@ -4541,7 +5590,11 @@ export type ListIntegrationDefinitionsResponse = ListIntegrationDefinitionsRespo
 export type ListIntegrationConnectionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
     url: '/api/v1/integration-connections';
 };
 
@@ -4560,6 +5613,7 @@ export type ListIntegrationConnectionsResponses = {
      */
     200: {
         items: Array<IntegrationConnection>;
+        nextPageToken: string;
     };
 };
 
@@ -4594,6 +5648,38 @@ export type CreateIntegrationConnectionResponses = {
 
 export type CreateIntegrationConnectionResponse = CreateIntegrationConnectionResponses[keyof CreateIntegrationConnectionResponses];
 
+export type DeleteIntegrationConnectionData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}';
+};
+
+export type DeleteIntegrationConnectionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DeleteIntegrationConnectionError = DeleteIntegrationConnectionErrors[keyof DeleteIntegrationConnectionErrors];
+
+export type DeleteIntegrationConnectionResponses = {
+    /**
+     * Connection disabled and terminally deleted; grants revoked
+     */
+    200: IntegrationConnection;
+};
+
+export type DeleteIntegrationConnectionResponse = DeleteIntegrationConnectionResponses[keyof DeleteIntegrationConnectionResponses];
+
 export type GetIntegrationConnectionData = {
     body?: never;
     path: {
@@ -4620,6 +5706,38 @@ export type GetIntegrationConnectionResponses = {
 };
 
 export type GetIntegrationConnectionResponse = GetIntegrationConnectionResponses[keyof GetIntegrationConnectionResponses];
+
+export type UpdateIntegrationConnectionData = {
+    body: IntegrationConnectionUpdateInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}';
+};
+
+export type UpdateIntegrationConnectionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UpdateIntegrationConnectionError = UpdateIntegrationConnectionErrors[keyof UpdateIntegrationConnectionErrors];
+
+export type UpdateIntegrationConnectionResponses = {
+    /**
+     * Connection metadata изменена по OCC; credential revision не затронута
+     */
+    200: IntegrationConnection;
+};
+
+export type UpdateIntegrationConnectionResponse = UpdateIntegrationConnectionResponses[keyof UpdateIntegrationConnectionResponses];
 
 export type ConfigureIntegrationConnectionCredentialData = {
     body: IntegrationCredentialInput;
@@ -5561,6 +6679,7 @@ export type ListAuditEventsResponses = {
      */
     200: {
         items: Array<AuditEvent>;
+        nextPageToken: string;
     };
 };
 

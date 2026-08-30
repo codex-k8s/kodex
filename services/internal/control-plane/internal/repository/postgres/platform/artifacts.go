@@ -99,11 +99,11 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 		if projectID == "" {
 			return entity.Artifact{}, errs.ErrNotFound
 		}
-		if err := requireProjectPermission(ctx, tx, scope, projectID, "MANAGE_ARTIFACTS"); err != nil {
-			return entity.Artifact{}, err
-		}
 	} else if input.RunRef != "" {
 		return entity.Artifact{}, errs.ErrInvalid
+	}
+	if err := repository.requireArtifactUploadAccess(ctx, tx, scope, input.ProjectRef); err != nil {
+		return entity.Artifact{}, err
 	}
 	fileName := safeFileName(input.FileName)
 	lockScopeID := projectID
@@ -215,11 +215,11 @@ func (repository *Repository) preflightArtifactUpload(
 		if projectID == "" {
 			return nil, errs.ErrNotFound
 		}
-		if err := requireProjectPermission(ctx, tx, scope, projectID, "MANAGE_ARTIFACTS"); err != nil {
-			return nil, err
-		}
 	} else if input.RunRef != "" {
 		return nil, errs.ErrInvalid
+	}
+	if err := repository.requireArtifactUploadAccess(ctx, tx, scope, input.ProjectRef); err != nil {
+		return nil, err
 	}
 	if input.RunRef != "" {
 		var runID, rootRunID, runRef, sessionRef string
@@ -232,6 +232,23 @@ func (repository *Repository) preflightArtifactUpload(
 		return nil, errs.ErrConflict
 	}
 	return nil, nil
+}
+
+func (repository *Repository) requireArtifactUploadAccess(ctx context.Context, tx pgx.Tx, current scope, projectRef string) error {
+	var target any = organizationTarget(current.organizationRef)
+	if projectRef != "" {
+		resolved, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
+			ProjectRef: projectRef, ResourceKind: "PROJECT", ResourceRef: projectRef,
+		})
+		if err != nil {
+			return err
+		}
+		target = resolved
+	}
+	if err := repository.requireAccess(ctx, tx, current, "artifact.upload", target); err != nil {
+		return errs.ErrNotFound
+	}
+	return nil
 }
 
 func artifactObjectKey(organizationRef, actorRef, projectRef, artifactRef, digest string) string {
@@ -266,12 +283,12 @@ type artifactPurgeReceipt struct {
 	LifecycleState string `json:"lifecycleState"`
 }
 
-func (repository *Repository) PurgeArtifact(ctx context.Context, principal value.Principal, mutation value.Mutation, artifactRef string) (string, error) {
+func (repository *Repository) PurgeArtifact(ctx context.Context, principal value.Principal, mutation value.Mutation, artifactRef, impactDigest string) (string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return "", err
 	}
-	receipt, err := repository.prepareArtifactPurge(ctx, scope, mutation, artifactRef)
+	receipt, err := repository.prepareArtifactPurge(ctx, scope, mutation, artifactRef, impactDigest)
 	if err != nil {
 		return "", err
 	}
@@ -290,7 +307,7 @@ func (repository *Repository) PurgeArtifact(ctx context.Context, principal value
 	return repository.finalizeArtifactPurge(ctx, scope, mutation, receipt)
 }
 
-func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope scope, mutation value.Mutation, artifactRef string) (artifactPurgeReceipt, error) {
+func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope scope, mutation value.Mutation, artifactRef, impactDigest string) (artifactPurgeReceipt, error) {
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return artifactPurgeReceipt{}, errs.ErrUnavailable
@@ -342,6 +359,13 @@ func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope sc
 		return artifactPurgeReceipt{}, errs.ErrVersionMismatch
 	}
 	if receipt.LifecycleState != "DELETED" {
+		return artifactPurgeReceipt{}, errs.ErrConflict
+	}
+	impact, impactState, err := repository.artifactImpactTx(ctx, tx, scope, artifactRef, "PURGE")
+	if err != nil {
+		return artifactPurgeReceipt{}, err
+	}
+	if impactState != receipt.LifecycleState || impact.Digest != impactDigest || !impact.Permitted {
 		return artifactPurgeReceipt{}, errs.ErrConflict
 	}
 	tag, err := tx.Exec(ctx, queryArtifactsPurgeMarkPending, pgx.StrictNamedArgs{
@@ -658,14 +682,11 @@ func (repository *Repository) changeArtifactLifecycle(ctx context.Context, tx pg
 		return commandOutcome{}, errs.ErrConflict
 	}
 	if input.Kind == command.DeleteArtifact {
-		var hasQueuedDependencies bool
-		if err := tx.QueryRow(ctx, queryArtifactsLifecycleSelectHasQueuedDependencies, pgx.StrictNamedArgs{
-			"artifact_id":      artifactID,
-			"artifact_version": version,
-		}).Scan(&hasQueuedDependencies); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+		impact, impactState, err := repository.artifactImpactTx(ctx, tx, scope, payload.ArtifactRef, "DELETE")
+		if err != nil {
+			return commandOutcome{}, err
 		}
-		if hasQueuedDependencies {
+		if impactState != lifecycleState || impact.Digest != payload.ImpactDigest || !impact.Permitted {
 			return commandOutcome{}, errs.ErrConflict
 		}
 	}
@@ -692,4 +713,101 @@ func (repository *Repository) changeArtifactLifecycle(ctx context.Context, tx pg
 		summary:       summary,
 		platformEvent: "ARTIFACT_CHANGED",
 	}, nil
+}
+
+func (repository *Repository) GetArtifactImpact(ctx context.Context, principal value.Principal, artifactRef, action string) (entity.ArtifactImpact, error) {
+	current, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return entity.ArtifactImpact{}, err
+	}
+	if action != "DELETE" && action != "PURGE" {
+		return entity.ArtifactImpact{}, errs.ErrInvalid
+	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return entity.ArtifactImpact{}, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	permission := "artifact.delete"
+	if action == "PURGE" {
+		permission = "artifact.purge"
+	}
+	_, target, err := repository.resolveCommandTarget(ctx, tx, current, permission, "ARTIFACT", artifactRef, "")
+	if err != nil {
+		return entity.ArtifactImpact{}, err
+	}
+	if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
+		return entity.ArtifactImpact{}, errs.ErrNotFound
+	}
+	impact, _, err := repository.artifactImpactTx(ctx, tx, current, artifactRef, action)
+	if err != nil {
+		return entity.ArtifactImpact{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.ArtifactImpact{}, errs.ErrConflict
+	}
+	return impact, nil
+}
+
+func (repository *Repository) artifactImpactTx(ctx context.Context, tx pgx.Tx, current scope, artifactRef, action string) (entity.ArtifactImpact, string, error) {
+	var artifactID, lifecycleState string
+	var activeRunsJSON []byte
+	var version, bindingCount, attachmentCount, activeRuntimeCount int64
+	err := tx.QueryRow(ctx, queryArtifactsImpact, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID,
+		"artifact_ref":    artifactRef,
+	}).Scan(&artifactID, &version, &lifecycleState, &bindingCount, &attachmentCount, &activeRuntimeCount, &activeRunsJSON)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.ArtifactImpact{}, "", errs.ErrNotFound
+	}
+	if err != nil {
+		return entity.ArtifactImpact{}, "", errs.ErrUnavailable
+	}
+	activeRuns := make([]entity.ArtifactImpactRun, 0, 21)
+	if json.Unmarshal(activeRunsJSON, &activeRuns) != nil ||
+		len(activeRuns) > 21 || activeRuntimeCount < int64(len(activeRuns)) ||
+		activeRuntimeCount <= 20 && activeRuntimeCount != int64(len(activeRuns)) ||
+		activeRuntimeCount > 20 && len(activeRuns) != 21 {
+		return entity.ArtifactImpact{}, "", errs.ErrUnavailable
+	}
+	activeRunsTruncated := len(activeRuns) > 20
+	if activeRunsTruncated {
+		activeRuns = activeRuns[:20]
+	}
+	blockers := make([]string, 0, 3)
+	if action == "DELETE" {
+		if lifecycleState != "ACTIVE" {
+			blockers = append(blockers, "ARTIFACT_NOT_ACTIVE")
+		}
+		if activeRuntimeCount > 0 {
+			blockers = append(blockers, "ACTIVE_RUN_USES_ARTIFACT")
+		}
+	} else {
+		if lifecycleState != "DELETED" {
+			blockers = append(blockers, "ARTIFACT_NOT_DELETED")
+		}
+		if bindingCount > 0 {
+			blockers = append(blockers, "ARTIFACT_HAS_BINDINGS")
+		}
+		if attachmentCount > 0 {
+			blockers = append(blockers, "ARTIFACT_HAS_IMMUTABLE_ATTACHMENTS")
+		}
+		if activeRuntimeCount > 0 {
+			blockers = append(blockers, "ACTIVE_RUN_USES_ARTIFACT")
+		}
+	}
+	digestPayload, _ := json.Marshal(struct {
+		ArtifactRef, Action, LifecycleState                                string
+		ArtifactVersion, BindingCount, AttachmentCount, ActiveRuntimeCount int64
+		Blockers                                                           []string
+		ActiveRuns                                                         []entity.ArtifactImpactRun
+		ActiveRunsTruncated                                                bool
+	}{artifactRef, action, lifecycleState, version, bindingCount, attachmentCount, activeRuntimeCount, blockers, activeRuns, activeRunsTruncated})
+	digestValue := sha256.Sum256(digestPayload)
+	return entity.ArtifactImpact{
+		ArtifactRef: artifactRef, Action: action, Digest: hex.EncodeToString(digestValue[:]),
+		ArtifactVersion: version, BindingCount: bindingCount, AttachmentCount: attachmentCount,
+		ActiveRuntimeCount: activeRuntimeCount, ActiveRuns: activeRuns, ActiveRunsTruncated: activeRunsTruncated,
+		Blockers: blockers, Permitted: len(blockers) == 0,
+	}, lifecycleState, nil
 }

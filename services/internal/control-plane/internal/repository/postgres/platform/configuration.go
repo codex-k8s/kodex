@@ -41,10 +41,29 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, err
 		}
 		ref, _ := newRef("sch")
+		revisionRef, _ := newRef("srev")
+		scheduleID, revisionID := uuid.NewString(), uuid.NewString()
+		revisionDigest, err := scheduleRevisionDigest(payload)
+		if err != nil {
+			return commandOutcome{}, errs.ErrInvalid
+		}
 		var item entity.Schedule
 		var next *time.Time
-		err = tx.QueryRow(ctx, queryConfigurationChangescheduleInsertSchedulesRefProjectIdTargetType, ref, scope.organizationID, projectID, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, normalized.Next, scope.actorID).Scan(&item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled, &item.Version, &next, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+		err = tx.QueryRow(ctx, queryConfigurationChangescheduleInsertSchedulesRefProjectIdTargetType,
+			scheduleID, ref, scope.organizationID, projectID, payload.Name, payload.Target.Type,
+			payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input),
+			payload.SessionPolicy, payload.NotificationPolicy, normalized.Next, scope.actorID, revisionID,
+		).Scan(&item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone,
+			&item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled, &item.Version,
+			&next, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
+			return commandOutcome{}, mapWriteError(err)
+		}
+		if _, err = tx.Exec(ctx, queryConfigurationChangescheduleInsertScheduleRevision,
+			revisionID, revisionRef, scope.organizationID, scheduleID, int64(1), payload.Name,
+			payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone,
+			asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, revisionDigest, scope.actorID,
+		); err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
 		item.ProjectRef = payload.ProjectRef
@@ -53,6 +72,12 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		item.TimeOfDay = payload.TimeOfDay
 		item.DayOfWeek = payload.DayOfWeek
 		item.NextRunAt = next
+		item.CurrentRevision = entity.ScheduleRevision{
+			Ref: revisionRef, Revision: 1, Digest: revisionDigest, Name: payload.Name,
+			Target: payload.Target, Preset: payload.Preset, CronExpression: payload.CronExpression,
+			Timezone: payload.Timezone, Input: payload.Input, SessionPolicy: payload.SessionPolicy,
+			NotificationPolicy: payload.NotificationPolicy, CreatedAt: item.CreatedAt,
+		}
 		item.NextActions = scheduleActions(item, true)
 		return scheduleCommandOutcome(item, projectID, payload.ProjectRef, "i18n:SCHEDULE_CREATED"), nil
 	}
@@ -143,6 +168,23 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		item.NextActions = scheduleActions(item, true)
 	}
 	return scheduleCommandOutcome(item, projectID, projectRef, summary), nil
+}
+
+func scheduleRevisionDigest(payload command.ScheduleInput) (string, error) {
+	encoded, err := json.Marshal(struct {
+		Name, TargetType, TargetRef, Preset, CronExpression, Timezone string
+		Input                                                         map[string]any
+		SessionPolicy, NotificationPolicy                             string
+	}{
+		payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset,
+		payload.CronExpression, payload.Timezone, payload.Input,
+		payload.SessionPolicy, payload.NotificationPolicy,
+	})
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:]), nil
 }
 
 func scheduleCommandOutcome(item entity.Schedule, projectID, projectRef, summary string) commandOutcome {

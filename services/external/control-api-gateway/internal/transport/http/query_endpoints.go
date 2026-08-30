@@ -309,12 +309,14 @@ func (server *Server) GetArtifact(w http.ResponseWriter, r *http.Request, ref ge
 	}
 	writeMessage(w, http.StatusOK, response, "artifact", "")
 }
-func (server *Server) ListSchedules(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef) {
+func (server *Server) ListSchedules(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListSchedulesParams) {
 	r, ok := withProjectReference(w, r, ref)
 	if !ok {
 		return
 	}
-	response, err := server.control.Query.ListSchedules(r.Context(), &controlplanev1.ListSchedulesRequest{ProjectRef: ref, Page: page(nil, nil)})
+	response, err := server.control.Query.ListSchedules(r.Context(), &controlplanev1.ListSchedulesRequest{
+		ProjectRef: ref, Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken),
+	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -330,15 +332,19 @@ func (server *Server) GetSchedule(w http.ResponseWriter, r *http.Request, ref ge
 	writeMessage(w, http.StatusOK, response, "schedule", "")
 }
 func (server *Server) ListIntegrationDefinitions(w http.ResponseWriter, r *http.Request, p generated.ListIntegrationDefinitionsParams) {
-	response, err := server.control.Query.ListIntegrationDefinitions(r.Context(), &controlplanev1.ListIntegrationDefinitionsRequest{Category: stringValue(p.Category)})
+	response, err := server.control.Query.ListIntegrationDefinitions(r.Context(), &controlplanev1.ListIntegrationDefinitionsRequest{
+		Category: stringValue(p.Category), Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken),
+	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "", "definitions")
 }
-func (server *Server) ListIntegrationConnections(w http.ResponseWriter, r *http.Request) {
-	response, err := server.control.Query.ListIntegrationConnections(r.Context(), &controlplanev1.ListIntegrationConnectionsRequest{Page: page(nil, nil)})
+func (server *Server) ListIntegrationConnections(w http.ResponseWriter, r *http.Request, p generated.ListIntegrationConnectionsParams) {
+	response, err := server.control.Query.ListIntegrationConnections(r.Context(), &controlplanev1.ListIntegrationConnectionsRequest{
+		Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query),
+	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

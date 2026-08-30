@@ -230,7 +230,7 @@ func (server *Server) ChangeArtifactBinding(ctx context.Context, request *contro
 }
 
 func (server *Server) DeleteArtifact(ctx context.Context, request *controlplanev1.DeleteArtifactRequest) (*controlplanev1.DeleteArtifactResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DeleteArtifact_FullMethodName, command.DeleteArtifact, request.GetMutation(), command.ArtifactLifecycleInput{ArtifactRef: request.GetArtifactRef()})
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DeleteArtifact_FullMethodName, command.DeleteArtifact, request.GetMutation(), command.ArtifactLifecycleInput{ArtifactRef: request.GetArtifactRef(), ImpactDigest: request.GetImpactDigest()})
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +250,7 @@ func (server *Server) PurgeArtifact(ctx context.Context, request *controlplanev1
 	if err != nil {
 		return nil, err
 	}
-	state, err := server.service.PurgeArtifact(ctx, p, mutation(request.GetMutation()), request.GetArtifactRef())
+	state, err := server.service.PurgeArtifact(ctx, p, mutation(request.GetMutation()), request.GetArtifactRef(), request.GetImpactDigest())
 	if err != nil {
 		return nil, transportError(err)
 	}

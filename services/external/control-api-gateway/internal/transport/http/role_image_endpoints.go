@@ -257,10 +257,15 @@ func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.Role
 	result := generated.RoleImageArtifact{
 		Ref: input.GetRef(), Version: int64(input.GetVersion()), RecipeRef: input.GetRecipeRef(),
 		RecipeGeneration: int64(input.GetRecipeGeneration()), ManifestDigest: input.GetManifestDigest(),
-		PromotedReference: input.GetPromotedReference(),
-		AdmissionVerdict:  generated.RoleImageArtifactAdmissionVerdict(strings.TrimPrefix(input.GetAdmissionVerdict().String(), "IMAGE_ADMISSION_VERDICT_")),
-		Tools:             make([]generated.RoleImageArtifactTool, 0, len(input.GetTools())),
-		PromotedAt:        protoTime(input.GetPromotedAt()),
+		AdmissionVerdict: generated.RoleImageArtifactAdmissionVerdict(strings.TrimPrefix(input.GetAdmissionVerdict().String(), "IMAGE_ADMISSION_VERDICT_")),
+		Tools:            make([]generated.RoleImageArtifactTool, 0, len(input.GetTools())),
+	}
+	if value := input.GetPromotedReference(); value != "" {
+		result.PromotedReference = &value
+	}
+	if input.GetPromotedAt() != nil {
+		value := generated.Timestamp(protoTime(input.GetPromotedAt()))
+		result.PromotedAt = &value
 	}
 	if value := input.GetSbomSha256(); value != "" {
 		result.SbomSha256 = &value

@@ -648,10 +648,14 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 }
 
 func scanRun(row rowScanner, actorScoped bool) (entity.Run, error) {
+	return scanRunWithPrefix(row, actorScoped)
+}
+
+func scanRunWithPrefix(row rowScanner, actorScoped bool, prefix ...any) (entity.Run, error) {
 	var item entity.Run
 	var input, usage []byte
 	var canCancel, canLaunch bool
-	destinations := []any{&item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.TitleSource, &item.ActivitySummary, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputAttachmentSetRef, &item.ArtifactRefs, &item.GateRefs, &usage, &item.CreatedAt, &item.StartedAt, &item.FinishedAt}
+	destinations := append(prefix, &item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.TitleSource, &item.ActivitySummary, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputAttachmentSetRef, &item.ArtifactRefs, &item.GateRefs, &usage, &item.CreatedAt, &item.StartedAt, &item.FinishedAt)
 	if actorScoped {
 		destinations = append(destinations, &canCancel, &canLaunch)
 	} else {
@@ -1238,12 +1242,18 @@ func (repository *Repository) ListSchedules(ctx context.Context, principal value
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListschedulesSelectSchedulesOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, boundedPage(filter.Page))
+	cursorTime, cursorRef, err := decodeMVPCursor("schedule", filter.Page.Token)
+	if err != nil {
+		return nil, "", err
+	}
+	limit := boundedPage(filter.Page)
+	rows, err := repository.pool.Query(ctx, queryQueriesListschedulesSelectSchedulesOrganizationIdRefProjectId,
+		scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), cursorTime, cursorRef, limit+1)
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	var result []entity.Schedule
+	result := make([]entity.Schedule, 0, limit+1)
 	for rows.Next() {
 		item, err := scanSchedule(rows)
 		if err != nil {
@@ -1251,7 +1261,16 @@ func (repository *Repository) ListSchedules(ctx context.Context, principal value
 		}
 		result = append(result, item)
 	}
-	return result, "", rows.Err()
+	if rows.Err() != nil {
+		return nil, "", errs.ErrUnavailable
+	}
+	next := ""
+	if len(result) > int(limit) {
+		result = result[:limit]
+		last := result[len(result)-1]
+		next = encodeMVPCursor("schedule", last.UpdatedAt, last.Ref)
+	}
+	return result, next, nil
 }
 
 func (repository *Repository) GetSchedule(ctx context.Context, principal value.Principal, ref string) (entity.Schedule, error) {
@@ -1291,14 +1310,20 @@ func scheduleActions(item entity.Schedule, canManage bool) []string {
 	return append(actions, "ENABLE")
 }
 
-func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, principal value.Principal, category string) ([]entity.IntegrationDefinition, []string, error) {
+func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.IntegrationDefinition, string, []string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", nil, err
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListintegrationdefinitionsSelectIntegrationDefinitionsCategory, category)
+	cursor := strings.TrimSpace(filter.Page.Token)
+	if cursor != "" && (!validStableKey(cursor) || len(cursor) > 96) {
+		return nil, "", nil, errs.ErrInvalid
+	}
+	limit := boundedPage(filter.Page)
+	rows, err := repository.pool.Query(ctx, queryQueriesListintegrationdefinitionsSelectIntegrationDefinitionsCategory,
+		strings.TrimSpace(filter.Category), strings.TrimSpace(filter.Query), cursor, limit+1)
 	if err != nil {
-		return nil, nil, errs.ErrUnavailable
+		return nil, "", nil, errs.ErrUnavailable
 	}
 	defer rows.Close()
 	var result []entity.IntegrationDefinition
@@ -1310,15 +1335,23 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 			&capabilities, &schema, &item.SchemaVersion, &item.DefinitionVersion, &item.Origin,
 			&item.Digest, &item.Adapter, &item.CredentialSecretKey,
 		); err != nil {
-			return nil, nil, errs.ErrUnavailable
+			return nil, "", nil, errs.ErrUnavailable
 		}
 		if json.Unmarshal(capabilities, &item.Capabilities) != nil || json.Unmarshal(schema, &item.ConfigurationFields) != nil {
-			return nil, nil, errs.ErrUnavailable
+			return nil, "", nil, errs.ErrUnavailable
 		}
 		result = append(result, item)
 	}
+	if rows.Err() != nil {
+		return nil, "", nil, errs.ErrUnavailable
+	}
+	next := ""
+	if len(result) > int(limit) {
+		result = result[:limit]
+		next = result[len(result)-1].Key
+	}
 	actions := collectionCreateActions(scope.role, "CREATE_CONNECTION")
-	return result, actions, rows.Err()
+	return result, next, actions, nil
 }
 
 func collectionCreateActions(role, action string) []string {
@@ -1578,7 +1611,7 @@ func (repository *Repository) GetAdministration(ctx context.Context, principal v
 	if err != nil {
 		return platformrepo.Administration{}, err
 	}
-	definitions, _, err := repository.ListIntegrationDefinitions(ctx, principal, "")
+	definitions, _, _, err := repository.ListIntegrationDefinitions(ctx, principal, query.Filter{})
 	if err != nil {
 		return platformrepo.Administration{}, err
 	}

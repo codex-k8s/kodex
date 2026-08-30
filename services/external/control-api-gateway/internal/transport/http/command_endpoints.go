@@ -181,7 +181,7 @@ func (server *Server) CreateAgent(w http.ResponseWriter, r *http.Request, projec
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Command.CreateAgent(r.Context(), &controlplanev1.CreateAgentRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, RoleDefinitionRef: stringValue(body.RoleDefinitionRef), AvatarUrl: stringValue(body.AvatarUrl), RuntimeRef: stringValue(body.RuntimeRef), InitialInstructions: stringValue(body.InitialInstructions)})
+	response, err := server.control.Command.CreateAgent(r.Context(), &controlplanev1.CreateAgentRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, RoleDefinitionRef: stringValue(body.RoleDefinitionRef), RuntimeRef: stringValue(body.RuntimeRef), InitialInstructions: stringValue(body.InitialInstructions)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -197,7 +197,7 @@ func (server *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ref ge
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.UpdateAgent(r.Context(), &controlplanev1.UpdateAgentRequest{Mutation: m, AgentRef: ref, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, RoleDefinitionRef: stringValue(body.RoleDefinitionRef), AvatarUrl: stringValue(body.AvatarUrl), RuntimeRef: stringValue(body.RuntimeRef)})
+	response, err := server.control.Command.UpdateAgent(r.Context(), &controlplanev1.UpdateAgentRequest{Mutation: m, AgentRef: ref, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, RoleDefinitionRef: stringValue(body.RoleDefinitionRef), RuntimeRef: stringValue(body.RuntimeRef)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -629,7 +629,7 @@ func (server *Server) DeleteArtifact(w http.ResponseWriter, r *http.Request, ref
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.DeleteArtifact(r.Context(), &controlplanev1.DeleteArtifactRequest{Mutation: m, ArtifactRef: ref})
+	response, err := server.control.Command.DeleteArtifact(r.Context(), &controlplanev1.DeleteArtifactRequest{Mutation: m, ArtifactRef: ref, ImpactDigest: p.XImpactDigest})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -653,12 +653,41 @@ func (server *Server) PurgeArtifact(w http.ResponseWriter, r *http.Request, ref 
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.PurgeArtifact(r.Context(), &controlplanev1.PurgeArtifactRequest{Mutation: m, ArtifactRef: ref})
+	response, err := server.control.Command.PurgeArtifact(r.Context(), &controlplanev1.PurgeArtifactRequest{Mutation: m, ArtifactRef: ref, ImpactDigest: p.XImpactDigest})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "", "")
+}
+func (server *Server) GetArtifactImpact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.GetArtifactImpactParams) {
+	action := controlplanev1.ArtifactImpactAction(controlplanev1.ArtifactImpactAction_value["ARTIFACT_IMPACT_ACTION_"+string(p.Action)])
+	response, err := server.control.Query.GetArtifactImpact(r.Context(), &controlplanev1.GetArtifactImpactRequest{ArtifactRef: ref, Action: action})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	impact := response.GetImpact()
+	activeRuns := make([]generated.ArtifactImpactRun, 0, len(impact.GetActiveRuns()))
+	for _, run := range impact.GetActiveRuns() {
+		item := generated.ArtifactImpactRun{
+			RunRef: run.GetRunRef(), Title: run.GetTitle(),
+			State: generated.ArtifactImpactRunState(strings.TrimPrefix(run.GetState().String(), "RUN_STATE_")),
+		}
+		if run.GetProjectRef() != "" {
+			projectRef := generated.OpaqueRef(run.GetProjectRef())
+			item.ProjectRef = &projectRef
+		}
+		activeRuns = append(activeRuns, item)
+	}
+	writeJSON(w, http.StatusOK, generated.ArtifactImpact{
+		ArtifactRef: impact.GetArtifactRef(), ArtifactVersion: impact.GetArtifactVersion(),
+		Action:       generated.ArtifactImpactAction(strings.TrimPrefix(impact.GetAction().String(), "ARTIFACT_IMPACT_ACTION_")),
+		ImpactDigest: impact.GetImpactDigest(), BindingCount: impact.GetBindingCount(),
+		AttachmentCount: impact.GetAttachmentCount(), ActiveRuntimeCount: impact.GetActiveRuntimeCount(),
+		ActiveRuns: activeRuns, ActiveRunsTruncated: impact.GetActiveRunsTruncated(),
+		Blockers: impact.GetBlockers(), Permitted: impact.GetPermitted(),
+	})
 }
 func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.UploadArtifactParams) {
 	r, ok := withProjectReference(w, r, projectRef)
