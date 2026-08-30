@@ -27,7 +27,7 @@ done
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
 [[ "$state_directory" == /* && "$state_directory" != / && "$state_directory" != "$HOME" ]] ||
   fail 'state directory must be an exact safe absolute path'
-for command_name in curl helm jq kubectl openssl sha256sum yq; do
+for command_name in certutil curl helm jq kubectl openssl sha256sum yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'Kubernetes context mismatch'
@@ -110,14 +110,12 @@ service:
 ports:
   web:
     port: 8000
-    hostPort: 80
     expose:
       default: true
     exposedPort: 80
     protocol: TCP
   websecure:
     port: 8443
-    hostPort: 443
     expose:
       default: true
     exposedPort: 443
@@ -182,11 +180,16 @@ EOF
 }
 
 trust_browser_ca() {
-  command -v certutil >/dev/null 2>&1 || return 0
-  [[ -d "$HOME/.pki/nssdb" ]] || return 0
+  install -d -m 0700 "$HOME/.pki/nssdb"
+  if [[ ! -f "$HOME/.pki/nssdb/cert9.db" ]]; then
+    certutil -N --empty-password -d "sql:$HOME/.pki/nssdb" >/dev/null ||
+      fail 'browser NSS database initialization failed'
+  fi
   certutil -D -d "sql:$HOME/.pki/nssdb" -n 'Kodex Local Development CA' >/dev/null 2>&1 || true
   certutil -A -d "sql:$HOME/.pki/nssdb" -n 'Kodex Local Development CA' \
     -t 'C,,' -i "$state_directory/kodex-local-ca.crt" || fail 'browser CA trust update failed'
+  certutil -L -d "sql:$HOME/.pki/nssdb" -n 'Kodex Local Development CA' >/dev/null ||
+    fail 'browser CA trust readback failed'
 }
 
 apply_hot_reload_host_tuning() {
@@ -279,6 +282,7 @@ readback_hot_reload_host_tuning() {
   pods=$(kubectl -n kube-system get pods -l app.kubernetes.io/name=kodex-local-host-tuning -o name)
   [[ -n "$pods" ]] || fail 'local host-tuning pod is absent'
   while IFS= read -r pod; do
+    # shellcheck disable=SC2016
     kubectl -n kube-system exec "$pod" -- /bin/sh -ec '
       [ "$(cat /host-proc-sys-fs-inotify/max_user_instances)" -ge 1024 ] &&
       [ "$(cat /host-proc-sys-fs-inotify/max_user_watches)" -ge 524288 ]

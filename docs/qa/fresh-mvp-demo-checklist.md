@@ -64,8 +64,8 @@ TLS-сертификата и финальный trusted E2E после отде
 
 - implementation SHA:
   `c07f6d9dea9b721242f5c1fe6a58acbc571646d9`;
-- Kubernetes context: `radar-dev-local`, namespace: `kodex-system`;
-- origin: `https://control.10.8.1.1.nip.io` с локальной доверенной CA;
+- Kubernetes context: `default`, namespace: `kodex-system`;
+- origin: `https://control.127.0.0.1.nip.io` с локальной доверенной CA;
 - render SHA-256:
   `e460e91be4f1c92af9a918a1c5a47f6a3da3d88c3b3bd54cff5ceb37aa9195ba`;
 - первый отчёт:

@@ -446,9 +446,13 @@ rg -Fq 'no ready Kubernetes node became available' \
   fail 'bare-metal installer does not report a node readiness timeout'
 rg -Fq 'dnsutils' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal installer does not install the DNS preflight client'
-rg -Fq 'for command_name in cosign dig go helm kubectl nsc yq' \
+rg -Fq 'for command_name in certutil cosign dig go helm kubectl nsc yq' \
   "$repository_root/tools/install/prepare-host.sh" ||
-  fail 'bare-metal host readback does not require dig'
+  fail 'bare-metal host readback does not require DNS and browser trust clients'
+rg -Fq '  - traefik' "$repository_root/tools/install/prepare-host.sh" ||
+  fail 'bare-metal k3s does not disable the bundled Traefik release'
+rg -Fq 'systemctl restart k3s' "$repository_root/tools/install/prepare-host.sh" ||
+  fail 'bare-metal host apply does not activate changed k3s configuration'
 
 identity_inputs="$temporary_directory/identity-inputs"
 identity_material="$temporary_directory/identity-material"

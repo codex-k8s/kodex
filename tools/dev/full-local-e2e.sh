@@ -15,7 +15,7 @@ usage() {
 }
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-kubeconfig=${KODEX_DEV_KUBECONFIG:-/home/s/.kube/radar-dev-local}
+kubeconfig=${KODEX_DEV_KUBECONFIG:-/home/s/.kube/kodex-dev-local}
 context=""
 state_directory="$repository_root/.kodex-dev"
 resource_prefix="full-local-e2e-$(date -u +%Y%m%d%H%M%S)"

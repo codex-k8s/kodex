@@ -33,8 +33,8 @@ case "$command_name" in
     exec "$(dirname -- "${BASH_SOURCE[0]}")/tools/dev/provider-account.sh" list "$@"
     ;;
 esac
-kubeconfig=${KODEX_DEV_KUBECONFIG:-/home/s/.kube/radar-dev-local}
-context=${KODEX_DEV_KUBE_CONTEXT:-radar-dev-local}
+kubeconfig=${KODEX_DEV_KUBECONFIG:-/home/s/.kube/kodex-dev-local}
+context=${KODEX_DEV_KUBE_CONTEXT:-default}
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 state_directory="$repository_root/.kodex-dev"
 resource_prefix="local-e2e-$(date -u +%Y%m%d%H%M%S)"
@@ -80,25 +80,14 @@ if [[ "$command_name" == down ]]; then
 fi
 
 install -d -m 0700 "$state_directory" "$state_directory/cache" "$state_directory/inputs"
-node_ip=${KODEX_DEV_NODE_IP:-}
-if [[ -n "$node_ip" ]]; then
-  [[ "$node_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'KODEX_DEV_NODE_IP must use IPv4'
-  kubectl get nodes -o json | jq -e --arg node_ip "$node_ip" '
-    [.items[].status.addresses[] | select(.type == "InternalIP" and .address == $node_ip)] |
-    length == 1
-  ' >/dev/null || fail 'KODEX_DEV_NODE_IP is not an exact local node InternalIP'
-else
-  node_ip=$(kubectl get nodes -o json | jq -er '
-  if (.items | length) != 1 then error("one local node is required") else
-    [.items[0].status.addresses[] |
-      select(.type == "InternalIP" and (.address | test("^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$"))) |
-      .address] |
-    if length != 1 then error("one IPv4 InternalIP is required") else .[0] end
-  end
-') || fail 'local node IPv4 address is ambiguous'
+endpoint_ip=${KODEX_DEV_ENDPOINT_IP:-127.0.0.1}
+[[ "$endpoint_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+  fail 'KODEX_DEV_ENDPOINT_IP must use IPv4'
+if [[ "$endpoint_ip" != 127.0.0.1 ]]; then
+  ip -4 -o address show | awk '{print $4}' | cut -d/ -f1 | grep -Fxq "$endpoint_ip" ||
+    fail 'KODEX_DEV_ENDPOINT_IP is not assigned to this host'
 fi
-[[ "$node_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'local node must use IPv4'
-dns_suffix=${node_ip//./.}.nip.io
+dns_suffix=${endpoint_ip//./.}.nip.io
 public_host="control.$dns_suffix"
 oidc_host="sso.$dns_suffix"
 grafana_host="grafana.$dns_suffix"

@@ -82,8 +82,9 @@ if [[ "$mode" == apply ]]; then
   apt-get update -qq
   apt-get upgrade -y -qq
   apt-get install -y -qq \
-    apache2-utils build-essential ca-certificates curl dnsutils gh git iptables jq make \
-    iproute2 openssl python3 ripgrep rsync systemd tar unzip uidmap ufw zstd
+    apache2-utils build-essential ca-certificates curl dnsutils gh git iptables jq \
+    libnss3-tools make iproute2 openssl python3 ripgrep rsync systemd tar unzip \
+    uidmap ufw zstd
 else
   command -v jq >/dev/null 2>&1 || fail 'jq is required'
 fi
@@ -135,12 +136,20 @@ if [[ "$mode" == apply ]]; then
 
   download_artifact k3s "$temporary_directory/k3s"
   install -m 0755 "$temporary_directory/k3s" /usr/local/bin/k3s
-  ln -sfn /usr/local/bin/k3s /usr/local/bin/kubectl
+  rm -f -- /usr/local/bin/kubectl
+  cat >/usr/local/bin/kubectl <<'EOF'
+#!/bin/sh
+export K3S_CONFIG_FILE=/dev/null
+exec /usr/local/bin/k3s kubectl "$@"
+EOF
+  chmod 0755 /usr/local/bin/kubectl
   ln -sfn /usr/local/bin/k3s /usr/local/bin/crictl
   mkdir -p /etc/rancher/k3s /var/lib/rancher/k3s
   cat >/etc/rancher/k3s/config.yaml <<EOF
 write-kubeconfig-mode: "0600"
 secrets-encryption: true
+disable:
+  - traefik
 tls-san:
   - "$server_public_ip"
 kubelet-arg:
@@ -173,17 +182,18 @@ WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
   configure_firewall
-  systemctl enable --now k3s
+  systemctl enable k3s >/dev/null
+  systemctl restart k3s
 fi
 
 systemctl is-active --quiet k3s || fail 'k3s service is not active'
-for command_name in cosign dig go helm kubectl nsc yq; do
+for command_name in certutil cosign dig go helm kubectl nsc yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "installed command is absent: $command_name"
 done
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 api_ready=false
 node_ready=false
-for attempt in $(seq 1 120); do
+for _ in $(seq 1 120); do
   if kubectl get --raw=/readyz >/dev/null 2>&1; then
     api_ready=true
     if [[ "$(kubectl get node -o json 2>/dev/null | jq '[.items[] | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))] | length')" -ge 1 ]]; then

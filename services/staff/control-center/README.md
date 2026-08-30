@@ -194,7 +194,7 @@ render/deploy/readback существующему `dev.sh`, выполняет a
 browser E2E, а затем сохраняет отдельный redacted summary без credentials:
 
 ```bash
-./dev.sh full-e2e --context radar-dev-local \
+./dev.sh full-e2e --context default \
   --resource-prefix local-acceptance-001 \
   --target test-integration-synthetic
 ```
