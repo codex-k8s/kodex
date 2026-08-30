@@ -4,8 +4,8 @@ title: Runtime-controller и role Pod
 type: architecture
 status: approved
 owner: architect
-version: 1.2.0
-updated: 2026-08-29
+version: 1.3.0
+updated: 2026-08-30
 ---
 
 # Runtime-controller и role Pod
@@ -100,7 +100,40 @@ execution-scoped opaque ticket в отдельном Secret и materialize-ит 
 через exact mTLS callback + ticket, запускает provider runtime, передаёт bounded
 progress, обслуживает разрешённые MCP servers/tools и завершает attempt через
 typed RPC. Provider process работает отдельным UID без Kubernetes token и
-authority credential.
+общих platform credentials. Из authority material ему доступна только
+execution-scoped mTLS client identity и ticket для закрытого набора callback
+операций текущего lease.
+
+## Ротация managed OAuth credential
+
+Codex app-server может атомарно переписать свой file-backed `auth.json` после
+успешного OAuth refresh. Provider-sidecar после каждого provider turn сравнивает
+точный SHA-256 файла с credential digest из `RuntimeRevision`. Неизменившийся
+файл удаляется вместе с execution workspace. Изменившийся snapshot до удаления
+передается в bounded callback
+`/v1/executions/{lease}/provider-credential-refresh`.
+
+Runtime-controller принимает callback только по exact mTLS client identity,
+ticket, lease, fence, generation и runtime revision digest. Он повторно читает
+закрепленную прежнюю immutable Secret, сверяет UID, resource version и SHA-256,
+разбирает старый и новый managed OAuth snapshot и требует совпадения non-empty
+provider account ID. API key и внешняя подмена логической учетной записи через
+этот path запрещены.
+
+Новый snapshot материализуется как deterministic immutable Secret в
+`kodex-runtime`. После create/get readback runtime-controller передает
+`CommitProviderCredentialRefresh` только metadata Secret и прежней revision.
+Control-plane под блокировкой provider account проверяет текущий lease и
+compare-and-swap, добавляет неизменяемую credential revision и атомарно
+переключает account current revision. Повтор exact callback idempotent;
+устаревшая попытка и несовпадающая Secret закрыто отклоняются.
+
+Rotating OAuth account допускает один активный runtime lease. Проверка
+capacity выполняется в control-plane под row lock перед созданием каждой
+`RuntimeRevision`, поэтому несколько controller replicas и несколько
+кандидатов одного claim не обходят ограничение. API-key account использует
+отдельный bounded concurrency limit. Secret value никогда не проходит через
+control-plane, Role runtime, browser, event, audit или лог.
 
 Wire contract `kodex.agent-runner-input.v6` содержит non-secret environment
 values и только Secret descriptors. Для каждого descriptor runtime-controller

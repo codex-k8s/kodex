@@ -140,6 +140,44 @@ func TestRunnerCompletionArchiveBindingIsCompleteAndBounded(t *testing.T) {
 	}
 }
 
+func TestProviderCredentialRefreshRequestIsExactAndBounded(t *testing.T) {
+	valid := RunnerProviderCredentialRefreshRequest{
+		RuntimeRevisionDigest:         strings.Repeat("a", 64),
+		PreviousCredentialRevisionRef: "pcr_abcdefgh",
+		PreviousContentSHA256:         strings.Repeat("b", 64),
+		Authentication:                []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"redacted"}}`),
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid provider credential refresh rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*RunnerProviderCredentialRefreshRequest){
+		"invalid revision digest": func(request *RunnerProviderCredentialRefreshRequest) {
+			request.RuntimeRevisionDigest = "invalid"
+		},
+		"invalid credential ref": func(request *RunnerProviderCredentialRefreshRequest) {
+			request.PreviousCredentialRevisionRef = "../credential"
+		},
+		"invalid previous digest": func(request *RunnerProviderCredentialRefreshRequest) {
+			request.PreviousContentSHA256 = "invalid"
+		},
+		"invalid authentication": func(request *RunnerProviderCredentialRefreshRequest) {
+			request.Authentication = []byte("not-json")
+		},
+		"oversized authentication": func(request *RunnerProviderCredentialRefreshRequest) {
+			request.Authentication = append([]byte{'{'}, make([]byte, MaximumProviderAuthBytes)...)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			request := valid
+			request.Authentication = append([]byte(nil), valid.Authentication...)
+			mutate(&request)
+			if request.Validate() == nil {
+				t.Fatalf("invalid provider credential refresh accepted: %#v", request)
+			}
+		})
+	}
+}
+
 func TestSessionPVCNameIsStableAndRejectsInvalidReference(t *testing.T) {
 	first, err := SessionPVCName("ses_abcdefgh")
 	if err != nil {
