@@ -25,6 +25,8 @@ var (
 	queryRoleImagesChangeRecipeState string
 	//go:embed sql/role_images_cancel_open_builds.sql
 	queryRoleImagesCancelOpenBuilds string
+	//go:embed sql/role_images_cancel_open_promotions.sql
+	queryRoleImagesCancelOpenPromotions string
 	//go:embed sql/role_images_find_promoted_artifact.sql
 	queryRoleImagesFindPromotedArtifact string
 	//go:embed sql/role_images_insert_build.sql
@@ -55,14 +57,26 @@ var (
 	queryRoleImagesLockArtifact string
 	//go:embed sql/role_images_record_admission.sql
 	queryRoleImagesRecordAdmission string
+	//go:embed sql/role_images_insert_promotion_request.sql
+	queryRoleImagesInsertPromotionRequest string
+	//go:embed sql/role_images_link_promotion_request.sql
+	queryRoleImagesLinkPromotionRequest string
 	//go:embed sql/role_images_claim_promotion_candidate.sql
 	queryRoleImagesClaimPromotionCandidate string
 	//go:embed sql/role_images_claim_promotion.sql
 	queryRoleImagesClaimPromotion string
+	//go:embed sql/role_images_mark_promotion_request_promoting.sql
+	queryRoleImagesMarkPromotionRequestPromoting string
+	//go:embed sql/role_images_lock_promotion_request.sql
+	queryRoleImagesLockPromotionRequest string
 	//go:embed sql/role_images_authorize_promotion.sql
 	queryRoleImagesAuthorizePromotion string
 	//go:embed sql/role_images_complete_promotion.sql
 	queryRoleImagesCompletePromotion string
+	//go:embed sql/role_images_mark_promotion_request_promoted.sql
+	queryRoleImagesMarkPromotionRequestPromoted string
 	//go:embed sql/role_images_activate_artifact.sql
 	queryRoleImagesActivateArtifact string
+	//go:embed sql/role_images_insert_promoted_revision.sql
+	queryRoleImagesInsertPromotedRevision string
 )

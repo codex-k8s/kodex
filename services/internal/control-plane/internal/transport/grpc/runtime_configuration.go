@@ -266,3 +266,23 @@ func (server *Server) BindAgentRuntimeEnvironment(ctx context.Context, request *
 	}
 	return &controlplanev1.BindAgentRuntimeEnvironmentResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}, nil
 }
+
+func (server *Server) SetRuntimeEnvironmentEnabled(ctx context.Context, request *controlplanev1.SetRuntimeEnvironmentEnabledRequest) (*controlplanev1.SetRuntimeEnvironmentEnabledResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_SetRuntimeEnvironmentEnabled_FullMethodName,
+		command.SetRuntimeEnvironmentEnabled, request.GetMutation(), command.RuntimeEnvironmentLifecycleInput{
+			EnvironmentRef: request.GetEnvironmentRef(), Enabled: request.GetEnabled(),
+		})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.SetRuntimeEnvironmentEnabledResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}, nil
+}
+
+func (server *Server) DeleteRuntimeEnvironment(ctx context.Context, request *controlplanev1.DeleteRuntimeEnvironmentRequest) (*controlplanev1.DeleteRuntimeEnvironmentResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DeleteRuntimeEnvironment_FullMethodName,
+		command.DeleteRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentLifecycleInput{EnvironmentRef: request.GetEnvironmentRef()})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.DeleteRuntimeEnvironmentResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}, nil
+}

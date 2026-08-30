@@ -64,6 +64,12 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
 	case command.RuntimeEnvironmentBindingInput:
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+	case command.RuntimeEnvironmentLifecycleInput:
+		permission := "runtime.environment.disable"
+		if input.Kind == command.DeleteRuntimeEnvironment {
+			permission = "runtime.environment.delete"
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, permission, "RUNTIME_ENVIRONMENT", payload.EnvironmentRef, "")
 	case command.RuntimeEnvironmentInput:
 		if input.Kind == command.CreateRuntimeEnvironment {
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
@@ -135,6 +141,18 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "schedule.manage", "SCHEDULE", payload.Ref, payload.ProjectRef)
+	case command.ProviderAccountInput:
+		if input.Kind == command.CreateProviderAccount {
+			return "provider.account.manage", organization, nil
+		}
+		permission := "provider.account.manage"
+		switch input.Kind {
+		case command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey, command.RefreshProviderAuthorization:
+			permission = "provider.account.authorize"
+		case command.RevokeProviderAccount:
+			permission = "provider.account.revoke"
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, permission, "PROVIDER_ACCOUNT", payload.AccountRef, "")
 	case command.ConnectionInput:
 		if payload.Ref == "" {
 			return "organization.manage", organization, nil

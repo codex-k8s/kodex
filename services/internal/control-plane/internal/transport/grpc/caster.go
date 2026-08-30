@@ -142,6 +142,8 @@ func scheduleState(schedule entity.Schedule) controlplanev1.ScheduleState {
 		return controlplanev1.ScheduleState_SCHEDULE_STATE_ARCHIVED
 	case "NEEDS_ATTENTION":
 		return controlplanev1.ScheduleState_SCHEDULE_STATE_NEEDS_ATTENTION
+	case "DELETED":
+		return controlplanev1.ScheduleState_SCHEDULE_STATE_DELETED
 	case "", "ACTIVE":
 	default:
 		return controlplanev1.ScheduleState_SCHEDULE_STATE_UNSPECIFIED
@@ -152,13 +154,10 @@ func scheduleState(schedule entity.Schedule) controlplanev1.ScheduleState {
 	return controlplanev1.ScheduleState_SCHEDULE_STATE_PAUSED
 }
 func connectionState(value string) controlplanev1.ConnectionState {
-	if value == "TESTING" {
-		value = "CONNECTING"
+	raw, exists := controlplanev1.ConnectionState_value["CONNECTION_STATE_"+value]
+	if !exists {
+		return controlplanev1.ConnectionState_CONNECTION_STATE_UNSPECIFIED
 	}
-	if value == "DEGRADED" {
-		value = "UNAVAILABLE"
-	}
-	raw := controlplanev1.ConnectionState_value["CONNECTION_STATE_"+value]
 	return controlplanev1.ConnectionState(raw)
 }
 func assistantState(value string) controlplanev1.AssistantRuntimeState {
@@ -517,6 +516,10 @@ func castConnection(value entity.IntegrationConnection) *controlplanev1.Integrat
 		State: connectionState(value.State), CredentialsConfigured: value.MaskedCredentialsState == "CONFIGURED",
 		CredentialsHint: credentialsHint, LastTestedAt: optionalTimestamp(value.LastTestedAt), LastTestOutcome: value.LastTestSummary,
 		PublicConfiguration: structure(value.PublicConfiguration), NextActions: nextActions(value.NextActions),
+		CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt),
+	}
+	if value.CredentialRevision != nil {
+		result.CredentialRevision = castIntegrationCredential(*value.CredentialRevision)
 	}
 	for _, capability := range value.Capabilities {
 		result.Capabilities = append(result.Capabilities, castIntegrationCapability(capability))

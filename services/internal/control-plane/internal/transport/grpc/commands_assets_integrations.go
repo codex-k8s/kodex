@@ -359,6 +359,14 @@ func (server *Server) ArchiveSchedule(ctx context.Context, request *controlplane
 	return &controlplanev1.ArchiveScheduleResponse{Schedule: castSchedule(*result.Schedule)}, nil
 }
 
+func (server *Server) DeleteSchedule(ctx context.Context, request *controlplanev1.DeleteScheduleRequest) (*controlplanev1.DeleteScheduleResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DeleteSchedule_FullMethodName, command.DeleteSchedule, request.GetMutation(), command.ScheduleInput{Ref: request.GetScheduleRef()})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.DeleteScheduleResponse{Schedule: castSchedule(*result.Schedule)}, nil
+}
+
 func (server *Server) CreateIntegrationConnection(ctx context.Context, request *controlplanev1.CreateIntegrationConnectionRequest) (*controlplanev1.CreateIntegrationConnectionResponse, error) {
 	payload := command.ConnectionInput{DefinitionKey: request.GetDefinitionKey(), Name: request.GetName(), PublicConfiguration: asMap(request.GetPublicConfiguration()), Enabled: true}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateIntegrationConnection_FullMethodName, command.CreateConnection, request.GetMutation(), payload)
@@ -366,6 +374,23 @@ func (server *Server) CreateIntegrationConnection(ctx context.Context, request *
 		return nil, err
 	}
 	return &controlplanev1.CreateIntegrationConnectionResponse{Connection: castConnection(*result.Connection)}, nil
+}
+
+func (server *Server) UpdateIntegrationConnection(ctx context.Context, request *controlplanev1.UpdateIntegrationConnectionRequest) (*controlplanev1.UpdateIntegrationConnectionResponse, error) {
+	payload := command.ConnectionInput{Ref: request.GetConnectionRef(), Name: request.GetName(), PublicConfiguration: asMap(request.GetPublicConfiguration())}
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_UpdateIntegrationConnection_FullMethodName, command.UpdateConnection, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.UpdateIntegrationConnectionResponse{Connection: castConnection(*result.Connection)}, nil
+}
+
+func (server *Server) DeleteIntegrationConnection(ctx context.Context, request *controlplanev1.DeleteIntegrationConnectionRequest) (*controlplanev1.DeleteIntegrationConnectionResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DeleteIntegrationConnection_FullMethodName, command.DeleteConnection, request.GetMutation(), command.ConnectionInput{Ref: request.GetConnectionRef()})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.DeleteIntegrationConnectionResponse{Connection: castConnection(*result.Connection)}, nil
 }
 
 func (server *Server) ConfigureIntegrationConnectionCredential(ctx context.Context, request *controlplanev1.ConfigureIntegrationConnectionCredentialRequest) (*controlplanev1.ConfigureIntegrationConnectionCredentialResponse, error) {

@@ -19,7 +19,8 @@ type gitLabProject struct {
 }
 
 type gitLabIssue struct {
-	IID, ID     int64  `json:"iid"`
+	IID         int64  `json:"iid"`
+	ID          int64  `json:"id"`
 	Title       string `json:"title"`
 	State       string `json:"state"`
 	Description string `json:"description"`

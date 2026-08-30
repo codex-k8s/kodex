@@ -11,6 +11,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
+	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -35,14 +36,15 @@ type Server struct {
 	controlplanev1.UnimplementedSessionArchiveWorkServiceServer
 	controlplanev1.UnimplementedInteractionWorkServiceServer
 	controlplanev1.UnimplementedAccessServiceServer
-	service *platformservice.Service
+	service    *platformservice.Service
+	roleImages *roleimageservice.Service
 }
 
-func NewServer(service *platformservice.Service) (*Server, error) {
-	if service == nil {
-		return nil, errors.New("platform service is required")
+func NewServer(service *platformservice.Service, roleImages *roleimageservice.Service) (*Server, error) {
+	if service == nil || roleImages == nil {
+		return nil, errors.New("platform and role image services are required")
 	}
-	return &Server{service: service}, nil
+	return &Server{service: service, roleImages: roleImages}, nil
 }
 
 func principal(ctx context.Context, method string) (value.Principal, error) {

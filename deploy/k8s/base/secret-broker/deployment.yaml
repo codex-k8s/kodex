@@ -138,6 +138,8 @@ spec:
             - name: application-grant
               mountPath: /var/run/secrets/kodex/secret-broker/application-grant
               readOnly: true
+            - name: provider-auth-state
+              mountPath: /var/lib/kodex-provider-auth
             - name: otel-ca
               mountPath: /var/run/config/kodex/secret-broker/observability
               readOnly: true
@@ -174,6 +176,8 @@ spec:
             defaultMode: 0440
         - name: application-grant
           emptyDir: {sizeLimit: 1Mi}
+        - name: provider-auth-state
+          emptyDir: {sizeLimit: 32Mi}
         - name: otel-ca
           configMap:
             name: kodex-otel-ca

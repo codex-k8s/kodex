@@ -7,4 +7,4 @@ SELECT c.ref,c.definition_key,d.name,c.name,c.state,c.masked_credentials_state,c
 FROM control_plane.integration_connections c
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
 LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credential_revision_id
-WHERE c.organization_id=$1::uuid AND c.ref=$2
+WHERE c.organization_id=$1::uuid AND c.ref=$2 AND c.lifecycle_state='ACTIVE'

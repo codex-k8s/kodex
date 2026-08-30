@@ -7,6 +7,6 @@ SELECT c.ref,c.definition_key,d.name,c.name,c.state,c.masked_credentials_state,c
 FROM control_plane.integration_connections c
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
 LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credential_revision_id
-WHERE c.organization_id=$1::uuid AND ($2='' OR c.definition_key=$2)
+WHERE c.organization_id=$1::uuid AND c.lifecycle_state='ACTIVE' AND ($2='' OR c.definition_key=$2)
 ORDER BY c.updated_at DESC
 LIMIT $3

@@ -13,13 +13,17 @@ import (
 	"os"
 	"time"
 
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/grpcserver"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	controlowner "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/controlplane"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
+	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/providercredential"
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/recovery"
 	transportgrpc "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/transport/grpc"
 	"google.golang.org/grpc"
@@ -51,11 +55,16 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	logger := telemetry.Logger(os.Stdout)
 	methods := map[string]string{
-		secretbrokerv1.SecretBrokerService_CreateSecret_FullMethodName:   "create",
-		secretbrokerv1.SecretBrokerService_RotateSecret_FullMethodName:   "rotate",
-		secretbrokerv1.SecretBrokerService_RevealSecret_FullMethodName:   "reveal",
-		secretbrokerv1.SecretBrokerService_RevokeSecret_FullMethodName:   "revoke",
-		secretbrokerv1.SecretBrokerService_CheckReadiness_FullMethodName: "readiness",
+		secretbrokerv1.SecretBrokerService_CreateSecret_FullMethodName:                                                   "create",
+		secretbrokerv1.SecretBrokerService_RotateSecret_FullMethodName:                                                   "rotate",
+		secretbrokerv1.SecretBrokerService_RevealSecret_FullMethodName:                                                   "reveal",
+		secretbrokerv1.SecretBrokerService_RevokeSecret_FullMethodName:                                                   "revoke",
+		secretbrokerv1.SecretBrokerService_CheckReadiness_FullMethodName:                                                 "readiness",
+		controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName: "provider_readiness",
+		controlplanev1.ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName:                     "provider_device_start",
+		controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName:                   "provider_device_observe",
+		controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName:                            "provider_api_key",
+		controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName:     "provider_discard",
 	}
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, buildVersion, methods)
 	recoveryMetrics := recovery.NewMetrics()
@@ -96,7 +105,25 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err := reconciler.EnableExpiredClaimRecovery(owner, store, config.RuntimeNamespace); err != nil {
 		return err
 	}
-	handler, err := transportgrpc.New(owner, store, reconciler, config.MaximumSecretBytes)
+	appServer, err := providercredential.NewAppServerProcess(config.CodexBinary, config.ProviderAuthorizationRoot)
+	if err != nil {
+		return err
+	}
+	providerCredentials, err := providercredential.New(lifecycle, store, appServer, config.ProviderDeviceAuthTTL)
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, providerCredentials.Close()) }()
+	verifier, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{
+		SocketPath: config.AuthorityVerifierSocket, ExpectedServerUID: config.AuthorityVerifierUID,
+		ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: config.RequestTimeout,
+	})
+	if err != nil {
+		return errors.New("connect provider credential authorization verifier")
+	}
+	defer func() { resultErr = errors.Join(resultErr, verifier.Close()) }()
+	handler, err := transportgrpc.New(owner, store, reconciler, config.MaximumSecretBytes,
+		transportgrpc.WithProviderCredentialMaterializer(providerCredentials))
 	if err != nil {
 		return err
 	}
@@ -110,6 +137,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		grpc.ChainUnaryInterceptor(
 			metrics.UnaryServerInterceptor(),
 			telemetry.UnaryServerInterceptor(methods),
+			routeProviderCredentialUnary(authorityclient.VerifierUnaryServerInterceptor(verifier.Verifier())),
 			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(
 				_ context.Context,
 				method string,
@@ -126,6 +154,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		grpc.MaxRecvMsgSize(config.MaximumSecretBytes+(64<<10)), grpc.MaxSendMsgSize(config.MaximumSecretBytes+(64<<10)),
 	)
 	secretbrokerv1.RegisterSecretBrokerServiceServer(grpcServer, handler)
+	controlplanev1.RegisterProviderCredentialMaterializerServiceServer(grpcServer, handler)
 	listener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {
 		return errors.New("listen for secret broker gRPC")
@@ -134,7 +163,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	readiness.Set(false, "infrastructure_starting")
 	metrics.SetReady(false)
 	technical := technicalServer(lifecycle, config, readiness, metrics)
-	if err := errors.Join(owner.Check(startup), store.Check(startup), reconciler.ReconcileOnce(startup)); err != nil {
+	verifierReadiness := providerVerifierReadiness{client: verifier.Verifier()}
+	if err := errors.Join(owner.Check(startup), store.Check(startup), reconciler.ReconcileOnce(startup),
+		providerCredentials.Check(startup), verifierReadiness.Check(startup)); err != nil {
 		_ = listener.Close()
 		return errors.Join(errors.New("secret broker startup barrier failed"), err)
 	}
@@ -143,7 +174,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
-		monitorReadiness(readiness, metrics, logger, config.RequestTimeout, owner, store, reconciler),
+		monitorReadiness(readiness, metrics, logger, config.RequestTimeout, owner, store, reconciler, providerCredentials, verifierReadiness),
 		reconciler.Worker(),
 	)
 	err = workers.Wait(context.WithoutCancel(lifecycle))
@@ -153,6 +184,33 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		serviceruntime.ShutdownOperation{Name: "secret broker workers", Timeout: config.ShutdownTimeout, Run: workers.Wait},
 	)
 	return errors.Join(err, shutdownErr)
+}
+
+type providerVerifierReadiness struct {
+	client internalrpcauthorityv1.AuthorizationVerifierServiceClient
+}
+
+func (checker providerVerifierReadiness) Check(ctx context.Context) error {
+	response, err := checker.client.CheckReadiness(ctx, &internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest{})
+	if err != nil || !response.GetReady() {
+		return errors.New("provider credential authorization verifier is not ready")
+	}
+	return nil
+}
+
+func routeProviderCredentialUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		switch info.FullMethod {
+		case controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName,
+			controlplanev1.ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName,
+			controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName,
+			controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName,
+			controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName:
+			return protected(ctx, request, info, handler)
+		default:
+			return handler(ctx, request)
+		}
+	}
 }
 
 func normalizeMethod(methods map[string]string, method string) string {
@@ -267,8 +325,10 @@ func serverTLS(config Config) (*tls.Config, error) {
 				return errors.New("secret broker client certificate is unverified")
 			}
 			for _, identity := range state.VerifiedChains[0][0].URIs {
-				if subtle.ConstantTimeCompare([]byte(identity.String()), []byte(config.ExpectedClientSPIFFEID)) == 1 {
-					return nil
+				for _, expected := range config.ExpectedClientSPIFFEIDs {
+					if subtle.ConstantTimeCompare([]byte(identity.String()), []byte(expected)) == 1 {
+						return nil
+					}
 				}
 			}
 			return errors.New("secret broker client identity is invalid")

@@ -34,7 +34,7 @@ LEFT JOIN control_plane.image_artifacts image_artifact ON image_artifact.id = cu
 LEFT JOIN control_plane.role_image_recipes image_recipe ON image_recipe.id = image_artifact.recipe_id
 WHERE environment.organization_id = @organization_id::uuid
   AND project.ref = @project_ref
-  AND environment.state = 'ACTIVE'
+  AND environment.state <> 'DELETED'
   AND (@query = '' OR environment.name ILIKE '%' || @query || '%' OR environment.description ILIKE '%' || @query || '%')
   AND (@cursor_ref = '' OR (lower(environment.name), environment.ref) > (
       SELECT lower(cursor.name), cursor.ref

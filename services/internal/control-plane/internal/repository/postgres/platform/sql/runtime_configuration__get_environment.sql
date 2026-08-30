@@ -34,6 +34,7 @@ LEFT JOIN control_plane.image_artifacts image_artifact ON image_artifact.id = cu
 LEFT JOIN control_plane.role_image_recipes image_recipe ON image_recipe.id = image_artifact.recipe_id
 WHERE environment.organization_id = $1::uuid
   AND environment.ref = $2
+  AND environment.state <> 'DELETED'
   AND ($3 IN ('OWNER', 'ADMINISTRATOR') OR EXISTS (
       SELECT 1 FROM control_plane.memberships membership
       WHERE membership.project_id = environment.project_id

@@ -23,8 +23,9 @@ import (
 )
 
 type Service struct {
-	repository             repository.Repository
-	credentialMaterializer CredentialMaterializer
+	repository                     repository.Repository
+	credentialMaterializer         CredentialMaterializer
+	providerCredentialMaterializer ProviderCredentialMaterializer
 }
 
 type Option func(*Service)
@@ -49,7 +50,12 @@ func New(repo repository.Repository, options ...Option) (*Service, error) {
 func (service *Service) Bootstrap(ctx context.Context) error {
 	return service.repository.Bootstrap(ctx)
 }
-func (service *Service) Ready(ctx context.Context) error { return service.repository.Ready(ctx) }
+func (service *Service) Ready(ctx context.Context) error {
+	if service.providerCredentialMaterializer == nil {
+		return errors.New("provider credential materializer is not configured")
+	}
+	return errors.Join(service.repository.Ready(ctx), service.providerCredentialMaterializer.Check(ctx))
+}
 
 func (service *Service) ResolveProofAuthority(ctx context.Context, input repository.ProofPrincipalInput) (repository.ProofAuthority, error) {
 	return service.repository.ResolveProofAuthority(ctx, input)
@@ -849,7 +855,8 @@ func knownCommand(kind command.Kind) bool {
 		command.RollbackInstructions, command.PublishAgentRuntimeConfig,
 		command.CreateConfigOverlayDraft, command.ValidateConfigOverlayDraft, command.PublishConfigOverlayDraft,
 		command.RollbackConfigOverlay, command.CreateRuntimeEnvironment, command.PublishRuntimeEnvironment,
-		command.RollbackRuntimeEnvironment, command.BindAgentRuntimeEnvironment,
+		command.RollbackRuntimeEnvironment, command.SetRuntimeEnvironmentEnabled, command.DeleteRuntimeEnvironment,
+		command.BindAgentRuntimeEnvironment,
 		command.ChangeAgentCapability, command.ChangeAgentGrant,
 		command.CreateWorkflow, command.UpdateWorkflow,
 		command.ValidateWorkflow, command.PublishWorkflow, command.ArchiveWorkflow,
@@ -857,7 +864,10 @@ func knownCommand(kind command.Kind) bool {
 		command.ResolveOwnerGate, command.ChangeArtifactBinding, command.DeleteArtifact,
 		command.RestoreArtifact, command.CreateAttachmentSetDraft, command.AddAttachmentSetItems,
 		command.RemoveAttachmentSetItems, command.FinalizeAttachmentSet, command.CreateSchedule,
-		command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.CreateConnection,
+		command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.DeleteSchedule,
+		command.CreateProviderAccount, command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey,
+		command.RefreshProviderAuthorization, command.RevokeProviderAccount, command.SetProviderAccountEnabled,
+		command.CreateConnection, command.UpdateConnection, command.DeleteConnection,
 		command.ConfigureConnectionCredential,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant,
 		command.CreateAssistantConversation, command.UpdateAssistantConversation, command.AddAssistantTurn,

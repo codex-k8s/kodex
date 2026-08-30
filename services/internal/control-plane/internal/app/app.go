@@ -16,6 +16,7 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/eventing"
 	"github.com/codex-k8s/kodex/libs/go/eventing/natsjetstream"
 	"github.com/codex-k8s/kodex/libs/go/grpcserver"
@@ -28,6 +29,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/authorityproof"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/providercredentialclient"
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
 	platformgrpc "github.com/codex-k8s/kodex/services/internal/control-plane/internal/transport/grpc"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -105,7 +107,27 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct integration credential materializer: %w", err)
 	}
-	service, err := platformservice.New(repository, platformservice.WithCredentialMaterializer(credentialMaterializer))
+	providerControl, err := controlplaneclient.Dial(startup, controlplaneclient.Config{
+		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName,
+		CAFile: config.ClientCAFile, ClientCertificateFile: config.ServerCertificateFile,
+		ClientPrivateKeyFile: config.ServerPrivateKeyFile, ApplicationGrantFile: config.ProviderApplicationGrantFile,
+		ResolverTarget: config.ProviderResolverTarget, ResolverTLSServerName: config.ProviderResolverTLSServerName,
+		ResolverCAFile: config.ProviderResolverCAFile, ExpectedIssuerUID: config.ProviderIssuerUID,
+		ExpectedIssuerGID: config.ProviderIssuerGID, DialTimeout: config.ReadinessTimeout,
+		Operations: controlplaneclient.ProviderCredentialMaterializerOperations(),
+	})
+	if err != nil {
+		return fmt.Errorf("construct provider credential materializer client: %w", err)
+	}
+	defer providerControl.Close()
+	providerMaterializer, err := providercredentialclient.New(providerControl)
+	if err != nil {
+		return fmt.Errorf("construct provider credential materializer adapter: %w", err)
+	}
+	service, err := platformservice.New(repository,
+		platformservice.WithCredentialMaterializer(credentialMaterializer),
+		platformservice.WithProviderCredentialMaterializer(providerMaterializer),
+	)
 	if err != nil {
 		return fmt.Errorf("construct platform service: %w", err)
 	}
@@ -129,6 +151,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		"image-admission":      config.ImageAdmissionGrantTrustFile,
 		"image-promotion":      config.ImagePromotionGrantTrustFile,
 		"secret-broker":        config.SecretBrokerGrantTrustFile,
+		"control-plane":        config.ControlPlaneGrantTrustFile,
 	}
 	if config.InteractionGrantTrustFile != "" {
 		workerGrantTrustFiles["interaction-gateway"] = config.InteractionGrantTrustFile
@@ -171,7 +194,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err := repository.CheckOutbox(startup); err != nil {
 		return fmt.Errorf("verify outbox: %w", err)
 	}
-	transport, err := platformgrpc.NewServer(service)
+	transport, err := platformgrpc.NewServer(service, roleImageService)
 	if err != nil {
 		return fmt.Errorf("construct gRPC transport: %w", err)
 	}

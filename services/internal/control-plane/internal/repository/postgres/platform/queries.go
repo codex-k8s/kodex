@@ -1300,8 +1300,11 @@ func scanSchedule(row rowScanner) (entity.Schedule, error) {
 
 func scheduleActions(item entity.Schedule, canManage bool) []string {
 	actions := []string{"OPEN"}
-	if !canManage || item.State == "ARCHIVED" {
+	if !canManage {
 		return actions
+	}
+	if item.State == "ARCHIVED" {
+		return append(actions, "DELETE")
 	}
 	actions = append(actions, "EDIT", "ARCHIVE")
 	if item.Enabled {
@@ -1446,9 +1449,12 @@ func connectionActions(item entity.IntegrationConnection, manageConnection, mana
 	}
 	if !item.Enabled {
 		if manageConnection {
-			return append(actions, "ENABLE")
+			return append(actions, "EDIT", "ENABLE", "DELETE")
 		}
 		return actions
+	}
+	if manageConnection {
+		actions = append(actions, "EDIT")
 	}
 	if manageConnection && item.CredentialSecretKey != "" && item.State != "TESTING" {
 		actions = append(actions, "CONFIGURE_CREDENTIAL")

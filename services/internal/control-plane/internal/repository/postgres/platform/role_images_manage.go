@@ -245,6 +245,9 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 			if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenBuilds, current.organizationID, locked.ID); err != nil {
 				return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
 			}
+			if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenPromotions, current.organizationID, locked.ID); err != nil {
+				return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
+			}
 			if _, err := tx.Exec(ctx, queryRoleImagesUpdateRecipe, current.organizationID, locked.ID,
 				input.Name, specification, specSHA256, repository.roleImages.PolicyRevision,
 				repository.roleImages.PolicySHA256, repository.roleImages.RoleRuntimeContractRevision,
@@ -254,6 +257,11 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 		} else if input.Action == "ARCHIVE" || input.Action == "RESTORE" {
 			if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenBuilds, current.organizationID, locked.ID); err != nil {
 				return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
+			}
+			if input.Action == "ARCHIVE" {
+				if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenPromotions, current.organizationID, locked.ID); err != nil {
+					return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
+				}
 			}
 			state := "ARCHIVED"
 			if input.Action == "RESTORE" {

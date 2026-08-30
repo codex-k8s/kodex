@@ -231,6 +231,9 @@ service ProviderCredentialMaterializerService {
   rpc StartDeviceAuthorization(ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) returns (ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse);
   rpc ObserveDeviceAuthorization(ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest) returns (ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse);
   rpc MaterializeAPIKey(ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest) returns (ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse);
+  // buf:lint:ignore RPC_REQUEST_STANDARD_NAME
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc DiscardProviderCredentialMaterialization(ProviderCredentialMaterializerServiceDiscardMaterializationRequest) returns (ProviderCredentialMaterializerServiceDiscardMaterializationResponse);
 }
 
 message MutationContext {
@@ -522,6 +525,7 @@ enum ScheduleState {
   SCHEDULE_STATE_PAUSED = 2;
   SCHEDULE_STATE_NEEDS_ATTENTION = 3;
   SCHEDULE_STATE_ARCHIVED = 4;
+  SCHEDULE_STATE_DELETED = 5;
 }
 
 enum ConnectionState {
@@ -533,6 +537,7 @@ enum ConnectionState {
   CONNECTION_STATE_DISABLED = 5;
   CONNECTION_STATE_TESTING = 6;
   CONNECTION_STATE_DEGRADED = 7;
+  CONNECTION_STATE_DELETED = 8;
 }
 
 // IntegrationRisk задаёт закрытый класс риска capability.
@@ -3872,6 +3877,8 @@ message ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse {
   string verification_uri = 2;
   string user_code = 3;
   google.protobuf.Timestamp expires_at = 4;
+  string materializer_attempt_uid = 5;
+  string materializer_attempt_resource_version = 6;
 }
 message ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest {
   string materializer_attempt_ref = 1;
@@ -3890,6 +3897,17 @@ message ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest {
 message ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse {
   ProviderCredentialDescriptor credential = 1;
   string external_account_masked = 2;
+}
+message ProviderCredentialMaterializerServiceDiscardMaterializationRequest {
+  string attempt_ref = 1;
+  string account_ref = 2;
+  string materializer_attempt_ref = 3;
+  string materializer_attempt_uid = 4;
+  string materializer_attempt_resource_version = 5;
+  ProviderCredentialDescriptor credential = 6;
+}
+message ProviderCredentialMaterializerServiceDiscardMaterializationResponse {
+  bool discarded = 1;
 }
 
 message CommitProviderCredentialRefreshRequest {

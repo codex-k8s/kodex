@@ -172,6 +172,57 @@ jq -e '
     all(.items[]; ((.required // true) | type == "boolean")))
 ' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
   fail 'secret projection registry contract is invalid'
+jq -e '
+  def projection($name): [.secrets[] | select(.name == $name)];
+  def source_ref($name; $type; $ref):
+    projection($name) as $projection |
+    ($projection | length) == 1 and
+    all($projection[0].items[]; .source.type == $type and .source.ref == $ref) and
+    (if $type == "authority" then $projection[0].dynamic == true
+     else ($projection[0].dynamic // false) == false end);
+  def has_source($name; $key; $type; $ref):
+    projection($name) as $projection |
+    ($projection | length) == 1 and
+    any($projection[0].items[];
+      .key == $key and .source.type == $type and .source.ref == $ref);
+  source_ref("control-plane-platform-worker-grant-signer"; "material";
+    "kodex/platform-worker-grants/control-plane") and
+  has_source("control-plane-application-grants"; "control-plane.platform-worker.public.jwk";
+    "material"; "kodex/platform-worker-grants/control-plane") and
+  source_ref("internal-rpc-authority-control-plane-issuer-key"; "authority";
+    "internal-rpc-authority-control-plane-issuer-key") and
+  source_ref("internal-rpc-authority-control-plane-issuer-postgresql"; "database";
+    "ira_control_plane_issuer_g1") and
+  source_ref("internal-rpc-authority-control-plane-issuer-readback-credential"; "authority";
+    "control-plane-issuer-readback-credential") and
+  source_ref("internal-rpc-authority-control-plane-issuer-readback-possession"; "authority";
+    "control-plane-issuer-readback-key") and
+  source_ref("internal-rpc-authority-control-plane-issuer-restore-credential"; "authority";
+    "control-plane-issuer-restore-credential") and
+  source_ref("internal-rpc-authority-control-plane-issuer-restore-ack"; "authority";
+    "control-plane-issuer-restore-ack") and
+  source_ref("internal-rpc-authority-secret-broker-verifier-postgresql"; "database";
+    "ira_secret_broker_verifier_g1") and
+  source_ref("internal-rpc-authority-secret-broker-verifier-readback-credential"; "authority";
+    "secret-broker-verifier-readback-credential") and
+  source_ref("internal-rpc-authority-secret-broker-verifier-readback-possession"; "authority";
+    "secret-broker-verifier-readback-key") and
+  source_ref("internal-rpc-authority-secret-broker-verifier-restore-credential"; "authority";
+    "secret-broker-verifier-restore-credential") and
+  source_ref("internal-rpc-authority-secret-broker-verifier-restore-ack"; "authority";
+    "secret-broker-verifier-restore-ack")
+' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
+  fail 'provider credential authority material projections are incomplete'
+for role in ira_control_plane_issuer_g1 ira_secret_broker_verifier_g1; do
+  rg -Fq "$role" "$repository_root/tools/install/generate-material.sh" ||
+    fail "fresh install does not generate PostgreSQL credential: $role"
+  rg -Fq "$role" \
+    "$repository_root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" ||
+    fail "PostgreSQL credential reconciler omits runtime principal: $role"
+done
+[[ $(rg -F -- '-eq 19' \
+  "$repository_root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" | wc -l) -eq 2 ]] ||
+  fail 'PostgreSQL credential startup and SCRAM readback counts differ from the exact role registry'
 rg -Fq '[.items[].key]' "$repository_root/tools/install/deploy-platform.sh" ||
 	fail 'dynamic Secret readback does not use the projection item registry'
 jq -e '

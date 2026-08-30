@@ -18,3 +18,7 @@ spec:
       path: /metrics
       interval: 30s
       scrapeTimeout: 5s
+    - port: verifier-metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 5s

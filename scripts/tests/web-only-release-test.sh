@@ -53,6 +53,117 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
         .ipBlock.cidr == "__KODEX_KUBERNETES_API_SERVICE_CIDR__") and
       any(.ports[]?; .protocol == "TCP" and .port == 443)))
 ' >/dev/null || fail 'session archive release wiring is incomplete'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "control-plane" and
+    any(.spec.template.spec.containers[];
+      .name == "control-plane" and
+      any(.env[]; .name == "CONTROL_PLANE_SECRET_BROKER_TARGET" and
+        .value == "dns:///secret-broker.kodex-system.svc:8443") and
+      any(.env[]; .name == "CONTROL_PLANE_SECRET_BROKER_TLS_SERVER_NAME" and
+        .value == "secret-broker.kodex-system.svc.cluster.local") and
+      any(.env[]; .name == "CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TARGET" and
+        .value == "dns:///control-plane.kodex-system.svc:8443") and
+      any(.env[]; .name == "CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TLS_SERVER_NAME" and
+        .value == "control-plane.kodex-system.svc.cluster.local")) and
+    any(.spec.template.spec.containers[];
+      .name == "internal-rpc-authority-issuer" and
+      .readinessProbe.httpGet.path == "/readyz" and
+      any(.env[]; .name == "INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER" and
+        .valueFrom.secretKeyRef.name == "internal-rpc-authority-control-plane-issuer-postgresql")) and
+    any(.spec.template.spec.containers[];
+      .name == "control-plane-platform-worker-grant-agent" and
+      .readinessProbe.httpGet.path == "/readyz") and
+    ([.spec.template.spec.volumes[]?.secret.secretName |
+      select(. == "internal-rpc-authority-control-plane-issuer-key" or
+        . == "internal-rpc-authority-control-plane-issuer-postgresql" or
+        . == "internal-rpc-authority-control-plane-issuer-readback-credential" or
+        . == "internal-rpc-authority-control-plane-issuer-readback-possession" or
+        . == "internal-rpc-authority-control-plane-issuer-restore-credential" or
+        . == "internal-rpc-authority-control-plane-issuer-restore-ack")] | unique | length) == 6) and
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "secret-broker" and
+    any(.spec.template.spec.containers[];
+      .name == "secret-broker" and
+      any(.env[]; .name == "INTERNAL_RPC_AUTHORITY_VERIFIER_SOCKET" and
+        .value == "/run/kodex/internal-rpc-authority/verifier.sock")) and
+    any(.spec.template.spec.containers[];
+      .name == "internal-rpc-authority-verifier" and
+      .readinessProbe.httpGet.path == "/readyz" and
+      any(.env[]; .name == "INTERNAL_RPC_AUTHORITY_WORKLOAD_ID" and .value == "secret-broker") and
+      any(.env[]; .name == "INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER" and
+        .valueFrom.secretKeyRef.name == "internal-rpc-authority-secret-broker-verifier-postgresql")) and
+    ([.spec.template.spec.volumes[]?.secret.secretName |
+      select(. == "internal-rpc-authority-secret-broker-verifier-postgresql" or
+        . == "internal-rpc-authority-secret-broker-verifier-readback-credential" or
+        . == "internal-rpc-authority-secret-broker-verifier-readback-possession" or
+        . == "internal-rpc-authority-secret-broker-verifier-restore-credential" or
+        . == "internal-rpc-authority-secret-broker-verifier-restore-ack")] | unique | length) == 5)
+' >/dev/null || fail 'provider credential authority sidecars and readiness are incomplete'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[]; .kind == "NetworkPolicy" and
+    .metadata.name == "control-plane-internal-rpc-authority-issuer-exact-paths" and
+    any(.spec.egress[]; any(.to[]?.podSelector.matchLabels?;
+      .["app.kubernetes.io/name"] == "kodex-postgresql") and
+      any(.ports[]; .protocol == "TCP" and .port == 5432)) and
+    any(.spec.egress[]; any(.to[]?.podSelector.matchLabels?;
+      .["app.kubernetes.io/name"] == "internal-rpc-authority-readback-attestor") and
+      any(.ports[]; .protocol == "TCP" and .port == 8443)) and
+    any(.spec.egress[]; any(.to[]?.podSelector.matchLabels?;
+      .["app.kubernetes.io/name"] == "internal-rpc-authority-restore-controller") and
+      any(.ports[]; .protocol == "TCP" and .port == 8443))) and
+  any(.[]; .kind == "NetworkPolicy" and .metadata.name == "control-plane-exact-runtime-paths" and
+    any(.spec.egress[]; any(.to[]?.podSelector.matchLabels?;
+      .["app.kubernetes.io/name"] == "secret-broker" and
+      .["app.kubernetes.io/component"] == "secret-broker") and
+      any(.ports[]; .protocol == "TCP" and .port == 8443))) and
+  any(.[]; .kind == "NetworkPolicy" and .metadata.name == "secret-broker-exact-runtime-paths" and
+    any(.spec.ingress[]; any(.from[]?.podSelector.matchLabels?;
+      .["app.kubernetes.io/name"] == "control-plane") and
+      any(.ports[]; .protocol == "TCP" and .port == 8443))) and
+  any(.[]; .kind == "Service" and .metadata.name == "secret-broker" and
+    any(.spec.ports[]; .name == "verifier-metrics" and .port == 9092)) and
+  any(.[]; .kind == "Role" and .metadata.name == "internal-rpc-authority-publisher" and
+    (["internal-rpc-authority-control-plane-issuer-key",
+      "internal-rpc-authority-control-plane-issuer-readback-credential",
+      "internal-rpc-authority-control-plane-issuer-readback-possession",
+      "internal-rpc-authority-control-plane-issuer-restore-credential",
+      "internal-rpc-authority-control-plane-issuer-restore-ack",
+      "internal-rpc-authority-secret-broker-verifier-readback-credential",
+      "internal-rpc-authority-secret-broker-verifier-readback-possession",
+      "internal-rpc-authority-secret-broker-verifier-restore-credential",
+      "internal-rpc-authority-secret-broker-verifier-restore-ack"] -
+      .rules[0].resourceNames | length) == 0 and
+    (.rules[0].verbs | sort) == ["get", "update"]) and
+  any(.[]; .kind == "Role" and .metadata.name == "secret-broker-runtime-secrets" and
+    (.rules[0].resources | sort) == ["secrets"] and
+    (.rules[0].verbs | sort) == ["create", "delete", "get", "list", "update"]) and
+  any(.[]; .kind == "RoleBinding" and .metadata.name == "internal-rpc-authority-publisher" and
+    (.rules | not) and .roleRef.kind == "Role" and
+    .roleRef.name == "internal-rpc-authority-publisher")
+' >/dev/null || fail 'provider credential TLS and exact network paths are incomplete'
+yq -N -r '
+  select(.kind == "ConfigMap" and
+    .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+  .data["key-delivery-targets.yaml"]
+' "$render" | yq -e '
+  .source_revision == 4 and
+  ([.targets[] | select(.workload_id == "control-plane" and
+    .role == "AUTHORIZATION_ISSUER" and
+    .database_identity.login_principal == "ira_control_plane_issuer_g1" and
+    .auth_private_key.secret_name == "internal-rpc-authority-control-plane-issuer-key" and
+    .readback.credential_secret_name == "internal-rpc-authority-control-plane-issuer-readback-credential" and
+    .readback.possession_key_secret_name == "internal-rpc-authority-control-plane-issuer-readback-possession" and
+    .restore_coordination.role_credential_secret_name == "internal-rpc-authority-control-plane-issuer-restore-credential" and
+    .restore_coordination.ack_key_secret_name == "internal-rpc-authority-control-plane-issuer-restore-ack")] | length) == 1 and
+  ([.targets[] | select(.workload_id == "secret-broker" and
+    .role == "AUTHORIZATION_VERIFIER" and
+    .database_identity.login_principal == "ira_secret_broker_verifier_g1" and
+    .readback.credential_secret_name == "internal-rpc-authority-secret-broker-verifier-readback-credential" and
+    .readback.possession_key_secret_name == "internal-rpc-authority-secret-broker-verifier-readback-possession" and
+    .restore_coordination.role_credential_secret_name == "internal-rpc-authority-secret-broker-verifier-restore-credential" and
+    .restore_coordination.ack_key_secret_name == "internal-rpc-authority-secret-broker-verifier-restore-ack")] | length) == 1
+' >/dev/null || fail 'provider credential publisher delivery targets are incomplete'
 for job in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
   control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
   JOB_NAME="$job" yq -e 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \

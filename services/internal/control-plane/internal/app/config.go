@@ -13,6 +13,13 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 )
 
+const (
+	providerTarget                  = "dns:///secret-broker.kodex-system.svc:8443"
+	providerTLSServerName           = "secret-broker.kodex-system.svc.cluster.local"
+	providerAuthorityResolverTarget = "dns:///control-plane.kodex-system.svc:8443"
+	providerAuthorityResolverSNI    = "control-plane.kodex-system.svc.cluster.local"
+)
+
 type Config struct {
 	GRPCListen                      string        `env:"CONTROL_PLANE_GRPC_LISTEN"`
 	TechnicalListen                 string        `env:"CONTROL_PLANE_TECHNICAL_LISTEN"`
@@ -50,6 +57,14 @@ type Config struct {
 	IntegrationCredentialSecretName string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_SECRET_NAME"`
 	RuntimeSecretNamespace          string        `env:"CONTROL_PLANE_RUNTIME_SECRET_NAMESPACE"`
 	KubernetesAPITimeout            time.Duration `env:"CONTROL_PLANE_KUBERNETES_API_TIMEOUT"`
+	SecretBrokerTarget              string        `env:"CONTROL_PLANE_SECRET_BROKER_TARGET"`
+	SecretBrokerTLSServerName       string        `env:"CONTROL_PLANE_SECRET_BROKER_TLS_SERVER_NAME"`
+	ProviderResolverTarget          string        `env:"CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TARGET"`
+	ProviderResolverTLSServerName   string        `env:"CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TLS_SERVER_NAME"`
+	ProviderResolverCAFile          string        `env:"CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_CA_FILE"`
+	ProviderApplicationGrantFile    string        `env:"CONTROL_PLANE_PROVIDER_APPLICATION_GRANT_FILE"`
+	ProviderIssuerUID               uint32        `env:"CONTROL_PLANE_PROVIDER_AUTHORITY_ISSUER_UID"`
+	ProviderIssuerGID               uint32        `env:"CONTROL_PLANE_PROVIDER_AUTHORITY_ISSUER_GID"`
 	AuthorityVerifierSocket         string        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_SOCKET"`
 	AuthorityVerifierUID            uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_UID"`
 	AuthorityVerifierGID            uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_GID"`
@@ -65,6 +80,7 @@ type Config struct {
 	ImageAdmissionGrantTrustFile    string        `env:"CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE"`
 	ImagePromotionGrantTrustFile    string        `env:"CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE"`
 	SecretBrokerGrantTrustFile      string        `env:"CONTROL_PLANE_SECRET_BROKER_GRANT_TRUST_FILE"`
+	ControlPlaneGrantTrustFile      string        `env:"CONTROL_PLANE_SELF_GRANT_TRUST_FILE"`
 	LeaseSigningKeyFile             string        `env:"CONTROL_PLANE_LEASE_SIGNING_KEY_FILE"`
 	ImagePolicyRevision             uint64        `env:"CONTROL_PLANE_IMAGE_POLICY_REVISION"`
 	ImagePolicySHA256               string        `env:"CONTROL_PLANE_IMAGE_POLICY_SHA256"`
@@ -131,6 +147,14 @@ func loadConfig() (Config, error) {
 		IntegrationCredentialSecretName: "kodex-integration-credentials",
 		RuntimeSecretNamespace:          "kodex-runtime",
 		KubernetesAPITimeout:            3 * time.Second,
+		SecretBrokerTarget:              providerTarget,
+		SecretBrokerTLSServerName:       providerTLSServerName,
+		ProviderResolverTarget:          providerAuthorityResolverTarget,
+		ProviderResolverTLSServerName:   providerAuthorityResolverSNI,
+		ProviderResolverCAFile:          "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
+		ProviderApplicationGrantFile:    "/var/run/secrets/kodex/control-plane/application-grant/application-grant.jws",
+		ProviderIssuerUID:               29001,
+		ProviderIssuerGID:               29000,
 		AuthorityVerifierSocket:         authorityclient.VerifierSocketPath,
 		AuthorityVerifierUID:            29002, AuthorityVerifierGID: 29000,
 		AuthorityPolicyFile:            "/var/run/config/kodex/control-plane/authority/policy.json",
@@ -145,6 +169,7 @@ func loadConfig() (Config, error) {
 		ImageAdmissionGrantTrustFile:   "/var/run/config/kodex/control-plane/application-grants/image-admission.platform-worker.public.jwk",
 		ImagePromotionGrantTrustFile:   "/var/run/config/kodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk",
 		SecretBrokerGrantTrustFile:     "/var/run/config/kodex/control-plane/application-grants/secret-broker.platform-worker.public.jwk",
+		ControlPlaneGrantTrustFile:     "/var/run/config/kodex/control-plane/application-grants/control-plane.platform-worker.public.jwk",
 		LeaseSigningKeyFile:            "/var/run/secrets/kodex/control-plane/lease-signing/key",
 		ImageBuildLeaseDuration:        5 * time.Minute,
 		ImageAdmissionClaimTTL:         30 * time.Minute,
@@ -173,7 +198,7 @@ func (config Config) validate() error {
 			return errors.New("control-plane listen address is invalid")
 		}
 	}
-	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.ObjectStorageAccessKeyFile, config.ObjectStorageSecretKeyFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.SessionArchiveGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.SecretBrokerGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
+	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.ObjectStorageAccessKeyFile, config.ObjectStorageSecretKeyFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile, config.ProviderResolverCAFile, config.ProviderApplicationGrantFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.SessionArchiveGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.SecretBrokerGrantTrustFile, config.ControlPlaneGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("control-plane file path is invalid")
 		}
@@ -193,6 +218,8 @@ func (config Config) validate() error {
 		config.IntegrationCredentialNamespace != "kodex-system" || config.IntegrationCredentialSecretName != "kodex-integration-credentials" ||
 		!validDNSLabel(config.RuntimeSecretNamespace) ||
 		config.KubernetesAPITimeout < 500*time.Millisecond || config.KubernetesAPITimeout > 10*time.Second ||
+		!validProviderCredentialBoundary(config) ||
+		config.ProviderIssuerUID == 0 || config.ProviderIssuerGID == 0 ||
 		config.ImagePolicyRevision == 0 || !validSHA256(config.ImagePolicySHA256) ||
 		config.ImageBuildLeaseDuration < 30*time.Second || config.ImageBuildLeaseDuration > 30*time.Minute ||
 		config.ImageAdmissionClaimTTL < time.Minute || config.ImageAdmissionClaimTTL > time.Hour ||
@@ -230,6 +257,16 @@ func (config Config) validate() error {
 		return errors.New("control-plane authority socket directory is invalid")
 	}
 	return nil
+}
+
+func validProviderCredentialBoundary(config Config) bool {
+	return config.SecretBrokerTarget == providerTarget &&
+		config.SecretBrokerTLSServerName == providerTLSServerName &&
+		config.ProviderResolverTarget == providerAuthorityResolverTarget &&
+		config.ProviderResolverTLSServerName == providerAuthorityResolverSNI &&
+		config.ProviderResolverCAFile == config.ClientCAFile &&
+		config.SecretBrokerTarget != config.ProviderResolverTarget &&
+		config.SecretBrokerTLSServerName != config.ProviderResolverTLSServerName
 }
 
 func validObjectStorageBoundary(config Config) bool {

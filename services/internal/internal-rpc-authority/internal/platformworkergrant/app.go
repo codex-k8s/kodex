@@ -36,6 +36,7 @@ var supportedWorkloads = map[string]struct{}{
 	"runtime-controller":   {},
 	"session-archive":      {},
 	"secret-broker":        {},
+	"control-plane":        {},
 }
 
 type config struct {

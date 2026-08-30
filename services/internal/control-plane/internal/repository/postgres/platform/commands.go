@@ -49,6 +49,14 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		input.Mutation.Operation, input.Mutation.IdempotencyKey); err != nil {
 		return command.Result{}, fmt.Errorf("lock command idempotency scope: %w", errs.ErrUnavailable)
 	}
+	if result, replayed, err := repository.replayDeletedCommand(ctx, tx, scope, input); err != nil {
+		return command.Result{}, err
+	} else if replayed {
+		if err := tx.Commit(ctx); err != nil {
+			return command.Result{}, errs.ErrConflict
+		}
+		return result, nil
+	}
 	if err := repository.authorizeCommand(ctx, tx, scope, input); err != nil {
 		return command.Result{}, err
 	}
@@ -96,6 +104,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 			return command.Result{}, err
 		}
 	}
+	clearDeletedResultActions(&outcome.result)
 	auditRef, err := newRef("aud")
 	if err != nil {
 		return command.Result{}, err
@@ -128,6 +137,83 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	return outcome.result, nil
 }
 
+func clearDeletedResultActions(result *command.Result) {
+	if result == nil {
+		return
+	}
+	if result.Connection != nil && result.Connection.State == "DELETED" {
+		result.Connection.NextActions = nil
+	}
+	if result.Schedule != nil && result.Schedule.State == "DELETED" {
+		result.Schedule.NextActions = nil
+	}
+	if result.RuntimeEnvironment != nil && result.RuntimeEnvironment.State == "DELETED" {
+		result.RuntimeEnvironment.NextActions = nil
+	}
+}
+
+func (repository *Repository) replayDeletedCommand(
+	ctx context.Context,
+	tx pgx.Tx,
+	current scope,
+	input command.Command,
+) (command.Result, bool, error) {
+	switch input.Kind {
+	case command.DeleteConnection, command.DeleteSchedule, command.DeleteRuntimeEnvironment:
+	default:
+		return command.Result{}, false, nil
+	}
+	if input.Mutation.ExpectedVersion == nil {
+		return command.Result{}, false, nil
+	}
+	var storedDigest string
+	var storedPayload []byte
+	err := tx.QueryRow(ctx, queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation,
+		current.organizationID, current.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey,
+	).Scan(&storedDigest, &storedPayload)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return command.Result{}, false, nil
+	}
+	if err != nil {
+		return command.Result{}, false, fmt.Errorf("read terminal delete receipt: %w", errs.ErrUnavailable)
+	}
+	if storedDigest != input.Mutation.IntentDigest {
+		return command.Result{}, false, nil
+	}
+	var result command.Result
+	if json.Unmarshal(storedPayload, &result) != nil || !matchesDeletedCommand(input, result) {
+		return command.Result{}, false, nil
+	}
+	return result, true, nil
+}
+
+func matchesDeletedCommand(input command.Command, result command.Result) bool {
+	expectedVersion := *input.Mutation.ExpectedVersion + 1
+	switch payload := input.Payload.(type) {
+	case command.ConnectionInput:
+		item := result.Connection
+		return input.Kind == command.DeleteConnection && item != nil && item.Ref == payload.Ref &&
+			item.Version == expectedVersion && item.State == "DELETED" && item.LifecycleState == "DELETED" &&
+			item.DefinitionKey != "" && item.DefinitionName != "" && item.Name != "" &&
+			item.DefinitionVersion != "" && item.DefinitionDigest != "" && item.PublicConfiguration != nil &&
+			!item.CreatedAt.IsZero() && !item.UpdatedAt.IsZero()
+	case command.ScheduleInput:
+		item := result.Schedule
+		return input.Kind == command.DeleteSchedule && item != nil && item.Ref == payload.Ref &&
+			item.Version == expectedVersion && item.State == "DELETED" && item.ProjectRef != "" &&
+			item.Name != "" && item.Target.Type != "" && item.Target.Ref != "" && item.Input != nil &&
+			!item.CreatedAt.IsZero() && !item.UpdatedAt.IsZero()
+	case command.RuntimeEnvironmentLifecycleInput:
+		item := result.RuntimeEnvironment
+		return input.Kind == command.DeleteRuntimeEnvironment && item != nil && item.Ref == payload.EnvironmentRef &&
+			item.Version == expectedVersion && item.State == "DELETED" && item.ProjectRef != "" && item.Name != "" &&
+			item.CurrentVersion.Ref != "" && item.CurrentVersion.Digest != "" &&
+			!item.CurrentVersion.CreatedAt.IsZero() && !item.UpdatedAt.IsZero()
+	default:
+		return false
+	}
+}
+
 func exposesActorActions(workload string) bool {
 	return workload == "control-api-gateway"
 }
@@ -152,7 +238,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeInstructions(ctx, tx, scope, input)
 	case command.PublishAgentRuntimeConfig, command.CreateConfigOverlayDraft, command.ValidateConfigOverlayDraft,
 		command.PublishConfigOverlayDraft, command.RollbackConfigOverlay, command.CreateRuntimeEnvironment,
-		command.PublishRuntimeEnvironment, command.RollbackRuntimeEnvironment, command.BindAgentRuntimeEnvironment:
+		command.PublishRuntimeEnvironment, command.RollbackRuntimeEnvironment, command.SetRuntimeEnvironmentEnabled,
+		command.DeleteRuntimeEnvironment, command.BindAgentRuntimeEnvironment:
 		return repository.changeRuntimeConfiguration(ctx, tx, scope, input)
 	case command.ChangeAgentCapability, command.ChangeAgentGrant:
 		return repository.changeAgentBinding(ctx, tx, scope, input)
@@ -173,9 +260,13 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 	case command.CreateAttachmentSetDraft, command.AddAttachmentSetItems,
 		command.RemoveAttachmentSetItems, command.FinalizeAttachmentSet:
 		return repository.changeAttachmentSet(ctx, tx, scope, input)
-	case command.CreateSchedule, command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule:
+	case command.CreateSchedule, command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.DeleteSchedule:
 		return repository.changeSchedule(ctx, tx, scope, input)
-	case command.CreateConnection, command.ConfigureConnectionCredential, command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
+	case command.CreateProviderAccount, command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey,
+		command.RefreshProviderAuthorization, command.RevokeProviderAccount, command.SetProviderAccountEnabled:
+		return repository.changeProviderAccount(ctx, tx, scope, input)
+	case command.CreateConnection, command.UpdateConnection, command.DeleteConnection, command.ConfigureConnectionCredential,
+		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
 		return repository.changeConnection(ctx, tx, scope, input)
 	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.AddAssistantTurn,
 		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
@@ -1726,6 +1817,8 @@ func platformEventKind(eventName string) string {
 		return "PROJECT"
 	case "AGENT_CHANGED":
 		return "AGENT"
+	case "RUNTIME_ENVIRONMENT_CHANGED":
+		return "RUNTIME_ENVIRONMENT"
 	case "ARTIFACT_CHANGED":
 		return "ARTIFACT"
 	case "INSTRUCTIONS_PUBLISHED":
@@ -1734,6 +1827,8 @@ func platformEventKind(eventName string) string {
 		return "WORKFLOW"
 	case "SCHEDULE_CHANGED":
 		return "SCHEDULE"
+	case "PROVIDER_ACCOUNT_CHANGED":
+		return "PROVIDER_ACCOUNT"
 	case "INTEGRATION_CONNECTION_CHANGED":
 		return "INTEGRATION_CONNECTION"
 	case "INTEGRATION_GRANT_CHANGED":

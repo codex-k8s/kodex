@@ -182,10 +182,11 @@ func SecretBrokerOperations() map[string]string {
 // materializer, ответы которого содержат только Secret descriptors.
 func ProviderCredentialMaterializerOperations() map[string]string {
 	return map[string]string{
-		"platform.provider-credentials.readiness.check":        controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName,
-		"platform.provider-credentials.device-authorize.start": controlplanev1.ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName,
-		"platform.provider-credentials.device-authorize.get":   controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName,
-		"platform.provider-credentials.api-key.materialize":    controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName,
+		"platform.provider-credentials.readiness.check":         controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName,
+		"platform.provider-credentials.device-authorize.start":  controlplanev1.ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName,
+		"platform.provider-credentials.device-authorize.get":    controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName,
+		"platform.provider-credentials.api-key.materialize":     controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName,
+		"platform.provider-credentials.materialization.discard": controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName,
 	}
 }
 

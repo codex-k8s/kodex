@@ -198,11 +198,79 @@ func (repository *Repository) changeRuntimeConfiguration(ctx context.Context, tx
 		return repository.changeConfigOverlay(ctx, tx, scope, input)
 	case command.CreateRuntimeEnvironment, command.PublishRuntimeEnvironment, command.RollbackRuntimeEnvironment:
 		return repository.changeRuntimeEnvironment(ctx, tx, scope, input)
+	case command.SetRuntimeEnvironmentEnabled, command.DeleteRuntimeEnvironment:
+		return repository.changeRuntimeEnvironmentLifecycle(ctx, tx, scope, input)
 	case command.BindAgentRuntimeEnvironment:
 		return repository.bindRuntimeEnvironment(ctx, tx, scope, input)
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
+}
+
+func (repository *Repository) changeRuntimeEnvironmentLifecycle(
+	ctx context.Context,
+	tx pgx.Tx,
+	current scope,
+	input command.Command,
+) (commandOutcome, error) {
+	payload, ok := input.Payload.(command.RuntimeEnvironmentLifecycleInput)
+	if !ok || payload.EnvironmentRef == "" || input.Mutation.ExpectedVersion == nil {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	var environmentID, projectID, projectRef, state string
+	var version int64
+	if err := tx.QueryRow(ctx, queryRuntimeConfigurationLockEnvironmentLifecycle, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "environment_ref": payload.EnvironmentRef,
+	}).Scan(&environmentID, &projectID, &projectRef, &state, &version); errors.Is(err, pgx.ErrNoRows) {
+		return commandOutcome{}, errs.ErrNotFound
+	} else if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if version != *input.Mutation.ExpectedVersion {
+		return commandOutcome{}, errs.ErrVersionMismatch
+	}
+	item, err := scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironmentLifecycleSnapshot,
+		pgx.StrictNamedArgs{"organization_id": current.organizationID, "environment_ref": payload.EnvironmentRef}))
+	if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	targetState := "DISABLED"
+	summary := "i18n:RUNTIME_ENVIRONMENT_DISABLED"
+	if input.Kind == command.SetRuntimeEnvironmentEnabled {
+		if payload.Enabled {
+			targetState, summary = "ACTIVE", "i18n:RUNTIME_ENVIRONMENT_ENABLED"
+		}
+		if state == targetState {
+			return commandOutcome{}, errs.ErrConflict
+		}
+	} else {
+		if state != "DISABLED" {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		var bindings int64
+		if err := tx.QueryRow(ctx, queryRuntimeConfigurationCountEnvironmentBindings, pgx.StrictNamedArgs{
+			"environment_id": environmentID,
+		}).Scan(&bindings); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if bindings != 0 {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		targetState, summary = "DELETED", "i18n:RUNTIME_ENVIRONMENT_DELETED"
+	}
+	if err := tx.QueryRow(ctx, queryRuntimeConfigurationUpdateEnvironmentLifecycle, pgx.StrictNamedArgs{
+		"environment_id": environmentID, "state": targetState, "expected_version": version,
+	}).Scan(&item.State, &item.Version, &item.UpdatedAt); errors.Is(err, pgx.ErrNoRows) {
+		return commandOutcome{}, errs.ErrVersionMismatch
+	} else if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	item.NextActions = nil
+	return commandOutcome{
+		result: command.Result{RuntimeEnvironment: &item}, projectID: projectID, projectRef: projectRef,
+		resourceKind: "RUNTIME_ENVIRONMENT", resourceRef: payload.EnvironmentRef, summary: summary,
+		platformEvent: "RUNTIME_ENVIRONMENT_CHANGED", platformAggregateVersion: item.Version, platformState: item.State,
+	}, nil
 }
 
 func (repository *Repository) lockRuntimeAgent(ctx context.Context, tx pgx.Tx, scope scope, ref string) (lockedRuntimeAgent, error) {
@@ -547,6 +615,9 @@ func (repository *Repository) resolveRuntimeEnvironmentImage(
 		available[tool.Name] = struct{}{}
 	}
 	normalized := append([]entity.RuntimeEnvironmentTool(nil), tools...)
+	if normalized == nil {
+		normalized = []entity.RuntimeEnvironmentTool{}
+	}
 	sort.Slice(normalized, func(left, right int) bool { return normalized[left].Command < normalized[right].Command })
 	for index, tool := range normalized {
 		if strings.TrimSpace(tool.Name) != tool.Name || tool.Name == "" || len(tool.Name) > 160 ||

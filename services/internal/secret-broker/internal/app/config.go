@@ -5,15 +5,18 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/caarlos0/env/v11"
 )
 
 const (
-	defaultControlPlaneTarget        = "dns:///control-plane.kodex-system.svc:8443"
-	defaultControlPlaneTLSServerName = "control-plane.kodex-system.svc.cluster.local"
-	defaultExpectedClientSPIFFEID    = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+	defaultControlPlaneTarget         = "dns:///control-plane.kodex-system.svc:8443"
+	defaultControlPlaneTLSServerName  = "control-plane.kodex-system.svc.cluster.local"
+	defaultControlAPIClientSPIFFEID   = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+	defaultControlPlaneClientSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
+	defaultProviderEgressProxy        = "http://egress-gateway.kodex-system.svc.cluster.local:8080"
 )
 
 type Config struct {
@@ -24,7 +27,7 @@ type Config struct {
 	ServerCertificateFile       string        `env:"SECRET_BROKER_SERVER_CERTIFICATE_FILE"`
 	ServerPrivateKeyFile        string        `env:"SECRET_BROKER_SERVER_PRIVATE_KEY_FILE"`
 	ClientCAFile                string        `env:"SECRET_BROKER_CLIENT_CA_FILE"`
-	ExpectedClientSPIFFEID      string        `env:"SECRET_BROKER_EXPECTED_CLIENT_SPIFFE_ID"`
+	ExpectedClientSPIFFEIDs     []string      `env:"SECRET_BROKER_EXPECTED_CLIENT_SPIFFE_IDS" envSeparator:","`
 	ControlPlaneTarget          string        `env:"SECRET_BROKER_CONTROL_PLANE_TARGET"`
 	ControlPlaneTLSServerName   string        `env:"SECRET_BROKER_CONTROL_PLANE_TLS_SERVER_NAME"`
 	ControlPlaneCAFile          string        `env:"SECRET_BROKER_CONTROL_PLANE_CA_FILE"`
@@ -36,6 +39,14 @@ type Config struct {
 	MaximumSecretBytes          int           `env:"SECRET_BROKER_MAXIMUM_SECRET_BYTES"`
 	RecoveryInterval            time.Duration `env:"SECRET_BROKER_RECOVERY_INTERVAL"`
 	RecoveryTimeout             time.Duration `env:"SECRET_BROKER_RECOVERY_TIMEOUT"`
+	CodexBinary                 string        `env:"SECRET_BROKER_CODEX_BINARY"`
+	ProviderAuthorizationRoot   string        `env:"SECRET_BROKER_PROVIDER_AUTHORIZATION_ROOT"`
+	ProviderDeviceAuthTTL       time.Duration `env:"SECRET_BROKER_PROVIDER_DEVICE_AUTH_TTL"`
+	ProviderHTTPSProxy          string        `env:"HTTPS_PROXY"`
+	ProviderHTTPProxy           string        `env:"HTTP_PROXY"`
+	AuthorityVerifierSocket     string        `env:"INTERNAL_RPC_AUTHORITY_VERIFIER_SOCKET"`
+	AuthorityVerifierUID        uint32        `env:"SECRET_BROKER_AUTHORITY_VERIFIER_UID"`
+	AuthorityVerifierGID        uint32        `env:"SECRET_BROKER_AUTHORITY_VERIFIER_GID"`
 }
 
 func loadConfig() (Config, error) {
@@ -44,7 +55,7 @@ func loadConfig() (Config, error) {
 		ServerCertificateFile:       "/var/run/secrets/kodex/secret-broker/server/tls.crt",
 		ServerPrivateKeyFile:        "/var/run/secrets/kodex/secret-broker/server/tls.key",
 		ClientCAFile:                "/var/run/config/kodex/secret-broker/client/ca.pem",
-		ExpectedClientSPIFFEID:      defaultExpectedClientSPIFFEID,
+		ExpectedClientSPIFFEIDs:     []string{defaultControlAPIClientSPIFFEID, defaultControlPlaneClientSPIFFEID},
 		ControlPlaneTarget:          defaultControlPlaneTarget,
 		ControlPlaneTLSServerName:   defaultControlPlaneTLSServerName,
 		ControlPlaneCAFile:          "/var/run/config/kodex/secret-broker/control-plane/ca.pem",
@@ -53,6 +64,10 @@ func loadConfig() (Config, error) {
 		ApplicationGrantFile:        "/var/run/secrets/kodex/secret-broker/application-grant/application-grant.jws",
 		RequestTimeout:              5 * time.Second, ShutdownTimeout: 20 * time.Second, MaximumSecretBytes: 512 << 10,
 		RecoveryInterval: 30 * time.Second, RecoveryTimeout: 10 * time.Second,
+		CodexBinary: "/usr/local/bin/codex", ProviderAuthorizationRoot: "/var/lib/kodex-provider-auth/sessions",
+		ProviderDeviceAuthTTL: 15 * time.Minute, ProviderHTTPSProxy: defaultProviderEgressProxy,
+		ProviderHTTPProxy: defaultProviderEgressProxy, AuthorityVerifierSocket: "/run/kodex/internal-rpc-authority/verifier.sock",
+		AuthorityVerifierUID: 29002, AuthorityVerifierGID: 29000,
 	}
 	if err := env.Parse(&config); err != nil {
 		return Config{}, err
@@ -81,15 +96,25 @@ func (config Config) validate() error {
 			return errors.New("secret broker listen address is invalid")
 		}
 	}
+	if config.ProviderDeviceAuthTTL < time.Minute || config.ProviderDeviceAuthTTL > time.Hour ||
+		config.ProviderHTTPSProxy != defaultProviderEgressProxy || config.ProviderHTTPProxy != defaultProviderEgressProxy ||
+		config.AuthorityVerifierUID == 0 || config.AuthorityVerifierGID == 0 || len(config.ExpectedClientSPIFFEIDs) != 2 ||
+		!slices.Contains(config.ExpectedClientSPIFFEIDs, defaultControlAPIClientSPIFFEID) ||
+		!slices.Contains(config.ExpectedClientSPIFFEIDs, defaultControlPlaneClientSPIFFEID) {
+		return errors.New("secret broker provider credential configuration is invalid")
+	}
 	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile,
-		config.ControlPlaneCAFile, config.ControlPlaneCertificateFile, config.ControlPlanePrivateKeyFile, config.ApplicationGrantFile} {
+		config.ControlPlaneCAFile, config.ControlPlaneCertificateFile, config.ControlPlanePrivateKeyFile, config.ApplicationGrantFile,
+		config.CodexBinary, config.ProviderAuthorizationRoot, config.AuthorityVerifierSocket} {
 		if !filepath.IsAbs(path) {
 			return errors.New("secret broker file path is invalid")
 		}
 	}
-	identity, err := url.Parse(config.ExpectedClientSPIFFEID)
-	if err != nil || identity.Scheme != "spiffe" || identity.Host == "" || identity.Path == "" || identity.RawQuery != "" || identity.Fragment != "" {
-		return errors.New("secret broker client identity is invalid")
+	for _, rawIdentity := range config.ExpectedClientSPIFFEIDs {
+		identity, err := url.Parse(rawIdentity)
+		if err != nil || identity.Scheme != "spiffe" || identity.Host == "" || identity.Path == "" || identity.RawQuery != "" || identity.Fragment != "" {
+			return errors.New("secret broker client identity is invalid")
+		}
 	}
 	return nil
 }

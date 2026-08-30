@@ -80,14 +80,14 @@ FROM (
   JOIN control_plane.projects p ON p.id = schedule.project_id
   JOIN control_plane.subjects owner_subject ON owner_subject.id = schedule.created_by
   WHERE @resource_kind = 'SCHEDULE' AND schedule.organization_id = @organization_id::uuid
-    AND schedule.ref = @resource_ref
+    AND schedule.ref = @resource_ref AND schedule.lifecycle_state <> 'DELETED'
   UNION ALL
   SELECT connection.id::text, '' AS project_id, '' AS project_ref, owner_subject.ref,
          '{}'::jsonb
   FROM control_plane.integration_connections connection
   JOIN control_plane.subjects owner_subject ON owner_subject.id = connection.created_by
   WHERE @resource_kind = 'INTEGRATION' AND connection.organization_id = @organization_id::uuid
-    AND connection.ref = @resource_ref
+    AND connection.ref = @resource_ref AND connection.lifecycle_state = 'ACTIVE'
   UNION ALL
   SELECT recipe.id::text, project.id::text, project.ref, owner_subject.ref,
          jsonb_build_object('PROJECT', project.ref)

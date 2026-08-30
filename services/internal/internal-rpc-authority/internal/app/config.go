@@ -195,6 +195,13 @@ func applyWorkloadProfile(config *Config) error {
 	}
 	profiles := map[Mode]map[string]workloadProfile{
 		ModeIssuer: {
+			"control-plane": {
+				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+				readbackCredentialSecret:    "internal-rpc-authority-control-plane-issuer-readback-credential",
+				readbackPossessionSecret:    "internal-rpc-authority-control-plane-issuer-readback-possession",
+				restoreRoleCredentialSecret: "internal-rpc-authority-control-plane-issuer-restore-credential",
+				restoreACKSecret:            "internal-rpc-authority-control-plane-issuer-restore-ack",
+			},
 			"secret-broker": {
 				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
 				readbackCredentialSecret:    "internal-rpc-authority-secret-broker-issuer-readback-credential",
@@ -267,6 +274,13 @@ func applyWorkloadProfile(config *Config) error {
 			},
 		},
 		ModeVerifier: {
+			"secret-broker": {
+				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+				readbackCredentialSecret:    "internal-rpc-authority-secret-broker-verifier-readback-credential",
+				readbackPossessionSecret:    "internal-rpc-authority-secret-broker-verifier-readback-possession",
+				restoreRoleCredentialSecret: "internal-rpc-authority-secret-broker-verifier-restore-credential",
+				restoreACKSecret:            "internal-rpc-authority-secret-broker-verifier-restore-ack",
+			},
 			"control-plane": {
 				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
 				readbackCredentialSecret:    "internal-rpc-authority-control-plane-verifier-readback-credential",

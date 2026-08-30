@@ -3,6 +3,7 @@ package grpc
 import (
 	"strings"
 	"testing"
+	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -21,8 +22,36 @@ func TestCastScheduleUsesPublicLifecycleStates(t *testing.T) {
 	if got := castSchedule(entity.Schedule{State: "ARCHIVED", Enabled: false}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_ARCHIVED {
 		t.Fatalf("archived schedule state = %s", got)
 	}
+	if got := castSchedule(entity.Schedule{State: "DELETED", Enabled: false}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_DELETED {
+		t.Fatalf("deleted schedule state = %s", got)
+	}
 	if got := castSchedule(entity.Schedule{State: "UNKNOWN", Enabled: true}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_UNSPECIFIED {
 		t.Fatalf("unknown schedule state = %s", got)
+	}
+}
+
+func TestCastConnectionUsesCompletePublicStatesAndSnapshot(t *testing.T) {
+	t.Parallel()
+
+	for state, want := range map[string]controlplanev1.ConnectionState{
+		"TESTING":  controlplanev1.ConnectionState_CONNECTION_STATE_TESTING,
+		"DEGRADED": controlplanev1.ConnectionState_CONNECTION_STATE_DEGRADED,
+		"DELETED":  controlplanev1.ConnectionState_CONNECTION_STATE_DELETED,
+		"UNKNOWN":  controlplanev1.ConnectionState_CONNECTION_STATE_UNSPECIFIED,
+	} {
+		if got := connectionState(state); got != want {
+			t.Fatalf("connection state %q = %s, want %s", state, got, want)
+		}
+	}
+	now := time.Now().UTC()
+	connection := castConnection(entity.IntegrationConnection{
+		State: "DELETED", CreatedAt: now, UpdatedAt: now,
+		CredentialRevision: &entity.IntegrationCredentialRevision{Ref: "icr_example", CreatedAt: now},
+	})
+	if connection.GetState() != controlplanev1.ConnectionState_CONNECTION_STATE_DELETED ||
+		connection.GetCredentialRevision().GetRef() != "icr_example" ||
+		connection.GetCreatedAt() == nil || connection.GetUpdatedAt() == nil {
+		t.Fatalf("connection terminal snapshot is incomplete: %#v", connection)
 	}
 }
 

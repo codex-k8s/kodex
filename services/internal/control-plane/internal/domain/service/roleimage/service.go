@@ -30,6 +30,7 @@ const (
 	permissionFailBuild          = "platform.role-images.builds.fail"
 	permissionClaimAdmission     = "platform.role-images.admission.claim"
 	permissionRecordAdmission    = "platform.role-images.admission.record"
+	permissionRequestPromotion   = "platform.command.role-images.promote"
 	permissionClaimPromotion     = "platform.role-images.promotion.claim"
 	permissionAuthorizePromotion = "platform.role-images.promotion.authorize"
 	permissionCompletePromotion  = "platform.role-images.promotion.complete"
@@ -238,6 +239,32 @@ func (service *Service) ClaimPromotion(ctx context.Context, principal value.Prin
 		return entity.ImagePromotionClaim{}, err
 	}
 	return service.repository.ClaimPromotion(ctx, principal, key)
+}
+
+func (service *Service) Promote(ctx context.Context, input repository.PromotionRequestInput) (entity.RoleImagePromotionReceipt, error) {
+	principal, err := service.resolvePrincipal(ctx, input.Principal)
+	if err != nil {
+		return entity.RoleImagePromotionReceipt{}, err
+	}
+	input.Principal = principal
+	if err := authorize(input.Principal, permissionRequestPromotion, "control-api-gateway"); err != nil {
+		return entity.RoleImagePromotionReceipt{}, err
+	}
+	input.Mutation.Operation = "controlplane.promote_role_image"
+	var expectedVersion int64
+	if input.Mutation.ExpectedVersion != nil {
+		expectedVersion = *input.Mutation.ExpectedVersion
+	}
+	input.Mutation.IntentDigest = digest(struct {
+		RecipeRef, ArtifactRef, ExpectedProvenanceSHA256 string
+		ExpectedVersion                                  int64
+	}{input.RecipeRef, input.ArtifactRef, input.ExpectedProvenanceSHA256, expectedVersion})
+	if input.Mutation.ExpectedVersion == nil || input.Mutation.Validate() != nil ||
+		!validRef(input.RecipeRef, "imgrec") || !validRef(input.ArtifactRef, "imgart") ||
+		!sha256Pattern.MatchString(input.ExpectedProvenanceSHA256) {
+		return entity.RoleImagePromotionReceipt{}, errs.ErrInvalid
+	}
+	return service.repository.RequestPromotion(ctx, input)
 }
 
 func (service *Service) AuthorizePromotion(ctx context.Context, input repository.PromotionAuthorizeInput) (entity.ImagePromotionAuthorization, error) {

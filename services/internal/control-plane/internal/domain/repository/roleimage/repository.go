@@ -77,6 +77,12 @@ type PromotionCompleteInput struct {
 	ExpectedVersion                                            uint64
 }
 
+type PromotionRequestInput struct {
+	Principal                                        value.Principal
+	Mutation                                         value.Mutation
+	RecipeRef, ArtifactRef, ExpectedProvenanceSHA256 string
+}
+
 type Repository interface {
 	ResolvePrincipal(context.Context, value.Principal) (value.Principal, error)
 	List(context.Context, value.Principal, Filter) ([]entity.RoleImageRecipe, string, error)
@@ -90,6 +96,7 @@ type Repository interface {
 	ClaimAdmission(context.Context, value.Principal, string) (entity.ImageAdmissionClaim, error)
 	RecordAdmission(context.Context, AdmissionRecordInput) (entity.ImageArtifact, error)
 	ClaimPromotion(context.Context, value.Principal, string) (entity.ImagePromotionClaim, error)
+	RequestPromotion(context.Context, PromotionRequestInput) (entity.RoleImagePromotionReceipt, error)
 	AuthorizePromotion(context.Context, PromotionAuthorizeInput) (entity.ImagePromotionAuthorization, error)
 	CompletePromotion(context.Context, PromotionCompleteInput) (entity.ImageArtifact, error)
 }

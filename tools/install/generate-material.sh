@@ -178,9 +178,10 @@ for role in \
   ira_role_image_builder_issuer_g1 ira_image_admission_issuer_g1 \
   ira_image_promotion_issuer_g1 ira_automation_scheduler_issuer_g1 \
   ira_session_archive_issuer_g1 ira_secret_broker_issuer_g1 \
-  ira_control_api_gateway_issuer_g1 ira_control_plane_verifier_g1 \
+  ira_control_api_gateway_issuer_g1 ira_control_plane_issuer_g1 ira_control_plane_verifier_g1 \
   ira_control_plane_resolver_g1 ira_integration_gateway_issuer_g1 \
-  ira_interaction_gateway_issuer_g1 ira_runtime_controller_issuer_g1; do
+  ira_interaction_gateway_issuer_g1 ira_runtime_controller_issuer_g1 \
+  ira_secret_broker_verifier_g1; do
   openssl rand -hex 32 >"$output_directory/postgresql/roles/$role"
 done
 
@@ -348,7 +349,7 @@ put_material kodex/image-admission/signing public_key "$output_directory/registr
     --output "$output_directory/crypto/authority-bootstrap"
 )
 
-for worker in automation-scheduler session-archive integration-gateway interaction-gateway runtime-controller role-image-builder image-admission image-promotion secret-broker; do
+for worker in automation-scheduler session-archive integration-gateway interaction-gateway runtime-controller role-image-builder image-admission image-promotion secret-broker control-plane; do
   put_material "kodex/platform-worker-grants/$worker" private.jwk \
     "$output_directory/crypto/platform-worker/$worker/private.jwk"
   put_material "kodex/platform-worker-grants/$worker" public-jwk \

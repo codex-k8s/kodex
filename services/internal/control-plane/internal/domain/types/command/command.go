@@ -2,6 +2,8 @@
 package command
 
 import (
+	"time"
+
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -200,9 +202,12 @@ type ScheduleInput struct {
 	Enabled                                                                                                          bool
 }
 type ProviderAccountInput struct {
-	AccountRef, DefinitionKey, Name string
-	APIKey                          []byte
-	Enabled                         bool
+	AccountRef, DefinitionKey, Name, AuthorizationRef, AuthorizationMethod string
+	AuthorizationState, MaterializerAttemptRef, VerificationURI, UserCode  string
+	ExternalAccountMasked, SafeFailureCode                                 string
+	AuthorizationExpiresAt                                                 *time.Time
+	Credential                                                             *entity.ProviderCredentialDescriptor
+	Enabled                                                                bool
 }
 type ConnectionInput struct {
 	Ref, DefinitionKey, Name, MaterializationRef string

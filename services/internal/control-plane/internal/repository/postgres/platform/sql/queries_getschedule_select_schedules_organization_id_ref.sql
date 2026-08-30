@@ -34,6 +34,7 @@ LEFT JOIN control_plane.workflows workflow
   ON schedule.target_type = 'WORKFLOW' AND workflow.ref = schedule.target_ref
 WHERE schedule.organization_id = $1::uuid
   AND schedule.ref = $2
+  AND schedule.lifecycle_state <> 'DELETED'
   AND ($3 IN ('OWNER', 'ADMINISTRATOR') OR EXISTS(
       SELECT 1
       FROM control_plane.memberships membership

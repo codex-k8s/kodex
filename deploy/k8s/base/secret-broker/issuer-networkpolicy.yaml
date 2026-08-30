@@ -18,6 +18,7 @@ spec:
               app.kubernetes.io/name: prometheus
       ports:
         - {protocol: TCP, port: 9091}
+        - {protocol: TCP, port: 9092}
   egress:
     - to:
         - namespaceSelector:

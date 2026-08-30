@@ -9,6 +9,7 @@ SELECT s.id::text,
        s.version
 FROM control_plane.schedules s
 JOIN control_plane.projects p ON p.id = s.project_id
-WHERE s.organization_id = $1::uuid
-  AND s.ref = $2
+WHERE s.organization_id = @organization_id::uuid
+  AND s.ref = @schedule_ref
+  AND s.lifecycle_state <> 'DELETED'
 FOR UPDATE

@@ -7262,6 +7262,7 @@ const (
 	ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName                     = "/controlplane.v1.ProviderCredentialMaterializerService/StartDeviceAuthorization"
 	ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName                   = "/controlplane.v1.ProviderCredentialMaterializerService/ObserveDeviceAuthorization"
 	ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName                            = "/controlplane.v1.ProviderCredentialMaterializerService/MaterializeAPIKey"
+	ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName     = "/controlplane.v1.ProviderCredentialMaterializerService/DiscardProviderCredentialMaterialization"
 )
 
 // ProviderCredentialMaterializerServiceClient is the client API for ProviderCredentialMaterializerService service.
@@ -7276,6 +7277,9 @@ type ProviderCredentialMaterializerServiceClient interface {
 	StartDeviceAuthorization(ctx context.Context, in *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest, opts ...grpc.CallOption) (*ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse, error)
 	ObserveDeviceAuthorization(ctx context.Context, in *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest, opts ...grpc.CallOption) (*ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse, error)
 	MaterializeAPIKey(ctx context.Context, in *ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest, opts ...grpc.CallOption) (*ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse, error)
+	// buf:lint:ignore RPC_REQUEST_STANDARD_NAME
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+	DiscardProviderCredentialMaterialization(ctx context.Context, in *ProviderCredentialMaterializerServiceDiscardMaterializationRequest, opts ...grpc.CallOption) (*ProviderCredentialMaterializerServiceDiscardMaterializationResponse, error)
 }
 
 type providerCredentialMaterializerServiceClient struct {
@@ -7326,6 +7330,16 @@ func (c *providerCredentialMaterializerServiceClient) MaterializeAPIKey(ctx cont
 	return out, nil
 }
 
+func (c *providerCredentialMaterializerServiceClient) DiscardProviderCredentialMaterialization(ctx context.Context, in *ProviderCredentialMaterializerServiceDiscardMaterializationRequest, opts ...grpc.CallOption) (*ProviderCredentialMaterializerServiceDiscardMaterializationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProviderCredentialMaterializerServiceDiscardMaterializationResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProviderCredentialMaterializerServiceServer is the server API for ProviderCredentialMaterializerService service.
 // All implementations must embed UnimplementedProviderCredentialMaterializerServiceServer
 // for forward compatibility.
@@ -7338,6 +7352,9 @@ type ProviderCredentialMaterializerServiceServer interface {
 	StartDeviceAuthorization(context.Context, *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) (*ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse, error)
 	ObserveDeviceAuthorization(context.Context, *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest) (*ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse, error)
 	MaterializeAPIKey(context.Context, *ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest) (*ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse, error)
+	// buf:lint:ignore RPC_REQUEST_STANDARD_NAME
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+	DiscardProviderCredentialMaterialization(context.Context, *ProviderCredentialMaterializerServiceDiscardMaterializationRequest) (*ProviderCredentialMaterializerServiceDiscardMaterializationResponse, error)
 	mustEmbedUnimplementedProviderCredentialMaterializerServiceServer()
 }
 
@@ -7359,6 +7376,9 @@ func (UnimplementedProviderCredentialMaterializerServiceServer) ObserveDeviceAut
 }
 func (UnimplementedProviderCredentialMaterializerServiceServer) MaterializeAPIKey(context.Context, *ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest) (*ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MaterializeAPIKey not implemented")
+}
+func (UnimplementedProviderCredentialMaterializerServiceServer) DiscardProviderCredentialMaterialization(context.Context, *ProviderCredentialMaterializerServiceDiscardMaterializationRequest) (*ProviderCredentialMaterializerServiceDiscardMaterializationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardProviderCredentialMaterialization not implemented")
 }
 func (UnimplementedProviderCredentialMaterializerServiceServer) mustEmbedUnimplementedProviderCredentialMaterializerServiceServer() {
 }
@@ -7454,6 +7474,24 @@ func _ProviderCredentialMaterializerService_MaterializeAPIKey_Handler(srv interf
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProviderCredentialMaterializerServiceDiscardMaterializationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialMaterializerServiceServer).DiscardProviderCredentialMaterialization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialMaterializerServiceServer).DiscardProviderCredentialMaterialization(ctx, req.(*ProviderCredentialMaterializerServiceDiscardMaterializationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ProviderCredentialMaterializerService_ServiceDesc is the grpc.ServiceDesc for ProviderCredentialMaterializerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -7476,6 +7514,10 @@ var ProviderCredentialMaterializerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MaterializeAPIKey",
 			Handler:    _ProviderCredentialMaterializerService_MaterializeAPIKey_Handler,
+		},
+		{
+			MethodName: "DiscardProviderCredentialMaterialization",
+			Handler:    _ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

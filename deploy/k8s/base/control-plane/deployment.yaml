@@ -158,6 +158,11 @@ spec:
               value: /var/run/config/kodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk
             - name: CONTROL_PLANE_SECRET_BROKER_GRANT_TRUST_FILE
               value: /var/run/config/kodex/control-plane/application-grants/secret-broker.platform-worker.public.jwk
+            - {name: CONTROL_PLANE_SECRET_BROKER_TARGET, value: "dns:///secret-broker.kodex-system.svc:8443"}
+            - {name: CONTROL_PLANE_SECRET_BROKER_TLS_SERVER_NAME, value: secret-broker.kodex-system.svc.cluster.local}
+            - {name: CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TARGET, value: "dns:///control-plane.kodex-system.svc:8443"}
+            - {name: CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TLS_SERVER_NAME, value: control-plane.kodex-system.svc.cluster.local}
+            - {name: CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_CA_FILE, value: /var/run/config/kodex/control-plane/internal-ca/ca.pem}
           ports:
             - name: grpc
               containerPort: 8443
@@ -241,6 +246,9 @@ spec:
               readOnly: true
             - name: application-grants
               mountPath: /var/run/config/kodex/control-plane/application-grants
+              readOnly: true
+            - name: provider-application-grant
+              mountPath: /var/run/secrets/kodex/control-plane/application-grant
               readOnly: true
             - name: role-environments
               mountPath: /var/run/config/kodex/control-plane/role-environments
@@ -344,6 +352,9 @@ spec:
           secret:
             secretName: control-plane-application-grants
             defaultMode: 292
+        - name: provider-application-grant
+          emptyDir:
+            sizeLimit: 1Mi
         - name: role-environments
           configMap:
             name: kodex-role-environments

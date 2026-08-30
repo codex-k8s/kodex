@@ -21,6 +21,8 @@ var (
 	queryConfigurationChangescheduleCancelClaimedOccurrences string
 	//go:embed sql/configuration_changeschedule_archive_schedule.sql
 	queryConfigurationChangescheduleArchiveSchedule string
+	//go:embed sql/configuration_changeschedule_delete_schedule.sql
+	queryConfigurationChangescheduleDeleteSchedule string
 	//go:embed sql/configuration_changeconnection_insert_integration_connections_ref_definition_key_state.sql
 	queryConfigurationChangeconnectionInsertIntegrationConnectionsRefDefinitionKeyState string
 	//go:embed sql/configuration_changeconnection_insert_credential_revision.sql
@@ -31,6 +33,14 @@ var (
 	queryConfigurationChangeconnectionSelectCredentialTarget string
 	//go:embed sql/configuration_changeconnection_select_integration_definitions_stable_key_enabled.sql
 	queryConfigurationChangeconnectionSelectIntegrationDefinitionsStableKeyEnabled string
+	//go:embed sql/configuration_changeconnection_lock.sql
+	queryConfigurationChangeconnectionLock string
+	//go:embed sql/configuration_changeconnection_count_active_dependencies.sql
+	queryConfigurationChangeconnectionCountActiveDependencies string
+	//go:embed sql/configuration_changeconnection_update.sql
+	queryConfigurationChangeconnectionUpdate string
+	//go:embed sql/configuration_changeconnection_delete.sql
+	queryConfigurationChangeconnectionDelete string
 	//go:embed sql/configuration_changeconnection_update_integration_connections_state_last_test_summary_version.sql
 	queryConfigurationChangeconnectionUpdateIntegrationConnectionsStateLastTestSummaryVersion string
 	//go:embed sql/configuration_changeconnection_update_integration_connections_enabled_state_version.sql

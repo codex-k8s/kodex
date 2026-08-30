@@ -13,6 +13,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
+	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/providercredential"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -41,18 +42,40 @@ type Store interface {
 
 type Server struct {
 	secretbrokerv1.UnimplementedSecretBrokerServiceServer
-	owner       Owner
-	store       Store
-	recovery    Recovery
-	namespace   string
-	maximumSize int
+	controlplanev1.UnimplementedProviderCredentialMaterializerServiceServer
+	owner               Owner
+	store               Store
+	recovery            Recovery
+	providerCredentials ProviderCredentialMaterializer
+	namespace           string
+	maximumSize         int
 }
 
-func New(owner Owner, store Store, recovery Recovery, maximumSize int) (*Server, error) {
+type ProviderCredentialMaterializer interface {
+	Check(context.Context) error
+	StartDeviceAuthorization(context.Context, string, string) (providercredential.DeviceAuthorization, error)
+	ObserveDeviceAuthorization(context.Context, string) (kubernetesstore.ProviderAuthorizationAttempt, error)
+	MaterializeAPIKey(context.Context, string, string, []byte) (kubernetesstore.ProviderCredentialDescriptor, string, error)
+	Discard(context.Context, providercredential.DiscardMaterialization) error
+}
+
+type Option func(*Server)
+
+func WithProviderCredentialMaterializer(materializer ProviderCredentialMaterializer) Option {
+	return func(server *Server) { server.providerCredentials = materializer }
+}
+
+func New(owner Owner, store Store, recovery Recovery, maximumSize int, options ...Option) (*Server, error) {
 	if owner == nil || store == nil || recovery == nil || store.Namespace() != "kodex-runtime" || maximumSize < 1<<10 || maximumSize > 1<<20 {
 		return nil, errors.New("secret broker server configuration is invalid")
 	}
-	return &Server{owner: owner, store: store, recovery: recovery, namespace: store.Namespace(), maximumSize: maximumSize}, nil
+	server := &Server{owner: owner, store: store, recovery: recovery, namespace: store.Namespace(), maximumSize: maximumSize}
+	for _, option := range options {
+		if option != nil {
+			option(server)
+		}
+	}
+	return server, nil
 }
 
 func (server *Server) CreateSecret(ctx context.Context, request *secretbrokerv1.CreateSecretRequest) (*secretbrokerv1.CreateSecretResponse, error) {

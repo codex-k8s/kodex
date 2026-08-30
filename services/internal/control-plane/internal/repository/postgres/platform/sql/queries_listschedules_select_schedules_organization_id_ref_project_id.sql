@@ -7,6 +7,7 @@ LEFT JOIN control_plane.agents a ON s.target_type='AGENT' AND a.ref=s.target_ref
 LEFT JOIN control_plane.workflows w ON s.target_type='WORKFLOW' AND w.ref=s.target_ref
 WHERE s.organization_id=$1::uuid
   AND p.ref=$2
+  AND s.lifecycle_state <> 'DELETED'
   AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=s.project_id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)))
   AND ($5 = '' OR lower(concat_ws(' ', s.name, s.target_ref, COALESCE(a.name, ''), COALESCE(w.name, ''))) LIKE '%' || lower($5) || '%')
   AND ($6::timestamptz IS NULL OR (s.updated_at, s.ref) < ($6::timestamptz, $7))

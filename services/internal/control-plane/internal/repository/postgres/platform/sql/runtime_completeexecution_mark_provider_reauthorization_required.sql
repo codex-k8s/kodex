@@ -1,4 +1,4 @@
--- name: runtime_completeexecution_mark_provider_reauthorization_required :execrows
+-- name: runtime_completeexecution_mark_provider_reauthorization_required :exec
 UPDATE control_plane.provider_accounts account
 SET state = 'REAUTHORIZATION_REQUIRED',
     version = account.version + 1,

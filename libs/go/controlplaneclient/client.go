@@ -56,6 +56,7 @@ func validOpaqueReference(reference, prefix string) bool {
 
 type Config struct {
 	Target, TLSServerName, CAFile, ClientCertificateFile, ClientPrivateKeyFile string
+	ResolverTarget, ResolverTLSServerName, ResolverCAFile                      string
 	ApplicationGrantFile                                                       string
 	ExpectedIssuerUID, ExpectedIssuerGID                                       uint32
 	DialTimeout                                                                time.Duration
@@ -65,21 +66,22 @@ type Config struct {
 }
 
 type Client struct {
-	Query           controlplanev1.PlatformQueryServiceClient
-	Command         controlplanev1.PlatformCommandServiceClient
-	Assistant       controlplanev1.SystemAssistantServiceClient
-	Runtime         controlplanev1.RuntimeWorkServiceClient
-	RuntimeSecrets  controlplanev1.RuntimeSecretWorkServiceClient
-	SessionArchive  controlplanev1.SessionArchiveWorkServiceClient
-	Interaction     controlplanev1.InteractionWorkServiceClient
-	RoleImages      controlplanev1.RoleImageServiceClient
-	Access          controlplanev1.AccessServiceClient
-	resolver        internalrpcauthorityv1.AuthorityProofResolverServiceClient
-	issuer          *authorityclient.LocalConnection
-	raw, protected  *grpc.ClientConn
-	proofOperations map[string]string
-	projectRequired map[string]struct{}
-	grantFile       string
+	Query               controlplanev1.PlatformQueryServiceClient
+	Command             controlplanev1.PlatformCommandServiceClient
+	Assistant           controlplanev1.SystemAssistantServiceClient
+	Runtime             controlplanev1.RuntimeWorkServiceClient
+	RuntimeSecrets      controlplanev1.RuntimeSecretWorkServiceClient
+	SessionArchive      controlplanev1.SessionArchiveWorkServiceClient
+	Interaction         controlplanev1.InteractionWorkServiceClient
+	RoleImages          controlplanev1.RoleImageServiceClient
+	Access              controlplanev1.AccessServiceClient
+	ProviderCredentials controlplanev1.ProviderCredentialMaterializerServiceClient
+	resolver            internalrpcauthorityv1.AuthorityProofResolverServiceClient
+	issuer              *authorityclient.LocalConnection
+	raw, protected      *grpc.ClientConn
+	proofOperations     map[string]string
+	projectRequired     map[string]struct{}
+	grantFile           string
 }
 
 type operationSet map[string]string
@@ -90,7 +92,17 @@ func (operations operationSet) OperationID(fullMethod string) (string, bool) {
 }
 
 func Dial(ctx context.Context, config Config) (*Client, error) {
+	if config.ResolverTarget == "" {
+		config.ResolverTarget = config.Target
+	}
+	if config.ResolverTLSServerName == "" {
+		config.ResolverTLSServerName = config.TLSServerName
+	}
+	if config.ResolverCAFile == "" {
+		config.ResolverCAFile = config.CAFile
+	}
 	if config.Target == "" || config.TLSServerName == "" || !filepath.IsAbs(config.CAFile) ||
+		config.ResolverTarget == "" || config.ResolverTLSServerName == "" || !filepath.IsAbs(config.ResolverCAFile) ||
 		!filepath.IsAbs(config.ClientCertificateFile) || !filepath.IsAbs(config.ClientPrivateKeyFile) ||
 		config.ApplicationGrantFile != "" && !filepath.IsAbs(config.ApplicationGrantFile) ||
 		config.ExpectedIssuerUID == 0 || config.ExpectedIssuerGID == 0 ||
@@ -109,12 +121,16 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	transport, err := transportCredentials(config)
+	transport, err := transportCredentials(config.TLSServerName, config.CAFile, config.ClientCertificateFile, config.ClientPrivateKeyFile)
 	if err != nil {
 		return nil, err
 	}
-	options := []grpc.DialOption{grpc.WithTransportCredentials(transport), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(17<<20), grpc.MaxCallSendMsgSize(17<<20))}
-	raw, err := grpc.NewClient(config.Target, options...)
+	resolverTransport, err := transportCredentials(config.ResolverTLSServerName, config.ResolverCAFile, config.ClientCertificateFile, config.ClientPrivateKeyFile)
+	if err != nil {
+		return nil, err
+	}
+	options := []grpc.DialOption{grpc.WithTransportCredentials(resolverTransport), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(17<<20), grpc.MaxCallSendMsgSize(17<<20))}
+	raw, err := grpc.NewClient(config.ResolverTarget, options...)
 	if err != nil {
 		return nil, errors.New("create control-plane resolver connection")
 	}
@@ -144,6 +160,7 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	client.Interaction = controlplanev1.NewInteractionWorkServiceClient(protected)
 	client.RoleImages = controlplanev1.NewRoleImageServiceClient(protected)
 	client.Access = controlplanev1.NewAccessServiceClient(protected)
+	client.ProviderCredentials = controlplanev1.NewProviderCredentialMaterializerServiceClient(protected)
 	return client, nil
 }
 
@@ -205,6 +222,26 @@ func (client *Client) Check(ctx context.Context) error {
 	return nil
 }
 
+// CheckProviderCredentialMaterializer проверяет полный рабочий путь
+// control-plane -> proof resolver -> local issuer -> secret-broker verifier.
+func (client *Client) CheckProviderCredentialMaterializer(ctx context.Context) error {
+	if err := client.CheckLocalAuthority(ctx); err != nil {
+		return err
+	}
+	ready, err := client.resolver.CheckReadiness(ctx, &internalrpcauthorityv1.AuthorityProofResolverServiceCheckReadinessRequest{})
+	if err != nil || !ready.GetReady() {
+		return errors.New("control-plane proof resolver is not ready")
+	}
+	response, err := client.ProviderCredentials.CheckProviderCredentialMaterializerReadiness(
+		ctx,
+		&controlplanev1.CheckProviderCredentialMaterializerReadinessRequest{},
+	)
+	if err != nil || !response.GetReady() {
+		return errors.New("provider credential materializer is not ready")
+	}
+	return nil
+}
+
 // CheckLocalAuthority проверяет только sidecar текущего workload. Этот путь
 // допустим для локальной readiness; соседний control-plane проверяется
 // отдельной диагностикой и на рабочем запросе.
@@ -248,12 +285,12 @@ func readCredential(path string) (string, error) {
 	return result, nil
 }
 
-func transportCredentials(config Config) (credentials.TransportCredentials, error) {
-	certificate, err := tls.LoadX509KeyPair(config.ClientCertificateFile, config.ClientPrivateKeyFile)
+func transportCredentials(serverName, caFile, certificateFile, privateKeyFile string) (credentials.TransportCredentials, error) {
+	certificate, err := tls.LoadX509KeyPair(certificateFile, privateKeyFile)
 	if err != nil {
 		return nil, errors.New("load control-plane client identity")
 	}
-	ca, err := os.ReadFile(config.CAFile)
+	ca, err := os.ReadFile(caFile)
 	if err != nil || len(ca) == 0 || len(ca) > 1<<20 {
 		return nil, errors.New("load control-plane CA")
 	}
@@ -261,5 +298,5 @@ func transportCredentials(config Config) (credentials.TransportCredentials, erro
 	if !roots.AppendCertsFromPEM(ca) {
 		return nil, errors.New("parse control-plane CA")
 	}
-	return credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS13, ServerName: config.TLSServerName, RootCAs: roots, Certificates: []tls.Certificate{certificate}}), nil
+	return credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS13, ServerName: serverName, RootCAs: roots, Certificates: []tls.Certificate{certificate}}), nil
 }

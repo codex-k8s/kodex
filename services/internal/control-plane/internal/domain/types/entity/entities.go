@@ -175,6 +175,11 @@ type ProviderDefinition struct {
 type ProviderAuthorization struct {
 	Ref, Method, State, VerificationURI, UserCode, SafeFailureCode string
 	ExpiresAt                                                      *time.Time
+	MaterializerAttemptRef                                         string `json:"-"`
+}
+
+type ProviderCredentialDescriptor struct {
+	SecretName, SecretUID, SecretResourceVersion, ContentSHA256 string
 }
 
 type ProviderAccount struct {

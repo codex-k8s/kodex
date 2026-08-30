@@ -230,6 +230,12 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("role image lifecycle uses canonical application access", func(t *testing.T) {
 		testRoleImageApplicationAccess(t, ctx, repository)
 	})
+	t.Run("role image promotion binds exact admitted artifact and receipt", func(t *testing.T) {
+		testRoleImagePromotionLifecycle(t, ctx, repository)
+	})
+	t.Run("runtime environment lifecycle returns a complete terminal snapshot", func(t *testing.T) {
+		testRuntimeEnvironmentLifecycle(t, ctx, repository, pool)
+	})
 	t.Run("runtime environment create rejects a missing exact image", func(t *testing.T) {
 		testRuntimeEnvironmentRejectsMissingImage(t, ctx, repository)
 	})
@@ -455,6 +461,185 @@ func testRuntimeEnvironmentRejectsMissingImage(t *testing.T, ctx context.Context
 		}})
 	if !errors.Is(err, domainerrs.ErrInvalid) || created.RuntimeEnvironment != nil {
 		t.Fatalf("environment without exact promoted image was accepted: environment=%#v err=%v", created.RuntimeEnvironment, err)
+	}
+}
+
+func testRuntimeEnvironmentLifecycle(
+	t *testing.T,
+	ctx context.Context,
+	repository *Repository,
+	pool *pgxpool.Pool,
+) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Runtime environment lifecycle owner", CallerWorkload: "control-api-gateway",
+		Operation: "platform.command.runtime-environments.create",
+	}, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct runtime environment lifecycle service: %v", err)
+	}
+	var artifactRef, projectRef string
+	if err := pool.QueryRow(ctx, `
+SELECT artifact.ref, project.ref
+FROM control_plane.image_artifacts artifact
+JOIN control_plane.projects project ON project.id = artifact.project_id
+JOIN control_plane.role_image_recipes recipe ON recipe.id = artifact.recipe_id
+WHERE project.name = 'Role image promotion'
+  AND recipe.name = 'Promotion image'
+  AND recipe.active_image_artifact_id = artifact.id
+  AND artifact.admission_state = 'ACCEPTED'
+  AND artifact.promotion_state = 'PROMOTED'
+  AND artifact.promoted_reference <> ''
+ORDER BY artifact.promoted_at DESC, artifact.ref
+LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
+		t.Fatalf("read promoted runtime image fixture: %v", err)
+	}
+	createEnvironment := func(key, name, mode string) entity.RuntimeEnvironmentSet {
+		t.Helper()
+		result, createErr := service.Execute(ctx, command.Command{
+			Kind: command.CreateRuntimeEnvironment, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: key},
+			Payload: command.RuntimeEnvironmentInput{
+				ProjectRef: projectRef, Name: name, Description: "Runtime lifecycle component environment",
+				ImageArtifactRef: artifactRef,
+				Values:           []entity.RuntimeEnvironmentValue{{Name: "LIFECYCLE_MODE", Value: mode}},
+				Policy:           runtimecontract.DefaultRuntimeEnvironmentPolicy(),
+			},
+		})
+		if createErr != nil || result.RuntimeEnvironment == nil || result.RuntimeEnvironment.CurrentVersion.Ref == "" ||
+			result.RuntimeEnvironment.CurrentVersion.Digest == "" {
+			t.Fatalf("create %s: environment=%#v err=%v", key, result.RuntimeEnvironment, createErr)
+		}
+		return *result.RuntimeEnvironment
+	}
+	first := createEnvironment("runtime-environment-lifecycle-first", "Runtime lifecycle first", "first")
+	second := createEnvironment("runtime-environment-lifecycle-second", "Runtime lifecycle second", "second")
+	agent := createLifecycleAgent(t, ctx, service, owner, projectRef,
+		"runtime-environment-lifecycle-agent", "Runtime lifecycle specialist")
+	agentVersion := agent.Version
+	boundFirst, err := service.Execute(ctx, command.Command{
+		Kind: command.BindAgentRuntimeEnvironment, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-bind-first", ExpectedVersion: &agentVersion},
+		Payload:  command.RuntimeEnvironmentBindingInput{AgentRef: agent.Ref, EnvironmentRef: first.Ref},
+	})
+	if err != nil || boundFirst.RuntimeConfiguration == nil || boundFirst.RuntimeConfiguration.Environment.Ref != first.Ref {
+		t.Fatalf("bind first runtime environment: configuration=%#v err=%v", boundFirst.RuntimeConfiguration, err)
+	}
+	firstVersion := first.Version
+	disabled, err := service.Execute(ctx, command.Command{
+		Kind: command.SetRuntimeEnvironmentEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-disable-first", ExpectedVersion: &firstVersion},
+		Payload:  command.RuntimeEnvironmentLifecycleInput{EnvironmentRef: first.Ref, Enabled: false},
+	})
+	if err != nil || disabled.RuntimeEnvironment == nil || disabled.RuntimeEnvironment.State != "DISABLED" ||
+		disabled.RuntimeEnvironment.Version != firstVersion+1 ||
+		!reflect.DeepEqual(disabled.RuntimeEnvironment.CurrentVersion, first.CurrentVersion) {
+		t.Fatalf("disable runtime environment: environment=%#v err=%v", disabled.RuntimeEnvironment, err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.SetRuntimeEnvironmentEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-enable-stale", ExpectedVersion: &firstVersion},
+		Payload:  command.RuntimeEnvironmentLifecycleInput{EnvironmentRef: first.Ref, Enabled: true},
+	}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
+		t.Fatalf("stale runtime environment enable was accepted: %v", err)
+	}
+	disabledVersion := disabled.RuntimeEnvironment.Version
+	enabled, err := service.Execute(ctx, command.Command{
+		Kind: command.SetRuntimeEnvironmentEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-enable-first", ExpectedVersion: &disabledVersion},
+		Payload:  command.RuntimeEnvironmentLifecycleInput{EnvironmentRef: first.Ref, Enabled: true},
+	})
+	if err != nil || enabled.RuntimeEnvironment == nil || enabled.RuntimeEnvironment.State != "ACTIVE" ||
+		!reflect.DeepEqual(enabled.RuntimeEnvironment.CurrentVersion, first.CurrentVersion) {
+		t.Fatalf("enable runtime environment: environment=%#v err=%v", enabled.RuntimeEnvironment, err)
+	}
+	enabledVersion := enabled.RuntimeEnvironment.Version
+	disabled, err = service.Execute(ctx, command.Command{
+		Kind: command.SetRuntimeEnvironmentEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-disable-for-delete", ExpectedVersion: &enabledVersion},
+		Payload:  command.RuntimeEnvironmentLifecycleInput{EnvironmentRef: first.Ref, Enabled: false},
+	})
+	if err != nil || disabled.RuntimeEnvironment == nil || disabled.RuntimeEnvironment.State != "DISABLED" {
+		t.Fatalf("disable runtime environment for delete: environment=%#v err=%v", disabled.RuntimeEnvironment, err)
+	}
+	deleteVersion := disabled.RuntimeEnvironment.Version
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.DeleteRuntimeEnvironment, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-delete-bound", ExpectedVersion: &deleteVersion},
+		Payload:  command.RuntimeEnvironmentLifecycleInput{EnvironmentRef: first.Ref},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("bound runtime environment was deleted: %v", err)
+	}
+	boundVersion := boundFirst.RuntimeConfiguration.AgentVersion
+	boundSecond, err := service.Execute(ctx, command.Command{
+		Kind: command.BindAgentRuntimeEnvironment, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-bind-second", ExpectedVersion: &boundVersion},
+		Payload:  command.RuntimeEnvironmentBindingInput{AgentRef: agent.Ref, EnvironmentRef: second.Ref},
+	})
+	if err != nil || boundSecond.RuntimeConfiguration == nil || boundSecond.RuntimeConfiguration.Environment.Ref != second.Ref {
+		t.Fatalf("rebind second runtime environment: configuration=%#v err=%v", boundSecond.RuntimeConfiguration, err)
+	}
+	deleteCommand := command.Command{
+		Kind: command.DeleteRuntimeEnvironment, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-delete", ExpectedVersion: &deleteVersion},
+		Payload:  command.RuntimeEnvironmentLifecycleInput{EnvironmentRef: first.Ref},
+	}
+	deleted, err := service.Execute(ctx, deleteCommand)
+	if err != nil || deleted.RuntimeEnvironment == nil || deleted.RuntimeEnvironment.State != "DELETED" ||
+		deleted.RuntimeEnvironment.Version != deleteVersion+1 || deleted.RuntimeEnvironment.Ref != first.Ref ||
+		deleted.RuntimeEnvironment.ProjectRef != disabled.RuntimeEnvironment.ProjectRef ||
+		deleted.RuntimeEnvironment.Name != disabled.RuntimeEnvironment.Name ||
+		deleted.RuntimeEnvironment.Description != disabled.RuntimeEnvironment.Description ||
+		!reflect.DeepEqual(deleted.RuntimeEnvironment.CurrentVersion, disabled.RuntimeEnvironment.CurrentVersion) ||
+		deleted.RuntimeEnvironment.UpdatedAt.Before(disabled.RuntimeEnvironment.UpdatedAt) || len(deleted.RuntimeEnvironment.NextActions) != 0 {
+		t.Fatalf("delete runtime environment terminal snapshot: environment=%#v err=%v", deleted.RuntimeEnvironment, err)
+	}
+	replayedDelete, err := service.Execute(ctx, deleteCommand)
+	if err != nil || !reflect.DeepEqual(replayedDelete.RuntimeEnvironment, deleted.RuntimeEnvironment) {
+		t.Fatalf("replay runtime environment delete: replay=%#v deleted=%#v err=%v",
+			replayedDelete.RuntimeEnvironment, deleted.RuntimeEnvironment, err)
+	}
+	wrongDeleteVersion := deleted.RuntimeEnvironment.Version
+	wrongDelete := deleteCommand
+	wrongDelete.Mutation.ExpectedVersion = &wrongDeleteVersion
+	if replay, err := service.Execute(ctx, wrongDelete); !errors.Is(err, domainerrs.ErrNotFound) || replay.RuntimeEnvironment != nil {
+		t.Fatalf("inexact runtime environment delete replay bypassed masking: replay=%#v err=%v", replay.RuntimeEnvironment, err)
+	}
+	if readback, err := service.GetRuntimeEnvironment(ctx, owner, first.Ref); !errors.Is(err, domainerrs.ErrNotFound) || readback.Ref != "" {
+		t.Fatalf("deleted runtime environment remained get-eligible: environment=%#v err=%v", readback, err)
+	}
+	environments, _, err := service.ListRuntimeEnvironments(ctx, owner, query.Filter{ProjectRef: projectRef})
+	if err != nil {
+		t.Fatalf("list runtime environments after delete: %v", err)
+	}
+	for _, environment := range environments {
+		if environment.Ref == first.Ref {
+			t.Fatalf("deleted runtime environment remained list-eligible: %#v", environment)
+		}
+	}
+	var state string
+	var storedVersion, bindingCount, deleteAuditCount, deleteEventCount int64
+	if err := pool.QueryRow(ctx, `
+SELECT environment.state, environment.version,
+       (SELECT count(*) FROM control_plane.agent_runtime_environment_bindings binding
+        WHERE binding.environment_set_id = environment.id),
+       (SELECT count(*) FROM control_plane.audit_events audit
+        WHERE audit.resource_ref = environment.ref AND audit.action = 'controlplane.delete_runtime_environment'),
+       (SELECT count(*) FROM control_plane.outbox_events event
+        WHERE convert_from(event.payload, 'UTF8')::jsonb ->> 'eventName' = 'RUNTIME_ENVIRONMENT_CHANGED'
+          AND convert_from(event.payload, 'UTF8')::jsonb ->> 'aggregateRef' = environment.ref
+          AND (convert_from(event.payload, 'UTF8')::jsonb ->> 'aggregateVersion')::bigint = environment.version
+          AND convert_from(event.payload, 'UTF8')::jsonb #>> '{data,state}' = 'DELETED'
+          AND convert_from(event.payload, 'UTF8')::jsonb #>> '{data,safeSummary}' = 'i18n:RUNTIME_ENVIRONMENT_DELETED')
+FROM control_plane.runtime_environment_sets environment
+WHERE environment.ref = $1`, first.Ref).Scan(
+		&state, &storedVersion, &bindingCount, &deleteAuditCount, &deleteEventCount,
+	); err != nil || state != "DELETED" || storedVersion != deleted.RuntimeEnvironment.Version ||
+		bindingCount != 0 || deleteAuditCount != 1 || deleteEventCount != 1 {
+		t.Fatalf("runtime environment delete readback: state=%q version=%d bindings=%d audits=%d events=%d err=%v",
+			state, storedVersion, bindingCount, deleteAuditCount, deleteEventCount, err)
 	}
 }
 
@@ -769,6 +954,14 @@ func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, reposito
 	candidateInput.ProjectRef = projectB.Ref
 	if _, err := repository.ResolveProofAuthority(ctx, candidateInput); !errors.Is(err, domainerrs.ErrForbidden) {
 		t.Fatalf("project B proof was not denied: %v", err)
+	}
+	allowedRunVersion := allowed.Run.Version
+	cancelled, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "enterprise-launch-agent-a-cleanup", ExpectedVersion: &allowedRunVersion},
+		Payload:  command.RunCommandInput{RunRef: allowed.Run.Ref, Reason: "Close enterprise access component fixture"},
+	})
+	if err != nil || cancelled.Run == nil || cancelled.Run.State != "CANCELLED" {
+		t.Fatalf("cancel enterprise access fixture: run=%#v err=%v", cancelled.Run, err)
 	}
 }
 
@@ -1140,6 +1333,166 @@ func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, re
 	})
 	if err != nil || revoked.Connection == nil || len(revoked.Connection.Grants) != 1 || revoked.Connection.Grants[0].Enabled {
 		t.Fatalf("revoke integration grant: connection=%#v err=%v", revoked.Connection, err)
+	}
+	updateVersion := revoked.Connection.Version
+	updated, err := service.Execute(ctx, command.Command{
+		Kind: command.UpdateConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-update", ExpectedVersion: &updateVersion},
+		Payload: command.ConnectionInput{Ref: created.Connection.Ref, Name: "Updated synthetic journal",
+			PublicConfiguration: map[string]any{"journal": "component-updated"}},
+	})
+	if err != nil || updated.Connection == nil || updated.Connection.Version != updateVersion+1 ||
+		updated.Connection.Name != "Updated synthetic journal" || updated.Connection.PublicConfiguration["journal"] != "component-updated" ||
+		len(updated.Connection.Grants) != 1 || updated.Connection.Grants[0].Enabled {
+		t.Fatalf("update integration connection: connection=%#v err=%v", updated.Connection, err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.UpdateConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-update-stale", ExpectedVersion: &updateVersion},
+		Payload: command.ConnectionInput{Ref: created.Connection.Ref, Name: "Stale synthetic journal",
+			PublicConfiguration: map[string]any{"journal": "component-stale"}},
+	}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
+		t.Fatalf("stale integration update was accepted: %v", err)
+	}
+	var reenableVersion int64
+	if err := pool.QueryRow(ctx, bootstrapComponentConnectIntegrationQuery, updated.Connection.Ref).Scan(&reenableVersion); err != nil {
+		t.Fatalf("materialize updated integration fixture: %v", err)
+	}
+	reenabledGrant, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeIntegrationGrant, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-grant-reenable", ExpectedVersion: &reenableVersion},
+		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref,
+			CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: true},
+	})
+	if err != nil || reenabledGrant.Connection == nil || len(reenabledGrant.Connection.Grants) != 1 || !reenabledGrant.Connection.Grants[0].Enabled {
+		t.Fatalf("reenable integration grant: connection=%#v err=%v", reenabledGrant.Connection, err)
+	}
+	testVersion := reenabledGrant.Connection.Version
+	testing, err := service.Execute(ctx, command.Command{
+		Kind: command.TestConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-test-before-disable", ExpectedVersion: &testVersion},
+		Payload:  command.ConnectionInput{Ref: created.Connection.Ref},
+	})
+	if err != nil || testing.Connection == nil || testing.Connection.State != "TESTING" {
+		t.Fatalf("queue integration test before disable: connection=%#v err=%v", testing.Connection, err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.UpdateConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-update-testing", ExpectedVersion: &testing.Connection.Version},
+		Payload: command.ConnectionInput{Ref: created.Connection.Ref, Name: "Testing synthetic journal",
+			PublicConfiguration: map[string]any{"journal": "component-testing"}},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("testing integration connection accepted update: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.DeleteConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-delete-active", ExpectedVersion: &testing.Connection.Version},
+		Payload:  command.ConnectionInput{Ref: created.Connection.Ref},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("active integration connection was deleted: %v", err)
+	}
+	disableVersion := testing.Connection.Version
+	disabled, err := service.Execute(ctx, command.Command{
+		Kind: command.SetConnectionEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-disable-for-delete", ExpectedVersion: &disableVersion},
+		Payload:  command.ConnectionInput{Ref: created.Connection.Ref, Enabled: false},
+	})
+	if err != nil || disabled.Connection == nil || disabled.Connection.State != "DISABLED" || disabled.Connection.Enabled ||
+		len(disabled.Connection.Grants) != 1 || disabled.Connection.Grants[0].Enabled {
+		t.Fatalf("disable integration connection atomically: connection=%#v err=%v", disabled.Connection, err)
+	}
+	var activeTests, cancelledTests, enabledGrants int64
+	if err := pool.QueryRow(ctx, `
+SELECT count(*) FILTER (WHERE test.state IN ('DUE', 'CLAIMED')),
+       count(*) FILTER (WHERE test.state = 'CANCELLED'),
+       (SELECT count(*) FROM control_plane.integration_grants grant_row
+        WHERE grant_row.connection_id = connection.id AND grant_row.enabled)
+FROM control_plane.integration_connections connection
+LEFT JOIN control_plane.integration_connection_tests test ON test.connection_id = connection.id
+WHERE connection.ref = $1
+GROUP BY connection.id`, created.Connection.Ref).Scan(&activeTests, &cancelledTests, &enabledGrants); err != nil ||
+		activeTests != 0 || cancelledTests != 1 || enabledGrants != 0 {
+		t.Fatalf("disable dependency readback: active_tests=%d cancelled_tests=%d enabled_grants=%d err=%v",
+			activeTests, cancelledTests, enabledGrants, err)
+	}
+	deleteVersion := disabled.Connection.Version
+	deleteCommand := command.Command{
+		Kind: command.DeleteConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-delete", ExpectedVersion: &deleteVersion},
+		Payload:  command.ConnectionInput{Ref: created.Connection.Ref},
+	}
+	deleted, err := service.Execute(ctx, deleteCommand)
+	if err != nil || deleted.Connection == nil || deleted.Connection.State != "DELETED" ||
+		deleted.Connection.LifecycleState != "DELETED" || deleted.Connection.Version != deleteVersion+1 ||
+		deleted.Connection.Ref != disabled.Connection.Ref || deleted.Connection.Name != disabled.Connection.Name ||
+		deleted.Connection.DefinitionKey != disabled.Connection.DefinitionKey ||
+		deleted.Connection.DefinitionVersion != disabled.Connection.DefinitionVersion ||
+		deleted.Connection.DefinitionDigest != disabled.Connection.DefinitionDigest ||
+		!reflect.DeepEqual(deleted.Connection.PublicConfiguration, disabled.Connection.PublicConfiguration) ||
+		!reflect.DeepEqual(deleted.Connection.Capabilities, disabled.Connection.Capabilities) ||
+		!reflect.DeepEqual(deleted.Connection.Grants, disabled.Connection.Grants) ||
+		deleted.Connection.CreatedAt != disabled.Connection.CreatedAt || deleted.Connection.UpdatedAt.Before(disabled.Connection.UpdatedAt) ||
+		len(deleted.Connection.NextActions) != 0 {
+		t.Fatalf("delete integration terminal snapshot: connection=%#v err=%v", deleted.Connection, err)
+	}
+	replayedDelete, err := service.Execute(ctx, deleteCommand)
+	if err != nil || !reflect.DeepEqual(replayedDelete.Connection, deleted.Connection) {
+		t.Fatalf("replay integration delete: replay=%#v deleted=%#v err=%v", replayedDelete.Connection, deleted.Connection, err)
+	}
+	wrongDeleteVersion := deleted.Connection.Version
+	wrongMutation := deleteCommand
+	wrongMutation.Mutation.ExpectedVersion = &wrongDeleteVersion
+	if replay, err := service.Execute(ctx, wrongMutation); !errors.Is(err, domainerrs.ErrNotFound) || replay.Connection != nil {
+		t.Fatalf("inexact integration delete replay bypassed masking: replay=%#v err=%v", replay.Connection, err)
+	}
+	otherActorCommand := deleteCommand
+	if err := pool.QueryRow(ctx, `
+INSERT INTO control_plane.subjects
+    (organization_id, ref, issuer, external_subject_digest, display_name)
+VALUES ($1::uuid, 'usr_delete_replay_actor', 'component.test', repeat('d', 64), 'Delete replay alternate actor')
+RETURNING id::text`, owner.AuthorityTenant).Scan(&otherActorCommand.Principal.ActorID); err != nil {
+		t.Fatalf("create alternate integration actor identity: %v", err)
+	}
+	if replay, err := service.Execute(ctx, otherActorCommand); !errors.Is(err, domainerrs.ErrNotFound) || replay.Connection != nil {
+		t.Fatalf("other actor received integration delete receipt: replay=%#v err=%v", replay.Connection, err)
+	}
+	otherTenantCommand := deleteCommand
+	otherTenantCommand.Principal.AuthorityTenant = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+	if replay, err := service.Execute(ctx, otherTenantCommand); err == nil || replay.Connection != nil {
+		t.Fatalf("other tenant received integration delete receipt: replay=%#v err=%v", replay.Connection, err)
+	}
+	if readback, err := service.GetIntegrationConnection(ctx, owner, created.Connection.Ref); !errors.Is(err, domainerrs.ErrNotFound) || readback.Ref != "" {
+		t.Fatalf("deleted integration remained get-eligible: connection=%#v err=%v", readback, err)
+	}
+	connections, _, err := service.ListIntegrationConnections(ctx, owner, query.Filter{DefinitionKey: "synthetic"})
+	if err != nil {
+		t.Fatalf("list integrations after delete: %v", err)
+	}
+	for _, connection := range connections {
+		if connection.Ref == created.Connection.Ref {
+			t.Fatalf("deleted integration remained list-eligible: %#v", connection)
+		}
+	}
+	var lifecycleState, operationalState string
+	var connectionEnabled bool
+	var storedVersion, deleteAuditCount, deleteEventCount int64
+	if err := pool.QueryRow(ctx, `
+SELECT connection.lifecycle_state, connection.state, connection.enabled, connection.version,
+       (SELECT count(*) FROM control_plane.audit_events audit
+        WHERE audit.resource_ref = connection.ref AND audit.action = 'controlplane.delete_integration_connection'),
+       (SELECT count(*) FROM control_plane.outbox_events event
+        WHERE convert_from(event.payload, 'UTF8')::jsonb ->> 'eventName' = 'INTEGRATION_CONNECTION_CHANGED'
+          AND convert_from(event.payload, 'UTF8')::jsonb ->> 'aggregateRef' = connection.ref
+          AND (convert_from(event.payload, 'UTF8')::jsonb ->> 'aggregateVersion')::bigint = connection.version
+          AND convert_from(event.payload, 'UTF8')::jsonb #>> '{data,state}' = 'DELETED'
+          AND convert_from(event.payload, 'UTF8')::jsonb #>> '{data,safeSummary}' = 'i18n:INTEGRATION_CONNECTION_DELETED')
+FROM control_plane.integration_connections connection
+WHERE connection.ref = $1`, created.Connection.Ref).Scan(
+		&lifecycleState, &operationalState, &connectionEnabled, &storedVersion, &deleteAuditCount, &deleteEventCount,
+	); err != nil || lifecycleState != "DELETED" || operationalState != "DISABLED" || connectionEnabled ||
+		storedVersion != deleted.Connection.Version || deleteAuditCount != 1 || deleteEventCount != 1 {
+		t.Fatalf("integration delete readback: lifecycle=%q state=%q enabled=%t version=%d audits=%d events=%d err=%v",
+			lifecycleState, operationalState, connectionEnabled, storedVersion, deleteAuditCount, deleteEventCount, err)
 	}
 }
 
@@ -1897,7 +2250,7 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 		Payload:  command.ScheduleInput{Ref: archiveCandidate.Schedule.Ref},
 	}
 	archived, err := service.Execute(ctx, archiveCommand)
-	if err != nil || archived.Schedule == nil || archived.Schedule.State != "ARCHIVED" || archived.Schedule.Enabled || archived.Schedule.NextRunAt != nil || !reflect.DeepEqual(archived.Schedule.NextActions, []string{"OPEN"}) {
+	if err != nil || archived.Schedule == nil || archived.Schedule.State != "ARCHIVED" || archived.Schedule.Enabled || archived.Schedule.NextRunAt != nil || !reflect.DeepEqual(archived.Schedule.NextActions, []string{"OPEN", "DELETE"}) {
 		t.Fatalf("archive schedule: schedule=%#v err=%v", archived.Schedule, err)
 	}
 	replayedArchive, err := service.Execute(ctx, archiveCommand)
@@ -1938,6 +2291,69 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 	claimsAfterArchive, err := service.ClaimDueSchedules(ctx, schedulerClaim, "scheduler-archive-lifecycle-component", 1)
 	if err != nil || len(claimsAfterArchive) != 0 {
 		t.Fatalf("archived schedule produced a future claim: claims=%#v err=%v", claimsAfterArchive, err)
+	}
+	deleteVersion := archived.Schedule.Version
+	deleteCommand := command.Command{
+		Kind: command.DeleteSchedule, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-delete", ExpectedVersion: &deleteVersion},
+		Payload:  command.ScheduleInput{Ref: archiveCandidate.Schedule.Ref},
+	}
+	deleted, err := service.Execute(ctx, deleteCommand)
+	if err != nil || deleted.Schedule == nil || deleted.Schedule.State != "DELETED" || deleted.Schedule.Enabled ||
+		deleted.Schedule.Version != deleteVersion+1 || deleted.Schedule.Ref != archived.Schedule.Ref ||
+		deleted.Schedule.ProjectRef != archived.Schedule.ProjectRef || deleted.Schedule.Name != archived.Schedule.Name ||
+		deleted.Schedule.Target.Type != archived.Schedule.Target.Type || deleted.Schedule.Target.Ref != archived.Schedule.Target.Ref ||
+		deleted.Schedule.Preset != archived.Schedule.Preset || deleted.Schedule.CronExpression != archived.Schedule.CronExpression ||
+		deleted.Schedule.Timezone != archived.Schedule.Timezone ||
+		!reflect.DeepEqual(deleted.Schedule.Input, archived.Schedule.Input) ||
+		deleted.Schedule.SessionPolicy != archived.Schedule.SessionPolicy ||
+		deleted.Schedule.NotificationPolicy != archived.Schedule.NotificationPolicy ||
+		deleted.Schedule.CreatedAt != archived.Schedule.CreatedAt || deleted.Schedule.UpdatedAt.Before(archived.Schedule.UpdatedAt) ||
+		deleted.Schedule.NextRunAt != nil || len(deleted.Schedule.NextActions) != 0 {
+		t.Fatalf("delete schedule terminal snapshot: schedule=%#v err=%v", deleted.Schedule, err)
+	}
+	replayedDelete, err := service.Execute(ctx, deleteCommand)
+	if err != nil || !reflect.DeepEqual(replayedDelete.Schedule, deleted.Schedule) {
+		t.Fatalf("replay schedule delete: replay=%#v deleted=%#v err=%v", replayedDelete.Schedule, deleted.Schedule, err)
+	}
+	wrongDeleteVersion := deleted.Schedule.Version
+	wrongDelete := deleteCommand
+	wrongDelete.Mutation.ExpectedVersion = &wrongDeleteVersion
+	if replay, err := service.Execute(ctx, wrongDelete); !errors.Is(err, domainerrs.ErrNotFound) || replay.Schedule != nil {
+		t.Fatalf("inexact schedule delete replay bypassed masking: replay=%#v err=%v", replay.Schedule, err)
+	}
+	if readback, err := service.GetSchedule(ctx, owner, archiveCandidate.Schedule.Ref); !errors.Is(err, domainerrs.ErrNotFound) || readback.Ref != "" {
+		t.Fatalf("deleted schedule remained get-eligible: schedule=%#v err=%v", readback, err)
+	}
+	schedules, _, err := service.ListSchedules(ctx, owner, query.Filter{ProjectRef: project.Project.Ref})
+	if err != nil {
+		t.Fatalf("list schedules after delete: %v", err)
+	}
+	for _, schedule := range schedules {
+		if schedule.Ref == archiveCandidate.Schedule.Ref {
+			t.Fatalf("deleted schedule remained list-eligible: %#v", schedule)
+		}
+	}
+	var deletedLifecycle string
+	var deletedEnabled, deletedNextRunCleared bool
+	var storedDeleteVersion, deleteAuditCount, deleteEventCount int64
+	if err := repository.pool.QueryRow(ctx, `
+SELECT schedule.lifecycle_state, schedule.enabled, schedule.next_run_at IS NULL, schedule.version,
+       (SELECT count(*) FROM control_plane.audit_events audit
+        WHERE audit.resource_ref = schedule.ref AND audit.action = 'controlplane.delete_schedule'),
+       (SELECT count(*) FROM control_plane.outbox_events event
+        WHERE convert_from(event.payload, 'UTF8')::jsonb ->> 'eventName' = 'SCHEDULE_CHANGED'
+          AND convert_from(event.payload, 'UTF8')::jsonb ->> 'aggregateRef' = schedule.ref
+          AND (convert_from(event.payload, 'UTF8')::jsonb ->> 'aggregateVersion')::bigint = schedule.version
+          AND convert_from(event.payload, 'UTF8')::jsonb #>> '{data,state}' = 'DELETED'
+          AND convert_from(event.payload, 'UTF8')::jsonb #>> '{data,safeSummary}' = 'i18n:SCHEDULE_DELETED')
+FROM control_plane.schedules schedule
+WHERE schedule.ref = $1`, archiveCandidate.Schedule.Ref).Scan(
+		&deletedLifecycle, &deletedEnabled, &deletedNextRunCleared, &storedDeleteVersion, &deleteAuditCount, &deleteEventCount,
+	); err != nil || deletedLifecycle != "DELETED" || deletedEnabled || !deletedNextRunCleared ||
+		storedDeleteVersion != deleted.Schedule.Version || deleteAuditCount != 1 || deleteEventCount != 1 {
+		t.Fatalf("schedule delete readback: lifecycle=%q enabled=%t next_run_cleared=%t version=%d audits=%d events=%d err=%v",
+			deletedLifecycle, deletedEnabled, deletedNextRunCleared, storedDeleteVersion, deleteAuditCount, deleteEventCount, err)
 	}
 	currentForStaleArchive, err := service.GetSchedule(ctx, owner, created.Schedule.Ref)
 	if err != nil {
@@ -2675,10 +3091,10 @@ func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repos
 			t.Fatalf("complete %s rejected provider run: run=%#v err=%v", key, completed.Run, completeErr)
 		}
 	}
-	providerForRevision := func(runtimeRevisionID string) (string, string) {
+	providerForRevision := func(runtimeRevisionRef string) (string, string) {
 		t.Helper()
 		var accountID, credentialID string
-		if readErr := pool.QueryRow(ctx, bootstrapComponentRuntimeProviderReadbackQuery, runtimeRevisionID).Scan(&accountID, &credentialID); readErr != nil {
+		if readErr := pool.QueryRow(ctx, bootstrapComponentRuntimeProviderReadbackQuery, runtimeRevisionRef).Scan(&accountID, &credentialID); readErr != nil {
 			t.Fatalf("read runtime provider revision: %v", readErr)
 		}
 		return accountID, credentialID
@@ -2703,7 +3119,7 @@ func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repos
 	}
 
 	staleLease := launchAndClaim("stale")
-	accountID, staleCredentialID := providerForRevision(stringMap(staleLease, "runtimeRevisionID"))
+	accountID, staleCredentialID := providerForRevision(stringMap(staleLease, "runtimeRevisionRef"))
 	_, currentCredentialID, versionBeforeRotation := accountState(accountID)
 	if currentCredentialID != staleCredentialID {
 		t.Fatalf("runtime revision did not pin the current credential: runtime=%s current=%s", staleCredentialID, currentCredentialID)
@@ -2716,7 +3132,7 @@ func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repos
 	}
 
 	currentLease := launchAndClaim("current")
-	currentAccountID, runtimeCredentialID := providerForRevision(stringMap(currentLease, "runtimeRevisionID"))
+	currentAccountID, runtimeCredentialID := providerForRevision(stringMap(currentLease, "runtimeRevisionRef"))
 	if currentAccountID != accountID || runtimeCredentialID != rotatedCredentialID {
 		t.Fatalf("new runtime did not pin the rotated credential: account=%s credential=%s", currentAccountID, runtimeCredentialID)
 	}
@@ -2725,7 +3141,11 @@ func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repos
 	if state != "REAUTHORIZATION_REQUIRED" || currentCredentialID != rotatedCredentialID || rejectedVersion != versionAfterStale+1 {
 		t.Fatalf("current rejection did not require reauthorization: state=%s credential=%s version=%d", state, currentCredentialID, rejectedVersion)
 	}
-	ownerScope, err := repository.resolveScope(ctx, owner)
+	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatalf("resolve provider rejection owner: %v", err)
+	}
+	ownerScope, err := repository.resolveScope(ctx, resolvedOwner)
 	if err != nil {
 		t.Fatalf("resolve provider rejection owner scope: %v", err)
 	}
@@ -2733,12 +3153,12 @@ func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repos
 	if err != nil {
 		t.Fatalf("begin rejected provider selection: %v", err)
 	}
-	if _, selectErr := repository.selectProviderAccountForAgent(ctx, tx, ownerScope.organizationID, agent.Ref); !errors.Is(selectErr, domainerrs.ErrConflict) {
-		_ = tx.Rollback(ctx)
-		t.Fatalf("rejected provider remained selectable: %v", selectErr)
+	fallbackAccountID, selectErr := repository.selectProviderAccountForAgent(ctx, tx, ownerScope.organizationID, agent.Ref)
+	if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+		t.Fatalf("rollback rejected provider selection: %v", rollbackErr)
 	}
-	if err := tx.Rollback(ctx); err != nil {
-		t.Fatalf("rollback rejected provider selection: %v", err)
+	if selectErr != nil || fallbackAccountID == "" || fallbackAccountID == accountID {
+		t.Fatalf("rejected provider did not fail over to another authorized account: account=%s err=%v", fallbackAccountID, selectErr)
 	}
 
 	finalCredentialID := rotate(accountID, "40000000-0000-4000-8000-000000000002", "reauth-2", strings.Repeat("e", 64))
@@ -2746,6 +3166,14 @@ func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repos
 	if state != "AUTHORIZED" || currentCredentialID != finalCredentialID || finalVersion != rejectedVersion+1 {
 		t.Fatalf("new credential did not restore provider account: state=%s credential=%s version=%d", state, currentCredentialID, finalVersion)
 	}
+	if _, err := pool.Exec(ctx, `UPDATE control_plane.provider_accounts SET state = 'DISABLED', enabled = false WHERE id = $1::uuid`, fallbackAccountID); err != nil {
+		t.Fatalf("disable fallback provider for exact restored selection: %v", err)
+	}
+	defer func() {
+		if _, restoreErr := pool.Exec(context.WithoutCancel(ctx), `UPDATE control_plane.provider_accounts SET state = 'AUTHORIZED', enabled = true WHERE id = $1::uuid`, fallbackAccountID); restoreErr != nil {
+			t.Errorf("restore fallback provider account: %v", restoreErr)
+		}
+	}()
 	tx, err = pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin restored provider selection: %v", err)
@@ -3181,20 +3609,6 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	`, ownerScope.organizationID, sessionID).Scan(&queuedRunRef, &queuedRunTitle, &queuedRunState); err != nil {
 		t.Fatalf("read queued assistant run descriptor: %v", err)
 	}
-	queuedImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "DELETE")
-	if err != nil || !queuedImpact.Permitted || queuedImpact.ActiveRuntimeCount != 1 || queuedImpact.ActiveRunsTruncated ||
-		len(queuedImpact.ActiveRuns) != 1 || queuedImpact.ActiveRuns[0].RunRef != queuedRunRef ||
-		queuedImpact.ActiveRuns[0].Title != queuedRunTitle || queuedImpact.ActiveRuns[0].State != queuedRunState ||
-		len(queuedImpact.Blockers) != 0 {
-		t.Fatalf("queued assistant input impact: impact=%#v err=%v", queuedImpact, err)
-	}
-	deletedInput, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-before-claim-1", ExpectedVersion: &queuedInputVersion},
-		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref, ImpactDigest: queuedImpact.Digest},
-	})
-	if err != nil || deletedInput.Artifact == nil || deletedInput.Artifact.LifecycleState != "DELETED" {
-		t.Fatalf("soft-delete queued assistant input: artifact=%#v err=%v", deletedInput.Artifact, err)
-	}
 	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-claim-1"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
 	if err != nil || len(claimed.RuntimeItems) != 1 {
@@ -3207,6 +3621,20 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	artifactCatalog, ok := lease["artifacts"].([]map[string]any)
 	if !ok || len(artifactCatalog) != 1 || stringMap(artifactCatalog[0], "ref") != assistantInput.Ref {
 		t.Fatalf("assistant runtime lost organization attachment snapshot: %#v", lease["artifacts"])
+	}
+	queuedImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "DELETE")
+	if err != nil || !queuedImpact.Permitted || queuedImpact.ActiveRuntimeCount != 1 || queuedImpact.ActiveRunsTruncated ||
+		len(queuedImpact.ActiveRuns) != 1 || queuedImpact.ActiveRuns[0].RunRef != queuedRunRef ||
+		queuedImpact.ActiveRuns[0].Title != queuedRunTitle || queuedImpact.ActiveRuns[0].State != queuedRunState ||
+		len(queuedImpact.Blockers) != 0 {
+		t.Fatalf("queued assistant input impact: impact=%#v err=%v", queuedImpact, err)
+	}
+	deletedInput, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-after-claim-1", ExpectedVersion: &queuedInputVersion},
+		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref, ImpactDigest: queuedImpact.Digest},
+	})
+	if err != nil || deletedInput.Artifact == nil || deletedInput.Artifact.LifecycleState != "DELETED" {
+		t.Fatalf("soft-delete queued assistant input: artifact=%#v err=%v", deletedInput.Artifact, err)
 	}
 	runtimeInput, err := service.ReadExecutionArtifact(ctx, runtimeReader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), assistantInput.Ref)
 	if err != nil {

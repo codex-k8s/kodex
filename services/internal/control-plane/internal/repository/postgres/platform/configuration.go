@@ -15,6 +15,7 @@ import (
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -86,7 +87,9 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 	}
 	var scheduleID, projectID, projectRef, storedPreset, storedCron, storedTimezone, storedState string
 	var storedVersion int64
-	if err := tx.QueryRow(ctx, queryConfigurationChangescheduleSelectScheduleForUpdate, scope.organizationID, payload.Ref).Scan(&scheduleID, &projectID, &projectRef, &storedPreset, &storedCron, &storedTimezone, &storedState, &storedVersion); errors.Is(err, pgx.ErrNoRows) {
+	if err := tx.QueryRow(ctx, queryConfigurationChangescheduleSelectScheduleForUpdate, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "schedule_ref": payload.Ref,
+	}).Scan(&scheduleID, &projectID, &projectRef, &storedPreset, &storedCron, &storedTimezone, &storedState, &storedVersion); errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
 	} else if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -94,10 +97,38 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 	if storedVersion != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
+	var item entity.Schedule
+	if input.Kind == command.DeleteSchedule {
+		if storedState != "ARCHIVED" {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		var deletedInput []byte
+		if err := tx.QueryRow(ctx, queryConfigurationChangescheduleDeleteSchedule, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID, "schedule_ref": payload.Ref,
+			"expected_version": *input.Mutation.ExpectedVersion,
+		}).Scan(
+			&projectID, &projectRef, &item.Ref, &item.Name, &item.Target.Type, &item.Target.Ref,
+			&item.Preset, &item.CronExpression, &item.Timezone, &deletedInput,
+			&item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled,
+			&item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt,
+		); errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		} else if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if _, err := tx.Exec(ctx, queryConfigurationChangescheduleCancelClaimedOccurrences,
+			pgx.StrictNamedArgs{"schedule_id": scheduleID}); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		item.ProjectRef = projectRef
+		if json.Unmarshal(deletedInput, &item.Input) != nil || attachScheduleDisplay(&item) != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		return scheduleCommandOutcome(item, projectID, projectRef, "i18n:SCHEDULE_DELETED"), nil
+	}
 	if storedState == "ARCHIVED" {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	var item entity.Schedule
 	summary := "i18n:SCHEDULE_UPDATED"
 	if input.Kind == command.ArchiveSchedule {
 		var archivedInput []byte
@@ -111,7 +142,8 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		} else if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := tx.Exec(ctx, queryConfigurationChangescheduleCancelClaimedOccurrences, scheduleID); err != nil {
+		if _, err := tx.Exec(ctx, queryConfigurationChangescheduleCancelClaimedOccurrences,
+			pgx.StrictNamedArgs{"schedule_id": scheduleID}); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		item.ProjectRef = projectRef
@@ -155,7 +187,8 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if !payload.Enabled {
-			if _, cancelErr := tx.Exec(ctx, queryConfigurationChangescheduleCancelClaimedOccurrences, scheduleID); cancelErr != nil {
+			if _, cancelErr := tx.Exec(ctx, queryConfigurationChangescheduleCancelClaimedOccurrences,
+				pgx.StrictNamedArgs{"schedule_id": scheduleID}); cancelErr != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
 		}
@@ -303,6 +336,12 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 	if payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if input.Kind == command.UpdateConnection {
+		return repository.updateIntegrationConnection(ctx, tx, scope, input.Mutation, payload)
+	}
+	if input.Kind == command.DeleteConnection {
+		return repository.deleteIntegrationConnection(ctx, tx, scope, input.Mutation, payload)
+	}
 	var item entity.IntegrationConnection
 	if input.Kind == command.ConfigureConnectionCredential {
 		credential := payload.CredentialRevision
@@ -368,8 +407,13 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if !payload.Enabled {
-			_, _ = tx.Exec(ctx, queryConfigurationChangeconnectionUpdateIntegrationGrantsEnabledVersionUpdatedAt, payload.Ref)
-			_, _ = tx.Exec(ctx, queryConfigurationChangeconnectionUpdateIntegrationConnectionTestsStateLeaseRefFenceDigest, payload.Ref)
+			args := pgx.StrictNamedArgs{"organization_id": scope.organizationID, "connection_ref": payload.Ref}
+			if _, err := tx.Exec(ctx, queryConfigurationChangeconnectionUpdateIntegrationGrantsEnabledVersionUpdatedAt, args); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if _, err := tx.Exec(ctx, queryConfigurationChangeconnectionUpdateIntegrationConnectionTestsStateLeaseRefFenceDigest, args); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
 		}
 	}
 	item, err := readConnection(ctx, tx, scope, item.Ref)
@@ -377,6 +421,148 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		return commandOutcome{}, err
 	}
 	return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref, summary: "i18n:INTEGRATION_CONNECTION_UPDATED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
+}
+
+type lockedIntegrationConnection struct {
+	id, definitionKey, lifecycleState, state, definitionVersion, definitionDigest string
+	enabled                                                                       bool
+	version                                                                       int64
+}
+
+func (repository *Repository) lockIntegrationConnection(
+	ctx context.Context,
+	tx pgx.Tx,
+	organizationID, ref string,
+) (lockedIntegrationConnection, error) {
+	var item lockedIntegrationConnection
+	err := tx.QueryRow(ctx, queryConfigurationChangeconnectionLock, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "connection_ref": ref,
+	}).Scan(&item.id, &item.definitionKey, &item.lifecycleState, &item.state, &item.enabled,
+		&item.version, &item.definitionVersion, &item.definitionDigest)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return lockedIntegrationConnection{}, errs.ErrNotFound
+	}
+	if err != nil {
+		return lockedIntegrationConnection{}, errs.ErrUnavailable
+	}
+	return item, nil
+}
+
+func (repository *Repository) integrationConnectionDependencies(
+	ctx context.Context,
+	tx pgx.Tx,
+	connectionID string,
+) (int64, int64, error) {
+	var effects, grants int64
+	if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionCountActiveDependencies,
+		pgx.StrictNamedArgs{"connection_id": connectionID}).Scan(&effects, &grants); err != nil {
+		return 0, 0, errs.ErrUnavailable
+	}
+	return effects, grants, nil
+}
+
+func (repository *Repository) updateIntegrationConnection(
+	ctx context.Context,
+	tx pgx.Tx,
+	current scope,
+	mutation value.Mutation,
+	payload command.ConnectionInput,
+) (commandOutcome, error) {
+	locked, err := repository.lockIntegrationConnection(ctx, tx, current.organizationID, payload.Ref)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if locked.version != *mutation.ExpectedVersion {
+		return commandOutcome{}, errs.ErrVersionMismatch
+	}
+	payload.Name = strings.TrimSpace(payload.Name)
+	definition, exists := repository.integrationDefinitions[locked.definitionKey]
+	configuration, valid := integrationStringConfiguration(payload.PublicConfiguration)
+	if payload.Name == "" || len(payload.Name) > 160 || !exists || !valid ||
+		definition.Metadata.Version != locked.definitionVersion || definition.Digest != locked.definitionDigest ||
+		definition.ValidateConfiguration(configuration) != nil || payload.CredentialRevision != nil {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	if locked.state == "TESTING" {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	activeEffects, _, err := repository.integrationConnectionDependencies(ctx, tx, locked.id)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if activeEffects != 0 {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	var updatedRef string
+	if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionUpdate, pgx.StrictNamedArgs{
+		"connection_id": locked.id, "expected_version": locked.version,
+		"name": payload.Name, "public_configuration": asJSON(configuration),
+	}).Scan(&updatedRef); errors.Is(err, pgx.ErrNoRows) {
+		return commandOutcome{}, errs.ErrVersionMismatch
+	} else if err != nil {
+		return commandOutcome{}, mapWriteError(err)
+	}
+	dependencyArgs := pgx.StrictNamedArgs{"organization_id": current.organizationID, "connection_ref": payload.Ref}
+	if _, err := tx.Exec(ctx, queryConfigurationChangeconnectionUpdateIntegrationGrantsEnabledVersionUpdatedAt, dependencyArgs); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryConfigurationChangeconnectionUpdateIntegrationConnectionTestsStateLeaseRefFenceDigest, dependencyArgs); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	item, err := readConnection(ctx, tx, current, updatedRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	return commandOutcome{
+		result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref,
+		summary: "i18n:INTEGRATION_CONNECTION_UPDATED", platformEvent: "INTEGRATION_CONNECTION_CHANGED",
+		platformAggregateVersion: item.Version, platformState: item.State,
+	}, nil
+}
+
+func (repository *Repository) deleteIntegrationConnection(
+	ctx context.Context,
+	tx pgx.Tx,
+	current scope,
+	mutation value.Mutation,
+	payload command.ConnectionInput,
+) (commandOutcome, error) {
+	locked, err := repository.lockIntegrationConnection(ctx, tx, current.organizationID, payload.Ref)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if locked.version != *mutation.ExpectedVersion {
+		return commandOutcome{}, errs.ErrVersionMismatch
+	}
+	if locked.enabled || locked.state != "DISABLED" {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	activeEffects, activeGrants, err := repository.integrationConnectionDependencies(ctx, tx, locked.id)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if activeEffects != 0 || activeGrants != 0 {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	item, err := readConnection(ctx, tx, current, payload.Ref)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionDelete, pgx.StrictNamedArgs{
+		"connection_id": locked.id, "expected_version": locked.version,
+	}).Scan(&item.LifecycleState, &item.Version, &item.UpdatedAt); errors.Is(err, pgx.ErrNoRows) {
+		return commandOutcome{}, errs.ErrVersionMismatch
+	} else if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	item.State = item.LifecycleState
+	item.Enabled = false
+	item.NextActions = nil
+	return commandOutcome{
+		result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref,
+		summary: "i18n:INTEGRATION_CONNECTION_DELETED", platformEvent: "INTEGRATION_CONNECTION_CHANGED",
+		platformAggregateVersion: item.Version, platformState: "DELETED",
+	}, nil
 }
 
 func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {

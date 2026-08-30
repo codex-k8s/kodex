@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 40,
+  "policy_revision": 41,
   "policy": {
     "trust_domain": "kodex.local",
     "default_decision": "DENY",
@@ -493,6 +493,7 @@
           "platform.runtime.execution.renew",
           "platform.runtime.integration.get",
           "platform.runtime.integration.resolve",
+          "platform.runtime.provider-credential.refresh.commit",
           "platform.runtime.run.metadata.propose",
           "platform.runtime.tool-call.record",
           "platform.runtime.warm.reconcile",
@@ -586,6 +587,49 @@
           "platform.session-archive.tasks.claim",
           "platform.session-archive.tasks.fail",
           "platform.session-archive.tasks.renew"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "ownership",
+          "provenance"
+        ]
+      },
+      {
+        "producer_id": "secret-broker.provider-credential-materializer",
+        "caller_workload_id": "control-plane",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "owner_workload_id": "control-plane",
+        "owner_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "kodex-internal-ca-g1",
+        "application_credential": "PLATFORM_WORKER_GRANT",
+        "application_credential_metadata": "authorization",
+        "application_credential_issuer": "https://control-plane.kodex-system.svc.cluster.local/authority/platform-worker/control-plane",
+        "application_credential_audience": "urn:kodex:platform-worker:control-plane",
+        "application_credential_trust_bundle_id": "control-plane-platform-worker-grants-g1",
+        "authority_proof_issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "authority_proof_audience": "urn:kodex:internal-rpc-authority-issuer:control-plane",
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_proof_max_age_seconds": 15,
+        "deadline_milliseconds": 2000,
+        "max_attempts": 2,
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "allowed_operation_ids": [
+          "platform.provider-credentials.api-key.materialize",
+          "platform.provider-credentials.device-authorize.get",
+          "platform.provider-credentials.device-authorize.start",
+          "platform.provider-credentials.materialization.discard",
+          "platform.provider-credentials.readiness.check"
         ],
         "server_resolved_fields": [
           "actor",
@@ -3697,6 +3741,146 @@
         }
       },
       {
+        "operation_id": "platform.provider-credentials.api-key.materialize",
+        "caller_workload_id": "control-plane",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "target_workload_id": "secret-broker",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "audience": "urn:kodex:internal-rpc:secret-broker",
+        "full_method": "/controlplane.v1.ProviderCredentialMaterializerService/MaterializeAPIKey",
+        "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.provider-credentials.api-key.materialize",
+        "authority_proof_producer_id": "secret-broker.provider-credential-materializer",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.provider-credentials.device-authorize.get",
+        "caller_workload_id": "control-plane",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "target_workload_id": "secret-broker",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "audience": "urn:kodex:internal-rpc:secret-broker",
+        "full_method": "/controlplane.v1.ProviderCredentialMaterializerService/ObserveDeviceAuthorization",
+        "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.provider-credentials.device-authorize.get",
+        "authority_proof_producer_id": "secret-broker.provider-credential-materializer",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.provider-credentials.device-authorize.start",
+        "caller_workload_id": "control-plane",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "target_workload_id": "secret-broker",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "audience": "urn:kodex:internal-rpc:secret-broker",
+        "full_method": "/controlplane.v1.ProviderCredentialMaterializerService/StartDeviceAuthorization",
+        "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.provider-credentials.device-authorize.start",
+        "authority_proof_producer_id": "secret-broker.provider-credential-materializer",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.provider-credentials.materialization.discard",
+        "caller_workload_id": "control-plane",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "target_workload_id": "secret-broker",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "audience": "urn:kodex:internal-rpc:secret-broker",
+        "full_method": "/controlplane.v1.ProviderCredentialMaterializerService/DiscardProviderCredentialMaterialization",
+        "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.provider-credentials.materialization.discard",
+        "authority_proof_producer_id": "secret-broker.provider-credential-materializer",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.provider-credentials.readiness.check",
+        "caller_workload_id": "control-plane",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "target_workload_id": "secret-broker",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "audience": "urn:kodex:internal-rpc:secret-broker",
+        "full_method": "/controlplane.v1.ProviderCredentialMaterializerService/CheckProviderCredentialMaterializerReadiness",
+        "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.provider-credentials.readiness.check",
+        "authority_proof_producer_id": "secret-broker.provider-credential-materializer",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
         "operation_id": "platform.query.administration.get",
         "caller_workload_id": "control-api-gateway",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
@@ -6145,6 +6329,34 @@
         "target_trust_bundle_id": "kodex-internal-ca-g1",
         "permission": "platform.runtime.integrations.complete",
         "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.runtime.provider-credential.refresh.commit",
+        "caller_workload_id": "runtime-controller",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeWorkService/CommitProviderCredentialRefresh",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime.provider-credential.refresh.commit",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
         "authority_sources": [
           "DOMAIN_STATE"
         ],

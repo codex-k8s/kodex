@@ -5,6 +5,7 @@ go 1.26.6
 require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
+	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
 	github.com/codex-k8s/kodex/libs/go/eventing v0.0.0
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/integrationpackage v0.0.0
@@ -113,6 +114,8 @@ require (
 replace github.com/codex-k8s/kodex/libs/go/cache => ../../../libs/go/cache
 
 replace github.com/codex-k8s/kodex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
+
+replace github.com/codex-k8s/kodex/libs/go/controlplaneclient => ../../../libs/go/controlplaneclient
 
 replace github.com/codex-k8s/kodex/libs/go/eventing => ../../../libs/go/eventing
 

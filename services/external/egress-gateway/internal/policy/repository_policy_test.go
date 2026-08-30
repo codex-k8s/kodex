@@ -12,7 +12,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-const repositoryPolicyDigest = "a32b8c5aa305640eaee494b65019804f668466b9dd82a1d5cc84af7f77747d4f"
+const repositoryPolicyDigest = "68820472113d636607336da46d1481c73126c6ab55ec8e0c59de4077dfc2ad89"
 
 func TestRepositoryPolicyMatchesExpectedImmutableDigest(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "..")
@@ -27,11 +27,11 @@ func TestRepositoryPolicyMatchesExpectedImmutableDigest(t *testing.T) {
 	if actualDigest != repositoryPolicyDigest {
 		t.Fatalf("repository policy digest mismatch: got %s", actualDigest)
 	}
-	active, err := Load(value, "2026-08-07.1", repositoryPolicyDigest)
+	active, err := Load(value, "2026-08-28.1", repositoryPolicyDigest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := []string{"api.openai.com", "auth.openai.com", "chatgpt.com", "github.com"}
+	expected := []string{"api.github.com", "api.openai.com", "auth.openai.com", "chatgpt.com", "github.com"}
 	if destinations := active.Destinations(); len(destinations) != len(expected) {
 		t.Fatalf("unexpected destination count: %d", len(destinations))
 	} else {

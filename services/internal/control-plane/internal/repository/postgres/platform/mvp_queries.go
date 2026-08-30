@@ -158,7 +158,7 @@ func scanProviderAccount(row rowScanner) (entity.ProviderAccount, error) {
 	if err := row.Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.ExternalAccountMasked,
 		&item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt,
 		&authorization.Ref, &authorization.Method, &authorization.State, &authorization.VerificationURI,
-		&authorization.UserCode, &expiresAt, &authorization.SafeFailureCode); err != nil {
+		&authorization.UserCode, &expiresAt, &authorization.SafeFailureCode, &authorization.MaterializerAttemptRef); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.ProviderAccount{}, errs.ErrNotFound
 		}
@@ -168,35 +168,67 @@ func scanProviderAccount(row rowScanner) (entity.ProviderAccount, error) {
 		authorization.ExpiresAt = expiresAt
 		item.Authorization = &authorization
 	}
+	if !validProviderAccountLifecycle(item.State, item.Enabled) {
+		return entity.ProviderAccount{}, errs.ErrUnavailable
+	}
 	item.Ready = item.Enabled && item.State == "AUTHORIZED"
 	return item, nil
+}
+
+func validProviderAccountLifecycle(state string, enabled bool) bool {
+	switch state {
+	case "AUTHORIZED":
+		return enabled
+	case "PENDING_AUTHORIZATION", "REVOKED", "DISABLED":
+		return !enabled
+	case "REAUTHORIZATION_REQUIRED":
+		return true
+	default:
+		return false
+	}
 }
 
 func providerAccountActions(item entity.ProviderAccount, canManage, canAuthorize, canRevoke bool) []string {
 	actions := []string{"OPEN"}
 	if item.State == "PENDING_AUTHORIZATION" {
+		if canAuthorize && item.Authorization == nil {
+			actions = append(actions, "CONFIGURE_CREDENTIAL")
+		}
+		if canAuthorize && item.Authorization != nil && item.Authorization.State == "PENDING" {
+			actions = append(actions, "REFRESH_AUTHORIZATION")
+		}
 		if canRevoke {
 			actions = append(actions, "REVOKE")
 		}
 		return actions
 	}
-	if item.State == "AUTHORIZED" {
+	switch item.State {
+	case "AUTHORIZED":
 		if canManage {
 			actions = append(actions, "TEST")
 		}
 		if canRevoke {
 			actions = append(actions, "REVOKE")
 		}
-	} else if canAuthorize {
-		actions = append(actions, "CONFIGURE_CREDENTIAL")
+		if canManage {
+			actions = append(actions, "DISABLE")
+		}
+	case "DISABLED":
+		if canRevoke {
+			actions = append(actions, "REVOKE")
+		}
+		if canManage {
+			actions = append(actions, "ENABLE")
+		}
+	case "REAUTHORIZATION_REQUIRED":
+		if canAuthorize {
+			actions = append(actions, "CONFIGURE_CREDENTIAL")
+		}
+		if canRevoke {
+			actions = append(actions, "REVOKE")
+		}
 	}
-	if !canManage {
-		return actions
-	}
-	if item.Enabled {
-		return append(actions, "DISABLE")
-	}
-	return append(actions, "ENABLE")
+	return actions
 }
 
 func (repository *Repository) authorizeProviderAccountActions(

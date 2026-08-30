@@ -31,6 +31,7 @@ func main() {
 		{"platform-worker/image-admission", "image-admission-platform-worker-g1"},
 		{"platform-worker/image-promotion", "image-promotion-platform-worker-g1"},
 		{"platform-worker/secret-broker", "secret-broker-platform-worker-g1"},
+		{"platform-worker/control-plane", "control-plane-platform-worker-g1"},
 	} {
 		key, err := internalrpcauth.GenerateES256Key(item.kid)
 		if err != nil {

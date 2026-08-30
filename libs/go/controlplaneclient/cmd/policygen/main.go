@@ -14,11 +14,15 @@ import (
 )
 
 const (
-	resolverMethod   = "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof"
-	controlPlaneID   = "control-plane"
-	controlPlanePeer = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
-	controlPlaneTLS  = "control-plane.kodex-system.svc.cluster.local"
-	internalAudience = "urn:kodex:internal-rpc:control-plane"
+	resolverMethod       = "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof"
+	controlPlaneID       = "control-plane"
+	controlPlanePeer     = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
+	controlPlaneTLS      = "control-plane.kodex-system.svc.cluster.local"
+	controlPlaneAudience = "urn:kodex:internal-rpc:control-plane"
+	secretBrokerID       = "secret-broker"
+	secretBrokerPeer     = "spiffe://kodex.local/ns/kodex-system/sa/secret-broker"
+	secretBrokerTLS      = "secret-broker.kodex-system.svc.cluster.local"
+	secretBrokerAudience = "urn:kodex:internal-rpc:secret-broker"
 )
 
 type document struct {
@@ -90,10 +94,11 @@ type localPeer struct {
 }
 
 type profile struct {
-	ProducerID, WorkloadID, Credential, CredentialIssuer, CredentialAudience, CredentialTrust string
-	Operations                                                                                map[string]string
-	ProjectRequired                                                                           map[string]struct{}
-	AuthoritySources                                                                          []string
+	ProducerID, WorkloadID, Credential, CredentialIssuer, CredentialAudience, CredentialTrust  string
+	TargetWorkloadID, TargetSPIFFEID, TargetAudience, TargetTLSServerName, TargetTrustBundleID string
+	Operations                                                                                 map[string]string
+	ProjectRequired                                                                            map[string]struct{}
+	AuthoritySources                                                                           []string
 }
 
 func main() {
@@ -120,13 +125,42 @@ func main() {
 		worker("image-admission", "control-plane.image-admission", controlplaneclient.ImageAdmissionOperations()),
 		worker("image-promotion", "control-plane.image-promotion", controlplaneclient.ImagePromotionOperations()),
 		worker("secret-broker", "control-plane.secret-broker", controlplaneclient.SecretBrokerOperations()),
+		targetedWorker(
+			controlPlaneID,
+			"secret-broker.provider-credential-materializer",
+			controlplaneclient.ProviderCredentialMaterializerOperations(),
+			secretBrokerID,
+			secretBrokerPeer,
+			secretBrokerAudience,
+			secretBrokerTLS,
+		),
 	}
-	value := document{Version: 1, PolicyRevision: 40, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 41, Policy: policy{
 		TrustDomain: "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
 	}}
 	for _, item := range profiles {
 		peer := workloadSPIFFE(item.WorkloadID)
+		targetWorkloadID := item.TargetWorkloadID
+		if targetWorkloadID == "" {
+			targetWorkloadID = controlPlaneID
+		}
+		targetSPIFFEID := item.TargetSPIFFEID
+		if targetSPIFFEID == "" {
+			targetSPIFFEID = controlPlanePeer
+		}
+		targetAudience := item.TargetAudience
+		if targetAudience == "" {
+			targetAudience = controlPlaneAudience
+		}
+		targetTLSServerName := item.TargetTLSServerName
+		if targetTLSServerName == "" {
+			targetTLSServerName = controlPlaneTLS
+		}
+		targetTrustBundleID := item.TargetTrustBundleID
+		if targetTrustBundleID == "" {
+			targetTrustBundleID = "kodex-internal-ca-g1"
+		}
 		operations := sortedKeys(item.Operations)
 		value.Policy.ProofProducers = append(value.Policy.ProofProducers, producer{
 			ProducerID: item.ProducerID, CallerWorkloadID: item.WorkloadID, CallerSPIFFEID: peer,
@@ -147,9 +181,9 @@ func main() {
 			_, projectRequired := item.ProjectRequired[operationID]
 			value.Policy.OperationBindings = append(value.Policy.OperationBindings, binding{
 				OperationID: operationID, CallerWorkloadID: item.WorkloadID, CallerSPIFFEID: peer, Issuer: peer,
-				TargetWorkloadID: controlPlaneID, TargetSPIFFEID: controlPlanePeer, Audience: internalAudience,
-				FullMethod: item.Operations[operationID], TargetTLSServerName: controlPlaneTLS,
-				TargetTrustBundleID: "kodex-internal-ca-g1", Permission: permissionForOperation(operationID),
+				TargetWorkloadID: targetWorkloadID, TargetSPIFFEID: targetSPIFFEID, Audience: targetAudience,
+				FullMethod: item.Operations[operationID], TargetTLSServerName: targetTLSServerName,
+				TargetTrustBundleID: targetTrustBundleID, Permission: permissionForOperation(operationID),
 				ProofProducerID: item.ProducerID, AuthoritySources: item.AuthoritySources, ProjectRequired: projectRequired,
 				LocalCaller: localPeer{UID: 10001, PrimaryGID: 10001, SharedFSGID: 29000},
 				LocalTarget: localPeer{UID: 10001, PrimaryGID: 10001, SharedFSGID: 29000},
@@ -198,6 +232,24 @@ func worker(workloadID, producerID string, operations map[string]string) profile
 		CredentialTrust:    workloadID + "-platform-worker-grants-g1", Operations: operations,
 		ProjectRequired: map[string]struct{}{}, AuthoritySources: []string{"DOMAIN_STATE"},
 	}
+}
+
+func targetedWorker(
+	workloadID string,
+	producerID string,
+	operations map[string]string,
+	targetWorkloadID string,
+	targetSPIFFEID string,
+	targetAudience string,
+	targetTLSServerName string,
+) profile {
+	result := worker(workloadID, producerID, operations)
+	result.TargetWorkloadID = targetWorkloadID
+	result.TargetSPIFFEID = targetSPIFFEID
+	result.TargetAudience = targetAudience
+	result.TargetTLSServerName = targetTLSServerName
+	result.TargetTrustBundleID = "kodex-internal-ca-g1"
+	return result
 }
 
 func workloadSPIFFE(workloadID string) string {

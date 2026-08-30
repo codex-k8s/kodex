@@ -41,6 +41,14 @@ var (
 	queryRuntimeConfigurationResolveImageArtifact string
 	//go:embed sql/runtime_configuration__lock_environment.sql
 	queryRuntimeConfigurationLockEnvironment string
+	//go:embed sql/runtime_configuration__lock_environment_lifecycle.sql
+	queryRuntimeConfigurationLockEnvironmentLifecycle string
+	//go:embed sql/runtime_configuration__get_environment_lifecycle_snapshot.sql
+	queryRuntimeConfigurationGetEnvironmentLifecycleSnapshot string
+	//go:embed sql/runtime_configuration__update_environment_lifecycle.sql
+	queryRuntimeConfigurationUpdateEnvironmentLifecycle string
+	//go:embed sql/runtime_configuration__count_environment_bindings.sql
+	queryRuntimeConfigurationCountEnvironmentBindings string
 	//go:embed sql/runtime_configuration__publish_environment.sql
 	queryRuntimeConfigurationPublishEnvironment string
 	//go:embed sql/runtime_configuration__rollback_environment.sql

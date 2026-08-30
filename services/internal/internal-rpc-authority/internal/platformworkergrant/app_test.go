@@ -52,9 +52,11 @@ func TestWriteAtomicRejectsSymlinkDirectory(t *testing.T) {
 	}
 }
 
-func TestSupportedWorkloadsIncludeSessionArchive(t *testing.T) {
+func TestSupportedWorkloadsIncludeAuthorityCallers(t *testing.T) {
 	t.Parallel()
-	if _, ok := supportedWorkloads["session-archive"]; !ok {
-		t.Fatal("session-archive отсутствует в закрытом реестре platform worker")
+	for _, workloadID := range []string{"control-plane", "session-archive"} {
+		if _, ok := supportedWorkloads[workloadID]; !ok {
+			t.Fatalf("%s отсутствует в закрытом реестре platform worker", workloadID)
+		}
 	}
 }
