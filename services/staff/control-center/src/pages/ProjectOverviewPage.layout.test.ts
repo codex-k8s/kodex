@@ -27,4 +27,11 @@ describe("ProjectOverviewPage layout", () => {
     expect(template).toContain(':schedules-ready="schedulesReady"');
     expect(template).toContain(':environments-ready="environmentsReady"');
   });
+
+  it("показывает загруженных ИИ-сотрудников, а не только счётчик Проекта", () => {
+    expect(source).toContain("platform.loadAgents(projectRef.value)");
+    expect(template).toContain("<ProjectAgentList");
+    expect(template).toContain(':agents="projectAgents.slice(0, 8)"');
+    expect(template).toContain(':problem="platform.problems.agents"');
+  });
 });

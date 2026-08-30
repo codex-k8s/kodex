@@ -293,6 +293,19 @@ p {
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
+.preload-failure {
+  position: fixed;
+  inset: var(--topbar-height) 0 auto var(--sidebar-width);
+  z-index: 29;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px var(--page-frame-gutter);
+  border-bottom: 1px solid var(--warning);
+  background: var(--warning-soft);
+  color: var(--text-secondary);
+}
 .brand {
   display: flex;
   align-items: center;
@@ -1374,6 +1387,9 @@ time,
   .mobile-tabs a.mobile-tabs__active {
     color: var(--accent);
     background: var(--accent-soft);
+  }
+  .preload-failure {
+    inset-inline-start: 0;
   }
 }
 

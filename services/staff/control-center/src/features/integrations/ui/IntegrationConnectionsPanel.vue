@@ -35,6 +35,8 @@ const emit = defineEmits<{
     action: "TEST" | "ENABLE" | "DISABLE",
   ];
   credential: [connection: IntegrationConnection];
+  edit: [connection: IntegrationConnection];
+  delete: [connection: IntegrationConnection];
   grants: [connection: IntegrationConnection];
 }>();
 
@@ -262,19 +264,21 @@ const { t } = useI18n();
             }}
           </button>
           <button
+            v-if="connectionAllows(connection, 'UPDATE')"
             class="button"
             type="button"
-            disabled
-            title="Изменение подключения пока недоступно"
+            :disabled="busyRef === connection.ref"
+            @click="emit('edit', connection)"
           >
             <Pencil :size="15" aria-hidden="true" />
             {{ t("common.edit") }}
           </button>
           <button
+            v-if="connectionAllows(connection, 'DELETE')"
             class="button button--danger"
             type="button"
-            disabled
-            title="Удаление подключения пока недоступно"
+            :disabled="busyRef === connection.ref"
+            @click="emit('delete', connection)"
           >
             <Trash2 :size="15" aria-hidden="true" />
             {{ t("common.delete") }}

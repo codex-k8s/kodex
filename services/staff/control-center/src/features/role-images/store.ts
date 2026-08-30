@@ -101,13 +101,20 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   async function loadDetail(
     projectRef: string,
     recipeRef: string,
+    showLoading = true,
   ): Promise<void> {
     const current = ++detailGeneration;
-    loadingDetail.value = true;
+    if (showLoading) loadingDetail.value = true;
     problem.value = undefined;
     try {
       const detail = await loadRoleImageDetail(projectRef, recipeRef);
       if (current !== detailGeneration) return;
+      if (!showLoading) {
+        recipes[detail.recipe.ref] = detail.recipe;
+        builds[detail.recipe.ref] = detail.builds;
+        artifacts[detail.recipe.ref] = detail.activeArtifact;
+        return;
+      }
       const [dependencyItems, revisionPage] = await Promise.all([
         detail.activeArtifact
           ? loadRoleImageDependencies(projectRef, detail.activeArtifact.ref)
@@ -124,7 +131,8 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     } catch (error) {
       if (current === detailGeneration) problem.value = asProblem(error);
     } finally {
-      if (current === detailGeneration) loadingDetail.value = false;
+      if (current === detailGeneration && showLoading)
+        loadingDetail.value = false;
     }
   }
 

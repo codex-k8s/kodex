@@ -57,7 +57,7 @@ const connection: IntegrationConnection = {
   lastTestOutcome: "READY",
   capabilities: definition.capabilities,
   grants: [],
-  nextActions: ["TEST", "DISABLE", "MANAGE_GRANTS"],
+  nextActions: ["TEST", "DISABLE", "MANAGE_GRANTS", "UPDATE", "DELETE"],
   definitionVersion: definition.definitionVersion,
   definitionDigest: definition.digest,
   publicConfiguration: {
@@ -67,7 +67,7 @@ const connection: IntegrationConnection = {
 };
 
 describe("IntegrationConnectionsPanel", () => {
-  it("показывает server-owned lifecycle и закрывает отсутствующие update/delete", async () => {
+  it("показывает только разрешённые server-owned lifecycle действия", async () => {
     const app = createSSRApp({
       render: () =>
         h(IntegrationConnectionsPanel, {
@@ -123,6 +123,6 @@ describe("IntegrationConnectionsPanel", () => {
     expect(html).toContain("Отключить");
     expect(html).toContain("Изменить");
     expect(html).toContain("Удалить");
-    expect(html.match(/<button[^>]*disabled/g)).toHaveLength(2);
+    expect(html).not.toMatch(/<button[^>]*disabled/);
   });
 });

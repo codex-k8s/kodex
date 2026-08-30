@@ -31,4 +31,22 @@ describe("FilesWorkspace contract", () => {
   it("не принимает выбор файла до загрузки capability Проекта", () => {
     expect(source).toContain(':disabled="!canUpload || trashMode"');
   });
+
+  it("занимает доступную ширину и отдаёт основную площадь коллекции", () => {
+    expect(source).toContain(
+      "grid-template-columns: minmax(0, 1fr) minmax(240px, 280px)",
+    );
+    expect(source).toContain('ref="scrollRoot"');
+    expect(source).toContain('ref="sentinel"');
+    expect(source).toContain("useCursorInfiniteScroll");
+  });
+
+  it("использует один toolbar для раздела, типа, состояния, источника и вида", () => {
+    expect(source).toContain('v-model="activeTab"');
+    expect(source).toContain('v-model="kind"');
+    expect(source).toContain('v-model="scanState"');
+    expect(source).toContain('v-model="source"');
+    expect(source).toContain("<ViewModeToggle");
+    expect(source).not.toContain("files-workspace__tabs");
+  });
 });

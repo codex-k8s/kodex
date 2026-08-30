@@ -24,6 +24,7 @@ import type {
   OidcGroup,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
@@ -77,6 +78,10 @@ const selectedBinding = ref<AccessBinding>();
 const initialSubject = ref<AccessSubject>();
 const mutationBusy = ref(false);
 const mutationProblem = ref<AppProblem>();
+const confirmation = ref<
+  | { kind: "ARCHIVE_ROLE"; role: AccessRole }
+  | { kind: "REVOKE_BINDING"; binding: AccessBinding }
+>();
 
 function selectSection(section: AccessSection): void {
   if (route.name === "project-access") {
@@ -165,22 +170,46 @@ async function saveRole(input: AccessRoleInput): Promise<void> {
   }
 }
 
-async function archiveRole(role: AccessRole): Promise<void> {
-  if (
-    !window.confirm(
-      t("access.rolesWorkspace.archiveConfirm", {
-        name: role.currentVersion.name,
-      }),
-    )
-  )
-    return;
+function archiveRole(role: AccessRole): void {
+  mutationProblem.value = undefined;
+  confirmation.value = { kind: "ARCHIVE_ROLE", role };
+}
+
+function revokeBinding(binding: AccessBinding): void {
+  mutationProblem.value = undefined;
+  confirmation.value = { kind: "REVOKE_BINDING", binding };
+}
+
+function closeConfirmation(force = false): void {
+  if (mutationBusy.value && !force) return;
+  confirmation.value = undefined;
+  mutationProblem.value = undefined;
+}
+
+async function confirmMutation(): Promise<void> {
+  const requested = confirmation.value;
+  if (!requested) return;
   mutationBusy.value = true;
   mutationProblem.value = undefined;
   try {
-    await access.archiveRole(role);
+    if (requested.kind === "ARCHIVE_ROLE") {
+      await access.archiveRole(requested.role);
+    } else {
+      await access.revokeBinding(requested.binding);
+    }
+    closeConfirmation(true);
   } catch (error) {
     mutationProblem.value = asProblem(error);
-    if (mutationProblem.value.kind === "conflict") await access.loadRoles(true);
+    if (mutationProblem.value.kind === "conflict") {
+      if (requested.kind === "ARCHIVE_ROLE") {
+        await access.loadRoles(true);
+      } else {
+        await access.loadBindings({
+          projectRef: projectRef.value || undefined,
+          includeRevoked: true,
+        });
+      }
+    }
   } finally {
     mutationBusy.value = false;
   }
@@ -239,25 +268,6 @@ async function saveBinding(
   }
 }
 
-async function revokeBinding(binding: AccessBinding): Promise<void> {
-  if (!window.confirm(t("access.bindingsWorkspace.revokeConfirm"))) return;
-  mutationBusy.value = true;
-  mutationProblem.value = undefined;
-  try {
-    await access.revokeBinding(binding);
-  } catch (error) {
-    mutationProblem.value = asProblem(error);
-    if (mutationProblem.value.kind === "conflict") {
-      await access.loadBindings({
-        projectRef: projectRef.value || undefined,
-        includeRevoked: true,
-      });
-    }
-  } finally {
-    mutationBusy.value = false;
-  }
-}
-
 watch(routeSection, (section) => void loadSection(section));
 watch(projectRef, (value) => {
   void Promise.all([loadSection(), access.loadMembershipPresentation(value)]);
@@ -288,7 +298,7 @@ onMounted(() => void loadBaseline());
       @retry="access.loadPermissions"
     />
     <ProblemNotice
-      v-if="mutationProblem && !roleDialog && !bindingDialog"
+      v-if="mutationProblem && !roleDialog && !bindingDialog && !confirmation"
       :problem="mutationProblem"
       compact
     />
@@ -421,5 +431,61 @@ onMounted(() => void loadBaseline());
       @save="saveBinding"
       @load-project-resources="loadProjectResources"
     />
+    <ModalDialog
+      v-if="confirmation"
+      :title="
+        confirmation.kind === 'ARCHIVE_ROLE'
+          ? 'Архивировать роль'
+          : 'Отозвать назначение'
+      "
+      :busy="mutationBusy"
+      size="md"
+      @close="closeConfirmation"
+    >
+      <p class="confirmation-copy">
+        {{
+          confirmation.kind === "ARCHIVE_ROLE"
+            ? t("access.rolesWorkspace.archiveConfirm", {
+                name: confirmation.role.currentVersion.name,
+              })
+            : t("access.bindingsWorkspace.revokeConfirm")
+        }}
+      </p>
+      <ProblemNotice
+        v-if="mutationProblem"
+        :problem="mutationProblem"
+        compact
+      />
+      <template #actions>
+        <button
+          class="button"
+          type="button"
+          :disabled="mutationBusy"
+          @click="closeConfirmation()"
+        >
+          {{ $t("common.cancel") }}
+        </button>
+        <button
+          class="button button--danger"
+          type="button"
+          :disabled="mutationBusy"
+          @click="confirmMutation"
+        >
+          {{
+            mutationBusy
+              ? "Выполняем…"
+              : confirmation.kind === "ARCHIVE_ROLE"
+                ? "Архивировать"
+                : "Отозвать"
+          }}
+        </button>
+      </template>
+    </ModalDialog>
   </PageFrame>
 </template>
+
+<style scoped>
+.confirmation-copy {
+  margin: 0;
+}
+</style>

@@ -155,6 +155,30 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
       <span>{{ events.length }}</span>
     </div>
 
+    <nav class="run-session-strip" :aria-label="$t('runs.context')">
+      <button
+        v-for="node in sessionNodes"
+        :key="node.ref"
+        type="button"
+        :class="{
+          'run-session-strip__item--selected': selectedNodeRef === node.ref,
+          'run-session-strip__item--future':
+            node.planned ||
+            node.state === 'PLANNED' ||
+            ((node.state === 'QUEUED' || node.state === 'WAITING') &&
+              !node.startedAt),
+        }"
+        :aria-pressed="selectedNodeRef === node.ref"
+        @click="selectedNodeRef = selectedNodeRef === node.ref ? '' : node.ref"
+      >
+        <span>
+          <strong>{{ node.displayName }}</strong>
+          <small>{{ node.role || $t(`runs.nodeTypes.${node.type}`) }}</small>
+        </span>
+        <StatusBadge :state="node.state" />
+      </button>
+    </nav>
+
     <div class="run-activity-drawer__body" aria-live="polite">
       <ol v-if="filteredItems.length" class="run-activity-list">
         <li
@@ -344,6 +368,54 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 0.76rem;
+}
+.run-session-strip {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 7px;
+  padding: 9px 16px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  scrollbar-width: thin;
+}
+.run-session-strip > button {
+  display: grid;
+  min-width: 190px;
+  max-width: 250px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.run-session-strip > button:hover,
+.run-session-strip__item--selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.run-session-strip__item--future {
+  border-style: dashed !important;
+  opacity: 0.74;
+}
+.run-session-strip > button > span {
+  display: grid;
+  min-width: 0;
+}
+.run-session-strip strong,
+.run-session-strip small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-session-strip small {
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 .run-activity-drawer__body {
   flex: 1 1 auto;

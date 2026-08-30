@@ -332,6 +332,7 @@ onBeforeUnmount(() => {
       id="assistant-workspace"
       ref="panel"
       class="assistant-drawer"
+      :class="{ 'assistant-drawer--plan': currentPlan }"
       role="dialog"
       aria-modal="true"
       :aria-label="$t('assistant.title')"
@@ -694,7 +695,7 @@ onBeforeUnmount(() => {
   right: 0;
   bottom: 0;
   display: flex;
-  width: clamp(720px, 62vw, 1040px);
+  width: clamp(520px, 42vw, 640px);
   max-width: calc(100vw - 32px);
   height: 100dvh;
   min-width: 0;
@@ -703,6 +704,9 @@ onBeforeUnmount(() => {
   background: var(--surface);
   box-shadow: -18px 0 48px rgb(15 23 42 / 20%);
   outline: 0;
+}
+.assistant-drawer--plan {
+  width: min(960px, calc(100vw - 32px));
 }
 .assistant-drawer > .assistant-plan-editor,
 .assistant-drawer__view,
@@ -1129,6 +1133,29 @@ onBeforeUnmount(() => {
   }
   .assistant-composer {
     padding-bottom: max(14px, env(safe-area-inset-bottom));
+  }
+}
+@media (min-width: 721px) and (max-width: 900px) {
+  .assistant-drawer {
+    width: min(640px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+  .assistant-drawer--plan {
+    width: calc(100vw - 24px);
+  }
+  .assistant-new-conversation,
+  .assistant-history__toggle {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    justify-content: center;
+    padding: 0;
+  }
+  .assistant-new-conversation span,
+  .assistant-history__toggle span,
+  .assistant-history__toggle svg:last-child,
+  .assistant-drawer__header > :deep(.status-badge) {
+    display: none;
   }
 }
 </style>

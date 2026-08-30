@@ -6,6 +6,7 @@ import { usePlatformStore } from "@/features/platform/store";
 import { useRuntimeStore } from "@/features/runtime/store";
 import ArtifactList from "@/features/workboard/components/ArtifactList.vue";
 import AttentionList from "@/features/workboard/components/AttentionList.vue";
+import ProjectAgentList from "@/features/workboard/components/ProjectAgentList.vue";
 import ProjectResources from "@/features/workboard/components/ProjectResources.vue";
 import RunWorkItem from "@/features/workboard/components/RunWorkItem.vue";
 import WorkboardSection from "@/features/workboard/components/WorkboardSection.vue";
@@ -28,6 +29,7 @@ const project = computed(() => platform.projects[projectRef.value]);
 const projectReady = ref(Boolean(project.value));
 const overviewReady = ref(false);
 const runsReady = ref(false);
+const agentsReady = ref(false);
 const schedulesReady = ref(false);
 const environmentsReady = ref(false);
 const environmentsLoading = ref(false);
@@ -48,6 +50,20 @@ const activeRuns = computed(() =>
   projectRuns.value.filter((run) =>
     ["QUEUED", "RUNNING", "WAITING_HUMAN", "CANCELLING"].includes(run.state),
   ),
+);
+const projectAgents = computed(() =>
+  Object.values(platform.agents)
+    .filter(
+      (agent) =>
+        agent.projectRef === projectRef.value &&
+        !agent.system &&
+        agent.state !== "ARCHIVED",
+    )
+    .sort(
+      (left, right) =>
+        Number(right.enabled) - Number(left.enabled) ||
+        left.name.localeCompare(right.name),
+    ),
 );
 const pendingGates = computed(() =>
   (platform.overview?.pendingGates ?? []).filter(
@@ -71,6 +87,7 @@ const refreshing = computed(
     (platform.loading.project && projectReady.value) ||
     (platform.loading.overview && overviewReady.value) ||
     (platform.loading.runs && runsReady.value) ||
+    (platform.loading.agents && agentsReady.value) ||
     (platform.loading.schedules && schedulesReady.value) ||
     (environmentsLoading.value && environmentsReady.value),
 );
@@ -86,6 +103,10 @@ async function refreshOverview(): Promise<void> {
 async function refreshRuns(): Promise<void> {
   await platform.loadRuns(projectRef.value);
   if (!platform.problems.runs) runsReady.value = true;
+}
+async function refreshAgents(): Promise<void> {
+  await platform.loadAgents(projectRef.value);
+  if (!platform.problems.agents) agentsReady.value = true;
 }
 async function refreshSchedules(): Promise<void> {
   await platform.loadSchedules(projectRef.value);
@@ -116,6 +137,7 @@ async function refresh(): Promise<void> {
     refreshProject(),
     refreshOverview(),
     refreshRuns(),
+    refreshAgents(),
     refreshSchedules(),
     refreshEnvironments(),
   ]);
@@ -127,6 +149,7 @@ watch(
     projectReady.value = Boolean(project.value);
     overviewReady.value = false;
     runsReady.value = false;
+    agentsReady.value = false;
     schedulesReady.value = false;
     environmentsReady.value = false;
     environmentItems.value = [];
@@ -223,6 +246,25 @@ watch(
             }}</RouterLink>
           </template>
           <ArtifactList :artifacts="recentArtifacts" />
+        </WorkboardSection>
+
+        <WorkboardSection
+          :title="$t('agents.title')"
+          :count="projectAgents.length"
+          :loading="platform.loading.agents"
+          :refreshing="refreshing"
+          :ready="agentsReady"
+          :problem="platform.problems.agents"
+          :empty="projectAgents.length === 0"
+          :empty-text="$t('agents.emptyTitle')"
+          @retry="refreshAgents"
+        >
+          <template #action>
+            <RouterLink :to="`/projects/${projectRef}/agents`">{{
+              $t("common.all")
+            }}</RouterLink>
+          </template>
+          <ProjectAgentList :agents="projectAgents.slice(0, 8)" />
         </WorkboardSection>
       </div>
 

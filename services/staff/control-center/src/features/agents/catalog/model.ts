@@ -65,7 +65,9 @@ export function toAgentCatalogItem(agent: Agent): AgentCatalogItem {
     roleDescription: agent.roleDescription,
     state: agent.state,
     statusTone: agentStatusTone(agent.state),
-    avatarUrl: sameOriginAvatarUrl(agent.avatarUrl),
+    avatarUrl: sameOriginAvatarUrl(
+      agent.avatar?.contentPath ?? agent.avatarUrl,
+    ),
     initials: agentInitials(agent.name),
     avatarTone: agentAvatarTone(agent.ref || agent.name),
     runtimeName: agent.runtimeName,

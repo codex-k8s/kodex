@@ -1,9 +1,20 @@
 <script setup lang="ts">
-import { Eye, FilePenLine, Save, ShieldCheck } from "@lucide/vue";
-import { computed, ref, shallowRef } from "vue";
+import {
+  Eye,
+  FilePenLine,
+  LoaderCircle,
+  RefreshCw,
+  Save,
+  ShieldCheck,
+  Sparkles,
+} from "@lucide/vue";
+import { computed, onBeforeUnmount, ref, shallowRef } from "vue";
 import { useI18n } from "vue-i18n";
 
-import { createTemplateVariableLoader } from "@/features/agents/detail/api";
+import {
+  createTemplateVariableLoader,
+  loadMaterializedTemplatePreview,
+} from "@/features/agents/detail/api";
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import type {
@@ -15,7 +26,10 @@ import {
   templateVariableInsertion,
   type TemplateVariablePickerItem,
 } from "@/features/agents/detail/model";
-import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import TemplateVariableCatalog from "@/features/agents/detail/TemplateVariableCatalog.vue";
+import type { PromptTemplatePreview } from "@/shared/api/generated/openapi/types.gen";
+import { asProblem, type AppProblem } from "@/shared/api/problem";
+import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
@@ -36,28 +50,63 @@ const emit = defineEmits<{
   validate: [];
   publish: [];
 }>();
-const { locale, t } = useI18n();
+const { locale } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
-const mode = ref<"edit" | "preview">("edit");
+const mode = ref<"edit" | "preview" | "materialized">("edit");
 const editor = shallowRef<{
   insertAtCursor(value: string): void;
 }>();
+const materializedPreview = ref<PromptTemplatePreview>();
+const materializedTemplate = ref("");
+const materializedBusy = ref(false);
+const materializedProblem = ref<AppProblem>();
+let materializedController: AbortController | undefined;
 const usedVariables = computed(() =>
   extractTemplateVariables(props.modelValue),
 );
 const loadVariables = createTemplateVariableLoader(props.projectRef);
-const variableLabels = computed(() => ({
-  label: copy.value.instructions.variables,
-  searchPlaceholder: copy.value.instructions.variableSearch,
-  loading: t("common.loading"),
-  loadingMore: copy.value.environment.loadingMore,
-  empty: t("common.empty"),
-  error: t("common.error"),
-  retry: t("common.retry"),
-}));
+const materializedContent = computed(
+  () =>
+    materializedPreview.value?.fullMaterializedPrompt ??
+    materializedPreview.value?.safePreview ??
+    "",
+);
+const materializedStale = computed(
+  () => materializedTemplate.value !== props.modelValue,
+);
 
 function insertVariable(item: TemplateVariablePickerItem): void {
   editor.value?.insertAtCursor(templateVariableInsertion(item.variable));
+}
+
+function selectMode(value: "edit" | "preview" | "materialized"): void {
+  mode.value = value;
+  if (value === "materialized" && materializedStale.value)
+    void refreshMaterializedPreview();
+}
+
+async function refreshMaterializedPreview(): Promise<void> {
+  if (!props.modelValue.trim() || materializedBusy.value) return;
+  materializedController?.abort();
+  const controller = new AbortController();
+  materializedController = controller;
+  materializedBusy.value = true;
+  materializedProblem.value = undefined;
+  try {
+    materializedPreview.value = await loadMaterializedTemplatePreview(
+      props.modelValue,
+      controller.signal,
+    );
+    materializedTemplate.value = props.modelValue;
+  } catch (error) {
+    if (!controller.signal.aborted)
+      materializedProblem.value = asProblem(error);
+  } finally {
+    if (materializedController === controller) {
+      materializedController = undefined;
+      materializedBusy.value = false;
+    }
+  }
 }
 
 const completeVariables: CodeEditorCompletionProvider = async (
@@ -79,6 +128,8 @@ const completeVariables: CodeEditorCompletionProvider = async (
     type: "variable",
   }));
 };
+
+onBeforeUnmount(() => materializedController?.abort());
 </script>
 
 <template>
@@ -99,7 +150,7 @@ const completeVariables: CodeEditorCompletionProvider = async (
         class="instructions-panel__mode"
         type="button"
         :aria-pressed="mode === 'edit'"
-        @click="mode = 'edit'"
+        @click="selectMode('edit')"
       >
         <FilePenLine :size="15" aria-hidden="true" />{{
           copy.instructions.editor
@@ -109,9 +160,18 @@ const completeVariables: CodeEditorCompletionProvider = async (
         class="instructions-panel__mode"
         type="button"
         :aria-pressed="mode === 'preview'"
-        @click="mode = 'preview'"
+        @click="selectMode('preview')"
       >
         <Eye :size="15" aria-hidden="true" />{{ copy.instructions.preview }}
+      </button>
+      <button
+        class="instructions-panel__mode"
+        type="button"
+        :aria-pressed="mode === 'materialized'"
+        @click="selectMode('materialized')"
+      >
+        <Sparkles :size="15" aria-hidden="true" />
+        {{ copy.instructions.materializedPreview }}
       </button>
     </div>
 
@@ -130,11 +190,79 @@ const completeVariables: CodeEditorCompletionProvider = async (
           :completion-provider="completeVariables"
           @update:model-value="emit('update:modelValue', $event)"
         />
-        <section v-else class="instructions-panel__preview" aria-live="polite">
+        <section
+          v-else-if="mode === 'preview'"
+          class="instructions-panel__preview"
+          aria-live="polite"
+        >
           <div class="instructions-panel__preview-bar">
             <Eye :size="15" aria-hidden="true" />{{ copy.instructions.preview }}
           </div>
           <SafeMarkdown :content="modelValue" />
+        </section>
+        <section
+          v-else
+          class="instructions-panel__preview instructions-panel__preview--materialized"
+          aria-live="polite"
+          :aria-busy="materializedBusy"
+        >
+          <div class="instructions-panel__preview-bar">
+            <Sparkles :size="15" aria-hidden="true" />
+            <span>{{ copy.instructions.materializedPreview }}</span>
+            <StatusBadge :state="materializedStale ? 'DRAFT' : 'AVAILABLE'" />
+            <button
+              class="button"
+              type="button"
+              :disabled="materializedBusy || !modelValue.trim()"
+              @click="refreshMaterializedPreview"
+            >
+              <RefreshCw :size="15" aria-hidden="true" />
+              {{ copy.instructions.refreshPreview }}
+            </button>
+          </div>
+          <p class="instructions-panel__materialized-help">
+            {{ copy.instructions.materializedHelp }}
+          </p>
+          <div
+            v-if="materializedBusy"
+            class="instructions-panel__materialized-state"
+            role="status"
+          >
+            <LoaderCircle class="spin" :size="18" aria-hidden="true" />
+            {{ $t("common.loading") }}
+          </div>
+          <ProblemNotice
+            v-else-if="materializedProblem"
+            :problem="materializedProblem"
+            compact
+          />
+          <SafeMarkdown
+            v-else-if="materializedContent && !materializedStale"
+            :content="materializedContent"
+          />
+          <p v-else class="instructions-panel__materialized-state">
+            {{ copy.instructions.materializedUnavailable }}
+          </p>
+          <ul
+            v-if="materializedPreview?.diagnostics.length"
+            class="instructions-panel__materialized-diagnostics"
+          >
+            <li
+              v-for="diagnostic in materializedPreview.diagnostics"
+              :key="
+                diagnostic.code +
+                '-' +
+                diagnostic.line +
+                '-' +
+                diagnostic.column
+              "
+            >
+              <strong>{{ diagnostic.severity }}</strong>
+              {{ diagnostic.message }} · {{ diagnostic.line }}:{{
+                diagnostic.column
+              }}
+            </li>
+          </ul>
         </section>
 
         <div v-if="canEdit" class="instructions-panel__actions">
@@ -177,46 +305,11 @@ const completeVariables: CodeEditorCompletionProvider = async (
           <StatusBadge state="AVAILABLE" />
         </div>
         <p>{{ copy.instructions.variablesHelp }}</p>
-        <AsyncEntityPicker
-          :load-items="loadVariables"
-          :labels="variableLabels"
+        <TemplateVariableCatalog
+          :project-ref="projectRef"
           :disabled="!canEdit || busy || mode !== 'edit'"
-          :debounce-ms="250"
           @select="insertVariable"
-        >
-          <template #option="{ item }">
-            <span class="instructions-panel__variable-option">
-              <span>
-                <strong>{{ item.variable.name }}</strong>
-                <small>{{ item.variable.description }}</small>
-                <small v-if="item.variable.example">
-                  {{ copy.instructions.variableExample }}:
-                  <code>{{ item.variable.example }}</code>
-                </small>
-                <small v-if="item.variable.collection">
-                  {{ copy.instructions.collection }} ·
-                  {{ item.variable.itemValueType ?? item.variable.valueType }}
-                </small>
-                <span
-                  v-if="item.variable.itemFields.length"
-                  class="instructions-panel__variable-fields"
-                >
-                  <code
-                    v-for="field in item.variable.itemFields"
-                    :key="field.name"
-                    :title="field.description"
-                  >
-                    {{ field.name }}: {{ field.valueType }}
-                  </code>
-                </span>
-              </span>
-              <span class="instructions-panel__variable-meta">
-                <code>{{ item.scope }}</code>
-                <span>{{ item.variable.valueType }}</span>
-              </span>
-            </span>
-          </template>
-        </AsyncEntityPicker>
+        />
         <div class="instructions-panel__used">
           <strong>{{ copy.instructions.usedVariables }}</strong>
           <div v-if="usedVariables.length" class="instructions-panel__tokens">
@@ -278,6 +371,7 @@ const completeVariables: CodeEditorCompletionProvider = async (
 .instructions-panel__mode {
   display: inline-flex;
   min-height: 32px;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
   padding: 5px 10px;
@@ -286,6 +380,7 @@ const completeVariables: CodeEditorCompletionProvider = async (
   color: var(--muted);
   background: var(--surface);
   cursor: pointer;
+  white-space: nowrap;
 }
 .instructions-panel__mode:last-child {
   border-right: 0;
@@ -296,7 +391,7 @@ const completeVariables: CodeEditorCompletionProvider = async (
 }
 .instructions-panel__workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 0.42fr);
   gap: 14px;
   align-items: start;
 }
@@ -320,8 +415,38 @@ const completeVariables: CodeEditorCompletionProvider = async (
   color: var(--muted);
   font-size: 0.78rem;
 }
+.instructions-panel__preview-bar .status-badge {
+  margin-left: auto;
+}
+.instructions-panel__preview-bar .button {
+  min-height: 30px;
+  padding: 4px 8px;
+}
 .instructions-panel__preview :deep(.safe-markdown) {
   padding: 16px;
+}
+.instructions-panel__materialized-help {
+  padding: 12px 16px 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.instructions-panel__materialized-state {
+  display: flex;
+  min-height: 280px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: var(--muted);
+  text-align: center;
+}
+.instructions-panel__materialized-diagnostics {
+  display: grid;
+  gap: 6px;
+  padding: 12px 32px 16px;
+  margin: 0;
+  color: var(--warning);
+  font-size: 0.78rem;
 }
 .instructions-panel__variables {
   display: grid;

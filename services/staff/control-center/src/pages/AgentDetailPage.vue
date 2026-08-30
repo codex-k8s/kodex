@@ -142,6 +142,25 @@ const authoritativeInstructions = computed(
 const instructionsDirty = computed(
   () => instructions.value !== authoritativeInstructions.value,
 );
+const applyReadback = computed(() => {
+  const value = agent.value;
+  if (!value) return undefined;
+  if (activeTab.value === "instructions") {
+    const draft = value.draftInstructions?.revision;
+    const published = value.publishedInstructions?.revision;
+    return [
+      draft !== undefined ? `draft r${String(draft)}` : undefined,
+      published !== undefined ? `published r${String(published)}` : undefined,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  if (activeTab.value === "runtime")
+    return [value.runtimeName, value.runtimeRevision]
+      .filter(Boolean)
+      .join(" · ");
+  return `Agent v${String(value.version)}`;
+});
 
 const tabs = computed<Array<{ id: AgentDetailTab; label: string }>>(() => [
   { id: "profile", label: t("agents.profile") },
@@ -588,6 +607,7 @@ onMounted(() => void load());
           :state="applyState"
           :scope="applyScope"
           :boundary="applyBoundary"
+          :readback="applyReadback"
         />
 
         <div class="agent-tabs" role="tablist" :aria-label="$t('nav.agent')">

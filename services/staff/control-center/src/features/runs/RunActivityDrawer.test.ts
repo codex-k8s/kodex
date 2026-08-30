@@ -155,6 +155,8 @@ describe("RunActivityDrawer", () => {
   it("разделяет сообщения инициатора и агента без выдуманного tool-call", async () => {
     const html = await render();
 
+    expect(html).toContain("run-session-strip");
+    expect(html).toContain("Аналитик продаж");
     expect(html).toContain("Владелец");
     expect(html).toContain("Проверь квартальный отчёт");
     expect(html).toContain("Аналитик продаж");

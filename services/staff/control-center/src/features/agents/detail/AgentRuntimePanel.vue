@@ -29,6 +29,11 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type {
+  AsyncEntityOption,
+  AsyncEntityOptionPage,
+} from "@/shared/ui/async-entity-picker";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{
@@ -84,18 +89,56 @@ const matchingRuntimes = computed(() =>
     form.model,
   ),
 );
-const providerUnavailable = computed(
-  () =>
-    Boolean(selectedProvider.value) &&
-    !providers.value.includes(selectedProvider.value),
+const providerOptions = computed<AsyncEntityOption[]>(() =>
+  providers.value.map((provider) => ({
+    ref: provider,
+    title: provider,
+    description: `${copy.value.runtime.providerProfiles}: ${String(
+      availableRuntimes.value.filter((item) => item.provider === provider)
+        .length,
+    )}`,
+  })),
 );
-const modelUnavailable = computed(
-  () => Boolean(form.model) && !models.value.includes(form.model),
+const modelOptions = computed<AsyncEntityOption[]>(() =>
+  models.value.map((model) => ({
+    ref: model,
+    title: model,
+    description: `${copy.value.runtime.modelProfiles}: ${String(
+      availableRuntimes.value.filter(
+        (item) =>
+          item.provider === selectedProvider.value && item.model === model,
+      ).length,
+    )}`,
+  })),
 );
-const runtimeUnavailable = computed(
-  () =>
-    Boolean(form.runtimeProfileRef) &&
-    !matchingRuntimes.value.some((item) => item.ref === form.runtimeProfileRef),
+const runtimeOptions = computed<AsyncEntityOption[]>(() =>
+  matchingRuntimes.value.map((runtime) => ({
+    ref: runtime.ref,
+    title: runtime.name,
+    description: `${runtime.provider} · ${runtime.model}`,
+    meta: runtime.revision,
+  })),
+);
+const selectedProviderOption = computed(() =>
+  selectedOrUnavailable(
+    selectedProvider.value,
+    providerOptions.value,
+    copy.value.runtime.unavailableSelection,
+  ),
+);
+const selectedModelOption = computed(() =>
+  selectedOrUnavailable(
+    form.model,
+    modelOptions.value,
+    copy.value.runtime.unavailableSelection,
+  ),
+);
+const selectedRuntimeOption = computed(() =>
+  selectedOrUnavailable(
+    form.runtimeProfileRef,
+    runtimeOptions.value,
+    copy.value.runtime.unavailableSelection,
+  ),
 );
 const runtimeDirty = computed(() => {
   const current = view.value?.configuration;
@@ -142,13 +185,76 @@ function sync(): void {
   notify("APPLIED");
 }
 
-function eventValue(event: Event): string | undefined {
-  const target = event.currentTarget;
-  return target instanceof HTMLSelectElement ? target.value : undefined;
+function selectedOrUnavailable(
+  ref: string,
+  options: readonly AsyncEntityOption[],
+  unavailable: string,
+): AsyncEntityOption | undefined {
+  if (!ref) return undefined;
+  return (
+    options.find((item) => item.ref === ref) ?? {
+      ref,
+      title: ref,
+      description: unavailable,
+      disabled: true,
+    }
+  );
 }
 
-function chooseProvider(event: Event): void {
-  const provider = eventValue(event);
+function localOptionPage(
+  options: readonly AsyncEntityOption[],
+  query: string,
+  cursor?: string,
+): AsyncEntityOptionPage {
+  const normalized = query.trim().toLocaleLowerCase();
+  const filtered = normalized
+    ? options.filter((item) =>
+        [item.title, item.description, item.meta]
+          .filter(Boolean)
+          .some((value) => value?.toLocaleLowerCase().includes(normalized)),
+      )
+    : [...options];
+  const offset = Number.parseInt(cursor ?? "0", 10);
+  const safeOffset = Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
+  const items = filtered.slice(safeOffset, safeOffset + 20);
+  const nextOffset = safeOffset + items.length;
+  return {
+    items,
+    ...(nextOffset < filtered.length
+      ? { nextPageToken: String(nextOffset) }
+      : {}),
+  };
+}
+
+function loadProviderPage(
+  query: string,
+  cursor?: string,
+): Promise<AsyncEntityOptionPage> {
+  return Promise.resolve(localOptionPage(providerOptions.value, query, cursor));
+}
+
+function loadModelPage(
+  query: string,
+  cursor?: string,
+): Promise<AsyncEntityOptionPage> {
+  return Promise.resolve(localOptionPage(modelOptions.value, query, cursor));
+}
+
+function loadRuntimePage(
+  query: string,
+  cursor?: string,
+): Promise<AsyncEntityOptionPage> {
+  return Promise.resolve(localOptionPage(runtimeOptions.value, query, cursor));
+}
+
+function pickerValue(
+  value: string | null | readonly string[],
+): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function chooseProvider(value: string | null | readonly string[]): void {
+  const provider = pickerValue(value);
   if (!provider) return;
   const previousProvider = selectedProvider.value;
   const runtimeRef = runtimeRefForSelection(availableRuntimes.value, provider);
@@ -162,8 +268,8 @@ function chooseProvider(event: Event): void {
   notify(runtimeDirty.value ? "DRAFT" : "APPLIED");
 }
 
-function chooseModel(event: Event): void {
-  const model = eventValue(event);
+function chooseModel(value: string | null | readonly string[]): void {
+  const model = pickerValue(value);
   const provider = selectedRuntime.value?.provider;
   if (!model || !provider) return;
   const runtimeRef = runtimeRefForSelection(
@@ -177,8 +283,8 @@ function chooseModel(event: Event): void {
   notify(runtimeDirty.value ? "DRAFT" : "APPLIED");
 }
 
-function chooseRuntime(event: Event): void {
-  const runtimeRef = eventValue(event);
+function chooseRuntime(value: string | null | readonly string[]): void {
+  const runtimeRef = pickerValue(value);
   const selected = availableRuntimes.value.find(
     (item) => item.ref === runtimeRef,
   );
@@ -189,7 +295,8 @@ function chooseRuntime(event: Event): void {
 }
 
 function chooseProviderPolicy(event: Event): void {
-  const value = eventValue(event);
+  const target = event.currentTarget;
+  const value = target instanceof HTMLSelectElement ? target.value : undefined;
   if (!value || !isProviderPolicyMode(value)) return;
   form.providerPolicyMode = value;
   notify(runtimeDirty.value ? "DRAFT" : "APPLIED");
@@ -291,65 +398,39 @@ onMounted(() => void load());
         <div class="runtime-panel__selectors">
           <label class="field">
             <span>{{ $t("agents.provider") }}</span>
-            <select
-              :value="selectedProvider"
+            <AsyncEntityPicker
+              :model-value="selectedProvider"
+              :selected="selectedProviderOption"
+              :load-page="loadProviderPage"
+              :placeholder="copy.runtime.chooseProvider"
+              :search-placeholder="copy.runtime.searchProvider"
               :disabled="!canEdit || busy || providers.length === 0"
-              @change="chooseProvider"
-            >
-              <option
-                v-if="providerUnavailable"
-                :value="selectedProvider"
-                disabled
-              >
-                {{ selectedProvider }} · {{ copy.runtime.unavailableSelection }}
-              </option>
-              <option
-                v-for="provider in providers"
-                :key="provider"
-                :value="provider"
-              >
-                {{ provider }}
-              </option>
-            </select>
+              @update:model-value="chooseProvider"
+            />
           </label>
           <label class="field">
             <span>{{ $t("agents.model") }}</span>
-            <select
-              :value="form.model"
+            <AsyncEntityPicker
+              :model-value="form.model"
+              :selected="selectedModelOption"
+              :load-page="loadModelPage"
+              :placeholder="copy.runtime.chooseModel"
+              :search-placeholder="copy.runtime.searchModel"
               :disabled="!canEdit || busy || models.length === 0"
-              @change="chooseModel"
-            >
-              <option v-if="modelUnavailable" :value="form.model" disabled>
-                {{ form.model }} · {{ copy.runtime.unavailableSelection }}
-              </option>
-              <option v-for="model in models" :key="model" :value="model">
-                {{ model }}
-              </option>
-            </select>
+              @update:model-value="chooseModel"
+            />
           </label>
           <label class="field">
             <span>{{ copy.runtime.profile }}</span>
-            <select
-              :value="form.runtimeProfileRef"
+            <AsyncEntityPicker
+              :model-value="form.runtimeProfileRef"
+              :selected="selectedRuntimeOption"
+              :load-page="loadRuntimePage"
+              :placeholder="copy.runtime.chooseProfile"
+              :search-placeholder="copy.runtime.searchProfile"
               :disabled="!canEdit || busy || matchingRuntimes.length === 0"
-              @change="chooseRuntime"
-            >
-              <option
-                v-if="runtimeUnavailable"
-                :value="form.runtimeProfileRef"
-                disabled
-              >
-                {{ form.runtimeProfileRef }} ·
-                {{ copy.runtime.unavailableSelection }}
-              </option>
-              <option
-                v-for="item in matchingRuntimes"
-                :key="item.ref"
-                :value="item.ref"
-              >
-                {{ item.name }} · {{ item.revision }}
-              </option>
-            </select>
+              @update:model-value="chooseRuntime"
+            />
           </label>
           <label class="field">
             <span>{{ $t("runtime.accountPolicy") }}</span>
@@ -370,6 +451,16 @@ onMounted(() => void load());
           </label>
         </div>
         <dl class="runtime-panel__summary">
+          <div>
+            <dt>
+              {{
+                $t("common.version", {
+                  version: view.configuration.version,
+                })
+              }}
+            </dt>
+            <dd class="mono">v{{ view.configuration.version }}</dd>
+          </div>
           <div>
             <dt>{{ $t("agents.runtimeRevision") }}</dt>
             <dd class="mono">{{ selectedRuntime?.revision }}</dd>
@@ -427,6 +518,21 @@ onMounted(() => void load());
           <div>
             <h2>{{ copy.runtime.overlay }}</h2>
             <p>{{ copy.runtime.overlayHelp }}</p>
+            <small>
+              {{
+                $t("agents.revision", {
+                  revision:
+                    view.draftOverlay?.revision ??
+                    view.publishedOverlay.revision,
+                })
+              }}
+              ·
+              {{
+                view.draftOverlay
+                  ? $t("states." + view.draftOverlay.state)
+                  : $t("states." + view.publishedOverlay.state)
+              }}
+            </small>
           </div>
           <StatusBadge :state="overlayDirty ? 'DRAFT' : overlayState" />
         </div>
@@ -522,13 +628,20 @@ onMounted(() => void load());
   color: var(--muted);
   font-size: 0.82rem;
 }
+.overlay-panel__head small {
+  display: block;
+  margin-top: 6px;
+  color: var(--subtle);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
 .runtime-panel__selectors {
   display: grid;
   gap: 12px;
 }
 .runtime-panel__summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1px;
   margin: 0;
   overflow: hidden;

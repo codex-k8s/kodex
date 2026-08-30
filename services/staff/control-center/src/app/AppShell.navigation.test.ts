@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const source = readFileSync(new URL("./AppShell.vue", import.meta.url), "utf8");
+const bootstrapSource = readFileSync(
+  new URL("../main.ts", import.meta.url),
+  "utf8",
+);
 
 describe("AppShell navigation", () => {
   it("оставляет Kodex только глобальным FAB и drawer", () => {
@@ -16,6 +20,14 @@ describe("AppShell navigation", () => {
     expect(source).toContain("realtime.openPlatform()");
     expect(source).not.toContain("offline-banner");
     expect(source).not.toContain("location.reload");
+  });
+
+  it("не перезагружает страницу автоматически при ошибке загрузки chunk", () => {
+    expect(bootstrapSource).toContain('new Event("kodex:preload-error")');
+    expect(bootstrapSource).not.toContain("window.location.reload");
+    expect(bootstrapSource).not.toContain("preloadRecoveryKey");
+    expect(source).toContain('v-if="preloadFailed"');
+    expect(source).toContain("refreshAfterPreloadFailure");
   });
 
   it("держит project switcher в sidebar и освобождает header для поиска", () => {

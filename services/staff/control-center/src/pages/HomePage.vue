@@ -11,6 +11,7 @@ import {
   homeFailedRuns,
   homeOpenGates,
   homeResumableSessions,
+  prioritizeHomeProjects,
 } from "@/features/home/model";
 import { usePlatformStore } from "@/features/platform/store";
 import ArtifactList from "@/features/workboard/components/ArtifactList.vue";
@@ -41,7 +42,9 @@ const resumableSessions = computed(() =>
 const recentArtifacts = computed(() =>
   projectArtifacts(platform.overview?.recentArtifacts ?? []),
 );
-const visibleProjects = computed(() => platform.projectList.slice(0, 6));
+const visibleProjects = computed(() =>
+  prioritizeHomeProjects(platform.projectList),
+);
 const currentUserName = computed(
   () => platform.bootstrap?.currentUser.displayName,
 );

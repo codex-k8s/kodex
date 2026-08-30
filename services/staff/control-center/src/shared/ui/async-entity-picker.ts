@@ -42,6 +42,48 @@ export interface AsyncEntityCollectionOptions {
   immediate?: boolean;
 }
 
+export interface VirtualWindow {
+  startIndex: number;
+  endIndex: number;
+  paddingBefore: number;
+  paddingAfter: number;
+}
+
+export function virtualWindow(options: {
+  itemCount: number;
+  columns?: number;
+  itemHeight: number;
+  scrollTop: number;
+  viewportHeight: number;
+  overscan?: number;
+}): VirtualWindow {
+  const itemCount = Math.max(0, Math.floor(options.itemCount));
+  const columns = Math.max(1, Math.floor(options.columns ?? 1));
+  const itemHeight = Math.max(1, options.itemHeight);
+  const rowCount = Math.ceil(itemCount / columns);
+  const overscan = Math.max(0, Math.floor(options.overscan ?? 2));
+  const firstVisibleRow = Math.min(
+    Math.max(0, rowCount - 1),
+    Math.floor(Math.max(0, options.scrollTop) / itemHeight),
+  );
+  const visibleRowCount = Math.max(
+    1,
+    Math.ceil(Math.max(0, options.viewportHeight) / itemHeight),
+  );
+  const startRow = Math.max(0, firstVisibleRow - overscan);
+  const endRow = Math.min(
+    rowCount,
+    firstVisibleRow + visibleRowCount + overscan,
+  );
+
+  return {
+    startIndex: Math.min(itemCount, startRow * columns),
+    endIndex: Math.min(itemCount, endRow * columns),
+    paddingBefore: startRow * itemHeight,
+    paddingAfter: Math.max(0, (rowCount - endRow) * itemHeight),
+  };
+}
+
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }

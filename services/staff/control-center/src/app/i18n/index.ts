@@ -26,6 +26,9 @@ const ru = {
     offline:
       "Нет сети. Показываем последнее полученное состояние; действия временно недоступны.",
     reconnecting: "Восстанавливаем realtime-соединение…",
+    preloadFailed:
+      "Интерфейс обновился на сервере, но текущая страница и введённые данные сохранены. Обновите страницу, когда будете готовы.",
+    refreshPage: "Обновить страницу",
     navigation: "Основная навигация",
     projectNavigation: "Навигация Проекта",
     breadcrumbs: "Навигационная цепочка",
@@ -2182,6 +2185,9 @@ const en = {
     offline:
       "You are offline. Last received state is shown and actions are temporarily unavailable.",
     reconnecting: "Restoring realtime connection…",
+    preloadFailed:
+      "A newer interface is available. The current page and entered data were preserved; refresh when you are ready.",
+    refreshPage: "Refresh page",
     navigation: "Main navigation",
     projectNavigation: "Project navigation",
     breadcrumbs: "Breadcrumbs",

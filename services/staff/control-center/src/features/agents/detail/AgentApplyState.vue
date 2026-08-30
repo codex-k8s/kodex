@@ -11,6 +11,7 @@ const props = defineProps<{
   state: "APPLIED" | "DRAFT" | "RUNNING" | "FAILED";
   scope: string;
   boundary: ApplyBoundary;
+  readback?: string;
 }>();
 const { locale } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
@@ -35,6 +36,7 @@ const detail = computed(() => {
     <div>
       <strong>{{ copy.apply.title }} · {{ scope }}</strong>
       <span>{{ detail }} · {{ copy.apply.boundaries[boundary] }}</span>
+      <code v-if="readback">{{ readback }}</code>
     </div>
     <StatusBadge :state="state" />
   </section>
@@ -67,6 +69,12 @@ const detail = computed(() => {
 .apply-state span:not(.status-badge) {
   color: var(--muted);
   font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+.apply-state code {
+  color: var(--subtle);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
   overflow-wrap: anywhere;
 }
 .apply-state--draft,

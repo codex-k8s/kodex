@@ -1,6 +1,25 @@
-import type { OwnerGate, Run } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  OwnerGate,
+  Project,
+  Run,
+} from "@/shared/api/generated/openapi/types.gen";
 
 export type HomeAttentionCategory = "HUMAN_GATE" | "RUN_FAILURE";
+
+export function prioritizeHomeProjects(
+  projects: readonly Project[],
+  limit = 6,
+): Project[] {
+  return [...projects]
+    .sort(
+      (left, right) =>
+        right.pendingGateCount - left.pendingGateCount ||
+        right.activeRunCount - left.activeRunCount ||
+        right.updatedAt.localeCompare(left.updatedAt) ||
+        left.name.localeCompare(right.name),
+    )
+    .slice(0, Math.max(0, limit));
+}
 
 function runActivityAt(run: Run): string {
   return run.finishedAt ?? run.startedAt ?? run.createdAt;

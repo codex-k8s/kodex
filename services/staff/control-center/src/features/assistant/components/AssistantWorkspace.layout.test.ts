@@ -30,8 +30,12 @@ describe("AssistantWorkspace layout", () => {
   });
 
   it("даёт desktop drawer достаточно места для истории и agent detail", () => {
-    expect(styles).toMatch(/width:\s*clamp\(720px,\s*62vw,\s*1040px\)/);
+    expect(styles).toMatch(/width:\s*clamp\(520px,\s*42vw,\s*640px\)/);
     expect(styles).toMatch(/max-width:\s*calc\(100vw\s*-\s*32px\)/);
+    expect(template).toContain("'assistant-drawer--plan': currentPlan");
+    expect(styles).toMatch(
+      /\.assistant-drawer--plan\s*\{[\s\S]*?width:\s*min\(960px,\s*calc\(100vw\s*-\s*32px\)\)/,
+    );
   });
 
   it("переключает drawer в mobile bottom sheet", () => {

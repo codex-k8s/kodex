@@ -19,13 +19,14 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const props = withDefaults(
   defineProps<{
     run: Run;
+    rootRun?: Run;
     node: RunNode;
     nodes: RunNode[];
     events: PresentedRunEvent[];
     artifacts: Artifact[];
     agent?: Agent;
   }>(),
-  { agent: undefined },
+  { rootRun: undefined, agent: undefined },
 );
 const emit = defineEmits<{ close: []; download: [artifact: Artifact] }>();
 const { locale } = useI18n();
@@ -172,6 +173,25 @@ function eventKind(
                 <dt>{{ $t("runs.runContext") }}</dt>
                 <dd>{{ run.title }}</dd>
               </div>
+              <div v-if="rootRun && rootRun.ref !== run.ref">
+                <dt>{{ $t("runs.graph") }}</dt>
+                <dd>{{ rootRun.title }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("decisions.requestedBy") }}</dt>
+                <dd>{{ run.initiator.displayName }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("runs.sessionNode") }}</dt>
+                <dd>
+                  {{ node.displayName }} ·
+                  {{ $t("runs.attempt", { attempt: run.attempt }) }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ $t("files.revision") }}</dt>
+                <dd>Run v{{ run.version }} · Graph r{{ run.graphRevision }}</dd>
+              </div>
               <div>
                 <dt>{{ $t("common.input") }}</dt>
                 <dd>
@@ -212,6 +232,17 @@ function eventKind(
 
           <section class="session-details__section">
             <h3>{{ $t("agents.instructions") }}</h3>
+            <dl v-if="agent?.publishedInstructions">
+              <div>
+                <dt>{{ $t("files.revision") }}</dt>
+                <dd>
+                  v{{ agent.publishedInstructions.version }} · r{{
+                    agent.publishedInstructions.revision
+                  }}
+                  <StatusBadge :state="agent.publishedInstructions.state" />
+                </dd>
+              </div>
+            </dl>
             <p class="session-details__unavailable">
               {{ $t("runs.renderedPromptUnavailable") }}
             </p>

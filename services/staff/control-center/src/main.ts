@@ -13,16 +13,11 @@ import { configureApiClient } from "@/shared/api/client";
 import { setUnauthorizedHandler } from "@/shared/api/problem";
 import { loadRuntimeConfig } from "@/shared/config/runtime";
 
-const preloadRecoveryKey = "kodex.preload-recovery";
-
 window.addEventListener("vite:preloadError", (event) => {
   event.preventDefault();
-  if (sessionStorage.getItem(preloadRecoveryKey) === "pending") {
-    console.error("Dynamic module recovery failed after page reload");
-    return;
-  }
-  sessionStorage.setItem(preloadRecoveryKey, "pending");
-  globalThis.setTimeout(() => window.location.reload(), 300);
+  document.documentElement.dataset.kodexPreload = "failed";
+  window.dispatchEvent(new Event("kodex:preload-error"));
+  console.error("Dynamic module loading failed; user refresh is required");
 });
 
 async function bootstrap(): Promise<void> {
@@ -42,7 +37,6 @@ async function bootstrap(): Promise<void> {
     usePlatformStore(pinia).clearOwnerState();
   });
   app.mount("#app");
-  sessionStorage.removeItem(preloadRecoveryKey);
   if ("serviceWorker" in navigator && import.meta.env.PROD) {
     void navigator.serviceWorker
       .register("/sw.js", { scope: "/", updateViaCache: "none" })

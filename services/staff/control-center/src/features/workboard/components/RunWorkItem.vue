@@ -69,7 +69,7 @@ const sourceIcon = computed(() => {
           <dd>{{ run.initiator.displayName }}</dd>
         </div>
         <div class="run-work-item__source">
-          <dt>{{ $t("workboard.source") }}</dt>
+          <dt>{{ $t("common.source") }}</dt>
           <dd
             :title="
               $t('workboard.sourceHint', {

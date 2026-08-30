@@ -3,6 +3,7 @@ import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type { InstructionVersion } from "@/shared/api/generated/openapi/types.gen";
+import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{
   versions: InstructionVersion[];
@@ -47,7 +48,12 @@ function confirmRollback(ref: string): void {
       {{ $t("agents.historyEmpty") }}
     </p>
     <ol v-else class="instruction-history__list">
-      <li v-for="version in versions" :key="version.ref">
+      <li
+        v-for="version in versions"
+        :key="version.ref"
+        :data-version="version.version"
+        :data-revision="version.revision"
+      >
         <div class="instruction-history__summary">
           <span>
             <strong>{{
@@ -57,14 +63,17 @@ function confirmRollback(ref: string): void {
               formatDate(version.publishedAt ?? version.createdAt)
             }}</small>
           </span>
-          <span
-            v-if="version.ref === currentRef"
-            class="instruction-history__current"
-          >
-            {{ $t("agents.currentRevision") }}
+          <span class="instruction-history__state">
+            <StatusBadge :state="version.state" />
+            <span
+              v-if="version.ref === currentRef"
+              class="instruction-history__current"
+            >
+              {{ $t("agents.currentRevision") }}
+            </span>
           </span>
           <button
-            v-else-if="canRollback"
+            v-if="version.ref !== currentRef && canRollback"
             class="button"
             type="button"
             :disabled="busy"
@@ -140,6 +149,12 @@ function confirmRollback(ref: string): void {
 .instruction-history__summary small,
 .instruction-history__current {
   color: var(--muted);
+}
+.instruction-history__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
 }
 .instruction-history details {
   margin-top: 8px;

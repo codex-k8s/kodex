@@ -20,6 +20,7 @@ const listRoleImageRecipesMock = vi.hoisted(() => vi.fn());
 const listRuntimeEnvironmentSetsMock = vi.hoisted(() => vi.fn());
 const listRuntimeEnvironmentVersionsMock = vi.hoisted(() => vi.fn());
 const publishRuntimeEnvironmentVersionMock = vi.hoisted(() => vi.fn());
+const rollbackRuntimeEnvironmentMock = vi.hoisted(() => vi.fn());
 const setRuntimeEnvironmentEnabledMock = vi.hoisted(() => vi.fn());
 const mutateMock = vi.hoisted(() => vi.fn());
 
@@ -64,6 +65,7 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   listRuntimeEnvironmentSets: listRuntimeEnvironmentSetsMock,
   listRuntimeEnvironmentVersions: listRuntimeEnvironmentVersionsMock,
   publishRuntimeEnvironmentVersion: publishRuntimeEnvironmentVersionMock,
+  rollbackRuntimeEnvironment: rollbackRuntimeEnvironmentMock,
   setRuntimeEnvironmentEnabled: setRuntimeEnvironmentEnabledMock,
 }));
 vi.mock("@/shared/api/client", () => ({
@@ -170,6 +172,7 @@ describe("runtime store", () => {
     listRuntimeEnvironmentAgentsMock.mockReset();
     listRuntimeEnvironmentVersionsMock.mockReset();
     publishRuntimeEnvironmentVersionMock.mockReset();
+    rollbackRuntimeEnvironmentMock.mockReset();
     setRuntimeEnvironmentEnabledMock.mockReset();
     mutateMock.mockReset();
     mutateMock.mockImplementation(
@@ -409,6 +412,36 @@ describe("runtime store", () => {
       expect.objectContaining({
         path: { environmentRef: "environment_main" },
         query: { pageSize: 30, pageToken: "cursor-2" },
+      }),
+    );
+  });
+
+  it("rollback публикует выбранную immutable revision как новую", async () => {
+    const environment = view("gpt-5.6-sol", 3).environment;
+    const restored = {
+      ...environment,
+      version: 4,
+      currentVersion: {
+        ...environment.currentVersion,
+        ref: "environment_version_restored",
+        revision: 4,
+      },
+    };
+    rollbackRuntimeEnvironmentMock.mockResolvedValueOnce(response(restored));
+    const store = useRuntimeStore();
+
+    await expect(
+      store.restoreEnvironment(environment, "environment_version_1"),
+    ).resolves.toEqual(restored);
+    expect(rollbackRuntimeEnvironmentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { environmentRef: environment.ref },
+        body: { publishedVersionRef: "environment_version_1" },
+        headers: {
+          "Idempotency-Key": "idem_1",
+          "If-Match": '"3"',
+          "X-CSRF-Token": "csrf_1",
+        },
       }),
     );
   });

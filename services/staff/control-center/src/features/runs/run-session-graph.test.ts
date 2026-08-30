@@ -77,6 +77,36 @@ describe("run session graph", () => {
     expect(projected.nodes.every(isRunSessionNode)).toBe(true);
   });
 
+  it("сворачивает служебный control-узел в связь между Session", () => {
+    const root = node("node_root", "ROOT_PROCESS");
+    const tool = node("node_tool", "EXTERNAL_ACTION", root.ref);
+    const agent = node("node_agent", "AGENT_EXECUTION", tool.ref);
+    const graph: RunGraph = {
+      runRef: root.runRef,
+      revision: 4,
+      sequence: 9,
+      nodes: [root, tool, agent],
+      edges: [
+        edge("edge_tool", root.ref, tool.ref),
+        edge("edge_agent", tool.ref, agent.ref),
+      ],
+    };
+
+    const projected = projectRunSessionGraph(graph);
+
+    expect(projected.nodes.map((item) => item.ref)).toEqual([
+      root.ref,
+      agent.ref,
+    ]);
+    expect(projected.edges).toEqual([
+      expect.objectContaining({
+        ref: "edge_agent",
+        sourceNodeRef: root.ref,
+        targetNodeRef: agent.ref,
+      }),
+    ]);
+  });
+
   it("привязывает tool и gate события к ближайшей родительской Session", () => {
     const root = node("node_root", "ROOT_PROCESS");
     const agent = node("node_agent", "AGENT_EXECUTION", root.ref);

@@ -86,7 +86,10 @@ describe("RuntimeSecretsWorkspace", () => {
     expect(html).toContain("CRM_TOKEN");
     expect(html).toContain("tok••••••9z");
     expect(html).not.toContain("raw-secret-plaintext");
+    expect(html).toContain("Создать секрет");
     expect(html).toContain("Показать значение секрета CRM_TOKEN");
+    expect(html).toContain("Ротировать секрет CRM_TOKEN");
+    expect(html).toContain("Отозвать секрет CRM_TOKEN");
 
     const buttonTag = (label: string): string => {
       const position = html.indexOf(label);
@@ -96,9 +99,8 @@ describe("RuntimeSecretsWorkspace", () => {
     expect(buttonTag("Показать значение секрета CRM_TOKEN")).not.toContain(
       "disabled",
     );
-    expect(html).not.toContain("secret.create");
-    expect(html).not.toContain("secret.rotate");
-    expect(html).not.toContain("secret.revoke");
+    expect(buttonTag("Ротировать секрет CRM_TOKEN")).not.toContain("disabled");
+    expect(buttonTag("Отозвать секрет CRM_TOKEN")).not.toContain("disabled");
     expect(html).not.toContain("nextAction");
   });
 });

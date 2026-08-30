@@ -66,6 +66,7 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -98,6 +99,7 @@ const versions = computed(() =>
 );
 const busy = ref(false);
 const problem = ref<AppProblem>();
+const deleteOpen = ref(false);
 const reauthRestored = ref(false);
 const activeSection = ref<EditorSection>("GENERAL");
 const editorForm = ref<HTMLFormElement>();
@@ -543,7 +545,6 @@ async function setEnabled(enabled: boolean): Promise<void> {
 
 async function remove(): Promise<void> {
   if (!current.value || !hasEnvironmentAction(current.value, "DELETE")) return;
-  if (!window.confirm(`${t("common.delete")} «${current.value.name}»?`)) return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -610,7 +611,7 @@ onMounted(() => void initialize());
         class="button button--danger"
         type="button"
         :disabled="busy"
-        @click="remove"
+        @click="deleteOpen = true"
       >
         <Trash2 :size="16" aria-hidden="true" />
         {{ $t("common.delete") }}
@@ -1584,6 +1585,41 @@ onMounted(() => void initialize());
       </div>
     </AsyncState>
   </PageFrame>
+  <ModalDialog
+    v-if="deleteOpen && current"
+    :title="`${t('common.delete')} «${current.name}»?`"
+    :busy="busy"
+    size="md"
+    @close="deleteOpen = false"
+  >
+    <div class="environment-delete-confirmation">
+      <Trash2 :size="24" aria-hidden="true" />
+      <div>
+        <strong>{{ current.name }}</strong>
+        <p>{{ current.description }}</p>
+        <StatusBadge :state="current.state" />
+      </div>
+    </div>
+    <template #actions>
+      <button
+        class="button"
+        type="button"
+        :disabled="busy"
+        @click="deleteOpen = false"
+      >
+        {{ t("common.cancel") }}
+      </button>
+      <button
+        class="button button--danger"
+        type="button"
+        :disabled="busy"
+        @click="remove"
+      >
+        <Trash2 :size="16" aria-hidden="true" />
+        {{ t("common.delete") }}
+      </button>
+    </template>
+  </ModalDialog>
 </template>
 
 <style scoped>
@@ -1635,6 +1671,19 @@ onMounted(() => void initialize());
   grid-template-columns: minmax(0, 1fr) minmax(290px, 0.27fr);
   gap: 16px;
   align-items: start;
+}
+.environment-delete-confirmation {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+.environment-delete-confirmation > svg {
+  color: var(--danger);
+}
+.environment-delete-confirmation p {
+  margin: 5px 0 10px;
+  color: var(--text-secondary);
 }
 .environment-editor {
   display: grid;

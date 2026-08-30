@@ -16,6 +16,7 @@ import { useRouter } from "vue-router";
 
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import {
+  buildIsActive,
   buildRevisionIdentity,
   canPromoteRoleImage,
   canRequestBuild,
@@ -24,6 +25,7 @@ import {
   validateDockerfile,
 } from "@/features/role-images/model";
 import { useRoleImagesStore } from "@/features/role-images/store";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
@@ -38,6 +40,7 @@ const name = ref("");
 const roleDefinitionRef = ref("");
 const environmentKey = ref("");
 const dockerfile = ref("");
+const confirmationAction = ref<"ARCHIVE" | "RESTORE">();
 const recipe = computed(() =>
   props.recipeRef ? store.recipes[props.recipeRef] : undefined,
 );
@@ -54,6 +57,19 @@ const revisions = computed(() =>
 const promotionReceipt = computed(() =>
   props.recipeRef ? store.promotionReceipts[props.recipeRef] : undefined,
 );
+const buildActive = computed(() =>
+  currentBuild.value ? buildIsActive(currentBuild.value) : false,
+);
+const promotionPending = computed(
+  () =>
+    !recipe.value?.promotedImageReady &&
+    ["QUEUED", "PROMOTING"].includes(promotionReceipt.value?.state ?? ""),
+);
+const promotionVisualState = computed(() => {
+  if (recipe.value?.promotedImageReady) return "PROMOTED";
+  if (promotionReceipt.value?.state === "PROMOTING") return "RUNNING";
+  return promotionReceipt.value?.state ?? "PENDING";
+});
 const dependencies = computed(() =>
   props.recipeRef ? (store.dependencies[props.recipeRef] ?? []) : [],
 );
@@ -83,6 +99,31 @@ const environmentLabel = computed(() => {
   const environment = store.environmentByKey.get(key);
   return environment ? t(environment.nameMessageKey) : key;
 });
+let buildPollTimer: ReturnType<typeof setTimeout> | undefined;
+let lifecyclePollAttempts = 0;
+
+function stopBuildPolling(): void {
+  if (buildPollTimer) clearTimeout(buildPollTimer);
+  buildPollTimer = undefined;
+}
+
+function scheduleBuildPolling(): void {
+  stopBuildPolling();
+  if (
+    !props.recipeRef ||
+    (!buildActive.value && !promotionPending.value) ||
+    lifecyclePollAttempts >= 150
+  )
+    return;
+  buildPollTimer = setTimeout(() => void refreshBuild(), 2000);
+}
+
+async function refreshBuild(): Promise<void> {
+  if (!props.recipeRef) return;
+  lifecyclePollAttempts += 1;
+  await store.loadDetail(props.projectRef, props.recipeRef, false);
+  scheduleBuildPolling();
+}
 
 function sync(): void {
   if (!recipe.value) return;
@@ -93,6 +134,7 @@ function sync(): void {
 }
 
 async function load(): Promise<void> {
+  lifecyclePollAttempts = 0;
   const tasks: Promise<void>[] = [
     store.loadSupportingCatalogs(props.projectRef),
   ];
@@ -106,6 +148,7 @@ async function load(): Promise<void> {
     if (recommended) selectEnvironment(recommended.key);
   }
   sync();
+  scheduleBuildPolling();
 }
 
 function selectEnvironment(key: string): void {
@@ -157,23 +200,20 @@ async function runCommand(
   action: "REQUEST_BUILD" | "ARCHIVE" | "RESTORE",
 ): Promise<void> {
   if (!recipe.value) return;
-  if (
-    action !== "REQUEST_BUILD" &&
-    !window.confirm(
-      t(
-        action === "ARCHIVE"
-          ? "roleImages.confirmArchive"
-          : "roleImages.confirmRestore",
-      ),
-    )
-  )
-    return;
   try {
     await store.command(props.projectRef, recipe.value, action);
+    lifecyclePollAttempts = 0;
+    confirmationAction.value = undefined;
     sync();
+    scheduleBuildPolling();
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
   }
+}
+
+async function confirmLifecycle(): Promise<void> {
+  if (!confirmationAction.value) return;
+  await runCommand(confirmationAction.value);
 }
 
 async function promote(): Promise<void> {
@@ -181,6 +221,8 @@ async function promote(): Promise<void> {
   if (!canPromoteRoleImage(recipe.value, artifact.value)) return;
   try {
     await store.promote(props.projectRef, recipe.value, artifact.value);
+    lifecyclePollAttempts = 0;
+    scheduleBuildPolling();
     sync();
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
@@ -189,10 +231,16 @@ async function promote(): Promise<void> {
 
 watch(
   () => [props.projectRef, props.recipeRef],
-  () => void load(),
+  () => {
+    stopBuildPolling();
+    void load();
+  },
 );
 onMounted(() => void load());
-onBeforeUnmount(() => store.dispose());
+onBeforeUnmount(() => {
+  stopBuildPolling();
+  store.dispose();
+});
 </script>
 
 <template>
@@ -241,7 +289,7 @@ onBeforeUnmount(() => store.dispose());
             class="button"
             type="button"
             :disabled="store.mutating"
-            @click="runCommand('ARCHIVE')"
+            @click="confirmationAction = 'ARCHIVE'"
           >
             <Archive :size="16" aria-hidden="true" />
             {{ t("common.archive") }}
@@ -251,7 +299,7 @@ onBeforeUnmount(() => store.dispose());
             class="button"
             type="button"
             :disabled="store.mutating"
-            @click="runCommand('RESTORE')"
+            @click="confirmationAction = 'RESTORE'"
           >
             <RotateCcw :size="16" aria-hidden="true" />
             {{ t("roleImages.restore") }}
@@ -267,6 +315,58 @@ onBeforeUnmount(() => store.dispose());
             {{ t("roleImages.promotion") }}
           </button>
         </div>
+      </section>
+
+      <section v-if="recipe" class="image-lifecycle" aria-live="polite">
+        <article class="panel lifecycle-step">
+          <Hammer :size="18" aria-hidden="true" />
+          <div>
+            <span>{{ t("roleImages.buildHistory") }}</span>
+            <strong>
+              {{
+                currentBuild
+                  ? t(`states.${currentBuild.stage}`)
+                  : t("states.PENDING")
+              }}
+            </strong>
+            <small v-if="currentBuild">
+              {{ currentBuild.progressPercent }}% ·
+              {{ new Date(currentBuild.updatedAt).toLocaleString() }}
+            </small>
+          </div>
+          <StatusBadge :state="currentBuild?.stage ?? 'PENDING'" />
+        </article>
+        <article class="panel lifecycle-step">
+          <ShieldCheck :size="18" aria-hidden="true" />
+          <div>
+            <span>{{ t("roleImages.admissionVerdict") }}</span>
+            <strong>
+              {{ artifact ? t("roleImages.evidence") : t("states.PENDING") }}
+            </strong>
+            <small v-if="artifact">{{ artifact.manifestDigest }}</small>
+          </div>
+          <StatusBadge
+            :state="artifact?.admissionVerdict ?? 'PENDING'"
+            :label="
+              artifact?.admissionVerdict === 'ACCEPTED'
+                ? t('states.APPROVED')
+                : artifact?.admissionVerdict === 'REJECTED'
+                  ? t('states.REJECTED')
+                  : t('states.PENDING')
+            "
+          />
+        </article>
+        <article class="panel lifecycle-step">
+          <PackageCheck :size="18" aria-hidden="true" />
+          <div>
+            <span>{{ t("roleImages.promotion") }}</span>
+            <strong>{{ t(`states.${promotionVisualState}`) }}</strong>
+            <small v-if="recipe.promotedImageReference">
+              {{ recipe.promotedImageReference }}
+            </small>
+          </div>
+          <StatusBadge :state="promotionVisualState" />
+        </article>
       </section>
 
       <div class="editor-layout">
@@ -592,6 +692,56 @@ onBeforeUnmount(() => store.dispose());
         </aside>
       </div>
     </template>
+    <ModalDialog
+      v-if="confirmationAction && recipe"
+      :title="
+        t(
+          confirmationAction === 'ARCHIVE'
+            ? 'roleImages.confirmArchive'
+            : 'roleImages.confirmRestore',
+        )
+      "
+      :busy="store.mutating"
+      size="md"
+      @close="confirmationAction = undefined"
+    >
+      <div class="lifecycle-confirmation">
+        <Box :size="24" aria-hidden="true" />
+        <div>
+          <strong>{{ recipe.name }}</strong>
+          <p>{{ roleLabel }}</p>
+        </div>
+      </div>
+      <template #actions>
+        <button
+          class="button"
+          type="button"
+          :disabled="store.mutating"
+          @click="confirmationAction = undefined"
+        >
+          {{ t("common.cancel") }}
+        </button>
+        <button
+          class="button"
+          :class="{ 'button--danger': confirmationAction === 'ARCHIVE' }"
+          type="button"
+          :disabled="store.mutating"
+          @click="confirmLifecycle"
+        >
+          <Archive
+            v-if="confirmationAction === 'ARCHIVE'"
+            :size="16"
+            aria-hidden="true"
+          />
+          <RotateCcw v-else :size="16" aria-hidden="true" />
+          {{
+            confirmationAction === "ARCHIVE"
+              ? t("common.archive")
+              : t("roleImages.restore")
+          }}
+        </button>
+      </template>
+    </ModalDialog>
   </div>
 </template>
 
@@ -603,6 +753,16 @@ onBeforeUnmount(() => store.dispose());
 .build-history {
   display: grid;
   gap: 16px;
+}
+.lifecycle-confirmation {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.lifecycle-confirmation p {
+  margin: 5px 0 0;
+  color: var(--text-secondary);
 }
 .editor-loading {
   display: grid;
@@ -644,6 +804,33 @@ onBeforeUnmount(() => store.dispose());
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+.image-lifecycle {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.lifecycle-step {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+}
+.lifecycle-step > svg {
+  margin-top: 2px;
+  color: var(--accent-strong);
+}
+.lifecycle-step > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.lifecycle-step span,
+.lifecycle-step small {
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .editor-layout {
   display: grid;
@@ -854,6 +1041,9 @@ onBeforeUnmount(() => store.dispose());
   white-space: nowrap;
 }
 @media (max-width: 1000px) {
+  .image-lifecycle {
+    grid-template-columns: 1fr;
+  }
   .editor-layout {
     grid-template-columns: minmax(0, 1fr);
   }

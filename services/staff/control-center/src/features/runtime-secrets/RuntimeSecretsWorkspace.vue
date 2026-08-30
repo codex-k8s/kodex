@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Eye, Search, ShieldCheck, ShieldX } from "@lucide/vue";
+import { Eye, Plus, RotateCw, Search, ShieldCheck, ShieldX } from "@lucide/vue";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -11,6 +11,8 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import type { RuntimeSecret } from "./model";
 import { canRuntimeSecretAction, maskedSecretHint } from "./model";
 import RuntimeSecretRevealDialog from "./RuntimeSecretRevealDialog.vue";
+import RuntimeSecretRevokeDialog from "./RuntimeSecretRevokeDialog.vue";
+import RuntimeSecretValueDialog from "./RuntimeSecretValueDialog.vue";
 import { useRuntimeSecretsStore } from "./store";
 
 const props = defineProps<{ projectRef: string }>();
@@ -18,8 +20,65 @@ const store = useRuntimeSecretsStore();
 const session = useSessionStore();
 const { locale } = useI18n();
 const search = ref("");
+const createOpen = ref(false);
+const rotateTarget = ref<RuntimeSecret>();
 const revealTarget = ref<RuntimeSecret>();
+const revokeTarget = ref<RuntimeSecret>();
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+function prepareMutation(): void {
+  store.clearMutationProblem();
+}
+
+function openCreate(): void {
+  prepareMutation();
+  createOpen.value = true;
+}
+
+function openRotate(secret: RuntimeSecret): void {
+  if (!canRuntimeSecretAction(secret, "ROTATE")) return;
+  prepareMutation();
+  rotateTarget.value = secret;
+}
+
+function openRevoke(secret: RuntimeSecret): void {
+  if (!canRuntimeSecretAction(secret, "REVOKE")) return;
+  prepareMutation();
+  revokeTarget.value = secret;
+}
+
+async function createSecret(
+  input: Parameters<typeof store.create>[0],
+): Promise<void> {
+  try {
+    await store.create(input);
+    createOpen.value = false;
+  } catch {
+    // Store передаёт безопасную problem-модель в открытый диалог.
+  }
+}
+
+async function rotateSecret(
+  input: Parameters<typeof store.rotate>[1],
+): Promise<void> {
+  if (!rotateTarget.value) return;
+  try {
+    await store.rotate(rotateTarget.value, input);
+    rotateTarget.value = undefined;
+  } catch {
+    // Store передаёт безопасную problem-модель в открытый диалог.
+  }
+}
+
+async function revokeSecret(): Promise<void> {
+  if (!revokeTarget.value) return;
+  try {
+    await store.revoke(revokeTarget.value);
+    revokeTarget.value = undefined;
+  } catch {
+    // Store передаёт безопасную problem-модель в открытый диалог.
+  }
+}
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(locale.value, {
@@ -85,6 +144,15 @@ onBeforeUnmount(() => {
         <span>{{
           $t("runtimeSecrets.shown", { count: store.items.length })
         }}</span>
+        <button
+          class="button button--primary"
+          type="button"
+          :disabled="Boolean(store.busyRef)"
+          @click="openCreate"
+        >
+          <Plus :size="16" aria-hidden="true" />
+          {{ $t("runtimeSecrets.create") }}
+        </button>
       </div>
     </header>
 
@@ -151,10 +219,43 @@ onBeforeUnmount(() => {
                     :aria-label="
                       $t('runtimeSecrets.revealNamed', { name: secret.name })
                     "
-                    :disabled="!canRuntimeSecretAction(secret, 'REVEAL')"
+                    :disabled="
+                      Boolean(store.busyRef) ||
+                      !canRuntimeSecretAction(secret, 'REVEAL')
+                    "
                     @click="revealTarget = secret"
                   >
                     <Eye :size="17" aria-hidden="true" />
+                  </button>
+                  <button
+                    class="icon-button"
+                    type="button"
+                    :title="$t('runtimeSecrets.rotate')"
+                    :aria-label="
+                      $t('runtimeSecrets.rotateNamed', { name: secret.name })
+                    "
+                    :disabled="
+                      Boolean(store.busyRef) ||
+                      !canRuntimeSecretAction(secret, 'ROTATE')
+                    "
+                    @click="openRotate(secret)"
+                  >
+                    <RotateCw :size="17" aria-hidden="true" />
+                  </button>
+                  <button
+                    class="icon-button icon-button--danger"
+                    type="button"
+                    :title="$t('runtimeSecrets.revoke')"
+                    :aria-label="
+                      $t('runtimeSecrets.revokeNamed', { name: secret.name })
+                    "
+                    :disabled="
+                      Boolean(store.busyRef) ||
+                      !canRuntimeSecretAction(secret, 'REVOKE')
+                    "
+                    @click="openRevoke(secret)"
+                  >
+                    <ShieldX :size="17" aria-hidden="true" />
                   </button>
                 </div>
               </td>
@@ -183,6 +284,29 @@ onBeforeUnmount(() => {
     v-if="revealTarget"
     :secret="revealTarget"
     @close="revealTarget = undefined"
+  />
+  <RuntimeSecretValueDialog
+    v-if="createOpen"
+    :busy="store.busyRef === 'create'"
+    :problem="store.mutationProblem"
+    @close="createOpen = false"
+    @create="createSecret"
+  />
+  <RuntimeSecretValueDialog
+    v-if="rotateTarget"
+    :secret="rotateTarget"
+    :busy="store.busyRef === rotateTarget.ref"
+    :problem="store.mutationProblem"
+    @close="rotateTarget = undefined"
+    @rotate="rotateSecret"
+  />
+  <RuntimeSecretRevokeDialog
+    v-if="revokeTarget"
+    :secret="revokeTarget"
+    :busy="store.busyRef === revokeTarget.ref"
+    :problem="store.mutationProblem"
+    @close="revokeTarget = undefined"
+    @confirm="revokeSecret"
   />
 </template>
 

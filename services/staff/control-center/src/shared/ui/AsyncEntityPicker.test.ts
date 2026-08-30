@@ -8,6 +8,7 @@ import {
   createCursorIntersectionHandler,
   nearScrollEnd,
   useAsyncEntityCollection,
+  virtualWindow,
   type AsyncEntityLoadRequest,
   type AsyncEntityPickerItem,
   type AsyncEntityPage,
@@ -206,6 +207,63 @@ describe("cursor infinite scroll", () => {
     expect(
       nearScrollEnd({ clientHeight: 200, scrollHeight: 500, scrollTop: 100 }),
     ).toBe(false);
+  });
+});
+
+describe("virtual window", () => {
+  it("ограничивает DOM видимыми строками списка с overscan", () => {
+    expect(
+      virtualWindow({
+        itemCount: 1_000,
+        itemHeight: 64,
+        scrollTop: 6_400,
+        viewportHeight: 384,
+        overscan: 2,
+      }),
+    ).toEqual({
+      startIndex: 98,
+      endIndex: 108,
+      paddingBefore: 6_272,
+      paddingAfter: 57_088,
+    });
+  });
+
+  it("виртуализирует сетку целыми строками и сохраняет общий размер", () => {
+    const window = virtualWindow({
+      itemCount: 101,
+      columns: 3,
+      itemHeight: 198,
+      scrollTop: 1_980,
+      viewportHeight: 396,
+      overscan: 1,
+    });
+
+    expect(window.startIndex % 3).toBe(0);
+    expect(window.endIndex - window.startIndex).toBeLessThanOrEqual(12);
+    expect(window).toEqual({
+      startIndex: 27,
+      endIndex: 39,
+      paddingBefore: 1_782,
+      paddingAfter: 4_158,
+    });
+  });
+
+  it("ограничивает окно последними строками после сокращения выборки", () => {
+    expect(
+      virtualWindow({
+        itemCount: 7,
+        columns: 3,
+        itemHeight: 198,
+        scrollTop: 20_000,
+        viewportHeight: 396,
+        overscan: 1,
+      }),
+    ).toEqual({
+      startIndex: 3,
+      endIndex: 7,
+      paddingBefore: 198,
+      paddingAfter: 0,
+    });
   });
 });
 

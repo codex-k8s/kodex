@@ -59,6 +59,23 @@ describe("agent catalog model", () => {
     expect(agentStatusTone("DISABLED")).toBe("neutral");
   });
 
+  it("использует canonical artifact avatar из Agent read-model", () => {
+    const item = toAgentCatalogItem(
+      agent({
+        avatar: {
+          source: "ARTIFACT",
+          artifactRef: "art_avatar01",
+          artifactRevision: 3,
+          contentPath: "/api/v1/artifacts/art_avatar01/content?purpose=PREVIEW",
+        },
+      }),
+    );
+
+    expect(item.avatarUrl).toBe(
+      "/api/v1/artifacts/art_avatar01/content?purpose=PREVIEW",
+    );
+  });
+
   it("строго разбирает сохранённый режим каталога", () => {
     expect(parseAgentCatalogView("list")).toBe("list");
     expect(parseAgentCatalogView("unknown")).toBe("grid");

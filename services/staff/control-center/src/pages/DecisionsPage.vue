@@ -39,6 +39,7 @@ import type {
 } from "@/shared/ui/attachment-composer";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const platform = usePlatformStore();
@@ -57,6 +58,7 @@ const validationMessages = ref<Record<string, string>>({});
 const attachmentStates = ref<Record<string, AttachmentComposerState>>({});
 const selectedAttachmentComposer = ref<AttachmentComposerHandle>();
 const resolutionAttachmentSets = ref<Record<string, AttachmentSet>>({});
+const sourceAttachmentSets = ref<Record<string, AttachmentSet>>({});
 const busyRef = ref("");
 const problem = ref<AppProblem>();
 const successMessage = ref("");
@@ -153,15 +155,23 @@ function runNodePath(item: DecisionInboxItem) {
 }
 
 let attachmentLoadGeneration = 0;
-async function loadResolutionAttachments(gate?: OwnerGate): Promise<void> {
+async function loadDecisionAttachments(gate?: OwnerGate): Promise<void> {
   const generation = ++attachmentLoadGeneration;
-  if (!gate?.resolutionAttachmentSetRef) return;
+  if (!gate) return;
   try {
-    const attachmentSet = await readAttachmentSet(
-      gate.resolutionAttachmentSetRef,
-    );
-    if (generation === attachmentLoadGeneration)
-      resolutionAttachmentSets.value[gate.ref] = attachmentSet;
+    const [sourceAttachmentSet, resolutionAttachmentSet] = await Promise.all([
+      gate.sourceAttachmentSetRef
+        ? readAttachmentSet(gate.sourceAttachmentSetRef)
+        : undefined,
+      gate.resolutionAttachmentSetRef
+        ? readAttachmentSet(gate.resolutionAttachmentSetRef)
+        : undefined,
+    ]);
+    if (generation !== attachmentLoadGeneration) return;
+    if (sourceAttachmentSet)
+      sourceAttachmentSets.value[gate.ref] = sourceAttachmentSet;
+    if (resolutionAttachmentSet)
+      resolutionAttachmentSets.value[gate.ref] = resolutionAttachmentSet;
   } catch (error) {
     if (generation === attachmentLoadGeneration)
       problem.value = asProblem(error);
@@ -184,6 +194,10 @@ function decisionConsequence(
   gate: OwnerGate,
   decision: DecisionAction,
 ): string {
+  const exact = gate.decisionConsequences.find(
+    (consequence) => consequence.decision === decision,
+  );
+  if (exact?.safeSummary.trim()) return exact.safeSummary;
   if (decision === "APPROVE")
     return (
       gate.consequencesSummary.trim() || t("decisions.consequencesUnavailable")
@@ -281,7 +295,7 @@ watch(
       const primary = decisionActionLayout(gate).primary;
       if (primary) decisionDrafts.value[gate.ref] = primary;
     }
-    void loadResolutionAttachments(gate);
+    void loadDecisionAttachments(gate);
     if (pageMounted) void loadGateAudit(gate);
   },
   { immediate: true },
@@ -448,9 +462,7 @@ onMounted(() => {
                   </small>
                   <small class="decision-row__route">
                     {{ item.run?.target.displayName }} ·
-                    {{ item.run?.title ?? $t("decisions.runUnavailable") }} ·
-                    {{ item.run?.sessionRef ?? "Session недоступна" }} ·
-                    {{ item.gate.nodeRef }}
+                    {{ item.run?.title ?? $t("decisions.runUnavailable") }}
                   </small>
                 </span>
                 <span class="decision-row__status">
@@ -501,16 +513,20 @@ onMounted(() => {
               </dd>
             </div>
             <div>
-              <dt>Session</dt>
+              <dt>{{ $t("runs.sessionNode") }}</dt>
               <dd>
-                <code>{{ selected.run?.sessionRef ?? "не представлена" }}</code>
+                <span v-if="selected.run">
+                  {{ selected.run.target.displayName }} ·
+                  {{ $t("runs.attempt", { attempt: selected.run.attempt }) }}
+                </span>
+                <span v-else>{{ $t("common.unavailable") }}</span>
               </dd>
             </div>
             <div>
-              <dt>Node</dt>
+              <dt>{{ $t("runs.context") }}</dt>
               <dd>
                 <RouterLink :to="runNodePath(selected)">
-                  <code>{{ selected.gate.nodeRef }}</code>
+                  {{ $t("decisions.openNode") }}
                 </RouterLink>
               </dd>
             </div>
@@ -569,21 +585,27 @@ onMounted(() => {
               </dt>
               <dd>
                 <span
-                  v-if="resolutionAttachmentSets[selected.gate.ref]"
+                  v-if="
+                    view === 'HISTORY'
+                      ? resolutionAttachmentSets[selected.gate.ref]
+                      : sourceAttachmentSets[selected.gate.ref]
+                  "
                   class="decision-attachment-summary"
                 >
                   {{
                     $t("decisions.evidenceCount", {
                       count:
-                        resolutionAttachmentSets[selected.gate.ref]
-                          ?.itemCount ?? 0,
+                        (view === "HISTORY"
+                          ? resolutionAttachmentSets[selected.gate.ref]
+                          : sourceAttachmentSets[selected.gate.ref]
+                        )?.itemCount ?? 0,
                     })
                   }}
                 </span>
                 <span v-else-if="view === 'HISTORY'">{{
                   $t("decisions.noEvidence")
                 }}</span>
-                <span v-else>Вложения исходного запроса не представлены</span>
+                <span v-else>{{ $t("decisions.noEvidence") }}</span>
               </dd>
             </div>
           </dl>
@@ -607,6 +629,29 @@ onMounted(() => {
                   : $t("decisions.consequencesUnavailable")
               }}
             </p>
+          </section>
+
+          <section
+            v-if="selected.gate.integrationIntent"
+            class="decision-integration-intent"
+          >
+            <h3>{{ $t("nav.integrations") }}</h3>
+            <dl>
+              <div>
+                <dt>{{ $t("integrations.connections") }}</dt>
+                <dd>{{ selected.gate.integrationIntent.connectionName }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("common.actions") }}</dt>
+                <dd>
+                  {{ selected.gate.integrationIntent.operation }} ·
+                  {{ selected.gate.integrationIntent.capabilityKey }}
+                </dd>
+              </div>
+            </dl>
+            <SafeStructuredData
+              :value="selected.gate.integrationIntent.effectPreview"
+            />
           </section>
 
           <section
@@ -1003,6 +1048,32 @@ onMounted(() => {
   border-left: 3px solid var(--warning);
   background: var(--warning-soft);
 }
+.decision-integration-intent {
+  display: grid;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+}
+.decision-integration-intent h3,
+.decision-integration-intent dl {
+  margin: 0;
+}
+.decision-integration-intent dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.decision-integration-intent dt {
+  color: var(--subtle);
+  font-size: 0.74rem;
+}
+.decision-integration-intent dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
 .decision-audit {
   display: grid;
   gap: 9px;
@@ -1205,6 +1276,9 @@ onMounted(() => {
     padding: 16px;
   }
   .decision-meta {
+    grid-template-columns: 1fr;
+  }
+  .decision-integration-intent dl {
     grid-template-columns: 1fr;
   }
   .decision-audit li,

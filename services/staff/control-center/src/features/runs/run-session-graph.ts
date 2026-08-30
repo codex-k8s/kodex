@@ -39,9 +39,29 @@ export function indexRunSessionOwnership(
 }
 
 export function projectRunSessionGraph(graph: RunGraph): RunGraph {
+  const ownership = indexRunSessionOwnership(graph.nodes);
   const nodes = graph.nodes.filter(isRunSessionNode);
   const nodeRefs = new Set(nodes.map((node) => node.ref));
-  const edges = graph.edges.filter((edge) => sessionEdge(edge, nodeRefs));
+  const edges: RunEdge[] = [];
+  const projectedEdges = new Set<string>();
+
+  for (const edge of graph.edges) {
+    const sourceNodeRef = ownership.get(edge.sourceNodeRef);
+    const targetNodeRef = ownership.get(edge.targetNodeRef);
+    if (
+      !sourceNodeRef ||
+      !targetNodeRef ||
+      sourceNodeRef === targetNodeRef ||
+      !nodeRefs.has(sourceNodeRef) ||
+      !nodeRefs.has(targetNodeRef)
+    ) {
+      continue;
+    }
+    const key = `${sourceNodeRef}\u0000${targetNodeRef}\u0000${edge.type}`;
+    if (projectedEdges.has(key)) continue;
+    projectedEdges.add(key);
+    edges.push({ ...edge, sourceNodeRef, targetNodeRef });
+  }
 
   return { ...graph, nodes, edges };
 }
@@ -67,8 +87,4 @@ export function resolveRunSessionSelection(
     nodes.find((node) => node.state === "SUCCEEDED")?.ref ??
     nodes[0]?.ref
   );
-}
-
-function sessionEdge(edge: RunEdge, nodeRefs: ReadonlySet<string>): boolean {
-  return nodeRefs.has(edge.sourceNodeRef) && nodeRefs.has(edge.targetNodeRef);
 }

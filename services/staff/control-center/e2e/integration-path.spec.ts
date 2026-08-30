@@ -28,8 +28,10 @@ interface Agent extends VersionedRef {
 }
 
 interface Connection extends VersionedRef {
+  readonly name: string;
   readonly state: string;
   readonly credentialsConfigured: boolean;
+  readonly publicConfiguration: Readonly<Record<string, unknown>>;
 }
 
 interface Run {
@@ -236,6 +238,14 @@ test.describe("deployed local integration path", () => {
     expect(final).toMatchObject({ count: 1, value: replayValue });
     expect(final.last_effect_key).not.toBe("");
     expect(final.last_replay_effect_key).toBe(final.last_effect_key);
+    connection = await updateConnection(page, connection, {
+      name: `${environment.resourcePrefix} — synthetic updated`,
+      publicConfiguration: { journal },
+    });
+    expect(connection.name).toContain("synthetic updated");
+    expect(connection.publicConfiguration).toEqual({ journal });
+    connection = await deleteConnection(page, connection);
+    expect(connection.state).toBe("DELETED");
   });
 
   test("опциональный GitHub READ и обратимый WRITE проходят через MCP", async ({
@@ -448,6 +458,35 @@ async function commandConnection(
     method: "POST",
     path: `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}/commands`,
     body: { action },
+    version: connection.version,
+    expectedStatus: 200,
+  });
+}
+
+async function updateConnection(
+  page: Page,
+  connection: Connection,
+  input: {
+    name: string;
+    publicConfiguration: Record<string, string>;
+  },
+): Promise<Connection> {
+  return mutateAPI<Connection>(page, {
+    method: "PATCH",
+    path: `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}`,
+    body: input,
+    version: connection.version,
+    expectedStatus: 200,
+  });
+}
+
+async function deleteConnection(
+  page: Page,
+  connection: Connection,
+): Promise<Connection> {
+  return mutateAPI<Connection>(page, {
+    method: "DELETE",
+    path: `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}`,
     version: connection.version,
     expectedStatus: 200,
   });

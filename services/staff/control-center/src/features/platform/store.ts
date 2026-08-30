@@ -27,6 +27,7 @@ import {
   createRun,
   createSchedule,
   createWorkflow,
+  deleteIntegrationConnection,
   deleteArtifact,
   downloadArtifact,
   getAdministration,
@@ -67,6 +68,7 @@ import {
   removeProjectMembership,
   removePlatformMembership,
   updateAgent,
+  updateIntegrationConnection,
   updateProject,
   updateRoleImageRecipe,
   updateSchedule,
@@ -89,6 +91,7 @@ import type {
   IntegrationConnection,
   IntegrationConnectionCommand,
   IntegrationConnectionInput,
+  IntegrationConnectionUpdateInput,
   IntegrationGrantInput,
   IntegrationDefinition,
   InstructionVersion,
@@ -1546,6 +1549,40 @@ export const usePlatformStore = defineStore("platform", () => {
     }
   }
 
+  async function updateConnection(
+    connection: IntegrationConnection,
+    input: IntegrationConnectionUpdateInput,
+  ): Promise<IntegrationConnection> {
+    const result = await mutate(
+      (headers) =>
+        updateIntegrationConnection({
+          path: { connectionRef: connection.ref },
+          body: input,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      connection.version,
+    );
+    connections[result.data.ref] = result.data;
+    return result.data;
+  }
+
+  async function deleteConnection(
+    connection: IntegrationConnection,
+  ): Promise<IntegrationConnection> {
+    const result = await mutate(
+      (headers) =>
+        deleteIntegrationConnection({
+          path: { connectionRef: connection.ref },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      connection.version,
+    );
+    connections[result.data.ref] = result.data;
+    return result.data;
+  }
+
   async function changeConnection(
     connection: IntegrationConnection,
     action: IntegrationConnectionCommand["action"],
@@ -1842,6 +1879,8 @@ export const usePlatformStore = defineStore("platform", () => {
     changeSchedule,
     connectIntegration,
     configureConnectionCredential,
+    updateConnection,
+    deleteConnection,
     changeConnection,
     changeConnectionGrant,
     updateAssistantInstructions,

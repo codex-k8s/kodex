@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import {
-  CircleAlert,
   Layers3,
   Plus,
+  Power,
   PowerOff,
   Search,
+  ShieldCheck,
   Trash2,
 } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -18,6 +19,7 @@ import {
 } from "@/features/runtime/environment-capabilities";
 import type { RuntimeEnvironmentSet } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -45,6 +47,7 @@ const selectedAgents = computed(() =>
   selected.value ? (runtime.environmentAgents[selected.value.ref] ?? []) : [],
 );
 const actionRef = ref("");
+const deleteTarget = ref<RuntimeEnvironmentSet>();
 let generation = 0;
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -120,12 +123,12 @@ async function setEnabled(
 
 async function remove(environment: RuntimeEnvironmentSet): Promise<void> {
   if (!hasEnvironmentAction(environment, "DELETE")) return;
-  if (!window.confirm(`${t("common.delete")} «${environment.name}»?`)) return;
   actionRef.value = environment.ref;
   problem.value = undefined;
   try {
     const saved = await runtime.removeEnvironment(environment);
     replaceItem(saved);
+    deleteTarget.value = undefined;
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -272,7 +275,7 @@ onBeforeUnmount(() => {
                       :aria-label="$t('common.disable')"
                       @click="setEnabled(environment, false)"
                     >
-                      <PowerOff :size="16" aria-hidden="true" />
+                      <Power :size="16" aria-hidden="true" />
                     </button>
                     <button
                       v-if="hasEnvironmentAction(environment, 'ENABLE')"
@@ -292,7 +295,7 @@ onBeforeUnmount(() => {
                       :disabled="actionRef === environment.ref"
                       :title="$t('common.delete')"
                       :aria-label="$t('common.delete')"
-                      @click="remove(environment)"
+                      @click="deleteTarget = environment"
                     >
                       <Trash2 :size="16" aria-hidden="true" />
                     </button>
@@ -378,12 +381,46 @@ onBeforeUnmount(() => {
             </div>
             <p v-else>{{ $t("common.empty") }}</p>
           </section>
-          <section class="environment-boundary" role="note">
-            <CircleAlert :size="17" aria-hidden="true" />
-            <div>
-              <strong>{{ $t("runtime.effectivePolicyPreview") }}</strong>
-              <p>{{ $t("runtime.catalogCapabilityBoundary") }}</p>
-            </div>
+          <section class="environment-policy-readback">
+            <h3>
+              <ShieldCheck :size="17" aria-hidden="true" />
+              {{ $t("runtime.effectivePolicyPreview") }}
+            </h3>
+            <dl>
+              <div>
+                <dt>{{ $t("runtime.resources") }}</dt>
+                <dd>
+                  {{
+                    selected.currentVersion.policy.resources.cpuRequestMilli
+                  }}/{{
+                    selected.currentVersion.policy.resources.cpuLimitMilli
+                  }}m CPU ·
+                  {{
+                    selected.currentVersion.policy.resources.memoryRequestMib
+                  }}/{{
+                    selected.currentVersion.policy.resources.memoryLimitMib
+                  }}
+                  MiB
+                </dd>
+              </div>
+              <div>
+                <dt>{{ $t("runtime.ephemeralVolumes") }}</dt>
+                <dd>{{ selected.currentVersion.policy.volumes.length }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("runtime.networkPolicy") }}</dt>
+                <dd>
+                  {{ selected.currentVersion.policy.network.egress.length }} ·
+                  {{ $t("runtime.denyByDefault") }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ $t("runtime.kubernetesRbac") }}</dt>
+                <dd>
+                  {{ selected.currentVersion.policy.kubernetesAccess.kind }}
+                </dd>
+              </div>
+            </dl>
           </section>
           <section class="environment-lifecycle">
             <h3>{{ $t("runtime.readiness") }}</h3>
@@ -447,12 +484,60 @@ onBeforeUnmount(() => {
       </div>
     </section>
   </PageFrame>
+  <ModalDialog
+    v-if="deleteTarget"
+    :title="`${t('common.delete')} «${deleteTarget.name}»?`"
+    :busy="actionRef === deleteTarget.ref"
+    size="md"
+    @close="deleteTarget = undefined"
+  >
+    <div class="environment-delete-confirmation">
+      <Trash2 :size="24" aria-hidden="true" />
+      <div>
+        <strong>{{ deleteTarget.name }}</strong>
+        <p>{{ deleteTarget.description }}</p>
+        <StatusBadge :state="deleteTarget.state" />
+      </div>
+    </div>
+    <template #actions>
+      <button
+        class="button"
+        type="button"
+        :disabled="actionRef === deleteTarget.ref"
+        @click="deleteTarget = undefined"
+      >
+        {{ t("common.cancel") }}
+      </button>
+      <button
+        class="button button--danger"
+        type="button"
+        :disabled="actionRef === deleteTarget.ref"
+        @click="remove(deleteTarget)"
+      >
+        <Trash2 :size="16" aria-hidden="true" />
+        {{ t("common.delete") }}
+      </button>
+    </template>
+  </ModalDialog>
 </template>
 
 <style scoped>
 .environment-registry {
   padding: 0;
   overflow: hidden;
+}
+.environment-delete-confirmation {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+.environment-delete-confirmation > svg {
+  color: var(--danger);
+}
+.environment-delete-confirmation p {
+  margin: 5px 0 10px;
+  color: var(--text-secondary);
 }
 .environment-toolbar {
   display: flex;
@@ -616,15 +701,22 @@ onBeforeUnmount(() => {
 .environment-loading--hint {
   color: var(--text-secondary);
 }
-.environment-boundary {
-  display: flex;
-  gap: 9px;
-  padding: 11px 0;
+.environment-policy-readback {
+  padding: 12px 0;
   border-top: 1px solid var(--hairline);
-  color: var(--text-secondary);
 }
-.environment-boundary p {
-  margin: 4px 0 0;
+.environment-policy-readback h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.environment-policy-readback h3 svg {
+  color: var(--accent-strong);
+}
+.environment-policy-readback dd {
+  max-width: 210px;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 @media (max-width: 780px) {
   .environment-toolbar {

@@ -4,8 +4,13 @@ import {
   homeFailedRuns,
   homeOpenGates,
   homeResumableSessions,
+  prioritizeHomeProjects,
 } from "@/features/home/model";
-import type { OwnerGate, Run } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  OwnerGate,
+  Project,
+  Run,
+} from "@/shared/api/generated/openapi/types.gen";
 
 function run(
   ref: string,
@@ -75,6 +80,36 @@ function gate(
 }
 
 describe("home attention model", () => {
+  it("поднимает Проекты с решениями и активной работой выше просто недавних", () => {
+    const project = (
+      ref: string,
+      pendingGateCount: number,
+      activeRunCount: number,
+      updatedAt: string,
+    ): Project => ({
+      ref,
+      version: 1,
+      name: ref,
+      purpose: ref,
+      language: "ru",
+      lifecycle: "ACTIVE",
+      agentCount: 0,
+      workflowCount: 0,
+      activeRunCount,
+      pendingGateCount,
+      updatedAt,
+      nextActions: [],
+    });
+
+    expect(
+      prioritizeHomeProjects([
+        project("recent", 0, 0, "2026-08-31T12:00:00Z"),
+        project("running", 0, 2, "2026-08-30T12:00:00Z"),
+        project("decision", 1, 0, "2026-08-29T12:00:00Z"),
+      ]).map((item) => item.ref),
+    ).toEqual(["decision", "running", "recent"]);
+  });
+
   it("показывает только открытые решения и сортирует ближайший срок первым", () => {
     const result = homeOpenGates([
       gate("later", "OPEN", { expiresAt: "2026-08-31T10:00:00Z" }),

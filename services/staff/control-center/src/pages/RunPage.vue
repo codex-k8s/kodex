@@ -211,6 +211,11 @@ const selectedAgent = computed(() =>
     ? platform.agents[selectedNode.value.agentRef]
     : undefined,
 );
+const selectedRun = computed(() =>
+  selectedNode.value
+    ? (platform.runs[selectedNode.value.runRef] ?? run.value)
+    : run.value,
+);
 const futureNodeRefs = computed(() =>
   (sessionGraph.value?.nodes ?? [])
     .filter(
@@ -732,6 +737,7 @@ onBeforeUnmount(() => {
               :nodes="allRunNodes"
               :artifacts="artifactList"
               :project-ref="routeProjectRef ?? run.projectRef"
+              :run="selectedRun"
               :agent="selectedAgent"
               @close="nodeInspectorOpen = false"
               @activity="openActivity"
@@ -777,7 +783,8 @@ onBeforeUnmount(() => {
         </div>
         <RunSessionDetailsDialog
           v-if="selectedNode && nodeDetailsOpen"
-          :run="run"
+          :run="selectedRun ?? run"
+          :root-run="run"
           :node="selectedNode"
           :nodes="allRunNodes"
           :events="eventList"

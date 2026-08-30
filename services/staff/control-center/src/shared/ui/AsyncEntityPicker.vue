@@ -14,12 +14,13 @@ import {
   RefreshCw,
   Search,
 } from "@lucide/vue";
-import { computed, ref, useId, watch } from "vue";
+import { computed, nextTick, onScopeDispose, ref, useId, watch } from "vue";
 
 import {
   nearScrollEnd,
   useAsyncEntityCollection,
   useCursorInfiniteScroll,
+  virtualWindow,
   type AsyncEntityLoader,
   type AsyncEntityOption,
   type AsyncEntityOptionPage,
@@ -60,6 +61,10 @@ const props = defineProps<{
   ) => Promise<AsyncEntityOptionPage>;
   placeholder?: string;
   searchPlaceholder?: string;
+  virtualize?: boolean;
+  virtualItemHeight?: number;
+  virtualColumns?: number;
+  virtualOverscan?: number;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: PickerValue];
@@ -73,6 +78,9 @@ const list = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const open = ref(false);
 const activeIndex = ref(-1);
+const scrollTop = ref(0);
+const viewportHeight = ref(360);
+let resizeObserver: ResizeObserver | undefined;
 
 const loader: AsyncEntityLoader<PickerEntry> = async (request) => {
   if (props.loadItems) {
@@ -152,12 +160,42 @@ const selectedOption = computed(() => {
     : undefined;
 });
 const activeDescendant = computed(() => {
+  if (
+    virtualized.value &&
+    (activeIndex.value < virtualRange.value.startIndex ||
+      activeIndex.value >= virtualRange.value.endIndex)
+  )
+    return undefined;
   const item = items.value[activeIndex.value];
   return item ? `${pickerId}-option-${item.id}` : undefined;
 });
 const infiniteScrollEnabled = computed(
   () => (inline || open.value) && hasMore.value,
 );
+const virtualized = computed(() => inline && props.virtualize);
+const virtualRange = computed(() =>
+  virtualWindow({
+    itemCount: items.value.length,
+    columns: props.virtualColumns ?? 1,
+    itemHeight: props.virtualItemHeight ?? 64,
+    scrollTop: scrollTop.value,
+    viewportHeight: viewportHeight.value,
+    overscan: props.virtualOverscan ?? 3,
+  }),
+);
+const renderedItems = computed(() => {
+  const range = virtualized.value
+    ? virtualRange.value
+    : {
+        startIndex: 0,
+        endIndex: items.value.length,
+        paddingBefore: 0,
+        paddingAfter: 0,
+      };
+  return items.value
+    .slice(range.startIndex, range.endIndex)
+    .map((item, offset) => ({ item, index: range.startIndex + offset }));
+});
 
 watch(items, (nextItems, previousItems) => {
   const previousActiveId = previousItems[activeIndex.value]?.id;
@@ -169,6 +207,26 @@ watch(items, (nextItems, previousItems) => {
       ? preservedIndex
       : nextItems.findIndex((item) => !item.disabled);
 });
+watch(query, () => {
+  scrollTop.value = 0;
+  if (list.value) list.value.scrollTop = 0;
+});
+watch(
+  list,
+  (element) => {
+    resizeObserver?.disconnect();
+    resizeObserver = undefined;
+    if (!element) return;
+    viewportHeight.value = element.clientHeight || viewportHeight.value;
+    if (typeof ResizeObserver === "undefined") return;
+    resizeObserver = new ResizeObserver(([entry]) => {
+      if (entry) viewportHeight.value = entry.contentRect.height;
+    });
+    resizeObserver.observe(element);
+  },
+  { flush: "post" },
+);
+onScopeDispose(() => resizeObserver?.disconnect());
 useCursorInfiniteScroll({
   root: list,
   sentinel,
@@ -207,17 +265,46 @@ function chooseDropdown(item: PickerEntry): void {
 }
 function moveActive(direction: 1 | -1): void {
   if (!items.value.length) return;
-  let index = activeIndex.value;
+  const activeIsRendered =
+    !virtualized.value ||
+    (activeIndex.value >= virtualRange.value.startIndex &&
+      activeIndex.value < virtualRange.value.endIndex);
+  let index = activeIsRendered
+    ? activeIndex.value
+    : direction > 0
+      ? virtualRange.value.startIndex - 1
+      : Math.min(items.value.length, virtualRange.value.endIndex);
   for (let attempts = 0; attempts < items.value.length; attempts += 1) {
     index = (index + direction + items.value.length) % items.value.length;
     if (!items.value[index]?.disabled) {
       activeIndex.value = index;
-      document
-        .getElementById(activeDescendant.value ?? "")
-        ?.scrollIntoView({ block: "nearest" });
+      ensureIndexVisible(index);
       return;
     }
   }
+}
+function ensureIndexVisible(index: number): void {
+  if (!virtualized.value || !list.value) {
+    document
+      .getElementById(activeDescendant.value ?? "")
+      ?.scrollIntoView({ block: "nearest" });
+    return;
+  }
+  const columns = Math.max(1, props.virtualColumns ?? 1);
+  const itemHeight = Math.max(1, props.virtualItemHeight ?? 64);
+  const row = Math.floor(index / columns);
+  const itemTop = row * itemHeight;
+  const itemBottom = itemTop + itemHeight;
+  const viewportBottom = list.value.scrollTop + list.value.clientHeight;
+  if (itemTop < list.value.scrollTop) list.value.scrollTop = itemTop;
+  else if (itemBottom > viewportBottom)
+    list.value.scrollTop = itemBottom - list.value.clientHeight;
+  scrollTop.value = list.value.scrollTop;
+  void nextTick(() =>
+    document
+      .getElementById(activeDescendant.value ?? "")
+      ?.scrollIntoView({ block: "nearest" }),
+  );
 }
 function handleListKeydown(event: KeyboardEvent, dropdown: boolean): void {
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -234,8 +321,10 @@ function handleListKeydown(event: KeyboardEvent, dropdown: boolean): void {
 }
 function handleScroll(event: Event): void {
   const target = event.currentTarget;
-  if (target instanceof HTMLElement && hasMore.value && nearScrollEnd(target))
-    void loadMore();
+  if (!(target instanceof HTMLElement)) return;
+  scrollTop.value = target.scrollTop;
+  viewportHeight.value = target.clientHeight || viewportHeight.value;
+  if (hasMore.value && nearScrollEnd(target)) void loadMore();
 }
 function close(): void {
   open.value = false;
@@ -314,38 +403,60 @@ function handlePopoverOpen(value: boolean): void {
         <Search :size="20" aria-hidden="true" />{{ copy.empty }}
       </div>
       <template v-else>
-        <button
-          v-for="(item, index) in items"
-          :id="`${pickerId}-option-${item.id}`"
-          :key="item.id"
-          type="button"
-          class="async-picker__option"
-          :class="{
-            'async-picker__option--active': index === activeIndex,
-            'async-picker__option--selected': isSelected(item),
-          }"
-          role="option"
-          :aria-selected="isSelected(item)"
-          :disabled="disabled || item.disabled"
-          @mouseenter="activeIndex = index"
-          @click="chooseInline(item)"
-        >
-          <slot
-            name="option"
-            :item="item.source as T"
-            :selected="isSelected(item)"
-            ><span
-              class="async-picker__option-copy"
-              :class="{
-                'async-picker__option-copy--single': !secondaryText(item),
-              }"
-              ><strong>{{ item.label }}</strong
-              ><small v-if="secondaryText(item)">{{
-                secondaryText(item)
-              }}</small></span
-            ></slot
-          ><Check v-if="isSelected(item)" :size="17" aria-hidden="true" />
-        </button>
+        <div
+          v-if="virtualized && virtualRange.paddingBefore > 0"
+          class="async-picker__virtual-spacer"
+          :style="{ height: `${virtualRange.paddingBefore}px` }"
+          aria-hidden="true"
+        />
+        <div class="async-picker__virtual-items">
+          <button
+            v-for="entry in renderedItems"
+            :id="`${pickerId}-option-${entry.item.id}`"
+            :key="entry.item.id"
+            type="button"
+            class="async-picker__option"
+            :class="{
+              'async-picker__option--active': entry.index === activeIndex,
+              'async-picker__option--selected': isSelected(entry.item),
+            }"
+            role="option"
+            :aria-posinset="entry.index + 1"
+            :aria-setsize="items.length"
+            :aria-selected="isSelected(entry.item)"
+            :disabled="disabled || entry.item.disabled"
+            @mouseenter="activeIndex = entry.index"
+            @click="chooseInline(entry.item)"
+          >
+            <slot
+              name="option"
+              :item="entry.item.source as T"
+              :selected="isSelected(entry.item)"
+              ><span
+                class="async-picker__option-copy"
+                :class="{
+                  'async-picker__option-copy--single': !secondaryText(
+                    entry.item,
+                  ),
+                }"
+                ><strong>{{ entry.item.label }}</strong
+                ><small v-if="secondaryText(entry.item)">{{
+                  secondaryText(entry.item)
+                }}</small></span
+              ></slot
+            ><Check
+              v-if="isSelected(entry.item)"
+              :size="17"
+              aria-hidden="true"
+            />
+          </button>
+        </div>
+        <div
+          v-if="virtualized && virtualRange.paddingAfter > 0"
+          class="async-picker__virtual-spacer"
+          :style="{ height: `${virtualRange.paddingAfter}px` }"
+          aria-hidden="true"
+        />
         <div ref="sentinel" class="async-picker__sentinel" aria-hidden="true" />
         <div
           v-if="loadingMore"
@@ -629,6 +740,13 @@ function handlePopoverOpen(value: boolean): void {
   text-align: left;
   cursor: pointer;
   overflow: hidden;
+}
+.async-picker__virtual-items {
+  min-width: 0;
+}
+.async-picker__virtual-spacer {
+  width: 100%;
+  pointer-events: none;
 }
 .async-picker__option:hover,
 .async-picker__option--active {

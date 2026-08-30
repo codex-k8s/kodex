@@ -12,6 +12,7 @@ import {
   LockKeyhole,
   Menu,
   PlugZap,
+  RefreshCw,
   Search,
   Settings,
   UsersRound,
@@ -70,6 +71,9 @@ const search = ref("");
 const searchInput = ref<HTMLInputElement>();
 const searchOpen = ref(false);
 const mobileSearchOpen = ref(false);
+const preloadFailed = ref(
+  document.documentElement.dataset.kodexPreload === "failed",
+);
 const searchRoot = ref<HTMLElement>();
 const realtimeStarted = ref(false);
 let disposed = false;
@@ -330,6 +334,14 @@ function setOnline(): void {
   online.value = navigator.onLine;
 }
 
+function markPreloadFailed(): void {
+  preloadFailed.value = true;
+}
+
+function refreshAfterPreloadFailure(): void {
+  globalThis.location.assign(globalThis.location.href);
+}
+
 watch(
   projectRef,
   (value) => {
@@ -354,6 +366,7 @@ onMounted(() => {
   document.documentElement.lang = locale.value;
   window.addEventListener("online", setOnline);
   window.addEventListener("offline", setOnline);
+  window.addEventListener("kodex:preload-error", markPreloadFailed);
   void Promise.all([
     platform.loadProjects(),
     platform.loadGates(),
@@ -369,6 +382,7 @@ onBeforeUnmount(() => {
   disposed = true;
   window.removeEventListener("online", setOnline);
   window.removeEventListener("offline", setOnline);
+  window.removeEventListener("kodex:preload-error", markPreloadFailed);
   realtime.closePlatform();
   runtime.clear();
   platform.clearOwnerState();
@@ -501,6 +515,14 @@ onBeforeUnmount(() => {
         />
       </div>
     </header>
+
+    <div v-if="preloadFailed" class="preload-failure" role="alert">
+      <span>{{ $t("app.preloadFailed") }}</span>
+      <button class="button" type="button" @click="refreshAfterPreloadFailure">
+        <RefreshCw :size="16" aria-hidden="true" />
+        {{ $t("app.refreshPage") }}
+      </button>
+    </div>
 
     <button
       v-if="mobileOpen"

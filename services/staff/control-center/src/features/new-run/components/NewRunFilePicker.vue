@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { Files, X } from "@lucide/vue";
-import { computed, nextTick, ref, shallowRef, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  shallowRef,
+  watch,
+} from "vue";
 
 import FileTypeIcon from "@/features/new-run/components/FileTypeIcon.vue";
 import {
@@ -50,6 +58,7 @@ const emit = defineEmits<{
 }>();
 
 const viewMode = ref<ViewMode>("list");
+const gridColumns = ref(3);
 const draftRefs = ref<string[]>([]);
 const knownArtifacts = shallowRef(new Map<string, Artifact>());
 const selectedItems = computed(() =>
@@ -58,6 +67,14 @@ const selectedItems = computed(() =>
     return artifact ? [artifact] : [];
   }),
 );
+const virtualItemHeight = computed(() =>
+  viewMode.value === "grid" ? 198 : 64,
+);
+let gridMedia: MediaQueryList | undefined;
+
+function syncGridColumns(): void {
+  gridColumns.value = gridMedia?.matches ? 2 : 3;
+}
 
 function seedSelection(): void {
   knownArtifacts.value = new Map(
@@ -113,6 +130,15 @@ watch(
   },
   { immediate: true },
 );
+onMounted(() => {
+  if (typeof window === "undefined") return;
+  gridMedia = window.matchMedia("(max-width: 760px)");
+  syncGridColumns();
+  gridMedia.addEventListener("change", syncGridColumns);
+});
+onBeforeUnmount(() =>
+  gridMedia?.removeEventListener("change", syncGridColumns),
+);
 </script>
 
 <template>
@@ -151,7 +177,11 @@ watch(
         :load-items="loadItems"
         :labels="labels.picker"
         :disabled="disabled"
+        :virtual-columns="viewMode === 'grid' ? gridColumns : 1"
+        :virtual-item-height="virtualItemHeight"
+        :virtual-overscan="3"
         multiple
+        virtualize
         @update:model-value="updateDraft"
         @select="remember"
       >
@@ -290,7 +320,7 @@ watch(
   color: var(--danger);
   font-size: 12px;
 }
-.new-run-file-picker__picker--grid :deep(.async-picker__list) {
+.new-run-file-picker__picker--grid :deep(.async-picker__virtual-items) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-content: start;
@@ -400,7 +430,7 @@ watch(
   .new-run-file-picker__toolbar {
     min-height: 52px;
   }
-  .new-run-file-picker__picker--grid :deep(.async-picker__list) {
+  .new-run-file-picker__picker--grid :deep(.async-picker__virtual-items) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     padding: 8px;

@@ -37,7 +37,10 @@ const { locale } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
 const view = ref<Awaited<ReturnType<typeof loadAgentRuntime>>>();
 const selectedEnvironment = ref("");
-const selectedCandidate = ref<AsyncEntityOption>();
+interface EnvironmentPickerOption extends AsyncEntityOption {
+  environment: RuntimeEnvironmentSet;
+}
+const selectedCandidate = ref<EnvironmentPickerOption>();
 const busy = ref(false);
 const loading = ref(false);
 const problem = ref<AppProblem>();
@@ -51,21 +54,31 @@ function notify(state: "APPLIED" | "DRAFT" | "RUNNING" | "FAILED"): void {
   emit("apply-state", state, copy.value.environment.catalog, "next-turn");
 }
 
-function environmentOption(value: RuntimeEnvironmentSet): AsyncEntityOption {
+function environmentOption(
+  value: RuntimeEnvironmentSet,
+): EnvironmentPickerOption {
+  const toolNames = value.currentVersion.tools
+    .slice(0, 3)
+    .map((tool) => tool.name)
+    .join(", ");
   return {
     ref: value.ref,
     title: value.name,
     description: [
       value.description,
       `rev ${String(value.currentVersion.revision)}`,
+      toolNames,
     ]
       .filter(Boolean)
       .join(" · "),
-    meta: value.state,
+    meta: value.ready ? value.state : copy.value.runtime.unavailableSelection,
+    disabled: !value.ready,
+    disabledReason: value.readinessBlockers.join(" · "),
+    environment: value,
   };
 }
 
-const selectedOption = computed<AsyncEntityOption | undefined>(() => {
+const selectedOption = computed<EnvironmentPickerOption | undefined>(() => {
   if (selectedCandidate.value?.ref === selectedEnvironment.value)
     return selectedCandidate.value;
   const environment = view.value?.environment;
@@ -111,7 +124,7 @@ function select(value: string | null | readonly string[]): void {
   notify(value === view.value?.environment.ref ? "APPLIED" : "DRAFT");
 }
 
-function selectOption(value: AsyncEntityOption): void {
+function selectOption(value: EnvironmentPickerOption): void {
   selectedCandidate.value = value;
 }
 
@@ -176,7 +189,35 @@ onMounted(() => void load());
               {{ view.environment.currentVersion.secretDescriptors.length }}
             </dd>
           </div>
+          <div>
+            <dt>{{ copy.environment.image }}</dt>
+            <dd>{{ view.environment.currentVersion.image.reference }}</dd>
+          </div>
         </dl>
+        <section class="environment-tools">
+          <div class="environment-tools__head">
+            <h3>{{ copy.environment.tools }}</h3>
+            <span>{{ view.environment.currentVersion.tools.length }}</span>
+          </div>
+          <p v-if="view.environment.currentVersion.tools.length === 0">
+            {{ copy.environment.noTools }}
+          </p>
+          <ul v-else>
+            <li
+              v-for="tool in view.environment.currentVersion.tools"
+              :key="tool.name"
+            >
+              <div>
+                <strong>{{ tool.name }}</strong>
+                <code>{{ tool.command }}</code>
+              </div>
+              <p>{{ tool.description }}</p>
+              <small v-if="tool.usageHint">
+                {{ copy.environment.usageHint }}: {{ tool.usageHint }}
+              </small>
+            </li>
+          </ul>
+        </section>
       </article>
 
       <article class="environment-catalog panel">
@@ -197,6 +238,59 @@ onMounted(() => void load());
           @update:model-value="select"
           @select="selectOption"
         />
+        <section
+          v-if="selectedCandidate"
+          class="environment-candidate"
+          aria-live="polite"
+        >
+          <div class="environment-candidate__head">
+            <div>
+              <span>{{ copy.environment.selectedPreview }}</span>
+              <strong>{{ selectedCandidate.environment.name }}</strong>
+            </div>
+            <StatusBadge
+              :state="
+                selectedCandidate.environment.ready ? 'READY' : 'UNAVAILABLE'
+              "
+            />
+          </div>
+          <p>{{ selectedCandidate.environment.description }}</p>
+          <dl>
+            <div>
+              <dt>{{ copy.environment.image }}</dt>
+              <dd>
+                {{
+                  selectedCandidate.environment.currentVersion.image.reference
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ copy.environment.tools }}</dt>
+              <dd>
+                {{
+                  selectedCandidate.environment.currentVersion.tools
+                    .map((tool) => tool.name)
+                    .join(", ") || copy.environment.noTools
+                }}
+              </dd>
+            </div>
+          </dl>
+          <div
+            v-if="selectedCandidate.environment.readinessBlockers.length"
+            class="environment-candidate__blockers"
+          >
+            <strong>{{ copy.environment.readinessBlockers }}</strong>
+            <ul>
+              <li
+                v-for="blocker in selectedCandidate.environment
+                  .readinessBlockers"
+                :key="blocker"
+              >
+                {{ blocker }}
+              </li>
+            </ul>
+          </div>
+        </section>
         <div class="environment-catalog__selection">
           <div>
             <span>{{ $t("common.selected") }}</span>
@@ -295,8 +389,127 @@ onMounted(() => void load());
   color: var(--muted);
 }
 .environment-current__meta dd {
+  min-width: 0;
   margin: 0;
   font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.environment-tools {
+  display: grid;
+  gap: 9px;
+  padding-top: 2px;
+}
+.environment-tools__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.environment-tools__head h3 {
+  font-size: 0.86rem;
+}
+.environment-tools__head span {
+  color: var(--subtle);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+.environment-tools > p {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.environment-tools ul {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.environment-tools li {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.environment-tools li > div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.environment-tools li code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accent-strong);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.environment-tools li p,
+.environment-tools li small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.environment-candidate {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.environment-candidate__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.environment-candidate__head > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.environment-candidate__head span {
+  color: var(--subtle);
+  font-size: 0.7rem;
+}
+.environment-candidate p {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.environment-candidate dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+.environment-candidate dl div {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.35fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.environment-candidate dt {
+  color: var(--subtle);
+}
+.environment-candidate dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.environment-candidate__blockers {
+  padding: 9px 10px;
+  border-radius: 7px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  font-size: 0.76rem;
+}
+.environment-candidate__blockers ul {
+  margin: 5px 0 0;
+  padding-left: 18px;
 }
 .environment-catalog__selection {
   display: flex;

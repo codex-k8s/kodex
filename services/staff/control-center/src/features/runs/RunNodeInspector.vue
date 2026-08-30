@@ -15,6 +15,7 @@ import { useI18n } from "vue-i18n";
 import type {
   Agent,
   Artifact,
+  Run,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem } from "@/shared/api/problem";
@@ -29,9 +30,10 @@ const props = withDefaults(
     nodes: RunNode[];
     artifacts: Artifact[];
     projectRef: string;
+    run?: Run;
     agent?: Agent;
   }>(),
-  { agent: undefined },
+  { run: undefined, agent: undefined },
 );
 const emit = defineEmits<{
   close: [];
@@ -122,6 +124,16 @@ function formatDate(value: string): string {
       </div>
 
       <dl class="run-node-inspector__metadata">
+        <div v-if="run">
+          <dt>{{ $t("runs.runContext") }}</dt>
+          <dd>
+            <strong>{{ run.title }}</strong>
+            <small>
+              {{ run.target.displayName }} ·
+              {{ $t("runs.attempt", { attempt: run.attempt }) }}
+            </small>
+          </dd>
+        </div>
         <div v-if="agent">
           <dt>{{ $t("agents.profile") }}</dt>
           <dd>{{ agent.name }}</dd>
@@ -152,6 +164,19 @@ function formatDate(value: string): string {
             <span v-for="name in node.integrationNames" :key="name">
               {{ name }}
             </span>
+          </dd>
+        </div>
+        <div v-if="agent?.runtimeRevision">
+          <dt>{{ $t("agents.runtimeRevision") }}</dt>
+          <dd>
+            <code>{{ agent.runtimeRevision }}</code>
+            <small v-if="agent.runtimeProvider || agent.runtimeModel">
+              {{
+                [agent.runtimeProvider, agent.runtimeModel]
+                  .filter(Boolean)
+                  .join(" · ")
+              }}
+            </small>
           </dd>
         </div>
         <div v-if="node.callbackSummary">
@@ -297,6 +322,15 @@ function formatDate(value: string): string {
   margin: 0;
   overflow-wrap: anywhere;
   font-size: 0.84rem;
+}
+.run-node-inspector__metadata dd > strong,
+.run-node-inspector__metadata dd > small {
+  display: block;
+}
+.run-node-inspector__metadata dd > small {
+  margin-top: 3px;
+  color: var(--subtle);
+  font-size: 0.72rem;
 }
 .run-node-inspector__metadata :deep(p) {
   margin: 0;

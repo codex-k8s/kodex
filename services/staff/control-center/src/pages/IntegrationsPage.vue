@@ -39,7 +39,9 @@ const activeSection = ref<IntegrationsSection>("CONNECTIONS");
 const catalogSearch = ref("");
 const catalogCategory = ref("");
 const dialog = ref(false);
-const dialogMode = ref<"CREATE" | "CREDENTIAL">("CREATE");
+const dialogMode = ref<"CREATE" | "CREDENTIAL" | "EDIT">("CREATE");
+const editingConnection = ref<IntegrationConnection>();
+const deleteCandidate = ref<IntegrationConnection>();
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const credentialStepFailed = ref(false);
@@ -99,6 +101,9 @@ const selectedDefinition = computed(
 const requiresCredential = computed(() =>
   definitionRequiresCredential(selectedDefinition.value),
 );
+const showsCredentialInput = computed(
+  () => dialogMode.value !== "EDIT" && requiresCredential.value,
+);
 const preparedConfiguration = computed(() =>
   prepareConnectionConfiguration(
     selectedDefinition.value?.configurationFields ?? [],
@@ -157,6 +162,7 @@ function openConnection(definitionKey: string): void {
   formSubmitted.value = false;
   problem.value = undefined;
   operationSuccess.value = "";
+  editingConnection.value = undefined;
   dialog.value = true;
 }
 
@@ -166,6 +172,7 @@ function closeConnectionDialog(force = false): void {
   dialogMode.value = "CREATE";
   credentialValue.value = "";
   pendingCredential.value = undefined;
+  editingConnection.value = undefined;
   credentialStepFailed.value = false;
   credentialRequired.value = false;
   formSubmitted.value = false;
@@ -173,6 +180,50 @@ function closeConnectionDialog(force = false): void {
   form.definitionKey = "";
   form.name = "";
   form.configuration = {};
+}
+
+function editableConfigurationValue(
+  connection: IntegrationConnection,
+  field: IntegrationConfigurationField,
+): string {
+  const value = connection.publicConfiguration[field.key];
+  if (Array.isArray(value)) return value.map(String).join(", ");
+  if (typeof value === "string" || typeof value === "number")
+    return String(value);
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return "";
+}
+
+async function openEdit(connection: IntegrationConnection): Promise<void> {
+  if (!connection.nextActions.includes("UPDATE")) return;
+  commandRef.value = connection.ref;
+  problem.value = undefined;
+  operationSuccess.value = "";
+  try {
+    const current = await platform.readConnection(connection.ref);
+    const definition = platform.definitions[current.definitionKey];
+    if (!definition || !current.nextActions.includes("UPDATE")) return;
+    dialogMode.value = "EDIT";
+    editingConnection.value = current;
+    form.definitionKey = current.definitionKey;
+    form.name = current.name;
+    form.configuration = Object.fromEntries(
+      definition.configurationFields.map((field) => [
+        field.key,
+        editableConfigurationValue(current, field),
+      ]),
+    );
+    credentialValue.value = "";
+    pendingCredential.value = undefined;
+    credentialStepFailed.value = false;
+    credentialRequired.value = false;
+    formSubmitted.value = false;
+    dialog.value = true;
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    commandRef.value = "";
+  }
 }
 
 function credentialChanged(): void {
@@ -207,6 +258,7 @@ async function openCredential(
       idempotencyKey: idempotencyKey(),
     };
     credentialStepFailed.value = false;
+    editingConnection.value = undefined;
     credentialRequired.value = false;
     formSubmitted.value = false;
     dialog.value = true;
@@ -228,17 +280,20 @@ function configurationProblem(field: IntegrationConfigurationField): string {
 async function submit(): Promise<void> {
   const definition = selectedDefinition.value;
   if (
-    !definition?.available ||
-    (dialogMode.value === "CREATE" && !canCreateConnection.value)
+    !definition ||
+    (dialogMode.value === "CREATE" &&
+      (!definition.available || !canCreateConnection.value)) ||
+    (dialogMode.value === "EDIT" &&
+      !editingConnection.value?.nextActions.includes("UPDATE"))
   )
     return;
   formSubmitted.value = true;
   if (
-    dialogMode.value === "CREATE" &&
+    dialogMode.value !== "CREDENTIAL" &&
     Object.keys(preparedConfiguration.value.problems).length
   )
     return;
-  if (requiresCredential.value && !credentialValue.value.trim()) {
+  if (showsCredentialInput.value && !credentialValue.value.trim()) {
     credentialRequired.value = true;
     return;
   }
@@ -250,6 +305,16 @@ async function submit(): Promise<void> {
   credentialValue.value = "";
   try {
     const publicConfiguration = preparedConfiguration.value.value;
+    if (dialogMode.value === "EDIT" && editingConnection.value) {
+      const updated = await platform.updateConnection(editingConnection.value, {
+        name: form.name,
+        publicConfiguration,
+      });
+      activeSection.value = "CONNECTIONS";
+      operationSuccess.value = `Подключение «${updated.name}» изменено.`;
+      closeConnectionDialog(true);
+      return;
+    }
     const outcome = await executeConnectionSetup(
       {
         connection: {
@@ -291,6 +356,44 @@ async function submit(): Promise<void> {
     problem.value = asProblem(error);
   } finally {
     credentialValue.value = "";
+    busy.value = false;
+  }
+}
+
+async function openDelete(connection: IntegrationConnection): Promise<void> {
+  if (!connection.nextActions.includes("DELETE")) return;
+  commandRef.value = connection.ref;
+  problem.value = undefined;
+  operationSuccess.value = "";
+  try {
+    const current = await platform.readConnection(connection.ref);
+    if (!current.nextActions.includes("DELETE")) return;
+    deleteCandidate.value = current;
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    commandRef.value = "";
+  }
+}
+
+function closeDeleteDialog(force = false): void {
+  if (busy.value && !force) return;
+  deleteCandidate.value = undefined;
+  problem.value = undefined;
+}
+
+async function confirmDelete(): Promise<void> {
+  const current = deleteCandidate.value;
+  if (!current?.nextActions.includes("DELETE")) return;
+  busy.value = true;
+  problem.value = undefined;
+  try {
+    const deleted = await platform.deleteConnection(current);
+    operationSuccess.value = `Подключение «${deleted.name}» удалено.`;
+    closeDeleteDialog(true);
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
     busy.value = false;
   }
 }
@@ -407,6 +510,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   credentialValue.value = "";
+  editingConnection.value = undefined;
+  deleteCandidate.value = undefined;
 });
 </script>
 
@@ -436,7 +541,11 @@ onBeforeUnmount(() => {
         @select="selectSection"
       />
 
-      <ProblemNotice v-if="problem && !dialog" :problem="problem" compact />
+      <ProblemNotice
+        v-if="problem && !dialog && !deleteCandidate"
+        :problem="problem"
+        compact
+      />
       <div
         v-if="operationSuccess && !dialog"
         class="operation-success"
@@ -459,6 +568,8 @@ onBeforeUnmount(() => {
           :busy-action="commandAction"
           @command="command"
           @credential="openCredential"
+          @edit="openEdit"
+          @delete="openDelete"
           @grants="openGrants"
         />
 
@@ -504,12 +615,14 @@ onBeforeUnmount(() => {
     <ModalDialog
       v-if="dialog && selectedDefinition"
       :title="
-        $t(
-          dialogMode === 'CREATE'
-            ? 'integrations.connectNamed'
-            : 'integrations.configureCredentialNamed',
-          { name: form.name },
-        )
+        dialogMode === 'EDIT'
+          ? `Изменить подключение «${form.name}»`
+          : $t(
+              dialogMode === 'CREATE'
+                ? 'integrations.connectNamed'
+                : 'integrations.configureCredentialNamed',
+              { name: form.name },
+            )
       "
       :busy="busy"
       size="lg"
@@ -539,12 +652,12 @@ onBeforeUnmount(() => {
             </span>
           </div>
         </section>
-        <label v-if="dialogMode === 'CREATE'" class="field field--wide">
+        <label v-if="dialogMode !== 'CREDENTIAL'" class="field field--wide">
           <span>{{ $t("common.name") }}</span>
           <input v-model.trim="form.name" required maxlength="160" autofocus />
         </label>
         <label
-          v-for="field in dialogMode === 'CREATE'
+          v-for="field in dialogMode !== 'CREDENTIAL'
             ? selectedDefinition.configurationFields
             : []"
           :key="field.key"
@@ -584,7 +697,7 @@ onBeforeUnmount(() => {
           <p>{{ $t("integrations.metadataAlreadyCreated") }}</p>
         </section>
         <label
-          v-if="requiresCredential"
+          v-if="showsCredentialInput"
           class="field field--wide card credential-boundary"
         >
           <strong>{{ $t("integrations.credentials") }}</strong>
@@ -611,6 +724,16 @@ onBeforeUnmount(() => {
             {{ $t("integrations.credentialRequired") }}
           </small>
         </label>
+        <section
+          v-else-if="dialogMode === 'EDIT'"
+          class="field field--wide card credential-boundary"
+        >
+          <strong>{{ $t("integrations.credentials") }}</strong>
+          <p>
+            Учётные данные не изменяются вместе с публичной конфигурацией. Для
+            их ротации используйте отдельное действие подключения.
+          </p>
+        </section>
         <section v-else class="field field--wide card credential-boundary">
           <strong>{{ $t("integrations.credentials") }}</strong>
           <p>{{ $t("integrations.credentialsNotRequired") }}</p>
@@ -654,8 +777,48 @@ onBeforeUnmount(() => {
               ? "Сохраняем…"
               : pendingCredential
                 ? $t("integrations.retryCredential")
-                : $t("integrations.connect")
+                : dialogMode === "EDIT"
+                  ? $t("common.save")
+                  : $t("integrations.connect")
           }}
+        </button>
+      </template>
+    </ModalDialog>
+
+    <ModalDialog
+      v-if="deleteCandidate"
+      title="Удалить подключение"
+      :busy="busy"
+      size="md"
+      @close="closeDeleteDialog"
+    >
+      <div class="delete-confirmation">
+        <p>
+          Подключение <strong>«{{ deleteCandidate.name }}»</strong> будет
+          отключено и переведено в терминальное состояние.
+        </p>
+        <p>
+          Все разрешения подключения будут отозваны. Это действие не удаляет
+          обязательный аудит.
+        </p>
+        <ProblemNotice v-if="problem" :problem="problem" compact />
+      </div>
+      <template #actions>
+        <button
+          class="button"
+          type="button"
+          :disabled="busy"
+          @click="closeDeleteDialog()"
+        >
+          {{ $t("common.cancel") }}
+        </button>
+        <button
+          class="button button--danger"
+          type="button"
+          :disabled="busy"
+          @click="confirmDelete"
+        >
+          {{ busy ? "Удаляем…" : $t("common.delete") }}
         </button>
       </template>
     </ModalDialog>
@@ -734,6 +897,13 @@ onBeforeUnmount(() => {
   background: var(--warning-soft);
 }
 .credential-failure p {
+  margin: 0;
+}
+.delete-confirmation {
+  display: grid;
+  gap: 10px;
+}
+.delete-confirmation p {
   margin: 0;
 }
 </style>

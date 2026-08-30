@@ -146,6 +146,12 @@ describe("DecisionsPage", () => {
             requestChanges: "Запросить изменения",
             cancel: "Отменить",
             unknownStatus: "Неизвестно",
+            unavailable: "Недоступно",
+          },
+          runs: {
+            sessionNode: "Сессия",
+            context: "Контекст узла",
+            attempt: "Попытка {attempt}",
           },
           decisions: {
             title: "Решения",
@@ -212,9 +218,9 @@ describe("DecisionsPage", () => {
     );
     expect(html).toContain("Менеджер продаж");
     expect(html).toContain("Согласование коммерческого предложения");
-    expect(html).toContain("nod_offer_gate");
     expect(html).toContain("nodeRef=nod_offer_gate");
-    expect(html).toContain("ses_offer");
+    expect(html).toContain("Сессия");
+    expect(html).toContain("Попытка 1");
     expect(html).toContain("Инициатор Run");
     expect(html).toContain("Запрос решения зарегистрирован");
     expect(html).toContain("OWNER_GATE_OPENED · SUCCEEDED");

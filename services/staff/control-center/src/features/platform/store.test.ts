@@ -38,6 +38,16 @@ const deleteArtifactMock = vi.hoisted(() =>
 );
 const createIntegrationConnectionMock = vi.hoisted(() => vi.fn());
 const configureIntegrationConnectionCredentialMock = vi.hoisted(() => vi.fn());
+const updateIntegrationConnectionMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").updateIntegrationConnection
+  >(),
+);
+const deleteIntegrationConnectionMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").deleteIntegrationConnection
+  >(),
+);
 const uploadArtifactMock = vi.hoisted(() =>
   vi.fn<
     typeof import("@/shared/api/generated/openapi/sdk.gen").uploadArtifact
@@ -67,6 +77,8 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   createIntegrationConnection: createIntegrationConnectionMock,
   configureIntegrationConnectionCredential:
     configureIntegrationConnectionCredentialMock,
+  updateIntegrationConnection: updateIntegrationConnectionMock,
+  deleteIntegrationConnection: deleteIntegrationConnectionMock,
   uploadArtifact: uploadArtifactMock,
   uploadOrganizationArtifact: uploadOrganizationArtifactMock,
 }));
@@ -267,6 +279,8 @@ describe("platform store", () => {
     deleteArtifactMock.mockReset();
     createIntegrationConnectionMock.mockReset();
     configureIntegrationConnectionCredentialMock.mockReset();
+    updateIntegrationConnectionMock.mockReset();
+    deleteIntegrationConnectionMock.mockReset();
     uploadArtifactMock.mockReset();
     uploadOrganizationArtifactMock.mockReset();
     selectProjectRef(undefined);
@@ -749,5 +763,80 @@ describe("platform store", () => {
     });
 
     expect(store.connections[created.ref]).toEqual(created);
+  });
+
+  it("изменяет и удаляет подключение отдельными OCC-командами без credential value", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const current = {
+      ...integrationConnection(4, true),
+      nextActions: ["UPDATE", "DELETE"] as IntegrationConnection["nextActions"],
+    };
+    const updated = {
+      ...current,
+      version: 5,
+      name: "GitHub для тестов",
+      publicConfiguration: { organization: "codex-k8s-fixtures" },
+    };
+    const deleted = {
+      ...updated,
+      version: 6,
+      state: "DELETED" as const,
+      nextActions: [],
+    };
+    updateIntegrationConnectionMock.mockResolvedValue({
+      data: updated,
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    deleteIntegrationConnectionMock.mockResolvedValue({
+      data: deleted,
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    const updateResult = await store.updateConnection(current, {
+      name: updated.name,
+      publicConfiguration: updated.publicConfiguration,
+    });
+    const deleteResult = await store.deleteConnection(updateResult);
+    const updateHeaders =
+      updateIntegrationConnectionMock.mock.calls[0]?.[0].headers;
+    const deleteHeaders =
+      deleteIntegrationConnectionMock.mock.calls[0]?.[0].headers;
+
+    expect(updateIntegrationConnectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { connectionRef: current.ref },
+        body: {
+          name: updated.name,
+          publicConfiguration: updated.publicConfiguration,
+        },
+        headers: {
+          "If-Match": '"4"',
+          "Idempotency-Key": updateHeaders?.["Idempotency-Key"],
+          "X-CSRF-Token": "a".repeat(43),
+        },
+      }),
+    );
+    expect(deleteIntegrationConnectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { connectionRef: current.ref },
+        headers: {
+          "If-Match": '"5"',
+          "Idempotency-Key": deleteHeaders?.["Idempotency-Key"],
+          "X-CSRF-Token": "a".repeat(43),
+        },
+      }),
+    );
+    expect(updateHeaders?.["Idempotency-Key"]).toHaveLength(36);
+    expect(deleteHeaders?.["Idempotency-Key"]).toHaveLength(36);
+    expect(deleteResult).toEqual(deleted);
+    expect(store.connections[current.ref]).toEqual(deleted);
+    expect(JSON.stringify(store.connections)).not.toContain(
+      "test-only-secret-value",
+    );
   });
 });

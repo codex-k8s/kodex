@@ -32,6 +32,7 @@ const copy = computed(() => agentDetailCopy(locale.value));
 const fileInput = ref<HTMLInputElement>();
 const avatarProblem = ref("");
 const removeConfirmationOpen = ref(false);
+const avatarDragging = ref(false);
 const avatarAvailable = computed(() => props.avatarAsset.state === "AVAILABLE");
 const avatarUnavailableReason = computed(() =>
   props.avatarAsset.state === "UNAVAILABLE"
@@ -52,16 +53,12 @@ function updateField(key: keyof AgentProfileDraft, event: Event): void {
 }
 
 function chooseAvatar(): void {
-  if (!avatarAvailable.value) return;
+  if (!props.canEdit || props.busy || !avatarAvailable.value) return;
   avatarProblem.value = "";
   fileInput.value?.click();
 }
 
-function uploadAvatar(event: Event): void {
-  const target = event.currentTarget;
-  if (!(target instanceof HTMLInputElement)) return;
-  const file = target.files?.[0];
-  target.value = "";
+function selectAvatarFile(file: File | undefined): void {
   if (!file || !avatarAvailable.value) return;
   if (!supportedAvatarFile(file)) {
     avatarProblem.value = copy.value.avatar.typeError;
@@ -69,6 +66,31 @@ function uploadAvatar(event: Event): void {
   }
   avatarProblem.value = "";
   emit("upload-avatar", file);
+}
+
+function uploadAvatar(event: Event): void {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLInputElement)) return;
+  const file = target.files?.[0];
+  target.value = "";
+  selectAvatarFile(file);
+}
+
+function dropAvatar(event: DragEvent): void {
+  avatarDragging.value = false;
+  if (!props.canEdit || props.busy || !avatarAvailable.value) return;
+  selectAvatarFile(event.dataTransfer?.files[0]);
+}
+
+function leaveAvatar(event: DragEvent): void {
+  const next = event.relatedTarget;
+  if (
+    next instanceof Node &&
+    event.currentTarget instanceof HTMLElement &&
+    event.currentTarget.contains(next)
+  )
+    return;
+  avatarDragging.value = false;
 }
 
 function requestAvatarRemoval(): void {
@@ -136,10 +158,20 @@ function confirmAvatarRemoval(): void {
           @input="updateField('roleDescription', $event)"
         />
       </label>
-      <section class="profile-panel__avatar-editor field--wide">
+      <section
+        class="profile-panel__avatar-editor field--wide"
+        :class="{
+          'profile-panel__avatar-editor--dragging': avatarDragging,
+        }"
+        @dragenter.prevent="avatarDragging = true"
+        @dragover.prevent
+        @dragleave="leaveAvatar"
+        @drop.prevent="dropAvatar"
+      >
         <div>
           <strong>{{ $t("agents.avatar") }}</strong>
           <p>{{ copy.avatar.help }}</p>
+          <p>{{ copy.avatar.dropHelp }}</p>
         </div>
         <input
           ref="fileInput"
@@ -280,6 +312,11 @@ function confirmAvatarRemoval(): void {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+}
+.profile-panel__avatar-editor--dragging {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  background: var(--accent-soft);
 }
 .profile-panel__avatar-editor p {
   margin: 4px 0 0;
