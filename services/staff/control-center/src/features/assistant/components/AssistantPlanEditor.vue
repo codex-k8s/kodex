@@ -15,6 +15,7 @@ import {
   editableOperations,
   operationActionLabel,
   operationInputs,
+  operationTargetLabel,
   type EditablePlanOperation,
 } from "@/features/assistant/model";
 import type {
@@ -268,7 +269,11 @@ function optionalNumber(event: Event): number | undefined {
                 :disabled="!editable || !operation.value.permitted"
               />
               <span class="assistant-operation-kind">
-                {{ operationActionLabel(operation.value.action) }}
+                {{
+                  $t(
+                    `assistant.planEditor.actions.${operationActionLabel(operation.value.action)}`,
+                  )
+                }}
               </span>
             </label>
             <span class="assistant-plan-operation__number"
@@ -278,16 +283,18 @@ function optionalNumber(event: Event): number | undefined {
 
           <dl class="assistant-plan-operation__identity">
             <div>
-              <dt>type</dt>
+              <dt>{{ $t("assistant.planEditor.commandType") }}</dt>
               <dd>{{ operation.value.type }}</dd>
             </div>
             <div>
-              <dt>action</dt>
+              <dt>{{ $t("assistant.planEditor.action") }}</dt>
               <dd>{{ operation.value.action }}</dd>
             </div>
             <div>
-              <dt>permitted</dt>
-              <dd>{{ operation.value.permitted }}</dd>
+              <dt>{{ $t("assistant.planEditor.permitted") }}</dt>
+              <dd>
+                {{ $t(operation.value.permitted ? "common.yes" : "common.no") }}
+              </dd>
             </div>
           </dl>
 
@@ -328,8 +335,21 @@ function optionalNumber(event: Event): number | undefined {
 
           <fieldset class="assistant-plan-target">
             <legend>{{ $t("assistant.planEditor.target") }}</legend>
+            <div class="assistant-plan-target__summary">
+              <span class="assistant-plan-target__action">
+                {{
+                  $t(
+                    `assistant.planEditor.actions.${operationActionLabel(operation.value.action)}`,
+                  )
+                }}
+              </span>
+              <strong>{{
+                operationTargetLabel(operation.value.target)
+              }}</strong>
+              <small>{{ operation.value.target.kind }}</small>
+            </div>
             <label class="field">
-              <span>kind</span>
+              <span>{{ $t("assistant.planEditor.targetKind") }}</span>
               <input
                 v-model="operation.value.target.kind"
                 maxlength="120"
@@ -337,7 +357,7 @@ function optionalNumber(event: Event): number | undefined {
               />
             </label>
             <label class="field">
-              <span>name</span>
+              <span>{{ $t("assistant.planEditor.targetName") }}</span>
               <input
                 v-model="operation.value.target.name"
                 maxlength="300"
@@ -345,7 +365,7 @@ function optionalNumber(event: Event): number | undefined {
               />
             </label>
             <label class="field">
-              <span>ref</span>
+              <span>{{ $t("assistant.planEditor.targetRef") }}</span>
               <input
                 v-model="operation.value.target.ref"
                 maxlength="300"
@@ -353,7 +373,7 @@ function optionalNumber(event: Event): number | undefined {
               />
             </label>
             <label class="field">
-              <span>version</span>
+              <span>{{ $t("assistant.planEditor.targetVersion") }}</span>
               <input
                 type="number"
                 min="0"
@@ -647,9 +667,10 @@ function optionalNumber(event: Event): number | undefined {
   justify-content: space-between;
 }
 .assistant-operation-kind {
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 700;
 }
 .assistant-plan-operation__number {
   color: var(--subtle);
@@ -692,6 +713,36 @@ function optionalNumber(event: Event): number | undefined {
   color: var(--muted);
   font-size: 0.82rem;
 }
+.assistant-plan-target__summary {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.assistant-plan-target__summary strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.assistant-plan-target__summary small {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+.assistant-plan-target__action {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
 .field--code textarea {
   font-family: var(--font-mono);
   font-size: 0.78rem;
@@ -722,6 +773,12 @@ function optionalNumber(event: Event): number | undefined {
   }
   .assistant-plan-target {
     grid-template-columns: 1fr;
+  }
+  .assistant-plan-target__summary {
+    grid-template-columns: 1fr;
+  }
+  .assistant-plan-target__action {
+    width: fit-content;
   }
   .assistant-plan-operation__identity,
   .assistant-plan-transition {

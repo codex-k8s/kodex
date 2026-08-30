@@ -53,6 +53,45 @@ export interface TextInsertionResult {
   selectionEnd: number;
 }
 
+type TemplateVariableWire = Omit<
+  TemplateVariable,
+  "collection" | "itemFields" | "itemValueType" | "rangeExample" | "valueType"
+> & {
+  valueType:
+    | TemplateVariable["valueType"]
+    | Lowercase<TemplateVariable["valueType"]>;
+} & Partial<
+    Pick<
+      TemplateVariable,
+      "collection" | "itemFields" | "itemValueType" | "rangeExample"
+    >
+  >;
+
+export function normalizeTemplateVariable(
+  variable: TemplateVariableWire,
+): TemplateVariable {
+  const valueType = variable.valueType.toLocaleUpperCase(
+    "en-US",
+  ) as TemplateVariable["valueType"];
+  const collection =
+    variable.collection === true ||
+    valueType === "COLLECTION" ||
+    /^\{\{\s*range\s+/i.test(variable.example);
+  const rangeExample =
+    variable.rangeExample?.trim() ||
+    (collection ? variable.example.trim() : undefined);
+  return {
+    ...variable,
+    valueType,
+    collection,
+    itemFields: variable.itemFields ?? [],
+    ...(variable.itemValueType
+      ? { itemValueType: variable.itemValueType }
+      : {}),
+    ...(rangeExample ? { rangeExample } : {}),
+  };
+}
+
 export function agentInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "AI";
@@ -138,17 +177,21 @@ export function sameProfileDraft(
 export function toTemplateVariablePickerItem(
   variable: TemplateVariable,
 ): TemplateVariablePickerItem {
+  const normalized = normalizeTemplateVariable(variable);
   return {
-    id: variable.name,
-    label: variable.name,
-    description: variable.description,
-    scope: variable.source,
-    variable,
+    id: normalized.name,
+    label: normalized.name,
+    description: normalized.description,
+    scope: normalized.source,
+    variable: normalized,
   };
 }
 
-export function templateVariableInsertion(name: string): string {
-  return `{{${name}}}`;
+export function templateVariableInsertion(variable: TemplateVariable): string {
+  if (variable.collection && variable.rangeExample?.trim())
+    return variable.rangeExample.trim();
+  if (variable.example.trim()) return variable.example.trim();
+  return `{{ .${variable.name} }}`;
 }
 
 export function insertTextAtSelection(
@@ -170,8 +213,14 @@ export function insertTextAtSelection(
 export function extractTemplateVariables(content: string): string[] {
   return [
     ...new Set(
-      [...content.matchAll(/\{\{\s*([A-Za-z][A-Za-z0-9_.-]*)\s*}}/g)].flatMap(
-        (match) => (match[1] ? [`{{${match[1]}}}`] : []),
+      [
+        ...content.matchAll(
+          /\{\{\s*(?:range\s+)?\.?([A-Za-z][A-Za-z0-9_.-]*)\s*}}/g,
+        ),
+      ].flatMap((match) =>
+        match[1] && match[1] !== "end" && match[1] !== "else"
+          ? [`{{ .${match[1]} }}`]
+          : [],
       ),
     ),
   ].sort();
@@ -179,7 +228,7 @@ export function extractTemplateVariables(content: string): string[] {
 
 function inlineTokens(value: string): CodeToken[] {
   const pattern =
-    /(\{\{\s*[A-Za-z][A-Za-z0-9_.-]*\s*}}|`[^`]*`|\*\*[^*]+\*\*|"[^"\n]*"|\b(?:true|false)\b|\b\d+(?:\.\d+)?\b)/g;
+    /(\{\{\s*(?:range\s+)?\.?[A-Za-z][A-Za-z0-9_.-]*\s*}}|`[^`]*`|\*\*[^*]+\*\*|"[^"\n]*"|\b(?:true|false)\b|\b\d+(?:\.\d+)?\b)/g;
   const tokens: CodeToken[] = [];
   let cursor = 0;
   for (const match of value.matchAll(pattern)) {

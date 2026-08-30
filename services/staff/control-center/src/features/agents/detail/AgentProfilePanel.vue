@@ -146,6 +146,7 @@ function confirmAvatarRemoval(): void {
           class="sr-only"
           type="file"
           accept="image/png,image/jpeg,image/webp"
+          :aria-label="copy.avatar.upload"
           :disabled="!canEdit || busy || !avatarAvailable"
           @change="uploadAvatar"
         />

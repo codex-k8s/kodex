@@ -70,6 +70,8 @@ export const runtimeVolumeBounds = {
   maxItems: 16,
 } as const;
 
+export const runtimeEnvironmentCollectionLimit = 128;
+
 export function defaultRuntimeEnvironmentPolicy(): RuntimeEnvironmentPolicyInput {
   return {
     resources: {
@@ -260,7 +262,7 @@ function validateCollectionLimit(
   field: "values" | "secretBindings" | "tools",
   problems: EnvironmentFormProblem[],
 ): void {
-  if (items.length > 128)
+  if (items.length > runtimeEnvironmentCollectionLimit)
     problems.push({ field, message: "runtime.errors.collectionLimit" });
 }
 

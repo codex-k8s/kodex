@@ -5,6 +5,7 @@ import {
   editableOperations,
   operationActionLabel,
   operationInputs,
+  operationTargetLabel,
 } from "@/features/assistant/model";
 import type { AssistantPlanOperation } from "@/shared/api/generated/openapi/types.gen";
 
@@ -84,5 +85,31 @@ describe("assistant plan editor model", () => {
 
   it("показывает archive как явное удаление", () => {
     expect(operationActionLabel("ARCHIVE")).toBe("delete");
+  });
+
+  it.each([
+    ["CREATE", "create"],
+    ["UPDATE", "update"],
+    ["ARCHIVE", "delete"],
+    ["EXECUTE", "execute"],
+  ] as const)("показывает действие %s явным глаголом %s", (action, label) => {
+    expect(operationActionLabel(action)).toBe(label);
+  });
+
+  it("показывает человеку выбранный объект, а не только технический ref", () => {
+    expect(
+      operationTargetLabel({
+        kind: "PROJECT",
+        name: "Отдел продаж",
+        ref: "prj_12345678",
+        version: 3,
+      }),
+    ).toBe("Отдел продаж");
+  });
+
+  it("закрыто использует тип объекта, если имя цели отсутствует", () => {
+    expect(operationTargetLabel({ kind: "PROJECT", name: "  " })).toBe(
+      "PROJECT",
+    );
   });
 });

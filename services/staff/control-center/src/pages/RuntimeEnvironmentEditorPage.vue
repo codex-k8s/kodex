@@ -13,7 +13,7 @@ import {
   ShieldCheck,
   Trash2,
 } from "@lucide/vue";
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -31,6 +31,7 @@ import {
   emptySecretBinding,
   mandatoryRuntimeNetworkDestinations,
   normalizeRuntimeEnvironmentInput,
+  runtimeEnvironmentCollectionLimit,
   runtimeResourceBounds,
   runtimeVolumeBounds,
   setRuntimeKubernetesAccess,
@@ -99,6 +100,7 @@ const busy = ref(false);
 const problem = ref<AppProblem>();
 const reauthRestored = ref(false);
 const activeSection = ref<EditorSection>("GENERAL");
+const editorForm = ref<HTMLFormElement>();
 const input = reactive<RuntimeEnvironmentInput>({
   name: "",
   description: "",
@@ -153,6 +155,34 @@ const sections: readonly { id: EditorSection; icon: typeof Boxes }[] = [
   { id: "POLICY", icon: ShieldCheck },
   { id: "READINESS", icon: CheckCircle2 },
 ];
+
+function sectionTabId(section: EditorSection): string {
+  return `environment-tab-${section.toLocaleLowerCase()}`;
+}
+
+function sectionPanelId(section: EditorSection): string {
+  return `environment-panel-${section.toLocaleLowerCase()}`;
+}
+
+function openSection(section: EditorSection): void {
+  activeSection.value = section;
+}
+
+async function moveSection(event: KeyboardEvent, index: number): Promise<void> {
+  const last = sections.length - 1;
+  let next = index;
+  if (event.key === "ArrowRight") next = index === last ? 0 : index + 1;
+  else if (event.key === "ArrowLeft") next = index === 0 ? last : index - 1;
+  else if (event.key === "Home") next = 0;
+  else if (event.key === "End") next = last;
+  else return;
+  event.preventDefault();
+  const section = sections[next]?.id;
+  if (!section) return;
+  activeSection.value = section;
+  await nextTick();
+  document.getElementById(sectionTabId(section))?.focus();
+}
 
 function sync(value = current.value): void {
   if (!value) return;
@@ -333,12 +363,28 @@ function updateSelectedTool(
   if (tool) tool[field] = target.value;
 }
 
-function addValue(): void {
+async function addValue(): Promise<void> {
+  if (input.values.length >= runtimeEnvironmentCollectionLimit) return;
+  openSection("VALUES");
   input.values.push({ name: "", value: "" });
+  await nextTick();
+  const names = editorForm.value?.querySelectorAll<HTMLInputElement>(
+    "[data-environment-variable-name]",
+  );
+  const target = names?.item(names.length - 1);
+  target?.focus();
 }
 
-function addSecret(): void {
+async function addSecret(): Promise<void> {
+  if (input.secretBindings.length >= runtimeEnvironmentCollectionLimit) return;
+  openSection("SECRETS");
   input.secretBindings.push(emptySecretBinding());
+  await nextTick();
+  const names = editorForm.value?.querySelectorAll<HTMLInputElement>(
+    "[data-environment-secret-name]",
+  );
+  const target = names?.item(names.length - 1);
+  target?.focus();
 }
 
 function addVolume(): void {
@@ -606,24 +652,91 @@ onMounted(() => void initialize());
       "
       @retry="load"
     >
-      <nav class="environment-tabs" :aria-label="$t('runtime.editorSections')">
+      <nav
+        class="environment-tabs"
+        role="tablist"
+        :aria-label="$t('runtime.editorSections')"
+      >
         <button
-          v-for="section in sections"
+          v-for="(section, index) in sections"
+          :id="sectionTabId(section.id)"
           :key="section.id"
           class="environment-tab"
           :class="{ 'environment-tab--active': activeSection === section.id }"
           type="button"
-          :aria-current="activeSection === section.id ? 'page' : undefined"
-          @click="activeSection = section.id"
+          role="tab"
+          :aria-selected="activeSection === section.id"
+          :aria-controls="sectionPanelId(section.id)"
+          :tabindex="activeSection === section.id ? 0 : -1"
+          @click="openSection(section.id)"
+          @keydown="moveSection($event, index)"
         >
           <component :is="section.icon" :size="16" aria-hidden="true" />
           {{ $t(`runtime.section.${section.id}`) }}
         </button>
       </nav>
 
+      <div
+        class="environment-command-bar"
+        role="toolbar"
+        :aria-label="$t('runtime.editorActions')"
+      >
+        <button
+          class="button"
+          type="button"
+          :disabled="busy"
+          @click="openSection('IMAGE_TOOLS')"
+        >
+          <Boxes :size="15" aria-hidden="true" />
+          {{ $t("runtime.section.IMAGE_TOOLS") }}
+        </button>
+        <button
+          class="button"
+          type="button"
+          :disabled="
+            busy || input.values.length >= runtimeEnvironmentCollectionLimit
+          "
+          @click="addValue"
+        >
+          <Plus :size="15" aria-hidden="true" />
+          {{ $t("runtime.addVariable") }}
+        </button>
+        <button
+          class="button"
+          type="button"
+          :disabled="
+            busy ||
+            input.secretBindings.length >= runtimeEnvironmentCollectionLimit
+          "
+          @click="addSecret"
+        >
+          <KeyRound :size="15" aria-hidden="true" />
+          {{ $t("runtime.addSecretBinding") }}
+        </button>
+        <button
+          class="button"
+          type="button"
+          :disabled="busy"
+          @click="openSection('POLICY')"
+        >
+          <ShieldCheck :size="15" aria-hidden="true" />
+          {{ $t("runtime.section.POLICY") }}
+        </button>
+      </div>
+
       <div class="environment-editor-layout">
-        <form class="panel environment-editor" @submit.prevent="save">
-          <section v-if="activeSection === 'GENERAL'" class="editor-section">
+        <form
+          ref="editorForm"
+          class="panel environment-editor"
+          @submit.prevent="save"
+        >
+          <section
+            v-if="activeSection === 'GENERAL'"
+            :id="sectionPanelId('GENERAL')"
+            class="editor-section"
+            role="tabpanel"
+            :aria-labelledby="sectionTabId('GENERAL')"
+          >
             <div class="section-header">
               <div>
                 <h2>{{ $t("runtime.environmentGeneral") }}</h2>
@@ -667,7 +780,10 @@ onMounted(() => void initialize());
 
           <section
             v-else-if="activeSection === 'IMAGE_TOOLS'"
+            :id="sectionPanelId('IMAGE_TOOLS')"
             class="editor-section"
+            role="tabpanel"
+            :aria-labelledby="sectionTabId('IMAGE_TOOLS')"
           >
             <div class="section-header">
               <div>
@@ -801,17 +917,16 @@ onMounted(() => void initialize());
 
           <section
             v-else-if="activeSection === 'VALUES'"
+            :id="sectionPanelId('VALUES')"
             class="editor-section"
+            role="tabpanel"
+            :aria-labelledby="sectionTabId('VALUES')"
           >
             <div class="section-header">
               <div>
                 <h2>{{ $t("runtime.variables") }}</h2>
                 <p>{{ $t("runtime.variablesHelp") }}</p>
               </div>
-              <button class="button" type="button" @click="addValue">
-                <Plus :size="15" aria-hidden="true" />
-                {{ $t("runtime.addVariable") }}
-              </button>
             </div>
             <div v-if="input.values.length" class="environment-fields">
               <div
@@ -821,7 +936,11 @@ onMounted(() => void initialize());
               >
                 <label class="field">
                   <span>{{ $t("runtime.variableName") }}</span>
-                  <input v-model="item.name" placeholder="VAR_NAME" />
+                  <input
+                    v-model="item.name"
+                    data-environment-variable-name
+                    placeholder="VAR_NAME"
+                  />
                 </label>
                 <label class="field">
                   <span>{{ $t("runtime.nonSecretValue") }}</span>
@@ -842,17 +961,16 @@ onMounted(() => void initialize());
 
           <section
             v-else-if="activeSection === 'SECRETS'"
+            :id="sectionPanelId('SECRETS')"
             class="editor-section"
+            role="tabpanel"
+            :aria-labelledby="sectionTabId('SECRETS')"
           >
             <div class="section-header">
               <div>
                 <h2>{{ $t("runtime.secretReferences") }}</h2>
                 <p>{{ $t("runtime.secretBindingsHelp") }}</p>
               </div>
-              <button class="button" type="button" @click="addSecret">
-                <Plus :size="15" aria-hidden="true" />
-                {{ $t("runtime.addSecretBinding") }}
-              </button>
             </div>
             <div class="secret-warning" role="note">
               <ShieldCheck :size="18" aria-hidden="true" />
@@ -890,7 +1008,11 @@ onMounted(() => void initialize());
               <div class="secret-binding-fields">
                 <label class="field">
                   <span>{{ $t("runtime.variableName") }}</span>
-                  <input v-model="item.name" placeholder="SECRET_NAME" />
+                  <input
+                    v-model="item.name"
+                    data-environment-secret-name
+                    placeholder="SECRET_NAME"
+                  />
                 </label>
                 <div class="field">
                   <span>{{ $t("runtime.runtimeSecret") }}</span>
@@ -942,7 +1064,10 @@ onMounted(() => void initialize());
 
           <section
             v-else-if="activeSection === 'POLICY'"
+            :id="sectionPanelId('POLICY')"
             class="editor-section"
+            role="tabpanel"
+            :aria-labelledby="sectionTabId('POLICY')"
           >
             <div class="section-header">
               <div>
@@ -1241,7 +1366,13 @@ onMounted(() => void initialize());
             </div>
           </section>
 
-          <section v-else class="editor-section">
+          <section
+            v-else
+            :id="sectionPanelId('READINESS')"
+            class="editor-section"
+            role="tabpanel"
+            :aria-labelledby="sectionTabId('READINESS')"
+          >
             <div class="section-header">
               <div>
                 <h2>{{ $t("runtime.readiness") }}</h2>
@@ -1473,6 +1604,12 @@ onMounted(() => void initialize());
   display: flex;
   overflow-x: auto;
   border-bottom: 1px solid var(--border);
+}
+.environment-command-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0;
 }
 .environment-tab {
   display: inline-flex;

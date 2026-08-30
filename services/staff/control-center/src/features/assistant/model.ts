@@ -1,6 +1,7 @@
 import type {
   AssistantPlanOperation,
   AssistantPlanOperationInput,
+  AssistantPlanTarget,
 } from "@/shared/api/generated/openapi/types.gen";
 
 export interface EditablePlanOperation {
@@ -81,4 +82,8 @@ export function operationActionLabel(
   if (action === "UPDATE") return "update";
   if (action === "ARCHIVE") return "delete";
   return "execute";
+}
+
+export function operationTargetLabel(target: AssistantPlanTarget): string {
+  return target.name.trim() || target.kind.trim() || "—";
 }

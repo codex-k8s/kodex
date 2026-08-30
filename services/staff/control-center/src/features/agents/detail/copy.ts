@@ -50,6 +50,7 @@ export interface AgentDetailCopy {
     variableSearch: string;
     variableScope: string;
     variableExample: string;
+    collection: string;
     insertVariable: string;
     usedVariables: string;
     noVariables: string;
@@ -137,6 +138,7 @@ const ru: AgentDetailCopy = {
     variableSearch: "Найти переменную по имени или описанию",
     variableScope: "Scope",
     variableExample: "Пример",
+    collection: "Коллекция",
     insertVariable: "Вставить переменную",
     usedVariables: "Переменные в тексте",
     noVariables: "В тексте нет шаблонных переменных",
@@ -227,6 +229,7 @@ const en: AgentDetailCopy = {
     variableSearch: "Find a variable by name or description",
     variableScope: "Scope",
     variableExample: "Example",
+    collection: "Collection",
     insertVariable: "Insert variable",
     usedVariables: "Variables used in text",
     noVariables: "The text does not use template variables",

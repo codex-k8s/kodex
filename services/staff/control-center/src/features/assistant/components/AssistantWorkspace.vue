@@ -25,6 +25,10 @@ import { useI18n } from "vue-i18n";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
 import { openAssistantEvent } from "@/features/assistant/events";
+import {
+  operationActionLabel,
+  operationTargetLabel,
+} from "@/features/assistant/model";
 import { useAssistantStore } from "@/features/assistant/store";
 import { usePlatformStore } from "@/features/platform/store";
 import RunActivityView from "@/features/runs/RunActivityView.vue";
@@ -44,6 +48,7 @@ import type {
 } from "@/shared/ui/attachment-composer";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
+import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = withDefaults(
@@ -562,9 +567,27 @@ onBeforeUnmount(() => {
                       v-for="operation in turn.plan.operations"
                       :key="operation.ref"
                     >
-                      <strong>{{ operation.title }}</strong>
-                      <span>{{ operation.summary }}</span>
-                      <small>{{ operation.target.name }}</small>
+                      <header>
+                        <span class="assistant-plan-card__action">
+                          {{
+                            $t(
+                              `assistant.planEditor.actions.${operationActionLabel(operation.action)}`,
+                            )
+                          }}
+                        </span>
+                        <small>{{ operation.target.kind }}</small>
+                      </header>
+                      <strong class="assistant-plan-card__target">
+                        {{ operationTargetLabel(operation.target) }}
+                      </strong>
+                      <span>{{ operation.title }}</span>
+                      <p>{{ operation.summary }}</p>
+                      <section class="assistant-plan-card__parameters">
+                        <strong>{{
+                          $t("assistant.planEditor.parametersTitle")
+                        }}</strong>
+                        <SafeStructuredData :value="operation.parameters" />
+                      </section>
                     </li>
                   </ol>
                   <button
@@ -950,14 +973,42 @@ onBeforeUnmount(() => {
 }
 .assistant-plan-card__operations li {
   display: grid;
-  gap: 2px;
+  gap: 6px;
   padding: 8px 10px;
   border-left: 3px solid var(--accent);
   background: var(--panel);
 }
+.assistant-plan-card__operations li > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.assistant-plan-card__operations .assistant-plan-card__action {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.assistant-plan-card__target {
+  overflow-wrap: anywhere;
+}
 .assistant-plan-card__operations span,
 .assistant-plan-card__operations small {
   color: var(--muted);
+}
+.assistant-plan-card__operations p {
+  margin: 0;
+}
+.assistant-plan-card__parameters {
+  display: grid;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.assistant-plan-card__parameters > strong {
+  font-size: 0.78rem;
 }
 .assistant-plan-card .button {
   justify-self: start;

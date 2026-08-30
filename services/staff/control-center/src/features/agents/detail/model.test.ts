@@ -4,6 +4,7 @@ import {
   agentInitials,
   extractTemplateVariables,
   insertTextAtSelection,
+  normalizeTemplateVariable,
   runtimeModels,
   runtimeProviders,
   runtimeRefForSelection,
@@ -65,9 +66,13 @@ describe("agent detail model", () => {
   it("выделяет переменные и синтаксические токены без HTML", () => {
     expect(
       extractTemplateVariables(
-        "# Роль\n{{project.ref}} и {{ run.ref }} и {{project.ref}}",
+        "# Роль\n{{project.ref}} и {{ .run.ref }} и {{ range .runtime.environment.tools }}{{ end }}",
       ),
-    ).toEqual(["{{project.ref}}", "{{run.ref}}"]);
+    ).toEqual([
+      "{{ .project.ref }}",
+      "{{ .run.ref }}",
+      "{{ .runtime.environment.tools }}",
+    ]);
     expect(tokenizeCodeLine('model = "gpt-5.1"', "toml")).toEqual([
       { text: "model", tone: "keyword" },
       { text: " = ", tone: "plain" },
@@ -98,9 +103,7 @@ describe("agent detail model", () => {
       example: "{{ .project.ref }}",
       source: "PROJECT",
     });
-    expect(templateVariableInsertion(item.variable.name)).toBe(
-      "{{project.ref}}",
-    );
+    expect(templateVariableInsertion(item.variable)).toBe("{{ .project.ref }}");
     expect(insertTextAtSelection("До после", "{{project.ref}}", 3, 3)).toEqual({
       value: "До {{project.ref}}после",
       selectionStart: 18,
@@ -109,5 +112,37 @@ describe("agent detail model", () => {
     expect(insertTextAtSelection("До X после", "{{run.ref}}", 3, 4).value).toBe(
       "До {{run.ref}} после",
     );
+
+    expect(
+      templateVariableInsertion({
+        name: "runtime.environment.tools",
+        valueType: "COLLECTION",
+        description: "Инструменты",
+        example: "{{ .runtime.environment.tools }}",
+        source: "RUNTIME",
+        collection: true,
+        itemValueType: "OBJECT",
+        itemFields: [],
+        rangeExample:
+          "{{ range .runtime.environment.tools }}{{ .name }}{{ end }}",
+      }),
+    ).toBe("{{ range .runtime.environment.tools }}{{ .name }}{{ end }}");
+  });
+
+  it("нормализует wire-каталог без локального придумывания шаблона", () => {
+    expect(
+      normalizeTemplateVariable({
+        name: "input.files",
+        valueType: "collection",
+        description: "Файлы входа",
+        example: "{{ range .input.files }}{{ .path }}{{ end }}",
+        source: "INPUT_FILES",
+      }),
+    ).toMatchObject({
+      valueType: "COLLECTION",
+      collection: true,
+      itemFields: [],
+      rangeExample: "{{ range .input.files }}{{ .path }}{{ end }}",
+    });
   });
 });

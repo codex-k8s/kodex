@@ -7,6 +7,7 @@ import AgentApplyState from "@/features/agents/detail/AgentApplyState.vue";
 import AgentInstructionsPanel from "@/features/agents/detail/AgentInstructionsPanel.vue";
 import AgentProfilePanel from "@/features/agents/detail/AgentProfilePanel.vue";
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
+import InstructionHistory from "@/features/agents/components/InstructionHistory.vue";
 
 vi.mock("@/features/agents/detail/api", () => ({
   createTemplateVariableLoader: () => () =>
@@ -23,6 +24,10 @@ const messages = {
       cancel: "Отмена",
       open: "Открыть",
       save: "Сохранить",
+      loading: "Загрузка",
+      empty: "Пусто",
+      error: "Ошибка",
+      retry: "Повторить",
       unavailable: "Недоступно",
       unknownStatus: "Неизвестно",
     },
@@ -31,6 +36,13 @@ const messages = {
       instructions: "Инструкции",
       validate: "Проверить инструкции",
       publish: "Опубликовать инструкции",
+      history: "История публикаций",
+      historyHelp: "Опубликованные версии неизменяемы",
+      historyEmpty: "Опубликованных версий пока нет",
+      revision: "Ревизия {revision}",
+      currentRevision: "Текущая",
+      rollback: "Вернуть опубликованную версию",
+      rollbackConfirm: "Вернуть инструкции из ревизии {revision}?",
       provider: "Провайдер",
       model: "Модель",
       runtimeRevision: "Ревизия runtime",
@@ -112,6 +124,7 @@ describe("agent detail panels", () => {
 
     expect(html).not.toContain('type="url"');
     expect(html).toContain('type="file"');
+    expect(html).toContain('aria-label="Загрузить изображение"');
     expect(html).toContain("avatar_asset");
     expect(html).toContain("Операция не представлена API");
     expect(html).toMatch(/<button[^>]*disabled[^>]*>[\s\S]*Загрузить/);
@@ -157,10 +170,47 @@ describe("agent detail panels", () => {
       dirty: true,
     });
 
-    expect(html).toContain("{{run.ref}}");
-    expect(html).toContain("{{project.ref}}");
+    expect(html).toContain("{{ .run.ref }}");
+    expect(html).toContain("{{ .project.ref }}");
     expect(html).toContain("Template variables");
     expect(html).toContain("Авторитетный каталог");
     expect(html).toContain('role="combobox"');
+  });
+
+  it("показывает явные save, validate, publish и rollback команды", async () => {
+    const instructions = await render(AgentInstructionsPanel, {
+      modelValue: "# Роль",
+      projectRef: "project_sales",
+      state: "VALID",
+      validationMessages: [],
+      canEdit: true,
+      canValidate: true,
+      canPublish: true,
+      busy: false,
+      dirty: false,
+    });
+    expect(instructions).toContain("Сохранить черновик");
+    expect(instructions).toContain("Проверить инструкции");
+    expect(instructions).toContain("Опубликовать инструкции");
+    expect(instructions).not.toContain("textarea");
+
+    const history = await render(InstructionHistory, {
+      versions: [
+        {
+          ref: "ins_previous",
+          version: 1,
+          revision: 1,
+          state: "PUBLISHED",
+          content: "# Предыдущая роль",
+          validationMessages: [],
+          createdAt: "2026-08-29T10:00:00Z",
+          publishedAt: "2026-08-29T10:00:00Z",
+        },
+      ],
+      currentRef: "ins_current",
+      canRollback: true,
+      busy: false,
+    });
+    expect(history).toContain("Вернуть опубликованную версию");
   });
 });

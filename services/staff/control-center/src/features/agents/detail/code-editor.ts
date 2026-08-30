@@ -13,6 +13,29 @@ export type CodeEditorCompletionProvider = (
   signal: AbortSignal,
 ) => Promise<readonly CodeEditorCompletionItem[]>;
 
+export interface CodeEditorAccessibilityInput {
+  label: string;
+  readonly: boolean;
+  invalid: boolean;
+  describedBy: string;
+  errorMessageId: string;
+}
+
+export function codeEditorContentAttributes(
+  input: CodeEditorAccessibilityInput,
+): Record<string, string> {
+  return {
+    role: "textbox",
+    "aria-label": input.label,
+    "aria-multiline": "true",
+    "aria-readonly": String(input.readonly),
+    "aria-invalid": String(input.invalid),
+    "aria-describedby": input.describedBy,
+    ...(input.invalid ? { "aria-errormessage": input.errorMessageId } : {}),
+    spellcheck: "false",
+  };
+}
+
 interface MarkdownState {
   fenced: boolean;
 }
@@ -36,7 +59,7 @@ export const markdownStreamParser: StreamParser<MarkdownState> = {
       if (stream.match(/^\s*>\s?/)) return "quote";
     }
 
-    if (stream.match(/^\{\{\s*[A-Za-z][A-Za-z0-9_.-]*\s*}}/))
+    if (stream.match(/^\{\{\s*(?:range\s+)?\.?[A-Za-z][A-Za-z0-9_.-]*\s*}}/))
       return "variableName";
     if (stream.match(/^`[^`]*`/)) return "monospace";
     if (stream.match(/^\*\*[^*]+\*\*/)) return "strong";
@@ -60,7 +83,9 @@ export function templateCompletionQuery(
     0,
     Math.max(0, Math.min(cursor, content.length)),
   );
-  const match = /\{\{\s*([A-Za-z][A-Za-z0-9_.-]*)?$/.exec(before);
+  const match = /\{\{\s*(?:range\s+)?\.?([A-Za-z][A-Za-z0-9_.-]*)?$/.exec(
+    before,
+  );
   if (match)
     return {
       from: before.length - match[0].length,

@@ -57,7 +57,7 @@ const variableLabels = computed(() => ({
 }));
 
 function insertVariable(item: TemplateVariablePickerItem): void {
-  editor.value?.insertAtCursor(templateVariableInsertion(item.variable.name));
+  editor.value?.insertAtCursor(templateVariableInsertion(item.variable));
 }
 
 const completeVariables: CodeEditorCompletionProvider = async (
@@ -67,7 +67,7 @@ const completeVariables: CodeEditorCompletionProvider = async (
   const page = await loadVariables({ cursor: undefined, query, signal });
   return page.items.map((item) => ({
     label: item.variable.name,
-    apply: templateVariableInsertion(item.variable.name),
+    apply: templateVariableInsertion(item.variable),
     detail: [
       item.scope,
       item.variable.valueType,
@@ -122,7 +122,8 @@ const completeVariables: CodeEditorCompletionProvider = async (
           ref="editor"
           :model-value="modelValue"
           language="markdown"
-          :label="copy.instructions.markdown"
+          :label="$t('agents.instructions')"
+          :description="copy.instructions.markdown"
           :readonly="!canEdit"
           :validation-messages="validationMessages"
           :min-lines="18"
@@ -192,6 +193,22 @@ const completeVariables: CodeEditorCompletionProvider = async (
                   {{ copy.instructions.variableExample }}:
                   <code>{{ item.variable.example }}</code>
                 </small>
+                <small v-if="item.variable.collection">
+                  {{ copy.instructions.collection }} ·
+                  {{ item.variable.itemValueType ?? item.variable.valueType }}
+                </small>
+                <span
+                  v-if="item.variable.itemFields.length"
+                  class="instructions-panel__variable-fields"
+                >
+                  <code
+                    v-for="field in item.variable.itemFields"
+                    :key="field.name"
+                    :title="field.description"
+                  >
+                    {{ field.name }}: {{ field.valueType }}
+                  </code>
+                </span>
               </span>
               <span class="instructions-panel__variable-meta">
                 <code>{{ item.scope }}</code>
@@ -358,6 +375,18 @@ const completeVariables: CodeEditorCompletionProvider = async (
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+}
+.instructions-panel__variable-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+.instructions-panel__variable-fields code {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--canvas);
+  font-size: 0.7rem;
 }
 .instructions-panel__variable-option strong,
 .instructions-panel__variable-option small {

@@ -7,10 +7,11 @@ import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, placeholder as editorPlaceholder } from "@codemirror/view";
 import { FileCode2, LockKeyhole, ShieldAlert } from "@lucide/vue";
 import { basicSetup } from "codemirror";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
+  codeEditorContentAttributes,
   codeEditorDiagnostics,
   codeMirrorPhrases,
   markdownStreamParser,
@@ -23,6 +24,7 @@ const props = withDefaults(
     modelValue: string;
     language: "markdown" | "toml";
     label: string;
+    description?: string;
     placeholder?: string;
     readonly?: boolean;
     validationMessages?: readonly string[];
@@ -30,6 +32,7 @@ const props = withDefaults(
     completionProvider?: CodeEditorCompletionProvider;
   }>(),
   {
+    description: "",
     minLines: 12,
     placeholder: "",
     readonly: false,
@@ -40,6 +43,9 @@ const props = withDefaults(
 
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 const { locale } = useI18n();
+const editorId = useId();
+const helpId = `${editorId}-help`;
+const validationId = `${editorId}-validation`;
 const editorRoot = ref<HTMLElement>();
 const lineCount = computed(
   () => props.modelValue.replace(/\r\n?/g, "\n").split("\n").length,
@@ -58,11 +64,15 @@ function editableExtension() {
   return [
     EditorState.readOnly.of(props.readonly),
     EditorView.editable.of(!props.readonly),
-    EditorView.contentAttributes.of({
-      "aria-label": props.label,
-      "aria-invalid": props.validationMessages.length ? "true" : "false",
-      spellcheck: "false",
-    }),
+    EditorView.contentAttributes.of(
+      codeEditorContentAttributes({
+        label: props.label,
+        readonly: props.readonly,
+        invalid: props.validationMessages.length > 0,
+        describedBy: props.validationMessages.length ? validationId : helpId,
+        errorMessageId: validationId,
+      }),
+    ),
   ];
 }
 
@@ -164,6 +174,10 @@ function insertAtCursor(value: string): void {
   view.focus();
 }
 
+function focus(): void {
+  view?.focus();
+}
+
 onMounted(() => {
   if (!editorRoot.value) return;
   view = new EditorView({
@@ -247,7 +261,7 @@ onBeforeUnmount(() => {
   view = undefined;
 });
 
-defineExpose({ insertAtCursor });
+defineExpose({ focus, insertAtCursor });
 </script>
 
 <template>
@@ -259,14 +273,20 @@ defineExpose({ insertAtCursor });
     <div class="code-editor__bar">
       <FileCode2 :size="16" aria-hidden="true" />
       <strong>{{ label }}</strong>
-      <code>{{ language === "toml" ? "TOML" : "Markdown" }}</code>
+      <code :id="helpId">
+        {{ description || (language === "toml" ? "TOML" : "Markdown") }}
+      </code>
       <span class="code-editor__spacer" />
       <LockKeyhole v-if="readonly" :size="15" aria-hidden="true" />
     </div>
     <div ref="editorRoot" class="code-editor__viewport" />
     <div class="code-editor__foot" aria-live="polite">
       <span class="mono">{{ lineCount }} · {{ modelValue.length }}</span>
-      <span v-if="validationMessages.length" class="code-editor__validation">
+      <span
+        v-if="validationMessages.length"
+        :id="validationId"
+        class="code-editor__validation"
+      >
         <ShieldAlert :size="14" aria-hidden="true" />
         {{ validationMessages.join(" · ") }}
       </span>

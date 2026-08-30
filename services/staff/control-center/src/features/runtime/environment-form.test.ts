@@ -5,6 +5,7 @@ import {
   editableRuntimeEnvironmentPolicy,
   editableSecretBindings,
   emptySecretBinding,
+  runtimeEnvironmentCollectionLimit,
   setRuntimeKubernetesAccess,
   validateEnvironmentInput,
 } from "@/features/runtime/environment-form";
@@ -218,5 +219,9 @@ describe("runtime environment form", () => {
         "runtime.errors.networkDestinations",
       ]),
     );
+  });
+
+  it("фиксирует единый ограниченный размер редактируемых коллекций", () => {
+    expect(runtimeEnvironmentCollectionLimit).toBe(128);
   });
 });

@@ -434,6 +434,7 @@ onMounted(() => void load());
           :model-value="overlayContent"
           language="toml"
           :label="copy.runtime.overlay"
+          :description="copy.runtime.overlayHelp"
           :placeholder="copy.runtime.overlayPlaceholder"
           :readonly="!canEdit"
           :validation-messages="overlayValidation"
@@ -447,7 +448,7 @@ onMounted(() => void load());
             :disabled="busy || !overlayDirty"
             @click="saveOverlay"
           >
-            <Save :size="16" aria-hidden="true" />{{ copy.runtime.saveOverlay }}
+            <Save :size="16" aria-hidden="true" />{{ $t("runtime.saveDraft") }}
           </button>
           <button
             class="button"
@@ -456,7 +457,7 @@ onMounted(() => void load());
             @click="changeOverlay('VALIDATE')"
           >
             <ShieldCheck :size="16" aria-hidden="true" />{{
-              $t("agents.validate")
+              $t("runtime.validate")
             }}
           </button>
           <button
@@ -467,9 +468,23 @@ onMounted(() => void load());
             "
             @click="changeOverlay('PUBLISH')"
           >
-            {{ $t("agents.publish") }}
+            {{ $t("runtime.publishOverlay") }}
           </button>
         </div>
+        <section class="overlay-panel__effective">
+          <div>
+            <h3>{{ $t("runtime.effectiveConfig") }}</h3>
+            <p>{{ $t("runtime.effectiveHelp") }}</p>
+          </div>
+          <CodeEditorSurface
+            :model-value="view.safeEffectiveConfig"
+            language="toml"
+            :label="$t('runtime.effectiveConfig')"
+            :description="$t('runtime.safeReadback')"
+            readonly
+            :min-lines="8"
+          />
+        </section>
       </article>
     </div>
   </AsyncState>
@@ -495,6 +510,7 @@ onMounted(() => void load());
   gap: 12px;
 }
 .runtime-panel h2,
+.overlay-panel h3,
 .runtime-panel p,
 .overlay-panel h2,
 .overlay-panel p {
@@ -562,6 +578,16 @@ onMounted(() => void load());
   flex-wrap: wrap;
   padding-top: 12px;
   border-top: 1px solid var(--border);
+}
+.overlay-panel__effective {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.overlay-panel__effective h3,
+.overlay-panel__effective p {
+  margin: 0;
 }
 .runtime-panel__actions span {
   margin-right: auto;

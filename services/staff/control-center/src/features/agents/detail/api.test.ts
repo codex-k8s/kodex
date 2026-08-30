@@ -51,6 +51,13 @@ describe("agent detail api", () => {
     expect(page.items[0]).toMatchObject({
       id: "runtime.environment.tools",
       scope: "RUNTIME",
+      variable: {
+        collection: true,
+        itemFields: [],
+        rangeExample:
+          "{{ range .runtime.environment.tools }}{{ .name }}{{ end }}",
+        valueType: "COLLECTION",
+      },
     });
     expect(page.nextCursor).toBe("runtime.environment.tools");
   });

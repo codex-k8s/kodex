@@ -79,4 +79,14 @@ describe("AssistantWorkspace layout", () => {
     expect(source).toContain("attachmentComposer.value?.finalize()");
     expect(source).toContain("attachmentState.value.ready");
   });
+
+  it("показывает в карточке плана действие, target и все явные параметры", () => {
+    expect(template).toContain('class="assistant-plan-card__action"');
+    expect(template).toContain("operationActionLabel(operation.action)");
+    expect(template).toContain('class="assistant-plan-card__target"');
+    expect(template).toContain("operationTargetLabel(operation.target)");
+    expect(template).toContain(
+      '<SafeStructuredData :value="operation.parameters" />',
+    );
+  });
 });
