@@ -11,10 +11,12 @@ import (
 )
 
 const (
-	FormatVersion            = 1
-	MaximumTaskBytes         = 64 << 10
-	MaximumSourceBytes int64 = 64 << 20
-	MaximumObjectBytes int64 = 68 << 20
+	FormatVersion              = 1
+	MaximumTaskBytes           = 64 << 10
+	MaximumSourceBytes   int64 = 64 << 20
+	MaximumObjectBytes   int64 = 68 << 20
+	SafeErrorPVCMissing        = "SESSION_ARCHIVE_PVC_MISSING"
+	SafeErrorPVCReplaced       = "SESSION_ARCHIVE_PVC_REPLACED"
 )
 
 type ArchiveBinding struct {
@@ -101,6 +103,10 @@ func (task Task) Validate() error {
 		len(task.RuntimeRevisionDigest) != 64 || len(task.SourceSHA256) != 64 || len(task.InputDigest) != 64 ||
 		runtimecontract.ValidateCodexArchiveIdentity(task.CodexSessionID, task.SourceRelativePath) != nil {
 		return errors.New("session archive task binding is invalid")
+	}
+	expectedPVCName, err := runtimecontract.SessionPVCName(task.SessionRef)
+	if err != nil || task.PVCName != expectedPVCName {
+		return errors.New("session archive PVC binding is invalid")
 	}
 	switch task.Kind {
 	case "SNAPSHOT":

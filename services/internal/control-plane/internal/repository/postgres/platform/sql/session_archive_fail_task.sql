@@ -31,6 +31,8 @@ WITH failed AS (
     UPDATE control_plane.session_storage storage
        SET state = CASE
              WHEN failed.kind = 'SNAPSHOT' AND failed.retry_scheduled THEN 'SNAPSHOT_READY'
+             WHEN failed.kind = 'SNAPSHOT'
+                  AND failed.safe_error_code IN ('SESSION_ARCHIVE_PVC_MISSING', 'SESSION_ARCHIVE_PVC_REPLACED') THEN 'ERROR'
              WHEN failed.kind = 'SNAPSHOT' THEN 'LIVE'
              WHEN failed.kind = 'RESTORE' AND failed.retry_scheduled THEN 'RESTORE_READY'
              WHEN failed.kind = 'DELETE_PVC' AND failed.retry_scheduled THEN 'DELETE_PVC_READY'

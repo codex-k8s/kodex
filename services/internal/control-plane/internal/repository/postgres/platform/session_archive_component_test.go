@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -74,6 +75,7 @@ func testSessionArchiveLifecycle(t *testing.T, ctx context.Context, repository *
 	pvcPrincipal := sessionArchivePrincipal(t, ctx, repository, "platform.session-archive.pvc-delete.complete")
 	restorePrincipal := sessionArchivePrincipal(t, ctx, repository, "platform.session-archive.restore.complete")
 	objectPrincipal := sessionArchivePrincipal(t, ctx, repository, "platform.session-archive.object-delete.complete")
+	failPrincipal := sessionArchivePrincipal(t, ctx, repository, "platform.session-archive.tasks.fail")
 	if _, err := pool.Exec(ctx, querySessionArchiveMaterializeTasks, pgx.StrictNamedArgs{
 		"idle_seconds": int64(sessionArchiveIdleAfter.Seconds()), "retention_seconds": int64(sessionArchiveRetention.Seconds()),
 		"maximum_attempts": sessionArchiveMaxAttempts,
@@ -156,6 +158,84 @@ func testSessionArchiveLifecycle(t *testing.T, ctx context.Context, repository *
 	}
 	if lifecycle != "DELETED" || storageState != "LIVE" {
 		t.Fatalf("unexpected final session archive lifecycle: archive=%s storage=%s", lifecycle, storageState)
+	}
+	testMissingSessionPVCTerminatesSnapshotLifecycle(t, ctx, service, pool, claimPrincipal, failPrincipal, launched.Run.SessionRef)
+}
+
+func testMissingSessionPVCTerminatesSnapshotLifecycle(t *testing.T, ctx context.Context, service *platformservice.Service,
+	pool *pgxpool.Pool, claimPrincipal, failPrincipal value.Principal, sessionRef string,
+) {
+	t.Helper()
+	if _, err := pool.Exec(ctx, `UPDATE control_plane.session_storage
+		SET state = 'LIVE', idle_since = clock_timestamp() - interval '1 hour'
+		WHERE session_id = (SELECT id FROM control_plane.sessions WHERE ref = $1)`, sessionRef); err != nil {
+		t.Fatalf("make missing PVC fixture eligible for snapshot: %v", err)
+	}
+	if _, err := pool.Exec(ctx, querySessionArchiveMaterializeTasks, pgx.StrictNamedArgs{
+		"idle_seconds": int64(sessionArchiveIdleAfter.Seconds()), "retention_seconds": int64(sessionArchiveRetention.Seconds()),
+		"maximum_attempts": sessionArchiveMaxAttempts,
+	}); err != nil {
+		t.Fatalf("materialize missing PVC snapshot fixture: %v", err)
+	}
+
+	var taskRef string
+	for attempt := int32(1); attempt <= sessionArchiveMaxAttempts; attempt++ {
+		snapshot := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
+		if taskRef == "" {
+			taskRef = stringMap(snapshot, "taskRef")
+		} else if stringMap(snapshot, "taskRef") != taskRef {
+			t.Fatalf("missing PVC retry changed task identity: got=%s want=%s", stringMap(snapshot, "taskRef"), taskRef)
+		}
+		result, err := service.Execute(ctx, command.Command{Kind: command.FailSessionArchiveTask, Principal: failPrincipal,
+			Mutation: value.Mutation{IdempotencyKey: fmt.Sprintf("session-archive-missing-pvc-%d", attempt)},
+			Payload: func() command.SessionArchiveTaskInput {
+				payload := claimedSessionArchivePayload(snapshot)
+				payload.SafeErrorCode = "SESSION_ARCHIVE_PVC_MISSING"
+				return payload
+			}(),
+		})
+		if err != nil {
+			t.Fatalf("fail missing PVC snapshot attempt %d: %v", attempt, err)
+		}
+		expectedState := "READY"
+		if attempt == sessionArchiveMaxAttempts {
+			expectedState = "DEAD_LETTER"
+		}
+		if stringMap(result.Runtime, "state") != expectedState {
+			t.Fatalf("missing PVC snapshot attempt %d state=%s want=%s", attempt, stringMap(result.Runtime, "state"), expectedState)
+		}
+		if expectedState == "READY" {
+			if _, err := pool.Exec(ctx, "UPDATE control_plane.session_archive_tasks SET available_at = clock_timestamp() - interval '1 second' WHERE ref = $1", taskRef); err != nil {
+				t.Fatalf("make missing PVC retry available: %v", err)
+			}
+		}
+	}
+
+	var taskState, safeErrorCode, storageState string
+	if err := pool.QueryRow(ctx, `SELECT task.state, task.safe_error_code, storage.state
+		FROM control_plane.session_archive_tasks task
+		JOIN control_plane.session_storage storage ON storage.session_id = task.session_id
+		WHERE task.ref = $1`, taskRef).Scan(&taskState, &safeErrorCode, &storageState); err != nil {
+		t.Fatalf("read missing PVC terminal lifecycle: %v", err)
+	}
+	if taskState != "DEAD_LETTER" || safeErrorCode != "SESSION_ARCHIVE_PVC_MISSING" || storageState != "ERROR" {
+		t.Fatalf("missing PVC terminal lifecycle: task=%s error=%s storage=%s", taskState, safeErrorCode, storageState)
+	}
+	if _, err := pool.Exec(ctx, querySessionArchiveMaterializeTasks, pgx.StrictNamedArgs{
+		"idle_seconds": int64(sessionArchiveIdleAfter.Seconds()), "retention_seconds": int64(sessionArchiveRetention.Seconds()),
+		"maximum_attempts": sessionArchiveMaxAttempts,
+	}); err != nil {
+		t.Fatalf("rematerialize after missing PVC terminal state: %v", err)
+	}
+	var replacementTasks int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.session_archive_tasks task
+		JOIN control_plane.sessions session ON session.id = task.session_id
+		WHERE session.ref = $1 AND task.kind = 'SNAPSHOT' AND task.ref <> $2
+		  AND task.state IN ('READY', 'CLAIMED')`, sessionRef, taskRef).Scan(&replacementTasks); err != nil {
+		t.Fatalf("read replacement snapshot tasks: %v", err)
+	}
+	if replacementTasks != 0 {
+		t.Fatalf("missing PVC terminal state rematerialized %d replacement snapshot tasks", replacementTasks)
 	}
 }
 

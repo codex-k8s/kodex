@@ -4,8 +4,8 @@ title: Диагностика session-archive
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
-updated: 2026-08-29
+version: 1.2.0
+updated: 2026-08-30
 ---
 
 # Диагностика session-archive
@@ -36,6 +36,23 @@ credentials.
 5. Для `DELETE_PVC` подтвердить `current_archive_id` и отсутствие Pod, который
    монтирует PVC. Свободное место само по себе не разрешает удаление.
 6. Для `DELETE_OBJECT` проверить retention и terminal/superseded lifecycle.
+
+Перед созданием `SNAPSHOT` или `RESTORE` Job controller читает exact PVC,
+проверяет canonical Session binding и фиксирует Kubernetes UID в аннотации Job
+`session-archive.kodex.dev/source-pvc-uid`. Во время выполнения controller
+повторно сверяет UID на каждом observation cycle. Он не разбирает текст
+scheduler event: отсутствие PVC даёт `SESSION_ARCHIVE_PVC_MISSING`, а объект с
+тем же именем и другим UID - `SESSION_ARCHIVE_PVC_REPLACED`. В обоих случаях
+Job и task ConfigMap удаляются, после чего результат проходит через fenced
+`FailSessionArchiveTask`.
+
+Эти ошибки повторяются только в пределах `maximum_attempts`. После исчерпания
+попыток task переходит в `DEAD_LETTER`, а `session_storage` - в `ERROR`; новый
+snapshot task автоматически не материализуется. Это закрытый отказ при утрате
+или подмене state volume, а не разрешение создать пустой PVC или считать данные
+заархивированными. Для восстановления сначала установить причину удаления и
+подтвердить источник данных; обходить состояние через ручной SQL, пересоздание
+одноимённого PVC или принудительное завершение task запрещено.
 
 Retry выполняет controller через новый fenced claim. Не переводить task или
 `session_storage` вручную SQL-запросом и не удалять PVC/Object вручную.

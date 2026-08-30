@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -25,6 +26,8 @@ import (
 const (
 	managedLabel           = "session-archive.kodex.dev/managed"
 	restoreInputAnnotation = "session-archive.kodex.dev/restore-input-digest"
+	sourcePVCUIDAnnotation = "session-archive.kodex.dev/source-pvc-uid"
+	defaultPollInterval    = 2 * time.Second
 )
 
 type Config struct {
@@ -39,6 +42,7 @@ type Controller struct {
 	client     kubernetes.Interface
 	config     Config
 	pvcRequest resource.Quantity
+	poll       time.Duration
 }
 
 func InCluster(config Config) (*Controller, error) {
@@ -63,7 +67,7 @@ func New(client kubernetes.Interface, config Config) (*Controller, error) {
 		config.WorkerTimeout < time.Minute || config.WorkerTimeout > 15*time.Minute {
 		return nil, errors.New("session archive controller configuration is invalid")
 	}
-	return &Controller{client: client, config: config, pvcRequest: pvcRequest}, nil
+	return &Controller{client: client, config: config, pvcRequest: pvcRequest, poll: defaultPollInterval}, nil
 }
 
 func (controller *Controller) Check(ctx context.Context) error {
@@ -115,6 +119,17 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 			return model.Result{}, err
 		}
 	}
+	var sourcePVCUID types.UID
+	if task.Kind == "SNAPSHOT" || task.Kind == "RESTORE" {
+		uid, failure, err := controller.bindSessionPVC(ctx, task.PVCName)
+		if err != nil {
+			return model.Result{}, err
+		}
+		if failure != nil {
+			return *failure, nil
+		}
+		sourcePVCUID = uid
+	}
 	name := workloadName(task.TaskRef, task.ContentGeneration, task.Attempt)
 	raw, err := json.Marshal(task)
 	if err != nil || len(raw) > model.MaximumTaskBytes {
@@ -122,16 +137,17 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 	}
 	immutable := true
 	configMap := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.Namespace,
-		Labels: map[string]string{managedLabel: "true"}}, Immutable: &immutable, Data: map[string]string{"task.json": string(raw)}}
+		Labels: map[string]string{managedLabel: "true"}, Annotations: pvcBindingAnnotation(sourcePVCUID)},
+		Immutable: &immutable, Data: map[string]string{"task.json": string(raw)}}
 	if _, err := controller.client.CoreV1().ConfigMaps(controller.config.Namespace).Create(ctx, configMap, metav1.CreateOptions{}); err != nil {
 		return model.Result{}, errors.New("create session archive task input")
 	}
 	defer controller.cleanup(ctx, name)
-	job := controller.job(name, task)
+	job := controller.job(name, task, sourcePVCUID)
 	if _, err := controller.client.BatchV1().Jobs(controller.config.Namespace).Create(ctx, job, metav1.CreateOptions{}); err != nil {
 		return model.Result{}, errors.New("create session archive worker job")
 	}
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(controller.poll)
 	renewTicker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	defer renewTicker.Stop()
@@ -144,6 +160,15 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 				return model.Result{}, err
 			}
 		case <-ticker.C:
+			if sourcePVCUID != "" {
+				failure, err := controller.observeSessionPVC(ctx, task.PVCName, sourcePVCUID)
+				if err != nil {
+					return model.Result{}, err
+				}
+				if failure != nil {
+					return *failure, nil
+				}
+			}
 			job, err := controller.client.BatchV1().Jobs(controller.config.Namespace).Get(ctx, name, metav1.GetOptions{})
 			if err != nil {
 				return model.Result{}, errors.New("observe session archive worker job")
@@ -154,6 +179,44 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 			return controller.readResult(ctx, name, job.Status.Succeeded > 0)
 		}
 	}
+}
+
+func (controller *Controller) bindSessionPVC(ctx context.Context, name string) (types.UID, *model.Result, error) {
+	pvc, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return "", pvcFailure(model.SafeErrorPVCMissing), nil
+	}
+	if err != nil {
+		return "", nil, errors.New("read session archive PVC binding")
+	}
+	if pvc.DeletionTimestamp != nil {
+		return "", pvcFailure(model.SafeErrorPVCMissing), nil
+	}
+	if pvc.UID == "" {
+		return "", nil, errors.New("session archive PVC UID is unavailable")
+	}
+	return pvc.UID, nil, nil
+}
+
+func (controller *Controller) observeSessionPVC(ctx context.Context, name string, expectedUID types.UID) (*model.Result, error) {
+	pvc, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return pvcFailure(model.SafeErrorPVCMissing), nil
+	}
+	if err != nil {
+		return nil, errors.New("observe session archive PVC binding")
+	}
+	if pvc.DeletionTimestamp != nil {
+		return pvcFailure(model.SafeErrorPVCMissing), nil
+	}
+	if pvc.UID != expectedUID {
+		return pvcFailure(model.SafeErrorPVCReplaced), nil
+	}
+	return nil, nil
+}
+
+func pvcFailure(code string) *model.Result {
+	return &model.Result{Success: false, SafeErrorCode: code}
 }
 
 func (controller *Controller) ensureRestorePVC(ctx context.Context, task model.Task) error {
@@ -264,7 +327,7 @@ func (controller *Controller) readResult(ctx context.Context, jobName string, su
 	return model.Result{}, errors.New("session archive worker result is missing")
 }
 
-func (controller *Controller) job(name string, task model.Task) *batchv1.Job {
+func (controller *Controller) job(name string, task model.Task, sourcePVCUID types.UID) *batchv1.Job {
 	zero, deadline, ttl := int32(0), int64(controller.config.WorkerTimeout/time.Second), int32(300)
 	falseValue := false
 	volumes := []corev1.Volume{
@@ -288,13 +351,21 @@ func (controller *Controller) job(name string, task model.Task) *batchv1.Job {
 			{Name: "SESSION_ARCHIVE_WORKER_TIMEOUT", Value: controller.config.WorkerTimeout.String()}},
 		VolumeMounts: mounts, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 		SecurityContext: restricted(10002)}
-	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.Namespace, Labels: map[string]string{managedLabel: "true"}},
+	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.Namespace,
+		Labels: map[string]string{managedLabel: "true"}, Annotations: pvcBindingAnnotation(sourcePVCUID)},
 		Spec: batchv1.JobSpec{BackoffLimit: &zero, ActiveDeadlineSeconds: &deadline, TTLSecondsAfterFinished: &ttl,
 			Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{managedLabel: "true"}}, Spec: corev1.PodSpec{
 				ServiceAccountName: controller.config.WorkerServiceAccount, AutomountServiceAccountToken: &falseValue,
 				RestartPolicy: corev1.RestartPolicyNever, EnableServiceLinks: &falseValue, Containers: []corev1.Container{container}, Volumes: volumes,
 				SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPtr(true), FSGroup: int64Ptr(29000), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			}}}}
+}
+
+func pvcBindingAnnotation(uid types.UID) map[string]string {
+	if uid == "" {
+		return nil
+	}
+	return map[string]string{sourcePVCUIDAnnotation: string(uid)}
 }
 
 func (controller *Controller) cleanup(ctx context.Context, name string) {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 func TestFromProtoAcceptsCanonicalTimestampedCodexArchive(t *testing.T) {
@@ -26,9 +27,19 @@ func TestFromProtoRejectsArchiveFromAnotherCodexSession(t *testing.T) {
 	}
 }
 
+func TestFromProtoRejectsPVCFromAnotherSession(t *testing.T) {
+	t.Parallel()
+
+	input := validSnapshotProto()
+	input.PvcName = "runtime-session-0123456789abcdef"
+	if _, err := FromProto(input); err == nil {
+		t.Fatal("task accepted a PVC from another Session")
+	}
+}
+
 func validSnapshotProto() *controlplanev1.SessionArchiveTask {
 	const codexSessionID = "00000000-0000-4000-8000-000000000003"
-	return &controlplanev1.SessionArchiveTask{
+	input := &controlplanev1.SessionArchiveTask{
 		TaskRef:                "sat_00000000-0000-4000-8000-000000000001",
 		Kind:                   controlplanev1.SessionArchiveTaskKind_SESSION_ARCHIVE_TASK_KIND_SNAPSHOT,
 		OrganizationRef:        "org_00000000-0000-4000-8000-000000000001",
@@ -40,7 +51,6 @@ func validSnapshotProto() *controlplanev1.SessionArchiveTask {
 		RuntimeRevisionDigest:  strings.Repeat("a", 64),
 		CodexSessionId:         codexSessionID,
 		ContentGeneration:      1,
-		PvcName:                "runtime-session-0123456789abcdef",
 		InputDigest:            strings.Repeat("b", 64),
 		SourceRelativePath:     ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-" + codexSessionID + ".jsonl",
 		SourceSha256:           strings.Repeat("c", 64),
@@ -48,4 +58,6 @@ func validSnapshotProto() *controlplanev1.SessionArchiveTask {
 		TargetObjectKey:        "session-archive/v1/org/prj/session/g1/task-a1.tar",
 		Attempt:                1,
 	}
+	input.PvcName, _ = runtimecontract.SessionPVCName(input.SessionRef)
+	return input
 }
