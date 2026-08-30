@@ -922,7 +922,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
     .metadata.namespace == "kodex-runtime" and .rules == [{
       "apiGroups":[""],
       "resources":["secrets"],
-      "verbs":["get","list","create","delete"]
+      "verbs":["get","list","create","update","delete"]
     }]) and
   any(.[];
     .kind == "Deployment" and .metadata.name == "runtime-controller" and
