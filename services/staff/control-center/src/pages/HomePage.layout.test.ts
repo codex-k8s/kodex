@@ -10,7 +10,7 @@ const template = source.slice(
 
 describe("HomePage layout", () => {
   it("показывает полноширинное внимание раньше активной работы", () => {
-    const attention = template.indexOf('class="home-attention-section"');
+    const attention = template.indexOf("<HomeAttentionCenter");
     const running = template.indexOf('class="home-running-section"');
 
     expect(attention).toBeGreaterThan(-1);
@@ -18,9 +18,18 @@ describe("HomePage layout", () => {
     expect(template).not.toContain("home-focus-grid");
   });
 
-  it("не скрывает непокрытые источники за пустым результатом", () => {
-    expect(template).toContain("<CapabilityCoverageList");
-    expect(template).toContain('v-if="attention.length"');
-    expect(template).toContain('class="home-section-empty"');
+  it("разделяет доступные источники и не рисует недостоверные provider-карточки", () => {
+    expect(template).toContain(':gates="openGates"');
+    expect(template).toContain(':failed-runs="failedRuns"');
+    expect(template).toContain(':runs="resumableSessions"');
+    expect(template).not.toContain("CapabilityCoverageList");
+    expect(template).not.toContain("PROVIDER_AUTH_EXPIRY");
+  });
+
+  it("обновляет данные через store без route reload", () => {
+    expect(source).toContain("platform.loadOverview()");
+    expect(source).toContain("platform.loadRuns()");
+    expect(source).not.toContain("location.reload");
+    expect(source).not.toContain("router.go");
   });
 });
