@@ -44,24 +44,23 @@ type lockedBuild struct {
 	Build                   entity.ImageBuild
 }
 
-func scanRecipe(row roleImageRowScanner) (entity.RoleImageRecipe, error) {
+func scanRecipe(row roleImageRowScanner) (entity.RoleImageRecipe, string, error) {
 	var recipe entity.RoleImageRecipe
 	var specification []byte
-	var canManage bool
+	var ownerSubjectRef string
 	err := row.Scan(&recipe.Ref, &recipe.ProjectRef, &recipe.RoleDefinitionRef, &recipe.Name,
 		&recipe.State, &specification, &recipe.Generation, &recipe.SpecSHA256,
 		&recipe.PolicyRevision, &recipe.PolicySHA256, &recipe.RoleRuntimeContractRevision,
 		&recipe.RoleRuntimeContractSHA256, &recipe.ActiveImageArtifactRef,
 		&recipe.PromotedImageReference, &recipe.Version, &recipe.CreatedAt, &recipe.UpdatedAt,
-		&canManage)
+		&ownerSubjectRef)
 	if err != nil {
-		return entity.RoleImageRecipe{}, err
+		return entity.RoleImageRecipe{}, "", err
 	}
 	if err := json.Unmarshal(specification, &recipe.Input); err != nil {
-		return entity.RoleImageRecipe{}, errors.New("decode role image recipe specification")
+		return entity.RoleImageRecipe{}, "", errors.New("decode role image recipe specification")
 	}
-	recipe.NextActions = roleImageActions(recipe, canManage)
-	return recipe, nil
+	return recipe, ownerSubjectRef, nil
 }
 
 func scanLockedRecipe(row roleImageRowScanner) (lockedRecipe, error) {

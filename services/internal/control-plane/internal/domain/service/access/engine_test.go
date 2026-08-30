@@ -119,6 +119,27 @@ func TestSensitivePermissionsAreSeparatedByExactResource(t *testing.T) {
 	}
 }
 
+func TestProjectViewCoversExactRoleImage(t *testing.T) {
+	t.Parallel()
+	definition, present := Permission("project.view")
+	if !present || !contains(definition.ResourceKinds, "ROLE_IMAGE") {
+		t.Fatalf("project.view does not cover exact role images: %#v", definition)
+	}
+	subject := entity.AccessSubject{Kind: "USER", Ref: "usr_viewer"}
+	binding := entity.AccessBinding{
+		State: "ACTIVE", Subject: subject,
+		RoleVersion: entity.AccessRoleVersion{PermissionKeys: []string{"project.view"}},
+		Scope:       entity.AccessScope{Kind: "PROJECT", ProjectRef: "prj_allowed"},
+	}
+	target := entity.AccessScope{
+		Kind: "RESOURCE_INSTANCE", ProjectRef: "prj_allowed",
+		ResourceKind: "ROLE_IMAGE", ResourceRef: "imgrec_allowed",
+	}
+	if decision := Evaluate(subject, "project.view", target, "", []entity.AccessBinding{binding}, time.Now().UTC()); !decision.Allowed {
+		t.Fatalf("project-scoped viewer cannot read an exact role image: %#v", decision)
+	}
+}
+
 func TestValidateScopeRequiresProjectForProjectOwnedResourceInstance(t *testing.T) {
 	if err := ValidateScope(entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: "agt_a"}); err == nil {
 		t.Fatal("project-owned agent scope without project was accepted")

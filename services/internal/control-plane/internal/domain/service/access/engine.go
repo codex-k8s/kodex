@@ -20,7 +20,7 @@ var definitions = []entity.PermissionDefinition{
 	permission("access.view", "READ", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
 	permission("access.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT"}, []string{"ORGANIZATION", "PROJECT"}, false),
 	permission("project.create", "WRITE", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
-	permission("project.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT"}, false),
+	permission("project.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "ROLE_IMAGE"}, false),
 	permission("project.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT"}, []string{"PROJECT"}, false),
 	permission("agent.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"AGENT"}, false),
 	permission("agent.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"AGENT"}, false),

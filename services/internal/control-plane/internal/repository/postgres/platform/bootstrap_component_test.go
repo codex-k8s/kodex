@@ -190,6 +190,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("enterprise access restricts exact agent and project", func(t *testing.T) {
 		testEnterpriseAccessRestriction(t, ctx, repository)
 	})
+	t.Run("role image lifecycle uses canonical application access", func(t *testing.T) {
+		testRoleImageApplicationAccess(t, ctx, repository)
+	})
 	t.Run("runtime environment create rejects a missing exact image", func(t *testing.T) {
 		testRuntimeEnvironmentRejectsMissingImage(t, ctx, repository)
 	})

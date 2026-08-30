@@ -15,6 +15,8 @@ var (
 	queryRoleImagesResolveProjectRole string
 	//go:embed sql/role_images_lock_recipe.sql
 	queryRoleImagesLockRecipe string
+	//go:embed sql/role_images_resolve_access_target.sql
+	queryRoleImagesResolveAccessTarget string
 	//go:embed sql/role_images_insert_recipe.sql
 	queryRoleImagesInsertRecipe string
 	//go:embed sql/role_images_update_recipe.sql

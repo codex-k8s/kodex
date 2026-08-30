@@ -10,15 +10,4 @@ JOIN control_plane.projects project ON project.id = recipe.project_id
 JOIN control_plane.role_definitions role ON role.id = recipe.role_definition_id
 WHERE recipe.organization_id = $1::uuid
   AND recipe.ref = $2
-  AND (
-      $3 IN ('OWNER', 'ADMINISTRATOR')
-      OR EXISTS (
-          SELECT 1
-          FROM control_plane.memberships membership
-          WHERE membership.project_id = project.id
-            AND membership.subject_id = $4::uuid
-            AND membership.active
-            AND 'MANAGE_AGENTS' = ANY(membership.permissions)
-      )
-  )
 FOR UPDATE OF recipe
