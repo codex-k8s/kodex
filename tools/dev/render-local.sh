@@ -19,6 +19,7 @@ usage() {
     '  --image-admission-image <repository@sha256:digest>' \
     '  --image-admission-tools-image <repository@sha256:digest>' \
     '  --authority-image <repository@sha256:digest>' \
+    '  --authority-source-revision <positive integer>' \
     '  --role-image-input-manifest-digest <sha256:digest>' \
     '  --role-image-input-payload-sha256 <sha256>' \
     '  --role-image-input-source-sha256 <sha256>' >&2
@@ -40,6 +41,7 @@ role_image_builder_image=""
 image_admission_image=""
 image_admission_tools_image=""
 authority_image=""
+authority_source_revision=""
 role_image_input_manifest_digest=""
 role_image_input_payload_sha256=""
 role_image_input_source_sha256=""
@@ -61,6 +63,7 @@ while (($# > 0)); do
     --image-admission-image) image_admission_image=${2:-}; shift 2 ;;
     --image-admission-tools-image) image_admission_tools_image=${2:-}; shift 2 ;;
     --authority-image) authority_image=${2:-}; shift 2 ;;
+    --authority-source-revision) authority_source_revision=${2:-}; shift 2 ;;
     --role-image-input-manifest-digest) role_image_input_manifest_digest=${2:-}; shift 2 ;;
     --role-image-input-payload-sha256) role_image_input_payload_sha256=${2:-}; shift 2 ;;
     --role-image-input-source-sha256) role_image_input_source_sha256=${2:-}; shift 2 ;;
@@ -94,6 +97,9 @@ for exact_image in "$role_image_builder_image" "$image_admission_image" \
   [[ "$exact_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
     fail 'local supply-chain image must use an exact manifest digest'
 done
+[[ "$authority_source_revision" =~ ^[1-9][0-9]*$ &&
+  "$authority_source_revision" -le 9007199254740991 ]] ||
+  fail 'local authority source revision is invalid'
 [[ "$role_image_input_manifest_digest" =~ ^sha256:[a-f0-9]{64}$ ]] ||
   fail 'local role image input manifest digest is invalid'
 for plain_digest in "$role_image_input_payload_sha256" "$role_image_input_source_sha256"; do
@@ -770,12 +776,13 @@ PUBLIC_HOST="$public_host" yq -i '
   )
 ' "$render"
 
-SESSION_ARCHIVE_IMAGE="$session_archive_image" yq -i '
+SESSION_ARCHIVE_IMAGE="$session_archive_image" \
+AUTHORITY_SOURCE_REVISION="$authority_source_revision" yq -i '
   with(select(.kind == "ConfigMap" and
       .metadata.name == "internal-rpc-authority-publisher-target-registry");
     .data."key-delivery-targets.yaml" |= (
       from_yaml |
-      .source_revision = 1 |
+      .source_revision = (strenv(AUTHORITY_SOURCE_REVISION) | tonumber) |
       .targets |= map(select(
         .workload_id == "automation-scheduler" or
         .workload_id == "control-api-gateway" or

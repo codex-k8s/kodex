@@ -80,6 +80,105 @@ if [[ "$command_name" == down ]]; then
 fi
 
 install -d -m 0700 "$state_directory" "$state_directory/cache" "$state_directory/inputs"
+
+read_authority_snapshot_revision() {
+  local encoded compact payload revision
+  if ! encoded=$(kubectl -n kodex-system get secret/internal-rpc-authority-snapshot \
+    -o jsonpath='{.data.snapshot\.jws}' 2>/dev/null); then
+    printf '0\n'
+    return
+  fi
+  [[ -n "$encoded" ]] || fail 'local authority snapshot is empty'
+  compact=$(printf '%s' "$encoded" | base64 --decode 2>/dev/null) ||
+    fail 'local authority snapshot encoding is invalid'
+  IFS=. read -r _ payload _ <<<"$compact"
+  [[ -n "$payload" ]] || fail 'local authority snapshot payload is absent'
+  case $((${#payload} % 4)) in
+    0) ;;
+    2) payload="${payload}==" ;;
+    3) payload="${payload}=" ;;
+    *) fail 'local authority snapshot payload encoding is invalid' ;;
+  esac
+  revision=$(printf '%s' "$payload" | tr '_-' '/+' | base64 --decode 2>/dev/null |
+    jq -er '
+      .source_revision |
+      select(type == "number" and . >= 1 and . <= 9007199254740991 and floor == .)
+    ') || fail 'local authority snapshot source revision is invalid'
+  printf '%s\n' "$revision"
+}
+
+calculate_local_source_fingerprint() {
+  (
+    cd -- "$repository_root"
+    printf 'HEAD\0%s\0' "$(git rev-parse HEAD)"
+    git diff --no-ext-diff --binary HEAD --
+    while IFS= read -r -d '' path; do
+      printf 'UNTRACKED\0%s\0' "$path"
+      if [[ -L "$path" ]]; then
+        printf 'SYMLINK\0%s\0' "$(readlink -- "$path")"
+      elif [[ -f "$path" ]]; then
+        sha256sum -- "$path"
+      else
+        printf 'OTHER\0'
+      fi
+    done < <(git ls-files --others --exclude-standard -z)
+  ) | sha256sum | awk '{print $1}'
+}
+
+resolve_local_authority_source_revision() {
+  local current_revision source_fingerprint state_file state_revision state_fingerprint
+  current_revision=$(read_authority_snapshot_revision)
+  source_fingerprint=$(calculate_local_source_fingerprint)
+  [[ "$source_fingerprint" =~ ^[a-f0-9]{64}$ ]] ||
+    fail 'local source fingerprint is invalid'
+  state_file="$state_directory/authority-source-state.json"
+  state_revision=0
+  state_fingerprint=""
+  if [[ -e "$state_file" ]]; then
+    [[ -f "$state_file" && ! -L "$state_file" &&
+      "$(stat -c '%u' "$state_file")" == "$(id -u)" &&
+      $((8#$(stat -c '%a' "$state_file") & 8#077)) == 0 ]] ||
+      fail 'local authority source state is unsafe'
+    state_revision=$(jq -er '
+      select(.version == 1) | .sourceRevision |
+      select(type == "number" and . >= 1 and . <= 9007199254740991 and floor == .)
+    ' "$state_file") || fail 'local authority source state revision is invalid'
+    state_fingerprint=$(jq -er '
+      .sourceFingerprint | select(type == "string" and test("^[a-f0-9]{64}$"))
+    ' "$state_file") || fail 'local authority source state fingerprint is invalid'
+  fi
+  if ((current_revision == 0)); then
+    authority_source_revision=1
+  elif ((state_revision == current_revision)) &&
+    [[ "$state_fingerprint" == "$source_fingerprint" ]]; then
+    authority_source_revision=$current_revision
+  else
+    ((current_revision < 9007199254740991)) ||
+      fail 'local authority source revision is exhausted'
+    authority_source_revision=$((current_revision + 1))
+  fi
+  authority_source_fingerprint=$source_fingerprint
+}
+
+commit_local_authority_source_state() {
+  local state_file temporary_state source_sha
+  state_file="$state_directory/authority-source-state.json"
+  temporary_state=$(mktemp "$state_directory/.authority-source-state.XXXXXX")
+  source_sha=$(git -C "$repository_root" rev-parse HEAD)
+  jq -n --argjson source_revision "$authority_source_revision" \
+    --arg source_fingerprint "$authority_source_fingerprint" \
+    --arg source_sha "$source_sha" '
+      {
+        version: 1,
+        sourceRevision: $source_revision,
+        sourceFingerprint: $source_fingerprint,
+        sourceSHA: $source_sha
+      }
+    ' >"$temporary_state"
+  chmod 0600 "$temporary_state"
+  mv -- "$temporary_state" "$state_file"
+}
+
 endpoint_ip=${KODEX_DEV_ENDPOINT_IP:-127.0.0.1}
 [[ "$endpoint_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
   fail 'KODEX_DEV_ENDPOINT_IP must use IPv4'
@@ -294,6 +393,8 @@ role_image_input_manifest_digest=$(jq -er '.manifestDigest' "$state_directory/ro
 role_image_input_payload_sha256=$(jq -er '.payloadSha256' "$state_directory/role-image-input.json")
 role_image_input_source_sha256=$(jq -er '.sourceSha256' "$state_directory/role-image-input.json")
 
+resolve_local_authority_source_revision
+
 api_service_ip=$(kubectl -n default get service kubernetes -o jsonpath='{.spec.clusterIP}')
 api_endpoint_slices=$(kubectl -n default get endpointslice \
   -l kubernetes.io/service-name=kubernetes -o json)
@@ -328,11 +429,13 @@ api_endpoint_port=$(jq -er '
   --image-admission-image "$image_admission_image" \
   --image-admission-tools-image "$image_admission_tools_image" \
   --authority-image "$authority_image" \
+  --authority-source-revision "$authority_source_revision" \
   --role-image-input-manifest-digest "$role_image_input_manifest_digest" \
   --role-image-input-payload-sha256 "$role_image_input_payload_sha256" \
   --role-image-input-source-sha256 "$role_image_input_source_sha256"
 "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode apply \
   --render "$state_directory/render.yaml" --state-directory "$state_directory"
+commit_local_authority_source_state
 
 provider_metadata=("$state_directory"/provider-accounts/*/account.json)
 restored_provider_accounts=0
