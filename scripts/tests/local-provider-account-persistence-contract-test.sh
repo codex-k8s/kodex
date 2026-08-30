@@ -8,6 +8,7 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 provider_script="$repository_root/tools/dev/provider-account.sh"
+reconcile_sql="$repository_root/tools/dev/reconcile-provider-account.sql"
 dev_script="$repository_root/dev.sh"
 
 grep -Fq 'canonical_auth_file="$account_home/auth.json"' "$provider_script" ||
@@ -22,5 +23,12 @@ grep -Fq 'provider account metadata directory binding is invalid' "$dev_script" 
   fail 'provider metadata is not bound to its account directory'
 grep -Fq 'restored_provider_accounts > 0' "$dev_script" ||
   fail 'runtime readiness is not rechecked after provider reconciliation'
+grep -Fq 'ON CONFLICT (ref) DO UPDATE' "$reconcile_sql" ||
+  fail 'provider reconciliation does not use the current immutable account identity'
+if grep -Fq 'ON CONFLICT (organization_id, stable_key)' "$reconcile_sql"; then
+  fail 'provider reconciliation relies on the removed stable-key uniqueness constraint'
+fi
+[[ $(grep -Fc "WHERE account.ref = :'account_ref'" "$reconcile_sql") -eq 3 ]] ||
+  fail 'provider credential reconciliation is not bound to the exact account ref'
 
 printf 'Kodex local provider account persistence contract test passed\n'
