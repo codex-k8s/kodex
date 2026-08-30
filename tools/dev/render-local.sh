@@ -298,6 +298,7 @@ yq -i '
 ' "$render"
 
 runner_digest=${runner_image#*@}
+runtime_runner_image="$promoted_pull_host/kodex/agent-runner@$runner_digest"
 admission_tools_digest=${image_admission_tools_image#*@}
 admission_tools_sha256=${image_admission_tools_image#*@sha256:}
 frontend_sha256=$("$source_root/tools/dev/resolve-local-dockerfile-frontend.sh" \
@@ -452,7 +453,7 @@ BACKUP_CONTROLLER_IMAGE="$backup_controller_image" yq -i '
 ' "$render"
 
 API_SERVICE_CIDR="$kubernetes_service_cidr" API_ENDPOINT_CIDR="$kubernetes_endpoint_cidr" \
-API_ENDPOINT_PORT="$kubernetes_endpoint_port" \
+API_ENDPOINT_PORT="$kubernetes_endpoint_port" RUNTIME_RUNNER_IMAGE="$runtime_runner_image" \
 OIDC_HOST="$oidc_host" yq -i '
   with(select(.kind == "ConfigMap" and .metadata.name == "kodex-platform-endpoints");
     .data.oidcConnectAddress = "sso.identity.svc.cluster.local:443" |
@@ -486,6 +487,35 @@ OIDC_HOST="$oidc_host" yq -i '
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "session-archive-runtime");
     .data.SESSION_ARCHIVE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL = "true"
+  ) |
+  with(select(.kind == "Deployment" and .metadata.name == "secret-broker");
+    .spec.template.spec.initContainers = (
+      ((.spec.template.spec.initContainers // []) |
+        map(select(.name != "codex-cli-install"))) +
+      [{
+        "name":"codex-cli-install",
+        "image":strenv(RUNTIME_RUNNER_IMAGE),
+        "imagePullPolicy":"IfNotPresent",
+        "command":["/bin/sh","-ec"],
+        "args":["binary=$(find /usr/local/lib/node_modules/@openai/codex -type f -path \"*/vendor/*/bin/codex\" -print -quit); test -n \"$binary\"; test -x \"$binary\"; cp \"$binary\" /codex/codex; chmod 0555 /codex/codex"],
+        "resources":{"requests":{"cpu":"10m","memory":"16Mi"},"limits":{"cpu":"100m","memory":"64Mi"}},
+        "securityContext":{"runAsNonRoot":true,"runAsUser":10001,"runAsGroup":29000,"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
+        "volumeMounts":[{"name":"codex-cli","mountPath":"/codex"}]
+      }]
+    ) |
+    (.spec.template.spec.containers[] | select(.name == "secret-broker")) |= (
+      .env = (((.env // []) |
+        map(select(.name != "SECRET_BROKER_CODEX_BINARY"))) +
+        [{"name":"SECRET_BROKER_CODEX_BINARY","value":"/codex/codex"}]) |
+      .volumeMounts = (((.volumeMounts // []) |
+        map(select(.name != "codex-cli"))) +
+        [{"name":"codex-cli","mountPath":"/codex","readOnly":true}])
+    ) |
+    .spec.template.spec.volumes = (
+      ((.spec.template.spec.volumes // []) |
+        map(select(.name != "codex-cli"))) +
+      [{"name":"codex-cli","emptyDir":{"sizeLimit":"384Mi"}}]
+    )
   ) |
   with(select(.kind == "StatefulSet" and .metadata.name == "kodex-postgresql");
     (.spec.template.spec.containers[] | select(.name == "postgresql") | .args) += [
@@ -902,6 +932,24 @@ yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center"
   fail 'frontend development workload is absent'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$output" >/dev/null ||
   fail 'Control Plane development workload is absent'
+yq -o=json -I=0 '.' "$output" | jq -s -e --arg runnerImage "$runtime_runner_image" '
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "secret-broker" and
+    any(.spec.template.spec.initContainers[]?;
+      .name == "codex-cli-install" and .image == $runnerImage and
+      .imagePullPolicy == "IfNotPresent" and
+      any(.volumeMounts[]?; .name == "codex-cli" and .mountPath == "/codex")) and
+    any(.spec.template.spec.containers[]?;
+      .name == "secret-broker" and
+      any(.env[]?;
+        .name == "SECRET_BROKER_CODEX_BINARY" and
+        .value == "/codex/codex") and
+      any(.volumeMounts[]?;
+        .name == "codex-cli" and
+        .mountPath == "/codex" and .readOnly == true)) and
+    any(.spec.template.spec.volumes[]?;
+      .name == "codex-cli" and .emptyDir.sizeLimit == "384Mi"))
+' >/dev/null || fail 'secret-broker local Codex app-server binary is absent'
 yq -o=json -I=0 '.' "$output" | jq -s -e '
   [
     .[] |

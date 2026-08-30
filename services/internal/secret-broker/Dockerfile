@@ -21,7 +21,21 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/secret-broker ./cmd/secret-broker
 
+FROM docker.io/library/node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 AS codex-cli
+
+ARG KODEX_CODEX_PACKAGE=@openai/codex@0.144.1
+
+RUN set -eu; \
+    npm install --global "${KODEX_CODEX_PACKAGE}"; \
+    binary=$(find /usr/local/lib/node_modules/@openai/codex -type f \
+      -path '*/vendor/*/bin/codex' -print -quit); \
+    test -n "$binary" && test -x "$binary"; \
+    "$binary" --version >/dev/null; \
+    install -D -m 0555 "$binary" /out/codex; \
+    npm cache clean --force
+
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35 AS runtime
 COPY --from=build --chmod=0555 /out/ /usr/local/bin/
+COPY --from=codex-cli --chmod=0555 /out/codex /usr/local/bin/codex
 USER 10001:10001
 ENTRYPOINT ["/usr/local/bin/secret-broker"]

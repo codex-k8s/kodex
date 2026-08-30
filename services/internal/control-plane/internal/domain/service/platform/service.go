@@ -51,10 +51,11 @@ func (service *Service) Bootstrap(ctx context.Context) error {
 	return service.repository.Bootstrap(ctx)
 }
 func (service *Service) Ready(ctx context.Context) error {
-	if service.providerCredentialMaterializer == nil {
-		return errors.New("provider credential materializer is not configured")
-	}
-	return errors.Join(service.repository.Ready(ctx), service.providerCredentialMaterializer.Check(ctx))
+	// Общая readiness подтверждает только owned state control-plane. Downstream
+	// materializer имеет отдельную exact-path readiness: иначе control-plane
+	// исчезает из Service endpoints до старта secret-broker, а secret-broker не
+	// может проверить принадлежащий control-plane runtime-secret work path.
+	return service.repository.Ready(ctx)
 }
 
 func (service *Service) ResolveProofAuthority(ctx context.Context, input repository.ProofPrincipalInput) (repository.ProofAuthority, error) {
