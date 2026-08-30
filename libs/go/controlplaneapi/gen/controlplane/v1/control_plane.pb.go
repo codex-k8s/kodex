@@ -201,6 +201,10 @@ const (
 	NextAction_NEXT_ACTION_REVEAL               NextAction = 35
 	NextAction_NEXT_ACTION_PROMOTE              NextAction = 36
 	NextAction_NEXT_ACTION_DELETE               NextAction = 37
+	NextAction_NEXT_ACTION_UPDATE               NextAction = 38
+	NextAction_NEXT_ACTION_RESTORE              NextAction = 39
+	NextAction_NEXT_ACTION_REQUEST_BUILD        NextAction = 40
+	NextAction_NEXT_ACTION_PURGE                NextAction = 41
 )
 
 // Enum value maps for NextAction.
@@ -244,6 +248,10 @@ var (
 		35: "NEXT_ACTION_REVEAL",
 		36: "NEXT_ACTION_PROMOTE",
 		37: "NEXT_ACTION_DELETE",
+		38: "NEXT_ACTION_UPDATE",
+		39: "NEXT_ACTION_RESTORE",
+		40: "NEXT_ACTION_REQUEST_BUILD",
+		41: "NEXT_ACTION_PURGE",
 	}
 	NextAction_value = map[string]int32{
 		"NEXT_ACTION_UNSPECIFIED":          0,
@@ -284,6 +292,10 @@ var (
 		"NEXT_ACTION_REVEAL":               35,
 		"NEXT_ACTION_PROMOTE":              36,
 		"NEXT_ACTION_DELETE":               37,
+		"NEXT_ACTION_UPDATE":               38,
+		"NEXT_ACTION_RESTORE":              39,
+		"NEXT_ACTION_REQUEST_BUILD":        40,
+		"NEXT_ACTION_PURGE":                41,
 	}
 )
 
@@ -38936,7 +38948,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"#PROJECT_PERMISSION_MANAGE_SCHEDULES\x10\n" +
 	"\x12*\n" +
 	"&PROJECT_PERMISSION_MANAGE_INTEGRATIONS\x10\v\x12!\n" +
-	"\x1dPROJECT_PERMISSION_VIEW_AUDIT\x10\f*\xb8\b\n" +
+	"\x1dPROJECT_PERMISSION_VIEW_AUDIT\x10\f*\x9f\t\n" +
 	"\n" +
 	"NextAction\x12\x1b\n" +
 	"\x17NEXT_ACTION_UNSPECIFIED\x10\x00\x12\x14\n" +
@@ -38977,7 +38989,11 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12NEXT_ACTION_ROTATE\x10\"\x12\x16\n" +
 	"\x12NEXT_ACTION_REVEAL\x10#\x12\x17\n" +
 	"\x13NEXT_ACTION_PROMOTE\x10$\x12\x16\n" +
-	"\x12NEXT_ACTION_DELETE\x10%*\x8b\x01\n" +
+	"\x12NEXT_ACTION_DELETE\x10%\x12\x16\n" +
+	"\x12NEXT_ACTION_UPDATE\x10&\x12\x17\n" +
+	"\x13NEXT_ACTION_RESTORE\x10'\x12\x1d\n" +
+	"\x19NEXT_ACTION_REQUEST_BUILD\x10(\x12\x15\n" +
+	"\x11NEXT_ACTION_PURGE\x10)*\x8b\x01\n" +
 	"\x0fEntityLifecycle\x12 \n" +
 	"\x1cENTITY_LIFECYCLE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16ENTITY_LIFECYCLE_DRAFT\x10\x01\x12\x1b\n" +

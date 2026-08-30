@@ -1355,6 +1355,7 @@ const (
 	NextActionOPEN                NextAction = "OPEN"
 	NextActionPROMOTE             NextAction = "PROMOTE"
 	NextActionPUBLISH             NextAction = "PUBLISH"
+	NextActionPURGE               NextAction = "PURGE"
 	NextActionRECOVER             NextAction = "RECOVER"
 	NextActionREQUESTBUILD        NextAction = "REQUEST_BUILD"
 	NextActionRESOLVEGATE         NextAction = "RESOLVE_GATE"
@@ -1426,6 +1427,8 @@ func (e NextAction) Valid() bool {
 	case NextActionPROMOTE:
 		return true
 	case NextActionPUBLISH:
+		return true
+	case NextActionPURGE:
 		return true
 	case NextActionRECOVER:
 		return true

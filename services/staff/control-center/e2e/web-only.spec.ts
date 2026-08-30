@@ -2440,7 +2440,10 @@ test.describe("web-only fresh installation", () => {
     expect(retentionMilliseconds).toBeGreaterThan(29.9 * 24 * 60 * 60 * 1000);
     expect(retentionMilliseconds).toBeLessThan(30.1 * 24 * 60 * 60 * 1000);
 
-    await page.getByLabel("Раздел").selectOption("TRASH");
+    await page.getByRole("link", { name: "Корзина", exact: true }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/projects/${projectRef}/files/trash$`),
+    );
     const restored = await operateArtifactLifecycle(
       page,
       restoreArtifact.fileName,
@@ -2451,7 +2454,8 @@ test.describe("web-only fresh installation", () => {
     expect(restored.deletedAt).toBeUndefined();
     expect(restored.purgeAfter).toBeUndefined();
 
-    await page.getByLabel("Раздел").selectOption("FILES");
+    await page.getByRole("link", { name: "Все файлы", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectRef}/files$`));
     const deletedAgain = await operateArtifactLifecycle(
       page,
       restoreArtifact.fileName,
@@ -2465,7 +2469,10 @@ test.describe("web-only fresh installation", () => {
       restoreArtifact.ref,
       purgeReceipt,
     );
-    await page.getByLabel("Раздел").selectOption("TRASH");
+    await page.getByRole("link", { name: "Корзина", exact: true }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/projects/${projectRef}/files/trash$`),
+    );
     const purgeResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "DELETE" &&
@@ -2493,7 +2500,8 @@ test.describe("web-only fresh installation", () => {
       purgeReceipt,
     );
 
-    await page.getByLabel("Раздел").selectOption("FILES");
+    await page.getByRole("link", { name: "Все файлы", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectRef}/files$`));
     const emptyTrashArtifact = await uploadFilesWorkspaceArtifact(
       page,
       `${environment.resourcePrefix}-empty-trash.txt`,
@@ -2514,7 +2522,10 @@ test.describe("web-only fresh installation", () => {
       emptyTrashArtifact.ref,
       emptyReceipt,
     );
-    await page.getByLabel("Раздел").selectOption("TRASH");
+    await page.getByRole("link", { name: "Корзина", exact: true }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/projects/${projectRef}/files/trash$`),
+    );
     await page.getByRole("button", { name: "Очистить корзину" }).click();
     const emptyDialog = page.getByRole("dialog", {
       name: "Очистить всю корзину?",
@@ -2536,7 +2547,8 @@ test.describe("web-only fresh installation", () => {
       emptyReceipt,
     );
 
-    await page.getByLabel("Раздел").selectOption("FILES");
+    await page.getByRole("link", { name: "Все файлы", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectRef}/files$`));
     const retentionArtifact = await uploadFilesWorkspaceArtifact(
       page,
       `${environment.resourcePrefix}-retention-clock.txt`,

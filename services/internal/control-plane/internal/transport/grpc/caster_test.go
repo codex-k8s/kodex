@@ -42,6 +42,26 @@ func TestCastBootstrapIncludesResolvedPlatformIdentity(t *testing.T) {
 	}
 }
 
+func TestNextActionsPreserveAllDomainLifecycleCommands(t *testing.T) {
+	t.Parallel()
+
+	actions := nextActions([]string{"UPDATE", "RESTORE", "REQUEST_BUILD", "PURGE"})
+	want := []controlplanev1.NextAction{
+		controlplanev1.NextAction_NEXT_ACTION_UPDATE,
+		controlplanev1.NextAction_NEXT_ACTION_RESTORE,
+		controlplanev1.NextAction_NEXT_ACTION_REQUEST_BUILD,
+		controlplanev1.NextAction_NEXT_ACTION_PURGE,
+	}
+	if len(actions) != len(want) {
+		t.Fatalf("next actions length = %d, want %d: %v", len(actions), len(want), actions)
+	}
+	for index := range want {
+		if actions[index] != want[index] {
+			t.Fatalf("next action %d = %s, want %s", index, actions[index], want[index])
+		}
+	}
+}
+
 func TestCastRunIncludesTypedTokenUsage(t *testing.T) {
 	t.Parallel()
 
