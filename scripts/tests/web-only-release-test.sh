@@ -136,6 +136,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .kind == "ValidatingAdmissionPolicy" and
     .metadata.name == "runtime-role-pod-exact-secret-projection" and
     .spec.failurePolicy == "Fail" and
+    .spec.paramKind == {"apiVersion":"v1","kind":"ConfigMap"} and
     ([.spec.validations[].expression] | join(" ") | contains(
       "runtime-sa-[a-f0-9]{16}")) and
     ([.spec.validations[].expression] | join(" ") | contains(
@@ -147,11 +148,18 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     ([.spec.validations[].expression] | join(" ") | contains(
       "container.securityContext.allowPrivilegeEscalation == false")) and
     ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime-provider-credential-relay")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "params.data['\''nodeReadbackImage'\'']")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
       "compareTo(quantity('\''100m'\''))"))) and
   any($resources[];
     .kind == "ValidatingAdmissionPolicyBinding" and
     .metadata.name == "runtime-role-pod-exact-secret-projection" and
     .spec.policyName == "runtime-role-pod-exact-secret-projection" and
+    .spec.paramRef.name == "kodex-image-admission-policy" and
+    .spec.paramRef.namespace == "kodex-system" and
+    .spec.paramRef.parameterNotFoundAction == "Deny" and
     .spec.validationActions == ["Deny"]) and
   any($resources[];
     .kind == "Role" and .metadata.name == "runtime-controller" and

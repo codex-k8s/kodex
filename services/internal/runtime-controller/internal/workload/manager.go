@@ -925,7 +925,7 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		err = apierrors.NewNotFound(corev1.Resource("pods"), podName)
 	}
 	if apierrors.IsNotFound(err) {
-		if ticketErr := manager.removeConflictingWarmTicket(ctx, secretName, input); ticketErr != nil {
+		if ticketErr := manager.removeConflictingWarmTicket(ctx, secretName, input, environmentSecrets, &providerBinding); ticketErr != nil {
 			return false, ticketErr
 		}
 		token, ticketErr := newTicket()
@@ -941,7 +941,7 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 			existing, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
 		}
 		if err != nil {
-			return false, errors.New("create warm runtime pod")
+			return false, fmt.Errorf("create warm runtime Pod: %w", err)
 		}
 	} else if err != nil {
 		return false, errors.New("read warm runtime pod")
@@ -999,7 +999,7 @@ func runtimeInputSecretName(pod *corev1.Pod) string {
 	return ""
 }
 
-func (manager *Manager) removeConflictingWarmTicket(ctx context.Context, secretName string, input runtimecontract.RunnerInput) error {
+func (manager *Manager) removeConflictingWarmTicket(ctx context.Context, secretName string, input runtimecontract.RunnerInput, environmentSecrets map[string][]byte, providerBinding *ProviderSecretBinding) error {
 	secret, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, secretName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return nil
@@ -1007,14 +1007,8 @@ func (manager *Manager) removeConflictingWarmTicket(ctx context.Context, secretN
 	if err != nil {
 		return errors.New("read warm runtime ticket")
 	}
-	if secret.Annotations[revisionAnnotation] == input.RuntimeRevisionDigest &&
-		secret.Annotations[controllerAnnotation] == manager.config.ControllerPodUID {
-		bound, decodeErr := runtimecontract.DecodeRunnerInput(secret.Data[inputKey])
-		if decodeErr == nil && bound.WorkloadInstance == input.WorkloadInstance &&
-			bound.CallbackURL == input.CallbackURL && bound.CallbackTLS == input.CallbackTLS &&
-			bound.ExecutionTicketFile == input.ExecutionTicketFile {
-			return nil
-		}
+	if runtimeTicketMatches(secret, "system-assistant-warm", "warm", input, "", environmentSecrets, providerBinding) {
+		return nil
 	}
 	if err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		return errors.New("replace stale warm runtime ticket")
@@ -1261,10 +1255,7 @@ func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode st
 	_, err = manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Create(ctx, secret, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		existing, getErr := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
-		if getErr != nil || existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest ||
-			!providerTicketBindingMatches(existing, input, providerBinding) ||
-			mode != "warm-turn" && !environmentProjectionMatches(input, existing.Data) ||
-			subtle.ConstantTimeCompare(existing.Data[ticketKey], []byte(token)) != 1 && mode == "warm-turn" {
+		if getErr != nil || !runtimeTicketMatches(existing, podName, mode, input, token, environmentSecrets, providerBinding) {
 			return errors.New("existing runtime ticket conflicts with immutable execution")
 		}
 		return nil
@@ -1273,6 +1264,44 @@ func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode st
 		return errors.New("create immutable runtime ticket")
 	}
 	return nil
+}
+
+func runtimeTicketMatches(existing *corev1.Secret, podName, mode string, input runtimecontract.RunnerInput, token string, environmentSecrets map[string][]byte, providerBinding *ProviderSecretBinding) bool {
+	if existing == nil || existing.Immutable == nil || !*existing.Immutable ||
+		existing.Labels[managedLabel] != "true" || existing.Labels[modeLabel] != mode ||
+		existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest ||
+		existing.Annotations[configAnnotation] != input.RuntimeConfigDigest ||
+		existing.Annotations[environmentAnnotation] != input.RuntimeEnvironmentDigest ||
+		existing.Annotations[controllerAnnotation] != input.WorkloadInstance ||
+		existing.Annotations[podAnnotation] != podName ||
+		existing.Annotations[resourcesAnnotation] != input.EnvironmentPolicy.ResourcesDigest ||
+		existing.Annotations[volumesAnnotation] != input.EnvironmentPolicy.VolumesDigest ||
+		existing.Annotations[networkAnnotation] != input.EnvironmentPolicy.NetworkDigest ||
+		existing.Annotations[rbacProfileAnnotation] != input.EnvironmentPolicy.RBACDigest ||
+		existing.Annotations[effectiveRBACAnnotation] != input.EffectiveKubernetesAccess.Digest ||
+		!providerTicketBindingMatches(existing, input, providerBinding) ||
+		len(existing.Data) != len(environmentSecrets)+2 {
+		return false
+	}
+	raw, err := runtimecontract.EncodeRunnerInput(input)
+	if err != nil || subtle.ConstantTimeCompare(existing.Data[inputKey], raw) != 1 {
+		return false
+	}
+	if len(existing.Data[ticketKey]) != 64 {
+		return false
+	}
+	if _, err := hex.DecodeString(string(existing.Data[ticketKey])); err != nil {
+		return false
+	}
+	if mode == "warm-turn" && subtle.ConstantTimeCompare(existing.Data[ticketKey], []byte(token)) != 1 {
+		return false
+	}
+	for key, value := range environmentSecrets {
+		if subtle.ConstantTimeCompare(existing.Data[key], value) != 1 {
+			return false
+		}
+	}
+	return true
 }
 
 func (manager *Manager) ensureSessionPVC(ctx context.Context, sessionRef string) error {

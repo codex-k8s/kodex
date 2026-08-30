@@ -1007,6 +1007,32 @@ func TestEnsureWarmReplacesTicketWithStaleCallbackAddress(t *testing.T) {
 	}
 }
 
+func TestEnsureWarmReplacesTicketWithStaleProviderSecretBinding(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, binding, err := manager.BuildWarmInput(testWarmRevision())
+	if err != nil {
+		t.Fatalf("BuildWarmInput() error = %v", err)
+	}
+	staleBinding := binding
+	staleBinding.ResourceVersion = "previous-resource-version"
+	secretName := manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest)
+	if err := manager.ensureTicket(context.Background(), secretName, "system-assistant-warm", "warm", input,
+		strings.Repeat("a", 64), nil, &staleBinding); err != nil {
+		t.Fatalf("ensure stale warm ticket error = %v", err)
+	}
+	if _, err := manager.EnsureWarm(context.Background(), input, binding); err != nil {
+		t.Fatalf("EnsureWarm() error = %v", err)
+	}
+	current, err := client.CoreV1().Secrets("kodex-runtime").Get(context.Background(), secretName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get(current warm ticket) error = %v", err)
+	}
+	if !providerTicketBindingMatches(current, input, &binding) {
+		t.Fatalf("warm ticket retained stale provider binding: annotations=%#v", current.Annotations)
+	}
+}
+
 func TestEnsureTurnRejectsExistingPodFromAnotherRevision(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)

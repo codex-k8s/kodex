@@ -314,6 +314,9 @@ metadata:
   name: runtime-role-pod-exact-secret-projection
 spec:
   failurePolicy: Fail
+  paramKind:
+    apiVersion: v1
+    kind: ConfigMap
   matchConstraints:
     resourceRules:
       - apiGroups: [""]
@@ -343,6 +346,10 @@ spec:
       expression: >-
         object.spec.containers.filter(container,
           container.name == 'role-runtime')
+    - name: relayContainers
+      expression: >-
+        object.spec.containers.filter(container,
+          container.name == 'provider-credential-relay')
     - name: kubeAccessVolumes
       expression: >-
         object.spec.volumes.filter(volume,
@@ -372,9 +379,10 @@ spec:
         object.spec.automountServiceAccountToken == false
       message: managed role Pod service account boundary is invalid
     - expression: >-
-        size(object.spec.containers) == 2 &&
+        size(object.spec.containers) == 3 &&
         size(variables.roleContainers) == 1 &&
         size(variables.providerContainers) == 1 &&
+        size(variables.relayContainers) == 1 &&
         has(object.spec.initContainers) &&
         size(object.spec.initContainers) == 1 &&
         object.spec.initContainers[0].name == 'workspace-init'
@@ -396,17 +404,26 @@ spec:
         object.spec.securityContext.seccompProfile.type == 'RuntimeDefault'
       message: managed role Pod security boundary is invalid
     - expression: >-
-        variables.allContainers.all(container,
+        [variables.roleContainers[0], variables.providerContainers[0],
+          object.spec.initContainers[0]].all(container,
           container.image.matches('^.+@sha256:[a-f0-9]{64}$') &&
           container.image == variables.roleContainers[0].image &&
           container.imagePullPolicy == 'IfNotPresent' &&
           (!has(container.command) || size(container.command) == 0)) &&
+        variables.relayContainers[0].image.matches('^.+@sha256:[a-f0-9]{64}$') &&
+        variables.relayContainers[0].image == params.data['nodeReadbackImage'] &&
+        variables.relayContainers[0].imagePullPolicy == 'IfNotPresent' &&
+        (!has(variables.relayContainers[0].command) ||
+          size(variables.relayContainers[0].command) == 0) &&
         size(variables.roleContainers[0].args) == 1 &&
         variables.roleContainers[0].args[0] ==
           (object.metadata.labels['runtime.kodex.dev/mode'] == 'warm'
             ? 'runtime-warm' : 'runtime-session') &&
         size(variables.providerContainers[0].args) == 1 &&
         variables.providerContainers[0].args[0] == 'runtime-provider' &&
+        size(variables.relayContainers[0].args) == 1 &&
+        variables.relayContainers[0].args[0] ==
+          'runtime-provider-credential-relay' &&
         size(object.spec.initContainers[0].args) == 1 &&
         object.spec.initContainers[0].args[0] == 'runtime-init-workspace'
       message: managed role Pod image or process contract is invalid
@@ -436,7 +453,11 @@ spec:
         variables.providerContainers[0].securityContext.seccompProfile.type ==
           'Unconfined' &&
         variables.providerContainers[0].securityContext.appArmorProfile.type ==
-          'Unconfined'
+          'Unconfined' &&
+        variables.relayContainers[0].securityContext.runAsUser == 10003 &&
+        variables.relayContainers[0].securityContext.runAsGroup == 10003 &&
+        variables.relayContainers[0].securityContext.seccompProfile.type ==
+          'RuntimeDefault'
       message: managed role Pod container securityContext is invalid
     - expression: >-
         size(variables.roleContainers[0].resources.requests) == 3 &&
@@ -461,7 +482,8 @@ spec:
           quantity('100Gi')) <= 0
       message: managed role Pod resources are outside the approved policy
     - expression: >-
-        [variables.providerContainers[0], object.spec.initContainers[0]].all(container,
+        [variables.providerContainers[0], variables.relayContainers[0],
+          object.spec.initContainers[0]].all(container,
           size(container.resources.requests) == 2 &&
           size(container.resources.limits) == 2 &&
           quantity(string(container.resources.requests.cpu)).compareTo(quantity('25m')) == 0 &&
@@ -525,6 +547,18 @@ spec:
           size(object.spec.initContainers[0].env) == 0)
       message: role runtime server-owned environment is invalid
     - expression: >-
+        size(variables.relayContainers[0].env) == 3 &&
+        variables.relayContainers[0].env.all(item, !has(item.valueFrom)) &&
+        size(variables.relayContainers[0].env.filter(item,
+          item.name == 'KODEX_RUNTIME_REVISION_FILE' &&
+          item.value == '/var/run/config/kodex/runtime/runtime.json')) == 1 &&
+        size(variables.relayContainers[0].env.filter(item,
+          item.name == 'OTEL_SDK_DISABLED' && item.value == 'true')) == 1 &&
+        size(variables.relayContainers[0].env.filter(item,
+          item.name == 'DEPLOYMENT_ENVIRONMENT' &&
+          item.value == object.metadata.labels['kodex.dev/environment'])) == 1
+      message: provider credential relay server-owned environment is invalid
+    - expression: >-
         size(variables.providerContainers[0].env) <= 135 &&
         variables.providerContainers[0].env.all(item,
           size(variables.providerContainers[0].env.filter(other,
@@ -577,7 +611,7 @@ spec:
         object.spec.volumes.all(volume,
           volume.name in ['session', 'runtime-input', 'callback-ca',
             'callback-client', 'provider-auth', 'provider-socket', 'tmp',
-            'provider-tmp', 'kube-api-access'] ||
+            'provider-tmp', 'provider-credential-relay', 'kube-api-access'] ||
           (volume.name.matches('^environment-[a-f0-9]{16}$') &&
            has(volume.emptyDir) && !has(volume.hostPath) &&
            !has(volume.persistentVolumeClaim) && !has(volume.secret) &&
@@ -608,7 +642,8 @@ spec:
           volume.name == 'provider-auth' && has(volume.secret) &&
           !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
           !has(volume.configMap) && !has(volume.projected) && !has(volume.emptyDir))) == 1 &&
-        ['provider-socket', 'tmp', 'provider-tmp'].all(name,
+        ['provider-socket', 'provider-credential-relay', 'tmp',
+          'provider-tmp'].all(name,
           size(object.spec.volumes.filter(volume,
             volume.name == name && has(volume.emptyDir) &&
             !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
@@ -624,7 +659,7 @@ spec:
     - expression: >-
         variables.providerContainers[0].volumeMounts.all(mount,
           mount.name in ['session', 'runtime-input', 'provider-auth',
-            'provider-socket', 'provider-tmp']) &&
+            'provider-socket', 'provider-credential-relay', 'provider-tmp']) &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
           mount.name == 'session' && mount.mountPath == '/workspace')) == 1 &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
@@ -637,6 +672,9 @@ spec:
         size(variables.providerContainers[0].volumeMounts.filter(mount,
           mount.name == 'provider-socket' &&
           mount.mountPath == '/run/kodex/provider')) == 1 &&
+        size(variables.providerContainers[0].volumeMounts.filter(mount,
+          mount.name == 'provider-credential-relay' &&
+          mount.mountPath == '/run/kodex/provider-credential-relay')) == 1 &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
           mount.name == 'provider-tmp' && mount.mountPath == '/tmp')) == 1 &&
         variables.roleContainers[0].volumeMounts.all(mount,
@@ -664,6 +702,26 @@ spec:
           mount.mountPath == '/run/kodex/provider')) == 1 &&
         size(variables.roleContainers[0].volumeMounts.filter(mount,
           mount.name == 'tmp' && mount.mountPath == '/tmp')) == 1 &&
+        variables.relayContainers[0].volumeMounts.all(mount,
+          mount.name in ['runtime-input', 'callback-ca', 'callback-client',
+            'provider-credential-relay']) &&
+        size(variables.relayContainers[0].volumeMounts.filter(mount,
+          mount.name == 'runtime-input' && mount.subPath == 'runtime.json' &&
+          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(variables.relayContainers[0].volumeMounts.filter(mount,
+          mount.name == 'runtime-input' && mount.subPath == 'token' &&
+          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(variables.relayContainers[0].volumeMounts.filter(mount,
+          mount.name == 'callback-ca' &&
+          mount.mountPath == '/var/run/config/kodex/runtime/callback' &&
+          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(variables.relayContainers[0].volumeMounts.filter(mount,
+          mount.name == 'callback-client' &&
+          mount.mountPath == '/var/run/secrets/kodex/runtime/callback-client' &&
+          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(variables.relayContainers[0].volumeMounts.filter(mount,
+          mount.name == 'provider-credential-relay' &&
+          mount.mountPath == '/run/kodex/provider-credential-relay')) == 1 &&
         object.spec.initContainers[0].volumeMounts.all(mount,
           mount.name in ['session', 'runtime-input', 'tmp']) &&
         size(object.spec.initContainers[0].volumeMounts.filter(mount,
@@ -700,6 +758,8 @@ spec:
             has(mount.readOnly) && mount.readOnly == true)) == 1)) &&
         variables.providerContainers[0].volumeMounts.all(mount,
           mount.name != 'kube-api-access') &&
+        variables.relayContainers[0].volumeMounts.all(mount,
+          mount.name != 'kube-api-access') &&
         object.spec.initContainers[0].volumeMounts.all(mount,
           mount.name != 'kube-api-access')
       message: Kubernetes API credential projection is not execution scoped
@@ -711,6 +771,10 @@ metadata:
 spec:
   policyName: runtime-role-pod-exact-secret-projection
   validationActions: [Deny]
+  paramRef:
+    name: kodex-image-admission-policy
+    namespace: kodex-system
+    parameterNotFoundAction: Deny
   matchResources:
     namespaceSelector:
       matchLabels:
