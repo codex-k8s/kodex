@@ -4,8 +4,8 @@ title: Infrastructure Guide
 type: guide
 status: approved
 owner: SRE
-version: 2.1.0
-updated: 2026-08-28
+version: 2.2.0
+updated: 2026-08-31
 ---
 
 # Infrastructure Guide
@@ -55,7 +55,10 @@ Artifact storage использует Secret `kodex-external-s3`. Endpoint, regi
 bucket поступают control-plane через `secretKeyRef`; `access-key` и `secret-key`
 монтируются отдельными read-only files. Secret отсутствует в render и Git.
 Локальный `tools/dev/deploy-local.sh` создаёт его из случайных файлов без вывода
-значений; production installer материализует его из owner input.
+значений; production installer материализует его из owner input. Полный Secret
+принадлежит `kodex-system`. В `kodex-runtime` создаётся отдельная проекция только
+с `access-key` и `secret-key` для специализированного session-archive worker;
+agent runtime Pod эту проекцию не монтирует и не получает S3 credentials.
 
 PostgreSQL bootstrap создаёт `NOLOGIN` group roles. Одноразовая Job задаёт
 SCRAM passwords для закрытого списка LOGIN roles из Secret, после чего migrations

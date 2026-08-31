@@ -4,8 +4,8 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.1.1
-updated: 2026-08-30
+version: 2.2.0
+updated: 2026-08-31
 ---
 
 # Чистое развертывание Kodex
@@ -27,20 +27,23 @@ bare-metal узла уничтожает все Kubernetes workloads, PVC и con
 5. Grafana, Prometheus, Alertmanager и Headlamp;
 6. локальный OCI registry;
 7. GitHub Actions Runner Controller и rootless BuildKit sidecar;
-8. PostgreSQL, NATS и все deployable Kodex в `kodex-system`.
+8. PostgreSQL, NATS и control-plane deployables в `kodex-system`, а runtime
+   workloads и session-archive workers в `kodex-runtime`.
 
 S3-compatible storage является обязательной зависимостью web-first MVP.
 Production использует заранее созданные внешний HTTPS endpoint и bucket;
 встроенный object storage не разворачивается.
 
 При установке компонента `secrets` установщик требует S3 env и материализует
-Secret `kodex-external-s3` с keys `endpoint`, `region`, `bucket`, `access-key`,
-`secret-key`; значения не входят в Git или render. При установке только
-компонента `platform` оператор заранее создаёт Secret с теми же exact keys, а
-установщик выполняет закрытый readback. Control-plane получает metadata через
-`secretKeyRef`, credentials через read-only files и остаётся not ready, если
-Secret, bucket либо authenticated `HeadBucket` недоступны. Bucket создаётся
-оператором до запуска platform.
+Secret `kodex-external-s3` в `kodex-system` с keys `endpoint`, `region`,
+`bucket`, `access-key`, `secret-key` и credential-only Secret с тем же именем
+и keys `access-key`, `secret-key` в `kodex-runtime`; значения не входят в Git
+или render. При установке только компонента `platform` оператор заранее создаёт
+оба exact Secret, а установщик выполняет закрытый readback. Control-plane
+получает metadata через `secretKeyRef`, credentials через read-only files и
+остаётся not ready, если Secret, bucket либо authenticated `HeadBucket`
+недоступны. Session-archive worker получает только credential projection в
+своём namespace. Bucket создаётся оператором до запуска platform.
 
 Служебный bootstrap registry принадлежит namespace `kodex-infra`; application
 registry и workloads Kodex принадлежат `kodex-system`. Смешивать эти границы
@@ -245,9 +248,12 @@ runtime-controller. Отсутствующий default `StorageClass` либо �
 Kubernetes Secrets защищаются k3s encryption at rest. Значения запрещены в
 GitHub artifacts, render, logs, Issue/PR и ConfigMap.
 
-Secret `kodex-external-s3` не выдаётся browser, gateway, runtime Pod или agent.
-Production endpoint обязан быть HTTPS без `skipTLSVerify`; local HTTP разрешён
-только для точного Service DNS `seaweedfs-s3.kodex-system.svc.cluster.local`.
+Secret `kodex-external-s3` не выдаётся browser, gateway, agent runtime Pod или
+agent. Специализированный session-archive worker получает в `kodex-runtime`
+только `access-key` и `secret-key`; endpoint, region и bucket передаёт
+контроллер из своей проверенной конфигурации. Production endpoint обязан быть
+HTTPS без `skipTLSVerify`; local HTTP разрешён только для точного Service DNS
+`seaweedfs-s3.kodex-system.svc.cluster.local`.
 
 ## 4. Preflight и reset
 

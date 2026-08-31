@@ -4,8 +4,8 @@ title: Обязательное S3-хранилище содержимого art
 type: decision
 status: approved
 owner: architect
-version: 2.0.0
-updated: 2026-08-28
+version: 2.1.0
+updated: 2026-08-31
 ---
 
 # ADR-MC-006. Обязательное S3-хранилище содержимого artifacts
@@ -42,13 +42,19 @@ digest и size; неизвестное либо повреждённое сос�
   `kodex-artifacts` создаёт идемпотентная bootstrap Job до запуска
   control-plane.
 - Local credentials генерирует `tools/dev/deploy-local.sh` в immutable Secret
-  `kodex-external-s3`; значения не входят в Git, render или log.
+  `kodex-external-s3` в `kodex-system` и отдельную credential-only проекцию с
+  тем же именем в `kodex-runtime`; значения не входят в Git, render или log.
 - Production не разворачивает встроенный object storage. Оператор заранее
-  создаёт внешний S3 bucket и Secret `kodex-external-s3` с keys `endpoint`,
-  `region`, `bucket`, `access-key`, `secret-key`. Значения не входят в Git.
+  создаёт внешний S3 bucket, полный Secret `kodex-external-s3` с keys
+  `endpoint`, `region`, `bucket`, `access-key`, `secret-key` в `kodex-system`
+  и credential-only Secret с keys `access-key`, `secret-key` в
+  `kodex-runtime`. Значения не входят в Git.
 - Control-plane монтирует только два credential files и получает
   endpoint/region/bucket через `secretKeyRef`. Отсутствующий Secret, bucket или
   отрицательный `HeadBucket` оставляет startup/readiness в закрытом отказе.
+- Session-archive controller передаёт проверенные endpoint/region/bucket worker
+  Job, а worker монтирует только credential-only Secret в `kodex-runtime`.
+  Обычный agent runtime Pod этот Secret не получает.
 - Plain HTTP разрешён только local endpoint с полным DNS suffix
   `.kodex-system.svc.cluster.local`; production endpoint обязан использовать
   HTTPS с проверкой hostname и доверенной CA.

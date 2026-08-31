@@ -164,6 +164,10 @@ if component_selected platform && ! component_selected secrets; then
     ((.data | keys | sort) == (["access-key", "bucket", "endpoint", "region", "secret-key"] | sort)) and
     all(.data[]; type == "string" and length > 0)
   ' >/dev/null || fail 'pre-provisioned kodex-external-s3 Secret is absent or invalid'
+  kubectl -n kodex-runtime get secret/kodex-external-s3 -o json | jq -e '
+    ((.data | keys | sort) == (["access-key", "secret-key"] | sort)) and
+    all(.data[]; type == "string" and length > 0)
+  ' >/dev/null || fail 'pre-provisioned runtime S3 credential projection is absent or invalid'
 fi
 
 installer_temporary_directory=$(mktemp -d)
@@ -387,6 +391,12 @@ if component_selected secrets; then
     --from-literal=endpoint="$KODEX_S3_ENDPOINT" \
     --from-literal=region="$KODEX_S3_REGION" \
     --from-literal=bucket="$KODEX_S3_BUCKET" \
+    --from-literal=access-key="$KODEX_S3_ACCESS_KEY" \
+    --from-literal=secret-key="$KODEX_S3_SECRET_KEY" \
+    --dry-run=client -o yaml |
+    kubectl apply --server-side --force-conflicts \
+      --field-manager=kodex-install -f - >/dev/null
+  kubectl -n kodex-runtime create secret generic kodex-external-s3 \
     --from-literal=access-key="$KODEX_S3_ACCESS_KEY" \
     --from-literal=secret-key="$KODEX_S3_SECRET_KEY" \
     --dry-run=client -o yaml |
