@@ -1,7 +1,9 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import { open } from "node:fs/promises";
 import { isAbsolute } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { type Page } from "@playwright/test";
@@ -24,6 +26,15 @@ interface Project extends VersionedRef {
 }
 
 interface Agent extends VersionedRef {
+  readonly state: string;
+}
+
+interface ProviderAccount extends VersionedRef {
+  readonly authorization?: { readonly method: string; readonly state: string };
+  readonly enabled: boolean;
+  readonly externalAccountMasked: string;
+  readonly name: string;
+  readonly ready: boolean;
   readonly state: string;
 }
 
@@ -404,6 +415,139 @@ test.describe("deployed local integration path", () => {
       token = undefined;
     }
   });
+
+  test("опциональный API key account выполняет run с exact affinity", async ({
+    page,
+  }) => {
+    test.skip(
+      !providerAPIKeyEnabled(),
+      "API key fixture требует явного KODEX_PROVIDER_E2E_API_KEY=1",
+    );
+    let apiKey: string | undefined = await readProviderAPIKey();
+    let account: ProviderAccount | undefined;
+
+    try {
+      await gotoWithRetry(page, "/administration/providers");
+      await page
+        .getByRole("button", { name: "Добавить учётную запись" })
+        .click();
+      const createDialog = page.getByRole("dialog", {
+        name: "Добавить учётную запись",
+      });
+      await createDialog
+        .getByLabel("Название")
+        .fill(`${environment.resourcePrefix} — API key account`);
+      const creationResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname === "/api/v1/provider-accounts",
+      );
+      await createDialog
+        .getByRole("button", { name: "Создать", exact: true })
+        .click();
+      const created = await creationResponse;
+      expect(created.status()).toBe(201);
+      account = (await created.json()) as ProviderAccount;
+      expect(account).toMatchObject({
+        enabled: false,
+        state: "PENDING_AUTHORIZATION",
+      });
+
+      const authorizationDialog = page.getByRole("dialog", {
+        name: new RegExp(`Авторизация: ${escapeRegExp(account.name)}`),
+      });
+      await authorizationDialog.getByRole("tab", { name: "API key" }).click();
+      await authorizationDialog.getByLabel("API key").fill(apiKey);
+      const authorizationResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname ===
+            `/api/v1/provider-accounts/${account?.ref ?? ""}/api-key-authorization`,
+      );
+      await authorizationDialog
+        .getByRole("button", { name: "Авторизовать", exact: true })
+        .click();
+      apiKey = undefined;
+      const authorized = await authorizationResponse;
+      expect(authorized.status()).toBe(200);
+      account = (await authorized.json()) as ProviderAccount;
+      expect(account).toMatchObject({
+        authorization: { method: "API_KEY", state: "AUTHORIZED" },
+        enabled: true,
+        ready: true,
+        state: "AUTHORIZED",
+      });
+      expect(account.externalAccountMasked).not.toBe("");
+      await expect(
+        authorizationDialog.getByText(
+          "Учётная запись авторизована и готова к использованию.",
+        ),
+      ).toBeVisible();
+      await authorizationDialog
+        .getByRole("button", { name: "Закрыть", exact: true })
+        .click();
+
+      const project = await mutateAPI<Project>(page, {
+        method: "POST",
+        path: "/api/v1/projects",
+        body: {
+          name: `${environment.resourcePrefix} — API key E2E`,
+          purpose: "Одноразовая проверка API key provider affinity.",
+          language: "ru",
+        },
+        expectedStatus: 201,
+      });
+      const agent = await mutateAPI<Agent>(page, {
+        method: "POST",
+        path: `/api/v1/projects/${encodeURIComponent(project.ref)}/agents`,
+        body: {
+          name: `${environment.resourcePrefix} — API key executor`,
+          purpose: "Подтвердить реальный запуск через API key account.",
+          roleDescription: "Детерминированный исполнитель provider E2E.",
+          initialInstructions:
+            "Отвечай по-русски одним коротким предложением. Не вызывай инструменты.",
+        },
+        expectedStatus: 201,
+      });
+      await pinAgentProviderAccount(page, agent.ref, account.ref);
+      const run = await createPlainRun(
+        page,
+        project.ref,
+        agent.ref,
+        "Ответь ровно: API key provider path работает.",
+      );
+      await waitForTerminalRun(page, run.ref, "SUCCEEDED");
+      await verifySingleProviderAffinity(
+        run.ref,
+        providerStableKey(account.ref),
+      );
+    } finally {
+      apiKey = undefined;
+      const credentialInput = page.locator('input[type="password"]');
+      if ((await credentialInput.count()) > 0) {
+        await credentialInput.fill("").catch(() => undefined);
+      }
+      if (account && account.state !== "REVOKED") {
+        const current = await readAPI<ProviderAccount>(
+          page,
+          `/api/v1/provider-accounts/${encodeURIComponent(account.ref)}`,
+        ).catch(() => undefined);
+        if (current && current.state !== "REVOKED") {
+          account = await mutateAPI<ProviderAccount>(page, {
+            method: "POST",
+            path: `/api/v1/provider-accounts/${encodeURIComponent(account.ref)}/revocation`,
+            version: current.version,
+            expectedStatus: 200,
+          });
+          expect(account).toMatchObject({
+            enabled: false,
+            ready: false,
+            state: "REVOKED",
+          });
+        }
+      }
+    }
+  });
 });
 
 async function createAndTestConnection(
@@ -535,6 +679,95 @@ async function createRun(
     expectedStatus: 201,
   });
   return workspace.run;
+}
+
+async function createPlainRun(
+  page: Page,
+  projectRef: string,
+  agentRef: string,
+  task: string,
+): Promise<Run> {
+  const workspace = await mutateAPI<RunWorkspace>(page, {
+    method: "POST",
+    path: "/api/v1/runs",
+    body: {
+      projectRef,
+      targetRef: agentRef,
+      targetType: "AGENT",
+      title: `${environment.resourcePrefix} — API key provider run`,
+      task,
+    },
+    expectedStatus: 201,
+  });
+  return workspace.run;
+}
+
+async function pinAgentProviderAccount(
+  page: Page,
+  agentRef: string,
+  accountRef: string,
+): Promise<void> {
+  const result = await page.evaluate(
+    async ({ expectedAccountRef, expectedAgentRef }) => {
+      const readbackResponse = await fetch(
+        `/api/v1/agents/${encodeURIComponent(expectedAgentRef)}/runtime-configuration`,
+      );
+      if (!readbackResponse.ok) {
+        return { status: readbackResponse.status, detail: "runtime readback" };
+      }
+      const readback = (await readbackResponse.json()) as {
+        agentVersion: number;
+        configuration: {
+          runtimeProfileRef: string;
+          model: string;
+          providerPolicy: {
+            accountCandidates: Array<{ accountRef: string; weight: number }>;
+            mode: string;
+          };
+        };
+      };
+      const currentCandidates =
+        readback.configuration.providerPolicy.accountCandidates;
+      if (
+        readback.configuration.providerPolicy.mode === "FIXED" &&
+        currentCandidates.length === 1 &&
+        currentCandidates[0]?.accountRef === expectedAccountRef
+      ) {
+        return { status: 200, detail: "" };
+      }
+      const csrfPrefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
+      const csrf = document.cookie
+        .split(";")
+        .map((part) => part.trim())
+        .find((part) => part.startsWith(csrfPrefix))
+        ?.slice(csrfPrefix.length);
+      if (!csrf) return { status: 0, detail: "CSRF token is unavailable" };
+      const publication = await fetch(
+        `/api/v1/agents/${encodeURIComponent(expectedAgentRef)}/runtime-configuration`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": crypto.randomUUID(),
+            "If-Match": `"${String(readback.agentVersion)}"`,
+            "X-CSRF-Token": decodeURIComponent(csrf),
+          },
+          body: JSON.stringify({
+            runtimeProfileRef: readback.configuration.runtimeProfileRef,
+            model: readback.configuration.model,
+            providerPolicyMode: "FIXED",
+            providerAccounts: [{ accountRef: expectedAccountRef, weight: 1 }],
+          }),
+        },
+      );
+      return {
+        status: publication.status,
+        detail: publication.ok ? "" : (await publication.text()).slice(0, 512),
+      };
+    },
+    { expectedAccountRef: accountRef, expectedAgentRef: agentRef },
+  );
+  expect(result.status, result.detail).toBe(200);
 }
 
 async function waitForOpenGate(page: Page, runRef: string): Promise<OwnerGate> {
@@ -826,6 +1059,117 @@ function githubEnabled(): boolean {
   if (raw !== "1")
     throw new Error("KODEX_INTEGRATION_E2E_GITHUB must be 0 or 1");
   return true;
+}
+
+function providerAPIKeyEnabled(): boolean {
+  const raw = process.env.KODEX_PROVIDER_E2E_API_KEY;
+  if (raw === undefined || raw === "0") return false;
+  if (raw !== "1") throw new Error("KODEX_PROVIDER_E2E_API_KEY must be 0 or 1");
+  return true;
+}
+
+async function readProviderAPIKey(): Promise<string> {
+  const direct = process.env.OPENAI_API_KEY;
+  const file = process.env.KODEX_PROVIDER_E2E_API_KEY_FILE;
+  if ((direct === undefined) === (file === undefined)) {
+    throw new Error("Exactly one provider API key source must be configured");
+  }
+  if (direct !== undefined) return validateProviderAPIKey(direct);
+  if (!file || !isAbsolute(file))
+    throw new Error("KODEX_PROVIDER_E2E_API_KEY_FILE must be absolute");
+  return validateProviderAPIKey(
+    await readPrivateFile(file, "Provider API key"),
+  );
+}
+
+function validateProviderAPIKey(raw: string): string {
+  if (
+    raw.length < 8 ||
+    raw.length > 16_384 ||
+    raw.trim() !== raw ||
+    /[\r\n\0]/.test(raw)
+  ) {
+    throw new Error("Provider API key value is invalid");
+  }
+  return raw;
+}
+
+async function readPrivateFile(path: string, label: string): Promise<string> {
+  const handle = await open(
+    path,
+    fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
+  );
+  try {
+    const stat = await handle.stat();
+    if (
+      !stat.isFile() ||
+      stat.size < 1 ||
+      stat.size > 16_384 ||
+      (stat.mode & 0o077) !== 0
+    ) {
+      throw new Error(
+        `${label} file must be a bounded owner-private regular file`,
+      );
+    }
+    if (typeof process.getuid === "function" && stat.uid !== process.getuid()) {
+      throw new Error(`${label} file owner is invalid`);
+    }
+    return await handle.readFile({ encoding: "utf8" });
+  } finally {
+    await handle.close();
+  }
+}
+
+function providerStableKey(accountRef: string): string {
+  return `account-${createHash("md5").update(accountRef).digest("hex").slice(0, 24)}`;
+}
+
+async function verifySingleProviderAffinity(
+  runRef: string,
+  accountKey: string,
+): Promise<void> {
+  const childEnvironment = { ...process.env };
+  delete childEnvironment.OPENAI_API_KEY;
+  delete childEnvironment.KODEX_PROVIDER_E2E_API_KEY_FILE;
+  delete childEnvironment.KODEX_GITHUB_BOT_PAT;
+  delete childEnvironment.KODEX_GITHUB_BOT_PAT_FILE;
+  const contextResult = await execFileAsync(
+    "kubectl",
+    ["config", "current-context"],
+    {
+      env: childEnvironment,
+      timeout: 10_000,
+      maxBuffer: 16 << 10,
+    },
+  );
+  const context = contextResult.stdout.trim();
+  if (!context || /prod(?:uction)?/i.test(context)) {
+    throw new Error("Exact local Kubernetes context is unavailable");
+  }
+  const verifier = fileURLToPath(
+    new URL(
+      "../../../../tools/dev/verify-provider-affinity.sh",
+      import.meta.url,
+    ),
+  );
+  const args = [
+    "--context",
+    context,
+    "--expect-run",
+    `${runRef}=${accountKey}`,
+    "--require-distinct-accounts",
+    "1",
+  ];
+  if (process.env.KUBECONFIG) args.push("--kubeconfig", process.env.KUBECONFIG);
+  await execFileAsync(verifier, args, {
+    env: childEnvironment,
+    timeout: 60_000,
+    maxBuffer: 64 << 10,
+  });
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function githubFixtureConfiguration(): {

@@ -23,7 +23,7 @@ usage() {
 Usage:
   verify-provider-affinity.sh --context <exact-context> \
     --expect-run <run-ref>=<provider-account-key> [--expect-run ...] \
-    --expect-same-session <original-run-ref>=<continuation-run-ref> [--expect-same-session ...] \
+    [--expect-same-session <original-run-ref>=<continuation-run-ref> ...] \
     [--require-distinct-accounts <count>]
 
 Read-only local E2E verification:
@@ -36,7 +36,7 @@ Options:
   --kubeconfig <path>                 Optional kubeconfig; defaults to KUBECONFIG.
   --expect-run <run>=<account>        Repeatable expected run/account binding.
   --expect-same-session <run>=<run>   Repeatable original/continuation pair.
-  --require-distinct-accounts <n>     Minimum observed accounts; default: 2, minimum: 2.
+  --require-distinct-accounts <n>     Minimum observed accounts; default: 2, minimum: 1.
   --help                              Show this help.
 
 Exit codes:
@@ -143,10 +143,9 @@ done
 [[ "$context" =~ ^[A-Za-z0-9._@/-]{1,253}$ ]] || fail_usage 'Kubernetes context is invalid'
 [[ "$context" != *prod* && "$context" != *production* ]] || fail_usage 'production context is forbidden'
 [[ "$required_distinct_accounts" =~ ^[0-9]+$ ]] || fail_usage 'distinct account count must be an integer'
-((required_distinct_accounts >= 2)) || fail_usage 'distinct account count must be at least 2'
+((required_distinct_accounts >= 1)) || fail_usage 'distinct account count must be at least 1'
 ((${#expected_run_order[@]} >= required_distinct_accounts)) ||
   fail_usage 'expected run set is smaller than the required distinct account count'
-((${#same_session_pairs[@]} > 0)) || fail_usage 'at least one original/continuation pair is required'
 
 for pair in "${same_session_pairs[@]}"; do
   original=${pair%%=*}

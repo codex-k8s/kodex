@@ -15,7 +15,9 @@ port=${KODEX_E2E_SYNTHETIC_PORT:-18082}
 for command_name in curl kubectl node npm; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
-[[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)) || fail 'KODEX_E2E_SYNTHETIC_PORT must be between 1024 and 65535'
+if [[ ! "$port" =~ ^[0-9]+$ ]] || ((port < 1024 || port > 65535)); then
+  fail 'KODEX_E2E_SYNTHETIC_PORT must be between 1024 and 65535'
+fi
 [[ ${KODEX_E2E_CONFIRM_DISPOSABLE:-} == 'I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION' ]] ||
   fail 'disposable installation confirmation is required'
 [[ -n ${KODEX_E2E_BASE_URL:-} ]] || fail 'KODEX_E2E_BASE_URL is required'
@@ -34,6 +36,16 @@ if [[ $github_enabled == 1 ]]; then
   if [[ -n ${KODEX_GITHUB_BOT_PAT:-} && -n ${KODEX_GITHUB_BOT_PAT_FILE:-} ]] ||
     [[ -z ${KODEX_GITHUB_BOT_PAT:-} && -z ${KODEX_GITHUB_BOT_PAT_FILE:-} ]]; then
     fail 'exactly one GitHub token source is required'
+  fi
+fi
+
+provider_api_key_enabled=${KODEX_PROVIDER_E2E_API_KEY:-0}
+[[ $provider_api_key_enabled == 0 || $provider_api_key_enabled == 1 ]] ||
+  fail 'KODEX_PROVIDER_E2E_API_KEY must be 0 or 1'
+if [[ $provider_api_key_enabled == 1 ]]; then
+  if [[ -n ${OPENAI_API_KEY:-} && -n ${KODEX_PROVIDER_E2E_API_KEY_FILE:-} ]] ||
+    [[ -z ${OPENAI_API_KEY:-} && -z ${KODEX_PROVIDER_E2E_API_KEY_FILE:-} ]]; then
+    fail 'exactly one provider API key source is required'
   fi
 fi
 

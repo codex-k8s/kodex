@@ -545,31 +545,39 @@ onBeforeUnmount(() => {
           </template>
         </section>
 
-        <form v-else class="authorization-panel" @submit.prevent="submitApiKey">
-          <p>{{ $t("providers.apiKeyDescription") }}</p>
-          <label class="field">
-            <span>{{ $t("providers.apiKey") }}</span>
-            <input
-              v-model="apiKey"
-              type="password"
-              maxlength="16384"
-              autocomplete="off"
-              spellcheck="false"
-              :placeholder="$t('providers.apiKeyPlaceholder')"
-            />
-            <small>{{ $t("providers.apiKeySafety") }}</small>
-          </label>
-          <button
-            class="button button--primary"
-            type="submit"
-            :disabled="
-              !apiKey ||
-              !accountAllows(authorizationAccount, 'CONFIGURE_CREDENTIAL')
-            "
+        <section v-else class="authorization-panel">
+          <template
+            v-if="authorizationAccount.authorization?.state === 'AUTHORIZED'"
           >
-            {{ $t("providers.authorizeApiKey") }}
-          </button>
-        </form>
+            <Check :size="24" aria-hidden="true" />
+            <strong>{{ $t("providers.authorized") }}</strong>
+          </template>
+          <form v-else class="provider-form" @submit.prevent="submitApiKey">
+            <p>{{ $t("providers.apiKeyDescription") }}</p>
+            <label class="field">
+              <span>{{ $t("providers.apiKey") }}</span>
+              <input
+                v-model="apiKey"
+                type="password"
+                maxlength="16384"
+                autocomplete="off"
+                spellcheck="false"
+                :placeholder="$t('providers.apiKeyPlaceholder')"
+              />
+              <small>{{ $t("providers.apiKeySafety") }}</small>
+            </label>
+            <button
+              class="button button--primary"
+              type="submit"
+              :disabled="
+                !apiKey ||
+                !accountAllows(authorizationAccount, 'CONFIGURE_CREDENTIAL')
+              "
+            >
+              {{ $t("providers.authorizeApiKey") }}
+            </button>
+          </form>
+        </section>
         <div
           v-if="authorizationAccount.authorization?.state === 'FAILED'"
           class="safe-warning"

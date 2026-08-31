@@ -20,6 +20,8 @@ describe("provider account layout", () => {
     expect(workspace).toContain('type="password"');
     expect(workspace).toContain('autocomplete="off"');
     expect(workspace).toContain('apiKey.value = ""');
+    expect(workspace).toContain('<section v-else class="authorization-panel">');
+    expect(workspace).toContain('<form v-else class="provider-form"');
     expect(workspace).not.toContain('name="providerAccountRef"');
     expect(selector).not.toContain('placeholder="pacc_');
   });

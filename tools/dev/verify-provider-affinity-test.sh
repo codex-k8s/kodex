@@ -60,6 +60,20 @@ jq -e '
   (.observed_accounts | length) == 2
 ' <<<"$valid_report" >/dev/null
 
+single_account_report=$({
+  row run_api_key session_api_key account-api-key 1 '["account-api-key"]'
+} | jq -s \
+  --argjson expected_runs '{"run_api_key":"account-api-key"}' \
+  --argjson same_sessions '[]' \
+  --argjson required_distinct_accounts 1 \
+  -f "$verifier")
+jq -e '
+  .ok == true and
+  .checked_runs == 1 and
+  .checked_session_pairs == 0 and
+  .observed_accounts == ["account-api-key"]
+' <<<"$single_account_report" >/dev/null
+
 missing_run_report=$({
   row run_original session_shared default-openai-codex 1 '["default-openai-codex"]'
   row run_continue session_shared default-openai-codex 1 '["default-openai-codex"]'
