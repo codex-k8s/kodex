@@ -695,7 +695,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
 }
 .run-flow :deep(.vue-flow__minimap) {
   right: 14px;
-  bottom: 14px;
+  bottom: 82px;
   width: 152px;
   height: 104px;
 }
@@ -853,7 +853,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
   }
   .run-flow :deep(.vue-flow__minimap) {
     right: 8px;
-    bottom: 8px;
+    bottom: 100px;
     width: 124px;
     height: 82px;
   }

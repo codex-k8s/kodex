@@ -1108,6 +1108,8 @@ onBeforeUnmount(() => {
   }
   .run-workspace-toolbar {
     top: 8px;
+    left: 8px;
+    transform: none;
   }
 }
 </style>
