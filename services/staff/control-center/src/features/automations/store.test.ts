@@ -8,6 +8,7 @@ import type {
 
 const updateScheduleMock = vi.hoisted(() => vi.fn());
 const commandScheduleMock = vi.hoisted(() => vi.fn());
+const listSchedulesMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   ...(await importOriginal<
@@ -15,6 +16,7 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   >()),
   updateSchedule: updateScheduleMock,
   commandSchedule: commandScheduleMock,
+  listSchedules: listSchedulesMock,
 }));
 vi.mock("@/shared/api/client", () => ({
   requestSignal: () => new AbortController().signal,
@@ -82,6 +84,7 @@ describe("automation store boundary", () => {
     setActivePinia(createPinia());
     updateScheduleMock.mockReset();
     commandScheduleMock.mockReset();
+    listSchedulesMock.mockReset();
     vi.stubGlobal("document", {
       cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
     });
@@ -137,5 +140,37 @@ describe("automation store boundary", () => {
     expect(request?.body).toEqual({ action: "ARCHIVE" });
     expect(request?.headers["If-Match"]).toBe('"4"');
     expect(store.schedules[current.ref]).toEqual(archived);
+  });
+
+  it("не перезаписывает mutation устаревшим list readback", async () => {
+    const current = schedule();
+    const paused = schedule({
+      version: 5,
+      state: "PAUSED",
+      nextActions: ["EDIT", "ENABLE", "ARCHIVE"],
+    });
+    let resolveList:
+      | ((value: { data: { items: Schedule[] }; response: Response }) => void)
+      | undefined;
+    listSchedulesMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveList = resolve;
+      }),
+    );
+    commandScheduleMock.mockResolvedValue({
+      data: paused,
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    const staleReload = store.loadSchedules(current.projectRef);
+    await store.changeSchedule(current, "PAUSE");
+    resolveList?.({
+      data: { items: [current] },
+      response: new Response(null, { status: 200 }),
+    });
+    await staleReload;
+
+    expect(store.schedules[current.ref]).toEqual(paused);
   });
 });

@@ -26,7 +26,6 @@ import { useI18n } from "vue-i18n";
 import AutomationArchiveDialog from "@/features/automations/AutomationArchiveDialog.vue";
 import AutomationEditorDialog from "@/features/automations/AutomationEditorDialog.vue";
 import {
-  commandSchedule,
   loadSchedulePage,
   loadScheduleRevisionPage,
   loadScheduleRunPage,
@@ -58,7 +57,7 @@ const { locale, t } = useI18n();
 
 const search = ref("");
 const state = ref<ScheduleFilter>("CURRENT");
-const schedules = ref<Schedule[]>([]);
+const scheduleRefs = ref<string[]>([]);
 const nextPageToken = ref<string>();
 const listLoading = ref(false);
 const moreLoading = ref(false);
@@ -92,6 +91,12 @@ let stopSentinelWatch: WatchStopHandle | undefined;
 const project = computed(() => platform.projects[props.projectRef]);
 const canCreate = computed(() =>
   project.value?.nextActions.includes("CREATE_SCHEDULE"),
+);
+const schedules = computed(() =>
+  scheduleRefs.value.flatMap((ref) => {
+    const schedule = platform.schedules[ref];
+    return schedule ? [schedule] : [];
+  }),
 );
 const filteredSchedules = computed(() =>
   schedules.value.filter((schedule) =>
@@ -204,8 +209,11 @@ function mergeRunOccurrences(
 }
 
 function replaceSchedule(schedule: Schedule): void {
-  schedules.value = mergeByRef(schedules.value, [schedule]);
-  platform.schedules[schedule.ref] = schedule;
+  const current = platform.schedules[schedule.ref];
+  if (!current || current.version <= schedule.version)
+    platform.schedules[schedule.ref] = schedule;
+  if (!scheduleRefs.value.includes(schedule.ref))
+    scheduleRefs.value = [...scheduleRefs.value, schedule.ref];
 }
 
 async function loadList(reset = false): Promise<void> {
@@ -228,12 +236,12 @@ async function loadList(reset = false): Promise<void> {
     );
     if (controller.signal.aborted || requestedProject !== props.projectRef)
       return;
-    schedules.value = reset
-      ? page.items
-      : mergeByRef(schedules.value, page.items);
+    const pageRefs = page.items.map((schedule) => schedule.ref);
+    scheduleRefs.value = reset
+      ? pageRefs
+      : [...new Set([...scheduleRefs.value, ...pageRefs])];
     nextPageToken.value = page.nextPageToken || undefined;
-    for (const schedule of page.items)
-      platform.schedules[schedule.ref] = schedule;
+    for (const schedule of page.items) replaceSchedule(schedule);
   } catch (error) {
     if (!controller.signal.aborted) listProblem.value = asProblem(error);
   } finally {
@@ -427,7 +435,7 @@ async function runCommand(
   commandBusy.value = schedule.ref;
   problem.value = undefined;
   try {
-    replaceSchedule(await commandSchedule(schedule, action));
+    replaceSchedule(await platform.changeSchedule(schedule, action));
   } catch (error) {
     const nextProblem = asProblem(error);
     if (nextProblem.kind === "conflict")

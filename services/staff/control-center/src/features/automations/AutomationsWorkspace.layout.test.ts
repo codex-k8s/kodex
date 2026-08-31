@@ -32,4 +32,11 @@ describe("AutomationsWorkspace lifecycle contract", () => {
     expect(source).toContain("deleteScheduleRef");
     expect(source).toContain("confirmDelete");
   });
+
+  it("использует единый realtime-aware store для lifecycle-команд", () => {
+    expect(source).toContain("const scheduleRefs = ref<string[]>([])");
+    expect(source).toContain("platform.schedules[ref]");
+    expect(source).toContain("platform.changeSchedule(schedule, action)");
+    expect(source).not.toContain("const schedules = ref<Schedule[]>([])");
+  });
 });
