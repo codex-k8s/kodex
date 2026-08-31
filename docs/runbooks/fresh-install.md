@@ -103,6 +103,15 @@ credential и режим `local-development` запрещены: они не с�
 `dev.sh down` удаляет только application namespaces `kodex-runtime`,
 `kodex-system`, `identity` и `kodex-trust`; общие контроллеры k3s сохраняются.
 
+При первом `dev.sh up` локальный профиль создаёт host-only dummy-интерфейс
+`kodex-api0` с адресом `10.254.254.1/32` и настраивает k3s
+`advertise-address` на него. Поэтому точный Kubernetes API destination в
+`NetworkPolicy` не зависит от DHCP, Wi-Fi или VPN. Публичные локальные адреса
+Control Center и SSO при этом остаются на `127.0.0.1.nip.io`; loopback нельзя
+использовать как API endpoint из Pod, поскольку внутри Pod он указывает на сам
+Pod. При доказанном конфликте адрес можно переопределить через
+`KODEX_DEV_KUBERNETES_API_ADDRESS`, выбрав другой приватный IPv4 `/32`.
+
 ## 2. Подготовка `.kodex-env`
 
 ```bash

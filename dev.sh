@@ -79,6 +79,11 @@ if [[ "$command_name" == down ]]; then
   exit 0
 fi
 
+api_endpoint_mode=readback
+[[ "$command_name" == up ]] && api_endpoint_mode=apply
+"$repository_root/tools/dev/configure-local-api-endpoint.sh" \
+  --context "$context" --mode "$api_endpoint_mode"
+
 install -d -m 0700 "$state_directory" "$state_directory/cache" "$state_directory/inputs"
 
 read_authority_snapshot_revision() {

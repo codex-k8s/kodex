@@ -8,6 +8,24 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 renderer="$repository_root/tools/dev/render-local.sh"
+endpoint_configurator="$repository_root/tools/dev/configure-local-api-endpoint.sh"
+
+[[ -x "$endpoint_configurator" ]] || fail 'stable local API endpoint configurator is not executable'
+for contract in \
+  'KODEX_DEV_KUBERNETES_API_ADDRESS:-10.254.254.1' \
+  'interface=kodex-api0' \
+  '."advertise-address" = strenv(KODEX_LOCAL_API_ADDRESS)' \
+  'Before=k3s.service' \
+  'unique) == [$address]' \
+  'Kubernetes API is unreachable through the stable address with verified TLS'; do
+  grep -Fq "$contract" "$endpoint_configurator" ||
+    fail "stable local API endpoint contract is absent: $contract"
+done
+grep -Fq 'tools/dev/configure-local-api-endpoint.sh' "$repository_root/dev.sh" ||
+  fail 'dev.sh does not configure and read back the stable local API endpoint'
+grep -Fq 'systemctl disable --now kodex-local-api-address.service' \
+  "$repository_root/tools/install/reset-host.sh" ||
+  fail 'full host reset does not remove the stable local API endpoint service'
 
 grep -Fq 'API_SERVICE_CIDR="$kubernetes_service_cidr"' "$renderer" ||
   fail 'Kubernetes service CIDR input is absent'

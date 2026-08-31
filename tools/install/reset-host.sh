@@ -23,6 +23,12 @@ done
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 "$script_directory/configure-ipv6-ingress-bridge.sh" --mode apply
 
+systemctl disable --now kodex-local-api-address.service >/dev/null 2>&1 || true
+rm -f -- \
+  /etc/systemd/system/kodex-local-api-address.service \
+  /usr/local/libexec/kodex-local-api-address
+ip link delete kodex-api0 >/dev/null 2>&1 || true
+
 if [[ -x /usr/local/bin/k3s-killall.sh ]]; then
   /usr/local/bin/k3s-killall.sh >/dev/null 2>&1 || true
 fi
