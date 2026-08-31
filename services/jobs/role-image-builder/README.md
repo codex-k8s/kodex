@@ -85,6 +85,12 @@ read-only способом сравнить будущий phase manifest.
 issuer sidecar, authenticated input registry и реальному bounded BuildKit solve.
 Probe не выполняет сетевых вызовов сам.
 
+Короткий `ROLE_IMAGE_BUILDER_RPC_DEADLINE` применяется только к локальному
+authority RPC. Реальный BuildKit solve получает отдельный bounded budget
+`ROLE_IMAGE_BUILDER_INFRASTRUCTURE_READINESS_TIMEOUT` не менее 180 секунд.
+Интервал следующей проверки отсчитывается после завершения предыдущей, поэтому
+медленный cold path не создаёт непрерывную очередь `--no-cache` solve.
+
 Для `image-admission-controller` действует тот же контракт: `/healthz`
 проверяет только процесс, а `/readyz` читает рассчитанный фоновым monitor
 снимок прямого Kubernetes API и immutable policy. Недоступность

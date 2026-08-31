@@ -155,17 +155,43 @@ func runBuildLoop(run func(context.Context) error, state *runtimeState, config C
 	}
 }
 
-func monitorLocalReadiness(control *controlplane.Client, executor *build.Executor, state *runtimeState, config Config) serviceruntime.Worker {
+type localAuthorityChecker interface {
+	CheckLocalAuthority(context.Context) error
+}
+
+type localInfrastructureChecker interface {
+	Check(context.Context) error
+}
+
+type readinessIntervalWaiter func(context.Context, time.Duration) error
+
+func monitorLocalReadiness(
+	control localAuthorityChecker,
+	executor localInfrastructureChecker,
+	state *runtimeState,
+	config Config,
+) serviceruntime.Worker {
+	return monitorLocalReadinessWithWait(control, executor, state, config, waitReadinessInterval)
+}
+
+func monitorLocalReadinessWithWait(
+	control localAuthorityChecker,
+	executor localInfrastructureChecker,
+	state *runtimeState,
+	config Config,
+	wait readinessIntervalWaiter,
+) serviceruntime.Worker {
 	return func(ctx context.Context) error {
-		ticker := time.NewTicker(config.ReadinessInterval)
-		defer ticker.Stop()
 		for {
 			authorityCheck, cancelAuthority := context.WithTimeout(ctx, config.RPCDeadline)
 			authorityErr := control.CheckLocalAuthority(authorityCheck)
 			cancelAuthority()
-			infrastructureCheck, cancelInfrastructure := context.WithTimeout(ctx, config.RPCDeadline)
-			infrastructureErr := executor.Check(infrastructureCheck)
-			cancelInfrastructure()
+			var infrastructureErr error
+			if authorityErr == nil {
+				infrastructureCheck, cancelInfrastructure := context.WithTimeout(ctx, config.ReadinessTimeout)
+				infrastructureErr = executor.Check(infrastructureCheck)
+				cancelInfrastructure()
+			}
 			if authorityErr == nil && infrastructureErr == nil {
 				state.metrics.SetReady(true)
 				if state.readiness.Set(true, "ready") {
@@ -181,12 +207,21 @@ func monitorLocalReadiness(control *controlplane.Client, executor *build.Executo
 					state.logger.WarnContext(ctx, "role image builder readiness lost", "error_class", failureClass)
 				}
 			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-ticker.C:
+			if err := wait(ctx, config.ReadinessInterval); err != nil {
+				return err
 			}
 		}
+	}
+}
+
+func waitReadinessInterval(ctx context.Context, interval time.Duration) error {
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
 

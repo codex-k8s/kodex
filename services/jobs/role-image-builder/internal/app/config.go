@@ -54,6 +54,7 @@ type Config struct {
 	PollInterval                 time.Duration `env:"ROLE_IMAGE_BUILDER_POLL_INTERVAL"`
 	RenewInterval                time.Duration `env:"ROLE_IMAGE_BUILDER_RENEW_INTERVAL"`
 	ReadinessInterval            time.Duration `env:"ROLE_IMAGE_BUILDER_READINESS_INTERVAL"`
+	ReadinessTimeout             time.Duration `env:"ROLE_IMAGE_BUILDER_INFRASTRUCTURE_READINESS_TIMEOUT"`
 }
 
 func loadConfig() (Config, error) {
@@ -88,7 +89,8 @@ func loadConfig() (Config, error) {
 		RoleRuntimeContractRevision:  1,
 		RoleRuntimeContractSHA256:    "0000000000000000000000000000000000000000000000000000000000000000",
 		StartupTimeout:               30 * time.Second, ShutdownTimeout: 20 * time.Second, RPCDeadline: 5 * time.Second,
-		PollInterval: time.Second, RenewInterval: 20 * time.Second, ReadinessInterval: 10 * time.Second,
+		PollInterval: time.Second, RenewInterval: 20 * time.Second, ReadinessInterval: 30 * time.Second,
+		ReadinessTimeout: 3 * time.Minute,
 	}
 	if err := env.Parse(&config); err != nil {
 		return Config{}, err
@@ -130,6 +132,7 @@ func (config Config) validate() error {
 		config.PollInterval < 250*time.Millisecond || config.PollInterval > time.Minute ||
 		config.RenewInterval < 5*time.Second || config.RenewInterval > time.Minute ||
 		config.ReadinessInterval < time.Second || config.ReadinessInterval > time.Minute ||
+		config.ReadinessTimeout < 3*time.Minute || config.ReadinessTimeout > 5*time.Minute ||
 		config.InputRepository == "" || strings.ContainsAny(config.InputRepository, "@?# \r\n\t") ||
 		config.InputRegistryTLSServerName == "" || strings.ContainsAny(config.InputRegistryTLSServerName, "*/:@?# \r\n\t") ||
 		config.TrustedRoleBaseRepository == "" || strings.ContainsAny(config.TrustedRoleBaseRepository, "@?# \r\n\t") ||
