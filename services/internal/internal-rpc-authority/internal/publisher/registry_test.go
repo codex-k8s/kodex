@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -59,6 +61,26 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 				got,
 				testCase.wantStartupReadbacks,
 			)
+		}
+		startupTargets := registry.StartupReadbackTargets()
+		startupTargetKeys := make([]string, 0, len(startupTargets))
+		for _, target := range startupTargets {
+			startupTargetKeys = append(
+				startupTargetKeys,
+				target.WorkloadID+"\x00"+target.Role+"\x00"+
+					strconv.FormatUint(target.WorkloadGeneration, 10),
+			)
+			if target.WorkloadID == "image-admission" ||
+				target.WorkloadID == "image-promotion" {
+				t.Fatalf(
+					"реестр %s включил динамическую цель %s в startup readback",
+					testCase.relative,
+					target.WorkloadID,
+				)
+			}
+		}
+		if !sort.StringsAreSorted(startupTargetKeys) {
+			t.Fatalf("реестр %s вернул недетерминированный порядок startup readback", testCase.relative)
 		}
 	}
 }

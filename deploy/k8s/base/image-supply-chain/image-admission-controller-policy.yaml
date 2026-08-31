@@ -351,7 +351,7 @@ spec:
             has(volume.secret) && volume.secret.secretName == variables.expectedIdentity :
           volume.name == 'authority-sockets' ?
             variables.protected && has(volume.emptyDir) &&
-            string(volume.emptyDir.sizeLimit) == '8Mi' :
+            string(volume.emptyDir.sizeLimit) == '64Mi' :
           volume.name == 'authority-snapshot' ?
             variables.protected && has(volume.secret) &&
             volume.secret.secretName == 'internal-rpc-authority-snapshot' :

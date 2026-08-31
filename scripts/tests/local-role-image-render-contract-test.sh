@@ -241,7 +241,10 @@ yq -o=json -I=0 '.' "$jobs" | jq -s -e '
       .secret.items == [
         {"key":"manifest-root-public.jwk","path":"bootstrap-public.jwk"},
         {"key":"manifest-root-metadata.json","path":"bootstrap-metadata.json"}
-      ]))
+      ]) and
+    any(.spec.template.spec.volumes[];
+      .name == "authority-sockets" and
+      .emptyDir.sizeLimit == "64Mi"))
 ' >/dev/null || fail 'real admission renderer did not materialize all exact phases'
 
 if rg -n '__KODEX_[A-Z0-9_]+__|\.invalid|@sha256:0{64}' "$render" "$jobs" >/dev/null; then

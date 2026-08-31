@@ -714,16 +714,19 @@ $_$;
 ALTER FUNCTION "internal_rpc_authority"."publisher_append_snapshot_history"("p_source_revision" bigint, "p_source_digest_sha256" "text", "p_key_set_revision" bigint, "p_policy_revision" bigint, "p_signer_generation" bigint, "p_predecessor_revision" bigint, "p_predecessor_digest_sha256" "text", "p_snapshot_compact_jws" "text", "p_publication_intent_id" "uuid", "p_publication_input_digest_sha256" "text", "p_expected_readback_count" integer, "p_published_at" timestamp with time zone) OWNER TO "internal_rpc_authority_readback_owner";
 
 --
--- Name: publisher_promote_snapshot("uuid", bigint, "text", integer); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
+-- Name: publisher_promote_snapshot("uuid", bigint, "text", integer, "text"[], "text"[], bigint[]); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
 -- +goose StatementBegin
-CREATE FUNCTION "internal_rpc_authority"."publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer) RETURNS boolean
+CREATE FUNCTION "internal_rpc_authority"."publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer, "p_expected_workload_ids" "text"[], "p_expected_roles" "text"[], "p_expected_workload_generations" bigint[]) RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
     AS $_$
 DECLARE
     matched integer;
+    expected_total integer;
+    expected_unique integer;
+    invalid_expected integer;
     publication internal_rpc_authority.authority_snapshot_history%ROWTYPE;
 BEGIN
     IF NOT pg_catalog.pg_has_role(
@@ -734,6 +737,42 @@ BEGIN
        OR NOT internal_rpc_authority.runtime_restore_fence_allows_work()
        OR p_source_digest_sha256 !~ '^[a-f0-9]{64}$'
        OR p_expected_readback_count NOT BETWEEN 1 AND 384
+       OR pg_catalog.cardinality(p_expected_workload_ids)
+            IS DISTINCT FROM p_expected_readback_count
+       OR pg_catalog.cardinality(p_expected_roles)
+            IS DISTINCT FROM p_expected_readback_count
+       OR pg_catalog.cardinality(p_expected_workload_generations)
+            IS DISTINCT FROM p_expected_readback_count
+    THEN
+        RETURN false;
+    END IF;
+    SELECT
+        pg_catalog.count(*)::integer,
+        pg_catalog.count(DISTINCT ROW(
+            expected.workload_id,
+            expected.role,
+            expected.workload_generation
+        ))::integer,
+        pg_catalog.count(*) FILTER (
+            WHERE expected.workload_id IS NULL
+               OR expected.workload_id !~
+                    '^[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$'
+               OR expected.role NOT IN (
+                    'AUTHORIZATION_ISSUER',
+                    'AUTHORIZATION_VERIFIER',
+                    'AUTHORITY_PROOF_RESOLVER'
+               )
+               OR expected.workload_generation NOT BETWEEN 1 AND 9007199254740991
+        )::integer
+    INTO expected_total, expected_unique, invalid_expected
+    FROM ROWS FROM (
+        pg_catalog.unnest(p_expected_workload_ids),
+        pg_catalog.unnest(p_expected_roles),
+        pg_catalog.unnest(p_expected_workload_generations)
+    ) AS expected(workload_id, role, workload_generation);
+    IF expected_total <> p_expected_readback_count
+       OR expected_unique <> p_expected_readback_count
+       OR invalid_expected <> 0
     THEN
         RETURN false;
     END IF;
@@ -750,9 +789,17 @@ BEGIN
     END IF;
     SELECT pg_catalog.count(*)::integer
     INTO matched
-    FROM internal_rpc_authority.authority_snapshot_readbacks
-    WHERE source_revision = p_source_revision
-      AND digest_sha256 = p_source_digest_sha256;
+    FROM ROWS FROM (
+        pg_catalog.unnest(p_expected_workload_ids),
+        pg_catalog.unnest(p_expected_roles),
+        pg_catalog.unnest(p_expected_workload_generations)
+    ) AS expected(workload_id, role, workload_generation)
+    JOIN internal_rpc_authority.authority_snapshot_readbacks AS readback
+      ON readback.workload_id = expected.workload_id
+     AND readback.role = expected.role
+     AND readback.workload_generation = expected.workload_generation
+     AND readback.source_revision = p_source_revision
+     AND readback.digest_sha256 = p_source_digest_sha256;
     IF matched <> p_expected_readback_count THEN
         RETURN false;
     END IF;
@@ -769,7 +816,7 @@ $_$;
 -- +goose StatementEnd
 
 
-ALTER FUNCTION "internal_rpc_authority"."publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer) OWNER TO "internal_rpc_authority_readback_owner";
+ALTER FUNCTION "internal_rpc_authority"."publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer, "p_expected_workload_ids" "text"[], "p_expected_roles" "text"[], "p_expected_workload_generations" bigint[]) OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: record_database_credential_session_readback("text", "uuid"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1883,11 +1930,11 @@ GRANT ALL ON FUNCTION "internal_rpc_authority"."publisher_append_snapshot_histor
 
 
 --
--- Name: FUNCTION "publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer); Type: ACL; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
+-- Name: FUNCTION "publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer, "p_expected_workload_ids" "text"[], "p_expected_roles" "text"[], "p_expected_workload_generations" bigint[]); Type: ACL; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
-REVOKE ALL ON FUNCTION "internal_rpc_authority"."publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "internal_rpc_authority"."publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer) TO "internal_rpc_authority_publisher";
+REVOKE ALL ON FUNCTION "internal_rpc_authority"."publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer, "p_expected_workload_ids" "text"[], "p_expected_roles" "text"[], "p_expected_workload_generations" bigint[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "internal_rpc_authority"."publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer, "p_expected_workload_ids" "text"[], "p_expected_roles" "text"[], "p_expected_workload_generations" bigint[]) TO "internal_rpc_authority_publisher";
 
 
 --

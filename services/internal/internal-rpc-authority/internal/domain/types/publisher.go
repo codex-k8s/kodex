@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"sort"
 	"time"
 )
 
@@ -70,16 +71,42 @@ type DeliveryTargetRegistry struct {
 	Targets        map[string]DeliveryTarget
 }
 
+// SnapshotReadbackTarget задаёт точную обязательную цель startup readback.
+type SnapshotReadbackTarget struct {
+	WorkloadID         string
+	Role               string
+	WorkloadGeneration uint64
+}
+
+// StartupReadbackTargets возвращает детерминированный обязательный набор.
+func (registry DeliveryTargetRegistry) StartupReadbackTargets() []SnapshotReadbackTarget {
+	targets := make([]SnapshotReadbackTarget, 0, len(registry.Targets))
+	for _, target := range registry.Targets {
+		if !target.StartupReadbackRequired {
+			continue
+		}
+		targets = append(targets, SnapshotReadbackTarget{
+			WorkloadID:         target.WorkloadID,
+			Role:               target.Role,
+			WorkloadGeneration: target.WorkloadGeneration,
+		})
+	}
+	sort.Slice(targets, func(left, right int) bool {
+		if targets[left].WorkloadID != targets[right].WorkloadID {
+			return targets[left].WorkloadID < targets[right].WorkloadID
+		}
+		if targets[left].Role != targets[right].Role {
+			return targets[left].Role < targets[right].Role
+		}
+		return targets[left].WorkloadGeneration < targets[right].WorkloadGeneration
+	})
+	return targets
+}
+
 // StartupReadbackTargetCount возвращает число долгоживущих workload,
 // подтверждение которых обязательно до первой активации authority snapshot.
 func (registry DeliveryTargetRegistry) StartupReadbackTargetCount() int {
-	count := 0
-	for _, target := range registry.Targets {
-		if target.StartupReadbackRequired {
-			count++
-		}
-	}
-	return count
+	return len(registry.StartupReadbackTargets())
 }
 
 // CredentialIssuanceDirective связывает выпуск с restore coordination.

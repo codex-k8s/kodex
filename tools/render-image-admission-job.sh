@@ -322,7 +322,7 @@ EOF
 EOF
   if [[ $protected == true ]]; then
     cat <<EOF
-        - {name: authority-sockets, emptyDir: {sizeLimit: 8Mi}}
+        - {name: authority-sockets, emptyDir: {sizeLimit: 64Mi}}
         - {name: authority-snapshot, secret: {secretName: internal-rpc-authority-snapshot, defaultMode: 0440}}
         - name: authority-bootstrap-roots
           secret:

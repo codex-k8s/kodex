@@ -77,6 +77,36 @@ func TestPeerScopedReadbackMigrationUsesCompositeIdempotencyLookup(t *testing.T)
 	}
 }
 
+func TestSnapshotPromotionUsesExactRequiredReadbackTargets(t *testing.T) {
+	t.Parallel()
+
+	content, err := os.ReadFile(baselineMigration)
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		`"p_expected_workload_ids" "text"[]`,
+		`"p_expected_roles" "text"[]`,
+		`"p_expected_workload_generations" bigint[]`,
+		"pg_catalog.cardinality(p_expected_workload_ids)",
+		"readback.workload_id = expected.workload_id",
+		"readback.role = expected.role",
+		"readback.workload_generation = expected.workload_generation",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("snapshot promotion is missing exact target invariant %q", required)
+		}
+	}
+	if strings.Contains(
+		text,
+		"FROM internal_rpc_authority.authority_snapshot_readbacks\n"+
+			"    WHERE source_revision = p_source_revision",
+	) {
+		t.Fatal("snapshot promotion still counts optional dynamic readbacks")
+	}
+}
+
 func TestFreshInstallContainsOneAuthorityBaseline(t *testing.T) {
 	t.Parallel()
 
