@@ -72,7 +72,8 @@ if [[ "$command_name" == e2e ]]; then
     >"$state_directory/e2e/$resource_prefix-report.json"
 fi
 EOF
-for local_e2e in local-session-archive-e2e.sh local-backup-restore-e2e.sh; do
+for local_e2e in local-role-image-supply-chain-e2e.sh local-session-archive-e2e.sh \
+  local-backup-restore-e2e.sh; do
   cat >"$fixture_root/scripts/tests/$local_e2e" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -106,6 +107,8 @@ KODEX_TEST_CREDENTIAL='must-not-be-persisted' \
     --run-timeout-ms 60000 --target test-extra >/dev/null
 grep -Fq 'dev up ' "$command_log" || fail 'full run did not delegate deployment to dev.sh up'
 grep -Fq 'dev e2e ' "$command_log" || fail 'full run did not delegate browser E2E to dev.sh e2e'
+grep -Fq 'storage-e2e local-role-image-supply-chain-e2e.sh ' "$command_log" ||
+  fail 'full run did not execute role image supply chain readback'
 grep -Fq 'storage-e2e local-session-archive-e2e.sh ' "$command_log" ||
   fail 'full run did not execute session archive readback'
 grep -Fq 'storage-e2e local-backup-restore-e2e.sh ' "$command_log" ||
@@ -119,6 +122,7 @@ jq -e '
   .browser == {status:"passed",counts:{passed:7}} and
   .additionalTargets == ["test-extra"] and
   [.phases[].name] == ["local-render-deploy","browser-auth-and-full-e2e",
+    "role-image-build-admit-promote-runtime-readback",
     "session-archive-write-restore-delete-readback","backup-and-disposable-restore-drill",
     "additional:test-extra"] and
   all(.phases[]; .status == "passed")
