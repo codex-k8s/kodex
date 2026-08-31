@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -74,7 +75,7 @@ func (repository *Repository) changeProviderAccount(
 		if err := repository.insertProviderAuthorization(ctx, tx, current, accountID, payload); err != nil {
 			return commandOutcome{}, err
 		}
-		if err := repository.activateProviderCredential(ctx, tx, current, accountID, payload); err != nil {
+		if err := repository.activateProviderCredential(ctx, tx, current, accountID, credentialID, payload); err != nil {
 			return commandOutcome{}, err
 		}
 		summary = "i18n:PROVIDER_ACCOUNT_AUTHORIZED"
@@ -105,7 +106,7 @@ func (repository *Repository) changeProviderAccount(
 			if !validTerminalProviderAuthorization(payload, true) {
 				return commandOutcome{}, errs.ErrInvalid
 			}
-			if err := repository.activateProviderCredential(ctx, tx, current, accountID, payload); err != nil {
+			if err := repository.activateProviderCredential(ctx, tx, current, accountID, credentialID, payload); err != nil {
 				return commandOutcome{}, err
 			}
 			summary = "i18n:PROVIDER_ACCOUNT_AUTHORIZED"
@@ -124,6 +125,15 @@ func (repository *Repository) changeProviderAccount(
 		if state == "REVOKED" {
 			return commandOutcome{}, errs.ErrConflict
 		}
+		var activeRuntimeLease, activeWarmConsumer bool
+		if err := tx.QueryRow(ctx, queryProviderAccountsCleanupGuard, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "account_id": accountID,
+		}).Scan(&activeRuntimeLease, &activeWarmConsumer); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if activeRuntimeLease || activeWarmConsumer {
+			return commandOutcome{}, errs.ErrConflict
+		}
 		if _, err := tx.Exec(ctx, queryProviderAccountsFailPendingAuthorizations, pgx.StrictNamedArgs{
 			"account_id": accountID, "safe_failure_code": "REVOKED",
 		}); err != nil {
@@ -131,6 +141,12 @@ func (repository *Repository) changeProviderAccount(
 		}
 		if _, err := tx.Exec(ctx, queryProviderAccountsUpdateLifecycle, pgx.StrictNamedArgs{
 			"account_id": accountID, "state": "REVOKED", "enabled": false, "clear_credential": true,
+		}); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if _, err := tx.Exec(ctx, queryProviderCredentialCleanupScheduleAccount, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "account_id": accountID,
+			"eligible_at": time.Now().UTC(), "maximum_attempts": providerCredentialCleanupMaxAttempts,
 		}); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -279,6 +295,7 @@ func (repository *Repository) activateProviderCredential(
 	tx pgx.Tx,
 	current scope,
 	accountID string,
+	previousCredentialID *string,
 	payload command.ProviderAccountInput,
 ) error {
 	if payload.Credential == nil || !validProviderCredential(*payload.Credential) ||
@@ -302,6 +319,10 @@ func (repository *Repository) activateProviderCredential(
 		"credential_id": credentialID, "account_id": accountID, "external_account_masked": payload.ExternalAccountMasked,
 	}); err != nil {
 		return errs.ErrUnavailable
+	}
+	if previousCredentialID != nil && *previousCredentialID != credentialID {
+		return repository.scheduleProviderCredentialCleanup(ctx, tx, current.organizationID, accountID,
+			*previousCredentialID, time.Now().UTC().Add(providerCredentialCleanupRetention))
 	}
 	return nil
 }

@@ -122,6 +122,21 @@ type RuntimeSecretFailInput struct {
 	ClaimGeneration                       int64
 }
 
+// ProviderCredentialCleanupTask несёт только immutable snapshot, который
+// materializer должен удалить по exact descriptor и fencing generation.
+type ProviderCredentialCleanupTask struct {
+	Ref, AccountRef string
+	Attempt         int32
+	Generation      int64
+	LeaseExpiresAt  time.Time
+	Credential      entity.ProviderCredentialDescriptor
+}
+
+type ProviderCredentialCleanupResult struct {
+	Ref, State, SafeErrorCode, TerminalReceipt string
+	RetryScheduled                             bool
+}
+
 type RuntimeSecretFailureResult struct {
 	OperationRef, State, FailureCode string
 }
@@ -221,6 +236,9 @@ type Repository interface {
 	ReportWarmRuntime(context.Context, value.Principal, command.WarmRuntimeInput) (entity.SystemAssistant, error)
 	ClaimSessionArchiveTasks(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	RenewSessionArchiveTask(context.Context, value.Principal, command.SessionArchiveTaskInput) (map[string]any, error)
+	ClaimProviderCredentialCleanupTasks(context.Context, string, int32) ([]ProviderCredentialCleanupTask, error)
+	CompleteProviderCredentialCleanupTask(context.Context, string, string, int64, string) (ProviderCredentialCleanupResult, error)
+	FailProviderCredentialCleanupTask(context.Context, string, string, int64, string) (ProviderCredentialCleanupResult, error)
 	ClaimDueSchedules(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	ClaimIntegrationConnectionTests(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	ResolveIntegrationInvocation(context.Context, value.Principal, map[string]string, map[string]any) (map[string]any, error)

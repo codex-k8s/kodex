@@ -26,6 +26,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -267,6 +268,9 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("system assistant core prompt upgrades forward only", func(t *testing.T) {
 		testSystemAssistantCorePromptUpgrade(t, ctx, repository, pool)
+	})
+	t.Run("provider credential cleanup is durable fenced and exact", func(t *testing.T) {
+		testProviderCredentialCleanupLifecycle(t, ctx, repository, pool)
 	})
 }
 
@@ -3725,6 +3729,22 @@ func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context,
 	if claimedCount != 1 || firstLease == nil {
 		t.Fatalf("serialized provider account produced %d concurrent claims", claimedCount)
 	}
+	revokeOwner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.provider-accounts.revoke",
+	}, "control-api-gateway")
+	var claimedAccountVersion int64
+	if err := pool.QueryRow(ctx, `
+		SELECT version FROM control_plane.provider_accounts WHERE ref = $1
+	`, stringMap(firstLease, "providerAccountRef")).Scan(&claimedAccountVersion); err != nil {
+		t.Fatalf("read claimed provider account version: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.RevokeProviderAccount, Principal: revokeOwner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-refresh-active-lease-revoke", ExpectedVersion: &claimedAccountVersion},
+		Payload:  command.ProviderAccountInput{AccountRef: stringMap(firstLease, "providerAccountRef")},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("active runtime lease did not block provider revoke: %v", err)
+	}
 
 	refresh := command.ProviderCredentialRefreshInput{
 		LeaseRef: stringMap(firstLease, "leaseRef"), Fence: stringMap(firstLease, "fence"), Generation: firstLease["generation"].(int64),
@@ -3743,6 +3763,28 @@ func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context,
 		t.Fatalf("commit provider credential refresh: binding=%#v err=%v", committed.Runtime, err)
 	}
 	committedRef := stringMap(committed.Runtime, "providerCredentialRevisionRef")
+	var retainedState, retainedSecretName, retainedSecretUID, retainedSecretVersion, retainedDigest string
+	var retainedAt time.Time
+	if err := pool.QueryRow(ctx, `
+		SELECT task.state, task.eligible_at, task.secret_name, task.secret_uid::text,
+		       task.secret_resource_version, task.content_sha256
+		FROM control_plane.provider_credential_cleanup_tasks task
+		JOIN control_plane.provider_credential_revisions revision
+		  ON revision.id = task.provider_credential_revision_id
+		WHERE revision.ref = $1
+	`, refresh.PreviousCredentialRevisionRef).Scan(&retainedState, &retainedAt, &retainedSecretName,
+		&retainedSecretUID, &retainedSecretVersion, &retainedDigest); err != nil {
+		t.Fatalf("read superseded provider credential cleanup retention: %v", err)
+	}
+	if retainedState != "PENDING" || retainedAt.Before(time.Now().UTC().Add(23*time.Hour)) ||
+		retainedAt.After(time.Now().UTC().Add(25*time.Hour)) ||
+		retainedSecretName != stringMap(firstLease, "providerSecretName") ||
+		retainedSecretUID != stringMap(firstLease, "providerSecretUID") ||
+		retainedSecretVersion != stringMap(firstLease, "providerSecretResourceVersion") ||
+		retainedDigest != refresh.PreviousContentSHA256 {
+		t.Fatalf("superseded provider cleanup snapshot/retention mismatch: state=%s eligible=%s descriptor=%s/%s/%s/%s",
+			retainedState, retainedAt, retainedSecretName, retainedSecretUID, retainedSecretVersion, retainedDigest)
+	}
 	repeated, err := service.Execute(ctx, command.Command{Kind: command.CommitProviderCredentialRefresh, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "provider-refresh-repeat"}, Payload: refresh})
 	if err != nil || stringMap(repeated.Runtime, "providerCredentialRevisionRef") != committedRef {
@@ -3773,6 +3815,313 @@ func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context,
 		t.Fatalf("claim after provider capacity release: claims=%#v err=%v", second.RuntimeItems, err)
 	}
 	completeClaimedExecution(t, ctx, service, worker, second.RuntimeItems[0], "provider-refresh-second", false)
+	var providerAccountID, providerOrganizationID string
+	if err := pool.QueryRow(ctx, `
+		SELECT id::text, organization_id::text
+		FROM control_plane.provider_accounts
+		WHERE ref = $1
+	`, stringMap(firstLease, "providerAccountRef")).Scan(&providerAccountID, &providerOrganizationID); err != nil {
+		t.Fatalf("read provider cleanup guard scope: %v", err)
+	}
+	var activeRuntimeLease, activeWarmConsumer bool
+	if err := pool.QueryRow(ctx, queryProviderAccountsCleanupGuard, pgx.StrictNamedArgs{
+		"organization_id": providerOrganizationID, "account_id": providerAccountID,
+	}).Scan(&activeRuntimeLease, &activeWarmConsumer); err != nil {
+		t.Fatalf("read provider cleanup guard after terminal lease: %v", err)
+	}
+	if activeRuntimeLease || activeWarmConsumer {
+		t.Fatalf("historical runtime revision blocked provider cleanup: lease=%v warm=%v",
+			activeRuntimeLease, activeWarmConsumer)
+	}
+}
+
+func testProviderCredentialCleanupLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	t.Helper()
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct provider cleanup service: %v", err)
+	}
+	revokeOwner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.provider-accounts.revoke",
+	}, "control-api-gateway")
+
+	var defaultAccountID, defaultOrganizationID, defaultAccountRef string
+	var defaultAccountVersion int64
+	if err := pool.QueryRow(ctx, `
+		SELECT id::text, organization_id::text, ref, version
+		FROM control_plane.provider_accounts
+		WHERE stable_key = 'default-openai-codex'
+	`).Scan(&defaultAccountID, &defaultOrganizationID, &defaultAccountRef, &defaultAccountVersion); err != nil {
+		t.Fatalf("read default provider account for cleanup guards: %v", err)
+	}
+	var originalWarmInstance *string
+	var originalHeartbeat *time.Time
+	var originalRuntimeState string
+	if err := pool.QueryRow(ctx, `
+		SELECT warm_instance_ref, last_heartbeat_at, runtime_state
+		FROM control_plane.assistant_runtime
+		WHERE organization_id = $1::uuid
+	`, defaultOrganizationID).Scan(&originalWarmInstance, &originalHeartbeat, &originalRuntimeState); err != nil {
+		t.Fatalf("read warm provider consumer: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE control_plane.assistant_runtime
+		SET warm_instance_ref = 'provider-cleanup-warm-consumer', runtime_state = 'READY',
+		    last_heartbeat_at = clock_timestamp(), updated_at = clock_timestamp()
+		WHERE organization_id = $1::uuid
+	`, defaultOrganizationID); err != nil {
+		t.Fatalf("activate warm provider consumer fixture: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.RevokeProviderAccount, Principal: revokeOwner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-cleanup-warm-block", ExpectedVersion: &defaultAccountVersion},
+		Payload:  command.ProviderAccountInput{AccountRef: defaultAccountRef},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("active warm consumer did not block provider revoke: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE control_plane.assistant_runtime
+		SET warm_instance_ref = $2, last_heartbeat_at = $3, runtime_state = $4,
+		    updated_at = clock_timestamp()
+		WHERE organization_id = $1::uuid
+	`, defaultOrganizationID, originalWarmInstance, originalHeartbeat, originalRuntimeState); err != nil {
+		t.Fatalf("restore warm provider consumer fixture: %v", err)
+	}
+
+	var reusableLeaseID string
+	if err := pool.QueryRow(ctx, `
+		SELECT lease.id::text
+		FROM control_plane.runtime_leases lease
+		JOIN control_plane.runtime_revisions revision ON revision.id = lease.runtime_revision_id
+		WHERE revision.provider_account_id = $1::uuid AND lease.state = 'COMPLETED'
+		ORDER BY lease.updated_at DESC
+		LIMIT 1
+	`, defaultAccountID).Scan(&reusableLeaseID); err != nil {
+		t.Fatalf("read terminal provider lease for race fixture: %v", err)
+	}
+	claimTx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin provider claim/revoke race: %v", err)
+	}
+	var maximumConcurrent int64
+	if err := claimTx.QueryRow(ctx, queryRuntimeClaimexecutionLockProviderAccount,
+		defaultAccountID, defaultOrganizationID).Scan(&maximumConcurrent); err != nil {
+		_ = claimTx.Rollback(ctx)
+		t.Fatalf("lock provider account as runtime claim winner: %v", err)
+	}
+	if _, err := claimTx.Exec(ctx, `
+		UPDATE control_plane.runtime_leases
+		SET state = 'CLAIMED', expires_at = clock_timestamp() + interval '1 minute',
+		    updated_at = clock_timestamp()
+		WHERE id = $1::uuid
+	`, reusableLeaseID); err != nil {
+		_ = claimTx.Rollback(ctx)
+		t.Fatalf("materialize provider race lease: %v", err)
+	}
+	raced := make(chan error, 1)
+	go func(version int64) {
+		_, revokeErr := service.Execute(ctx, command.Command{Kind: command.RevokeProviderAccount, Principal: revokeOwner,
+			Mutation: value.Mutation{IdempotencyKey: "provider-cleanup-claim-race", ExpectedVersion: &version},
+			Payload:  command.ProviderAccountInput{AccountRef: defaultAccountRef},
+		})
+		raced <- revokeErr
+	}(defaultAccountVersion)
+	time.Sleep(25 * time.Millisecond)
+	if err := claimTx.Commit(ctx); err != nil {
+		t.Fatalf("commit provider claim/revoke race winner: %v", err)
+	}
+	if err := <-raced; !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("claim/revoke race did not fail closed: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE control_plane.runtime_leases
+		SET state = 'COMPLETED', updated_at = clock_timestamp()
+		WHERE id = $1::uuid
+	`, reusableLeaseID); err != nil {
+		t.Fatalf("restore provider race lease: %v", err)
+	}
+
+	const accountRef = "pacc_cleanup_component"
+	var accountID, organizationID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO control_plane.provider_accounts (
+		    ref, organization_id, definition_key, stable_key, name,
+		    state, enabled, created_by
+		)
+		SELECT $1, source.organization_id, source.definition_key,
+		       'component-cleanup', 'Component cleanup account',
+		       'REAUTHORIZATION_REQUIRED', false, source.created_by
+		FROM control_plane.provider_accounts source
+		WHERE source.stable_key = 'default-openai-codex'
+		RETURNING id::text, organization_id::text
+	`, accountRef).Scan(&accountID, &organizationID); err != nil {
+		t.Fatalf("create provider cleanup account: %v", err)
+	}
+	const firstCredentialRef = "pcr_cleanup_component_1"
+	firstDescriptor := entity.ProviderCredentialDescriptor{
+		SecretName: "runtime-provider-cleanup-component-1",
+		SecretUID:  "61000000-0000-4000-8000-000000000001", SecretResourceVersion: "cleanup-1",
+		ContentSHA256: strings.Repeat("6", 64),
+	}
+	var firstCredentialID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO control_plane.provider_credential_revisions (
+		    ref, organization_id, provider_account_id, revision_number,
+		    secret_name, secret_uid, secret_resource_version, content_sha256, observed_at
+		) VALUES ($1, $2::uuid, $3::uuid, 1, $4, $5::uuid, $6, $7, clock_timestamp())
+		RETURNING id::text
+	`, firstCredentialRef, organizationID, accountID, firstDescriptor.SecretName, firstDescriptor.SecretUID,
+		firstDescriptor.SecretResourceVersion, firstDescriptor.ContentSHA256).Scan(&firstCredentialID); err != nil {
+		t.Fatalf("create first provider cleanup credential: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE control_plane.provider_accounts
+		SET current_credential_revision_id = $2::uuid, version = version + 1,
+		    updated_at = clock_timestamp()
+		WHERE id = $1::uuid
+	`, accountID, firstCredentialID); err != nil {
+		t.Fatalf("activate first provider cleanup credential: %v", err)
+	}
+	var accountVersion int64
+	if err := pool.QueryRow(ctx, `SELECT version FROM control_plane.provider_accounts WHERE id = $1::uuid`, accountID).Scan(&accountVersion); err != nil {
+		t.Fatalf("read provider cleanup account version: %v", err)
+	}
+	authorizeOwner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.provider-accounts.api-key-authorize",
+	}, "control-api-gateway")
+	secondDescriptor := entity.ProviderCredentialDescriptor{
+		SecretName: "runtime-provider-cleanup-component-2",
+		SecretUID:  "61000000-0000-4000-8000-000000000002", SecretResourceVersion: "cleanup-2",
+		ContentSHA256: strings.Repeat("7", 64),
+	}
+	authorized, err := service.Execute(ctx, command.Command{Kind: command.AuthorizeProviderAPIKey, Principal: authorizeOwner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-cleanup-activate", ExpectedVersion: &accountVersion},
+		Payload: command.ProviderAccountInput{AccountRef: accountRef, AuthorizationRef: "pauth_cleanup_component",
+			AuthorizationMethod: "API_KEY", AuthorizationState: "AUTHORIZED",
+			ExternalAccountMasked: "Cleanup account", Credential: &secondDescriptor},
+	})
+	if err != nil || authorized.ProviderAccount == nil {
+		t.Fatalf("activate provider cleanup revision: account=%#v err=%v", authorized.ProviderAccount, err)
+	}
+	var retainedAt time.Time
+	var retainedDescriptor entity.ProviderCredentialDescriptor
+	if err := pool.QueryRow(ctx, `
+		SELECT task.eligible_at, task.secret_name, task.secret_uid::text,
+		       task.secret_resource_version, task.content_sha256
+		FROM control_plane.provider_credential_cleanup_tasks task
+		WHERE task.provider_credential_revision_id = $1::uuid
+	`, firstCredentialID).Scan(&retainedAt, &retainedDescriptor.SecretName, &retainedDescriptor.SecretUID,
+		&retainedDescriptor.SecretResourceVersion, &retainedDescriptor.ContentSHA256); err != nil {
+		t.Fatalf("read successful activation cleanup retention: %v", err)
+	}
+	if retainedDescriptor != firstDescriptor || retainedAt.Before(time.Now().UTC().Add(23*time.Hour)) ||
+		retainedAt.After(time.Now().UTC().Add(25*time.Hour)) {
+		t.Fatalf("successful activation cleanup mismatch: eligible=%s descriptor=%#v", retainedAt, retainedDescriptor)
+	}
+
+	accountVersion = authorized.ProviderAccount.Version
+	revoked, err := service.Execute(ctx, command.Command{Kind: command.RevokeProviderAccount, Principal: revokeOwner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-cleanup-revoke-all", ExpectedVersion: &accountVersion},
+		Payload:  command.ProviderAccountInput{AccountRef: accountRef},
+	})
+	if err != nil || revoked.ProviderAccount == nil || revoked.ProviderAccount.State != "REVOKED" {
+		t.Fatalf("revoke provider cleanup account: account=%#v err=%v", revoked.ProviderAccount, err)
+	}
+	var scheduledCount, acceleratedCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)::int,
+		       count(*) FILTER (WHERE eligible_at <= clock_timestamp())::int
+		FROM control_plane.provider_credential_cleanup_tasks
+		WHERE provider_account_id = $1::uuid
+	`, accountID).Scan(&scheduledCount, &acceleratedCount); err != nil {
+		t.Fatalf("read revoked provider cleanup tasks: %v", err)
+	}
+	if scheduledCount != 2 || acceleratedCount != 2 {
+		t.Fatalf("revoke cleanup schedule = %d/%d, want 2/2", scheduledCount, acceleratedCount)
+	}
+
+	claimed, err := repository.ClaimProviderCredentialCleanupTasks(ctx, "provider-cleanup-component", 2)
+	if err != nil || len(claimed) != 2 {
+		t.Fatalf("claim provider cleanup tasks: tasks=%#v err=%v", claimed, err)
+	}
+	claimedByName := make(map[string]platformrepo.ProviderCredentialCleanupTask, len(claimed))
+	for _, task := range claimed {
+		claimedByName[task.Credential.SecretName] = task
+	}
+	firstTask := claimedByName[firstDescriptor.SecretName]
+	secondTask := claimedByName[secondDescriptor.SecretName]
+	if firstTask.Ref == "" || secondTask.Ref == "" || firstTask.Credential != firstDescriptor ||
+		secondTask.Credential != secondDescriptor || firstTask.Generation != 1 || secondTask.Generation != 1 {
+		t.Fatalf("claimed cleanup lost exact descriptors or generations: %#v", claimed)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE control_plane.provider_credential_cleanup_tasks
+		SET lease_expires_at = clock_timestamp() - interval '1 second'
+		WHERE ref = $1
+	`, secondTask.Ref); err != nil {
+		t.Fatalf("expire provider cleanup claim: %v", err)
+	}
+	reclaimed, err := repository.ClaimProviderCredentialCleanupTasks(ctx, "provider-cleanup-component", 1)
+	if err != nil || len(reclaimed) != 1 || reclaimed[0].Ref != secondTask.Ref ||
+		reclaimed[0].Generation != 2 || reclaimed[0].Attempt != 2 || reclaimed[0].Credential != secondDescriptor {
+		t.Fatalf("reclaim expired provider cleanup task: task=%#v err=%v", reclaimed, err)
+	}
+	if _, err := repository.CompleteProviderCredentialCleanupTask(ctx, secondTask.Ref,
+		"provider-cleanup-component", secondTask.Generation, "cleanup-stale-receipt"); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("stale provider cleanup completion was not fenced: %v", err)
+	}
+	const cleanupReceipt = "provider-cleanup-component-receipt"
+	completed, err := repository.CompleteProviderCredentialCleanupTask(ctx, secondTask.Ref,
+		"provider-cleanup-component", reclaimed[0].Generation, cleanupReceipt)
+	if err != nil || completed.State != "COMPLETED" || completed.TerminalReceipt != cleanupReceipt {
+		t.Fatalf("complete provider cleanup task: result=%#v err=%v", completed, err)
+	}
+	repeatedComplete, err := repository.CompleteProviderCredentialCleanupTask(ctx, secondTask.Ref,
+		"provider-cleanup-component", reclaimed[0].Generation, cleanupReceipt)
+	if err != nil || repeatedComplete != completed {
+		t.Fatalf("repeat provider cleanup completion: result=%#v err=%v", repeatedComplete, err)
+	}
+
+	failed, err := repository.FailProviderCredentialCleanupTask(ctx, firstTask.Ref,
+		"provider-cleanup-component", firstTask.Generation, "PROVIDER_CREDENTIAL_CLEANUP_UNAVAILABLE")
+	if err != nil || failed.State != "PENDING" || !failed.RetryScheduled {
+		t.Fatalf("fail provider cleanup task: result=%#v err=%v", failed, err)
+	}
+	repeatedFail, err := repository.FailProviderCredentialCleanupTask(ctx, firstTask.Ref,
+		"provider-cleanup-component", firstTask.Generation, "PROVIDER_CREDENTIAL_CLEANUP_UNAVAILABLE")
+	if err != nil || repeatedFail != failed {
+		t.Fatalf("repeat provider cleanup failure: result=%#v err=%v", repeatedFail, err)
+	}
+	lastGeneration := firstTask.Generation
+	for attempt := int32(2); attempt <= providerCredentialCleanupMaxAttempts; attempt++ {
+		if _, err := pool.Exec(ctx, `
+			UPDATE control_plane.provider_credential_cleanup_tasks
+			SET eligible_at = clock_timestamp() - interval '1 second'
+			WHERE ref = $1
+		`, firstTask.Ref); err != nil {
+			t.Fatalf("make provider cleanup retry %d eligible: %v", attempt, err)
+		}
+		retry, claimErr := repository.ClaimProviderCredentialCleanupTasks(ctx, "provider-cleanup-component", 1)
+		if claimErr != nil || len(retry) != 1 || retry[0].Ref != firstTask.Ref || retry[0].Attempt != attempt ||
+			retry[0].Generation <= lastGeneration || retry[0].Credential != firstDescriptor {
+			t.Fatalf("claim provider cleanup retry %d: task=%#v err=%v", attempt, retry, claimErr)
+		}
+		lastGeneration = retry[0].Generation
+		failed, err = repository.FailProviderCredentialCleanupTask(ctx, firstTask.Ref,
+			"provider-cleanup-component", retry[0].Generation, "PROVIDER_CREDENTIAL_CLEANUP_UNAVAILABLE")
+		if err != nil {
+			t.Fatalf("fail provider cleanup retry %d: %v", attempt, err)
+		}
+	}
+	if failed.State != "DEAD_LETTER" || failed.RetryScheduled || failed.TerminalReceipt == "" {
+		t.Fatalf("provider cleanup did not enter dead letter: %#v", failed)
+	}
+	repeatedDeadLetter, err := repository.FailProviderCredentialCleanupTask(ctx, firstTask.Ref,
+		"provider-cleanup-component", lastGeneration, "PROVIDER_CREDENTIAL_CLEANUP_UNAVAILABLE")
+	if err != nil || repeatedDeadLetter != failed {
+		t.Fatalf("repeat provider cleanup dead letter: result=%#v err=%v", repeatedDeadLetter, err)
+	}
 }
 
 func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {

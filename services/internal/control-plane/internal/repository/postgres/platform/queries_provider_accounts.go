@@ -23,4 +23,10 @@ var (
 	queryProviderAccountsMaterializationReferenced string
 	//go:embed sql/provider_accounts_materialization_guard.sql
 	queryProviderAccountsMaterializationGuard string
+	//go:embed sql/provider_accounts_cleanup_guard.sql
+	queryProviderAccountsCleanupGuard string
+	//go:embed sql/provider_credential_cleanup_schedule_revision.sql
+	queryProviderCredentialCleanupScheduleRevision string
+	//go:embed sql/provider_credential_cleanup_schedule_account.sql
+	queryProviderCredentialCleanupScheduleAccount string
 )

@@ -450,6 +450,10 @@ func (repository *Repository) reconcileProviderCredential(ctx context.Context, t
 	if err != nil || tag.RowsAffected() != 1 {
 		return errors.New("activate reconciled provider credential revision")
 	}
+	if err := repository.scheduleProviderCredentialCleanup(ctx, tx, organizationID, accountID,
+		currentCredentialID, time.Now().UTC().Add(providerCredentialCleanupRetention)); err != nil {
+		return errors.New("schedule reconciled provider credential cleanup")
+	}
 	return nil
 }
 

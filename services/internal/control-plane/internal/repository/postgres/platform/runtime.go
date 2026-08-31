@@ -697,6 +697,10 @@ func (repository *Repository) commitProviderCredentialRefresh(ctx context.Contex
 	if tag.RowsAffected() != 1 {
 		return commandOutcome{}, errs.ErrConflict
 	}
+	if err := repository.scheduleProviderCredentialCleanup(ctx, tx, machineScope.organizationID, accountID,
+		pinnedCredentialID, time.Now().UTC().Add(providerCredentialCleanupRetention)); err != nil {
+		return commandOutcome{}, err
+	}
 	return providerCredentialRefreshOutcome(lease, accountRef, credentialRef, revisionNumber,
 		payload.SecretName, payload.SecretUID, payload.SecretResourceVersion, payload.ContentSHA256), nil
 }
