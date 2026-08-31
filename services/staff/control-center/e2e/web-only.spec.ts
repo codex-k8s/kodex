@@ -1777,9 +1777,7 @@ test.describe("web-only fresh installation", () => {
       `[data-artifact-ref="${uploadedArtifactRef}"]`,
     );
     await expect(knowledgeArtifact).toBeVisible();
-    await knowledgeArtifact
-      .getByRole("button", { name: new RegExp(uploadedFileName) })
-      .click();
+    await knowledgeArtifact.locator("button.file-list-row").click();
     const binding = page.getByRole("checkbox", {
       name: new RegExp(analystName),
     });
@@ -1822,6 +1820,47 @@ test.describe("web-only fresh installation", () => {
           .find((part) => part.startsWith(csrfPrefix))
           ?.slice(csrfPrefix.length);
         if (!csrf) throw new Error("E2E CSRF cookie is absent");
+        const mutationHeaders = (): Record<string, string> => ({
+          "Content-Type": "application/json",
+          "Idempotency-Key": crypto.randomUUID(),
+          "X-CSRF-Token": decodeURIComponent(csrf),
+        });
+        const draftResponse = await fetch(
+          `/api/v1/projects/${encodeURIComponent(expectedProjectRef)}/attachment-sets`,
+          {
+            method: "POST",
+            headers: mutationHeaders(),
+            body: JSON.stringify({
+              purpose: "RUN_INPUT",
+              artifactRefs: [artifactRef],
+            }),
+          },
+        );
+        if (!draftResponse.ok)
+          throw new Error(
+            `E2E AttachmentSet draft failed: ${String(draftResponse.status)}`,
+          );
+        const draft = (await draftResponse.json()) as {
+          ref: string;
+          version: number;
+        };
+        const finalizeResponse = await fetch(
+          `/api/v1/attachment-sets/${encodeURIComponent(draft.ref)}/finalization`,
+          {
+            method: "POST",
+            headers: {
+              ...mutationHeaders(),
+              "If-Match": `"${String(draft.version)}"`,
+            },
+          },
+        );
+        if (!finalizeResponse.ok)
+          throw new Error(
+            `E2E AttachmentSet finalization failed: ${String(finalizeResponse.status)}`,
+          );
+        const attachmentSet = (await finalizeResponse.json()) as {
+          ref: string;
+        };
         const beforeResponse = await fetch(
           `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
         );
@@ -1841,7 +1880,7 @@ test.describe("web-only fresh installation", () => {
             targetType: "AGENT",
             title,
             task: "Эта подделанная команда не должна создать Run.",
-            artifactRefs: [artifactRef],
+            attachmentSetRef: attachmentSet.ref,
           }),
         });
         const problem = (await response.json()) as { code?: string };
@@ -2004,7 +2043,7 @@ test.describe("web-only fresh installation", () => {
     const graphNodes = page
       .getByRole("region", { name: "Граф выполнения" })
       .locator('[role="button"][data-node-ref]');
-    await expect(graphNodes).toHaveCount(6, {
+    await expect(graphNodes).toHaveCount(5, {
       timeout: 300_000,
     });
     await expect
@@ -2013,7 +2052,12 @@ test.describe("web-only fresh installation", () => {
           nodes.map((node) => node.getAttribute("aria-label") ?? ""),
         ),
       )
-      .toEqual(expect.arrayContaining([analystName, writerName]));
+      .toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(analystName),
+          expect.stringContaining(writerName),
+        ]),
+      );
     const authoritativeGraph = await page.evaluate(async (runRef) => {
       const response = await fetch(
         `/api/v1/runs/${encodeURIComponent(runRef)}/graph`,
@@ -2027,7 +2071,7 @@ test.describe("web-only fresh installation", () => {
             targetNodeRef: string;
             type: string;
           }>;
-          nodes: Array<{ ref: string }>;
+          nodes: Array<{ ref: string; type: string }>;
         };
       };
       return body.graph;
@@ -2047,6 +2091,10 @@ test.describe("web-only fresh installation", () => {
       missingEdgeEndpoints,
       `authoritative nodes: ${[...authoritativeNodeRefs].sort().join(",")}`,
     ).toEqual([]);
+    expect(authoritativeGraph.nodes).toHaveLength(6);
+    expect(
+      authoritativeGraph.nodes.filter((node) => node.type === "HUMAN_GATE"),
+    ).toHaveLength(1);
     const authoritativeEdgeTypes = authoritativeGraph.edges
       .map((edge) => edge.type)
       .sort();
@@ -2059,6 +2107,9 @@ test.describe("web-only fresh installation", () => {
       "DELEGATED_TO",
       "WAITING_FOR",
     ]);
+    const visibleSessionEdgeTypes = authoritativeEdgeTypes.filter(
+      (type) => type !== "WAITING_FOR",
+    );
     await expect
       .poll(
         () =>
@@ -2069,9 +2120,11 @@ test.describe("web-only fresh installation", () => {
                 .map((edge) => edge.getAttribute("data-edge-type") ?? "")
                 .sort(),
             ),
-        { message: `authoritative edges: ${authoritativeEdgeTypes.join(",")}` },
+        {
+          message: `visible session edges: ${visibleSessionEdgeTypes.join(",")}`,
+        },
       )
-      .toEqual(authoritativeEdgeTypes);
+      .toEqual(visibleSessionEdgeTypes);
     await page
       .getByLabel("Контекст узла")
       .getByRole("button", { name: "Ход работы" })
@@ -2129,7 +2182,7 @@ test.describe("web-only fresh installation", () => {
       "human-gate",
     );
     await decisionDetail
-      .getByLabel("Комментарий")
+      .getByRole("textbox", { name: "Комментарий к одобрению" })
       .fill(
         "Evidence приложен; локальный E2E подтверждает решение через inbox.",
       );
@@ -2152,10 +2205,12 @@ test.describe("web-only fresh installation", () => {
       resolutionAttachmentSet.items.map((item) => item.artifactRef),
     ).toEqual([evidence.ref]);
     const resolvedGate = (await resolved.json()) as {
-      gate?: { artifactRefs?: string[]; state?: string };
+      gate?: { resolutionAttachmentSetRef?: string; state?: string };
     };
     expect(resolvedGate.gate?.state).toBe("APPROVED");
-    expect(resolvedGate.gate?.artifactRefs).toContain(evidence.ref);
+    expect(resolvedGate.gate?.resolutionAttachmentSetRef).toBe(
+      resolutionAttachmentSet.ref,
+    );
 
     const staleResolution = await resolveGateAtVersion(
       page,
@@ -2164,9 +2219,9 @@ test.describe("web-only fresh installation", () => {
     );
     expect(staleResolution.status).toBe(409);
     expect(staleResolution.code).not.toBe("");
-    expect((await readOwnerGate(page, gate.ref)).artifactRefs).toContain(
-      evidence.ref,
-    );
+    expect(
+      (await readOwnerGate(page, gate.ref)).resolutionAttachmentSetRef,
+    ).toBe(resolutionAttachmentSet.ref);
 
     await gotoWithRetry(page, `/runs/${workflowRunRef}`);
     await expectRunState(page, /Выполняется|Завершён/);
@@ -3347,10 +3402,10 @@ async function readOwnerGate(
   page: Page,
   gateRef: string,
 ): Promise<{
-  artifactRefs: string[];
   consequencesSummary: string;
   contextSummary: string;
   requestedBy: { displayName: string; ref: string };
+  resolutionAttachmentSetRef?: string;
   state: string;
   title: string;
   version: number;
@@ -3363,10 +3418,10 @@ async function readOwnerGate(
       throw new Error(`owner gate readback failed: ${String(response.status)}`);
     }
     return (await response.json()) as {
-      artifactRefs: string[];
       consequencesSummary: string;
       contextSummary: string;
       requestedBy: { displayName: string; ref: string };
+      resolutionAttachmentSetRef?: string;
       state: string;
       title: string;
       version: number;

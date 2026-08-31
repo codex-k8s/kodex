@@ -36,7 +36,23 @@ describe("AutomationsWorkspace lifecycle contract", () => {
   it("использует единый realtime-aware store для lifecycle-команд", () => {
     expect(source).toContain("const scheduleRefs = ref<string[]>([])");
     expect(source).toContain("platform.schedules[ref]");
-    expect(source).toContain("platform.changeSchedule(schedule, action)");
+    expect(source).toContain(
+      "replaceSchedule(await commandSchedule(schedule, action))",
+    );
+    expect(source).not.toContain("platform.changeSchedule(schedule, action)");
     expect(source).not.toContain("const schedules = ref<Schedule[]>([])");
+  });
+
+  it("перечитывает authoritative schedule перед OCC lifecycle-командой", () => {
+    expect(source).toContain("async function refreshExact");
+    expect(source).toContain(
+      "const schedule = await refreshExact(scheduleRef)",
+    );
+    expect(source).toContain(
+      "replaceSchedule(await commandSchedule(schedule, action))",
+    );
+    expect(source).toContain("runCommand(selectedSchedule.ref, 'PAUSE')");
+    expect(source).toContain("runCommand(selectedSchedule.ref, 'ENABLE')");
+    expect(source).not.toContain("runCommand(selectedSchedule, 'PAUSE')");
   });
 });

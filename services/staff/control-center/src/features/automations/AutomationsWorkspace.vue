@@ -26,6 +26,7 @@ import { useI18n } from "vue-i18n";
 import AutomationArchiveDialog from "@/features/automations/AutomationArchiveDialog.vue";
 import AutomationEditorDialog from "@/features/automations/AutomationEditorDialog.vue";
 import {
+  commandSchedule,
   loadSchedulePage,
   loadScheduleRevisionPage,
   loadScheduleRunPage,
@@ -393,8 +394,10 @@ function openEdit(schedule: Schedule): void {
   editorOpen.value = true;
 }
 
-async function refreshExact(ref: string): Promise<void> {
-  replaceSchedule(await readSchedule(ref));
+async function refreshExact(ref: string): Promise<Schedule> {
+  const schedule = await readSchedule(ref);
+  replaceSchedule(schedule);
+  return platform.schedules[ref] ?? schedule;
 }
 
 async function submitEditor(
@@ -422,24 +425,25 @@ async function submitEditor(
 }
 
 async function runCommand(
-  schedule: Schedule,
+  scheduleRef: string,
   action: ScheduleCommand["action"],
 ): Promise<void> {
-  const requiredAction =
-    action === "PAUSE"
-      ? "DISABLE"
-      : action === "ARCHIVE"
-        ? "ARCHIVE"
-        : "ENABLE";
-  if (!schedule.nextActions.includes(requiredAction)) return;
-  commandBusy.value = schedule.ref;
+  commandBusy.value = scheduleRef;
   problem.value = undefined;
   try {
-    replaceSchedule(await platform.changeSchedule(schedule, action));
+    const schedule = await refreshExact(scheduleRef);
+    const requiredAction =
+      action === "PAUSE"
+        ? "DISABLE"
+        : action === "ARCHIVE"
+          ? "ARCHIVE"
+          : "ENABLE";
+    if (!schedule.nextActions.includes(requiredAction)) return;
+    replaceSchedule(await commandSchedule(schedule, action));
   } catch (error) {
     const nextProblem = asProblem(error);
     if (nextProblem.kind === "conflict")
-      await refreshExact(schedule.ref).catch(() => undefined);
+      await refreshExact(scheduleRef).catch(() => undefined);
     problem.value = nextProblem;
   } finally {
     commandBusy.value = "";
@@ -447,24 +451,26 @@ async function runCommand(
 }
 
 async function confirmArchive(): Promise<void> {
-  const schedule = archiveSchedule.value;
-  if (!schedule) return;
-  await runCommand(schedule, "ARCHIVE");
+  const scheduleRef = archiveScheduleRef.value;
+  if (!scheduleRef) return;
+  await runCommand(scheduleRef, "ARCHIVE");
   if (!problem.value) archiveScheduleRef.value = "";
 }
 
 async function confirmDelete(): Promise<void> {
-  const schedule = deleteCandidate.value;
-  if (!schedule || !schedule.nextActions.includes("DELETE")) return;
-  commandBusy.value = schedule.ref;
+  const scheduleRef = deleteScheduleRef.value;
+  if (!scheduleRef) return;
+  commandBusy.value = scheduleRef;
   problem.value = undefined;
   try {
+    const schedule = await refreshExact(scheduleRef);
+    if (!schedule.nextActions.includes("DELETE")) return;
     replaceSchedule(await removeSchedule(schedule));
     deleteScheduleRef.value = "";
   } catch (error) {
     const nextProblem = asProblem(error);
     if (nextProblem.kind === "conflict")
-      await refreshExact(schedule.ref).catch(() => undefined);
+      await refreshExact(scheduleRef).catch(() => undefined);
     problem.value = nextProblem;
   } finally {
     commandBusy.value = "";
@@ -859,7 +865,7 @@ onBeforeUnmount(() => {
               class="button"
               type="button"
               :disabled="commandBusy === selectedSchedule.ref"
-              @click="runCommand(selectedSchedule, 'PAUSE')"
+              @click="runCommand(selectedSchedule.ref, 'PAUSE')"
             >
               <Pause :size="16" aria-hidden="true" />{{
                 $t("automations.pause")
@@ -870,7 +876,7 @@ onBeforeUnmount(() => {
               class="button"
               type="button"
               :disabled="commandBusy === selectedSchedule.ref"
-              @click="runCommand(selectedSchedule, 'ENABLE')"
+              @click="runCommand(selectedSchedule.ref, 'ENABLE')"
             >
               <Play :size="16" aria-hidden="true" />{{ $t("common.enable") }}
             </button>
