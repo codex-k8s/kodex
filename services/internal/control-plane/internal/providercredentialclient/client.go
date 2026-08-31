@@ -5,11 +5,21 @@ package providercredentialclient
 import (
 	"context"
 	"errors"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/google/uuid"
+)
+
+const (
+	maximumProviderCredentialRefBytes             = 96
+	maximumProviderCredentialResourceVersionBytes = 128
+	maximumProviderCredentialTerminalReceiptBytes = 512
 )
 
 type Client struct {
@@ -109,6 +119,36 @@ func (client *Client) Discard(ctx context.Context, target platformservice.Provid
 	return nil
 }
 
+func (client *Client) CleanupProviderCredential(
+	ctx context.Context,
+	taskRef, accountRef string,
+	leaseGeneration int64,
+	credential entity.ProviderCredentialDescriptor,
+) (string, error) {
+	if !validProviderCredentialRef(taskRef, "pcct_") ||
+		!validProviderCredentialRef(accountRef, "pacc_") ||
+		leaseGeneration < 1 || !validProviderCredentialDescriptor(credential) {
+		return "", errors.New("provider credential cleanup request is invalid")
+	}
+	response, err := client.client.ProviderCredentials.CleanupProviderCredential(ctx,
+		&controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest{
+			TaskRef: taskRef, AccountRef: accountRef, LeaseGeneration: leaseGeneration,
+			Credential: &controlplanev1.ProviderCredentialDescriptor{
+				SecretName: credential.SecretName, SecretUid: credential.SecretUID,
+				SecretResourceVersion: credential.SecretResourceVersion,
+				ContentSha256:         credential.ContentSHA256,
+			},
+		})
+	if err != nil {
+		return "", err
+	}
+	receipt := response.GetTerminalReceipt()
+	if !validBoundedSafeText(receipt, maximumProviderCredentialTerminalReceiptBytes) {
+		return "", errors.New("provider credential cleanup terminal receipt is invalid")
+	}
+	return receipt, nil
+}
+
 func credentialDescriptor(value *controlplanev1.ProviderCredentialDescriptor) *entity.ProviderCredentialDescriptor {
 	if value == nil {
 		return nil
@@ -132,4 +172,61 @@ func providerAuthorizationState(value controlplanev1.ProviderAuthorizationState)
 	default:
 		return ""
 	}
+}
+
+func validProviderCredentialRef(value, prefix string) bool {
+	if len(value) < len(prefix)+8 || len(value) > maximumProviderCredentialRefBytes || !strings.HasPrefix(value, prefix) {
+		return false
+	}
+	for _, character := range value[len(prefix):] {
+		if (character < 'a' || character > 'z') && (character < '0' || character > '9') &&
+			character != '_' && character != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func validProviderCredentialDescriptor(value entity.ProviderCredentialDescriptor) bool {
+	parsedUID, err := uuid.Parse(value.SecretUID)
+	return validDNSLabel(value.SecretName) && err == nil && parsedUID.String() == value.SecretUID &&
+		validBoundedSafeText(value.SecretResourceVersion, maximumProviderCredentialResourceVersionBytes) &&
+		validLowerHexSHA256(value.ContentSHA256)
+}
+
+func validDNSLabel(value string) bool {
+	if value == "" || len(value) > 63 {
+		return false
+	}
+	for index, character := range value {
+		if ((character < 'a' || character > 'z') && (character < '0' || character > '9') && character != '-') ||
+			character == '-' && (index == 0 || index == len(value)-1) {
+			return false
+		}
+	}
+	return true
+}
+
+func validLowerHexSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func validBoundedSafeText(value string, maximumBytes int) bool {
+	if value == "" || len(value) > maximumBytes || !utf8.ValidString(value) || strings.TrimSpace(value) != value {
+		return false
+	}
+	for _, character := range value {
+		if unicode.IsControl(character) {
+			return false
+		}
+	}
+	return true
 }

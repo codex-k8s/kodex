@@ -7263,6 +7263,7 @@ const (
 	ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName                   = "/controlplane.v1.ProviderCredentialMaterializerService/ObserveDeviceAuthorization"
 	ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName                            = "/controlplane.v1.ProviderCredentialMaterializerService/MaterializeAPIKey"
 	ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName     = "/controlplane.v1.ProviderCredentialMaterializerService/DiscardProviderCredentialMaterialization"
+	ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName                    = "/controlplane.v1.ProviderCredentialMaterializerService/CleanupProviderCredential"
 )
 
 // ProviderCredentialMaterializerServiceClient is the client API for ProviderCredentialMaterializerService service.
@@ -7280,6 +7281,10 @@ type ProviderCredentialMaterializerServiceClient interface {
 	// buf:lint:ignore RPC_REQUEST_STANDARD_NAME
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
 	DiscardProviderCredentialMaterialization(ctx context.Context, in *ProviderCredentialMaterializerServiceDiscardMaterializationRequest, opts ...grpc.CallOption) (*ProviderCredentialMaterializerServiceDiscardMaterializationResponse, error)
+	// CleanupProviderCredential удаляет только exact credential material,
+	// закреплённый durable task и текущим lease generation. Raw credential
+	// отсутствует в запросе и ответе.
+	CleanupProviderCredential(ctx context.Context, in *ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest, opts ...grpc.CallOption) (*ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse, error)
 }
 
 type providerCredentialMaterializerServiceClient struct {
@@ -7340,6 +7345,16 @@ func (c *providerCredentialMaterializerServiceClient) DiscardProviderCredentialM
 	return out, nil
 }
 
+func (c *providerCredentialMaterializerServiceClient) CleanupProviderCredential(ctx context.Context, in *ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest, opts ...grpc.CallOption) (*ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProviderCredentialMaterializerServiceServer is the server API for ProviderCredentialMaterializerService service.
 // All implementations must embed UnimplementedProviderCredentialMaterializerServiceServer
 // for forward compatibility.
@@ -7355,6 +7370,10 @@ type ProviderCredentialMaterializerServiceServer interface {
 	// buf:lint:ignore RPC_REQUEST_STANDARD_NAME
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
 	DiscardProviderCredentialMaterialization(context.Context, *ProviderCredentialMaterializerServiceDiscardMaterializationRequest) (*ProviderCredentialMaterializerServiceDiscardMaterializationResponse, error)
+	// CleanupProviderCredential удаляет только exact credential material,
+	// закреплённый durable task и текущим lease generation. Raw credential
+	// отсутствует в запросе и ответе.
+	CleanupProviderCredential(context.Context, *ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) (*ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse, error)
 	mustEmbedUnimplementedProviderCredentialMaterializerServiceServer()
 }
 
@@ -7379,6 +7398,9 @@ func (UnimplementedProviderCredentialMaterializerServiceServer) MaterializeAPIKe
 }
 func (UnimplementedProviderCredentialMaterializerServiceServer) DiscardProviderCredentialMaterialization(context.Context, *ProviderCredentialMaterializerServiceDiscardMaterializationRequest) (*ProviderCredentialMaterializerServiceDiscardMaterializationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DiscardProviderCredentialMaterialization not implemented")
+}
+func (UnimplementedProviderCredentialMaterializerServiceServer) CleanupProviderCredential(context.Context, *ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) (*ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CleanupProviderCredential not implemented")
 }
 func (UnimplementedProviderCredentialMaterializerServiceServer) mustEmbedUnimplementedProviderCredentialMaterializerServiceServer() {
 }
@@ -7492,6 +7514,24 @@ func _ProviderCredentialMaterializerService_DiscardProviderCredentialMaterializa
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProviderCredentialMaterializerService_CleanupProviderCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialMaterializerServiceServer).CleanupProviderCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialMaterializerServiceServer).CleanupProviderCredential(ctx, req.(*ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ProviderCredentialMaterializerService_ServiceDesc is the grpc.ServiceDesc for ProviderCredentialMaterializerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -7518,6 +7558,10 @@ var ProviderCredentialMaterializerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DiscardProviderCredentialMaterialization",
 			Handler:    _ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_Handler,
+		},
+		{
+			MethodName: "CleanupProviderCredential",
+			Handler:    _ProviderCredentialMaterializerService_CleanupProviderCredential_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

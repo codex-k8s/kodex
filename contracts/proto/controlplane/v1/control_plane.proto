@@ -234,6 +234,10 @@ service ProviderCredentialMaterializerService {
   // buf:lint:ignore RPC_REQUEST_STANDARD_NAME
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
   rpc DiscardProviderCredentialMaterialization(ProviderCredentialMaterializerServiceDiscardMaterializationRequest) returns (ProviderCredentialMaterializerServiceDiscardMaterializationResponse);
+  // CleanupProviderCredential удаляет только exact credential material,
+  // закреплённый durable task и текущим lease generation. Raw credential
+  // отсутствует в запросе и ответе.
+  rpc CleanupProviderCredential(ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) returns (ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse);
 }
 
 message MutationContext {
@@ -3909,7 +3913,6 @@ message ProviderCredentialMaterializerServiceDiscardMaterializationRequest {
 message ProviderCredentialMaterializerServiceDiscardMaterializationResponse {
   bool discarded = 1;
 }
-
 message CommitProviderCredentialRefreshRequest {
   MutationContext mutation = 1;
   string lease_ref = 2;
@@ -3924,4 +3927,23 @@ message CommitProviderCredentialRefreshRequest {
 }
 message CommitProviderCredentialRefreshResponse {
   ProviderCredentialBinding provider_credential = 1;
+}
+
+// ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest
+// фиксирует exact cleanup task, fencing generation и безопасный descriptor.
+message ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest {
+  // task_ref — opaque control-plane task ref с префиксом pcct_.
+  string task_ref = 1;
+  // account_ref — exact provider account ref с префиксом pacc_.
+  string account_ref = 2;
+  // lease_generation — монотонный fence текущего claim.
+  int64 lease_generation = 3;
+  // credential содержит только exact Secret metadata и SHA-256, без material.
+  ProviderCredentialDescriptor credential = 4;
+}
+// ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse
+// возвращает только ограниченное подтверждение terminal exact-delete.
+message ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse {
+  // terminal_receipt — безопасное идемпотентное подтверждение длиной 1..512 байт.
+  string terminal_receipt = 1;
 }
