@@ -1,5 +1,4 @@
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import { open } from "node:fs/promises";
 import { isAbsolute } from "node:path";
@@ -517,10 +516,7 @@ test.describe("deployed local integration path", () => {
         "Ответь ровно: API key provider path работает.",
       );
       await waitForTerminalRun(page, run.ref, "SUCCEEDED");
-      await verifySingleProviderAffinity(
-        run.ref,
-        providerStableKey(account.ref),
-      );
+      await verifySingleProviderAffinity(run.ref, account.ref);
     } finally {
       apiKey = undefined;
       const credentialInput = page.locator('input[type="password"]');
@@ -1120,13 +1116,9 @@ async function readPrivateFile(path: string, label: string): Promise<string> {
   }
 }
 
-function providerStableKey(accountRef: string): string {
-  return `account-${createHash("md5").update(accountRef).digest("hex").slice(0, 24)}`;
-}
-
 async function verifySingleProviderAffinity(
   runRef: string,
-  accountKey: string,
+  accountRef: string,
 ): Promise<void> {
   const childEnvironment = { ...process.env };
   delete childEnvironment.OPENAI_API_KEY;
@@ -1156,7 +1148,7 @@ async function verifySingleProviderAffinity(
     "--context",
     context,
     "--expect-run",
-    `${runRef}=${accountKey}`,
+    `${runRef}=${accountRef}`,
     "--require-distinct-accounts",
     "1",
   ];

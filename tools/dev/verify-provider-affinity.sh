@@ -22,7 +22,7 @@ usage() {
   cat <<'EOF'
 Usage:
   verify-provider-affinity.sh --context <exact-context> \
-    --expect-run <run-ref>=<provider-account-key> [--expect-run ...] \
+    --expect-run <run-ref>=<provider-account-ref> [--expect-run ...] \
     [--expect-same-session <original-run-ref>=<continuation-run-ref> ...] \
     [--require-distinct-accounts <count>]
 
@@ -34,7 +34,7 @@ Read-only local E2E verification:
 Options:
   --context <name>                    Required exact local Kubernetes context.
   --kubeconfig <path>                 Optional kubeconfig; defaults to KUBECONFIG.
-  --expect-run <run>=<account>        Repeatable expected run/account binding.
+  --expect-run <run>=<account-ref>    Repeatable expected run/provider account ref binding.
   --expect-same-session <run>=<run>   Repeatable original/continuation pair.
   --require-distinct-accounts <n>     Minimum observed accounts; default: 2, minimum: 1.
   --help                              Show this help.
@@ -66,7 +66,7 @@ fail_internal() {
 context=""
 kubeconfig="${KUBECONFIG:-}"
 required_distinct_accounts=2
-declare -A expected_account_by_run=()
+declare -A expected_account_ref_by_run=()
 declare -a expected_run_order=()
 declare -a same_session_pairs=()
 
@@ -74,20 +74,20 @@ validate_run_ref() {
   [[ "$1" =~ ^[A-Za-z0-9_-]{8,96}$ ]]
 }
 
-validate_account_key() {
-  [[ "$1" =~ ^[a-z][a-z0-9_-]{1,95}$ ]]
+validate_account_ref() {
+  [[ "$1" =~ ^pacc_[A-Za-z0-9_-]{8,88}$ ]]
 }
 
 add_expected_run() {
-  local value=$1 run_ref account_key
-  [[ "$value" == *=* ]] || fail_usage '--expect-run must use <run-ref>=<provider-account-key>'
+  local value=$1 run_ref account_ref
+  [[ "$value" == *=* ]] || fail_usage '--expect-run must use <run-ref>=<provider-account-ref>'
   run_ref=${value%%=*}
-  account_key=${value#*=}
+  account_ref=${value#*=}
   validate_run_ref "$run_ref" || fail_usage "invalid run ref: $run_ref"
-  validate_account_key "$account_key" || fail_usage "invalid provider account key for run $run_ref"
-  [[ -z "${expected_account_by_run[$run_ref]+present}" ]] ||
+  validate_account_ref "$account_ref" || fail_usage "invalid provider account ref for run $run_ref"
+  [[ -z "${expected_account_ref_by_run[$run_ref]+present}" ]] ||
     fail_usage "duplicate expected run: $run_ref"
-  expected_account_by_run[$run_ref]=$account_key
+  expected_account_ref_by_run[$run_ref]=$account_ref
   expected_run_order+=("$run_ref")
 }
 
@@ -150,9 +150,9 @@ done
 for pair in "${same_session_pairs[@]}"; do
   original=${pair%%=*}
   continuation=${pair#*=}
-  [[ -n "${expected_account_by_run[$original]+present}" ]] ||
+  [[ -n "${expected_account_ref_by_run[$original]+present}" ]] ||
     fail_usage "session pair run is absent from --expect-run: $original"
-  [[ -n "${expected_account_by_run[$continuation]+present}" ]] ||
+  [[ -n "${expected_account_ref_by_run[$continuation]+present}" ]] ||
     fail_usage "session pair run is absent from --expect-run: $continuation"
 done
 
@@ -199,12 +199,12 @@ query_errors="$temporary_directory/readback.err"
 expected_runs_json='{}'
 run_refs_json='[]'
 for run_ref in "${expected_run_order[@]}"; do
-  account_key=${expected_account_by_run[$run_ref]}
+  account_ref=${expected_account_ref_by_run[$run_ref]}
   expected_runs_json=$(jq -cn \
     --argjson current "$expected_runs_json" \
     --arg run_ref "$run_ref" \
-    --arg account_key "$account_key" \
-    '$current + {($run_ref): $account_key}') || fail_internal 'cannot build expected run map'
+    --arg account_ref "$account_ref" \
+    '$current + {($run_ref): $account_ref}') || fail_internal 'cannot build expected run map'
   run_refs_json=$(jq -cn \
     --argjson current "$run_refs_json" \
     --arg run_ref "$run_ref" \
@@ -236,7 +236,7 @@ SELECT jsonb_build_object(
            'run_ref', requested.run_ref,
            'found', run.id IS NOT NULL,
            'session_ref', COALESCE(session.ref, ''),
-           'session_account_key', COALESCE(session_account.stable_key, ''),
+           'session_account_ref', COALESCE(session_account.ref, ''),
            'runtime_revision_count', count(runtime_revision.id),
            'runtime_boundary_consistent', COALESCE(
                bool_and(
@@ -248,9 +248,9 @@ SELECT jsonb_build_object(
                ) FILTER (WHERE runtime_revision.id IS NOT NULL),
                false
            ),
-           'runtime_account_keys', COALESCE(
-               jsonb_agg(DISTINCT runtime_account.stable_key)
-                   FILTER (WHERE runtime_account.stable_key IS NOT NULL),
+           'runtime_account_refs', COALESCE(
+               jsonb_agg(DISTINCT runtime_account.ref)
+                   FILTER (WHERE runtime_account.ref IS NOT NULL),
                '[]'::jsonb
            )
        )::text
@@ -263,7 +263,7 @@ LEFT JOIN control_plane.runtime_revisions runtime_revision
        ON runtime_revision.run_id = run.id
 LEFT JOIN control_plane.provider_accounts runtime_account
        ON runtime_account.id = runtime_revision.provider_account_id
-GROUP BY requested.run_ref, run.id, session.ref, session_account.stable_key
+GROUP BY requested.run_ref, run.id, session.ref, session_account.ref
 ORDER BY requested.run_ref;
 COMMIT;
 SQL
@@ -278,10 +278,10 @@ readback_json=$(jq -s -e '
     (.run_ref | type) == "string" and
     (.found | type) == "boolean" and
     (.session_ref | type) == "string" and
-    (.session_account_key | type) == "string" and
+    (.session_account_ref | type) == "string" and
     (.runtime_revision_count | type) == "number" and
     (.runtime_boundary_consistent | type) == "boolean" and
-    (.runtime_account_keys | type) == "array")
+    (.runtime_account_refs | type) == "array")
   then . else error("invalid readback schema") end
 ' "$query_output" 2>/dev/null) || fail_internal 'PostgreSQL readback has an invalid safe schema'
 
@@ -299,5 +299,5 @@ if ! jq -e '.ok == true' <<<"$report" >/dev/null; then
 fi
 
 jq -r '
-  "Kodex provider affinity verified: runs=\(.checked_runs) session_pairs=\(.checked_session_pairs) distinct_accounts=\(.observed_accounts | length) accounts=\(.observed_accounts | join(","))"
+  "Kodex provider affinity verified: runs=\(.checked_runs) session_pairs=\(.checked_session_pairs) distinct_account_refs=\(.observed_account_refs | length) account_refs=\(.observed_account_refs | join(","))"
 ' <<<"$report"

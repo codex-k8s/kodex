@@ -3248,7 +3248,7 @@ components:
       required: [accountRef, weight]
       properties:
         accountRef: { $ref: '#/components/schemas/OpaqueRef' }
-        weight: { type: integer, minimum: 1, maximum: 10000 }
+        weight: { type: integer, minimum: 1, maximum: 100 }
     ProviderAccountPolicyVersion:
       type: object
       additionalProperties: false
@@ -4582,7 +4582,7 @@ components:
       additionalProperties: false
       required: [apiKey]
       properties:
-        apiKey: { type: string, minLength: 1, maxLength: 16384, writeOnly: true }
+        apiKey: { type: string, minLength: 8, maxLength: 16384, writeOnly: true }
     IntegrationCapability:
       type: object
       additionalProperties: false
