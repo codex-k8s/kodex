@@ -1706,9 +1706,83 @@ test.describe("web-only fresh installation", () => {
     persistRefs();
     await gotoWithRetry(page, `/runs/${scheduledRunRef}`);
     await waitForTerminalSuccess(page);
-    await expect(page.locator("#main-content")).toContainText(
-      "KODEX_AUTOMATION_E2E_OK",
+    const scheduledRunReadback = await page.evaluate(
+      async ({ runRef, expectedAgentRef }) => {
+        const [graphResponse, eventsResponse] = await Promise.all([
+          fetch(`/api/v1/runs/${encodeURIComponent(runRef)}/graph`),
+          fetch(
+            `/api/v1/runs/${encodeURIComponent(runRef)}/events?afterSequence=0&limit=500`,
+          ),
+        ]);
+        if (!graphResponse.ok || !eventsResponse.ok) {
+          throw new Error(
+            `Scheduled run readback failed: graph=${String(graphResponse.status)}, events=${String(eventsResponse.status)}`,
+          );
+        }
+        const workspace = (await graphResponse.json()) as {
+          run: {
+            ref: string;
+            state: string;
+            source: string;
+            resultSummary?: string;
+            target: { type: string; ref: string };
+          };
+          graph: {
+            nodes: Array<{
+              ref: string;
+              type: string;
+              state: string;
+              agentRef?: string;
+            }>;
+          };
+        };
+        const events = (await eventsResponse.json()) as {
+          complete: boolean;
+          currentSequence: number;
+          items: Array<{
+            type: string;
+            nodeRef?: string;
+            messageKind?: string;
+            summary: string;
+            actor?: { ref?: string };
+          }>;
+        };
+        const agentNode = workspace.graph.nodes.find(
+          (node) =>
+            node.type === "AGENT_EXECUTION" &&
+            node.agentRef === expectedAgentRef,
+        );
+        return {
+          run: workspace.run,
+          agentNode,
+          complete: events.complete,
+          currentSequence: events.currentSequence,
+          finalMessages: events.items
+            .filter(
+              (event) =>
+                event.type === "TURN_COMPLETED" &&
+                event.nodeRef === agentNode?.ref &&
+                event.messageKind === "FINAL_MESSAGE" &&
+                event.actor?.ref === expectedAgentRef,
+            )
+            .map((event) => event.summary.trim()),
+        };
+      },
+      { runRef: scheduledRunRef, expectedAgentRef: analystRef },
     );
+    expect(scheduledRunReadback.run).toMatchObject({
+      ref: scheduledRunRef,
+      state: "SUCCEEDED",
+      source: "SCHEDULE",
+      target: { type: "AGENT", ref: analystRef },
+      resultSummary: "KODEX_AUTOMATION_E2E_OK",
+    });
+    expect(scheduledRunReadback.agentNode?.state).toBe("SUCCEEDED");
+    expect(scheduledRunReadback.complete).toBe(true);
+    expect(scheduledRunReadback.currentSequence).toBeGreaterThan(0);
+    expect(scheduledRunReadback.finalMessages).toEqual([
+      "KODEX_AUTOMATION_E2E_OK",
+    ]);
 
     await gotoWithRetry(page, `/projects/${projectRef}/automations`);
     row = page.locator(".automation-row").filter({ hasText: automationName });

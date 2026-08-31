@@ -151,6 +151,42 @@ func TestMessageMapNormalizesProviderEnumsToOpenAPIValues(t *testing.T) {
 	}
 }
 
+func TestMessageMapNormalizesRunEventEnumsToOpenAPIValues(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.RunEvent{
+		Ref:         "evt-example",
+		RunRef:      "run-example",
+		Sequence:    1,
+		Type:        controlplanev1.RunEventType_RUN_EVENT_TYPE_TURN_COMPLETED,
+		MessageKind: controlplanev1.RunEventMessageKind_RUN_EVENT_MESSAGE_KIND_FINAL_MESSAGE,
+		Actor: &controlplanev1.RunEventActor{
+			Kind: controlplanev1.RunEventActorKind_RUN_EVENT_ACTOR_KIND_AGENT,
+			Ref:  "agt-example",
+			Name: "Исполнитель",
+		},
+		ToolCall: &controlplanev1.RunToolCall{
+			Ref:   "tool-example",
+			Tool:  "exec_command",
+			State: controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_SUCCEEDED,
+		},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["type"] != "TURN_COMPLETED" || value["messageKind"] != "FINAL_MESSAGE" {
+		t.Fatalf("enum события не соответствует OpenAPI: %#v", value)
+	}
+	actor, ok := value["actor"].(map[string]any)
+	if !ok || actor["kind"] != "AGENT" {
+		t.Fatalf("actor события не соответствует OpenAPI: %#v", value)
+	}
+	toolCall, ok := value["toolCall"].(map[string]any)
+	if !ok || toolCall["state"] != "SUCCEEDED" {
+		t.Fatalf("tool call события не соответствует OpenAPI: %#v", value)
+	}
+}
+
 func TestNormalizeEnumCollections(t *testing.T) {
 	t.Parallel()
 	value := map[string]any{"nextActions": []any{"NEXT_ACTION_OPEN", "NEXT_ACTION_CREATE_PROJECT"}}

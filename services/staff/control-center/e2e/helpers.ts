@@ -33,15 +33,23 @@ export async function gotoWithRetry(
       }
       return;
     } catch (error) {
+      const emptyAppShell =
+        requirements.appShell !== false && (await hasEmptyAppShell(page));
       if (
         index === retryDelays.length - 1 ||
         !(error instanceof Error) ||
-        !error.message.includes("net::ERR_NETWORK_CHANGED")
+        (!error.message.includes("net::ERR_NETWORK_CHANGED") && !emptyAppShell)
       ) {
         throw error;
       }
     }
   }
+}
+
+async function hasEmptyAppShell(page: Page): Promise<boolean> {
+  const app = page.locator("#app");
+  if ((await app.count()) !== 1) return false;
+  return app.evaluate((element) => element.childElementCount === 0);
 }
 
 function safeNavigationPath(raw: string): string {
