@@ -56,15 +56,32 @@ jq -e '
   .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
 ' <<<"$namespace_json" >/dev/null || fail 'Kodex namespace is not the disposable local profile'
 
+frontend_directory="$repository_root/services/staff/control-center"
 storage_state="$state_directory/e2e/owner.json"
 ca_file="$state_directory/kodex-local-ca.crt"
-[[ -f "$storage_state" && ! -L "$storage_state" ]] || fail 'authenticated owner storage state is absent'
+owner_username_file="$state_directory/inputs/owner-username"
+owner_password_file="$state_directory/inputs/owner-password"
 [[ -f "$ca_file" && ! -L "$ca_file" ]] || fail 'local HTTPS CA is absent'
+[[ -f "$owner_username_file" && -r "$owner_username_file" && ! -L "$owner_username_file" ]] ||
+  fail 'local owner username is absent or unsafe'
+[[ -f "$owner_password_file" && -r "$owner_password_file" && ! -L "$owner_password_file" ]] ||
+  fail 'local owner password is absent or unsafe'
 install -d -m 0700 "$state_directory/e2e"
 state="$state_directory/e2e/$resource_prefix-role-image.json"
 [[ ! -e "$state" && ! -L "$state" ]] || fail 'RoleImage E2E state already exists'
 
 base_url=https://control.127.0.0.1.nip.io/
+KODEX_E2E_BASE_URL="${base_url%/}" \
+  KODEX_E2E_OWNER_USERNAME="$(<"$owner_username_file")" \
+  KODEX_E2E_OWNER_PASSWORD="$(<"$owner_password_file")" \
+  KODEX_E2E_STORAGE_STATE="$storage_state" \
+  KODEX_E2E_RBAC_GROUP=kodex-e2e-restricted \
+  KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+  NODE_EXTRA_CA_CERTS="$ca_file" \
+  npm --prefix "$frontend_directory" run test:e2e:auth
+[[ -f "$storage_state" && ! -L "$storage_state" ]] ||
+  fail 'authenticated owner storage state was not created'
+
 api_storage_state=$(mktemp "$state_directory/e2e/$resource_prefix-owner-api.XXXXXX.json")
 cleanup() {
   rm -f -- "$api_storage_state"
@@ -75,7 +92,7 @@ KODEX_E2E_BASE_URL="${base_url%/}" \
   KODEX_E2E_API_STORAGE_STATE="$api_storage_state" \
   KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
   NODE_EXTRA_CA_CERTS="$ca_file" \
-  npm --prefix "$repository_root/services/staff/control-center" run test:e2e:api-session
+  npm --prefix "$frontend_directory" run test:e2e:api-session
 
 common_environment=(
   KODEX_ROLE_IMAGE_E2E_BASE_URL="$base_url"
