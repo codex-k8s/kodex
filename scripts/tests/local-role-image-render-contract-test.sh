@@ -109,6 +109,14 @@ policy_json=$(yq -o=json -I=0 '
 ' "$render")
 [[ -n "$policy_json" && "$policy_json" != null ]] || fail 'rendered owner intent is absent'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
+  all(.[] | select(.kind == "Deployment" or .kind == "StatefulSet" or
+      .kind == "Job");
+    all(((.spec.template.spec.initContainers // []) +
+        (.spec.template.spec.containers // []))[];
+      ([.env[]? | select(.name == "OTEL_SDK_DISABLED" and .value == "true")] |
+        length) == 1))
+' >/dev/null || fail 'local render does not disable telemetry in every workload container'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
   (first(.[] | select(.kind == "ConfigMap" and
     .metadata.name == "kodex-image-admission-policy")) | .data) as $policy |
   all(.[] | select(.kind == "Deployment" or .kind == "StatefulSet" or

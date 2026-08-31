@@ -242,11 +242,7 @@ PROMOTED_PULL_HOST="$promoted_pull_host" yq -i '
     (.spec.template.spec.containers[] | select(.startupProbe != null) |
       .startupProbe.failureThreshold) = 180 |
     (.spec.template.spec.containers[] | select(.startupProbe != null) |
-      .startupProbe.periodSeconds) = 2 |
-    .spec.template.spec.containers[] |= (
-      .env = ((.env // []) | map(select(.name != "OTEL_SDK_DISABLED")) +
-        [{"name":"OTEL_SDK_DISABLED","value":"true"}])
-    )
+      .startupProbe.periodSeconds) = 2
   ) |
   with(select(.metadata.labels != null);
     .metadata.labels."kodex.dev/environment" = "staging" |
@@ -878,6 +874,18 @@ yq -o=json -I=0 '.' "$render" | jq -sc '
   map(select(.kind != null)) |
   unique_by([.apiVersion,.kind,(.metadata.namespace // ""),.metadata.name])[]
 ' | yq -p=json -P >"$output"
+
+# Local workloads use disposable telemetry settings. Apply this only after all
+# generated init containers have been materialized into the final manifest.
+yq -i '
+  with(select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job");
+    (.spec.template.spec.initContainers[]?,
+      .spec.template.spec.containers[]?) |= (
+      .env = ((.env // []) | map(select(.name != "OTEL_SDK_DISABLED")) +
+        [{"name":"OTEL_SDK_DISABLED","value":"true"}])
+    )
+  )
+' "$output"
 
 # Kubernetes still resolves YAML 1.1 boolean-like scalars in string fields.
 # Quote every literal env value so tokens such as GOWORK=off remain strings.
