@@ -11,7 +11,7 @@ SELECT artifact.ref,
        artifact.source,
        artifact.size_bytes,
        artifact.revision,
-       artifact.version,
+       (exact_snapshot.item ->> 'version')::bigint,
        artifact.created_at,
        content.object_key,
        content.object_version,
@@ -38,6 +38,22 @@ LEFT JOIN control_plane.projects AS project
   ON project.id = artifact.project_id
 JOIN control_plane.artifact_content AS content
   ON content.artifact_id = artifact.id
+JOIN LATERAL (
+    SELECT exact.item
+    FROM jsonb_array_elements(COALESCE(revision.safe_snapshot -> 'artifacts', '[]'::jsonb))
+         WITH ORDINALITY AS exact(item, ordinal)
+    WHERE exact.item ->> 'ref' = artifact.ref
+      AND exact.item ->> 'digest' = artifact.digest
+      AND exact.item ->> 'digest' = content.digest
+      AND exact.item -> 'revision' = to_jsonb(artifact.revision)
+      AND exact.item ->> 'fileName' = artifact.file_name
+      AND exact.item ->> 'mediaType' = artifact.media_type
+      AND exact.item -> 'sizeBytes' = to_jsonb(artifact.size_bytes)
+      AND exact.item ->> 'source' = artifact.source
+      AND content.size_bytes = artifact.size_bytes
+    ORDER BY exact.ordinal
+    LIMIT 1
+) AS exact_snapshot ON true
 LEFT JOIN control_plane.runs AS artifact_run
   ON artifact_run.id = artifact.run_id
 LEFT JOIN control_plane.sessions AS artifact_session
@@ -51,16 +67,3 @@ WHERE lease.organization_id = @organization_id::uuid
   AND artifact.ref = @artifact_ref
   AND artifact.scan_state = 'CLEAN'
   AND artifact.lifecycle_state IN ('ACTIVE', 'DELETED')
-  AND EXISTS (
-    SELECT 1
-    FROM jsonb_array_elements(COALESCE(revision.safe_snapshot -> 'artifacts', '[]'::jsonb)) AS exact(item)
-    WHERE exact.item ->> 'ref' = artifact.ref
-      AND exact.item ->> 'digest' = artifact.digest
-      AND exact.item ->> 'digest' = content.digest
-      AND exact.item -> 'revision' = to_jsonb(artifact.revision)
-      AND exact.item ->> 'fileName' = artifact.file_name
-      AND exact.item ->> 'mediaType' = artifact.media_type
-      AND exact.item -> 'sizeBytes' = to_jsonb(artifact.size_bytes)
-      AND exact.item ->> 'source' = artifact.source
-      AND content.size_bytes = artifact.size_bytes
-  )

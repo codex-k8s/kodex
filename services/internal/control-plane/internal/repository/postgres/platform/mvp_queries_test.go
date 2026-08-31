@@ -351,10 +351,16 @@ func TestAttachmentSnapshotQueriesKeepImmutableRuntimeBoundary(t *testing.T) {
 		"artifact.lifecycle_state IN ('ACTIVE', 'DELETED')",
 		"exact.item -> 'revision' = to_jsonb(artifact.revision)",
 		"exact.item ->> 'digest' = content.digest",
+		"WITH ORDINALITY AS exact(item, ordinal)",
+		"(exact_snapshot.item ->> 'version')::bigint",
+		"ORDER BY exact.ordinal",
 	} {
 		if !strings.Contains(queryRuntimeReadexecutionartifactSelectArtifactContent, fragment) {
 			t.Fatalf("runtime artifact read lacks %q", fragment)
 		}
+	}
+	if strings.Contains(queryRuntimeReadexecutionartifactSelectArtifactContent, "artifact.version,") {
+		t.Fatal("runtime artifact read returns mutable artifact version instead of immutable snapshot version")
 	}
 	if !strings.Contains(queryArtifactsDownloadartifactSelectArtifactForGrant, "ar.lifecycle_state = 'ACTIVE'") {
 		t.Fatal("ordinary artifact download no longer rejects soft-deleted artifacts")
