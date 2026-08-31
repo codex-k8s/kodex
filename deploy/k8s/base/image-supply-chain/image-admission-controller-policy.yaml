@@ -26,6 +26,11 @@ spec:
       expression: object.metadata.labels['kodex.dev/image-admission-id']
     - name: protected
       expression: variables.phase in ['claim', 'admit', 'promote']
+    - name: localProfile
+      expression: >-
+        has(params.metadata.labels) &&
+        'kodex.dev/local-profile' in params.metadata.labels &&
+        params.metadata.labels['kodex.dev/local-profile'] == 'hot-reload'
     - name: workload
       expression: >-
         variables.phase == 'promote' ? 'image-promotion' : 'image-admission'
@@ -83,7 +88,10 @@ spec:
         object.metadata.annotations['kodex.dev/admission-run-sha256'].matches(
           '^[a-f0-9]{64}$') &&
         object.metadata.annotations['kodex.dev/admission-policy-revision'] ==
-          params.spec.policyRevision
+          params.spec.policyRevision &&
+        (variables.localProfile ?
+          object.spec.template.metadata.labels['kodex.dev/local-profile'] == 'hot-reload' :
+          !('kodex.dev/local-profile' in object.spec.template.metadata.labels))
       message: Image admission Job identity is outside the owner contract.
     - expression: >-
         object.spec.backoffLimit == 1 &&
@@ -213,7 +221,9 @@ spec:
     - expression: >-
         !variables.protected ||
         (variables.issuerEnvironmentNames ==
-          'DEPLOYMENT_ENVIRONMENT,OTEL_EXPORTER_OTLP_ENDPOINT,' +
+          'DEPLOYMENT_ENVIRONMENT,' +
+          (variables.localProfile ? 'OTEL_SDK_DISABLED,' : '') +
+          'OTEL_EXPORTER_OTLP_ENDPOINT,' +
           'OTEL_EXPORTER_OTLP_TLS_SERVER_NAME,OTEL_EXPORTER_OTLP_CA_FILE,' +
           'OTEL_TRACES_SAMPLER_ARG,SENTRY_DSN_FILE,SENTRY_EXPECTED_HOST,' +
           'INTERNAL_RPC_AUTHORITY_WORKLOAD_ID,INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID,' +
@@ -237,6 +247,8 @@ spec:
              !has(item.valueFrom) && has(item.value) &&
              (item.name == 'DEPLOYMENT_ENVIRONMENT' ?
                 item.value == object.spec.template.metadata.labels['kodex.dev/environment'] :
+              item.name == 'OTEL_SDK_DISABLED' ?
+                variables.localProfile && item.value == 'true' :
               item.name == 'OTEL_EXPORTER_OTLP_ENDPOINT' ?
                 item.value == 'otel-collector.observability.svc:4317' :
               item.name == 'OTEL_EXPORTER_OTLP_TLS_SERVER_NAME' ?

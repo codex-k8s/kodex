@@ -472,6 +472,18 @@ done
   "$temporary_directory/admission.yaml" | grep -c '^mc-admit-') -eq 5 ]]
 [[ $(yq eval-all 'select(.kind == "Job") | .metadata.name' \
   "$temporary_directory/admission-production.yaml" | grep -c '^mc-admit-') -eq 5 ]]
+if yq eval-all -e '
+  select(.kind == "Job") |
+  select(
+    .spec.template.metadata.labels."kodex.dev/local-profile" != null or
+    any(.spec.template.spec.initContainers[]?.env[]?;
+      .name == "OTEL_SDK_DISABLED")
+  )
+' "$temporary_directory/admission.yaml" "$temporary_directory/admission-production.yaml" \
+  >/dev/null 2>&1; then
+  echo "non-local admission renderer enabled local telemetry policy" >&2
+  exit 1
+fi
 for service_account in kodex-image-scanner kodex-image-signer \
   image-admission image-promotion; do
   grep -Fq "serviceAccountName: $service_account" "$temporary_directory/admission.yaml"

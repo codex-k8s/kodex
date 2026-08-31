@@ -208,9 +208,18 @@ yq -o=json -I=0 '.' "$jobs" | jq -s -e '
     .metadata.labels["kodex.dev/image-admission-phase"]] | sort) ==
       (["admit","claim","promote","scan","sign"] | sort) and
   all(.[] | select(.kind == "Job");
+    .spec.template.metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
     (.spec.template.spec.containers | length) > 0 and
     all(.spec.template.spec.containers[];
-      .image | test("@sha256:[a-f0-9]{64}$")))
+      .image | test("@sha256:[a-f0-9]{64}$"))) and
+  all(.[] | select(.kind == "Job" and
+      (.metadata.labels["kodex.dev/image-admission-phase"] |
+        IN("claim", "admit", "promote")));
+    ([.spec.template.spec.initContainers[] |
+      select(.name == "internal-rpc-authority-issuer") |
+      .env[]? |
+      select(.name == "OTEL_SDK_DISABLED" and .value == "true")] |
+      length) == 1)
 ' >/dev/null || fail 'real admission renderer did not materialize all exact phases'
 
 if rg -n '__KODEX_[A-Z0-9_]+__|\.invalid|@sha256:0{64}' "$render" "$jobs" >/dev/null; then

@@ -44,8 +44,11 @@ trusted_role_base_repository=$(jq -er '.data.trustedRoleBaseRepository' <<<"$int
 trusted_role_base_digest=$(jq -er '.data.trustedRoleBaseDigest' <<<"$intent")
 role_runtime_contract_revision=$(jq -er '.data.roleRuntimeContractRevision' <<<"$intent")
 role_runtime_contract_sha256=$(jq -er '.data.roleRuntimeContractSHA256' <<<"$intent")
+local_profile=$(jq -r '.metadata.labels["kodex.dev/local-profile"] // ""' <<<"$intent")
 jq -e '.immutable == true and .metadata.labels["kodex.dev/owner-intent"] == "true"' <<<"$intent" >/dev/null ||
   { echo "admission owner intent is not immutable" >&2; exit 78; }
+[[ -z $local_profile || $local_profile == hot-reload ]] ||
+  { echo "admission local profile is invalid" >&2; exit 78; }
 for image in "$tools_image" "$admission_image" "$authority_image"; do
   [[ $image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
     { echo "admission image binding is invalid" >&2; exit 78; }
@@ -140,6 +143,11 @@ spec:
         kodex.dev/image-admission-id: ${suffix}
         kodex.dev/environment: ${environment_name}
 EOF
+  if [[ $local_profile == hot-reload ]]; then
+    cat <<EOF
+        kodex.dev/local-profile: hot-reload
+EOF
+  fi
   if [[ $protected == true ]]; then
     cat <<EOF
         kodex.dev/internal-rpc-authority-issuer: enabled
@@ -172,6 +180,13 @@ EOF
           command: [/usr/local/bin/internal-rpc-authority-issuer]
           env:
             - {name: DEPLOYMENT_ENVIRONMENT, value: "${environment_name}"}
+EOF
+    if [[ $local_profile == hot-reload ]]; then
+      cat <<EOF
+            - {name: OTEL_SDK_DISABLED, value: "true"}
+EOF
+    fi
+    cat <<EOF
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: otel-collector.observability.svc:4317}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem}
