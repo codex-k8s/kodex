@@ -26,6 +26,7 @@ import { useI18n } from "vue-i18n";
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
 import { openAssistantEvent } from "@/features/assistant/events";
 import {
+  assistantEffectiveRuntimeState,
   operationActionLabel,
   operationTargetLabel,
 } from "@/features/assistant/model";
@@ -115,6 +116,11 @@ const canStartConversation = computed(
     props.live &&
     !store.busy &&
     Boolean(store.assistant?.nextActions.includes("CREATE_CONVERSATION")),
+);
+const assistantRuntimeState = computed(() =>
+  store.assistant
+    ? assistantEffectiveRuntimeState(store.assistant)
+    : "RECOVERING",
 );
 const isRunContext = computed(() => props.context.entityKind === "RUN");
 
@@ -351,7 +357,8 @@ onBeforeUnmount(() => {
         </div>
         <StatusBadge
           v-if="store.assistant"
-          :state="store.assistant.runtimeState"
+          :state="assistantRuntimeState"
+          :label="store.assistant.readinessSummary"
         />
         <button
           class="assistant-new-conversation"

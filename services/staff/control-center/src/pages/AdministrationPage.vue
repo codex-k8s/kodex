@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 
+import { assistantEffectiveRuntimeState } from "@/features/assistant/model";
 import { usePlatformStore } from "@/features/platform/store";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
@@ -79,7 +80,10 @@ onMounted(() => void load());
           </article>
           <article class="metric-card">
             <span>{{ $t("administration.assistant") }}</span
-            ><StatusBadge :state="state.assistant.runtimeState" />
+            ><StatusBadge
+              :state="assistantEffectiveRuntimeState(state.assistant)"
+              :label="state.assistant.readinessSummary"
+            />
             <p>{{ state.assistant.readinessSummary }}</p>
           </article>
           <article class="metric-card">

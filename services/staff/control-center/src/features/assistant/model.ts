@@ -2,6 +2,7 @@ import type {
   AssistantPlanOperation,
   AssistantPlanOperationInput,
   AssistantPlanTarget,
+  SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
 
 export interface EditablePlanOperation {
@@ -86,4 +87,15 @@ export function operationActionLabel(
 
 export function operationTargetLabel(target: AssistantPlanTarget): string {
   return target.name.trim() || target.kind.trim() || "—";
+}
+
+export function assistantEffectiveRuntimeState(
+  assistant: SystemAssistant,
+): SystemAssistant["runtimeState"] {
+  if (
+    assistant.runtimeState === "READY" &&
+    !assistant.nextActions.includes("CREATE_CONVERSATION")
+  )
+    return "RECOVERING";
+  return assistant.runtimeState;
 }

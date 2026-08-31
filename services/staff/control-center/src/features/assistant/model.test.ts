@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import { reactive } from "vue";
 
 import {
+  assistantEffectiveRuntimeState,
   editableOperations,
   operationActionLabel,
   operationInputs,
   operationTargetLabel,
 } from "@/features/assistant/model";
-import type { AssistantPlanOperation } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  AssistantPlanOperation,
+  SystemAssistant,
+} from "@/shared/api/generated/openapi/types.gen";
 
 function operation(): AssistantPlanOperation {
   return {
@@ -111,5 +115,43 @@ describe("assistant plan editor model", () => {
     expect(operationTargetLabel({ kind: "PROJECT", name: "  " })).toBe(
       "PROJECT",
     );
+  });
+});
+
+describe("assistant runtime presentation", () => {
+  function assistant(
+    runtimeState: SystemAssistant["runtimeState"],
+    nextActions: SystemAssistant["nextActions"],
+  ): SystemAssistant {
+    return {
+      ref: "asst_system",
+      version: 1,
+      name: "Kodex",
+      system: true,
+      removable: false,
+      corePromptRevision: "core-v1",
+      ownerInstructions: "",
+      runtimeState,
+      readinessSummary: "Восстановление runtime",
+      nextActions,
+    };
+  }
+
+  it("не показывает READY после снятия runtime action", () => {
+    expect(assistantEffectiveRuntimeState(assistant("READY", []))).toBe(
+      "RECOVERING",
+    );
+  });
+
+  it("сохраняет READY только для фактически доступного нового диалога", () => {
+    expect(
+      assistantEffectiveRuntimeState(
+        assistant("READY", ["CREATE_CONVERSATION", "ADD_TURN"]),
+      ),
+    ).toBe("READY");
+  });
+
+  it("не подменяет явное состояние выполнения", () => {
+    expect(assistantEffectiveRuntimeState(assistant("BUSY", []))).toBe("BUSY");
   });
 });
