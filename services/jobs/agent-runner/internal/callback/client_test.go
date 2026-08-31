@@ -127,14 +127,11 @@ func TestCompleteRetriesTransientCallbackWithoutChangingPayload(t *testing.T) {
 	}
 }
 
-func TestProgressRetriesTransientControlPlaneOutage(t *testing.T) {
+func TestProgressDoesNotDuplicateTransientControlPlaneOutage(t *testing.T) {
 	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
-		if attempts.Add(1) < 3 {
-			http.Error(writer, "control plane restarting", http.StatusServiceUnavailable)
-			return
-		}
-		writer.WriteHeader(http.StatusNoContent)
+		attempts.Add(1)
+		http.Error(writer, "control plane restarting", http.StatusServiceUnavailable)
 	}))
 	defer server.Close()
 	base, err := url.Parse(server.URL)
@@ -142,11 +139,12 @@ func TestProgressRetriesTransientControlPlaneOutage(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond, time.Millisecond}}
-	if err := client.Progress(context.Background(), validWarmTurnFixture(), "MODEL_REQUEST_RUNNING"); err != nil {
+	err = client.Progress(context.Background(), validWarmTurnFixture(), "MODEL_REQUEST_RUNNING")
+	if err == nil || err.Error() != "runtime callback rejected request with status 503" {
 		t.Fatalf("Progress() error = %v", err)
 	}
-	if attempts.Load() != 3 {
-		t.Fatalf("Progress() attempts = %d, want 3", attempts.Load())
+	if attempts.Load() != 1 {
+		t.Fatalf("Progress() attempts = %d, want 1", attempts.Load())
 	}
 }
 

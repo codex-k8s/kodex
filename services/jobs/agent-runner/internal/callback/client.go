@@ -64,9 +64,7 @@ func (client *Client) Close() {
 func (client *Client) Token() string { return client.token }
 
 func (client *Client) Progress(ctx context.Context, input model.Input, code string) error {
-	delivery, cancel := context.WithTimeout(ctx, callbackDeliveryTimeout)
-	defer cancel()
-	return client.postRetriable(delivery, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/progress", runtimecontract.RunnerProgressRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Progress: code})
+	return client.post(ctx, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/progress", runtimecontract.RunnerProgressRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Progress: code})
 }
 
 func (client *Client) Complete(ctx context.Context, input model.Input, payload runtimecontract.RunnerCompletionRequest) error {
