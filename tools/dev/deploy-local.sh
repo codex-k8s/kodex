@@ -73,6 +73,29 @@ apply_image_admission_crd() {
     --timeout=3m >/dev/null || fail 'image admission policy CRD is not Established'
 }
 
+cleanup_local_image_admission_runs() {
+  local selector inventory
+  selector='app.kubernetes.io/name=kodex-image-admission,kodex.dev/image-admission-orchestrated=true'
+  inventory=$(kubectl -n "$namespace" get jobs,persistentvolumeclaims \
+    -l "$selector" -o json) ||
+    fail 'local image admission inventory is unavailable for revision cleanup'
+  jq -e --arg namespace "$namespace" '
+    all(.items[];
+      .metadata.namespace == $namespace and
+      .metadata.labels["app.kubernetes.io/name"] == "kodex-image-admission" and
+      .metadata.labels["kodex.dev/image-admission-orchestrated"] == "true" and
+      (if .kind == "Job" then
+        (.metadata.name | test(
+          "^mc-admit-[a-f0-9]{32}-(claim|scan|sign|admit|promote)$"))
+       elif .kind == "PersistentVolumeClaim" then
+        (.metadata.name | test("^mc-admit-[a-f0-9]{32}$"))
+       else false end))
+  ' <<<"$inventory" >/dev/null ||
+    fail 'local image admission inventory contains an unmanaged resource'
+  kubectl -n "$namespace" delete jobs,persistentvolumeclaims -l "$selector" \
+    --ignore-not-found --wait=true --timeout=3m >/dev/null
+}
+
 reconcile_local_immutable_image_admission_policy() {
   local desired current desired_digest current_digest
   desired=$(yq -o=json -I=0 '
@@ -96,6 +119,7 @@ reconcile_local_immutable_image_admission_policy() {
         fail 'immutable image admission ConfigMap is not owned by the local Kodex profile'
       kubectl -n "$namespace" delete configmap/kodex-image-admission-policy \
         --wait=true --timeout=2m >/dev/null
+      cleanup_local_image_admission_runs
     fi
   fi
 
