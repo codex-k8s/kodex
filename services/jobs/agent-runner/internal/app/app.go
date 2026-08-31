@@ -153,7 +153,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 	}
 	result, err := codex.ExecuteViaBroker(ctx, input, prompt, mcpProxy.SocketPath(), mcpProxy.LocalBearerToken())
 	if err != nil {
-		return completeFailure(ctx, input, client, "RUNTIME_PROVIDER_UNAVAILABLE")
+		return completeFailure(ctx, input, client, runtimeExecutionFailureCode(err))
 	}
 	if err := recordNativeToolTimeline(ctx, input, client, result.ToolCalls); err != nil {
 		return err
@@ -231,7 +231,7 @@ func completeFailureWithSummaryAndUsage(ctx context.Context, input model.Input, 
 
 func safeFailureCode(code string) string {
 	switch code {
-	case "unauthorized", "authentication_required", "authentication_expired":
+	case "unauthorized", "authentication_required", "authentication_expired", "PROVIDER_AUTH_REJECTED":
 		return "PROVIDER_AUTH_REJECTED"
 	case "usage_limit_exceeded":
 		return "PROVIDER_RATE_LIMITED"
@@ -243,7 +243,7 @@ func safeFailureCode(code string) string {
 		return "PROVIDER_REQUEST_REJECTED"
 	case "provider_bad_request", "provider_sandbox_error":
 		return "PROVIDER_REQUEST_REJECTED"
-	case "invalid_configuration", "stale_grant", "RUNTIME_CONFIGURATION_STALE":
+	case "invalid_configuration", "stale_grant", "RUNTIME_CONFIGURATION_STALE", "RUNTIME_PROFILE_UNSUPPORTED":
 		return "RUNTIME_PROFILE_UNSUPPORTED"
 	case "context_window_exceeded", "session_budget_exceeded", "thread_rollback_failed", "active_turn_not_steerable":
 		return "RUNTIME_PROFILE_UNSUPPORTED"
@@ -253,6 +253,17 @@ func safeFailureCode(code string) string {
 		return "RUNTIME_INPUT_INVALID"
 	default:
 		return "RUNTIME_UNAVAILABLE"
+	}
+}
+
+func runtimeExecutionFailureCode(err error) string {
+	switch {
+	case errors.Is(err, codex.ErrProviderAuthentication):
+		return "PROVIDER_AUTH_REJECTED"
+	case errors.Is(err, codex.ErrAuthorityRequestUnsupported):
+		return "RUNTIME_PROFILE_UNSUPPORTED"
+	default:
+		return "RUNTIME_PROVIDER_UNAVAILABLE"
 	}
 }
 

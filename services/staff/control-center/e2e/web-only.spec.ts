@@ -43,9 +43,9 @@ const workflowName = `${environment.resourcePrefix} — квалификация
 const uploadedFileName = `${environment.resourcePrefix}-lead-context.txt`;
 const automationName = `${environment.resourcePrefix} — ежечасная проверка лидов`;
 const automationTask =
-  "Проверь новые синтетические лиды и подготовь краткий статус.";
+  "Ответь точно одной строкой: KODEX_AUTOMATION_E2E_OK. Не используй файлы, внешние источники, интеграции, плагины и запросы пользовательского ввода.";
 const automationEditedTask =
-  "Проверь новые синтетические лиды и подготовь краткий статус без персональных данных.";
+  "Ответь точно одной строкой: KODEX_AUTOMATION_E2E_UPDATED_OK. Не используй файлы, внешние источники, интеграции, плагины и запросы пользовательского ввода.";
 const runtimeEnvironmentName = `${environment.resourcePrefix} — среда E2E`;
 const runtimeOverlay = [
   'model_reasoning_effort = "high"',
@@ -313,11 +313,13 @@ async function exerciseAttachmentComposer(
 
   await page.route("**/api/v1/**", rejectFirstUpload);
   try {
+    const rejectedUpload = waitForArtifactUpload(page, uploadPath, failedName);
     await composer.locator('input[type="file"]').setInputFiles({
       name: failedName,
       mimeType: "text/plain",
       buffer: Buffer.from(`retry fixture for ${surface}`, "utf8"),
     });
+    expect((await rejectedUpload).status()).toBe(429);
     const failedItem = composer
       .locator(".attachment-composer__item")
       .filter({ hasText: failedName });
@@ -1704,6 +1706,9 @@ test.describe("web-only fresh installation", () => {
     persistRefs();
     await gotoWithRetry(page, `/runs/${scheduledRunRef}`);
     await waitForTerminalSuccess(page);
+    await expect(page.locator("#main-content")).toContainText(
+      "KODEX_AUTOMATION_E2E_OK",
+    );
 
     await gotoWithRetry(page, `/projects/${projectRef}/automations`);
     row = page.locator(".automation-row").filter({ hasText: automationName });

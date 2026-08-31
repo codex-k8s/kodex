@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -30,6 +31,8 @@ const (
 )
 
 var rolloutPathPattern = regexp.MustCompile(`^\.kodex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`)
+
+var ErrAuthorityRequestUnsupported = errors.New("Codex app-server authority request is unsupported")
 
 type streamEvent struct {
 	message wireMessage
@@ -291,11 +294,11 @@ func (server *appServer) notifyInitialized() error {
 
 func (server *appServer) rejectRequest(message wireMessage) error {
 	if _, allowed := serverRequestMethods[message.method]; !allowed {
-		return errors.New("Codex app-server request method is not allowed")
+		return fmt.Errorf("%w: request method is not allowed", ErrAuthorityRequestUnsupported)
 	}
 	_ = server.write(map[string]any{"id": message.id, "error": map[string]any{
 		"code": int64(-32000), "message": "Server requests are not authorized in agent-runner"}})
-	return errors.New("Codex app-server requested authority that agent-runner does not hold: " + message.method)
+	return fmt.Errorf("%w: %s", ErrAuthorityRequestUnsupported, message.method)
 }
 
 func (server *appServer) handleRequest(state *protocolState, message wireMessage) error {

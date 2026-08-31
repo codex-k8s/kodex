@@ -619,37 +619,51 @@ export const usePlatformStore = defineStore("platform", () => {
       const graphReadback = await unwrap(
         getRunGraph({ path: { runRef: ref }, signal: requestSignal() }),
       );
+      const workspace = graphReadback.data;
+      const history = await loadRunEventHistory(ref, workspace.graph.sequence);
       if (generation.get("run") !== current) return;
 
-      const workspace = graphReadback.data;
       upsert(runs, [workspace.run]);
       graphs[workspace.graph.runRef] = mergeRunGraph(
         graphs[workspace.graph.runRef],
         workspace.graph,
       );
-
-      // Event catch-up improves the timeline, but it must not make an already
-      // authoritative run/graph snapshot unusable when the request is
-      // transiently interrupted.
-      const eventPage = await unwrap(
-        listRunEvents({
-          path: { runRef: ref },
-          query: { afterSequence: 0, limit: 200 },
-          signal: requestSignal(),
-        }),
-      );
-      if (generation.get("run") !== current) return;
       const bucket = events[workspace.graph.runRef] ?? {};
-      for (const event of eventPage.data.items) {
-        if (event.sequence <= workspace.graph.sequence)
-          bucket[event.sequence] = event;
-      }
+      for (const event of history) bucket[event.sequence] = event;
       events[workspace.graph.runRef] = bucket;
     } catch (error) {
       if (generation.get("run") === current) problems.run = asProblem(error);
     } finally {
       if (generation.get("run") === current) loading.run = false;
     }
+  }
+
+  async function loadRunEventHistory(
+    ref: string,
+    throughSequence: number,
+  ): Promise<RunEvent[]> {
+    const result: RunEvent[] = [];
+    let afterSequence = 0;
+    while (afterSequence < throughSequence) {
+      const response = await unwrap(
+        listRunEvents({
+          path: { runRef: ref },
+          query: { afterSequence, limit: 500 },
+          signal: requestSignal(),
+        }),
+      );
+      for (const event of response.data.items) {
+        if (event.sequence > throughSequence) break;
+        if (event.sequence !== afterSequence + 1)
+          throw new Error("Run event history is not contiguous");
+        result.push(event);
+        afterSequence = event.sequence;
+      }
+      if (afterSequence >= throughSequence) break;
+      if (response.data.complete || response.data.items.length === 0)
+        throw new Error("Run event history ended before graph snapshot");
+    }
+    return result;
   }
 
   async function loadGates(

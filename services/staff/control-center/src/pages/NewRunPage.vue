@@ -435,8 +435,8 @@ watch(
 <template>
   <PageFrame :title="$t('runs.new')" :subtitle="$t('runs.newRun.subtitle')">
     <AsyncState
-      :loading="platform.loading.project"
-      :problem="platform.problems.project"
+      :loading="platform.loading.project && !project"
+      :problem="project ? undefined : platform.problems.project"
       @retry="load"
     >
       <form v-if="canLaunch" class="new-run-layout" @submit.prevent="submit">

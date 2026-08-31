@@ -508,7 +508,11 @@ describe("platform store", () => {
       response: new Response(null, { status: 200 }),
     });
     listRunEventsMock.mockResolvedValue({
-      data: { items: [runEvent(1), runEvent(2), runEvent(3)] },
+      data: {
+        items: [runEvent(1), runEvent(2), runEvent(3)],
+        currentSequence: 3,
+        complete: true,
+      },
       response: new Response(null, { status: 200 }),
     });
     const store = usePlatformStore();
@@ -523,7 +527,7 @@ describe("platform store", () => {
     ]);
   });
 
-  it("сохраняет authoritative Run и граф при временной ошибке event catch-up", async () => {
+  it("не публикует новый Run и граф при временной ошибке event catch-up", async () => {
     const workspace: RunWorkspace = {
       run: run(2),
       graph: {
@@ -551,13 +555,60 @@ describe("platform store", () => {
 
     await store.loadRun("run_consistent01");
 
-    expect(store.runs.run_consistent01).toEqual(workspace.run);
-    expect(store.graphs.run_consistent01).toEqual(workspace.graph);
+    expect(store.runs.run_consistent01).toBeUndefined();
+    expect(store.graphs.run_consistent01).toBeUndefined();
     expect(store.problems.run).toMatchObject({
       code: "RUN_EVENTS_UNAVAILABLE",
       kind: "unavailable",
     });
     expect(store.loading.run).toBe(false);
+  });
+
+  it("пагинирует события до sequence авторитетного graph snapshot", async () => {
+    const workspace: RunWorkspace = {
+      run: run(3),
+      graph: {
+        runRef: "run_consistent01",
+        revision: 3,
+        sequence: 3,
+        nodes: [],
+        edges: [],
+      },
+    };
+    getRunGraphMock.mockResolvedValue({
+      data: workspace,
+      response: new Response(null, { status: 200 }),
+    });
+    listRunEventsMock
+      .mockResolvedValueOnce({
+        data: {
+          items: [runEvent(1), runEvent(2)],
+          currentSequence: 3,
+          complete: false,
+        },
+        response: new Response(null, { status: 200 }),
+      })
+      .mockResolvedValueOnce({
+        data: {
+          items: [runEvent(3)],
+          currentSequence: 3,
+          complete: true,
+        },
+        response: new Response(null, { status: 200 }),
+      });
+    const store = usePlatformStore();
+
+    await store.loadRun("run_consistent01");
+
+    expect(listRunEventsMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ query: { afterSequence: 2, limit: 500 } }),
+    );
+    expect(Object.keys(store.events.run_consistent01 ?? {})).toEqual([
+      "1",
+      "2",
+      "3",
+    ]);
   });
 
   it("заменяет разрешённые действия коллекции только авторитетным ответом", async () => {

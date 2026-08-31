@@ -70,9 +70,10 @@ class FakeWebSocket {
 
 const scheduled: Array<() => void> = [];
 const windowEvents = new Map<string, () => void>();
+const authoritativeRunSequences = new Map<string, number>();
 
 async function flushProcessing(): Promise<void> {
-  for (let index = 0; index < 10; index += 1) await Promise.resolve();
+  for (let index = 0; index < 50; index += 1) await Promise.resolve();
 }
 
 function sent(socket: FakeWebSocket, index: number): Record<string, unknown> {
@@ -120,6 +121,20 @@ function event(runRef: string, sequence: number): RunEvent {
   };
 }
 
+function hydrateRun(
+  platform: ReturnType<typeof usePlatformStore>,
+  runRef: string,
+  sequence: number,
+): void {
+  platform.graphs[runRef] = graph(runRef, sequence);
+  platform.events[runRef] = Object.fromEntries(
+    Array.from({ length: sequence }, (_, index) => {
+      const next = index + 1;
+      return [next, event(runRef, next)];
+    }),
+  );
+}
+
 function resumeRequest(socket: FakeWebSocket): Record<string, unknown> {
   return sent(socket, 0);
 }
@@ -141,12 +156,32 @@ function runEnvelope(
   };
 }
 
+function runSnapshot(
+  socket: FakeWebSocket,
+  runRef: string,
+  sequence = 1,
+): Record<string, unknown> {
+  authoritativeRunSequences.set(runRef, sequence);
+  return runEnvelope(socket, runRef, {
+    type: "RUN_GRAPH_SNAPSHOT",
+    cursor: sequence,
+    snapshot: graph(runRef, sequence),
+  });
+}
+
 describe("browser-session realtime multiplexer", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     FakeWebSocket.instances = [];
     scheduled.length = 0;
     windowEvents.clear();
+    authoritativeRunSequences.clear();
+    const platform = usePlatformStore();
+    vi.spyOn(platform, "loadRun").mockImplementation((runRef) => {
+      const sequence = authoritativeRunSequences.get(runRef);
+      if (sequence !== undefined) hydrateRun(platform, runRef, sequence);
+      return Promise.resolve();
+    });
     vi.stubGlobal("WebSocket", FakeWebSocket);
     vi.stubGlobal("navigator", { onLine: true });
     vi.stubGlobal("crypto", {
@@ -236,13 +271,7 @@ describe("browser-session realtime multiplexer", () => {
     const socket = socketAt(0);
     socket.open();
     store.openRun("run_realtime02");
-    socket.message(
-      runEnvelope(socket, "run_realtime01", {
-        type: "RUN_GRAPH_SNAPSHOT",
-        cursor: 1,
-        snapshot: graph("run_realtime01"),
-      }),
-    );
+    socket.message(runSnapshot(socket, "run_realtime01"));
     socket.message({
       type: "SESSION_READY",
       requestRef: requestRef(socket),
@@ -280,20 +309,8 @@ describe("browser-session realtime multiplexer", () => {
       eventName: "RUN_CHANGED",
       kind: "RUN",
     });
-    first.message(
-      runEnvelope(first, "run_realtime01", {
-        type: "RUN_GRAPH_SNAPSHOT",
-        cursor: 2,
-        snapshot: graph("run_realtime01", 2),
-      }),
-    );
-    first.message(
-      runEnvelope(first, "run_realtime02", {
-        type: "RUN_GRAPH_SNAPSHOT",
-        cursor: 4,
-        snapshot: graph("run_realtime02", 4),
-      }),
-    );
+    first.message(runSnapshot(first, "run_realtime01", 2));
+    first.message(runSnapshot(first, "run_realtime02", 4));
     await flushProcessing();
 
     first.close(1006, "CONNECTION_LOST");
@@ -319,20 +336,8 @@ describe("browser-session realtime multiplexer", () => {
     store.openRun("run_realtime02");
     const socket = socketAt(0);
     socket.open();
-    socket.message(
-      runEnvelope(socket, "run_realtime01", {
-        type: "RUN_GRAPH_SNAPSHOT",
-        cursor: 1,
-        snapshot: graph("run_realtime01"),
-      }),
-    );
-    socket.message(
-      runEnvelope(socket, "run_realtime02", {
-        type: "RUN_GRAPH_SNAPSHOT",
-        cursor: 1,
-        snapshot: graph("run_realtime02"),
-      }),
-    );
+    socket.message(runSnapshot(socket, "run_realtime01"));
+    socket.message(runSnapshot(socket, "run_realtime02"));
     await flushProcessing();
     socket.message(
       runEnvelope(socket, "run_realtime01", {
@@ -361,18 +366,36 @@ describe("browser-session realtime multiplexer", () => {
     store.closeAll();
   });
 
+  it("не принимает snapshot без непрерывной авторитетной истории", async () => {
+    const store = useRealtimeStore();
+    store.openRun("run_realtime01");
+    const socket = socketAt(0);
+    socket.open();
+
+    socket.message(
+      runEnvelope(socket, "run_realtime01", {
+        type: "RUN_GRAPH_SNAPSHOT",
+        cursor: 2,
+        snapshot: graph("run_realtime01", 2),
+      }),
+    );
+    await flushProcessing();
+
+    expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+    expect(store.state.run_realtime01).toMatchObject({
+      state: "recovering",
+      attempt: 1,
+    });
+    expect(scheduled).toHaveLength(1);
+    store.closeAll();
+  });
+
   it("принимает готовность точного набора потоков и отклоняет подмену", async () => {
     const store = useRealtimeStore();
     store.openRun("run_realtime01");
     const socket = socketAt(0);
     socket.open();
-    socket.message(
-      runEnvelope(socket, "run_realtime01", {
-        type: "RUN_GRAPH_SNAPSHOT",
-        cursor: 1,
-        snapshot: graph("run_realtime01"),
-      }),
-    );
+    socket.message(runSnapshot(socket, "run_realtime01"));
     await flushProcessing();
     socket.message({
       type: "SESSION_READY",

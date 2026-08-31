@@ -9,8 +9,28 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
+
+func TestRuntimeExecutionFailureCodePreservesAuthorityBoundary(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "provider auth", err: codex.ErrProviderAuthentication, want: "PROVIDER_AUTH_REJECTED"},
+		{name: "authority request", err: codex.ErrAuthorityRequestUnsupported, want: "RUNTIME_PROFILE_UNSUPPORTED"},
+		{name: "provider transport", err: errors.New("provider transport failed"), want: "RUNTIME_PROVIDER_UNAVAILABLE"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := runtimeExecutionFailureCode(test.err); got != test.want {
+				t.Fatalf("runtimeExecutionFailureCode() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
 
 type nativeToolRecorderStub struct {
 	calls []runtimecontract.NativeToolCall
@@ -237,7 +257,7 @@ func TestWriteInputManifestsUsesCanonicalFullCatalog(t *testing.T) {
 	}
 	if err := writeInputManifests(input, map[string]runtimecontract.CanonicalAttachmentManifest{
 		input.AttachmentSetRef: direct,
-		"aset_history1":       history,
+		"aset_history1":        history,
 	}, workspace); err != nil {
 		t.Fatalf("writeInputManifests() error = %v", err)
 	}

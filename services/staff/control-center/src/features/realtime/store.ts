@@ -79,6 +79,16 @@ export function reducePlatformSequence(
   return "applied";
 }
 
+export function hasCompleteRunSnapshot(
+  graph: RunGraph | undefined,
+  events: Record<number, RunEvent> | undefined,
+  cursor: number,
+): boolean {
+  if (!Number.isSafeInteger(cursor) || cursor < 0) return false;
+  if ((graph?.sequence ?? -1) < cursor) return false;
+  return cursor === 0 || Boolean(events?.[cursor]);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -260,10 +270,10 @@ export const useRealtimeStore = defineStore("realtime", () => {
     return false;
   }
 
-  function processRunEnvelope(
+  async function processRunEnvelope(
     socket: WebSocket,
     envelope: Record<string, unknown>,
-  ): boolean {
+  ): Promise<boolean> {
     if (envelope.streamKind !== "RUN" || typeof envelope.streamRef !== "string")
       return false;
     const runRef = envelope.streamRef;
@@ -283,11 +293,20 @@ export const useRealtimeStore = defineStore("realtime", () => {
         !Array.isArray(snapshot.edges)
       )
         return false;
-      platform.applyRunSnapshot(snapshot);
       state[runRef] = {
         state: "recovering",
         attempt: state[runRef]?.attempt ?? 0,
       };
+      await platform.loadRun(runRef);
+      if (
+        platform.problems.run ||
+        !hasCompleteRunSnapshot(
+          platform.graphs[runRef],
+          platform.events[runRef],
+          cursor,
+        )
+      )
+        scheduleRunRecovery(runRef);
       return true;
     }
     if (envelope.type === "RUN_EVENT") {
@@ -303,7 +322,13 @@ export const useRealtimeStore = defineStore("realtime", () => {
       return true;
     }
     if (envelope.type === "RUN_READY") {
-      if ((platform.graphs[runRef]?.sequence ?? 0) !== cursor) {
+      if (
+        !hasCompleteRunSnapshot(
+          platform.graphs[runRef],
+          platform.events[runRef],
+          cursor,
+        )
+      ) {
         scheduleRunRecovery(runRef);
         return true;
       }
@@ -349,7 +374,13 @@ export const useRealtimeStore = defineStore("realtime", () => {
     if (envelope.streamKind === "RUN" && !activeRuns.has(envelope.streamRef))
       return true;
     if (envelope.streamKind === "RUN") {
-      if ((platform.graphs[envelope.streamRef]?.sequence ?? 0) !== cursor)
+      if (
+        !hasCompleteRunSnapshot(
+          platform.graphs[envelope.streamRef],
+          platform.events[envelope.streamRef],
+          cursor,
+        )
+      )
         return false;
       state[envelope.streamRef] = {
         state: "live",
@@ -455,7 +486,11 @@ export const useRealtimeStore = defineStore("realtime", () => {
             return cursor === platformSequence.value;
           return (
             !activeRuns.has(ref) ||
-            cursor === (platform.graphs[ref]?.sequence ?? 0)
+            hasCompleteRunSnapshot(
+              platform.graphs[ref],
+              platform.events[ref],
+              Number(cursor),
+            )
           );
         }) &&
         expectedRefs.size === 0;
@@ -465,7 +500,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       return;
     }
     if (await processPlatformEnvelope(socket, envelope)) return;
-    if (processRunEnvelope(socket, envelope)) return;
+    if (await processRunEnvelope(socket, envelope)) return;
     if (processHeartbeat(envelope)) return;
     if (processStreamProblem(envelope)) return;
     failProtocol(socket, "INVALID_SESSION_ENVELOPE");
