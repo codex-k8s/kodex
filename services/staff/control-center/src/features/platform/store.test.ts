@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   Artifact,
+  AuditEvent,
   IntegrationConnection,
   Project,
   ProjectPage,
@@ -263,6 +264,23 @@ function artifact(ref: string, projectRef?: string): Artifact {
   };
 }
 
+function auditEvent(ref: string, occurredAt: string): AuditEvent {
+  return {
+    ref,
+    projectRef: "project_sales",
+    initiator: { ref: "user_owner", displayName: "Владелец" },
+    executor: "CONTROL_CENTER",
+    source: "CONTROL_CENTER",
+    action: "schedule.create",
+    resourceType: "SCHEDULE",
+    resourceRef: "schedule_quarterly",
+    resourceName: "Квартальный отчёт",
+    outcome: "SUCCEEDED",
+    safeSummary: "Автоматизация создана",
+    occurredAt,
+  };
+}
+
 describe("platform store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -370,7 +388,7 @@ describe("platform store", () => {
 
   it("передаёт поиск аудита авторитетному owner API", async () => {
     listAuditEventsMock.mockResolvedValue({
-      data: { items: [] },
+      data: { items: [], nextPageToken: "" },
       response: new Response(null, { status: 200 }),
     });
     const store = usePlatformStore();
@@ -386,6 +404,44 @@ describe("platform store", () => {
         },
       }),
     );
+  });
+
+  it("добавляет audit cursor-страницу без повторов и зацикливания", async () => {
+    const first = auditEvent("aud_first_page", "2026-08-31T12:00:00Z");
+    const second = auditEvent("aud_second_page", "2026-08-31T11:00:00Z");
+    listAuditEventsMock
+      .mockResolvedValueOnce({
+        data: { items: [first], nextPageToken: "audit-page-2" },
+        response: new Response(null, { status: 200 }),
+      })
+      .mockResolvedValueOnce({
+        data: { items: [first, second], nextPageToken: "audit-page-2" },
+        response: new Response(null, { status: 200 }),
+      });
+    const store = usePlatformStore();
+
+    await store.loadAudit("project_sales", " Квартальный отчёт ");
+    await Promise.all([
+      store.loadMoreAudit("project_sales", " Квартальный отчёт "),
+      store.loadMoreAudit("project_sales", " Квартальный отчёт "),
+    ]);
+
+    expect(listAuditEventsMock).toHaveBeenCalledTimes(2);
+    expect(listAuditEventsMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: {
+          projectRef: "project_sales",
+          query: "Квартальный отчёт",
+          pageSize: 100,
+          pageToken: "audit-page-2",
+        },
+      }),
+    );
+    expect(store.auditEvents.map((event) => event.ref)).toEqual([
+      first.ref,
+      second.ref,
+    ]);
+    expect(store.auditNextPageToken).toBeUndefined();
   });
 
   it("собирает опубликованные revisions инструкций из bounded pages", async () => {

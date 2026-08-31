@@ -1696,12 +1696,20 @@ func (repository *Repository) ListAuditEvents(ctx context.Context, principal val
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListauditeventsSelectAuditEventsOrganizationIdRefAction, scope.organizationID, filter.ProjectRef, filter.Action, filter.Outcome, filter.Query, scope.role, scope.actorID, boundedPage(filter.Page))
+	cursorOccurredAt, cursorRef, err := decodeAuditCursor(filter.Page.Token)
+	if err != nil {
+		return nil, "", err
+	}
+	limit := boundedPage(filter.Page)
+	rows, err := repository.pool.Query(ctx, queryQueriesListauditeventsSelectAuditEventsOrganizationIdRefAction,
+		scope.organizationID, filter.ProjectRef, filter.Action, filter.Outcome, filter.Query,
+		scope.role, scope.actorID, cursorOccurredAt, cursorRef, limit+1,
+	)
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	var result []entity.AuditEvent
+	result := make([]entity.AuditEvent, 0, limit+1)
 	for rows.Next() {
 		var item entity.AuditEvent
 		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.ActorRef, &item.ActorName, &item.Executor, &item.Source, &item.Action, &item.ResourceKind, &item.ResourceRef, &item.ResourceName, &item.Outcome, &item.Summary, &item.CorrelationRef, &item.OccurredAt); err != nil {
@@ -1709,5 +1717,29 @@ func (repository *Repository) ListAuditEvents(ctx context.Context, principal val
 		}
 		result = append(result, item)
 	}
-	return result, "", rows.Err()
+	if rows.Err() != nil {
+		return nil, "", errs.ErrUnavailable
+	}
+	next := ""
+	if len(result) > int(limit) {
+		result = result[:limit]
+		last := result[len(result)-1]
+		next = encodeAuditCursor(last.OccurredAt, last.Ref)
+	}
+	return result, next, nil
+}
+
+func encodeAuditCursor(occurredAt time.Time, ref string) string {
+	return encodeMVPCursor("audit", occurredAt, ref)
+}
+
+func decodeAuditCursor(token string) (*time.Time, string, error) {
+	occurredAt, ref, err := decodeMVPCursor("audit", token)
+	if err != nil {
+		return nil, "", err
+	}
+	if ref != "" && (!strings.HasPrefix(ref, "aud_") || strings.ContainsAny(ref, "\r\n")) {
+		return nil, "", errs.ErrInvalid
+	}
+	return occurredAt, ref, nil
 }

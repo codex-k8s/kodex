@@ -1921,6 +1921,8 @@ const ru = {
     search: "Поиск по аудиту",
     searchPlaceholder: "Название объекта",
     emptyTitle: "События аудита не найдены",
+    loadMore: "Показать более ранние события",
+    loadingMore: "Загружаем более ранние события…",
     technicalDetails: "Технические сведения",
     operationCode: "Код операции",
     executorValue: {
@@ -4074,6 +4076,8 @@ const en = {
     search: "Search audit",
     searchPlaceholder: "Resource name",
     emptyTitle: "No audit events found",
+    loadMore: "Show earlier events",
+    loadingMore: "Loading earlier events…",
     technicalDetails: "Technical details",
     operationCode: "Operation code",
     executorValue: {

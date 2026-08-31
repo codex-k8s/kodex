@@ -5,6 +5,7 @@ import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
@@ -18,6 +19,10 @@ const projectRef = computed(() =>
     : undefined,
 );
 const list = computed(() => platform.auditEvents);
+const hasMore = computed(() => Boolean(platform.auditNextPageToken));
+const loadingMore = computed(() => Boolean(platform.loading.auditMore));
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 function auditLabel(
@@ -28,16 +33,29 @@ function auditLabel(
   return i18n.te(key) ? i18n.t(key) : value;
 }
 
-function load(): void {
-  void platform.loadAudit(projectRef.value, query.value);
+async function load(): Promise<void> {
+  await platform.loadAudit(projectRef.value, query.value);
+  if (platform.auditNextPageToken)
+    await platform.loadMoreAudit(projectRef.value, query.value);
 }
+
+function loadMore(): Promise<void> {
+  return platform.loadMoreAudit(projectRef.value, query.value);
+}
+
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => hasMore.value && !loadingMore.value,
+  loadMore,
+});
 
 watch(query, () => {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(load, 250);
+  searchTimer = setTimeout(() => void load(), 250);
 });
-watch(projectRef, load);
-onMounted(load);
+watch(projectRef, () => void load());
+onMounted(() => void load());
 onUnmounted(() => {
   if (searchTimer) clearTimeout(searchTimer);
 });
@@ -97,6 +115,21 @@ onUnmounted(() => {
           <StatusBadge role="cell" :state="event.outcome" />
         </article>
       </div>
+      <div
+        v-if="hasMore || loadingMore || platform.problems.auditMore"
+        ref="sentinel"
+        class="audit-pagination"
+        aria-live="polite"
+      >
+        <span v-if="loadingMore">{{ $t("audit.loadingMore") }}</span>
+        <button v-else class="button" type="button" @click="loadMore">
+          {{
+            platform.problems.auditMore
+              ? $t("common.retry")
+              : $t("audit.loadMore")
+          }}
+        </button>
+      </div>
     </AsyncState>
   </PageFrame>
 </template>
@@ -139,6 +172,13 @@ onUnmounted(() => {
   color: var(--muted);
   cursor: pointer;
   font-size: 0.78rem;
+}
+.audit-pagination {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
 }
 @media (max-width: 800px) {
   .audit-table__header {

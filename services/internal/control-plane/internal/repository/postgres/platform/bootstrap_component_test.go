@@ -2332,6 +2332,21 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 			t.Fatalf("audit readback exposed an unresolved resource: %#v", auditEvent)
 		}
 	}
+	firstAuditPage, nextAuditPage, err := service.ListAuditEvents(ctx, owner, query.Filter{
+		Query: "Readback run", Page: query.Page{Size: 1},
+	})
+	if err != nil || len(firstAuditPage) != 1 || nextAuditPage == "" {
+		t.Fatalf("first audit cursor page is unstable: events=%#v next=%q err=%v", firstAuditPage, nextAuditPage, err)
+	}
+	secondAuditPage, _, err := service.ListAuditEvents(ctx, owner, query.Filter{
+		Query: "Readback run", Page: query.Page{Size: 1, Token: nextAuditPage},
+	})
+	if err != nil || len(secondAuditPage) != 1 || secondAuditPage[0].Ref == firstAuditPage[0].Ref {
+		t.Fatalf("second audit cursor page is unstable: first=%#v second=%#v err=%v", firstAuditPage, secondAuditPage, err)
+	}
+	if _, _, err := service.ListAuditEvents(ctx, owner, query.Filter{Page: query.Page{Size: 1, Token: "invalid"}}); !errors.Is(err, domainerrs.ErrInvalid) {
+		t.Fatalf("invalid audit cursor was accepted: %v", err)
+	}
 	hiddenAuditEvents, _, err := service.ListAuditEvents(ctx, candidate, query.Filter{Query: "Readback run", Page: query.Page{Size: 20}})
 	if err != nil || len(hiddenAuditEvents) != 0 {
 		t.Fatalf("audit readback ignored VIEW_AUDIT eligibility: events=%#v err=%v", hiddenAuditEvents, err)

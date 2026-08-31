@@ -175,7 +175,8 @@ type QueryKey =
   | "members"
   | "memberCandidates"
   | "administration"
-  | "audit";
+  | "audit"
+  | "auditMore";
 
 function mutationHeaders(headers: MutationHeaders): {
   "Idempotency-Key": string;
@@ -233,9 +234,12 @@ export const usePlatformStore = defineStore("platform", () => {
   const conversations = reactive<Record<string, AssistantConversation>>({});
   const assistant = ref<SystemAssistant>();
   const auditEvents = ref<AuditEvent[]>([]);
+  const auditNextPageToken = ref<string>();
+  const auditScopeKey = ref("");
   const loading = reactive<Partial<Record<QueryKey, boolean>>>({});
   const problems = reactive<Partial<Record<QueryKey, AppProblem>>>({});
   const generation = new Map<QueryKey, number>();
+  const consumedAuditPageTokens = new Set<string>();
 
   async function query<T>(
     key: QueryKey,
@@ -1120,6 +1124,14 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   async function loadAudit(projectRef?: string, search = ""): Promise<void> {
+    const normalizedSearch = search.trim();
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}`;
+    auditScopeKey.value = scopeKey;
+    auditNextPageToken.value = undefined;
+    consumedAuditPageTokens.clear();
+    generation.set("auditMore", (generation.get("auditMore") ?? 0) + 1);
+    loading.auditMore = false;
+    Reflect.deleteProperty(problems, "auditMore");
     await query(
       "audit",
       async () =>
@@ -1128,15 +1140,69 @@ export const usePlatformStore = defineStore("platform", () => {
             listAuditEvents({
               query: {
                 ...(projectRef ? { projectRef } : {}),
-                ...(search.trim() ? { query: search.trim() } : {}),
+                ...(normalizedSearch ? { query: normalizedSearch } : {}),
                 pageSize: 100,
               },
               signal: requestSignal(),
             }),
           )
-        ).data.items,
-      (values) => {
-        auditEvents.value = values;
+        ).data,
+      (page) => {
+        if (auditScopeKey.value !== scopeKey) return;
+        auditEvents.value = page.items;
+        auditNextPageToken.value = page.nextPageToken || undefined;
+      },
+    );
+  }
+
+  async function loadMoreAudit(
+    projectRef?: string,
+    search = "",
+  ): Promise<void> {
+    const normalizedSearch = search.trim();
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}`;
+    const pageToken = auditNextPageToken.value;
+    if (
+      !pageToken ||
+      loading.auditMore ||
+      auditScopeKey.value !== scopeKey ||
+      consumedAuditPageTokens.has(pageToken)
+    )
+      return;
+    await query(
+      "auditMore",
+      async () =>
+        (
+          await unwrap(
+            listAuditEvents({
+              query: {
+                ...(projectRef ? { projectRef } : {}),
+                ...(normalizedSearch ? { query: normalizedSearch } : {}),
+                pageSize: 100,
+                pageToken,
+              },
+              signal: requestSignal(),
+            }),
+          )
+        ).data,
+      (page) => {
+        if (
+          auditScopeKey.value !== scopeKey ||
+          auditNextPageToken.value !== pageToken
+        )
+          return;
+        consumedAuditPageTokens.add(pageToken);
+        const knownRefs = new Set(auditEvents.value.map((event) => event.ref));
+        auditEvents.value.push(
+          ...page.items.filter((event) => !knownRefs.has(event.ref)),
+        );
+        const candidate = page.nextPageToken || undefined;
+        auditNextPageToken.value =
+          candidate &&
+          candidate !== pageToken &&
+          !consumedAuditPageTokens.has(candidate)
+            ? candidate
+            : undefined;
       },
     );
   }
@@ -1776,6 +1842,9 @@ export const usePlatformStore = defineStore("platform", () => {
     integrationDefinitionActions.value = [];
     assistant.value = undefined;
     auditEvents.value = [];
+    auditNextPageToken.value = undefined;
+    auditScopeKey.value = "";
+    consumedAuditPageTokens.clear();
     selectProjectRef(undefined);
   }
 
@@ -1816,6 +1885,7 @@ export const usePlatformStore = defineStore("platform", () => {
     conversations,
     assistant,
     auditEvents,
+    auditNextPageToken,
     loading,
     problems,
     projectList,
@@ -1859,6 +1929,7 @@ export const usePlatformStore = defineStore("platform", () => {
     revokePlatformMembership,
     loadAdministration,
     loadAudit,
+    loadMoreAudit,
     loadCapabilities,
     loadRuntimes,
     finishOnboarding,
