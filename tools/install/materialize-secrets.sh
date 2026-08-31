@@ -117,6 +117,47 @@ create_secret() {
     kubectl apply --server-side --force-conflicts --field-manager=kodex-install -f - >/dev/null
 }
 
+apply_configmap() {
+  local namespace_name=$1 name=$2
+  shift 2
+  kubectl -n "$namespace_name" create configmap "$name" "$@" --dry-run=client -o yaml |
+    kubectl apply --server-side --force-conflicts --field-manager=kodex-install -f - >/dev/null
+}
+
+preserve_selected_provider_metadata() {
+  local metadata selected_name selected_secret selected_digest
+  metadata=$(kubectl -n kodex-system get configmap \
+    runtime-provider-openai-default-metadata -o json 2>/dev/null) || return 1
+  jq -e '
+    .metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex" and
+    (.data.secretName | test("^runtime-provider-openai-[a-z0-9-]{1,160}$")) and
+    (.data.secretUID | type == "string" and length > 0) and
+    (.data.secretResourceVersion | type == "string" and length > 0) and
+    (.data.contentSHA256 | test("^[a-f0-9]{64}$"))
+  ' <<<"$metadata" >/dev/null || return 1
+  selected_name=$(jq -er '.data.secretName' <<<"$metadata")
+  selected_secret=$(kubectl -n "$runtime_namespace" get "secret/$selected_name" -o json 2>/dev/null) || return 1
+  selected_digest=$(jq -jr '.data["auth.json"] // "" | @base64d' <<<"$selected_secret" |
+    sha256sum | awk '{print $1}')
+  jq -e --arg name "$selected_name" --arg digest "$selected_digest" \
+    --arg uid "$(jq -r '.metadata.uid' <<<"$selected_secret")" \
+    --arg resource_version "$(jq -r '.metadata.resourceVersion' <<<"$selected_secret")" '
+      .immutable == true and .type == "Opaque" and
+      .metadata.name == $name and
+      .metadata.namespace == "kodex-runtime" and
+      .metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex" and
+      ((.data["auth.sha256"] // "" | @base64d | gsub("[[:space:]]"; "")) == $digest) and
+      $uid != "" and $resource_version != ""
+    ' <<<"$selected_secret" >/dev/null || return 1
+  jq -e --arg uid "$(jq -r '.metadata.uid' <<<"$selected_secret")" \
+    --arg resource_version "$(jq -r '.metadata.resourceVersion' <<<"$selected_secret")" \
+    --arg digest "$selected_digest" '
+      .data.secretUID == $uid and
+      .data.secretResourceVersion == $resource_version and
+      .data.contentSHA256 == $digest
+    ' <<<"$metadata" >/dev/null
+}
+
 materialize_provider_secret() {
   local name=runtime-provider-openai-default-r1
   local digest digest_file manifest current current_digest current_digest_file
@@ -195,7 +236,12 @@ create_secret kodex-system kodex-nats-credentials \
 create_secret kodex-system kodex-sentry --from-literal=dsn=
 create_secret kodex-system internal-rpc-authority-sentry --from-literal=dsn=
 create_secret kodex-system kodex-integration-credentials --from-literal=empty=
-materialize_provider_secret
+selected_provider_metadata_preserved=false
+if preserve_selected_provider_metadata; then
+  selected_provider_metadata_preserved=true
+else
+  materialize_provider_secret
+fi
 if legacy_provider=$(kubectl -n kodex-system get secret runtime-provider-openai-default-r1 -o json 2>/dev/null); then
   jq -e '
     .metadata.labels["app.kubernetes.io/managed-by"] == "kodex-install" and
@@ -206,52 +252,12 @@ if legacy_provider=$(kubectl -n kodex-system get secret runtime-provider-openai-
     --wait=true --timeout=3m >/dev/null
 fi
 
-apply_configmap() {
-  local namespace_name=$1 name=$2
-  shift 2
-  kubectl -n "$namespace_name" create configmap "$name" "$@" --dry-run=client -o yaml |
-    kubectl apply --server-side --force-conflicts --field-manager=kodex-install -f - >/dev/null
-}
-
-preserve_selected_provider_metadata() {
-  local metadata selected_name selected_secret selected_digest
-  metadata=$(kubectl -n kodex-system get configmap \
-    runtime-provider-openai-default-metadata -o json 2>/dev/null) || return 1
-  jq -e '
-    .metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex" and
-    (.data.secretName | type == "string" and length > 0) and
-    (.data.secretUID | type == "string" and length > 0) and
-    (.data.secretResourceVersion | type == "string" and length > 0) and
-    (.data.contentSHA256 | test("^[a-f0-9]{64}$"))
-  ' <<<"$metadata" >/dev/null || return 1
-  selected_name=$(jq -er '.data.secretName' <<<"$metadata")
-  selected_secret=$(kubectl -n "$runtime_namespace" get "secret/$selected_name" -o json 2>/dev/null) || return 1
-  selected_digest=$(jq -jr '.data["auth.json"] // "" | @base64d' <<<"$selected_secret" |
-    sha256sum | awk '{print $1}')
-  jq -e --arg name "$selected_name" --arg digest "$selected_digest" \
-    --arg uid "$(jq -r '.metadata.uid' <<<"$selected_secret")" \
-    --arg resource_version "$(jq -r '.metadata.resourceVersion' <<<"$selected_secret")" '
-      .immutable == true and
-      .metadata.name == $name and
-      .metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex" and
-      ((.data["auth.sha256"] // "" | @base64d | gsub("[[:space:]]"; "")) == $digest) and
-      $uid != "" and $resource_version != ""
-    ' <<<"$selected_secret" >/dev/null || return 1
-  jq -e --arg uid "$(jq -r '.metadata.uid' <<<"$selected_secret")" \
-    --arg resource_version "$(jq -r '.metadata.resourceVersion' <<<"$selected_secret")" \
-    --arg digest "$selected_digest" '
-      .data.secretUID == $uid and
-      .data.secretResourceVersion == $resource_version and
-      .data.contentSHA256 == $digest
-    ' <<<"$metadata" >/dev/null
-}
-
 apply_configmap kodex-system kodex-oidc-ca --from-file=ca.pem="$oidc_ca_file"
 for configmap_name in kodex-internal-ca kodex-otel-ca internal-rpc-authority-otel-ca; do
   apply_configmap kodex-system "$configmap_name" --from-file=ca.pem="$installation_ca/ca.crt"
 done
 
-if ! preserve_selected_provider_metadata; then
+if [[ "$selected_provider_metadata_preserved" != true ]]; then
   provider_uid=$(kubectl -n "$runtime_namespace" get secret runtime-provider-openai-default-r1 \
     -o jsonpath='{.metadata.uid}')
   provider_resource_version=$(kubectl -n "$runtime_namespace" get secret runtime-provider-openai-default-r1 \
@@ -303,8 +309,8 @@ for secret_name in kodex-installation-ca kodex-postgresql-bootstrap \
   kubectl -n kodex-system get secret "$secret_name" -o json | jq -e \
     '.data | type == "object"' >/dev/null || fail "Secret readback failed: $secret_name"
 done
-for secret_name in runtime-execution-client-tls runtime-provider-openai-default-r1; do
-  kubectl -n "$runtime_namespace" get secret "$secret_name" -o json | jq -e \
-    '.data | type == "object"' >/dev/null || fail "runtime Secret readback failed: $secret_name"
-done
+secret_name=runtime-execution-client-tls
+kubectl -n "$runtime_namespace" get secret "$secret_name" -o json | jq -e \
+  '.data | type == "object"' >/dev/null || fail "runtime Secret readback failed: $secret_name"
+preserve_selected_provider_metadata || fail 'active provider credential readback failed'
 printf 'Kodex Kubernetes Secrets materialized\n'

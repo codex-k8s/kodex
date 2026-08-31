@@ -10,6 +10,8 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 provider_script="$repository_root/tools/dev/provider-account.sh"
 reconcile_sql="$repository_root/tools/dev/reconcile-provider-account.sql"
 dev_script="$repository_root/dev.sh"
+materialize_script="$repository_root/tools/install/materialize-secrets.sh"
+deploy_script="$repository_root/tools/install/deploy-platform.sh"
 
 grep -Fq 'canonical_auth_file="$account_home/auth.json"' "$provider_script" ||
   fail 'provider import does not retain a canonical private auth snapshot'
@@ -38,6 +40,17 @@ grep -Fq 'provider account metadata directory binding is invalid' "$dev_script" 
   fail 'provider metadata is not bound to its account directory'
 grep -Fq 'restored_provider_accounts > 0' "$dev_script" ||
   fail 'runtime readiness is not rechecked after provider reconciliation'
+grep -Fq 'if preserve_selected_provider_metadata; then' "$materialize_script" ||
+  fail 'installer does not preserve the selected immutable provider revision'
+grep -Fq 'selected_provider_metadata_preserved=true' "$materialize_script" ||
+  fail 'installer does not distinguish an active revision from bootstrap material'
+grep -Fq 'preserve_selected_provider_metadata || fail' "$materialize_script" ||
+  fail 'active provider revision has no final exact readback'
+if grep -Fq 'local name=runtime-provider-openai-default-r1 secret_json metadata_json' "$deploy_script"; then
+  fail 'platform preflight is still pinned to the bootstrap provider revision'
+fi
+grep -Fq 'name=$(jq -er' "$deploy_script" ||
+  fail 'platform preflight does not resolve the active provider revision from metadata'
 grep -Fq 'FROM control_plane.owner_claim_contracts installation_owner' "$provider_script" ||
   fail 'default provider account is not resolved through the installation owner contract'
 grep -Fq 'ON account.organization_id = installation_owner.organization_id' "$provider_script" ||

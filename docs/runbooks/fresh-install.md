@@ -230,17 +230,16 @@ Secrets принадлежат installer field manager. Динамические
 создаёт и обновляет только `internal-rpc-authority-publisher`; installer создаёт
 для них пустой generation `0`, но не перезаписывает опубликованное значение.
 
-Provider credential `runtime-provider-openai-default-r1` материализуется как
-immutable revision с `auth.json` и `auth.sha256`. Перед созданием metadata
-ConfigMap installer сверяет фактический digest, UID и `resourceVersion`.
-Повторный запуск с тем же материалом сохраняет revision без изменений. Старый
-mutable `r1`, созданный версией installer до этого инварианта, удаляется только
-при подтверждённом field manager `kodex-install` и создаётся заново; bootstrap
-платформы при следующем старте создаёт новую монотонную credential revision в
-БД и атомарно фиксирует новые UID и `resourceVersion`, не изменяя прежнюю
-immutable revision. Повторный bootstrap после этого является no-op. Изменение уже
-immutable `r1` закрыто отклоняется: ротация credentials должна создавать новую
-revision, а не менять существующую.
+Provider credential на чистой установке материализуется как bootstrap revision
+`runtime-provider-openai-default-r1` с immutable `auth.json` и `auth.sha256`.
+Перед созданием metadata ConfigMap installer сверяет фактический digest, UID и
+`resourceVersion`. После штатной авторизации или ротации metadata указывает на
+новую immutable revision; повторный запуск installer проверяет и сохраняет эту
+активную revision, не сравнивая её с изменившимся bootstrap-файлом и не
+возвращая указатель на `r1`. Старый mutable `r1`, созданный версией installer до
+этого инварианта, удаляется только при подтверждённом field manager
+`kodex-install` и создаётся заново. Изменение любой уже immutable revision
+закрыто отклоняется: ротация credentials всегда создаёт новую revision.
 
 Platform preflight и readback повторяют проверку immutable, digest и metadata.
 Повреждённый либо рассинхронизированный provider Secret останавливает deploy до

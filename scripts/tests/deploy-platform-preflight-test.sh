@@ -209,6 +209,7 @@ if [[ " $* " == *' get secret/runtime-provider-openai-default-r1 -o json '* ]]; 
   jq -n --arg auth "$(printf '%s' "$auth" | base64 -w0)" \
     --arg digest "$(printf '%s\n' "$digest" | base64 -w0)" '{
       metadata:{name:"runtime-provider-openai-default-r1",namespace:"kodex-runtime",
+        annotations:{"kodex.dev/provider-account-key":"default-openai-codex"},
         uid:"10000000-0000-4000-8000-000000000001",resourceVersion:"7"},
       immutable:true,type:"Opaque",data:{"auth.json":$auth,"auth.sha256":$digest}
     }'
@@ -218,7 +219,8 @@ if [[ " $* " == *' get configmap/runtime-provider-openai-default-metadata -o jso
   auth='{"tokens":"provider-fixture"}'
   digest=$(printf '%s' "$auth" | sha256sum | awk '{print $1}')
   jq -n --arg digest "$digest" '{
-      metadata:{name:"runtime-provider-openai-default-metadata",namespace:"kodex-system"},
+      metadata:{name:"runtime-provider-openai-default-metadata",namespace:"kodex-system",
+        annotations:{"kodex.dev/provider-account-key":"default-openai-codex"}},
       data:{secretName:"runtime-provider-openai-default-r1",
         secretUID:"10000000-0000-4000-8000-000000000001",
         secretResourceVersion:"7",contentSHA256:$digest}

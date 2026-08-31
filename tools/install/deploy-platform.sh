@@ -82,20 +82,25 @@ for secret_name in kodex-installation-ca kodex-postgresql-bootstrap \
   kubectl --context "$context" -n "$namespace" get secret "$secret_name" >/dev/null 2>&1 ||
     fail "installation Secret is absent: $secret_name"
 done
-for secret_name in runtime-execution-client-tls runtime-provider-openai-default-r1; do
-  kubectl --context "$context" -n "$runtime_namespace" get secret "$secret_name" >/dev/null 2>&1 ||
-    fail "installation runtime Secret is absent: $secret_name"
-done
+secret_name=runtime-execution-client-tls
+kubectl --context "$context" -n "$runtime_namespace" get secret "$secret_name" >/dev/null 2>&1 ||
+  fail "installation runtime Secret is absent: $secret_name"
 
 verify_provider_credential() {
-  local name=runtime-provider-openai-default-r1 secret_json metadata_json
+  local name secret_json metadata_json
   local auth_digest digest_file metadata_digest
-  secret_json=$(kubectl --context "$context" -n "$runtime_namespace" get "secret/$name" -o json)
   metadata_json=$(kubectl --context "$context" -n "$namespace" get \
     configmap/runtime-provider-openai-default-metadata -o json)
+  name=$(jq -er '
+    .metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex" and
+    (.data.secretName | test("^runtime-provider-openai-[a-z0-9-]{1,160}$")) as $valid |
+    if $valid then .data.secretName else error("invalid provider Secret name") end
+  ' <<<"$metadata_json") || fail 'provider credential metadata contract is invalid'
+  secret_json=$(kubectl --context "$context" -n "$runtime_namespace" get "secret/$name" -o json)
   jq -e --arg namespace "$runtime_namespace" --arg name "$name" '
     .metadata.namespace == $namespace and .metadata.name == $name and
     .immutable == true and .type == "Opaque" and
+    .metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex" and
     (.data["auth.json"] | type == "string" and length > 0) and
     (.data["auth.sha256"] | type == "string" and length > 0)
   ' <<<"$secret_json" >/dev/null || fail 'provider credential Secret contract is invalid'
