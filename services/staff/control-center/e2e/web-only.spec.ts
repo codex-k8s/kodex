@@ -1846,6 +1846,12 @@ test.describe("web-only fresh installation", () => {
       task: automationEditedTask,
     });
     await expect(row).toHaveCount(0);
+    await page.getByRole("combobox", { name: "Состояние" }).selectOption(
+      "ARCHIVED",
+    );
+    row = page.locator(".automation-row").filter({ hasText: automationName });
+    await expect(row).toBeVisible();
+    await row.click();
     await expect(
       page.locator(".automation-details__status .status-badge"),
     ).toHaveText("Архивирован");

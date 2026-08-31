@@ -27,6 +27,7 @@ export default defineConfig({
             protocol: "wss",
           },
           watch: {
+            ignored: ["**/test-results/**", "**/playwright-report/**"],
             interval: 500,
             usePolling: true,
           },

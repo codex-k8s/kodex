@@ -29,13 +29,12 @@ async function bootstrap(): Promise<void> {
   app.use(i18n);
   const session = useSessionStore(pinia);
   installSessionGuard(router, session);
-  app.use(router);
-  await router.isReady();
   setUnauthorizedHandler(() => {
     session.invalidate();
     useRealtimeStore(pinia).closeAll();
     usePlatformStore(pinia).clearOwnerState();
   });
+  app.use(router);
   app.mount("#app");
   if ("serviceWorker" in navigator && import.meta.env.PROD) {
     void navigator.serviceWorker
