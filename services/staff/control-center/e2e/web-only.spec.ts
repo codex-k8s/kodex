@@ -2777,7 +2777,12 @@ test.describe("web-only fresh installation", () => {
       `/administration/audit?projectRef=${encodeURIComponent(projectRef)}`,
     );
     await expectPageHeading(page, "Аудит и диагностика");
+    const auditSearch = page.getByRole("searchbox", {
+      name: "Поиск по аудиту",
+    });
+    await auditSearch.fill(automationName);
     await expect(page.getByRole("table")).toContainText(automationName);
+    await auditSearch.fill(uploadedFileName);
     await expect(page.getByRole("table")).toContainText(uploadedFileName);
 
     const unauthenticated = await browser.newContext({
@@ -2856,13 +2861,16 @@ test.describe("web-only fresh installation", () => {
     );
 
     const currentUserMenuButton = page.locator("button[aria-haspopup='menu']");
-    const currentUserMenu = currentUserMenuButton.locator("..");
     await expect(currentUserMenuButton).toBeVisible();
     await currentUserMenuButton.click();
     await expect(currentUserMenuButton).toHaveAttribute(
       "aria-expanded",
       "true",
     );
+    const currentUserMenu = page.getByRole("menu", {
+      name: /owner Owner, роль: Владелец/,
+    });
+    await expect(currentUserMenu).toBeVisible();
     const logoutButton = currentUserMenu.getByRole("button", {
       name: "Выйти",
       exact: true,
