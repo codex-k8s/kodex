@@ -4,8 +4,8 @@ title: Расширенный план доведения Kodex MVP
 type: implementation-plan
 status: approved
 owner: manager
-version: 2.1.0
-updated: 2026-08-30
+version: 2.2.0
+updated: 2026-08-31
 ---
 
 # Расширенный план доведения Kodex MVP
@@ -142,6 +142,13 @@ control-center:
 timestamps, rotation state и `display_hint`. Reveal выполняется по `D4-B`:
 требует отдельного permission и свежей OIDC re-auth, а значение возвращается
 одноразовым ответом secret-broker.
+
+Provider credential material имеет отдельный lifecycle: control plane хранит
+только exact metadata и durable cleanup task, а специализированный
+`ProviderCredentialMaterializerService` материализует и удаляет opaque Secret
+без возврата body. Credential plaintext не сохраняется в control-plane task,
+PostgreSQL, audit, event, cache, browser, prompt, `RuntimeRevision`, логах или
+трассировках.
 
 ### 5. Переменные шаблона инструкций
 
@@ -312,17 +319,63 @@ digest и локальным путём. Коллизии имён разреш�
   runtime-controller Secret readback и control-plane CAS. Rotating account
   выполняет один provider turn, API-key account использует отдельный bounded
   concurrency limit.
+- Реализовать специализированный `revoke`: он запрещён при активном provider
+  turn или warm consumer. `turn/warm consumer claim` и `revoke` блокируют одну
+  account row с OCC/fence и дают ровно одного победителя.
+- После release историческая `RuntimeRevision` остаётся неизменяемым audit
+  snapshot, но не считается активным consumer и не блокирует `revoke` или
+  cleanup.
+- При supersede атомарно создавать durable control-plane cleanup task со
+  сроком хранения material 24 часа. Принятый `revoke` создаёт отсутствующие
+  tasks для всех revisions и переносит `eligible_at` незавершённых tasks на
+  текущее время.
+- Реализовать task states `PENDING`, `CLAIMED`, `COMPLETED`, `DEAD_LETTER`,
+  bounded lease, reclaim с новым fence, bounded retry/backoff и отдельный
+  auditable operator requeue.
+- Физическое удаление разрешить только exact-delete через
+  `ProviderCredentialMaterializerService` с
+  `accountRef + UID + resourceVersion + SHA-256`. Generic Kubernetes Secret
+  delete и удаление по имени не входят в operation profile; после exact
+  readback service применяет delete preconditions UID/resourceVersion и
+  подтверждает отсутствие объекта.
 
-Матрица OAuth lifecycle:
+Матрица OAuth lifecycle и credential cleanup:
 
-| Переход            | Authority и condition                                                | Атомарный результат                                                     | Ошибка                            |
-| ------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------- |
-| `claim`            | authorized account, exact current credential, capacity под row lock  | immutable RuntimeRevision и CLAIMED lease                               | node остается QUEUED              |
-| `refresh detected` | provider-sidecar, изменившийся digest и peer-authenticated UDS relay | bounded callback с новым snapshot; ticket доступен только relay         | provider turn закрыто завершается |
-| `materialize`      | runtime-controller, old Secret UID/RV/SHA и same provider account ID | новая immutable Secret с exact readback                                 | current revision не меняется      |
-| `commit`           | control-plane, lease/fence/generation и CAS прежней revision         | новая credential revision и account current pointer в одной transaction | stale callback отклоняется        |
-| `retry callback`   | те же lease и exact Secret metadata                                  | идемпотентный readback уже активной revision                            | несовпадающий повтор отклоняется  |
-| `terminal/expiry`  | owner transition lease                                               | capacity освобождается; следующий turn pin-ит current revision          | частичная activation запрещена    |
+| Переход | Authority и condition | Атомарный результат | Закрытый отказ |
+| --- | --- | --- | --- |
+| `turn/warm claim` | account row, `AUTHORIZED`, exact current revision, capacity, отсутствие победившего `revoke` | immutable `RuntimeRevision` и execution/warm-consumer lease с attempt/fence | победивший `revoke` запрещает claim и continuation |
+| `refresh detected` | provider-sidecar, изменившийся digest и peer-authenticated UDS relay | bounded callback с новым snapshot; ticket доступен только relay | provider turn закрыто завершается |
+| `materialize` | runtime-controller, old Secret UID/RV/SHA и same provider account ID | новая immutable Secret с exact readback | current revision не меняется |
+| `refresh commit` | control plane, lease/fence/generation и CAS прежней revision | новая current revision; прежняя superseded; `PENDING` cleanup task с `eligible_at +24h` | current pointer и cleanup task не фиксируются частично |
+| `retry callback` | те же lease и exact Secret metadata | идемпотентный readback уже активной revision | несовпадающий повтор отклоняется |
+| `release` | exact provider turn/warm-consumer lease, attempt и fence | capacity и активный blocker освобождены; historical `RuntimeRevision` остаётся историей | stale release не меняет usage |
+| `revoke` | account row, exact permission/owner, нет активных turn и warm consumer | `REVOKED`; missing cleanup tasks созданы, незавершённые tasks due немедленно | победивший claim оставляет account активным, `revoke` отклоняется |
+| `cleanup claim` | due `PENDING`, exact tuple, target revision не удерживается consumer, retry budget | `CLAIMED` с bounded lease, attempt и fence | ранняя/stale/занятая task не выдаётся |
+| `lease expiry/reclaim` | истёкшая `CLAIMED` lease и неизменный exact tuple | `PENDING` с новым fence/backoff либо `DEAD_LETTER` при исчерпанном budget | прежний worker не может complete |
+| `exact-delete/complete` | действующая task lease; readback `accountRef+UID+resourceVersion+SHA-256`; delete preconditions UID/RV | совпавший Secret удалён, отсутствие подтверждено, task `COMPLETED` | mismatch/precondition conflict не удаляет Secret и ведёт в safe retry/`DEAD_LETTER` |
+| `retry/dead letter` | классифицированная временная ошибка и оставшийся bounded budget | `PENDING` с bounded backoff либо terminal `DEAD_LETTER` | бесконечный retry и изменение exact tuple запрещены |
+| `operator requeue` | `DEAD_LETTER`, exact operator permission, устранённая причина, тот же immutable tuple | новая retry generation, `PENDING`, новый fence/budget и audit | автоматический requeue и редактирование tuple запрещены |
+
+Негативные сценарии provider credential lifecycle:
+
+- Одновременные `turn claim` и `revoke` дают ровно один эффект: нельзя получить
+  и execution lease, и `REVOKED` для одной account revision.
+- `revoke` отклоняется отдельно при активном turn и при живом warm consumer;
+  cleanup tasks при отклонённом отзыве не ускоряются.
+- Historical `RuntimeRevision` после exact release не блокирует `revoke`, но и
+  не позволяет заново получить удалённый credential material.
+- Superseded task не claim-ится до `superseded_at + 24h`; принятый `revoke`
+  делает её due немедленно, не выполняя Kubernetes delete внутри account
+  transaction.
+- Secret с тем же именем и другим UID, `resourceVersion` или SHA-256 не
+  удаляется stale task; mismatch заканчивается безопасным retry либо
+  `DEAD_LETTER`.
+- Worker с истёкшей lease после reclaim не может записать `COMPLETED`; повтор
+  после неоднозначного ответа принимается только по exact tuple и receipt.
+- Временная недоступность materializer достигает bounded retry и
+  `DEAD_LETTER`, а не бесконечного цикла или ложного `COMPLETED`.
+- Cleanup task, RPC, audit, event и диагностика отклоняют credential body и не
+  сохраняют plaintext.
 
 ### Блок 5. ИИ-сотрудники
 
@@ -453,6 +506,9 @@ digest и локальным путём. Коллизии имён разреш�
   message/turn/workflow bindings, workspace manifest и 30-дневную retention job.
 - Delete немедленно закрывает новые download/materialization grants; purge
   удаляет exact S3 version с readback и не удаляет обязательный audit tombstone.
+- Добавить durable provider credential cleanup task и worker с публичной
+  bounded точкой запуска, lease/reclaim/retry/dead-letter observability и
+  вызовом только specialized exact-delete operation materializer service.
 - Для production описать необходимые S3 env/secret names, buckets, lifecycle,
   encryption и backup restore, не добавляя значения в репозиторий.
 - Обновить observability: websocket reconnect/gap, secret operations без value,
@@ -469,6 +525,10 @@ digest и локальным путём. Коллизии имён разреш�
 - Проверить create/edit/delete/version flows образа, окружения, секрета,
   сотрудника, Process, автоматизации и интеграции.
 - Проверить два provider accounts, device auth и API key provider path.
+- Проверить provider claim-vs-revoke race, запрет отзыва при активном turn и
+  warm consumer, неблокирующую historical `RuntimeRevision`, 24-hour retention,
+  ускорение tasks отзывом, lease expiry/reclaim, bounded retry,
+  `DEAD_LETTER`, exact metadata mismatch и отсутствие credential plaintext.
 - Проверить fixture integration и отдельный GitHub repository.
 - Проверить одиночную Session, continuation, несколько Sessions одного агента,
   Process graph, tool events, cancel/retry, Human Gate и reconnect.
@@ -658,6 +718,9 @@ digest и локальным путём. Коллизии имён разреш�
   fake data и скрытых ручных операций.
 - Секреты не раскрываются без выбранного отдельного flow и никогда не попадают
   в обычные read-модели.
+- Provider credential revoke и cleanup реализуют single-winner с execution
+  claim, durable task lifecycle, 24-hour superseded retention и exact-delete
+  без plaintext в control-plane состоянии.
 - Live Run показывает Session graph, realtime timeline и tool calls после
   reconnect без перезагрузки страницы.
 - UI пригоден на широком desktop и mobile, dropdown/modal/file/assistant cases
