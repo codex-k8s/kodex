@@ -250,6 +250,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("runtime configuration publish validates canonical provider accounts", func(t *testing.T) {
 		testRuntimeConfigurationPublish(t, ctx, repository)
 	})
+	t.Run("session provider affinity survives policy mutation and fails closed on revoke", func(t *testing.T) {
+		testSessionProviderAffinityAfterPolicyMutation(t, ctx, repository, pool)
+	})
 	t.Run("runtime secret lifecycle is crash consistent", func(t *testing.T) {
 		testRuntimeSecretCrashConsistency(t, ctx, repository)
 	})
@@ -837,6 +840,166 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 		t.Fatalf("published runtime configuration readback mismatch: before=%#v after=%#v",
 			current, *result.RuntimeConfiguration)
 	}
+}
+
+func testSessionProviderAffinityAfterPolicyMutation(
+	t *testing.T,
+	ctx context.Context,
+	repository *Repository,
+	pool *pgxpool.Pool,
+) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Provider affinity owner", CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
+	}, "control-api-gateway")
+	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
+	}, "runtime-controller")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct provider affinity service: %v", err)
+	}
+
+	var primaryAccountID, primaryAccountRef, primaryCredentialID, secondaryAccountRef string
+	if err := pool.QueryRow(ctx, `
+		SELECT primary_account.id::text, primary_account.ref,
+		       primary_account.current_credential_revision_id::text, secondary_account.ref
+		FROM control_plane.provider_accounts primary_account
+		JOIN control_plane.provider_accounts secondary_account
+		  ON secondary_account.organization_id = primary_account.organization_id
+		 AND secondary_account.stable_key = 'component-secondary'
+		WHERE primary_account.stable_key = 'default-openai-codex'
+	`).Scan(&primaryAccountID, &primaryAccountRef, &primaryCredentialID, &secondaryAccountRef); err != nil {
+		t.Fatalf("read provider affinity accounts: %v", err)
+	}
+
+	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-project"}, Payload: command.ProjectInput{
+			Name: "Provider affinity", Purpose: "Verify immutable Session account affinity", Language: "en",
+		}})
+	if err != nil || project.Project == nil {
+		t.Fatalf("create provider affinity project: project=%#v err=%v", project.Project, err)
+	}
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref,
+		"provider-affinity-agent", "Provider affinity specialist")
+
+	publishFixedPolicy := func(key, accountRef string) {
+		t.Helper()
+		current, readErr := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
+		if readErr != nil {
+			t.Fatalf("read provider affinity runtime configuration: %v", readErr)
+		}
+		expectedVersion := current.AgentVersion
+		published, publishErr := service.Execute(ctx, command.Command{Kind: command.PublishAgentRuntimeConfig, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &expectedVersion},
+			Payload: command.AgentRuntimeConfigurationInput{
+				AgentRef: agent.Ref, RuntimeProfileRef: current.Configuration.RuntimeProfileRef,
+				Model: current.Configuration.Model, ProviderPolicyMode: "FIXED",
+				ProviderAccounts: []entity.ProviderAccountCandidate{{AccountRef: accountRef, Weight: 1}},
+			}})
+		if publishErr != nil || published.RuntimeConfiguration == nil {
+			t.Fatalf("publish fixed provider policy for %s: configuration=%#v err=%v",
+				accountRef, published.RuntimeConfiguration, publishErr)
+		}
+	}
+
+	publishFixedPolicy("provider-affinity-policy-primary", primaryAccountRef)
+	launched, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-launch"}, Payload: command.LaunchRunInput{
+			ProjectRef: project.Project.Ref, Title: "Provider affinity run",
+			Task: "Verify immutable provider account affinity.", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref},
+		}})
+	if err != nil || launched.Run == nil {
+		t.Fatalf("launch provider affinity run: run=%#v err=%v", launched.Run, err)
+	}
+	publishFixedPolicy("provider-affinity-policy-secondary", secondaryAccountRef)
+
+	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-claim"},
+		Payload:  command.LeaseInput{WorkloadInstance: "runtime-provider-affinity", Limit: 1}})
+	if err != nil || len(claimed.RuntimeItems) != 1 ||
+		stringMap(claimed.RuntimeItems[0], "runRef") != launched.Run.Ref ||
+		stringMap(claimed.RuntimeItems[0], "providerAccountRef") != primaryAccountRef {
+		t.Fatalf("claim switched Session provider after policy mutation: claims=%#v err=%v", claimed.RuntimeItems, err)
+	}
+	lease := claimed.RuntimeItems[0]
+	var sessionAccountID, revisionAccountID string
+	if err := pool.QueryRow(ctx, `
+		SELECT session.provider_account_id::text, revision.provider_account_id::text
+		FROM control_plane.runtime_revisions revision
+		JOIN control_plane.sessions session ON session.id = revision.session_id
+		WHERE revision.ref = $1
+	`, stringMap(lease, "runtimeRevisionRef")).Scan(&sessionAccountID, &revisionAccountID); err != nil {
+		t.Fatalf("read provider affinity RuntimeRevision: %v", err)
+	}
+	if sessionAccountID != primaryAccountID || revisionAccountID != primaryAccountID {
+		t.Fatalf("RuntimeRevision account differs from Session: session=%s revision=%s want=%s",
+			sessionAccountID, revisionAccountID, primaryAccountID)
+	}
+	completed := completeClaimedExecution(t, ctx, service, worker, lease, "provider-affinity-first", false)
+	if completed.Run == nil || completed.Run.State != "SUCCEEDED" {
+		t.Fatalf("complete provider affinity run: run=%#v", completed.Run)
+	}
+
+	continued, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-continuation"}, Payload: command.SessionTurnInput{
+			SessionRef: launched.Run.SessionRef, RunRef: launched.Run.Ref,
+			Task: "Verify revoked Session account fails closed without provider fallback.",
+		}})
+	if err != nil || continued.Run == nil {
+		t.Fatalf("continue provider affinity Session: run=%#v err=%v", continued.Run, err)
+	}
+
+	restored := false
+	defer func() {
+		if restored {
+			return
+		}
+		if _, restoreErr := pool.Exec(context.WithoutCancel(ctx), `
+			UPDATE control_plane.provider_accounts
+			SET state = 'AUTHORIZED', enabled = true, current_credential_revision_id = $2::uuid,
+			    version = version + 1, updated_at = clock_timestamp()
+			WHERE id = $1::uuid
+		`, primaryAccountID, primaryCredentialID); restoreErr != nil {
+			t.Errorf("restore provider affinity account: %v", restoreErr)
+		}
+	}()
+	if _, err := pool.Exec(ctx, `
+		UPDATE control_plane.provider_accounts
+		SET state = 'REVOKED', enabled = false, current_credential_revision_id = NULL,
+		    version = version + 1, updated_at = clock_timestamp()
+		WHERE id = $1::uuid
+	`, primaryAccountID); err != nil {
+		t.Fatalf("revoke provider affinity account: %v", err)
+	}
+
+	blocked, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-claim-revoked"},
+		Payload:  command.LeaseInput{WorkloadInstance: "runtime-provider-affinity-revoked", Limit: 1}})
+	if err != nil || len(blocked.RuntimeItems) != 0 {
+		t.Fatalf("revoked Session account switched to current policy fallback: claims=%#v err=%v", blocked.RuntimeItems, err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE control_plane.provider_accounts
+		SET state = 'AUTHORIZED', enabled = true, current_credential_revision_id = $2::uuid,
+		    version = version + 1, updated_at = clock_timestamp()
+		WHERE id = $1::uuid
+	`, primaryAccountID, primaryCredentialID); err != nil {
+		t.Fatalf("restore provider affinity account: %v", err)
+	}
+	restored = true
+
+	recovered, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-claim-restored"},
+		Payload:  command.LeaseInput{WorkloadInstance: "runtime-provider-affinity-restored", Limit: 1}})
+	if err != nil || len(recovered.RuntimeItems) != 1 ||
+		stringMap(recovered.RuntimeItems[0], "runRef") != continued.Run.Ref ||
+		stringMap(recovered.RuntimeItems[0], "providerAccountRef") != primaryAccountRef {
+		t.Fatalf("restored Session did not retain provider account: claims=%#v err=%v", recovered.RuntimeItems, err)
+	}
+	completeClaimedExecution(t, ctx, service, worker, recovered.RuntimeItems[0], "provider-affinity-restored", false)
 }
 
 func testRuntimeEnvironmentRejectsMissingImage(t *testing.T, ctx context.Context, repository *Repository) {
