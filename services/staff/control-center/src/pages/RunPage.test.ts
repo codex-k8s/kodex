@@ -44,6 +44,7 @@ function messages() {
       graph: "Граф выполнения",
       activity: "Ход работы",
       context: "Контекст узла",
+      workspaceTools: "Инструменты запуска",
       connections: "Связи графа",
       artifacts: "Результаты и файлы",
       incidents: "Диагностика",

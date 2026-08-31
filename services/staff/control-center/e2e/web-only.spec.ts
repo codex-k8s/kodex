@@ -548,12 +548,15 @@ test.describe("web-only fresh installation", () => {
     await waitForConnected(page);
     await expectRunState(page, "Завершён");
     expect(await readRunUsage(page, firstRunRef)).toEqual(usageBeforeReload);
-    await expect(page.getByLabel("Контекст узла")).toContainText(
-      "lead-plan.txt",
-    );
-    await page
+    const runTools = page.getByRole("toolbar", {
+      name: "Инструменты запуска",
+    });
+    await runTools.getByRole("button", { name: "Контекст узла" }).click();
+    const nodeContext = page.getByRole("dialog", { name: "Контекст узла" });
+    await expect(nodeContext).toContainText("lead-plan.txt");
+    await nodeContext.getByRole("button", { name: "Закрыть" }).first().click();
+    await runTools
       .getByRole("button", { name: "Ход работы", exact: true })
-      .first()
       .click();
     const activity = page.getByRole("dialog", { name: "Ход работы" });
     await expect(activity).toBeVisible();
@@ -2126,7 +2129,7 @@ test.describe("web-only fresh installation", () => {
       )
       .toEqual(visibleSessionEdgeTypes);
     await page
-      .getByLabel("Контекст узла")
+      .getByRole("toolbar", { name: "Инструменты запуска" })
       .getByRole("button", { name: "Ход работы" })
       .click();
     const activityDrawer = page.getByRole("dialog", { name: "Ход работы" });
@@ -2228,7 +2231,7 @@ test.describe("web-only fresh installation", () => {
     await waitForTerminalSuccess(page);
     await assertNoDuplicateGraphNodes(page);
     await page
-      .getByLabel("Контекст узла")
+      .getByRole("toolbar", { name: "Инструменты запуска" })
       .getByRole("button", { name: "Ход работы" })
       .click();
     await expect(

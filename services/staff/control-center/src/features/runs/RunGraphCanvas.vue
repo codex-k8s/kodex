@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Background } from "@vue-flow/background";
-import { Controls } from "@vue-flow/controls";
 import {
   VueFlow,
   useVueFlow,
@@ -11,8 +10,11 @@ import { MiniMap } from "@vue-flow/minimap";
 import {
   Bot,
   ListTree,
+  Maximize2,
+  Minus,
   Network,
   PlugZap,
+  Plus,
   UserRoundCheck,
   Workflow,
 } from "@lucide/vue";
@@ -22,7 +24,6 @@ import { useI18n } from "vue-i18n";
 
 import "@vue-flow/core/dist/style.css";
 import "@vue-flow/core/dist/theme-default.css";
-import "@vue-flow/controls/dist/style.css";
 import "@vue-flow/minimap/dist/style.css";
 
 import RunGraphEdge from "@/features/runs/RunGraphEdge.vue";
@@ -187,6 +188,12 @@ async function fit(userInitiated = true): Promise<void> {
   } finally {
     programmaticViewportChange.value = false;
   }
+}
+
+async function changeZoom(direction: "in" | "out"): Promise<void> {
+  userAdjustedView.value = true;
+  if (direction === "in") await zoomIn({ duration: 120 });
+  else await zoomOut({ duration: 120 });
 }
 
 function setViewMode(mode: "graph" | "outline"): void {
@@ -394,6 +401,37 @@ function compareNodes(left: RunNode, right: RunNode): number {
           <ListTree :size="18" aria-hidden="true" />
         </button>
       </div>
+      <span class="graph-toolbar__separator" aria-hidden="true" />
+      <button
+        class="icon-button"
+        type="button"
+        :aria-label="$t('runs.zoomOut')"
+        :title="$t('runs.zoomOut')"
+        :disabled="viewMode !== 'graph'"
+        @click="changeZoom('out')"
+      >
+        <Minus :size="18" aria-hidden="true" />
+      </button>
+      <button
+        class="icon-button"
+        type="button"
+        :aria-label="$t('runs.zoomIn')"
+        :title="$t('runs.zoomIn')"
+        :disabled="viewMode !== 'graph'"
+        @click="changeZoom('in')"
+      >
+        <Plus :size="18" aria-hidden="true" />
+      </button>
+      <button
+        class="icon-button"
+        type="button"
+        :aria-label="$t('runs.fitGraph')"
+        :title="$t('runs.fitGraph')"
+        :disabled="viewMode !== 'graph'"
+        @click="fit(true)"
+      >
+        <Maximize2 :size="17" aria-hidden="true" />
+      </button>
     </div>
 
     <div
@@ -440,14 +478,6 @@ function compareNodes(left: RunNode, right: RunNode): number {
           <RunGraphEdge v-bind="edgeProps" />
         </template>
         <Background :gap="24" :size="1" pattern-color="var(--hairline)" />
-        <Controls
-          position="top-right"
-          :show-interactive="false"
-          :fit-view-params="runGraphFitViewOptions"
-          @zoom-in="markUserAdjusted"
-          @zoom-out="markUserAdjusted"
-          @fit-view="markUserAdjusted"
-        />
         <MiniMap
           position="bottom-right"
           pannable
@@ -577,7 +607,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
   position: absolute;
   z-index: 12;
   top: 14px;
-  left: 14px;
+  right: 14px;
   display: flex;
   min-height: 42px;
   align-items: center;
@@ -592,6 +622,12 @@ function compareNodes(left: RunNode, right: RunNode): number {
   display: flex;
   align-items: center;
   gap: 5px;
+}
+.graph-toolbar__separator {
+  width: 1px;
+  height: 24px;
+  margin: 0 3px;
+  background: var(--border);
 }
 .graph-toolbar .icon-button[aria-pressed="true"] {
   border-color: var(--accent);
@@ -633,7 +669,6 @@ function compareNodes(left: RunNode, right: RunNode): number {
 .run-flow :deep(.vue-flow__edge-path) {
   fill: none;
 }
-.run-flow :deep(.vue-flow__controls),
 .run-flow :deep(.vue-flow__minimap) {
   overflow: hidden;
   border: 1px solid var(--border);
@@ -657,20 +692,6 @@ function compareNodes(left: RunNode, right: RunNode): number {
 }
 .graph-empty p {
   margin: 0;
-}
-.run-flow :deep(.vue-flow__controls) {
-  top: 14px;
-  right: 14px;
-}
-.run-flow :deep(.vue-flow__controls-button) {
-  width: 34px;
-  height: 34px;
-  border-color: var(--border);
-  background: transparent;
-  color: var(--text);
-}
-.run-flow :deep(.vue-flow__controls-button:hover) {
-  background: var(--panel);
 }
 .run-flow :deep(.vue-flow__minimap) {
   right: 14px;
@@ -826,13 +847,9 @@ function compareNodes(left: RunNode, right: RunNode): number {
   .graph-toolbar {
     top: 8px;
     bottom: auto;
-    left: 8px;
+    right: 8px;
     min-height: 40px;
     padding: 4px;
-  }
-  .run-flow :deep(.vue-flow__controls) {
-    top: 8px;
-    right: 8px;
   }
   .run-flow :deep(.vue-flow__minimap) {
     right: 8px;

@@ -80,7 +80,9 @@ export function buildRunActivityItems(
             : (node?.displayName ?? run.title)),
       summary: event.displaySummary,
       progress: event.displayProgress,
-      nodeRef: sessionNodeRef,
+      // Human Gate changes are run-wide owner decisions. They remain visible
+      // even when the timeline is narrowed to one agent session.
+      nodeRef: event.messageKind === "OWNER_GATE" ? undefined : sessionNodeRef,
       occurredAt: event.occurredAt,
       sequence: event.sequence,
       state: event.nodeState ?? event.runState,

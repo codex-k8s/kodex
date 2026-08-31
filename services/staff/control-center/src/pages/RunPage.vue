@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Activity } from "@lucide/vue";
+import { Activity, ListChecks, PanelRightOpen } from "@lucide/vue";
 import {
   type ComponentPublicInstance,
   computed,
@@ -43,6 +43,7 @@ import type {
   AttachmentComposerState,
 } from "@/shared/ui/attachment-composer";
 import PageFrame from "@/shared/ui/PageFrame.vue";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -195,6 +196,9 @@ const gateList = computed(() =>
     (g) => g.runRef === runRef.value || g.runRef === run.value?.rootRunRef,
   ),
 );
+const openGateList = computed(() =>
+  gateList.value.filter((gate) => gate.state === "OPEN"),
+);
 const artifactList = computed(() =>
   Object.values(platform.artifacts).filter(
     (a) => a.runRef === runRef.value || a.runRef === run.value?.rootRunRef,
@@ -263,9 +267,9 @@ const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
 const activityOpen = ref(false);
 const activityNodeRef = ref<string>();
-const nodeInspectorOpen = ref(true);
+const nodeInspectorOpen = ref(false);
 const nodeDetailsOpen = ref(false);
-const mobilePane = ref<"graph" | "activity">("graph");
+const gateDialogOpen = ref(false);
 const activityTrigger = ref<HTMLButtonElement>();
 const hasAuthoritativeSnapshot = computed(() =>
   Boolean(run.value && graph.value),
@@ -421,12 +425,13 @@ function inspectGateNode(gate: OwnerGate): void {
   const node = sessionGraph.value?.nodes.find(
     (candidate) => candidate.ref === sessionRef,
   );
-  if (node) select(node);
+  if (!node) return;
+  select(node);
+  gateDialogOpen.value = false;
+  nodeInspectorOpen.value = true;
 }
 function select(node: RunNode) {
   selectedRef.value = node.ref;
-  nodeInspectorOpen.value = true;
-  mobilePane.value = "graph";
 }
 function openNodeDetails(node: RunNode): void {
   select(node);
@@ -435,15 +440,18 @@ function openNodeDetails(node: RunNode): void {
 function openActivity(nodeRef?: string): void {
   activityNodeRef.value = nodeRef;
   activityOpen.value = true;
-  mobilePane.value = "activity";
-}
-function showGraph(): void {
-  activityOpen.value = false;
-  mobilePane.value = "graph";
 }
 function closeActivity(): void {
-  showGraph();
+  activityOpen.value = false;
   void nextTick(() => activityTrigger.value?.focus());
+}
+function openNodeActivity(nodeRef: string): void {
+  nodeInspectorOpen.value = false;
+  openActivity(nodeRef);
+}
+function openSelectedDetails(): void {
+  nodeInspectorOpen.value = false;
+  nodeDetailsOpen.value = true;
 }
 async function downloadArtifact(artifact: Artifact): Promise<void> {
   if (!artifact.nextActions.includes("DOWNLOAD")) return;
@@ -480,6 +488,12 @@ watch(refreshKey, (next) => {
   lastRefreshKey = next;
   void refreshScheduler.request(runRef.value);
 });
+watch(
+  () => openGateList.value.length,
+  (count) => {
+    if (count === 0) gateDialogOpen.value = false;
+  },
+);
 watch(runRef, async (next, previous) => {
   refreshScheduler.cancel();
   if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
@@ -488,13 +502,13 @@ watch(runRef, async (next, previous) => {
   activityOpen.value = false;
   activityNodeRef.value = undefined;
   selectedRef.value = undefined;
-  nodeInspectorOpen.value = true;
+  nodeInspectorOpen.value = false;
   nodeDetailsOpen.value = false;
+  gateDialogOpen.value = false;
   turn.value = "";
   turnAttachmentComposer.value?.clear();
   gateAttachmentStates.value = {};
   comments.value = {};
-  mobilePane.value = "graph";
   await load(next);
   if (runRef.value === next) openCurrentStream();
 });
@@ -524,16 +538,6 @@ onBeforeUnmount(() => {
           <StatusBadge :state="resultOutcomeState" />
         </span>
       </div>
-      <button
-        v-if="run"
-        ref="activityTrigger"
-        class="button"
-        type="button"
-        @click="openActivity()"
-      >
-        <Activity :size="17" aria-hidden="true" />
-        {{ $t("runs.activity") }}
-      </button>
       <button
         v-if="run?.nextActions.includes('CANCEL')"
         class="button button--danger"
@@ -572,127 +576,45 @@ onBeforeUnmount(() => {
           />
           <ProblemNotice v-if="problem" :problem="problem" compact />
         </div>
-        <section
-          v-if="gateList.some((g) => g.state === 'OPEN')"
-          class="gate-strip"
-        >
-          <article
-            v-for="gate in gateList.filter((g) => g.state === 'OPEN')"
-            :key="gate.ref"
+        <div class="run-workspace">
+          <nav
+            class="run-workspace-toolbar"
+            role="toolbar"
+            :aria-label="$t('runs.workspaceTools')"
           >
-            <div class="gate-question">
-              <p class="eyebrow">{{ $t("decisions.question") }}</p>
-              <h2>{{ gate.title }}</h2>
-              <dl>
-                <div>
-                  <dt>{{ $t("decisions.requestedBy") }}</dt>
-                  <dd>{{ gate.requestedBy.displayName }}</dd>
-                </div>
-                <div>
-                  <dt>{{ $t("decisions.process") }}</dt>
-                  <dd>
-                    <button
-                      class="button button--ghost"
-                      type="button"
-                      @click="inspectGateNode(gate)"
-                    >
-                      {{ gateNodeName(gate) }}
-                    </button>
-                  </dd>
-                </div>
-              </dl>
-              <h3>{{ $t("decisions.fullQuestion") }}</h3>
-              <SafeMarkdown :content="gate.contextSummary" />
-              <h3>{{ $t("decisions.consequences") }}</h3>
-              <SafeMarkdown :content="gate.consequencesSummary" />
-            </div>
-            <div class="gate-response">
-              <label class="field"
-                ><span>{{ $t("decisions.comment") }}</span
-                ><textarea v-model="comments[gate.ref]" maxlength="1000" />
-              </label>
-              <AttachmentComposer
-                :ref="
-                  (component) => setGateAttachmentComposer(gate.ref, component)
-                "
-                compact
-                purpose="OWNER_GATE_MESSAGE"
-                :project-ref="run?.projectRef"
-                :disabled="busy"
-                @change="gateAttachmentStates[gate.ref] = $event"
-              />
-              <div class="gate-actions">
-                <button
-                  v-if="
-                    gate.nextActions.includes('RESOLVE_GATE') &&
-                    gate.allowedDecisions.includes('APPROVE')
-                  "
-                  class="button button--primary"
-                  type="button"
-                  :disabled="busy || !gateAttachmentsReady(gate.ref)"
-                  @click="decide(gate, 'APPROVE')"
-                >
-                  {{ $t("common.approve") }}</button
-                ><button
-                  v-if="
-                    gate.nextActions.includes('RESOLVE_GATE') &&
-                    gate.allowedDecisions.includes('REQUEST_CHANGES')
-                  "
-                  class="button"
-                  type="button"
-                  :disabled="busy || !gateAttachmentsReady(gate.ref)"
-                  @click="decide(gate, 'REQUEST_CHANGES')"
-                >
-                  {{ $t("common.requestChanges") }}</button
-                ><button
-                  v-if="
-                    gate.nextActions.includes('RESOLVE_GATE') &&
-                    gate.allowedDecisions.includes('REJECT')
-                  "
-                  class="button button--danger"
-                  type="button"
-                  :disabled="busy || !gateAttachmentsReady(gate.ref)"
-                  @click="decide(gate, 'REJECT')"
-                >
-                  {{ $t("common.reject") }}
-                </button>
-              </div>
-            </div>
-          </article>
-        </section>
-        <div
-          class="run-mobile-tabs"
-          role="tablist"
-          :aria-label="$t('runs.activity')"
-        >
-          <button
-            id="run-graph-tab"
-            class="button"
-            type="button"
-            role="tab"
-            aria-controls="run-graph-panel"
-            :aria-selected="mobilePane === 'graph'"
-            @click="showGraph"
-          >
-            {{ $t("runs.graph") }}
-          </button>
-          <button
-            id="run-activity-tab"
-            class="button"
-            type="button"
-            role="tab"
-            aria-controls="run-activity-drawer"
-            :aria-selected="mobilePane === 'activity'"
-            @click="openActivity()"
-          >
-            {{ $t("runs.activity") }}
-            <span>{{ eventList.length }}</span>
-          </button>
-        </div>
-        <div
-          class="run-workspace"
-          :class="{ 'run-workspace--activity': activityOpen }"
-        >
+            <button
+              class="icon-button"
+              type="button"
+              :disabled="!selectedNode"
+              :aria-label="$t('runs.context')"
+              :title="$t('runs.context')"
+              @click="nodeInspectorOpen = true"
+            >
+              <PanelRightOpen :size="18" aria-hidden="true" />
+            </button>
+            <button
+              ref="activityTrigger"
+              class="icon-button"
+              type="button"
+              :aria-label="$t('runs.activity')"
+              :title="$t('runs.activity')"
+              @click="openActivity()"
+            >
+              <Activity :size="18" aria-hidden="true" />
+            </button>
+            <button
+              v-if="openGateList.length"
+              class="icon-button run-toolbar-action--attention"
+              type="button"
+              :aria-label="$t('decisions.title')"
+              :title="$t('decisions.title')"
+              @click="gateDialogOpen = true"
+            >
+              <ListChecks :size="18" aria-hidden="true" />
+              <span class="run-toolbar-count">{{ openGateList.length }}</span>
+            </button>
+          </nav>
+
           <aside class="run-canvas-summary">
             <div>
               <strong>{{ run.target.displayName }}</strong>
@@ -730,23 +652,124 @@ onBeforeUnmount(() => {
               />
             </div>
           </section>
-
-          <aside v-if="selectedNode && nodeInspectorOpen" class="node-panel">
-            <RunNodeInspector
-              :node="selectedNode"
-              :nodes="allRunNodes"
-              :artifacts="artifactList"
-              :project-ref="routeProjectRef ?? run.projectRef"
-              :run="selectedRun"
-              :agent="selectedAgent"
-              @close="nodeInspectorOpen = false"
-              @activity="openActivity"
-              @details="nodeDetailsOpen = true"
-            />
-          </aside>
-
+        </div>
+        <ModalDialog
+          v-if="gateDialogOpen && openGateList.length"
+          :title="$t('decisions.title')"
+          size="lg"
+          :busy="busy"
+          @close="gateDialogOpen = false"
+        >
+          <div class="gate-dialog">
+            <article v-for="gate in openGateList" :key="gate.ref">
+              <div class="gate-question">
+                <p class="eyebrow">{{ $t("decisions.question") }}</p>
+                <h2>{{ gate.title }}</h2>
+                <dl>
+                  <div>
+                    <dt>{{ $t("decisions.requestedBy") }}</dt>
+                    <dd>{{ gate.requestedBy.displayName }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ $t("decisions.process") }}</dt>
+                    <dd>
+                      <button
+                        class="button button--ghost"
+                        type="button"
+                        @click="inspectGateNode(gate)"
+                      >
+                        {{ gateNodeName(gate) }}
+                      </button>
+                    </dd>
+                  </div>
+                </dl>
+                <h3>{{ $t("decisions.fullQuestion") }}</h3>
+                <SafeMarkdown :content="gate.contextSummary" />
+                <h3>{{ $t("decisions.consequences") }}</h3>
+                <SafeMarkdown :content="gate.consequencesSummary" />
+              </div>
+              <div class="gate-response">
+                <label class="field"
+                  ><span>{{ $t("decisions.comment") }}</span
+                  ><textarea v-model="comments[gate.ref]" maxlength="1000" />
+                </label>
+                <AttachmentComposer
+                  :ref="
+                    (component) =>
+                      setGateAttachmentComposer(gate.ref, component)
+                  "
+                  compact
+                  purpose="OWNER_GATE_MESSAGE"
+                  :project-ref="run?.projectRef"
+                  :disabled="busy"
+                  @change="gateAttachmentStates[gate.ref] = $event"
+                />
+                <div class="gate-actions">
+                  <button
+                    v-if="
+                      gate.nextActions.includes('RESOLVE_GATE') &&
+                      gate.allowedDecisions.includes('APPROVE')
+                    "
+                    class="button button--primary"
+                    type="button"
+                    :disabled="busy || !gateAttachmentsReady(gate.ref)"
+                    @click="decide(gate, 'APPROVE')"
+                  >
+                    {{ $t("common.approve") }}</button
+                  ><button
+                    v-if="
+                      gate.nextActions.includes('RESOLVE_GATE') &&
+                      gate.allowedDecisions.includes('REQUEST_CHANGES')
+                    "
+                    class="button"
+                    type="button"
+                    :disabled="busy || !gateAttachmentsReady(gate.ref)"
+                    @click="decide(gate, 'REQUEST_CHANGES')"
+                  >
+                    {{ $t("common.requestChanges") }}</button
+                  ><button
+                    v-if="
+                      gate.nextActions.includes('RESOLVE_GATE') &&
+                      gate.allowedDecisions.includes('REJECT')
+                    "
+                    class="button button--danger"
+                    type="button"
+                    :disabled="busy || !gateAttachmentsReady(gate.ref)"
+                    @click="decide(gate, 'REJECT')"
+                  >
+                    {{ $t("common.reject") }}
+                  </button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </ModalDialog>
+        <ModalDialog
+          v-if="selectedNode && nodeInspectorOpen"
+          :title="$t('runs.context')"
+          size="xl"
+          @close="nodeInspectorOpen = false"
+        >
+          <RunNodeInspector
+            :node="selectedNode"
+            :nodes="allRunNodes"
+            :artifacts="artifactList"
+            :project-ref="routeProjectRef ?? run.projectRef"
+            :run="selectedRun"
+            :agent="selectedAgent"
+            @close="nodeInspectorOpen = false"
+            @activity="openNodeActivity"
+            @details="openSelectedDetails"
+          />
+        </ModalDialog>
+        <ModalDialog
+          v-if="activityOpen"
+          :title="$t('runs.activity')"
+          size="full"
+          @close="closeActivity"
+        >
           <RunActivityDrawer
-            :open="activityOpen"
+            :open="true"
             :run="run"
             :nodes="allRunNodes"
             :events="eventList"
@@ -780,7 +803,7 @@ onBeforeUnmount(() => {
               </form>
             </template>
           </RunActivityDrawer>
-        </div>
+        </ModalDialog>
         <RunSessionDetailsDialog
           v-if="selectedNode && nodeDetailsOpen"
           :run="selectedRun ?? run"
@@ -815,9 +838,10 @@ onBeforeUnmount(() => {
 }
 .run-page.run-page {
   display: flex;
+  min-width: 0;
+  min-height: 0;
   max-width: 100%;
-  height: calc(100dvh - 148px);
-  min-height: 640px;
+  flex: 1 1 auto;
   flex-direction: column;
   overflow: hidden;
 }
@@ -828,20 +852,22 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   min-width: 0;
-  min-height: 520px;
+  min-height: 0;
   flex: 1 1 auto;
-  margin: 0 calc(var(--page-frame-gutter) * -1) -36px;
+  margin: 0 calc(var(--page-frame-gutter) * -1)
+    calc(var(--page-frame-gutter) * -1);
   overflow: hidden;
 }
 .run-notices {
   position: absolute;
-  z-index: 24;
-  top: 14px;
-  right: 440px;
-  left: 126px;
+  z-index: 26;
+  top: 68px;
+  left: 50%;
   display: grid;
+  width: min(680px, calc(100% - 32px));
   gap: 8px;
   pointer-events: none;
+  transform: translateX(-50%);
 }
 .run-notices > * {
   pointer-events: auto;
@@ -859,21 +885,13 @@ onBeforeUnmount(() => {
 .live-indicator--live {
   color: var(--success);
 }
-.gate-strip {
-  position: absolute;
-  z-index: 22;
-  top: 86px;
-  bottom: 14px;
-  left: 14px;
-  width: min(520px, calc(100% - 422px));
-  min-width: 300px;
-  overflow: auto;
-  overscroll-behavior: contain;
-  filter: drop-shadow(0 16px 38px rgba(16, 22, 30, 0.16));
-}
-.gate-strip article {
+.gate-dialog {
   display: grid;
-  grid-template-columns: 1fr;
+  gap: 16px;
+}
+.gate-dialog article {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
   align-items: start;
   gap: 16px;
   padding: 16px;
@@ -881,8 +899,8 @@ onBeforeUnmount(() => {
   border-radius: 10px;
   background: var(--warning-soft);
 }
-.gate-strip h2,
-.gate-strip p {
+.gate-dialog h2,
+.gate-dialog p {
   margin-bottom: 4px;
 }
 .gate-question {
@@ -938,11 +956,69 @@ onBeforeUnmount(() => {
   background: var(--surface);
   overflow: hidden;
 }
+.run-workspace-toolbar {
+  position: absolute;
+  z-index: 20;
+  top: 14px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 8px 24px rgba(16, 22, 30, 0.1);
+  backdrop-filter: blur(8px);
+  transform: translateX(-50%);
+}
+.run-workspace-toolbar .icon-button {
+  position: relative;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+}
+.run-workspace-toolbar .icon-button:first-child {
+  border-radius: 7px 0 0 7px;
+}
+.run-workspace-toolbar .icon-button:last-child {
+  border-right: 0;
+  border-radius: 0 7px 7px 0;
+}
+.run-toolbar-count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--warning);
+  color: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  place-items: center;
+}
+.run-toolbar-action--attention {
+  animation: attention-outline 1.6s ease-in-out infinite;
+}
+@keyframes attention-outline {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 1px transparent,
+      0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 1px var(--warning),
+      0 0 0 4px color-mix(in srgb, var(--warning) 22%, transparent);
+  }
+}
 .run-canvas-summary {
   position: absolute;
   z-index: 14;
   top: 14px;
-  right: 64px;
+  left: 14px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   width: min(360px, calc(100% - 190px));
@@ -976,8 +1052,7 @@ onBeforeUnmount(() => {
   margin-left: 0;
   white-space: normal;
 }
-.graph-panel,
-.node-panel {
+.graph-panel {
   min-width: 0;
   min-height: 0;
 }
@@ -986,25 +1061,10 @@ onBeforeUnmount(() => {
   inset: 0;
   background: var(--canvas);
 }
-.node-panel {
-  position: absolute;
-  z-index: 16;
-  top: 126px;
-  right: 14px;
-  bottom: 14px;
-  width: min(380px, calc(100% - 28px));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 16px 44px rgba(16, 22, 30, 0.16);
-  overflow: hidden;
-}
 .graph-panel__canvas {
   width: 100%;
   height: 100%;
   min-height: 0;
-}
-.run-mobile-tabs {
-  display: none;
 }
 .run-continuation {
   display: grid;
@@ -1013,83 +1073,42 @@ onBeforeUnmount(() => {
 .run-continuation > .button {
   justify-self: end;
 }
-@media (min-width: 761px) and (max-width: 1100px) {
-  .run-notices {
-    top: 126px;
-    right: 14px;
-    left: 14px;
+.run-page-body :deep(.modal--full .modal__body) {
+  display: flex;
+  overflow: hidden;
+}
+.run-page-body :deep(.modal--full .modal__footer:empty),
+.run-page-body :deep(.modal--xl .modal__footer:empty),
+.run-page-body :deep(.modal--lg .modal__footer:empty) {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .run-toolbar-action--attention {
+    animation: none;
+    box-shadow: inset 0 0 0 1px var(--warning);
   }
 }
 @media (max-width: 760px) {
-  .run-page.run-page {
-    height: calc(100dvh - 192px);
-    min-height: 560px;
-  }
   .run-page-body {
-    min-height: 480px;
-    margin: 0 calc(var(--page-frame-gutter) * -1);
+    min-height: 0;
   }
   .run-notices {
-    top: 118px;
-    right: 8px;
-    left: 8px;
+    top: 116px;
+    width: calc(100% - 16px);
   }
   .run-summary .live-indicator {
     margin-left: 0;
   }
-  .run-mobile-tabs {
-    position: absolute;
-    z-index: 25;
-    top: 8px;
-    left: 50%;
-    display: grid;
-    width: min(210px, calc(100% - 112px));
-    grid-template-columns: 1fr 1fr;
-    transform: translateX(-50%);
-  }
-  .run-mobile-tabs .button {
-    min-width: 0;
-    border-radius: 0;
-  }
-  .run-mobile-tabs .button:first-child {
-    border-radius: 7px 0 0 7px;
-  }
-  .run-mobile-tabs .button:last-child {
-    border-radius: 0 7px 7px 0;
-  }
-  .run-mobile-tabs .button[aria-selected="true"] {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-    color: var(--accent-strong);
-  }
-  .run-mobile-tabs span {
-    font-family: var(--font-mono);
-    font-size: 0.74rem;
-  }
-  .gate-strip {
-    top: 118px;
-    right: 8px;
-    bottom: 8px;
-    left: 8px;
-    width: auto;
-    min-width: 0;
+  .gate-dialog article {
+    grid-template-columns: 1fr;
   }
   .run-canvas-summary {
     top: 62px;
-    right: 56px;
-    width: min(320px, calc(100% - 64px));
+    left: 8px;
+    width: min(320px, calc(100% - 16px));
   }
-  .node-panel {
-    z-index: 20;
-    top: auto;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    max-height: 56%;
-    border-top: 1px solid var(--border);
-    border-left: 0;
-    border-radius: 8px 8px 0 0;
+  .run-workspace-toolbar {
+    top: 8px;
   }
 }
 </style>

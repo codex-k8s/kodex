@@ -2856,6 +2856,27 @@ func testScheduleContractReadback(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("get schedule before continuation binding: %v", err)
 	}
 	assertScheduleContractReadback(t, initialDetail, created.Schedule.CurrentRevision, "")
+	updateVersion := initialDetail.Version
+	updated, err := service.Execute(ctx, command.Command{
+		Kind: command.UpdateSchedule, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-contract-update", ExpectedVersion: &updateVersion},
+		Payload: command.ScheduleInput{
+			Ref: created.Schedule.Ref, Name: "Updated schedule contract readback",
+			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Preset: "WEEKDAYS", TimeOfDay: "09:45",
+			Timezone: "Europe/Saratov", Input: map[string]any{"task": "Verify the updated immutable revision.", "limit": float64(20)},
+			SessionPolicy: "CONTINUE_ONE", NotificationPolicy: "CONTROL_CENTER_ONLY",
+		},
+	})
+	if err != nil || updated.Schedule == nil || updated.Schedule.CurrentRevision.Revision != 2 ||
+		updated.Schedule.CurrentRevision.Ref == created.Schedule.CurrentRevision.Ref ||
+		updated.Schedule.CurrentRevision.Input["task"] != "Verify the updated immutable revision." {
+		t.Fatalf("update schedule current revision: schedule=%#v err=%v", updated.Schedule, err)
+	}
+	updatedDetail, err := service.GetSchedule(ctx, owner, created.Schedule.Ref)
+	if err != nil {
+		t.Fatalf("get updated schedule contract readback: %v", err)
+	}
+	assertScheduleContractReadback(t, updatedDetail, updated.Schedule.CurrentRevision, "")
 
 	run, err := service.Execute(ctx, command.Command{
 		Kind: command.LaunchRun, Principal: owner,
@@ -2907,7 +2928,7 @@ WHERE schedule.ref = $1
 	if err != nil {
 		t.Fatalf("get schedule contract readback: %v", err)
 	}
-	assertScheduleContractReadback(t, detail, created.Schedule.CurrentRevision, run.Run.SessionRef)
+	assertScheduleContractReadback(t, detail, updated.Schedule.CurrentRevision, run.Run.SessionRef)
 	items, _, err := service.ListSchedules(ctx, owner, query.Filter{ProjectRef: project.Project.Ref, Page: query.Page{Size: 20}})
 	if err != nil {
 		t.Fatalf("list schedule contract readback: %v", err)

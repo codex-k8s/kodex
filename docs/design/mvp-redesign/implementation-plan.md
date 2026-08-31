@@ -245,6 +245,9 @@ digest и локальным путём. Коллизии имён разреш�
 - Добавить async combobox: debounce, server search, cursor pagination,
   infinite scroll, loading/error/empty states.
 - Исправить размеры кнопок, radio/checkbox, focus и disabled states.
+- Все badge, status chip и tag имеют размер по содержимому, не растягиваются по
+  высоте grid/flex-контейнера и сохраняют компактную геометрию на карточках
+  разной высоты.
 - Оставить FAB Kodex на всех поддерживаемых экранах.
 
 ### Блок 2. Главная и обзор Проекта
@@ -361,18 +364,25 @@ digest и локальным путём. Коллизии имён разреш�
 
 ### Блок 7. Live Run canvas и timeline
 
-- Canvas занимает весь доступный viewport за вычетом shell; summary, legend,
-  inspector и controls являются detached overlays.
+- Canvas занимает весь доступный viewport за вычетом shell без общего
+  вертикального scroll и нижней пустой полосы. Постоянные detached-элементы не
+  перекрываются: `run-canvas-summary` находится слева сверху, единая панель
+  переключения вида и zoom controls - справа сверху, legend - слева снизу.
+- Сверху по центру находится компактная панель инструментов запуска. Она
+  открывает context, activity timeline и Human Gate в semantic modal; остальные
+  боковые окна поверх canvas запрещены. Действие, которое ждёт владельца,
+  получает пульсирующую окантовку с `prefers-reduced-motion` fallback.
 - Использовать Vue Flow с pan, wheel zoom, fit, minimap/controls по необходимости
   и custom nodes/edges.
 - Убрать текст с edges. Тип связи передавать цветом/штрихом/направлением и
   объяснять в закреплённой легенде.
 - Node отображает avatar, сотрудника, Session name, state и activity animation.
   Будущие Process stages показываются ghost nodes.
-- Click выбирает node и открывает компактный inspector. `Открыть подробно`
-  открывает wide modal: identity, parent/root, parameters, RuntimeRevision,
-  rendered prompts, turns, attempts, messages и tool calls.
-- Timeline drawer показывает сообщения инициатора/parent agent, ответы агента,
+- Click выбирает node; context открывается из центральной панели инструментов
+  в wide modal. `Открыть подробно` открывает full detail modal: identity,
+  parent/root, parameters, RuntimeRevision, rendered prompts, turns, attempts,
+  messages и tool calls.
+- Timeline modal показывает сообщения инициатора/parent agent, ответы агента,
   plan/status, tool start/progress/result и terminal/error events.
 - Message/continuation composer в drawer поддерживает AttachmentSet, а timeline
   показывает безопасные file descriptors, preview/download/delete по RBAC.
@@ -575,8 +585,10 @@ digest и локальным путём. Коллизии имён разреш�
 
 ### D11. Компоновка Live Run
 
-- **A, принято:** full-bleed canvas, detached summary/legend/inspector и
-  выезжающий activity drawer.
+- **A, принято и уточнено:** full-bleed canvas; постоянны только summary слева
+  сверху, объединённые view/zoom controls справа сверху и legend слева снизу.
+  Context, activity и Human Gate открываются как modal из верхней центральной
+  панели инструментов; ожидающие решения выделяются пульсирующей окантовкой.
 - B: постоянный split 60/40 между canvas и timeline.
 - C: canvas и timeline как отдельные tabs.
 

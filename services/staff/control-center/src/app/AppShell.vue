@@ -80,6 +80,9 @@ let disposed = false;
 
 const projectRef = computed(() => routeProjectRef(route.params));
 const activeSection = computed(() => activeNavigationSection(route.name));
+const fullBleedRunWorkspace = computed(
+  () => route.name === "run" || route.name === "project-run",
+);
 const project = computed(() =>
   projectRef.value ? platform.projects[projectRef.value] : undefined,
 );
@@ -606,7 +609,11 @@ onBeforeUnmount(() => {
       </div>
     </aside>
 
-    <div id="main-content" class="app-content">
+    <div
+      id="main-content"
+      class="app-content"
+      :class="{ 'app-content--run-workspace': fullBleedRunWorkspace }"
+    >
       <nav class="breadcrumbs" :aria-label="$t('app.breadcrumbs')">
         <ol>
           <li v-for="item in breadcrumbs" :key="`${item.path}:${item.label}`">

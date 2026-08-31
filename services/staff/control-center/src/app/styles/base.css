@@ -511,6 +511,21 @@ p {
   min-height: 100vh;
   padding: calc(var(--topbar-height) + 16px) 0 112px var(--sidebar-width);
 }
+.app-content--run-workspace {
+  display: flex;
+  height: 100dvh;
+  min-height: 0;
+  flex-direction: column;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+.app-content--run-workspace > .breadcrumbs {
+  flex: 0 0 auto;
+}
+.app-content--run-workspace > .page-frame {
+  min-height: 0;
+  flex: 1 1 auto;
+}
 .breadcrumbs {
   min-height: 28px;
   margin-bottom: 10px;
@@ -1014,11 +1029,29 @@ label {
   justify-content: flex-end;
   margin-top: 18px;
 }
+:where(
+  .status-badge,
+  .count-badge,
+  .authority-badge,
+  .immutable-badge,
+  .unavailable-badge,
+  .source-chip,
+  .scope-tag,
+  .risk,
+  .agent-card__tag,
+  .new-run-file-picker__chip,
+  .chip-list > span
+) {
+  width: max-content;
+  max-width: 100%;
+  height: max-content;
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
 .status-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  width: max-content;
   padding: 4px 8px;
   border-radius: 999px;
   color: var(--muted);
@@ -1289,6 +1322,9 @@ time,
 
     padding: calc(var(--topbar-height) + 12px) 0
       calc(var(--mobile-tabs-height) + 96px);
+  }
+  .app-content--run-workspace {
+    padding-bottom: var(--mobile-tabs-height);
   }
   .page-header {
     flex-direction: column;

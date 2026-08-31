@@ -7,9 +7,8 @@ import {
   FileText,
   UserRound,
   Wrench,
-  X,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
@@ -104,40 +103,16 @@ function formatBytes(value: number): string {
     maximumFractionDigits: 1,
   }).format(normalized);
 }
-
-function handleKeydown(event: KeyboardEvent): void {
-  if (props.open && event.key === "Escape") emit("close");
-}
-
-onMounted(() => window.addEventListener("keydown", handleKeydown));
-onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
 </script>
 
 <template>
-  <aside
+  <section
     v-if="open"
     id="run-activity-drawer"
     class="run-activity-drawer"
-    role="dialog"
-    aria-modal="false"
+    role="region"
     :aria-label="$t('runs.activity')"
   >
-    <header class="run-activity-drawer__header">
-      <div>
-        <h2>{{ $t("runs.activity") }}</h2>
-        <p>{{ filteredItems.length }} · {{ run.target.displayName }}</p>
-      </div>
-      <button
-        class="icon-button"
-        type="button"
-        :aria-label="$t('common.close')"
-        :title="$t('common.close')"
-        @click="emit('close')"
-      >
-        <X :size="19" aria-hidden="true" />
-      </button>
-    </header>
-
     <div class="run-activity-drawer__tools">
       <label>
         <span class="sr-only">{{ $t("runs.context") }}</span>
@@ -305,47 +280,19 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
     <footer v-if="$slots.composer" class="run-activity-drawer__composer">
       <slot name="composer" />
     </footer>
-  </aside>
+  </section>
 </template>
 
 <style scoped>
 .run-activity-drawer {
-  position: absolute;
-  z-index: 30;
-  top: 12px;
-  right: 12px;
-  bottom: 12px;
   display: flex;
-  width: min(640px, calc(100% - 24px));
-  min-width: 440px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 8px;
   background: var(--surface);
-  box-shadow: -16px 18px 48px rgba(16, 22, 30, 0.18);
-}
-.run-activity-drawer__header {
-  display: flex;
-  min-height: 58px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 10px 14px 10px 16px;
-  border-bottom: 1px solid var(--border);
-}
-.run-activity-drawer__header h2,
-.run-activity-drawer__header p {
-  margin: 0;
-}
-.run-activity-drawer__header h2 {
-  font-size: 1rem;
-}
-.run-activity-drawer__header p {
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 0.76rem;
 }
 .run-activity-drawer__tools {
   display: flex;
@@ -604,15 +551,6 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
   resize: vertical;
 }
 @media (max-width: 760px) {
-  .run-activity-drawer {
-    inset: 0;
-    z-index: 40;
-    width: 100%;
-    min-width: 0;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-  }
   .run-activity-drawer__body {
     padding-inline: 14px;
   }

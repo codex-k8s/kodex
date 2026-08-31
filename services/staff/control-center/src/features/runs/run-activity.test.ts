@@ -218,4 +218,34 @@ describe("buildRunActivityItems", () => {
       toolCall: { tool: "project_files.search" },
     });
   });
+
+  it("оставляет решение владельца видимым в любом Session-фильтре", () => {
+    const gateNode: RunNode = {
+      ...node,
+      ref: "nod_gate",
+      parentNodeRef: node.ref,
+      type: "HUMAN_GATE",
+      displayName: "Проверить результат",
+      state: "SUCCEEDED",
+    };
+    const [firstEvent] = events;
+    if (!firstEvent) throw new Error("test event fixture is required");
+    const gateEvent: PresentedRunEvent = {
+      ...firstEvent,
+      ref: "evt_gate_resolved",
+      nodeRef: gateNode.ref,
+      type: "OWNER_GATE_RESOLVED",
+      messageKind: "OWNER_GATE",
+      displaySummary: "Решение принято",
+      actor: { kind: "USER", ref: "usr_owner", name: "Владелец" },
+    };
+
+    const items = buildRunActivityItems(run, [node, gateNode], [gateEvent]);
+
+    expect(items[0]).toMatchObject({
+      kind: "initiator",
+      summary: "Решение принято",
+      nodeRef: undefined,
+    });
+  });
 });

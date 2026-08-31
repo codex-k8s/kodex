@@ -117,7 +117,11 @@ describe("RunGraphCanvas", () => {
     expect(html).toContain('aria-level="1"');
     expect(html).toContain('aria-level="2"');
     expect(html).toContain('aria-selected="true"');
-    expect(html).toContain("vue-flow__controls");
+    expect(html).toContain('class="graph-toolbar"');
+    expect(html).toContain('aria-label="Уменьшить масштаб"');
+    expect(html).toContain('aria-label="Увеличить масштаб"');
+    expect(html).toContain('aria-label="Вместить"');
+    expect(html).not.toContain("vue-flow__controls");
     expect(html).toContain("vue-flow__minimap");
     expect(html).toContain("Мини-карта графа");
   });
