@@ -1040,7 +1040,17 @@ label {
   .risk,
   .agent-card__tag,
   .new-run-file-picker__chip,
-  .chip-list > span
+  .chip-list > span,
+  .automation-details__current,
+  .tab-count,
+  .home-attention__count,
+  .home-attention__group-head > span,
+  .decision-urgency,
+  .realtime-status,
+  .capability-coverage li > b,
+  .runs-lane header span,
+  .workboard-section__count,
+  .run-toolbar-count
 ) {
   width: max-content;
   max-width: 100%;

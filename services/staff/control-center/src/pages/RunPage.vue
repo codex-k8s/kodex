@@ -854,8 +854,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
-  margin: 0 calc(var(--page-frame-gutter) * -1)
-    calc(var(--page-frame-gutter) * -1);
+  margin: 0 calc(var(--page-frame-gutter) * -1);
   overflow: hidden;
 }
 .run-notices {
