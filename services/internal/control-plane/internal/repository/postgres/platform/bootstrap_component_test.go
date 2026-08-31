@@ -1596,7 +1596,7 @@ func testOptionalInteractionIncident(t *testing.T, ctx context.Context, reposito
 	if err != nil || launched.Run == nil {
 		t.Fatalf("launch interaction run: run=%#v err=%v", launched.Run, err)
 	}
-	completed := claimAndCompleteRun(t, ctx, service, runtimeWorker, "interaction-run", false)
+	completed := claimAndCompleteRun(t, ctx, service, runtimeWorker, launched.Run.Ref, "interaction-run", false)
 	if completed.Run == nil || completed.Run.State != "SUCCEEDED" {
 		t.Fatalf("complete interaction run: run=%#v", completed.Run)
 	}
@@ -1976,7 +1976,8 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 		Kind: command.ClaimExecution, Principal: runtimeWorker, Mutation: value.Mutation{IdempotencyKey: "integration-effect-runtime-claim"},
 		Payload: command.LeaseInput{WorkloadInstance: "runtime-integration-effect", Limit: 1},
 	})
-	if err != nil || len(rejectedExecutionResult.RuntimeItems) != 1 {
+	if err != nil || len(rejectedExecutionResult.RuntimeItems) != 1 ||
+		stringMap(rejectedExecutionResult.RuntimeItems[0], "runRef") != rejectedRun.Run.Ref {
 		t.Fatalf("claim rejected effect runtime: claims=%d err=%v", len(rejectedExecutionResult.RuntimeItems), err)
 	}
 	rejectedExecution := rejectedExecutionResult.RuntimeItems[0]
@@ -2057,7 +2058,8 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 		Kind: command.ClaimExecution, Principal: runtimeWorker, Mutation: value.Mutation{IdempotencyKey: "integration-effect-approved-runtime-claim"},
 		Payload: command.LeaseInput{WorkloadInstance: "runtime-integration-effect", Limit: 1},
 	})
-	if err != nil || len(approvedExecutionResult.RuntimeItems) != 1 {
+	if err != nil || len(approvedExecutionResult.RuntimeItems) != 1 ||
+		stringMap(approvedExecutionResult.RuntimeItems[0], "runRef") != launched.Run.Ref {
 		t.Fatalf("claim approved effect runtime: claims=%d err=%v", len(approvedExecutionResult.RuntimeItems), err)
 	}
 	execution := approvedExecutionResult.RuntimeItems[0]
@@ -2844,6 +2846,27 @@ func testScheduleContractReadback(t *testing.T, ctx context.Context, repository 
 	if err != nil || run.Run == nil || run.Run.SessionRef == "" {
 		t.Fatalf("create schedule continuation session: run=%#v err=%v", run.Run, err)
 	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		defer cleanupCancel()
+		current, cleanupErr := service.GetRun(cleanupCtx, owner, run.Run.Ref)
+		if cleanupErr != nil {
+			t.Errorf("read schedule continuation run during fixture cleanup: %v", cleanupErr)
+			return
+		}
+		if current.State == "SUCCEEDED" || current.State == "FAILED" || current.State == "CANCELLED" {
+			return
+		}
+		version := current.Version
+		cancelled, cleanupErr := service.Execute(cleanupCtx, command.Command{
+			Kind: command.CancelRun, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "schedule-contract-session-cleanup", ExpectedVersion: &version},
+			Payload:  command.RunCommandInput{RunRef: current.Ref, Reason: "Component fixture cleanup"},
+		})
+		if cleanupErr != nil || cancelled.Run == nil || cancelled.Run.State != "CANCELLED" {
+			t.Errorf("cancel schedule continuation fixture: run=%#v err=%v", cancelled.Run, cleanupErr)
+		}
+	})
 	tag, err := repository.pool.Exec(ctx, `
 UPDATE control_plane.schedules schedule
 SET continue_session_id = session.id,
@@ -3083,7 +3106,7 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || launched.Run == nil {
 		t.Fatalf("launch gate workflow: run=%#v err=%v", launched.Run, err)
 	}
-	waiting := claimAndCompleteRun(t, ctx, service, worker, "gate-review", false)
+	waiting := claimAndCompleteRun(t, ctx, service, worker, launched.Run.Ref, "gate-review", false)
 	if waiting.Run == nil || waiting.Run.State != "WAITING_HUMAN" || len(waiting.Run.GateRefs) != 1 {
 		t.Fatalf("open owner gate: run=%#v event=%#v", waiting.Run, waiting.Event)
 	}
@@ -3114,7 +3137,7 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || changeRun.Run == nil {
 		t.Fatalf("launch change-request workflow: run=%#v err=%v", changeRun.Run, err)
 	}
-	changeWaiting := claimAndCompleteRun(t, ctx, service, worker, "gate-change-review", false)
+	changeWaiting := claimAndCompleteRun(t, ctx, service, worker, changeRun.Run.Ref, "gate-change-review", false)
 	if changeWaiting.Run == nil || changeWaiting.Run.State != "WAITING_HUMAN" || len(changeWaiting.Run.GateRefs) != 1 {
 		t.Fatalf("open change-request gate: run=%#v", changeWaiting.Run)
 	}
@@ -3130,7 +3153,7 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if changes.Graph == nil || graphNodeState(changes.Graph.Nodes, "AGENT_EXECUTION") != "QUEUED" {
 		t.Fatalf("requested changes did not requeue the agent node: %#v", changes.Graph)
 	}
-	reworked := claimAndCompleteRun(t, ctx, service, worker, "gate-change-rework", false)
+	reworked := claimAndCompleteRun(t, ctx, service, worker, changes.Run.Ref, "gate-change-rework", false)
 	if reworked.Run == nil || reworked.Run.State != "WAITING_HUMAN" || len(reworked.Run.GateRefs) != 2 {
 		t.Fatalf("open gate after requested changes: run=%#v", reworked.Run)
 	}
@@ -3934,7 +3957,7 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || retried.Run == nil || retried.Graph == nil || retried.Run.Attempt != 2 || retried.Run.RetryOfRunRef != cancelled.Run.Ref {
 		t.Fatalf("retry cancelled run: run=%#v graph=%#v err=%v", retried.Run, retried.Graph, err)
 	}
-	completedRetry := claimAndCompleteRun(t, ctx, service, worker, "lifecycle-retry", false)
+	completedRetry := claimAndCompleteRun(t, ctx, service, worker, retried.Run.Ref, "lifecycle-retry", false)
 	events, currentSequence, complete, err := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: completedRetry.Run.Ref, Limit: 100})
 	if err != nil || !complete || len(events) == 0 || currentSequence != events[len(events)-1].Sequence {
 		t.Fatalf("read retry event stream: events=%d sequence=%d complete=%v err=%v", len(events), currentSequence, complete, err)
@@ -3955,12 +3978,12 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	}
 }
 
-func claimAndCompleteRun(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, key string, artifact bool) command.Result {
+func claimAndCompleteRun(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, expectedRunRef, key string, artifact bool) command.Result {
 	t.Helper()
 	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: key + "-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
-	if err != nil || len(claimed.RuntimeItems) != 1 {
-		t.Fatalf("claim %s execution: claims=%d err=%v", key, len(claimed.RuntimeItems), err)
+	if err != nil || len(claimed.RuntimeItems) != 1 || stringMap(claimed.RuntimeItems[0], "runRef") != expectedRunRef {
+		t.Fatalf("claim %s execution: expected_run=%s claims=%#v err=%v", key, expectedRunRef, claimed.RuntimeItems, err)
 	}
 	return completeClaimedExecution(t, ctx, service, worker, claimed.RuntimeItems[0], key, artifact)
 }
