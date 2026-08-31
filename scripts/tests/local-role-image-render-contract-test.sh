@@ -272,6 +272,17 @@ yq -o=json -I=0 '.' "$jobs" | jq -s -e '
       .emptyDir.sizeLimit == "64Mi"))
 ' >/dev/null || fail 'real admission renderer did not materialize all exact phases'
 
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "secret-broker" and
+    any(.spec.template.spec.initContainers[]?;
+      .name == "codex-cli-install" and
+      .resources.requests.cpu == "10m" and
+      .resources.requests.memory == "64Mi" and
+      .resources.limits.cpu == "100m" and
+      .resources.limits.memory == "256Mi"))
+' >/dev/null || fail 'secret-broker Codex CLI init resources are not bounded for a clean local install'
+
 if rg -n '__KODEX_[A-Z0-9_]+__|\.invalid|@sha256:0{64}' "$render" "$jobs" >/dev/null; then
   fail 'rendered supply-chain contains unresolved values'
 fi
