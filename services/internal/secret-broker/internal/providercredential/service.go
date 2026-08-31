@@ -34,6 +34,7 @@ type Store interface {
 	CreateProviderCredential(context.Context, string, string, []byte) (kubernetesstore.ProviderCredentialDescriptor, error)
 	DiscardProviderAuthorizationAttempt(context.Context, string, string, string, string, string) error
 	DiscardProviderCredential(context.Context, string, string, kubernetesstore.ProviderCredentialDescriptor) error
+	CleanupProviderCredential(context.Context, string, string, int64, kubernetesstore.ProviderCredentialDescriptor) (string, error)
 }
 
 type DeviceAuthorization struct {
@@ -165,6 +166,19 @@ func (service *Service) Discard(ctx context.Context, target DiscardMaterializati
 		return ErrInvalidInput
 	}
 	return service.store.DiscardProviderCredential(ctx, target.AttemptRef, target.AccountRef, *target.Credential)
+}
+
+func (service *Service) CleanupProviderCredential(
+	ctx context.Context,
+	taskRef, accountRef string,
+	leaseGeneration int64,
+	descriptor kubernetesstore.ProviderCredentialDescriptor,
+) (string, error) {
+	receipt, err := service.store.CleanupProviderCredential(ctx, taskRef, accountRef, leaseGeneration, descriptor)
+	if errors.Is(err, kubernetesstore.ErrProviderCredentialCleanupInvalid) {
+		return "", ErrInvalidInput
+	}
+	return receipt, err
 }
 
 func (service *Service) ObserveDeviceAuthorization(

@@ -37,6 +37,15 @@ interface ProviderAccount extends VersionedRef {
   readonly state: string;
 }
 
+interface ProviderCredentialCleanupReadback {
+  readonly safe_error_code: string;
+  readonly secret_name: string;
+  readonly secret_uid: string;
+  readonly state: string;
+  readonly task_ref: string;
+  readonly terminal_receipt: string;
+}
+
 interface Connection extends VersionedRef {
   readonly name: string;
   readonly state: string;
@@ -540,6 +549,12 @@ test.describe("deployed local integration path", () => {
             ready: false,
             state: "REVOKED",
           });
+          await expect
+            .poll(() => verifyProviderCredentialCleanup(account?.ref ?? ""), {
+              timeout: 180_000,
+              intervals: [250, 1_000, 2_000, 5_000],
+            })
+            .toBe(true);
         }
       }
     }
@@ -1158,6 +1173,126 @@ async function verifySingleProviderAffinity(
     timeout: 60_000,
     maxBuffer: 64 << 10,
   });
+}
+
+async function verifyProviderCredentialCleanup(
+  accountRef: string,
+): Promise<boolean> {
+  if (!/^pacc_[A-Za-z0-9_-]{8,88}$/.test(accountRef)) {
+    throw new Error("Provider account ref is invalid for cleanup readback");
+  }
+  const childEnvironment = localKubernetesEnvironment();
+  const contextResult = await execFileAsync(
+    "kubectl",
+    ["config", "current-context"],
+    { env: childEnvironment, timeout: 10_000, maxBuffer: 16 << 10 },
+  );
+  const context = contextResult.stdout.trim();
+  if (!context || /prod(?:uction)?/i.test(context)) {
+    throw new Error("Exact local Kubernetes context is unavailable");
+  }
+  const query = [
+    "BEGIN TRANSACTION READ ONLY;",
+    "SET LOCAL statement_timeout = '10s';",
+    "SELECT jsonb_build_object(",
+    "  'task_ref', task.ref,",
+    "  'state', task.state,",
+    "  'secret_name', task.secret_name,",
+    "  'secret_uid', task.secret_uid::text,",
+    "  'safe_error_code', task.safe_error_code,",
+    "  'terminal_receipt', task.terminal_receipt",
+    ")::text",
+    "FROM control_plane.provider_credential_cleanup_tasks task",
+    "JOIN control_plane.provider_accounts account",
+    "  ON account.id = task.provider_account_id",
+    "WHERE account.ref = :'account_ref'",
+    "ORDER BY task.created_at, task.id;",
+    "COMMIT;",
+  ].join("\n");
+  const result = await execFileAsync(
+    "kubectl",
+    [
+      "--context",
+      context,
+      "-n",
+      "kodex-system",
+      "exec",
+      "-i",
+      "kodex-postgresql-0",
+      "--",
+      "psql",
+      "-X",
+      "-qAt",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-U",
+      "postgres",
+      "-d",
+      "control_plane",
+      "-v",
+      `account_ref=${accountRef}`,
+      "-c",
+      query,
+    ],
+    { env: childEnvironment, timeout: 30_000, maxBuffer: 64 << 10 },
+  );
+  const tasks = result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as ProviderCredentialCleanupReadback);
+  if (tasks.length === 0) return false;
+  if (
+    tasks.some(
+      (task) =>
+        !/^pcct_[A-Za-z0-9_-]{8,88}$/.test(task.task_ref) ||
+        !/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(task.secret_name) ||
+        task.secret_name.length > 63 ||
+        !/^[0-9a-f-]{36}$/.test(task.secret_uid),
+    )
+  ) {
+    throw new Error("Provider credential cleanup readback is invalid");
+  }
+  if (
+    tasks.some(
+      (task) =>
+        task.state !== "COMPLETED" ||
+        task.safe_error_code !== "" ||
+        task.terminal_receipt.length < 1 ||
+        task.terminal_receipt.length > 512,
+    )
+  ) {
+    return false;
+  }
+  for (const task of tasks) {
+    const secret = await execFileAsync(
+      "kubectl",
+      [
+        "--context",
+        context,
+        "-n",
+        "kodex-runtime",
+        "get",
+        "secret",
+        task.secret_name,
+        "--ignore-not-found",
+        "-o",
+        "jsonpath={.metadata.uid}",
+      ],
+      { env: childEnvironment, timeout: 10_000, maxBuffer: 4 << 10 },
+    );
+    if (secret.stdout.trim() !== "") return false;
+  }
+  return true;
+}
+
+function localKubernetesEnvironment(): NodeJS.ProcessEnv {
+  const childEnvironment = { ...process.env };
+  delete childEnvironment.OPENAI_API_KEY;
+  delete childEnvironment.KODEX_PROVIDER_E2E_API_KEY_FILE;
+  delete childEnvironment.KODEX_GITHUB_BOT_PAT;
+  delete childEnvironment.KODEX_GITHUB_BOT_PAT_FILE;
+  return childEnvironment;
 }
 
 function escapeRegExp(value: string): string {

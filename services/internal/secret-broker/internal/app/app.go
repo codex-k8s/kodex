@@ -65,6 +65,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName:                   "provider_device_observe",
 		controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName:                            "provider_api_key",
 		controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName:     "provider_discard",
+		controlplanev1.ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName:                    "provider_cleanup",
 	}
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, buildVersion, methods)
 	recoveryMetrics := recovery.NewMetrics()
@@ -205,7 +206,8 @@ func routeProviderCredentialUnary(protected grpc.UnaryServerInterceptor) grpc.Un
 			controlplanev1.ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName,
 			controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName,
 			controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName,
-			controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName:
+			controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName,
+			controlplanev1.ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName:
 			return protected(ctx, request, info, handler)
 		default:
 			return handler(ctx, request)

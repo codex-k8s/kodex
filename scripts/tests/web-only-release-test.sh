@@ -164,6 +164,32 @@ yq -N -r '
     .restore_coordination.role_credential_secret_name == "internal-rpc-authority-secret-broker-verifier-restore-credential" and
     .restore_coordination.ack_key_secret_name == "internal-rpc-authority-secret-broker-verifier-restore-ack")] | length) == 1
 ' >/dev/null || fail 'provider credential publisher delivery targets are incomplete'
+yq -N -r '
+  select(.kind == "ConfigMap" and
+    .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+  .data["authority-policy.json"]
+' "$render" | jq -e '
+  .policy_revision == 42 and
+  ([.policy.authority_proof_producers[] |
+    select(.producer_id == "secret-broker.provider-credential-materializer" and
+      .caller_workload_id == "control-plane" and
+      .application_credential == "PLATFORM_WORKER_GRANT" and
+      .authority_sources == ["DOMAIN_STATE"] and
+      (.allowed_operation_ids | index("platform.provider-credentials.cleanup")) != null)] | length) == 1 and
+  ([.policy.operation_bindings[] |
+    select(.operation_id == "platform.provider-credentials.cleanup" and
+      .permission == "platform.provider-credentials.cleanup" and
+      .full_method == "/controlplane.v1.ProviderCredentialMaterializerService/CleanupProviderCredential" and
+      .caller_workload_id == "control-plane" and
+      .caller_spiffe_id == "spiffe://kodex.local/ns/kodex-system/sa/control-plane" and
+      .target_workload_id == "secret-broker" and
+      .target_spiffe_id == "spiffe://kodex.local/ns/kodex-system/sa/secret-broker" and
+      .audience == "urn:kodex:internal-rpc:secret-broker" and
+      .target_tls_server_name == "secret-broker.kodex-system.svc.cluster.local" and
+      .authority_proof_producer_id == "secret-broker.provider-credential-materializer" and
+      .authority_sources == ["DOMAIN_STATE"] and
+      .project_required == false)] | length) == 1
+' >/dev/null || fail 'provider credential cleanup workload operation profile is incomplete'
 for job in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
   control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
   JOB_NAME="$job" yq -e 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \

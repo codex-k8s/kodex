@@ -187,6 +187,7 @@ func ProviderCredentialMaterializerOperations() map[string]string {
 		"platform.provider-credentials.device-authorize.get":    controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName,
 		"platform.provider-credentials.api-key.materialize":     controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName,
 		"platform.provider-credentials.materialization.discard": controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName,
+		"platform.provider-credentials.cleanup":                 controlplanev1.ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName,
 	}
 }
 

@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 41,
+  "policy_revision": 42,
   "policy": {
     "trust_domain": "kodex.local",
     "default_decision": "DENY",
@@ -626,6 +626,7 @@
         ],
         "allowed_operation_ids": [
           "platform.provider-credentials.api-key.materialize",
+          "platform.provider-credentials.cleanup",
           "platform.provider-credentials.device-authorize.get",
           "platform.provider-credentials.device-authorize.start",
           "platform.provider-credentials.materialization.discard",
@@ -3752,6 +3753,34 @@
         "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
         "target_trust_bundle_id": "kodex-internal-ca-g1",
         "permission": "platform.provider-credentials.api-key.materialize",
+        "authority_proof_producer_id": "secret-broker.provider-credential-materializer",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.provider-credentials.cleanup",
+        "caller_workload_id": "control-plane",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "target_workload_id": "secret-broker",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "audience": "urn:kodex:internal-rpc:secret-broker",
+        "full_method": "/controlplane.v1.ProviderCredentialMaterializerService/CleanupProviderCredential",
+        "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.provider-credentials.cleanup",
         "authority_proof_producer_id": "secret-broker.provider-credential-materializer",
         "authority_sources": [
           "DOMAIN_STATE"

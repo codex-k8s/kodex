@@ -57,6 +57,7 @@ type ProviderCredentialMaterializer interface {
 	ObserveDeviceAuthorization(context.Context, string) (kubernetesstore.ProviderAuthorizationAttempt, error)
 	MaterializeAPIKey(context.Context, string, string, []byte) (kubernetesstore.ProviderCredentialDescriptor, string, error)
 	Discard(context.Context, providercredential.DiscardMaterialization) error
+	CleanupProviderCredential(context.Context, string, string, int64, kubernetesstore.ProviderCredentialDescriptor) (string, error)
 }
 
 type Option func(*Server)

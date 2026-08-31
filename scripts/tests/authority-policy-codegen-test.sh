@@ -24,13 +24,14 @@ cmp -s "$generated" "$canonical" || fail 'generated policy differs from the cano
 jq -e '
   def provider_operations: [
     "platform.provider-credentials.api-key.materialize",
+    "platform.provider-credentials.cleanup",
     "platform.provider-credentials.device-authorize.get",
     "platform.provider-credentials.device-authorize.start",
     "platform.provider-credentials.materialization.discard",
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-  .policy_revision == 41 and
+  .policy_revision == 42 and
   (.policy.authority_proof_producers | length) == 11 and
   ((.policy.operation_bindings | map(.operation_id) | unique | length) ==
    (.policy.operation_bindings | length)) and
@@ -46,6 +47,15 @@ jq -e '
     .audience == "urn:kodex:internal-rpc:secret-broker" and
     .target_tls_server_name == "secret-broker.kodex-system.svc.cluster.local" and
     .authority_proof_producer_id == "secret-broker.provider-credential-materializer") and
+  ([.policy.operation_bindings[] |
+    select(.operation_id == "platform.provider-credentials.cleanup" and
+      .permission == "platform.provider-credentials.cleanup" and
+      .full_method == "/controlplane.v1.ProviderCredentialMaterializerService/CleanupProviderCredential" and
+      .caller_workload_id == "control-plane" and
+      .target_workload_id == "secret-broker" and
+      .authority_proof_producer_id == "secret-broker.provider-credential-materializer" and
+      .authority_sources == ["DOMAIN_STATE"] and
+      .project_required == false)] | length) == 1 and
   all(.policy.operation_bindings[] | select(.target_workload_id != "secret-broker");
     .target_workload_id == "control-plane") and
   ([.policy.authority_proof_producers[] |
@@ -55,6 +65,10 @@ jq -e '
     .caller_workload_id == "control-plane" and
     .owner_workload_id == "control-plane" and
     .application_credential == "PLATFORM_WORKER_GRANT" and
+    .application_credential_issuer == "https://control-plane.kodex-system.svc.cluster.local/authority/platform-worker/control-plane" and
+    .application_credential_audience == "urn:kodex:platform-worker:control-plane" and
+    .application_credential_trust_bundle_id == "control-plane-platform-worker-grants-g1" and
+    .authority_sources == ["DOMAIN_STATE"] and
     (.allowed_operation_ids | sort) == provider_operations)
 ' "$canonical" >/dev/null || fail 'canonical policy invariants are invalid'
 

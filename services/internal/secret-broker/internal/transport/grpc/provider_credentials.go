@@ -106,6 +106,35 @@ func (server *Server) DiscardProviderCredentialMaterialization(
 	return &controlplanev1.ProviderCredentialMaterializerServiceDiscardMaterializationResponse{Discarded: true}, nil
 }
 
+func (server *Server) CleanupProviderCredential(
+	ctx context.Context,
+	request *controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest,
+) (*controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse, error) {
+	if server.providerCredentials == nil {
+		return nil, status.Error(codes.Unavailable, "provider credential materializer is unavailable")
+	}
+	descriptor := kubernetesstore.ProviderCredentialDescriptor{}
+	if credential := request.GetCredential(); credential != nil {
+		descriptor = kubernetesstore.ProviderCredentialDescriptor{
+			SecretName: credential.GetSecretName(), SecretUID: credential.GetSecretUid(),
+			SecretResourceVersion: credential.GetSecretResourceVersion(), ContentSHA256: credential.GetContentSha256(),
+		}
+	}
+	receipt, err := server.providerCredentials.CleanupProviderCredential(
+		ctx,
+		request.GetTaskRef(),
+		request.GetAccountRef(),
+		request.GetLeaseGeneration(),
+		descriptor,
+	)
+	if err != nil {
+		return nil, providerCredentialCleanupError(err)
+	}
+	return &controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse{
+		TerminalReceipt: receipt,
+	}, nil
+}
+
 func providerAuthorizationState(state string) controlplanev1.ProviderAuthorizationState {
 	switch state {
 	case "PENDING":
@@ -144,5 +173,17 @@ func providerCredentialError(err error) error {
 		return status.Error(codes.Aborted, "provider credential materialization conflicts with stored state")
 	default:
 		return status.Error(codes.Unavailable, "provider credential materializer is unavailable")
+	}
+}
+
+func providerCredentialCleanupError(err error) error {
+	switch {
+	case errors.Is(err, providercredential.ErrInvalidInput),
+		errors.Is(err, kubernetesstore.ErrProviderCredentialCleanupInvalid):
+		return status.Error(codes.InvalidArgument, "provider credential cleanup input is invalid")
+	case errors.Is(err, kubernetesstore.ErrProviderCredentialCleanupConflict):
+		return status.Error(codes.FailedPrecondition, "provider credential cleanup conflicts with stored state")
+	default:
+		return status.Error(codes.Unavailable, "provider credential cleanup is unavailable")
 	}
 }

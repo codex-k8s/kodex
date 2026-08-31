@@ -115,6 +115,9 @@ type Config struct {
 	RelayLeaseDuration              time.Duration `env:"CONTROL_PLANE_RELAY_LEASE_DURATION"`
 	RelayPublishTimeout             time.Duration `env:"CONTROL_PLANE_RELAY_PUBLISH_TIMEOUT"`
 	RelayFinalizeTimeout            time.Duration `env:"CONTROL_PLANE_RELAY_FINALIZE_TIMEOUT"`
+	ProviderCleanupBatchSize        int32         `env:"CONTROL_PLANE_PROVIDER_CREDENTIAL_CLEANUP_BATCH_SIZE"`
+	ProviderCleanupPollInterval     time.Duration `env:"CONTROL_PLANE_PROVIDER_CREDENTIAL_CLEANUP_POLL_INTERVAL"`
+	ProviderCleanupTimeout          time.Duration `env:"CONTROL_PLANE_PROVIDER_CREDENTIAL_CLEANUP_OPERATION_TIMEOUT"`
 }
 
 func loadConfig() (Config, error) {
@@ -182,6 +185,9 @@ func loadConfig() (Config, error) {
 		ReadinessInterval: 2 * time.Second, ShutdownTimeout: 10 * time.Second,
 		RelayPollInterval: 250 * time.Millisecond, RelayLeaseDuration: 10 * time.Second,
 		RelayPublishTimeout: 2 * time.Second, RelayFinalizeTimeout: 2 * time.Second,
+		ProviderCleanupBatchSize:    16,
+		ProviderCleanupPollInterval: 250 * time.Millisecond,
+		ProviderCleanupTimeout:      10 * time.Second,
 	}
 	if err := env.Parse(&config); err != nil {
 		return Config{}, errors.New("parse control-plane environment")
@@ -239,7 +245,8 @@ func (config Config) validate() error {
 		config.ReadinessInterval < 500*time.Millisecond || config.ReadinessInterval > time.Minute ||
 		config.ShutdownTimeout < time.Second || config.ShutdownTimeout > time.Minute ||
 		config.RelayPollInterval < 50*time.Millisecond || config.RelayLeaseDuration < time.Second ||
-		config.RelayPublishTimeout <= 0 || config.RelayFinalizeTimeout <= 0 || config.RelayPublishTimeout+config.RelayFinalizeTimeout >= config.RelayLeaseDuration {
+		config.RelayPublishTimeout <= 0 || config.RelayFinalizeTimeout <= 0 || config.RelayPublishTimeout+config.RelayFinalizeTimeout >= config.RelayLeaseDuration ||
+		!validProviderCredentialCleanupConfig(config) {
 		return errors.New("control-plane bounded configuration is invalid")
 	}
 	issuer, issuerErr := url.Parse(config.OIDCIssuer)
@@ -257,6 +264,14 @@ func (config Config) validate() error {
 		return errors.New("control-plane authority socket directory is invalid")
 	}
 	return nil
+}
+
+func validProviderCredentialCleanupConfig(config Config) bool {
+	return config.ProviderCleanupBatchSize >= 1 && config.ProviderCleanupBatchSize <= 16 &&
+		config.ProviderCleanupPollInterval >= 50*time.Millisecond &&
+		config.ProviderCleanupPollInterval <= time.Minute &&
+		config.ProviderCleanupTimeout >= 100*time.Millisecond &&
+		config.ProviderCleanupTimeout <= 30*time.Second
 }
 
 func validProviderCredentialBoundary(config Config) bool {

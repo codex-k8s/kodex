@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,17 +24,31 @@ const (
 	providerAttemptRefAnnotation  = "provider-credentials.kodex.dev/attempt-ref"
 	providerAccountRefAnnotation  = "provider-credentials.kodex.dev/account-ref"
 	providerContentSHAAnnotation  = "provider-credentials.kodex.dev/content-sha256"
+	providerManagedByLabel        = "app.kubernetes.io/managed-by"
+	providerPartOfLabel           = "app.kubernetes.io/part-of"
+	providerRuntimeManagedLabel   = "runtime.kodex.dev/managed"
+	providerRuntimeAccountRef     = "runtime.kodex.dev/provider-account-ref"
+	providerRuntimeContentSHA     = "runtime.kodex.dev/provider-credential-digest"
+	providerSecretBrokerManager   = "secret-broker"
+	providerRuntimeManager        = "runtime-controller"
 	providerAuthJSONKey           = "auth.json"
 	providerAuthSHA256Key         = "auth.sha256"
 	providerCredentialMaximumSize = 1 << 20
+	providerReferenceMaximumSize  = 96
+	providerResourceVersionMax    = 128
 )
 
 var (
-	providerReferencePattern          = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{7,95}$`)
-	ErrProviderAttemptNotFound        = errors.New("provider authorization attempt is not found")
-	ErrProviderAttemptConflict        = errors.New("provider authorization attempt conflicts with stored state")
-	ErrProviderCredentialConflict     = errors.New("provider credential conflicts with stored materialization")
-	ErrProviderCredentialInputInvalid = errors.New("provider credential materialization input is invalid")
+	providerReferencePattern             = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{7,95}$`)
+	providerCleanupReferencePattern      = regexp.MustCompile(`^[a-z0-9_-]+$`)
+	providerCredentialNamePattern        = regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$`)
+	providerCredentialUIDPattern         = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	ErrProviderAttemptNotFound           = errors.New("provider authorization attempt is not found")
+	ErrProviderAttemptConflict           = errors.New("provider authorization attempt conflicts with stored state")
+	ErrProviderCredentialConflict        = errors.New("provider credential conflicts with stored materialization")
+	ErrProviderCredentialInputInvalid    = errors.New("provider credential materialization input is invalid")
+	ErrProviderCredentialCleanupConflict = errors.New("provider credential cleanup conflicts with stored materialization")
+	ErrProviderCredentialCleanupInvalid  = errors.New("provider credential cleanup input is invalid")
 )
 
 // ProviderCredentialDescriptor содержит только exact metadata Kubernetes
@@ -168,7 +183,11 @@ func (store *Store) CreateProviderCredential(
 	wanted := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name, Namespace: store.namespace,
-			Labels: map[string]string{providerCredentialLabel: "true"},
+			Labels: map[string]string{
+				providerCredentialLabel: "true",
+				providerManagedByLabel:  providerSecretBrokerManager,
+				providerPartOfLabel:     "kodex",
+			},
 			Annotations: map[string]string{
 				providerAttemptRefAnnotation: attemptRef,
 				providerAccountRefAnnotation: accountRef,
@@ -282,6 +301,53 @@ func (store *Store) DiscardProviderCredential(
 	return nil
 }
 
+// CleanupProviderCredential удаляет provider credential только после проверки
+// server-owned binding, exact metadata и фактического content digest.
+func (store *Store) CleanupProviderCredential(
+	ctx context.Context,
+	taskRef, accountRef string,
+	leaseGeneration int64,
+	descriptor ProviderCredentialDescriptor,
+) (string, error) {
+	if !validProviderCleanupReference(taskRef, "pcct_") ||
+		!validProviderCleanupReference(accountRef, "pacc_") || leaseGeneration < 1 ||
+		!validProviderCredentialCleanupDescriptor(descriptor) {
+		return "", ErrProviderCredentialCleanupInvalid
+	}
+	receipt := providerCredentialCleanupReceipt(taskRef, accountRef, leaseGeneration, descriptor)
+	secret, err := store.client.CoreV1().Secrets(store.namespace).Get(ctx, descriptor.SecretName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return receipt, nil
+	}
+	if err != nil {
+		return "", errors.New("read provider credential for cleanup")
+	}
+	defer clearSecretData(secret)
+	if !providerCredentialCleanupSecretMatches(secret, accountRef, descriptor) {
+		return "", ErrProviderCredentialCleanupConflict
+	}
+	uid := types.UID(descriptor.SecretUID)
+	resourceVersion := descriptor.SecretResourceVersion
+	err = store.client.CoreV1().Secrets(store.namespace).Delete(ctx, descriptor.SecretName, metav1.DeleteOptions{
+		Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &resourceVersion},
+	})
+	if apierrors.IsConflict(err) || apierrors.IsInvalid(err) {
+		return "", ErrProviderCredentialCleanupConflict
+	}
+	if err != nil && !apierrors.IsNotFound(err) {
+		return "", errors.New("delete provider credential for cleanup")
+	}
+	readback, err := store.client.CoreV1().Secrets(store.namespace).Get(ctx, descriptor.SecretName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return receipt, nil
+	}
+	if err != nil {
+		return "", errors.New("read back provider credential cleanup")
+	}
+	clearSecretData(readback)
+	return "", ErrProviderCredentialCleanupConflict
+}
+
 func providerAttemptSecret(namespace, name string, attempt ProviderAuthorizationAttempt) *corev1.Secret {
 	descriptor := []byte(nil)
 	if attempt.Credential != nil {
@@ -386,10 +452,8 @@ func providerCredentialName(accountRef, attemptRef string) string {
 
 func providerCredentialDescriptor(secret *corev1.Secret, attemptRef, accountRef, digest string) (ProviderCredentialDescriptor, error) {
 	if secret == nil || secret.UID == "" || secret.ResourceVersion == "" || secret.Type != corev1.SecretTypeOpaque ||
-		secret.Immutable == nil || !*secret.Immutable || secret.Labels[providerCredentialLabel] != "true" ||
+		secret.Immutable == nil || !*secret.Immutable || !providerCredentialSecretBrokerOwned(secret, accountRef, digest) ||
 		secret.Annotations[providerAttemptRefAnnotation] != attemptRef ||
-		secret.Annotations[providerAccountRefAnnotation] != accountRef ||
-		secret.Annotations[providerContentSHAAnnotation] != digest ||
 		string(secret.Data[providerAuthSHA256Key]) != digest {
 		return ProviderCredentialDescriptor{}, ErrProviderCredentialConflict
 	}
@@ -417,6 +481,89 @@ func validProviderCredentialDescriptor(value ProviderCredentialDescriptor) bool 
 	decoded, err := hex.DecodeString(value.ContentSHA256)
 	return err == nil && len(decoded) == sha256.Size &&
 		value.ContentSHA256 == strings.ToLower(value.ContentSHA256)
+}
+
+func validProviderCleanupReference(value, prefix string) bool {
+	if len(value) < len(prefix)+8 || len(value) > providerReferenceMaximumSize || !strings.HasPrefix(value, prefix) {
+		return false
+	}
+	return providerCleanupReferencePattern.MatchString(value[len(prefix):])
+}
+
+func validProviderCredentialCleanupDescriptor(value ProviderCredentialDescriptor) bool {
+	return providerCredentialNamePattern.MatchString(value.SecretName) &&
+		providerCredentialUIDPattern.MatchString(value.SecretUID) &&
+		validProviderResourceVersion(value.SecretResourceVersion) &&
+		validProviderCredentialDescriptor(value)
+}
+
+func validProviderResourceVersion(value string) bool {
+	if value == "" || len(value) > providerResourceVersionMax {
+		return false
+	}
+	for index := range len(value) {
+		if value[index] < 0x21 || value[index] > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+func providerCredentialCleanupSecretMatches(
+	secret *corev1.Secret,
+	accountRef string,
+	descriptor ProviderCredentialDescriptor,
+) bool {
+	if secret == nil {
+		return false
+	}
+	serverOwned := providerCredentialSecretBrokerOwned(secret, accountRef, descriptor.ContentSHA256) ||
+		providerCredentialRuntimeOwned(secret, accountRef, descriptor.ContentSHA256)
+	if secret.Name != descriptor.SecretName || string(secret.UID) != descriptor.SecretUID ||
+		secret.ResourceVersion != descriptor.SecretResourceVersion || secret.Immutable == nil || !*secret.Immutable ||
+		secret.Type != corev1.SecretTypeOpaque || len(secret.Data) != 2 ||
+		string(secret.Data[providerAuthSHA256Key]) != descriptor.ContentSHA256 ||
+		!json.Valid(secret.Data[providerAuthJSONKey]) || !serverOwned {
+		return false
+	}
+	actual := sha256.Sum256(secret.Data[providerAuthJSONKey])
+	return subtle.ConstantTimeCompare(
+		[]byte(hex.EncodeToString(actual[:])),
+		[]byte(descriptor.ContentSHA256),
+	) == 1
+}
+
+func providerCredentialSecretBrokerOwned(secret *corev1.Secret, accountRef, digest string) bool {
+	return secret.Labels[providerCredentialLabel] == "true" &&
+		secret.Labels[providerManagedByLabel] == providerSecretBrokerManager &&
+		secret.Labels[providerPartOfLabel] == "kodex" &&
+		secret.Annotations[providerAccountRefAnnotation] == accountRef &&
+		secret.Annotations[providerContentSHAAnnotation] == digest
+}
+
+func providerCredentialRuntimeOwned(secret *corev1.Secret, accountRef, digest string) bool {
+	return secret.Labels[providerRuntimeManagedLabel] == "true" &&
+		secret.Labels[providerManagedByLabel] == providerRuntimeManager &&
+		secret.Labels[providerPartOfLabel] == "kodex" &&
+		secret.Annotations[providerRuntimeAccountRef] == accountRef &&
+		secret.Annotations[providerRuntimeContentSHA] == digest
+}
+
+func providerCredentialCleanupReceipt(
+	taskRef, accountRef string,
+	leaseGeneration int64,
+	descriptor ProviderCredentialDescriptor,
+) string {
+	digest := sha256.Sum256([]byte(strings.Join([]string{
+		taskRef,
+		accountRef,
+		strconv.FormatInt(leaseGeneration, 10),
+		descriptor.SecretName,
+		descriptor.SecretUID,
+		descriptor.SecretResourceVersion,
+		descriptor.ContentSHA256,
+	}, "\x00")))
+	return "provider-credential-cleanup:sha256:" + hex.EncodeToString(digest[:])
 }
 
 func samePendingProviderAttempt(left, right ProviderAuthorizationAttempt) bool {

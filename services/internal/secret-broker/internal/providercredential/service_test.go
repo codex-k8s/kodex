@@ -10,8 +10,15 @@ import (
 )
 
 type providerCredentialStoreStub struct {
-	attempt   kubernetesstore.ProviderAuthorizationAttempt
-	completed []kubernetesstore.ProviderAuthorizationAttempt
+	attempt           kubernetesstore.ProviderAuthorizationAttempt
+	completed         []kubernetesstore.ProviderAuthorizationAttempt
+	cleanupTaskRef    string
+	cleanupAccountRef string
+	cleanupGeneration int64
+	cleanupDescriptor kubernetesstore.ProviderCredentialDescriptor
+	cleanupReceipt    string
+	cleanupErr        error
+	cleanupCalls      int
 }
 
 func (store *providerCredentialStoreStub) Check(context.Context) error { return nil }
@@ -68,6 +75,20 @@ func (store *providerCredentialStoreStub) DiscardProviderCredential(
 	return errors.New("unexpected credential discard")
 }
 
+func (store *providerCredentialStoreStub) CleanupProviderCredential(
+	_ context.Context,
+	taskRef, accountRef string,
+	leaseGeneration int64,
+	descriptor kubernetesstore.ProviderCredentialDescriptor,
+) (string, error) {
+	store.cleanupCalls++
+	store.cleanupTaskRef = taskRef
+	store.cleanupAccountRef = accountRef
+	store.cleanupGeneration = leaseGeneration
+	store.cleanupDescriptor = descriptor
+	return store.cleanupReceipt, store.cleanupErr
+}
+
 type providerAppServerStub struct{ starts int }
 
 func (server *providerAppServerStub) Check(context.Context) error { return nil }
@@ -100,6 +121,44 @@ func TestStartDeviceAuthorizationFailsClosedForExpiredPendingAttemptAfterRestart
 	if completed.State != "EXPIRED" || completed.SafeFailureCode != "DEVICE_AUTHORIZATION_EXPIRED" ||
 		completed.VerificationURI != "" || completed.UserCode != "" || completed.Credential != nil {
 		t.Fatalf("unexpected expired terminal state: %#v", completed)
+	}
+}
+
+func TestCleanupProviderCredentialForwardsExactFencedTarget(t *testing.T) {
+	t.Parallel()
+	descriptor := kubernetesstore.ProviderCredentialDescriptor{
+		SecretName:            "provider-credential-cleanup",
+		SecretUID:             "61000000-0000-4000-8000-000000000002",
+		SecretResourceVersion: "cleanup-7",
+		ContentSHA256:         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}
+	store := &providerCredentialStoreStub{cleanupReceipt: "provider-credential-cleanup:sha256:receipt"}
+	service, err := New(context.Background(), store, &providerAppServerStub{}, DefaultDeviceAuthorizationTTL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := service.CleanupProviderCredential(
+		context.Background(), "pcct_cleanup1234", "pacc_cleanup1234", 7, descriptor,
+	)
+	if err != nil || receipt != store.cleanupReceipt || store.cleanupCalls != 1 ||
+		store.cleanupTaskRef != "pcct_cleanup1234" || store.cleanupAccountRef != "pacc_cleanup1234" ||
+		store.cleanupGeneration != 7 || store.cleanupDescriptor != descriptor {
+		t.Fatalf("cleanup target was not forwarded exactly: receipt=%q store=%#v err=%v", receipt, store, err)
+	}
+}
+
+func TestCleanupProviderCredentialMapsStoreValidationError(t *testing.T) {
+	t.Parallel()
+	store := &providerCredentialStoreStub{cleanupErr: kubernetesstore.ErrProviderCredentialCleanupInvalid}
+	service, err := New(context.Background(), store, &providerAppServerStub{}, DefaultDeviceAuthorizationTTL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.CleanupProviderCredential(
+		context.Background(), "pcct_short", "pacc_short", 0, kubernetesstore.ProviderCredentialDescriptor{},
+	)
+	if !errors.Is(err, ErrInvalidInput) || store.cleanupCalls != 1 {
+		t.Fatalf("cleanup validation error was not mapped: calls=%d err=%v", store.cleanupCalls, err)
 	}
 }
 

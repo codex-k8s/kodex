@@ -29,6 +29,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/authorityproof"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/providercredentialcleanup"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/providercredentialclient"
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
 	platformgrpc "github.com/codex-k8s/kodex/services/internal/control-plane/internal/transport/grpc"
@@ -239,6 +240,22 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterAccessServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRoleImageServiceServer(grpcServer, roleImageTransport)
 	internalrpcauthorityv1.RegisterAuthorityProofResolverServiceServer(grpcServer, proofTransport)
+	cleanupClaimHealth := serviceruntime.NewReadiness()
+	cleanupClaimHealth.Set(true, "ready")
+	cleanupWorker, err := providercredentialcleanup.New(
+		repository,
+		providerMaterializer,
+		cleanupClaimHealth,
+		slog.Default(),
+		providercredentialcleanup.Config{
+			LeaseOwner: config.InstanceID, BatchSize: config.ProviderCleanupBatchSize,
+			PollInterval:     config.ProviderCleanupPollInterval,
+			OperationTimeout: config.ProviderCleanupTimeout,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("construct provider credential cleanup worker: %w", err)
+	}
 	listener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {
 		return errors.New("listen control-plane gRPC")
@@ -248,9 +265,10 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
-		monitorReadiness(service, repository, publisher, readiness, slog.Default(), config),
+		monitorReadiness(service, repository, publisher, cleanupClaimHealth, readiness, slog.Default(), config),
 		monitorOIDCSigningKeys(proofService, slog.Default(), config),
 		runOutboxRelay(repository, publisher, shutdownBase, config),
+		cleanupWorker.Run,
 	)
 	workerDone := make(chan error, 1)
 	go func() { workerDone <- workers.Wait(lifecycle) }()
@@ -424,7 +442,11 @@ type readinessPublisher interface {
 	Check(context.Context) error
 }
 
-func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
+type readinessCondition interface {
+	Ready() (bool, string)
+}
+
+func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, cleanupClaim readinessCondition, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
@@ -432,13 +454,19 @@ func monitorReadiness(service *platformservice.Service, store readinessStore, pu
 			check, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
 			err := errors.Join(service.Ready(check), store.CheckOutbox(check), publisher.Check(check))
 			cancel()
+			reason, errorClass := "direct_infrastructure_unavailable", "direct_infrastructure"
+			if cleanupReady, _ := cleanupClaim.Ready(); err == nil && !cleanupReady {
+				err = errors.New("provider credential cleanup claim is unavailable")
+				reason = "provider_credential_cleanup_claim_unavailable"
+				errorClass = "provider_credential_cleanup_claim"
+			}
 			if err == nil {
 				if readiness.Set(true, "ready") {
 					logger.InfoContext(ctx, "control-plane readiness restored")
 				}
 			} else {
-				if readiness.Set(false, "direct_infrastructure_unavailable") {
-					logger.WarnContext(ctx, "control-plane readiness lost", "error_class", "direct_infrastructure")
+				if readiness.Set(false, reason) {
+					logger.WarnContext(ctx, "control-plane readiness lost", "error_class", errorClass)
 				}
 			}
 			select {

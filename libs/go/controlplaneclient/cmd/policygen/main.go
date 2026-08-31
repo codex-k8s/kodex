@@ -135,7 +135,7 @@ func main() {
 			secretBrokerTLS,
 		),
 	}
-	value := document{Version: 1, PolicyRevision: 41, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 42, Policy: policy{
 		TrustDomain: "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
 	}}

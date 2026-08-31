@@ -33,6 +33,7 @@ func TestRouteProviderCredentialUnaryProtectsExactService(t *testing.T) {
 		controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName,
 		controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName,
 		controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName,
+		controlplanev1.ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName,
 	}
 	for _, method := range providerMethods {
 		result, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: method}, handler)
