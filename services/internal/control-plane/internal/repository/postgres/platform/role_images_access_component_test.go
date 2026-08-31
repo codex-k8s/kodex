@@ -47,6 +47,15 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	if err != nil || created.Recipe.Ref == "" || created.Build == nil {
 		t.Fatalf("owner create role image: result=%#v err=%v", created, err)
 	}
+	worker := roleImageOwner
+	worker.CallerWorkload = "role-image-builder"
+	worker.Permission = "platform.role-images.builds.claim"
+	worker.CorrelationRef = "role-image-access-build-claim"
+	claimed, err := repository.ClaimBuild(ctx, worker, "role-image-access-build-claim")
+	if err != nil || claimed.Build.Ref != created.Build.Ref || claimed.Build.Stage != "MATERIALIZATION" ||
+		claimed.Input.RecipeRef != created.Recipe.Ref || claimed.Input.SpecSHA256 != created.Recipe.SpecSHA256 {
+		t.Fatalf("claim created role image build: created=%#v claim=%#v err=%v", created.Build, claimed, err)
+	}
 
 	candidateInput := platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000009912", ExternalTenantID: ownerInput.ExternalTenantID,
