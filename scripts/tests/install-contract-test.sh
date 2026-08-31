@@ -172,6 +172,9 @@ jq -e '
     all(.items[]; ((.required // true) | type == "boolean")))
 ' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
   fail 'secret projection registry contract is invalid'
+[[ $(rg -F -- 'kodex.dev/provider-account-key=default-openai-codex' \
+  "$repository_root/tools/install/materialize-secrets.sh" | wc -l) -eq 2 ]] ||
+  fail 'fresh and restored default provider metadata do not share the required annotation'
 jq -e '
   def projection($name): [.secrets[] | select(.name == $name)];
   def source_ref($name; $type; $ref):

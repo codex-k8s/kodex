@@ -296,6 +296,8 @@ if [[ "$selected_provider_metadata_preserved" != true ]]; then
     --from-literal=secretUID="$provider_uid" \
     --from-literal=secretResourceVersion="$provider_resource_version" \
     --from-literal=contentSHA256="$provider_sha256"
+  kubectl -n kodex-system annotate configmap runtime-provider-openai-default-metadata \
+    kodex.dev/provider-account-key=default-openai-codex --overwrite >/dev/null
 fi
 
 manifest_root="$material_directory/crypto/authority-bootstrap/public/manifest-root"
