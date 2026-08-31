@@ -79,6 +79,17 @@ describe("AssistantWorkspace layout", () => {
     expect(header).toContain('class="icon-button assistant-history__toggle"');
   });
 
+  it("не запускает mutation на устаревшем loading state и обрабатывает отказ", () => {
+    expect(source).toMatch(
+      /const canStartConversation = computed\([\s\S]*?!store\.loading[\s\S]*?!store\.busy[\s\S]*?!store\.problem/,
+    );
+    expect(template).toContain(':aria-busy="store.busy || store.loading"');
+    expect(source).toContain(
+      "await handleStoreMutation(() => store.startConversation())",
+    );
+    expect(source).toContain("if (!(error instanceof AppProblem)) throw error");
+  });
+
   it("блокирует готовность composer до завершения server-side scan", () => {
     expect(source).toContain("attachmentComposer.value?.finalize()");
     expect(source).toContain("attachmentState.value.ready");

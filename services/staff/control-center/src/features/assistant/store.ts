@@ -126,13 +126,17 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   }
 
   async function runMutation<T>(operation: () => Promise<T>): Promise<T> {
+    // Mutation авторитетнее чтения, которое началось до него.
+    generation += 1;
+    loading.value = false;
     busy.value = true;
     problem.value = undefined;
     try {
       return await operation();
     } catch (error) {
-      problem.value = asProblem(error);
-      throw error;
+      const normalized = asProblem(error);
+      problem.value = normalized;
+      throw normalized;
     } finally {
       busy.value = false;
     }

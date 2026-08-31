@@ -38,6 +38,7 @@ import type {
   AssistantPlan,
   RunEvent,
 } from "@/shared/api/generated/openapi/types.gen";
+import { AppProblem } from "@/shared/api/problem";
 import {
   focusableElements,
   trappedFocusTarget,
@@ -103,7 +104,9 @@ const currentPlan = computed<AssistantPlan | undefined>(() => {
 const canSend = computed(
   () =>
     props.live &&
+    !store.loading &&
     !store.busy &&
+    !store.problem &&
     Boolean(store.assistant?.nextActions.includes("ADD_TURN")) &&
     Boolean(
       store.selectedConversation ||
@@ -114,7 +117,9 @@ const canSend = computed(
 const canStartConversation = computed(
   () =>
     props.live &&
+    !store.loading &&
     !store.busy &&
+    !store.problem &&
     Boolean(store.assistant?.nextActions.includes("CREATE_CONVERSATION")),
 );
 const assistantRuntimeState = computed(() =>
@@ -186,10 +191,22 @@ async function startConversation(): Promise<void> {
   historyOpen.value = false;
   titleEditing.value = false;
   openPlanRef.value = undefined;
+  if (!(await handleStoreMutation(() => store.startConversation()))) return;
   attachmentComposer.value?.clear();
-  await store.startConversation();
   await nextTick();
   composer.value?.focus();
+}
+
+async function handleStoreMutation(
+  operation: () => Promise<unknown>,
+): Promise<boolean> {
+  try {
+    await operation();
+    return true;
+  } catch (error) {
+    if (!(error instanceof AppProblem)) throw error;
+    return false;
+  }
 }
 
 function conversationDisplayTitle(title: string): string {
@@ -206,7 +223,8 @@ function startTitleEdit(): void {
 }
 
 async function saveTitle(): Promise<void> {
-  await store.changeTitle(titleDraft.value);
+  if (!(await handleStoreMutation(() => store.changeTitle(titleDraft.value))))
+    return;
   titleEditing.value = false;
 }
 
@@ -214,7 +232,8 @@ async function send(): Promise<void> {
   const value = message.value.trim();
   if (!value || !canSend.value) return;
   const attachmentSetRef = await attachmentComposer.value?.finalize();
-  await store.send(value, attachmentSetRef);
+  if (!(await handleStoreMutation(() => store.send(value, attachmentSetRef))))
+    return;
   message.value = "";
   attachmentComposer.value?.clear();
   await nextTick();
@@ -241,20 +260,24 @@ async function savePlan(
   summary: string,
   operations: Parameters<typeof store.saveDraft>[2],
 ): Promise<void> {
-  if (!currentPlan.value) return;
-  await store.saveDraft(currentPlan.value, summary, operations);
+  const plan = currentPlan.value;
+  if (!plan) return;
+  await handleStoreMutation(() => store.saveDraft(plan, summary, operations));
 }
 
 async function validatePlan(): Promise<void> {
-  if (currentPlan.value) await store.validate(currentPlan.value);
+  const plan = currentPlan.value;
+  if (plan) await handleStoreMutation(() => store.validate(plan));
 }
 
 async function applyPlan(): Promise<void> {
-  if (currentPlan.value) await store.apply(currentPlan.value);
+  const plan = currentPlan.value;
+  if (plan) await handleStoreMutation(() => store.apply(plan));
 }
 
 async function rejectPlan(): Promise<void> {
-  if (currentPlan.value) await store.reject(currentPlan.value);
+  const plan = currentPlan.value;
+  if (plan) await handleStoreMutation(() => store.reject(plan));
 }
 
 function documentPointerDown(event: PointerEvent): void {
@@ -342,7 +365,7 @@ onBeforeUnmount(() => {
       role="dialog"
       aria-modal="true"
       :aria-label="$t('assistant.title')"
-      :aria-busy="store.busy"
+      :aria-busy="store.busy || store.loading"
       :data-conversation-ref="store.selectedConversation?.ref"
       tabindex="-1"
       @keydown="handleKeydown"

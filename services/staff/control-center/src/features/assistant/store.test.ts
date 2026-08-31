@@ -7,6 +7,7 @@ import type {
   AssistantPlan,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
+import { AppProblem } from "@/shared/api/problem";
 
 const createConversationMock = vi.hoisted(() => vi.fn());
 const appendTurnMock = vi.hoisted(() => vi.fn());
@@ -120,6 +121,17 @@ function systemAssistant(): SystemAssistant {
   };
 }
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
+
 describe("assistant workspace store", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -176,6 +188,60 @@ describe("assistant workspace store", () => {
     expect(store.selectedRef).toBe(created.ref);
     expect(store.selectedConversation?.turns).toEqual([]);
     expect(store.conversations).toHaveLength(2);
+  });
+
+  it("не позволяет устаревшему load стереть созданный диалог", async () => {
+    const assistantReadback = deferred<SystemAssistant>();
+    const conversationsReadback = deferred<AssistantConversation[]>();
+    const created = {
+      ...conversation(),
+      ref: "cnv_created_during_load",
+      turns: [],
+    };
+    readAssistantMock.mockReturnValue(assistantReadback.promise);
+    readConversationsMock.mockReturnValue(conversationsReadback.promise);
+    createConversationMock.mockResolvedValue(created);
+    const store = useAssistantStore();
+
+    const loading = store.load(context, "prj_sales");
+    await store.startConversation();
+    assistantReadback.resolve(systemAssistant());
+    conversationsReadback.resolve([]);
+    await loading;
+
+    expect(store.loading).toBe(false);
+    expect(store.selectedRef).toBe(created.ref);
+    expect(store.conversations).toEqual([created]);
+  });
+
+  it("возвращает нормализованную ошибку создания через problem state", async () => {
+    createConversationMock.mockRejectedValue(new TypeError("network failed"));
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+
+    let failure: unknown;
+    try {
+      await store.startConversation();
+    } catch (error: unknown) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(AppProblem);
+    expect(failure).toBe(store.problem);
+    expect(store.problem).toMatchObject({
+      code: "UNKNOWN",
+      kind: "unavailable",
+      retryable: true,
+      status: 0,
+    });
+    expect(store.busy).toBe(false);
+
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock.mockResolvedValue([]);
+    await store.load(context, "prj_sales");
+
+    expect(store.problem).toBeUndefined();
+    expect(store.loading).toBe(false);
   });
 
   it("передаёт finalized AttachmentSet в сообщение помощнику", async () => {
