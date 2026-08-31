@@ -8,6 +8,7 @@ FROM docker.io/regclient/regctl:v0.11.5@sha256:dbe356c6cf9f8f85e302b9e47fed481ef
 FROM docker.io/library/alpine:3.22.1@sha256:eafc1edb577d2e9b458664a15f23ea1c370214193226069eb22921169fc7e43f
 ARG SOURCE_SHA=unknown
 RUN apk add --no-cache \
+      bash=5.2.37-r0 \
       ca-certificates=20260611-r0 \
       coreutils=9.7-r1 \
       curl=8.14.1-r3 \
@@ -19,7 +20,7 @@ COPY --from=cosign --chmod=0555 /ko-app/cosign /usr/local/bin/cosign
 COPY --from=syft --chmod=0555 /syft /usr/local/bin/syft
 COPY --from=grype --chmod=0555 /grype /usr/local/bin/grype
 COPY --from=regctl --chmod=0555 /regctl /usr/local/bin/regctl
-RUN for tool in base64 cmp cosign curl grype jq openssl pgrep regctl sha256sum syft wc; do \
+RUN for tool in base64 bash cmp cosign curl grype jq openssl pgrep regctl sha256sum syft wc; do \
       command -v "$tool" >/dev/null || exit 1; \
     done
 LABEL org.opencontainers.image.title="Kodex image admission tools" \

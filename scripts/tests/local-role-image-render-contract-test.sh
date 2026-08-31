@@ -43,6 +43,14 @@ rootless_regctl_writes=$(rg -c --fixed-strings 'docker run --rm --user 0:0' \
   "$source_root/tools/dev/build-local-image-supply-chain.sh")
 [[ "$rootless_regctl_writes" == 2 ]] ||
   fail 'both rootless Docker regctl writes must use container root for the private bind mount'
+for admission_tools_dockerfile in \
+  "$source_root/infra/admission-tools/Dockerfile" \
+  "$source_root/tools/dev/Dockerfile.local-image-supply-chain"; do
+  rg -F 'bash=5.2.37-r0' "$admission_tools_dockerfile" >/dev/null ||
+    fail "image admission runtime omits the pinned renderer shell: $admission_tools_dockerfile"
+  rg 'RUN for tool in .*bash' "$admission_tools_dockerfile" >/dev/null ||
+    fail "image admission runtime does not verify the renderer shell: $admission_tools_dockerfile"
+done
 rg -F -- "-name 'agent-runner-*.oci.tar' -print | LC_ALL=C sort" \
   "$source_root/tools/dev/seed-local-image-supply-chain.sh" >/dev/null ||
   fail 'runner OCI cache selection is not deterministic'
