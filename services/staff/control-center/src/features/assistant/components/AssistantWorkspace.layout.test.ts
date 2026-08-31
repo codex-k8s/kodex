@@ -93,4 +93,9 @@ describe("AssistantWorkspace layout", () => {
       '<SafeStructuredData :value="operation.parameters" />',
     );
   });
+
+  it("экспонирует стабильную последовательность turn для realtime и E2E", () => {
+    expect(template).toContain(':data-turn-ref="turn.ref"');
+    expect(template).toContain(':data-turn-sequence="turn.sequence"');
+  });
 });

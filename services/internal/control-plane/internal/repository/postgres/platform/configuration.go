@@ -968,7 +968,7 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, runID, runRef, "TURN_QUEUED", nodeRef, "", "", "", "i18n:ASSISTANT_TURN_QUEUED", "RUNNING", "QUEUED"); err != nil {
 		return commandOutcome{}, err
 	}
-	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, AttachmentSetRef: payload.AttachmentSetRef, State: "COMPLETED", CreatedAt: time.Now().UTC()}}
+	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Sequence: turnNumber, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, AttachmentSetRef: payload.AttachmentSetRef, State: "COMPLETED", CreatedAt: time.Now().UTC()}}
 	assistant, err := repository.getAssistantTx(ctx, tx, scope)
 	if err != nil {
 		return commandOutcome{}, err

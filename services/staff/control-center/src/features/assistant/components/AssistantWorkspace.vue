@@ -545,6 +545,8 @@ onBeforeUnmount(() => {
                 :key="turn.ref"
                 class="assistant-message"
                 :class="`assistant-message--${turn.role.toLowerCase()}`"
+                :data-turn-ref="turn.ref"
+                :data-turn-sequence="turn.sequence"
               >
                 <header>
                   <strong>{{

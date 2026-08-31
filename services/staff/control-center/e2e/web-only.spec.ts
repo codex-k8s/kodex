@@ -116,26 +116,50 @@ async function requestLatestKodexPlan(
   expectedText: string,
 ): Promise<Locator> {
   const dialog = page.getByRole("dialog", { name: "Kodex" });
-  const userMessages = dialog.locator("article.assistant-message--user");
-  const assistantMessages = dialog.locator(
-    "article.assistant-message--assistant",
-  );
   const composer = dialog.getByRole("textbox", {
     name: "Опишите, что нужно настроить или запустить",
   });
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const userMessageCount = await userMessages.count();
-    const assistantMessageCount = await assistantMessages.count();
     await composer.fill(prompt);
+    const appendResponse = page.waitForResponse((response) => {
+      const request = response.request();
+      return (
+        request.method() === "POST" &&
+        /^\/api\/v1\/assistant-conversations\/[^/]+\/turns$/.test(
+          new URL(response.url()).pathname,
+        )
+      );
+    });
     await dialog.getByRole("button", { name: "Отправить помощнику" }).click();
-    await expect(userMessages).toHaveCount(userMessageCount + 1);
-    await expect(assistantMessages).toHaveCount(assistantMessageCount + 1, {
+    const appended = await appendResponse;
+    expect(appended.status(), await appended.text()).toBe(202);
+    const conversation = (await appended.json()) as {
+      turns?: Array<{
+        ref?: string;
+        role?: string;
+        sequence?: number;
+        content?: string;
+      }>;
+    };
+    const userTurn = conversation.turns
+      ?.filter((turn) => turn.role === "USER" && turn.content === prompt)
+      .toSorted((left, right) => (right.sequence ?? 0) - (left.sequence ?? 0))
+      .at(0);
+    expect(userTurn?.ref).toMatch(/^trn_[A-Za-z0-9_-]+$/);
+    expect(
+      Number.isSafeInteger(userTurn?.sequence) && (userTurn?.sequence ?? 0) > 0,
+    ).toBe(true);
+    const currentUserMessage = dialog.locator(
+      `article.assistant-message--user[data-turn-ref="${userTurn?.ref ?? ""}"]`,
+    );
+    await expect(currentUserMessage).toHaveCount(1);
+    const currentAssistantMessage = dialog.locator(
+      `article.assistant-message--assistant[data-turn-sequence="${String((userTurn?.sequence ?? 0) + 1)}"]`,
+    );
+    await expect(currentAssistantMessage).toHaveCount(1, {
       timeout: 120_000,
     });
-    const currentAssistantMessage = assistantMessages.nth(
-      assistantMessageCount,
-    );
 
     const outcome = await waitForAssistantPlanAttempt(
       page,
@@ -411,7 +435,9 @@ test.describe("web-only fresh installation", () => {
       page.getByText("Внешние интеграции не нужны для начала работы"),
     ).toBeVisible();
     await expect(
-      page.locator("#main-content").getByText("Готов", { exact: true }),
+      page
+        .locator("#main-content")
+        .getByText("Готов к команде", { exact: true }),
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Начать с помощником" }).click();

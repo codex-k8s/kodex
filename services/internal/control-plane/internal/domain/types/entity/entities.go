@@ -559,6 +559,7 @@ type AssistantPlanReceipt struct {
 
 type AssistantTurn struct {
 	Ref, Actor, ActorName, Content, State, AttachmentSetRef string
+	Sequence                                                int64
 	CreatedAt                                               time.Time
 	CompletedAt                                             *time.Time
 }
