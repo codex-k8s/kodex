@@ -419,31 +419,48 @@ test.describe("web-only fresh installation", () => {
 
   test("первый вход, горячий помощник и первый Проект", async ({ page }) => {
     await gotoWithRetry(page, "/onboarding");
-    await expectPageHeading(page, "Настроим Kodex");
-    const assistantPreflight = await page.evaluate(async () => {
-      const response = await fetch("/api/v1/system-assistant");
-      if (!response.ok) {
-        return { ref: "", status: response.status };
-      }
-      const assistant = (await response.json()) as { ref?: string };
-      return { ref: assistant.ref ?? "", status: response.status };
+    const preflight = await page.evaluate(async () => {
+      const [bootstrapResponse, assistantResponse] = await Promise.all([
+        fetch("/api/v1/bootstrap"),
+        fetch("/api/v1/system-assistant"),
+      ]);
+      const bootstrap = bootstrapResponse.ok
+        ? ((await bootstrapResponse.json()) as { onboardingComplete?: boolean })
+        : undefined;
+      const assistant = assistantResponse.ok
+        ? ((await assistantResponse.json()) as { ref?: string })
+        : undefined;
+      return {
+        assistantRef: assistant?.ref ?? "",
+        assistantStatus: assistantResponse.status,
+        bootstrapStatus: bootstrapResponse.status,
+        onboardingComplete: bootstrap?.onboardingComplete ?? false,
+      };
     });
-    expect(assistantPreflight.status).toBe(200);
-    expect(assistantPreflight.ref).toMatch(/^agt_[A-Za-z0-9_-]+$/);
-    await expect(
-      page.getByRole("heading", { name: "Системный помощник готов" }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Внешние интеграции не нужны для начала работы"),
-    ).toBeVisible();
-    await expect(
-      page
-        .locator("#main-content")
-        .getByText("Готов к команде", { exact: true }),
-    ).toBeVisible();
+    expect(preflight.bootstrapStatus).toBe(200);
+    expect(preflight.assistantStatus).toBe(200);
+    expect(preflight.assistantRef).toMatch(/^agt_[A-Za-z0-9_-]+$/);
 
-    await page.getByRole("button", { name: "Начать с помощником" }).click();
-    await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
+    if (preflight.onboardingComplete) {
+      await expect(page).toHaveURL(/\/$/);
+      await expectPageHeading(page, /Добрый день/);
+      await openKodex(page);
+    } else {
+      await expectPageHeading(page, "Настроим Kodex");
+      await expect(
+        page.getByRole("heading", { name: "Системный помощник готов" }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Внешние интеграции не нужны для начала работы"),
+      ).toBeVisible();
+      await expect(
+        page
+          .locator("#main-content")
+          .getByText("Готов к команде", { exact: true }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Начать с помощником" }).click();
+      await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
+    }
 
     if (discoveryMode && projectRef) {
       await gotoWithRetry(page, `/projects/${projectRef}`);
@@ -1228,8 +1245,8 @@ test.describe("web-only fresh installation", () => {
       'model_reasoning_effort = "high"',
     );
 
-    await ensureAuthorizedProviderAffinity(page, coordinatorRef);
-    await ensureAuthorizedProviderAffinity(page, analystRef);
+    await ensureAuthorizedProviderAffinity(page, coordinatorRef, 0);
+    await ensureAuthorizedProviderAffinity(page, analystRef, 1);
   });
 
   test("файл загружается, просматривается, привязывается и скачивается", async ({
@@ -1846,9 +1863,9 @@ test.describe("web-only fresh installation", () => {
       task: automationEditedTask,
     });
     await expect(row).toHaveCount(0);
-    await page.getByRole("combobox", { name: "Состояние" }).selectOption(
-      "ARCHIVED",
-    );
+    await page
+      .getByRole("combobox", { name: "Состояние" })
+      .selectOption("ARCHIVED");
     row = page.locator(".automation-row").filter({ hasText: automationName });
     await expect(row).toBeVisible();
     await row.click();
@@ -3081,14 +3098,16 @@ function requireRefs(...required: ReadonlyArray<keyof DiscoveryRefs>): void {
 async function ensureAuthorizedProviderAffinity(
   page: Page,
   agentRef: string,
+  eligibleIndex = 0,
 ): Promise<void> {
-  const preflight = await page.evaluate(async () => {
+  const preflight = await page.evaluate(async (requestedEligibleIndex) => {
     const response = await fetch(
       "/api/v1/provider-accounts?definitionKey=openai-codex&pageSize=100",
     );
     if (!response.ok) {
       return {
         accountRef: "",
+        eligibleCount: 0,
         status: response.status,
         summary: "provider account catalog readback failed",
       };
@@ -3101,26 +3120,29 @@ async function ensureAuthorizedProviderAffinity(
         state: string;
       }>;
     };
-    const eligible = body.items.filter(
-      (item) => item.state === "AUTHORIZED" && item.enabled && item.ready,
-    );
+    const eligible = body.items
+      .filter(
+        (item) => item.state === "AUTHORIZED" && item.enabled && item.ready,
+      )
+      .toSorted((left, right) => left.ref.localeCompare(right.ref));
     const states = body.items.reduce<Record<string, number>>((result, item) => {
       const key = `${item.state}:${item.enabled ? "enabled" : "disabled"}:${item.ready ? "ready" : "not-ready"}`;
       result[key] = (result[key] ?? 0) + 1;
       return result;
     }, {});
     return {
-      accountRef: eligible[0]?.ref ?? "",
+      accountRef: eligible[requestedEligibleIndex]?.ref ?? "",
+      eligibleCount: eligible.length,
       status: response.status,
       summary: Object.entries(states)
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([state, count]) => `${state}=${String(count)}`)
         .join(", "),
     };
-  });
+  }, eligibleIndex);
   expect(preflight.status, preflight.summary).toBe(200);
   if (!preflight.accountRef) {
-    const blocker = `BLOCKED: no AUTHORIZED+enabled+ready provider account is available (${preflight.summary || "empty catalog"})`;
+    const blocker = `BLOCKED: AUTHORIZED+enabled+ready provider account index ${String(eligibleIndex)} is unavailable; eligible=${String(preflight.eligibleCount)} (${preflight.summary || "empty catalog"})`;
     test.info().annotations.push({ type: "blocked", description: blocker });
     throw new Error(blocker);
   }

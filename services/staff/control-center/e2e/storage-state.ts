@@ -76,6 +76,48 @@ export async function writeStorageState(
   rawPath: string,
   value: unknown,
 ): Promise<void> {
+  await writeParsedStorageState(rawPath, parseStorageState(value, true));
+}
+
+export async function writeAuthenticatedStorageState(
+  rawPath: string,
+  value: unknown,
+  expectedOrigin: string,
+): Promise<void> {
+  const origin = exactHTTPSOrigin(expectedOrigin);
+  const state = parseStorageState(value, false);
+  const matchingCookies = state.cookies.filter(
+    (cookie) =>
+      cookie.domain.replace(/^\./, "") === origin.hostname &&
+      cookie.path === "/" &&
+      cookie.secure,
+  );
+  const csrf = matchingCookies.find(
+    (cookie) => cookie.name === "__Host-kodex-csrf",
+  );
+  const session = matchingCookies.find(
+    (cookie) => cookie.name === "__Host-kodex-session",
+  );
+  if (
+    !csrf ||
+    csrf.value.length < 43 ||
+    csrf.value.length > 256 ||
+    !session ||
+    !session.httpOnly ||
+    session.value.length < 32 ||
+    session.value.length > 16_384
+  ) {
+    throw new Error(
+      "Authenticated E2E storage state does not contain the exact Kodex API cookies",
+    );
+  }
+  await writeParsedStorageState(rawPath, state);
+}
+
+async function writeParsedStorageState(
+  rawPath: string,
+  state: BrowserStorageState,
+): Promise<void> {
   const path = resolve(rawPath);
   const parent = dirname(path);
   await mkdir(parent, { recursive: true, mode: 0o700 });
@@ -84,7 +126,6 @@ export async function writeStorageState(
   let temporaryCreated = false;
   try {
     await validateExistingTarget(path);
-    const state = parseStorageState(value, true);
     const payload = `${JSON.stringify(state)}\n`;
     if (Buffer.byteLength(payload) > maximumStorageStateBytes) {
       throw new Error("E2E storage state file size is invalid");
@@ -118,6 +159,19 @@ export async function writeStorageState(
     if (temporaryCreated) await rm(temporaryPath, { force: true });
     await directory.close();
   }
+}
+
+function exactHTTPSOrigin(value: string): URL {
+  const parsed = new URL(value);
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.origin !== value ||
+    parsed.username ||
+    parsed.password
+  ) {
+    throw new Error("Authenticated E2E origin must be an exact HTTPS origin");
+  }
+  return parsed;
 }
 
 async function openSafeDirectory(path: string) {

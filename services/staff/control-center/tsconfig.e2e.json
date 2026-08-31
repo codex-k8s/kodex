@@ -9,6 +9,7 @@
     "playwright.config.ts",
     "playwright.discovery.config.ts",
     "playwright.auth.config.ts",
+    "playwright.api-session.config.ts",
     "playwright.integration.config.ts",
     "playwright.local.config.ts",
     "e2e/**/*.ts"

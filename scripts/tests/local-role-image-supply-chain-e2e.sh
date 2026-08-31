@@ -43,7 +43,7 @@ done
   fail 'resource prefix is invalid'
 [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -ge 60 && "$timeout_seconds" -le 1800 ]] ||
   fail 'timeout must be between 60 and 1800 seconds'
-for command_name in jq kubectl node stat; do
+for command_name in jq kubectl node npm stat; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
@@ -65,9 +65,21 @@ state="$state_directory/e2e/$resource_prefix-role-image.json"
 [[ ! -e "$state" && ! -L "$state" ]] || fail 'RoleImage E2E state already exists'
 
 base_url=https://control.127.0.0.1.nip.io/
+api_storage_state=$(mktemp "$state_directory/e2e/$resource_prefix-owner-api.XXXXXX.json")
+cleanup() {
+  rm -f -- "$api_storage_state"
+}
+trap cleanup EXIT
+KODEX_E2E_BASE_URL="${base_url%/}" \
+  KODEX_E2E_STORAGE_STATE="$storage_state" \
+  KODEX_E2E_API_STORAGE_STATE="$api_storage_state" \
+  KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+  NODE_EXTRA_CA_CERTS="$ca_file" \
+  npm --prefix "$repository_root/services/staff/control-center" run test:e2e:api-session
+
 common_environment=(
   KODEX_ROLE_IMAGE_E2E_BASE_URL="$base_url"
-  KODEX_ROLE_IMAGE_E2E_STORAGE_STATE="$storage_state"
+  KODEX_ROLE_IMAGE_E2E_STORAGE_STATE="$api_storage_state"
   KODEX_ROLE_IMAGE_E2E_STATE="$state"
   KODEX_ROLE_IMAGE_E2E_PREFIX="$resource_prefix"
   KODEX_ROLE_IMAGE_E2E_TIMEOUT_MS="$((timeout_seconds * 1000))"
