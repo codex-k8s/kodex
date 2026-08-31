@@ -1030,6 +1030,12 @@ label {
   margin-top: 18px;
 }
 :where(
+  [class$="-badge"],
+  [class*="-badge "],
+  [class$="-tag"],
+  [class*="-tag "],
+  [class$="-chip"],
+  [class*="-chip "],
   .status-badge,
   .count-badge,
   .authority-badge,
@@ -1054,7 +1060,8 @@ label {
 ) {
   width: max-content;
   max-width: 100%;
-  height: max-content;
+  height: fit-content;
+  min-height: 0;
   flex: 0 0 auto;
   align-self: flex-start;
 }

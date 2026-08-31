@@ -2378,6 +2378,16 @@ test.describe("web-only fresh installation", () => {
     }
     await expect(roleCard).toContainText("Конкретный ресурс");
     await expect(roleCard).toContainText("Полномочий: 2");
+    const roleTagHeights = await roleCard
+      .locator(".scope-tag")
+      .evaluateAll((tags) =>
+        tags.map((tag) => Math.round(tag.getBoundingClientRect().height)),
+      );
+    expect(roleTagHeights.length).toBeGreaterThanOrEqual(2);
+    expect(
+      roleTagHeights.every((height) => height > 0 && height <= 32),
+      `Role badges must remain compact, received heights: ${roleTagHeights.join(", ")}`,
+    ).toBe(true);
 
     const setup = await page.evaluate(
       async ({

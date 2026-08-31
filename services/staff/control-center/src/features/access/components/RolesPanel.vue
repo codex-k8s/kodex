@@ -292,14 +292,22 @@ function permissionDefinition(key: string): PermissionDefinition | undefined {
 }
 .role-tags {
   display: flex;
+  align-items: flex-start;
+  align-self: start;
   flex-wrap: wrap;
   gap: 6px;
 }
 .scope-tag {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  height: fit-content;
+  align-self: flex-start;
   padding: 3px 7px;
   border-radius: 999px;
   background: #edf1f5;
   font-size: 0.75rem;
+  white-space: nowrap;
 }
 .role-card footer {
   justify-content: flex-start;
