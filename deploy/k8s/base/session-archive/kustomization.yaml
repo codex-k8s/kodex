@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
   - configmap.yaml
   - serviceaccounts.yaml
-  - rbac.yaml
   - deployment.yaml
   - service.yaml
   - networkpolicy.yaml
@@ -12,3 +11,5 @@ resources:
   - poddisruptionbudget.yaml
 components:
   - ../../components/internal-rpc-authority-session-archive-issuer
+transformers:
+  - controller-namespace-transformer.yaml

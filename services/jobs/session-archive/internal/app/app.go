@@ -50,7 +50,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	if err != nil {
 		return err
 	}
-	kubernetes, err := controller.InCluster(controller.Config{Namespace: config.Namespace, Environment: config.Environment,
+	kubernetes, err := controller.InCluster(controller.Config{WorkerNamespace: config.WorkerNamespace, Environment: config.Environment,
 		WorkerImage: config.WorkerImage, WorkerServiceAccount: config.WorkerServiceAccount, ObjectStorageSecret: config.ObjectStorageSecret,
 		StorageClass: config.StorageClass, SessionPVCSize: config.SessionPVCSize,
 		ObjectStorageEndpoint: config.ObjectStorageEndpoint, ObjectStorageRegion: config.ObjectStorageRegion,

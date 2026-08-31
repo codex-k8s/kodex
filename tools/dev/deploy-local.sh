@@ -271,8 +271,28 @@ discover_local_object_storage_secret() {
   readback_local_object_storage_secret
 }
 
+readback_session_archive_worker_secret() {
+  local source runtime
+  [[ -n "$object_storage_secret_name" ]] || fail 'session archive object storage Secret name is absent'
+  source=$(kubectl -n "$namespace" get "secret/$object_storage_secret_name" -o json) ||
+    fail 'session archive source object storage Secret is absent'
+  runtime=$(kubectl -n "$runtime_namespace" get "secret/$object_storage_secret_name" -o json) ||
+    fail 'session archive runtime object storage Secret is absent'
+  jq -e --arg name "$object_storage_secret_name" --argjson source "$source" '
+    .metadata.name == $name and .metadata.namespace == "kodex-runtime" and
+    .metadata.labels["app.kubernetes.io/name"] == "session-archive" and
+    .metadata.labels["app.kubernetes.io/component"] == "archive-worker" and
+    .metadata.labels["kodex.dev/local-credential"] == "session-archive-object-storage" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .immutable == true and
+    (.data | keys | sort) == (["access-key", "secret-key"] | sort) and
+    .data["access-key"] == $source.data["access-key"] and
+    .data["secret-key"] == $source.data["secret-key"]
+  ' <<<"$runtime" >/dev/null || fail 'session archive runtime object storage Secret readback failed'
+}
+
 readback_session_archive() {
-  local deployment expected_image endpoint_slices target_registry
+  local deployment expected_image endpoint_slices target_registry resource
   expected_image=$(yq -N -r '
     select(.kind == "Deployment" and .metadata.name == "session-archive") |
     .spec.template.spec.containers[] |
@@ -299,15 +319,105 @@ readback_session_archive() {
         .name == "SESSION_ARCHIVE_WORKER_IMAGE" and .value == $image))
   ' <<<"$deployment" >/dev/null || fail 'session archive Deployment readback failed'
 
-  for resource in serviceaccount/session-archive serviceaccount/session-archive-worker \
-    role/session-archive-controller rolebinding/session-archive-controller \
+  kubectl -n "$namespace" get configmap/session-archive-runtime -o json | jq -e '
+    .metadata.namespace == "kodex-system" and
+    .data.SESSION_ARCHIVE_WORKER_NAMESPACE == "kodex-runtime"
+  ' >/dev/null || fail 'session archive exact worker namespace readback failed'
+
+  for resource in serviceaccount/session-archive \
     networkpolicy/session-archive-default-deny \
     networkpolicy/session-archive-exact-paths \
-    networkpolicy/session-archive-worker-object-storage \
     networkpolicy/session-archive-internal-rpc-authority-exact-paths; do
     kubectl -n "$namespace" get "$resource" >/dev/null 2>&1 ||
-      fail "session archive runtime resource is absent: $resource"
+      fail "session archive controller resource is absent: $resource"
   done
+  for resource in serviceaccount/session-archive-worker \
+    role/session-archive-controller role/session-archive-worker \
+    rolebinding/session-archive-controller rolebinding/session-archive-worker \
+    networkpolicy/session-archive-worker-default-deny \
+    networkpolicy/session-archive-worker-object-storage; do
+    kubectl -n "$runtime_namespace" get "$resource" >/dev/null 2>&1 ||
+      fail "session archive worker resource is absent: $resource"
+  done
+  readback_session_archive_worker_secret
+
+  kubectl -n "$runtime_namespace" get role/session-archive-controller -o json | jq -e '
+    ([.rules[] | {apiGroups:(.apiGroups | sort), resources:(.resources | sort), verbs:(.verbs | sort)}] | sort_by(.resources[0])) ==
+    ([
+      {apiGroups:[""], resources:["configmaps"], verbs:["create","delete","deletecollection"]},
+      {apiGroups:[""], resources:["persistentvolumeclaims"], verbs:["create","delete","get"]},
+      {apiGroups:[""], resources:["pods"], verbs:["list"]},
+      {apiGroups:["batch"], resources:["jobs"], verbs:["create","delete","deletecollection","get","list"]}
+    ] | sort_by(.resources[0]))
+  ' >/dev/null || fail 'session archive controller runtime Role is broader than required'
+  kubectl -n "$runtime_namespace" get role/session-archive-worker -o json | jq -e '
+    (.rules | length) == 0
+  ' >/dev/null || fail 'session archive worker received Kubernetes API permissions'
+  kubectl -n "$runtime_namespace" get serviceaccount/session-archive-worker -o json | jq -e '
+    .automountServiceAccountToken == false
+  ' >/dev/null || fail 'session archive worker ServiceAccount token automount is enabled'
+  kubectl -n "$runtime_namespace" get rolebinding/session-archive-controller -o json | jq -e '
+    (.subjects | length) == 1 and .subjects[0].kind == "ServiceAccount" and
+    .subjects[0].name == "session-archive" and .subjects[0].namespace == "kodex-system" and
+    .roleRef.kind == "Role" and .roleRef.name == "session-archive-controller"
+  ' >/dev/null || fail 'session archive controller cross-namespace RoleBinding is invalid'
+  kubectl -n "$runtime_namespace" get rolebinding/session-archive-worker -o json | jq -e '
+    (.subjects | length) == 1 and .subjects[0].kind == "ServiceAccount" and
+    .subjects[0].name == "session-archive-worker" and .subjects[0].namespace == "kodex-runtime" and
+    .roleRef.kind == "Role" and .roleRef.name == "session-archive-worker"
+  ' >/dev/null || fail 'session archive worker RoleBinding is invalid'
+  kubectl -n "$runtime_namespace" get networkpolicy/session-archive-worker-default-deny -o json | jq -e '
+    .spec.podSelector.matchLabels["session-archive.kodex.dev/managed"] == "true" and
+    (.spec.policyTypes | sort) == (["Egress","Ingress"] | sort) and
+    ((.spec.ingress // []) | length) == 0 and ((.spec.egress // []) | length) == 0
+  ' >/dev/null || fail 'session archive worker default-deny policy is invalid'
+  kubectl -n "$runtime_namespace" get networkpolicy/session-archive-worker-object-storage -o json | jq -e '
+    .spec.podSelector.matchLabels["session-archive.kodex.dev/managed"] == "true" and
+    (.spec.policyTypes | sort) == (["Egress","Ingress"] | sort) and
+    ((.spec.ingress // []) | length) == 0 and (.spec.egress | length) == 2 and
+    ([.spec.egress[] | select(
+      (.to | length) == 1 and
+      .to[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kube-system" and
+      .to[0].podSelector.matchLabels["k8s-app"] == "kube-dns" and
+      ([.ports[] | [.protocol,.port]] | sort) == ([ ["TCP",53], ["UDP",53] ] | sort)
+    )] | length) == 1 and
+    ([.spec.egress[] | select(
+      (.to | length) == 1 and
+      .to[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-system" and
+      .to[0].podSelector.matchLabels["app.kubernetes.io/name"] == "seaweedfs" and
+      .to[0].podSelector.matchLabels["app.kubernetes.io/component"] == "object-storage" and
+      (.ports | length) == 1 and .ports[0].protocol == "TCP" and .ports[0].port == 8333
+    )] | length) == 1
+  ' >/dev/null || fail 'session archive worker object-storage policy is invalid'
+
+  kubectl auth can-i create jobs.batch -n "$runtime_namespace" \
+    --as=system:serviceaccount:kodex-system:session-archive | grep -qx yes ||
+    fail 'session archive controller cannot create runtime worker Jobs'
+  if kubectl auth can-i create jobs.batch -n "$namespace" \
+    --as=system:serviceaccount:kodex-system:session-archive | grep -qx yes; then
+    fail 'session archive controller can create worker Jobs in kodex-system'
+  fi
+  if kubectl auth can-i list pods -n "$runtime_namespace" \
+    --as=system:serviceaccount:kodex-runtime:session-archive-worker | grep -qx yes; then
+    fail 'session archive worker can access the Kubernetes API'
+  fi
+
+  for resource in serviceaccount/session-archive-worker role/session-archive-controller \
+    role/session-archive-worker rolebinding/session-archive-controller \
+    rolebinding/session-archive-worker networkpolicy/session-archive-worker-default-deny \
+    networkpolicy/session-archive-worker-object-storage; do
+    if kubectl -n "$namespace" get "$resource" >/dev/null 2>&1; then
+      fail "session archive worker resource leaked into kodex-system: $resource"
+    fi
+  done
+  for resource in jobs configmaps; do
+    kubectl -n "$namespace" get "$resource" \
+      -l 'session-archive.kodex.dev/managed=true' -o json | jq -e '.items | length == 0' >/dev/null ||
+      fail "session archive managed $resource leaked into kodex-system"
+  done
+  kubectl -n "$namespace" get persistentvolumeclaims -o json | jq -e '
+    [.items[] | select(.metadata.name | startswith("runtime-session-"))] | length == 0
+  ' >/dev/null || fail 'session archive session PVC leaked into kodex-system'
 
   target_registry=$(kubectl -n "$namespace" get \
     configmap/internal-rpc-authority-publisher-target-registry -o jsonpath='{.data.key-delivery-targets\.yaml}')
@@ -402,6 +512,61 @@ ensure_local_object_storage_secret() {
       sub("^kodex-external-s3$"; strenv(OBJECT_STORAGE_SECRET_NAME))
   ' "$render"
   readback_local_object_storage_secret
+}
+
+ensure_session_archive_worker_secret() {
+  local source manifest current source_digest current_digest stale
+  source=$(kubectl -n "$namespace" get "secret/$object_storage_secret_name" -o json) ||
+    fail 'session archive source object storage Secret is absent'
+  manifest=$(jq --arg name "$object_storage_secret_name" '
+    {
+      apiVersion:"v1",
+      kind:"Secret",
+      metadata:{
+        name:$name,
+        namespace:"kodex-runtime",
+        labels:{
+          "app.kubernetes.io/part-of":"kodex",
+          "app.kubernetes.io/name":"session-archive",
+          "app.kubernetes.io/component":"archive-worker",
+          "app.kubernetes.io/managed-by":"tools-dev",
+          "kodex.dev/local-profile":"hot-reload",
+          "kodex.dev/local-credential":"session-archive-object-storage"
+        }
+      },
+      immutable:true,
+      type:"Opaque",
+      data:{
+        "access-key":.data["access-key"],
+        "secret-key":.data["secret-key"]
+      }
+    }
+  ' <<<"$source")
+  source_digest=$(jq -Sc '.data' <<<"$manifest" | sha256sum | awk '{print $1}')
+  current=$(kubectl -n "$runtime_namespace" get "secret/$object_storage_secret_name" -o json 2>/dev/null || true)
+  if [[ -n "$current" ]]; then
+    current_digest=$(jq -Sc '.data' <<<"$current" | sha256sum | awk '{print $1}')
+    [[ "$current_digest" == "$source_digest" ]] ||
+      fail 'content-addressed session archive runtime Secret differs'
+  else
+    kubectl create --field-manager=kodex-local-dev -f - <<<"$manifest" >/dev/null
+  fi
+  while IFS= read -r stale; do
+    [[ -n "$stale" && "$stale" != "$object_storage_secret_name" ]] || continue
+    kubectl -n "$runtime_namespace" delete "secret/$stale" --wait=true --timeout=2m >/dev/null
+  done < <(kubectl -n "$runtime_namespace" get secrets \
+    -l 'kodex.dev/local-credential=session-archive-object-storage' \
+    -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
+  readback_session_archive_worker_secret
+}
+
+cleanup_legacy_session_archive_worker_resources() {
+  kubectl -n "$namespace" delete --ignore-not-found \
+    serviceaccount/session-archive-worker \
+    role/session-archive-controller role/session-archive-worker \
+    rolebinding/session-archive-controller rolebinding/session-archive-worker \
+    networkpolicy/session-archive-worker-default-deny \
+    networkpolicy/session-archive-worker-object-storage >/dev/null
 }
 
 write_local_backup_controller_credentials() {
@@ -773,6 +938,8 @@ if [[ "$mode" == apply ]]; then
     select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "Job" and
       .kind != "Secret" and .kind != "CustomResourceDefinition")
   '
+  ensure_session_archive_worker_secret
+  cleanup_legacy_session_archive_worker_resources
   wait_certificates
   apply_render statefulsets 'select(.kind == "StatefulSet")'
   reconcile_local_statefulset_rollout kodex-postgresql kodex-nats seaweedfs
@@ -817,6 +984,7 @@ if [[ "$mode" == apply ]]; then
   '
 else
   discover_local_object_storage_secret
+  readback_session_archive_worker_secret
 fi
 
 wait_certificates

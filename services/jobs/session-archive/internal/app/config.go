@@ -11,11 +11,14 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
-const serviceName = "session-archive"
+const (
+	serviceName          = "session-archive"
+	exactWorkerNamespace = "kodex-runtime"
+)
 
 type Config struct {
 	Environment                     string        `env:"SESSION_ARCHIVE_ENVIRONMENT"`
-	Namespace                       string        `env:"SESSION_ARCHIVE_NAMESPACE"`
+	WorkerNamespace                 string        `env:"SESSION_ARCHIVE_WORKER_NAMESPACE"`
 	InstanceID                      string        `env:"SESSION_ARCHIVE_INSTANCE_ID"`
 	TechnicalListen                 string        `env:"SESSION_ARCHIVE_TECHNICAL_LISTEN"`
 	ControlPlaneTarget              string        `env:"SESSION_ARCHIVE_CONTROL_PLANE_TARGET"`
@@ -42,7 +45,7 @@ type Config struct {
 }
 
 func loadConfig() (Config, error) {
-	value := Config{Namespace: "kodex-system", TechnicalListen: ":9090", ControlPlaneTarget: "control-plane.kodex-system.svc:8443",
+	value := Config{WorkerNamespace: exactWorkerNamespace, TechnicalListen: ":9090", ControlPlaneTarget: "control-plane.kodex-system.svc:8443",
 		ControlPlaneTLSServerName:   "control-plane.kodex-system.svc.cluster.local",
 		ControlPlaneCAFile:          "/var/run/config/kodex/session-archive/control-plane/ca.pem",
 		ControlPlaneCertificateFile: "/var/run/secrets/kodex/session-archive/workload-tls/tls.crt",
@@ -75,7 +78,7 @@ func (value Config) validate() error {
 			return errors.New("session archive credential path is invalid")
 		}
 	}
-	if value.Namespace == "" || value.InstanceID == "" || value.WorkerImage == "" || value.WorkerServiceAccount == "" || value.SessionPVCSize == "" || value.ObjectStorageSecret == "" ||
+	if value.WorkerNamespace != exactWorkerNamespace || value.InstanceID == "" || value.WorkerImage == "" || value.WorkerServiceAccount == "" || value.SessionPVCSize == "" || value.ObjectStorageSecret == "" ||
 		value.ObjectStorageEndpoint == "" || value.ObjectStorageRegion == "" || value.ObjectStorageBucket == "" ||
 		!validObjectStorageBoundary(value) || strings.ContainsAny(value.ControlPlaneTLSServerName, "*/") ||
 		value.Environment == "production" && value.ObjectStorageAllowInsecureLocal ||

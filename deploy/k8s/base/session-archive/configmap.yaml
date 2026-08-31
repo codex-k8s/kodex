@@ -4,7 +4,7 @@ metadata:
   name: session-archive-runtime
 data:
   SESSION_ARCHIVE_TECHNICAL_LISTEN: ":9090"
-  SESSION_ARCHIVE_NAMESPACE: "kodex-system"
+  SESSION_ARCHIVE_WORKER_NAMESPACE: "kodex-runtime"
   SESSION_ARCHIVE_CONTROL_PLANE_TARGET: "control-plane.kodex-system.svc:8443"
   SESSION_ARCHIVE_CONTROL_PLANE_TLS_SERVER_NAME: "control-plane.kodex-system.svc.cluster.local"
   SESSION_ARCHIVE_STARTUP_TIMEOUT: "45s"

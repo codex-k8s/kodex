@@ -197,6 +197,8 @@ render="$temporary_directory/local.yaml"
   printf '\n---\n'
   kubectl kustomize "$repository_root/deploy/k8s/base/local-object-storage"
   printf '\n---\n'
+  kubectl kustomize "$repository_root/deploy/k8s/overlays/local/session-archive"
+  printf '\n---\n'
   kubectl kustomize "$repository_root/deploy/k8s/overlays/local/integration-synthetic"
 } >"$render"
 
@@ -1038,15 +1040,82 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg image "$session_archive_image" '
       any(.env[];
         .name == "SESSION_ARCHIVE_WORKER_IMAGE" and .value == $image)) and
     any(.spec.template.spec.containers[]; .name == "internal-rpc-authority-issuer") and
-    any(.spec.template.spec.containers[]; .name == "platform-worker-grant-agent"))
+    any(.spec.template.spec.containers[]; .name == "platform-worker-grant-agent")) and
+  any(.[];
+    .kind == "ConfigMap" and .metadata.name == "session-archive-runtime" and
+    .metadata.namespace == "kodex-system" and
+    .data.SESSION_ARCHIVE_WORKER_NAMESPACE == "kodex-runtime") and
+  any(.[];
+    .kind == "ServiceAccount" and .metadata.name == "session-archive-worker" and
+    .metadata.namespace == "kodex-runtime" and .automountServiceAccountToken == false) and
+  any(.[];
+    .kind == "RoleBinding" and .metadata.name == "session-archive-controller" and
+    .metadata.namespace == "kodex-runtime" and
+    .roleRef.kind == "Role" and .roleRef.name == "session-archive-controller" and
+    (.subjects | length) == 1 and .subjects[0].kind == "ServiceAccount" and
+    .subjects[0].name == "session-archive" and .subjects[0].namespace == "kodex-system") and
+  any(.[];
+    .kind == "Role" and .metadata.name == "session-archive-controller" and
+    .metadata.namespace == "kodex-runtime" and
+    ([.rules[] | {
+      apiGroups:(.apiGroups | sort),
+      resources:(.resources | sort),
+      verbs:(.verbs | sort)
+    }] | sort_by(.resources[0])) ==
+    ([
+      {apiGroups:[""], resources:["configmaps"], verbs:["create","delete","deletecollection"]},
+      {apiGroups:[""], resources:["persistentvolumeclaims"], verbs:["create","delete","get"]},
+      {apiGroups:[""], resources:["pods"], verbs:["list"]},
+      {apiGroups:["batch"], resources:["jobs"], verbs:["create","delete","deletecollection","get","list"]}
+    ] | sort_by(.resources[0]))) and
+  any(.[];
+    .kind == "Role" and .metadata.name == "session-archive-worker" and
+    .metadata.namespace == "kodex-runtime" and (.rules | length) == 0) and
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "session-archive-worker-default-deny" and
+    .metadata.namespace == "kodex-runtime" and
+    (.spec.policyTypes | sort) == (["Egress","Ingress"] | sort) and
+    ((.spec.ingress // []) | length) == 0 and
+    ((.spec.egress // []) | length) == 0) and
+  ([.[] | select(
+    .metadata.namespace == "kodex-system" and
+    ((.kind == "ServiceAccount" and .metadata.name == "session-archive-worker") or
+     (.kind == "Role" and .metadata.name == "session-archive-controller") or
+     (.kind == "RoleBinding" and .metadata.name == "session-archive-controller") or
+     (.kind == "NetworkPolicy" and .metadata.name == "session-archive-worker-object-storage")))]
+    | length) == 0
 ' >/dev/null || fail 'session-archive local controller or exact worker image is absent'
 yq -o=json -I=0 '.' "$output" | jq -s -e '
   any(.[];
     .kind == "NetworkPolicy" and
     .metadata.name == "session-archive-worker-object-storage" and
-    any(.spec.egress[];
-      any(.to[]?;
-        .podSelector.matchLabels["app.kubernetes.io/name"] == "seaweedfs") and
+    .metadata.namespace == "kodex-runtime" and
+    .spec.podSelector.matchLabels["session-archive.kodex.dev/managed"] == "true" and
+    (.spec.policyTypes | sort) == (["Egress","Ingress"] | sort) and
+    ((.spec.ingress // []) | length) == 0 and
+    (.spec.egress | length) == 2 and
+    ([.spec.egress[] | select(
+      (.to | length) == 1 and
+      .to[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kube-system" and
+      .to[0].podSelector.matchLabels["k8s-app"] == "kube-dns" and
+      ([.ports[] | [.protocol,.port]] | sort) == ([ ["TCP",53], ["UDP",53] ] | sort)
+    )] | length) == 1 and
+    ([.spec.egress[] | select(
+      (.to | length) == 1 and
+      .to[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-system" and
+      .to[0].podSelector.matchLabels["app.kubernetes.io/name"] == "seaweedfs" and
+      .to[0].podSelector.matchLabels["app.kubernetes.io/component"] == "object-storage" and
+      (.ports | length) == 1 and .ports[0].protocol == "TCP" and .ports[0].port == 8333
+    )] | length) == 1) and
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "seaweedfs-session-archive-runtime-ingress" and
+    .metadata.namespace == "kodex-system" and
+    any(.spec.ingress[];
+      any(.from[]?;
+        .namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-runtime" and
+        .podSelector.matchLabels["session-archive.kodex.dev/managed"] == "true") and
       any(.ports[]?; .protocol == "TCP" and .port == 8333))) and
   any(.[];
     .kind == "NetworkPolicy" and

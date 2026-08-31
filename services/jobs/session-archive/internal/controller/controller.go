@@ -25,17 +25,18 @@ import (
 
 const (
 	managedLabel           = "session-archive.kodex.dev/managed"
+	exactWorkerNamespace   = "kodex-runtime"
 	restoreInputAnnotation = "session-archive.kodex.dev/restore-input-digest"
 	sourcePVCUIDAnnotation = "session-archive.kodex.dev/source-pvc-uid"
 	defaultPollInterval    = 2 * time.Second
 )
 
 type Config struct {
-	Namespace, Environment, WorkerImage, WorkerServiceAccount, ObjectStorageSecret string
-	StorageClass, SessionPVCSize                                                   string
-	ObjectStorageEndpoint, ObjectStorageRegion, ObjectStorageBucket                string
-	ObjectStorageAllowInsecureLocal                                                bool
-	WorkerTimeout                                                                  time.Duration
+	WorkerNamespace, Environment, WorkerImage, WorkerServiceAccount, ObjectStorageSecret string
+	StorageClass, SessionPVCSize                                                         string
+	ObjectStorageEndpoint, ObjectStorageRegion, ObjectStorageBucket                      string
+	ObjectStorageAllowInsecureLocal                                                      bool
+	WorkerTimeout                                                                        time.Duration
 }
 
 type Controller struct {
@@ -60,7 +61,7 @@ func InCluster(config Config) (*Controller, error) {
 
 func New(client kubernetes.Interface, config Config) (*Controller, error) {
 	pvcRequest, quantityErr := resource.ParseQuantity(config.SessionPVCSize)
-	if client == nil || config.Namespace == "" || config.Environment == "" || config.WorkerImage == "" ||
+	if client == nil || config.WorkerNamespace != exactWorkerNamespace || config.Environment == "" || config.WorkerImage == "" ||
 		config.WorkerServiceAccount == "" || config.ObjectStorageSecret == "" || config.ObjectStorageEndpoint == "" ||
 		config.ObjectStorageRegion == "" || config.ObjectStorageBucket == "" || quantityErr != nil || pvcRequest.Sign() <= 0 ||
 		(config.StorageClass != "" && len(utilvalidation.IsDNS1123Subdomain(config.StorageClass)) != 0) ||
@@ -71,7 +72,7 @@ func New(client kubernetes.Interface, config Config) (*Controller, error) {
 }
 
 func (controller *Controller) Check(ctx context.Context) error {
-	_, err := controller.client.BatchV1().Jobs(controller.config.Namespace).List(ctx, metav1.ListOptions{Limit: 1})
+	_, err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).List(ctx, metav1.ListOptions{Limit: 1})
 	if err != nil {
 		return errors.New("Kubernetes session archive API is unavailable")
 	}
@@ -81,13 +82,13 @@ func (controller *Controller) Check(ctx context.Context) error {
 func (controller *Controller) CleanupStale(ctx context.Context) error {
 	selector := labels.Set{managedLabel: "true"}.AsSelector().String()
 	propagation := metav1.DeletePropagationForeground
-	if err := controller.client.BatchV1().Jobs(controller.config.Namespace).DeleteCollection(ctx,
+	if err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).DeleteCollection(ctx,
 		metav1.DeleteOptions{PropagationPolicy: &propagation}, metav1.ListOptions{LabelSelector: selector}); err != nil {
 		return errors.New("delete stale session archive jobs")
 	}
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		jobs, err := controller.client.BatchV1().Jobs(controller.config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+		jobs, err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
 		if err != nil {
 			return errors.New("observe stale session archive jobs")
 		}
@@ -103,7 +104,7 @@ func (controller *Controller) CleanupStale(ctx context.Context) error {
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
-	if err := controller.client.CoreV1().ConfigMaps(controller.config.Namespace).DeleteCollection(ctx,
+	if err := controller.client.CoreV1().ConfigMaps(controller.config.WorkerNamespace).DeleteCollection(ctx,
 		metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: selector}); err != nil {
 		return errors.New("delete stale session archive task inputs")
 	}
@@ -136,15 +137,15 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 		return model.Result{}, errors.New("encode session archive task input")
 	}
 	immutable := true
-	configMap := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.Namespace,
+	configMap := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.WorkerNamespace,
 		Labels: map[string]string{managedLabel: "true"}, Annotations: pvcBindingAnnotation(sourcePVCUID)},
 		Immutable: &immutable, Data: map[string]string{"task.json": string(raw)}}
-	if _, err := controller.client.CoreV1().ConfigMaps(controller.config.Namespace).Create(ctx, configMap, metav1.CreateOptions{}); err != nil {
+	if _, err := controller.client.CoreV1().ConfigMaps(controller.config.WorkerNamespace).Create(ctx, configMap, metav1.CreateOptions{}); err != nil {
 		return model.Result{}, errors.New("create session archive task input")
 	}
 	defer controller.cleanup(ctx, name)
 	job := controller.job(name, task, sourcePVCUID)
-	if _, err := controller.client.BatchV1().Jobs(controller.config.Namespace).Create(ctx, job, metav1.CreateOptions{}); err != nil {
+	if _, err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).Create(ctx, job, metav1.CreateOptions{}); err != nil {
 		return model.Result{}, errors.New("create session archive worker job")
 	}
 	ticker := time.NewTicker(controller.poll)
@@ -169,7 +170,7 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 					return *failure, nil
 				}
 			}
-			job, err := controller.client.BatchV1().Jobs(controller.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+			job, err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).Get(ctx, name, metav1.GetOptions{})
 			if err != nil {
 				return model.Result{}, errors.New("observe session archive worker job")
 			}
@@ -182,7 +183,7 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 }
 
 func (controller *Controller) bindSessionPVC(ctx context.Context, name string) (types.UID, *model.Result, error) {
-	pvc, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	pvc, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.WorkerNamespace).Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return "", pvcFailure(model.SafeErrorPVCMissing), nil
 	}
@@ -199,7 +200,7 @@ func (controller *Controller) bindSessionPVC(ctx context.Context, name string) (
 }
 
 func (controller *Controller) observeSessionPVC(ctx context.Context, name string, expectedUID types.UID) (*model.Result, error) {
-	pvc, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	pvc, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.WorkerNamespace).Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return pvcFailure(model.SafeErrorPVCMissing), nil
 	}
@@ -220,7 +221,7 @@ func pvcFailure(code string) *model.Result {
 }
 
 func (controller *Controller) ensureRestorePVC(ctx context.Context, task model.Task) error {
-	pvcs := controller.client.CoreV1().PersistentVolumeClaims(controller.config.Namespace)
+	pvcs := controller.client.CoreV1().PersistentVolumeClaims(controller.config.WorkerNamespace)
 	existing, err := pvcs.Get(ctx, task.PVCName, metav1.GetOptions{})
 	if err == nil {
 		return controller.validateRestorePVC(existing, task)
@@ -232,7 +233,7 @@ func (controller *Controller) ensureRestorePVC(ctx context.Context, task model.T
 	if controller.config.StorageClass != "" {
 		storageClassName = &controller.config.StorageClass
 	}
-	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: controller.config.Namespace,
+	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: controller.config.WorkerNamespace,
 		Annotations: map[string]string{restoreInputAnnotation: task.InputDigest}}, Spec: corev1.PersistentVolumeClaimSpec{
 		AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, StorageClassName: storageClassName,
 		Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: controller.pvcRequest}},
@@ -267,7 +268,7 @@ func (controller *Controller) deletePVC(ctx context.Context, task model.Task) (m
 	if task.Archive == nil {
 		return model.Result{}, errors.New("PVC deletion lacks an archive receipt")
 	}
-	pods, err := controller.client.CoreV1().Pods(controller.config.Namespace).List(ctx, metav1.ListOptions{Limit: 500})
+	pods, err := controller.client.CoreV1().Pods(controller.config.WorkerNamespace).List(ctx, metav1.ListOptions{Limit: 500})
 	if err != nil {
 		return model.Result{}, errors.New("list PVC consumers")
 	}
@@ -281,10 +282,10 @@ func (controller *Controller) deletePVC(ctx context.Context, task model.Task) (m
 			}
 		}
 	}
-	pvc, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.Namespace).Get(ctx, task.PVCName, metav1.GetOptions{})
+	pvc, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.WorkerNamespace).Get(ctx, task.PVCName, metav1.GetOptions{})
 	if err == nil {
 		uid := pvc.UID
-		if err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.Namespace).Delete(ctx, task.PVCName,
+		if err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.WorkerNamespace).Delete(ctx, task.PVCName,
 			metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil && !apierrors.IsNotFound(err) {
 			return model.Result{}, errors.New("delete archived session PVC")
 		}
@@ -292,7 +293,7 @@ func (controller *Controller) deletePVC(ctx context.Context, task model.Task) (m
 		return model.Result{}, errors.New("read archived session PVC")
 	}
 	for {
-		_, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.Namespace).Get(ctx, task.PVCName, metav1.GetOptions{})
+		_, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.WorkerNamespace).Get(ctx, task.PVCName, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			return model.Result{Success: true}, nil
 		}
@@ -308,7 +309,7 @@ func (controller *Controller) deletePVC(ctx context.Context, task model.Task) (m
 }
 
 func (controller *Controller) readResult(ctx context.Context, jobName string, succeeded bool) (model.Result, error) {
-	pods, err := controller.client.CoreV1().Pods(controller.config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: "job-name=" + jobName})
+	pods, err := controller.client.CoreV1().Pods(controller.config.WorkerNamespace).List(ctx, metav1.ListOptions{LabelSelector: "job-name=" + jobName})
 	if err != nil || len(pods.Items) != 1 {
 		return model.Result{}, errors.New("read session archive worker pod")
 	}
@@ -351,7 +352,7 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 			{Name: "SESSION_ARCHIVE_WORKER_TIMEOUT", Value: controller.config.WorkerTimeout.String()}},
 		VolumeMounts: mounts, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 		SecurityContext: restricted(10002)}
-	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.Namespace,
+	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.WorkerNamespace,
 		Labels: map[string]string{managedLabel: "true"}, Annotations: pvcBindingAnnotation(sourcePVCUID)},
 		Spec: batchv1.JobSpec{BackoffLimit: &zero, ActiveDeadlineSeconds: &deadline, TTLSecondsAfterFinished: &ttl,
 			Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{managedLabel: "true"}}, Spec: corev1.PodSpec{
@@ -372,8 +373,8 @@ func (controller *Controller) cleanup(ctx context.Context, name string) {
 	background, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	propagation := metav1.DeletePropagationBackground
-	_ = controller.client.BatchV1().Jobs(controller.config.Namespace).Delete(background, name, metav1.DeleteOptions{PropagationPolicy: &propagation})
-	_ = controller.client.CoreV1().ConfigMaps(controller.config.Namespace).Delete(background, name, metav1.DeleteOptions{})
+	_ = controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).Delete(background, name, metav1.DeleteOptions{PropagationPolicy: &propagation})
+	_ = controller.client.CoreV1().ConfigMaps(controller.config.WorkerNamespace).Delete(background, name, metav1.DeleteOptions{})
 }
 
 func workloadName(ref string, generation int64, attempt int32) string {

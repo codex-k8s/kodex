@@ -36,7 +36,7 @@ func TestValidObjectStorageBoundary(t *testing.T) {
 func TestConfigRejectsInsecureLocalOptInInProduction(t *testing.T) {
 	t.Parallel()
 	config := Config{
-		Environment: "production", Namespace: "kodex-system", InstanceID: "instance-1",
+		Environment: "production", WorkerNamespace: "kodex-runtime", InstanceID: "instance-1",
 		TechnicalListen: ":9090", ControlPlaneTarget: "control-plane:8443",
 		ControlPlaneTLSServerName: "control-plane.kodex-system.svc.cluster.local",
 		ControlPlaneCAFile:        "/tls/ca.pem", ControlPlaneCertificateFile: "/tls/tls.crt",
@@ -50,5 +50,30 @@ func TestConfigRejectsInsecureLocalOptInInProduction(t *testing.T) {
 	}
 	if err := config.validate(); err == nil {
 		t.Fatal("production configuration accepted insecure local opt-in")
+	}
+}
+
+func TestConfigRejectsWorkerNamespaceOutsideRuntimeBoundary(t *testing.T) {
+	t.Parallel()
+	config := validTestConfig()
+	config.WorkerNamespace = "kodex-system"
+	if err := config.validate(); err == nil {
+		t.Fatal("configuration accepted a worker namespace outside kodex-runtime")
+	}
+}
+
+func validTestConfig() Config {
+	return Config{
+		Environment: "staging", WorkerNamespace: exactWorkerNamespace, InstanceID: "instance-1",
+		TechnicalListen: ":9090", ControlPlaneTarget: "control-plane:8443",
+		ControlPlaneTLSServerName: "control-plane.kodex-system.svc.cluster.local",
+		ControlPlaneCAFile:        "/tls/ca.pem", ControlPlaneCertificateFile: "/tls/tls.crt",
+		ControlPlanePrivateKeyFile: "/tls/tls.key", ApplicationGrantFile: "/grant/application.jws",
+		WorkerImage: "registry.example.test/session-archive@sha256:digest", WorkerServiceAccount: "session-archive-worker",
+		SessionPVCSize: "20Gi", ObjectStorageSecret: "kodex-external-s3",
+		ObjectStorageEndpoint: "https://s3.example.test", ObjectStorageRegion: "us-east-1",
+		ObjectStorageBucket: "kodex-session-archives",
+		RPCDeadline:         5 * time.Second, PollInterval: time.Second,
+		ReadinessInterval: 10 * time.Second, WorkerTimeout: 8 * time.Minute,
 	}
 }

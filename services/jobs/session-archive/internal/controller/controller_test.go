@@ -32,11 +32,11 @@ func TestExecuteMissingSnapshotPVCIsIdempotentAndCreatesNoWorkerResources(t *tes
 			t.Fatalf("missing PVC result attempt %d = %#v", attempt+1, result)
 		}
 	}
-	jobs, err := client.BatchV1().Jobs(testConfig().Namespace).List(context.Background(), metav1.ListOptions{})
+	jobs, err := client.BatchV1().Jobs(testConfig().WorkerNamespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil || len(jobs.Items) != 0 {
 		t.Fatalf("missing PVC created worker jobs: jobs=%d err=%v", len(jobs.Items), err)
 	}
-	inputs, err := client.CoreV1().ConfigMaps(testConfig().Namespace).List(context.Background(), metav1.ListOptions{})
+	inputs, err := client.CoreV1().ConfigMaps(testConfig().WorkerNamespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil || len(inputs.Items) != 0 {
 		t.Fatalf("missing PVC created task inputs: configmaps=%d err=%v", len(inputs.Items), err)
 	}
@@ -46,7 +46,7 @@ func TestExecuteStopsPendingWorkerWhenSnapshotPVCDisappears(t *testing.T) {
 	t.Parallel()
 
 	task := testSnapshotTask()
-	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: testConfig().Namespace,
+	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: testConfig().WorkerNamespace,
 		UID: types.UID("source-pvc-uid")}}
 	client := fake.NewSimpleClientset(pvc)
 	controller, err := New(client, testConfig())
@@ -56,8 +56,21 @@ func TestExecuteStopsPendingWorkerWhenSnapshotPVCDisappears(t *testing.T) {
 	controller.poll = 5 * time.Millisecond
 	result := executeAsync(controller, task)
 	jobName := workloadName(task.TaskRef, task.ContentGeneration, task.Attempt)
-	waitForJob(t, client, jobName)
-	if err := client.CoreV1().PersistentVolumeClaims(testConfig().Namespace).Delete(context.Background(), task.PVCName, metav1.DeleteOptions{}); err != nil {
+	job := waitForJob(t, client, jobName)
+	if job.Namespace != exactWorkerNamespace {
+		t.Fatalf("created worker Job namespace = %q", job.Namespace)
+	}
+	input, err := client.CoreV1().ConfigMaps(exactWorkerNamespace).Get(context.Background(), jobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("read worker ConfigMap: %v", err)
+	}
+	if input.Namespace != exactWorkerNamespace {
+		t.Fatalf("created worker ConfigMap namespace = %q", input.Namespace)
+	}
+	if _, err := client.CoreV1().ConfigMaps("kodex-system").Get(context.Background(), jobName, metav1.GetOptions{}); err == nil {
+		t.Fatal("worker ConfigMap leaked into kodex-system")
+	}
+	if err := client.CoreV1().PersistentVolumeClaims(testConfig().WorkerNamespace).Delete(context.Background(), task.PVCName, metav1.DeleteOptions{}); err != nil {
 		t.Fatalf("delete source PVC: %v", err)
 	}
 	completed := waitForResult(t, result)
@@ -71,7 +84,7 @@ func TestExecuteRejectsSnapshotPVCReplacement(t *testing.T) {
 	t.Parallel()
 
 	task := testSnapshotTask()
-	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: testConfig().Namespace,
+	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: testConfig().WorkerNamespace,
 		UID: types.UID("source-pvc-uid")}}
 	client := fake.NewSimpleClientset(pvc)
 	controller, err := New(client, testConfig())
@@ -85,12 +98,12 @@ func TestExecuteRejectsSnapshotPVCReplacement(t *testing.T) {
 	if job.Annotations[sourcePVCUIDAnnotation] != "source-pvc-uid" {
 		t.Fatalf("job source PVC binding = %#v", job.Annotations)
 	}
-	if err := client.CoreV1().PersistentVolumeClaims(testConfig().Namespace).Delete(context.Background(), task.PVCName, metav1.DeleteOptions{}); err != nil {
+	if err := client.CoreV1().PersistentVolumeClaims(testConfig().WorkerNamespace).Delete(context.Background(), task.PVCName, metav1.DeleteOptions{}); err != nil {
 		t.Fatalf("delete original PVC: %v", err)
 	}
 	pvc.UID = types.UID("replacement-pvc-uid")
 	pvc.ResourceVersion = ""
-	if _, err := client.CoreV1().PersistentVolumeClaims(testConfig().Namespace).Create(context.Background(), pvc, metav1.CreateOptions{}); err != nil {
+	if _, err := client.CoreV1().PersistentVolumeClaims(testConfig().WorkerNamespace).Create(context.Background(), pvc, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("create replacement PVC: %v", err)
 	}
 	completed := waitForResult(t, result)
@@ -112,7 +125,7 @@ func TestEnsureRestorePVCCreatesBoundedCanonicalVolume(t *testing.T) {
 	if err := controller.ensureRestorePVC(context.Background(), task); err != nil {
 		t.Fatalf("ensure restore PVC: %v", err)
 	}
-	pvc, err := client.CoreV1().PersistentVolumeClaims("kodex-system").Get(context.Background(), task.PVCName, metav1.GetOptions{})
+	pvc, err := client.CoreV1().PersistentVolumeClaims("kodex-runtime").Get(context.Background(), task.PVCName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("read restore PVC: %v", err)
 	}
@@ -135,6 +148,9 @@ func TestWorkerJobUsesSessionVolumeGroupWithoutServiceAccountToken(t *testing.T)
 		t.Fatalf("create controller: %v", err)
 	}
 	job := controller.job("session-archive-test", model.Task{Kind: "SNAPSHOT", PVCName: "runtime-session-0123456789abcdef"}, "pvc-uid")
+	if job.Namespace != "kodex-runtime" {
+		t.Fatalf("worker namespace = %q", job.Namespace)
+	}
 	pod := job.Spec.Template.Spec
 	if pod.SecurityContext == nil || pod.SecurityContext.FSGroup == nil || *pod.SecurityContext.FSGroup != 29000 {
 		t.Fatalf("worker cannot read runner-owned session files: %#v", pod.SecurityContext)
@@ -145,6 +161,15 @@ func TestWorkerJobUsesSessionVolumeGroupWithoutServiceAccountToken(t *testing.T)
 	assertEnvironmentValue(t, pod.Containers[0].Env, "SESSION_ARCHIVE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL", "false")
 	if job.Annotations[sourcePVCUIDAnnotation] != "pvc-uid" {
 		t.Fatalf("worker job lost the exact source PVC binding: %#v", job.Annotations)
+	}
+}
+
+func TestNewRejectsWorkerNamespaceOutsideRuntimeBoundary(t *testing.T) {
+	t.Parallel()
+	config := testConfig()
+	config.WorkerNamespace = "kodex-system"
+	if _, err := New(fake.NewSimpleClientset(), config); err == nil {
+		t.Fatal("controller accepted a worker namespace outside kodex-runtime")
 	}
 }
 
@@ -179,7 +204,7 @@ func waitForJob(t *testing.T, client *fake.Clientset, name string) *batchv1.Job 
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
-		job, err := client.BatchV1().Jobs(testConfig().Namespace).Get(context.Background(), name, metav1.GetOptions{})
+		job, err := client.BatchV1().Jobs(testConfig().WorkerNamespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err == nil {
 			return job
 		}
@@ -202,10 +227,10 @@ func waitForResult(t *testing.T, result <-chan executionResult) executionResult 
 
 func assertWorkerResourcesRemoved(t *testing.T, client *fake.Clientset, name string) {
 	t.Helper()
-	if _, err := client.BatchV1().Jobs(testConfig().Namespace).Get(context.Background(), name, metav1.GetOptions{}); err == nil {
+	if _, err := client.BatchV1().Jobs(testConfig().WorkerNamespace).Get(context.Background(), name, metav1.GetOptions{}); err == nil {
 		t.Fatalf("worker job %s was not removed", name)
 	}
-	if _, err := client.CoreV1().ConfigMaps(testConfig().Namespace).Get(context.Background(), name, metav1.GetOptions{}); err == nil {
+	if _, err := client.CoreV1().ConfigMaps(testConfig().WorkerNamespace).Get(context.Background(), name, metav1.GetOptions{}); err == nil {
 		t.Fatalf("task input %s was not removed", name)
 	}
 }
@@ -216,7 +241,7 @@ func testSnapshotTask() model.Task {
 }
 
 func testConfig() Config {
-	return Config{Namespace: "kodex-system", Environment: "staging", WorkerImage: "example.invalid/session-archive@sha256:" + strings.Repeat("0", 64),
+	return Config{WorkerNamespace: "kodex-runtime", Environment: "staging", WorkerImage: "example.invalid/session-archive@sha256:" + strings.Repeat("0", 64),
 		WorkerServiceAccount: "session-archive-worker", SessionPVCSize: "20Gi", ObjectStorageSecret: "object-storage",
 		ObjectStorageEndpoint: "https://s3.example.invalid", ObjectStorageRegion: "us-east-1", ObjectStorageBucket: "archives",
 		WorkerTimeout: 8 * time.Minute}
