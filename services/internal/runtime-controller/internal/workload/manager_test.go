@@ -848,6 +848,16 @@ func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
 		t.Fatalf("EnsureWarm() error = %v", err)
 	}
 	if ready {
+		t.Fatal("deleted warm Pod cannot be ready")
+	}
+	if _, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("terminal warm Pod was not deleted before replacement: %v", err)
+	}
+	ready, err = manager.EnsureWarm(context.Background(), input, binding)
+	if err != nil {
+		t.Fatalf("second EnsureWarm() error = %v", err)
+	}
+	if ready {
 		t.Fatal("new warm Pod cannot be ready before Kubernetes observation")
 	}
 	pod, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{})
@@ -878,6 +888,16 @@ func TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime(t *testing.T) {
 	ready, err := manager.EnsureWarm(context.Background(), input, binding)
 	if err != nil {
 		t.Fatalf("EnsureWarm() error = %v", err)
+	}
+	if ready {
+		t.Fatal("deleted warm Pod cannot be ready")
+	}
+	if _, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("terminated warm Pod was not deleted before replacement: %v", err)
+	}
+	ready, err = manager.EnsureWarm(context.Background(), input, binding)
+	if err != nil {
+		t.Fatalf("second EnsureWarm() error = %v", err)
 	}
 	if ready {
 		t.Fatal("recreated warm Pod cannot be ready before Kubernetes observation")
@@ -916,6 +936,12 @@ func TestEnsureWarmRotatesTerminalTicketAndDeletesStaleWarmTickets(t *testing.T)
 	}
 	if _, err := manager.EnsureWarm(context.Background(), input, binding); err != nil {
 		t.Fatalf("EnsureWarm() error = %v", err)
+	}
+	if _, err := client.CoreV1().Secrets("kodex-runtime").Get(context.Background(), secretName, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("terminal warm ticket was not deleted before replacement: %v", err)
+	}
+	if _, err := manager.EnsureWarm(context.Background(), input, binding); err != nil {
+		t.Fatalf("second EnsureWarm() error = %v", err)
 	}
 	current, err := client.CoreV1().Secrets("kodex-runtime").Get(context.Background(), secretName, metav1.GetOptions{})
 	if err != nil {

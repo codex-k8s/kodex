@@ -922,7 +922,11 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 				return false, deleteErr
 			}
 		}
-		err = apierrors.NewNotFound(corev1.Resource("pods"), podName)
+		// Pod deletion is asynchronous. Recreating an immutable Secret with the
+		// same name while the old Pod still runs would make its mounted token
+		// differ from the callback verifier. A later reconciliation creates the
+		// fresh ticket and Pod only after Kubernetes reports the old Pod absent.
+		return false, nil
 	}
 	if apierrors.IsNotFound(err) {
 		if ticketErr := manager.removeConflictingWarmTicket(ctx, secretName, input, environmentSecrets, &providerBinding); ticketErr != nil {
