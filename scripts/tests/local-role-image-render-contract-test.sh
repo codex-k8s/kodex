@@ -35,6 +35,31 @@ for singleton_flag in --public-origin --grafana-origin --headlamp-origin; do
   flag_count=$(rg -o --fixed-strings -- "$singleton_flag" "$source_root/dev.sh" | wc -l)
   [[ "$flag_count" == 1 ]] || fail "dev.sh duplicates singleton Keycloak flag: $singleton_flag"
 done
+binding_cleanup_line=$(rg -n -F \
+  'kubectl delete validatingadmissionpolicybindings.admissionregistration.k8s.io' \
+  "$source_root/dev.sh" | cut -d: -f1)
+policy_cleanup_line=$(rg -n -F \
+  'kubectl delete validatingadmissionpolicies.admissionregistration.k8s.io' \
+  "$source_root/dev.sh" | cut -d: -f1)
+namespace_cleanup_line=$(rg -n -F \
+  'for namespace in kodex-runtime kodex-system identity kodex-trust; do' \
+  "$source_root/dev.sh" | cut -d: -f1)
+[[ "$binding_cleanup_line" -lt "$policy_cleanup_line" &&
+  "$policy_cleanup_line" -lt "$namespace_cleanup_line" ]] ||
+  fail 'local reset does not remove fail-closed admission guards before namespaces'
+for admission_resource in \
+  internal-rpc-authority-restore-anchor-forward-only \
+  internal-rpc-authority-restore-pitr-cluster-owner \
+  kodex-image-admission-controller-jobs \
+  kodex-image-admission-controller-workspaces \
+  runtime-execution-network-policy \
+  runtime-execution-rbac \
+  runtime-execution-service-account \
+  runtime-execution-ticket-exact-projection \
+  runtime-role-pod-exact-secret-projection; do
+  rg -F "$admission_resource" "$source_root/dev.sh" >/dev/null ||
+    fail "local reset omits admission resource: $admission_resource"
+done
 if rg -n 'GOSUMDB[=:][[:space:]]*off|GOSUMDB="?off' \
   "$source_root/tools/dev/run-go-hot-reload.sh" "$source_root/tools/dev/render-local.sh" >/dev/null; then
   fail 'local hot reload must not disable Go checksum database verification'

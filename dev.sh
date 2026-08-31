@@ -66,6 +66,21 @@ kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
 [[ "$context" != *prod* && "$context" != *production* ]] || fail 'production context is forbidden'
 
 if [[ "$command_name" == down ]]; then
+  local_admission_resources=(
+    internal-rpc-authority-restore-anchor-forward-only
+    internal-rpc-authority-restore-pitr-cluster-owner
+    kodex-image-admission-controller-jobs
+    kodex-image-admission-controller-workspaces
+    runtime-execution-network-policy
+    runtime-execution-rbac
+    runtime-execution-service-account
+    runtime-execution-ticket-exact-projection
+    runtime-role-pod-exact-secret-projection
+  )
+  kubectl delete validatingadmissionpolicybindings.admissionregistration.k8s.io \
+    "${local_admission_resources[@]}" --ignore-not-found --wait=true --timeout=2m >/dev/null
+  kubectl delete validatingadmissionpolicies.admissionregistration.k8s.io \
+    "${local_admission_resources[@]}" --ignore-not-found --wait=true --timeout=2m >/dev/null
   for namespace in kodex-runtime kodex-system identity kodex-trust; do
     kubectl get namespace "$namespace" >/dev/null 2>&1 || continue
     kubectl delete namespace "$namespace" --wait=false >/dev/null
