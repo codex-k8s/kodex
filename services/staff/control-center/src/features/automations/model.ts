@@ -139,9 +139,12 @@ export function verifyScheduleCommandReadback(
 
 export function verifyScheduleDeleteReadback(
   mutationResult: Schedule,
-  readback: Schedule | undefined,
+  readback: { kind: "found"; schedule: Schedule } | { kind: "not-found" },
 ): Schedule {
-  const result = verifyScheduleCommandReadback(mutationResult, readback);
+  const result =
+    readback.kind === "found"
+      ? verifyScheduleCommandReadback(mutationResult, readback.schedule)
+      : mutationResult;
   if (result.state !== "DELETED" || result.nextActions.includes("DELETE"))
     throw new AppProblem({
       status: 502,

@@ -155,6 +155,42 @@ class FakeXMLHttpRequest {
 }
 
 describe("loadArtifactPage", () => {
+  it("загружает нефильтрованную корзину одним серверным cursor-запросом", async () => {
+    const deleted = artifact("artifact_deleted", {
+      lifecycleState: "DELETED",
+      version: 2,
+    });
+    listArtifactsMock.mockResolvedValue({
+      data: { items: [deleted], nextPageToken: "trash-next" },
+      response: new Response(null, { status: 200 }),
+    });
+    const controller = new AbortController();
+
+    const page = await loadArtifactPage(
+      "project_sales",
+      {
+        cursor: "trash-before",
+        query: "  результат  ",
+        signal: controller.signal,
+      },
+      { allSources: true, lifecycleState: "DELETED" },
+    );
+
+    expect(listArtifactsMock).toHaveBeenCalledTimes(1);
+    expect(listArtifactsMock).toHaveBeenCalledWith({
+      path: { projectRef: "project_sales" },
+      query: {
+        lifecycleState: "DELETED",
+        pageSize: 40,
+        pageToken: "trash-before",
+        query: "результат",
+      },
+      signal: controller.signal,
+    });
+    expect(page.items[0]?.artifact).toEqual(deleted);
+    expect(page.nextCursor).toBe("trash-next");
+  });
+
   it("передаёт серверный поиск и cursor, затем сохраняет следующий cursor", async () => {
     listArtifactsMock.mockImplementation(
       ({ query }: { query: { sourceKind: Artifact["source"] } }) =>

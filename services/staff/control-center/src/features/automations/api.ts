@@ -17,7 +17,7 @@ import type {
   ScheduleRunOccurrencePage,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
-import { AppProblem, unwrap } from "@/shared/api/problem";
+import { AppProblem, asProblem, unwrap } from "@/shared/api/problem";
 
 import {
   verifyScheduleCommandReadback,
@@ -141,10 +141,14 @@ export async function removeSchedule(schedule: Schedule): Promise<Schedule> {
       }),
     schedule.version,
   );
-  return verifyScheduleDeleteReadback(
-    mutation.data,
-    await readSchedule(mutation.data.ref),
-  );
+  const readback = await readSchedule(mutation.data.ref)
+    .then((value) => ({ kind: "found" as const, schedule: value }))
+    .catch((error: unknown) => {
+      const problem = asProblem(error);
+      if (problem.kind === "not-found") return { kind: "not-found" as const };
+      throw problem;
+    });
+  return verifyScheduleDeleteReadback(mutation.data, readback);
 }
 
 export async function loadScheduleRevisionPage(

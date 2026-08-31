@@ -31,12 +31,17 @@ export interface ArtifactBulkReceipt {
   status: "SUCCEEDED" | "FAILED";
 }
 
-export interface ArtifactListFilters {
+interface ArtifactListBaseFilters {
   lifecycleState?: Artifact["lifecycleState"];
   scanState?: Artifact["scanState"];
-  sourceKinds: readonly Artifact["source"][];
   type?: "TEXT" | "DOCUMENT" | "IMAGE";
 }
+
+export type ArtifactListFilters = ArtifactListBaseFilters &
+  (
+    | { allSources: true; sourceKinds?: never }
+    | { allSources?: false; sourceKinds: readonly Artifact["source"][] }
+  );
 
 export interface ArtifactUploadRequest {
   signal: AbortSignal;
@@ -229,6 +234,23 @@ export async function loadArtifactPage(
   filters: ArtifactListFilters,
 ): Promise<AsyncEntityPage<ArtifactListItem>> {
   const query = request.query.trim();
+  if (filters.allSources) {
+    const result = await unwrap(
+      listArtifacts({
+        path: { projectRef },
+        query: {
+          lifecycleState: filters.lifecycleState ?? "ACTIVE",
+          pageSize: artifactPageSize,
+          ...(filters.type ? { type: filters.type } : {}),
+          ...(filters.scanState ? { scanState: filters.scanState } : {}),
+          ...(query ? { query } : {}),
+          ...(request.cursor ? { pageToken: request.cursor } : {}),
+        },
+        signal: request.signal,
+      }),
+    );
+    return artifactPage(result.data.items, result.data.nextPageToken ?? null);
+  }
   const sourceKinds = [...new Set(filters.sourceKinds)];
   if (sourceKinds.length === 0) return { items: [], nextCursor: null };
   const cursors = parseCursor(request.cursor, sourceKinds);
@@ -280,6 +302,13 @@ export async function loadArtifactPage(
         right.createdAt.localeCompare(left.createdAt) ||
         left.ref.localeCompare(right.ref),
     );
+  return artifactPage(artifacts, serializeCursor(nextSources));
+}
+
+function artifactPage(
+  artifacts: Artifact[],
+  nextCursor: string | null,
+): AsyncEntityPage<ArtifactListItem> {
   return {
     items: artifacts.map((artifact) => ({
       artifact,
@@ -287,7 +316,7 @@ export async function loadArtifactPage(
       id: artifact.ref,
       label: artifact.fileName,
     })),
-    nextCursor: serializeCursor(nextSources),
+    nextCursor,
   };
 }
 

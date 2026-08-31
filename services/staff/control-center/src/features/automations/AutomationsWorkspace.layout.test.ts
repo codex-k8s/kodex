@@ -43,6 +43,13 @@ describe("AutomationsWorkspace lifecycle contract", () => {
     expect(source).not.toContain("const schedules = ref<Schedule[]>([])");
   });
 
+  it("сохраняет выбранную запись после исключения из текущего фильтра", () => {
+    expect(source).toContain("[schedules, filteredSchedules]");
+    expect(source).toContain(
+      "allSchedules.some((schedule) => schedule.ref === selectedRef.value)",
+    );
+  });
+
   it("перечитывает authoritative schedule перед OCC lifecycle-командой", () => {
     expect(source).toContain("async function refreshExact");
     expect(source).toContain(

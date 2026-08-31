@@ -207,7 +207,10 @@ describe("automation API boundary", () => {
       nextActions: ["OPEN"],
     });
     mocks.delete.mockResolvedValue(response(deleted));
-    mocks.get.mockResolvedValue(response(deleted));
+    mocks.get.mockResolvedValue({
+      error: { code: "NOT_FOUND", status: 404 },
+      response: new Response(undefined, { status: 404 }),
+    });
 
     const result = await removeSchedule(schedule());
 

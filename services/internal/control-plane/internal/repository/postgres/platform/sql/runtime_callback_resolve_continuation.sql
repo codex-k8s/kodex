@@ -30,7 +30,7 @@ LEFT JOIN LATERAL (
 WHERE parent_node.organization_id = @organization_id::uuid
   AND parent_node.id = @parent_node_id::uuid
   AND parent_node.state = 'SUCCEEDED'
-  AND root.state = 'RUNNING'
+  AND root.state IN ('RUNNING', 'WAITING_HUMAN')
   AND (
       EXISTS (
       SELECT 1

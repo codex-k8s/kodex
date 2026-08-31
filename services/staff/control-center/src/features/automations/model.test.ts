@@ -142,14 +142,24 @@ describe("automations model", () => {
       version: 5,
       nextActions: ["OPEN"],
     });
-    expect(verifyScheduleDeleteReadback(deleted, deleted).state).toBe(
-      "DELETED",
-    );
+    expect(
+      verifyScheduleDeleteReadback(deleted, {
+        kind: "found",
+        schedule: deleted,
+      }).state,
+    ).toBe("DELETED");
+    expect(
+      verifyScheduleDeleteReadback(deleted, { kind: "not-found" }).state,
+    ).toBe("DELETED");
     expect(() =>
-      verifyScheduleDeleteReadback(
-        deleted,
-        schedule({ state: "ARCHIVED", version: 5, nextActions: ["OPEN"] }),
-      ),
+      verifyScheduleDeleteReadback(deleted, {
+        kind: "found",
+        schedule: schedule({
+          state: "ARCHIVED",
+          version: 5,
+          nextActions: ["OPEN"],
+        }),
+      }),
     ).toThrow(AppProblem);
   });
 

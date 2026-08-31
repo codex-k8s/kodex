@@ -257,10 +257,10 @@ watch(search, () => {
 });
 
 watch(
-  filteredSchedules,
-  (values) => {
-    if (!values.some((schedule) => schedule.ref === selectedRef.value))
-      selectedRef.value = values[0]?.ref ?? "";
+  [schedules, filteredSchedules],
+  ([allSchedules, visibleSchedules]) => {
+    if (!allSchedules.some((schedule) => schedule.ref === selectedRef.value))
+      selectedRef.value = visibleSchedules[0]?.ref ?? "";
   },
   { immediate: true },
 );

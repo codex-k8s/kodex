@@ -127,7 +127,11 @@ const collection = useAsyncEntityCollection(
   (request) =>
     loadArtifactPage(props.projectRef, request, {
       lifecycleState: trashMode.value ? "DELETED" : "ACTIVE",
-      sourceKinds: artifactSourceKinds(collectionTab.value, source.value),
+      ...(trashMode.value && source.value === "ALL"
+        ? { allSources: true as const }
+        : {
+            sourceKinds: artifactSourceKinds(collectionTab.value, source.value),
+          }),
       ...(kind.value === "ALL" ? {} : { type: kind.value }),
       ...(scanState.value === "ALL" ? {} : { scanState: scanState.value }),
     }),
@@ -843,8 +847,8 @@ async function loadEntireTrash(): Promise<Artifact[]> {
       props.projectRef,
       { cursor, query: "", signal: controller.signal },
       {
+        allSources: true,
         lifecycleState: "DELETED",
-        sourceKinds: artifactSourceKinds("TRASH", "ALL"),
       },
     );
     artifacts.push(...page.items.map((item) => item.artifact));

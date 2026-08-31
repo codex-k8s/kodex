@@ -977,12 +977,25 @@ test.describe("web-only fresh installation", () => {
       page,
       `/projects/${projectRef}/agents/${coordinatorRef}`,
     );
-    const runtimeResponse = page.waitForResponse(
-      (response) =>
-        response.request().method() === "GET" &&
-        new URL(response.url()).pathname ===
-          `/api/v1/agents/${coordinatorRef}/runtime-configuration`,
-    );
+    const runtimePath = `/api/v1/agents/${coordinatorRef}/runtime-configuration`;
+    const runtimeResponse = Promise.race([
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === "GET" &&
+          new URL(response.url()).pathname === runtimePath,
+      ),
+      page
+        .waitForEvent("requestfailed", {
+          predicate: (request) =>
+            request.method() === "GET" &&
+            new URL(request.url()).pathname === runtimePath,
+        })
+        .then((request) => {
+          throw new Error(
+            `Runtime request failed: ${request.failure()?.errorText ?? "unknown"}`,
+          );
+        }),
+    ]);
     await page.getByRole("tab", { name: "Runtime", exact: true }).click();
     expect((await runtimeResponse).status()).toBe(200);
     const runtimePanel = page.locator("#agent-panel-runtime");

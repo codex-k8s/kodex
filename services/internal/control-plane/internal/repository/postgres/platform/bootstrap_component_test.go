@@ -2846,7 +2846,8 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 		Payload:  command.ScheduleInput{Ref: archiveCandidate.Schedule.Ref},
 	}
 	archived, err := service.Execute(ctx, archiveCommand)
-	if err != nil || archived.Schedule == nil || archived.Schedule.State != "ARCHIVED" || archived.Schedule.Enabled || archived.Schedule.NextRunAt != nil || !reflect.DeepEqual(archived.Schedule.NextActions, []string{"OPEN", "DELETE"}) {
+	if err != nil || archived.Schedule == nil || archived.Schedule.State != "ARCHIVED" || archived.Schedule.Enabled || archived.Schedule.NextRunAt != nil || !reflect.DeepEqual(archived.Schedule.NextActions, []string{"OPEN", "DELETE"}) ||
+		!reflect.DeepEqual(archived.Schedule.CurrentRevision, archiveCandidate.Schedule.CurrentRevision) {
 		t.Fatalf("archive schedule: schedule=%#v err=%v", archived.Schedule, err)
 	}
 	replayedArchive, err := service.Execute(ctx, archiveCommand)
@@ -2854,7 +2855,8 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 		t.Fatalf("replay schedule archive: schedule=%#v err=%v", replayedArchive.Schedule, err)
 	}
 	archivedDetail, err := service.GetSchedule(ctx, owner, archiveCandidate.Schedule.Ref)
-	if err != nil || archivedDetail.State != "ARCHIVED" || archivedDetail.Target.Ref != agent.Ref || archivedDetail.Input["task"] != "Prepare an archive lifecycle summary." {
+	if err != nil || archivedDetail.State != "ARCHIVED" || archivedDetail.Target.Ref != agent.Ref || archivedDetail.Input["task"] != "Prepare an archive lifecycle summary." ||
+		!reflect.DeepEqual(archivedDetail.CurrentRevision, archived.Schedule.CurrentRevision) {
 		t.Fatalf("read archived schedule history: schedule=%#v err=%v", archivedDetail, err)
 	}
 	var lifecycleState string
@@ -2904,6 +2906,7 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 		!reflect.DeepEqual(deleted.Schedule.Input, archived.Schedule.Input) ||
 		deleted.Schedule.SessionPolicy != archived.Schedule.SessionPolicy ||
 		deleted.Schedule.NotificationPolicy != archived.Schedule.NotificationPolicy ||
+		!reflect.DeepEqual(deleted.Schedule.CurrentRevision, archived.Schedule.CurrentRevision) ||
 		deleted.Schedule.CreatedAt != archived.Schedule.CreatedAt || deleted.Schedule.UpdatedAt.Before(archived.Schedule.UpdatedAt) ||
 		deleted.Schedule.NextRunAt != nil || len(deleted.Schedule.NextActions) != 0 {
 		t.Fatalf("delete schedule terminal snapshot: schedule=%#v err=%v", deleted.Schedule, err)
@@ -3540,32 +3543,75 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("claim delegated children: claims=%d err=%v", len(claimedChildren.RuntimeItems), err)
 	}
 	childSessions := map[string]struct{}{}
+	var regularChildLease, gatedChildLease map[string]any
 	for _, lease := range claimedChildren.RuntimeItems {
 		childSession := stringMap(lease, "sessionRef")
 		if childSession == "" || childSession == stringMap(coordinatorLease, "sessionRef") {
 			t.Fatalf("child execution reused the parent FIFO session: child=%q parent=%q", childSession, stringMap(coordinatorLease, "sessionRef"))
 		}
 		childSessions[childSession] = struct{}{}
+		switch stringMap(lease, "agentRef") {
+		case firstChild.Ref:
+			regularChildLease = lease
+		case secondChild.Ref:
+			gatedChildLease = lease
+		}
 	}
-	if len(childSessions) != 2 {
-		t.Fatalf("parallel children did not receive distinct sessions: %#v", childSessions)
+	if len(childSessions) != 2 || regularChildLease == nil || gatedChildLease == nil {
+		t.Fatalf("parallel children did not receive distinct attributable sessions: sessions=%#v claims=%#v", childSessions, claimedChildren.RuntimeItems)
 	}
 	coordinatorCompleted := completeClaimedExecution(t, ctx, service, worker, coordinatorLease, "delegation-coordinator", false)
 	if coordinatorCompleted.Run == nil || coordinatorCompleted.Run.State != "RUNNING" || coordinatorCompleted.Graph == nil {
 		t.Fatalf("coordinator completion before callbacks changed the run incorrectly: run=%#v graph=%#v", coordinatorCompleted.Run, coordinatorCompleted.Graph)
 	}
-	for index, lease := range claimedChildren.RuntimeItems {
-		child := completeClaimedExecution(t, ctx, service, worker, lease, "delegation-child-"+leftPad(index+1, 2), false)
-		if child.Run == nil || child.Run.Usage != turnUsageFixture() {
-			t.Fatalf("child completion %d usage = %#v", index+1, child.Run)
-		}
+	gatedChild := completeClaimedExecution(t, ctx, service, worker, gatedChildLease, "delegation-child-gated", false)
+	if gatedChild.Run == nil || gatedChild.Run.State != "SUCCEEDED" || len(gatedChild.Run.GateRefs) != 1 || gatedChild.Run.Usage != turnUsageFixture() {
+		t.Fatalf("gated child completion did not open the owner gate: %#v", gatedChild.Run)
+	}
+	gatedRoot, err := service.GetRun(ctx, owner, launched.Run.Ref)
+	if err != nil || gatedRoot.State != "WAITING_HUMAN" || len(gatedRoot.GateRefs) != 1 {
+		t.Fatalf("gated child completion did not block the root run: run=%#v err=%v", gatedRoot, err)
+	}
+	regularChild := completeClaimedExecution(t, ctx, service, worker, regularChildLease, "delegation-child-regular", false)
+	if regularChild.Run == nil || regularChild.Run.Usage != turnUsageFixture() {
+		t.Fatalf("regular child completion usage = %#v", regularChild.Run)
 	}
 	waitingForOwner, err := service.GetRun(ctx, owner, launched.Run.Ref)
 	if err != nil || waitingForOwner.State != "WAITING_HUMAN" || len(waitingForOwner.GateRefs) != 1 {
 		t.Fatalf("human-gated delegated step did not open exactly one owner gate: run=%#v err=%v", waitingForOwner, err)
 	}
-	for index, lease := range claimedChildren.RuntimeItems {
-		replayed := completeClaimedExecution(t, ctx, service, worker, lease, "delegation-child-"+leftPad(index+1, 2), false)
+	if regularChild.Graph == nil {
+		t.Fatal("regular child completion did not return the authoritative graph")
+	}
+	preApprovalContinuationEdges := 0
+	preApprovalContinuationState := ""
+	for _, edge := range regularChild.Graph.Edges {
+		if edge.Type != "CONTINUES" {
+			continue
+		}
+		preApprovalContinuationEdges++
+		for _, node := range regularChild.Graph.Nodes {
+			if node.Ref == edge.TargetNodeRef {
+				preApprovalContinuationState = node.State
+			}
+		}
+	}
+	if preApprovalContinuationEdges != 1 || preApprovalContinuationState != "QUEUED" {
+		t.Fatalf("callback continuation was not queued behind the owner gate: edges=%#v nodes=%#v", regularChild.Graph.Edges, regularChild.Graph.Nodes)
+	}
+	blockedClaim, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-continuation-blocked-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
+	if err != nil || len(blockedClaim.RuntimeItems) != 0 {
+		t.Fatalf("continuation became claimable before owner approval: claims=%#v err=%v", blockedClaim.RuntimeItems, err)
+	}
+	for index, item := range []struct {
+		lease map[string]any
+		key   string
+	}{
+		{lease: gatedChildLease, key: "delegation-child-gated"},
+		{lease: regularChildLease, key: "delegation-child-regular"},
+	} {
+		replayed := completeClaimedExecution(t, ctx, service, worker, item.lease, item.key, false)
 		if replayed.Run == nil || replayed.Graph == nil || replayed.Run.Usage != turnUsageFixture() {
 			t.Fatalf("replay child completion %d lost authoritative result: %#v", index+1, replayed)
 		}

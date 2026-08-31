@@ -146,6 +146,7 @@ import {
   type RunEventOutcome,
 } from "@/features/platform/run-reducer";
 import { instructionCommandInput } from "@/features/platform/instruction-command";
+import { runBoundedPlatformReload } from "@/features/platform/platform-reload";
 import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 
 type QueryKey =
@@ -240,6 +241,7 @@ export const usePlatformStore = defineStore("platform", () => {
   const problems = reactive<Partial<Record<QueryKey, AppProblem>>>({});
   const generation = new Map<QueryKey, number>();
   const consumedAuditPageTokens = new Set<string>();
+  let platformReloadPromise: Promise<void> | undefined;
 
   async function query<T>(
     key: QueryKey,
@@ -1765,41 +1767,51 @@ export const usePlatformStore = defineStore("platform", () => {
       default:
         throw new Error("Unknown platform invalidation kind");
     }
-    await Promise.all(operations.map((operation) => operation.run()));
+    await runBoundedPlatformReload(operations);
     if (operations.some((operation) => problems[operation.key]))
       throw new Error("Authoritative platform reload failed");
   }
 
-  async function reloadPlatformState(): Promise<void> {
-    const projectRef = selectedProjectRef();
-    const operations: Array<{ key: QueryKey; run: () => Promise<void> }> = [
-      { key: "bootstrap", run: loadBootstrap },
-      { key: "projects", run: loadProjects },
-      { key: "overview", run: () => loadOverview(projectRef) },
-      { key: "runs", run: () => loadRuns(projectRef) },
-      { key: "gates", run: () => loadGates(projectRef) },
-      { key: "integrations", run: loadIntegrations },
-      { key: "assistant", run: loadAssistant },
-    ];
-    if (projectRef) {
-      operations.push(
-        { key: "project", run: () => loadProject(projectRef) },
-        { key: "agents", run: () => loadAgents(projectRef) },
-        { key: "workflows", run: () => loadWorkflows(projectRef) },
-        { key: "artifacts", run: () => loadArtifacts(projectRef) },
-        { key: "schedules", run: () => loadSchedules(projectRef) },
-        {
-          key: "roleImages",
-          run: () => loadRoleImageRecipes(projectRef),
-        },
-      );
-    }
-    await Promise.all(operations.map((operation) => operation.run()));
-    if (operations.some((operation) => problems[operation.key]))
-      throw new Error("Authoritative platform resync failed");
+  function reloadPlatformState(): Promise<void> {
+    if (platformReloadPromise) return platformReloadPromise;
+    const reload = async (): Promise<void> => {
+      const projectRef = selectedProjectRef();
+      const operations: Array<{ key: QueryKey; run: () => Promise<void> }> = [
+        { key: "bootstrap", run: loadBootstrap },
+        { key: "projects", run: loadProjects },
+        { key: "overview", run: () => loadOverview(projectRef) },
+        { key: "runs", run: () => loadRuns(projectRef) },
+        { key: "gates", run: () => loadGates(projectRef) },
+        { key: "integrations", run: loadIntegrations },
+        { key: "assistant", run: loadAssistant },
+      ];
+      if (projectRef) {
+        operations.push(
+          { key: "project", run: () => loadProject(projectRef) },
+          { key: "agents", run: () => loadAgents(projectRef) },
+          { key: "workflows", run: () => loadWorkflows(projectRef) },
+          { key: "artifacts", run: () => loadArtifacts(projectRef) },
+          { key: "schedules", run: () => loadSchedules(projectRef) },
+          {
+            key: "roleImages",
+            run: () => loadRoleImageRecipes(projectRef),
+          },
+        );
+      }
+      await runBoundedPlatformReload(operations);
+      if (operations.some((operation) => problems[operation.key]))
+        throw new Error("Authoritative platform resync failed");
+    };
+    const current = reload();
+    const tracked = current.finally(() => {
+      if (platformReloadPromise === tracked) platformReloadPromise = undefined;
+    });
+    platformReloadPromise = tracked;
+    return tracked;
   }
 
   function clearOwnerState(): void {
+    platformReloadPromise = undefined;
     generation.clear();
     for (const target of [
       runtimes,
