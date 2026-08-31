@@ -394,6 +394,16 @@ test.describe("web-only fresh installation", () => {
   test("первый вход, горячий помощник и первый Проект", async ({ page }) => {
     await gotoWithRetry(page, "/onboarding");
     await expectPageHeading(page, "Настроим Kodex");
+    const assistantPreflight = await page.evaluate(async () => {
+      const response = await fetch("/api/v1/system-assistant");
+      if (!response.ok) {
+        return { ref: "", status: response.status };
+      }
+      const assistant = (await response.json()) as { ref?: string };
+      return { ref: assistant.ref ?? "", status: response.status };
+    });
+    expect(assistantPreflight.status).toBe(200);
+    expect(assistantPreflight.ref).toMatch(/^agt_[A-Za-z0-9_-]+$/);
     await expect(
       page.getByRole("heading", { name: "Системный помощник готов" }),
     ).toBeVisible();

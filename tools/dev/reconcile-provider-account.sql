@@ -7,12 +7,16 @@ INSERT INTO control_plane.provider_accounts
      external_account_masked, state, enabled, max_concurrent_executions, created_by)
 SELECT :'account_ref', organization.id, 'openai-codex', :'stable_key',
        :'account_name', '', 'AUTHORIZED', true, :'max_concurrent_executions'::integer, subject.id
-FROM control_plane.organizations organization
+FROM control_plane.owner_claim_contracts installation_owner
+JOIN control_plane.organizations organization
+  ON organization.id = installation_owner.organization_id
 JOIN control_plane.subjects subject
   ON subject.organization_id = organization.id
  AND subject.ref = 'sys_platform'
-ORDER BY organization.created_at
-LIMIT 1
+ AND subject.issuer = 'kodex-system'
+ AND subject.kind = 'SERVICE'
+ AND subject.active
+WHERE installation_owner.stable_key = 'installation-owner'
 ON CONFLICT (ref) DO UPDATE
 SET name = EXCLUDED.name,
     state = 'AUTHORIZED',
@@ -53,10 +57,9 @@ WHERE account.ref = :'account_ref'
   AND account.definition_key = 'openai-codex'
   AND account.stable_key = :'stable_key'
   AND account.organization_id = (
-      SELECT organization.id
-      FROM control_plane.organizations organization
-      ORDER BY organization.created_at
-      LIMIT 1
+      SELECT installation_owner.organization_id
+      FROM control_plane.owner_claim_contracts installation_owner
+      WHERE installation_owner.stable_key = 'installation-owner'
   )
   AND NOT EXISTS (
       SELECT 1
@@ -79,10 +82,9 @@ WHERE account.ref = :'account_ref'
   AND account.definition_key = 'openai-codex'
   AND account.stable_key = :'stable_key'
   AND account.organization_id = (
-      SELECT organization.id
-      FROM control_plane.organizations organization
-      ORDER BY organization.created_at
-      LIMIT 1
+      SELECT installation_owner.organization_id
+      FROM control_plane.owner_claim_contracts installation_owner
+      WHERE installation_owner.stable_key = 'installation-owner'
   )
   AND revision.provider_account_id = account.id
   AND revision.secret_uid = :'secret_uid'::uuid
@@ -101,10 +103,9 @@ WHERE account.ref = :'account_ref'
   AND account.definition_key = 'openai-codex'
   AND account.stable_key = :'stable_key'
   AND account.organization_id = (
-      SELECT organization.id
-      FROM control_plane.organizations organization
-      ORDER BY organization.created_at
-      LIMIT 1
+      SELECT installation_owner.organization_id
+      FROM control_plane.owner_claim_contracts installation_owner
+      WHERE installation_owner.stable_key = 'installation-owner'
   );
 
 COMMIT;

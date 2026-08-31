@@ -5,6 +5,10 @@ import _ "embed"
 var (
 	//go:embed sql/workers_reconcilewarmruntime_lock_session_binding.sql
 	queryWorkersReconcilewarmruntimeLockSessionBinding string
+	//go:embed sql/workers_reconcilewarmruntime_select_system_provider_policy.sql
+	queryWorkersReconcilewarmruntimeSelectSystemProviderPolicy string
+	//go:embed sql/workers_reconcilewarmruntime_publish_system_provider_policy.sql
+	queryWorkersReconcilewarmruntimePublishSystemProviderPolicy string
 	//go:embed sql/workers_reconcilewarmruntime_close_session.sql
 	queryWorkersReconcilewarmruntimeCloseSession string
 	//go:embed sql/workers_reconcilewarmruntime_insert_session.sql

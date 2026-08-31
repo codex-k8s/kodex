@@ -78,6 +78,20 @@ DEFAULT_RUNTIME_NAME:
   other: Default runtime
 DEFAULT_PROVIDER_ACCOUNT_NAME:
   other: Default model account
+PROVIDER_ACCOUNT_CREATED:
+  other: Model account created
+PROVIDER_ACCOUNT_UPDATED:
+  other: Model account updated
+PROVIDER_DEVICE_AUTHORIZATION_STARTED:
+  other: Model account device authorization started
+PROVIDER_ACCOUNT_AUTHORIZED:
+  other: Model account authorized
+PROVIDER_AUTHORIZATION_FAILED:
+  other: Model account authorization failed
+PROVIDER_ACCOUNT_REVOKED:
+  other: Model account access revoked
+PROVIDER_CREDENTIAL_REFRESH_COMMITTED:
+  other: Refreshed model credentials activated
 INSTALLATION_OWNER_NAME:
   other: Installation owner
 OIDC_USER_NAME:
@@ -108,6 +122,10 @@ ROLE_IMAGE_RECIPE_CHANGED:
   other: The role environment configuration was updated
 ROLE_IMAGE_BUILD_COMPLETED:
   other: The role environment image was built
+ROLE_IMAGE_PROMOTION_REQUESTED:
+  other: Role environment image promotion requested
+ROLE_IMAGE_PROMOTED:
+  other: Role environment image promoted
 ONBOARDING_COMPLETED:
   other: Initial setup is complete
 PROJECT_CREATED:
@@ -148,6 +166,8 @@ SCHEDULE_UPDATED:
   other: Schedule updated
 SCHEDULE_ARCHIVED:
   other: Schedule archived
+SCHEDULE_DELETED:
+  other: Schedule deleted
 SCHEDULED_RUN_TASK:
   other: Scheduled run
 SCHEDULE_OCCURRENCE_MATERIALIZED:
@@ -158,6 +178,8 @@ INTEGRATION_CONNECTION_CREATED:
   other: Integration connection created
 INTEGRATION_CONNECTION_UPDATED:
   other: Integration connection updated
+INTEGRATION_CONNECTION_DELETED:
+  other: Integration connection deleted
 INTEGRATION_GRANT_UPDATED:
   other: Integration permission updated
 INTEGRATION_CONNECTION_TEST_COMPLETED:
@@ -226,6 +248,10 @@ SYSTEM_ASSISTANT_HEARTBEAT_RECORDED:
   other: System assistant runtime heartbeat recorded
 SYSTEM_ASSISTANT_CORE_PROMPT_UPDATED:
   other: System assistant core instructions upgraded
+SYSTEM_ASSISTANT_PROVIDER_POLICY_UPDATED:
+  other: System assistant provider account pool updated
+SYSTEM_ASSISTANT_RUNTIME_ENVIRONMENT_UPDATED:
+  other: System assistant runtime environment updated
 SYSTEM_ASSISTANT_LABEL:
   other: System · non-removable
 ARTIFACT_AVAILABLE:
@@ -416,6 +442,12 @@ RUNTIME_ENVIRONMENT_CREATED:
   other: Runtime environment created
 RUNTIME_ENVIRONMENT_PUBLISHED:
   other: Runtime environment published
+RUNTIME_ENVIRONMENT_ENABLED:
+  other: Runtime environment enabled
+RUNTIME_ENVIRONMENT_DISABLED:
+  other: Runtime environment disabled
+RUNTIME_ENVIRONMENT_DELETED:
+  other: Runtime environment deleted
 ACCESS_ROLE_CHANGED:
   other: Access role updated
 ACCESS_BINDING_CHANGED:

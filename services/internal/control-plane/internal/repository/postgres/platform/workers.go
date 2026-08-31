@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -28,6 +29,9 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		return entity.SystemAssistant{}, nil, false, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := repository.reconcileSystemAssistantProviderPolicy(ctx, tx, scope); err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
 	sessionBinding, err := repository.lockWarmSessionBinding(ctx, tx, scope.organizationID)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, err
@@ -206,6 +210,119 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
 	return assistant, snapshot, required, nil
+}
+
+type systemAssistantProviderPolicySnapshot struct {
+	agentID, agentRef, configID, runtimeProfileRef, provider, model, mode string
+	configVersion                                                         int64
+	currentCandidates, desiredCandidates                                  []entity.ProviderAccountCandidate
+}
+
+func (repository *Repository) reconcileSystemAssistantProviderPolicy(
+	ctx context.Context,
+	tx pgx.Tx,
+	current scope,
+) (bool, error) {
+	var snapshot systemAssistantProviderPolicySnapshot
+	var rawCurrent, rawDesired []byte
+	err := tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSelectSystemProviderPolicy, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID,
+	}).Scan(
+		&snapshot.agentID,
+		&snapshot.agentRef,
+		&snapshot.configID,
+		&snapshot.configVersion,
+		&snapshot.runtimeProfileRef,
+		&snapshot.provider,
+		&snapshot.model,
+		&snapshot.mode,
+		&rawCurrent,
+		&rawDesired,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, errs.ErrConflict
+	}
+	if err != nil {
+		return false, errs.ErrUnavailable
+	}
+	if json.Unmarshal(rawCurrent, &snapshot.currentCandidates) != nil ||
+		json.Unmarshal(rawDesired, &snapshot.desiredCandidates) != nil ||
+		!validProviderPolicy(snapshot.mode, snapshot.currentCandidates) {
+		return false, errs.ErrConflict
+	}
+	if len(snapshot.desiredCandidates) == 0 {
+		return false, nil
+	}
+	desiredMode := "LEAST_USED"
+	if len(snapshot.desiredCandidates) == 1 {
+		desiredMode = "FIXED"
+	}
+	if !validProviderPolicy(desiredMode, snapshot.desiredCandidates) {
+		return false, errs.ErrConflict
+	}
+	sort.Slice(snapshot.currentCandidates, func(left, right int) bool {
+		return snapshot.currentCandidates[left].AccountRef < snapshot.currentCandidates[right].AccountRef
+	})
+	sort.Slice(snapshot.desiredCandidates, func(left, right int) bool {
+		return snapshot.desiredCandidates[left].AccountRef < snapshot.desiredCandidates[right].AccountRef
+	})
+	if snapshot.mode == desiredMode && providerCandidatesEqual(snapshot.currentCandidates, snapshot.desiredCandidates) {
+		return false, nil
+	}
+	rawDesired, err = json.Marshal(snapshot.desiredCandidates)
+	if err != nil {
+		return false, errs.ErrConflict
+	}
+	policyRef, err := newRef("ppol")
+	if err != nil {
+		return false, err
+	}
+	configRef, err := newRef("rconf")
+	if err != nil {
+		return false, err
+	}
+	auditRef, err := newRef("aud")
+	if err != nil {
+		return false, err
+	}
+	version := snapshot.configVersion + 1
+	policyDigest := digestBytes([]byte(desiredMode), rawDesired)
+	configDigest := digestBytes(
+		[]byte(snapshot.runtimeProfileRef),
+		[]byte(snapshot.provider),
+		[]byte(snapshot.model),
+		[]byte(policyRef),
+		[]byte(strconvFormat(version)),
+		[]byte(policyDigest),
+	)
+	var publishedRef string
+	err = tx.QueryRow(ctx, queryWorkersReconcilewarmruntimePublishSystemProviderPolicy, pgx.StrictNamedArgs{
+		"policy_ref": policyRef, "organization_id": current.organizationID, "agent_id": snapshot.agentID,
+		"version_number": version, "policy_mode": desiredMode, "account_candidates": rawDesired,
+		"policy_digest": policyDigest, "created_by": current.actorID, "config_ref": configRef,
+		"runtime_profile_ref": snapshot.runtimeProfileRef, "provider": snapshot.provider, "model": snapshot.model,
+		"config_digest": configDigest, "current_config_id": snapshot.configID,
+		"next_runtime_revision": "system-assistant-runtime-" + configDigest, "audit_ref": auditRef,
+	}).Scan(&publishedRef)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, errs.ErrConflict
+	}
+	if err != nil || publishedRef != configRef {
+		return false, errs.ErrUnavailable
+	}
+	return true, nil
+}
+
+func providerCandidatesEqual(left, right []entity.ProviderAccountCandidate) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 type warmSessionBinding struct {

@@ -6,12 +6,10 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"reflect"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -28,7 +26,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -307,6 +304,16 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	if err != nil {
 		t.Fatalf("read system assistant runtime configuration: %v", err)
 	}
+	initialConfigurationVersion := configuration.Configuration.Version
+	var initialConfigurationCount int64
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)::bigint
+		FROM control_plane.agent_runtime_config_versions config
+		JOIN control_plane.agents agent ON agent.id = config.agent_id
+		WHERE agent.ref = $1
+	`, assistant.Ref).Scan(&initialConfigurationCount); err != nil {
+		t.Fatalf("count system assistant runtime configuration revisions: %v", err)
+	}
 	var currentSessionID, currentSessionRef, currentAccountID, currentAccountRef, fallbackAccountID string
 	var configuredProviderCredential ProviderCredentialConfig
 	if err := pool.QueryRow(ctx, `
@@ -339,8 +346,6 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	if err := repository.ConfigureProviderCredential(configuredProviderCredential); err != nil {
 		t.Fatalf("configure current default provider credential: %v", err)
 	}
-	publishSystemAssistantTestProviderPolicy(t, ctx, repository, owner, assistant.Ref, configuration,
-		[]entity.ProviderAccountCandidate{{AccountRef: currentAccountRef, Weight: 1}, {AccountRef: "pacc_component_warm_failover", Weight: 1}})
 	if _, err := pool.Exec(ctx, `
 		UPDATE control_plane.provider_accounts
 		SET state = 'REAUTHORIZATION_REQUIRED', version = version + 1, updated_at = clock_timestamp()
@@ -366,6 +371,69 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	if failedOver.WarmSessionRef == currentSessionRef || failedOver.RuntimeState != "RECOVERING" ||
 		failedOver.LastHeartbeatAt != nil || stringMap(desired, "providerAccountRef") != "pacc_component_warm_failover" {
 		t.Fatalf("warm provider failover readback mismatch: assistant=%#v desired=%#v", failedOver, desired)
+	}
+	var reconciledConfigurationVersion, reconciledConfigurationCount int64
+	var reconciledPolicyMode string
+	var reconciledCandidates []entity.ProviderAccountCandidate
+	var rawReconciledCandidates []byte
+	if err := pool.QueryRow(ctx, `
+		SELECT config.version_number,
+		       count(all_config.id)::bigint,
+		       policy.mode,
+		       policy.account_candidates
+		FROM control_plane.agents agent
+		JOIN control_plane.agent_runtime_config_versions config ON config.id = agent.current_runtime_config_id
+		JOIN control_plane.provider_account_policy_versions policy ON policy.id = config.provider_account_policy_id
+		JOIN control_plane.agent_runtime_config_versions all_config ON all_config.agent_id = agent.id
+		WHERE agent.ref = $1
+		GROUP BY config.version_number, policy.mode, policy.account_candidates
+	`, assistant.Ref).Scan(
+		&reconciledConfigurationVersion,
+		&reconciledConfigurationCount,
+		&reconciledPolicyMode,
+		&rawReconciledCandidates,
+	); err != nil {
+		t.Fatalf("read reconciled system assistant provider policy: %v", err)
+	}
+	if err := decodeStrict(rawReconciledCandidates, &reconciledCandidates); err != nil {
+		t.Fatalf("decode reconciled system assistant provider policy: %v", err)
+	}
+	expectedCandidates := make([]entity.ProviderAccountCandidate, 0, len(reconciledCandidates))
+	rows, err := pool.Query(ctx, `
+		SELECT account.ref
+		FROM control_plane.provider_accounts account
+		WHERE account.definition_key = 'openai-codex'
+		  AND account.organization_id = (
+		      SELECT runtime.organization_id
+		      FROM control_plane.assistant_runtime runtime
+		      JOIN control_plane.agents agent ON agent.id = runtime.agent_id
+		      WHERE agent.ref = $1
+		  )
+		  AND account.current_credential_revision_id IS NOT NULL
+		  AND account.state IN ('AUTHORIZED', 'REAUTHORIZATION_REQUIRED')
+		ORDER BY account.ref
+	`, assistant.Ref)
+	if err != nil {
+		t.Fatalf("list expected system assistant provider accounts: %v", err)
+	}
+	for rows.Next() {
+		var accountRef string
+		if err := rows.Scan(&accountRef); err != nil {
+			rows.Close()
+			t.Fatalf("scan expected system assistant provider account: %v", err)
+		}
+		expectedCandidates = append(expectedCandidates, entity.ProviderAccountCandidate{AccountRef: accountRef, Weight: 1})
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatalf("read expected system assistant provider accounts: %v", err)
+	}
+	if reconciledConfigurationVersion != initialConfigurationVersion+1 ||
+		reconciledConfigurationCount != initialConfigurationCount+1 ||
+		reconciledPolicyMode != "LEAST_USED" ||
+		!providerCandidatesEqual(reconciledCandidates, expectedCandidates) {
+		t.Fatalf("system assistant provider policy was not reconciled: version=%d count=%d mode=%s candidates=%#v",
+			reconciledConfigurationVersion, reconciledConfigurationCount, reconciledPolicyMode, reconciledCandidates)
 	}
 	var oldState, oldProviderID, currentState, currentProviderID string
 	var currentWarmInstance *string
@@ -450,6 +518,19 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 		t.Fatalf("stable reconcile repeated session migration: failed_over=%#v reported=%#v stable=%#v",
 			failedOver, reported, stable)
 	}
+	var stableConfigurationCount int64
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)::bigint
+		FROM control_plane.agent_runtime_config_versions config
+		JOIN control_plane.agents agent ON agent.id = config.agent_id
+		WHERE agent.ref = $1
+	`, assistant.Ref).Scan(&stableConfigurationCount); err != nil {
+		t.Fatalf("count stable system assistant runtime configuration revisions: %v", err)
+	}
+	if stableConfigurationCount != reconciledConfigurationCount {
+		t.Fatalf("stable reconcile created a duplicate provider policy revision: before=%d after=%d",
+			reconciledConfigurationCount, stableConfigurationCount)
+	}
 	var systemSessionCount, activeSystemSessionCount int
 	if err := pool.QueryRow(ctx, `
 		SELECT count(*)::int, count(*) FILTER (WHERE state = 'ACTIVE')::int
@@ -467,82 +548,26 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	if err != nil || created.Conversation == nil {
 		t.Fatalf("create assistant conversation after provider failover: conversation=%#v err=%v", created.Conversation, err)
 	}
-	var conversationProviderID string
+	var conversationProviderID, conversationProviderRef string
 	if err := pool.QueryRow(ctx, `
-		SELECT session.provider_account_id::text
+		SELECT session.provider_account_id::text, account.ref
 		FROM control_plane.assistant_conversations conversation
 		JOIN control_plane.sessions session ON session.id = conversation.session_id
+		JOIN control_plane.provider_accounts account ON account.id = session.provider_account_id
 		WHERE conversation.ref = $1
-	`, created.Conversation.Ref).Scan(&conversationProviderID); err != nil {
+	`, created.Conversation.Ref).Scan(&conversationProviderID, &conversationProviderRef); err != nil {
 		t.Fatalf("read assistant conversation provider binding: %v", err)
 	}
-	if conversationProviderID != fallbackAccountID {
-		t.Fatalf("assistant conversation bypassed provider policy: provider_account_id=%s", conversationProviderID)
+	conversationProviderAllowed := false
+	for _, candidate := range expectedCandidates {
+		if candidate.AccountRef == conversationProviderRef {
+			conversationProviderAllowed = true
+			break
+		}
 	}
-}
-
-func publishSystemAssistantTestProviderPolicy(
-	t *testing.T,
-	ctx context.Context,
-	repository *Repository,
-	owner value.Principal,
-	agentRef string,
-	current entity.AgentRuntimeConfigurationView,
-	accounts []entity.ProviderAccountCandidate,
-) {
-	t.Helper()
-	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
-	if err != nil {
-		t.Fatalf("resolve warm failover owner: %v", err)
-	}
-	ownerScope, err := repository.resolveScope(ctx, resolvedOwner)
-	if err != nil {
-		t.Fatalf("resolve warm failover owner scope: %v", err)
-	}
-	tx, err := repository.pool.Begin(ctx)
-	if err != nil {
-		t.Fatalf("begin system assistant provider policy fixture: %v", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	locked, err := repository.lockRuntimeAgent(ctx, tx, ownerScope, agentRef)
-	if err != nil {
-		t.Fatalf("lock system assistant runtime fixture: %v", err)
-	}
-	sort.Slice(accounts, func(left, right int) bool { return accounts[left].AccountRef < accounts[right].AccountRef })
-	rawAccounts, err := json.Marshal(accounts)
-	if err != nil {
-		t.Fatalf("encode system assistant provider policy fixture: %v", err)
-	}
-	policyRef, err := newRef("ppol")
-	if err != nil {
-		t.Fatalf("create system assistant provider policy ref: %v", err)
-	}
-	configRef, err := newRef("rconf")
-	if err != nil {
-		t.Fatalf("create system assistant runtime config ref: %v", err)
-	}
-	policyDigest := digestBytes([]byte("LEAST_USED"), rawAccounts)
-	version := locked.configVersion + 1
-	configDigest := digestBytes(
-		[]byte(current.Configuration.RuntimeProfileRef),
-		[]byte(current.Configuration.Provider),
-		[]byte(current.Configuration.Model),
-		[]byte(policyRef),
-		[]byte(strconvFormat(version)),
-		[]byte(policyDigest),
-	)
-	var publishedRef string
-	if err := tx.QueryRow(ctx, queryRuntimeConfigurationPublish, pgx.StrictNamedArgs{
-		"policy_ref": policyRef, "organization_id": ownerScope.organizationID, "agent_id": locked.id,
-		"version_number": version, "policy_mode": "LEAST_USED", "account_candidates": rawAccounts,
-		"policy_digest": policyDigest, "created_by": ownerScope.actorID, "config_ref": configRef,
-		"runtime_profile_ref": current.Configuration.RuntimeProfileRef, "provider": current.Configuration.Provider,
-		"model": current.Configuration.Model, "config_digest": configDigest,
-	}).Scan(&publishedRef); err != nil || publishedRef != configRef {
-		t.Fatalf("publish system assistant provider policy fixture: ref=%s err=%v", publishedRef, err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		t.Fatalf("commit system assistant provider policy fixture: %v", err)
+	if !conversationProviderAllowed || conversationProviderID == currentAccountID {
+		t.Fatalf("assistant conversation bypassed provider policy: provider_account_id=%s provider_account_ref=%s",
+			conversationProviderID, conversationProviderRef)
 	}
 }
 

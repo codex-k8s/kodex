@@ -126,6 +126,31 @@ func TestMessageMapNormalizesAttachmentSetEnumsToOpenAPIValues(t *testing.T) {
 	}
 }
 
+func TestMessageMapNormalizesProviderEnumsToOpenAPIValues(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.ProviderAccount{
+		Ref:     "pacc-example",
+		State:   controlplanev1.ProviderAccountState_PROVIDER_ACCOUNT_STATE_AUTHORIZED,
+		Enabled: true,
+		Ready:   true,
+		Authorization: &controlplanev1.ProviderAuthorization{
+			Method: controlplanev1.ProviderAuthorizationMethod_PROVIDER_AUTHORIZATION_METHOD_DEVICE_CODE,
+			State:  controlplanev1.ProviderAuthorizationState_PROVIDER_AUTHORIZATION_STATE_PENDING,
+		},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["state"] != "AUTHORIZED" {
+		t.Fatalf("provider account state is not public: %#v", value)
+	}
+	authorization, ok := value["authorization"].(map[string]any)
+	if !ok || authorization["method"] != "DEVICE_CODE" || authorization["state"] != "PENDING" {
+		t.Fatalf("provider authorization enums are not public: %#v", value)
+	}
+}
+
 func TestNormalizeEnumCollections(t *testing.T) {
 	t.Parallel()
 	value := map[string]any{"nextActions": []any{"NEXT_ACTION_OPEN", "NEXT_ACTION_CREATE_PROJECT"}}

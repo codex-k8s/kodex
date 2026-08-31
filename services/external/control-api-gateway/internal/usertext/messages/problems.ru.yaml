@@ -78,6 +78,20 @@ DEFAULT_RUNTIME_NAME:
   other: Базовая среда
 DEFAULT_PROVIDER_ACCOUNT_NAME:
   other: Основная учётная запись модели
+PROVIDER_ACCOUNT_CREATED:
+  other: Учётная запись модели создана
+PROVIDER_ACCOUNT_UPDATED:
+  other: Учётная запись модели обновлена
+PROVIDER_DEVICE_AUTHORIZATION_STARTED:
+  other: Авторизация учётной записи модели по коду устройства начата
+PROVIDER_ACCOUNT_AUTHORIZED:
+  other: Учётная запись модели авторизована
+PROVIDER_AUTHORIZATION_FAILED:
+  other: Авторизовать учётную запись модели не удалось
+PROVIDER_ACCOUNT_REVOKED:
+  other: Доступ учётной записи модели отозван
+PROVIDER_CREDENTIAL_REFRESH_COMMITTED:
+  other: Обновлённые учётные данные модели применены
 INSTALLATION_OWNER_NAME:
   other: Владелец установки
 OIDC_USER_NAME:
@@ -108,6 +122,10 @@ ROLE_IMAGE_RECIPE_CHANGED:
   other: Конфигурация среды роли обновлена
 ROLE_IMAGE_BUILD_COMPLETED:
   other: Образ среды роли собран
+ROLE_IMAGE_PROMOTION_REQUESTED:
+  other: Продвижение образа среды роли запрошено
+ROLE_IMAGE_PROMOTED:
+  other: Образ среды роли продвинут
 ONBOARDING_COMPLETED:
   other: Первичная настройка завершена
 PROJECT_CREATED:
@@ -148,6 +166,8 @@ SCHEDULE_UPDATED:
   other: Расписание обновлено
 SCHEDULE_ARCHIVED:
   other: Расписание архивировано
+SCHEDULE_DELETED:
+  other: Расписание удалено
 SCHEDULED_RUN_TASK:
   other: Запуск по расписанию
 SCHEDULE_OCCURRENCE_MATERIALIZED:
@@ -158,6 +178,8 @@ INTEGRATION_CONNECTION_CREATED:
   other: Подключение интеграции создано
 INTEGRATION_CONNECTION_UPDATED:
   other: Подключение интеграции обновлено
+INTEGRATION_CONNECTION_DELETED:
+  other: Подключение интеграции удалено
 INTEGRATION_GRANT_UPDATED:
   other: Разрешение интеграции обновлено
 INTEGRATION_CONNECTION_TEST_COMPLETED:
@@ -226,6 +248,10 @@ SYSTEM_ASSISTANT_HEARTBEAT_RECORDED:
   other: Пульс среды выполнения системного помощника зафиксирован
 SYSTEM_ASSISTANT_CORE_PROMPT_UPDATED:
   other: Основные инструкции системного помощника обновлены
+SYSTEM_ASSISTANT_PROVIDER_POLICY_UPDATED:
+  other: Набор учётных записей системного помощника обновлён
+SYSTEM_ASSISTANT_RUNTIME_ENVIRONMENT_UPDATED:
+  other: Рабочее окружение системного помощника обновлено
 SYSTEM_ASSISTANT_LABEL:
   other: Системный · неудаляемый
 ARTIFACT_AVAILABLE:
@@ -416,6 +442,12 @@ RUNTIME_ENVIRONMENT_CREATED:
   other: Runtime-окружение создано
 RUNTIME_ENVIRONMENT_PUBLISHED:
   other: Runtime-окружение опубликовано
+RUNTIME_ENVIRONMENT_ENABLED:
+  other: Runtime-окружение включено
+RUNTIME_ENVIRONMENT_DISABLED:
+  other: Runtime-окружение отключено
+RUNTIME_ENVIRONMENT_DELETED:
+  other: Runtime-окружение удалено
 ACCESS_ROLE_CHANGED:
   other: Роль доступа обновлена
 ACCESS_BINDING_CHANGED:

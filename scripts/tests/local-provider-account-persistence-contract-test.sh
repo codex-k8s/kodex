@@ -38,6 +38,15 @@ grep -Fq 'provider account metadata directory binding is invalid' "$dev_script" 
   fail 'provider metadata is not bound to its account directory'
 grep -Fq 'restored_provider_accounts > 0' "$dev_script" ||
   fail 'runtime readiness is not rechecked after provider reconciliation'
+grep -Fq 'FROM control_plane.owner_claim_contracts installation_owner' "$provider_script" ||
+  fail 'default provider account is not resolved through the installation owner contract'
+grep -Fq 'ON account.organization_id = installation_owner.organization_id' "$provider_script" ||
+  fail 'default provider account is not bound to the installation organization'
+grep -Fq "WHERE installation_owner.stable_key = 'installation-owner'" "$provider_script" ||
+  fail 'default provider account lookup does not require the authoritative installation owner'
+if grep -Eq 'control_plane\.(assistant_runtime|sessions)' "$provider_script"; then
+  fail 'default provider account lookup still depends on the current warm session'
+fi
 grep -Fq 'ON CONFLICT (ref) DO UPDATE' "$reconcile_sql" ||
   fail 'provider reconciliation does not use the current immutable account identity'
 if grep -Fq 'ON CONFLICT (organization_id, stable_key)' "$reconcile_sql"; then
@@ -45,5 +54,18 @@ if grep -Fq 'ON CONFLICT (organization_id, stable_key)' "$reconcile_sql"; then
 fi
 [[ $(grep -Fc "WHERE account.ref = :'account_ref'" "$reconcile_sql") -ge 4 ]] ||
   fail 'provider credential reconciliation is not bound to the exact account ref'
+[[ $(grep -Fc "installation_owner.stable_key = 'installation-owner'" "$reconcile_sql") -eq 4 ]] ||
+  fail 'provider reconciliation is not consistently bound to the installation owner contract'
+grep -Fq 'ON organization.id = installation_owner.organization_id' "$reconcile_sql" ||
+  fail 'provider account creation is not bound to the installation organization'
+grep -Fq 'ON subject.organization_id = organization.id' "$reconcile_sql" ||
+  fail 'provider account creator is not bound to the installation organization'
+grep -Fq "AND subject.issuer = 'kodex-system'" "$reconcile_sql" ||
+  fail 'provider account creator does not require the system issuer'
+grep -Fq 'AND subject.active' "$reconcile_sql" ||
+  fail 'provider account creator does not require an active system subject'
+if grep -Fq 'ORDER BY organization.created_at' "$reconcile_sql"; then
+  fail 'provider reconciliation still selects an organization by creation order'
+fi
 
 printf 'Kodex local provider account persistence contract test passed\n'

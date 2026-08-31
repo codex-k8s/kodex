@@ -161,15 +161,14 @@ if [[ "$account_key" == default-openai-codex ]]; then
   existing_account_ref=$(kubectl -n "$control_namespace" exec kodex-postgresql-0 -- \
     psql -qAt -U postgres -d control_plane -P pager=off -v ON_ERROR_STOP=1 -c "
       SELECT account.ref
-      FROM control_plane.assistant_runtime runtime
-      JOIN control_plane.sessions session ON session.ref = runtime.system_session_ref
-      JOIN control_plane.provider_accounts account ON account.id = session.provider_account_id
-      WHERE runtime.stable_key = 'system-assistant'
+      FROM control_plane.owner_claim_contracts installation_owner
+      JOIN control_plane.provider_accounts account
+        ON account.organization_id = installation_owner.organization_id
+      WHERE installation_owner.stable_key = 'installation-owner'
         AND account.definition_key = 'openai-codex'
-        AND account.stable_key = 'default-openai-codex'
-      LIMIT 1")
+        AND account.stable_key = 'default-openai-codex'")
   [[ "$existing_account_ref" =~ ^pacc_[A-Za-z0-9_-]{8,88}$ ]] ||
-    fail 'default provider account binding is absent'
+    fail 'authoritative default provider account is absent'
   account_ref=$existing_account_ref
 fi
 credential_digest=$(printf '%s\n%s\n%s\n' "$account_key" "$secret_uid" "$secret_resource_version" | sha256sum | awk '{print $1}')
