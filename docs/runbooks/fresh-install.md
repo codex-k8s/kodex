@@ -236,7 +236,10 @@ Provider credential на чистой установке материализу�
 `resourceVersion`. После штатной авторизации или ротации metadata указывает на
 новую immutable revision; повторный запуск installer проверяет и сохраняет эту
 активную revision, не сравнивая её с изменившимся bootstrap-файлом и не
-возвращая указатель на `r1`. Старый mutable `r1`, созданный версией installer до
+возвращая указатель на `r1`. Если пересоздание installation material удалило
+metadata ConfigMap, installer восстанавливает его только по единственной
+revision с точным digest актуального owner-private `auth.json`. Старый mutable
+`r1`, созданный версией installer до
 этого инварианта, удаляется только при подтверждённом field manager
 `kodex-install` и создаётся заново. Изменение любой уже immutable revision
 закрыто отклоняется: ротация credentials всегда создаёт новую revision.

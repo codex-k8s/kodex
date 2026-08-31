@@ -155,7 +155,33 @@ preserve_selected_provider_metadata() {
       .data.secretUID == $uid and
       .data.secretResourceVersion == $resource_version and
       .data.contentSHA256 == $digest
-    ' <<<"$metadata" >/dev/null
+  ' <<<"$metadata" >/dev/null
+}
+
+restore_selected_provider_metadata_from_auth() {
+  local digest candidates selected_name selected_uid selected_resource_version
+  digest=$(sha256sum "$provider_auth_file" | awk '{print $1}')
+  candidates=$(kubectl -n "$runtime_namespace" get secrets -o json | jq -c \
+    --arg digest "$digest" '
+      [.items[] |
+        select(.immutable == true and .type == "Opaque") |
+        select(.metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex") |
+        select(.metadata.name | test("^runtime-provider-openai-[a-z0-9-]{1,160}$")) |
+        select((.data["auth.sha256"] // "" | @base64d | gsub("[[:space:]]"; "")) == $digest) |
+        {name:.metadata.name,uid:.metadata.uid,resourceVersion:.metadata.resourceVersion}]
+    ')
+  [[ "$(jq -r 'length' <<<"$candidates")" == 1 ]] || return 1
+  selected_name=$(jq -er '.[0].name' <<<"$candidates")
+  selected_uid=$(jq -er '.[0].uid | select(type == "string" and length > 0)' <<<"$candidates")
+  selected_resource_version=$(jq -er \
+    '.[0].resourceVersion | select(type == "string" and length > 0)' <<<"$candidates")
+  apply_configmap kodex-system runtime-provider-openai-default-metadata \
+    --from-literal=secretName="$selected_name" \
+    --from-literal=secretUID="$selected_uid" \
+    --from-literal=secretResourceVersion="$selected_resource_version" \
+    --from-literal=contentSHA256="$digest"
+  kubectl -n kodex-system annotate configmap runtime-provider-openai-default-metadata \
+    kodex.dev/provider-account-key=default-openai-codex --overwrite >/dev/null
 }
 
 materialize_provider_secret() {
@@ -238,6 +264,8 @@ create_secret kodex-system internal-rpc-authority-sentry --from-literal=dsn=
 create_secret kodex-system kodex-integration-credentials --from-literal=empty=
 selected_provider_metadata_preserved=false
 if preserve_selected_provider_metadata; then
+  selected_provider_metadata_preserved=true
+elif restore_selected_provider_metadata_from_auth && preserve_selected_provider_metadata; then
   selected_provider_metadata_preserved=true
 else
   materialize_provider_secret

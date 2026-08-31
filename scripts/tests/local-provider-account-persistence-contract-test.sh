@@ -44,6 +44,10 @@ grep -Fq 'if preserve_selected_provider_metadata; then' "$materialize_script" ||
   fail 'installer does not preserve the selected immutable provider revision'
 grep -Fq 'selected_provider_metadata_preserved=true' "$materialize_script" ||
   fail 'installer does not distinguish an active revision from bootstrap material'
+grep -Fq 'restore_selected_provider_metadata_from_auth && preserve_selected_provider_metadata' "$materialize_script" ||
+  fail 'installer cannot restore active provider metadata after material recreation'
+grep -Fq 'select((.data["auth.sha256"] // "" | @base64d' "$materialize_script" ||
+  fail 'provider metadata recovery is not bound to the exact authorization digest'
 grep -Fq 'preserve_selected_provider_metadata || fail' "$materialize_script" ||
   fail 'active provider revision has no final exact readback'
 if grep -Fq 'local name=runtime-provider-openai-default-r1 secret_json metadata_json' "$deploy_script"; then
