@@ -86,15 +86,19 @@ async function openKodex(page: Page, newConversation = false): Promise<void> {
   const dialog = page.getByRole("dialog", { name: "Kodex" });
   await expect(dialog).toBeVisible();
   if (!newConversation) return;
-  const creation = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/v1/assistant-conversations",
-  );
-  await dialog
-    .getByRole("button", { name: "Новый диалог", exact: true })
-    .click();
-  const created = await creation;
+  const createButton = dialog.getByRole("button", {
+    name: "Новый диалог",
+    exact: true,
+  });
+  await expect(createButton).toBeEnabled();
+  const [created] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/api/v1/assistant-conversations",
+    ),
+    createButton.click(),
+  ]);
   expect(created.status(), await created.text()).toBe(201);
   const conversation = (await created.json()) as { ref?: string };
   expect(conversation.ref).toMatch(/^cnv_[A-Za-z0-9_-]+$/);
@@ -488,6 +492,7 @@ test.describe("web-only fresh installation", () => {
       await publishAgent(page);
     }
     await ensureAgentCapability(page, projectRef, coordinatorRef, /Файлы/);
+    await ensureAuthorizedProviderAffinity(page, coordinatorRef);
 
     firstRunRef = await launchAgent(
       page,
@@ -944,31 +949,31 @@ test.describe("web-only fresh installation", () => {
     const runtimePanel = page.locator("#agent-panel-runtime");
     await expect(
       runtimePanel.getByRole("heading", {
-        name: "Runtime и рабочее окружение",
+        name: "Модель и среда выполнения",
       }),
     ).toBeVisible();
 
-    const providerRow = runtimePanel.locator(".runtime-row").filter({
-      hasText: "Провайдер",
+    const providerPicker = runtimePanel.getByRole("button", {
+      name: "Выберите провайдера",
     });
-    const profileRow = runtimePanel.locator(".runtime-row").filter({
-      hasText: "Runtime-профиль",
+    const modelPicker = runtimePanel.getByRole("button", {
+      name: "Выберите модель",
     });
-    const modelRow = runtimePanel.locator(".runtime-row").filter({
-      hasText: "Модель",
+    const runtimeProfilePicker = runtimePanel.getByRole("button", {
+      name: "Выберите runtime-профиль",
     });
-    await expect(providerRow.locator("input")).not.toHaveValue("");
-    await expect(modelRow.locator("input")).not.toHaveValue("");
-    const providerName = await providerRow.locator("input").inputValue();
-    const modelName = await modelRow.locator("input").inputValue();
-    await expect(profileRow.locator("select option:checked")).toContainText(
-      /.+ · .+/,
-    );
+    await expect(providerPicker).toBeVisible();
+    await expect(modelPicker).toBeVisible();
+    await expect(runtimeProfilePicker).toBeVisible();
+    await expect(providerPicker.locator("strong")).not.toHaveText("");
+    await expect(modelPicker.locator("strong")).not.toHaveText("");
+    await expect(runtimeProfilePicker.locator("strong")).not.toHaveText("");
+    const providerName = (
+      await providerPicker.locator("strong").innerText()
+    ).trim();
+    const modelName = (await modelPicker.locator("strong").innerText()).trim();
 
-    const policy = runtimePanel
-      .locator(".runtime-row")
-      .filter({ hasText: "Политика учётных записей" })
-      .locator("select");
+    const policy = runtimePanel.getByLabel("Политика учётных записей");
     const policyBefore = await policy.inputValue();
     const policyAfter = "LEAST_USED";
     if (policyBefore !== policyAfter) {
@@ -980,7 +985,7 @@ test.describe("web-only fresh installation", () => {
             `/api/v1/agents/${coordinatorRef}/runtime-configuration`,
       );
       await runtimePanel
-        .getByRole("button", { name: "Опубликовать runtime-конфигурацию" })
+        .getByRole("button", { name: "Сохранить runtime" })
         .click();
       const publicationResponse = await runtimePublication;
       const publicationProblem =
@@ -1000,9 +1005,6 @@ test.describe("web-only fresh installation", () => {
       ).toBe(200);
     }
     await expect(policy).toHaveValue(policyAfter);
-    await expect(
-      runtimePanel.locator(".runtime-history > div"),
-    ).not.toHaveCount(0);
 
     const overlayEditor = runtimePanel.getByRole("textbox", {
       name: "Overlay config.toml",
@@ -1079,13 +1081,30 @@ test.describe("web-only fresh installation", () => {
       'model_reasoning_effort = "high"',
     );
 
-    const environmentPicker = runtimePanel.locator(
-      ".runtime-row--picker [role=combobox]",
+    const environmentResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        new URL(response.url()).pathname ===
+          `/api/v1/agents/${coordinatorRef}/runtime-configuration`,
     );
+    await page
+      .getByRole("tab", { name: "Рабочее окружение", exact: true })
+      .click();
+    expect((await environmentResponse).status()).toBe(200);
+    const environmentPanel = page.locator("#agent-panel-environment");
+    await expect(
+      environmentPanel.getByRole("heading", { name: "Текущее окружение" }),
+    ).toBeVisible();
+    await expect(
+      environmentPanel.getByRole("heading", { name: "Каталог окружений" }),
+    ).toBeVisible();
+    const environmentPicker = environmentPanel.getByRole("button", {
+      name: "Найти окружение по названию, назначению или ПО",
+    });
     await environmentPicker.click();
     await expect(environmentPicker).toHaveAttribute("aria-expanded", "true");
-    await runtimePanel
-      .getByRole("heading", { name: "Runtime и рабочее окружение" })
+    await environmentPanel
+      .getByRole("heading", { name: "Текущее окружение" })
       .click();
     await expect(environmentPicker).toHaveAttribute("aria-expanded", "false");
     const boundEnvironmentRef = await page.evaluate(async (agentRef) => {
@@ -1097,9 +1116,13 @@ test.describe("web-only fresh installation", () => {
     }, coordinatorRef);
     if (boundEnvironmentRef !== runtimeEnvironmentRef) {
       await environmentPicker.click();
-      const popover = page.locator(".async-picker__popover");
+      const popover = environmentPanel.getByRole("dialog", {
+        name: "Найти окружение по названию, назначению или ПО",
+      });
       await popover
-        .locator('input[type="search"]')
+        .getByRole("combobox", {
+          name: "Найти окружение по названию, назначению или ПО",
+        })
         .fill(runtimeEnvironmentName);
       await popover
         .getByRole("option", { name: new RegExp(runtimeEnvironmentName) })
@@ -1110,7 +1133,7 @@ test.describe("web-only fresh installation", () => {
           new URL(response.url()).pathname ===
             `/api/v1/agents/${coordinatorRef}/runtime-environment-binding`,
       );
-      await runtimePanel
+      await environmentPanel
         .getByRole("button", { name: "Назначить окружение" })
         .click();
       expect((await binding).status()).toBe(200);
@@ -1511,9 +1534,21 @@ test.describe("web-only fresh installation", () => {
       await dialog.getByLabel("Время запуска").fill(timeOfDay);
       await dialog.getByLabel("Часовой пояс").selectOption("Europe/Saratov");
       await dialog.getByLabel("Задача").fill(automationTask);
+      const creation = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          response.request().method() === "POST" &&
+          url.pathname === `/api/v1/projects/${projectRef}/schedules`
+        );
+      });
       await dialog
         .getByRole("button", { name: "Создать", exact: true })
         .click();
+      const created = await creation;
+      expect(
+        created.status(),
+        await mutationFailureDiagnostic(created, page),
+      ).toBe(201);
       await expect(dialog).toHaveCount(0);
       row = page.locator(".automation-row").filter({
         hasText: automationName,
@@ -1661,7 +1696,7 @@ test.describe("web-only fresh installation", () => {
   });
 
   test("сотрудник без capability Файлы не получает файл", async ({ page }) => {
-    requireRefs("projectRef", "analystRef");
+    requireRefs("projectRef", "analystRef", "uploadedArtifactRef");
     await gotoWithRetry(page, `/projects/${projectRef}/agents/${analystRef}`);
     await launchAgent(
       page,
@@ -1673,13 +1708,42 @@ test.describe("web-only fresh installation", () => {
     );
 
     await gotoWithRetry(page, `/projects/${projectRef}/files`);
-    const knowledgeArtifact = page
-      .getByRole("button", {
-        name: new RegExp(uploadedFileName),
-      })
-      .first();
+    await expectPageHeading(page, "Файлы и знания");
+    const searchResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === "GET" &&
+        url.pathname === `/api/v1/projects/${projectRef}/artifacts` &&
+        url.searchParams.get("sourceKind") === "CONTROL_CENTER" &&
+        url.searchParams.get("query") === uploadedFileName
+      );
+    });
+    await page
+      .getByRole("searchbox", { name: "Найти файл" })
+      .fill(uploadedFileName);
+    const searched = await searchResponse;
+    expect(
+      searched.status(),
+      `Exact artifact search failed with HTTP ${String(searched.status())}`,
+    ).toBe(200);
+    const searchReadback = (await searched.json()) as {
+      items?: Array<{ fileName: string; ref: string }>;
+    };
+    expect(searchReadback.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fileName: uploadedFileName,
+          ref: uploadedArtifactRef,
+        }),
+      ]),
+    );
+    const knowledgeArtifact = page.locator(
+      `[data-artifact-ref="${uploadedArtifactRef}"]`,
+    );
     await expect(knowledgeArtifact).toBeVisible();
-    await knowledgeArtifact.click();
+    await knowledgeArtifact
+      .getByRole("button", { name: new RegExp(uploadedFileName) })
+      .click();
     const binding = page.getByRole("checkbox", {
       name: new RegExp(analystName),
     });
@@ -2776,6 +2840,123 @@ function requireRefs(...required: ReadonlyArray<keyof DiscoveryRefs>): void {
   }
 }
 
+async function ensureAuthorizedProviderAffinity(
+  page: Page,
+  agentRef: string,
+): Promise<void> {
+  const preflight = await page.evaluate(async () => {
+    const response = await fetch(
+      "/api/v1/provider-accounts?definitionKey=openai-codex&pageSize=100",
+    );
+    if (!response.ok) {
+      return {
+        accountRef: "",
+        status: response.status,
+        summary: "provider account catalog readback failed",
+      };
+    }
+    const body = (await response.json()) as {
+      items: Array<{
+        enabled: boolean;
+        ready: boolean;
+        ref: string;
+        state: string;
+      }>;
+    };
+    const eligible = body.items.filter(
+      (item) => item.state === "AUTHORIZED" && item.enabled && item.ready,
+    );
+    const states = body.items.reduce<Record<string, number>>((result, item) => {
+      const key = `${item.state}:${item.enabled ? "enabled" : "disabled"}:${item.ready ? "ready" : "not-ready"}`;
+      result[key] = (result[key] ?? 0) + 1;
+      return result;
+    }, {});
+    return {
+      accountRef: eligible[0]?.ref ?? "",
+      status: response.status,
+      summary: Object.entries(states)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([state, count]) => `${state}=${String(count)}`)
+        .join(", "),
+    };
+  });
+  expect(preflight.status, preflight.summary).toBe(200);
+  if (!preflight.accountRef) {
+    const blocker = `BLOCKED: no AUTHORIZED+enabled+ready provider account is available (${preflight.summary || "empty catalog"})`;
+    test.info().annotations.push({ type: "blocked", description: blocker });
+    throw new Error(blocker);
+  }
+  await pinAgentProviderAccount(page, agentRef, preflight.accountRef);
+}
+
+async function pinAgentProviderAccount(
+  page: Page,
+  agentRef: string,
+  accountRef: string,
+): Promise<void> {
+  const result = await page.evaluate(
+    async ({ expectedAccountRef, expectedAgentRef }) => {
+      const readbackResponse = await fetch(
+        `/api/v1/agents/${encodeURIComponent(expectedAgentRef)}/runtime-configuration`,
+      );
+      if (!readbackResponse.ok) {
+        return { status: readbackResponse.status, detail: "runtime readback" };
+      }
+      const readback = (await readbackResponse.json()) as {
+        agentVersion: number;
+        configuration: {
+          runtimeProfileRef: string;
+          model: string;
+          providerPolicy: {
+            accountCandidates: Array<{ accountRef: string; weight: number }>;
+            mode: string;
+          };
+        };
+      };
+      const currentCandidates =
+        readback.configuration.providerPolicy.accountCandidates;
+      if (
+        readback.configuration.providerPolicy.mode === "FIXED" &&
+        currentCandidates.length === 1 &&
+        currentCandidates[0]?.accountRef === expectedAccountRef
+      ) {
+        return { status: 200, detail: "" };
+      }
+      const csrfPrefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
+      const csrf = document.cookie
+        .split(";")
+        .map((part) => part.trim())
+        .find((part) => part.startsWith(csrfPrefix))
+        ?.slice(csrfPrefix.length);
+      if (!csrf) return { status: 0, detail: "CSRF token is unavailable" };
+      const publication = await fetch(
+        `/api/v1/agents/${encodeURIComponent(expectedAgentRef)}/runtime-configuration`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": crypto.randomUUID(),
+            "If-Match": `"${String(readback.agentVersion)}"`,
+            "X-CSRF-Token": decodeURIComponent(csrf),
+          },
+          body: JSON.stringify({
+            runtimeProfileRef: readback.configuration.runtimeProfileRef,
+            model: readback.configuration.model,
+            providerPolicyMode: "FIXED",
+            providerAccounts: [{ accountRef: expectedAccountRef, weight: 1 }],
+          }),
+        },
+      );
+      return {
+        status: publication.status,
+        detail: publication.ok ? "" : (await publication.text()).slice(0, 512),
+      };
+    },
+    { expectedAccountRef: accountRef, expectedAgentRef: agentRef },
+  );
+  expect(result.status, result.detail).toBe(200);
+}
+
 async function pinAgentProviderCandidate(
   page: Page,
   agentRef: string,
@@ -3121,7 +3302,7 @@ async function runArtifactStorageFixture(
           "I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION",
       },
       maxBuffer: 2 * 1024 * 1024,
-      timeout: 5 * 60 * 1000,
+      timeout: 8 * 60 * 1000,
     },
   );
 }

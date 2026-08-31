@@ -4,12 +4,33 @@ export async function gotoWithRetry(
   page: Page,
   url: string,
   options?: Parameters<Page["goto"]>[1],
+  requirements: { readonly appShell?: boolean } = {},
 ): Promise<void> {
   const retryDelays = [0, 200, 600];
   for (const [index, delay] of retryDelays.entries()) {
     if (delay > 0) await page.waitForTimeout(delay);
     try {
-      await page.goto(url, options);
+      const response = await page.goto(url, options);
+      if (!response) {
+        throw new Error(
+          `Navigation did not return a main document response for ${safeNavigationPath(page.url())}`,
+        );
+      }
+      const contentType = response.headers()["content-type"] ?? "missing";
+      if (!response.ok() || !contentType.toLowerCase().includes("text/html")) {
+        throw new Error(
+          [
+            "Main document navigation failed",
+            `path=${safeNavigationPath(response.url())}`,
+            `status=${String(response.status())}`,
+            `content-type=${safeContentType(contentType)}`,
+          ].join("; "),
+        );
+      }
+      if (requirements.appShell !== false) {
+        await expect(page.locator("#app")).toBeVisible();
+        await expect(page.locator("#main-content")).toBeVisible();
+      }
       return;
     } catch (error) {
       if (
@@ -21,6 +42,18 @@ export async function gotoWithRetry(
       }
     }
   }
+}
+
+function safeNavigationPath(raw: string): string {
+  try {
+    return new URL(raw).pathname.slice(0, 512);
+  } catch {
+    return "invalid-url";
+  }
+}
+
+function safeContentType(value: string): string {
+  return value.replace(/[^A-Za-z0-9!#$&^_.+\-/;= ]/g, "?").slice(0, 160);
 }
 
 export function routeRef(page: Page, segment: string): string {

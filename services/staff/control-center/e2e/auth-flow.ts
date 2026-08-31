@@ -38,10 +38,15 @@ export async function authenticateOwner(
   let identitySubmissions = 0;
   let frontendOIDCAttempts = 0;
 
-  await gotoWithRetry(page, "/", {
-    timeout: remainingTimeout(deadline),
-    waitUntil: "domcontentloaded",
-  });
+  await gotoWithRetry(
+    page,
+    "/",
+    {
+      timeout: remainingTimeout(deadline),
+      waitUntil: "domcontentloaded",
+    },
+    { appShell: false },
+  );
 
   let surface = await waitForAuthSurface(page, deadline, undefined, {
     identitySubmissions,

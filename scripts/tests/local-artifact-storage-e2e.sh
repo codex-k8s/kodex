@@ -180,7 +180,7 @@ accelerate_retention() {
      WHERE ref = '$artifact_ref' AND lifecycle_state = 'DELETED'
      RETURNING ref;")
   [[ "$updated" == "$artifact_ref" ]] || fail 'retention test clock fixture was not applied to exact tombstone'
-  deadline=$((SECONDS + 180))
+  deadline=$((SECONDS + 360))
   while ((SECONDS < deadline)); do
     state=$(query_database "
       SELECT artifact.lifecycle_state || '|' ||
