@@ -341,6 +341,8 @@ func (repository *Repository) scanRuntimeEnvironment(scanner rowScanner) (entity
 	readiness := repository.runtimeEnvironmentReadiness(item)
 	item.Ready = readiness.Ready
 	item.ReadinessBlockers = readiness.Blockers
+	item.CurrentVersion.Image.RoleRuntimeContractRevision = 0
+	item.CurrentVersion.Image.RoleRuntimeContractSHA256 = ""
 	return item, nil
 }
 

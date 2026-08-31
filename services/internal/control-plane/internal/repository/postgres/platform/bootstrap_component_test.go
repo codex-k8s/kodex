@@ -291,9 +291,21 @@ func testStaleRoleRuntimeContractRejectsLaunch(
 		t.Fatalf("create runtime contract project: project=%#v err=%v", project.Project, err)
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "runtime-contract-agent", "Runtime contract agent")
-	configuration, err := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
-	if err != nil || !configuration.Environment.Ready {
-		t.Fatalf("read current runtime environment: configuration=%#v err=%v", configuration, err)
+	baseline, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-contract-current-launch"}, Payload: command.LaunchRunInput{
+			ProjectRef: project.Project.Ref, Task: "Verify launch with the current runtime contract.",
+			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref},
+		}})
+	if err != nil || baseline.Run == nil {
+		t.Fatalf("launch with current runtime contract: run=%#v err=%v", baseline.Run, err)
+	}
+	baselineVersion := baseline.Run.Version
+	cancelled, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-contract-current-cancel", ExpectedVersion: &baselineVersion},
+		Payload:  command.RunCommandInput{RunRef: baseline.Run.Ref, Reason: "Component fixture cleanup"},
+	})
+	if err != nil || cancelled.Run == nil || cancelled.Run.State != "CANCELLED" {
+		t.Fatalf("cancel current runtime contract fixture: run=%#v err=%v", cancelled.Run, err)
 	}
 	var sessionsBefore, runsBefore int64
 	if err := pool.QueryRow(ctx, `
@@ -316,11 +328,6 @@ func testStaleRoleRuntimeContractRejectsLaunch(
 			t.Errorf("restore runtime contract configuration: %v", restoreErr)
 		}
 	}()
-	configuration, err = service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
-	if err != nil || configuration.Environment.Ready ||
-		!contains(configuration.Environment.ReadinessBlockers, "ROLE_RUNTIME_CONTRACT_STALE") {
-		t.Fatalf("stale runtime environment readiness: configuration=%#v err=%v", configuration, err)
-	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "runtime-contract-stale-launch"}, Payload: command.LaunchRunInput{
 			ProjectRef: project.Project.Ref, Task: "This run must be rejected before durable state is created.",

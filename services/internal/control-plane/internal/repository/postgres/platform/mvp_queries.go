@@ -407,7 +407,11 @@ func (repository *Repository) GetRuntimeEnvironmentReadiness(ctx context.Context
 	if err != nil {
 		return entity.RuntimeEnvironmentReadiness{}, errs.ErrUnavailable
 	}
-	result := repository.runtimeEnvironmentReadiness(item)
+	result := entity.RuntimeEnvironmentReadiness{
+		EnvironmentRef: item.Ref, EnvironmentVersion: item.Version,
+		PublishedVersionRef: item.CurrentVersion.Ref, PublishedVersionDigest: item.CurrentVersion.Digest,
+		Ready: item.Ready, Blockers: append([]string(nil), item.ReadinessBlockers...), ObservedAt: time.Now().UTC(),
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return entity.RuntimeEnvironmentReadiness{}, errs.ErrConflict
 	}
