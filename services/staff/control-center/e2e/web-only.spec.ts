@@ -1111,7 +1111,7 @@ test.describe("web-only fresh installation", () => {
       expect((await publication).status()).toBe(200);
     }
     const effectiveConfig = runtimePanel.getByRole("textbox", {
-      name: "Безопасный effective config",
+      name: "Итоговый effective config",
     });
     await expect(effectiveConfig).toContainText(
       'model_reasoning_effort = "high"',
@@ -1152,7 +1152,7 @@ test.describe("web-only fresh installation", () => {
     }, coordinatorRef);
     if (boundEnvironmentRef !== runtimeEnvironmentRef) {
       await environmentPicker.click();
-      const popover = environmentPanel.getByRole("dialog", {
+      const popover = page.getByRole("dialog", {
         name: "Найти окружение по названию, назначению или ПО",
       });
       await popover
@@ -1210,8 +1210,8 @@ test.describe("web-only fresh installation", () => {
       'model_reasoning_effort = "high"',
     );
 
-    await pinAgentProviderCandidate(page, coordinatorRef, 0);
-    await pinAgentProviderCandidate(page, analystRef, 1);
+    await ensureAuthorizedProviderAffinity(page, coordinatorRef);
+    await ensureAuthorizedProviderAffinity(page, analystRef);
   });
 
   test("файл загружается, просматривается, привязывается и скачивается", async ({
@@ -2989,71 +2989,6 @@ async function pinAgentProviderAccount(
       };
     },
     { expectedAccountRef: accountRef, expectedAgentRef: agentRef },
-  );
-  expect(result.status, result.detail).toBe(200);
-}
-
-async function pinAgentProviderCandidate(
-  page: Page,
-  agentRef: string,
-  candidateIndex: number,
-): Promise<void> {
-  const result = await page.evaluate(
-    async ({ expectedAgentRef, expectedCandidateIndex }) => {
-      const readbackResponse = await fetch(
-        `/api/v1/agents/${encodeURIComponent(expectedAgentRef)}/runtime-configuration`,
-      );
-      if (!readbackResponse.ok) {
-        return { status: readbackResponse.status, detail: "runtime readback" };
-      }
-      const readback = (await readbackResponse.json()) as {
-        agentVersion: number;
-        configuration: {
-          runtimeProfileRef: string;
-          model: string;
-          providerPolicy: {
-            accountCandidates: Array<{ accountRef: string; weight: number }>;
-          };
-        };
-      };
-      const candidate =
-        readback.configuration.providerPolicy.accountCandidates[
-          expectedCandidateIndex
-        ];
-      if (!candidate) {
-        return { status: 0, detail: "provider candidate is unavailable" };
-      }
-      const csrfPrefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
-      const csrf = document.cookie
-        .split(";")
-        .map((part) => part.trim())
-        .find((part) => part.startsWith(csrfPrefix))
-        ?.slice(csrfPrefix.length);
-      if (!csrf) return { status: 0, detail: "CSRF token is unavailable" };
-      const publication = await fetch(
-        `/api/v1/agents/${encodeURIComponent(expectedAgentRef)}/runtime-configuration`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Key": crypto.randomUUID(),
-            "If-Match": `"${String(readback.agentVersion)}"`,
-            "X-CSRF-Token": decodeURIComponent(csrf),
-          },
-          body: JSON.stringify({
-            runtimeProfileRef: readback.configuration.runtimeProfileRef,
-            model: readback.configuration.model,
-            providerPolicyMode: "FIXED",
-            providerAccounts: [{ ...candidate, weight: 1 }],
-          }),
-        },
-      );
-      return {
-        status: publication.status,
-        detail: publication.ok ? "" : await publication.text(),
-      };
-    },
-    { expectedAgentRef: agentRef, expectedCandidateIndex: candidateIndex },
   );
   expect(result.status, result.detail).toBe(200);
 }

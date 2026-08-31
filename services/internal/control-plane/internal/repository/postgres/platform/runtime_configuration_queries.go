@@ -337,6 +337,9 @@ func scanRuntimeEnvironment(scanner rowScanner) (entity.RuntimeEnvironmentSet, e
 	if digestErr != nil || storedCore != coreDigest || storedDigest != item.CurrentVersion.Digest {
 		return entity.RuntimeEnvironmentSet{}, errors.New("runtime environment digest mismatch")
 	}
+	readiness := runtimeEnvironmentReadiness(item)
+	item.Ready = readiness.Ready
+	item.ReadinessBlockers = readiness.Blockers
 	return item, nil
 }
 

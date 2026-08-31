@@ -31,6 +31,26 @@ func TestCastScheduleUsesPublicLifecycleStates(t *testing.T) {
 	}
 }
 
+func TestCastRuntimeEnvironmentPreservesReadinessAndActions(t *testing.T) {
+	t.Parallel()
+
+	environment := castRuntimeEnvironment(entity.RuntimeEnvironmentSet{
+		Ref: "renv_ready", Ready: false,
+		ReadinessBlockers: []string{"PROMOTED_IMAGE_MISSING"},
+		NextActions:       []string{"OPEN", "UPDATE"},
+	})
+	if environment.GetReady() || !reflect.DeepEqual(environment.GetReadinessBlockers(), []string{"PROMOTED_IMAGE_MISSING"}) {
+		t.Fatalf("runtime environment readiness contract is incomplete: %#v", environment)
+	}
+	wantActions := []controlplanev1.NextAction{
+		controlplanev1.NextAction_NEXT_ACTION_OPEN,
+		controlplanev1.NextAction_NEXT_ACTION_UPDATE,
+	}
+	if !reflect.DeepEqual(environment.GetNextActions(), wantActions) {
+		t.Fatalf("runtime environment actions = %v, want %v", environment.GetNextActions(), wantActions)
+	}
+}
+
 func TestCastScheduleMaterializesRevisionAndContinuationContract(t *testing.T) {
 	t.Parallel()
 

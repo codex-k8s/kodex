@@ -291,7 +291,8 @@ func castRuntimeKubernetesAccessKind(value string) controlplanev1.RuntimeKuberne
 func castRuntimeEnvironment(value entity.RuntimeEnvironmentSet) *controlplanev1.RuntimeEnvironmentSet {
 	return &controlplanev1.RuntimeEnvironmentSet{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef,
 		Name: value.Name, Description: value.Description, State: value.State,
-		CurrentVersion: castRuntimeEnvironmentVersion(value.CurrentVersion), UpdatedAt: timestamp(value.UpdatedAt)}
+		CurrentVersion: castRuntimeEnvironmentVersion(value.CurrentVersion), UpdatedAt: timestamp(value.UpdatedAt),
+		Ready: value.Ready, ReadinessBlockers: value.ReadinessBlockers, NextActions: nextActions(value.NextActions)}
 }
 func castRuntimeConfigurationView(value entity.AgentRuntimeConfigurationView) *controlplanev1.AgentRuntimeConfigurationView {
 	return &controlplanev1.AgentRuntimeConfigurationView{Configuration: castAgentRuntimeConfiguration(value.Configuration),

@@ -824,13 +824,24 @@ LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
 			},
 		})
 		if createErr != nil || result.RuntimeEnvironment == nil || result.RuntimeEnvironment.CurrentVersion.Ref == "" ||
-			result.RuntimeEnvironment.CurrentVersion.Digest == "" {
+			result.RuntimeEnvironment.CurrentVersion.Digest == "" || !result.RuntimeEnvironment.Ready ||
+			len(result.RuntimeEnvironment.ReadinessBlockers) != 0 {
 			t.Fatalf("create %s: environment=%#v err=%v", key, result.RuntimeEnvironment, createErr)
 		}
 		return *result.RuntimeEnvironment
 	}
 	first := createEnvironment("runtime-environment-lifecycle-first", "Runtime lifecycle first", "first")
 	second := createEnvironment("runtime-environment-lifecycle-second", "Runtime lifecycle second", "second")
+	environments, _, err := service.ListRuntimeEnvironments(ctx, owner, query.Filter{ProjectRef: projectRef})
+	if err != nil {
+		t.Fatalf("list ready runtime environments: %v", err)
+	}
+	for _, environment := range environments {
+		if (environment.Ref == first.Ref || environment.Ref == second.Ref) &&
+			(!environment.Ready || len(environment.ReadinessBlockers) != 0) {
+			t.Fatalf("promoted runtime environment is not ready in list: %#v", environment)
+		}
+	}
 	agent := createLifecycleAgent(t, ctx, service, owner, projectRef,
 		"runtime-environment-lifecycle-agent", "Runtime lifecycle specialist")
 	agentVersion := agent.Version
@@ -925,7 +936,7 @@ LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
 	if readback, err := service.GetRuntimeEnvironment(ctx, owner, first.Ref); !errors.Is(err, domainerrs.ErrNotFound) || readback.Ref != "" {
 		t.Fatalf("deleted runtime environment remained get-eligible: environment=%#v err=%v", readback, err)
 	}
-	environments, _, err := service.ListRuntimeEnvironments(ctx, owner, query.Filter{ProjectRef: projectRef})
+	environments, _, err = service.ListRuntimeEnvironments(ctx, owner, query.Filter{ProjectRef: projectRef})
 	if err != nil {
 		t.Fatalf("list runtime environments after delete: %v", err)
 	}
