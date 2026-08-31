@@ -399,7 +399,7 @@ func (repository *Repository) GetRuntimeEnvironmentReadiness(ctx context.Context
 		return entity.RuntimeEnvironmentReadiness{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	item, err := scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment,
+	item, err := repository.scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment,
 		current.organizationID, ref, current.role, current.actorID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.RuntimeEnvironmentReadiness{}, errs.ErrNotFound
@@ -407,14 +407,14 @@ func (repository *Repository) GetRuntimeEnvironmentReadiness(ctx context.Context
 	if err != nil {
 		return entity.RuntimeEnvironmentReadiness{}, errs.ErrUnavailable
 	}
-	result := runtimeEnvironmentReadiness(item)
+	result := repository.runtimeEnvironmentReadiness(item)
 	if err := tx.Commit(ctx); err != nil {
 		return entity.RuntimeEnvironmentReadiness{}, errs.ErrConflict
 	}
 	return result, nil
 }
 
-func runtimeEnvironmentReadiness(item entity.RuntimeEnvironmentSet) entity.RuntimeEnvironmentReadiness {
+func (repository *Repository) runtimeEnvironmentReadiness(item entity.RuntimeEnvironmentSet) entity.RuntimeEnvironmentReadiness {
 	result := entity.RuntimeEnvironmentReadiness{
 		EnvironmentRef: item.Ref, EnvironmentVersion: item.Version,
 		PublishedVersionRef: item.CurrentVersion.Ref, PublishedVersionDigest: item.CurrentVersion.Digest,
@@ -428,6 +428,9 @@ func runtimeEnvironmentReadiness(item entity.RuntimeEnvironmentSet) entity.Runti
 	}
 	if item.CurrentVersion.Image.Reference == "" || item.CurrentVersion.Image.Digest == "" {
 		result.Blockers = append(result.Blockers, "PROMOTED_IMAGE_MISSING")
+	} else if item.CurrentVersion.Image.RoleRuntimeContractRevision != int64(repository.roleImages.RoleRuntimeContractRevision) ||
+		item.CurrentVersion.Image.RoleRuntimeContractSHA256 != repository.roleImages.RoleRuntimeContractSHA256 {
+		result.Blockers = append(result.Blockers, "ROLE_RUNTIME_CONTRACT_STALE")
 	}
 	result.Ready = len(result.Blockers) == 0
 	return result

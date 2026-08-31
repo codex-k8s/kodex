@@ -88,7 +88,7 @@ func (repository *Repository) ListRuntimeEnvironments(ctx context.Context, princ
 	defer rows.Close()
 	items := make([]entity.RuntimeEnvironmentSet, 0, limit+1)
 	for rows.Next() {
-		item, scanErr := scanRuntimeEnvironment(rows)
+		item, scanErr := repository.scanRuntimeEnvironment(rows)
 		if scanErr != nil {
 			return nil, "", errs.ErrUnavailable
 		}
@@ -110,7 +110,7 @@ func (repository *Repository) GetRuntimeEnvironment(ctx context.Context, princip
 	if err != nil {
 		return entity.RuntimeEnvironmentSet{}, err
 	}
-	item, err := scanRuntimeEnvironment(repository.pool.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment, scope.organizationID, ref, scope.role, scope.actorID))
+	item, err := repository.scanRuntimeEnvironment(repository.pool.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment, scope.organizationID, ref, scope.role, scope.actorID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.RuntimeEnvironmentSet{}, errs.ErrNotFound
 	}
@@ -303,7 +303,7 @@ func scanAgentRuntimeConfigurationView(scanner rowScanner) (entity.AgentRuntimeC
 	return view, nil
 }
 
-func scanRuntimeEnvironment(scanner rowScanner) (entity.RuntimeEnvironmentSet, error) {
+func (repository *Repository) scanRuntimeEnvironment(scanner rowScanner) (entity.RuntimeEnvironmentSet, error) {
 	var item entity.RuntimeEnvironmentSet
 	var rawValues, rawSecrets, rawTools, rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte
 	var coreDigest string
@@ -311,7 +311,8 @@ func scanRuntimeEnvironment(scanner rowScanner) (entity.RuntimeEnvironmentSet, e
 		&item.UpdatedAt, &item.CurrentVersion.Ref, &item.CurrentVersion.Revision, &rawValues, &rawSecrets,
 		&item.CurrentVersion.Image.ArtifactRef, &item.CurrentVersion.Image.RecipeRef,
 		&item.CurrentVersion.Image.RecipeGeneration, &item.CurrentVersion.Image.Reference,
-		&item.CurrentVersion.Image.Digest, &rawTools,
+		&item.CurrentVersion.Image.Digest, &item.CurrentVersion.Image.RoleRuntimeContractRevision,
+		&item.CurrentVersion.Image.RoleRuntimeContractSHA256, &rawTools,
 		&coreDigest, &rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
 		&item.CurrentVersion.Policy.ResourcesDigest, &item.CurrentVersion.Policy.VolumesDigest,
 		&item.CurrentVersion.Policy.NetworkDigest, &item.CurrentVersion.Policy.RBACDigest,
@@ -337,7 +338,7 @@ func scanRuntimeEnvironment(scanner rowScanner) (entity.RuntimeEnvironmentSet, e
 	if digestErr != nil || storedCore != coreDigest || storedDigest != item.CurrentVersion.Digest {
 		return entity.RuntimeEnvironmentSet{}, errors.New("runtime environment digest mismatch")
 	}
-	readiness := runtimeEnvironmentReadiness(item)
+	readiness := repository.runtimeEnvironmentReadiness(item)
 	item.Ready = readiness.Ready
 	item.ReadinessBlockers = readiness.Blockers
 	return item, nil

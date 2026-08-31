@@ -664,26 +664,26 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 		return errors.New("runtime turn input is invalid")
 	}
 	if err := manager.validateProviderSecret(ctx, input, providerBinding); err != nil {
-		return err
+		return fmt.Errorf("validate provider credential projection: %w", err)
 	}
 	environmentSecrets, err := manager.materializeEnvironmentSecrets(ctx, input)
 	if err != nil {
-		return err
+		return fmt.Errorf("materialize runtime environment secrets: %w", err)
 	}
 	if err := manager.ensureSessionPVC(ctx, input.SessionRef); err != nil {
-		return err
+		return fmt.Errorf("ensure runtime session volume: %w", err)
 	}
 	token, err := newTicket()
 	if err != nil {
-		return err
+		return fmt.Errorf("generate runtime execution ticket: %w", err)
 	}
 	secretName := ticketName(input.LeaseRef)
 	podName := runtimecontract.RuntimeTurnPodName(input.LeaseRef)
 	if err := manager.ensureExecutionPolicy(ctx, input, podName); err != nil {
-		return err
+		return fmt.Errorf("ensure runtime execution policy: %w", err)
 	}
 	if err := manager.ensureTicket(ctx, secretName, podName, "turn", input, token, environmentSecrets, &providerBinding); err != nil {
-		return err
+		return fmt.Errorf("ensure runtime execution ticket: %w", err)
 	}
 	pod := manager.runtimePod(input, providerBinding, secretName, podName, "turn")
 	_, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, pod, metav1.CreateOptions{})
@@ -695,7 +695,7 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 		return nil
 	}
 	if err != nil {
-		return errors.New("create runtime turn pod")
+		return fmt.Errorf("create runtime turn pod: %w", err)
 	}
 	return nil
 }

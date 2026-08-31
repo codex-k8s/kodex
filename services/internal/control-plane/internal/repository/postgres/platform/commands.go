@@ -1355,6 +1355,19 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	var runtimeContractReady bool
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunValidateAgentRuntimeContract, pgx.StrictNamedArgs{
+		"organization_id":                scope.organizationID,
+		"project_id":                     projectID,
+		"agent_refs":                     targetAgentRefs,
+		"role_runtime_contract_revision": repository.roleImages.RoleRuntimeContractRevision,
+		"role_runtime_contract_sha256":   repository.roleImages.RoleRuntimeContractSHA256,
+	}).Scan(&runtimeContractReady); err != nil {
+		return commandOutcome{}, fmt.Errorf("validate run runtime contract: %w", errs.ErrUnavailable)
+	}
+	if !runtimeContractReady {
+		return commandOutcome{}, errs.ErrConflict
+	}
 	attachmentKind := "RUN_INPUT"
 	if payload.Target.Type == "WORKFLOW" {
 		attachmentKind = "WORKFLOW_INPUT"

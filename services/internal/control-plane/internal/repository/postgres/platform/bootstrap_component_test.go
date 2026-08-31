@@ -244,6 +244,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("runtime environment privileged admission requires fresh authentication and permission", func(t *testing.T) {
 		testRuntimeEnvironmentPrivilegedAdmission(t, ctx, repository)
 	})
+	t.Run("stale role runtime contract rejects launch before durable state", func(t *testing.T) {
+		testStaleRoleRuntimeContractRejectsLaunch(t, ctx, repository, pool)
+	})
 	t.Run("runtime configuration publish validates canonical provider accounts", func(t *testing.T) {
 		testRuntimeConfigurationPublish(t, ctx, repository)
 	})
@@ -262,6 +265,82 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("system assistant core prompt upgrades forward only", func(t *testing.T) {
 		testSystemAssistantCorePromptUpgrade(t, ctx, repository, pool)
 	})
+}
+
+func testStaleRoleRuntimeContractRejectsLaunch(
+	t *testing.T,
+	ctx context.Context,
+	repository *Repository,
+	pool *pgxpool.Pool,
+) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Runtime contract owner", CallerWorkload: "control-api-gateway",
+		Operation: "platform.command.projects.create",
+	}, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct runtime contract service: %v", err)
+	}
+	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-contract-project"}, Payload: command.ProjectInput{
+			Name: "Runtime contract boundary", Purpose: "Verify stale runtime contract launch rejection", Language: "en",
+		}})
+	if err != nil || project.Project == nil {
+		t.Fatalf("create runtime contract project: project=%#v err=%v", project.Project, err)
+	}
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "runtime-contract-agent", "Runtime contract agent")
+	configuration, err := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
+	if err != nil || !configuration.Environment.Ready {
+		t.Fatalf("read current runtime environment: configuration=%#v err=%v", configuration, err)
+	}
+	var sessionsBefore, runsBefore int64
+	if err := pool.QueryRow(ctx, `
+		SELECT (SELECT count(*) FROM control_plane.sessions session WHERE session.project_id = project.id),
+		       (SELECT count(*) FROM control_plane.runs run WHERE run.project_id = project.id)
+		FROM control_plane.projects project
+		WHERE project.ref = $1
+	`, project.Project.Ref).Scan(&sessionsBefore, &runsBefore); err != nil {
+		t.Fatalf("read durable launch state before contract upgrade: %v", err)
+	}
+	original := repository.roleImages
+	upgraded := original
+	upgraded.RoleRuntimeContractRevision++
+	upgraded.RoleRuntimeContractSHA256 = strings.Repeat("e", 64)
+	if err := repository.ConfigureRoleImages(upgraded); err != nil {
+		t.Fatalf("configure upgraded runtime contract: %v", err)
+	}
+	defer func() {
+		if restoreErr := repository.ConfigureRoleImages(original); restoreErr != nil {
+			t.Errorf("restore runtime contract configuration: %v", restoreErr)
+		}
+	}()
+	configuration, err = service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
+	if err != nil || configuration.Environment.Ready ||
+		!contains(configuration.Environment.ReadinessBlockers, "ROLE_RUNTIME_CONTRACT_STALE") {
+		t.Fatalf("stale runtime environment readiness: configuration=%#v err=%v", configuration, err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-contract-stale-launch"}, Payload: command.LaunchRunInput{
+			ProjectRef: project.Project.Ref, Task: "This run must be rejected before durable state is created.",
+			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref},
+		}}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("stale runtime contract launch error = %v, want conflict", err)
+	}
+	var sessionsAfter, runsAfter int64
+	if err := pool.QueryRow(ctx, `
+		SELECT (SELECT count(*) FROM control_plane.sessions session WHERE session.project_id = project.id),
+		       (SELECT count(*) FROM control_plane.runs run WHERE run.project_id = project.id)
+		FROM control_plane.projects project
+		WHERE project.ref = $1
+	`, project.Project.Ref).Scan(&sessionsAfter, &runsAfter); err != nil {
+		t.Fatalf("read durable launch state after rejected launch: %v", err)
+	}
+	if sessionsAfter != sessionsBefore || runsAfter != runsBefore {
+		t.Fatalf("rejected launch changed durable state: sessions=%d->%d runs=%d->%d",
+			sessionsBefore, sessionsAfter, runsBefore, runsAfter)
+	}
 }
 
 func testSystemAssistantWarmRuntimeProviderFailover(

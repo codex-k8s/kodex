@@ -532,6 +532,8 @@ LEFT JOIN LATERAL (
       AND artifact.admission_state = 'ACCEPTED'
       AND artifact.promotion_state = 'PROMOTED'
       AND artifact.promoted_reference <> ''
+      AND artifact.role_runtime_contract_revision = $5
+      AND artifact.role_runtime_contract_sha256 = $6
     LIMIT 1
 ) role_image ON true
 WHERE n.organization_id = $1::uuid

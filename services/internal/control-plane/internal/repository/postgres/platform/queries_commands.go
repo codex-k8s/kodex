@@ -129,6 +129,8 @@ var (
 	queryCommandsLaunchrunSelectAgentsOrganizationIdProjectIdRef string
 	//go:embed sql/commands_launchrun_select_workflows_organization_id_project_id_ref.sql
 	queryCommandsLaunchrunSelectWorkflowsOrganizationIdProjectIdRef string
+	//go:embed sql/commands_launchrun_validate_agent_runtime_contract.sql
+	queryCommandsLaunchrunValidateAgentRuntimeContract string
 	//go:embed sql/commands_launchrun_insert_sessions_ref_project_id_target_ref.sql
 	queryCommandsLaunchrunInsertSessionsRefProjectIdTargetRef string
 	//go:embed sql/commands_launchrun_select_sessions_organization_id_project_id_ref.sql

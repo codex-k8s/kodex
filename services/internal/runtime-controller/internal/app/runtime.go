@@ -170,6 +170,7 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 		}
 		if !warmExecution {
 			if err := runtime.manager.EnsureTurn(ctx, input, providerBinding); err != nil {
+				runtime.logger.WarnContext(ctx, "runtime turn materialization failed", "error_class", "kubernetes", "reason", err.Error())
 				<-runtime.capacity
 				runtime.failClaim(ctx, input, execution, "RUNTIME_MATERIALIZATION_FAILED")
 				continue

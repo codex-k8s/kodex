@@ -100,6 +100,63 @@ func TestProviderAccountEnabledTransitionMatrix(t *testing.T) {
 	}
 }
 
+func TestRuntimeEnvironmentReadinessRequiresCurrentRoleRuntimeContract(t *testing.T) {
+	t.Parallel()
+	const currentContractRevision = 7
+	currentContractSHA256 := strings.Repeat("a", 64)
+	repository := &Repository{roleImages: RoleImageConfig{
+		RoleRuntimeContractRevision: currentContractRevision,
+		RoleRuntimeContractSHA256:   currentContractSHA256,
+	}}
+	base := entity.RuntimeEnvironmentSet{
+		Ref: "renv_readiness", Version: 3, State: "ACTIVE",
+		CurrentVersion: entity.RuntimeEnvironmentVersion{
+			Ref: "renvv_readiness", Digest: strings.Repeat("b", 64),
+			Image: entity.RuntimeEnvironmentImage{
+				Reference: "registry.invalid/kodex/runtime@sha256:" + strings.Repeat("c", 64),
+				Digest:    strings.Repeat("c", 64), RoleRuntimeContractRevision: currentContractRevision,
+				RoleRuntimeContractSHA256: currentContractSHA256,
+			},
+		},
+	}
+	tests := []struct {
+		name    string
+		mutate  func(*entity.RuntimeEnvironmentSet)
+		ready   bool
+		blocker string
+	}{
+		{name: "current contract", ready: true},
+		{name: "stale revision", mutate: func(item *entity.RuntimeEnvironmentSet) {
+			item.CurrentVersion.Image.RoleRuntimeContractRevision--
+		}, blocker: "ROLE_RUNTIME_CONTRACT_STALE"},
+		{name: "stale digest", mutate: func(item *entity.RuntimeEnvironmentSet) {
+			item.CurrentVersion.Image.RoleRuntimeContractSHA256 = strings.Repeat("d", 64)
+		}, blocker: "ROLE_RUNTIME_CONTRACT_STALE"},
+		{name: "missing promoted image", mutate: func(item *entity.RuntimeEnvironmentSet) {
+			item.CurrentVersion.Image.Reference = ""
+			item.CurrentVersion.Image.Digest = ""
+		}, blocker: "PROMOTED_IMAGE_MISSING"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			item := base
+			if test.mutate != nil {
+				test.mutate(&item)
+			}
+			readiness := repository.runtimeEnvironmentReadiness(item)
+			if readiness.Ready != test.ready {
+				t.Fatalf("readiness = %v, want %v: %#v", readiness.Ready, test.ready, readiness.Blockers)
+			}
+			if test.blocker == "" && len(readiness.Blockers) != 0 {
+				t.Fatalf("unexpected blockers: %#v", readiness.Blockers)
+			}
+			if test.blocker != "" && !contains(readiness.Blockers, test.blocker) {
+				t.Fatalf("blockers = %#v, want %q", readiness.Blockers, test.blocker)
+			}
+		})
+	}
+}
+
 func TestProviderCompensationQueryWaitsForOwnerTransactionAndMatchesExactDescriptor(t *testing.T) {
 	t.Parallel()
 	if !strings.Contains(queryProviderAccountsMaterializationGuard, "FOR UPDATE") {

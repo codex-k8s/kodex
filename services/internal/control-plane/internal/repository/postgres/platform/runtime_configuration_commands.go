@@ -229,7 +229,7 @@ func (repository *Repository) changeRuntimeEnvironmentLifecycle(
 	if version != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
-	item, err := scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironmentLifecycleSnapshot,
+	item, err := repository.scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironmentLifecycleSnapshot,
 		pgx.StrictNamedArgs{"organization_id": current.organizationID, "environment_ref": payload.EnvironmentRef}))
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -700,7 +700,7 @@ func (repository *Repository) getRuntimeConfigurationViewTx(ctx context.Context,
 }
 
 func (repository *Repository) getRuntimeEnvironmentTx(ctx context.Context, tx pgx.Tx, scope scope, ref string) (entity.RuntimeEnvironmentSet, error) {
-	item, err := scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment,
+	item, err := repository.scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment,
 		scope.organizationID, ref, scope.role, scope.actorID))
 	if err != nil {
 		return entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable

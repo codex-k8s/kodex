@@ -106,11 +106,13 @@ type RuntimeEnvironmentTool struct {
 }
 
 type RuntimeEnvironmentImage struct {
-	ArtifactRef      string `json:"artifact_ref"`
-	RecipeRef        string `json:"recipe_ref"`
-	Reference        string `json:"reference"`
-	Digest           string `json:"digest"`
-	RecipeGeneration int64  `json:"recipe_generation"`
+	ArtifactRef                 string `json:"artifact_ref"`
+	RecipeRef                   string `json:"recipe_ref"`
+	Reference                   string `json:"reference"`
+	Digest                      string `json:"digest"`
+	RecipeGeneration            int64  `json:"recipe_generation"`
+	RoleRuntimeContractSHA256   string `json:"-"`
+	RoleRuntimeContractRevision int64  `json:"-"`
 }
 
 type RuntimeEnvironmentVersion struct {
