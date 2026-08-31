@@ -109,11 +109,11 @@ emit_job() {
   local phase=$1 service_account=$2 identity_secret=$3 protected=${4:-false}
   local workload="" grant_signer_secret=""
   if [[ $phase == claim || $phase == admit ]]; then
-    workload=image-admission
-    grant_signer_secret=image-admission-platform-worker-grant-signer
+    workload='image-admission'
+    grant_signer_secret='image-admission-platform-worker-grant-signer'
   elif [[ $phase == promote ]]; then
-    workload=image-promotion
-    grant_signer_secret=image-promotion-platform-worker-grant-signer
+    workload='image-promotion'
+    grant_signer_secret='image-promotion-platform-worker-grant-signer'
   fi
   cat <<EOF
 ---
@@ -213,6 +213,7 @@ EOF
           volumeMounts:
             - {name: authority-sockets, mountPath: /run/kodex}
             - {name: authority-snapshot, mountPath: /var/run/config/kodex/internal-rpc-authority/snapshot, readOnly: true}
+            - {name: authority-bootstrap-roots, mountPath: /usr/local/share/internal-rpc-authority/manifest-root, readOnly: true}
             - {name: authority-manifest-trust, mountPath: /var/run/config/kodex/internal-rpc-authority/manifest-trust, readOnly: true}
             - {name: authority-proof-trust, mountPath: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust, readOnly: true}
             - {name: authority-issuer-key, mountPath: /var/run/secrets/kodex/internal-rpc-authority/issuer, readOnly: true}
@@ -323,6 +324,13 @@ EOF
     cat <<EOF
         - {name: authority-sockets, emptyDir: {sizeLimit: 8Mi}}
         - {name: authority-snapshot, secret: {secretName: internal-rpc-authority-snapshot, defaultMode: 0440}}
+        - name: authority-bootstrap-roots
+          secret:
+            secretName: internal-rpc-authority-bootstrap-roots
+            defaultMode: 0444
+            items:
+              - {key: manifest-root-public.jwk, path: bootstrap-public.jwk}
+              - {key: manifest-root-metadata.json, path: bootstrap-metadata.json}
         - {name: authority-manifest-trust, secret: {secretName: internal-rpc-authority-${workload}-manifest-trust, defaultMode: 0440}}
         - {name: authority-proof-trust, secret: {secretName: internal-rpc-authority-${workload}-proof-trust, defaultMode: 0440}}
         - {name: authority-issuer-key, secret: {secretName: internal-rpc-authority-${workload}-issuer-key, defaultMode: 0440}}

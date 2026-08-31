@@ -227,7 +227,21 @@ yq -o=json -I=0 '.' "$jobs" | jq -s -e '
       select(.name == "internal-rpc-authority-issuer") |
       .env[]? |
       select(.name == "OTEL_SDK_DISABLED" and .value == "true")] |
-      length) == 1)
+      length) == 1 and
+    any(.spec.template.spec.initContainers[];
+      .name == "internal-rpc-authority-issuer" and
+      any(.volumeMounts[];
+        .name == "authority-bootstrap-roots" and
+        .mountPath == "/usr/local/share/internal-rpc-authority/manifest-root" and
+        .readOnly == true)) and
+    any(.spec.template.spec.volumes[];
+      .name == "authority-bootstrap-roots" and
+      .secret.secretName == "internal-rpc-authority-bootstrap-roots" and
+      .secret.defaultMode == 444 and
+      .secret.items == [
+        {"key":"manifest-root-public.jwk","path":"bootstrap-public.jwk"},
+        {"key":"manifest-root-metadata.json","path":"bootstrap-metadata.json"}
+      ]))
 ' >/dev/null || fail 'real admission renderer did not materialize all exact phases'
 
 if rg -n '__KODEX_[A-Z0-9_]+__|\.invalid|@sha256:0{64}' "$render" "$jobs" >/dev/null; then
