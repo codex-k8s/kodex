@@ -121,11 +121,11 @@ media и никогда не исполняет активный контент.
 `purge_after = deleted_at + 30 days`, actor и reason. После commit новые
 bindings, AttachmentSet и manifests для Artifact запрещены. Draft set с
 удалённым файлом нельзя seal-ить. Удаление не переписывает уже активный manifest
-и не обещает отозвать байты, материализованные выполняющемуся Turn.
-Если exact version уже закреплена во входном `AttachmentSet` запуска или Turn,
-который ещё находится в `QUEUED` и не получил неизменяемый runtime snapshot,
-удаление закрыто отклоняется. Пользователь сначала явно отменяет зависимый
-запуск либо дожидается claim; скрытая вечная очередь из-за tombstone запрещена.
+и не отзывает exact finalized input у уже созданного активного Run или Turn.
+Такой Run может получить свою неизменяемую `RuntimeRevision` после soft delete и
+завершить работу с закреплённой revision; обычные download, новые bindings и
+новые независимые Turn при этом закрыто отклоняются. Физический purge блокируется
+до terminal transition каждого активного Run, использующего exact revision.
 
 `RestoreArtifact` допустим до `purge_after` и создаёт новую aggregate version.
 Он не возобновляет отозванные bindings автоматически. Действующие bindings,

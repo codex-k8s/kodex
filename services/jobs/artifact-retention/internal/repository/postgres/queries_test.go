@@ -12,6 +12,13 @@ func TestClaimQueryKeepsBoundedFencedLifecycle(t *testing.T) {
 		"content.object_version",
 		"retention_claim_generation + 1",
 		"@lease_seconds * interval '1 second'",
+		"active_run.state IN ('QUEUED', 'RUNNING', 'WAITING_HUMAN', 'CANCELLING')",
+		"input_item.artifact_revision = artifact.revision",
+		"source_turn.created_at < active_run.created_at",
+		"artifact.deleted_at > active_run.created_at",
+		"runtime_revision.safe_snapshot -> 'artifacts'",
+		"runtime_revision.root_run_id = active_run.id",
+		"exact.item -> 'revision' = to_jsonb(artifact.revision)",
 	} {
 		if !strings.Contains(queryClaimDue, fragment) {
 			t.Fatalf("claim query lacks %q", fragment)

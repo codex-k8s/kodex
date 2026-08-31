@@ -228,8 +228,10 @@ revision:
 
 1. `Delete` после проверки exact Project owner и OCC переводит `Artifact` в
    `DELETED`, выставляет `deleted_at` и `purge_after = deleted_at + 30 days`,
-   запрещает новые bindings и отзывает download/materialization grants. Artifact
-   появляется в корзине; исторические bindings остаются частью audit lineage.
+   запрещает новые bindings и ordinary download. Exact finalized input уже
+   созданного активного Run сохраняет право на runtime materialization до его
+   terminal transition. Artifact появляется в корзине; исторические bindings
+   остаются частью audit lineage.
 2. `Restore` до `purge_after` возвращает `ACTIVE`, не создаёт новую revision и
    повторно разрешает только те bindings, для которых actor и target всё ещё
    eligible. Restore не оживляет terminal Run и не меняет старую
@@ -255,17 +257,22 @@ object key/version, body, prompt fragment и secret metadata после purge н
 
 ## Активная Session и неизменяемый snapshot
 
-Soft delete не изменяет уже материализованный workspace работающего attempt:
-это нарушило бы immutable input и воспроизводимость. Перед подтверждением UI
-показывает активные Runs/Sessions, использующие revision, и предлагает отменить
-их, если требуется немедленно прекратить обработку.
+Soft delete не изменяет exact finalized input уже созданного активного Run:
+Run может получить `RuntimeRevision` после удаления и завершить attempt с тем же
+snapshot. Иное поведение нарушило бы immutable input и оставило бы Run навсегда
+в очереди. Перед подтверждением UI показывает активные Runs/Sessions,
+использующие revision, и предлагает отменить их, если требуется немедленно
+прекратить обработку.
 
 После Delete:
 
-- текущий attempt может завершить работу со своим read-only snapshot;
-- новый Turn, retry, continuation или child Run получает новую
-  `RuntimeRevision` и не включает deleted revision;
-- новые download/materialization grants закрыто отклоняются;
+- текущий active Run и его attempt могут материализовать и завершить работу со
+  своим read-only snapshot;
+- новый независимый Turn, continuation или child Run получает новую
+  `RuntimeRevision` и не включает deleted revision; retry следует отдельному
+  version-pinned контракту исходного Turn;
+- новые ordinary download и materialization вне exact snapshot активного Run
+  закрыто отклоняются;
 - restore не мутирует текущий attempt, а влияет только на будущую
   материализацию после новой проверки eligibility.
 

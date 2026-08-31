@@ -115,6 +115,9 @@ func (repository *Repository) changeAttachmentSet(ctx context.Context, tx pgx.Tx
 		return commandOutcome{}, err
 	}
 	if input.Kind == command.FinalizeAttachmentSet {
+		if err := repository.lockMaterializableAttachmentSetItems(ctx, tx, current, base.ProjectID, base.ID, int64(len(items)), false); err != nil {
+			return commandOutcome{}, err
+		}
 		artifacts := make([]runtimecontract.RunnerInputArtifact, 0, len(items))
 		for _, item := range items {
 			item.Scope = runtimecontract.AttachmentScopeInput
@@ -280,7 +283,7 @@ func (repository *Repository) lockLatestAttachmentSetRevision(ctx context.Contex
 }
 
 func (repository *Repository) resolveFinalizedAttachmentSet(ctx context.Context, tx pgx.Tx, current scope,
-	projectID, ref, purpose string,
+	projectID, ref, purpose string, allowSoftDeleted bool,
 ) (sealedAttachmentSet, error) {
 	if ref == "" {
 		return sealedAttachmentSet{}, nil
@@ -292,7 +295,40 @@ func (repository *Repository) resolveFinalizedAttachmentSet(ctx context.Context,
 	}).Scan(&item.ID, &item.Ref, &item.ManifestDigest, &item.Purpose, &item.ItemCount, &item.TotalSizeBytes); err != nil {
 		return sealedAttachmentSet{}, errs.ErrConflict
 	}
+	if err := repository.lockMaterializableAttachmentSetItems(ctx, tx, current, projectID, item.ID, item.ItemCount, allowSoftDeleted); err != nil {
+		return sealedAttachmentSet{}, err
+	}
 	return item, nil
+}
+
+func (repository *Repository) lockMaterializableAttachmentSetItems(ctx context.Context, tx pgx.Tx, current scope,
+	projectID, setID string, expectedCount int64, allowSoftDeleted bool,
+) error {
+	rows, err := tx.Query(ctx, queryAttachmentSetsLockMaterializableItems, pgx.StrictNamedArgs{
+		"organization_id":    current.organizationID,
+		"project_id":         projectID,
+		"attachment_set_id":  setID,
+		"allow_soft_deleted": allowSoftDeleted,
+	})
+	if err != nil {
+		return errs.ErrUnavailable
+	}
+	defer rows.Close()
+	var count int64
+	for rows.Next() {
+		var artifactID string
+		if err := rows.Scan(&artifactID); err != nil {
+			return errs.ErrUnavailable
+		}
+		count++
+	}
+	if rows.Err() != nil {
+		return errs.ErrUnavailable
+	}
+	if count != expectedCount {
+		return errs.ErrConflict
+	}
+	return nil
 }
 
 func (repository *Repository) listAttachmentSetItemsTx(ctx context.Context, tx pgx.Tx, setID string) ([]attachmentSetItem, error) {

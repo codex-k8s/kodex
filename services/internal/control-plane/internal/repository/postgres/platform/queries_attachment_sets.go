@@ -27,6 +27,8 @@ var (
 	queryAttachmentSetsSelectLatest string
 	//go:embed sql/attachmentsets_resolve_finalized.sql
 	queryAttachmentSetsResolveFinalized string
+	//go:embed sql/attachmentsets_lock_materializable_items.sql
+	queryAttachmentSetsLockMaterializableItems string
 	//go:embed sql/attachmentsets_list_items.sql
 	queryAttachmentSetsListItems string
 	//go:embed sql/attachmentsets_get.sql

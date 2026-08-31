@@ -906,7 +906,7 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	turnRef, _ := newRef("trn")
-	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, "ASSISTANT_MESSAGE")
+	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, "ASSISTANT_MESSAGE", false)
 	if err != nil {
 		return commandOutcome{}, err
 	}

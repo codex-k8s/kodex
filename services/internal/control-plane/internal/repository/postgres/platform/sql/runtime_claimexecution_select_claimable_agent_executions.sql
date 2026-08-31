@@ -91,7 +91,33 @@ SELECT n.id::text,
                JOIN control_plane.attachment_sets AS previous_set
                  ON previous_set.id = previous_turn.attachment_set_id
                 AND previous_set.state = 'FINALIZED'
-               WHERE input_attachment_set.id IS NULL OR previous_set.id <> input_attachment_set.id
+               WHERE (input_attachment_set.id IS NULL OR previous_set.id <> input_attachment_set.id)
+                 AND previous_set.item_count = (
+                     SELECT count(*)
+                     FROM control_plane.attachment_set_items AS eligible_item
+                     JOIN control_plane.artifacts AS eligible_artifact
+                       ON eligible_artifact.id = eligible_item.artifact_id
+                     JOIN control_plane.artifact_content AS eligible_content
+                       ON eligible_content.artifact_id = eligible_artifact.id
+                     WHERE eligible_item.attachment_set_id = previous_set.id
+                       AND eligible_artifact.scan_state = 'CLEAN'
+                       AND (
+                           eligible_artifact.lifecycle_state = 'ACTIVE'
+                           OR (
+                               eligible_artifact.lifecycle_state = 'DELETED'
+                               AND eligible_artifact.deleted_at > r.created_at
+                           )
+                       )
+                       AND eligible_artifact.ref = eligible_item.artifact_ref
+                       AND eligible_artifact.revision = eligible_item.artifact_revision
+                       AND eligible_artifact.file_name = eligible_item.file_name
+                       AND eligible_artifact.media_type = eligible_item.media_type
+                       AND eligible_artifact.size_bytes = eligible_item.size_bytes
+                       AND eligible_artifact.digest = eligible_item.digest
+                       AND eligible_artifact.source = eligible_item.source
+                       AND eligible_content.digest = eligible_item.digest
+                       AND eligible_content.size_bytes = eligible_item.size_bytes
+                 )
            ) AS runtime_set
        ), '[]'::jsonb) ELSE '[]'::jsonb END,
        CASE WHEN 'platform.artifact.manage'=ANY(a.capabilities) THEN COALESCE((
@@ -122,7 +148,7 @@ SELECT n.id::text,
                           item.digest,
                           item.artifact_revision AS revision,
                           item.artifact_version AS version,
-                          artifact.source,
+                          item.source,
                           'INPUT'::text AS usage_scope,
                           item.position,
                           0::integer AS scope_order,
@@ -135,9 +161,16 @@ SELECT n.id::text,
                    JOIN control_plane.artifact_content AS content ON content.artifact_id = artifact.id
                    WHERE item.attachment_set_id = input_attachment_set.id
                      AND artifact.scan_state = 'CLEAN'
-                     AND artifact.lifecycle_state = 'ACTIVE'
+                     AND artifact.lifecycle_state IN ('ACTIVE', 'DELETED')
+                     AND artifact.ref = item.artifact_ref
                      AND artifact.revision = item.artifact_revision
-                     AND artifact.version = item.artifact_version
+                     AND artifact.file_name = item.file_name
+                     AND artifact.media_type = item.media_type
+                     AND artifact.size_bytes = item.size_bytes
+                     AND artifact.digest = item.digest
+                     AND artifact.source = item.source
+                     AND content.digest = item.digest
+                     AND content.size_bytes = item.size_bytes
                      AND input_attachment_set.state = 'FINALIZED'
 
                    UNION ALL
@@ -149,7 +182,7 @@ SELECT n.id::text,
                           previous_item.digest,
                           previous_item.artifact_revision,
                           previous_item.artifact_version,
-                          previous_artifact.source,
+                          previous_item.source,
                           'SESSION'::text AS usage_scope,
                           previous_item.position,
                           1::integer AS scope_order,
@@ -180,9 +213,48 @@ SELECT n.id::text,
                      ON previous_content.artifact_id = previous_artifact.id
                    WHERE (input_attachment_set.id IS NULL OR previous_set.id <> input_attachment_set.id)
                      AND previous_artifact.scan_state = 'CLEAN'
-                     AND previous_artifact.lifecycle_state = 'ACTIVE'
+                     AND (
+                         previous_artifact.lifecycle_state = 'ACTIVE'
+                         OR (
+                             previous_artifact.lifecycle_state = 'DELETED'
+                             AND previous_artifact.deleted_at > r.created_at
+                         )
+                     )
+                     AND previous_artifact.ref = previous_item.artifact_ref
                      AND previous_artifact.revision = previous_item.artifact_revision
-                     AND previous_artifact.version = previous_item.artifact_version
+                     AND previous_artifact.file_name = previous_item.file_name
+                     AND previous_artifact.media_type = previous_item.media_type
+                     AND previous_artifact.size_bytes = previous_item.size_bytes
+                     AND previous_artifact.digest = previous_item.digest
+                     AND previous_artifact.source = previous_item.source
+                     AND previous_content.digest = previous_item.digest
+                     AND previous_content.size_bytes = previous_item.size_bytes
+                     AND previous_set.item_count = (
+                         SELECT count(*)
+                         FROM control_plane.attachment_set_items AS eligible_item
+                         JOIN control_plane.artifacts AS eligible_artifact
+                           ON eligible_artifact.id = eligible_item.artifact_id
+                         JOIN control_plane.artifact_content AS eligible_content
+                           ON eligible_content.artifact_id = eligible_artifact.id
+                         WHERE eligible_item.attachment_set_id = previous_set.id
+                           AND eligible_artifact.scan_state = 'CLEAN'
+                           AND (
+                               eligible_artifact.lifecycle_state = 'ACTIVE'
+                               OR (
+                                   eligible_artifact.lifecycle_state = 'DELETED'
+                                   AND eligible_artifact.deleted_at > r.created_at
+                               )
+                           )
+                           AND eligible_artifact.ref = eligible_item.artifact_ref
+                           AND eligible_artifact.revision = eligible_item.artifact_revision
+                           AND eligible_artifact.file_name = eligible_item.file_name
+                           AND eligible_artifact.media_type = eligible_item.media_type
+                           AND eligible_artifact.size_bytes = eligible_item.size_bytes
+                           AND eligible_artifact.digest = eligible_item.digest
+                           AND eligible_artifact.source = eligible_item.source
+                           AND eligible_content.digest = eligible_item.digest
+                           AND eligible_content.size_bytes = eligible_item.size_bytes
+                     )
 
                    UNION ALL
 
@@ -481,9 +553,16 @@ WHERE n.organization_id = $1::uuid
           JOIN control_plane.artifact_content AS input_content ON input_content.artifact_id = input_artifact.id
           WHERE input_item.attachment_set_id = input_attachment_set.id
             AND input_artifact.scan_state = 'CLEAN'
-            AND input_artifact.lifecycle_state = 'ACTIVE'
+            AND input_artifact.lifecycle_state IN ('ACTIVE', 'DELETED')
+            AND input_artifact.ref = input_item.artifact_ref
             AND input_artifact.revision = input_item.artifact_revision
-            AND input_artifact.version = input_item.artifact_version
+            AND input_artifact.file_name = input_item.file_name
+            AND input_artifact.media_type = input_item.media_type
+            AND input_artifact.size_bytes = input_item.size_bytes
+            AND input_artifact.digest = input_item.digest
+            AND input_artifact.source = input_item.source
+            AND input_content.digest = input_item.digest
+            AND input_content.size_bytes = input_item.size_bytes
       )
   )
   AND NOT EXISTS (

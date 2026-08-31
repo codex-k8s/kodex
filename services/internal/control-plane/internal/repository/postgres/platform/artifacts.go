@@ -806,9 +806,6 @@ func (repository *Repository) artifactImpactTx(ctx context.Context, tx pgx.Tx, c
 		if bindingCount > 0 {
 			blockers = append(blockers, "ARTIFACT_HAS_BINDINGS")
 		}
-		if attachmentCount > 0 {
-			blockers = append(blockers, "ARTIFACT_HAS_IMMUTABLE_ATTACHMENTS")
-		}
 		if activeRuntimeCount > 0 {
 			blockers = append(blockers, "ACTIVE_RUN_USES_ARTIFACT")
 		}

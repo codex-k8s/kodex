@@ -4037,19 +4037,6 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	`, ownerScope.organizationID, sessionID).Scan(&queuedRunRef, &queuedRunTitle, &queuedRunState); err != nil {
 		t.Fatalf("read queued assistant run descriptor: %v", err)
 	}
-	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-claim-1"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
-	if err != nil || len(claimed.RuntimeItems) != 1 {
-		t.Fatalf("claim assistant execution: claims=%d err=%v", len(claimed.RuntimeItems), err)
-	}
-	lease := claimed.RuntimeItems[0]
-	if stringMap(lease, "projectRef") != projectRef {
-		t.Fatalf("assistant runtime lost project binding: got=%q want=%q", stringMap(lease, "projectRef"), projectRef)
-	}
-	artifactCatalog, ok := lease["artifacts"].([]map[string]any)
-	if !ok || len(artifactCatalog) != 1 || stringMap(artifactCatalog[0], "ref") != assistantInput.Ref {
-		t.Fatalf("assistant runtime lost organization attachment snapshot: %#v", lease["artifacts"])
-	}
 	queuedImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "DELETE")
 	if err != nil || !queuedImpact.Permitted || queuedImpact.ActiveRuntimeCount != 1 || queuedImpact.ActiveRunsTruncated ||
 		len(queuedImpact.ActiveRuns) != 1 || queuedImpact.ActiveRuns[0].RunRef != queuedRunRef ||
@@ -4058,11 +4045,51 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("queued assistant input impact: impact=%#v err=%v", queuedImpact, err)
 	}
 	deletedInput, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-after-claim-1", ExpectedVersion: &queuedInputVersion},
+		Mutation: value.Mutation{IdempotencyKey: "assistant-artifact-delete-before-claim-1", ExpectedVersion: &queuedInputVersion},
 		Payload:  command.ArtifactLifecycleInput{ArtifactRef: assistantInput.Ref, ImpactDigest: queuedImpact.Digest},
 	})
 	if err != nil || deletedInput.Artifact == nil || deletedInput.Artifact.LifecycleState != "DELETED" {
 		t.Fatalf("soft-delete queued assistant input: artifact=%#v err=%v", deletedInput.Artifact, err)
+	}
+	if _, err := service.DownloadArtifact(ctx, owner, assistantInput.Ref, "DOWNLOAD"); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("ordinary download exposed soft-deleted assistant input: %v", err)
+	}
+	rejectedConversation, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-conversation-deleted-input-1"}, Payload: command.AssistantConversationInput{}})
+	if err != nil || rejectedConversation.Conversation == nil {
+		t.Fatalf("create assistant conversation for deleted input rejection: conversation=%#v err=%v", rejectedConversation.Conversation, err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.AddAssistantTurn, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-turn-deleted-input-1"}, Payload: command.AssistantTurnInput{
+			ConversationRef: rejectedConversation.Conversation.Ref, Content: "Must not bind deleted input", AttachmentSetRef: assistantAttachmentSetRef,
+		}}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("new assistant turn accepted soft-deleted attachment snapshot: %v", err)
+	}
+	activePurgeImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "PURGE")
+	if err != nil || activePurgeImpact.Permitted || activePurgeImpact.AttachmentCount < 1 ||
+		activePurgeImpact.ActiveRuntimeCount != 1 || activePurgeImpact.ActiveRunsTruncated ||
+		len(activePurgeImpact.ActiveRuns) != 1 || activePurgeImpact.ActiveRuns[0].RunRef != queuedRunRef ||
+		!contains(activePurgeImpact.Blockers, "ACTIVE_RUN_USES_ARTIFACT") ||
+		contains(activePurgeImpact.Blockers, "ARTIFACT_HAS_IMMUTABLE_ATTACHMENTS") {
+		t.Fatalf("active assistant input purge impact: impact=%#v err=%v", activePurgeImpact, err)
+	}
+	if _, err := service.PurgeArtifact(ctx, owner,
+		value.Mutation{IdempotencyKey: "assistant-artifact-purge-active-1", ExpectedVersion: &deletedInput.Artifact.Version},
+		assistantInput.Ref, activePurgeImpact.Digest); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("purge active assistant input returned %v", err)
+	}
+	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-claim-after-soft-delete-1"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
+	if err != nil || len(claimed.RuntimeItems) != 1 {
+		t.Fatalf("claim assistant execution after input soft delete: claims=%d err=%v", len(claimed.RuntimeItems), err)
+	}
+	lease := claimed.RuntimeItems[0]
+	if stringMap(lease, "projectRef") != projectRef {
+		t.Fatalf("assistant runtime lost project binding: got=%q want=%q", stringMap(lease, "projectRef"), projectRef)
+	}
+	artifactCatalog, ok := lease["artifacts"].([]map[string]any)
+	if !ok || len(artifactCatalog) != 1 || stringMap(artifactCatalog[0], "ref") != assistantInput.Ref {
+		t.Fatalf("assistant runtime lost soft-deleted organization attachment snapshot: %#v", lease["artifacts"])
 	}
 	runtimeInput, err := service.ReadExecutionArtifact(ctx, runtimeReader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), assistantInput.Ref)
 	if err != nil {
@@ -4113,15 +4140,16 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("complete direct assistant execution: run=%#v err=%v", completed.Run, err)
 	}
 	purgeImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "PURGE")
-	if err != nil || purgeImpact.Permitted || purgeImpact.AttachmentCount < 1 ||
+	if err != nil || !purgeImpact.Permitted || purgeImpact.AttachmentCount < 1 ||
 		purgeImpact.ActiveRuntimeCount != int64(len(purgeImpact.ActiveRuns)) || purgeImpact.ActiveRunsTruncated ||
-		!contains(purgeImpact.Blockers, "ARTIFACT_HAS_IMMUTABLE_ATTACHMENTS") {
-		t.Fatalf("immutable assistant attachment purge impact: impact=%#v err=%v", purgeImpact, err)
+		len(purgeImpact.Blockers) != 0 {
+		t.Fatalf("terminal assistant attachment purge impact: impact=%#v err=%v", purgeImpact, err)
 	}
-	if _, err := service.PurgeArtifact(ctx, owner,
-		value.Mutation{IdempotencyKey: "assistant-artifact-purge-1", ExpectedVersion: &deletedInput.Artifact.Version},
-		assistantInput.Ref, purgeImpact.Digest); !errors.Is(err, domainerrs.ErrConflict) {
-		t.Fatalf("purge immutable assistant attachment returned %v", err)
+	purgedState, err := service.PurgeArtifact(ctx, owner,
+		value.Mutation{IdempotencyKey: "assistant-artifact-purge-terminal-1", ExpectedVersion: &deletedInput.Artifact.Version},
+		assistantInput.Ref, purgeImpact.Digest)
+	if err != nil || purgedState != "PURGED" {
+		t.Fatalf("purge terminal assistant attachment: state=%q err=%v", purgedState, err)
 	}
 	assistantOutput, err := service.DownloadArtifact(ctx, owner, completed.CreatedRefs[0], "DOWNLOAD")
 	if err != nil {

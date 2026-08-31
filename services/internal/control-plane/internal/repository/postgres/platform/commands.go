@@ -1301,6 +1301,10 @@ func (repository *Repository) agentsHaveCapabilities(ctx context.Context, tx pgx
 }
 
 func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	return repository.launchRunWithAttachmentPolicy(ctx, tx, scope, input, false)
+}
+
+func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, reuseAttachmentSnapshot bool) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LaunchRunInput)
 	if !ok || payload.ProjectRef == "" || strings.TrimSpace(payload.Task) == "" || len(payload.Task) > 32768 || len(payload.Title) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) {
 		return commandOutcome{}, errs.ErrInvalid
@@ -1362,7 +1366,7 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	if !contains(attachmentSetPurposes, attachmentPurpose) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, attachmentPurpose)
+	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, attachmentPurpose, reuseAttachmentSnapshot)
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -2077,7 +2081,7 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	nested := input
 	nested.Kind = command.LaunchRun
 	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: title, Task: task, SessionRef: sessionRef, Source: source, Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: launchInput, AttachmentSetRef: attachmentSetRef, AttachmentPurpose: attachmentPurpose}
-	outcome, err := repository.launchRun(ctx, tx, scope, nested)
+	outcome, err := repository.launchRunWithAttachmentPolicy(ctx, tx, scope, nested, true)
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -2142,7 +2146,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if !contains(allowed, payload.Decision) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
-	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, "OWNER_GATE_MESSAGE")
+	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, "OWNER_GATE_MESSAGE", false)
 	if err != nil {
 		return commandOutcome{}, err
 	}

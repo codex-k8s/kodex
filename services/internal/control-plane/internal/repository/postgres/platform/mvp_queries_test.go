@@ -258,6 +258,61 @@ func TestSynchronousPurgeKeepsTombstoneNameUnique(t *testing.T) {
 	}
 }
 
+func TestAttachmentSnapshotQueriesKeepImmutableRuntimeBoundary(t *testing.T) {
+	for _, fragment := range []string{
+		"artifact.lifecycle_state = 'ACTIVE'",
+		"artifact.revision = item.artifact_revision",
+		"content.digest = item.digest",
+		"content.size_bytes = item.size_bytes",
+		"FOR SHARE OF artifact",
+	} {
+		if !strings.Contains(queryAttachmentSetsLockMaterializableItems, fragment) {
+			t.Fatalf("attachment set materialization lock lacks %q", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		"artifact.lifecycle_state IN ('ACTIVE', 'DELETED')",
+		"artifact.revision = item.artifact_revision",
+		"content.digest = item.digest",
+		"input_artifact.lifecycle_state IN ('ACTIVE', 'DELETED')",
+		"runtime_revision.safe_snapshot -> 'artifacts'",
+	} {
+		if !strings.Contains(queryRuntimeClaimExecutionSelectClaimableAgentExecutions, fragment) &&
+			!strings.Contains(queryArtifactsImpact, fragment) {
+			t.Fatalf("runtime snapshot queries lack %q", fragment)
+		}
+	}
+	for _, forbidden := range []string{
+		"artifact.version = item.artifact_version",
+		"input_artifact.version = input_item.artifact_version",
+	} {
+		if strings.Contains(queryRuntimeClaimExecutionSelectClaimableAgentExecutions, forbidden) {
+			t.Fatalf("runtime claim depends on mutable artifact version through %q", forbidden)
+		}
+	}
+	for _, fragment := range []string{
+		"artifact.lifecycle_state IN ('ACTIVE', 'DELETED')",
+		"exact.item -> 'revision' = to_jsonb(artifact.revision)",
+		"exact.item ->> 'digest' = content.digest",
+	} {
+		if !strings.Contains(queryRuntimeReadexecutionartifactSelectArtifactContent, fragment) {
+			t.Fatalf("runtime artifact read lacks %q", fragment)
+		}
+	}
+	if !strings.Contains(queryArtifactsDownloadartifactSelectArtifactForGrant, "ar.lifecycle_state = 'ACTIVE'") {
+		t.Fatal("ordinary artifact download no longer rejects soft-deleted artifacts")
+	}
+	for _, fragment := range []string{
+		"item.artifact_revision = artifact.revision",
+		"runtime_revision.safe_snapshot -> 'artifacts'",
+		"run.id = runtime_revision.root_run_id",
+	} {
+		if !strings.Contains(queryArtifactsImpact, fragment) {
+			t.Fatalf("artifact purge guard lacks %q", fragment)
+		}
+	}
+}
+
 func TestProviderAccountActionsForViewOnlyMember(t *testing.T) {
 	t.Parallel()
 	item := entity.ProviderAccount{State: "AUTHORIZED", Enabled: true}

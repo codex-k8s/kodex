@@ -50,11 +50,17 @@ WHERE lease.organization_id = @organization_id::uuid
   AND lease.expires_at > clock_timestamp()
   AND artifact.ref = @artifact_ref
   AND artifact.scan_state = 'CLEAN'
-  AND artifact.lifecycle_state <> 'PURGED'
+  AND artifact.lifecycle_state IN ('ACTIVE', 'DELETED')
   AND EXISTS (
     SELECT 1
     FROM jsonb_array_elements(COALESCE(revision.safe_snapshot -> 'artifacts', '[]'::jsonb)) AS exact(item)
     WHERE exact.item ->> 'ref' = artifact.ref
       AND exact.item ->> 'digest' = artifact.digest
       AND exact.item ->> 'digest' = content.digest
+      AND exact.item -> 'revision' = to_jsonb(artifact.revision)
+      AND exact.item ->> 'fileName' = artifact.file_name
+      AND exact.item ->> 'mediaType' = artifact.media_type
+      AND exact.item -> 'sizeBytes' = to_jsonb(artifact.size_bytes)
+      AND exact.item ->> 'source' = artifact.source
+      AND content.size_bytes = artifact.size_bytes
   )
