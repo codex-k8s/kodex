@@ -1695,27 +1695,42 @@ test.describe("web-only fresh installation", () => {
     await gotoWithRetry(page, `/projects/${projectRef}/automations`);
     row = page.locator(".automation-row").filter({ hasText: automationName });
     await row.click();
-    const edit = page.waitForResponse(
-      (response) =>
-        response.request().method() === "PATCH" &&
-        /^\/api\/v1\/schedules\/[^/]+$/.test(new URL(response.url()).pathname),
-    );
-    await page
-      .locator(".automation-details")
-      .getByRole("button", { name: "Изменить автоматизацию" })
-      .click();
-    const editDialog = page.getByRole("dialog", {
-      name: "Изменить автоматизацию",
+    if ((await readScheduleRevisionState(page, automationRef)).revision === 1) {
+      const edit = page.waitForResponse(
+        (response) =>
+          response.request().method() === "PATCH" &&
+          /^\/api\/v1\/schedules\/[^/]+$/.test(
+            new URL(response.url()).pathname,
+          ),
+      );
+      await page
+        .locator(".automation-details")
+        .getByRole("button", { name: "Изменить автоматизацию" })
+        .click();
+      const editDialog = page.getByRole("dialog", {
+        name: "Изменить автоматизацию",
+      });
+      await editDialog.getByLabel("Задача").fill(automationEditedTask);
+      await editDialog.getByRole("button", { name: "Сохранить" }).click();
+      const edited = await edit;
+      expect(edited.status()).toBe(200);
+      expect(
+        (
+          (await edited.json()) as {
+            currentRevision?: { revision?: number };
+          }
+        ).currentRevision?.revision,
+      ).toBe(2);
+      await expect(editDialog).toHaveCount(0);
+    }
+    expect(await readScheduleRevisionState(page, automationRef)).toEqual({
+      revision: 2,
+      task: automationEditedTask,
     });
-    await editDialog.getByLabel("Задача").fill(automationEditedTask);
-    await editDialog.getByRole("button", { name: "Сохранить" }).click();
-    expect((await edit).status()).toBe(200);
-    await expect(editDialog).toHaveCount(0);
     await expect(page.locator(".automation-details")).toContainText(
       automationEditedTask,
     );
 
-    const archive = scheduleCommandResponse(page);
     await page
       .locator(".automation-details")
       .getByRole("button", { name: "Архивировать" })
@@ -1724,11 +1739,24 @@ test.describe("web-only fresh installation", () => {
       name: "Архивировать автоматизацию?",
     });
     await expect(archiveDialog).toContainText(
-      "Автоматизация и её история останутся доступны только для чтения",
+      "Будущие запуски будут отменены. Неизменяемые ревизии и история запусков останутся доступны только для чтения.",
     );
-    await archiveDialog.getByRole("button", { name: "Архивировать" }).click();
-    expect((await archive).status()).toBe(200);
-    await expect(row.locator(".status-badge")).toHaveText("Архивирован");
+    const [archived] = await Promise.all([
+      scheduleCommandResponse(page),
+      archiveDialog.getByRole("button", { name: "Архивировать" }).click(),
+    ]);
+    expect(archived.request().postDataJSON()).toEqual({ action: "ARCHIVE" });
+    expect(archived.status()).toBe(200);
+    const archivedSchedule = (await archived.json()) as { state?: string };
+    expect(archivedSchedule.state).toBe("ARCHIVED");
+    expect(await readScheduleRevisionState(page, automationRef)).toEqual({
+      revision: 2,
+      task: automationEditedTask,
+    });
+    await expect(row).toHaveCount(0);
+    await expect(
+      page.locator(".automation-details__status .status-badge"),
+    ).toHaveText("Архивирован");
     await expect(page.locator(".automation-details")).toContainText(
       automationEditedTask,
     );
@@ -3603,6 +3631,34 @@ function scheduleCommandResponse(page: Page): Promise<Response> {
       /^\/api\/v1\/schedules\/[^/]+\/commands$/.test(pathname)
     );
   });
+}
+
+async function readScheduleRevisionState(
+  page: Page,
+  scheduleRef: string,
+): Promise<{ revision: number; task: string }> {
+  return page.evaluate(async (ref) => {
+    const response = await fetch(
+      `/api/v1/schedules/${encodeURIComponent(ref)}`,
+    );
+    if (!response.ok)
+      throw new Error(
+        `Schedule readback failed with HTTP ${String(response.status)}`,
+      );
+    const schedule = (await response.json()) as {
+      currentRevision?: { input?: { task?: unknown }; revision?: unknown };
+    };
+    return {
+      revision:
+        typeof schedule.currentRevision?.revision === "number"
+          ? schedule.currentRevision.revision
+          : 0,
+      task:
+        typeof schedule.currentRevision?.input?.task === "string"
+          ? schedule.currentRevision.input.task
+          : "",
+    };
+  }, scheduleRef);
 }
 
 async function mutationFailureDiagnostic(
