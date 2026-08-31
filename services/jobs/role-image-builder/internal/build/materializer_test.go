@@ -2,7 +2,9 @@ package build
 
 import (
 	"encoding/base64"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -48,10 +50,10 @@ func TestMaterializerAcceptsOnlyExactImmutableRepository(t *testing.T) {
 func TestPhaseFromRawJSONUsesReachableBuildKitVertex(t *testing.T) {
 	t.Parallel()
 	for raw, expected := range map[string]controlplanev1.ImageBuildStage{
-		`{"vertexes":[{"name":"load metadata for registry/base@sha256:abc"}]}`:                                                  controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL,
-		`{"vertexes":[{"name":"RUN /bin/sh /run/kodex/install.sh"}]}`:                                                     controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION,
+		`{"vertexes":[{"name":"load metadata for registry/base@sha256:abc"}]}`:                                      controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL,
+		`{"vertexes":[{"name":"RUN /bin/sh /run/kodex/install.sh"}]}`:                                               controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION,
 		`{"vertexes":[{"name":"COPY --from=trusted-runtime /usr/local/bin/kodex-init /usr/local/bin/kodex-init"}]}`: controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION,
-		`{"vertexes":[{"name":"exporting to image"}]}`:                                                                          controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH,
+		`{"vertexes":[{"name":"exporting to image"}]}`:                                                              controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH,
 	} {
 		if actual := phaseFromRawJSON([]byte(raw)); actual != expected {
 			t.Fatalf("phaseFromRawJSON() = %s, want %s", actual, expected)
@@ -86,6 +88,27 @@ func TestBuildPhaseTrackerAcceptsActualBuildKitOrdering(t *testing.T) {
 		if actual[index] != buildPhaseSequence[index] {
 			t.Fatalf("phase %d = %s, want %s", index, actual[index], buildPhaseSequence[index])
 		}
+	}
+}
+
+func TestBuildProgressPipeReadsBuildctlStderr(t *testing.T) {
+	t.Parallel()
+	const progress = `{"vertexes":[{"name":"exporting to image"}]}`
+	command := exec.Command("sh", "-c", `printf 'not-progress'; printf '%s\n' "$1" >&2`, "sh", progress)
+	stream, err := buildProgressPipe(command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	actual, readErr := io.ReadAll(stream)
+	waitErr := command.Wait()
+	if readErr != nil || waitErr != nil {
+		t.Fatalf("read BuildKit progress: read=%v wait=%v", readErr, waitErr)
+	}
+	if string(actual) != progress+"\n" {
+		t.Fatalf("progress stream = %q, want exact stderr event", actual)
 	}
 }
 

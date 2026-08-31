@@ -257,18 +257,17 @@ func (executor *Executor) Build(
 		"--output", "type=image,name=" + tag + ",push=true", "--metadata-file", metadataFile}
 	command := exec.CommandContext(ctx, executor.config.Binary, args...)
 	command.Env = append(os.Environ(), "DOCKER_CONFIG="+filepath.Dir(executor.config.BuildKitPullDockerConfig), "HOME="+prepared.root)
-	stdout, err := command.StdoutPipe()
+	progress, err := buildProgressPipe(command)
 	if err != nil {
 		return controlclient.BuildEvidence{}, Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build graph was rejected"}
 	}
-	command.Stderr = io.Discard
 	if err := command.Start(); err != nil {
 		return controlclient.BuildEvidence{}, Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build graph did not start"}
 	}
 	tracker := newBuildPhaseTracker()
 	lastStage := controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL
 	var progressionErr error
-	scanner := bufio.NewScanner(stdout)
+	scanner := bufio.NewScanner(progress)
 	scanner.Buffer(make([]byte, 64<<10), 1<<20)
 	for scanner.Scan() {
 		if progressionErr != nil {
@@ -316,6 +315,11 @@ func (executor *Executor) Build(
 	return controlclient.BuildEvidence{StagingReference: executor.config.StagingRepository + "@" + digest,
 		ManifestDigest: digest, ProvenanceSHA256: provenanceSHA256,
 		ImmutableBuildSHA256: input.GetImmutableBuildSha256()}, nil
+}
+
+func buildProgressPipe(command *exec.Cmd) (io.ReadCloser, error) {
+	command.Stdout = io.Discard
+	return command.StderrPipe()
 }
 
 func provenanceBindingSHA256(input *controlplanev1.RoleImageBuildInput, manifestDigest string) (string, error) {
