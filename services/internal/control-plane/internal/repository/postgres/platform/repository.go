@@ -600,14 +600,6 @@ func systemAssistantCoreRevisionNumber(revision string) (uint64, bool) {
 	return number, err == nil && number > 0
 }
 
-func defaultProviderAccountID(ctx context.Context, tx pgx.Tx, organizationID string) (string, error) {
-	var providerAccountID string
-	if err := tx.QueryRow(ctx, queryRepositorySelectDefaultProviderAccount, organizationID).Scan(&providerAccountID); err != nil {
-		return "", errs.ErrUnavailable
-	}
-	return providerAccountID, nil
-}
-
 type scope struct {
 	organizationID, organizationRef, actorID, actorRef, actorName, role, correlationRef string
 	credentialAuthenticatedAt                                                           time.Time

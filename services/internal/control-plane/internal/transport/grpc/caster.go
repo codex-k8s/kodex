@@ -473,7 +473,16 @@ func castAttachmentSet(value entity.AttachmentSet) *controlplanev1.AttachmentSet
 	return result
 }
 func castSchedule(value entity.Schedule) *controlplanev1.Schedule {
-	return &controlplanev1.Schedule{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Target: castRunTarget(value.Target), State: scheduleState(value), Preset: value.Preset, CronExpression: value.CronExpression, Timezone: value.Timezone, Input: structure(value.Input), SessionPolicy: value.SessionPolicy, NotificationPolicy: value.NotificationPolicy, NextRunAt: optionalTimestamp(value.NextRunAt), NextActions: nextActions(value.NextActions), TimeOfDay: value.TimeOfDay, DayOfWeek: value.DayOfWeek}
+	return &controlplanev1.Schedule{
+		Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name,
+		Target: castRunTarget(value.Target), State: scheduleState(value), Preset: value.Preset,
+		CronExpression: value.CronExpression, Timezone: value.Timezone, Input: structure(value.Input),
+		SessionPolicy: value.SessionPolicy, NotificationPolicy: value.NotificationPolicy,
+		NextRunAt: optionalTimestamp(value.NextRunAt), NextActions: nextActions(value.NextActions),
+		TimeOfDay: value.TimeOfDay, DayOfWeek: value.DayOfWeek,
+		CurrentRevision:    castScheduleRevision(value.CurrentRevision),
+		ContinueSessionRef: value.ContinueSessionRef,
+	}
 }
 func castDefinition(value entity.IntegrationDefinition) *controlplanev1.IntegrationDefinition {
 	result := &controlplanev1.IntegrationDefinition{

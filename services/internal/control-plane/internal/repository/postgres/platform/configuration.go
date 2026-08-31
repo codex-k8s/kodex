@@ -797,7 +797,11 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 		projectID = nil
 	}
 	sessionRef, _ := newRef("ses")
-	providerAccountID, err := defaultProviderAccountID(ctx, tx, scope.organizationID)
+	assistant, err := repository.getAssistantTx(ctx, tx, scope)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	providerAccountID, err := repository.selectProviderAccountForAgent(ctx, tx, scope.organizationID, assistant.Ref)
 	if err != nil {
 		return commandOutcome{}, err
 	}

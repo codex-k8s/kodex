@@ -1248,7 +1248,16 @@ func (repository *Repository) ListSchedules(ctx context.Context, principal value
 	}
 	limit := boundedPage(filter.Page)
 	rows, err := repository.pool.Query(ctx, queryQueriesListschedulesSelectSchedulesOrganizationIdRefProjectId,
-		scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), cursorTime, cursorRef, limit+1)
+		pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID,
+			"project_ref":     filter.ProjectRef,
+			"role":            scope.role,
+			"actor_id":        scope.actorID,
+			"search_query":    strings.TrimSpace(filter.Query),
+			"cursor_time":     cursorTime,
+			"cursor_ref":      cursorRef,
+			"page_size":       limit + 1,
+		})
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -1278,20 +1287,48 @@ func (repository *Repository) GetSchedule(ctx context.Context, principal value.P
 	if err != nil {
 		return entity.Schedule{}, err
 	}
-	return scanSchedule(repository.pool.QueryRow(ctx, queryQueriesGetscheduleSelectSchedulesOrganizationIdRef, scope.organizationID, ref, scope.role, scope.actorID))
+	return scanSchedule(repository.pool.QueryRow(ctx, queryQueriesGetscheduleSelectSchedulesOrganizationIdRef, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+		"schedule_ref":    ref,
+		"role":            scope.role,
+		"actor_id":        scope.actorID,
+	}))
 }
 
 func scanSchedule(row rowScanner) (entity.Schedule, error) {
 	var item entity.Schedule
-	var input []byte
+	var input, currentRevisionInput []byte
+	var continueSessionExpected bool
+	var continueSessionRef *string
 	var canManage bool
-	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.Name, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Preset, &item.CronExpression, &item.Timezone, &input, &item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt, &canManage); err != nil {
+	if err := row.Scan(
+		&item.Ref, &item.ProjectRef, &item.Name, &item.Target.Type, &item.Target.Ref, &item.Target.Name,
+		&item.Preset, &item.CronExpression, &item.Timezone, &input, &item.SessionPolicy,
+		&item.NotificationPolicy, &item.State, &item.Enabled, &item.Version, &item.NextRunAt,
+		&item.LastRunAt, &item.CreatedAt, &item.UpdatedAt,
+		&item.CurrentRevision.Ref, &item.CurrentRevision.Revision, &item.CurrentRevision.Digest,
+		&item.CurrentRevision.Name, &item.CurrentRevision.Target.Type, &item.CurrentRevision.Target.Ref,
+		&item.CurrentRevision.Preset, &item.CurrentRevision.CronExpression, &item.CurrentRevision.Timezone,
+		&currentRevisionInput, &item.CurrentRevision.SessionPolicy,
+		&item.CurrentRevision.NotificationPolicy, &item.CurrentRevision.CreatedAt,
+		&continueSessionExpected, &continueSessionRef, &canManage,
+	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Schedule{}, errs.ErrNotFound
 		}
 		return entity.Schedule{}, errs.ErrUnavailable
 	}
-	if err := attachScheduleDisplay(&item); err != nil || json.Unmarshal(input, &item.Input) != nil {
+	if err := attachScheduleDisplay(&item); err != nil ||
+		json.Unmarshal(input, &item.Input) != nil ||
+		json.Unmarshal(currentRevisionInput, &item.CurrentRevision.Input) != nil {
+		return entity.Schedule{}, errs.ErrUnavailable
+	}
+	if continueSessionExpected {
+		if continueSessionRef == nil || strings.TrimSpace(*continueSessionRef) == "" {
+			return entity.Schedule{}, errs.ErrUnavailable
+		}
+		item.ContinueSessionRef = *continueSessionRef
+	} else if continueSessionRef != nil {
 		return entity.Schedule{}, errs.ErrUnavailable
 	}
 	item.NextActions = scheduleActions(item, canManage)

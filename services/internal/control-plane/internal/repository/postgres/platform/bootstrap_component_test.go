@@ -6,10 +6,12 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +28,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -72,6 +75,8 @@ var (
 	bootstrapComponentToolCallOutboxReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_insert_secondary_provider.sql
 	bootstrapComponentInsertSecondaryProviderQuery string
+	//go:embed testdata/sql/bootstrap_component_insert_warm_failover_provider.sql
+	bootstrapComponentInsertWarmFailoverProviderQuery string
 	//go:embed testdata/sql/bootstrap_component_integration_invocation_effect_key.sql
 	bootstrapComponentIntegrationInvocationEffectKeyQuery string
 	//go:embed testdata/sql/bootstrap_component_runtime_provider_readback.sql
@@ -209,6 +214,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("idempotency occ and concurrent run creation", func(t *testing.T) {
 		testIdempotencyOCCAndConcurrentRuns(t, ctx, repository)
 	})
+	t.Run("schedule readback hydrates current revision and continuation session", func(t *testing.T) {
+		testScheduleContractReadback(t, ctx, repository)
+	})
 	t.Run("durable schedule materializes immutable occurrence", func(t *testing.T) {
 		testScheduleLifecycle(t, ctx, repository)
 	})
@@ -220,9 +228,6 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("optional interaction failure is a separate live incident", func(t *testing.T) {
 		testOptionalInteractionIncident(t, ctx, repository, pool)
-	})
-	t.Run("system assistant core prompt upgrades forward only", func(t *testing.T) {
-		testSystemAssistantCorePromptUpgrade(t, ctx, repository, pool)
 	})
 	t.Run("enterprise access restricts exact agent and project", func(t *testing.T) {
 		testEnterpriseAccessRestriction(t, ctx, repository)
@@ -254,6 +259,291 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("system assistant runtime image creates an immutable environment revision", func(t *testing.T) {
 		testSystemAssistantRuntimeEnvironmentReconciliation(t, ctx, repository, pool)
 	})
+	t.Run("system assistant warm runtime fails over through provider policy", func(t *testing.T) {
+		testSystemAssistantWarmRuntimeProviderFailover(t, ctx, repository, pool)
+	})
+	t.Run("system assistant core prompt upgrades forward only", func(t *testing.T) {
+		testSystemAssistantCorePromptUpgrade(t, ctx, repository, pool)
+	})
+}
+
+func testSystemAssistantWarmRuntimeProviderFailover(
+	t *testing.T,
+	ctx context.Context,
+	repository *Repository,
+	pool *pgxpool.Pool,
+) {
+	t.Helper()
+	originalProviderCredential := repository.providerCredential
+	defer func() {
+		if restoreErr := repository.ConfigureProviderCredential(originalProviderCredential); restoreErr != nil {
+			t.Errorf("restore configured provider credential: %v", restoreErr)
+		}
+	}()
+	if _, err := pool.Exec(ctx, bootstrapComponentInsertWarmFailoverProviderQuery); err != nil {
+		t.Fatalf("insert warm failover provider account: %v", err)
+	}
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Warm failover owner", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
+	}, "control-api-gateway")
+	reconcileWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.reconcile",
+	}, "runtime-controller")
+	reportWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report",
+	}, "runtime-controller")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct warm failover service: %v", err)
+	}
+	assistant, err := service.GetSystemAssistant(ctx, owner)
+	if err != nil {
+		t.Fatalf("read system assistant before failover: %v", err)
+	}
+	configuration, err := service.GetAgentRuntimeConfiguration(ctx, owner, assistant.Ref)
+	if err != nil {
+		t.Fatalf("read system assistant runtime configuration: %v", err)
+	}
+	var currentSessionID, currentSessionRef, currentAccountID, currentAccountRef, fallbackAccountID string
+	var configuredProviderCredential ProviderCredentialConfig
+	if err := pool.QueryRow(ctx, `
+		SELECT session.id::text, session.ref, account.id::text, account.ref,
+		       fallback.id::text, credential.secret_name, credential.secret_uid::text,
+		       credential.secret_resource_version, credential.content_sha256
+		FROM control_plane.assistant_runtime runtime
+		JOIN control_plane.sessions session ON session.ref = runtime.system_session_ref
+		JOIN control_plane.provider_accounts account ON account.id = session.provider_account_id
+		JOIN control_plane.provider_credential_revisions credential
+		  ON credential.id = account.current_credential_revision_id
+		JOIN control_plane.provider_accounts fallback
+		  ON fallback.organization_id = runtime.organization_id
+		 AND fallback.ref = 'pacc_component_warm_failover'
+		WHERE runtime.organization_id = session.organization_id
+		  AND account.stable_key = 'default-openai-codex'
+	`).Scan(
+		&currentSessionID,
+		&currentSessionRef,
+		&currentAccountID,
+		&currentAccountRef,
+		&fallbackAccountID,
+		&configuredProviderCredential.SecretName,
+		&configuredProviderCredential.SecretUID,
+		&configuredProviderCredential.SecretResourceVersion,
+		&configuredProviderCredential.ContentSHA256,
+	); err != nil {
+		t.Fatalf("read initial warm session binding: %v", err)
+	}
+	if err := repository.ConfigureProviderCredential(configuredProviderCredential); err != nil {
+		t.Fatalf("configure current default provider credential: %v", err)
+	}
+	publishSystemAssistantTestProviderPolicy(t, ctx, repository, owner, assistant.Ref, configuration,
+		[]entity.ProviderAccountCandidate{{AccountRef: currentAccountRef, Weight: 1}, {AccountRef: "pacc_component_warm_failover", Weight: 1}})
+	if _, err := pool.Exec(ctx, `
+		UPDATE control_plane.provider_accounts
+		SET state = 'REAUTHORIZATION_REQUIRED', version = version + 1, updated_at = clock_timestamp()
+		WHERE id = $1::uuid
+	`, currentAccountID); err != nil {
+		t.Fatalf("reject current warm provider account: %v", err)
+	}
+	defer func() {
+		if _, restoreErr := pool.Exec(context.WithoutCancel(ctx), `
+			UPDATE control_plane.provider_accounts
+			SET state = 'AUTHORIZED', enabled = true, version = version + 1, updated_at = clock_timestamp()
+			WHERE id = $1::uuid
+		`, currentAccountID); restoreErr != nil {
+			t.Errorf("restore current warm provider account: %v", restoreErr)
+		}
+	}()
+
+	const workloadInstance = "runtime-warm-failover"
+	failedOver, desired, required, err := service.ReconcileWarmRuntime(ctx, reconcileWorker, workloadInstance)
+	if err != nil || !required {
+		t.Fatalf("reconcile rejected warm provider: assistant=%#v required=%v err=%v", failedOver, required, err)
+	}
+	if failedOver.WarmSessionRef == currentSessionRef || failedOver.RuntimeState != "RECOVERING" ||
+		failedOver.LastHeartbeatAt != nil || stringMap(desired, "providerAccountRef") != "pacc_component_warm_failover" {
+		t.Fatalf("warm provider failover readback mismatch: assistant=%#v desired=%#v", failedOver, desired)
+	}
+	var oldState, oldProviderID, currentState, currentProviderID string
+	var currentWarmInstance *string
+	var currentHeartbeat *time.Time
+	var activeSessions int
+	if err := pool.QueryRow(ctx, `
+		SELECT old_session.state, old_session.provider_account_id::text,
+		       current_session.state, current_session.provider_account_id::text,
+		       runtime.warm_instance_ref, runtime.last_heartbeat_at,
+		       count(*) FILTER (WHERE all_sessions.state = 'ACTIVE')::int
+		FROM control_plane.assistant_runtime runtime
+		JOIN control_plane.sessions old_session ON old_session.id = $1::uuid
+		JOIN control_plane.sessions current_session ON current_session.ref = runtime.system_session_ref
+		JOIN control_plane.sessions all_sessions
+		  ON all_sessions.organization_id = runtime.organization_id
+		 AND all_sessions.ref IN (old_session.ref, current_session.ref)
+		WHERE runtime.organization_id = current_session.organization_id
+		GROUP BY old_session.state, old_session.provider_account_id,
+		         current_session.state, current_session.provider_account_id,
+		         runtime.warm_instance_ref, runtime.last_heartbeat_at
+	`, currentSessionID).Scan(&oldState, &oldProviderID, &currentState, &currentProviderID,
+		&currentWarmInstance, &currentHeartbeat, &activeSessions); err != nil {
+		t.Fatalf("read warm provider failover state: %v", err)
+	}
+	if oldState != "CLOSED" || oldProviderID != currentAccountID || currentState != "ACTIVE" ||
+		currentProviderID != fallbackAccountID || currentWarmInstance != nil || currentHeartbeat != nil || activeSessions != 1 {
+		t.Fatalf("warm provider failover is not atomic: old=%s/%s current=%s/%s instance=%v heartbeat=%v active=%d",
+			oldState, oldProviderID, currentState, currentProviderID, currentWarmInstance, currentHeartbeat, activeSessions)
+	}
+	var rejectedState, rejectedCredentialID string
+	var rejectedVersion, rejectedRevisionCount int64
+	if err := pool.QueryRow(ctx, `
+		SELECT account.state, account.current_credential_revision_id::text, account.version,
+		       count(revision.id)::bigint
+		FROM control_plane.provider_accounts account
+		JOIN control_plane.provider_credential_revisions revision
+		  ON revision.provider_account_id = account.id
+		WHERE account.id = $1::uuid
+		GROUP BY account.state, account.current_credential_revision_id, account.version
+	`, currentAccountID).Scan(&rejectedState, &rejectedCredentialID, &rejectedVersion, &rejectedRevisionCount); err != nil {
+		t.Fatalf("read rejected default provider before bootstrap restart: %v", err)
+	}
+	if rejectedState != "REAUTHORIZATION_REQUIRED" {
+		t.Fatalf("default provider state before bootstrap restart = %q", rejectedState)
+	}
+	for attempt := 1; attempt <= 2; attempt++ {
+		if err := repository.Bootstrap(ctx); err != nil {
+			t.Fatalf("bootstrap after warm provider failover attempt %d: %v", attempt, err)
+		}
+	}
+	var restartedState, restartedCredentialID string
+	var restartedVersion, restartedRevisionCount int64
+	if err := pool.QueryRow(ctx, `
+		SELECT account.state, account.current_credential_revision_id::text, account.version,
+		       count(revision.id)::bigint
+		FROM control_plane.provider_accounts account
+		JOIN control_plane.provider_credential_revisions revision
+		  ON revision.provider_account_id = account.id
+		WHERE account.id = $1::uuid
+		GROUP BY account.state, account.current_credential_revision_id, account.version
+	`, currentAccountID).Scan(&restartedState, &restartedCredentialID, &restartedVersion, &restartedRevisionCount); err != nil {
+		t.Fatalf("read rejected default provider after bootstrap restart: %v", err)
+	}
+	if restartedState != rejectedState || restartedCredentialID != rejectedCredentialID ||
+		restartedVersion != rejectedVersion || restartedRevisionCount != rejectedRevisionCount {
+		t.Fatalf("bootstrap restart changed rejected default provider: state=%s->%s credential=%s->%s version=%d->%d revisions=%d->%d",
+			rejectedState, restartedState, rejectedCredentialID, restartedCredentialID,
+			rejectedVersion, restartedVersion, rejectedRevisionCount, restartedRevisionCount)
+	}
+	reported, err := service.ReportWarmRuntime(ctx, reportWorker, command.WarmRuntimeInput{
+		WorkloadInstance: workloadInstance, RuntimeRevision: failedOver.DesiredRuntimeRevision, State: "READY",
+	})
+	if err != nil {
+		t.Fatalf("report failed-over warm runtime ready: %v", err)
+	}
+	stable, stableDesired, stableRequired, err := service.ReconcileWarmRuntime(ctx, reconcileWorker, workloadInstance)
+	if err != nil || stableRequired {
+		t.Fatalf("reconcile stable warm runtime: assistant=%#v desired=%#v required=%v err=%v",
+			stable, stableDesired, stableRequired, err)
+	}
+	if stable.WarmSessionRef != failedOver.WarmSessionRef || stable.Version != reported.Version {
+		t.Fatalf("stable reconcile repeated session migration: failed_over=%#v reported=%#v stable=%#v",
+			failedOver, reported, stable)
+	}
+	var systemSessionCount, activeSystemSessionCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)::int, count(*) FILTER (WHERE state = 'ACTIVE')::int
+		FROM control_plane.sessions
+		WHERE ref IN ($1, $2)
+	`, currentSessionRef, failedOver.WarmSessionRef).Scan(&systemSessionCount, &activeSystemSessionCount); err != nil {
+		t.Fatalf("count system assistant sessions after stable reconcile: %v", err)
+	}
+	if systemSessionCount != 2 || activeSystemSessionCount != 1 {
+		t.Fatalf("stable reconcile changed session cardinality: total=%d active=%d", systemSessionCount, activeSystemSessionCount)
+	}
+	created, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "warm-failover-conversation-create"},
+		Payload:  command.AssistantConversationInput{}})
+	if err != nil || created.Conversation == nil {
+		t.Fatalf("create assistant conversation after provider failover: conversation=%#v err=%v", created.Conversation, err)
+	}
+	var conversationProviderID string
+	if err := pool.QueryRow(ctx, `
+		SELECT session.provider_account_id::text
+		FROM control_plane.assistant_conversations conversation
+		JOIN control_plane.sessions session ON session.id = conversation.session_id
+		WHERE conversation.ref = $1
+	`, created.Conversation.Ref).Scan(&conversationProviderID); err != nil {
+		t.Fatalf("read assistant conversation provider binding: %v", err)
+	}
+	if conversationProviderID != fallbackAccountID {
+		t.Fatalf("assistant conversation bypassed provider policy: provider_account_id=%s", conversationProviderID)
+	}
+}
+
+func publishSystemAssistantTestProviderPolicy(
+	t *testing.T,
+	ctx context.Context,
+	repository *Repository,
+	owner value.Principal,
+	agentRef string,
+	current entity.AgentRuntimeConfigurationView,
+	accounts []entity.ProviderAccountCandidate,
+) {
+	t.Helper()
+	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatalf("resolve warm failover owner: %v", err)
+	}
+	ownerScope, err := repository.resolveScope(ctx, resolvedOwner)
+	if err != nil {
+		t.Fatalf("resolve warm failover owner scope: %v", err)
+	}
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin system assistant provider policy fixture: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	locked, err := repository.lockRuntimeAgent(ctx, tx, ownerScope, agentRef)
+	if err != nil {
+		t.Fatalf("lock system assistant runtime fixture: %v", err)
+	}
+	sort.Slice(accounts, func(left, right int) bool { return accounts[left].AccountRef < accounts[right].AccountRef })
+	rawAccounts, err := json.Marshal(accounts)
+	if err != nil {
+		t.Fatalf("encode system assistant provider policy fixture: %v", err)
+	}
+	policyRef, err := newRef("ppol")
+	if err != nil {
+		t.Fatalf("create system assistant provider policy ref: %v", err)
+	}
+	configRef, err := newRef("rconf")
+	if err != nil {
+		t.Fatalf("create system assistant runtime config ref: %v", err)
+	}
+	policyDigest := digestBytes([]byte("LEAST_USED"), rawAccounts)
+	version := locked.configVersion + 1
+	configDigest := digestBytes(
+		[]byte(current.Configuration.RuntimeProfileRef),
+		[]byte(current.Configuration.Provider),
+		[]byte(current.Configuration.Model),
+		[]byte(policyRef),
+		[]byte(strconvFormat(version)),
+		[]byte(policyDigest),
+	)
+	var publishedRef string
+	if err := tx.QueryRow(ctx, queryRuntimeConfigurationPublish, pgx.StrictNamedArgs{
+		"policy_ref": policyRef, "organization_id": ownerScope.organizationID, "agent_id": locked.id,
+		"version_number": version, "policy_mode": "LEAST_USED", "account_candidates": rawAccounts,
+		"policy_digest": policyDigest, "created_by": ownerScope.actorID, "config_ref": configRef,
+		"runtime_profile_ref": current.Configuration.RuntimeProfileRef, "provider": current.Configuration.Provider,
+		"model": current.Configuration.Model, "config_digest": configDigest,
+	}).Scan(&publishedRef); err != nil || publishedRef != configRef {
+		t.Fatalf("publish system assistant provider policy fixture: ref=%s err=%v", publishedRef, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit system assistant provider policy fixture: %v", err)
+	}
 }
 
 func testSystemAssistantRuntimeEnvironmentReconciliation(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
@@ -2383,6 +2673,108 @@ WHERE schedule.ref = $1`, archiveCandidate.Schedule.Ref).Scan(
 	})
 	if err != nil || reenabledSchedule.Schedule == nil || !reenabledSchedule.Schedule.Enabled || reenabledSchedule.Schedule.NextRunAt == nil {
 		t.Fatalf("reenable paused schedule: schedule=%#v err=%v", reenabledSchedule.Schedule, err)
+	}
+}
+
+func testScheduleContractReadback(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.schedules.create",
+	}, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct schedule contract service: %v", err)
+	}
+	project, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-contract-project-create"},
+		Payload:  command.ProjectInput{Name: "Schedule contract project", Purpose: "Verify schedule read models", Language: "en"},
+	})
+	if err != nil || project.Project == nil {
+		t.Fatalf("create schedule contract project: project=%#v err=%v", project.Project, err)
+	}
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "schedule-contract-agent", "Schedule contract agent")
+	created, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateSchedule, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-contract-create"},
+		Payload: command.ScheduleInput{
+			ProjectRef: project.Project.Ref, Name: "Schedule contract readback",
+			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Preset: "DAILY", TimeOfDay: "08:15",
+			Timezone: "UTC", Input: map[string]any{"task": "Verify the schedule read model.", "limit": float64(10)},
+			SessionPolicy: "CONTINUE_ONE", NotificationPolicy: "CONTROL_CENTER_ONLY",
+		},
+	})
+	if err != nil || created.Schedule == nil {
+		t.Fatalf("create schedule contract fixture: schedule=%#v err=%v", created.Schedule, err)
+	}
+	if created.Schedule.CurrentRevision.Ref == "" || created.Schedule.CurrentRevision.Revision != 1 ||
+		created.Schedule.CurrentRevision.Digest == "" || created.Schedule.CurrentRevision.Target.Ref != agent.Ref {
+		t.Fatalf("create schedule omitted current revision: %#v", created.Schedule)
+	}
+	initialDetail, err := service.GetSchedule(ctx, owner, created.Schedule.Ref)
+	if err != nil {
+		t.Fatalf("get schedule before continuation binding: %v", err)
+	}
+	assertScheduleContractReadback(t, initialDetail, created.Schedule.CurrentRevision, "")
+
+	run, err := service.Execute(ctx, command.Command{
+		Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-contract-session-create"},
+		Payload: command.LaunchRunInput{
+			ProjectRef: project.Project.Ref, Title: "Schedule continuation session", Task: "Create a reusable session.",
+			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref},
+		},
+	})
+	if err != nil || run.Run == nil || run.Run.SessionRef == "" {
+		t.Fatalf("create schedule continuation session: run=%#v err=%v", run.Run, err)
+	}
+	tag, err := repository.pool.Exec(ctx, `
+UPDATE control_plane.schedules schedule
+SET continue_session_id = session.id,
+    updated_at = clock_timestamp()
+FROM control_plane.sessions session
+WHERE schedule.ref = $1
+  AND session.ref = $2
+  AND session.organization_id = schedule.organization_id
+  AND session.project_id = schedule.project_id
+`, created.Schedule.Ref, run.Run.SessionRef)
+	if err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("bind schedule continuation session: rows=%d err=%v", tag.RowsAffected(), err)
+	}
+
+	detail, err := service.GetSchedule(ctx, owner, created.Schedule.Ref)
+	if err != nil {
+		t.Fatalf("get schedule contract readback: %v", err)
+	}
+	assertScheduleContractReadback(t, detail, created.Schedule.CurrentRevision, run.Run.SessionRef)
+	items, _, err := service.ListSchedules(ctx, owner, query.Filter{ProjectRef: project.Project.Ref, Page: query.Page{Size: 20}})
+	if err != nil {
+		t.Fatalf("list schedule contract readback: %v", err)
+	}
+	for _, item := range items {
+		if item.Ref == created.Schedule.Ref {
+			assertScheduleContractReadback(t, item, detail.CurrentRevision, run.Run.SessionRef)
+			return
+		}
+	}
+	t.Fatalf("created schedule %q is absent from list readback", created.Schedule.Ref)
+}
+
+func assertScheduleContractReadback(t *testing.T, item entity.Schedule, expectedRevision entity.ScheduleRevision, expectedSessionRef string) {
+	t.Helper()
+	if item.ContinueSessionRef != expectedSessionRef {
+		t.Fatalf("schedule continuation session = %q, want %q", item.ContinueSessionRef, expectedSessionRef)
+	}
+	revision := item.CurrentRevision
+	if revision.Ref != expectedRevision.Ref || revision.Revision != expectedRevision.Revision ||
+		revision.Digest != expectedRevision.Digest || revision.Name != expectedRevision.Name ||
+		revision.Target.Type != expectedRevision.Target.Type || revision.Target.Ref != expectedRevision.Target.Ref ||
+		revision.Preset != expectedRevision.Preset || revision.CronExpression != expectedRevision.CronExpression ||
+		revision.Timezone != expectedRevision.Timezone || !reflect.DeepEqual(revision.Input, expectedRevision.Input) ||
+		revision.SessionPolicy != expectedRevision.SessionPolicy ||
+		revision.NotificationPolicy != expectedRevision.NotificationPolicy || revision.CreatedAt.IsZero() {
+		t.Fatalf("schedule current revision is incomplete: got=%#v want=%#v", revision, expectedRevision)
 	}
 }
 

@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +28,40 @@ func TestCastScheduleUsesPublicLifecycleStates(t *testing.T) {
 	}
 	if got := castSchedule(entity.Schedule{State: "UNKNOWN", Enabled: true}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_UNSPECIFIED {
 		t.Fatalf("unknown schedule state = %s", got)
+	}
+}
+
+func TestCastScheduleMaterializesRevisionAndContinuationContract(t *testing.T) {
+	t.Parallel()
+
+	createdAt := time.Date(2026, time.August, 31, 1, 2, 3, 0, time.UTC)
+	input := map[string]any{"task": "Prepare a bounded report.", "limit": float64(10)}
+	schedule := castSchedule(entity.Schedule{
+		Ref: "sch_contract", Version: 4, ProjectRef: "prj_contract", Name: "Daily report",
+		Target: entity.RunTarget{Type: "AGENT", Ref: "agt_contract"}, State: "ACTIVE", Enabled: true,
+		Preset: "DAILY", CronExpression: "0 9 * * *", Timezone: "UTC", Input: input,
+		SessionPolicy: "CONTINUE_ONE", NotificationPolicy: "CONTROL_CENTER_ONLY",
+		CurrentRevision: entity.ScheduleRevision{
+			Ref: "srev_contract", Revision: 3, Digest: strings.Repeat("a", 64), Name: "Daily report",
+			Target: entity.RunTarget{Type: "AGENT", Ref: "agt_contract"}, Preset: "DAILY",
+			CronExpression: "0 9 * * *", Timezone: "UTC", Input: input,
+			SessionPolicy: "CONTINUE_ONE", NotificationPolicy: "CONTROL_CENTER_ONLY", CreatedAt: createdAt,
+		},
+		ContinueSessionRef: "ses_contract",
+	})
+
+	revision := schedule.GetCurrentRevision()
+	if revision == nil || revision.GetRef() != "srev_contract" || revision.GetRevision() != 3 ||
+		revision.GetDigest() != strings.Repeat("a", 64) || revision.GetTarget().GetAgentRef() != "agt_contract" ||
+		revision.GetCreatedAt().AsTime() != createdAt || !reflect.DeepEqual(revision.GetInput().AsMap(), input) {
+		t.Fatalf("schedule current revision contract is incomplete: %#v", revision)
+	}
+	if schedule.GetContinueSessionRef() != "ses_contract" {
+		t.Fatalf("schedule continuation session = %q", schedule.GetContinueSessionRef())
+	}
+	fields := schedule.ProtoReflect().Descriptor().Fields()
+	if fields.ByJSONName("currentRevision") == nil || fields.ByJSONName("continueSessionRef") == nil {
+		t.Fatal("generated Schedule contract does not expose currentRevision and continueSessionRef")
 	}
 }
 

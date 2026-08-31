@@ -3,6 +3,16 @@ package platform
 import _ "embed"
 
 var (
+	//go:embed sql/workers_reconcilewarmruntime_lock_session_binding.sql
+	queryWorkersReconcilewarmruntimeLockSessionBinding string
+	//go:embed sql/workers_reconcilewarmruntime_close_session.sql
+	queryWorkersReconcilewarmruntimeCloseSession string
+	//go:embed sql/workers_reconcilewarmruntime_insert_session.sql
+	queryWorkersReconcilewarmruntimeInsertSession string
+	//go:embed sql/workers_reconcilewarmruntime_switch_session.sql
+	queryWorkersReconcilewarmruntimeSwitchSession string
+	//go:embed sql/workers_reconcilewarmruntime_mark_unavailable.sql
+	queryWorkersReconcilewarmruntimeMarkUnavailable string
 	//go:embed sql/workers_reconcilewarmruntime_select_assistant_runtime_organization_id.sql
 	queryWorkersReconcilewarmruntimeSelectAssistantRuntimeOrganizationId string
 	//go:embed sql/workers_reconcilewarmruntime_update_assistant_runtime_runtime_state_warm_instance_ref_version.sql

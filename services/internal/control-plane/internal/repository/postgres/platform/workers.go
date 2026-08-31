@@ -28,6 +28,32 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		return entity.SystemAssistant{}, nil, false, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	sessionBinding, err := repository.lockWarmSessionBinding(ctx, tx, scope.organizationID)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	sessionMigrated := false
+	if !sessionBinding.providerAccountEligible {
+		providerAccountID, selectErr := repository.selectProviderAccountForAgent(
+			ctx, tx, scope.organizationID, sessionBinding.assistantRef,
+		)
+		if errors.Is(selectErr, errs.ErrConflict) {
+			if err := repository.markWarmRuntimeUnavailable(ctx, tx, scope.organizationID, sessionBinding); err != nil {
+				return entity.SystemAssistant{}, nil, false, err
+			}
+			if err := tx.Commit(ctx); err != nil {
+				return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+			}
+			return entity.SystemAssistant{}, nil, false, errs.ErrUnavailable
+		}
+		if selectErr != nil {
+			return entity.SystemAssistant{}, nil, false, selectErr
+		}
+		if err := repository.replaceWarmSession(ctx, tx, scope.organizationID, sessionBinding, providerAccountID); err != nil {
+			return entity.SystemAssistant{}, nil, false, err
+		}
+		sessionMigrated = true
+	}
 	var assistant entity.SystemAssistant
 	var limits []byte
 	var promptRef, promptDigest, promptContent, ownerInstructions, systemSessionRef string
@@ -106,8 +132,8 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	assistant.System = true
 	assistant.Deletable = false
 	stale := assistant.LastHeartbeatAt == nil || time.Since(*assistant.LastHeartbeatAt) > 45*time.Second
-	required := !contains([]string{"READY", "BUSY"}, assistant.RuntimeState) || assistant.RuntimeRevision != assistant.DesiredRuntimeRevision || warmInstance != instance || stale
-	if required {
+	required := sessionMigrated || !contains([]string{"READY", "BUSY"}, assistant.RuntimeState) || assistant.RuntimeRevision != assistant.DesiredRuntimeRevision || warmInstance != instance || stale
+	if required && !sessionMigrated {
 		if _, err := tx.Exec(ctx, queryWorkersReconcilewarmruntimeUpdateAssistantRuntimeRuntimeStateWarmInstanceRefVersion, scope.organizationID, instance); err != nil {
 			return entity.SystemAssistant{}, nil, false, errs.ErrUnavailable
 		}
@@ -180,6 +206,104 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
 	return assistant, snapshot, required, nil
+}
+
+type warmSessionBinding struct {
+	assistantRef            string
+	sessionID               string
+	sessionRef              string
+	createdBy               string
+	providerAccountEligible bool
+}
+
+func (repository *Repository) lockWarmSessionBinding(
+	ctx context.Context,
+	tx pgx.Tx,
+	organizationID string,
+) (warmSessionBinding, error) {
+	var binding warmSessionBinding
+	err := tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeLockSessionBinding, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+	}).Scan(
+		&binding.assistantRef,
+		&binding.sessionID,
+		&binding.sessionRef,
+		&binding.createdBy,
+		&binding.providerAccountEligible,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return warmSessionBinding{}, errs.ErrConflict
+	}
+	if err != nil {
+		return warmSessionBinding{}, errs.ErrUnavailable
+	}
+	return binding, nil
+}
+
+func (repository *Repository) replaceWarmSession(
+	ctx context.Context,
+	tx pgx.Tx,
+	organizationID string,
+	current warmSessionBinding,
+	providerAccountID string,
+) error {
+	if providerAccountID == "" {
+		return errs.ErrConflict
+	}
+	if _, err := tx.Exec(ctx, queryWorkersReconcilewarmruntimeCloseSession, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"session_id":      current.sessionID,
+	}); err != nil {
+		return errs.ErrUnavailable
+	}
+	nextSessionRef, err := newRef("ses")
+	if err != nil {
+		return err
+	}
+	var nextSessionID string
+	if err := tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeInsertSession, pgx.StrictNamedArgs{
+		"session_ref":         nextSessionRef,
+		"organization_id":     organizationID,
+		"provider_account_id": providerAccountID,
+		"created_by":          current.createdBy,
+	}).Scan(&nextSessionID); err != nil || nextSessionID == "" {
+		return errs.ErrUnavailable
+	}
+	var runtimeVersion int64
+	if err := tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSwitchSession, pgx.StrictNamedArgs{
+		"organization_id":     organizationID,
+		"current_session_ref": current.sessionRef,
+		"next_session_ref":    nextSessionRef,
+	}).Scan(&runtimeVersion); errors.Is(err, pgx.ErrNoRows) {
+		return errs.ErrConflict
+	} else if err != nil || runtimeVersion < 1 {
+		return errs.ErrUnavailable
+	}
+	return nil
+}
+
+func (repository *Repository) markWarmRuntimeUnavailable(
+	ctx context.Context,
+	tx pgx.Tx,
+	organizationID string,
+	current warmSessionBinding,
+) error {
+	if _, err := tx.Exec(ctx, queryWorkersReconcilewarmruntimeCloseSession, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"session_id":      current.sessionID,
+	}); err != nil {
+		return errs.ErrUnavailable
+	}
+	var runtimeVersion int64
+	if err := tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeMarkUnavailable, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"session_ref":     current.sessionRef,
+	}).Scan(&runtimeVersion); errors.Is(err, pgx.ErrNoRows) {
+		return errs.ErrConflict
+	} else if err != nil || runtimeVersion < 1 {
+		return errs.ErrUnavailable
+	}
+	return nil
 }
 
 func (repository *Repository) ReportWarmRuntime(ctx context.Context, principal value.Principal, payload command.WarmRuntimeInput) (entity.SystemAssistant, error) {
