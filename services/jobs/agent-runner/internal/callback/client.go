@@ -24,10 +24,19 @@ import (
 )
 
 type Client struct {
-	http  *http.Client
-	base  *url.URL
-	token string
+	http        *http.Client
+	base        *url.URL
+	token       string
+	retryDelays []time.Duration
 }
+
+const (
+	callbackMaximumRetryDelays = 5
+	callbackAttemptTimeout     = 8 * time.Second
+	callbackDeliveryTimeout    = 60 * time.Second
+)
+
+var defaultCallbackRetryDelays = [...]time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second, 5 * time.Second}
 
 func New(input model.Input) (*Client, error) {
 	transport, err := exactTransport(input.CallbackTLS)
@@ -55,14 +64,18 @@ func (client *Client) Close() {
 func (client *Client) Token() string { return client.token }
 
 func (client *Client) Progress(ctx context.Context, input model.Input, code string) error {
-	return client.post(ctx, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/progress", runtimecontract.RunnerProgressRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Progress: code})
+	delivery, cancel := context.WithTimeout(ctx, callbackDeliveryTimeout)
+	defer cancel()
+	return client.postRetriable(delivery, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/progress", runtimecontract.RunnerProgressRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Progress: code})
 }
 
 func (client *Client) Complete(ctx context.Context, input model.Input, payload runtimecontract.RunnerCompletionRequest) error {
 	if err := payload.Validate(); err != nil {
 		return errors.New("validate runtime completion: " + err.Error())
 	}
-	return client.post(ctx, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/complete", payload)
+	delivery, cancel := context.WithTimeout(context.WithoutCancel(ctx), callbackDeliveryTimeout)
+	defer cancel()
+	return client.postRetriable(delivery, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/complete", payload)
 }
 
 func (client *Client) RecordNativeToolCall(ctx context.Context, input model.Input, call runtimecontract.NativeToolCall) error {
@@ -70,7 +83,9 @@ func (client *Client) RecordNativeToolCall(ctx context.Context, input model.Inpu
 	if err := payload.Validate(); err != nil {
 		return errors.New("validate native tool callback: " + err.Error())
 	}
-	return client.post(ctx, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/native-tool-call", payload)
+	delivery, cancel := context.WithTimeout(ctx, callbackDeliveryTimeout)
+	defer cancel()
+	return client.postRetriable(delivery, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/native-tool-call", payload)
 }
 
 func (client *Client) CommitProviderCredentialRefresh(ctx context.Context, input model.Input, payload runtimecontract.RunnerProviderCredentialRefreshRequest) error {
@@ -159,30 +174,89 @@ func (client *Client) NextWarm(ctx context.Context, input model.Input) (model.In
 }
 
 func (client *Client) post(ctx context.Context, path string, payload any) error {
+	return client.postWithRetry(ctx, path, payload, nil)
+}
+
+func (client *Client) postRetriable(ctx context.Context, path string, payload any) error {
+	delays := client.retryDelays
+	if delays == nil {
+		delays = defaultCallbackRetryDelays[:]
+	}
+	return client.postWithRetry(ctx, path, payload, delays)
+}
+
+func (client *Client) postWithRetry(ctx context.Context, path string, payload any, retryDelays []time.Duration) error {
 	raw, err := json.Marshal(payload)
-	if err != nil || len(raw) > runtimecontract.MaximumCompletionBytes+1<<20 {
+	if err != nil || len(raw) > runtimecontract.MaximumCompletionBytes+1<<20 || len(retryDelays) > callbackMaximumRetryDelays {
 		return errors.New("encode runtime callback request")
+	}
+	for _, delay := range retryDelays {
+		if delay <= 0 || delay > callbackDeliveryTimeout {
+			return errors.New("encode runtime callback request")
+		}
 	}
 	defer clear(raw)
 	endpoint := *client.base
 	endpoint.Path = path
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(raw))
+	var lastErr error
+	for attempt := 0; attempt <= len(retryDelays); attempt++ {
+		attemptContext := ctx
+		cancel := func() {}
+		if len(retryDelays) > 0 {
+			attemptContext, cancel = context.WithTimeout(ctx, callbackAttemptTimeout)
+		}
+		retry, postErr := client.postOnce(attemptContext, endpoint.String(), raw)
+		cancel()
+		if postErr == nil {
+			return nil
+		}
+		lastErr = postErr
+		if !retry || attempt == len(retryDelays) {
+			return lastErr
+		}
+		delay := retryDelays[attempt]
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return errors.New("runtime callback is unavailable")
+		case <-timer.C:
+		}
+	}
+	return lastErr
+}
+
+func (client *Client) postOnce(ctx context.Context, endpoint string, raw []byte) (bool, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
 	if err != nil {
-		return errors.New("create runtime callback request")
+		return false, errors.New("create runtime callback request")
 	}
 	request.Header.Set("Authorization", "Bearer "+client.token)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	response, err := client.http.Do(request)
 	if err != nil {
-		return errors.New("runtime callback is unavailable")
+		return true, errors.New("runtime callback is unavailable")
 	}
 	defer response.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 16<<10))
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return errors.New("runtime callback rejected request with status " + strconv.Itoa(response.StatusCode))
+	if response.StatusCode >= 200 && response.StatusCode < 300 {
+		return false, nil
 	}
-	return nil
+	retry := retryableCallbackStatus(response.StatusCode)
+	return retry, errors.New("runtime callback rejected request with status " + strconv.Itoa(response.StatusCode))
+}
+
+func retryableCallbackStatus(code int) bool {
+	switch code {
+	case http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusInternalServerError,
+		http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
 }
 
 func exactTransport(binding model.TLSBinding) (*http.Transport, error) {

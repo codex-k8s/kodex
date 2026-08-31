@@ -1158,44 +1158,74 @@ func (manager *Manager) deleteExecutionPolicyByHash(ctx context.Context, executi
 	return result
 }
 
-func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.RunnerInput, warmExecution bool) (string, error) {
+type TurnPodObservation struct {
+	State          string
+	DiagnosticCode string
+}
+
+func (manager *Manager) ObserveTurnPod(ctx context.Context, input runtimecontract.RunnerInput, warmExecution bool) (TurnPodObservation, error) {
 	podName := runtimecontract.RuntimeTurnPodName(input.LeaseRef)
 	if warmExecution {
 		podName = "system-assistant-warm"
 	}
 	pod, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		return "MISSING", nil
+		return TurnPodObservation{State: "MISSING", DiagnosticCode: "POD_MISSING"}, nil
 	}
 	if err != nil {
-		return "", errors.New("read runtime execution pod")
+		return TurnPodObservation{}, errors.New("read runtime execution pod")
 	}
 	if warmExecution {
 		compatibility, compatibilityErr := runtimecontract.WarmCompatibilityDigest(input)
 		if compatibilityErr != nil || pod.Annotations[warmCompatibilityAnnotation] != compatibility {
-			return "CONFLICT", nil
+			return TurnPodObservation{State: "CONFLICT", DiagnosticCode: "WARM_COMPATIBILITY_CONFLICT"}, nil
 		}
 	} else if pod.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest {
-		return "CONFLICT", nil
+		return TurnPodObservation{State: "CONFLICT", DiagnosticCode: "RUNTIME_REVISION_CONFLICT"}, nil
 	}
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded:
-		return "SUCCEEDED", nil
+		return TurnPodObservation{State: "SUCCEEDED", DiagnosticCode: "POD_SUCCEEDED_WITHOUT_CALLBACK"}, nil
 	case corev1.PodFailed:
-		return "FAILED", nil
+		return TurnPodObservation{State: "FAILED", DiagnosticCode: terminalContainerDiagnostic(pod)}, nil
 	case corev1.PodRunning:
 		if !warmExecution && runtimePodTerminal(pod, "role-runtime", "provider-runtime", "provider-credential-relay") {
-			return "FAILED", nil
+			return TurnPodObservation{State: "FAILED", DiagnosticCode: terminalContainerDiagnostic(pod)}, nil
 		}
 		if podReady(pod) {
-			return "READY", nil
+			return TurnPodObservation{State: "READY"}, nil
 		}
-		return "STARTING", nil
+		return TurnPodObservation{State: "STARTING"}, nil
 	case corev1.PodPending:
-		return "STARTING", nil
+		return TurnPodObservation{State: "STARTING"}, nil
 	default:
-		return "UNKNOWN", nil
+		return TurnPodObservation{State: "UNKNOWN"}, nil
 	}
+}
+
+func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.RunnerInput, warmExecution bool) (string, error) {
+	observation, err := manager.ObserveTurnPod(ctx, input, warmExecution)
+	return observation.State, err
+}
+
+func terminalContainerDiagnostic(pod *corev1.Pod) string {
+	for _, status := range pod.Status.ContainerStatuses {
+		if status.State.Terminated == nil {
+			continue
+		}
+		switch status.Name {
+		case "role-runtime":
+			if status.State.Terminated.ExitCode == 0 {
+				return "ROLE_RUNTIME_EXITED_ZERO"
+			}
+			return "ROLE_RUNTIME_EXITED_NONZERO"
+		case "provider-runtime":
+			return "PROVIDER_RUNTIME_EXITED"
+		case "provider-credential-relay":
+			return "PROVIDER_CREDENTIAL_RELAY_EXITED"
+		}
+	}
+	return "POD_FAILED"
 }
 
 func runtimePodMatches(existing, desired *corev1.Pod) bool {

@@ -119,7 +119,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	unitReadiness.Set(false, "infrastructure_starting")
 	metrics.SetReady(false)
 	assistantReadiness.Set(false, "assistant_runtime_starting")
-	runtime := newRuntime(control, manager, coordinator, config, assistantReadiness, logger)
+	runtime := newRuntime(control.Runtime, manager, coordinator, config, assistantReadiness, logger)
 	technical := technicalServer(lifecycle, config, unitReadiness, assistantReadiness, metrics)
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveHTTP(technical, config.ShutdownTimeout), callbackServer.Run,

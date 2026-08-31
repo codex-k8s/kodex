@@ -1,13 +1,18 @@
 package callback
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
@@ -86,6 +91,125 @@ func TestCompleteRejectsInvalidPayloadBeforeTransport(t *testing.T) {
 	}
 }
 
+func TestCompleteRetriesTransientCallbackWithoutChangingPayload(t *testing.T) {
+	var attempts atomic.Int32
+	var mu sync.Mutex
+	var bodies [][]byte
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		body, _ := io.ReadAll(request.Body)
+		mu.Lock()
+		bodies = append(bodies, body)
+		mu.Unlock()
+		if attempts.Add(1) < 3 {
+			http.Error(writer, "temporary owner failure", http.StatusServiceUnavailable)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond, time.Millisecond}}
+	input := validWarmTurnFixture()
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: "done"}
+	if err := client.Complete(context.Background(), input, payload); err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if attempts.Load() != 3 {
+		t.Fatalf("Complete() attempts = %d, want 3", attempts.Load())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(bodies) != 3 || !bytes.Equal(bodies[0], bodies[1]) || !bytes.Equal(bodies[1], bodies[2]) {
+		t.Fatalf("terminal callback payload changed across retries: %q", bodies)
+	}
+}
+
+func TestProgressRetriesTransientControlPlaneOutage(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) < 3 {
+			http.Error(writer, "control plane restarting", http.StatusServiceUnavailable)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond, time.Millisecond}}
+	if err := client.Progress(context.Background(), validWarmTurnFixture(), "MODEL_REQUEST_RUNNING"); err != nil {
+		t.Fatalf("Progress() error = %v", err)
+	}
+	if attempts.Load() != 3 {
+		t.Fatalf("Progress() attempts = %d, want 3", attempts.Load())
+	}
+}
+
+func TestDefaultCallbackRetryWindowCoversControlPlaneRestart(t *testing.T) {
+	var window time.Duration
+	for _, delay := range defaultCallbackRetryDelays {
+		window += delay
+	}
+	if window < 7*time.Second {
+		t.Fatalf("callback retry window = %s, want at least 7s", window)
+	}
+}
+
+func TestRetryableCallbackStatusUsesClosedTransientSet(t *testing.T) {
+	t.Parallel()
+	for _, code := range []int{
+		http.StatusRequestTimeout,
+		http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout,
+	} {
+		if !retryableCallbackStatus(code) {
+			t.Fatalf("status %d is not retryable", code)
+		}
+	}
+	for _, code := range []int{
+		http.StatusBadRequest,
+		http.StatusUnauthorized,
+		http.StatusForbidden,
+		http.StatusNotFound,
+		http.StatusConflict,
+	} {
+		if retryableCallbackStatus(code) {
+			t.Fatalf("status %d is unexpectedly retryable", code)
+		}
+	}
+}
+
+func TestCompleteDoesNotRetryStateConflict(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		attempts.Add(1)
+		http.Error(writer, "state conflict", http.StatusConflict)
+	}))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond}}
+	input := validWarmTurnFixture()
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: "done"}
+	err = client.Complete(context.Background(), input, payload)
+	if err == nil || err.Error() != "runtime callback rejected request with status 409" {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if attempts.Load() != 1 {
+		t.Fatalf("Complete() attempts = %d, want 1", attempts.Load())
+	}
+}
+
 func TestRecordNativeToolCallUsesExecutionScopedBoundedPayload(t *testing.T) {
 	var captured runtimecontract.RunnerNativeToolCallRequest
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -117,6 +241,53 @@ func TestRecordNativeToolCallUsesExecutionScopedBoundedPayload(t *testing.T) {
 	}
 	if captured.RuntimeRevisionDigest != input.RuntimeRevisionDigest || captured.CallID != call.CallID || captured.Kind != call.Kind {
 		t.Fatalf("captured payload = %#v", captured)
+	}
+}
+
+func TestRecordNativeToolCallRetriesTransientCallback(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) == 1 {
+			http.Error(writer, "control plane restarting", http.StatusGatewayTimeout)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond}}
+	call := runtimecontract.NativeToolCall{CallID: "call-shell", Kind: runtimecontract.NativeToolKindShell,
+		State: runtimecontract.NativeToolStateSucceeded, SafeResult: runtimecontract.NativeToolResultCompleted,
+		SafeParameters: map[string]any{"action_count": 1, "action_kinds": []string{"READ"}, "cwd_scope": "WORKSPACE", "exit_code": "ZERO", "source": "AGENT"}}
+	if err := client.RecordNativeToolCall(context.Background(), validWarmTurnFixture(), call); err != nil {
+		t.Fatalf("RecordNativeToolCall() error = %v", err)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("RecordNativeToolCall() attempts = %d, want 2", attempts.Load())
+	}
+}
+
+func TestProgressDoesNotRetryClientError(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		attempts.Add(1)
+		http.Error(writer, "invalid progress", http.StatusBadRequest)
+	}))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond}}
+	err = client.Progress(context.Background(), validWarmTurnFixture(), "MODEL_REQUEST_RUNNING")
+	if err == nil || err.Error() != "runtime callback rejected request with status 400" {
+		t.Fatalf("Progress() error = %v", err)
+	}
+	if attempts.Load() != 1 {
+		t.Fatalf("Progress() attempts = %d, want 1", attempts.Load())
 	}
 }
 

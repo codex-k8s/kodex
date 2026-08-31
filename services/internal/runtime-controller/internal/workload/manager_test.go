@@ -734,6 +734,7 @@ func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 		statuses   []corev1.ContainerStatus
 		conditions []corev1.PodCondition
 		want       string
+		wantDiag   string
 	}{
 		{
 			name: "role terminated while provider is running",
@@ -741,7 +742,8 @@ func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 				{Name: "role-runtime", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 0}}},
 				{Name: "provider-runtime", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
 			},
-			want: "FAILED",
+			want:     "FAILED",
+			wantDiag: "ROLE_RUNTIME_EXITED_ZERO",
 		},
 		{
 			name: "provider terminated while role is running",
@@ -749,7 +751,8 @@ func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 				{Name: "role-runtime", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
 				{Name: "provider-runtime", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}}},
 			},
-			want: "FAILED",
+			want:     "FAILED",
+			wantDiag: "PROVIDER_RUNTIME_EXITED",
 		},
 		{
 			name: "both running but pod is not ready",
@@ -784,12 +787,12 @@ func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 			if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 				t.Fatalf("Create(cold runtime Pod) error = %v", err)
 			}
-			state, err := manager.TurnPodState(context.Background(), input, false)
+			observation, err := manager.ObserveTurnPod(context.Background(), input, false)
 			if err != nil {
-				t.Fatalf("TurnPodState() error = %v", err)
+				t.Fatalf("ObserveTurnPod() error = %v", err)
 			}
-			if state != test.want {
-				t.Fatalf("TurnPodState() = %q, want %q", state, test.want)
+			if observation.State != test.want || observation.DiagnosticCode != test.wantDiag {
+				t.Fatalf("ObserveTurnPod() = %#v, want state=%q diagnostic=%q", observation, test.want, test.wantDiag)
 			}
 		})
 	}
