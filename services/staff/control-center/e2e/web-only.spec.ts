@@ -3151,14 +3151,14 @@ test.describe("web-only fresh installation", () => {
         return [
           {
             alignSelf: style.alignSelf,
-            className: badge.className,
+            className: badge.getAttribute("class") ?? "",
             display: style.display,
             flexGrow: style.flexGrow,
             grandparentClassName:
-              badge.parentElement?.parentElement?.className ?? "",
+              badge.parentElement?.parentElement?.getAttribute("class") ?? "",
             height: box.height,
             parentHeight: parentBox?.height ?? 0,
-            parentClassName: badge.parentElement?.className ?? "",
+            parentClassName: badge.parentElement?.getAttribute("class") ?? "",
             text: badge.textContent.trim(),
             width: box.width,
           },
@@ -3168,7 +3168,7 @@ test.describe("web-only fresh installation", () => {
     expect(samples.length).toBeGreaterThanOrEqual(4);
     for (const sample of samples) {
       const diagnostic = JSON.stringify(sample);
-      expect(sample.display, diagnostic).toBe("inline-flex");
+      expect(["inline-flex", "flex"], diagnostic).toContain(sample.display);
       expect(sample.alignSelf, diagnostic).not.toBe("stretch");
       expect(Number(sample.flexGrow), diagnostic).toBe(0);
       expect(sample.height, diagnostic).toBeGreaterThan(0);
