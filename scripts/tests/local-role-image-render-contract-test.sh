@@ -102,10 +102,15 @@ origin_argument_uses=$(rg -c --fixed-strings '"${keycloak_origin_arguments[@]}"'
   fail 'dev.sh Keycloak apply/readback must share one singleton origin argument set'
 for cleanup_contract in \
   'cleanup_local_image_admission_runs' \
+  'pause_local_image_admission_controller' \
+  'image_admission_controller_restore_replicas' \
+  'deployment/image-admission-controller' \
+  '--replicas=0' \
+  '(.status.availableReplicas // 0) == 0' \
   'app.kubernetes.io/name=kodex-image-admission,kodex.dev/image-admission-orchestrated=true' \
   '^mc-admit-[a-f0-9]{32}-(claim|scan|sign|admit|promote)$' \
   '^mc-admit-[a-f0-9]{32}$'; do
-  rg -F "$cleanup_contract" "$source_root/tools/dev/deploy-local.sh" >/dev/null ||
+  rg -F -- "$cleanup_contract" "$source_root/tools/dev/deploy-local.sh" >/dev/null ||
     fail "local admission revision cleanup omits contract: $cleanup_contract"
 done
 

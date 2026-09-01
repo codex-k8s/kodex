@@ -44,7 +44,16 @@ runtime_namespace=kodex-runtime
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 object_storage_secret_name=""
 temporary_directory=$(mktemp -d)
-trap 'rm -rf -- "$temporary_directory"' EXIT
+image_admission_controller_restore_replicas=""
+
+cleanup_on_exit() {
+  if [[ -n "$image_admission_controller_restore_replicas" ]]; then
+    kubectl -n "$namespace" scale deployment/image-admission-controller \
+      --replicas="$image_admission_controller_restore_replicas" >/dev/null 2>&1 || true
+  fi
+  rm -rf -- "$temporary_directory"
+}
+trap cleanup_on_exit EXIT
 
 filter_render() {
   local name=$1 expression=$2 output
@@ -94,6 +103,40 @@ cleanup_local_image_admission_runs() {
     fail 'local image admission inventory contains an unmanaged resource'
   kubectl -n "$namespace" delete jobs,persistentvolumeclaims -l "$selector" \
     --ignore-not-found --wait=true --timeout=3m >/dev/null
+}
+
+pause_local_image_admission_controller() {
+  local controller replicas
+  controller=$(kubectl -n "$namespace" get \
+    deployment/image-admission-controller -o json 2>/dev/null || true)
+  [[ -n "$controller" ]] || return 0
+  jq -e --arg namespace "$namespace" '
+    .metadata.namespace == $namespace and
+    .metadata.name == "image-admission-controller" and
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    ((.spec.replicas // 0) == 0 or (.spec.replicas // 0) == 1)
+  ' <<<"$controller" >/dev/null ||
+    fail 'image admission controller is not owned by the local Kodex profile'
+  replicas=$(jq -er '.spec.replicas // 0' <<<"$controller")
+  ((replicas > 0)) || return 0
+  kubectl -n "$namespace" scale deployment/image-admission-controller \
+    --replicas=0 >/dev/null || fail 'local image admission controller cannot be paused'
+  image_admission_controller_restore_replicas=$replicas
+  for attempt in $(seq 1 180); do
+    controller=$(kubectl -n "$namespace" get \
+      deployment/image-admission-controller -o json) ||
+      fail 'paused local image admission controller is unavailable'
+    if jq -e '
+      (.spec.replicas // 0) == 0 and
+      (.status.replicas // 0) == 0 and
+      (.status.availableReplicas // 0) == 0
+    ' <<<"$controller" >/dev/null; then
+      return 0
+    fi
+    ((attempt < 180)) || fail 'local image admission controller did not stop'
+    sleep 1
+  done
 }
 
 reconcile_local_immutable_image_admission_policy() {
@@ -956,6 +999,8 @@ if [[ "$mode" == apply ]]; then
   ensure_local_backup_controller_secret
   ensure_seed_secrets
   apply_image_admission_crd
+  pause_local_image_admission_controller
+  cleanup_local_image_admission_runs
   reconcile_local_immutable_image_admission_policy
   reconcile_local_mutable_configmaps
   apply_render foundation '
@@ -998,6 +1043,7 @@ if [[ "$mode" == apply ]]; then
       (.metadata.name == "image-admission-controller" or
        .metadata.name == "role-image-builder"))
   '
+  image_admission_controller_restore_replicas=""
   apply_render application-workloads '
     select(.kind == "Deployment" and
       .metadata.name != "internal-rpc-authority-publisher" and
