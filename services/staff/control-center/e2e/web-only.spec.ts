@@ -3151,10 +3151,14 @@ test.describe("web-only fresh installation", () => {
         return [
           {
             alignSelf: style.alignSelf,
+            className: badge.className,
             display: style.display,
             flexGrow: style.flexGrow,
+            grandparentClassName:
+              badge.parentElement?.parentElement?.className ?? "",
             height: box.height,
             parentHeight: parentBox?.height ?? 0,
+            parentClassName: badge.parentElement?.className ?? "",
             text: badge.textContent.trim(),
             width: box.width,
           },
@@ -3163,15 +3167,16 @@ test.describe("web-only fresh installation", () => {
     );
     expect(samples.length).toBeGreaterThanOrEqual(4);
     for (const sample of samples) {
-      expect(sample.display, sample.text).toBe("inline-flex");
-      expect(sample.alignSelf, sample.text).not.toBe("stretch");
-      expect(Number(sample.flexGrow), sample.text).toBe(0);
-      expect(sample.height, sample.text).toBeGreaterThan(0);
-      expect(sample.height, sample.text).toBeLessThanOrEqual(32);
+      const diagnostic = JSON.stringify(sample);
+      expect(sample.display, diagnostic).toBe("inline-flex");
+      expect(sample.alignSelf, diagnostic).not.toBe("stretch");
+      expect(Number(sample.flexGrow), diagnostic).toBe(0);
+      expect(sample.height, diagnostic).toBeGreaterThan(0);
+      expect(sample.height, diagnostic).toBeLessThanOrEqual(32);
       if (sample.parentHeight > 48) {
-        expect(sample.height, sample.text).toBeLessThan(sample.parentHeight);
+        expect(sample.height, diagnostic).toBeLessThan(sample.parentHeight);
       }
-      expect(sample.width, sample.text).toBeLessThan(640);
+      expect(sample.width, diagnostic).toBeLessThan(640);
     }
   });
 
