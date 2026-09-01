@@ -73,7 +73,7 @@ func schema(required []string, allowed ...string) objectSchema {
 }
 
 func parseWireMessage(raw []byte) (wireMessage, error) {
-	fields, err := decodeObject(raw, schema(nil, "id", "method", "params", "result", "error", "trace"))
+	fields, err := decodeObject(raw, schema(nil, "id", "method", "params", "result", "error", "trace", "emittedAtMs"))
 	if err != nil {
 		return wireMessage{}, errors.New("Codex app-server JSON-RPC message is invalid")
 	}
@@ -83,13 +83,20 @@ func parseWireMessage(raw []byte) (wireMessage, error) {
 	result, hasResult := fields["result"]
 	errorValue, hasError := fields["error"]
 	_, hasTrace := fields["trace"]
+	emittedAtMS, hasEmittedAtMS := fields["emittedAtMs"]
+	if hasEmittedAtMS {
+		var timestamp int64
+		if strictDecode(emittedAtMS, &timestamp) != nil || timestamp < 0 {
+			return wireMessage{}, errors.New("Codex app-server notification timestamp is invalid")
+		}
+	}
 	if hasMethod {
 		method, decodeErr := decodeBoundedString(methodRaw, 256)
 		if decodeErr != nil || method == "" || hasResult || hasError {
 			return wireMessage{}, errors.New("Codex app-server JSON-RPC method is invalid")
 		}
 		if hasID {
-			if !validRequestID(id) || !hasParams {
+			if hasEmittedAtMS || !validRequestID(id) || !hasParams {
 				return wireMessage{}, errors.New("Codex app-server JSON-RPC request is invalid")
 			}
 			return wireMessage{kind: messageRequest, id: id, method: method, payload: params}, nil
@@ -99,7 +106,7 @@ func parseWireMessage(raw []byte) (wireMessage, error) {
 		}
 		return wireMessage{kind: messageNotification, method: method, payload: params}, nil
 	}
-	if !hasID || hasParams || hasTrace || hasResult == hasError || !validRequestID(id) {
+	if !hasID || hasParams || hasTrace || hasEmittedAtMS || hasResult == hasError || !validRequestID(id) {
 		return wireMessage{}, errors.New("Codex app-server JSON-RPC response is invalid")
 	}
 	if hasError {

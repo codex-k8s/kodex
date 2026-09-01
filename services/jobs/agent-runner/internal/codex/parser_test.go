@@ -309,6 +309,31 @@ func TestWireParserRejectsUnknownAndDuplicateFields(t *testing.T) {
 	}
 }
 
+func TestWireParserAcceptsCurrentNotificationTimestampEnvelope(t *testing.T) {
+	message, err := parseWireMessage([]byte(`{"method":"remoteControl/status/changed","params":{"installationId":"installation","serverName":"server","status":"disabled"},"emittedAtMs":1788254519388}`))
+	if err != nil {
+		t.Fatalf("current notification envelope was rejected: %v", err)
+	}
+	if message.kind != messageNotification || message.method != "remoteControl/status/changed" {
+		t.Fatalf("unexpected notification: %#v", message)
+	}
+}
+
+func TestWireParserRejectsNotificationTimestampOutsideEnvelopeContract(t *testing.T) {
+	for _, value := range []string{
+		`{"method":"remoteControl/status/changed","params":{},"emittedAtMs":-1}`,
+		`{"method":"remoteControl/status/changed","params":{},"emittedAtMs":1.5}`,
+		`{"method":"remoteControl/status/changed","params":{},"emittedAtMs":"1"}`,
+		`{"id":1,"method":"mcpServer/elicitation/request","params":{},"emittedAtMs":1}`,
+		`{"id":1,"result":{},"emittedAtMs":1}`,
+		`{"id":1,"error":{"code":-32000,"message":"failed"},"emittedAtMs":1}`,
+	} {
+		if _, err := parseWireMessage([]byte(value)); err == nil {
+			t.Fatalf("invalid notification timestamp envelope accepted: %s", value)
+		}
+	}
+}
+
 func TestServerRequestSetIsClosed(t *testing.T) {
 	if _, ok := serverRequestMethods["item/commandExecution/requestApproval"]; !ok {
 		t.Fatal("approval request method is missing")
