@@ -414,6 +414,75 @@ function waitForArtifactUpload(
   });
 }
 
+interface VisualBox {
+  readonly bottom: number;
+  readonly height: number;
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly width: number;
+}
+
+async function visualBox(locator: Locator, label: string): Promise<VisualBox> {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error(`${label} is not visible`);
+  return {
+    bottom: box.y + box.height,
+    height: box.height,
+    left: box.x,
+    right: box.x + box.width,
+    top: box.y,
+    width: box.width,
+  };
+}
+
+function expectNear(
+  actual: number,
+  expected: number,
+  label: string,
+  tolerance = 2,
+): void {
+  expect(
+    Math.abs(actual - expected),
+    `${label}: expected ${String(expected)} +/- ${String(tolerance)}, received ${String(actual)}`,
+  ).toBeLessThanOrEqual(tolerance);
+}
+
+function expectNoIntersection(
+  left: { readonly box: VisualBox; readonly label: string },
+  right: { readonly box: VisualBox; readonly label: string },
+): void {
+  const horizontal =
+    Math.min(left.box.right, right.box.right) -
+    Math.max(left.box.left, right.box.left);
+  const vertical =
+    Math.min(left.box.bottom, right.box.bottom) -
+    Math.max(left.box.top, right.box.top);
+  expect(
+    horizontal <= 0.5 || vertical <= 0.5,
+    `${left.label} intersects ${right.label}: ${JSON.stringify({ horizontal, vertical })}`,
+  ).toBe(true);
+}
+
+async function expectInsideViewport(
+  page: Page,
+  locator: Locator,
+  label: string,
+): Promise<VisualBox> {
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("browser viewport is unavailable");
+  const box = await visualBox(locator, label);
+  expect(box.left, `${label} left edge`).toBeGreaterThanOrEqual(-0.5);
+  expect(box.top, `${label} top edge`).toBeGreaterThanOrEqual(-0.5);
+  expect(box.right, `${label} right edge`).toBeLessThanOrEqual(
+    viewport.width + 0.5,
+  );
+  expect(box.bottom, `${label} bottom edge`).toBeLessThanOrEqual(
+    viewport.height + 0.5,
+  );
+  return box;
+}
+
 test.describe("web-only fresh installation", () => {
   test.describe.configure({ mode: discoveryMode ? "default" : "serial" });
 
@@ -2186,6 +2255,19 @@ test.describe("web-only fresh installation", () => {
       await expectRunState(page, /В очереди|Выполняется/);
     }
     await expectRunState(page, "Ждёт решения");
+    const decisionAttention = page
+      .getByRole("toolbar", { name: "Инструменты запуска" })
+      .getByRole("button", { name: "Решения" });
+    await expect(decisionAttention).toBeVisible();
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await expect(decisionAttention).toHaveCSS(
+      "animation-name",
+      "attention-outline",
+    );
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(decisionAttention).toHaveCSS("animation-name", "none");
+    await expect(decisionAttention).not.toHaveCSS("box-shadow", "none");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     const graphNodes = page
       .getByRole("region", { name: "Граф выполнения" })
       .locator('[role="button"][data-node-ref]');
@@ -2910,6 +2992,287 @@ test.describe("web-only fresh installation", () => {
       retentionArtifact.ref,
       retentionReceipt,
     );
+  });
+
+  test("финальная визуальная приёмка: run canvas", async ({ page }) => {
+    requireRefs("projectRef", "workflowRunRef");
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await gotoWithRetry(page, `/projects/${projectRef}/runs/${workflowRunRef}`);
+
+    const workspace = page.locator(".run-workspace");
+    const summary = workspace.locator(".run-canvas-summary");
+    const workspaceToolbar = workspace.locator(".run-workspace-toolbar");
+    const graphToolbar = workspace.locator(".graph-toolbar");
+    const legend = workspace.locator(".graph-legend");
+    await expect(workspace).toBeVisible();
+    await expect(summary).toBeVisible();
+    await expect(workspaceToolbar).toBeVisible();
+    await expect(graphToolbar).toBeVisible();
+    await expect(legend).toBeVisible();
+    await expect(graphToolbar.locator(".graph-view-switch")).toBeVisible();
+    await expect(
+      graphToolbar.getByRole("button", { name: "Уменьшить масштаб" }),
+    ).toBeVisible();
+    await expect(
+      graphToolbar.getByRole("button", { name: "Увеличить масштаб" }),
+    ).toBeVisible();
+
+    const viewport = page.viewportSize();
+    if (!viewport) throw new Error("browser viewport is unavailable");
+    const verticalOverflow = await page.evaluate(() => ({
+      body: document.body.scrollHeight - document.body.clientHeight,
+      document:
+        document.documentElement.scrollHeight -
+        document.documentElement.clientHeight,
+    }));
+    expect(verticalOverflow.body).toBeLessThanOrEqual(1);
+    expect(verticalOverflow.document).toBeLessThanOrEqual(1);
+
+    const sidebarBox = await visualBox(page.locator(".sidebar"), "sidebar");
+    const workspaceBox = await visualBox(workspace, "run workspace");
+    const graphCanvasBox = await visualBox(
+      workspace.locator(".graph-canvas-shell"),
+      "graph canvas",
+    );
+    expectNear(workspaceBox.left, sidebarBox.right, "workspace left edge");
+    expectNear(workspaceBox.right, viewport.width, "workspace right edge");
+    expectNear(workspaceBox.bottom, viewport.height, "workspace bottom edge");
+    expectNear(graphCanvasBox.left, workspaceBox.left, "canvas left edge");
+    expectNear(graphCanvasBox.top, workspaceBox.top, "canvas top edge");
+    expectNear(graphCanvasBox.right, workspaceBox.right, "canvas right edge");
+    expectNear(
+      graphCanvasBox.bottom,
+      workspaceBox.bottom,
+      "canvas bottom edge",
+    );
+
+    const panels = [
+      { label: "summary", box: await visualBox(summary, "summary") },
+      {
+        label: "workspace toolbar",
+        box: await visualBox(workspaceToolbar, "workspace toolbar"),
+      },
+      {
+        label: "graph toolbar",
+        box: await visualBox(graphToolbar, "graph toolbar"),
+      },
+      { label: "legend", box: await visualBox(legend, "legend") },
+    ];
+    const [
+      summaryPanel,
+      workspaceToolbarPanel,
+      graphToolbarPanel,
+      legendPanel,
+    ] = panels;
+    if (
+      !summaryPanel ||
+      !workspaceToolbarPanel ||
+      !graphToolbarPanel ||
+      !legendPanel
+    ) {
+      throw new Error("run canvas panels are unavailable");
+    }
+    expectNear(
+      summaryPanel.box.left - workspaceBox.left,
+      14,
+      "summary left offset",
+    );
+    expectNear(
+      summaryPanel.box.top - workspaceBox.top,
+      14,
+      "summary top offset",
+    );
+    expectNear(
+      (workspaceToolbarPanel.box.left + workspaceToolbarPanel.box.right) / 2,
+      (workspaceBox.left + workspaceBox.right) / 2,
+      "workspace toolbar center",
+    );
+    expectNear(
+      graphToolbarPanel.box.right,
+      workspaceBox.right - 14,
+      "graph toolbar right offset",
+    );
+    expectNear(
+      graphToolbarPanel.box.top - workspaceBox.top,
+      14,
+      "graph toolbar top offset",
+    );
+    expectNear(
+      legendPanel.box.left - workspaceBox.left,
+      14,
+      "legend left offset",
+    );
+    expectNear(
+      legendPanel.box.bottom,
+      workspaceBox.bottom - 14,
+      "legend bottom offset",
+    );
+    for (let left = 0; left < panels.length; left += 1) {
+      for (let right = left + 1; right < panels.length; right += 1) {
+        const leftPanel = panels[left];
+        const rightPanel = panels[right];
+        if (!leftPanel || !rightPanel)
+          throw new Error("run canvas panel pair is unavailable");
+        expectNoIntersection(leftPanel, rightPanel);
+      }
+    }
+  });
+
+  test("финальная визуальная приёмка: badges", async ({ page }) => {
+    requireRefs("projectRef", "workflowRunRef");
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await gotoWithRetry(page, `/projects/${projectRef}/runs/${workflowRunRef}`);
+    const samples = await page.locator(".status-badge").evaluateAll((badges) =>
+      badges.flatMap((badge) => {
+        const box = badge.getBoundingClientRect();
+        if (box.width === 0 || box.height === 0) return [];
+        const style = getComputedStyle(badge);
+        const parentBox = badge.parentElement?.getBoundingClientRect();
+        return [
+          {
+            alignSelf: style.alignSelf,
+            display: style.display,
+            flexGrow: style.flexGrow,
+            height: box.height,
+            parentHeight: parentBox?.height ?? 0,
+            text: badge.textContent.trim(),
+            width: box.width,
+          },
+        ];
+      }),
+    );
+    expect(samples.length).toBeGreaterThanOrEqual(4);
+    for (const sample of samples) {
+      expect(sample.display, sample.text).toBe("inline-flex");
+      expect(sample.alignSelf, sample.text).not.toBe("stretch");
+      expect(Number(sample.flexGrow), sample.text).toBe(0);
+      expect(sample.height, sample.text).toBeGreaterThan(0);
+      expect(sample.height, sample.text).toBeLessThanOrEqual(32);
+      if (sample.parentHeight > 48) {
+        expect(sample.height, sample.text).toBeLessThan(sample.parentHeight);
+      }
+      expect(sample.width, sample.text).toBeLessThan(640);
+    }
+  });
+
+  test("финальная визуальная приёмка: semantic modals", async ({ page }) => {
+    requireRefs("projectRef", "uploadedArtifactRef");
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await gotoWithRetry(
+      page,
+      `/projects/${projectRef}/files?artifactRef=${encodeURIComponent(uploadedArtifactRef)}`,
+    );
+    const details = page.locator(".file-details");
+    await expect(details).toBeVisible();
+    await details.getByRole("button", { name: "Открыть", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: uploadedFileName });
+    await expect(dialog).toBeVisible();
+    const dialogBox = await expectInsideViewport(page, dialog, "file preview");
+    expect(dialogBox.width).toBeGreaterThanOrEqual(1536);
+    const overflow = await dialog.evaluate((panel) => {
+      const body = panel.querySelector<HTMLElement>(".modal__body");
+      return {
+        body: body ? body.scrollWidth - body.clientWidth : Number.NaN,
+        panel: panel.scrollWidth - panel.clientWidth,
+      };
+    });
+    expect(Number.isFinite(overflow.body)).toBe(true);
+    expect(overflow.body).toBeLessThanOrEqual(1);
+    expect(overflow.panel).toBeLessThanOrEqual(1);
+  });
+
+  test("финальная визуальная приёмка: files workspace", async ({ page }) => {
+    requireRefs("projectRef", "uploadedArtifactRef");
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await gotoWithRetry(
+      page,
+      `/projects/${projectRef}/files?artifactRef=${encodeURIComponent(uploadedArtifactRef)}`,
+    );
+    const filesPage = page.locator(".files-page");
+    const workspace = page.locator(".files-workspace");
+    const layout = workspace.locator(".files-workspace__layout--details");
+    const collection = layout.locator(".files-workspace__scroll");
+    const details = layout.locator(".file-details");
+    await expect(layout).toBeVisible();
+    await expect(details).toBeVisible();
+
+    const viewport = page.viewportSize();
+    if (!viewport) throw new Error("browser viewport is unavailable");
+    const sidebarBox = await visualBox(page.locator(".sidebar"), "sidebar");
+    const pageBox = await visualBox(filesPage, "files page");
+    const workspaceBox = await visualBox(workspace, "files workspace");
+    const layoutBox = await visualBox(layout, "files layout");
+    const collectionBox = await visualBox(collection, "file collection");
+    const detailsBox = await visualBox(details, "file details");
+    const padding = await filesPage.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        left: Number.parseFloat(style.paddingLeft),
+        right: Number.parseFloat(style.paddingRight),
+      };
+    });
+    expectNear(pageBox.left, sidebarBox.right, "files page left edge");
+    expectNear(pageBox.right, viewport.width, "files page right edge");
+    expectNear(
+      workspaceBox.left,
+      pageBox.left + padding.left,
+      "files workspace left edge",
+    );
+    expectNear(
+      workspaceBox.right,
+      pageBox.right - padding.right,
+      "files workspace right edge",
+    );
+    expect(detailsBox.width).toBeGreaterThanOrEqual(240);
+    expect(detailsBox.width).toBeLessThanOrEqual(280);
+    expectNear(detailsBox.right, layoutBox.right, "details right edge");
+    expect(collectionBox.right).toBeLessThanOrEqual(detailsBox.left + 1);
+    expect(collectionBox.width).toBeGreaterThan(detailsBox.width * 3);
+  });
+
+  test("финальная визуальная приёмка: assistant entity drawer", async ({
+    page,
+  }) => {
+    requireRefs("projectRef", "coordinatorRef");
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const agentPath = `/projects/${projectRef}/agents/${coordinatorRef}`;
+    await gotoWithRetry(page, agentPath);
+    await expectPageHeading(page, coordinatorName);
+    await openKodex(page);
+    const drawer = page.getByRole("dialog", { name: "Kodex" });
+    await expect(drawer).toHaveAttribute("aria-busy", "false");
+    const drawerBox = await expectInsideViewport(page, drawer, "Kodex drawer");
+    expect(drawerBox.width).toBeGreaterThanOrEqual(520);
+    expect(drawerBox.width).toBeLessThanOrEqual(640);
+    expectNear(drawerBox.right, 1920, "Kodex drawer right edge");
+    expectNear(drawerBox.top, 0, "Kodex drawer top edge");
+    expectNear(drawerBox.bottom, 1080, "Kodex drawer bottom edge");
+
+    const context = drawer.locator(".assistant-context-strip");
+    await expect(context).toContainText(coordinatorName);
+    await expect(context).toContainText(agentPath);
+    await expect(drawer.locator(".assistant-drawer__header")).toBeVisible();
+    await expect(drawer.locator(".assistant-composer")).toBeVisible();
+    const overflow = await drawer.evaluate((element) =>
+      [
+        element,
+        element.querySelector<HTMLElement>(".assistant-drawer__header"),
+        element.querySelector<HTMLElement>(".assistant-context-strip"),
+        element.querySelector<HTMLElement>(".assistant-composer"),
+      ].map((item) =>
+        item
+          ? {
+              clientWidth: item.clientWidth,
+              overflow: item.scrollWidth - item.clientWidth,
+            }
+          : { clientWidth: 0, overflow: Number.NaN },
+      ),
+    );
+    for (const item of overflow) {
+      expect(item.clientWidth).toBeGreaterThan(0);
+      expect(Number.isFinite(item.overflow)).toBe(true);
+      expect(item.overflow).toBeLessThanOrEqual(1);
+    }
   });
 
   test("административные экраны и security boundary дают ожидаемый readback", async ({
