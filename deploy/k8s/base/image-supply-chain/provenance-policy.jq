@@ -5,7 +5,7 @@ def dependency_key:
   [.uri, .digest.sha256] | join("@");
 
 type == "object" and
-._type == "https://in-toto.io/Statement/v1" and
+._type == "https://in-toto.io/Statement/v0.1" and
 .predicateType == "https://slsa.dev/provenance/v1" and
 (.subject | type == "array" and length == 1) and
 (.subject[0] | type == "object" and (.name | type == "string" and length > 0) and

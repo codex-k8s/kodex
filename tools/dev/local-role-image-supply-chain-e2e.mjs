@@ -254,19 +254,10 @@ async function prepare() {
   const recipeRef = boundedString(recipe.ref, "recipe ref");
   if (!Number.isSafeInteger(recipe.version) || recipe.version < 1)
     fail("recipe version is invalid");
-  const receipt = await request(
-    "POST",
-    `/api/v1/projects/${encodeURIComponent(projectRef)}/role-image-recipes/${encodeURIComponent(recipeRef)}/commands`,
-    {
-      body: { action: "REQUEST_BUILD" },
-      version: recipe.version,
-      expectedStatus: 200,
-    },
-  );
-  const buildRef = boundedString(receipt.imageBuild?.ref, "image build ref");
 
   const deadline = Date.now() + timeoutMilliseconds;
   let detail;
+  let buildRef = "";
   while (Date.now() < deadline) {
     detail = await request(
       "GET",
@@ -280,6 +271,9 @@ async function prepare() {
           ),
         )
       : undefined;
+    if (!buildRef && Array.isArray(detail.builds) && detail.builds.length > 0) {
+      buildRef = boundedString(detail.builds[0]?.ref, "image build ref");
+    }
     if (failedBuild) {
       fail(
         `RoleImage build terminated at ${String(failedBuild.stage)} (${String(failedBuild.diagnosticCode ?? failedBuild.safeErrorCode ?? "UNKNOWN")})`,
@@ -292,6 +286,7 @@ async function prepare() {
       break;
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 2000));
   }
+  if (!buildRef) fail("image build created with the recipe was not observed");
   if (detail?.activeArtifact?.admissionVerdict !== "ACCEPTED")
     fail("accepted promoted RoleImage was not produced before timeout");
   const artifactRef = boundedString(detail.activeArtifact.ref, "artifact ref");

@@ -21,7 +21,7 @@ jq -n --arg image "$image_hex" --arg base "$base_hex" --arg frontend "$frontend_
   --arg subject "$subject" \
   --arg builder "$builder_identity" --arg build_type "$build_type" \
   --arg tools "$tools_digest" --arg policy "$policy_revision" '{
-  _type: "https://in-toto.io/Statement/v1",
+  _type: "https://in-toto.io/Statement/v0.1",
   predicateType: "https://slsa.dev/provenance/v1",
   subject: [{name: $subject, digest: {sha256: $image}}],
   predicate: {
