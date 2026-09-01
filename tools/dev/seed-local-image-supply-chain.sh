@@ -148,11 +148,11 @@ docker run --rm --network host --user 0:0 \
       "$(tr -d "\r\n" </work/password)" | base64 | tr -d "\r\n")
     jq -n --arg target "$target" --arg auth "$auth" \
       "{auths:{(\$target):{auth:\$auth}}}" >"$DOCKER_CONFIG/config.json"
-    regctl registry set "$target" --tls enabled \
+    regctl registry set "$target" --skip-check --tls enabled \
       --cacert "$(cat /work/ca.pem)" \
       --client-cert "$(cat /work/client.crt)" \
       --client-key "$(cat /work/client.key)"
-    regctl registry login "$target" --user "$(cat /work/username)" \
+    regctl registry login "$target" --skip-check --user "$(cat /work/username)" \
       --pass-stdin < /work/password
     regctl image import "$target/kodex/agent-runner:local-base" /input/runner.oci.tar
     regctl image import "$target/kodex/control-plane:local-readiness" /input/runner.oci.tar

@@ -443,7 +443,8 @@ login_registry() {
     --cacert "$(cat /identity/ca.pem)" \
     --client-cert "$(cat /identity/registry-client.crt)" \
     --client-key "$(cat /identity/registry-client.key)"
-  regctl registry login "$host" --user "$(tr -d '\r\n' <"$username_file")" \
+  regctl registry login "$host" --skip-check \
+    --user "$(tr -d '\r\n' <"$username_file")" \
     --pass-stdin <"$password_file" >/dev/null
 }
 

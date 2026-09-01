@@ -287,7 +287,7 @@ buildkit_deployment=$(yq -o=json -I=0 '
 jq -e '
   .spec.template.spec.hostUsers == false and
   (.spec.template.spec.containers[] | select(.name == "buildkitd") |
-    .image == "moby/buildkit:v0.24.0@sha256:8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4" and
+    .image == "moby/buildkit:v0.30.0@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f" and
     .securityContext.privileged == true and
     .securityContext.runAsUser == 0 and
     .securityContext.runAsGroup == 0 and

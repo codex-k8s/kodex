@@ -47,7 +47,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w" \
     -o /out/registry-pull-authorizer ./cmd/registry-pull-authorizer
 
-FROM moby/buildkit:v0.24.0-rootless@sha256:995077ff90af1afff56ff23018699d7511d122b2b111041f2011bd12afd5c0fe AS runtime
+FROM moby/buildkit:v0.30.0-rootless@sha256:d76eb1caecac5733ef7553c1e90a1b21f1bb218cd1142d3553de0747b4a14ba9 AS runtime
 USER 0:0
 RUN mkdir -p /var/run/kodex/work \
     && chown 1000:1000 /var/run/kodex/work \

@@ -79,6 +79,15 @@ done
 rg -F 'regctl registry set "$host" --skip-check --tls enabled' \
   "$source_root/deploy/k8s/base/image-supply-chain/image-admission.sh" >/dev/null ||
   fail 'authenticated registry configuration still performs an unauthenticated connectivity check'
+rg -F 'regctl registry login "$host" --skip-check' \
+  "$source_root/deploy/k8s/base/image-supply-chain/image-admission.sh" >/dev/null ||
+  fail 'authenticated registry login still performs a pre-credential connectivity check'
+for authenticated_registry_script in \
+  "$source_root/deploy/k8s/base/image-supply-chain/cleanup.sh" \
+  "$source_root/tools/dev/seed-local-image-supply-chain.sh"; do
+  rg -F -- '--skip-check' "$authenticated_registry_script" >/dev/null ||
+    fail "authenticated registry helper omits skip-check: $authenticated_registry_script"
+done
 rg -F -- "-name 'agent-runner-*.oci.tar' -print | LC_ALL=C sort" \
   "$source_root/tools/dev/seed-local-image-supply-chain.sh" >/dev/null ||
   fail 'runner OCI cache selection is not deterministic'

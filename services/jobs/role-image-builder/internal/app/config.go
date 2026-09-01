@@ -83,7 +83,7 @@ func loadConfig() (Config, error) {
 		TrustedRoleBaseDigest:        "sha256:0000000000000000000000000000000000000000000000000000000000000000",
 		FrontendRepository:           "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/dockerfile",
 		StagingRepository:            "kodex-image-registry-push.kodex-system.svc.cluster.local:5001/staging/role-images",
-		ExpectedBuilderSHA256:        "8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4",
+		ExpectedBuilderSHA256:        "0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f",
 		ExpectedFrontendSHA256:       "0000000000000000000000000000000000000000000000000000000000000000",
 		ExpectedToolchainSHA256:      "0000000000000000000000000000000000000000000000000000000000000000",
 		RoleRuntimeContractRevision:  1,

@@ -129,7 +129,7 @@ spec:
   buildType: https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
   trustedRoleBaseRepository: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner
   trustedRoleBaseDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-  builderSHA256: "8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4"
+  builderSHA256: "0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f"
   frontendSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
   toolchainSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
   roleRuntimeContractRevision: "1"

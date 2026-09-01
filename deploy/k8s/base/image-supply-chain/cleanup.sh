@@ -8,7 +8,7 @@ key_file="/var/run/secrets/kodex/image-registry/admin/client.key"
 username_file="/var/run/secrets/kodex/image-registry/admin/username"
 password_file="/var/run/secrets/kodex/image-registry/admin/password"
 
-regctl registry set "${registry_host}" --tls enabled \
+regctl registry set "${registry_host}" --skip-check --tls enabled \
   --cacert "$(cat "${ca_file}")" \
   --client-cert "$(cat "${certificate_file}")" \
   --client-key "$(cat "${key_file}")"
@@ -17,7 +17,7 @@ if [ -z "${registry_username}" ] || [ ! -s "${password_file}" ]; then
   echo "registry admin credentials are unavailable" >&2
   exit 1
 fi
-regctl registry login "${registry_host}" \
+regctl registry login "${registry_host}" --skip-check \
   --user "${registry_username}" --pass-stdin <"${password_file}" >/dev/null
 repository_file="$(mktemp)"
 regctl repo ls "${registry_host}" >"${repository_file}"
