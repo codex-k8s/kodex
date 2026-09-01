@@ -535,12 +535,22 @@ jq -e '
 for remote_contract in \
   'KODEX_DEV_TLS_MODE=public-acme' \
   'preflight-public-hosts.sh' \
+  'prepare-playwright-browser.sh' \
   'host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport' \
   'KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET'; do
   rg -Fq -- "$remote_contract" \
     "$repository_root/tools/dev/remote-dev.sh" "$repository_root/dev.sh" \
     "$repository_root/.kodex-remote-env.example" ||
     fail "remote development contract is absent: $remote_contract"
+done
+for browser_contract in \
+  'node_modules/.bin/playwright' \
+  'sudo -n "$playwright_cli" install-deps chromium' \
+  '"$playwright_cli" install chromium' \
+  'chromium.launch({ headless: true })'; do
+  rg -Fq -- "$browser_contract" \
+    "$repository_root/tools/dev/prepare-playwright-browser.sh" ||
+    fail "remote Playwright preparation contract is absent: $browser_contract"
 done
 for teleport_contract in \
   '.proxyListenerMode = "multiplex"' \

@@ -4,7 +4,7 @@ title: Удалённый hot-reload контур Kodex
 type: runbook
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-09-01
 ---
 
@@ -90,6 +90,13 @@ firewall и пользовательский kubeconfig.
 Vite отслеживают изменения исходников без пересборки полного release image.
 Тяжёлые runtime/supply-chain образы пересобираются только при изменении их
 входов и импортируются напрямую в containerd k3s.
+
+Перед первым browser smoke entrypoint устанавливает системные зависимости и
+только Chromium через зафиксированный в `package-lock.json` локальный
+Playwright. Браузер хранится в cache пользователя, после установки entrypoint
+обязан реально запустить и закрыть его. Проверены актуальные документы
+Playwright 1.61 через Context7: `install-deps chromium`, `install chromium` и
+Linux cache `~/.cache/ms-playwright`.
 
 Если OAuth App был создан после основного запуска, Teleport применяется
 отдельно:
