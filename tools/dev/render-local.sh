@@ -391,7 +391,21 @@ ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
     .spec.template.metadata.annotations."kodex.dev/trusted-role-base-repository" =
       "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner" |
     .spec.template.metadata.annotations."kodex.dev/trusted-role-base-digest" = strenv(RUNNER_DIGEST) |
-    .spec.template.metadata.annotations."kodex.dev/frontend-sha256" = strenv(FRONTEND_SHA256)
+    .spec.template.metadata.annotations."kodex.dev/frontend-sha256" = strenv(FRONTEND_SHA256) |
+    with(.spec.template.spec.containers[] | select(.name == "buildkitd");
+      .resources.requests.cpu = "8" |
+      .resources.requests.memory = "8Gi" |
+      .resources.limits.cpu = "24" |
+      .resources.limits.memory = "64Gi"
+    )
+  ) |
+  with(select(.kind == "Job" and .metadata.name == "seaweedfs-bucket-bootstrap");
+    with(.spec.template.spec.containers[] | select(.name == "bootstrap");
+      .resources.requests.cpu = "500m" |
+      .resources.requests.memory = "256Mi" |
+      .resources.limits.cpu = "2" |
+      .resources.limits.memory = "512Mi"
+    )
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "role-image-builder");
     .spec.template.metadata.annotations."kodex.dev/release-revision" = strenv(SOURCE_REVISION) |
@@ -1216,8 +1230,15 @@ yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "integration-gatewa
   fail 'integration-gateway exact NetworkPolicy is absent from the local fixture path'
 yq -e 'select(.kind == "StatefulSet" and .metadata.name == "seaweedfs")' "$output" >/dev/null ||
   fail 'SeaweedFS local workload is absent'
-yq -e 'select(.kind == "Job" and .metadata.name == "seaweedfs-bucket-bootstrap")' "$output" >/dev/null ||
-  fail 'SeaweedFS bucket bootstrap is absent'
+yq -e '
+  select(.kind == "Job" and .metadata.name == "seaweedfs-bucket-bootstrap") |
+  any(.spec.template.spec.containers[];
+    .name == "bootstrap" and
+    .resources.requests.cpu == "500m" and
+    .resources.requests.memory == "256Mi" and
+    .resources.limits.cpu == "2" and
+    .resources.limits.memory == "512Mi")
+' "$output" >/dev/null || fail 'SeaweedFS bucket bootstrap dev resources are invalid'
 yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "control-plane-local-object-storage-egress")' "$output" >/dev/null ||
   fail 'Control Plane local object storage egress is absent'
 yq -o=json -I=0 '.' "$output" | jq -s -e '
@@ -1276,7 +1297,11 @@ RUNNER_IMAGE="$runner_image" yq -o=json -I=0 '.' "$output" | jq -s -e \
   any($resources[]; .kind == "Deployment" and .metadata.name == "kodex-buildkit" and
     .spec.replicas == 1 and .spec.template.spec.hostUsers == false and
     any(.spec.template.spec.containers[];
-      .name == "buildkitd" and .securityContext.privileged == true)) and
+      .name == "buildkitd" and .securityContext.privileged == true and
+      .resources.requests.cpu == "8" and
+      .resources.requests.memory == "8Gi" and
+      .resources.limits.cpu == "24" and
+      .resources.limits.memory == "64Gi")) and
   any($resources[]; .kind == "Deployment" and .metadata.name == "role-image-builder" and
     any(.spec.template.spec.containers[];
       .name == "role-image-builder" and .image == $builderImage))
