@@ -79,10 +79,34 @@ describe("AssistantWorkspace layout", () => {
     expect(header).toContain('class="icon-button assistant-history__toggle"');
   });
 
-  it("не запускает mutation на устаревшем loading state и обрабатывает отказ", () => {
-    expect(source).toMatch(
-      /const canStartConversation = computed\([\s\S]*?!store\.loading[\s\S]*?!store\.busy[\s\S]*?!store\.problem/,
+  it("разрешает новый диалог после ошибки истории только готовому assistant", () => {
+    const createAccess = source.slice(
+      source.indexOf("const canCreateConversation"),
+      source.indexOf("const canSend"),
     );
+    const sendAccess = source.slice(
+      source.indexOf("const canSend"),
+      source.indexOf("const canStartConversation"),
+    );
+    const startAccess = source.slice(
+      source.indexOf("const canStartConversation"),
+      source.indexOf("const isRunContext"),
+    );
+
+    expect(createAccess).toContain('assistantRuntimeState.value === "READY"');
+    expect(createAccess).toContain(
+      'nextActions.includes("CREATE_CONVERSATION")',
+    );
+    expect(sendAccess).toContain('nextActions.includes("ADD_TURN")');
+    expect(sendAccess).toContain(
+      "store.selectedConversation || canCreateConversation.value",
+    );
+    expect(sendAccess).not.toContain("store.problem");
+    expect(startAccess).toContain("!store.loading");
+    expect(startAccess).toContain("!store.busy");
+    expect(startAccess).toContain("canCreateConversation.value");
+    expect(startAccess).not.toContain("store.problem");
+    expect(template).toContain('v-if="store.problem"');
     expect(template).toContain(':aria-busy="store.busy || store.loading"');
     expect(source).toContain(
       "await handleStoreMutation(() => store.startConversation())",

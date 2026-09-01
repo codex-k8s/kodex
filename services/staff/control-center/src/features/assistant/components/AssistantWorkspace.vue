@@ -105,31 +105,29 @@ const currentPlan = computed<AssistantPlan | undefined>(() => {
   }
   return undefined;
 });
+const assistantRuntimeState = computed(() =>
+  store.assistant
+    ? assistantEffectiveRuntimeState(store.assistant)
+    : "RECOVERING",
+);
+const canCreateConversation = computed(
+  () =>
+    assistantRuntimeState.value === "READY" &&
+    Boolean(store.assistant?.nextActions.includes("CREATE_CONVERSATION")),
+);
 const canSend = computed(
   () =>
     props.live &&
     !store.loading &&
     !store.busy &&
-    !store.problem &&
+    assistantRuntimeState.value === "READY" &&
     Boolean(store.assistant?.nextActions.includes("ADD_TURN")) &&
-    Boolean(
-      store.selectedConversation ||
-      store.assistant?.nextActions.includes("CREATE_CONVERSATION"),
-    ) &&
+    Boolean(store.selectedConversation || canCreateConversation.value) &&
     attachmentState.value.ready,
 );
 const canStartConversation = computed(
   () =>
-    props.live &&
-    !store.loading &&
-    !store.busy &&
-    !store.problem &&
-    Boolean(store.assistant?.nextActions.includes("CREATE_CONVERSATION")),
-);
-const assistantRuntimeState = computed(() =>
-  store.assistant
-    ? assistantEffectiveRuntimeState(store.assistant)
-    : "RECOVERING",
+    props.live && !store.loading && !store.busy && canCreateConversation.value,
 );
 const isRunContext = computed(() => props.context.entityKind === "RUN");
 

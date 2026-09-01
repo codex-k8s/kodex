@@ -244,6 +244,37 @@ describe("assistant workspace store", () => {
     expect(store.loading).toBe(false);
   });
 
+  it("очищает ошибку истории перед созданием диалога из realtime state", async () => {
+    const created = { ...conversation(), turns: [] };
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock.mockRejectedValue(
+      new TypeError("history unavailable"),
+    );
+    const store = useAssistantStore();
+
+    await store.load(context, "prj_sales");
+    store.applyRealtimeSnapshot(systemAssistant(), [], "prj_sales");
+
+    expect(store.assistant?.runtimeState).toBe("READY");
+    expect(store.assistant?.nextActions).toContain("CREATE_CONVERSATION");
+    expect(store.problem).toMatchObject({
+      code: "UNKNOWN",
+      kind: "unavailable",
+    });
+
+    let problemDuringMutation: AppProblem | undefined;
+    createConversationMock.mockImplementation(() => {
+      problemDuringMutation = store.problem;
+      return Promise.resolve(created);
+    });
+
+    await store.startConversation();
+
+    expect(problemDuringMutation).toBeUndefined();
+    expect(store.problem).toBeUndefined();
+    expect(store.selectedRef).toBe(created.ref);
+  });
+
   it("передаёт finalized AttachmentSet в сообщение помощнику", async () => {
     const initial = conversation();
     appendTurnMock.mockResolvedValue({

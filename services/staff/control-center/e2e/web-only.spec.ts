@@ -1753,57 +1753,46 @@ test.describe("web-only fresh installation", () => {
     ).toBe(200);
     await expect(row.locator(".status-badge")).toHaveText("Активен");
 
-    scheduledRunRef = await expect
+    let discoveredScheduledRunRef = "";
+    await expect
       .poll(
-        async () =>
-          page.evaluate(
+        async () => {
+          discoveredScheduledRunRef = await page.evaluate(
             async ({ expectedTitle, expectedProjectRef }) => {
-              const response = await fetch(
-                `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
-              );
-              if (!response.ok) return "";
-              const body = (await response.json()) as {
-                items?: Array<{
-                  ref: string;
-                  source: string;
-                  title: string;
-                }>;
-              };
-              return (
-                body.items?.find(
-                  (run) =>
-                    run.source === "SCHEDULE" && run.title === expectedTitle,
-                )?.ref ?? ""
-              );
+              try {
+                const response = await fetch(
+                  `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
+                );
+                if (!response.ok) return "";
+                const body = (await response.json()) as {
+                  items?: Array<{
+                    ref: string;
+                    source: string;
+                    title: string;
+                  }>;
+                };
+                return (
+                  body.items?.find(
+                    (run) =>
+                      run.source === "SCHEDULE" && run.title === expectedTitle,
+                  )?.ref ?? ""
+                );
+              } catch {
+                return "";
+              }
             },
             { expectedTitle: automationName, expectedProjectRef: projectRef },
-          ),
+          );
+          return discoveredScheduledRunRef;
+        },
         {
           message: "расписание должно создать run",
           timeout: 180_000,
           intervals: [1_000, 2_000, 5_000],
         },
       )
-      .not.toBe("")
-      .then(() =>
-        page.evaluate(
-          async ({ expectedTitle, expectedProjectRef }) => {
-            const response = await fetch(
-              `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
-            );
-            const body = (await response.json()) as {
-              items: Array<{ ref: string; source: string; title: string }>;
-            };
-            return (
-              body.items.find(
-                (run) =>
-                  run.source === "SCHEDULE" && run.title === expectedTitle,
-              )?.ref ?? ""
-            );
-          },
-          { expectedTitle: automationName, expectedProjectRef: projectRef },
-        ),
-      );
+      .not.toBe("");
+    scheduledRunRef = discoveredScheduledRunRef;
     expect(scheduledRunRef).not.toBe("");
     persistRefs();
     await gotoWithRetry(page, `/runs/${scheduledRunRef}`);
@@ -3193,7 +3182,7 @@ test.describe("web-only fresh installation", () => {
       `/projects/${projectRef}/files?artifactRef=${encodeURIComponent(uploadedArtifactRef)}`,
     );
     const details = page.locator(".file-details");
-    await expect(details).toBeVisible();
+    await waitForFilesWorkspaceArtifact(page, details);
     await details.getByRole("button", { name: "Открыть", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: uploadedFileName });
     await expect(dialog).toBeVisible();
@@ -3684,17 +3673,27 @@ async function uploadFilesWorkspaceArtifact(
   fileName: string,
   content: string,
 ): Promise<ArtifactReadback> {
-  const uploadButton = page
-    .locator(".files-workspace")
-    .getByRole("button", { name: "Загрузить", exact: true });
+  const workspace = page.locator(".files-workspace");
+  const uploadButton = workspace.getByRole("button", {
+    name: "Загрузить",
+    exact: true,
+  });
   await expect(uploadButton).toBeVisible();
   await expect(uploadButton).toBeEnabled();
-  const response = page.waitForResponse(
-    (candidate) =>
-      candidate.request().method() === "POST" &&
-      new URL(candidate.url()).pathname ===
-        `/api/v1/projects/${projectRef}/artifacts`,
-  );
+  const retryButton = workspace.getByRole("button", {
+    name: `Повторить: ${fileName}`,
+    exact: true,
+  });
+  const firstAttempt = Promise.race([
+    waitForFilesWorkspaceUpload(page, fileName).then((response) => ({
+      response,
+      retryableNetworkFailure: false,
+    })),
+    retryButton.waitFor({ state: "visible" }).then(() => ({
+      response: undefined,
+      retryableNetworkFailure: true,
+    })),
+  ]);
   const fileChooser = page.waitForEvent("filechooser");
   await uploadButton.click();
   await (
@@ -3704,10 +3703,62 @@ async function uploadFilesWorkspaceArtifact(
     mimeType: "text/plain",
     buffer: Buffer.from(content, "utf8"),
   });
-  const upload = await response;
+  const firstUpload = await firstAttempt;
+  let upload = firstUpload.response;
+  if (
+    firstUpload.retryableNetworkFailure ||
+    (upload !== undefined && upload.status() >= 500 && upload.status() < 600)
+  ) {
+    await expect(retryButton).toBeVisible();
+    const retryResponse = waitForFilesWorkspaceUpload(page, fileName);
+    await retryButton.click();
+    upload = await retryResponse;
+  }
+  if (!upload) throw new Error("artifact upload completed without a response");
   expect(upload.request().headers()["x-file-name"]).toBe(fileName);
   expect(upload.status(), await upload.text()).toBe(201);
   return (await upload.json()) as ArtifactReadback;
+}
+
+function waitForFilesWorkspaceUpload(
+  page: Page,
+  fileName: string,
+): Promise<Response> {
+  return page.waitForResponse((candidate) => {
+    const request = candidate.request();
+    return (
+      request.method() === "POST" &&
+      new URL(candidate.url()).pathname ===
+        `/api/v1/projects/${projectRef}/artifacts` &&
+      request.headers()["x-file-name"] === fileName
+    );
+  });
+}
+
+async function waitForFilesWorkspaceArtifact(
+  page: Page,
+  details: Locator,
+): Promise<void> {
+  const workspace = page.locator(".files-workspace");
+  const retryButton = workspace
+    .locator(".problem-notice")
+    .getByRole("button", { name: "Повторить", exact: true });
+  const state = await Promise.race([
+    details.waitFor({ state: "visible" }).then(() => "ready" as const),
+    retryButton.waitFor({ state: "visible" }).then(() => "retry" as const),
+  ]);
+  if (state === "retry") {
+    const retryResponse = page.waitForResponse(
+      (candidate) =>
+        candidate.request().method() === "GET" &&
+        new URL(candidate.url()).pathname ===
+          `/api/v1/projects/${projectRef}/artifacts`,
+    );
+    await retryButton.click();
+    const response = await retryResponse;
+    expect(response.status(), await response.text()).toBe(200);
+  }
+  await expect(details).toBeVisible();
 }
 
 async function operateArtifactLifecycle(

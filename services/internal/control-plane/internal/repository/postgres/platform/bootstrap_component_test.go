@@ -4503,6 +4503,15 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		t.Fatalf("claim lifecycle execution: claims=%d err=%v", len(claimed.RuntimeItems), err)
 	}
 	lease := claimed.RuntimeItems[0]
+	metadata, err := service.Execute(ctx, command.Command{Kind: command.ProposeRunMetadata, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "lifecycle-run-metadata"}, Payload: command.ProposeRunMetadataInput{
+			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
+			Title: "Agent-proposed support run", ActivitySummary: "Preparing the support response",
+		}})
+	if err != nil || metadata.Run == nil || metadata.Run.Title != launch.Run.Title ||
+		metadata.Run.TitleSource != "USER_EDITED" || metadata.Run.ActivitySummary != "Preparing the support response" {
+		t.Fatalf("propose run metadata without overriding user title: run=%#v err=%v", metadata.Run, err)
+	}
 	catalog, ok := lease["artifacts"].([]map[string]any)
 	if !ok || len(catalog) != 2 {
 		t.Fatalf("runtime artifact catalog = %#v, want input and knowledge artifacts", lease["artifacts"])

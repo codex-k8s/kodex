@@ -155,7 +155,6 @@ func (repository *Repository) proposeRunMetadata(ctx context.Context, tx pgx.Tx,
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	run.TitleSource, run.ActivitySummary = "AGENT_PROPOSED", activity
 	return commandOutcome{result: command.Result{Run: &run, Event: &event}, projectID: stringMap(lease, "projectID"),
 		projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN", resourceRef: stringMap(lease, "runRef"),
 		summary: "i18n:RUN_METADATA_UPDATED"}, nil
