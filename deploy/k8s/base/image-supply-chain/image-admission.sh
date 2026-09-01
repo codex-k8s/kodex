@@ -1,7 +1,12 @@
 #!/bin/sh
 set -eu
 
+admission_phase=${1:-}
+
 fail() {
+  if [ "$admission_phase" = scan ] || [ "$admission_phase" = sign ]; then
+    write_technical_rejection "$1" || true
+  fi
   echo "image admission failed: $1" >&2
   exit 1
 }
@@ -102,7 +107,6 @@ load_owner_claim() {
   artifact_id=$(jq -er .artifactId /work/owner-claim.json)
   source_ref=$(jq -er .stagingReference /work/owner-claim.json)
   image_digest=$(jq -er .manifestDigest /work/owner-claim.json)
-  image_hex=${image_digest#sha256:}
   spec_sha256=$(jq -er .specSHA256 /work/owner-claim.json)
   immutable_build_sha256=$(jq -er .immutableBuildSHA256 /work/owner-claim.json)
   expected_provenance_sha256=$(jq -er .provenanceSHA256 /work/owner-claim.json)
@@ -124,6 +128,41 @@ load_owner_claim() {
   source_ref="kodex-image-registry-staging-read.kodex-system.svc.cluster.local:5004/${source_ref#*/}"
   subject_name=${source_ref%@*}
   staging_host=${source_ref%%/*}
+}
+
+write_technical_rejection() {
+  reason=$1
+  [ -f /work/owner-claim.json ] || return 0
+  jq -e --argjson policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" '
+    (.artifactId | type == "string" and length > 0) and
+    (.manifestDigest | test("^sha256:[a-f0-9]{64}$")) and
+    (.specSHA256 | test("^[a-f0-9]{64}$")) and
+    (.immutableBuildSHA256 | test("^[a-f0-9]{64}$")) and
+    .policyRevision == $policy and .policySHA256 == $policy_sha
+  ' /work/owner-claim.json >/dev/null || return 0
+  image_digest=$(jq -er .manifestDigest /work/owner-claim.json)
+  spec_sha256=$(jq -er .specSHA256 /work/owner-claim.json)
+  immutable_build_sha256=$(jq -er .immutableBuildSHA256 /work/owner-claim.json)
+  jq -Sjc -n --arg build_type "$EXPECTED_BUILD_TYPE" --arg builder_id "$EXPECTED_BUILDER_ID" \
+    --arg immutable "$immutable_build_sha256" --arg manifest "$image_digest" \
+    --argjson policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" \
+    --arg schema "kodex.dev/image-provenance-binding/v1" --arg spec "$spec_sha256" \
+    '{buildType:$build_type,builderId:$builder_id,immutableBuildSHA256:$immutable,
+      manifestDigest:$manifest,policyRevision:$policy,policySHA256:$policy_sha,
+      schema:$schema,specSHA256:$spec}' >/work/provenance.json
+  jq -Sjc -n --arg phase "$admission_phase" --arg reason "$reason" \
+    '[{schema:"kodex.dev/native-provenance-rejection/v1",phase:$phase,reason:$reason}]' \
+    >/work/native-provenance.json
+  jq -Sjc -n --arg phase "$admission_phase" --arg reason "$reason" \
+    '{schema:"kodex.dev/sbom-unavailable/v1",phase:$phase,reason:$reason}' >/work/sbom.json
+  jq -Sjc -n --arg phase "$admission_phase" --arg reason "$reason" \
+    '{schema:"kodex.dev/vulnerability-evidence-unavailable/v1",phase:$phase,reason:$reason}' \
+    >/work/vulnerability.json
+  sha256sum /work/provenance.json | awk '{print $1}' >/work/provenance.sha256
+  sha256sum /work/sbom.json | awk '{print $1}' >/work/sbom.sha256
+  sha256sum /work/vulnerability.json | awk '{print $1}' >/work/vulnerability.sha256
+  printf '%s\n' REJECTED >/work/verdict
+  write_marker signature.complete
 }
 
 load_promotion_claim() {
@@ -418,10 +457,10 @@ verify_image_and_provenance() {
     /work/image-index.json | sort -u >/work/actual-platforms
   cmp -s /work/expected-platforms /work/actual-platforms || fail "image platform set mismatch"
   jq -r '.manifests[] | select(.platform.os != "unknown" and .platform.architecture != "unknown") |
-    [.digest, .platform.os, .platform.architecture, (.platform.variant // "")] | @tsv' \
+    .digest' \
     /work/image-index.json >/work/platform-manifests
   : >/work/native-provenance.jsonl
-  while IFS="$(printf '\t')" read -r platform_digest platform_os platform_arch platform_variant; do
+  while IFS= read -r platform_digest; do
     echo "$platform_digest" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "platform manifest digest is invalid"
     platform_ref="${subject_name}@${platform_digest}"
     regctl image inspect "$platform_ref" --format '{{json .Config.Labels}}' >/work/labels.json
@@ -548,7 +587,8 @@ case "${1:-}" in
     if [ "$(cat /work/verdict)" = ACCEPTED ]; then
       login_registry "$staging_host" /identity/username /identity/password
       verify_image_and_provenance
-      export COSIGN_PASSWORD="$(cat /identity/cosign.password)"
+      COSIGN_PASSWORD=$(cat /identity/cosign.password)
+      export COSIGN_PASSWORD
       printf '%s\n' "$image_digest" >/work/image-digest.subject
       cosign sign-blob --yes --key /identity/cosign.key --output-signature /work/image-digest.sig /work/image-digest.subject
       for evidence in provenance native-provenance sbom vulnerability; do

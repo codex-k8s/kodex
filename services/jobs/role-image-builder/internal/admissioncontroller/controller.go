@@ -169,6 +169,9 @@ func (controller *Controller) reconcileAdmissions(ctx context.Context, policy *c
 		}
 		phase, terminal, failed := nextAdmissionPhase(workspace.Labels[idLabel], jobs)
 		if terminal || failed {
+			if err := controller.deleteAdmissionJobs(ctx, workspace.Labels[idLabel], jobs); err != nil {
+				return err
+			}
 			if err := controller.deleteWorkspace(ctx, workspace); err != nil {
 				return err
 			}
@@ -285,6 +288,25 @@ func (controller *Controller) deleteWorkspace(ctx context.Context, workspace *co
 	return nil
 }
 
+func (controller *Controller) deleteAdmissionJobs(ctx context.Context, id string, jobs []batchv1.Job) error {
+	propagation := metav1.DeletePropagationBackground
+	for index := range jobs {
+		job := &jobs[index]
+		if job.Labels[idLabel] != id || job.Labels[phaseLabel] == "promote" {
+			continue
+		}
+		options := metav1.DeleteOptions{PropagationPolicy: &propagation}
+		if job.UID != "" {
+			uid := job.UID
+			options.Preconditions = &metav1.Preconditions{UID: &uid}
+		}
+		if err := controller.client.BatchV1().Jobs(controller.config.Namespace).Delete(ctx, job.Name, options); err != nil && !apierrors.IsNotFound(err) {
+			return errors.New("delete terminal image admission job")
+		}
+	}
+	return nil
+}
+
 func nextAdmissionPhase(id string, jobs []batchv1.Job) (string, bool, bool) {
 	byPhase := map[string]*batchv1.Job{}
 	for index := range jobs {
@@ -299,6 +321,19 @@ func nextAdmissionPhase(id string, jobs []batchv1.Job) (string, bool, bool) {
 			return phase, false, false
 		}
 		if jobFailed(job) {
+			if phase == "scan" || phase == "sign" {
+				admit := byPhase["admit"]
+				switch {
+				case admit == nil:
+					return "admit", false, false
+				case jobFailed(admit):
+					return "", false, true
+				case jobSucceeded(admit):
+					return "", true, false
+				default:
+					return "", false, false
+				}
+			}
 			return "", false, true
 		}
 		if !jobSucceeded(job) {
