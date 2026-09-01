@@ -97,7 +97,7 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 func (client *Client) Check(ctx context.Context) error {
 	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
 	defer cancel()
-	return client.shared.Check(callCtx)
+	return client.shared.CheckLocalAuthority(callCtx)
 }
 
 func (client *Client) Claim(ctx context.Context, key string) (Claim, error) {

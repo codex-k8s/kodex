@@ -28,3 +28,38 @@ func TestProviderCredentialMaterializerOperationsAreExact(t *testing.T) {
 		t.Fatalf("provider credential materializer operations = %#v, want %#v", got, want)
 	}
 }
+
+func TestImageSupplyChainWorkerOperationsAreExact(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		got  map[string]string
+		want map[string]string
+	}{
+		{
+			name: "admission",
+			got:  ImageAdmissionOperations(),
+			want: map[string]string{
+				"platform.role-images.admission.claim":  controlplanev1.RoleImageService_ClaimImageAdmission_FullMethodName,
+				"platform.role-images.admission.record": controlplanev1.RoleImageService_RecordImageAdmission_FullMethodName,
+			},
+		},
+		{
+			name: "promotion",
+			got:  ImagePromotionOperations(),
+			want: map[string]string{
+				"platform.role-images.promotion.claim":     controlplanev1.RoleImageService_ClaimImagePromotion_FullMethodName,
+				"platform.role-images.promotion.authorize": controlplanev1.RoleImageService_AuthorizeImagePromotion_FullMethodName,
+				"platform.role-images.promotion.complete":  controlplanev1.RoleImageService_CompleteImagePromotion_FullMethodName,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if !reflect.DeepEqual(test.got, test.want) {
+				t.Fatalf("image supply-chain operations = %#v, want %#v", test.got, test.want)
+			}
+		})
+	}
+}
