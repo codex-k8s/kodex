@@ -60,7 +60,9 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
   tools/install/reconcile-nats-runtime-users.sh \
   tools/install/reconcile-pull-docker-config.sh \
   tools/install/release-platform.sh tools/install/reset-host.sh \
-  tools/install/verify-oidc-target.sh tools/install/write-env-file.sh; do
+  tools/install/verify-oidc-target.sh tools/install/write-env-file.sh \
+  tools/dev/preflight-public-hosts.sh tools/dev/remote-dev.sh \
+  infra/teleport/bootstrap.sh; do
   [[ -x "$repository_root/$script" ]] || fail "installer entrypoint is not executable: $script"
   bash -n "$repository_root/$script"
 done
@@ -512,9 +514,43 @@ rg -Fq 'no ready Kubernetes node became available' \
   fail 'bare-metal installer does not report a node readiness timeout'
 rg -Fq 'dnsutils' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal installer does not install the DNS preflight client'
-rg -Fq 'for command_name in certutil cosign dig go helm kubectl nsc yq' \
+rg -Fq 'for command_name in certutil codex cosign dig docker go helm node npm kubectl nsc yq' \
   "$repository_root/tools/install/prepare-host.sh" ||
-  fail 'bare-metal host readback does not require DNS and browser trust clients'
+  fail 'bare-metal host readback does not require the development toolchain'
+for host_tool_contract in \
+  'docker.io docker-buildx docker-compose-v2' \
+  '"name": "node"' \
+  "'@openai/codex@0.152.0'" \
+  'systemctl enable --now docker'; do
+  rg -Fq -- "$host_tool_contract" \
+    "$repository_root/tools/install/prepare-host.sh" \
+    "$repository_root/tools/install/components.lock.json" ||
+    fail "bare-metal development tool contract is absent: $host_tool_contract"
+done
+jq -e '
+  any(.charts[]; .name == "teleport-cluster" and .version == "18.11.0" and
+    (.sha256 | test("^[a-f0-9]{64}$")))
+' "$repository_root/tools/install/components.lock.json" >/dev/null ||
+  fail 'Teleport chart lock is invalid'
+for remote_contract in \
+  'KODEX_DEV_TLS_MODE=public-acme' \
+  'preflight-public-hosts.sh' \
+  'host-preflight|host-apply|up|status|smoke|e2e|down|teleport' \
+  'KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET'; do
+  rg -Fq -- "$remote_contract" \
+    "$repository_root/tools/dev/remote-dev.sh" "$repository_root/dev.sh" \
+    "$repository_root/.kodex-remote-env.example" ||
+    fail "remote development contract is absent: $remote_contract"
+done
+for teleport_contract in \
+  '.proxyListenerMode = "multiplex"' \
+  '.service.type = "ClusterIP"' \
+  '/v1/webapi/github/callback' \
+  'kubernetes_groups:["system:masters"]' \
+  'tctl create -f -'; do
+  rg -Fq -- "$teleport_contract" "$repository_root/infra/teleport/bootstrap.sh" ||
+    fail "Teleport access contract is absent: $teleport_contract"
+done
 rg -Fq '  - traefik' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal k3s does not disable the bundled Traefik release'
 rg -Fq 'systemctl restart k3s' "$repository_root/tools/install/prepare-host.sh" ||

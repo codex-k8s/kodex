@@ -128,12 +128,21 @@ if [[ "$mode" == apply ]]; then
   apt-get install -y -qq \
     apache2-utils build-essential ca-certificates curl dnsutils gh git iptables jq \
     libnss3-tools make iproute2 openssl python3 ripgrep rsync systemd tar unzip \
-    uidmap ufw zstd
+    uidmap ufw xz-utils zstd docker.io docker-buildx docker-compose-v2
 else
-  command -v jq >/dev/null 2>&1 || fail 'jq is required'
+  command -v python3 >/dev/null 2>&1 || fail 'python3 is required'
 fi
-jq -e '.schemaVersion == 1 and (.artifacts | length) == 6 and (.charts | length) == 1' \
-  "$lock_file" >/dev/null || fail 'component lock is invalid'
+python3 - "$lock_file" <<'PY' || fail 'component lock is invalid'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    lock = json.load(source)
+if lock.get("schemaVersion") != 1:
+    raise SystemExit(1)
+if len(lock.get("artifacts", [])) != 7 or len(lock.get("charts", [])) != 2:
+    raise SystemExit(1)
+PY
 
 "$ipv6_ingress_bridge_script" --mode preflight \
   --server-public-ipv6-address "$server_public_ipv6_address"
@@ -165,6 +174,16 @@ if [[ "$mode" == apply ]]; then
   tar -xzf "$temporary_directory/go.tar.gz" -C /usr/local
   ln -sfn /usr/local/go/bin/go /usr/local/bin/go
   ln -sfn /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+
+  download_artifact node "$temporary_directory/node.tar.xz"
+  rm -rf -- /usr/local/node
+  mkdir -p /usr/local/node
+  tar -xJf "$temporary_directory/node.tar.xz" -C /usr/local/node --strip-components=1
+  for node_command in node npm npx corepack; do
+    ln -sfn "/usr/local/node/bin/$node_command" "/usr/local/bin/$node_command"
+  done
+  npm install --global --no-audit --no-fund '@openai/codex@0.152.0' >/dev/null
+  ln -sfn /usr/local/node/bin/codex /usr/local/bin/codex
 
   download_artifact helm "$temporary_directory/helm.tar.gz"
   tar -xzf "$temporary_directory/helm.tar.gz" -C "$temporary_directory"
@@ -229,14 +248,20 @@ WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
   configure_firewall
+  systemctl enable --now docker >/dev/null
+  if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != root ]]; then
+    usermod -aG docker "$SUDO_USER"
+  fi
   systemctl enable k3s >/dev/null
   systemctl restart k3s
 fi
 
 systemctl is-active --quiet k3s || fail 'k3s service is not active'
-for command_name in certutil cosign dig go helm kubectl nsc yq; do
+for command_name in certutil codex cosign dig docker go helm node npm kubectl nsc yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "installed command is absent: $command_name"
 done
+systemctl is-active --quiet docker || fail 'Docker service is not active'
+docker buildx version >/dev/null 2>&1 || fail 'Docker buildx is unavailable'
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 api_ready=false
 node_ready=false

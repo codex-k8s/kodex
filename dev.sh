@@ -212,12 +212,32 @@ if [[ "$endpoint_ip" != 127.0.0.1 ]]; then
     fail 'KODEX_DEV_ENDPOINT_IP is not assigned to this host'
 fi
 dns_suffix=${endpoint_ip//./.}.nip.io
-public_host="control.$dns_suffix"
-oidc_host="sso.$dns_suffix"
-grafana_host="grafana.$dns_suffix"
-headlamp_host="headlamp.$dns_suffix"
-registry_host="registry.$dns_suffix"
-promoted_pull_host="pull.$dns_suffix"
+public_host=${KODEX_DEV_PUBLIC_HOST:-control.$dns_suffix}
+oidc_host=${KODEX_DEV_OIDC_HOST:-sso.$dns_suffix}
+grafana_host=${KODEX_DEV_GRAFANA_HOST:-grafana.$dns_suffix}
+headlamp_host=${KODEX_DEV_HEADLAMP_HOST:-headlamp.$dns_suffix}
+registry_host=${KODEX_DEV_REGISTRY_HOST:-registry.$dns_suffix}
+promoted_pull_host=${KODEX_DEV_PROMOTED_PULL_HOST:-pull.$dns_suffix}
+for host in "$public_host" "$oidc_host" "$grafana_host" "$headlamp_host" \
+  "$registry_host" "$promoted_pull_host"; do
+  [[ "$host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$host" == *.* ]] ||
+    fail 'development public host is invalid'
+done
+tls_mode=${KODEX_DEV_TLS_MODE:-local-ca}
+case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is invalid' ;; esac
+ingress_class=${KODEX_DEV_INGRESS_CLASS:-traefik}
+cluster_issuer=${KODEX_DEV_CLUSTER_ISSUER:-kodex-local}
+acme_email=${KODEX_DEV_ACME_EMAIL:-}
+oidc_ca_file="$state_directory/kodex-local-ca.crt"
+node_extra_ca_file="$state_directory/kodex-local-ca.crt"
+if [[ "$tls_mode" == public-acme ]]; then
+  [[ "$cluster_issuer" == letsencrypt-production ]] ||
+    fail 'public development TLS requires letsencrypt-production'
+  [[ "$acme_email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] ||
+    fail 'ACME email is required for public development TLS'
+  oidc_ca_file=/etc/ssl/certs/ca-certificates.crt
+  node_extra_ca_file=""
+fi
 keycloak_origin_arguments=(
   --public-origin "https://$public_host"
   --grafana-origin "https://$grafana_host"
@@ -243,7 +263,18 @@ source "$credentials_file"
 cluster_mode=readback
 [[ "$command_name" == up ]] && cluster_mode=apply
 "$repository_root/tools/dev/bootstrap-cluster.sh" --context "$context" \
-  --mode "$cluster_mode" --state-directory "$state_directory"
+  --mode "$cluster_mode" --state-directory "$state_directory" \
+  --tls-mode "$tls_mode" --acme-email "$acme_email" \
+  --ingress-class "$ingress_class" --cluster-issuer "$cluster_issuer"
+
+if [[ "$command_name" == up && "$tls_mode" == public-acme ]]; then
+  "$repository_root/tools/dev/preflight-public-hosts.sh" \
+    --hosts "${KODEX_DEV_PUBLIC_TLS_HOSTS:-$public_host,$oidc_host}" \
+    --allowed-ipv4-addresses "${KODEX_DEV_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES:-}" \
+    --allowed-ipv6-addresses "${KODEX_DEV_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES:-}" \
+    --dns-timeout-seconds "${KODEX_DEV_PUBLIC_TLS_DNS_TIMEOUT_SECONDS:-10}" \
+    --http-timeout-seconds "${KODEX_DEV_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS:-10}"
+fi
 
 if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" == e2e ]]; then
   if [[ "$command_name" == e2e ]]; then
@@ -272,7 +303,7 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
     KODEX_E2E_STORAGE_STATE="$state_directory/e2e/owner.json" \
     KODEX_E2E_RBAC_GROUP=kodex-e2e-restricted \
     KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
-    NODE_EXTRA_CA_CERTS="$state_directory/kodex-local-ca.crt" \
+    NODE_EXTRA_CA_CERTS="$node_extra_ca_file" \
     npm --prefix "$frontend_directory" run test:e2e:local; then
     fail 'local browser smoke failed'
   fi
@@ -293,7 +324,7 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
       KODEX_E2E_KUBE_CONTEXT="$context" \
       KODEX_E2E_REPOSITORY_ROOT="$repository_root" \
       KODEX_E2E_STATE_DIRECTORY="$state_directory" \
-      NODE_EXTRA_CA_CERTS="$state_directory/kodex-local-ca.crt" \
+      NODE_EXTRA_CA_CERTS="$node_extra_ca_file" \
       npm --prefix "$frontend_directory" run test:e2e:discovery; then
       fail 'local browser E2E failed'
     fi
@@ -359,12 +390,17 @@ fi
 "$repository_root/tools/deploy/materialize-identity-secrets.sh" \
   --context "$context" --material-directory "$material_directory"
 "$repository_root/infra/identity/bootstrap.sh" --context "$context" --mode apply \
-  --oidc-host "$oidc_host" --ingress-class traefik --cluster-issuer kodex-local \
+  --oidc-host "$oidc_host" --ingress-class "$ingress_class" --cluster-issuer "$cluster_issuer" \
   --ingress-namespace kube-system --ingress-pod-name traefik
 kubectl label namespace identity app.kubernetes.io/part-of=kodex kodex.dev/capability=identity \
   kodex.dev/environment=staging kodex.dev/local-profile=hot-reload --overwrite >/dev/null
-kubectl -n identity patch serverstransport sso-public --type=merge \
-  -p '{"spec":{"rootCAsSecrets":["sso-public-tls"]}}' >/dev/null
+if [[ "$tls_mode" == local-ca ]]; then
+  kubectl -n identity patch serverstransport sso-public --type=merge \
+    -p '{"spec":{"rootCAsSecrets":["sso-public-tls"]}}' >/dev/null
+else
+  kubectl -n identity patch serverstransport sso-public --type=merge \
+    -p '{"spec":{"rootCAsSecrets":null}}' >/dev/null
+fi
 "$repository_root/tools/deploy/configure-keycloak.sh" --context "$context" --mode apply \
   "${keycloak_origin_arguments[@]}"
 
@@ -390,7 +426,7 @@ fi
 rm -rf -- "$provider_validation_home"
 "$repository_root/tools/install/materialize-secrets.sh" --context "$context" \
   --material-directory "$material_directory" \
-  --oidc-ca-file "$state_directory/kodex-local-ca.crt" \
+  --oidc-ca-file "$oidc_ca_file" \
   --provider-auth-file "$provider_auth"
 "$repository_root/tools/dev/reconcile-local-material.sh" --context "$context" \
   --state-directory "$state_directory" --mode commit >/dev/null
@@ -443,6 +479,7 @@ api_endpoint_port=$(jq -er '
 "$repository_root/tools/dev/render-local.sh" --source-root "$repository_root" \
   --cache-root "$state_directory/cache" --output "$state_directory/render.yaml" \
   --public-host "$public_host" --oidc-host "$oidc_host" \
+  --ingress-class "$ingress_class" --cluster-issuer "$cluster_issuer" \
   --kubernetes-service-cidr "$api_service_ip/32" \
   --kubernetes-endpoint-cidr "$api_endpoint_ip/32" \
   --kubernetes-endpoint-port "$api_endpoint_port" \

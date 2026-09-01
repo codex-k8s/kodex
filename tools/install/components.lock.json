@@ -14,6 +14,12 @@
       "sha256": "708effb774be8237570d0add163225abbdfaf4fca28b2611df167beba4feef89"
     },
     {
+      "name": "node",
+      "version": "24.17.0",
+      "url": "https://nodejs.org/dist/v24.17.0/node-v24.17.0-linux-x64.tar.xz",
+      "sha256": "ab343a1b747c7cbf3630dfd7dbf818c5423fab2eb4f5ad1afc896f6bd121a917"
+    },
+    {
       "name": "helm",
       "version": "v4.2.4",
       "url": "https://get.helm.sh/helm-v4.2.4-linux-amd64.tar.gz",
@@ -44,6 +50,13 @@
       "version": "v1.21.1",
       "repository": "oci://quay.io/jetstack/charts/cert-manager",
       "sha256": "c27101f3f3e2349fb4a9e704316105bf7b52ad73b8c8257d3498ef7f2f6a4adc"
+    },
+    {
+      "name": "teleport-cluster",
+      "version": "18.11.0",
+      "repository": "https://charts.releases.teleport.dev",
+      "chart": "teleport-cluster",
+      "sha256": "1a0bd89d3d21abaa899768c0ef9b2fe75138f0835e6a12dd0b9109debcc1eb3a"
     }
   ]
 }

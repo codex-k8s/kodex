@@ -10,6 +10,7 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --source-root <path> --cache-root <path> --output <path>" \
     '  --public-host <dns> --oidc-host <dns> --kubernetes-service-cidr <cidr>' \
+    '  [--ingress-class <name>] [--cluster-issuer <name>]' \
     '  --kubernetes-endpoint-cidr <cidr> --kubernetes-endpoint-port <port>' \
     '  --runner-image <repository@sha256:digest>' \
     '  --session-archive-image <repository@sha256:digest>' \
@@ -30,6 +31,8 @@ cache_root=""
 output=""
 public_host=""
 oidc_host=""
+ingress_class=traefik
+cluster_issuer=kodex-local
 kubernetes_service_cidr=""
 kubernetes_endpoint_cidr=""
 kubernetes_endpoint_port=""
@@ -52,6 +55,8 @@ while (($# > 0)); do
     --output) output=${2:-}; shift 2 ;;
     --public-host) public_host=${2:-}; shift 2 ;;
     --oidc-host) oidc_host=${2:-}; shift 2 ;;
+    --ingress-class) ingress_class=${2:-}; shift 2 ;;
+    --cluster-issuer) cluster_issuer=${2:-}; shift 2 ;;
     --kubernetes-service-cidr) kubernetes_service_cidr=${2:-}; shift 2 ;;
     --kubernetes-endpoint-cidr) kubernetes_endpoint_cidr=${2:-}; shift 2 ;;
     --kubernetes-endpoint-port) kubernetes_endpoint_port=${2:-}; shift 2 ;;
@@ -81,6 +86,10 @@ for host in "$public_host" "$oidc_host"; do
     fail 'local host is invalid'
 done
 [[ "$public_host" != "$oidc_host" ]] || fail 'public and OIDC hosts must differ'
+[[ "$ingress_class" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
+  fail 'development ingress class is invalid'
+[[ "$cluster_issuer" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
+  fail 'development cluster issuer is invalid'
 [[ "$kubernetes_service_cidr" =~ /32$ && "$kubernetes_endpoint_cidr" =~ /32$ ]] ||
   fail 'Kubernetes API CIDRs are invalid'
 [[ "$kubernetes_endpoint_port" =~ ^[1-9][0-9]{0,4}$ ]] || fail 'Kubernetes API port is invalid'
@@ -217,6 +226,7 @@ oidc_origin="https://$oidc_host"
 PUBLIC_HOST="$public_host" PUBLIC_ORIGIN="$public_origin" \
 OIDC_ISSUER="$oidc_issuer" OIDC_JWKS_URL="$oidc_jwks_url" \
 OIDC_HOST="$oidc_host" OIDC_ORIGIN="$oidc_origin" \
+INGRESS_CLASS="$ingress_class" CLUSTER_ISSUER="$cluster_issuer" \
 KUBERNETES_SERVICE_CIDR="$kubernetes_service_cidr" \
 SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
 SEAWEEDFS_IMAGE="$seaweedfs_image" AWS_CLI_IMAGE="$aws_cli_image" \
@@ -229,8 +239,8 @@ PROMOTED_PULL_HOST="$promoted_pull_host" yq -i '
     sub("__KODEX_OIDC_CONNECT_ADDRESS__"; "sso.identity.svc.cluster.local:443") |
     sub("__KODEX_OIDC_TLS_SERVER_NAME__"; strenv(OIDC_HOST)) |
     sub("__KODEX_OIDC_ORIGIN__"; strenv(OIDC_ORIGIN)) |
-    sub("__KODEX_INGRESS_CLASS__"; "traefik") |
-    sub("__KODEX_CLUSTER_ISSUER__"; "kodex-local") |
+    sub("__KODEX_INGRESS_CLASS__"; strenv(INGRESS_CLASS)) |
+    sub("__KODEX_CLUSTER_ISSUER__"; strenv(CLUSTER_ISSUER)) |
     sub("__KODEX_INGRESS_NAMESPACE__"; "kube-system") |
     sub("__KODEX_INGRESS_POD_NAME__"; "traefik") |
     sub("__KODEX_OIDC_NAMESPACE__"; "identity") |

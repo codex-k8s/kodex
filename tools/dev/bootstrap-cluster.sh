@@ -7,17 +7,28 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --context <exact-context> --mode apply|readback --state-directory <path>\n' "$0" >&2
+  printf '%s\n' \
+    "Usage: $0 --context <exact-context> --mode apply|readback --state-directory <path>" \
+    '  [--tls-mode local-ca|public-acme] [--acme-email <email>]' \
+    '  [--ingress-class <name>] [--cluster-issuer <name>]' >&2
 }
 
 context=""
 mode=""
 state_directory=""
+tls_mode=local-ca
+acme_email=""
+ingress_class=traefik
+cluster_issuer=kodex-local
 while (($# > 0)); do
   case "$1" in
     --context) context=${2:-}; shift 2 ;;
     --mode) mode=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
+    --tls-mode) tls_mode=${2:-}; shift 2 ;;
+    --acme-email) acme_email=${2:-}; shift 2 ;;
+    --ingress-class) ingress_class=${2:-}; shift 2 ;;
+    --cluster-issuer) cluster_issuer=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -25,6 +36,17 @@ done
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
+case "$tls_mode" in local-ca|public-acme) ;; *) fail 'TLS mode is invalid' ;; esac
+[[ "$ingress_class" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
+  fail 'ingress class is invalid'
+[[ "$cluster_issuer" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
+  fail 'cluster issuer is invalid'
+if [[ "$tls_mode" == public-acme ]]; then
+  [[ "$acme_email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] ||
+    fail 'ACME email is required in public TLS mode'
+  [[ "$cluster_issuer" == letsencrypt-production ]] ||
+    fail 'public TLS mode requires the supported letsencrypt-production issuer'
+fi
 [[ "$state_directory" == /* && "$state_directory" != / && "$state_directory" != "$HOME" ]] ||
   fail 'state directory must be an exact safe absolute path'
 for command_name in certutil curl helm jq kubectl openssl sha256sum yq; do
@@ -291,12 +313,20 @@ readback_hot_reload_host_tuning() {
 }
 
 if [[ "$mode" == apply ]]; then
-  install_cert_manager
+  if [[ "$tls_mode" == local-ca ]]; then
+    install_cert_manager
+  else
+    "$repository_root/tools/install/bootstrap-cert-manager.sh" \
+      --context "$context" --mode apply --acme-email "$acme_email" \
+      --ingress-class "$ingress_class"
+  fi
   "$repository_root/infra/service-infrastructure/bootstrap.sh" \
     --context "$context" --mode apply-controllers
   install_traefik
-  apply_local_issuer
-  trust_browser_ca
+  if [[ "$tls_mode" == local-ca ]]; then
+    apply_local_issuer
+    trust_browser_ca
+  fi
   apply_hot_reload_host_tuning
 fi
 
@@ -307,13 +337,13 @@ done
 kubectl -n kube-system rollout status deployment/traefik --timeout=3m >/dev/null ||
   fail 'Traefik deployment is unavailable'
 kubectl get ingressclass traefik >/dev/null || fail 'Traefik IngressClass is absent'
-kubectl get clusterissuer kodex-local -o json | jq -e '
+kubectl get clusterissuer "$cluster_issuer" -o json | jq -e '
   any(.status.conditions[]?; .type == "Ready" and .status == "True")
-' >/dev/null || fail 'local ClusterIssuer readback failed'
+' >/dev/null || fail 'development ClusterIssuer readback failed'
 kubectl -n kube-system get service traefik -o json | jq -e '
   .spec.type == "LoadBalancer" and
   ([.spec.ports[] | select(.port == 80 or .port == 443) | .port] | sort) == [80,443]
 ' >/dev/null || fail 'Traefik public ports are invalid'
 readback_hot_reload_host_tuning
 
-printf 'Kodex local cluster bootstrap completed: %s\n' "$mode"
+printf 'Kodex development cluster bootstrap completed: mode=%s tls=%s\n' "$mode" "$tls_mode"

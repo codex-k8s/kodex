@@ -1,0 +1,25 @@
+# Одноузловой disposable dev-сервер. Файл с реальными значениями должен иметь
+# mode 0600 и не должен попадать в Git.
+KODEX_REMOTE_SERVER_PUBLIC_IP=203.0.113.10
+KODEX_REMOTE_SERVER_PUBLIC_IPV6_ADDRESS=
+KODEX_REMOTE_CONTROL_HOST=control.kodex.example.com
+KODEX_REMOTE_OIDC_HOST=sso.kodex.example.com
+KODEX_REMOTE_TELEPORT_HOST=teleport.kodex.example.com
+KODEX_REMOTE_GRAFANA_HOST=grafana.kodex.example.com
+KODEX_REMOTE_HEADLAMP_HOST=headlamp.kodex.example.com
+KODEX_REMOTE_REGISTRY_HOST=registry.kodex.example.com
+KODEX_REMOTE_PROMOTED_PULL_HOST=pull.kodex.example.com
+KODEX_REMOTE_ACME_EMAIL=owner@example.com
+KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES=203.0.113.10
+KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES=
+
+# GitHub OAuth App для Teleport Community Edition. Callback URL:
+# https://<KODEX_REMOTE_TELEPORT_HOST>/v1/webapi/github/callback
+KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_ID=
+KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET=
+KODEX_REMOTE_GITHUB_ORGANIZATION=codex-k8s
+KODEX_REMOTE_GITHUB_TEAM=kodex-teleport-admins
+
+KODEX_REMOTE_STATE_DIRECTORY=/srv/kodex-dev/state
+KODEX_REMOTE_KUBECONFIG=/home/operator/.kube/kodex-dev-remote
+KODEX_REMOTE_KUBE_CONTEXT=default
