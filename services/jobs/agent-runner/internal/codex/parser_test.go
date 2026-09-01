@@ -3,6 +3,7 @@ package codex
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"testing"
 
@@ -154,6 +155,84 @@ func TestThreadBindingAcceptsCurrentAppServerOptionalFields(t *testing.T) {
 	if err := state.bindThread(response, "codex", "/workspace", "never"); err != nil {
 		t.Fatalf("current app-server thread response was rejected: %v", err)
 	}
+}
+
+func TestRequiredMCPStatusBindsThreadCatalogBeforeTurn(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	state.threadID = testThreadID
+	required := []string{
+		"propose_run_metadata",
+		"get_configuration_catalog",
+		"propose_configuration_plan",
+		"propose_assistant_metadata",
+	}
+	ready, err := state.bindRequiredMCPStatus(mcpStatusResponse("connected", required), required)
+	if err != nil || !ready || !state.requiredMCPReady || state.requiredMCPStatus != "ready" {
+		t.Fatalf("required MCP was not bound: ready=%v state=%#v err=%v", ready, state, err)
+	}
+
+	failure := raw(`{"error":"startup failed","failureReason":null,"name":"kodex","status":"failed","threadId":"` + testThreadID + `"}`)
+	if err := state.notification("mcpServer/startupStatus/updated", failure); !errors.Is(err, ErrRequiredMCPUnavailable) {
+		t.Fatalf("required MCP degradation was accepted: %v", err)
+	}
+}
+
+func TestRequiredMCPStatusWaitsOnlyForStartupStates(t *testing.T) {
+	required := []string{"propose_run_metadata"}
+	state := newProtocolState(testThreadID)
+	ready, err := state.bindRequiredMCPStatus(mcpStatusResponse("starting", nil), required)
+	if err != nil || ready {
+		t.Fatalf("starting MCP status was not retained as pending: ready=%v err=%v", ready, err)
+	}
+	for _, status := range []string{"authenticationRequired", "failed", "cancelled", "disabled"} {
+		ready, err = state.bindRequiredMCPStatus(mcpStatusResponse(status, required), required)
+		if ready || !errors.Is(err, ErrRequiredMCPUnavailable) {
+			t.Fatalf("terminal MCP status %q was accepted: ready=%v err=%v", status, ready, err)
+		}
+	}
+}
+
+func TestRequiredMCPStatusRejectsCatalogDrift(t *testing.T) {
+	required := []string{"propose_run_metadata", "get_configuration_catalog"}
+	state := newProtocolState(testThreadID)
+	ready, err := state.bindRequiredMCPStatus(mcpStatusResponse("connected", required[:1]), required)
+	if ready || !errors.Is(err, ErrRequiredMCPUnavailable) {
+		t.Fatalf("incomplete MCP catalog was accepted: ready=%v err=%v", ready, err)
+	}
+}
+
+func TestMCPStartupNotificationValidatesStructuredFailure(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	valid := raw(`{"error":"","failureReason":"reauthenticationRequired","name":"kodex","status":"failed","threadId":"` + testThreadID + `"}`)
+	if err := state.notification("mcpServer/startupStatus/updated", valid); err != nil {
+		t.Fatalf("structured startup failure was rejected: %v", err)
+	}
+	if state.requiredMCPThread != testThreadID || state.requiredMCPStatus != "failed" {
+		t.Fatalf("structured startup failure was not retained: %#v", state)
+	}
+	invalid := raw(`{"failureReason":"futureReason","name":"kodex","status":"failed","threadId":"` + testThreadID + `"}`)
+	if err := state.notification("mcpServer/startupStatus/updated", invalid); err == nil {
+		t.Fatal("unknown MCP startup failure reason was accepted")
+	}
+}
+
+func mcpStatusResponse(runtimeStatus string, tools []string) json.RawMessage {
+	catalog := make(map[string]map[string]any, len(tools))
+	for _, name := range tools {
+		catalog[name] = map[string]any{"name": name, "inputSchema": map[string]any{"type": "object"}}
+	}
+	encoded, err := json.Marshal(map[string]any{
+		"data": []map[string]any{{
+			"authStatus": "bearerToken", "name": "kodex", "pluginId": nil,
+			"resourceTemplates": []any{}, "resources": []any{}, "runtimeStatus": runtimeStatus,
+			"serverInfo": nil, "tools": catalog,
+		}},
+		"nextCursor": nil,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return encoded
 }
 
 func TestTokenUsageNotificationProducesCurrentTurnDelta(t *testing.T) {

@@ -31,6 +31,10 @@ import {
   operationTargetLabel,
 } from "@/features/assistant/model";
 import { useAssistantStore } from "@/features/assistant/store";
+import {
+  persistAssistantWorkspaceOpen,
+  restoreAssistantWorkspaceOpen,
+} from "@/features/assistant/workspace-state";
 import { usePlatformStore } from "@/features/platform/store";
 import RunActivityView from "@/features/runs/RunActivityView.vue";
 import type {
@@ -66,7 +70,7 @@ const props = withDefaults(
 const { t } = useI18n();
 const store = useAssistantStore();
 const platform = usePlatformStore();
-const open = ref(false);
+const open = ref(restoreAssistantWorkspaceOpen());
 const historyOpen = ref(false);
 const message = ref("");
 const titleDraft = ref("");
@@ -145,6 +149,7 @@ function handleOpenAssistant(): void {
 
 async function show(): Promise<void> {
   open.value = true;
+  persistAssistantWorkspaceOpen(true);
   historyOpen.value = false;
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
@@ -156,6 +161,7 @@ async function show(): Promise<void> {
 function close(): void {
   if (store.busy) return;
   open.value = false;
+  persistAssistantWorkspaceOpen(false);
   historyOpen.value = false;
   openPlanRef.value = undefined;
   store.clearReceipt();
@@ -329,10 +335,12 @@ watch(
 onMounted(() => {
   document.addEventListener("pointerdown", documentPointerDown);
   window.addEventListener(openAssistantEvent, handleOpenAssistant);
+  if (open.value) void show();
 });
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", documentPointerDown);
   window.removeEventListener(openAssistantEvent, handleOpenAssistant);
+  persistAssistantWorkspaceOpen(false);
 });
 </script>
 

@@ -531,6 +531,9 @@ test.describe("web-only fresh installation", () => {
       await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
     }
 
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
+
     if (discoveryMode && projectRef) {
       await gotoWithRetry(page, `/projects/${projectRef}`);
       await expectPageHeading(page, projectName);

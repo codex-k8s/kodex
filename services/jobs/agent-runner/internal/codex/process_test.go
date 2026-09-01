@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
@@ -47,6 +48,24 @@ func TestTokenUsageNotificationRemainsEnabled(t *testing.T) {
 		if method == "thread/tokenUsage/updated" {
 			t.Fatal("token usage notification is required for authoritative per-turn accounting")
 		}
+	}
+}
+
+func TestRequiredMCPToolNamesMatchRuntimeAuthority(t *testing.T) {
+	input := model.Input{SystemAssistant: true}
+	input.DelegationTargets = append(input.DelegationTargets, runtimecontract.RunnerDelegationTarget{})
+	input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{})
+	actual := requiredMCPToolNames(input)
+	expected := []string{
+		"propose_run_metadata",
+		"get_configuration_catalog",
+		"propose_configuration_plan",
+		"propose_assistant_metadata",
+		"delegate_agent",
+		"invoke_integration",
+	}
+	if !sameStringSet(actual, expected) {
+		t.Fatalf("required MCP tools = %#v, want %#v", actual, expected)
 	}
 }
 

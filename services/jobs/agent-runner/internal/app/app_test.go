@@ -21,6 +21,7 @@ func TestRuntimeExecutionFailureCodePreservesAuthorityBoundary(t *testing.T) {
 	}{
 		{name: "provider auth", err: codex.ErrProviderAuthentication, want: "PROVIDER_AUTH_REJECTED"},
 		{name: "authority request", err: codex.ErrAuthorityRequestUnsupported, want: "RUNTIME_PROFILE_UNSUPPORTED"},
+		{name: "required MCP", err: codex.ErrRequiredMCPUnavailable, want: "RUNTIME_MCP_UNAVAILABLE"},
 		{name: "provider transport", err: errors.New("provider transport failed"), want: "RUNTIME_PROVIDER_UNAVAILABLE"},
 	}
 	for _, test := range tests {

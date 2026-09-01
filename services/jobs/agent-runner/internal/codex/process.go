@@ -28,11 +28,16 @@ const (
 	maximumArchiveBytes   = 64 << 20
 	maximumDiagnosticSize = 1 << 20
 	maximumRequestBytes   = 2 << 20
+	mcpReadinessTimeout   = 15 * time.Second
+	mcpReadinessPoll      = 100 * time.Millisecond
 )
 
 var rolloutPathPattern = regexp.MustCompile(`^\.kodex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`)
 
-var ErrAuthorityRequestUnsupported = errors.New("Codex app-server authority request is unsupported")
+var (
+	ErrAuthorityRequestUnsupported = errors.New("Codex app-server authority request is unsupported")
+	ErrRequiredMCPUnavailable      = errors.New("Codex required MCP runtime is unavailable")
+)
 
 type streamEvent struct {
 	message wireMessage
@@ -94,6 +99,9 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err := state.bindThread(raw, input.Model, input.WorkspaceRoot, input.CodexApprovalPolicy); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
+	if err := server.waitRequiredMCP(ctx, state, requiredMCPToolNames(input)); err != nil {
+		return Result{}, server.abort(ctx, state, err)
+	}
 	if err := state.captureUsageBaseline(); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
@@ -132,6 +140,50 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	result.ArchiveSHA256 = digest
 	result.ArchiveSizeBytes = sizeBytes
 	return result, nil
+}
+
+func (server *appServer) waitRequiredMCP(ctx context.Context, state *protocolState, requiredTools []string) error {
+	readinessContext, cancel := context.WithTimeout(ctx, mcpReadinessTimeout)
+	defer cancel()
+	params := map[string]any{
+		"threadId": state.threadID,
+		"detail":   "toolsAndAuthOnly",
+		"limit":    uint32(128),
+	}
+	for {
+		raw, err := server.call(readinessContext, state, "mcpServerStatus/list", params)
+		if err != nil {
+			if readinessContext.Err() != nil {
+				return ErrRequiredMCPUnavailable
+			}
+			return err
+		}
+		ready, err := state.bindRequiredMCPStatus(raw, requiredTools)
+		if err != nil || ready {
+			return err
+		}
+		timer := time.NewTimer(mcpReadinessPoll)
+		select {
+		case <-readinessContext.Done():
+			timer.Stop()
+			return ErrRequiredMCPUnavailable
+		case <-timer.C:
+		}
+	}
+}
+
+func requiredMCPToolNames(input model.Input) []string {
+	result := []string{"propose_run_metadata"}
+	if input.SystemAssistant {
+		result = append(result, "get_configuration_catalog", "propose_configuration_plan", "propose_assistant_metadata")
+	}
+	if len(input.DelegationTargets) != 0 {
+		result = append(result, "delegate_agent")
+	}
+	if len(input.IntegrationGrants) != 0 {
+		result = append(result, "invoke_integration")
+	}
+	return result
 }
 
 func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error) {

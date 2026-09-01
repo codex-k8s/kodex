@@ -262,6 +262,8 @@ func runtimeExecutionFailureCode(err error) string {
 		return "PROVIDER_AUTH_REJECTED"
 	case errors.Is(err, codex.ErrAuthorityRequestUnsupported):
 		return "RUNTIME_PROFILE_UNSUPPORTED"
+	case errors.Is(err, codex.ErrRequiredMCPUnavailable):
+		return "RUNTIME_MCP_UNAVAILABLE"
 	default:
 		return "RUNTIME_PROVIDER_UNAVAILABLE"
 	}

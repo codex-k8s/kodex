@@ -166,6 +166,9 @@ type protocolState struct {
 	expectedSessionID string
 	threadID          string
 	threadPath        string
+	requiredMCPThread string
+	requiredMCPStatus string
+	requiredMCPReady  bool
 	turnID            string
 	turnStarted       uint32
 	terminals         uint32
@@ -234,6 +237,7 @@ func (state *protocolState) bindThread(raw json.RawMessage, expectedModel, expec
 	}
 	threadID, path, threadErr := parseThread(fields["thread"])
 	if threadErr != nil || (state.expectedSessionID != "" && threadID != state.expectedSessionID) ||
+		(state.requiredMCPThread != "" && state.requiredMCPThread != threadID) ||
 		(state.threadID != "" && state.threadID != threadID) {
 		return errors.New("Codex app-server thread identity is invalid")
 	}
@@ -321,6 +325,43 @@ func (state *protocolState) notification(method string, raw json.RawMessage) err
 		}
 		state.turnStarted++
 		return state.consumeItems(turn.items, false, 0)
+	case "mcpServer/startupStatus/updated":
+		fields, _ := decodeObject(raw, notificationSchema(method))
+		name, nameErr := decodeBoundedString(fields["name"], 128)
+		status, statusErr := decodeBoundedString(fields["status"], 32)
+		if nameErr != nil || statusErr != nil || !allowedMCPStartupStatus(status) {
+			return errors.New("Codex app-server MCP startup notification is invalid")
+		}
+		if rawThreadID, present := fields["threadId"]; present && !bytes.Equal(rawThreadID, []byte("null")) {
+			threadID, err := decodeBoundedString(rawThreadID, 128)
+			if err != nil || uuid.Validate(threadID) != nil || (state.threadID != "" && state.threadID != threadID) {
+				return errors.New("Codex app-server MCP startup thread is invalid")
+			}
+			if name == "kodex" {
+				if state.requiredMCPThread != "" && state.requiredMCPThread != threadID {
+					return errors.New("Codex app-server MCP startup thread is invalid")
+				}
+				state.requiredMCPThread = threadID
+			}
+		}
+		if rawError, present := fields["error"]; present && !bytes.Equal(rawError, []byte("null")) {
+			var diagnostic string
+			if strictDecode(rawError, &diagnostic) != nil || len(diagnostic) > maximumDiagnosticBytes || !utf8.ValidString(diagnostic) {
+				return errors.New("Codex app-server MCP startup diagnostic is invalid")
+			}
+		}
+		if rawReason, present := fields["failureReason"]; present && !bytes.Equal(rawReason, []byte("null")) {
+			reason, err := decodeBoundedString(rawReason, 64)
+			if err != nil || reason != "reauthenticationRequired" {
+				return errors.New("Codex app-server MCP startup failure reason is invalid")
+			}
+		}
+		if name == "kodex" {
+			state.requiredMCPStatus = status
+			if state.requiredMCPReady && status != "ready" {
+				return ErrRequiredMCPUnavailable
+			}
+		}
 	case "thread/tokenUsage/updated":
 		fields, _ := decodeObject(raw, notificationSchema(method))
 		if err := state.validateUsageTuple(fields); err != nil {
@@ -379,6 +420,127 @@ func (state *protocolState) notification(method string, raw json.RawMessage) err
 		return err
 	}
 	return nil
+}
+
+func allowedMCPStartupStatus(status string) bool {
+	switch status {
+	case "starting", "ready", "failed", "cancelled":
+		return true
+	default:
+		return false
+	}
+}
+
+func (state *protocolState) bindRequiredMCPStatus(raw json.RawMessage, requiredTools []string) (bool, error) {
+	fields, err := decodeObject(raw, schema([]string{"data"}, "data", "nextCursor"))
+	if err != nil {
+		return false, errors.New("Codex app-server MCP status response is invalid")
+	}
+	if cursor, present := fields["nextCursor"]; present && !bytes.Equal(cursor, []byte("null")) {
+		return false, errors.New("Codex app-server MCP status response is incomplete")
+	}
+	var entries []json.RawMessage
+	if strictDecode(fields["data"], &entries) != nil || len(entries) == 0 || len(entries) > 128 {
+		return false, errors.New("Codex app-server MCP status inventory is invalid")
+	}
+	found := false
+	for _, entry := range entries {
+		server, err := decodeObject(entry, schema(
+			[]string{"authStatus", "name", "resourceTemplates", "resources", "tools"},
+			"authStatus", "name", "pluginId", "resourceTemplates", "resources", "runtimeStatus", "serverInfo", "tools",
+		))
+		if err != nil {
+			return false, errors.New("Codex app-server MCP status entry is invalid")
+		}
+		name, err := decodeBoundedString(server["name"], 128)
+		if err != nil {
+			return false, errors.New("Codex app-server MCP status name is invalid")
+		}
+		if name != "kodex" {
+			continue
+		}
+		if found {
+			return false, errors.New("Codex app-server required MCP status is duplicated")
+		}
+		found = true
+		runtimeStatus := ""
+		if rawStatus, present := server["runtimeStatus"]; present && !bytes.Equal(rawStatus, []byte("null")) {
+			runtimeStatus, err = decodeBoundedString(rawStatus, 32)
+			if err != nil {
+				return false, errors.New("Codex app-server MCP runtime status is invalid")
+			}
+		}
+		switch runtimeStatus {
+		case "connected":
+			authStatus, authErr := decodeBoundedString(server["authStatus"], 32)
+			toolNames, toolsErr := decodeDynamicObjectKeys(server["tools"], 256)
+			if authErr != nil || authStatus != "bearerToken" || toolsErr != nil || !sameStringSet(toolNames, requiredTools) {
+				return false, ErrRequiredMCPUnavailable
+			}
+			state.requiredMCPReady = true
+			state.requiredMCPStatus = "ready"
+			return true, nil
+		case "notStarted", "starting":
+			return false, nil
+		case "authenticationRequired", "failed", "cancelled", "disabled", "":
+			return false, ErrRequiredMCPUnavailable
+		default:
+			return false, errors.New("Codex app-server MCP runtime status is invalid")
+		}
+	}
+	return false, ErrRequiredMCPUnavailable
+}
+
+func decodeDynamicObjectKeys(raw json.RawMessage, maximum int) ([]string, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('{') {
+		return nil, errors.New("JSON value is not an object")
+	}
+	keys := make([]string, 0)
+	seen := make(map[string]struct{})
+	for decoder.More() {
+		keyToken, tokenErr := decoder.Token()
+		key, ok := keyToken.(string)
+		if tokenErr != nil || !ok || key == "" || len(key) > 128 || len(keys) >= maximum {
+			return nil, errors.New("JSON object key is invalid")
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return nil, errors.New("JSON object key is duplicated")
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil || len(value) == 0 {
+			return nil, errors.New("JSON object value is invalid")
+		}
+	}
+	if token, err = decoder.Token(); err != nil || token != json.Delim('}') || ensureEOF(decoder) != nil {
+		return nil, errors.New("JSON object is incomplete")
+	}
+	return keys, nil
+}
+
+func sameStringSet(actual, expected []string) bool {
+	if len(actual) != len(expected) {
+		return false
+	}
+	values := make(map[string]struct{}, len(expected))
+	for _, value := range expected {
+		if value == "" {
+			return false
+		}
+		values[value] = struct{}{}
+	}
+	if len(values) != len(expected) {
+		return false
+	}
+	for _, value := range actual {
+		if _, present := values[value]; !present {
+			return false
+		}
+	}
+	return true
 }
 
 func (state *protocolState) validateUsageTuple(fields map[string]json.RawMessage) error {
