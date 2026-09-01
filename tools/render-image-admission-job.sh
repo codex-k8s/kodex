@@ -107,10 +107,11 @@ EOF
 
 emit_job() {
   local phase=$1 service_account=$2 identity_secret=$3 protected=${4:-false}
-  local workload="" grant_signer_secret="" memory_request=128Mi memory_limit=1Gi
+  local workload="" grant_signer_secret="" memory_request=128Mi memory_limit=1Gi tmp_limit=64Mi
   if [[ $phase == scan ]]; then
     memory_request=256Mi
     memory_limit=2Gi
+    tmp_limit=1Gi
   fi
   if [[ $phase == claim || $phase == admit ]]; then
     workload='image-admission'
@@ -320,7 +321,7 @@ EOF
 EOF
   fi
   cat <<EOF
-        - {name: tmp, emptyDir: {sizeLimit: 64Mi}}
+        - {name: tmp, emptyDir: {sizeLimit: ${tmp_limit}}}
         - {name: script, configMap: {name: kodex-image-admission, defaultMode: 0555}}
         - {name: identity, secret: {secretName: ${identity_secret}, defaultMode: 0440}}
 EOF

@@ -510,16 +510,20 @@ fi
 if ! yq eval-all -e '
   select(.kind == "Job" and .metadata.labels."kodex.dev/image-admission-phase" == "scan") |
   .spec.template.spec.containers[0].resources.requests.memory == "256Mi" and
-  .spec.template.spec.containers[0].resources.limits.memory == "2Gi"
+  .spec.template.spec.containers[0].resources.limits.memory == "2Gi" and
+  (.spec.template.spec.volumes[] | select(.name == "tmp") | .emptyDir.sizeLimit) == "1Gi"
 ' "$temporary_directory/admission.yaml" >/dev/null 2>&1; then
-  echo "scan Job does not have its bounded memory profile" >&2
+  echo "scan Job does not have its bounded memory and temporary storage profile" >&2
   exit 1
 fi
 if yq eval-all -e '
   select(.kind == "Job" and .metadata.labels."kodex.dev/image-admission-phase" != "scan") |
-  select(.spec.template.spec.containers[0].resources.limits.memory != "1Gi")
+  select(
+    .spec.template.spec.containers[0].resources.limits.memory != "1Gi" or
+    (.spec.template.spec.volumes[] | select(.name == "tmp") | .emptyDir.sizeLimit) != "64Mi"
+  )
 ' "$temporary_directory/admission.yaml" >/dev/null 2>&1; then
-  echo "non-scan admission Job changed its memory profile" >&2
+  echo "non-scan admission Job changed its memory or temporary storage profile" >&2
   exit 1
 fi
 if yq eval-all -e '

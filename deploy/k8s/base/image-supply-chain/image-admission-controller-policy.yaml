@@ -342,7 +342,8 @@ spec:
               (!has(volume.persistentVolumeClaim.readOnly) ||
                volume.persistentVolumeClaim.readOnly == false)) :
           volume.name == 'tmp' ?
-            has(volume.emptyDir) && string(volume.emptyDir.sizeLimit) == '64Mi' :
+            has(volume.emptyDir) && string(volume.emptyDir.sizeLimit) ==
+              (variables.phase == 'scan' ? '1Gi' : '64Mi') :
           volume.name == 'script' ?
             has(volume.configMap) &&
             volume.configMap.name == 'kodex-image-admission' &&
