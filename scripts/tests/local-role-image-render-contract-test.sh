@@ -161,6 +161,16 @@ source_digest=$(printf '%s' "$source_revision" | sha256sum | awk '{print $1}')
   "$expected_runtime_contract_digest" != "$source_digest" ]] ||
   fail 'policy, role runtime contract, and source revision identities unexpectedly collide'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "Role" and .metadata.name == "image-admission-controller" and
+    any(.rules[];
+      .apiGroups == ["batch"] and .resources == ["jobs"] and
+      (.verbs | sort) == (["create","delete","get","list"] | sort)) and
+    any(.rules[];
+      .apiGroups == [""] and .resources == ["persistentvolumeclaims"] and
+      (.verbs | sort) == (["create","delete","get","list"] | sort)))
+' >/dev/null || fail 'image admission controller cannot clean terminal jobs and workspaces'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
   all(.[] | select(.kind == "Deployment" or .kind == "StatefulSet" or
       .kind == "Job");
     all(((.spec.template.spec.initContainers // []) +
