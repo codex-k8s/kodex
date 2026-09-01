@@ -28,6 +28,7 @@ import {
   gotoWithRetry,
   launchAgent,
   publishAgent,
+  readJsonWithNetworkRetry,
   routeRef,
   waitForConnected,
   waitForTerminalSuccess,
@@ -1169,26 +1170,25 @@ test.describe("web-only fresh installation", () => {
       draftContent?: string;
       draftState?: string;
       publishedContent: string;
-    }> =>
-      page.evaluate(async (agentRef) => {
-        const response = await fetch(
-          `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
+    }> => {
+      const response = await readJsonWithNetworkRetry<{
+        draftOverlay?: { content: string; state: string };
+        publishedOverlay: { content: string };
+      }>(
+        page,
+        `/api/v1/agents/${encodeURIComponent(coordinatorRef)}/runtime-configuration`,
+      );
+      if (response.status !== 200) {
+        throw new Error(
+          `runtime overlay readback failed: ${String(response.status)}`,
         );
-        if (!response.ok) {
-          throw new Error(
-            `runtime overlay readback failed: ${String(response.status)}`,
-          );
-        }
-        const body = (await response.json()) as {
-          draftOverlay?: { content: string; state: string };
-          publishedOverlay: { content: string };
-        };
-        return {
-          draftContent: body.draftOverlay?.content,
-          draftState: body.draftOverlay?.state,
-          publishedContent: body.publishedOverlay.content,
-        };
-      }, coordinatorRef);
+      }
+      return {
+        draftContent: response.body.draftOverlay?.content,
+        draftState: response.body.draftOverlay?.state,
+        publishedContent: response.body.publishedOverlay.content,
+      };
+    };
     let overlayState = await readOverlayState();
     if (overlayState.publishedContent !== runtimeOverlay) {
       if (overlayState.draftContent !== runtimeOverlay) {
@@ -1263,13 +1263,14 @@ test.describe("web-only fresh installation", () => {
       .getByRole("heading", { name: "Текущее окружение" })
       .click();
     await expect(environmentPicker).toHaveAttribute("aria-expanded", "false");
-    const boundEnvironmentRef = await page.evaluate(async (agentRef) => {
-      const response = await fetch(
-        `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
-      );
-      const body = (await response.json()) as { environment: { ref: string } };
-      return body.environment.ref;
-    }, coordinatorRef);
+    const boundEnvironmentResponse = await readJsonWithNetworkRetry<{
+      environment: { ref: string };
+    }>(
+      page,
+      `/api/v1/agents/${encodeURIComponent(coordinatorRef)}/runtime-configuration`,
+    );
+    expect(boundEnvironmentResponse.status).toBe(200);
+    const boundEnvironmentRef = boundEnvironmentResponse.body.environment.ref;
     if (boundEnvironmentRef !== runtimeEnvironmentRef) {
       await environmentPicker.click();
       const popover = page.getByRole("dialog", {
@@ -1295,24 +1296,22 @@ test.describe("web-only fresh installation", () => {
       expect((await binding).status()).toBe(200);
     }
 
-    const readback = await page.evaluate(async (agentRef) => {
-      const response = await fetch(
-        `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
-      );
-      if (!response.ok)
-        throw new Error(`runtime readback failed: ${String(response.status)}`);
-      return (await response.json()) as {
-        configuration: {
-          model: string;
-          provider: string;
-          providerPolicy: { mode: string };
-          version: number;
-        };
-        environment: { ref: string; currentVersion: { revision: number } };
-        publishedOverlay: { content: string; state: string };
-        safeEffectiveConfig: string;
+    const readbackResponse = await readJsonWithNetworkRetry<{
+      configuration: {
+        model: string;
+        provider: string;
+        providerPolicy: { mode: string };
+        version: number;
       };
-    }, coordinatorRef);
+      environment: { ref: string; currentVersion: { revision: number } };
+      publishedOverlay: { content: string; state: string };
+      safeEffectiveConfig: string;
+    }>(
+      page,
+      `/api/v1/agents/${encodeURIComponent(coordinatorRef)}/runtime-configuration`,
+    );
+    expect(readbackResponse.status).toBe(200);
+    const readback = readbackResponse.body;
     expect(readback.configuration.provider).toBe(providerName);
     expect(readback.configuration.model).toBe(modelName);
     expect(readback.configuration.version).toBeGreaterThan(0);
@@ -1797,70 +1796,62 @@ test.describe("web-only fresh installation", () => {
     persistRefs();
     await gotoWithRetry(page, `/runs/${scheduledRunRef}`);
     await waitForTerminalSuccess(page);
-    const scheduledRunReadback = await page.evaluate(
-      async ({ runRef, expectedAgentRef }) => {
-        const [graphResponse, eventsResponse] = await Promise.all([
-          fetch(`/api/v1/runs/${encodeURIComponent(runRef)}/graph`),
-          fetch(
-            `/api/v1/runs/${encodeURIComponent(runRef)}/events?afterSequence=0&limit=500`,
-          ),
-        ]);
-        if (!graphResponse.ok || !eventsResponse.ok) {
-          throw new Error(
-            `Scheduled run readback failed: graph=${String(graphResponse.status)}, events=${String(eventsResponse.status)}`,
-          );
-        }
-        const workspace = (await graphResponse.json()) as {
-          run: {
-            ref: string;
-            state: string;
-            source: string;
-            resultSummary?: string;
-            target: { type: string; ref: string };
-          };
-          graph: {
-            nodes: Array<{
-              ref: string;
-              type: string;
-              state: string;
-              agentRef?: string;
-            }>;
-          };
-        };
-        const events = (await eventsResponse.json()) as {
-          complete: boolean;
-          currentSequence: number;
-          items: Array<{
-            type: string;
-            nodeRef?: string;
-            messageKind?: string;
-            summary: string;
-            actor?: { ref?: string };
-          }>;
-        };
-        const agentNode = workspace.graph.nodes.find(
-          (node) =>
-            node.type === "AGENT_EXECUTION" &&
-            node.agentRef === expectedAgentRef,
-        );
-        return {
-          run: workspace.run,
-          agentNode,
-          complete: events.complete,
-          currentSequence: events.currentSequence,
-          finalMessages: events.items
-            .filter(
-              (event) =>
-                event.type === "TURN_COMPLETED" &&
-                event.nodeRef === agentNode?.ref &&
-                event.messageKind === "FINAL_MESSAGE" &&
-                event.actor?.ref === expectedAgentRef,
-            )
-            .map((event) => event.summary.trim()),
-        };
-      },
-      { runRef: scheduledRunRef, expectedAgentRef: analystRef },
+    const graphResponse = await readJsonWithNetworkRetry<{
+      run: {
+        ref: string;
+        state: string;
+        source: string;
+        resultSummary?: string;
+        target: { type: string; ref: string };
+      };
+      graph: {
+        nodes: Array<{
+          ref: string;
+          type: string;
+          state: string;
+          agentRef?: string;
+        }>;
+      };
+    }>(page, `/api/v1/runs/${encodeURIComponent(scheduledRunRef)}/graph`);
+    const eventsResponse = await readJsonWithNetworkRetry<{
+      complete: boolean;
+      currentSequence: number;
+      items: Array<{
+        type: string;
+        nodeRef?: string;
+        messageKind?: string;
+        summary: string;
+        actor?: { ref?: string };
+      }>;
+    }>(
+      page,
+      `/api/v1/runs/${encodeURIComponent(scheduledRunRef)}/events?afterSequence=0&limit=500`,
     );
+    if (graphResponse.status !== 200 || eventsResponse.status !== 200) {
+      throw new Error(
+        `Scheduled run readback failed: graph=${String(graphResponse.status)}, events=${String(eventsResponse.status)}`,
+      );
+    }
+    const workspace = graphResponse.body;
+    const events = eventsResponse.body;
+    const agentNode = workspace.graph.nodes.find(
+      (node) => node.type === "AGENT_EXECUTION" && node.agentRef === analystRef,
+    );
+    const scheduledRunReadback = {
+      run: workspace.run,
+      agentNode,
+      complete: events.complete,
+      currentSequence: events.currentSequence,
+      finalMessages: events.items
+        .filter(
+          (event) =>
+            event.type === "TURN_COMPLETED" &&
+            event.nodeRef === agentNode?.ref &&
+            event.messageKind === "FINAL_MESSAGE" &&
+            event.actor?.ref === analystRef,
+        )
+        .map((event) => event.summary.trim()),
+    };
     expect(scheduledRunReadback.run).toMatchObject({
       ref: scheduledRunRef,
       state: "SUCCEEDED",
@@ -3482,26 +3473,21 @@ async function ensureAuthorizedProviderAffinity(
   agentRef: string,
   eligibleIndex = 0,
 ): Promise<void> {
-  const preflight = await page.evaluate(async (requestedEligibleIndex) => {
-    const response = await fetch(
-      "/api/v1/provider-accounts?definitionKey=openai-codex&pageSize=100",
+  const response = await readJsonWithNetworkRetry<{
+    items: Array<{
+      enabled: boolean;
+      ready: boolean;
+      ref: string;
+      state: string;
+    }>;
+  }>(page, "/api/v1/provider-accounts?definitionKey=openai-codex&pageSize=100");
+  if (response.status !== 200) {
+    throw new Error(
+      `provider account catalog readback failed: ${String(response.status)}`,
     );
-    if (!response.ok) {
-      return {
-        accountRef: "",
-        eligibleCount: 0,
-        status: response.status,
-        summary: "provider account catalog readback failed",
-      };
-    }
-    const body = (await response.json()) as {
-      items: Array<{
-        enabled: boolean;
-        ready: boolean;
-        ref: string;
-        state: string;
-      }>;
-    };
+  }
+  const preflight = (() => {
+    const body = response.body;
     const eligible = body.items
       .filter(
         (item) => item.state === "AUTHORIZED" && item.enabled && item.ready,
@@ -3513,7 +3499,7 @@ async function ensureAuthorizedProviderAffinity(
       return result;
     }, {});
     return {
-      accountRef: eligible[requestedEligibleIndex]?.ref ?? "",
+      accountRef: eligible[eligibleIndex]?.ref ?? "",
       eligibleCount: eligible.length,
       status: response.status,
       summary: Object.entries(states)
@@ -3521,7 +3507,7 @@ async function ensureAuthorizedProviderAffinity(
         .map(([state, count]) => `${state}=${String(count)}`)
         .join(", "),
     };
-  }, eligibleIndex);
+  })();
   expect(preflight.status, preflight.summary).toBe(200);
   if (!preflight.accountRef) {
     const blocker = `BLOCKED: AUTHORIZED+enabled+ready provider account index ${String(eligibleIndex)} is unavailable; eligible=${String(preflight.eligibleCount)} (${preflight.summary || "empty catalog"})`;
@@ -3536,34 +3522,38 @@ async function pinAgentProviderAccount(
   agentRef: string,
   accountRef: string,
 ): Promise<void> {
-  const result = await page.evaluate(
-    async ({ expectedAccountRef, expectedAgentRef }) => {
-      const readbackResponse = await fetch(
-        `/api/v1/agents/${encodeURIComponent(expectedAgentRef)}/runtime-configuration`,
-      );
-      if (!readbackResponse.ok) {
-        return { status: readbackResponse.status, detail: "runtime readback" };
-      }
-      const readback = (await readbackResponse.json()) as {
-        agentVersion: number;
-        configuration: {
-          runtimeProfileRef: string;
-          model: string;
-          providerPolicy: {
-            accountCandidates: Array<{ accountRef: string; weight: number }>;
-            mode: string;
-          };
-        };
+  const readbackResponse = await readJsonWithNetworkRetry<{
+    agentVersion: number;
+    configuration: {
+      runtimeProfileRef: string;
+      model: string;
+      providerPolicy: {
+        accountCandidates: Array<{ accountRef: string; weight: number }>;
+        mode: string;
       };
-      const currentCandidates =
-        readback.configuration.providerPolicy.accountCandidates;
-      if (
-        readback.configuration.providerPolicy.mode === "FIXED" &&
-        currentCandidates.length === 1 &&
-        currentCandidates[0]?.accountRef === expectedAccountRef
-      ) {
-        return { status: 200, detail: "" };
-      }
+    };
+  }>(
+    page,
+    `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
+  );
+  if (readbackResponse.status !== 200) {
+    throw new Error(
+      `runtime readback failed: ${String(readbackResponse.status)}`,
+    );
+  }
+  const readback = readbackResponse.body;
+  const currentCandidates =
+    readback.configuration.providerPolicy.accountCandidates;
+  if (
+    readback.configuration.providerPolicy.mode === "FIXED" &&
+    currentCandidates.length === 1 &&
+    currentCandidates[0]?.accountRef === accountRef
+  ) {
+    return;
+  }
+
+  const result = await page.evaluate(
+    async ({ expectedAccountRef, expectedAgentRef, runtime }) => {
       const csrfPrefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
       const csrf = document.cookie
         .split(";")
@@ -3578,12 +3568,12 @@ async function pinAgentProviderAccount(
           headers: {
             "Content-Type": "application/json",
             "Idempotency-Key": crypto.randomUUID(),
-            "If-Match": `"${String(readback.agentVersion)}"`,
+            "If-Match": `"${String(runtime.agentVersion)}"`,
             "X-CSRF-Token": decodeURIComponent(csrf),
           },
           body: JSON.stringify({
-            runtimeProfileRef: readback.configuration.runtimeProfileRef,
-            model: readback.configuration.model,
+            runtimeProfileRef: runtime.runtimeProfileRef,
+            model: runtime.model,
             providerPolicyMode: "FIXED",
             providerAccounts: [{ accountRef: expectedAccountRef, weight: 1 }],
           }),
@@ -3594,7 +3584,15 @@ async function pinAgentProviderAccount(
         detail: publication.ok ? "" : (await publication.text()).slice(0, 512),
       };
     },
-    { expectedAccountRef: accountRef, expectedAgentRef: agentRef },
+    {
+      expectedAccountRef: accountRef,
+      expectedAgentRef: agentRef,
+      runtime: {
+        agentVersion: readback.agentVersion,
+        model: readback.configuration.model,
+        runtimeProfileRef: readback.configuration.runtimeProfileRef,
+      },
+    },
   );
   expect(result.status, result.detail).toBe(200);
 }

@@ -1,5 +1,55 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+export type BrowserJsonReadback<T> = {
+  readonly body: T;
+  readonly status: number;
+};
+
+export async function readJsonWithNetworkRetry<T>(
+  page: Page,
+  path: string,
+): Promise<BrowserJsonReadback<T>> {
+  if (!path.startsWith("/api/")) {
+    throw new Error("Read-only browser JSON path must start with /api/");
+  }
+
+  const retryDelays = [0, 200, 600];
+  for (const [index, delay] of retryDelays.entries()) {
+    if (delay > 0) await page.waitForTimeout(delay);
+    try {
+      return await page.evaluate(async (requestPath) => {
+        const response = await fetch(requestPath);
+        const rawBody = await response.text();
+        if (!rawBody) {
+          throw new Error(
+            `Read-only browser JSON response is empty: status=${String(response.status)}`,
+          );
+        }
+        return {
+          body: JSON.parse(rawBody) as T,
+          status: response.status,
+        };
+      }, path);
+    } catch (error) {
+      if (
+        index === retryDelays.length - 1 ||
+        !isTransientBrowserFetchFailure(error)
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error("Read-only browser JSON retry budget exhausted");
+}
+
+function isTransientBrowserFetchFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /(?:TypeError: Failed to fetch|NetworkError when attempting to fetch resource|Load failed|net::ERR_(?:CONNECTION_RESET|NETWORK_CHANGED|CONNECTION_CLOSED))/.test(
+    error.message,
+  );
+}
+
 export async function gotoWithRetry(
   page: Page,
   url: string,
