@@ -41,6 +41,7 @@ test-service-infrastructure-bootstrap:
 	@./scripts/tests/nats-operator-material-test.sh
 
 test-management-surfaces:
+	@./scripts/tests/keycloak-protocol-mapper-reconcile-test.sh
 	@./scripts/tests/management-surfaces-test.sh
 
 test-install-contract:
