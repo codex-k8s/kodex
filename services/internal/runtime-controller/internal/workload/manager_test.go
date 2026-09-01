@@ -142,7 +142,8 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 		providerSecurity.AllowPrivilegeEscalation == nil || *providerSecurity.AllowPrivilegeEscalation ||
 		providerSecurity.ReadOnlyRootFilesystem == nil || !*providerSecurity.ReadOnlyRootFilesystem ||
 		providerSecurity.SeccompProfile == nil || providerSecurity.SeccompProfile.Type != corev1.SeccompProfileTypeUnconfined ||
-		providerSecurity.AppArmorProfile == nil || providerSecurity.AppArmorProfile.Type != corev1.AppArmorProfileTypeUnconfined {
+		providerSecurity.AppArmorProfile == nil || providerSecurity.AppArmorProfile.Type != corev1.AppArmorProfileTypeLocalhost ||
+		providerSecurity.AppArmorProfile.LocalhostProfile == nil || *providerSecurity.AppArmorProfile.LocalhostProfile != "kodex-provider-runtime" {
 		t.Fatalf("provider sandbox security context = %#v", providerSecurity)
 	}
 	if input.CodexHome != "/workspace/.kodex/state/codex-home" {

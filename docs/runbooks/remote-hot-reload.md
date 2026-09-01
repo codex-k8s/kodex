@@ -4,7 +4,7 @@ title: Удалённый hot-reload контур Kodex
 type: runbook
 status: approved
 owner: manager
-version: 1.0.1
+version: 1.0.2
 updated: 2026-09-01
 ---
 
@@ -17,6 +17,12 @@ updated: 2026-09-01
 cert-manager, SeaweedFS, Kodex с монтированием исходников и Teleport Community
 Edition. Для публичных интерфейсов используются реальные сертификаты Let's
 Encrypt. Production-данные и production-секреты в контур не переносятся.
+
+Host bootstrap также устанавливает именованный AppArmor profile
+`kodex-provider-runtime`. Он точечно разрешает `userns` только provider-контейнеру,
+чтобы Codex мог создать внутренний bubblewrap sandbox с запретом чтения
+`auth.json`, `/run/secrets` и `/proc`. Системное ограничение unprivileged user
+namespaces при этом глобально не отключается.
 
 Teleport размещается в отдельном namespace того же disposable k3s. Прямой SSH
 на порт `22` остаётся аварийным доступом. Traefik занимает публичные `80/443` и
@@ -74,7 +80,7 @@ Teleport Community Edition использует отдельный GitHub OAuth 
 
 После `host-apply` нужно открыть новую SSH-сессию, чтобы применилось членство
 оператора в группе `docker`. Readback обязан подтвердить k3s, Docker buildx,
-firewall и пользовательский kubeconfig.
+firewall, загруженный AppArmor profile и пользовательский kubeconfig.
 
 ## Запуск и проверка
 

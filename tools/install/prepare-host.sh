@@ -34,9 +34,30 @@ case "$mode" in preflight|apply|readback) ;; *) fail 'mode is invalid' ;; esac
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 lock_file="$script_directory/components.lock.json"
 ipv6_ingress_bridge_script="$script_directory/configure-ipv6-ingress-bridge.sh"
+provider_apparmor_profile_source="$script_directory/../../infra/apparmor/kodex-provider-runtime"
+provider_apparmor_profile_target=/etc/apparmor.d/kodex-provider-runtime
 pod_cidr=10.42.0.0/16
 service_cidr=10.43.0.0/16
 k3s_resolver_file=/etc/rancher/k3s/resolv.conf
+
+configure_provider_apparmor_profile() {
+  [[ -f "$provider_apparmor_profile_source" && ! -L "$provider_apparmor_profile_source" ]] ||
+    fail 'provider AppArmor profile source is absent'
+  apparmor_parser -Q "$provider_apparmor_profile_source" >/dev/null ||
+    fail 'provider AppArmor profile is invalid'
+  install -m 0644 "$provider_apparmor_profile_source" "$provider_apparmor_profile_target"
+  apparmor_parser -r "$provider_apparmor_profile_target"
+}
+
+readback_provider_apparmor_profile() {
+  command -v apparmor_parser >/dev/null 2>&1 || fail 'apparmor_parser is required'
+  [[ -f "$provider_apparmor_profile_target" && ! -L "$provider_apparmor_profile_target" ]] ||
+    fail 'provider AppArmor profile is absent'
+  cmp -s "$provider_apparmor_profile_source" "$provider_apparmor_profile_target" ||
+    fail 'provider AppArmor profile differs from repository source'
+  grep -Fxq 'kodex-provider-runtime (unconfined)' /sys/kernel/security/apparmor/profiles ||
+    fail 'provider AppArmor profile is not loaded'
+}
 
 configure_k3s_resolver() {
   local source_file temporary_file nameserver_count
@@ -126,7 +147,7 @@ if [[ "$mode" == apply ]]; then
   apt-get update -qq
   apt-get upgrade -y -qq
   apt-get install -y -qq \
-    apache2-utils build-essential ca-certificates curl dnsutils gh git iptables jq \
+    apache2-utils apparmor apparmor-utils build-essential ca-certificates curl dnsutils gh git iptables jq \
     libnss3-tools make iproute2 openssl python3 ripgrep rsync systemd tar unzip \
     uidmap ufw xz-utils zstd docker.io docker-buildx docker-compose-v2
 else
@@ -184,6 +205,8 @@ if [[ "$mode" == apply ]]; then
   done
   npm install --global --no-audit --no-fund '@openai/codex@0.152.0' >/dev/null
   ln -sfn /usr/local/node/bin/codex /usr/local/bin/codex
+
+  configure_provider_apparmor_profile
 
   download_artifact helm "$temporary_directory/helm.tar.gz"
   tar -xzf "$temporary_directory/helm.tar.gz" -C "$temporary_directory"
@@ -279,6 +302,7 @@ done
 [[ "$node_ready" == true ]] || fail 'no ready Kubernetes node became available'
 readback_k3s_resolver
 readback_firewall
+readback_provider_apparmor_profile
 if [[ "$mode" == apply ]]; then
   "$ipv6_ingress_bridge_script" --mode apply \
     --server-public-ipv6-address "$server_public_ipv6_address"

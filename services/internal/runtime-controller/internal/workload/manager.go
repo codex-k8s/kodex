@@ -1839,6 +1839,7 @@ func turnPodName(value string) string                            { return runtim
 func int64Pointer(value int64) *int64                            { return &value }
 func int32Pointer(value int32) *int32                            { return &value }
 func boolPointer(value bool) *bool                               { return &value }
+func stringPointer(value string) *string                         { return &value }
 func quantityPointer(value resource.Quantity) *resource.Quantity { return &value }
 
 func validDNSLabel(value string) bool {
@@ -1873,9 +1874,12 @@ func restrictedSecurityContext(uid int64) *corev1.SecurityContext {
 func providerSandboxSecurityContext(uid int64) *corev1.SecurityContext {
 	securityContext := restrictedSecurityContext(uid)
 	// Codex строит внутреннюю файловую и сетевую границу через bubblewrap.
-	// Default seccomp/AppArmor профили Kubernetes блокируют создание его user namespace.
+	// Default seccomp и общий AppArmor профиль блокируют создание его user namespace.
+	// Host bootstrap устанавливает отдельный default-allow профиль, который
+	// разрешает только userns mediation, не отключая ограничение для всего узла.
 	securityContext.SeccompProfile = &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeUnconfined}
-	securityContext.AppArmorProfile = &corev1.AppArmorProfile{Type: corev1.AppArmorProfileTypeUnconfined}
+	securityContext.AppArmorProfile = &corev1.AppArmorProfile{Type: corev1.AppArmorProfileTypeLocalhost,
+		LocalhostProfile: stringPointer("kodex-provider-runtime")}
 	return securityContext
 }
 
