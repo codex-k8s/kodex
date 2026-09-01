@@ -49,6 +49,8 @@ var (
 	queryRoleImagesInsertArtifact string
 	//go:embed sql/role_images_fail_build.sql
 	queryRoleImagesFailBuild string
+	//go:embed sql/role_images_reject_stale_admission_candidates.sql
+	queryRoleImagesRejectStaleAdmissionCandidates string
 	//go:embed sql/role_images_claim_admission_candidate.sql
 	queryRoleImagesClaimAdmissionCandidate string
 	//go:embed sql/role_images_claim_admission.sql

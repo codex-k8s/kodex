@@ -233,6 +233,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("role image lifecycle uses canonical application access", func(t *testing.T) {
 		testRoleImageApplicationAccess(t, ctx, repository)
 	})
+	t.Run("role image admission closes stale policy claims", func(t *testing.T) {
+		testRoleImageAdmissionPolicyRotation(t, ctx, repository)
+	})
 	t.Run("role image promotion binds exact admitted artifact and receipt", func(t *testing.T) {
 		testRoleImagePromotionLifecycle(t, ctx, repository)
 	})

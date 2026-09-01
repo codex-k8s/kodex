@@ -13,6 +13,12 @@ import (
 )
 
 func (repository *Repository) ClaimAdmission(ctx context.Context, principal value.Principal, key string) (entity.ImageAdmissionClaim, error) {
+	return retryRoleImageTransaction(ctx, func() (entity.ImageAdmissionClaim, error) {
+		return repository.claimAdmission(ctx, principal, key)
+	})
+}
+
+func (repository *Repository) claimAdmission(ctx context.Context, principal value.Principal, key string) (entity.ImageAdmissionClaim, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.ImageAdmissionClaim{}, err
@@ -24,10 +30,28 @@ func (repository *Repository) ClaimAdmission(ctx context.Context, principal valu
 		return entity.ImageAdmissionClaim{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := repository.lockRoleImageIdempotency(ctx, tx, current, operation, key); err != nil {
+		return entity.ImageAdmissionClaim{}, err
+	}
+	policyArguments := pgx.StrictNamedArgs{
+		"organization_id": current.organizationID,
+		"policy_revision": repository.roleImages.PolicyRevision,
+		"policy_sha256":   repository.roleImages.PolicySHA256,
+	}
+	if _, err := tx.Exec(ctx, queryRoleImagesRejectStaleAdmissionCandidates, policyArguments); err != nil {
+		return entity.ImageAdmissionClaim{}, errs.ErrUnavailable
+	}
 	var replay admissionClaimReceipt
 	if found, receiptErr := repository.loadRoleImageReceipt(ctx, tx, current, operation, key, intent, &replay); receiptErr != nil {
 		return entity.ImageAdmissionClaim{}, receiptErr
 	} else if found {
+		if replay.Artifact.PolicyRevision != repository.roleImages.PolicyRevision ||
+			replay.Artifact.PolicySHA256 != repository.roleImages.PolicySHA256 {
+			if err := committed(tx, ctx); err != nil {
+				return entity.ImageAdmissionClaim{}, err
+			}
+			return entity.ImageAdmissionClaim{}, errs.ErrNotFound
+		}
 		if err := committed(tx, ctx); err != nil {
 			return entity.ImageAdmissionClaim{}, err
 		}
@@ -35,9 +59,12 @@ func (repository *Repository) ClaimAdmission(ctx context.Context, principal valu
 	}
 	var artifactID, artifactRef string
 	var version, fence uint64
-	err = tx.QueryRow(ctx, queryRoleImagesClaimAdmissionCandidate, current.organizationID).Scan(
+	err = tx.QueryRow(ctx, queryRoleImagesClaimAdmissionCandidate, policyArguments).Scan(
 		&artifactID, &artifactRef, &version, &fence)
 	if errors.Is(err, pgx.ErrNoRows) {
+		if err := committed(tx, ctx); err != nil {
+			return entity.ImageAdmissionClaim{}, err
+		}
 		return entity.ImageAdmissionClaim{}, errs.ErrNotFound
 	}
 	if err != nil {
