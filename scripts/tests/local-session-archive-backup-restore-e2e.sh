@@ -34,7 +34,7 @@ confirmation=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION
   fail 'Kubernetes configuration is absent or unsafe'
 [[ "$state_directory" == /* && -d "$state_directory" && ! -L "$state_directory" ]] ||
   fail 'state directory is absent or unsafe'
-for command_name in date go head jq kubectl sed seq sleep yq; do
+for command_name in date go head jq kubectl sed sleep yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
@@ -48,13 +48,16 @@ kubectl get namespace/kodex-system -o json | jq -e '
 ' >/dev/null || fail 'Kodex namespace is not the exact disposable local profile'
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-mkdir -p "$state_directory/e2e"
+source "$repository_root/scripts/tests/lib/local-kubernetes-e2e.sh"
+kodex_e2e_ensure_private_directory "$state_directory/e2e" ||
+  fail 'private E2E state directory is unavailable'
 temporary_directory=$(mktemp -d "$state_directory/e2e/session-archive-backup.XXXXXX")
 chmod 0700 "$temporary_directory"
 suffix=$(date -u +%Y%m%d%H%M%S)-$$
 fixture_id=${suffix//-/}
 object_key="session-archive/v1/org_e2e00001/prj_e2e00001/ses_e2e00001/g1/sat_e2e${fixture_id}-a1.tar"
 job_name="backup-session-e2e-${fixture_id: -20}"
+stale_job_selector='app.kubernetes.io/name=backup-controller,app.kubernetes.io/component=backup-e2e,app.kubernetes.io/managed-by=kodex-local-e2e,kodex.dev/local-profile=hot-reload'
 expected_file="$temporary_directory/session-archive.tar"
 mutated_file="$temporary_directory/session-archive-mutated.tar"
 backup_id_file="$temporary_directory/backup-id"
@@ -62,7 +65,8 @@ port_forward_pid=""
 fixture_prepared=0
 
 cleanup() {
-  kubectl -n kodex-system delete "job/$job_name" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  kodex_e2e_delete_owned_jobs kodex-system "$stale_job_selector" \
+    '^backup-session-e2e-[0-9]{15,20}$' 2m >/dev/null 2>&1 || true
   if [[ "$fixture_prepared" == 1 && -n "${endpoint:-}" ]]; then
     (
       cd "$repository_root/services/jobs/backup-controller"
@@ -83,6 +87,8 @@ cleanup() {
   rm -rf -- "$temporary_directory"
 }
 trap cleanup EXIT
+kodex_e2e_delete_owned_jobs kodex-system "$stale_job_selector" \
+  '^backup-session-e2e-[0-9]{15,20}$' 2m || fail 'stale backup E2E Job cleanup failed'
 
 printf 'kodex canonical session archive backup fixture %s\n' "$suffix" >"$expected_file"
 printf 'kodex mutated session archive fixture %s\n' "$suffix" >"$mutated_file"
@@ -103,18 +109,10 @@ kubectl -n kodex-system get secret/backup-controller-credentials -o json | jq -e
 chmod 0600 "$temporary_directory/access-key" "$temporary_directory/secret-key"
 
 port_forward_log="$temporary_directory/port-forward.log"
-kubectl -n kodex-system port-forward --address=127.0.0.1 service/seaweedfs-s3 :8333 \
-  >"$port_forward_log" 2>&1 &
-port_forward_pid=$!
-endpoint=""
-for _ in $(seq 1 100); do
-  endpoint=$(sed -nE 's/^Forwarding from 127\.0\.0\.1:([0-9]+) -> 8333$/http:\/\/127.0.0.1:\1/p' \
-    "$port_forward_log" | head -n 1)
-  [[ -n "$endpoint" ]] && break
-  kill -0 "$port_forward_pid" >/dev/null 2>&1 || fail 'SeaweedFS port-forward failed'
-  sleep 0.1
-done
-[[ -n "$endpoint" ]] || fail 'SeaweedFS loopback endpoint was not established'
+kodex_e2e_start_seaweedfs_port_forward kodex-system "$port_forward_log" ||
+  fail 'ready SeaweedFS Service endpoint or loopback port-forward is unavailable'
+port_forward_pid=$KODEX_E2E_PORT_FORWARD_PID
+endpoint=$KODEX_E2E_PORT_FORWARD_ENDPOINT
 
 run_fixture_oracle() {
   local phase=$1 fixture_file=$2
@@ -152,6 +150,7 @@ jq --arg job_name "$job_name" '
         "app.kubernetes.io/name": "backup-controller",
         "app.kubernetes.io/component": "backup-e2e",
         "app.kubernetes.io/part-of": "kodex",
+        "app.kubernetes.io/managed-by": "kodex-local-e2e",
         "kodex.dev/environment": "staging",
         "kodex.dev/local-profile": "hot-reload"
       }
@@ -164,6 +163,7 @@ jq --arg job_name "$job_name" '
     }
   } |
   .spec.template.metadata.labels["app.kubernetes.io/component"] = "backup-e2e" |
+  .spec.template.metadata.labels["app.kubernetes.io/managed-by"] = "kodex-local-e2e" |
   .spec.template.metadata.labels["kodex.dev/environment"] = "staging" |
   .spec.template.metadata.labels["kodex.dev/local-profile"] = "hot-reload" |
   .spec.template.spec.restartPolicy = "Never" |
@@ -176,8 +176,7 @@ jq --arg job_name "$job_name" '
 ' "$deployment" >"$job_manifest" || fail 'build one-shot backup Job manifest'
 kubectl -n kodex-system apply --server-side --force-conflicts --field-manager=kodex-local-e2e \
   -f "$job_manifest" >/dev/null
-if ! kubectl -n kodex-system wait --for=condition=Complete "job/$job_name" --timeout=15m >/dev/null; then
-  kubectl -n kodex-system logs "job/$job_name" --all-containers --tail=200 >&2 || true
+if ! kodex_e2e_wait_job_complete kodex-system "$job_name" 900; then
   fail 'one-shot backup did not complete'
 fi
 

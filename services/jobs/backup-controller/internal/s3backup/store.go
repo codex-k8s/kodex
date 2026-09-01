@@ -136,17 +136,72 @@ func (repository *Repository) AcquireOperationLock(ctx context.Context, operatio
 	default:
 		return nil, errors.New(operationLockInputError)
 	}
-	receipt, err := repository.PutJSON(ctx, "locks/controller.json", operationLockDocument{
+	document := operationLockDocument{
 		SchemaVersion: 1, Kind: "kodex-backup-operation-lock", Operation: operation,
 		OperationID: operationID, AcquiredAt: now, ExpiresAt: now.Add(ttl),
-	})
+	}
+	receipt, err := repository.PutJSON(ctx, "locks/controller.json", document)
 	if errors.Is(err, ErrConflict) {
-		return nil, errors.New("backup repository operation is already locked")
+		existingReceipt, existing, readErr := repository.loadOperationLock(ctx)
+		if readErr != nil {
+			return nil, readErr
+		}
+		if now.Before(existing.ExpiresAt) {
+			return nil, errors.New("backup repository operation is already locked")
+		}
+		if deleteErr := repository.deleteExpiredOperationLock(ctx, existingReceipt); deleteErr != nil {
+			return nil, deleteErr
+		}
+		receipt, err = repository.PutJSON(ctx, "locks/controller.json", document)
+		if errors.Is(err, ErrConflict) {
+			return nil, errors.New("backup repository operation is already locked")
+		}
 	}
 	if err != nil {
 		return nil, err
 	}
 	return &OperationLock{repository: repository, receipt: receipt}, nil
+}
+
+func (repository *Repository) loadOperationLock(ctx context.Context) (manifest.Receipt, operationLockDocument, error) {
+	var document operationLockDocument
+	receipt, err := repository.LoadJSON(ctx, "locks/controller.json", 4<<10, &document)
+	if err != nil || !validOperationLockDocument(document) {
+		return manifest.Receipt{}, operationLockDocument{}, errors.New("backup repository operation lock readback is invalid")
+	}
+	return receipt, document, nil
+}
+
+func (repository *Repository) deleteExpiredOperationLock(ctx context.Context, receipt manifest.Receipt) error {
+	if !receipt.Valid() || receipt.Bucket != repository.destination.config.Bucket ||
+		receipt.Key != repository.key("locks/controller.json") {
+		return errors.New("expired backup repository operation lock receipt is invalid")
+	}
+	_, err := repository.destination.api.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(receipt.Bucket), Key: aws.String(receipt.Key), VersionId: aws.String(receipt.VersionID),
+	})
+	if err != nil {
+		return errors.New("delete expired backup repository operation lock")
+	}
+	if _, err = repository.destination.head(ctx, receipt.Key, receipt.VersionID); errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	return errors.New("expired backup repository operation lock deletion readback failed")
+}
+
+func validOperationLockDocument(document operationLockDocument) bool {
+	if document.SchemaVersion != 1 || document.Kind != "kodex-backup-operation-lock" ||
+		document.OperationID == "" || len(document.OperationID) > 128 || document.AcquiredAt.IsZero() ||
+		document.ExpiresAt.IsZero() || !document.ExpiresAt.After(document.AcquiredAt) {
+		return false
+	}
+	switch document.Operation {
+	case "backup", "retention", "restore", "verify":
+	default:
+		return false
+	}
+	ttl := document.ExpiresAt.Sub(document.AcquiredAt)
+	return ttl >= 10*time.Minute && ttl <= 25*time.Hour
 }
 
 func (lock *OperationLock) Release(ctx context.Context) error {

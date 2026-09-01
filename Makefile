@@ -39,6 +39,7 @@ test-web-only-release:
 test-service-infrastructure-bootstrap:
 	@./scripts/tests/service-infrastructure-bootstrap-test.sh
 	@./scripts/tests/nats-operator-material-test.sh
+	@./scripts/tests/local-storage-e2e-reliability-contract-test.sh
 
 test-management-surfaces:
 	@./scripts/tests/keycloak-protocol-mapper-reconcile-test.sh

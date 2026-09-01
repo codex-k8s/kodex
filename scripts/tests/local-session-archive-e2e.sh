@@ -34,7 +34,7 @@ confirmation=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION
   fail 'Kubernetes configuration is absent or unsafe'
 [[ "$state_directory" == /* && -d "$state_directory" && ! -L "$state_directory" ]] ||
   fail 'state directory is absent or unsafe'
-for command_name in head jq kubectl sed seq sleep; do
+for command_name in head jq kubectl sed sleep; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
@@ -48,7 +48,11 @@ kubectl get namespace/kodex-system -o json | jq -e '
 ' >/dev/null || fail 'Kodex namespace is not the exact disposable local profile'
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+source "$repository_root/scripts/tests/lib/local-kubernetes-e2e.sh"
+kodex_e2e_ensure_private_directory "$state_directory/e2e" ||
+  fail 'private E2E state directory is unavailable'
 temporary_directory=$(mktemp -d "$state_directory/e2e/session-archive.XXXXXX")
+chmod 0700 "$temporary_directory"
 port_forward_pid=""
 cleanup() {
   if [[ -n "$port_forward_pid" ]]; then
@@ -68,17 +72,10 @@ jq -er '.items[0].data["secret-key"] | @base64d' "$secret_state" >"$temporary_di
 chmod 0600 "$temporary_directory/access-key" "$temporary_directory/secret-key"
 
 port_forward_log="$temporary_directory/port-forward.log"
-kubectl -n kodex-system port-forward --address=127.0.0.1 service/seaweedfs-s3 :8333 \
-  >"$port_forward_log" 2>&1 &
-port_forward_pid=$!
-endpoint=""
-for _ in $(seq 1 100); do
-  endpoint=$(sed -nE 's/^Forwarding from 127\.0\.0\.1:([0-9]+) -> 8333$/http:\/\/127.0.0.1:\1/p' "$port_forward_log" | head -n 1)
-  [[ -n "$endpoint" ]] && break
-  kill -0 "$port_forward_pid" >/dev/null 2>&1 || fail 'SeaweedFS port-forward failed'
-  sleep 0.1
-done
-[[ -n "$endpoint" ]] || fail 'SeaweedFS loopback endpoint was not established'
+kodex_e2e_start_seaweedfs_port_forward kodex-system "$port_forward_log" ||
+  fail 'ready SeaweedFS Service endpoint or loopback port-forward is unavailable'
+port_forward_pid=$KODEX_E2E_PORT_FORWARD_PID
+endpoint=$KODEX_E2E_PORT_FORWARD_ENDPOINT
 
 SESSION_ARCHIVE_E2E_ENDPOINT="$endpoint" \
 SESSION_ARCHIVE_E2E_ACCESS_KEY_FILE="$temporary_directory/access-key" \

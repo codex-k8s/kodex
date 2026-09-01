@@ -4,8 +4,8 @@ title: Диагностика session-archive
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
-updated: 2026-08-30
+version: 1.3.0
+updated: 2026-09-01
 ---
 
 # Диагностика session-archive
@@ -74,3 +74,12 @@ port-forward и вызывает существующий SeaweedFS E2E.
 `KODEX_E2E_CONFIRM_DISPOSABLE`; значения credentials не передаются аргументами
 и не выводятся. Отсутствие bucket, readback или delete evidence является
 `FAIL`, а не условным успехом.
+
+Эта проверка доказывает S3 snapshot/restore/delete adapter, но пока не создаёт
+задачу через штатный `control-plane -> session-archive controller -> worker`
+путь. Сквозной пользовательский сценарий остаётся точным follow-up Issue #1002:
+disposable fixture должна через публичный API завершить Session, дождаться
+автоматического snapshot, удалить только подтверждённый idle PVC и продолжить
+тот же Codex session ID после restore. До появления такого публичного fixture
+этот path имеет статус `NOT RUN`; прямая запись в S3 или ручное изменение БД не
+могут имитировать его успешную проверку.

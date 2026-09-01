@@ -30,6 +30,7 @@ type fakeS3 struct {
 	objects       map[string]fakeObject
 	lastIfNoMatch string
 	nextVersion   int
+	deleteHook    func()
 }
 
 func newFakeS3() *fakeS3 {
@@ -105,6 +106,11 @@ func (fake *fakeS3) DeleteObject(_ context.Context, input *s3.DeleteObjectInput,
 		return nil, responseError(http.StatusNotFound)
 	}
 	delete(fake.objects, key)
+	if fake.deleteHook != nil {
+		hook := fake.deleteHook
+		fake.deleteHook = nil
+		hook()
+	}
 	return &s3.DeleteObjectOutput{}, nil
 }
 
@@ -143,6 +149,73 @@ func TestOperationLockIsExclusiveAndExactlyReleased(t *testing.T) {
 	}
 	if _, err := repository.AcquireOperationLock(context.Background(), "restore", "restore", now, time.Hour); err != nil {
 		t.Fatalf("lock was not exactly released: %v", err)
+	}
+}
+
+func TestOperationLockReplacesOnlyExpiredExactVersion(t *testing.T) {
+	t.Parallel()
+	repository, fake := testRepository(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+	stale, err := repository.AcquireOperationLock(ctx, "backup", "stale-attempt", now, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := repository.AcquireOperationLock(ctx, "restore", "restore-attempt", now.Add(time.Hour), time.Hour)
+	if err != nil {
+		t.Fatalf("replace expired lock: %v", err)
+	}
+	if replacement.receipt.VersionID == stale.receipt.VersionID {
+		t.Fatal("expired lock replacement reused the stale exact version")
+	}
+	if err := stale.Release(ctx); err == nil {
+		t.Fatal("stale lock holder released the replacement lock")
+	}
+	var readback operationLockDocument
+	receipt, err := repository.LoadJSON(ctx, "locks/controller.json", 4<<10, &readback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.VersionID != replacement.receipt.VersionID || readback.Operation != "restore" ||
+		readback.OperationID != "restore-attempt" || !readback.AcquiredAt.Equal(now.Add(time.Hour)) {
+		t.Fatalf("replacement lock readback = %#v, %#v", receipt, readback)
+	}
+	if err := replacement.Release(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.objects) != 0 {
+		t.Fatalf("lock objects after exact release = %#v", fake.objects)
+	}
+}
+
+func TestOperationLockExpiredReplacementLosesRaceSafely(t *testing.T) {
+	t.Parallel()
+	repository, fake := testRepository(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+	if _, err := repository.AcquireOperationLock(ctx, "backup", "stale-attempt", now, 10*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	competitor := operationLockDocument{SchemaVersion: 1, Kind: "kodex-backup-operation-lock",
+		Operation: "verify", OperationID: "competing-attempt", AcquiredAt: now.Add(10 * time.Minute),
+		ExpiresAt: now.Add(20 * time.Minute)}
+	var hookErr error
+	fake.deleteHook = func() {
+		_, hookErr = repository.PutJSON(ctx, "locks/controller.json", competitor)
+	}
+	if _, err := repository.AcquireOperationLock(ctx, "restore", "losing-attempt",
+		now.Add(10*time.Minute), time.Hour); err == nil || err.Error() != "backup repository operation is already locked" {
+		t.Fatalf("expired lock replacement race error = %v", err)
+	}
+	if hookErr != nil {
+		t.Fatalf("create competing lock: %v", hookErr)
+	}
+	var readback operationLockDocument
+	if _, err := repository.LoadJSON(ctx, "locks/controller.json", 4<<10, &readback); err != nil {
+		t.Fatal(err)
+	}
+	if readback.OperationID != competitor.OperationID || readback.Operation != competitor.Operation {
+		t.Fatalf("competing lock was overwritten: %#v", readback)
 	}
 }
 

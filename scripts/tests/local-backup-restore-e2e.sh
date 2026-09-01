@@ -52,7 +52,7 @@ if [[ -n "$expected_object_key" || -n "$expected_object_file" ]]; then
   [[ "$expected_object_file" == /* && -f "$expected_object_file" && -s "$expected_object_file" &&
     ! -L "$expected_object_file" ]] || fail 'expected session archive object file is absent or unsafe'
 fi
-for command_name in date go head jq kubectl sed seq sleep yq; do
+for command_name in date go head jq kubectl sed sleep yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
@@ -66,12 +66,17 @@ kubectl get namespace/kodex-system -o json | jq -e '
 ' >/dev/null || fail 'Kodex namespace is not the exact disposable local profile'
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+source "$repository_root/scripts/tests/lib/local-kubernetes-e2e.sh"
+kodex_e2e_ensure_private_directory "$state_directory/e2e" ||
+  fail 'private E2E state directory is unavailable'
 temporary_directory=$(mktemp -d "$state_directory/e2e/backup-restore.XXXXXX")
+chmod 0700 "$temporary_directory"
 suffix=$(date -u +%Y%m%d%H%M%S)-$$
 restore_id="e2e-restore-$suffix"
 approval_id="e2e-approval-$suffix"
 target_prefix="$restore_id"
 job_name="backup-controller-$restore_id"
+job_selector="app.kubernetes.io/name=backup-controller,app.kubernetes.io/component=restore-drill,app.kubernetes.io/managed-by=kodex-local-e2e,kodex.dev/local-profile=hot-reload,kodex.dev/e2e-run=$suffix"
 target_databases=()
 port_forward_pid=""
 cleanup() {
@@ -79,7 +84,8 @@ cleanup() {
     kill "$port_forward_pid" >/dev/null 2>&1 || true
     wait "$port_forward_pid" >/dev/null 2>&1 || true
   fi
-  kubectl -n kodex-system delete "job/$job_name" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  kodex_e2e_delete_owned_jobs kodex-system "$job_selector" \
+    '^backup-controller-e2e-restore-[0-9]{14}-[0-9]+$' 2m >/dev/null 2>&1 || true
   kubectl -n kodex-system delete secret/backup-controller-repository \
     secret/backup-controller-restore-targets secret/backup-controller-restore-approval \
     --ignore-not-found --wait=false >/dev/null 2>&1 || true
@@ -215,12 +221,20 @@ image=$(kubectl -n kodex-system get deployment/backup-controller -o json | jq -e
 ') || fail 'backup-controller exact image is unavailable'
 digest=${image##*@sha256:}
 job_manifest="$temporary_directory/restore-job.yaml"
-RESTORE_JOB_NAME="$job_name" BACKUP_CONTROLLER_IMAGE="$image" BACKUP_CONTROLLER_DIGEST="$digest" \
+RESTORE_JOB_NAME="$job_name" E2E_RUN="$suffix" \
+BACKUP_CONTROLLER_IMAGE="$image" BACKUP_CONTROLLER_DIGEST="$digest" \
   yq '
     .metadata.name = strenv(RESTORE_JOB_NAME) |
+    .metadata.labels["app.kubernetes.io/part-of"] = "kodex" |
+    .metadata.labels["app.kubernetes.io/managed-by"] = "kodex-local-e2e" |
+    .metadata.labels["kodex.dev/e2e-run"] = strenv(E2E_RUN) |
     .metadata.labels["kodex.dev/environment"] = "staging" |
     .metadata.labels["kodex.dev/local-profile"] = "hot-reload" |
+    .spec.activeDeadlineSeconds = 900 |
     .spec.ttlSecondsAfterFinished = 600 |
+    .spec.template.metadata.labels["app.kubernetes.io/part-of"] = "kodex" |
+    .spec.template.metadata.labels["app.kubernetes.io/managed-by"] = "kodex-local-e2e" |
+    .spec.template.metadata.labels["kodex.dev/e2e-run"] = strenv(E2E_RUN) |
     .spec.template.metadata.labels["kodex.dev/environment"] = "staging" |
     .spec.template.metadata.labels["kodex.dev/local-profile"] = "hot-reload" |
     (.spec.template.spec.containers[] | select(.name == "restore-drill") | .image) = strenv(BACKUP_CONTROLLER_IMAGE) |
@@ -230,8 +244,7 @@ RESTORE_JOB_NAME="$job_name" BACKUP_CONTROLLER_IMAGE="$image" BACKUP_CONTROLLER_
   ' "$repository_root/deploy/k8s/base/backup-controller/restore-drill-job.template.yaml" >"$job_manifest"
 kubectl -n kodex-system apply --server-side --force-conflicts --field-manager=kodex-local-e2e \
   -f "$job_manifest" >/dev/null
-if ! kubectl -n kodex-system wait --for=condition=Complete "job/$job_name" --timeout=15m >/dev/null; then
-  kubectl -n kodex-system logs "job/$job_name" --all-containers --tail=200 >&2 || true
+if ! kodex_e2e_wait_job_complete kodex-system "$job_name" 900; then
   fail 'disposable restore drill did not complete'
 fi
 
@@ -247,17 +260,10 @@ jq -er '.destination.secretAccessKey' "$credentials" >"$temporary_directory/secr
 chmod 0600 "$temporary_directory/access-key" "$temporary_directory/secret-key"
 
 port_forward_log="$temporary_directory/port-forward.log"
-kubectl -n kodex-system port-forward --address=127.0.0.1 service/seaweedfs-s3 :8333 \
-  >"$port_forward_log" 2>&1 &
-port_forward_pid=$!
-endpoint=""
-for _ in $(seq 1 100); do
-  endpoint=$(sed -nE 's/^Forwarding from 127\.0\.0\.1:([0-9]+) -> 8333$/http:\/\/127.0.0.1:\1/p' "$port_forward_log" | head -n 1)
-  [[ -n "$endpoint" ]] && break
-  kill -0 "$port_forward_pid" >/dev/null 2>&1 || fail 'SeaweedFS port-forward failed'
-  sleep 0.1
-done
-[[ -n "$endpoint" ]] || fail 'SeaweedFS loopback endpoint was not established'
+kodex_e2e_start_seaweedfs_port_forward kodex-system "$port_forward_log" ||
+  fail 'ready SeaweedFS Service endpoint or loopback port-forward is unavailable'
+port_forward_pid=$KODEX_E2E_PORT_FORWARD_PID
+endpoint=$KODEX_E2E_PORT_FORWARD_ENDPOINT
 (
   cd "$repository_root/services/jobs/backup-controller"
   BACKUP_RESTORE_E2E=1 \

@@ -4,8 +4,8 @@ title: Backup, retention и restore drill
 type: runbook
 status: approved
 owner: sre
-version: 1.3.0
-updated: 2026-08-29
+version: 1.4.0
+updated: 2026-09-01
 ---
 
 # Backup, retention и restore drill
@@ -121,11 +121,13 @@ conditional skip.
 
 ## Отказы
 
-- `backup repository operation is already locked`: убедиться, что Deployment
-  или restore Job ещё работает. Автоматически удалять lock запрещено. Для
-  аварийного lock после `expiresAt` владелец подтверждает отсутствие живой
-  операции, SRE фиксирует exact lock version receipt и удаляет только эту
-  version через проверяемый repository tool; затем выполняет readback отсутствия.
+- `backup repository operation is already locked`: до `expiresAt` это закрытый
+  отказ параллельной операции. При наступившем `expiresAt` следующий contender
+  читает и валидирует immutable lock, удаляет только его exact `VersionId`,
+  подтверждает отсутствие этой версии и повторяет conditional put. Если между
+  delete и put другой contender уже получил lock, операция остаётся
+  заблокированной. Невалидный документ, ошибка exact delete или readback не
+  разрешают ручное или автоматическое снятие lock: требуется расследование.
 - `immutable S3 object already exists`: не перезаписывать key и не отключать
   version checks; выяснить повтор operation ID или постороннюю запись.
 - `backup verification receipt is unavailable`: backup не является restore
