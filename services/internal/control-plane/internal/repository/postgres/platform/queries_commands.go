@@ -129,6 +129,8 @@ var (
 	queryCommandsLaunchrunSelectAgentsOrganizationIdProjectIdRef string
 	//go:embed sql/commands_launchrun_select_workflows_organization_id_project_id_ref.sql
 	queryCommandsLaunchrunSelectWorkflowsOrganizationIdProjectIdRef string
+	//go:embed sql/commands_launchrun_validate_agent_runtime_contract.sql
+	queryCommandsLaunchrunValidateAgentRuntimeContract string
 	//go:embed sql/commands_launchrun_insert_sessions_ref_project_id_target_ref.sql
 	queryCommandsLaunchrunInsertSessionsRefProjectIdTargetRef string
 	//go:embed sql/commands_launchrun_select_sessions_organization_id_project_id_ref.sql
@@ -157,6 +159,10 @@ var (
 	queryCommandsInsertagentnodeInsertRunNodesRefRootRunIdParentNodeId string
 	//go:embed sql/commands_insertagentnode_insert_run_edges_ref_root_run_id_target_node_id.sql
 	queryCommandsInsertagentnodeInsertRunEdgesRefRootRunIdTargetNodeId string
+	//go:embed sql/commands_launchrun_insert_planned_workflow_node.sql
+	queryCommandsLaunchrunInsertPlannedWorkflowNode string
+	//go:embed sql/commands_launchrun_insert_planned_workflow_edge.sql
+	queryCommandsLaunchrunInsertPlannedWorkflowEdge string
 	//go:embed sql/commands_emitplatformevent_update_installation_platform_sequence.sql
 	queryCommandsEmitplatformeventUpdateInstallationPlatformSequence string
 	//go:embed sql/commands_emitplatformevent_insert_outbox_events_event_id_ordering_key_payload.sql
@@ -225,6 +231,8 @@ var (
 	queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState string
 	//go:embed sql/commands_resolvegate_update_owner_gates_state_decision_decision_comment.sql
 	queryCommandsResolvegateUpdateOwnerGatesStateDecisionDecisionComment string
+	//go:embed sql/commands_resolvegate_update_integration_invocation.sql
+	queryCommandsResolvegateUpdateIntegrationInvocation string
 	//go:embed sql/commands_resolvegate_insert_change_request_turn.sql
 	queryCommandsResolvegateInsertChangeRequestTurn string
 	//go:embed sql/commands_resolvegate_update_change_request_session.sql

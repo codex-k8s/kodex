@@ -1,0 +1,99 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: confluence
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: Confluence
+  description: Поиск и чтение страниц, а также создание и OCC-обновление черновиков в одном exact space.
+  category: knowledge
+  adapter: CONFLUENCE
+  credential: {secretKey: token, kind: TOKEN}
+  configurationFields:
+    - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
+    - {key: auth_scheme, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16, allowedValues: [BASIC, BEARER]}
+    - {key: username, type: STRING, format: EMAIL, required: false, maximumLength: 320}
+    - {key: space_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+  networkDestinations:
+    - {key: confluence_api, source: CONFIGURATION, configurationField: base_url, port: 443, tls: REQUIRED}
+  healthCheck: {operation: confluence.space.read, timeoutSeconds: 15, maxAttempts: 3}
+  capabilities:
+    - key: confluence.space.read
+      name: Прочитать пространство
+      description: Возвращает имя и ключ одного разрешённого space.
+      operation: confluence.space.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields: []
+      outputFields:
+        - {key: id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+        - {key: key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+        - {key: name, type: STRING, format: PLAIN, required: true, maximumLength: 255}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: confluence.page.search
+      name: Найти страницы
+      description: Выполняет bounded поиск страниц внутри configured space.
+      operation: confluence.page.search
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 50}
+      outputFields:
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 50}
+        - {key: pages, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 300}
+    - key: confluence.page.read
+      name: Прочитать страницу
+      description: Возвращает title, version и bounded storage body одной страницы configured space.
+      operation: confluence.page.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+      outputFields:
+        - {key: id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: version, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+        - {key: body, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 300}
+    - key: confluence.page.create
+      name: Создать черновик страницы
+      description: Создаёт черновик с effect marker в configured space после Human Gate.
+      operation: confluence.page.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: body, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: parent_id, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
+      outputFields:
+        - {key: id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: version, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
+    - key: confluence.page.update
+      name: Обновить черновик страницы
+      description: Обновляет title или body только при совпадении expected version после Human Gate.
+      operation: confluence.page.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+        - {key: expected_version, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: false, maximumLength: 512}
+        - {key: body, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+      outputFields:
+        - {key: id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: version, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}

@@ -16,11 +16,6 @@ export const router = createRouter({
       component: lazyPage(() => import("@/pages/OnboardingPage.vue")),
     },
     {
-      path: "/assistant",
-      name: "assistant",
-      component: lazyPage(() => import("@/pages/AssistantPage.vue")),
-    },
-    {
       path: "/projects",
       name: "projects",
       component: lazyPage(() => import("@/pages/ProjectsPage.vue")),
@@ -68,6 +63,12 @@ export const router = createRouter({
       meta: { projectScoped: true },
     },
     {
+      path: "/projects/:projectRef/runs/:runRef",
+      name: "project-run",
+      component: lazyPage(() => import("@/pages/RunPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
       path: "/runs",
       name: "runs",
       component: lazyPage(() => import("@/pages/RunsPage.vue")),
@@ -84,9 +85,61 @@ export const router = createRouter({
       meta: { projectScoped: true },
     },
     {
+      path: "/projects/:projectRef/files/trash",
+      name: "files-trash",
+      component: lazyPage(() => import("@/pages/FilesPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
       path: "/projects/:projectRef/automations",
       name: "automations",
       component: lazyPage(() => import("@/pages/AutomationsPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/environments",
+      name: "runtime-environments",
+      component: lazyPage(() => import("@/pages/RuntimeEnvironmentsPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/environments/new",
+      name: "runtime-environment-new",
+      component: lazyPage(
+        () => import("@/pages/RuntimeEnvironmentEditorPage.vue"),
+      ),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/environments/:environmentRef",
+      name: "runtime-environment",
+      component: lazyPage(
+        () => import("@/pages/RuntimeEnvironmentEditorPage.vue"),
+      ),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/secrets",
+      name: "runtime-secrets",
+      component: lazyPage(() => import("@/pages/RuntimeSecretsPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/role-images",
+      name: "role-images",
+      component: lazyPage(() => import("@/pages/RoleImagesPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/role-images/new",
+      name: "role-image-new",
+      component: lazyPage(() => import("@/pages/RoleImageEditorPage.vue")),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/role-images/:recipeRef",
+      name: "role-image",
+      component: lazyPage(() => import("@/pages/RoleImageEditorPage.vue")),
       meta: { projectScoped: true },
     },
     {
@@ -100,7 +153,7 @@ export const router = createRouter({
       component: lazyPage(() => import("@/pages/DecisionsPage.vue")),
     },
     {
-      path: "/administration/access",
+      path: "/administration/access/:section?",
       name: "access",
       component: lazyPage(() => import("@/pages/AccessPage.vue")),
     },
@@ -116,6 +169,11 @@ export const router = createRouter({
       component: lazyPage(() => import("@/pages/AdministrationPage.vue")),
     },
     {
+      path: "/administration/providers",
+      name: "provider-accounts",
+      component: lazyPage(() => import("@/pages/ProviderAccountsPage.vue")),
+    },
+    {
       path: "/administration/audit",
       name: "audit",
       component: lazyPage(() => import("@/pages/AuditPage.vue")),
@@ -123,7 +181,9 @@ export const router = createRouter({
     {
       path: "/auth/callback",
       name: "auth-callback",
-      component: lazyPage(() => import("@/pages/AuthCallbackPage.vue")),
+      component: lazyPage(
+        () => import("@/features/session/AuthCallbackView.vue"),
+      ),
       meta: { public: true },
     },
     { path: "/:pathMatch(.*)*", redirect: "/" },

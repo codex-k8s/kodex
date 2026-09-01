@@ -1,0 +1,13 @@
+-- name: artifacts_purge_finalize :exec
+UPDATE control_plane.artifacts
+SET lifecycle_state = 'PURGED',
+    file_name = 'purged-' || ref,
+    media_type = 'application/octet-stream',
+    size_bytes = 0,
+    digest = 'sha256:' || repeat('0', 64),
+    scan_state = 'FAILED',
+    preview_state = 'BLOCKED',
+    purged_at = clock_timestamp(),
+    version = version + 1
+WHERE id = @artifact_id::uuid
+  AND lifecycle_state = 'PURGE_PENDING';

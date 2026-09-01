@@ -362,7 +362,26 @@ func (server *Server) ListArtifacts(ctx context.Context, request *controlplanev1
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListArtifacts(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), ResourceRef: request.GetRunRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
+	lifecycleState := ""
+	if request.GetLifecycleState() != controlplanev1.ArtifactLifecycleState_ARTIFACT_LIFECYCLE_STATE_UNSPECIFIED {
+		lifecycleState = enumSuffix(request.GetLifecycleState(), "ARTIFACT_LIFECYCLE_STATE_")
+	}
+	artifactType := ""
+	if request.GetType() != controlplanev1.ArtifactType_ARTIFACT_TYPE_UNSPECIFIED {
+		artifactType = enumSuffix(request.GetType(), "ARTIFACT_TYPE_")
+	}
+	scanState := ""
+	if request.GetScanState() != controlplanev1.ArtifactScanState_ARTIFACT_SCAN_STATE_UNSPECIFIED {
+		scanState = enumSuffix(request.GetScanState(), "ARTIFACT_SCAN_STATE_")
+	}
+	sourceKind := ""
+	if request.GetSourceKind() != controlplanev1.ArtifactSource_ARTIFACT_SOURCE_UNSPECIFIED {
+		sourceKind = enumSuffix(request.GetSourceKind(), "ARTIFACT_SOURCE_")
+	}
+	items, next, err := server.service.ListArtifacts(ctx, p, query.Filter{
+		ProjectRef: request.GetProjectRef(), ResourceRef: request.GetRunRef(), Query: request.GetQuery(),
+		State: lifecycleState, ArtifactType: artifactType, ScanState: scanState, SourceKind: sourceKind, Page: page(request.GetPage()),
+	})
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -371,6 +390,31 @@ func (server *Server) ListArtifacts(ctx context.Context, request *controlplanev1
 		response.Artifacts = append(response.Artifacts, castArtifact(item))
 	}
 	return response, nil
+}
+
+func (server *Server) GetArtifactImpact(ctx context.Context, request *controlplanev1.GetArtifactImpactRequest) (*controlplanev1.GetArtifactImpactResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetArtifactImpact_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	action := enumSuffix(request.GetAction(), "ARTIFACT_IMPACT_ACTION_")
+	impact, err := server.service.GetArtifactImpact(ctx, p, request.GetArtifactRef(), action)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ArtifactImpact{
+		ArtifactRef: impact.ArtifactRef, ArtifactVersion: impact.ArtifactVersion,
+		Action: request.GetAction(), ImpactDigest: impact.Digest, BindingCount: impact.BindingCount,
+		AttachmentCount: impact.AttachmentCount, ActiveRuntimeCount: impact.ActiveRuntimeCount,
+		Blockers: impact.Blockers, Permitted: impact.Permitted, ActiveRunsTruncated: impact.ActiveRunsTruncated,
+	}
+	for _, run := range impact.ActiveRuns {
+		response.ActiveRuns = append(response.ActiveRuns, &controlplanev1.ArtifactImpactRun{
+			RunRef: run.RunRef, Title: run.Title,
+			State: runState(run.State), ProjectRef: run.ProjectRef,
+		})
+	}
+	return &controlplanev1.GetArtifactImpactResponse{Impact: response}, nil
 }
 
 func (server *Server) GetArtifact(ctx context.Context, request *controlplanev1.GetArtifactRequest) (*controlplanev1.GetArtifactResponse, error) {
@@ -383,6 +427,19 @@ func (server *Server) GetArtifact(ctx context.Context, request *controlplanev1.G
 		return nil, transportError(err)
 	}
 	return &controlplanev1.GetArtifactResponse{Artifact: castArtifact(item)}, nil
+}
+
+func (server *Server) GetAttachmentSet(ctx context.Context, request *controlplanev1.GetAttachmentSetRequest) (*controlplanev1.GetAttachmentSetResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetAttachmentSet_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	item, next, err := server.service.GetAttachmentSet(ctx, p, request.GetAttachmentSetRef(), page(request.GetPage()))
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.GetAttachmentSetResponse{AttachmentSet: castAttachmentSet(item),
+		Page: &controlplanev1.PageInfo{NextPageToken: next}}, nil
 }
 
 func (server *Server) ListSchedules(ctx context.Context, request *controlplanev1.ListSchedulesRequest) (*controlplanev1.ListSchedulesResponse, error) {
@@ -401,16 +458,33 @@ func (server *Server) ListSchedules(ctx context.Context, request *controlplanev1
 	return response, nil
 }
 
+func (server *Server) GetSchedule(ctx context.Context, request *controlplanev1.GetScheduleRequest) (*controlplanev1.GetScheduleResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetSchedule_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	item, err := server.service.GetSchedule(ctx, p, request.GetScheduleRef())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.GetScheduleResponse{Schedule: castSchedule(item)}, nil
+}
+
 func (server *Server) ListIntegrationDefinitions(ctx context.Context, request *controlplanev1.ListIntegrationDefinitionsRequest) (*controlplanev1.ListIntegrationDefinitionsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListIntegrationDefinitions_FullMethodName)
 	if err != nil {
 		return nil, err
 	}
-	items, actions, err := server.service.ListIntegrationDefinitions(ctx, p, request.GetCategory())
+	items, next, actions, err := server.service.ListIntegrationDefinitions(ctx, p, query.Filter{
+		Category: request.GetCategory(), Query: request.GetQuery(), Page: page(request.GetPage()),
+	})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListIntegrationDefinitionsResponse{NextActions: nextActions(actions), CoreReady: true}
+	response := &controlplanev1.ListIntegrationDefinitionsResponse{
+		NextActions: nextActions(actions), CoreReady: true,
+		Page: &controlplanev1.PageInfo{NextPageToken: next},
+	}
 	for _, item := range items {
 		response.Definitions = append(response.Definitions, castDefinition(item))
 	}
@@ -422,7 +496,9 @@ func (server *Server) ListIntegrationConnections(ctx context.Context, request *c
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListIntegrationConnections(ctx, p, query.Filter{Category: request.GetDefinitionKey(), Page: page(request.GetPage())})
+	items, next, err := server.service.ListIntegrationConnections(ctx, p, query.Filter{
+		Category: request.GetDefinitionKey(), Query: request.GetQuery(), Page: page(request.GetPage()),
+	})
 	if err != nil {
 		return nil, transportError(err)
 	}

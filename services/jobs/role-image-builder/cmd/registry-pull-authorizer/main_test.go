@@ -92,6 +92,22 @@ func TestNodePullRepositoriesAreClosedToBootstrapAndRuntime(t *testing.T) {
 	}
 }
 
+func TestInstallationNodePullProfileIsBounded(t *testing.T) {
+	t.Parallel()
+	profile, ok := pullProfiles()["kodex-node-pull-installer"]
+	if !ok {
+		t.Fatal("installation node pull profile is absent")
+	}
+	if profile.configFile != "/identity/pull-dockerconfigjson" {
+		t.Fatalf("installation credential path = %q", profile.configFile)
+	}
+	if len(profile.repositories) != 2 ||
+		profile.repositories[0] != "kodex/agent-runner" ||
+		profile.repositories[1] != "kodex/roles" {
+		t.Fatalf("installation repositories = %v", profile.repositories)
+	}
+}
+
 func TestPullProfileBasicAuthenticationBoundary(t *testing.T) {
 	t.Parallel()
 	const registryHost = "images.kodex.works"

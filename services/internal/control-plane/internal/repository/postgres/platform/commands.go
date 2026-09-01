@@ -23,6 +23,8 @@ import (
 type commandOutcome struct {
 	result                                                                   command.Result
 	projectID, projectRef, resourceKind, resourceRef, summary, platformEvent string
+	platformAggregateVersion                                                 int64
+	platformState                                                            string
 }
 
 const defaultAgentRunConcurrency = 8
@@ -32,6 +34,12 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	if err != nil {
 		return command.Result{}, err
 	}
+	prepared, err := repository.prepareCommandObjects(ctx, scope, &input)
+	if err != nil {
+		return command.Result{}, err
+	}
+	keepPrepared := false
+	defer func() { repository.cleanupPreparedObjects(ctx, prepared, keepPrepared) }()
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return command.Result{}, fmt.Errorf("begin command transaction: %w", errs.ErrUnavailable)
@@ -40,6 +48,14 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID,
 		input.Mutation.Operation, input.Mutation.IdempotencyKey); err != nil {
 		return command.Result{}, fmt.Errorf("lock command idempotency scope: %w", errs.ErrUnavailable)
+	}
+	if result, replayed, err := repository.replayDeletedCommand(ctx, tx, scope, input); err != nil {
+		return command.Result{}, err
+	} else if replayed {
+		if err := tx.Commit(ctx); err != nil {
+			return command.Result{}, errs.ErrConflict
+		}
+		return result, nil
 	}
 	if err := repository.authorizeCommand(ctx, tx, scope, input); err != nil {
 		return command.Result{}, err
@@ -88,6 +104,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 			return command.Result{}, err
 		}
 	}
+	clearDeletedResultActions(&outcome.result)
 	auditRef, err := newRef("aud")
 	if err != nil {
 		return command.Result{}, err
@@ -102,7 +119,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		return command.Result{}, fmt.Errorf("insert command audit event: %w", errs.ErrUnavailable)
 	}
 	if outcome.platformEvent != "" {
-		if err := repository.emitPlatformEvent(ctx, tx, scope, outcome.platformEvent, outcome.projectRef, outcome.resourceRef, outcome.summary); err != nil {
+		if err := repository.emitCommandOutcomePlatformEvent(ctx, tx, scope, outcome); err != nil {
 			return command.Result{}, err
 		}
 	}
@@ -116,7 +133,85 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	if err := tx.Commit(ctx); err != nil {
 		return command.Result{}, fmt.Errorf("commit command transaction: %w", errs.ErrConflict)
 	}
+	keepPrepared = resultContainsPreparedObjects(outcome.result, prepared)
 	return outcome.result, nil
+}
+
+func clearDeletedResultActions(result *command.Result) {
+	if result == nil {
+		return
+	}
+	if result.Connection != nil && result.Connection.State == "DELETED" {
+		result.Connection.NextActions = nil
+	}
+	if result.Schedule != nil && result.Schedule.State == "DELETED" {
+		result.Schedule.NextActions = nil
+	}
+	if result.RuntimeEnvironment != nil && result.RuntimeEnvironment.State == "DELETED" {
+		result.RuntimeEnvironment.NextActions = nil
+	}
+}
+
+func (repository *Repository) replayDeletedCommand(
+	ctx context.Context,
+	tx pgx.Tx,
+	current scope,
+	input command.Command,
+) (command.Result, bool, error) {
+	switch input.Kind {
+	case command.DeleteConnection, command.DeleteSchedule, command.DeleteRuntimeEnvironment:
+	default:
+		return command.Result{}, false, nil
+	}
+	if input.Mutation.ExpectedVersion == nil {
+		return command.Result{}, false, nil
+	}
+	var storedDigest string
+	var storedPayload []byte
+	err := tx.QueryRow(ctx, queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation,
+		current.organizationID, current.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey,
+	).Scan(&storedDigest, &storedPayload)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return command.Result{}, false, nil
+	}
+	if err != nil {
+		return command.Result{}, false, fmt.Errorf("read terminal delete receipt: %w", errs.ErrUnavailable)
+	}
+	if storedDigest != input.Mutation.IntentDigest {
+		return command.Result{}, false, nil
+	}
+	var result command.Result
+	if json.Unmarshal(storedPayload, &result) != nil || !matchesDeletedCommand(input, result) {
+		return command.Result{}, false, nil
+	}
+	return result, true, nil
+}
+
+func matchesDeletedCommand(input command.Command, result command.Result) bool {
+	expectedVersion := *input.Mutation.ExpectedVersion + 1
+	switch payload := input.Payload.(type) {
+	case command.ConnectionInput:
+		item := result.Connection
+		return input.Kind == command.DeleteConnection && item != nil && item.Ref == payload.Ref &&
+			item.Version == expectedVersion && item.State == "DELETED" && item.LifecycleState == "DELETED" &&
+			item.DefinitionKey != "" && item.DefinitionName != "" && item.Name != "" &&
+			item.DefinitionVersion != "" && item.DefinitionDigest != "" && item.PublicConfiguration != nil &&
+			!item.CreatedAt.IsZero() && !item.UpdatedAt.IsZero()
+	case command.ScheduleInput:
+		item := result.Schedule
+		return input.Kind == command.DeleteSchedule && item != nil && item.Ref == payload.Ref &&
+			item.Version == expectedVersion && item.State == "DELETED" && item.ProjectRef != "" &&
+			item.Name != "" && item.Target.Type != "" && item.Target.Ref != "" && item.Input != nil &&
+			!item.CreatedAt.IsZero() && !item.UpdatedAt.IsZero()
+	case command.RuntimeEnvironmentLifecycleInput:
+		item := result.RuntimeEnvironment
+		return input.Kind == command.DeleteRuntimeEnvironment && item != nil && item.Ref == payload.EnvironmentRef &&
+			item.Version == expectedVersion && item.State == "DELETED" && item.ProjectRef != "" && item.Name != "" &&
+			item.CurrentVersion.Ref != "" && item.CurrentVersion.Digest != "" &&
+			!item.CurrentVersion.CreatedAt.IsZero() && !item.UpdatedAt.IsZero()
+	default:
+		return false
+	}
 }
 
 func exposesActorActions(workload string) bool {
@@ -141,6 +236,11 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeAgent(ctx, tx, scope, input)
 	case command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions, command.RollbackInstructions:
 		return repository.changeInstructions(ctx, tx, scope, input)
+	case command.PublishAgentRuntimeConfig, command.CreateConfigOverlayDraft, command.ValidateConfigOverlayDraft,
+		command.PublishConfigOverlayDraft, command.RollbackConfigOverlay, command.CreateRuntimeEnvironment,
+		command.PublishRuntimeEnvironment, command.RollbackRuntimeEnvironment, command.SetRuntimeEnvironmentEnabled,
+		command.DeleteRuntimeEnvironment, command.BindAgentRuntimeEnvironment:
+		return repository.changeRuntimeConfiguration(ctx, tx, scope, input)
 	case command.ChangeAgentCapability, command.ChangeAgentGrant:
 		return repository.changeAgentBinding(ctx, tx, scope, input)
 	case command.CreateWorkflow, command.UpdateWorkflow, command.ValidateWorkflow, command.PublishWorkflow, command.ArchiveWorkflow:
@@ -155,14 +255,32 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.resolveGate(ctx, tx, scope, input)
 	case command.ChangeArtifactBinding:
 		return repository.changeArtifactBinding(ctx, tx, scope, input)
-	case command.CreateSchedule, command.UpdateSchedule, command.SetScheduleEnabled:
+	case command.DeleteArtifact, command.RestoreArtifact:
+		return repository.changeArtifactLifecycle(ctx, tx, scope, input)
+	case command.CreateAttachmentSetDraft, command.AddAttachmentSetItems,
+		command.RemoveAttachmentSetItems, command.FinalizeAttachmentSet:
+		return repository.changeAttachmentSet(ctx, tx, scope, input)
+	case command.CreateSchedule, command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.DeleteSchedule:
 		return repository.changeSchedule(ctx, tx, scope, input)
-	case command.CreateConnection, command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
+	case command.CreateProviderAccount, command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey,
+		command.RefreshProviderAuthorization, command.RevokeProviderAccount, command.SetProviderAccountEnabled:
+		return repository.changeProviderAccount(ctx, tx, scope, input)
+	case command.CreateConnection, command.UpdateConnection, command.DeleteConnection, command.ConfigureConnectionCredential,
+		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
 		return repository.changeConnection(ctx, tx, scope, input)
-	case command.CreateAssistantConversation, command.AddAssistantTurn, command.ApplyAssistantPlan, command.UpdateAssistantInstructions, command.RecoverAssistant:
+	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.AddAssistantTurn,
+		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
+		command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return repository.changeAssistant(ctx, tx, scope, input)
-	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution, command.DelegateExecution, command.ProposeAssistantPlan:
+	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,
+		command.CompleteExecution,
+		command.DelegateExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
+		command.ProposeRunMetadata, command.RecordRunToolCall:
 		return repository.changeExecution(ctx, tx, scope, input)
+	case command.CompleteSessionSnapshot, command.CompleteSessionRestore,
+		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
+		command.FailSessionArchiveTask:
+		return repository.changeSessionArchive(ctx, tx, scope, input)
 	case command.MaterializeOccurrence:
 		return repository.changeOccurrence(ctx, tx, scope, input)
 	case command.CompleteConnectionTest:
@@ -173,6 +291,9 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.completeInteractionDelivery(ctx, tx, scope, input)
 	case command.AcceptInteractionMessage:
 		return repository.acceptInteractionMessage(ctx, tx, scope, input)
+	case command.CreateAccessRole, command.CreateAccessRoleVersion, command.ArchiveAccessRole,
+		command.CreateAccessBinding, command.ChangeAccessBinding, command.RevokeAccessBinding:
+		return repository.applyAccessCommand(ctx, tx, scope, input)
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -203,7 +324,7 @@ func (repository *Repository) createProject(ctx context.Context, tx pgx.Tx, scop
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
-	membershipRef, _ := newRef("mem")
+	membershipRef, _ := newRef("abnd")
 	if _, err = tx.Exec(ctx, queryCommandsCreateprojectInsertMembershipsRefProjectIdRole, membershipRef, scope.organizationID, ref, scope.actorID, allPermissions()); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
@@ -259,7 +380,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 		if payload.UserRef == "" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		ref, err := newRef("mem")
+		ref, err := newRef("abnd")
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -269,6 +390,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 			"project_id":      projectID,
 			"user_ref":        payload.UserRef,
 			"permissions":     payload.Permissions,
+			"actor_id":        scope.actorID,
 		}).Scan(
 			&item.Ref, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked,
 			&item.User.Active, &item.Role, &item.Permissions, &item.Active, &item.Version,
@@ -312,6 +434,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 			"expected_version": *input.Mutation.ExpectedVersion,
 			"permissions":      payload.Permissions,
 			"active":           payload.Active,
+			"actor_id":         scope.actorID,
 		}).Scan(&item.Ref, &item.Permissions, &item.Active, &item.Version)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
@@ -381,7 +504,7 @@ func (repository *Repository) changePlatformMembership(ctx context.Context, tx p
 		if payload.UserRef == "" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		ref, err := newRef("mem")
+		ref, err := newRef("abnd")
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -390,6 +513,7 @@ func (repository *Repository) changePlatformMembership(ctx context.Context, tx p
 			"organization_id": scope.organizationID,
 			"user_ref":        payload.UserRef,
 			"platform_role":   payload.Role,
+			"actor_id":        scope.actorID,
 		}).Scan(
 			&item.Ref, &subjectID, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked,
 			&item.User.Active, &item.Role, &item.Active, &item.Version)
@@ -547,6 +671,11 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	if projectID == "" {
 		return commandOutcome{}, errs.ErrNotFound
 	}
+	avatarURL, err := repository.validateAvatarArtifact(ctx, tx, scope, projectID, input.AvatarURL)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	input.AvatarURL = avatarURL
 	runtimeKey := input.RuntimeRef
 	if runtimeKey == "" {
 		runtimeKey = defaultRuntimeKey
@@ -580,6 +709,9 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	err = tx.QueryRow(ctx, queryCommandsCreateagentInsertAgentsRefProjectIdPurpose, ref, scope.organizationID, projectID, roleID, strings.TrimSpace(input.Name), strings.TrimSpace(input.Purpose), strings.TrimSpace(input.RoleDescription), strings.TrimSpace(input.AvatarURL), runtimeKey, scope.actorID).Scan(&agentID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)
+	}
+	if err := repository.bootstrapAgentRuntime(ctx, tx, scope.organizationID, agentID, projectID, runtime, scope.actorID); err != nil {
+		return commandOutcome{}, fmt.Errorf("bootstrap agent runtime configuration: %v: %w", err, errs.ErrUnavailable)
 	}
 	instructionRef, _ := newRef("ins")
 	digest := sha256.Sum256([]byte(input.Instructions))
@@ -643,11 +775,27 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 	var projectID string
 	switch input.Kind {
 	case command.UpdateAgent:
-		if payload.RuntimeRef != "" {
-			if _, err := resolveEnabledRuntime(ctx, tx, payload.RuntimeRef); err != nil {
-				return commandOutcome{}, err
-			}
+		locked, lockErr := repository.lockRuntimeAgent(ctx, tx, scope, payload.Ref)
+		if lockErr != nil {
+			return commandOutcome{}, lockErr
 		}
+		if payload.RuntimeRef != "" && payload.RuntimeRef != locked.runtimeProfileRef {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		var currentAvatarURL string
+		if avatarErr := tx.QueryRow(ctx, queryCommandsSelectAgentAvatarURL, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID,
+			"agent_ref":       payload.Ref,
+		}).Scan(&currentAvatarURL); avatarErr != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		avatarURL, avatarErr := repository.validateAvatarUpdate(
+			ctx, tx, scope, locked.projectID, currentAvatarURL, payload.AvatarURL,
+		)
+		if avatarErr != nil {
+			return commandOutcome{}, avatarErr
+		}
+		payload.AvatarURL = avatarURL
 		err := tx.QueryRow(ctx, queryCommandsChangeagentUpdateAgentsNamePurposeRoleDescription, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Purpose, payload.RoleDescription, payload.AvatarURL, payload.RuntimeRef, payload.RoleDefinitionRef).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
@@ -1153,8 +1301,12 @@ func (repository *Repository) agentsHaveCapabilities(ctx context.Context, tx pgx
 }
 
 func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	return repository.launchRunWithAttachmentPolicy(ctx, tx, scope, input, false)
+}
+
+func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, reuseAttachmentSnapshot bool) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LaunchRunInput)
-	if !ok || payload.ProjectRef == "" || strings.TrimSpace(payload.Task) == "" || len(payload.Task) > 32768 || len(payload.Title) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) || len(payload.ArtifactRefs) > 50 {
+	if !ok || payload.ProjectRef == "" || strings.TrimSpace(payload.Task) == "" || len(payload.Task) > 32768 || len(payload.Title) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
@@ -1203,7 +1355,35 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	if len(payload.ArtifactRefs) > 0 {
+	var runtimeContractReady bool
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunValidateAgentRuntimeContract, pgx.StrictNamedArgs{
+		"organization_id":                scope.organizationID,
+		"project_id":                     projectID,
+		"agent_refs":                     targetAgentRefs,
+		"role_runtime_contract_revision": repository.roleImages.RoleRuntimeContractRevision,
+		"role_runtime_contract_sha256":   repository.roleImages.RoleRuntimeContractSHA256,
+	}).Scan(&runtimeContractReady); err != nil {
+		return commandOutcome{}, fmt.Errorf("validate run runtime contract: %w", errs.ErrUnavailable)
+	}
+	if !runtimeContractReady {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	attachmentKind := "RUN_INPUT"
+	if payload.Target.Type == "WORKFLOW" {
+		attachmentKind = "WORKFLOW_INPUT"
+	}
+	attachmentPurpose := payload.AttachmentPurpose
+	if attachmentPurpose == "" {
+		attachmentPurpose = attachmentKind
+	}
+	if !contains(attachmentSetPurposes, attachmentPurpose) {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, attachmentPurpose, reuseAttachmentSnapshot)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if attachmentSet.ID != "" {
 		allowed, err := repository.agentsHaveCapabilities(ctx, tx, scope.organizationID, projectID, targetAgentRefs, []string{runtimecontract.ArtifactCapability})
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -1216,7 +1396,7 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	var sessionID string
 	if sessionRef == "" {
 		sessionRef, _ = newRef("ses")
-		providerAccountID, err := defaultProviderAccountID(ctx, tx, scope.organizationID)
+		providerAccountID, err := repository.selectProviderAccountForAgent(ctx, tx, scope.organizationID, targetAgentRefs[0])
 		if err != nil {
 			return commandOutcome{}, err
 		}
@@ -1228,25 +1408,17 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	runRef, _ := newRef("run")
 	title := strings.TrimSpace(payload.Title)
+	titleSource := strings.TrimSpace(payload.TitleSource)
 	if title == "" {
 		title = targetName + ": " + truncate(payload.Task, 120)
+		titleSource = "SERVER_DEFAULT"
+	} else if titleSource == "" {
+		titleSource = "SERVER_DEFAULT"
+	}
+	if !contains([]string{"SERVER_DEFAULT", "AGENT_PROPOSED", "USER_EDITED"}, titleSource) {
+		return commandOutcome{}, errs.ErrInvalid
 	}
 	rawInput := asJSON(payload.Input)
-	artifactRefs := append([]string(nil), payload.ArtifactRefs...)
-	if artifactRefs == nil {
-		artifactRefs = []string{}
-	}
-	var artifactsValid bool
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrunValidateInputArtifacts, pgx.StrictNamedArgs{
-		"organization_id": scope.organizationID,
-		"project_id":      projectID,
-		"artifact_refs":   artifactRefs,
-	}).Scan(&artifactsValid); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
-	}
-	if !artifactsValid {
-		return commandOutcome{}, errs.ErrConflict
-	}
 	var runID string
 	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunsRefProjectIdTargetType, pgx.StrictNamedArgs{
 		"run_ref":             runRef,
@@ -1258,13 +1430,16 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		"target_ref":          payload.Target.Ref,
 		"source":              source,
 		"title":               title,
+		"title_source":        titleSource,
 		"task":                payload.Task,
 		"input":               rawInput,
-		"input_artifact_refs": artifactRefs,
 		"initiated_by":        scope.actorID,
 		"concurrency_limit":   runConcurrency,
 	}).Scan(&runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert launched run: %w", mapWriteError(err))
+	}
+	if err := repository.attachSetToRun(ctx, tx, scope, projectID, attachmentSet, runID, attachmentKind); err != nil {
+		return commandOutcome{}, fmt.Errorf("bind run attachment set: %w", err)
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsRootRunId, runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("bind root run lineage: %w", errs.ErrUnavailable)
@@ -1275,8 +1450,11 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	turnRef, _ := newRef("trn")
 	var turnID string
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, runID, scope.actorRef, executionTask, artifactRefs).Scan(&turnID); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, runID, scope.actorRef, executionTask).Scan(&turnID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert initial session turn: %w", errs.ErrUnavailable)
+	}
+	if err := repository.attachSetToTurn(ctx, tx, scope, projectID, attachmentSet, turnID, "SESSION_TURN"); err != nil {
+		return commandOutcome{}, fmt.Errorf("bind turn attachment set: %w", err)
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
 		return commandOutcome{}, fmt.Errorf("advance run session: %w", errs.ErrUnavailable)
@@ -1299,6 +1477,9 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunNodesWorkflowStepKeyHumanGateAfter, nodeID, "workflow.coordinator.initial", initialGate); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		if err := repository.insertPlannedWorkflowNodes(ctx, tx, scope, projectID, runID, nodeID, workflowVersion); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsStateStartedAtVersion, runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("start launched run: %w", errs.ErrUnavailable)
@@ -1311,6 +1492,54 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		return commandOutcome{}, fmt.Errorf("read launched run graph: %w", err)
 	}
 	return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "RUN", resourceRef: runRef, summary: "i18n:RUN_CREATED"}, nil
+}
+
+func (repository *Repository) insertPlannedWorkflowNodes(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, coordinatorNodeID string, workflow entity.WorkflowVersion) error {
+	nodeIDs := make(map[string]string, len(workflow.Steps))
+	for _, step := range workflow.Steps {
+		nodeRef, err := newRef("nod")
+		if err != nil {
+			return err
+		}
+		var nodeID string
+		if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertPlannedWorkflowNode, pgx.StrictNamedArgs{
+			"node_ref": nodeRef, "organization_id": scope.organizationID, "project_id": projectID,
+			"root_run_id": rootRunID, "parent_node_id": coordinatorNodeID, "workflow_step_key": step.Key,
+			"agent_ref": step.AgentRef, "human_gate_after": step.HumanGateAfter,
+			"input_summary": truncate(step.Instructions, 1000),
+		}).Scan(&nodeID); err != nil {
+			return fmt.Errorf("insert planned workflow node: %w", errs.ErrUnavailable)
+		}
+		nodeIDs[step.Key] = nodeID
+	}
+	for _, step := range workflow.Steps {
+		sources := step.DependsOn
+		if len(sources) == 0 {
+			sources = []string{""}
+		}
+		for _, dependency := range sources {
+			sourceNodeID := coordinatorNodeID
+			edgeType := "DELEGATED_TO"
+			if dependency != "" {
+				sourceNodeID = nodeIDs[dependency]
+				edgeType = "WAITING_FOR"
+				if sourceNodeID == "" {
+					return errs.ErrConflict
+				}
+			}
+			edgeRef, err := newRef("edg")
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, queryCommandsLaunchrunInsertPlannedWorkflowEdge, pgx.StrictNamedArgs{
+				"edge_ref": edgeRef, "organization_id": scope.organizationID, "root_run_id": rootRunID,
+				"source_node_id": sourceNodeID, "target_node_id": nodeIDs[step.Key], "edge_type": edgeType, "label": step.Key,
+			}); err != nil {
+				return fmt.Errorf("insert planned workflow edge: %w", errs.ErrUnavailable)
+			}
+		}
+	}
+	return nil
 }
 
 func workflowCoordinatorTask(task, versionRef, versionDigest string, version entity.WorkflowVersion) string {
@@ -1386,12 +1615,28 @@ func truncate(value string, maximum int) string {
 }
 
 func (repository *Repository) emitPlatformEvent(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string) error {
+	return repository.emitPlatformEventSnapshot(ctx, tx, scope, eventName, projectRef, aggregateRef, summary, 1, "")
+}
+
+func (repository *Repository) emitCommandOutcomePlatformEvent(ctx context.Context, tx pgx.Tx, scope scope, outcome commandOutcome) error {
+	version := outcome.platformAggregateVersion
+	if version < 1 {
+		version = 1
+	}
+	return repository.emitPlatformEventSnapshot(ctx, tx, scope, outcome.platformEvent, outcome.projectRef, outcome.resourceRef, outcome.summary, version, outcome.platformState)
+}
+
+func (repository *Repository) emitPlatformEventSnapshot(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string, aggregateVersion int64, state string) error {
 	var sequence int64
 	if err := tx.QueryRow(ctx, queryCommandsEmitplatformeventUpdateInstallationPlatformSequence).Scan(&sequence); err != nil {
 		return errs.ErrUnavailable
 	}
 	eventID := uuid.New()
-	payload := map[string]any{"eventId": eventID.String(), "eventName": eventName, "eventVersion": 1, "occurredAt": time.Now().UTC(), "organizationRef": scope.organizationRef, "aggregateRef": aggregateRef, "aggregateVersion": 1, "sequence": sequence, "correlationRef": scope.correlationRef, "data": map[string]any{"kind": platformEventKind(eventName), "safeSummary": summary}}
+	data := map[string]any{"kind": platformEventKind(eventName), "safeSummary": summary}
+	if state != "" {
+		data["state"] = state
+	}
+	payload := map[string]any{"eventId": eventID.String(), "eventName": eventName, "eventVersion": 1, "occurredAt": time.Now().UTC(), "organizationRef": scope.organizationRef, "aggregateRef": aggregateRef, "aggregateVersion": aggregateVersion, "sequence": sequence, "correlationRef": scope.correlationRef, "data": data}
 	if projectRef != "" {
 		payload["projectRef"] = projectRef
 	}
@@ -1440,11 +1685,13 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 		incidentRef = incident.Ref
 	}
 	safeSummary := truncate(summary, 2000)
-	event := entity.RunEvent{Ref: ref, RunRef: rootRef, Sequence: sequence, GraphRevision: delta.Run.GraphRevision, Type: eventType, NodeRef: nodeRef, EdgeRef: edgeRef, GateRef: gateRef, ArtifactRef: artifactRef, IncidentRef: incidentRef, Summary: safeSummary, RunState: runState, NodeState: nodeState, OccurredAt: time.Now().UTC(), Delta: delta}
-	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertRunEventsEventIdOrganizationIdRootRunId, eventID, ref, scope.organizationID, projectValue, rootRunID, aggregateRef, version, sequence, eventType, nodeRef, edgeRef, gateRef, artifactRef, safeSummary, runState, nodeState, asJSON(delta), scope.actorRef, event.OccurredAt); err != nil {
+	actor, messageKind := runEventPresentation(scope, eventType, delta)
+	event := entity.RunEvent{Ref: ref, RunRef: rootRef, Sequence: sequence, GraphRevision: delta.Run.GraphRevision, Type: eventType, NodeRef: nodeRef, EdgeRef: edgeRef, GateRef: gateRef, ArtifactRef: artifactRef, IncidentRef: incidentRef, Summary: safeSummary, RunState: runState, NodeState: nodeState, MessageKind: messageKind, Actor: actor, OccurredAt: time.Now().UTC(), Delta: delta}
+	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertRunEventsEventIdOrganizationIdRootRunId, eventID, ref, scope.organizationID, projectValue, rootRunID, aggregateRef, version, sequence, eventType, nodeRef, edgeRef, gateRef, artifactRef, safeSummary, runState, nodeState, asJSON(delta), scope.actorRef, event.OccurredAt, actor.Kind, actor.Ref, actor.Name, messageKind, nil); err != nil {
 		return entity.RunEvent{}, errs.ErrUnavailable
 	}
-	data := map[string]any{"kind": eventKind(eventType), "runRef": rootRef, "safeSummary": safeSummary}
+	data := map[string]any{"kind": eventKind(eventType), "runRef": rootRef, "safeSummary": safeSummary,
+		"actor": map[string]string{"kind": actor.Kind, "ref": actor.Ref, "name": actor.Name}, "messageKind": messageKind}
 	for key, value := range map[string]string{"nodeRef": nodeRef, "edgeRef": edgeRef, "gateRef": gateRef, "artifactRef": artifactRef} {
 		if value != "" {
 			data[key] = value
@@ -1464,7 +1711,41 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertOutboxEventsEventIdOrderingKeyPayload, eventID, subject, "run:"+rootRef, sequence, asJSON(payload)); err != nil {
 		return entity.RunEvent{}, errs.ErrUnavailable
 	}
+	// Org-wide stream получает только безопасный invalidation-сигнал. Полная
+	// delta остаётся в авторитетном run event store и защищённом run stream.
+	if err := repository.emitPlatformEventSnapshot(ctx, tx, scope, "RUN_CHANGED", projectRef, rootRef, safeSummary, version, runState); err != nil {
+		return entity.RunEvent{}, err
+	}
 	return event, nil
+}
+
+func runEventPresentation(scope scope, eventType string, delta entity.RunEventDelta) (entity.RunEventActor, string) {
+	actor := entity.RunEventActor{Kind: "PLATFORM", Ref: "platform", Name: "Kodex"}
+	if delta.Node != nil && delta.Node.AgentRef != "" {
+		actor = entity.RunEventActor{Kind: "AGENT", Ref: delta.Node.AgentRef, Name: delta.Node.DisplayName}
+	} else if scope.actorRef != "" && scope.actorName != "" {
+		actor = entity.RunEventActor{Kind: "USER", Ref: scope.actorRef, Name: scope.actorName}
+	}
+	switch eventType {
+	case "TURN_QUEUED":
+		return actor, "USER_MESSAGE"
+	case "TURN_PROGRESS":
+		return actor, "INTERMEDIATE_MESSAGE"
+	case "TURN_COMPLETED", "CALLBACK_DELIVERED":
+		return actor, "FINAL_MESSAGE"
+	case "OWNER_GATE_OPENED", "OWNER_GATE_RESOLVED":
+		return actor, "OWNER_GATE"
+	case "ARTIFACT_AVAILABLE":
+		return actor, "ARTIFACT"
+	case "INCIDENT_LINKED":
+		return actor, "INCIDENT"
+	case "PLAN_UPDATED":
+		return actor, "PLAN_UPDATE"
+	case "TOOL_CALL_RECORDED":
+		return actor, "TOOL_CALL"
+	default:
+		return actor, "STATE"
+	}
 }
 
 func (repository *Repository) readRunEventDelta(ctx context.Context, tx pgx.Tx, organizationID, rootRunID, nodeRef, edgeRef, gateRef, artifactRef string) (entity.RunEventDelta, error) {
@@ -1553,6 +1834,8 @@ func platformEventKind(eventName string) string {
 		return "PROJECT"
 	case "AGENT_CHANGED":
 		return "AGENT"
+	case "RUNTIME_ENVIRONMENT_CHANGED":
+		return "RUNTIME_ENVIRONMENT"
 	case "ARTIFACT_CHANGED":
 		return "ARTIFACT"
 	case "INSTRUCTIONS_PUBLISHED":
@@ -1561,6 +1844,8 @@ func platformEventKind(eventName string) string {
 		return "WORKFLOW"
 	case "SCHEDULE_CHANGED":
 		return "SCHEDULE"
+	case "PROVIDER_ACCOUNT_CHANGED":
+		return "PROVIDER_ACCOUNT"
 	case "INTEGRATION_CONNECTION_CHANGED":
 		return "INTEGRATION_CONNECTION"
 	case "INTEGRATION_GRANT_CHANGED":
@@ -1573,6 +1858,8 @@ func platformEventKind(eventName string) string {
 		return "SYSTEM_ASSISTANT"
 	case "ROLE_IMAGE_RECIPE_CHANGED":
 		return "ROLE_IMAGE_RECIPE"
+	case "RUN_CHANGED":
+		return "RUN"
 	default:
 		return "SYSTEM_ASSISTANT"
 	}
@@ -1606,6 +1893,10 @@ func eventKind(eventType string) string {
 		return "ARTIFACT"
 	case "INCIDENT_LINKED":
 		return "INCIDENT"
+	case "TOOL_CALL_RECORDED":
+		return "TOOL_CALL"
+	case "PLAN_UPDATED":
+		return "PLAN"
 	default:
 		return "RUN"
 	}
@@ -1623,7 +1914,7 @@ func (repository *Repository) readRunGraphTx(ctx context.Context, tx pgx.Tx, sco
 	}
 	for rows.Next() {
 		var n entity.RunNode
-		if err := rows.Scan(&n.Ref, &n.RunRef, &n.ParentNodeRef, &n.Type, &n.State, &n.DisplayName, &n.Role, &n.AgentRef, &n.TurnRef, &n.Attempt, &n.InputSummary, &n.ProgressSummary, &n.IntegrationNames, &n.CallbackSummary, &n.SafeErrorCode, &n.SafeErrorMessage, &n.NextActions, &n.CreatedAt, &n.StartedAt, &n.FinishedAt, &n.ArtifactRefs, &n.ChildRunRefs); err != nil {
+		if err := rows.Scan(&n.Ref, &n.RunRef, &n.ParentNodeRef, &n.Type, &n.State, &n.DisplayName, &n.Role, &n.AgentRef, &n.TurnRef, &n.Attempt, &n.InputSummary, &n.ProgressSummary, &n.IntegrationNames, &n.CallbackSummary, &n.SafeErrorCode, &n.SafeErrorMessage, &n.NextActions, &n.MaterializationState, &n.CreatedAt, &n.StartedAt, &n.FinishedAt, &n.ArtifactRefs, &n.ChildRunRefs); err != nil {
 			rows.Close()
 			return entity.Run{}, entity.RunGraph{}, fmt.Errorf("scan run graph node: %w", errs.ErrUnavailable)
 		}
@@ -1663,7 +1954,7 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 	if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectSessionsOrganizationIdRefState, scope.organizationID, payload.SessionRef).Scan(&projectID, &projectRef, &targetType, &targetRef); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
-	launch := command.LaunchRunInput{ProjectRef: projectRef, Title: "i18n:SESSION_CONTINUATION", Task: payload.Task, SessionRef: payload.SessionRef, Source: "CONTROL_CENTER", Target: entity.RunTarget{Type: targetType, Ref: targetRef}, ArtifactRefs: payload.ArtifactRefs}
+	launch := command.LaunchRunInput{ProjectRef: projectRef, Title: "i18n:SESSION_CONTINUATION", Task: payload.Task, SessionRef: payload.SessionRef, Source: "CONTROL_CENTER", Target: entity.RunTarget{Type: targetType, Ref: targetRef}, AttachmentSetRef: payload.AttachmentSetRef, AttachmentPurpose: "SESSION_TURN"}
 	nested := input
 	nested.Kind = command.LaunchRun
 	nested.Payload = launch
@@ -1794,16 +2085,16 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	var targetType, targetRef, title, task, sessionRef, source string
 	var raw []byte
-	var artifacts []string
-	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsId, runID).Scan(&targetType, &targetRef, &title, &task, &sessionRef, &source, &raw, &artifacts); err != nil {
+	var attachmentSetRef, attachmentPurpose string
+	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsId, runID).Scan(&targetType, &targetRef, &title, &task, &sessionRef, &source, &raw, &attachmentSetRef, &attachmentPurpose); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var launchInput map[string]any
 	_ = json.Unmarshal(raw, &launchInput)
 	nested := input
 	nested.Kind = command.LaunchRun
-	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: title, Task: task, SessionRef: sessionRef, Source: source, Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: launchInput, ArtifactRefs: artifacts}
-	outcome, err := repository.launchRun(ctx, tx, scope, nested)
+	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: title, Task: task, SessionRef: sessionRef, Source: source, Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: launchInput, AttachmentSetRef: attachmentSetRef, AttachmentPurpose: attachmentPurpose}
+	outcome, err := repository.launchRunWithAttachmentPolicy(ctx, tx, scope, nested, true)
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -1848,12 +2139,13 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	var gateID, nodeID, rootRunID, projectID, projectRef, gateNodeRef string
-	var predecessorNodeID, predecessorNodeRef, predecessorRunID, sessionID string
+	var predecessorNodeID, predecessorNodeRef, predecessorRunID, sessionID, integrationInvocationID string
 	var version int64
 	var allowed []string
 	err := tx.QueryRow(ctx, queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState, scope.organizationID, payload.GateRef).Scan(
 		&gateID, &nodeID, &rootRunID, &projectID, &projectRef, &version, &allowed, &gateNodeRef,
 		&predecessorNodeID, &predecessorNodeRef, &predecessorRunID, &sessionID,
+		&integrationInvocationID,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrAlreadyResolved
@@ -1867,8 +2159,41 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if !contains(allowed, payload.Decision) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
+	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, "OWNER_GATE_MESSAGE", false)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if integrationInvocationID != "" {
+		invocationState, safeErrorCode := "READY", ""
+		if payload.Decision == "REJECT" {
+			invocationState, safeErrorCode = "REJECTED", "INTEGRATION_REJECTED_BY_OWNER"
+		} else if payload.Decision == "CANCEL" {
+			invocationState, safeErrorCode = "CANCELLED", "INTEGRATION_CANCELLED_BY_OWNER"
+		}
+		tag, err := tx.Exec(ctx, queryCommandsResolvegateUpdateIntegrationInvocation,
+			integrationInvocationID, invocationState, safeErrorCode,
+		)
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if tag.RowsAffected() != 1 {
+			return commandOutcome{}, errs.ErrConflict
+		}
+	}
 	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateOwnerGatesStateDecisionDecisionComment, gateID, nextState, payload.Decision, truncate(payload.Comment, 2000), scope.actorID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if attachmentSet.ID != "" {
+		tag, err := tx.Exec(ctx, queryAttachmentSetsBindGateResolution, pgx.StrictNamedArgs{
+			"attachment_set_id": attachmentSet.ID,
+			"gate_id":           gateID,
+		})
+		if err != nil || tag.RowsAffected() != 1 {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if err := repository.bindAttachmentSet(ctx, tx, scope, projectID, attachmentSet, "OWNER_GATE_MESSAGE", gateID); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	if _, err := tx.Exec(ctx, queryInteractionCancelPendingGateDeliveries, pgx.StrictNamedArgs{"gate_id": gateID}); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -1898,6 +2223,9 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		if err := tx.QueryRow(ctx, queryCommandsResolvegateInsertChangeRequestTurn, turnRef, scope.organizationID,
 			sessionID, predecessorRunID, scope.actorRef, truncate(comment, 2000)).Scan(&turnID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if err := repository.attachSetToTurn(ctx, tx, scope, projectID, attachmentSet, turnID, "SESSION_TURN"); err != nil {
+			return commandOutcome{}, err
 		}
 		if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateChangeRequestSession, sessionID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable

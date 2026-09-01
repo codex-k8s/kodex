@@ -62,7 +62,7 @@ lock-файлом; точный image — Dockerfile либо release lock.
 
 | Tool | Active version/source | Scope |
 |---|---:|---|
-| `@openai/codex` | `0.144.1` | первый provider adapter через typed app-server contract |
+| `@openai/codex` | `0.152.0` | первый provider adapter через typed app-server contract |
 | `kodex-agent-runner` | текущий release digest | защищённый runtime ABI каждого role image |
 | Node.js | `24.x` | Codex/provider process и role tooling |
 | Go | `1.26.6` | runtime/toolchain для ролей, которым это разрешено recipe |
@@ -85,7 +85,8 @@ promoted system role image и always-hot runtime contract.
 | `nsc` | `v2.15.0` | owner-side generation of fresh NATS operator, account and bounded user material |
 | `cosign` | `v3.1.3` | owner-side generation of image-signing material and runtime OCI verification |
 | `syft` | `v1.51.0` | формирование SBOM при admission role image |
-| `grype` | `v0.117.0` | проверка уязвимостей SBOM при admission role image |
+| `grype` | `v0.117.0` | полный vulnerability report и policy `fix-available-high-or-critical/v1` при admission role image |
+| Grype vulnerability database | `v6.1.9`, built `2026-08-31T06:37:31Z`, `sha256:70e70f6232f41281063bd2a0a20600758ae12d6e60ba571b16070f950e2f99d3` | закреплённая offline-база admission; runtime-обновление запрещено, допустимый возраст ограничен 720 часами |
 | `regctl` | `v0.11.5` | OCI readback, evidence artifacts и promotion role image |
 | Kubernetes Secrets | Kubernetes API + encryption at rest | exact RBAC и workload-bound delivery без значений в manifests |
 | Keycloak/OIDC provider | environment contract | browser identity; конкретный public domain задаёт deploy owner |

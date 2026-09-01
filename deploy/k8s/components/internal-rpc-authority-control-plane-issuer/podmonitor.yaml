@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: control-plane-internal-rpc-authority-issuer
+  labels:
+    app.kubernetes.io/name: internal-rpc-authority
+    app.kubernetes.io/component: issuer
+spec:
+  selector:
+    matchLabels:
+      kodex.dev/internal-rpc-authority-issuer: enabled
+  podMetricsEndpoints:
+    - port: issuer-metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 5s
+    - port: grant-metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 5s

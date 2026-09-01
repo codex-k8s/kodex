@@ -6,117 +6,192 @@ import (
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
 
-func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) error {
-	if scope.role == "OWNER" || scope.role == "ADMINISTRATOR" {
-		return nil
-	}
+func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	switch input.Kind {
-	case command.CompleteOnboarding, command.CreateProject,
-		command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership,
-		command.CreateConnection, command.TestConnection, command.SetConnectionEnabled, command.UpdateAssistantInstructions, command.RecoverAssistant:
-		return errs.ErrForbidden
-	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
-		command.DelegateExecution, command.ProposeAssistantPlan, command.MaterializeOccurrence,
+	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,
+		command.CompleteExecution,
+		command.DelegateExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
+		command.ProposeRunMetadata, command.RecordRunToolCall, command.MaterializeOccurrence,
+		command.CompleteSessionSnapshot, command.CompleteSessionRestore,
+		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
+		command.FailSessionArchiveTask,
 		command.CompleteConnectionTest, command.CompleteIntegrationInvocation,
 		command.CompleteInteractionDelivery, command.AcceptInteractionMessage:
 		return nil
+	case command.CreateAccessRole, command.CreateAccessRoleVersion, command.ArchiveAccessRole,
+		command.CreateAccessBinding, command.ChangeAccessBinding, command.RevokeAccessBinding:
+		return repository.requireAccess(ctx, tx, current, "access.manage", organizationTarget(current.organizationRef))
 	}
-	projectID, permission, err := repository.commandProjectPermission(ctx, tx, scope, input)
+	permission, target, err := repository.commandAccessTarget(ctx, tx, current, input)
 	if err != nil {
 		return err
 	}
-	if projectID == "" {
-		return nil
+	if permission == "" {
+		return errs.ErrNotFound
 	}
-	var permitted bool
-	err = tx.QueryRow(ctx, queryPermissionsAuthorizecommandSelectMembershipsOrganizationIdProjectIdSubjectId, scope.organizationID, projectID, scope.actorID, permission).Scan(&permitted)
-	if err != nil {
-		return errs.ErrUnavailable
-	}
-	if !permitted {
+	if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
 		return errs.ErrNotFound
 	}
 	return nil
 }
 
-func (repository *Repository) commandProjectPermission(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (string, string, error) {
-	var ref, table, permission string
+func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (string, resolvedAccessTarget, error) {
+	organization := resolvedAccessTarget{scope: organizationTarget(current.organizationRef)}
 	switch payload := input.Payload.(type) {
 	case command.ProjectInput:
-		ref, table, permission = payload.Ref, "projects", "MANAGE"
+		if input.Kind == command.CreateProject {
+			return "project.create", organization, nil
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.Ref, payload.Ref)
+	case command.PlatformMembershipInput:
+		return "access.manage", organization, nil
 	case command.MembershipInput:
-		ref, table, permission = payload.ProjectRef, "projects", "MANAGE_MEMBERS"
+		return repository.resolveCommandTarget(ctx, tx, current, "access.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 	case command.AgentInput:
-		if payload.ProjectRef != "" {
-			ref, table = payload.ProjectRef, "projects"
-		} else {
-			ref, table = payload.Ref, "agents"
+		if input.Kind == command.CreateAgent {
+			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 		}
-		permission = "MANAGE_AGENTS"
+		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.Ref, payload.ProjectRef)
 	case command.AgentBindingInput:
-		ref, table, permission = payload.AgentRef, "agents", "MANAGE_AGENTS"
+		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+	case command.AgentRuntimeConfigurationInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+	case command.ConfigOverlayInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+	case command.RuntimeEnvironmentBindingInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+	case command.RuntimeEnvironmentLifecycleInput:
+		permission := "runtime.environment.disable"
+		if input.Kind == command.DeleteRuntimeEnvironment {
+			permission = "runtime.environment.delete"
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, permission, "RUNTIME_ENVIRONMENT", payload.EnvironmentRef, "")
+	case command.RuntimeEnvironmentInput:
+		if input.Kind == command.CreateRuntimeEnvironment {
+			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
+		}
+		if payload.Ref == "" {
+			return "", resolvedAccessTarget{}, errs.ErrInvalid
+		}
+		lookupScope := current
+		lookupScope.role = "OWNER"
+		environment, err := repository.getRuntimeEnvironmentTx(ctx, tx, lookupScope, payload.Ref)
+		if err != nil {
+			return "", resolvedAccessTarget{}, err
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
 	case command.WorkflowInput:
-		if payload.ProjectRef != "" {
-			ref, table = payload.ProjectRef, "projects"
-		} else {
-			ref, table = payload.Ref, "workflows"
+		if input.Kind == command.CreateWorkflow {
+			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 		}
-		permission = "MANAGE_WORKFLOWS"
+		return repository.resolveCommandTarget(ctx, tx, current, "workflow.manage", "WORKFLOW", payload.Ref, payload.ProjectRef)
 	case command.LaunchRunInput:
-		ref, table, permission = payload.ProjectRef, "projects", "LAUNCH_RUNS"
-	case command.SessionTurnInput:
-		ref, table, permission = payload.SessionRef, "sessions", "LAUNCH_RUNS"
-	case command.RunCommandInput:
-		ref, table, permission = payload.RunRef, "runs", "CANCEL_RUNS"
-	case command.GateResolutionInput:
-		ref, table, permission = payload.GateRef, "owner_gates", "RESOLVE_GATES"
-	case command.ArtifactBindingInput:
-		ref, table, permission = payload.ArtifactRef, "artifacts", "MANAGE_ARTIFACTS"
-	case command.ScheduleInput:
-		if payload.ProjectRef != "" {
-			ref, table = payload.ProjectRef, "projects"
-		} else {
-			ref, table = payload.Ref, "schedules"
+		permission := "agent.launch"
+		if payload.Target.Type == "WORKFLOW" {
+			permission = "workflow.launch"
+		} else if payload.Target.Type != "AGENT" {
+			return "", resolvedAccessTarget{}, errs.ErrInvalid
 		}
-		permission = "MANAGE_SCHEDULES"
+		return repository.resolveCommandTarget(ctx, tx, current, permission, payload.Target.Type, payload.Target.Ref, payload.ProjectRef)
+	case command.SessionTurnInput:
+		if payload.RunRef == "" {
+			return "organization.view", organization, nil
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "run.view", "RUN", payload.RunRef, "")
+	case command.RunCommandInput:
+		permission := "run.cancel"
+		if input.Kind == command.RetryRun {
+			permission = "run.view"
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, permission, "RUN", payload.RunRef, "")
+	case command.GateResolutionInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "gate.resolve", "OWNER_GATE", payload.GateRef, "")
+	case command.ArtifactBindingInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "artifact.bind", "ARTIFACT", payload.ArtifactRef, "")
+	case command.ArtifactLifecycleInput:
+		permission := ""
+		switch input.Kind {
+		case command.DeleteArtifact:
+			permission = "artifact.delete"
+		case command.RestoreArtifact:
+			permission = "artifact.restore"
+		case command.PurgeArtifact:
+			permission = "artifact.purge"
+		default:
+			return "", resolvedAccessTarget{}, errs.ErrInvalid
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, permission, "ARTIFACT", payload.ArtifactRef, "")
+	case command.AttachmentSetDraftInput:
+		projectRef := payload.ProjectRef
+		if input.Kind != command.CreateAttachmentSetDraft {
+			if err := tx.QueryRow(ctx, queryAttachmentSetsProjectByRef, current.organizationID, payload.AttachmentSetRef).Scan(&projectRef); err != nil {
+				return "", resolvedAccessTarget{}, errs.ErrNotFound
+			}
+		}
+		if projectRef == "" {
+			return "organization.view", organization, nil
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "project.view", "PROJECT", projectRef, projectRef)
+	case command.ScheduleInput:
+		if input.Kind == command.CreateSchedule {
+			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "schedule.manage", "SCHEDULE", payload.Ref, payload.ProjectRef)
+	case command.ProviderAccountInput:
+		if input.Kind == command.CreateProviderAccount {
+			return "provider.account.manage", organization, nil
+		}
+		permission := "provider.account.manage"
+		switch input.Kind {
+		case command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey, command.RefreshProviderAuthorization:
+			permission = "provider.account.authorize"
+		case command.RevokeProviderAccount:
+			permission = "provider.account.revoke"
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, permission, "PROVIDER_ACCOUNT", payload.AccountRef, "")
+	case command.ConnectionInput:
+		if payload.Ref == "" {
+			return "organization.manage", organization, nil
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", payload.Ref, "")
 	case command.IntegrationGrantInput:
 		if payload.AgentRef != "" {
-			ref, table = payload.AgentRef, "agents"
-		} else {
-			ref, table = payload.WorkflowRef, "workflows"
+			return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
 		}
-		permission = "MANAGE_INTEGRATIONS"
+		return repository.resolveCommandTarget(ctx, tx, current, "workflow.manage", "WORKFLOW", payload.WorkflowRef, "")
 	case command.AssistantConversationInput:
 		if payload.ProjectRef == "" {
-			return "", "", nil
+			return "organization.view", organization, nil
 		}
-		ref, table, permission = payload.ProjectRef, "projects", "VIEW"
-	case command.AssistantTurnInput:
-		ref, table, permission = payload.ConversationRef, "assistant_conversations", "VIEW"
-	case command.AssistantPlanInput:
-		return "", "", nil
+		return repository.resolveCommandTarget(ctx, tx, current, "project.view", "PROJECT", payload.ProjectRef, payload.ProjectRef)
+	case command.AssistantTurnInput, command.AssistantConversationTitleInput,
+		command.AssistantPlanInput, command.AssistantPlanDraftInput, command.AssistantInstructionsInput:
+		return "organization.manage", organization, nil
 	default:
-		return "", "", nil
+		if input.Kind == command.CompleteOnboarding {
+			return "organization.manage", organization, nil
+		}
+		return "", resolvedAccessTarget{}, nil
 	}
-	if ref == "" {
-		return "", "", errs.ErrInvalid
-	}
-	projectID, err := projectIDByResource(ctx, tx, scope.organizationID, table, ref)
-	if err != nil {
-		return "", "", err
-	}
-	return projectID, permission, nil
 }
 
-func requireProjectPermission(ctx context.Context, tx pgx.Tx, scope scope, projectID, permission string) error {
-	if scope.role == "OWNER" || scope.role == "ADMINISTRATOR" {
-		return nil
-	}
+func (repository *Repository) resolveCommandTarget(ctx context.Context, tx pgx.Tx, current scope, permission, resourceKind, resourceRef, projectRef string) (string, resolvedAccessTarget, error) {
+	resolved, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
+		ProjectRef: projectRef, ResourceKind: resourceKind, ResourceRef: resourceRef,
+	})
+	return permission, resolved, err
+}
+
+// Legacy query endpoints use this helper only for compatibility filtering.
+// Policy decisions for new commands and access APIs do not use memberships.
+func requireProjectPermission(ctx context.Context, tx pgx.Tx, current scope, projectID, permission string) error {
 	var allowed bool
-	if err := tx.QueryRow(ctx, queryPermissionsRequireprojectpermissionSelectMembershipsOrganizationIdProjectIdSubjectId, scope.organizationID, projectID, scope.actorID, permission).Scan(&allowed); err != nil {
+	if err := tx.QueryRow(ctx, queryPermissionsRequireprojectpermissionSelectMembershipsOrganizationIdProjectIdSubjectId,
+		current.organizationID, projectID, current.actorID, permission).Scan(&allowed); err != nil {
 		return errs.ErrUnavailable
 	}
 	if !allowed {
@@ -127,15 +202,16 @@ func requireProjectPermission(ctx context.Context, tx pgx.Tx, scope scope, proje
 
 func projectIDByResource(ctx context.Context, tx pgx.Tx, organizationID, table, ref string) (string, error) {
 	queries := map[string]string{
-		"projects":                queryPermissionsProjectidbyresourceSelectProjectsOrganizationIdRef,
-		"agents":                  queryPermissionsProjectidbyresourceSelectAgentsOrganizationIdRef,
-		"workflows":               queryPermissionsProjectidbyresourceSelectWorkflowsOrganizationIdRef,
-		"sessions":                queryPermissionsProjectidbyresourceSelectSessionsOrganizationIdRef,
-		"runs":                    queryPermissionsProjectidbyresourceSelectRunsOrganizationIdRef,
-		"owner_gates":             queryPermissionsProjectidbyresourceSelectOwnerGatesOrganizationIdRef,
-		"artifacts":               queryPermissionsProjectidbyresourceSelectArtifactsOrganizationIdRef,
-		"schedules":               queryPermissionsProjectidbyresourceSelectSchedulesOrganizationIdRef,
-		"assistant_conversations": queryPermissionsProjectidbyresourceSelectAssistantConversationsOrganizationIdRef,
+		"projects":                 queryPermissionsProjectidbyresourceSelectProjectsOrganizationIdRef,
+		"agents":                   queryPermissionsProjectidbyresourceSelectAgentsOrganizationIdRef,
+		"workflows":                queryPermissionsProjectidbyresourceSelectWorkflowsOrganizationIdRef,
+		"sessions":                 queryPermissionsProjectidbyresourceSelectSessionsOrganizationIdRef,
+		"runs":                     queryPermissionsProjectidbyresourceSelectRunsOrganizationIdRef,
+		"owner_gates":              queryPermissionsProjectidbyresourceSelectOwnerGatesOrganizationIdRef,
+		"artifacts":                queryPermissionsProjectidbyresourceSelectArtifactsOrganizationIdRef,
+		"schedules":                queryPermissionsProjectidbyresourceSelectSchedulesOrganizationIdRef,
+		"assistant_conversations":  queryPermissionsProjectidbyresourceSelectAssistantConversationsOrganizationIdRef,
+		"runtime_environment_sets": queryPermissionsProjectidbyresourceSelectRuntimeEnvironmentSetsOrganizationIdRef,
 	}
 	query := queries[table]
 	if query == "" {

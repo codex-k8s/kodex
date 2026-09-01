@@ -16,8 +16,10 @@ SELECT gate.ref,
        gate.version,
        gate.created_at,
        gate.resolved_at,
-       '{}'::text[]
+       COALESCE(attachment_set.ref, '')
 FROM control_plane.owner_gates gate
+LEFT JOIN control_plane.attachment_sets attachment_set
+  ON attachment_set.id = gate.resolution_attachment_set_id
 JOIN control_plane.projects project ON project.id = gate.project_id
 JOIN control_plane.runs root ON root.id = gate.root_run_id
 JOIN control_plane.run_nodes node ON node.id = gate.node_id

@@ -17,11 +17,13 @@ builder_identity=spiffe://kodex.local/ns/kodex-system/sa/role-image-builder
 build_type=https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
 tools_digest=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 policy_revision=7
+grype_database_url=https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.9_2026-08-31T00:36:25Z_1788158251.tar.zst
+grype_database_sha256=70e70f6232f41281063bd2a0a20600758ae12d6e60ba571b16070f950e2f99d3
 jq -n --arg image "$image_hex" --arg base "$base_hex" --arg frontend "$frontend_hex" \
   --arg subject "$subject" \
   --arg builder "$builder_identity" --arg build_type "$build_type" \
   --arg tools "$tools_digest" --arg policy "$policy_revision" '{
-  _type: "https://in-toto.io/Statement/v1",
+  _type: "https://in-toto.io/Statement/v0.1",
   predicateType: "https://slsa.dev/provenance/v1",
   subject: [{name: $subject, digest: {sha256: $image}}],
   predicate: {
@@ -287,7 +289,7 @@ buildkit_deployment=$(yq -o=json -I=0 '
 jq -e '
   .spec.template.spec.hostUsers == false and
   (.spec.template.spec.containers[] | select(.name == "buildkitd") |
-    .image == "moby/buildkit:v0.24.0@sha256:8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4" and
+    .image == "moby/buildkit:v0.30.0@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f" and
     .securityContext.privileged == true and
     .securityContext.runAsUser == 0 and
     .securityContext.runAsGroup == 0 and
@@ -409,6 +411,31 @@ for runtime_tool in curl openssl pgrep; do
       exit 1
     }
 done
+for dockerfile in \
+  "$repository_root/infra/admission-tools/Dockerfile" \
+  "$repository_root/tools/dev/Dockerfile.local-image-supply-chain"; do
+  grep -Fq "ADD --checksum=sha256:$grype_database_sha256" "$dockerfile" || {
+    echo "admission tools image does not pin the Grype database checksum: $dockerfile" >&2
+    exit 1
+  }
+  grep -Fq "$grype_database_url" "$dockerfile" || {
+    echo "admission tools image does not pin the Grype database URL: $dockerfile" >&2
+    exit 1
+  }
+  for contract in \
+    'GRYPE_DB_CACHE_DIR=/var/lib/grype/db' \
+    'GRYPE_DB_AUTO_UPDATE=false' \
+    'GRYPE_DB_VALIDATE_AGE=true' \
+    'GRYPE_DB_MAX_ALLOWED_BUILT_AGE=720h' \
+    'GRYPE_CHECK_FOR_APP_UPDATE=false' \
+    'grype db import /tmp/grype-db.tar.zst' \
+    'grype db status >/dev/null'; do
+    grep -Fq "$contract" "$dockerfile" || {
+      echo "admission tools image omits the offline Grype database contract: $contract" >&2
+      exit 1
+    }
+  done
+done
 grep -Fq 'client-cert "$(cat "${certificate_file}")"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/cleanup.sh"
 yq eval-all -e '
@@ -472,6 +499,45 @@ done
   "$temporary_directory/admission.yaml" | grep -c '^mc-admit-') -eq 5 ]]
 [[ $(yq eval-all 'select(.kind == "Job") | .metadata.name' \
   "$temporary_directory/admission-production.yaml" | grep -c '^mc-admit-') -eq 5 ]]
+if ! yq eval-all -e '
+  select(.kind == "Job") |
+  .spec.backoffLimit == 0
+' "$temporary_directory/admission.yaml" "$temporary_directory/admission-production.yaml" \
+  >/dev/null 2>&1; then
+  echo "admission Job retained an internal pod retry" >&2
+  exit 1
+fi
+if ! yq eval-all -e '
+  select(.kind == "Job" and .metadata.labels."kodex.dev/image-admission-phase" == "scan") |
+  .spec.template.spec.containers[0].resources.requests.memory == "256Mi" and
+  .spec.template.spec.containers[0].resources.limits.memory == "2Gi" and
+  (.spec.template.spec.volumes[] | select(.name == "tmp") | .emptyDir.sizeLimit) == "1Gi"
+' "$temporary_directory/admission.yaml" >/dev/null 2>&1; then
+  echo "scan Job does not have its bounded memory and temporary storage profile" >&2
+  exit 1
+fi
+if yq eval-all -e '
+  select(.kind == "Job" and .metadata.labels."kodex.dev/image-admission-phase" != "scan") |
+  select(
+    .spec.template.spec.containers[0].resources.limits.memory != "1Gi" or
+    (.spec.template.spec.volumes[] | select(.name == "tmp") | .emptyDir.sizeLimit) != "64Mi"
+  )
+' "$temporary_directory/admission.yaml" >/dev/null 2>&1; then
+  echo "non-scan admission Job changed its memory or temporary storage profile" >&2
+  exit 1
+fi
+if yq eval-all -e '
+  select(.kind == "Job") |
+  select(
+    .spec.template.metadata.labels."kodex.dev/local-profile" != null or
+    any(.spec.template.spec.initContainers[]?.env[]?;
+      .name == "OTEL_SDK_DISABLED")
+  )
+' "$temporary_directory/admission.yaml" "$temporary_directory/admission-production.yaml" \
+  >/dev/null 2>&1; then
+  echo "non-local admission renderer enabled local telemetry policy" >&2
+  exit 1
+fi
 for service_account in kodex-image-scanner kodex-image-signer \
   image-admission image-promotion; do
   grep -Fq "serviceAccountName: $service_account" "$temporary_directory/admission.yaml"
@@ -502,6 +568,57 @@ grep -Fq 'regctl artifact put "$@" "$evidence_tag"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq 'regctl artifact get "$evidence_reference" --file "$evidence_name"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq '"check-for-app-update": false' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'parallelism: 1' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq '"ca-cert": "/identity/ca.pem"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq '"tls-cert": "/identity/registry-client.crt"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq '"tls-key": "/identity/registry-client.key"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'syft --config /tmp/syft.json --from registry "$source_ref"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'fail "SBOM generation failed"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'fail "vulnerability scan failed"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'kodex.dev/fix-available-high-or-critical/v1' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/vulnerability-policy.jq"
+grep -Fq 'unresolvedNoFixMatchCount' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/vulnerability-policy.jq"
+grep -Fq '.kodexPolicy.blockingMatchCount == 0' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+if grep -Fq -- '--fail-on high' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
+  echo "admission discards the complete vulnerability report through fail-on" >&2
+  exit 1
+fi
+cat >"$temporary_directory/vulnerability-no-fix.json" <<'EOF'
+{"matches":[{"vulnerability":{"severity":"Critical","fix":{"state":"wont-fix","versions":[]}}}]}
+EOF
+jq --argjson policy_revision 1 --arg policy_sha256 "$(printf 'a%.0s' {1..64})" \
+  -f "$repository_root/deploy/k8s/base/image-supply-chain/vulnerability-policy.jq" \
+  "$temporary_directory/vulnerability-no-fix.json" >"$temporary_directory/vulnerability-no-fix.result.json"
+jq -e '
+  .kodexPolicy.highOrCriticalMatchCount == 1 and
+  .kodexPolicy.blockingMatchCount == 0 and
+  .kodexPolicy.unresolvedNoFixMatchCount == 1 and
+  (.matches | length) == 1
+' "$temporary_directory/vulnerability-no-fix.result.json" >/dev/null
+cat >"$temporary_directory/vulnerability-fixable.json" <<'EOF'
+{"matches":[{"vulnerability":{"severity":"High","fix":{"state":"fixed","versions":["2.0.0"]}}}]}
+EOF
+jq --argjson policy_revision 1 --arg policy_sha256 "$(printf 'b%.0s' {1..64})" \
+  -f "$repository_root/deploy/k8s/base/image-supply-chain/vulnerability-policy.jq" \
+  "$temporary_directory/vulnerability-fixable.json" >"$temporary_directory/vulnerability-fixable.result.json"
+jq -e '
+  .kodexPolicy.highOrCriticalMatchCount == 1 and
+  .kodexPolicy.blockingMatchCount == 1 and
+  .kodexPolicy.unresolvedNoFixMatchCount == 0 and
+  (.matches | length) == 1
+' "$temporary_directory/vulnerability-fixable.result.json" >/dev/null
 if rg -q -- '--slurpfile|admission\.evidence\.json' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
   echo "admission evidence still reserializes signed payloads" >&2
@@ -512,6 +629,15 @@ if grep -Fq 'issuedAt' \
   echo "admission receipt contains non-deterministic issue time" >&2
   exit 1
 fi
+if grep -Eq -- '--output-signature|--signature([ =]|$)' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
+  echo "admission still uses removed Cosign detached-signature flags" >&2
+  exit 1
+fi
+grep -Fq -- '--bundle /work/image-digest.sigstore.json' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq -- '--bundle "$evidence_directory/$signed_name.sigstore.json"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq 'load_promotion_claim' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 promotion_uses_emptydir=$(yq eval-all 'select(.kind == "Job" and .metadata.labels."kodex.dev/image-admission-phase" == "promote") |
@@ -545,20 +671,22 @@ set -eu
 [ "${1:-}" = verify-blob ] || exit 1
 shift
 public_key=
-signature=
+bundle=
 payload=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --key) public_key=$2; shift 2 ;;
-    --signature) signature=$2; shift 2 ;;
+    --bundle) bundle=$2; shift 2 ;;
     --*) exit 1 ;;
     *) payload=$1; shift ;;
   esac
 done
-[ -r "$public_key" ] && [ -r "$signature" ] && [ -r "$payload" ] || exit 1
+[ -r "$public_key" ] && [ -r "$bundle" ] && [ -r "$payload" ] || exit 1
 decoded_signature=$(mktemp)
 trap 'rm -f -- "$decoded_signature"' EXIT HUP INT TERM
-base64 -d <"$signature" >"$decoded_signature"
+jq -er '.mediaType == "application/vnd.dev.sigstore.bundle.v0.3+json" and
+  (.messageSignature.signature | type == "string" and length > 0)' "$bundle" >/dev/null
+jq -er '.messageSignature.signature' "$bundle" | base64 -d >"$decoded_signature"
 openssl dgst -sha256 -verify "$public_key" -signature "$decoded_signature" "$payload" >/dev/null
 EOF
 chmod 0555 "$temporary_directory/bin/cosign"
@@ -577,15 +705,15 @@ chmod 0555 "$temporary_directory/bin/regctl"
 evidence_entries_fixture() {
   cat <<'EOF'
 image-digest.subject|application/vnd.kodex.image-digest.v1+text
-image-digest.sig|application/vnd.dev.cosign.signature.v1+text
+image-digest.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 provenance.json|application/vnd.kodex.provenance-binding.v1+json
-provenance.sig|application/vnd.dev.cosign.signature.v1+text
+provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 native-provenance.json|application/vnd.kodex.native-provenance.v1+json
-native-provenance.sig|application/vnd.dev.cosign.signature.v1+text
+native-provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 sbom.json|application/spdx+json
-sbom.sig|application/vnd.dev.cosign.signature.v1+text
+sbom.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 vulnerability.json|application/vnd.kodex.vulnerability-report.v1+json
-vulnerability.sig|application/vnd.dev.cosign.signature.v1+text
+vulnerability.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 signature.binding.json|application/vnd.kodex.signature-binding.v1+json
 admission.receipt.json|application/vnd.kodex.admission-receipt.v1+json
 cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
@@ -624,10 +752,14 @@ EOF
 
 sign_evidence_fixture() {
   payload_file=$1
-  signature_file=$2
-  openssl dgst -sha256 -sign "$temporary_directory/evidence-private.pem" "$payload_file" |
-    base64 | tr -d '\n' >"$signature_file"
-  printf '\n' >>"$signature_file"
+  bundle_file=$2
+  signature=$(openssl dgst -sha256 -sign "$temporary_directory/evidence-private.pem" "$payload_file" |
+    base64 | tr -d '\n')
+  jq -cn --arg signature "$signature" \
+    '{mediaType:"application/vnd.dev.sigstore.bundle.v0.3+json",
+      verificationMaterial:{publicKey:{hint:"fixture"}},
+      messageSignature:{messageDigest:{algorithm:"SHA2_256",digest:"fixture"},signature:$signature}}' \
+    >"$bundle_file"
 }
 
 expect_evidence_failure() {
@@ -688,7 +820,7 @@ EOF
 for signed_name in image-digest provenance native-provenance sbom vulnerability; do
   signed_file="$evidence_source/$signed_name.json"
   [[ $signed_name == image-digest ]] && signed_file="$evidence_source/image-digest.subject"
-  sign_evidence_fixture "$signed_file" "$evidence_source/$signed_name.sig"
+  sign_evidence_fixture "$signed_file" "$evidence_source/$signed_name.sigstore.json"
 done
 signature_identity=$(sha256sum "$evidence_source/cosign.pub" | awk '{print $1}')
 cat >"$evidence_source/signature.binding.json" <<EOF
@@ -766,10 +898,14 @@ jq '.layers[0].annotations["org.opencontainers.image.title"] = "foreign.json"' \
 expect_evidence_failure "OCI evidence manifest with foreign layer" "$evidence_recovered" \
   "$temporary_directory/evidence-foreign.json"
 cp -a "$evidence_recovered" "$temporary_directory/evidence-signature-mutated"
-printf 'A' >>"$temporary_directory/evidence-signature-mutated/sbom.sig"
+jq '.messageSignature.signature += "A"' \
+  "$temporary_directory/evidence-signature-mutated/sbom.sigstore.json" \
+  >"$temporary_directory/evidence-signature-mutated/sbom.sigstore.next.json"
+mv "$temporary_directory/evidence-signature-mutated/sbom.sigstore.next.json" \
+  "$temporary_directory/evidence-signature-mutated/sbom.sigstore.json"
 write_evidence_manifest_fixture "$temporary_directory/evidence-signature-mutated" \
   "$temporary_directory/evidence-signature-mutated.json"
-expect_evidence_failure "mutated detached evidence signature" \
+expect_evidence_failure "mutated Sigstore evidence bundle" \
   "$temporary_directory/evidence-signature-mutated" "$temporary_directory/evidence-signature-mutated.json"
 
 auth=$(printf 'pull-reader:current-password' | base64 | tr -d '\n')

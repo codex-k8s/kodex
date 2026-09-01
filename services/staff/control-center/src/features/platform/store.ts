@@ -3,11 +3,9 @@ import { computed, reactive, ref } from "vue";
 
 import { requestSignal } from "@/shared/api/client";
 import {
-  addAssistantTurn,
   addPlatformMembership,
   addProjectMembership,
   addSessionTurn,
-  applyAssistantPlan,
   commandAgent,
   commandAgentInstructions,
   commandIntegrationConnection,
@@ -20,8 +18,8 @@ import {
   changePlatformMembership,
   changeProjectMembership,
   completeOnboarding,
+  configureIntegrationConnectionCredential,
   createAgent,
-  createAssistantConversation,
   createInstructionDraft,
   createIntegrationConnection,
   createProject,
@@ -29,9 +27,13 @@ import {
   createRun,
   createSchedule,
   createWorkflow,
+  deleteIntegrationConnection,
+  deleteArtifact,
   downloadArtifact,
   getAdministration,
   getAgent,
+  getArtifact,
+  getArtifactImpact,
   getBootstrapState,
   getIntegrationConnection,
   getOverview,
@@ -66,12 +68,14 @@ import {
   removeProjectMembership,
   removePlatformMembership,
   updateAgent,
+  updateIntegrationConnection,
   updateProject,
   updateRoleImageRecipe,
   updateSchedule,
   updateSystemAssistantOwnerInstructions,
   updateWorkflowDraft,
   uploadArtifact,
+  uploadOrganizationArtifact,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   AdministrationState,
@@ -79,6 +83,7 @@ import type {
   AgentCommand,
   AgentInput,
   Artifact,
+  ArtifactImpact,
   AssistantConversation,
   AuditEvent,
   BootstrapState,
@@ -86,6 +91,7 @@ import type {
   IntegrationConnection,
   IntegrationConnectionCommand,
   IntegrationConnectionInput,
+  IntegrationConnectionUpdateInput,
   IntegrationGrantInput,
   IntegrationDefinition,
   InstructionVersion,
@@ -122,7 +128,12 @@ import type {
   WorkflowCommand,
   WorkflowInput,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate, type MutationHeaders } from "@/shared/api/mutation";
+import {
+  csrfToken,
+  etag,
+  mutate,
+  type MutationHeaders,
+} from "@/shared/api/mutation";
 import {
   asProblem,
   type AppProblem,
@@ -135,6 +146,7 @@ import {
   type RunEventOutcome,
 } from "@/features/platform/run-reducer";
 import { instructionCommandInput } from "@/features/platform/instruction-command";
+import { runBoundedPlatformReload } from "@/features/platform/platform-reload";
 import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 
 type QueryKey =
@@ -164,7 +176,8 @@ type QueryKey =
   | "members"
   | "memberCandidates"
   | "administration"
-  | "audit";
+  | "audit"
+  | "auditMore";
 
 function mutationHeaders(headers: MutationHeaders): {
   "Idempotency-Key": string;
@@ -222,9 +235,13 @@ export const usePlatformStore = defineStore("platform", () => {
   const conversations = reactive<Record<string, AssistantConversation>>({});
   const assistant = ref<SystemAssistant>();
   const auditEvents = ref<AuditEvent[]>([]);
+  const auditNextPageToken = ref<string>();
+  const auditScopeKey = ref("");
   const loading = reactive<Partial<Record<QueryKey, boolean>>>({});
   const problems = reactive<Partial<Record<QueryKey, AppProblem>>>({});
   const generation = new Map<QueryKey, number>();
+  const consumedAuditPageTokens = new Set<string>();
+  let platformReloadPromise: Promise<void> | undefined;
 
   async function query<T>(
     key: QueryKey,
@@ -284,6 +301,36 @@ export const usePlatformStore = defineStore("platform", () => {
         Reflect.deleteProperty(target, ref);
     }
     upsert(target, values);
+  }
+
+  function reconcileRuns(values: Run[], projectRef?: string): void {
+    const currentRefs = new Set(values.map((value) => value.ref));
+    for (const [ref, value] of Object.entries(runs)) {
+      if (
+        (!projectRef || value.projectRef === projectRef) &&
+        !currentRefs.has(ref)
+      )
+        Reflect.deleteProperty(runs, ref);
+    }
+    for (const value of values) {
+      const current = runs[value.ref];
+      if (current && current.version <= value.version)
+        Object.assign(current, value);
+      else if (!current) runs[value.ref] = value;
+    }
+  }
+
+  function reconcileConversations(values: AssistantConversation[]): void {
+    const currentRefs = new Set(values.map((value) => value.ref));
+    for (const ref of Object.keys(conversations)) {
+      if (!currentRefs.has(ref)) Reflect.deleteProperty(conversations, ref);
+    }
+    for (const value of values) {
+      const current = conversations[value.ref];
+      if (current && current.version <= value.version)
+        Object.assign(current, value);
+      else if (!current) conversations[value.ref] = value;
+    }
   }
 
   function replaceByKey<T>(
@@ -558,9 +605,7 @@ export const usePlatformStore = defineStore("platform", () => {
           )
         ).data.items,
       (values) => {
-        if (projectRef)
-          replaceScoped(runs, values, (run) => run.projectRef === projectRef);
-        else replace(runs, values);
+        reconcileRuns(values, projectRef);
       },
     );
   }
@@ -574,37 +619,51 @@ export const usePlatformStore = defineStore("platform", () => {
       const graphReadback = await unwrap(
         getRunGraph({ path: { runRef: ref }, signal: requestSignal() }),
       );
+      const workspace = graphReadback.data;
+      const history = await loadRunEventHistory(ref, workspace.graph.sequence);
       if (generation.get("run") !== current) return;
 
-      const workspace = graphReadback.data;
       upsert(runs, [workspace.run]);
       graphs[workspace.graph.runRef] = mergeRunGraph(
         graphs[workspace.graph.runRef],
         workspace.graph,
       );
-
-      // Event catch-up improves the timeline, but it must not make an already
-      // authoritative run/graph snapshot unusable when the request is
-      // transiently interrupted.
-      const eventPage = await unwrap(
-        listRunEvents({
-          path: { runRef: ref },
-          query: { afterSequence: 0, limit: 200 },
-          signal: requestSignal(),
-        }),
-      );
-      if (generation.get("run") !== current) return;
       const bucket = events[workspace.graph.runRef] ?? {};
-      for (const event of eventPage.data.items) {
-        if (event.sequence <= workspace.graph.sequence)
-          bucket[event.sequence] = event;
-      }
+      for (const event of history) bucket[event.sequence] = event;
       events[workspace.graph.runRef] = bucket;
     } catch (error) {
       if (generation.get("run") === current) problems.run = asProblem(error);
     } finally {
       if (generation.get("run") === current) loading.run = false;
     }
+  }
+
+  async function loadRunEventHistory(
+    ref: string,
+    throughSequence: number,
+  ): Promise<RunEvent[]> {
+    const result: RunEvent[] = [];
+    let afterSequence = 0;
+    while (afterSequence < throughSequence) {
+      const response = await unwrap(
+        listRunEvents({
+          path: { runRef: ref },
+          query: { afterSequence, limit: 500 },
+          signal: requestSignal(),
+        }),
+      );
+      for (const event of response.data.items) {
+        if (event.sequence > throughSequence) break;
+        if (event.sequence !== afterSequence + 1)
+          throw new Error("Run event history is not contiguous");
+        result.push(event);
+        afterSequence = event.sequence;
+      }
+      if (afterSequence >= throughSequence) break;
+      if (response.data.complete || response.data.items.length === 0)
+        throw new Error("Run event history ended before graph snapshot");
+    }
+    return result;
   }
 
   async function loadGates(
@@ -665,6 +724,7 @@ export const usePlatformStore = defineStore("platform", () => {
   async function uploadProjectArtifact(
     projectRef: string,
     file: File,
+    signal?: AbortSignal,
   ): Promise<Artifact> {
     const result = await mutate((headers) =>
       uploadArtifact({
@@ -674,8 +734,79 @@ export const usePlatformStore = defineStore("platform", () => {
           ...mutationHeaders(headers),
           "X-File-Name": file.name,
         },
+        signal: requestSignal(signal),
+      }),
+    );
+    upsert(artifacts, [result.data]);
+    return result.data;
+  }
+
+  async function uploadOrganizationArtifactFile(
+    file: File,
+    signal?: AbortSignal,
+  ): Promise<Artifact> {
+    const result = await mutate((headers) =>
+      uploadOrganizationArtifact({
+        body: file,
+        headers: {
+          ...mutationHeaders(headers),
+          "X-File-Name": file.name,
+        },
+        signal: requestSignal(signal),
+      }),
+    );
+    upsert(artifacts, [result.data]);
+    return result.data;
+  }
+
+  async function uploadAttachmentArtifact(
+    projectRef: string | undefined,
+    file: File,
+    signal?: AbortSignal,
+  ): Promise<Artifact> {
+    return projectRef
+      ? uploadProjectArtifact(projectRef, file, signal)
+      : uploadOrganizationArtifactFile(file, signal);
+  }
+
+  async function readArtifact(artifactRef: string): Promise<Artifact> {
+    const result = await unwrap(
+      getArtifact({
+        path: { artifactRef },
         signal: requestSignal(),
       }),
+    );
+    upsert(artifacts, [result.data]);
+    return result.data;
+  }
+
+  async function deleteProjectArtifact(artifact: Artifact): Promise<Artifact> {
+    const impactResult = await unwrap(
+      getArtifactImpact({
+        path: { artifactRef: artifact.ref },
+        query: { action: "DELETE" },
+        signal: requestSignal(),
+      }),
+    );
+    const impact: ArtifactImpact = impactResult.data;
+    if (
+      !impact.permitted ||
+      impact.action !== "DELETE" ||
+      impact.artifactRef !== artifact.ref ||
+      impact.artifactVersion !== artifact.version
+    )
+      throw new Error("Artifact impact does not authorize this mutation");
+    const result = await mutate(
+      (headers) =>
+        deleteArtifact({
+          path: { artifactRef: artifact.ref },
+          headers: {
+            ...versionedHeaders(headers),
+            "X-Impact-Digest": impact.impactDigest,
+          },
+          signal: requestSignal(),
+        }),
+      artifact.version,
     );
     upsert(artifacts, [result.data]);
     return result.data;
@@ -818,7 +949,7 @@ export const usePlatformStore = defineStore("platform", () => {
       },
       (value) => {
         assistant.value = value.assistant;
-        replace(conversations, value.conversations);
+        reconcileConversations(value.conversations);
       },
     );
   }
@@ -1009,6 +1140,14 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   async function loadAudit(projectRef?: string, search = ""): Promise<void> {
+    const normalizedSearch = search.trim();
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}`;
+    auditScopeKey.value = scopeKey;
+    auditNextPageToken.value = undefined;
+    consumedAuditPageTokens.clear();
+    generation.set("auditMore", (generation.get("auditMore") ?? 0) + 1);
+    loading.auditMore = false;
+    Reflect.deleteProperty(problems, "auditMore");
     await query(
       "audit",
       async () =>
@@ -1017,15 +1156,69 @@ export const usePlatformStore = defineStore("platform", () => {
             listAuditEvents({
               query: {
                 ...(projectRef ? { projectRef } : {}),
-                ...(search.trim() ? { query: search.trim() } : {}),
+                ...(normalizedSearch ? { query: normalizedSearch } : {}),
                 pageSize: 100,
               },
               signal: requestSignal(),
             }),
           )
-        ).data.items,
-      (values) => {
-        auditEvents.value = values;
+        ).data,
+      (page) => {
+        if (auditScopeKey.value !== scopeKey) return;
+        auditEvents.value = page.items;
+        auditNextPageToken.value = page.nextPageToken || undefined;
+      },
+    );
+  }
+
+  async function loadMoreAudit(
+    projectRef?: string,
+    search = "",
+  ): Promise<void> {
+    const normalizedSearch = search.trim();
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}`;
+    const pageToken = auditNextPageToken.value;
+    if (
+      !pageToken ||
+      loading.auditMore ||
+      auditScopeKey.value !== scopeKey ||
+      consumedAuditPageTokens.has(pageToken)
+    )
+      return;
+    await query(
+      "auditMore",
+      async () =>
+        (
+          await unwrap(
+            listAuditEvents({
+              query: {
+                ...(projectRef ? { projectRef } : {}),
+                ...(normalizedSearch ? { query: normalizedSearch } : {}),
+                pageSize: 100,
+                pageToken,
+              },
+              signal: requestSignal(),
+            }),
+          )
+        ).data,
+      (page) => {
+        if (
+          auditScopeKey.value !== scopeKey ||
+          auditNextPageToken.value !== pageToken
+        )
+          return;
+        consumedAuditPageTokens.add(pageToken);
+        const knownRefs = new Set(auditEvents.value.map((event) => event.ref));
+        auditEvents.value.push(
+          ...page.items.filter((event) => !knownRefs.has(event.ref)),
+        );
+        const candidate = page.nextPageToken || undefined;
+        auditNextPageToken.value =
+          candidate &&
+          candidate !== pageToken &&
+          !consumedAuditPageTokens.has(candidate)
+            ? candidate
+            : undefined;
       },
     );
   }
@@ -1413,6 +1606,65 @@ export const usePlatformStore = defineStore("platform", () => {
     return readback.data;
   }
 
+  async function configureConnectionCredential(
+    connection: Pick<IntegrationConnection, "ref" | "version">,
+    credentialValue: string,
+    requestIdempotencyKey: string,
+  ): Promise<IntegrationConnection> {
+    try {
+      const result = await unwrap(
+        configureIntegrationConnectionCredential({
+          path: { connectionRef: connection.ref },
+          body: { value: credentialValue },
+          headers: {
+            "If-Match": etag(connection.version),
+            "Idempotency-Key": requestIdempotencyKey,
+            "X-CSRF-Token": csrfToken(),
+          },
+          signal: requestSignal(),
+        }),
+      );
+      connections[result.data.ref] = result.data;
+      return result.data;
+    } catch (error) {
+      throw asProblem(error);
+    }
+  }
+
+  async function updateConnection(
+    connection: IntegrationConnection,
+    input: IntegrationConnectionUpdateInput,
+  ): Promise<IntegrationConnection> {
+    const result = await mutate(
+      (headers) =>
+        updateIntegrationConnection({
+          path: { connectionRef: connection.ref },
+          body: input,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      connection.version,
+    );
+    connections[result.data.ref] = result.data;
+    return result.data;
+  }
+
+  async function deleteConnection(
+    connection: IntegrationConnection,
+  ): Promise<IntegrationConnection> {
+    const result = await mutate(
+      (headers) =>
+        deleteIntegrationConnection({
+          path: { connectionRef: connection.ref },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      connection.version,
+    );
+    connections[result.data.ref] = result.data;
+    return result.data;
+  }
+
   async function changeConnection(
     connection: IntegrationConnection,
     action: IntegrationConnectionCommand["action"],
@@ -1445,61 +1697,6 @@ export const usePlatformStore = defineStore("platform", () => {
       connection.version,
     );
     return readConnection(connection.ref);
-  }
-
-  async function newConversation(
-    title: string,
-    projectRef?: string,
-  ): Promise<AssistantConversation> {
-    const result = await mutate((headers) =>
-      createAssistantConversation({
-        body: { title, ...(projectRef ? { projectRef } : {}) },
-        headers: mutationHeaders(headers),
-        signal: requestSignal(),
-      }),
-    );
-    conversations[result.data.ref] = result.data;
-    return result.data;
-  }
-
-  async function sendAssistantTurn(
-    conversationRef: string,
-    content: string,
-  ): Promise<AssistantConversation> {
-    const previous = conversations[conversationRef];
-    const result = await mutate((headers) =>
-      addAssistantTurn({
-        path: { conversationRef },
-        body: { content },
-        headers: mutationHeaders(headers),
-        signal: requestSignal(),
-      }),
-    );
-    const updated = {
-      ...result.data,
-      turns: [...(previous?.turns ?? []), ...result.data.turns],
-    };
-    conversations[result.data.ref] = updated;
-    return updated;
-  }
-
-  async function applyPlan(
-    planRef: string,
-    version: number,
-  ): Promise<AssistantConversation> {
-    const result = await mutate(
-      (headers) =>
-        applyAssistantPlan({
-          path: { planRef },
-          headers: versionedHeaders(headers),
-          signal: requestSignal(),
-        }),
-      version,
-    );
-    await loadAssistant();
-    return (
-      conversations[result.data.conversation.ref] ?? result.data.conversation
-    );
   }
 
   async function updateAssistantInstructions(
@@ -1576,44 +1773,59 @@ export const usePlatformStore = defineStore("platform", () => {
         if (projectRef)
           add("roleImages", () => loadRoleImageRecipes(projectRef));
         break;
+      case "RUN":
+        add("runs", () => loadRuns(projectRef));
+        add("gates", () => loadGates(projectRef));
+        add("overview", () => loadOverview(projectRef));
+        break;
       default:
         throw new Error("Unknown platform invalidation kind");
     }
-    await Promise.all(operations.map((operation) => operation.run()));
+    await runBoundedPlatformReload(operations);
     if (operations.some((operation) => problems[operation.key]))
       throw new Error("Authoritative platform reload failed");
   }
 
-  async function reloadPlatformState(): Promise<void> {
-    const projectRef = selectedProjectRef();
-    const operations: Array<{ key: QueryKey; run: () => Promise<void> }> = [
-      { key: "bootstrap", run: loadBootstrap },
-      { key: "projects", run: loadProjects },
-      { key: "overview", run: () => loadOverview(projectRef) },
-      { key: "runs", run: () => loadRuns(projectRef) },
-      { key: "gates", run: () => loadGates(projectRef) },
-      { key: "integrations", run: loadIntegrations },
-      { key: "assistant", run: loadAssistant },
-    ];
-    if (projectRef) {
-      operations.push(
-        { key: "project", run: () => loadProject(projectRef) },
-        { key: "agents", run: () => loadAgents(projectRef) },
-        { key: "workflows", run: () => loadWorkflows(projectRef) },
-        { key: "artifacts", run: () => loadArtifacts(projectRef) },
-        { key: "schedules", run: () => loadSchedules(projectRef) },
-        {
-          key: "roleImages",
-          run: () => loadRoleImageRecipes(projectRef),
-        },
-      );
-    }
-    await Promise.all(operations.map((operation) => operation.run()));
-    if (operations.some((operation) => problems[operation.key]))
-      throw new Error("Authoritative platform resync failed");
+  function reloadPlatformState(): Promise<void> {
+    if (platformReloadPromise) return platformReloadPromise;
+    const reload = async (): Promise<void> => {
+      const projectRef = selectedProjectRef();
+      const operations: Array<{ key: QueryKey; run: () => Promise<void> }> = [
+        { key: "bootstrap", run: loadBootstrap },
+        { key: "projects", run: loadProjects },
+        { key: "overview", run: () => loadOverview(projectRef) },
+        { key: "runs", run: () => loadRuns(projectRef) },
+        { key: "gates", run: () => loadGates(projectRef) },
+        { key: "integrations", run: loadIntegrations },
+        { key: "assistant", run: loadAssistant },
+      ];
+      if (projectRef) {
+        operations.push(
+          { key: "project", run: () => loadProject(projectRef) },
+          { key: "agents", run: () => loadAgents(projectRef) },
+          { key: "workflows", run: () => loadWorkflows(projectRef) },
+          { key: "artifacts", run: () => loadArtifacts(projectRef) },
+          { key: "schedules", run: () => loadSchedules(projectRef) },
+          {
+            key: "roleImages",
+            run: () => loadRoleImageRecipes(projectRef),
+          },
+        );
+      }
+      await runBoundedPlatformReload(operations);
+      if (operations.some((operation) => problems[operation.key]))
+        throw new Error("Authoritative platform resync failed");
+    };
+    const current = reload();
+    const tracked = current.finally(() => {
+      if (platformReloadPromise === tracked) platformReloadPromise = undefined;
+    });
+    platformReloadPromise = tracked;
+    return tracked;
   }
 
   function clearOwnerState(): void {
+    platformReloadPromise = undefined;
     generation.clear();
     for (const target of [
       runtimes,
@@ -1656,6 +1868,9 @@ export const usePlatformStore = defineStore("platform", () => {
     integrationDefinitionActions.value = [];
     assistant.value = undefined;
     auditEvents.value = [];
+    auditNextPageToken.value = undefined;
+    auditScopeKey.value = "";
+    consumedAuditPageTokens.clear();
     selectProjectRef(undefined);
   }
 
@@ -1696,6 +1911,7 @@ export const usePlatformStore = defineStore("platform", () => {
     conversations,
     assistant,
     auditEvents,
+    auditNextPageToken,
     loading,
     problems,
     projectList,
@@ -1719,11 +1935,15 @@ export const usePlatformStore = defineStore("platform", () => {
     loadGates,
     loadArtifacts,
     uploadProjectArtifact,
+    uploadAttachmentArtifact,
+    readArtifact,
+    deleteProjectArtifact,
     changeArtifactAgentBinding,
     downloadArtifactContent,
     loadSchedules,
     loadIntegrations,
     loadConnection,
+    readConnection,
     loadAssistant,
     loadMembers,
     loadMembershipCandidates,
@@ -1735,6 +1955,7 @@ export const usePlatformStore = defineStore("platform", () => {
     revokePlatformMembership,
     loadAdministration,
     loadAudit,
+    loadMoreAudit,
     loadCapabilities,
     loadRuntimes,
     finishOnboarding,
@@ -1754,11 +1975,11 @@ export const usePlatformStore = defineStore("platform", () => {
     saveSchedule,
     changeSchedule,
     connectIntegration,
+    configureConnectionCredential,
+    updateConnection,
+    deleteConnection,
     changeConnection,
     changeConnectionGrant,
-    newConversation,
-    sendAssistantTurn,
-    applyPlan,
     updateAssistantInstructions,
     applyRunSnapshot,
     applyRunEvent,

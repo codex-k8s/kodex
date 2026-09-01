@@ -29,17 +29,19 @@ type admissionClaimReceipt struct {
 }
 
 type promotionClaimReceipt struct {
-	Artifact            entity.ImageArtifact
-	Fence               uint64
-	AuthorityGeneration uint64
-	ClaimExpiresAt      time.Time
+	Artifact                      entity.ImageArtifact
+	PromotionRequestReceiptSHA256 string
+	Fence                         uint64
+	AuthorityGeneration           uint64
+	ClaimExpiresAt                time.Time
 }
 
 type promotionAuthorizationReceipt struct {
-	Artifact               entity.ImageArtifact
-	Fence                  uint64
-	AuthorityGeneration    uint64
-	AuthorizationExpiresAt time.Time
+	Artifact                      entity.ImageArtifact
+	PromotionRequestReceiptSHA256 string
+	Fence                         uint64
+	AuthorityGeneration           uint64
+	AuthorizationExpiresAt        time.Time
 }
 
 func (repository *Repository) ClaimBuild(ctx context.Context, principal value.Principal, key string) (entity.ImageBuildClaim, error) {

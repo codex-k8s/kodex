@@ -13,6 +13,13 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 )
 
+const (
+	providerTarget                  = "dns:///secret-broker.kodex-system.svc:8443"
+	providerTLSServerName           = "secret-broker.kodex-system.svc.cluster.local"
+	providerAuthorityResolverTarget = "dns:///control-plane.kodex-system.svc:8443"
+	providerAuthorityResolverSNI    = "control-plane.kodex-system.svc.cluster.local"
+)
+
 type Config struct {
 	GRPCListen                      string        `env:"CONTROL_PLANE_GRPC_LISTEN"`
 	TechnicalListen                 string        `env:"CONTROL_PLANE_TECHNICAL_LISTEN"`
@@ -23,6 +30,13 @@ type Config struct {
 	PostgresCAFile                  string        `env:"CONTROL_PLANE_POSTGRES_CA_FILE"`
 	PostgresTLSServerName           string        `env:"CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME"`
 	PostgresMaxConnections          int32         `env:"CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS"`
+	ObjectStorageEndpoint           string        `env:"CONTROL_PLANE_OBJECT_STORAGE_ENDPOINT"`
+	ObjectStorageRegion             string        `env:"CONTROL_PLANE_OBJECT_STORAGE_REGION"`
+	ObjectStorageBucket             string        `env:"CONTROL_PLANE_OBJECT_STORAGE_BUCKET"`
+	ObjectStorageAccessKeyFile      string        `env:"CONTROL_PLANE_OBJECT_STORAGE_ACCESS_KEY_FILE"`
+	ObjectStorageSecretKeyFile      string        `env:"CONTROL_PLANE_OBJECT_STORAGE_SECRET_KEY_FILE"`
+	ObjectStorageUsePathStyle       bool          `env:"CONTROL_PLANE_OBJECT_STORAGE_USE_PATH_STYLE"`
+	ObjectStorageAllowInsecureLocal bool          `env:"CONTROL_PLANE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL"`
 	NATSURL                         string        `env:"CONTROL_PLANE_NATS_URL"`
 	NATSTLSServerName               string        `env:"CONTROL_PLANE_NATS_TLS_SERVER_NAME"`
 	NATSCAFile                      string        `env:"CONTROL_PLANE_NATS_CA_FILE"`
@@ -39,6 +53,18 @@ type Config struct {
 	DefaultProviderSecretUID        string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_UID"`
 	DefaultProviderSecretVersion    string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_RESOURCE_VERSION"`
 	DefaultProviderCredentialSHA256 string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256"`
+	IntegrationCredentialNamespace  string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_NAMESPACE"`
+	IntegrationCredentialSecretName string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_SECRET_NAME"`
+	RuntimeSecretNamespace          string        `env:"CONTROL_PLANE_RUNTIME_SECRET_NAMESPACE"`
+	KubernetesAPITimeout            time.Duration `env:"CONTROL_PLANE_KUBERNETES_API_TIMEOUT"`
+	SecretBrokerTarget              string        `env:"CONTROL_PLANE_SECRET_BROKER_TARGET"`
+	SecretBrokerTLSServerName       string        `env:"CONTROL_PLANE_SECRET_BROKER_TLS_SERVER_NAME"`
+	ProviderResolverTarget          string        `env:"CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TARGET"`
+	ProviderResolverTLSServerName   string        `env:"CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TLS_SERVER_NAME"`
+	ProviderResolverCAFile          string        `env:"CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_CA_FILE"`
+	ProviderApplicationGrantFile    string        `env:"CONTROL_PLANE_PROVIDER_APPLICATION_GRANT_FILE"`
+	ProviderIssuerUID               uint32        `env:"CONTROL_PLANE_PROVIDER_AUTHORITY_ISSUER_UID"`
+	ProviderIssuerGID               uint32        `env:"CONTROL_PLANE_PROVIDER_AUTHORITY_ISSUER_GID"`
 	AuthorityVerifierSocket         string        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_SOCKET"`
 	AuthorityVerifierUID            uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_UID"`
 	AuthorityVerifierGID            uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_GID"`
@@ -46,12 +72,15 @@ type Config struct {
 	ProofSignerFile                 string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_SIGNER_FILE"`
 	ProofSignerTrustFile            string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_TRUST_FILE"`
 	AutomationGrantTrustFile        string        `env:"CONTROL_PLANE_AUTOMATION_GRANT_TRUST_FILE"`
+	SessionArchiveGrantTrustFile    string        `env:"CONTROL_PLANE_SESSION_ARCHIVE_GRANT_TRUST_FILE"`
 	IntegrationGrantTrustFile       string        `env:"CONTROL_PLANE_INTEGRATION_GRANT_TRUST_FILE"`
 	InteractionGrantTrustFile       string        `env:"CONTROL_PLANE_INTERACTION_GRANT_TRUST_FILE"`
 	RuntimeGrantTrustFile           string        `env:"CONTROL_PLANE_RUNTIME_GRANT_TRUST_FILE"`
 	RoleImageBuilderGrantTrustFile  string        `env:"CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE"`
 	ImageAdmissionGrantTrustFile    string        `env:"CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE"`
 	ImagePromotionGrantTrustFile    string        `env:"CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE"`
+	SecretBrokerGrantTrustFile      string        `env:"CONTROL_PLANE_SECRET_BROKER_GRANT_TRUST_FILE"`
+	ControlPlaneGrantTrustFile      string        `env:"CONTROL_PLANE_SELF_GRANT_TRUST_FILE"`
 	LeaseSigningKeyFile             string        `env:"CONTROL_PLANE_LEASE_SIGNING_KEY_FILE"`
 	ImagePolicyRevision             uint64        `env:"CONTROL_PLANE_IMAGE_POLICY_REVISION"`
 	ImagePolicySHA256               string        `env:"CONTROL_PLANE_IMAGE_POLICY_SHA256"`
@@ -86,41 +115,64 @@ type Config struct {
 	RelayLeaseDuration              time.Duration `env:"CONTROL_PLANE_RELAY_LEASE_DURATION"`
 	RelayPublishTimeout             time.Duration `env:"CONTROL_PLANE_RELAY_PUBLISH_TIMEOUT"`
 	RelayFinalizeTimeout            time.Duration `env:"CONTROL_PLANE_RELAY_FINALIZE_TIMEOUT"`
+	ProviderCleanupBatchSize        int32         `env:"CONTROL_PLANE_PROVIDER_CREDENTIAL_CLEANUP_BATCH_SIZE"`
+	ProviderCleanupPollInterval     time.Duration `env:"CONTROL_PLANE_PROVIDER_CREDENTIAL_CLEANUP_POLL_INTERVAL"`
+	ProviderCleanupTimeout          time.Duration `env:"CONTROL_PLANE_PROVIDER_CREDENTIAL_CLEANUP_OPERATION_TIMEOUT"`
 }
 
 func loadConfig() (Config, error) {
 	config := Config{
 		GRPCListen: ":8443", TechnicalListen: ":9090",
-		ServerCertificateFile:   "/var/run/secrets/kodex/control-plane/workload-tls/tls.crt",
-		ServerPrivateKeyFile:    "/var/run/secrets/kodex/control-plane/workload-tls/tls.key",
-		ClientCAFile:            "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
-		PostgresDSNFile:         "/var/run/secrets/kodex/control-plane/postgres-runtime/dsn",
-		PostgresCAFile:          "/var/run/config/kodex/control-plane/postgres/ca.pem",
-		PostgresTLSServerName:   "control-plane-postgresql-rw.kodex-system.svc.cluster.local",
-		PostgresMaxConnections:  16,
-		NATSURL:                 "tls://nats.kodex-system.svc:4222",
-		NATSTLSServerName:       "nats.kodex-system.svc.cluster.local",
-		NATSCAFile:              "/var/run/config/kodex/control-plane/nats/ca.pem",
-		NATSCertificateFile:     "/var/run/secrets/kodex/control-plane/nats-client/tls.crt",
-		NATSPrivateKeyFile:      "/var/run/secrets/kodex/control-plane/nats-client/tls.key",
-		NATSCredentialsFile:     "/var/run/secrets/kodex/control-plane/nats/user.creds",
-		NATSStream:              "CONTROL_PLANE",
-		NATSReplicas:            3,
-		NATSMaxBytes:            32 << 30,
-		DefaultRuntimeProvider:  "openai-codex",
-		DefaultRuntimeModel:     "gpt-5.6-sol",
-		AuthorityVerifierSocket: authorityclient.VerifierSocketPath,
-		AuthorityVerifierUID:    29002, AuthorityVerifierGID: 29000,
+		ServerCertificateFile:           "/var/run/secrets/kodex/control-plane/workload-tls/tls.crt",
+		ServerPrivateKeyFile:            "/var/run/secrets/kodex/control-plane/workload-tls/tls.key",
+		ClientCAFile:                    "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
+		PostgresDSNFile:                 "/var/run/secrets/kodex/control-plane/postgres-runtime/dsn",
+		PostgresCAFile:                  "/var/run/config/kodex/control-plane/postgres/ca.pem",
+		PostgresTLSServerName:           "control-plane-postgresql-rw.kodex-system.svc.cluster.local",
+		PostgresMaxConnections:          16,
+		ObjectStorageRegion:             "us-east-1",
+		ObjectStorageBucket:             "kodex-artifacts",
+		ObjectStorageAccessKeyFile:      "/var/run/secrets/kodex/control-plane/object-storage/access-key-id",
+		ObjectStorageSecretKeyFile:      "/var/run/secrets/kodex/control-plane/object-storage/secret-access-key",
+		ObjectStorageUsePathStyle:       true,
+		NATSURL:                         "tls://nats.kodex-system.svc:4222",
+		NATSTLSServerName:               "nats.kodex-system.svc.cluster.local",
+		NATSCAFile:                      "/var/run/config/kodex/control-plane/nats/ca.pem",
+		NATSCertificateFile:             "/var/run/secrets/kodex/control-plane/nats-client/tls.crt",
+		NATSPrivateKeyFile:              "/var/run/secrets/kodex/control-plane/nats-client/tls.key",
+		NATSCredentialsFile:             "/var/run/secrets/kodex/control-plane/nats/user.creds",
+		NATSStream:                      "CONTROL_PLANE",
+		NATSReplicas:                    3,
+		NATSMaxBytes:                    32 << 30,
+		DefaultRuntimeProvider:          "openai-codex",
+		DefaultRuntimeModel:             "gpt-5.6-sol",
+		IntegrationCredentialNamespace:  "kodex-system",
+		IntegrationCredentialSecretName: "kodex-integration-credentials",
+		RuntimeSecretNamespace:          "kodex-runtime",
+		KubernetesAPITimeout:            3 * time.Second,
+		SecretBrokerTarget:              providerTarget,
+		SecretBrokerTLSServerName:       providerTLSServerName,
+		ProviderResolverTarget:          providerAuthorityResolverTarget,
+		ProviderResolverTLSServerName:   providerAuthorityResolverSNI,
+		ProviderResolverCAFile:          "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
+		ProviderApplicationGrantFile:    "/var/run/secrets/kodex/control-plane/application-grant/application-grant.jws",
+		ProviderIssuerUID:               29001,
+		ProviderIssuerGID:               29000,
+		AuthorityVerifierSocket:         authorityclient.VerifierSocketPath,
+		AuthorityVerifierUID:            29002, AuthorityVerifierGID: 29000,
 		AuthorityPolicyFile:            "/var/run/config/kodex/control-plane/authority/policy.json",
 		ProofSignerFile:                "/var/run/secrets/kodex/internal-rpc-authority/proof-signer/private.jwk",
 		ProofSignerTrustFile:           "/var/run/config/kodex/internal-rpc-authority/authority-proof-trust/jwks.json",
 		AutomationGrantTrustFile:       "/var/run/config/kodex/control-plane/application-grants/automation-scheduler.platform-worker.public.jwk",
+		SessionArchiveGrantTrustFile:   "/var/run/config/kodex/control-plane/application-grants/session-archive.platform-worker.public.jwk",
 		IntegrationGrantTrustFile:      "/var/run/config/kodex/control-plane/application-grants/integration-gateway.platform-worker.public.jwk",
 		InteractionGrantTrustFile:      "",
 		RuntimeGrantTrustFile:          "/var/run/config/kodex/control-plane/application-grants/runtime-controller.platform-worker.public.jwk",
 		RoleImageBuilderGrantTrustFile: "/var/run/config/kodex/control-plane/application-grants/role-image-builder.platform-worker.public.jwk",
 		ImageAdmissionGrantTrustFile:   "/var/run/config/kodex/control-plane/application-grants/image-admission.platform-worker.public.jwk",
 		ImagePromotionGrantTrustFile:   "/var/run/config/kodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk",
+		SecretBrokerGrantTrustFile:     "/var/run/config/kodex/control-plane/application-grants/secret-broker.platform-worker.public.jwk",
+		ControlPlaneGrantTrustFile:     "/var/run/config/kodex/control-plane/application-grants/control-plane.platform-worker.public.jwk",
 		LeaseSigningKeyFile:            "/var/run/secrets/kodex/control-plane/lease-signing/key",
 		ImageBuildLeaseDuration:        5 * time.Minute,
 		ImageAdmissionClaimTTL:         30 * time.Minute,
@@ -133,6 +185,9 @@ func loadConfig() (Config, error) {
 		ReadinessInterval: 2 * time.Second, ShutdownTimeout: 10 * time.Second,
 		RelayPollInterval: 250 * time.Millisecond, RelayLeaseDuration: 10 * time.Second,
 		RelayPublishTimeout: 2 * time.Second, RelayFinalizeTimeout: 2 * time.Second,
+		ProviderCleanupBatchSize:    16,
+		ProviderCleanupPollInterval: 250 * time.Millisecond,
+		ProviderCleanupTimeout:      10 * time.Second,
 	}
 	if err := env.Parse(&config); err != nil {
 		return Config{}, errors.New("parse control-plane environment")
@@ -149,7 +204,7 @@ func (config Config) validate() error {
 			return errors.New("control-plane listen address is invalid")
 		}
 	}
-	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
+	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.ObjectStorageAccessKeyFile, config.ObjectStorageSecretKeyFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile, config.ProviderResolverCAFile, config.ProviderApplicationGrantFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.SessionArchiveGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.SecretBrokerGrantTrustFile, config.ControlPlaneGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("control-plane file path is invalid")
 		}
@@ -166,6 +221,11 @@ func (config Config) validate() error {
 		!validDNSLabel(config.DefaultProviderSecretName) || !validUUID(config.DefaultProviderSecretUID) ||
 		config.DefaultProviderSecretVersion == "" || len(config.DefaultProviderSecretVersion) > 128 ||
 		!validSHA256(config.DefaultProviderCredentialSHA256) ||
+		config.IntegrationCredentialNamespace != "kodex-system" || config.IntegrationCredentialSecretName != "kodex-integration-credentials" ||
+		!validDNSLabel(config.RuntimeSecretNamespace) ||
+		config.KubernetesAPITimeout < 500*time.Millisecond || config.KubernetesAPITimeout > 10*time.Second ||
+		!validProviderCredentialBoundary(config) ||
+		config.ProviderIssuerUID == 0 || config.ProviderIssuerGID == 0 ||
 		config.ImagePolicyRevision == 0 || !validSHA256(config.ImagePolicySHA256) ||
 		config.ImageBuildLeaseDuration < 30*time.Second || config.ImageBuildLeaseDuration > 30*time.Minute ||
 		config.ImageAdmissionClaimTTL < time.Minute || config.ImageAdmissionClaimTTL > time.Hour ||
@@ -185,7 +245,8 @@ func (config Config) validate() error {
 		config.ReadinessInterval < 500*time.Millisecond || config.ReadinessInterval > time.Minute ||
 		config.ShutdownTimeout < time.Second || config.ShutdownTimeout > time.Minute ||
 		config.RelayPollInterval < 50*time.Millisecond || config.RelayLeaseDuration < time.Second ||
-		config.RelayPublishTimeout <= 0 || config.RelayFinalizeTimeout <= 0 || config.RelayPublishTimeout+config.RelayFinalizeTimeout >= config.RelayLeaseDuration {
+		config.RelayPublishTimeout <= 0 || config.RelayFinalizeTimeout <= 0 || config.RelayPublishTimeout+config.RelayFinalizeTimeout >= config.RelayLeaseDuration ||
+		!validProviderCredentialCleanupConfig(config) {
 		return errors.New("control-plane bounded configuration is invalid")
 	}
 	issuer, issuerErr := url.Parse(config.OIDCIssuer)
@@ -196,10 +257,45 @@ func (config Config) validate() error {
 		connectErr != nil || connectHost == "" || net.ParseIP(connectHost) != nil || connectPort != "443" {
 		return errors.New("control-plane OIDC boundary is invalid")
 	}
+	if !validObjectStorageBoundary(config) {
+		return errors.New("control-plane object storage boundary is invalid")
+	}
 	if info, err := os.Lstat(filepath.Dir(config.AuthorityVerifierSocket)); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return errors.New("control-plane authority socket directory is invalid")
 	}
 	return nil
+}
+
+func validProviderCredentialCleanupConfig(config Config) bool {
+	return config.ProviderCleanupBatchSize >= 1 && config.ProviderCleanupBatchSize <= 16 &&
+		config.ProviderCleanupPollInterval >= 50*time.Millisecond &&
+		config.ProviderCleanupPollInterval <= time.Minute &&
+		config.ProviderCleanupTimeout >= 100*time.Millisecond &&
+		config.ProviderCleanupTimeout <= 30*time.Second
+}
+
+func validProviderCredentialBoundary(config Config) bool {
+	return config.SecretBrokerTarget == providerTarget &&
+		config.SecretBrokerTLSServerName == providerTLSServerName &&
+		config.ProviderResolverTarget == providerAuthorityResolverTarget &&
+		config.ProviderResolverTLSServerName == providerAuthorityResolverSNI &&
+		config.ProviderResolverCAFile == config.ClientCAFile &&
+		config.SecretBrokerTarget != config.ProviderResolverTarget &&
+		config.SecretBrokerTLSServerName != config.ProviderResolverTLSServerName
+}
+
+func validObjectStorageBoundary(config Config) bool {
+	endpoint, err := url.Parse(config.ObjectStorageEndpoint)
+	if err != nil || endpoint == nil {
+		return false
+	}
+	localInsecure := config.ObjectStorageAllowInsecureLocal && endpoint.Scheme == "http" &&
+		endpoint.Hostname() == "seaweedfs-s3.kodex-system.svc.cluster.local" &&
+		endpoint.Port() == "8333"
+	return (endpoint.Scheme == "https" || localInsecure) && endpoint.Host != "" &&
+		endpoint.User == nil && endpoint.RawQuery == "" && endpoint.Fragment == "" &&
+		(endpoint.Path == "" || endpoint.Path == "/") &&
+		validRuntimeIdentifier(config.ObjectStorageRegion) && validDNSLabel(config.ObjectStorageBucket)
 }
 
 func validDNSLabel(value string) bool {

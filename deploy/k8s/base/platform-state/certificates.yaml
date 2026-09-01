@@ -39,6 +39,30 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
+  name: secret-broker-server
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  secretName: secret-broker-server-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  dnsNames:
+    - secret-broker
+    - secret-broker.kodex-system.svc
+    - secret-broker.kodex-system.svc.cluster.local
+  usages:
+    - server auth
+  issuerRef:
+    name: kodex-installation-ca
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
   name: staff-control-center-backend
   annotations:
     argocd.argoproj.io/sync-wave: "-9"

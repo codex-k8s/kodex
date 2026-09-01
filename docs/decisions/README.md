@@ -4,8 +4,8 @@ title: Реестр архитектурных решений
 type: decision-index
 status: approved
 owner: architect
-version: 1.0.1
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-08-28
 ---
 
 # Реестр архитектурных решений
@@ -15,7 +15,7 @@ updated: 2026-08-23
 | `ADR-MC-002` | Универсальная web-first модель `Organization`, `Project` и `Agent` | approved |
 | `ADR-MC-004` | `RuntimeRevision` и неизменяемая привязка учетной записи поставщика | approved |
 | `ADR-MC-005` | Два режима интеграций и обязательные согласования | approved |
-| `ADR-MC-006` | Bounded artifact storage boundary без обязательного S3 | approved |
+| `ADR-MC-006` | Обязательное S3-хранилище содержимого artifacts | approved |
 | `ADR-MC-007` | Долговечные расписания и очередь запусков в PostgreSQL | approved |
 | `ADR-MC-008` | BuildKit и неизменяемые образы ролей | approved |
 | `ADR-MC-009` | Публичная лицензия MIT | approved |

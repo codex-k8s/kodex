@@ -4,8 +4,8 @@ title: Runtime, сессии и запуски
 type: architecture
 status: approved
 owner: architect
-version: 1.1.0
-updated: 2026-08-23
+version: 1.2.0
+updated: 2026-08-28
 ---
 
 # Runtime, сессии и запуски
@@ -28,16 +28,31 @@ incidents, graph revision и next event sequence. RunNode представляе
 process, agent execution, Human Gate или bounded external action. RunEdge имеет
 семантику `DELEGATED_TO`, `CALLBACK_TO`, `RETRY_OF`, `CONTINUES`, `WAITING_FOR`.
 
-Tool calls остаются в timeline/detail node и не засоряют основной graph.
-Frontend получает готовые nodes/edges/state/nextActions от control-plane и не
-выводит causality или terminal state локально.
+При запуске immutable WorkflowVersion control-plane сразу добавляет в graph
+snapshot все будущие workflow nodes со state/materialization state `PLANNED` и
+server-owned dependency edges. Делегирование материализует существующий node,
+связывает child Run/Turn и переводит его в `QUEUED`, не создавая второй node или
+второе planning edge. Cancel закрывает также ещё не материализованные nodes.
+
+Tool calls остаются в timeline/detail node и не засоряют основной graph. Каждый
+terminal tool-call projection содержит только tool name, bounded safe
+parameters, capability/grant ref, state, duration, safe result и audit ref.
+Raw MCP request/response, prompt, provider payload, file body и secret material
+не входят ни в RunEvent, ни в outbox envelope. Frontend получает готовые
+nodes/edges/state/nextActions от control-plane и не выводит causality или
+terminal state локально.
 
 ## RuntimeRevision
 
 Перед каждым turn/retry/continuation control-plane atomically pin-ит:
 
 - exact Agent/Workflow/instruction versions;
-- model/provider policy и session affinity;
+- runtime configuration ref/version/digest с model и runtime profile;
+- provider policy ref/version/digest, выбранный provider account и exact
+  credential revision UID/resourceVersion/content digest;
+- published `config.toml` overlay ref/version/digest и canonical content;
+- runtime environment ref/version/digest, Agent binding ref/version/digest,
+  non-secret values и Secret descriptors без values;
 - promoted role image digest/runtime ABI;
 - capability и integration grant revisions;
 - knowledge/artifact versions;
@@ -46,6 +61,13 @@ Frontend получает готовые nodes/edges/state/nextActions от cont
 
 Mutation любой зависимости влияет только на следующий RuntimeRevision и не
 изменяет уже выполняемую attempt.
+
+RuntimeRevision создаётся заново перед каждым turn, retry и continuation после
+авторитетного чтения текущих published versions. Она не содержит «latest»
+ссылок: runtime-controller получает точные refs, versions и digests всех
+перечисленных зависимостей. Provider account фиксируется в Session и остаётся
+неизменным между turns; новая credential revision указывается явно и не
+подменяет account affinity.
 
 ## Delegation и callback
 
@@ -88,10 +110,18 @@ browser current snapshot, sequence и ordered deltas; reconnect использу
 `afterSequence`, catch-up и fallback snapshot. Duplicate игнорируется, gap не
 заполняется phantom state.
 
+RunEvent имеет server-resolved actor (`USER`, `AGENT`, `SYSTEM_ASSISTANT`,
+`PLATFORM`, `INTEGRATION`) и закрытый message kind. Presentation metadata Run
+хранит server-owned title source и bounded activity summary. Runtime tool может
+предложить title/activity, но не получает право менять lifecycle или выполнять
+внешний effect. #997 фиксирует только generic typed projection; реализация
+конкретного integration effect принадлежит отдельному adapter unit.
+
 ## Retention
 
 Control-plane metadata, provider history manifest и Artifacts имеют явную
 retention policy. Execution Pod и ephemeral workspace удаляются только после
 terminal owner state и сохранённого bounded result/history. External channel
-delete не инициирует core cleanup. Long-term external archive backend относится
-к отдельному storage adapter и не обязателен для fresh web-only MVP.
+delete не инициирует core cleanup. До реализации session-archive unit #1002
+session PVC нельзя удалить, если дальнейшее продолжение требует Codex JSONL.
+S3 archive/restore и guarded удаление такого PVC относятся только к #1002.

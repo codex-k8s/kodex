@@ -57,5 +57,8 @@ WHERE e.organization_id = $1::uuid
                    AND membership.subject_id = $7::uuid
                    AND membership.active
                    AND 'VIEW_AUDIT' = ANY(membership.permissions)))
-ORDER BY e.occurred_at DESC
-LIMIT $8
+  AND ($8::timestamptz IS NULL
+       OR e.occurred_at < $8::timestamptz
+       OR (e.occurred_at = $8::timestamptz AND e.ref > $9))
+ORDER BY e.occurred_at DESC, e.ref
+LIMIT $10

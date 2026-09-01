@@ -23,12 +23,15 @@ func main() {
 		{"publisher/manifest-signer", "ira-publisher-manifest-g1"},
 		{"restore/pitr-evidence", "ira-restore-pitr-evidence-g1"},
 		{"platform-worker/automation-scheduler", "automation-scheduler-platform-worker-g1"},
+		{"platform-worker/session-archive", "session-archive-platform-worker-g1"},
 		{"platform-worker/integration-gateway", "integration-gateway-platform-worker-g1"},
 		{"platform-worker/interaction-gateway", "interaction-gateway-platform-worker-g1"},
 		{"platform-worker/runtime-controller", "runtime-controller-platform-worker-g1"},
 		{"platform-worker/role-image-builder", "role-image-builder-platform-worker-g1"},
 		{"platform-worker/image-admission", "image-admission-platform-worker-g1"},
 		{"platform-worker/image-promotion", "image-promotion-platform-worker-g1"},
+		{"platform-worker/secret-broker", "secret-broker-platform-worker-g1"},
+		{"platform-worker/control-plane", "control-plane-platform-worker-g1"},
 	} {
 		key, err := internalrpcauth.GenerateES256Key(item.kid)
 		if err != nil {

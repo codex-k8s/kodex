@@ -4,8 +4,8 @@ title: Ошибки внутренних RPC и внешних HTTP API
 type: guide
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-07-28
+version: 1.0.1
+updated: 2026-08-30
 ---
 
 # Ошибки внутренних RPC и внешних HTTP API
@@ -30,7 +30,7 @@ updated: 2026-07-28
 | RATE_LIMITED            | ResourceExhausted  | 429         | RATE_LIMITED            | true      |
 | INVALID_REQUEST         | ResourceExhausted  | 413         | PAYLOAD_TOO_LARGE       | false     |
 | UNAVAILABLE             | DeadlineExceeded   | 504         | DEADLINE_EXCEEDED       | true      |
-| INVALID_REQUEST         | Cancelled          | 499         | CANCELLED               | false     |
+| INVALID_REQUEST         | Canceled           | 499         | CANCELLED               | false     |
 | UNAVAILABLE             | Unavailable        | 503         | UNAVAILABLE             | true      |
 | INTERNAL                | Internal           | 500         | INTERNAL                | false     |
 
@@ -39,6 +39,16 @@ mapper `control-api-gateway`. Gateway не передаёт пользовате
 текст: он преобразует только известный canonical gRPC code, а frontend
 локализует стабильный `Problem.code` по текущей локали. Конфликт оптимистичной
 версии передается как `VERSION_MISMATCH`.
+
+`Canceled -> 499 CANCELLED` применяется к отменённому входящему запросу.
+Типизированный `LocalAuthorityError` с кодом `Canceled`, полученный от
+workload-local authority-зависимости при ещё живом входящем контексте,
+считается временной недоступностью и преобразуется в retryable
+`503 UNAVAILABLE`. Он не может преобразовываться в `401`: реальный
+authentication rejection должен иметь `Unauthenticated` или
+`PermissionDenied`. До открытия business RPC допускается один bounded повтор
+получения proof; после открытия RPC действуют обычные правила idempotency и
+unknown outcome.
 
 Неизвестный gRPC code, отсутствующий detail, неизвестный `code` или
 несогласованная пара `reason/code/retryable` преобразуется в `500 INTERNAL` и

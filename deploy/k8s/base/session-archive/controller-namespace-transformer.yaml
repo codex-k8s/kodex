@@ -1,0 +1,6 @@
+apiVersion: builtin
+kind: NamespaceTransformer
+metadata:
+  name: session-archive-controller-namespace
+  namespace: kodex-system
+unsetOnly: true

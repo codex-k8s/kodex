@@ -1,5 +1,5 @@
 -- name: proof_next_revision :one
 UPDATE control_plane.installation
-SET platform_sequence = platform_sequence + 1
+SET authority_proof_sequence = authority_proof_sequence + 1
 WHERE singleton
-RETURNING platform_sequence
+RETURNING authority_proof_sequence

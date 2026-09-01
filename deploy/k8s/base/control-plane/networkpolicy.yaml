@@ -29,10 +29,10 @@ spec:
               app.kubernetes.io/name: control-api-gateway
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: agent-runner
+              app.kubernetes.io/name: automation-scheduler
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: automation-scheduler
+              app.kubernetes.io/name: session-archive
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: role-image-builder
@@ -47,6 +47,12 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: integration-gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: interaction-gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: secret-broker
       ports:
         - protocol: TCP
           port: 8443
@@ -61,6 +67,14 @@ spec:
         - protocol: TCP
           port: 9090
   egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: secret-broker
+              app.kubernetes.io/component: secret-broker
+      ports:
+        - protocol: TCP
+          port: 8443
     - to:
         - namespaceSelector:
             matchLabels:
@@ -87,6 +101,12 @@ spec:
       ports:
         - protocol: TCP
           port: 4222
+    - to:
+        - ipBlock:
+            cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__
+      ports:
+        - protocol: TCP
+          port: 443
     - to:
         - namespaceSelector:
             matchLabels:

@@ -9,6 +9,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type localizingRecorder struct{ *httptest.ResponseRecorder }
@@ -53,7 +54,7 @@ func TestWorkflowDraftPreservesBoundedInputFields(t *testing.T) {
 	key := "priority"
 	fields := []generated.WorkflowInputFieldInput{{
 		Key: &key, Label: "Приоритет", Description: "Выберите срочность",
-		ValueType: generated.SELECT, Required: true, Options: []string{"Обычный", "Высокий"},
+		ValueType: generated.WorkflowInputFieldInputValueTypeSELECT, Required: true, Options: []string{"Обычный", "Высокий"},
 	}}
 	draft := workflowDraft(generated.WorkflowInput{
 		Name: "Обработка обращения", Purpose: "Подготовить ответ", CoordinatorAgentRef: "agt-coordinator",
@@ -87,12 +88,134 @@ func TestNormalizeArtifactSource(t *testing.T) {
 	}
 }
 
+func TestNormalizeArtifactLifecycleState(t *testing.T) {
+	t.Parallel()
+	value := map[string]any{"lifecycleState": "ARTIFACT_LIFECYCLE_STATE_DELETED"}
+	normalize(value)
+	if value["lifecycleState"] != "DELETED" {
+		t.Fatalf("lifecycle artifact не нормализован: %#v", value)
+	}
+}
+
+func TestMessageMapNormalizesAttachmentSetEnumsToOpenAPIValues(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.AttachmentSet{
+		Ref:     "aset-example",
+		State:   controlplanev1.AttachmentSetState_ATTACHMENT_SET_STATE_FINALIZED,
+		Purpose: controlplanev1.AttachmentSetPurpose_ATTACHMENT_SET_PURPOSE_SESSION_TURN,
+		Source:  "CONTROL_CENTER",
+		Items: []*controlplanev1.AttachmentSetItem{{
+			ArtifactRef: "art-example",
+			Source:      controlplanev1.ArtifactSource_ARTIFACT_SOURCE_INTERACTION_ATTACHMENT,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["state"] != "FINALIZED" || value["purpose"] != "SESSION_TURN" {
+		t.Fatalf("attachment set enums are not public: %#v", value)
+	}
+	items, ok := value["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("attachment set items are invalid: %#v", value)
+	}
+	item, ok := items[0].(map[string]any)
+	if !ok || item["source"] != "INTERACTION_ATTACHMENT" {
+		t.Fatalf("attachment item source is not public: %#v", value)
+	}
+}
+
+func TestMessageMapNormalizesProviderEnumsToOpenAPIValues(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.ProviderAccount{
+		Ref:     "pacc-example",
+		State:   controlplanev1.ProviderAccountState_PROVIDER_ACCOUNT_STATE_AUTHORIZED,
+		Enabled: true,
+		Ready:   true,
+		Authorization: &controlplanev1.ProviderAuthorization{
+			Method: controlplanev1.ProviderAuthorizationMethod_PROVIDER_AUTHORIZATION_METHOD_DEVICE_CODE,
+			State:  controlplanev1.ProviderAuthorizationState_PROVIDER_AUTHORIZATION_STATE_PENDING,
+		},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["state"] != "AUTHORIZED" {
+		t.Fatalf("provider account state is not public: %#v", value)
+	}
+	authorization, ok := value["authorization"].(map[string]any)
+	if !ok || authorization["method"] != "DEVICE_CODE" || authorization["state"] != "PENDING" {
+		t.Fatalf("provider authorization enums are not public: %#v", value)
+	}
+}
+
+func TestMessageMapNormalizesRunEventEnumsToOpenAPIValues(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.RunEvent{
+		Ref:         "evt-example",
+		RunRef:      "run-example",
+		Sequence:    1,
+		Type:        controlplanev1.RunEventType_RUN_EVENT_TYPE_TURN_COMPLETED,
+		MessageKind: controlplanev1.RunEventMessageKind_RUN_EVENT_MESSAGE_KIND_FINAL_MESSAGE,
+		Actor: &controlplanev1.RunEventActor{
+			Kind: controlplanev1.RunEventActorKind_RUN_EVENT_ACTOR_KIND_AGENT,
+			Ref:  "agt-example",
+			Name: "Исполнитель",
+		},
+		ToolCall: &controlplanev1.RunToolCall{
+			Ref:   "tool-example",
+			Tool:  "exec_command",
+			State: controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_SUCCEEDED,
+		},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["type"] != "TURN_COMPLETED" || value["messageKind"] != "FINAL_MESSAGE" {
+		t.Fatalf("enum события не соответствует OpenAPI: %#v", value)
+	}
+	actor, ok := value["actor"].(map[string]any)
+	if !ok || actor["kind"] != "AGENT" {
+		t.Fatalf("actor события не соответствует OpenAPI: %#v", value)
+	}
+	toolCall, ok := value["toolCall"].(map[string]any)
+	if !ok || toolCall["state"] != "SUCCEEDED" {
+		t.Fatalf("tool call события не соответствует OpenAPI: %#v", value)
+	}
+}
+
 func TestNormalizeEnumCollections(t *testing.T) {
 	t.Parallel()
 	value := map[string]any{"nextActions": []any{"NEXT_ACTION_OPEN", "NEXT_ACTION_CREATE_PROJECT"}}
 	normalize(value)
 	if !reflect.DeepEqual(value["nextActions"], []any{"OPEN", "CREATE_PROJECT"}) {
 		t.Fatalf("enum collection не нормализована: %#v", value)
+	}
+}
+
+func TestMessageMapNormalizesAccessEnumsToOpenAPIValues(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.PermissionDefinition{
+		Key:           "agent.launch",
+		Risk:          controlplanev1.PermissionRisk_PERMISSION_RISK_WRITE,
+		AllowedScopes: []controlplanev1.AccessScopeKind{controlplanev1.AccessScopeKind_ACCESS_SCOPE_KIND_RESOURCE_INSTANCE},
+		ResourceKinds: []controlplanev1.AccessResourceKind{controlplanev1.AccessResourceKind_ACCESS_RESOURCE_KIND_AGENT},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["risk"] != "WRITE" {
+		t.Fatalf("permission risk is not public: %#v", value)
+	}
+	if !reflect.DeepEqual(value["allowedScopes"], []any{"RESOURCE_INSTANCE"}) {
+		t.Fatalf("permission scopes are not public: %#v", value)
+	}
+	if !reflect.DeepEqual(value["resourceKinds"], []any{"AGENT"}) {
+		t.Fatalf("permission resources are not public: %#v", value)
 	}
 }
 
@@ -106,7 +229,7 @@ func TestMessageMapConvertsProtoInt64ToOpenAPIJSONNumber(t *testing.T) {
 	if value["version"] != float64(7) {
 		t.Fatalf("version не преобразован в JSON number: %#v", value)
 	}
-	for _, key := range []string{"operations", "nextActions"} {
+	for _, key := range []string{"operations", "validationProblems", "nextActions"} {
 		if items, ok := value[key].([]any); !ok || len(items) != 0 {
 			t.Fatalf("пустая обязательная коллекция %s не материализована: %#v", key, value)
 		}
@@ -145,6 +268,26 @@ func TestMessageMapMaterializesZeroTokenUsage(t *testing.T) {
 	}
 }
 
+func TestMessageMapMaterializesRequiredEmptyRuntimeConfigurationStrings(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.AgentRuntimeConfigurationView{
+		PublishedOverlay: &controlplanev1.ConfigOverlayVersion{
+			Ref: "cov-example", Version: 1, Revision: 1, State: "PUBLISHED",
+		},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["safeEffectiveConfig"] != "" {
+		t.Fatalf("safeEffectiveConfig не материализован: %#v", value)
+	}
+	overlay, ok := value["publishedOverlay"].(map[string]any)
+	if !ok || overlay["content"] != "" {
+		t.Fatalf("пустой published overlay не материализован: %#v", value)
+	}
+}
+
 func TestMessageMapDoesNotMaterializeAbsentOptionalScalar(t *testing.T) {
 	t.Parallel()
 
@@ -173,6 +316,86 @@ func TestMessageMapMaterializesNestedEmptyCollections(t *testing.T) {
 	conversation := conversations[0].(map[string]any)
 	if turns, ok := conversation["turns"].([]any); !ok || len(turns) != 0 {
 		t.Fatalf("пустой обязательный turns не материализован: %#v", conversation)
+	}
+}
+
+func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
+	t.Parallel()
+
+	parameters, err := structpb.NewStruct(map[string]any{"name": "Продажи"})
+	if err != nil {
+		t.Fatalf("create parameters: %v", err)
+	}
+	value, err := messageMap(&controlplanev1.AssistantConversation{
+		Ref: "cnv-example", Version: 3, Title: "Диалог", TitleSource: "SERVER_DEFAULT", TitleRevision: 1,
+		Context: &controlplanev1.AssistantContextDescriptor{Route: "/onboarding"},
+		Turns: []*controlplanev1.AssistantTurn{{
+			Ref: "pln-example", Sequence: 2, Role: "ASSISTANT", State: "COMPLETED",
+			Plan: &controlplanev1.AssistantPlan{
+				Ref: "pln-example", Version: 1, Revision: 1, ConversationRef: "cnv-example",
+				State: controlplanev1.AssistantPlanState_ASSISTANT_PLAN_STATE_DRAFT, AuditSummary: "Создать проект",
+				ContentDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Operations: []*controlplanev1.AssistantPlanOperation{{
+					Ref: "operation-001", Type: controlplanev1.AssistantPlanOperation_TYPE_CREATE_PROJECT,
+					Action: controlplanev1.AssistantPlanOperation_ACTION_CREATE, TargetKind: "PROJECT", TargetName: "Продажи",
+					Parameters: parameters,
+				}},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	context := value["context"].(map[string]any)
+	for _, key := range []string{"entityKind", "entityRef", "entityName"} {
+		if context[key] != "" {
+			t.Fatalf("required assistant context field %s = %#v", key, context[key])
+		}
+	}
+	turn := value["turns"].([]any)[0].(map[string]any)
+	plan := turn["plan"].(map[string]any)
+	if plan["state"] != "DRAFT" || plan["applied"] != false {
+		t.Fatalf("assistant plan state is not public: %#v", plan)
+	}
+	operation := plan["operations"].([]any)[0].(map[string]any)
+	if operation["type"] != "CREATE_PROJECT" || operation["action"] != "CREATE" {
+		t.Fatalf("assistant operation enums are not public: %#v", operation)
+	}
+	target := operation["target"].(map[string]any)
+	if target["kind"] != "PROJECT" || target["name"] != "Продажи" {
+		t.Fatalf("assistant operation target is invalid: %#v", target)
+	}
+	if !reflect.DeepEqual(operation["parameters"], map[string]any{"name": "Продажи"}) {
+		t.Fatalf("protobuf Struct was corrupted: %#v", operation["parameters"])
+	}
+	if problems, ok := operation["validationProblems"].([]any); !ok || len(problems) != 0 {
+		t.Fatalf("assistant operation validation problems are invalid: %#v", operation)
+	}
+}
+
+func TestMessageMapMaterializesEmptyAssistantPlanReceiptCollections(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.AssistantPlanReceipt{
+		Ref: "rcp-example", PlanRef: "pln-example", PlanRevision: 1,
+		Outcome: "APPLIED", Operations: []*controlplanev1.AssistantPlanOperationReceipt{{
+			OperationRef: "operation-001", ResourceRef: "prj-example", Outcome: "APPLIED", AuditRef: "aud-example",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	operationReceipts, ok := value["operationReceipts"].([]any)
+	if !ok || len(operationReceipts) != 1 {
+		t.Fatalf("assistant receipt operations are not normalized: %#v", value)
+	}
+	if _, exists := value["operations"]; exists {
+		t.Fatalf("internal receipt operations leaked into the public response: %#v", value)
+	}
+	for _, key := range []string{"conflicts", "auditRefs", "createdResourceRefs"} {
+		if items, ok := value[key].([]any); !ok || len(items) != 0 {
+			t.Fatalf("empty assistant receipt collection %s is not materialized: %#v", key, value)
+		}
 	}
 }
 

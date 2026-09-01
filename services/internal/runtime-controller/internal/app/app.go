@@ -88,13 +88,15 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
 	manager, err := workload.InCluster(workload.Config{
-		Environment: config.Environment, Namespace: config.Namespace, ControllerPodUID: config.PodUID, ControllerPodIP: config.PodIP,
+		Environment: config.Environment, ControlNamespace: config.ControlNamespace, RuntimeNamespace: config.RuntimeNamespace,
+		ControllerPodUID: config.PodUID, ControllerPodIP: config.PodIP,
 		CallbackTLSServerName: config.CallbackTLSServerName, CallbackClientCASecret: config.CallbackClientCASecret,
 		CallbackClientTLSSecret: config.CallbackClientTLSSecret, ProviderHTTPSProxy: config.ProviderHTTPSProxy,
-		StorageClass: config.StorageClass, SessionPVCSize: config.SessionPVCSize, RunnerServiceAccount: config.RunnerServiceAccount,
+		KubernetesAPIServiceIP: config.KubernetesAPIServiceIP,
+		StorageClass:           config.StorageClass, SessionPVCSize: config.SessionPVCSize, RunnerServiceAccount: config.RunnerServiceAccount,
 		PromotedRoleImageRepository: config.PromotedRoleImageRepository, RoleRuntimeContractRevision: config.RoleRuntimeContractRevision,
 		DefaultRoleImageReference: config.DefaultRoleImageReference,
-		RoleRuntimeContractSHA256: config.RoleRuntimeContractSHA256, TurnCPUMilli: config.TurnCPUMilli, TurnMemoryBytes: config.TurnMemoryBytes,
+		RoleRuntimeContractSHA256: config.RoleRuntimeContractSHA256,
 	})
 	if err != nil {
 		return err
@@ -117,7 +119,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	unitReadiness.Set(false, "infrastructure_starting")
 	metrics.SetReady(false)
 	assistantReadiness.Set(false, "assistant_runtime_starting")
-	runtime := newRuntime(control, manager, coordinator, config, assistantReadiness, logger)
+	runtime := newRuntime(control.Runtime, manager, coordinator, config, assistantReadiness, logger)
 	technical := technicalServer(lifecycle, config, unitReadiness, assistantReadiness, metrics)
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveHTTP(technical, config.ShutdownTimeout), callbackServer.Run,

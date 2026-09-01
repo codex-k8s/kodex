@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artifact-retention
+  labels:
+    app.kubernetes.io/name: artifact-retention
+    app.kubernetes.io/component: retention-job
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: artifact-retention
+      app.kubernetes.io/component: retention-job
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: artifact-retention
+        app.kubernetes.io/component: retention-job
+    spec:
+      serviceAccountName: artifact-retention
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 35
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: artifact-retention
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/artifact-retention@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: {name: artifact-retention-runtime}
+          env:
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['kodex.dev/environment']"}}
+            - name: ARTIFACT_RETENTION_INSTANCE_ID
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+            - {name: ARTIFACT_RETENTION_POSTGRES_DSN_FILE, value: /var/run/secrets/kodex/artifact-retention/postgres-runtime/dsn}
+            - {name: ARTIFACT_RETENTION_POSTGRES_CA_FILE, value: /var/run/config/kodex/artifact-retention/postgres/ca.pem}
+            - name: ARTIFACT_RETENTION_OBJECT_STORAGE_ENDPOINT
+              valueFrom: {secretKeyRef: {name: kodex-external-s3, key: endpoint}}
+            - name: ARTIFACT_RETENTION_OBJECT_STORAGE_REGION
+              valueFrom: {secretKeyRef: {name: kodex-external-s3, key: region}}
+            - name: ARTIFACT_RETENTION_OBJECT_STORAGE_BUCKET
+              valueFrom: {secretKeyRef: {name: kodex-external-s3, key: bucket}}
+            - {name: ARTIFACT_RETENTION_OBJECT_STORAGE_ACCESS_KEY_FILE, value: /var/run/secrets/kodex/artifact-retention/object-storage/access-key-id}
+            - {name: ARTIFACT_RETENTION_OBJECT_STORAGE_SECRET_KEY_FILE, value: /var/run/secrets/kodex/artifact-retention/object-storage/secret-access-key}
+            - {name: ARTIFACT_RETENTION_OBJECT_STORAGE_USE_PATH_STYLE, value: "true"}
+            - {name: ARTIFACT_RETENTION_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL, value: "false"}
+            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: otel-collector.observability.svc:4317}
+            - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
+            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/kodex/artifact-retention/observability/otel-ca.pem}
+            - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
+            - {name: SENTRY_DSN_FILE, value: /var/run/secrets/kodex/artifact-retention/observability/sentry-dsn}
+            - {name: SENTRY_EXPECTED_HOST, value: sentry-relay.observability.svc:8443}
+          ports:
+            - {name: metrics, containerPort: 9090, protocol: TCP}
+          startupProbe: &technicalProbe
+            httpGet: {path: /healthz, port: metrics}
+            timeoutSeconds: 2
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            <<: *technicalProbe
+            httpGet: {path: /readyz, port: metrics}
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet: {path: /healthz, port: metrics}
+            timeoutSeconds: 2
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: "2", memory: 256Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: postgres-runtime, mountPath: /var/run/secrets/kodex/artifact-retention/postgres-runtime, readOnly: true}
+            - {name: postgres-ca, mountPath: /var/run/config/kodex/artifact-retention/postgres, readOnly: true}
+            - {name: object-storage, mountPath: /var/run/secrets/kodex/artifact-retention/object-storage, readOnly: true}
+            - {name: otel-ca, mountPath: /var/run/config/kodex/artifact-retention/observability, readOnly: true}
+            - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/artifact-retention/observability, readOnly: true}
+      volumes:
+        - name: postgres-runtime
+          secret: {secretName: artifact-retention-postgres-runtime, defaultMode: 0440}
+        - name: postgres-ca
+          configMap:
+            name: control-plane-postgresql-ca
+            defaultMode: 0440
+            items: [{key: ca.pem, path: ca.pem}]
+        - name: object-storage
+          secret:
+            secretName: kodex-external-s3
+            defaultMode: 0440
+            items:
+              - {key: access-key, path: access-key-id}
+              - {key: secret-key, path: secret-access-key}
+        - name: otel-ca
+          configMap: {name: kodex-otel-ca, defaultMode: 0440}
+        - name: sentry-dsn
+          secret: {secretName: kodex-sentry, defaultMode: 0440}

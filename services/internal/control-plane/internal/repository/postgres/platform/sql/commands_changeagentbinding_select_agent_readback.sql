@@ -10,6 +10,7 @@ SELECT a.ref, p.ref, role.ref, role.name, a.name, a.purpose,
            WHERE binding.target_kind = 'KNOWLEDGE'
              AND binding.target_ref = a.ref
              AND artifact.scan_state = 'CLEAN'
+             AND artifact.lifecycle_state = 'ACTIVE'
        ), '{}'),
        a.created_at, a.updated_at
 FROM control_plane.agents a

@@ -6,6 +6,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - serviceaccounts-rbac.yaml
+  - runtime-materialization-admission.yaml
   - networkpolicy.yaml
   - poddisruptionbudget.yaml
   - servicemonitor.yaml

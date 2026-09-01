@@ -72,6 +72,11 @@ spec:
             - {name: CONTROL_API_GATEWAY_PER_SUBJECT_WEBSOCKET_CONCURRENCY, value: "4"}
             - {name: CONTROL_API_GATEWAY_CONTROL_PLANE_TARGET, value: "dns:///control-plane.kodex-system.svc:8443"}
             - {name: CONTROL_API_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME, value: control-plane.kodex-system.svc.cluster.local}
+            - {name: CONTROL_API_GATEWAY_SECRET_BROKER_TARGET, value: "dns:///secret-broker.kodex-system.svc:8443"}
+            - {name: CONTROL_API_GATEWAY_SECRET_BROKER_TLS_SERVER_NAME, value: secret-broker.kodex-system.svc.cluster.local}
+            - {name: CONTROL_API_GATEWAY_SECRET_BROKER_CA_FILE, value: /var/run/config/kodex/control-api-gateway/secret-broker/ca.pem}
+            - {name: CONTROL_API_GATEWAY_SECRET_BROKER_CLIENT_CERTIFICATE_FILE, value: /var/run/secrets/kodex/control-api-gateway/control-plane-client/tls.crt}
+            - {name: CONTROL_API_GATEWAY_SECRET_BROKER_CLIENT_PRIVATE_KEY_FILE, value: /var/run/secrets/kodex/control-api-gateway/control-plane-client/tls.key}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/kodex/control-api-gateway/observability/otel-ca.pem}
@@ -112,6 +117,7 @@ spec:
             - {name: session-keys, mountPath: /var/run/secrets/kodex/control-api-gateway/session, readOnly: true}
             - {name: internal-rpc-authority-workload-tls, mountPath: /var/run/secrets/kodex/control-api-gateway/control-plane-client, readOnly: true}
             - {name: internal-rpc-ca, mountPath: /var/run/config/kodex/control-api-gateway/control-plane, readOnly: true}
+            - {name: secret-broker-ca, mountPath: /var/run/config/kodex/control-api-gateway/secret-broker, readOnly: true}
             - {name: nats-client-tls, mountPath: /var/run/secrets/kodex/control-api-gateway/nats-client, readOnly: true}
             - {name: nats-credential, mountPath: /var/run/secrets/kodex/control-api-gateway/nats, readOnly: true}
             - {name: nats-ca, mountPath: /var/run/config/kodex/control-api-gateway/nats, readOnly: true}
@@ -126,6 +132,8 @@ spec:
         - name: session-keys
           secret: {secretName: control-api-gateway-session-keys, defaultMode: 0440}
         - name: internal-rpc-ca
+          configMap: {name: kodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
+        - name: secret-broker-ca
           configMap: {name: kodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: nats-client-tls
           secret: {secretName: control-api-gateway-nats-client-tls, defaultMode: 0440, items: [{key: tls.crt, path: tls.crt}, {key: tls.key, path: tls.key}]}

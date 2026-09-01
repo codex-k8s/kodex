@@ -7,8 +7,14 @@ var (
 	queryRuntimeClaimexecutionExpireStaleLeases string
 	//go:embed sql/runtime_claimexecution_select_claimable_agent_executions.sql
 	queryRuntimeClaimExecutionSelectClaimableAgentExecutions string
+	//go:embed sql/runtime_claimexecution_lock_provider_account.sql
+	queryRuntimeClaimexecutionLockProviderAccount string
+	//go:embed sql/runtime_claimexecution_count_active_provider_leases.sql
+	queryRuntimeClaimexecutionCountActiveProviderLeases string
 	//go:embed sql/runtime_claimexecution_insert_runtime_revision.sql
 	queryRuntimeClaimExecutionInsertRuntimeRevision string
+	//go:embed sql/runtime_claimexecution_select_assistant_context.sql
+	queryRuntimeClaimexecutionSelectAssistantContext string
 	//go:embed sql/runtime_claimexecution_insert_runtime_leases_ref_run_id_workload_instance.sql
 	queryRuntimeClaimexecutionInsertRuntimeLeasesRefRunIdWorkloadInstance string
 	//go:embed sql/runtime_claimexecution_update_run_nodes_state_started_at_version.sql
@@ -23,6 +29,16 @@ var (
 	queryRuntimeRenewexecutionUpdateRuntimeLeasesExpiresAtUpdatedAt string
 	//go:embed sql/runtime_reportprogress_update_run_nodes_progress_summary_version.sql
 	queryRuntimeReportprogressUpdateRunNodesProgressSummaryVersion string
+	//go:embed sql/runtime_commitprovidercredentialrefresh_lock_provider_account.sql
+	queryRuntimeCommitprovidercredentialrefreshLockProviderAccount string
+	//go:embed sql/runtime_commitprovidercredentialrefresh_select_pinned_credential.sql
+	queryRuntimeCommitprovidercredentialrefreshSelectPinnedCredential string
+	//go:embed sql/runtime_commitprovidercredentialrefresh_select_existing_revision.sql
+	queryRuntimeCommitprovidercredentialrefreshSelectExistingRevision string
+	//go:embed sql/runtime_commitprovidercredentialrefresh_insert_revision.sql
+	queryRuntimeCommitprovidercredentialrefreshInsertRevision string
+	//go:embed sql/runtime_commitprovidercredentialrefresh_activate_revision.sql
+	queryRuntimeCommitprovidercredentialrefreshActivateRevision string
 	//go:embed sql/runtime_completeexecution_update_runtime_leases_state_updated_at.sql
 	queryRuntimeCompleteexecutionUpdateRuntimeLeasesStateUpdatedAt string
 	//go:embed sql/runtime_completeexecution_update_run_nodes_state_progress_summary_safe_error_code.sql
@@ -31,10 +47,14 @@ var (
 	queryRuntimeCompleteexecutionUpdateSessionTurnsStateCompletedAt string
 	//go:embed sql/runtime_completeexecution_select_runs_id.sql
 	queryRuntimeCompleteexecutionSelectRunsId string
+	//go:embed sql/runtime_completeexecution_upsert_session_storage.sql
+	queryRuntimeCompleteexecutionUpsertSessionStorage string
 	//go:embed sql/runtime_completeexecution_select_agent_capability.sql
 	queryRuntimeCompleteexecutionSelectAgentCapability string
 	//go:embed sql/runtime_completeexecution_lock_root_run.sql
 	queryRuntimeCompleteexecutionLockRootRun string
+	//go:embed sql/runtime_completeexecution_mark_provider_reauthorization_required.sql
+	queryRuntimeCompleteexecutionMarkProviderReauthorizationRequired string
 	//go:embed sql/runtime_completeexecution_update_run_usage.sql
 	queryRuntimeCompleteexecutionUpdateRunUsage string
 	//go:embed sql/runtime_completeexecution_update_root_usage.sql
@@ -99,6 +119,18 @@ var (
 	queryRuntimeDelegateexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt string
 	//go:embed sql/runtime_delegateexecution_insert_run_nodes_ref_root_run_id_parent_node_id.sql
 	queryRuntimeDelegateexecutionInsertRunNodesRefRootRunIdParentNodeId string
+	//go:embed sql/runtime_delegateexecution_materialize_planned_node.sql
+	queryRuntimeDelegateexecutionMaterializePlannedNode string
+	//go:embed sql/runtime_proposeassistantmetadata_update_conversation.sql
+	queryRuntimeProposeassistantmetadataUpdateConversation string
+	//go:embed sql/runtime_proposerunmetadata_update_run.sql
+	queryRuntimeProposerunmetadataUpdateRun string
+	//go:embed sql/runtime_recordtoolcall_select_actor_and_grant.sql
+	queryRuntimeRecordtoolcallSelectActorAndGrant string
+	//go:embed sql/runtime_recordtoolcall_update_event.sql
+	queryRuntimeRecordtoolcallUpdateEvent string
+	//go:embed sql/runtime_recordtoolcall_update_outbox.sql
+	queryRuntimeRecordtoolcallUpdateOutbox string
 	//go:embed sql/runtime_delegateexecution_insert_delegation_edge.sql
 	queryRuntimeDelegateexecutionInsertDelegationEdge string
 	//go:embed sql/runtime_delegateexecution_insert_callback_edge.sql

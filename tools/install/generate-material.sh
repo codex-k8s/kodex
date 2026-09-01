@@ -99,14 +99,16 @@ for authority in pki pki-buildkit-push pki-node-pull pki-public; do
 done
 
 issue_certificate() {
-  local source_json=$1 authority profile common_name alt_names cache_key directory ext_file
+  local source_json=$1 authority profile common_name alt_names uri_sans cache_key directory ext_file
+  local subject_alt_name=""
   authority=$(jq -er '.authority' <<<"$source_json")
   profile=$(jq -er '.profile' <<<"$source_json")
   common_name=$(jq -er '.arguments.common_name' <<<"$source_json")
   alt_names=$(jq -r '.arguments.alt_names // ""' <<<"$source_json")
+  uri_sans=$(jq -r '.arguments.uri_sans // ""' <<<"$source_json")
   common_name=${common_name//registry-pull.invalid/$promoted_pull_host}
   alt_names=${alt_names//registry-pull.invalid/$promoted_pull_host}
-  cache_key=$(printf '%s\0%s\0%s\0%s' "$authority" "$profile" "$common_name" "$alt_names" |
+  cache_key=$(printf '%s\0%s\0%s\0%s\0%s' "$authority" "$profile" "$common_name" "$alt_names" "$uri_sans" |
     sha256sum | awk '{print $1}')
   directory="$output_directory/certificates/$cache_key"
   [[ -s "$directory/tls.crt" && -s "$directory/tls.key" ]] && {
@@ -127,16 +129,21 @@ issue_certificate() {
       'subjectKeyIdentifier=hash' \
       'authorityKeyIdentifier=keyid,issuer'
     if [[ -n "$alt_names" ]]; then
-      printf 'subjectAltName='
-      awk -v list="$alt_names" 'BEGIN {
+      subject_alt_name=$(awk -v list="$alt_names" 'BEGIN {
         count=split(list, names, ",");
-        for (i=1; i<=count; i++) {
-          printf "%sDNS:%s", i == 1 ? "" : ",", names[i]
-        }
-        printf "\n"
-      }'
+        for (i=1; i<=count; i++) printf "%sDNS:%s", i == 1 ? "" : ",", names[i]
+      }')
     elif [[ "$common_name" == *.* ]]; then
-      printf 'subjectAltName=DNS:%s\n' "$common_name"
+      subject_alt_name="DNS:$common_name"
+    fi
+    if [[ -n "$uri_sans" ]]; then
+      while IFS= read -r uri; do
+        [[ -n "$uri" ]] || continue
+        subject_alt_name+="${subject_alt_name:+,}URI:$uri"
+      done < <(tr ',' '\n' <<<"$uri_sans")
+    fi
+    if [[ -n "$subject_alt_name" ]]; then
+      printf 'subjectAltName=%s\n' "$subject_alt_name"
     fi
   } >"$ext_file"
   openssl x509 -req -sha256 -days 825 \
@@ -165,13 +172,16 @@ write_value() {
 postgresql_bootstrap_password="$output_directory/postgresql/bootstrap-password"
 openssl rand -hex 32 >"$postgresql_bootstrap_password"
 for role in \
-  control_plane_migrator control_plane_runtime_g1 internal_rpc_authority_migrator \
+  control_plane_migrator control_plane_runtime_g1 artifact_retention_runtime_g1 internal_rpc_authority_migrator \
+  kodex_backup_reader \
   ira_restore_controller_g1 ira_publisher_g4 ira_readback_attestor_g4 \
   ira_role_image_builder_issuer_g1 ira_image_admission_issuer_g1 \
   ira_image_promotion_issuer_g1 ira_automation_scheduler_issuer_g1 \
-  ira_control_api_gateway_issuer_g1 ira_control_plane_verifier_g1 \
+  ira_session_archive_issuer_g1 ira_secret_broker_issuer_g1 \
+  ira_control_api_gateway_issuer_g1 ira_control_plane_issuer_g1 ira_control_plane_verifier_g1 \
   ira_control_plane_resolver_g1 ira_integration_gateway_issuer_g1 \
-  ira_interaction_gateway_issuer_g1 ira_runtime_controller_issuer_g1; do
+  ira_interaction_gateway_issuer_g1 ira_runtime_controller_issuer_g1 \
+  ira_secret_broker_verifier_g1; do
   openssl rand -hex 32 >"$output_directory/postgresql/roles/$role"
 done
 
@@ -190,6 +200,9 @@ create_database_material control_plane_migrator control_plane \
 create_database_material control_plane_runtime_g1 control_plane \
   control-plane-postgresql-rw.kodex-system.svc.cluster.local \
   /var/run/config/kodex/control-plane/postgres/ca.pem
+create_database_material artifact_retention_runtime_g1 control_plane \
+  control-plane-postgresql-rw.kodex-system.svc.cluster.local \
+  /var/run/config/kodex/artifact-retention/postgres/ca.pem
 create_database_material internal_rpc_authority_migrator internal_rpc_authority \
   internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local \
   /var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem
@@ -203,6 +216,8 @@ put_material kodex/control-plane/postgres-migration dsn \
   "$output_directory/database/control_plane_migrator/dsn"
 put_material kodex/control-plane/postgres-runtime dsn \
   "$output_directory/database/control_plane_runtime_g1/dsn"
+put_material kodex/artifact-retention/postgres-runtime dsn \
+  "$output_directory/database/artifact_retention_runtime_g1/dsn"
 put_material internal-rpc-authority/postgres-migration dsn \
   "$output_directory/database/internal_rpc_authority_migrator/dsn"
 
@@ -234,6 +249,23 @@ jq -cn --arg certificate_sha256 "$control_api_certificate_sha256" '{
 }' >"$output_directory/control-api/public-tls-material.json"
 put_material kodex/control-api-gateway/public-tls-material material.json \
   "$output_directory/control-api/public-tls-material.json"
+
+runtime_execution_tls_source=$(jq -cn '{
+  authority:"pki", profile:"kodex-runtime-execution-client",
+  arguments:{
+    common_name:"agent-runner.kodex-runtime.svc.cluster.local",
+    alt_names:"agent-runner,agent-runner.kodex-runtime.svc,agent-runner.kodex-runtime.svc.cluster.local",
+    uri_sans:"spiffe://kodex.local/ns/kodex-runtime/sa/agent-runner",
+    ttl:"720h"
+  }
+}')
+runtime_execution_tls_directory=$(issue_certificate "$runtime_execution_tls_source")
+put_material kodex/runtime-execution-client/tls tls.crt \
+  "$runtime_execution_tls_directory/tls.crt"
+put_material kodex/runtime-execution-client/tls tls.key \
+  "$runtime_execution_tls_directory/tls.key"
+put_material kodex/runtime-execution-client/tls ca.crt \
+  "$output_directory/authorities/pki/ca.crt"
 
 create_registry_credential() {
   local name=$1 host=$2 username_file=${3:-} password_file=${4:-}
@@ -287,6 +319,16 @@ create_registry_credential promotion "$internal_promotion_host"
 create_registry_credential release-source "$release_registry_host" \
   "$release_registry_username_file" "$release_registry_password_file"
 
+# Staging-read registry принимает разные application identities. Общий ACL
+# содержит только их bcrypt-записи и не раздаёт потребителям общий пароль.
+staging_read_acl_directory="$output_directory/registry/staging-read-authorized"
+mkdir -p "$staging_read_acl_directory"
+: >"$staging_read_acl_directory/htpasswd"
+for name in staging-read scanner signer admission promotion-staging; do
+  cat -- "$output_directory/registry/$name/htpasswd" >>"$staging_read_acl_directory/htpasswd"
+done
+chmod 0600 "$staging_read_acl_directory/htpasswd"
+
 for name in pull buildkit-base-pull staging-read evidence-probe evidence-admission evidence-promotion admin scanner signer admission promotion-staging promotion; do
   for field in username password; do
     put_material "kodex/image-registry/$name" "$field" "$output_directory/registry/$name/$field"
@@ -294,6 +336,8 @@ for name in pull buildkit-base-pull staging-read evidence-probe evidence-admissi
   put_material "kodex/image-registry/$name" htpasswd "$output_directory/registry/$name/htpasswd"
   put_material "kodex/image-registry/$name" dockerconfigjson "$output_directory/registry/$name/dockerconfig.json"
 done
+put_material kodex/image-registry/staging-read-authorized htpasswd \
+  "$staging_read_acl_directory/htpasswd"
 put_material kodex/role-image-builder/input-read docker-config \
   "$output_directory/registry/input-read/dockerconfig.json"
 put_material kodex/release-registry/pull dockerconfigjson \
@@ -317,7 +361,7 @@ put_material kodex/image-admission/signing public_key "$output_directory/registr
     --output "$output_directory/crypto/authority-bootstrap"
 )
 
-for worker in automation-scheduler integration-gateway interaction-gateway runtime-controller role-image-builder image-admission image-promotion; do
+for worker in automation-scheduler session-archive integration-gateway interaction-gateway runtime-controller role-image-builder image-admission image-promotion secret-broker control-plane; do
   put_material "kodex/platform-worker-grants/$worker" private.jwk \
     "$output_directory/crypto/platform-worker/$worker/private.jwk"
   put_material "kodex/platform-worker-grants/$worker" public-jwk \

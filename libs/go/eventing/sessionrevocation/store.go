@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/eventing/natsjetstream"
@@ -102,9 +103,39 @@ func (store *Store) Revoke(ctx context.Context, sessionID string) error {
 	ack, err := store.jetstream.PublishMsg(write, &nats.Msg{Subject: subject(sessionID), Data: []byte(revokedValue)},
 		jetstream.WithMsgID("session-revocation:"+sessionID), jetstream.WithExpectStream(StreamName), jetstream.WithRetryAttempts(0))
 	if err != nil || ack == nil || ack.Stream != StreamName || ack.Sequence == 0 {
+		revoked, readErr := store.Revoked(ctx, sessionID)
+		if readErr == nil && revoked {
+			return nil
+		}
 		return errors.New("persist session revocation")
 	}
 	return nil
+}
+
+// ConsumeOnce атомарно закрывает browser session. Только первый caller,
+// записавший revocation при отсутствии прежней записи, получает won=true.
+func (store *Store) ConsumeOnce(ctx context.Context, sessionID string) (bool, error) {
+	if store == nil || store.jetstream == nil || uuid.Validate(sessionID) != nil {
+		return false, errors.New("session consumption input is invalid")
+	}
+	write, cancel := context.WithTimeout(ctx, store.timeout)
+	defer cancel()
+	message := &nats.Msg{Subject: subject(sessionID), Data: []byte(revokedValue), Header: nats.Header{}}
+	message.Header.Set(jetstream.MsgIDHeader, "session-consumption:"+uuid.NewString())
+	message.Header.Set(jetstream.ExpectedStreamHeader, StreamName)
+	message.Header.Set(jetstream.ExpectedLastSubjSeqHeader, strconv.FormatUint(0, 10))
+	ack, err := store.jetstream.PublishMsg(write, message, jetstream.WithRetryAttempts(0))
+	if err == nil && ack != nil && ack.Stream == StreamName && ack.Sequence > 0 {
+		return true, nil
+	}
+	revoked, readErr := store.Revoked(ctx, sessionID)
+	if readErr != nil {
+		return false, errors.New("read session consumption result")
+	}
+	if revoked {
+		return false, nil
+	}
+	return false, errors.New("persist session consumption")
 }
 
 func (store *Store) Revoked(ctx context.Context, sessionID string) (bool, error) {

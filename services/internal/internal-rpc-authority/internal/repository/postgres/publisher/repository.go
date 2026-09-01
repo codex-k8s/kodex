@@ -150,8 +150,22 @@ func (repository *Repository) AppendSnapshot(
 func (repository *Repository) SnapshotPublicationReady(
 	ctx context.Context,
 	value model.AuthoritySnapshotPublication,
-	expectedReadbacks int,
+	expectedTargets []model.SnapshotReadbackTarget,
 ) error {
+	if len(expectedTargets) == 0 {
+		return errors.New("publisher snapshot expected readback set is empty")
+	}
+	workloadIDs := make([]string, 0, len(expectedTargets))
+	roles := make([]string, 0, len(expectedTargets))
+	workloadGenerations := make([]int64, 0, len(expectedTargets))
+	for _, target := range expectedTargets {
+		workloadIDs = append(workloadIDs, target.WorkloadID)
+		roles = append(roles, target.Role)
+		workloadGenerations = append(
+			workloadGenerations,
+			int64(target.WorkloadGeneration),
+		)
+	}
 	var ready bool
 	if err := repository.pool.QueryRow(
 		ctx,
@@ -160,7 +174,10 @@ func (repository *Repository) SnapshotPublicationReady(
 			"publication_intent_id":   value.IntentID,
 			"source_revision":         value.SourceRevision,
 			"source_digest_sha256":    value.SourceDigestSHA256,
-			"expected_readback_count": expectedReadbacks,
+			"expected_readback_count": len(expectedTargets),
+			"expected_workload_ids":   workloadIDs,
+			"expected_roles":          roles,
+			"expected_generations":    workloadGenerations,
 		},
 	).Scan(&ready); err != nil {
 		return fmt.Errorf("promote publisher snapshot: %w", err)

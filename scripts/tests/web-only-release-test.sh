@@ -31,6 +31,165 @@ for workload in kodex-postgresql kodex-nats; do
     'select(.kind == "StatefulSet" and .metadata.name == strenv(WORKLOAD_NAME))' "$render" >/dev/null ||
     fail "stateful dependency is absent: $workload"
 done
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "session-archive" and
+    .metadata.namespace == "kodex-system" and
+    any(.spec.template.spec.containers[];
+      .name == "session-archive" and
+      .image == "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/session-archive@sha256:0000000000000000000000000000000000000000000000000000000000000000" and
+      (.image as $sessionImage |
+        any(.env[];
+          .name == "SESSION_ARCHIVE_WORKER_IMAGE" and .value == $sessionImage))) and
+    any(.spec.template.spec.containers[];
+      .name == "internal-rpc-authority-issuer") and
+    any(.spec.template.spec.containers[];
+      .name == "platform-worker-grant-agent")) and
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "session-archive-exact-paths" and
+    any(.spec.egress[];
+      any(.to[]?;
+        .ipBlock.cidr == "__KODEX_KUBERNETES_API_SERVICE_CIDR__") and
+      any(.ports[]?; .protocol == "TCP" and .port == 443)))
+' >/dev/null || fail 'session archive release wiring is incomplete'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "control-plane" and
+    any(.spec.template.spec.containers[];
+      .name == "control-plane" and
+      any(.env[]; .name == "CONTROL_PLANE_SECRET_BROKER_TARGET" and
+        .value == "dns:///secret-broker.kodex-system.svc:8443") and
+      any(.env[]; .name == "CONTROL_PLANE_SECRET_BROKER_TLS_SERVER_NAME" and
+        .value == "secret-broker.kodex-system.svc.cluster.local") and
+      any(.env[]; .name == "CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TARGET" and
+        .value == "dns:///control-plane.kodex-system.svc:8443") and
+      any(.env[]; .name == "CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TLS_SERVER_NAME" and
+        .value == "control-plane.kodex-system.svc.cluster.local")) and
+    any(.spec.template.spec.containers[];
+      .name == "internal-rpc-authority-issuer" and
+      .readinessProbe.httpGet.path == "/readyz" and
+      any(.env[]; .name == "INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER" and
+        .valueFrom.secretKeyRef.name == "internal-rpc-authority-control-plane-issuer-postgresql")) and
+    any(.spec.template.spec.containers[];
+      .name == "control-plane-platform-worker-grant-agent" and
+      .readinessProbe.httpGet.path == "/readyz") and
+    ([.spec.template.spec.volumes[]?.secret.secretName |
+      select(. == "internal-rpc-authority-control-plane-issuer-key" or
+        . == "internal-rpc-authority-control-plane-issuer-postgresql" or
+        . == "internal-rpc-authority-control-plane-issuer-readback-credential" or
+        . == "internal-rpc-authority-control-plane-issuer-readback-possession" or
+        . == "internal-rpc-authority-control-plane-issuer-restore-credential" or
+        . == "internal-rpc-authority-control-plane-issuer-restore-ack")] | unique | length) == 6) and
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "secret-broker" and
+    any(.spec.template.spec.containers[];
+      .name == "secret-broker" and
+      any(.env[]; .name == "INTERNAL_RPC_AUTHORITY_VERIFIER_SOCKET" and
+        .value == "/run/kodex/internal-rpc-authority/verifier.sock")) and
+    any(.spec.template.spec.containers[];
+      .name == "internal-rpc-authority-verifier" and
+      .readinessProbe.httpGet.path == "/readyz" and
+      any(.env[]; .name == "INTERNAL_RPC_AUTHORITY_WORKLOAD_ID" and .value == "secret-broker") and
+      any(.env[]; .name == "INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER" and
+        .valueFrom.secretKeyRef.name == "internal-rpc-authority-secret-broker-verifier-postgresql")) and
+    ([.spec.template.spec.volumes[]?.secret.secretName |
+      select(. == "internal-rpc-authority-secret-broker-verifier-postgresql" or
+        . == "internal-rpc-authority-secret-broker-verifier-readback-credential" or
+        . == "internal-rpc-authority-secret-broker-verifier-readback-possession" or
+        . == "internal-rpc-authority-secret-broker-verifier-restore-credential" or
+        . == "internal-rpc-authority-secret-broker-verifier-restore-ack")] | unique | length) == 5)
+' >/dev/null || fail 'provider credential authority sidecars and readiness are incomplete'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[]; .kind == "NetworkPolicy" and
+    .metadata.name == "control-plane-internal-rpc-authority-issuer-exact-paths" and
+    any(.spec.egress[]; any(.to[]?.podSelector.matchLabels?;
+      .["app.kubernetes.io/name"] == "kodex-postgresql") and
+      any(.ports[]; .protocol == "TCP" and .port == 5432)) and
+    any(.spec.egress[]; any(.to[]?.podSelector.matchLabels?;
+      .["app.kubernetes.io/name"] == "internal-rpc-authority-readback-attestor") and
+      any(.ports[]; .protocol == "TCP" and .port == 8443)) and
+    any(.spec.egress[]; any(.to[]?.podSelector.matchLabels?;
+      .["app.kubernetes.io/name"] == "internal-rpc-authority-restore-controller") and
+      any(.ports[]; .protocol == "TCP" and .port == 8443))) and
+  any(.[]; .kind == "NetworkPolicy" and .metadata.name == "control-plane-exact-runtime-paths" and
+    any(.spec.egress[]; any(.to[]?.podSelector.matchLabels?;
+      .["app.kubernetes.io/name"] == "secret-broker" and
+      .["app.kubernetes.io/component"] == "secret-broker") and
+      any(.ports[]; .protocol == "TCP" and .port == 8443))) and
+  any(.[]; .kind == "NetworkPolicy" and .metadata.name == "secret-broker-exact-runtime-paths" and
+    any(.spec.ingress[]; any(.from[]?.podSelector.matchLabels?;
+      .["app.kubernetes.io/name"] == "control-plane") and
+      any(.ports[]; .protocol == "TCP" and .port == 8443))) and
+  any(.[]; .kind == "Service" and .metadata.name == "secret-broker" and
+    any(.spec.ports[]; .name == "verify-metrics" and .port == 9092)) and
+  any(.[]; .kind == "Role" and .metadata.name == "internal-rpc-authority-publisher" and
+    (["internal-rpc-authority-control-plane-issuer-key",
+      "internal-rpc-authority-control-plane-issuer-readback-credential",
+      "internal-rpc-authority-control-plane-issuer-readback-possession",
+      "internal-rpc-authority-control-plane-issuer-restore-credential",
+      "internal-rpc-authority-control-plane-issuer-restore-ack",
+      "internal-rpc-authority-secret-broker-verifier-readback-credential",
+      "internal-rpc-authority-secret-broker-verifier-readback-possession",
+      "internal-rpc-authority-secret-broker-verifier-restore-credential",
+      "internal-rpc-authority-secret-broker-verifier-restore-ack"] -
+      .rules[0].resourceNames | length) == 0 and
+    (.rules[0].verbs | sort) == ["get", "update"]) and
+  any(.[]; .kind == "Role" and .metadata.name == "secret-broker-runtime-secrets" and
+    (.rules[0].resources | sort) == ["secrets"] and
+    (.rules[0].verbs | sort) == ["create", "delete", "get", "list", "update"]) and
+  any(.[]; .kind == "RoleBinding" and .metadata.name == "internal-rpc-authority-publisher" and
+    (.rules | not) and .roleRef.kind == "Role" and
+    .roleRef.name == "internal-rpc-authority-publisher")
+' >/dev/null || fail 'provider credential TLS and exact network paths are incomplete'
+yq -N -r '
+  select(.kind == "ConfigMap" and
+    .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+  .data["key-delivery-targets.yaml"]
+' "$render" | yq -e '
+  .source_revision == 4 and
+  ([.targets[] | select(.workload_id == "control-plane" and
+    .role == "AUTHORIZATION_ISSUER" and
+    .database_identity.login_principal == "ira_control_plane_issuer_g1" and
+    .auth_private_key.secret_name == "internal-rpc-authority-control-plane-issuer-key" and
+    .readback.credential_secret_name == "internal-rpc-authority-control-plane-issuer-readback-credential" and
+    .readback.possession_key_secret_name == "internal-rpc-authority-control-plane-issuer-readback-possession" and
+    .restore_coordination.role_credential_secret_name == "internal-rpc-authority-control-plane-issuer-restore-credential" and
+    .restore_coordination.ack_key_secret_name == "internal-rpc-authority-control-plane-issuer-restore-ack")] | length) == 1 and
+  ([.targets[] | select(.workload_id == "secret-broker" and
+    .role == "AUTHORIZATION_VERIFIER" and
+    .database_identity.login_principal == "ira_secret_broker_verifier_g1" and
+    .readback.credential_secret_name == "internal-rpc-authority-secret-broker-verifier-readback-credential" and
+    .readback.possession_key_secret_name == "internal-rpc-authority-secret-broker-verifier-readback-possession" and
+    .restore_coordination.role_credential_secret_name == "internal-rpc-authority-secret-broker-verifier-restore-credential" and
+    .restore_coordination.ack_key_secret_name == "internal-rpc-authority-secret-broker-verifier-restore-ack")] | length) == 1
+' >/dev/null || fail 'provider credential publisher delivery targets are incomplete'
+yq -N -r '
+  select(.kind == "ConfigMap" and
+    .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+  .data["authority-policy.json"]
+' "$render" | jq -e '
+  .policy_revision == 42 and
+  ([.policy.authority_proof_producers[] |
+    select(.producer_id == "secret-broker.provider-credential-materializer" and
+      .caller_workload_id == "control-plane" and
+      .application_credential == "PLATFORM_WORKER_GRANT" and
+      .authority_sources == ["DOMAIN_STATE"] and
+      (.allowed_operation_ids | index("platform.provider-credentials.cleanup")) != null)] | length) == 1 and
+  ([.policy.operation_bindings[] |
+    select(.operation_id == "platform.provider-credentials.cleanup" and
+      .permission == "platform.provider-credentials.cleanup" and
+      .full_method == "/controlplane.v1.ProviderCredentialMaterializerService/CleanupProviderCredential" and
+      .caller_workload_id == "control-plane" and
+      .caller_spiffe_id == "spiffe://kodex.local/ns/kodex-system/sa/control-plane" and
+      .target_workload_id == "secret-broker" and
+      .target_spiffe_id == "spiffe://kodex.local/ns/kodex-system/sa/secret-broker" and
+      .audience == "urn:kodex:internal-rpc:secret-broker" and
+      .target_tls_server_name == "secret-broker.kodex-system.svc.cluster.local" and
+      .authority_proof_producer_id == "secret-broker.provider-credential-materializer" and
+      .authority_sources == ["DOMAIN_STATE"] and
+      .project_required == false)] | length) == 1
+' >/dev/null || fail 'provider credential cleanup workload operation profile is incomplete'
 for job in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
   control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
   JOB_NAME="$job" yq -e 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
@@ -70,8 +229,98 @@ yq -e 'select(.kind == "ValidatingAdmissionPolicy" and
   "$render" >/dev/null ||
   fail 'restore evidence policy does not preserve active protection and namespace teardown'
 
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  map(select(.kind != null)) as $resources |
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "runtime-execution-ticket-exact-projection" and
+    .spec.failurePolicy == "Fail" and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "system:serviceaccount:kodex-system:runtime-controller")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "!has(object.stringData)")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "^environment-[a-f0-9]{16}$")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime.kodex.dev/environment-digest"))) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "runtime-execution-ticket-exact-projection" and
+    .spec.policyName == "runtime-execution-ticket-exact-projection" and
+    .spec.validationActions == ["Deny"]) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "runtime-execution-service-account" and
+    .spec.failurePolicy == "Fail" and
+    ([.spec.matchConditions[].expression] | join(" ") | contains(
+      "system:serviceaccount:kodex-system:runtime-controller")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime-sa-[a-f0-9]{16}"))) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "runtime-execution-network-policy" and
+    .spec.failurePolicy == "Fail" and
+    .spec.paramKind == {"apiVersion":"v1","kind":"ConfigMap"} and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "params.data['\''kubernetes-api-service-cidr'\'']"))) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "runtime-execution-network-policy" and
+    .spec.paramRef.name == "runtime-materialization-admission-parameters" and
+    .spec.paramRef.namespace == "kodex-system" and
+    .spec.paramRef.parameterNotFoundAction == "Deny") and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "runtime-role-pod-exact-secret-projection" and
+    .spec.failurePolicy == "Fail" and
+    .spec.paramKind == {"apiVersion":"v1","kind":"ConfigMap"} and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime-sa-[a-f0-9]{16}")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "item.valueFrom.secretKeyRef.name")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "container.name != '\''provider-runtime'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "mount.subPath in ['\''runtime.json'\'', '\''token'\'']")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "container.securityContext.allowPrivilegeEscalation == false")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime-provider-credential-relay")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "params.data['\''nodeReadbackImage'\'']")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "compareTo(quantity('\''100m'\''))"))) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "runtime-role-pod-exact-secret-projection" and
+    .spec.policyName == "runtime-role-pod-exact-secret-projection" and
+    .spec.paramRef.name == "kodex-image-admission-policy" and
+    .spec.paramRef.namespace == "kodex-system" and
+    .spec.paramRef.parameterNotFoundAction == "Deny" and
+    .spec.validationActions == ["Deny"]) and
+  any($resources[];
+    .kind == "Role" and .metadata.name == "runtime-controller" and
+    any(.rules[];
+      .apiGroups == [""] and .resources == ["secrets"] and
+      ((.verbs | sort) == (["create", "delete", "get"] | sort)))) and
+  any($resources[];
+    .kind == "ServiceAccount" and .metadata.name == "agent-runner" and
+    .automountServiceAccountToken == false)
+' >/dev/null ||
+  fail 'runtime Secret materialization admission boundary is incomplete'
+if yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "Secret" and
+    ((.data // {}) | keys | any(. == "runtime.json" or
+      test("^environment-[a-f0-9]{16}$"))))
+' >/dev/null; then
+  fail 'release render embeds a runtime input or environment Secret projection'
+fi
+
 secret_references="$temporary_directory/secret-references"
 secret_producers="$temporary_directory/secret-producers"
+rg -Fq 'create secret generic kodex-external-s3' "$repository_root/install.sh" ||
+  fail 'external object storage Secret does not have an installer producer'
 {
   yq -N -r '.. | select(tag == "!!map" and has("secretName")) | .secretName' "$render"
   yq -N -r '.. | select(tag == "!!map" and has("secretKeyRef")) | .secretKeyRef.name' "$render"
@@ -91,7 +340,9 @@ secret_producers="$temporary_directory/secret-producers"
   printf '%s\n' \
     internal-rpc-authority-bootstrap-roots \
     internal-rpc-authority-sentry \
+    backup-controller-credentials \
     kodex-installation-ca \
+    kodex-external-s3 \
     kodex-integration-credentials \
     kodex-nats-credentials \
     kodex-postgresql-bootstrap \
@@ -104,6 +355,35 @@ secret_producers="$temporary_directory/secret-producers"
 missing_secrets=$(comm -23 "$secret_references" "$secret_producers")
 [[ -z "$missing_secrets" ]] ||
   fail "release references Kubernetes Secrets without a producer: ${missing_secrets//$'\n'/,}"
+yq -e '
+  select(.kind == "Deployment" and .metadata.name == "backup-controller") |
+  (.spec.strategy.type == "Recreate") and
+  (.spec.template.spec.automountServiceAccountToken == false)
+' "$render" >/dev/null || fail 'backup-controller release workload contract is incomplete'
+yq -e '
+  select(.kind == "Deployment" and .metadata.name == "backup-controller") |
+  .spec.template.spec.containers[] |
+  select(.name == "backup-controller") |
+  .image | test("/backup-controller@sha256:[a-f0-9]{64}$")
+' "$render" >/dev/null || fail 'backup-controller release image reference is invalid'
+yq -e '
+  select(.kind == "Deployment" and .metadata.name == "backup-controller") |
+  .spec.template.spec.volumes[] |
+  select(.name == "credentials") |
+  .secret.secretName == "backup-controller-credentials"
+' "$render" >/dev/null || fail 'backup-controller credential projection is invalid'
+yq -e '
+  select(.kind == "Deployment" and .metadata.name == "backup-controller") |
+  .spec.template.spec.volumes[] |
+  select(.name == "tls") |
+  .configMap.name == "backup-controller-postgresql-ca"
+' "$render" >/dev/null || fail 'backup-controller PostgreSQL CA projection is invalid'
+jq -e '
+  any(.images[];
+    .component == "backup-controller" and
+    .dockerfile == "services/jobs/backup-controller/Dockerfile")
+' "$repository_root/tools/release/images.json" >/dev/null ||
+  fail 'backup-controller image contract is absent'
 if yq -e 'select(.kind == "ServiceAccount" and
   ((.imagePullSecrets // []) | length > 0))' "$render" >/dev/null 2>&1; then
   fail 'ServiceAccount bypasses the canonical node registry credential path'
@@ -113,10 +393,10 @@ postgres_clients="$temporary_directory/postgres-clients"
 postgres_allowed_clients="$temporary_directory/postgres-allowed-clients"
 yq -o=json -I=0 '.' "$render" | jq -sr '
   .[] |
-  if .kind == "CronJob" then .spec.jobTemplate.spec.template
+  (if .kind == "CronJob" then .spec.jobTemplate.spec.template
   elif (.kind == "Deployment" or .kind == "StatefulSet" or
     .kind == "DaemonSet" or .kind == "Job") then .spec.template
-  else empty end as $template |
+  else empty end) as $template |
   select(any($template.spec.containers[]?.env[]?;
     (.name // "") | test("POSTGRES.*DSN_FILE$"))) |
   $template.metadata.labels["app.kubernetes.io/name"]
@@ -188,6 +468,7 @@ for policy in internal-rpc-authority-restore-controller-exact-paths \
 done
 for policy in kodex-image-admission-controller-exact-paths \
   runtime-controller-exact-paths \
+  session-archive-exact-paths \
   internal-rpc-authority-publisher-exact-paths \
   internal-rpc-authority-restore-controller-exact-paths \
   internal-rpc-authority-restore-jobs-exact-paths \

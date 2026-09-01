@@ -8,6 +8,7 @@ WITH suspended AS (
       AND schedule.project_id = $2::uuid
       AND schedule.target_type = $3
       AND schedule.target_ref = $4
+      AND schedule.lifecycle_state = 'ACTIVE'
       AND schedule.enabled
     RETURNING schedule.id, schedule.ref
 ), cancelled AS (
@@ -20,7 +21,7 @@ WITH suspended AS (
         version = occurrence.version + 1,
         updated_at = clock_timestamp()
     WHERE occurrence.schedule_id IN (SELECT id FROM suspended)
-      AND occurrence.state = 'CLAIMED'
+      AND occurrence.state IN ('DUE', 'CLAIMED')
     RETURNING occurrence.id
 )
 SELECT count(*), COALESCE(min(ref), '')

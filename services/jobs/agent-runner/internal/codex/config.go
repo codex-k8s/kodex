@@ -9,15 +9,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 
 	"github.com/BurntSushi/toml"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
 type runtimeConfig struct {
 	Model                  string                       `toml:"model"`
+	ModelReasoningEffort   string                       `toml:"model_reasoning_effort,omitempty"`
+	Personality            string                       `toml:"personality,omitempty"`
+	AllowLoginShell        *bool                        `toml:"allow_login_shell,omitempty"`
 	ApprovalPolicy         string                       `toml:"approval_policy"`
 	DefaultPermissions     string                       `toml:"default_permissions"`
 	CLIAuthCredentialStore string                       `toml:"cli_auth_credentials_store"`
@@ -37,8 +42,10 @@ type historyConfig struct {
 }
 
 type shellEnvironmentPolicy struct {
-	Inherit string            `toml:"inherit"`
-	Set     map[string]string `toml:"set"`
+	Inherit               string            `toml:"inherit"`
+	IgnoreDefaultExcludes bool              `toml:"ignore_default_excludes"`
+	IncludeOnly           []string          `toml:"include_only"`
+	Set                   map[string]string `toml:"set"`
 }
 
 type mcpServerConfig struct {
@@ -73,18 +80,45 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	if err != nil {
 		return err
 	}
-	config := runtimeConfig{Model: input.Model, ApprovalPolicy: input.CodexApprovalPolicy,
+	overlay, err := runtimecontract.ParseConfigOverlay(input.ConfigOverlay)
+	if err != nil {
+		return errors.New("validate published Codex configuration overlay")
+	}
+	allowLoginShell := false
+	if overlay.AllowLoginShell != nil {
+		allowLoginShell = *overlay.AllowLoginShell
+	}
+	historyPersistence := overlay.History.Persistence
+	if historyPersistence == "" {
+		historyPersistence = "save-all"
+	}
+	environmentSet := map[string]string{"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp"}
+	environmentNames := map[string]struct{}{"PATH": {}, "HOME": {}}
+	for _, item := range input.EnvironmentValues {
+		environmentSet[item.Name] = item.Value
+		environmentNames[item.Name] = struct{}{}
+	}
+	for _, item := range input.SecretProjections {
+		environmentNames[item.Name] = struct{}{}
+	}
+	includeOnly := make([]string, 0, len(environmentNames))
+	for name := range environmentNames {
+		includeOnly = append(includeOnly, name)
+	}
+	slices.Sort(includeOnly)
+	config := runtimeConfig{Model: input.Model, ModelReasoningEffort: overlay.ModelReasoningEffort,
+		Personality: overlay.Personality, AllowLoginShell: &allowLoginShell, ApprovalPolicy: input.CodexApprovalPolicy,
 		DefaultPermissions: permissionProfileName, CLIAuthCredentialStore: "file",
-		History: historyConfig{Persistence: "save-all"},
+		History: historyConfig{Persistence: historyPersistence},
 		Permissions: map[string]permissionProfile{permissionProfileName: {Extends: permissionBase,
 			Filesystem: map[string]string{
 				filepath.Join(input.CodexHome, "auth.json"): "deny",
 				"/run/secrets": "deny",
 				"/proc":        "deny",
 			}}},
-		ShellEnvironmentPolicy: shellEnvironmentPolicy{Inherit: "none", Set: map[string]string{
-			"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp",
-		}}, MCPServers: map[string]mcpServerConfig{"kodex": {URL: mcpURL,
+		ShellEnvironmentPolicy: shellEnvironmentPolicy{Inherit: "all", IgnoreDefaultExcludes: true,
+			IncludeOnly: includeOnly, Set: environmentSet},
+		MCPServers: map[string]mcpServerConfig{"kodex": {URL: mcpURL,
 			BearerTokenEnvVar: "KODEX_MCP_PROXY_TOKEN",
 			Required:          true, StartupTimeoutSeconds: 15, ToolTimeoutSeconds: 60}}}
 	var raw bytes.Buffer
@@ -97,6 +131,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		!decoded.MCPServers["kodex"].Required ||
 		decoded.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
 		decoded.DefaultPermissions != permissionProfileName || decoded.Permissions[permissionProfileName].Extends != permissionBase ||
+		decoded.ShellEnvironmentPolicy.Inherit != "all" || !slices.Equal(decoded.ShellEnvironmentPolicy.IncludeOnly, includeOnly) ||
 		decoded.Permissions[permissionProfileName].Filesystem[filepath.Join(input.CodexHome, "auth.json")] != "deny" {
 		return errors.New("validate Codex configuration")
 	}

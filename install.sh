@@ -141,18 +141,13 @@ fi
 if component_selected secrets; then
   [[ -n "${KODEX_OPENAI_AUTH_JSON_B64:-}" || -n "${KODEX_OPENAI_AUTH_JSON_FILE:-}" ]] ||
     fail 'KODEX_OPENAI_AUTH_JSON_B64 or KODEX_OPENAI_AUTH_JSON_FILE is required'
+  kodex_require_env KODEX_S3_ENDPOINT KODEX_S3_REGION KODEX_S3_BUCKET \
+    KODEX_S3_ACCESS_KEY KODEX_S3_SECRET_KEY || exit 1
 fi
 if ! component_selected registry && any_component_selected secrets platform &&
   [[ ! -e "$material_directory" ]]; then
   kodex_require_env KODEX_RELEASE_REGISTRY_USERNAME KODEX_RELEASE_REGISTRY_PASSWORD || exit 1
 fi
-if [[ "${KODEX_ENABLE_EXTERNAL_S3:-false}" == true ]]; then
-  kodex_require_env KODEX_S3_ENDPOINT KODEX_S3_REGION KODEX_S3_BUCKET \
-    KODEX_S3_ACCESS_KEY KODEX_S3_SECRET_KEY || exit 1
-elif [[ "${KODEX_ENABLE_EXTERNAL_S3:-false}" != false ]]; then
-  fail 'KODEX_ENABLE_EXTERNAL_S3 must be true or false'
-fi
-
 if component_selected host; then
   "$repository_root/tools/install/prepare-host.sh" --mode apply \
     --server-public-ip "$KODEX_SERVER_PUBLIC_IP" \
@@ -164,6 +159,16 @@ export KUBECONFIG=$KODEX_KUBECONFIG
 kubectl config use-context "$KODEX_KUBE_CONTEXT" >/dev/null
 [[ "$(kubectl config current-context)" == "$KODEX_KUBE_CONTEXT" ]] || fail 'Kubernetes context mismatch'
 kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
+if component_selected platform && ! component_selected secrets; then
+  kubectl -n "$KODEX_NAMESPACE" get secret/kodex-external-s3 -o json | jq -e '
+    ((.data | keys | sort) == (["access-key", "bucket", "endpoint", "region", "secret-key"] | sort)) and
+    all(.data[]; type == "string" and length > 0)
+  ' >/dev/null || fail 'pre-provisioned kodex-external-s3 Secret is absent or invalid'
+  kubectl -n kodex-runtime get secret/kodex-external-s3 -o json | jq -e '
+    ((.data | keys | sort) == (["access-key", "secret-key"] | sort)) and
+    all(.data[]; type == "string" and length > 0)
+  ' >/dev/null || fail 'pre-provisioned runtime S3 credential projection is absent or invalid'
+fi
 
 installer_temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$installer_temporary_directory"' EXIT
@@ -382,17 +387,21 @@ if component_selected secrets; then
           --field-manager=kodex-install -f - >/dev/null
     done
   fi
-  if [[ "${KODEX_ENABLE_EXTERNAL_S3:-false}" == true ]]; then
-    kubectl -n kodex-system create secret generic kodex-external-s3 \
-      --from-literal=endpoint="$KODEX_S3_ENDPOINT" \
-      --from-literal=region="$KODEX_S3_REGION" \
-      --from-literal=bucket="$KODEX_S3_BUCKET" \
-      --from-literal=access-key="$KODEX_S3_ACCESS_KEY" \
-      --from-literal=secret-key="$KODEX_S3_SECRET_KEY" \
-      --dry-run=client -o yaml |
-      kubectl apply --server-side --force-conflicts \
-        --field-manager=kodex-install -f - >/dev/null
-  fi
+  kubectl -n kodex-system create secret generic kodex-external-s3 \
+    --from-literal=endpoint="$KODEX_S3_ENDPOINT" \
+    --from-literal=region="$KODEX_S3_REGION" \
+    --from-literal=bucket="$KODEX_S3_BUCKET" \
+    --from-literal=access-key="$KODEX_S3_ACCESS_KEY" \
+    --from-literal=secret-key="$KODEX_S3_SECRET_KEY" \
+    --dry-run=client -o yaml |
+    kubectl apply --server-side --force-conflicts \
+      --field-manager=kodex-install -f - >/dev/null
+  kubectl -n kodex-runtime create secret generic kodex-external-s3 \
+    --from-literal=access-key="$KODEX_S3_ACCESS_KEY" \
+    --from-literal=secret-key="$KODEX_S3_SECRET_KEY" \
+    --dry-run=client -o yaml |
+    kubectl apply --server-side --force-conflicts \
+      --field-manager=kodex-install -f - >/dev/null
 fi
 
 workflow_sha_file="$material_directory/github/workflow-sha"

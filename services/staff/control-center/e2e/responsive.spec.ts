@@ -5,6 +5,17 @@ import { gotoWithRetry, routeRef } from "./helpers";
 const environment = loadE2EEnvironment();
 const projectName = `${environment.resourcePrefix} — отдел продаж`;
 
+async function expectNoHorizontalOverflow(
+  page: import("@playwright/test").Page,
+) {
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+}
+
 test("mobile shell, помощник и граф доступны без горизонтального переполнения", async ({
   page,
 }) => {
@@ -24,32 +35,25 @@ test("mobile shell, помощник и граф доступны без гор�
     page.getByRole("navigation", { name: "Навигация Проекта" }),
   ).toBeVisible();
 
-  await page
-    .getByRole("link", { name: "Помощник", exact: true })
-    .last()
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Помощник Kodex" }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Открыть Kodex" }).click();
+  await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
   await expect(
     page.getByLabel("Опишите, что нужно настроить или запустить"),
   ).toBeVisible();
 
   await gotoWithRetry(page, `/projects/${projectRef}/runs`);
-  const run = page.locator(".entity-row").first();
+  await expectNoHorizontalOverflow(page);
+  const run = page.locator(".run-work-item").first();
   await expect(run).toBeVisible();
   await run.click();
+  await expect(page.locator(".graph-viewport")).toBeVisible();
+  await page.getByRole("button", { name: "связи графа" }).click();
   const graph = page.getByRole("tree", { name: "Связи графа" });
   await expect(graph).toBeVisible();
   await expect(page.locator(".graph-viewport")).toBeHidden();
   await expect(graph.getByRole("treeitem").first()).toBeVisible();
 
-  const overflow = await page.evaluate(
-    () =>
-      document.documentElement.scrollWidth -
-      document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(1);
+  await expectNoHorizontalOverflow(page);
 
   await page.keyboard.press("Tab");
   const focused = await page.evaluate(

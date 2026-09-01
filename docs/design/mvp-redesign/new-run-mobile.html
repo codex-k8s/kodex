@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Новый запуск · Mobile</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  /* Mobile «Новый запуск» */
+  .p-newrun-m.m-body { padding-bottom: 0; gap: 12px; }
+  .p-newrun-m .seg { display: flex; }
+  .p-newrun-m .seg__btn { flex: 1 1 0; justify-content: center; }
+  .p-newrun-m .card__body { padding: 0 14px 14px; }
+  .p-newrun-m .card__head { padding: 10px 14px; }
+  .p-newrun-m__ctx { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg-field); font-size: 13px; }
+  .p-newrun-m__ctx .ic { color: var(--mut); }
+  .p-newrun-m__file { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 0; border-top: 1px solid var(--line-hair); }
+  .p-newrun-m__file:first-child { border-top: 0; }
+  .p-newrun-m__more { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-4); background: var(--bg); color: var(--sec); font-size: 14px; text-align: left; }
+  .p-newrun-m__more .ic-chev { color: var(--mut); transition: transform 0.12s; }
+  .p-newrun-m__more[aria-expanded="true"] .ic-chev { transform: rotate(90deg); }
+  .p-newrun-m__more[aria-expanded="true"] { border-radius: var(--r-4) var(--r-4) 0 0; }
+  .p-newrun-m__more-panel { border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--r-4) var(--r-4); padding: 12px 14px 14px; margin-top: -12px; background: var(--bg); display: flex; flex-direction: column; gap: 12px; }
+  .p-newrun-m__bar { position: sticky; bottom: 0; z-index: 2; display: flex; gap: 8px; margin: 4px -14px 0; padding: 10px 14px 14px; background: var(--bg); border-top: 1px solid var(--line); }
+  .p-newrun-m__bar .btn { height: var(--h-touch); }
+  .p-newrun-m .kv__k { flex-basis: 108px; }
+  /* Sheet выбора файлов */
+  .p-mfp__row { display: flex; align-items: flex-start; gap: 10px; min-height: 64px; padding: 10px 16px; border-bottom: 1px solid var(--line-hair); }
+  .p-mfp__row.is-checked { background: var(--acc-soft); }
+  .p-mfp__row .check { min-height: 44px; align-items: center; }
+  .p-mfp__row .check__box { width: 22px; height: 22px; border-radius: 6px; margin-top: 0; }
+  .p-mfp__row .check__box .ic { width: 14px; height: 14px; }
+  .p-mfp__name { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 3px; }
+  .p-mfp__title { font-size: 14px; font-weight: 500; line-height: 1.3; word-break: break-word; }
+  .p-mfp__meta { font-size: 12px; color: var(--mut); display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+  .p-mfp__meta .pill { height: 22px; }
+  #m-file-picker .sheet__body { padding: 0; }
+  #m-file-picker .sheet__head .search { width: auto; flex: 1 1 auto; }
+  .frame .search input:focus-visible { box-shadow: none; }
+  #m-file-picker .sheet__head { flex-wrap: wrap; gap: 8px; padding: 10px 8px 10px 16px; }
+  #m-file-picker .toolbar__count { width: 100%; padding: 0 0 2px; }
+  /* Sheet выбора сессии: inline picker занимает всю высоту */
+  #m-session-sheet .sheet__body { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+  #m-session-sheet .picker--inline { flex: 1 1 auto; min-height: 0; border: 0; border-radius: 0; }
+  #m-session-sheet .picker__item { min-height: 64px; }
+  .frame--mobile .sheet--full { top: 40px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Новый запуск · mobile 390×844 · маршрут <code>/projects/:projectRef/runs/new</code></p>
+<div class="frame frame--mobile" id="frame">
+  <main class="page p-newrun-m" id="page" aria-label="Новый запуск">
+
+    <div class="p-newrun-m__ctx" role="group" aria-label="Проект запуска">
+      <svg class="ic"><use href="#i-folder"/></svg>
+      <span class="grow truncate">Проект: <b>Корпоративные продажи</b></span>
+      <a href="#">Сменить</a>
+    </div>
+
+    <section class="card" aria-labelledby="m-sec-target">
+      <div class="card__head"><h2 class="sec-title" id="m-sec-target">Что запускаем</h2></div>
+      <div class="card__body col gap-12">
+        <div class="seg" data-seg id="m-target-seg" role="group" aria-label="Тип цели запуска">
+          <button class="seg__btn" type="button" aria-pressed="false" data-view="agent">ИИ-сотрудник</button>
+          <button class="seg__btn" type="button" aria-pressed="true" data-view="workflow">Процесс</button>
+        </div>
+        <div class="field">
+          <span class="field__label" id="m-target-label">Процесс</span>
+          <button class="combobox" type="button" id="m-target-cb" aria-labelledby="m-target-label m-target-cb">
+            <svg class="ic"><use href="#i-wf"/></svg>
+            <span class="combobox__text"><span class="combobox__title">Обработка нового лида</span><span class="combobox__sub">v3 · координатор Менеджер продаж · 3 ИИ-сотрудника</span></span>
+            <svg class="ic"><use href="#i-chev"/></svg>
+          </button>
+        </div>
+        <div class="field">
+          <label class="field__label" for="m-goal">Цель запуска <span class="req" aria-hidden="true">*</span></label>
+          <textarea class="textarea" id="m-goal" rows="2" aria-required="true" style="min-height:64px;font-size:15px">Подготовить коммерческое предложение для компании Север к встрече 27 августа</textarea>
+        </div>
+        <div class="field">
+          <label class="field__label" for="m-name">Название <span class="mut">(необязательно)</span></label>
+          <input class="input" id="m-name" type="text" placeholder="Например: «КП для Севера, 27.08»">
+          <div class="field__hint">Если оставить пустым, Kodex предложит понятное название по цели запуска. Его можно будет изменить в любой момент.</div>
+        </div>
+        <div class="field">
+          <label class="field__label" for="m-task">Задача <span class="req" aria-hidden="true">*</span></label>
+          <textarea class="textarea" id="m-task" data-autosize rows="4" aria-required="true" style="font-size:15px">Подготовить коммерческое предложение на пилот для 50 сотрудников: состав работ, сроки внедрения и стоимость пилотного периода. Использовать бриф и условия пилота из входных файлов.</textarea>
+          <div class="field__hint">Передаётся координатору Процесса как есть. Секретные значения в текст не вставляйте.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="m-sec-session">
+      <div class="card__head"><h2 class="sec-title" id="m-sec-session">Продолжение работы</h2></div>
+      <div class="card__body col gap-8" role="radiogroup" aria-labelledby="m-sec-session">
+        <label class="radio-card">
+          <input type="radio" name="m-session" value="new" id="m-session-new" checked>
+          <span class="radio__dot"></span>
+          <span class="radio-card__text"><span class="radio-card__title">Новая сессия</span><span class="radio-card__sub">Координатор начнёт с чистой историей.</span></span>
+        </label>
+        <label class="radio-card">
+          <input type="radio" name="m-session" value="continue" id="m-session-continue">
+          <span class="radio__dot"></span>
+          <span class="radio-card__text"><span class="radio-card__title">Продолжить существующую сессию</span><span class="radio-card__sub">История и контекст сохранятся, добавится новый ход.</span></span>
+        </label>
+        <div class="field mt-4" id="m-session-field" hidden>
+          <span class="field__label" id="m-session-label">Сессия</span>
+          <button class="combobox is-placeholder" type="button" id="m-session-cb" aria-labelledby="m-session-label m-session-cb" data-sheet="#m-session-sheet">
+            <svg class="ic"><use href="#i-history"/></svg>
+            <span class="combobox__text"><span class="combobox__title" id="m-session-title">Выберите сессию для продолжения</span><span class="combobox__sub" id="m-session-sub">Завершённые сессии координатора</span></span>
+            <svg class="ic"><use href="#i-chev"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="m-sec-inputs">
+      <div class="card__head"><h2 class="sec-title" id="m-sec-inputs">Входные данные Процесса</h2><span class="xs mut">v3</span></div>
+      <div class="card__body col gap-12">
+        <div class="field"><label class="field__label" for="m-in-company">Компания</label><input class="input" id="m-in-company" value="Север"></div>
+        <div class="field"><label class="field__label" for="m-in-contact">Контакт</label><input class="input" id="m-in-contact" value="Мария Соколова, директор по закупкам"></div>
+        <div class="field"><label class="field__label" for="m-in-goal">Цель встречи</label><input class="input" id="m-in-goal" value="Обсудить пилот на 50 сотрудников"></div>
+        <div class="field"><label class="field__label" for="m-in-deadline">Срок</label><input class="input" id="m-in-deadline" value="27 августа, 16:00"><div class="field__hint">Часовой пояс Проекта: Europe/Saratov</div></div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="m-sec-files">
+      <div class="card__head"><h2 class="sec-title" id="m-sec-files">Входные файлы <span class="tab__count" id="m-files-count">2</span></h2></div>
+      <div class="card__body col gap-10">
+        <div id="m-form-files">
+          <div class="p-newrun-m__file">
+            <span class="mime mime--pdf">pdf</span>
+            <span class="col gap-2 grow"><span class="m" style="word-break:break-word">Бриф — Север.pdf</span><span class="xs mut">1,8 МБ · v2 · сегодня, 09:41</span></span>
+            <span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span>
+          </div>
+          <div class="p-newrun-m__file">
+            <span class="mime mime--doc">docx</span>
+            <span class="col gap-2 grow"><span class="m" style="word-break:break-word">Условия пилота — Север.docx</span><span class="xs mut">640 КБ · v1 · вчера, 16:12</span></span>
+            <span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span>
+          </div>
+        </div>
+        <button class="btn btn--block" type="button" data-sheet="#m-file-picker"><svg class="ic"><use href="#i-files"/></svg>Выбрать файлы</button>
+        <div class="field__hint">В запуск попадают только проверенные файлы; версии фиксируются на момент запуска.</div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="m-sec-notify">
+      <div class="card__head"><h2 class="sec-title" id="m-sec-notify">Уведомления</h2></div>
+      <div class="card__body col gap-8" role="radiogroup" aria-labelledby="m-sec-notify">
+        <label class="radio-card">
+          <input type="radio" name="m-notify" value="cc" checked>
+          <span class="radio__dot"></span>
+          <span class="radio-card__text"><span class="radio-card__title">Только Control Center</span><span class="radio-card__sub">Решения, ошибки и результат появятся на главной и в «Решениях».</span></span>
+        </label>
+      </div>
+    </section>
+
+    <div>
+      <button class="p-newrun-m__more" type="button" id="m-more-btn" aria-expanded="false" aria-controls="m-more-panel">
+        <svg class="ic ic-chev"><use href="#i-chev-r"/></svg>
+        <span class="grow">Дополнительно</span>
+        <span class="xs mut" id="m-more-state">свёрнуто</span>
+      </button>
+      <div class="p-newrun-m__more-panel" id="m-more-panel" hidden>
+        <div class="field"><span class="field__label" id="m-lbl-timeout">Таймаут запуска</span><button class="select select--block" type="button" aria-labelledby="m-lbl-timeout" data-menu="#m-menu-timeout" aria-haspopup="menu" aria-expanded="false"><span class="select__value" id="m-val-timeout">2 часа</span><svg class="ic"><use href="#i-chev"/></svg></button></div>
+        <div class="field"><span class="field__label" id="m-lbl-priority">Приоритет</span><button class="select select--block" type="button" aria-labelledby="m-lbl-priority" data-menu="#m-menu-priority" aria-haspopup="menu" aria-expanded="false"><span class="select__value" id="m-val-priority">Обычный</span><svg class="ic"><use href="#i-chev"/></svg></button></div>
+        <div class="field"><span class="field__label" id="m-lbl-policy">Политика сессии</span><button class="select select--block" type="button" aria-labelledby="m-lbl-policy" data-menu="#m-menu-policy" aria-haspopup="menu" aria-expanded="false"><span class="select__value" id="m-val-policy">Оставить открытой для уточнений</span><svg class="ic"><use href="#i-chev"/></svg></button></div>
+      </div>
+    </div>
+
+    <section class="card" aria-labelledby="m-sum-title">
+      <div class="card__head"><h2 class="sec-title" id="m-sum-title">Что будет запущено</h2><span class="pill pill--info pill--sm"><svg class="ic"><use href="#i-edit"/></svg>Черновик</span></div>
+      <div class="card__body">
+        <div class="kv">
+          <div class="kv__row"><span class="kv__k">Проект</span><span class="kv__v">Корпоративные продажи</span></div>
+          <div class="kv__row"><span class="kv__k">Цель</span><span class="kv__v">Процесс «Обработка нового лида» · v3</span></div>
+          <div class="kv__row"><span class="kv__k">Координатор</span><span class="kv__v">Менеджер продаж</span></div>
+          <div class="kv__row"><span class="kv__k">Участники</span><span class="kv__v">Аналитик продаж, Редактор предложений, Юридический консультант</span></div>
+          <div class="kv__row"><span class="kv__k">Решение человека</span><span class="kv__v">«Согласовать предложение» — перед завершением</span></div>
+          <div class="kv__row"><span class="kv__k">Название</span><span class="kv__v mut" id="m-sum-name">будет предложено Kodex по цели</span></div>
+          <div class="kv__row"><span class="kv__k">Файлы</span><span class="kv__v" id="m-sum-files">2 файла · проверены</span></div>
+          <div class="kv__row"><span class="kv__k">Сессия</span><span class="kv__v" id="m-sum-session">Новая</span></div>
+          <div class="kv__row"><span class="kv__k">Источник</span><span class="kv__v">Control Center · инициатор Анна Волкова</span></div>
+        </div>
+        <p class="xs mut mt-10" style="line-height:1.5">Право «Запуск работы» проверяется сервером в момент запуска. После запуска откроется экран запуска с графом и ходом работы.</p>
+      </div>
+    </section>
+
+    <div class="p-newrun-m__bar" role="group" aria-label="Действия">
+      <button class="btn btn--primary grow" type="button"><svg class="ic"><use href="#i-run"/></svg>Запустить</button>
+      <button class="btn" type="button" style="flex:0 0 96px">Отмена</button>
+    </div>
+  </main>
+
+  <div class="menu" id="m-menu-timeout"><button class="menu__item" role="menuitemradio" aria-checked="false" data-set="m-val-timeout">30 минут</button><button class="menu__item" role="menuitemradio" aria-checked="true" data-set="m-val-timeout">2 часа</button><button class="menu__item" role="menuitemradio" aria-checked="false" data-set="m-val-timeout">8 часов</button></div>
+  <div class="menu" id="m-menu-priority"><button class="menu__item" role="menuitemradio" aria-checked="false" data-set="m-val-priority">Низкий</button><button class="menu__item" role="menuitemradio" aria-checked="true" data-set="m-val-priority">Обычный</button><button class="menu__item" role="menuitemradio" aria-checked="false" data-set="m-val-priority">Высокий</button></div>
+  <div class="menu menu--wide" id="m-menu-policy"><button class="menu__item" role="menuitemradio" aria-checked="true" data-set="m-val-policy">Оставить открытой для уточнений</button><button class="menu__item" role="menuitemradio" aria-checked="false" data-set="m-val-policy">Завершить после результата</button></div>
+
+  <!-- Sheet: выбор файлов -->
+  <div class="sheet sheet--full" id="m-file-picker" role="dialog" aria-modal="true" aria-labelledby="m-fp-title" data-modal-drawer>
+    <div class="sheet__grip"></div>
+    <div class="sheet__head">
+      <label class="search search--bg grow"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" id="m-fp-search" placeholder="Поиск по названию" aria-label="Поиск файлов" autofocus></label>
+      <button class="m-icon" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+      <span class="toolbar__count" id="m-fp-count" aria-live="polite">Показано 0 из 1 248</span>
+    </div>
+    <div class="sheet__body" id="m-fp-scroll">
+      <div id="m-fp-list" role="group" aria-label="Файлы"></div>
+      <div class="list-more" id="m-fp-foot" aria-live="polite"></div>
+    </div>
+    <div class="sheet__foot">
+      <button class="btn grow" type="button" data-close style="height:44px">Отмена</button>
+      <button class="btn btn--primary grow" type="button" id="m-fp-add" data-close style="height:44px">Добавить (2)</button>
+    </div>
+  </div>
+
+  <!-- Sheet: выбор сессии -->
+  <div class="sheet sheet--full" id="m-session-sheet" role="dialog" aria-modal="true" aria-labelledby="m-ss-title" data-modal-drawer>
+    <div class="sheet__grip"></div>
+    <div class="sheet__head"><span class="sheet__title" id="m-ss-title">Сессия для продолжения</span><button class="m-icon" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button></div>
+    <div class="sheet__body" id="m-session-host"></div>
+  </div>
+</div>
+<p class="stage-note">Mobile-версия конструктора: те же поля в один столбец, radio-card высотой не меньше 52 px, summary — нижняя секция перед действиями, primary «Запустить» закреплена sticky-панелью внизу и доступна при любой прокрутке (FAB Kodex расположен выше панели). Проект показан как контекст со ссылкой «Сменить». Выбор файлов открывается как полноэкранная bottom sheet с серверным поиском и cursor-подгрузкой; выбор сессии — как bottom sheet с inline async picker. «Дополнительно» раскрывается кнопкой с aria-expanded.</p>
+<script src="assets/kodex.js"></script>
+<script>
+(function () {
+  const { $, $$, esc, ic } = Kodex;
+  const frame = document.getElementById('frame');
+  Kodex.mount({ title: 'Новый запуск', sub: 'Корпоративные продажи', back: true, nav: 'project.runs', project: Kodex.data.projects[0], decisions: 2, tabs: false,
+    kodexContext: { screen: 'Новый запуск', object: 'Проект «Корпоративные продажи»', can: ['предложить название по цели', 'подобрать Процесс под задачу'] } });
+
+  /* Дополнительно */
+  const moreBtn = $('#m-more-btn', frame), morePanel = $('#m-more-panel', frame);
+  moreBtn.addEventListener('click', () => { const open = moreBtn.getAttribute('aria-expanded') !== 'true'; moreBtn.setAttribute('aria-expanded', open); morePanel.hidden = !open; $('#m-more-state', frame).textContent = open ? 'развёрнуто' : 'свёрнуто'; });
+  frame.addEventListener('click', (e) => { const b = e.target.closest('[data-set]'); if (b) $('#' + b.dataset.set, frame).textContent = b.textContent; });
+  $('#m-name', frame).addEventListener('input', (e) => { const v = e.target.value.trim(); const s = $('#m-sum-name', frame); s.textContent = v || 'будет предложено Kodex по цели'; s.classList.toggle('mut', !v); });
+
+  /* Продолжение работы → sheet с inline picker сессий */
+  const SESSIONS = Kodex.gen.sessions(400, 11).filter((s) => s.state !== 'gate').map((s) => Object.assign({}, s, { agent: 'Менеджер продаж', initials: 'МП', tone: 'acc' }));
+  const SSTATE = { ok: ['ok', 'Завершена'], err: ['err', 'Ошибка'], cancel: ['cancel', 'Отменена'] };
+  const turns = (n) => n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'ход' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'хода' : 'ходов');
+  let sessionPicker = null;
+  function setSession(s) {
+    const cb = $('#m-session-cb', frame);
+    if (s) { cb.classList.remove('is-placeholder'); $('#m-session-title', frame).textContent = s.title; $('#m-session-sub', frame).textContent = `${s.agent} · ${s.when} · ${turns(s.turns)}`; $('#m-sum-session', frame).textContent = `Продолжение: «${s.title}» · ${s.agent} · ${s.when}`; }
+    else { cb.classList.add('is-placeholder'); $('#m-session-title', frame).textContent = 'Выберите сессию для продолжения'; $('#m-session-sub', frame).textContent = 'Завершённые сессии координатора'; $('#m-sum-session', frame).textContent = 'Продолжение: сессия не выбрана'; }
+  }
+  $('#m-session-sheet', frame).addEventListener('kodex:open', () => {
+    if (sessionPicker) return;
+    sessionPicker = Kodex.asyncPicker({ trigger: $('#m-session-cb', frame), inline: true, host: $('#m-session-host', frame), items: SESSIONS, placeholder: 'Найти сессию по названию или итогу',
+      match: (s, q) => (s.title + ' ' + s.context + ' ' + s.when).toLowerCase().includes(q),
+      render: (s) => { const st = SSTATE[s.state] || SSTATE.ok; return `${Kodex.avatar(s.initials, 36, s.tone)}<span class="picker__text"><span class="picker__title" style="font-size:14px">${esc(s.title)}</span><span class="picker__sub" style="font-size:12px"><span>${esc(s.when)}</span><span>·</span><span>${turns(s.turns)}</span><span>·</span><span>${esc(s.context)}</span></span></span><span class="picker__aside">${Kodex.pill(st[0], st[1], true)}</span>`; },
+      onSelect: (s) => { setSession(s); Kodex.closeOverlay($('#m-session-sheet', frame)); } });
+  });
+  $$('input[name="m-session"]', frame).forEach((r) => r.addEventListener('change', () => { const cont = $('#m-session-continue', frame).checked; $('#m-session-field', frame).hidden = !cont; if (!cont) $('#m-sum-session', frame).textContent = 'Новая'; else setSession(sessionPicker && sessionPicker.selected()[0]); }));
+
+  /* Sheet выбора файлов: cursor-подгрузка */
+  const FIXED = [
+    { id: 'f-brief', name: 'Бриф — Север.pdf', ext: 'pdf', mime: 'pdf', sizeKb: 1843, ver: 2, scan: 'ok', when: 'сегодня, 09:41', source: 'Загрузила Анна Волкова', context: 'Папка Клиенты/Север' },
+    { id: 'f-terms', name: 'Условия пилота — Север.docx', ext: 'docx', mime: 'doc', sizeKb: 640, ver: 1, scan: 'ok', when: 'вчера, 16:12', source: 'Загрузил Михаил Орлов', context: 'Папка Клиенты/Север' },
+    { id: 'f-price', name: 'Прайс-лист 2026.xlsx', ext: 'xlsx', mime: 'xls', sizeKb: 260, ver: 3, scan: 'ok', when: '22 авг', source: 'Загрузила Анна Волкова', context: 'Папка Общие' },
+    { id: 'f-price-old', name: 'Прайс-лист 2026.xlsx', ext: 'xlsx', mime: 'xls', sizeKb: 248, ver: 1, scan: 'ok', when: '3 июл', source: 'Запуск «Сводка по прайсу»', context: 'Результаты запусков' },
+    { id: 'f-quar', name: 'Сценарии продаж.docx', ext: 'docx', mime: 'doc', sizeKb: 820, ver: 1, scan: 'err', when: 'вчера, 18:30', source: 'Загрузил Михаил Орлов', context: 'Папка Общие' },
+  ];
+  const FILES = [...FIXED, ...Kodex.gen.files(1243, 7).map((f) => Object.assign(f, { context: f.context.replace('Проект «Корпоративные продажи» · папка', 'Папка').replace('Загружен вручную', 'Папка Общие') }))];
+  const SCAN = { ok: ['ok', 'Проверен'], run: ['run', 'Проверяется'], err: ['err', 'Изолирован'] };
+  const selected = new Set(['f-brief', 'f-terms']);
+  const scroll = $('#m-fp-scroll', frame), list = $('#m-fp-list', frame), foot = $('#m-fp-foot', frame);
+  let filtered = FILES, cursor = 0, loading = false, done = false, seq = 0, query = '';
+  const fmtN = (n) => n.toLocaleString('ru-RU');
+  function row(f) {
+    const blocked = f.scan !== 'ok', on = selected.has(f.id), st = SCAN[f.scan];
+    return `<div class="p-mfp__row${on ? ' is-checked' : ''}" data-id="${esc(f.id)}">
+      <label class="check"><input type="checkbox" data-m-check="${esc(f.id)}" ${on ? 'checked' : ''} ${blocked ? 'disabled' : ''} aria-label="Выбрать ${esc(f.name)}"><span class="check__box">${ic('check')}</span></label>
+      <span class="mime mime--${f.mime}">${esc(f.ext)}</span>
+      <span class="p-mfp__name"><span class="p-mfp__title">${esc(f.name)}</span><span class="p-mfp__meta"><span>${Kodex.fmtKb(f.sizeKb)}</span><span>·</span><span>v${f.ver}</span><span>·</span><span>${esc(f.when)}</span></span><span class="p-mfp__meta"><span>${esc(f.context)}</span><span>·</span><span>${esc(f.source)}</span></span>${blocked ? `<span class="p-mfp__meta">${Kodex.pill(st[0], st[1], true)}<span>${f.scan === 'err' ? 'недоступен для запуска' : 'проверка не завершена'}</span></span>` : ''}</span>
+    </div>`;
+  }
+  function setCount() { $('#m-fp-count', frame).textContent = `Показано ${fmtN(cursor)} из ${fmtN(filtered.length)}`; }
+  function load(immediate) {
+    if (loading || done) return; loading = true; const my = ++seq;
+    foot.innerHTML = '<span class="spinner spinner--sm"></span><span>Загружаем…</span>';
+    const step = () => { if (my !== seq) return; const chunk = filtered.slice(cursor, cursor + 30); list.insertAdjacentHTML('beforeend', chunk.map(row).join('')); cursor += chunk.length; done = cursor >= filtered.length; loading = false; setCount(); foot.innerHTML = done ? '<span>Это все файлы</span>' : '<span>Листайте дальше — подгрузим следующую страницу</span>'; };
+    if (immediate) step(); else setTimeout(step, 350);
+  }
+  function apply(isSearch) {
+    seq++; loading = false; done = false; cursor = 0; filtered = FILES.filter((f) => !query || (f.name + ' ' + f.context).toLowerCase().includes(query));
+    foot.innerHTML = ''; setCount();
+    list.innerHTML = isSearch ? '<div class="picker__state"><span class="spinner"></span><span>Ищем на сервере…</span></div>' : '';
+    const finish = () => { list.innerHTML = ''; if (!filtered.length) { list.innerHTML = `<div class="empty empty--compact"><span class="empty__icon">${ic('search', 20)}</span><div class="empty__title">Ничего не найдено</div><div class="empty__text">Измените запрос.</div></div>`; return; } load(true); };
+    if (isSearch) setTimeout(() => { if (list.querySelector('.picker__state')) finish(); }, 420); else finish();
+  }
+  scroll.addEventListener('scroll', () => { if (scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 80) load(false); });
+  $('#m-fp-search', frame).addEventListener('input', Kodex.debounce((e) => { query = e.target.value.trim().toLowerCase(); apply(true); }, 250));
+  list.addEventListener('change', (e) => { const c = e.target.closest('[data-m-check]'); if (!c) return; if (c.checked) selected.add(c.dataset.mCheck); else selected.delete(c.dataset.mCheck); c.closest('.p-mfp__row').classList.toggle('is-checked', c.checked); $('#m-fp-add', frame).textContent = `Добавить (${selected.size})`; });
+  $('#m-file-picker', frame).addEventListener('kodex:open', () => { if (!cursor) apply(false); });
+  $('#m-fp-add', frame).addEventListener('click', () => { const n = selected.size; $('#m-files-count', frame).textContent = n; $('#m-sum-files', frame).textContent = `${n} ${n === 1 ? 'файл' : n < 5 ? 'файла' : 'файлов'} · проверены`; });
+})();
+</script>
+</body>
+</html>

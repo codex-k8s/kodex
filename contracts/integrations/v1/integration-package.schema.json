@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kodex.dev/contracts/integrations/v1/integration-package.schema.json",
+  "title": "Kodex Integration Package v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "integrations.kodex.io/v1" },
+    "kind": { "const": "IntegrationPackage" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "version", "origin"],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "version": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$",
+          "maxLength": 32
+        },
+        "origin": { "const": "SHIPPED" }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "description",
+        "category",
+        "adapter",
+        "configurationFields",
+        "networkDestinations",
+        "healthCheck",
+        "capabilities"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "category": { "$ref": "#/$defs/key" },
+        "adapter": {
+          "enum": [
+            "SYNTHETIC_HTTP",
+            "GITHUB",
+            "GITLAB",
+            "JIRA",
+            "CONFLUENCE",
+            "EMAIL_HTTPS",
+            "MATTERMOST_INTERACTION"
+          ]
+        },
+        "credential": { "$ref": "#/$defs/credential" },
+        "configurationFields": {
+          "type": "array",
+          "maxItems": 24,
+          "items": { "$ref": "#/$defs/field" }
+        },
+        "networkDestinations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/networkDestination" }
+        },
+        "healthCheck": { "$ref": "#/$defs/healthCheck" },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 48,
+          "items": { "$ref": "#/$defs/capability" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "maxLength": 120
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "type", "required"],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "enum": ["STRING", "INTEGER", "BOOLEAN"] },
+        "format": { "enum": ["PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "EMAIL", "HOST", "IDENTIFIER"] },
+        "required": { "type": "boolean" },
+        "maximumLength": { "type": "integer", "minimum": 1, "maximum": 65536 },
+        "minimum": { "type": "integer", "minimum": 0 },
+        "maximum": { "type": "integer", "minimum": 0 },
+        "allowedValues": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 120 }
+        }
+      }
+    },
+    "credential": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["secretKey", "kind"],
+      "properties": {
+        "secretKey": { "$ref": "#/$defs/key" },
+        "kind": { "enum": ["TOKEN", "PASSWORD"] }
+      }
+    },
+    "networkDestination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "source", "port", "tls"],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "source": { "enum": ["STATIC", "CONFIGURATION"] },
+        "hostname": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$",
+          "maxLength": 253
+        },
+        "configurationField": { "$ref": "#/$defs/key" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "tls": { "enum": ["REQUIRED", "NONE"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "source": { "const": "STATIC" } } },
+          "then": {
+            "required": ["hostname"],
+            "not": { "required": ["configurationField"] }
+          }
+        },
+        {
+          "if": { "properties": { "source": { "const": "CONFIGURATION" } } },
+          "then": {
+            "required": ["configurationField"],
+            "not": { "required": ["hostname"] }
+          }
+        }
+      ]
+    },
+    "healthCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "timeoutSeconds", "maxAttempts"],
+      "properties": {
+        "operation": { "$ref": "#/$defs/key" },
+        "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 3 }
+      }
+    },
+    "resourceScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "connectionFields"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "SYNTHETIC_JOURNAL",
+            "GITHUB_REPOSITORY",
+            "GITLAB_PROJECT",
+            "JIRA_PROJECT",
+            "CONFLUENCE_SPACE",
+            "EMAIL_SENDER",
+            "MATTERMOST_CHANNEL"
+          ]
+        },
+        "connectionFields": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/key" }
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["idempotency", "timeoutSeconds", "maxAttempts", "retryBackoffMilliseconds"],
+      "properties": {
+        "idempotency": { "enum": ["READ_ONLY", "EFFECT_KEY", "PROVIDER_NATIVE"] },
+        "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 120 },
+        "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "retryBackoffMilliseconds": { "type": "integer", "minimum": 50, "maximum": 5000 }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "name",
+        "description",
+        "operation",
+        "risk",
+        "approvalPolicy",
+        "resourceScope",
+        "inputFields",
+        "outputFields",
+        "execution"
+      ],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "operation": { "$ref": "#/$defs/key" },
+        "risk": { "enum": ["READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"] },
+        "approvalPolicy": { "enum": ["NONE", "HUMAN_EACH_EFFECT"] },
+        "resourceScope": { "$ref": "#/$defs/resourceScope" },
+        "inputFields": {
+          "type": "array",
+          "maxItems": 24,
+          "items": { "$ref": "#/$defs/field" }
+        },
+        "outputFields": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 24,
+          "items": { "$ref": "#/$defs/field" }
+        },
+        "execution": { "$ref": "#/$defs/execution" }
+      }
+    }
+  }
+}

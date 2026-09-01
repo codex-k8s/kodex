@@ -26,6 +26,9 @@ const ru = {
     offline:
       "Нет сети. Показываем последнее полученное состояние; действия временно недоступны.",
     reconnecting: "Восстанавливаем realtime-соединение…",
+    preloadFailed:
+      "Интерфейс обновился на сервере, но текущая страница и введённые данные сохранены. Обновите страницу, когда будете готовы.",
+    refreshPage: "Обновить страницу",
     navigation: "Основная навигация",
     projectNavigation: "Навигация Проекта",
     breadcrumbs: "Навигационная цепочка",
@@ -50,9 +53,14 @@ const ru = {
     run: "Запуск",
     files: "Файлы и знания",
     automations: "Автоматизации",
+    environments: "Окружения",
+    environment: "Окружение",
+    newEnvironment: "Новое окружение",
+    secrets: "Секреты",
     members: "Участники",
     access: "Участники и доступ",
     audit: "Аудит и диагностика",
+    providers: "Учётные записи моделей",
   },
   common: {
     create: "Создать",
@@ -80,7 +88,12 @@ const ru = {
       "У вашей роли нет разрешения на это действие в выбранном проекте.",
     conflict: "Состояние уже изменилось. Показано актуальное решение.",
     unavailable: "Функция временно недоступна",
+    available: "Доступно",
+    disabled: "Отключено",
+    yes: "Да",
     name: "Название",
+    description: "Описание",
+    delete: "Удалить",
     purpose: "Назначение",
     status: "Состояние",
     unknownStatus: "Статус недоступен",
@@ -97,7 +110,8 @@ const ru = {
     all: "Все",
     active: "Активные",
     duration: "Длительность",
-    source: "Источник",
+    source: "Запущено через",
+    sourceHint: "Запуск создан через «{source}».",
     target: "Цель",
     input: "Входные данные",
     download: "Скачать",
@@ -166,6 +180,77 @@ const ru = {
     createAgent: "Создать сотрудника",
     createWorkflow: "Создать Процесс",
   },
+  workboard: {
+    greeting: "Добрый день, {name}",
+    attention: "Требует внимания",
+    noAttention:
+      "Сейчас нет решений или активных инцидентов, требующих внимания.",
+    runningNow: "Выполняется сейчас",
+    noActiveRuns: "Активных запусков сейчас нет.",
+    recentResults: "Недавние результаты",
+    noRecentResults: "Недавних проверенных результатов пока нет.",
+    refreshing: "обновляется",
+    source: "Источник",
+    initiator: "Инициатор",
+    executor: "Исполнитель",
+    executorUnavailable: "не передан API",
+    resources: "Ресурсы Проекта",
+    projectCollections: "Ресурсы Проекта",
+    resourceCount: "Всего: {count}",
+    activeCount: "Активных: {count}",
+    pendingCount: "Ожидают решения: {count}",
+    openCollection: "Открыть список",
+    openCurrentWork: "Открыть текущую работу",
+    openDecisions: "Открыть ожидающие решения",
+    resourceUnavailable: "Данные этого раздела сейчас недоступны.",
+    noAutomations: "Автоматизации ещё не настроены.",
+    noEnvironments: "Окружения ещё не созданы.",
+    nextRun: "Следующий запуск: {date}",
+    moreEnvironments:
+      "Показаны последние окружения. Полный каталог доступен по ссылке «Все».",
+    coverage: {
+      title: "Покрытие источников внимания",
+      subtitle: "Эти состояния не входят в текущий Overview API",
+      unavailable: "Нет API",
+      capabilities: {
+        STOPPED_RUNS: {
+          title: "Остановленные запуски",
+          description:
+            "Платформа пока не передаёт отдельную выборку остановленных запусков.",
+        },
+        PROVIDER_AUTH_EXPIRY: {
+          title: "Авторизация провайдеров",
+          description:
+            "Срок действия авторизации учётных записей провайдера пока недоступен этому экрану.",
+        },
+        SESSION_CONTINUATION: {
+          title: "Продолжение сессий",
+          description:
+            "Overview API пока не возвращает список недавних сессий для продолжения.",
+        },
+      },
+    },
+    projectActivity: "Активных запусков: {runs} · решений: {gates}",
+    allProjectRuns: "Все запуски Проекта",
+    allProjectFiles: "Все файлы Проекта",
+    projectRuns: "Запуски Проекта",
+    viewMode: "Вид списка запусков",
+    kanban: "Kanban",
+    list: "Список",
+    noRuns: "Запусков с выбранным состоянием нет.",
+    noRunsInLane: "В этой колонке запусков нет.",
+    filters: {
+      ALL: "Все",
+      ACTIVE: "Активные",
+      TERMINAL: "Завершённые",
+    },
+    lanes: {
+      QUEUED: "В очереди",
+      RUNNING: "Работает",
+      WAITING_HUMAN: "Ждёт решения",
+      TERMINAL: "Завершён",
+    },
+  },
   agents: {
     title: "ИИ-сотрудники",
     subtitle: "Роли, инструкции, возможности и доступ к знаниям",
@@ -179,7 +264,7 @@ const ru = {
     provider: "Провайдер",
     model: "Модель",
     runtimeRevision: "Ревизия runtime",
-    avatar: "Ссылка на аватар",
+    avatar: "Аватар",
     instructions: "Инструкции",
     capabilities: "Возможности",
     capabilitiesHelp: "Выдаются отдельно и применяются при следующем запуске",
@@ -188,6 +273,17 @@ const ru = {
     knowledge: "Знания",
     enabled: "Сотрудник включён",
     currentActivity: "Сейчас",
+    catalogSearch: "Поиск сотрудников",
+    catalogSearchPlaceholder: "Найти по имени, назначению или роли",
+    catalogClearSearch: "Очистить поиск",
+    catalogView: "Вид каталога сотрудников",
+    catalogGrid: "Карточки",
+    catalogTable: "Таблица",
+    catalogResetFilters: "Сбросить фильтры",
+    catalogLoaded: "Загружено: {count}",
+    catalogLoadMore: "Загрузить ещё",
+    catalogLoadingMore: "Загружаем следующую страницу…",
+    updatedAt: "Изменён",
     validate: "Проверить инструкции",
     publish: "Опубликовать инструкции",
     rollback: "Вернуть опубликованную версию",
@@ -217,6 +313,391 @@ const ru = {
     catalogDescription:
       "Пользователи выбирают назначение окружения; внутренние образы и digest управляются платформой.",
   },
+  runtime: {
+    title: "Runtime и рабочее окружение",
+    appliesNextTurn:
+      "Опубликованные изменения применятся к следующему ходу через новую RuntimeRevision.",
+    modelAndExecution: "Модель и среда выполнения",
+    nextTurnHint: "Изменения не затрагивают уже выполняющийся ход",
+    provider: "Провайдер",
+    providerHelp: "Определяется выбранным runtime-профилем",
+    profile: "Runtime-профиль",
+    profileHelp: "Профиль ресурсов, ограничений и модели выполнения",
+    model: "Модель",
+    modelHelp: "Проверяется сервером вместе с provider account policy",
+    accountPolicy: "Политика учётных записей",
+    accountPolicyHelp: "Выбор авторизованной записи для новых сессий",
+    policy: {
+      FIXED: "Фиксированная запись",
+      LEAST_USED: "С наименьшей нагрузкой",
+      WEIGHTED: "По весам",
+    },
+    accounts: "Назначенные учётные записи провайдера",
+    account: "Учётная запись {account}",
+    authorizedAccount: "Авторизована и разрешена сервером",
+    weight: "Вес",
+    accountCatalogUnavailable: "Добавление учётных записей пока недоступно",
+    accountCatalogBlocker:
+      "Текущий API возвращает назначенные записи, но не предоставляет безопасный каталог доступных provider accounts. Можно менять policy и веса текущего набора; ввод внутренних ref вручную запрещён.",
+    accountCatalogHelp:
+      "Выберите одну или несколько готовых записей. Внутренние идентификаторы вводить вручную нельзя.",
+    environment: "Рабочее окружение",
+    environmentHelp: "Версионируемый набор переменных и Secret descriptors",
+    chooseEnvironment: "Выберите окружение",
+    searchEnvironment: "Поиск окружений на сервере",
+    bindEnvironment: "Назначить окружение",
+    publishConfiguration: "Опубликовать runtime-конфигурацию",
+    overlay: "Overlay config.toml",
+    overlayHelp:
+      "Разрешённые параметры накладываются поверх защищённой конфигурации платформы.",
+    overlayEditor: "Черновик overlay",
+    saveDraft: "Сохранить черновик",
+    validate: "Проверить TOML",
+    publishOverlay: "Опубликовать overlay",
+    effectiveConfig: "Итоговый effective config",
+    effectiveHelp:
+      "Read-only представление не содержит значений секретов и показывает конфигурацию следующего хода.",
+    safeReadback: "Безопасное представление",
+    history: "История runtime-конфигурации",
+    overlayRollbackUnavailable: "История overlay недоступна в API",
+    overlayRollbackBlocker:
+      "Операция rollback существует, но контракт не предоставляет список прежних overlay refs. UI не предлагает бессмысленный возврат к текущей версии.",
+    conflictHelp:
+      "Конфигурация была изменена параллельно. Перезагрузите авторитетное состояние и повторите правку.",
+    reload: "Перезагрузить состояние",
+    pickerShown: "Показано: {count}",
+    pickerScroll: "Прокрутите для продолжения",
+    environmentsTitle: "Рабочие окружения",
+    environmentsSubtitle:
+      "Версионируемые переменные и ссылки на неизменяемые ревизии Secret",
+    newEnvironment: "Новое окружение",
+    environmentsEmpty: "Окружения не найдены",
+    environmentsEmptyHelp: "Создайте окружение или измените поисковый запрос.",
+    revision: "Ревизия",
+    variables: "Переменные",
+    secretDescriptors: "Secret descriptors",
+    environmentEditorSubtitle: "Публикация создаёт новую неизменяемую ревизию",
+    publishRevision: "Опубликовать ревизию",
+    reauthCompleted: "Свежая OIDC-аутентификация завершена",
+    reauthExplicitSaveRequired:
+      "Черновик восстановлен. Проверьте параметры и явно повторите создание или публикацию.",
+    restoredImageSelection:
+      "Выбор восстановлен после OIDC-аутентификации; точные сведения загрузятся после публикации.",
+    restoredSecretSelection:
+      "Ссылка на секрет восстановлена после OIDC-аутентификации.",
+    environmentGeneral: "Основные параметры",
+    environmentGeneralHelp:
+      "Название и назначение видны сотрудникам при выборе окружения.",
+    variablesHelp:
+      "Только несекретные значения. Имена передаются в runtime без преобразования.",
+    addVariable: "Добавить переменную",
+    variableName: "Имя переменной",
+    nonSecretValue: "Несекретное значение",
+    secretDescriptorsHelp:
+      "Ссылки закрепляют точную ревизию Kubernetes Secret; значения не читаются и не сохраняются UI.",
+    secretBindingsHelp:
+      "Задайте имя переменной и выберите активный секрет Проекта. Неизменяемые Kubernetes-метаданные назначит сервер при публикации.",
+    addSecretDescriptor: "Добавить descriptor",
+    addSecretBinding: "Добавить секрет",
+    secretValuesForbidden:
+      "Не вставляйте сюда token, пароль или ключ. Выберите секрет из безопасного каталога Проекта.",
+    secretDescriptor: "Secret descriptor {number}",
+    secretBinding: "Секретная переменная {number}",
+    runtimeSecret: "Секрет Проекта",
+    chooseRuntimeSecret: "Выберите секрет",
+    searchRuntimeSecret: "Поиск секретов на сервере",
+    secretNotSelected: "Секрет не выбран",
+    secretRevoked: "Секрет отозван и недоступен для новых ревизий",
+    currentPublishedSecret: "Секрет текущей опубликованной ревизии",
+    currentImmutableDescriptor:
+      "Неизменяемые метаданные текущей опубликованной ревизии",
+    descriptorGeneratedOnPublish:
+      "Точные Kubernetes-метаданные появятся после публикации и будут доступны только для чтения.",
+    secretTarget: "Kubernetes Secret и ключ",
+    secretPicker: {
+      loading: "Загрузка секретов",
+      loadingMore: "Загрузка следующей страницы",
+      empty: "Активные секреты не найдены",
+      error: "Не удалось загрузить секреты",
+    },
+    secretName: "Имя Kubernetes Secret",
+    secretKey: "Ключ в Secret",
+    secretUid: "Secret UID",
+    secretResourceVersion: "Secret resourceVersion",
+    revisionHistory: "История ревизий",
+    rollback: "Вернуть как новую ревизию",
+    environmentConflict:
+      "Окружение изменилось на сервере. Перезагрузите данные перед публикацией.",
+    updatedAt: "Обновлено",
+    variableNames: "Доступные переменные",
+    secretDescriptorNames: "Секретные переменные",
+    openEditor: "Открыть редактор",
+    editorSections: "Разделы редактора окружения",
+    editorActions: "Быстрые действия редактора окружения",
+    section: {
+      GENERAL: "Основное",
+      IMAGE_TOOLS: "Образ и инструменты",
+      VALUES: "Переменные",
+      SECRETS: "Секреты",
+      POLICY: "Ресурсы и доступ",
+      READINESS: "Готовность",
+    },
+    notPublished: "Ещё не опубликовано",
+    versionDigest: "Digest ревизии окружения",
+    imageAndTools: "Образ и проверенные инструменты",
+    imageAndToolsHelp:
+      "Окружение должно закреплять exact promoted image digest и разрешать только проверенные executable.",
+    exactImage: "Exact image revision и digest",
+    choosePromotedImage: "Выберите собранный и promoted образ",
+    searchPromotedImage: "Найти promoted образ",
+    promotedAndVerified: "Promoted и проверен",
+    verifiedTools: "Проверенные инструменты",
+    verifiedToolsHelp:
+      "Разрешите только нужные executable из выбранного образа и опишите их назначение для материализованного prompt.",
+    selectedToolsCount: "Выбрано: {selected} из {total}",
+    toolDisplayName: "Название в prompt",
+    toolCommand: "Проверенный executable",
+    toolUsageHint: "Подсказка по использованию",
+    noVerifiedTools: "В образе нет проверенных executable.",
+    chooseImageFirst: "Сначала выберите promoted образ.",
+    secretReferences: "Ссылки на секреты",
+    createSecret: "Создать секрет",
+    rotateSecret: "Ротировать",
+    revealSecret: "Показать значение",
+    secretActionsUnavailable:
+      "Secret create/rotate/reveal отсутствуют в текущем API.",
+    secretLifecycleUnavailable:
+      "Операция недоступна: API secret-broker lifecycle не материализован.",
+    secretRevealUnavailable:
+      "Reveal недоступен: нет API, permission readback и fresh OIDC action proof.",
+    secretReferenceIncomplete: "Неполная ссылка на ревизию секрета",
+    secretMaskedHint: "Безопасная маска",
+    secretMaskedHintUnavailable:
+      "Недоступна: API не возвращает типизированный display_hint.",
+    editSecretReference: "Изменить immutable reference",
+    noSecretReferences: "Ссылки на секреты не добавлены.",
+    resourcesAndAccess: "Ресурсы, сеть и Kubernetes RBAC",
+    resourcesAndAccessHelp:
+      "Effective policy должен вычисляться сервером в пределах полномочий пользователя и admission policy.",
+    resources: "Requests и limits",
+    resourcesHelp:
+      "Значения задаются целыми millicores и MiB в пределах admission policy платформы.",
+    cpuRequest: "CPU request, millicores",
+    cpuLimit: "CPU limit, millicores",
+    cpuRequestRange: "От 100 до 8 000",
+    cpuLimitRange: "От request до 16 000",
+    memoryRequest: "Memory request, MiB",
+    memoryLimit: "Memory limit, MiB",
+    memoryRequestRange: "От 128 до 32 768 MiB",
+    memoryLimitRange: "От request до 65 536 MiB",
+    ephemeralStorageRequest: "Ephemeral storage request, MiB",
+    ephemeralStorageLimit: "Ephemeral storage limit, MiB",
+    ephemeralStorageRequestRange: "От 256 до 20 480 MiB",
+    ephemeralStorageLimitRange: "От request до 102 400 MiB",
+    resourcesUnavailable:
+      "Typed resource profile отсутствует в текущем RuntimeEnvironment API.",
+    ephemeralVolumes: "Временные тома",
+    ephemeralVolumesHelp:
+      "Только execution-scoped disk или memory emptyDir. Mount path назначает платформа.",
+    addVolume: "Добавить том",
+    noEphemeralVolumes: "Дополнительные временные тома не настроены.",
+    volumeKind: "Тип тома",
+    volumeKindLabel: {
+      EPHEMERAL_DISK: "Временный диск",
+      EPHEMERAL_MEMORY: "Память (tmpfs)",
+    },
+    volumeSize: "Размер, MiB",
+    mountPath: "Итоговый mount path",
+    networkPolicy: "Сетевая политика",
+    networkPolicyHelp:
+      "Deny-by-default включён всегда. UI показывает только закрытый реестр разрешённых назначений.",
+    networkDestination: {
+      DNS: "DNS",
+      PROVIDER_PROXY: "Provider proxy",
+      RUNTIME_CALLBACK: "Runtime callback",
+      KUBERNETES_API: "Kubernetes API",
+    },
+    networkDestinationHelp: {
+      DNS: "Разрешение имён через DNS кластера, TCP/UDP 53.",
+      PROVIDER_PROXY:
+        "Вызовы провайдера только через платформенный proxy, TCP 8080.",
+      RUNTIME_CALLBACK:
+        "Возврат событий выполнения в runtime-controller, TCP 8444.",
+      KUBERNETES_API:
+        "Добавляется только вместе с профилем чтения собственного execution, TCP 443.",
+    },
+    mandatoryDestination: "Обязательно",
+    scopedAccessEnabled: "Scoped доступ",
+    networkPolicyUnavailable:
+      "API не предоставляет typed destinations и итоговый NetworkPolicy preview.",
+    kubernetesRbac: "Scoped Kubernetes RBAC",
+    kubernetesRbacHelp:
+      "Профиль не выдаёт произвольный доступ и ограничен объектами текущего execution.",
+    readOwnExecution: "Разрешить чтение собственного execution",
+    readOwnExecutionHelp:
+      "READ_OWN_EXECUTION: только точные Pod и Pod logs, назначенные текущему запуску.",
+    kubernetesAccessBoundary:
+      "ServiceAccount, resourceNames и namespace kodex-runtime назначает сервер. List, watch, exec и доступ к Secret не выдаются.",
+    kubernetesRbacUnavailable:
+      "API не возвращает workload identity, RBAC profile и effective grants.",
+    effectivePolicyPreview: "Effective policy preview",
+    effectivePolicyPreviewHelp:
+      "Черновик отправляется как typed policy; после публикации ниже показывается авторитетная нормализованная policy сервера.",
+    serverCalculated: "Рассчитано сервером",
+    afterPublish: "После публикации",
+    effectivePolicyAfterPublish:
+      "Digest-ы, точные egress rules и mount paths появятся после первой публикации.",
+    denyByDefault: "Deny-by-default",
+    kubernetesNamespace: "Runtime namespace",
+    effectiveEgressRules: "Egress rules",
+    effectiveVolumes: "Тома",
+    policyDigest: {
+      resources: "Resources digest",
+      volumes: "Volumes digest",
+      network: "Network digest",
+      rbac: "RBAC digest",
+    },
+    effectivePolicyUnavailable:
+      "Авторитетный preview ресурсов, сети и RBAC пока недоступен; UI не строит его по догадке.",
+    catalogCapabilityBoundary:
+      "Каталог показывает exact image и инструменты. Resources, network и RBAC появятся после materialization соответствующего API.",
+    readiness: "Готовность окружения",
+    readinessHelp:
+      "Локальные проверки отделены от server-side readiness выбранного image digest и effective policy.",
+    readinessCheck: {
+      FORM: "Основные параметры и env values",
+      SECRET_REFS: "Immutable Secret references",
+      IMAGE: "Exact promoted image",
+      TOOLS: "Разрешённые verified tools",
+      POLICY: "Typed resource, volume, network и RBAC policy",
+      REVISION: "Опубликованная immutable revision",
+      EFFECTIVE_POLICY: "Авторитетная effective policy",
+      SERVER_READINESS: "Server-side readiness",
+    },
+    readinessState: {
+      READY: "Готово",
+      NEEDS_ATTENTION: "Требует внимания",
+      UNAVAILABLE: "Недоступно в API",
+    },
+    safeEffectivePreview: "Безопасное представление текущей ревизии",
+    safeEffectivePreviewHelp:
+      "Показывает только доступные API метаданные и никогда не включает plaintext секретов.",
+    revisionHistoryHelp:
+      "Возврат публикует новую ревизию и не изменяет старую.",
+    revisionHistoryEmpty: "Опубликованных ревизий пока нет.",
+    errors: {
+      nameRequired: "Укажите название окружения.",
+      imageRequired: "Выберите promoted образ для окружения.",
+      toolNameRequired: "Укажите название инструмента без пробелов по краям.",
+      toolCommand: "Executable имеет недопустимый формат.",
+      toolDescriptionRequired:
+        "Добавьте описание инструмента без пробелов по краям.",
+      duplicateTool: "Один executable нельзя разрешить дважды.",
+      variableName: "Имя переменной должно соответствовать формату VAR_NAME.",
+      reservedVariableName:
+        "Это имя зарезервировано платформой или средой выполнения.",
+      duplicateVariable: "Имена переменных в окружении не должны повторяться.",
+      secretBindingRequired: "Выберите секрет Проекта.",
+      nameTooLong: "Название окружения не должно превышать 120 символов.",
+      descriptionTooLong: "Описание не должно превышать 1 000 символов.",
+      collectionLimit: "В одном разделе допускается не более 128 элементов.",
+      toolNameTooLong: "Название инструмента не должно превышать 160 символов.",
+      toolDescriptionTooLong:
+        "Описание инструмента не должно превышать 500 символов.",
+      toolUsageHintTooLong:
+        "Подсказка инструмента не должна превышать 500 символов.",
+      cpuRequestRange:
+        "CPU request должен быть целым числом от 100 до 8 000 millicores.",
+      cpuLimitRange:
+        "CPU limit должен быть целым числом от 100 до 16 000 millicores.",
+      cpuLimitBelowRequest: "CPU limit не может быть меньше CPU request.",
+      memoryRequestRange:
+        "Memory request должен быть целым числом от 128 до 32 768 MiB.",
+      memoryLimitRange:
+        "Memory limit должен быть целым числом от 128 до 65 536 MiB.",
+      memoryLimitBelowRequest:
+        "Memory limit не может быть меньше memory request.",
+      ephemeralStorageRequestRange:
+        "Ephemeral storage request должен быть целым числом от 256 до 20 480 MiB.",
+      ephemeralStorageLimitRange:
+        "Ephemeral storage limit должен быть целым числом от 256 до 102 400 MiB.",
+      ephemeralStorageLimitBelowRequest:
+        "Ephemeral storage limit не может быть меньше request.",
+      volumeLimit: "Допускается не более 16 временных томов.",
+      volumeName: "Имя тома должно быть DNS-label длиной до 32 символов.",
+      reservedVolumeName: "Это имя тома зарезервировано платформой.",
+      duplicateVolume: "Имена временных томов не должны повторяться.",
+      volumeKind: "Разрешены только EPHEMERAL_DISK и EPHEMERAL_MEMORY.",
+      volumeSizeRange:
+        "Размер тома должен быть целым числом от 16 до 10 240 MiB.",
+      kubernetesAccess: "Неизвестный профиль Kubernetes доступа.",
+      networkDestinations:
+        "Сеть должна содержать DNS, provider proxy и runtime callback, а Kubernetes API — только при READ_OWN_EXECUTION.",
+      secretDescriptorRequired:
+        "Заполните все обязательные поля Secret descriptor.",
+      sha256: "SHA-256 должен содержать 64 строчные шестнадцатеричные цифры.",
+    },
+  },
+  runtimeSecrets: {
+    title: "Секреты Проекта",
+    subtitle:
+      "Безопасные значения для окружений: версии, ротация и контролируемая выдача",
+    secret: "Секрет",
+    search: "Поиск секретов",
+    searchPlaceholder: "Найти по названию или описанию",
+    shown: "Показано: {count}",
+    create: "Создать секрет",
+    createTitle: "Новый секрет",
+    rotate: "Ротировать",
+    rotateTitle: "Ротация секрета",
+    rotateHelp:
+      "Будет создана новая неизменяемая ревизия. Прежнее значение останется недоступным из интерфейса.",
+    revoke: "Отозвать",
+    revokeTitle: "Отозвать секрет?",
+    revokeHelp:
+      "Секрет и все его ревизии будут отозваны. Новые запуски не смогут использовать это значение.",
+    reveal: "Показать значение",
+    revealTitle: "Одноразовый просмотр секрета",
+    revealNamed: "Показать значение секрета {name}",
+    rotateNamed: "Ротировать секрет {name}",
+    revokeNamed: "Отозвать секрет {name}",
+    reauthRequired: "Требуется свежая OIDC-аутентификация",
+    reauthHelp:
+      "Сервер выдаст значение только пользователю с полномочием secret.reveal после отдельного свежего входа через OIDC.",
+    reauthenticate: "Войти заново через OIDC",
+    reauthRedirectHelp:
+      "Перед просмотром вы перейдёте к провайдеру входа. После подтверждения платформа вернёт вас к этому секрету.",
+    reauthCompleted:
+      "Свежий вход подтверждён. Одноразовый допуск действует только для этого секрета.",
+    revealedValue: "Выданное значение",
+    revealEphemeral:
+      "Значение хранится только в памяти этого открытого диалога и будет очищено при скрытии или закрытии.",
+    hideValue: "Скрыть и очистить",
+    showEnteredValue: "Показать введённое значение",
+    hideEnteredValue: "Скрыть введённое значение",
+    value: "Секретное значение",
+    valueHelp:
+      "Значение отправляется напрямую в защищённый API и не записывается в browser storage или метаданные каталога.",
+    valueType: "Тип значения",
+    types: {
+      STRING: "Строка",
+      JSON: "JSON",
+      BINARY: "Бинарное значение в Base64",
+    },
+    maskedHint: "Безопасная маска",
+    revision: "Текущая ревизия",
+    updatedAt: "Обновлено",
+    loadMore: "Загрузить ещё",
+    emptyTitle: "Секретов пока нет",
+    emptyText:
+      "Создайте первый секрет, чтобы затем закрепить его ревизию в рабочем окружении.",
+    emptySearchText: "Измените поисковый запрос.",
+    errors: {
+      nameRequired: "Укажите название секрета.",
+      required: "Введите секретное значение.",
+      "invalid-json": "Введите корректный JSON.",
+    },
+  },
   "role-environments": {
     standard: {
       name: "Стандартное окружение",
@@ -233,6 +714,75 @@ const ru = {
       pdf: "Обработка PDF",
       ocr: "Распознавание текста",
       office: "Офисные форматы",
+    },
+  },
+  roleImages: {
+    title: "Образы ИИ-сотрудников",
+    subtitle:
+      "Сборки, ревизии и программное окружение для рабочих сред Проекта",
+    entity: "Образ ИИ-сотрудника",
+    new: "Новый образ",
+    editorTitle: "Настройка образа",
+    editorSubtitle:
+      "Dockerfile, сборка, promotion и доказательства supply chain",
+    backToCatalog: "К каталогу образов",
+    search: "Найти образ в загруженной части каталога",
+    searchLimitation:
+      "Текущий API не принимает поисковый запрос: фильтр применяется только к уже загруженным страницам.",
+    loaded: "Загружено: {count}",
+    loadMore: "Загрузить ещё",
+    archived: "Архивные",
+    empty: "Образы не найдены",
+    emptyHelp:
+      "Измените фильтры или создайте образ из доступного базового окружения.",
+    unknownRole: "Название роли недоступно",
+    generation: "Поколение",
+    environment: "Базовое окружение",
+    promotion: "Promotion",
+    promoted: "Promoted",
+    notPromoted: "Не promoted",
+    updated: "Обновлено: {date}",
+    updatedAt: "Обновлено",
+    role: "Роль",
+    chooseRole: "Выберите роль",
+    chooseEnvironment: "Выберите базовое окружение",
+    recommended: "Рекомендуется",
+    agentsCount: "сотрудников: {count}",
+    sourceTitle: "Исходный Dockerfile",
+    sourceHelp:
+      "Платформа должна сохранить immutable revision и добавить защищённый runtime contract Kodex.",
+    dockerfile: "Полный Dockerfile",
+    localDraft: "Локальный черновик",
+    generationLabel: "Поколение {generation}",
+    createHelp:
+      "Создание сохраняет исходный Dockerfile как первое неизменяемое поколение.",
+    immutableRevisionHelp:
+      "Сохранение создаёт новое поколение; уже собранные поколения и digest не изменяются.",
+    createRevision: "Создать ревизию",
+    requestBuild: "Запросить сборку",
+    restore: "Восстановить",
+    confirmArchive:
+      "Архивировать этот образ? Новые сборки станут недоступны до восстановления.",
+    confirmRestore: "Восстановить этот образ?",
+    buildHistory: "История сборок",
+    buildHistoryHelp:
+      "Фактические attempt, stage, progress и безопасная диагностика из API.",
+    noBuilds: "Сборки ещё не запускались.",
+    attempt: "Попытка {attempt}",
+    currentState: "Текущее состояние",
+    evidence: "Digest, SBOM и provenance",
+    manifestDigest: "OCI manifest digest",
+    vulnerabilityEvidence: "Доказательство проверки уязвимостей",
+    admissionVerdict: "Результат admission",
+    noPromotedArtifact: "Promoted artifact ещё не создан.",
+    executables: "Обнаруженные executable",
+    noVerifiedExecutables: "Проверенные executable пока отсутствуют.",
+    usedByEnvironments: "Используется окружениями",
+    noEnvironmentDependencies: "Ни одно окружение не использует этот artifact.",
+    openEnvironments: "Открыть окружения",
+    validation: {
+      dockerfileRequired: "Dockerfile не должен быть пустым.",
+      fromRequired: "Dockerfile должен содержать инструкцию FROM.",
     },
   },
   workflows: {
@@ -287,6 +837,56 @@ const ru = {
     title: "Запуски",
     subtitle: "Все текущие и завершённые задания",
     new: "Новый запуск",
+    newRun: {
+      subtitle: "Настройте цель, файлы и продолжение работы",
+      projectContextLabel: "Проект",
+      projectContextPreserved: "Контекст Проекта сохранён для этого запуска.",
+      changeProject: "Выбрать другой Проект",
+      targetHint: "Выберите ИИ-сотрудника или опубликованный Процесс.",
+      targetTypeLabel: "Тип цели",
+      titlePlaceholder: "Краткое понятное название",
+      titleRequiredHint:
+        "Название обязательно и будет видно в списке запусков.",
+      taskPlaceholder: "Опишите результат, ограничения и критерии готовности",
+      taskHint:
+        "Задание получит выбранный ИИ-сотрудник или координатор Процесса.",
+      authorityHint:
+        "Запуск выполняется только с вашими текущими полномочиями в Проекте.",
+      files: {
+        choose: "Выбрать файлы",
+        pickerTitle: "Выберите входные файлы",
+        pickerSubtitle: "Только проверенные файлы Проекта «{project}».",
+        confirm: "Добавить выбранные",
+        selectedCount: "Выбрано: {count}",
+        remove: "Убрать файл {name}",
+        viewMode: "Вид списка файлов",
+        listView: "Список",
+        gridView: "Плитка",
+        unavailable: "Недоступен для запуска",
+        pickerLabel: "Доступные файлы",
+        searchPlaceholder: "Найти файл по названию",
+        loading: "Загружаем файлы…",
+        loadingMore: "Загружаем ещё…",
+        empty: "Подходящих файлов нет.",
+        error: "Не удалось загрузить файлы.",
+      },
+      session: {
+        newDescription:
+          "Создать отдельную сессию без истории предыдущей работы.",
+        continueDescription:
+          "Продолжить выбранную сессию этого же ИИ-сотрудника или Процесса.",
+        pickerTitle: "Выберите предыдущую сессию",
+        pickerSubtitle:
+          "Поиск выполняется только среди совместимых сессий текущей цели.",
+        pickerLabel: "Доступные сессии",
+        searchHint: "Начните вводить название или задачу запуска.",
+        searchPlaceholder: "Найти сессию",
+        loading: "Загружаем сессии…",
+        loadingMore: "Загружаем ещё…",
+        empty: "Совместимых сессий нет.",
+        error: "Не удалось загрузить сессии.",
+      },
+    },
     task: "Задание",
     runTitle: "Название запуска",
     targetType: "Что запустить",
@@ -317,6 +917,7 @@ const ru = {
     graph: "Граф выполнения",
     activity: "Ход работы",
     context: "Контекст узла",
+    workspaceTools: "Инструменты запуска",
     artifacts: "Результаты и файлы",
     incidents: "Диагностика",
     noIncidents: "Активных инцидентов этого запуска нет.",
@@ -326,6 +927,7 @@ const ru = {
     attempt: "Попытка {attempt}",
     previousAttempt: "Открыть предыдущую попытку",
     continueTask: "Дополнительное задание",
+    runContext: "Контекст запуска",
     live: "Данные поступают в реальном времени",
     selectedNode: "Выбранный узел",
     noEvents: "События появятся после начала выполнения",
@@ -335,6 +937,7 @@ const ru = {
     zoomIn: "Увеличить масштаб",
     zoomOut: "Уменьшить масштаб",
     fitGraph: "Вместить",
+    minimap: "Мини-карта графа",
     waitingForActivity: "Ожидает начала работы",
     callback: "Ответ дочернего запуска",
     childRuns: "Дочерние запуски",
@@ -343,6 +946,16 @@ const ru = {
     finishedAt: "Завершение",
     nodeConversation: "Работа ИИ-сотрудника",
     noNodeActivity: "Сообщения появятся после начала работы этого узла.",
+    sessionNode: "Сессия",
+    controlNode: "Контрольный этап",
+    platformActor: "Платформа",
+    toolParameters: "Безопасные параметры",
+    toolResult: "Безопасный результат",
+    toolDuration: "Длительность: {duration} мс",
+    artifactUnavailable:
+      "Событие файла получено, но его безопасное описание недоступно.",
+    renderedPromptUnavailable:
+      "Полностью отрендеренные инструкции и RuntimeRevision не представлены текущим API. Интерфейс не восстанавливает их из косвенных данных.",
     usage: {
       title: "Использование токенов",
       total: "Всего",
@@ -370,6 +983,7 @@ const ru = {
   files: {
     title: "Файлы и знания",
     subtitle: "Материалы для ИИ-сотрудников и результаты их работы",
+    trash: "Корзина",
     emptyTitle: "Файлов пока нет",
     emptyText:
       "Загрузите входной материал или запустите сотрудника, чтобы получить первый результат.",
@@ -378,7 +992,6 @@ const ru = {
     tabs: "Виды файлов",
     tab: {
       FILES: "Файлы",
-      KNOWLEDGE: "Источники знаний",
       RESULTS: "Результаты",
     },
     search: "Найти файл",
@@ -442,6 +1055,23 @@ const ru = {
     sessionPolicy: "Политика сессии",
     notifications: "Уведомления",
     nextRun: "Следующий запуск",
+    sectionsLabel: "Разделы автоматизации",
+    sections: {
+      OVERVIEW: "Сводка",
+      VERSIONS: "Версии",
+      RUNS: "Запуски",
+    },
+    versionHistory: "История версий",
+    currentVersion: "Версия {version} · текущая",
+    versionHistoryUnavailable: "Предыдущие версии пока недоступны",
+    versionHistoryUnavailableText:
+      "API возвращает только текущую версию автоматизации и не позволяет достоверно показать или восстановить предыдущую конфигурацию.",
+    runHistory: "История запусков",
+    runHistoryUnavailable: "Полная история запусков пока недоступна",
+    runHistoryUnavailableText:
+      "API не связывает запуск с точной автоматизацией. Kodex не сопоставляет историю по изменяемому названию, чтобы не показать чужой или неверный запуск.",
+    notScheduled: "Не запланирован",
+    noRunsYet: "Результатов пока нет",
     emptyTitle: "Автоматизаций пока нет",
     emptyText:
       "Создайте расписание для сотрудника или опубликованного Процесса.",
@@ -487,6 +1117,36 @@ const ru = {
       "Подключений пока нет. Core-платформа полностью доступна без них.",
     credentialSetup:
       "После создания подключения защищённые учётные данные настраиваются через разрешённый способ материализации этой установки.",
+    credentialValue: "Секретное значение",
+    credentialValueHelp:
+      "Значение передаётся один раз по защищённому API, не сохраняется в браузере и после настройки отображается только как маска.",
+    credentialRequired: "Введите учётные данные для продолжения.",
+    credentialsNotRequired:
+      "Для этого подключения защищённые учётные данные не требуются.",
+    credentialsConfigured: "Учётные данные настроены",
+    credentialsNotConfigured: "Учётные данные не настроены",
+    configureCredential: "Настроить учётные данные",
+    configureCredentialNamed: "Настроить учётные данные: {name}",
+    retryCredential: "Повторить настройку",
+    metadataAlreadyCreated:
+      "Подключение уже создано. Будут настроены только учётные данные; новый экземпляр не появится.",
+    metadataPreserved:
+      "Подключение сохранено. Повторите только этот шаг — дубликат создан не будет.",
+    credentialFailedTitle: "Учётные данные не настроены",
+    credentialErrors: {
+      unauthorized:
+        "Сессия завершена. Войдите снова и откройте подключение для повторной настройки.",
+      forbidden:
+        "У вас нет полномочий для настройки учётных данных этого подключения.",
+      notFound:
+        "Подключение больше недоступно. Обновите список подключений перед повторной настройкой.",
+      conflict:
+        "Подключение изменилось. Закройте форму, откройте подключение снова и повторите настройку.",
+      unavailable:
+        "Защищённое хранилище временно недоступно. Повторите настройку позже.",
+      default:
+        "Не удалось безопасно сохранить учётные данные. Проверьте значение и повторите настройку.",
+    },
     connectNamed: "Подключить {name}",
     webOnlyReady:
       "Подключения необязательны: Проекты, ИИ-сотрудники и запуски работают без внешних систем.",
@@ -516,19 +1176,519 @@ const ru = {
       DESTRUCTIVE: "необратимое действие",
     },
   },
+  integrationsRedesign: {
+    tabsLabel: "Разделы интеграций",
+    tabs: {
+      CONNECTIONS: "Подключения",
+      CATALOG: "Каталог пакетов",
+      GRANTS: "Разрешения",
+      APPROVALS: "Ожидают решения",
+    },
+    catalogTitle: "Каталог пакетов",
+    catalogDescription:
+      "Типизированные возможности внешних систем. Подключайте только необходимые пакеты.",
+    packageCount: "Пакетов: {count}",
+    searchPackages: "Найти пакет или возможность",
+    category: "Категория",
+    allCategories: "Все категории",
+    firstParty: "first-party",
+    customPackage: "пользовательский пакет",
+    connectionCount: "Подключений: {count}",
+    capabilityCount: "Возможностей: {count}",
+    approvalCapabilityCount: "Human Gate: {count}",
+    packageDetails: "Описание пакета",
+    packageDetailsUnavailable:
+      "Backend пока не отдаёт версию, YAML, происхождение и историю пакета.",
+    connectUnavailable:
+      "Подключение недоступно без CREATE_CONNECTION и доступного definition.",
+    noPackages: "Пакеты не найдены",
+    noPackagesHint: "Измените поиск или выбранную категорию.",
+    zeroConnectionsReady:
+      "Платформа полностью работоспособна без внешних подключений.",
+    connectionsTitle: "Рабочие подключения",
+    connectionsDescription:
+      "Health, учётные данные и доступные серверные команды каждого подключения.",
+    activeGrants: "активных разрешений",
+    capabilitiesShort: "возможностей",
+    grantsAction: "Разрешения",
+    grantsTitle: "Разрешения подключений",
+    grantsDescription:
+      "Каждое разрешение связывает одну capability с одним ИИ-сотрудником или Процессом.",
+    grantCount: "Разрешений: {count}",
+    connectionPicker: "Подключение",
+    allConnections: "Все подключения",
+    targetKind: {
+      AGENT: "ИИ-сотрудник",
+      WORKFLOW: "Процесс",
+      UNKNOWN: "Получатель не определён",
+    },
+    noGrantsHint:
+      "Выберите управляемое подключение, Проект, получателя и capability.",
+    grantEditorTitle: "Выдать разрешение",
+    chooseConnectionHint: "Выберите подключение с действием MANAGE_GRANTS.",
+    resourceScopeUnavailable:
+      "Resource scope, режим учётной записи, срок и Human Gate policy не представлены текущим API. Разрешение нельзя расширить локально.",
+    approvalsTitle: "Решения Human Gate",
+    approvalsDescription:
+      "Неизменяемое намерение, effect preview, actor, root initiator и результат решения.",
+    backendUnavailableShort: "backend недоступен",
+    approvalQueue: "Ожидают решения",
+    approvalReadUnavailable: "Очередь интеграционных решений недоступна",
+    approvalReadGap:
+      "Текущий OwnerGate не связывает решение с integration connection, capability, resource scope и effect preview.",
+    effectPreview: "Что изменится",
+    noIntentSelected: "намерение не загружено",
+    approvalFailClosed:
+      "Одобрение, возврат на доработку и отклонение отключены: UI не выполняет решение без авторитетного integration intent и OCC readback.",
+  },
   decisions: {
     title: "Решения",
-    subtitle: "Долговечные Human Gates, ожидающие вашего выбора",
+    subtitle: "Вопросы, без ответа на которые работа не продолжится",
     emptyTitle: "Нет ожидающих решений",
+    emptyText:
+      "В выбранном Проекте сейчас нет вопросов, ожидающих вашего ответа.",
+    projectFilter: "Проект",
+    allProjects: "Все Проекты",
+    pendingCount: "Ожидают ответа: {count}",
+    historyCount: "В истории: {count}",
+    pending: "Ожидают ответа",
+    history: "История",
+    historyEmpty: "История решений пуста",
+    historyEmptyText: "В выбранном Проекте ещё нет завершённых решений.",
+    question: "Решение человека",
+    fullQuestion: "Что нужно решить",
+    questionUnavailable:
+      "Авторитетный текст вопроса не передан API. Откройте запуск для проверки контекста.",
+    consequencesUnavailable:
+      "Последствия решения не переданы API. Действие следует выполнять только после проверки запуска.",
+    projectUnavailable: "Название Проекта недоступно",
+    run: "Запуск",
+    process: "Запуск и точный узел",
+    runUnavailable: "Название запуска недоступно",
+    openedAt: "Запрошено",
+    deadline: "Срок ответа",
+    noDeadline: "Без указанного срока",
+    evidence: "Материалы",
+    evidenceCount: "Открыть материалы: {count}",
+    noEvidence: "Дополнительные материалы не приложены",
     requestedBy: "Запросил",
     consequences: "Что произойдёт",
     comment: "Комментарий",
+    commentPlaceholder: "Добавьте контекст для продолжения работы",
+    actionsUnavailable: "Ответ сейчас недоступен",
+    actionsUnavailableText:
+      "Сервер не выдал право RESOLVE_GATE или допустимые варианты ответа. Интерфейс не будет имитировать решение.",
+    urgency: {
+      OVERDUE: "Срок истёк",
+      SOON: "Срочно",
+      NORMAL: "Обычный приоритет",
+    },
     stale: "Это решение уже принял другой участник",
     openRun: "Открыть запуск",
+    openNode: "Открыть точный узел запуска",
+    outcome: "Принятое решение",
   },
   access: {
     title: "Участники и доступ",
     subtitle: "Роли и типизированные полномочия в Проекте",
+    workspaceTitle: "Участники и доступ",
+    workspaceSubtitle:
+      "OIDC определяет личность и группы, Kodex — прикладные роли, области и эффективный доступ",
+    workspaceProjectSubtitle:
+      "Доступ в контексте выбранного Проекта без расширения полномочий организации",
+    model: {
+      title: "Как вычисляется доступ",
+      authorityBadge: "Авторитет: control-plane",
+      organizationContext:
+        "Организационная роль задаёт базовую границу, а точные действия разрешают versioned-роли и привязки.",
+      projectContext:
+        "Платформенная роль наследуется из организации; членство и узкие привязки действуют только в выбранном Проекте.",
+      layers: {
+        identity: {
+          title: "Identity",
+          description:
+            "Проверенный пользователь, OIDC-группа или служебный субъект.",
+        },
+        platform: {
+          title: "Платформенная роль",
+          description:
+            "Системная роль в области организации: владелец, администратор, оператор, участник или аудитор.",
+        },
+        project: {
+          title: "Доступ к Проекту",
+          description:
+            "Членство в Проекте и узкие привязки к типу или экземпляру сущности.",
+        },
+        effective: {
+          title: "Эффективное решение",
+          description:
+            "Backend сопоставляет typed permission, scope, условия и актуальное состояние.",
+        },
+      },
+      rule: "Название роли само по себе ничего не разрешает: authority появляется только из активной version-pinned привязки и всегда повторно проверяется control-plane.",
+    },
+    loadMore: "Показать ещё",
+    sections: {
+      label: "Разделы управления доступом",
+      participants: "Субъекты и членство",
+      groups: "Группы OIDC",
+      roles: "Роли",
+      bindings: "Назначения",
+      effective: "Эффективный доступ",
+    },
+    participants: {
+      title: "Участники",
+      subtitle: "Пользователи и служебные субъекты с прикладными привязками",
+      projectSubtitle:
+        "Платформенная роль, членство и узкие назначения в выбранном Проекте",
+      search: "Поиск участников",
+      searchPlaceholder: "Имя участника",
+      participant: "Участник",
+      identity: "Identity и группы",
+      bindings: "Привязки",
+      platformRole: "Платформенная роль",
+      projectAccess: "Доступ к Проекту",
+      directIdentity: "Прямая identity",
+      assignRole: "Назначить роль",
+      createBinding: "Создать назначение",
+      noPlatformRole: "Не назначена",
+      organizationWide: "Область организации",
+      noProjectAccess: "Нет проектного доступа",
+      presentationUnavailable:
+        "Недоступно: сервер не вернул membership presentation",
+      permissionCount: "Полномочий: {count}",
+      scopedBindingCount: "Узких назначений: {count}",
+      bindingCount: "Активных назначений: {count}",
+      empty: "Участники не найдены",
+      emptyHint:
+        "Пользователь появится после первого входа через OIDC; до выдачи binding доступ закрыт.",
+    },
+    groups: {
+      title: "Группы OIDC",
+      subtitle: "Проверенный read model групп провайдера identity",
+      search: "Поиск групп OIDC",
+      searchPlaceholder: "Название группы",
+      authorityTitle: "Группа не является ролью Kodex",
+      authorityHint:
+        "OIDC сообщает членство, а прикладные полномочия появляются только после явной привязки к versioned-роли.",
+      oidcSource: "Источник: OIDC token snapshot",
+      members: "Участники",
+      bindings: "Привязки",
+      lastSeen: "Последний вход",
+      roleMappings: "Прикладные назначения",
+      noRoleMappings: "Роли Kodex группе не назначены.",
+      bindingsUnavailable:
+        "Недоступно: сервер не вернул прикладные назначения.",
+      createMapping: "Создать назначение группе",
+      empty: "Группы OIDC пока не обнаружены",
+      emptyHint:
+        "Группа появится после проверенного входа её участника; отсутствие группы не расширяет доступ.",
+    },
+    rolesWorkspace: {
+      title: "Системные и пользовательские роли",
+      subtitle:
+        "Роль хранит закрытый набор полномочий; изменение создаёт новую неизменяемую версию",
+      create: "Создать роль",
+      empty: "Роли не найдены",
+      emptyHint: "Создайте пользовательскую роль из полномочий реестра.",
+      bindingsShort: "привязок",
+      permissionCount: "Полномочий: {count}",
+      showPermissions: "Полномочия и риск ({count})",
+      systemImmutable: "Системная роль",
+      permissionUnavailable:
+        "Недоступно: серверный реестр не подтвердил описание полномочия.",
+      archiveConfirm:
+        "Архивировать роль «{name}»? Существующие version-pinned привязки останутся действовать до явного изменения.",
+    },
+    roleEditor: {
+      createTitle: "Новая пользовательская роль",
+      editTitle: "Новая версия роли",
+      description: "Понятное назначение",
+      descriptionPlaceholder:
+        "Какие действия и в каких рабочих сценариях разрешает эта роль",
+      permissions: "Полномочия",
+      permissionsHint:
+        "Выберите только необходимые действия. Риск и смысл каждого полномочия заданы серверным реестром.",
+      scopes: "Допустимые области",
+      scopesHint:
+        "Binding сможет использовать только области, разрешённые одновременно всеми выбранными полномочиями.",
+      changeComment: "Причина изменения",
+      changeCommentPlaceholder: "Что изменилось и зачем",
+      create: "Создать роль v1",
+      publishVersion: "Опубликовать новую версию",
+      newVersion: "Будет создана новая immutable-версия",
+      newVersionHint:
+        "Действующие bindings останутся закреплены за прежней версией до явного переназначения.",
+      history: "История версий ({count})",
+      revision: "Ревизия {revision}",
+      noComment: "Причина не указана",
+    },
+    bindingsWorkspace: {
+      title: "Привязки ролей",
+      subtitle:
+        "Кому, какая версия роли и в какой точной области разрешает действия",
+      filter: "Фильтр состояния привязок",
+      create: "Создать привязку",
+      empty: "Привязки не найдены",
+      emptyHint:
+        "Создайте allow-binding для пользователя, OIDC-группы или служебного субъекта.",
+      wholeOrganization: "Вся организация",
+      ownerOnly: "Только свои ресурсы",
+      until: "До {date}",
+      noConditions: "Без дополнительных условий",
+      permissionCount: "полномочий: {count}",
+      assignmentKinds: {
+        PLATFORM_ROLE: "Платформенная роль",
+        PROJECT_MEMBERSHIP: "Членство в Проекте",
+        SCOPED_GRANT: "Узкое назначение",
+      },
+      revokeConfirm:
+        "Отозвать эту привязку? Действие будет зафиксировано в аудите.",
+    },
+    bindingEditor: {
+      createTitle: "Новая привязка роли",
+      editTitle: "Изменить привязку",
+      modelTitle: "Allow-only модель",
+      modelHint:
+        "Доступ появляется только при совпадении субъекта, закреплённой версии роли, полномочия, области и условий.",
+      subjectKind: "Тип субъекта",
+      subject: "Субъект",
+      chooseSubject: "Выберите участника или группу",
+      role: "Версия роли",
+      chooseRole: "Выберите активную роль",
+      pinnedVersion:
+        "Привязка закрепляется за этой immutable-версией и не меняется при выпуске следующей.",
+      scope: "Область действия",
+      scopeHint:
+        "Для точечного запуска выберите конкретного ИИ-сотрудника в конкретном Проекте.",
+      conditions: "Дополнительные условия",
+      validFrom: "Действует с",
+      validUntil: "Действует до",
+      ownerOnly: "Только ресурсы, созданные самим субъектом",
+      ownerOnlyHint:
+        "Условие доступно только полномочиям, для которых его разрешает серверный реестр.",
+      invalidWindow: "Дата окончания должна быть позже даты начала.",
+      operationCount: "Типизированных операций: {count}",
+      permissionRegistryUnavailable:
+        "Сохранение недоступно: серверный реестр вернул не все полномочия выбранной роли.",
+      create: "Создать привязку",
+    },
+    effective: {
+      title: "Эффективный доступ",
+      subtitle:
+        "Проверка, объяснение и безопасная симуляция решения авторитетного permission engine",
+      mode: "Режим проверки доступа",
+      modes: {
+        QUERY: "Проверить",
+        EXPLAIN: "Объяснить",
+        SIMULATE: "Симулировать",
+      },
+      subject: "Субъект",
+      chooseSubject: "Выберите пользователя, группу или сервис",
+      permission: "Действие",
+      choosePermission: "Выберите полномочие",
+      role: "Предлагаемая роль",
+      chooseRole: "Выберите роль для read-only симуляции",
+      actions: {
+        QUERY: "Проверить доступ",
+        EXPLAIN: "Объяснить решение",
+        SIMULATE: "Сравнить без сохранения",
+      },
+      result: "Авторитетное решение",
+      simulationTitle: "Сравнение доступа",
+      current: "Сейчас",
+      after: "После предлагаемой привязки",
+      readOnlySimulation:
+        "Симуляция ничего не сохраняет и не выдаёт полномочия.",
+      noResult: "Заполните параметры проверки",
+      noResultHint:
+        "Результат и цепочка источников появятся после ответа control-plane.",
+      who: "Кто",
+      what: "Какое действие",
+      where: "Область",
+      target: "Над чем",
+    },
+    subjectKinds: {
+      USER: "Пользователь",
+      OIDC_GROUP: "Группа OIDC",
+      SERVICE: "Служебный субъект",
+    },
+    roleKinds: {
+      SYSTEM: "Системные роли",
+      CUSTOM: "Пользовательские роли",
+    },
+    risk: {
+      READ: "Чтение",
+      WRITE: "Изменение",
+      APPROVE: "Решение",
+      ADMIN: "Администрирование",
+    },
+    scope: {
+      kind: "Тип области",
+      project: "Проект",
+      chooseProject: "Выберите Проект",
+      resourceKind: "Тип ресурса",
+      agent: "ИИ-сотрудник",
+      chooseAgent: "Выберите конкретного ИИ-сотрудника",
+      chooseResource: "Выберите конкретный ресурс",
+      agentHint:
+        "Такой binding не разрешает запуск других сотрудников даже в том же Проекте.",
+      exactResourceHint:
+        "Backend повторно разрешит выбранный экземпляр внутри указанного Проекта; ref не является authority.",
+      resourceRef: "Экземпляр ресурса",
+      resourceRefPlaceholder: "Выберите или укажите авторитетный ref",
+      resourceRefHint:
+        "Для типов без отдельного picker используется непрозрачная ссылка, полученная из интерфейса Kodex.",
+      contractBoundary: "Поддержка условий текущим серверным контрактом",
+      operationCondition: "Конкретная операция",
+      operationConditionHint:
+        "Операция задаётся typed permission из закреплённой версии роли, а не произвольной строкой.",
+      values: {
+        ORGANIZATION: "Организация",
+        PROJECT: "Проект",
+        RESOURCE_KIND: "Тип ресурсов",
+        RESOURCE_INSTANCE: "Конкретный ресурс",
+      },
+      hints: {
+        ORGANIZATION: "Все допустимые ресурсы организации",
+        PROJECT: "Все допустимые ресурсы одного Проекта",
+        RESOURCE_KIND: "Один тип ресурсов внутри Проекта",
+        RESOURCE_INSTANCE: "Один выбранный экземпляр ресурса",
+      },
+    },
+    resourceKinds: {
+      ORGANIZATION: "Организация",
+      PROJECT: "Проект",
+      AGENT: "ИИ-сотрудник",
+      WORKFLOW: "Процесс",
+      RUN: "Запуск",
+      OWNER_GATE: "Human Gate",
+      ARTIFACT: "Файл",
+      SCHEDULE: "Автоматизация",
+      INTEGRATION: "Интеграция",
+      RUNTIME_ENVIRONMENT: "Рабочее окружение",
+      ROLE_IMAGE: "Образ роли",
+      SESSION: "Сессия",
+      SECRET: "Секрет",
+    },
+    platformRoles: {
+      OWNER: "Владелец",
+      ADMINISTRATOR: "Администратор",
+      OPERATOR: "Оператор",
+      MEMBER: "Участник",
+      AUDITOR: "Аудитор",
+    },
+    explanation: {
+      DIRECT_BINDING: "Найдена прямая привязка субъекта",
+      OIDC_GROUP_BINDING: "Найдена привязка проверенной OIDC-группы",
+      SERVICE_BINDING: "Найдена привязка служебного субъекта",
+      ROLE_PERMISSION: "Закреплённая версия роли содержит полномочие",
+      SCOPE_MATCH: "Область привязки совпадает с целевым ресурсом",
+      CONDITION_MATCH: "Дополнительные условия выполнены",
+      NO_ALLOW_BINDING: "Подходящая разрешающая привязка отсутствует",
+    },
+    permissionsRegistry: {
+      "organization.view": {
+        name: "Просматривать организацию",
+        description: "Читать профиль и доступные ресурсы организации.",
+      },
+      "organization.manage": {
+        name: "Управлять организацией",
+        description: "Изменять настройки и жизненный цикл организации.",
+      },
+      "access.view": {
+        name: "Просматривать доступ",
+        description: "Читать роли, привязки и эффективные решения доступа.",
+      },
+      "access.manage": {
+        name: "Управлять доступом",
+        description: "Создавать роли и изменять прикладные привязки.",
+      },
+      "project.create": {
+        name: "Создавать Проекты",
+        description: "Создавать новые рабочие Проекты организации.",
+      },
+      "project.view": {
+        name: "Просматривать Проект",
+        description: "Читать профиль и доступные ресурсы Проекта.",
+      },
+      "project.manage": {
+        name: "Управлять Проектом",
+        description: "Изменять настройки и жизненный цикл Проекта.",
+      },
+      "agent.view": {
+        name: "Просматривать ИИ-сотрудников",
+        description: "Читать профиль и состояние разрешённых ИИ-сотрудников.",
+      },
+      "agent.manage": {
+        name: "Управлять ИИ-сотрудниками",
+        description: "Создавать и изменять разрешённых ИИ-сотрудников.",
+      },
+      "agent.launch": {
+        name: "Запускать ИИ-сотрудников",
+        description: "Создавать запуски разрешённых ИИ-сотрудников.",
+      },
+      "workflow.view": {
+        name: "Просматривать Процессы",
+        description: "Читать разрешённые Процессы и их версии.",
+      },
+      "workflow.manage": {
+        name: "Управлять Процессами",
+        description: "Создавать и изменять разрешённые Процессы.",
+      },
+      "workflow.launch": {
+        name: "Запускать Процессы",
+        description: "Создавать запуски разрешённых Процессов.",
+      },
+      "run.view": {
+        name: "Просматривать запуски",
+        description: "Читать состояние и результаты разрешённых запусков.",
+      },
+      "run.cancel.own": {
+        name: "Отменять свои запуски",
+        description: "Отменять только запуски, инициированные субъектом.",
+      },
+      "run.cancel.any": {
+        name: "Отменять любые запуски",
+        description: "Отменять разрешённые запуски независимо от инициатора.",
+      },
+      "gate.resolve": {
+        name: "Принимать решения Human Gate",
+        description: "Одобрять, отклонять или запрашивать изменения.",
+      },
+      "artifact.view": {
+        name: "Просматривать файлы",
+        description: "Читать метаданные разрешённых файлов.",
+      },
+      "artifact.download": {
+        name: "Скачивать файлы",
+        description: "Получать содержимое разрешённых проверенных файлов.",
+      },
+      "artifact.manage": {
+        name: "Управлять файлами",
+        description: "Загружать, связывать и изменять разрешённые файлы.",
+      },
+      "schedule.view": {
+        name: "Просматривать автоматизации",
+        description: "Читать расписания и состояние автоматизаций.",
+      },
+      "schedule.manage": {
+        name: "Управлять автоматизациями",
+        description: "Создавать, изменять и приостанавливать автоматизации.",
+      },
+      "integration.view": {
+        name: "Просматривать интеграции",
+        description: "Читать доступные подключения и их состояние.",
+      },
+      "integration.manage": {
+        name: "Управлять интеграциями",
+        description: "Создавать подключения и выдавать ограниченные grants.",
+      },
+      "audit.view": {
+        name: "Просматривать аудит",
+        description: "Читать безопасный журнал действий и решений.",
+      },
+    },
     organizationTitle: "Участники организации",
     organizationSubtitle:
       "Платформенные роли определяют базовый доступ, а разрешения Проекта назначаются отдельно",
@@ -587,6 +1747,152 @@ const ru = {
       VIEW_AUDIT: "Просмотр аудита",
     },
   },
+  accessRedesign: {
+    tabsLabel: "Разделы управления доступом",
+    tabs: {
+      MEMBERS: "Участники",
+      GROUPS: "Группы OIDC",
+      ROLES: "Роли",
+      EFFECTIVE: "Эффективный доступ",
+      AGENT_SCOPE: "Область ИИ-сотрудников",
+    },
+    membersTitle: "Участники и назначения",
+    organizationMembersDescription:
+      "Платформенная роль назначается в Kodex; identity подтверждает OIDC.",
+    projectMembersDescription:
+      "Прямые полномочия действуют только в текущем Проекте.",
+    memberCount: "Участников: {count}",
+    systemRole: "системная роль",
+    projectBindingsUnavailable:
+      "Проектные bindings и их источники не представлены API",
+    rolesTitle: "Роли Kodex",
+    rolesDescription:
+      "Системные роли неизменяемы; пользовательские роли должны быть versioned.",
+    createRole: "Создать роль",
+    systemRoles: "Системные роли",
+    systemRolesHint:
+      "Закрытый набор платформенных ролей из текущего membership contract.",
+    immutable: "Неизменяемы",
+    organizationScope: "Организация",
+    projectScope: "Проект",
+    assignedMembers: "назначено",
+    activeMembers: "активно",
+    roleDescription: {
+      OWNER:
+        "Полное управление организацией; критические ограничения подтверждает сервер.",
+      ADMINISTRATOR:
+        "Настройка платформы, интеграций и доступа в разрешённых границах.",
+      OPERATOR: "Запуск работы и операционные действия в доступных Проектах.",
+      MEMBER: "Работа только в Проектах с отдельным назначением полномочий.",
+      AUDITOR: "Просмотр разрешённых результатов и аудита без изменений.",
+    },
+    customRoles: "Пользовательские роли",
+    customRolesHint:
+      "Новая версия не должна изменять существующие bindings автоматически.",
+    customRolesUnavailable: "Versioned custom roles пока недоступны",
+    customRolesGap:
+      "Generated API не содержит role definition, version, permission registry и binding lifecycle.",
+    backendUnavailableShort: "backend недоступен",
+    groupsSearch: "Найти группу OIDC",
+    addBinding: "Добавить привязку",
+    subject: "Участник",
+    resource: "Ресурс",
+    action: "Действие",
+    why: "Почему?",
+    projectSelector: "Проект",
+    agentSelector: "ИИ-сотрудники",
+    effectiveResult: "Эффективный результат",
+    failClosed:
+      "Недоступные RBAC-операции отключены. UI не вычисляет authority, bindings или effective access локально.",
+    surface: {
+      GROUPS: {
+        title: "Группы OIDC",
+        description:
+          "Состав групп принадлежит identity provider; Kodex хранит только прикладные role bindings.",
+        emptyTitle: "Группы и bindings не загружены",
+        gap: "Нет API групп, состояния синхронизации и привязок к versioned ролям и областям.",
+      },
+      EFFECTIVE: {
+        title: "Эффективный доступ",
+        description:
+          "Авторитетное объяснение результата для участника, действия и конкретного ресурса.",
+        emptyTitle: "Explain-access недоступен",
+        gap: "Нет серверного расчёта allow-chain, источников назначения и scoped результата.",
+      },
+      AGENT_SCOPE: {
+        title: "Область ИИ-сотрудников",
+        description:
+          "Один Проект, выбранные экземпляры ИИ-сотрудников и закрытый набор действий.",
+        emptyTitle: "Entity-scoped binding недоступен",
+        gap: "Текущий project membership принимает плоский список permissions без agent refs и versioned binding.",
+      },
+    },
+  },
+  providers: {
+    title: "Учётные записи моделей",
+    subtitle:
+      "Авторизация нескольких учётных записей провайдеров и их готовность к новым сессиям",
+    definitions: "Доступные провайдеры",
+    create: "Добавить учётную запись",
+    definition: "Провайдер",
+    search: "Поиск учётных записей",
+    searchPlaceholder: "Название или безопасная подпись",
+    loadMore: "Показать ещё",
+    loadMoreProviders: "Показать ещё провайдеров",
+    emptyTitle: "Учётных записей пока нет",
+    emptyText:
+      "Добавьте учётную запись и завершите безопасную авторизацию перед запуском ИИ-сотрудника.",
+    externalAccountPending: "Внешняя учётная запись ещё не подтверждена",
+    authorize: "Авторизовать",
+    revoke: "Отозвать",
+    revokeTitle: "Отозвать учётную запись",
+    revokeConfirmation:
+      "Учётная запись «{name}» станет недоступна для новых запусков. Продолжить?",
+    authorizationTitle: "Авторизация: {name}",
+    authorizationMethod: "Способ авторизации",
+    methods: {
+      DEVICE_CODE: "Код устройства",
+      API_KEY: "API key",
+    },
+    deviceDescription:
+      "Kodex запросит одноразовый код. Откройте страницу провайдера и подтвердите нужную учётную запись.",
+    deviceInstructions:
+      "Откройте страницу провайдера, введите код и вернитесь сюда. Kodex проверяет результат через отдельный защищённый запрос.",
+    startDevice: "Получить код",
+    openVerification: "Открыть страницу авторизации",
+    userCode: "Одноразовый код",
+    copyCode: "Скопировать код",
+    expiresAt: "Код действует до {value}",
+    waitingAuthorization: "Ожидаем подтверждение провайдера…",
+    checkAuthorization: "Проверить сейчас",
+    authorized: "Учётная запись авторизована и готова к использованию.",
+    authorizationFailed:
+      "Провайдер не подтвердил авторизацию. Запросите новый код или проверьте API key.",
+    apiKey: "API key",
+    apiKeyPlaceholder: "Введите значение один раз",
+    apiKeyDescription:
+      "Значение передаётся только для материализации credential и не возвращается в интерфейс.",
+    apiKeySafety:
+      "После отправки поле будет очищено. Kodex не сохраняет и не показывает значение повторно.",
+    authorizeApiKey: "Авторизовать",
+    selectorLabel: "Учётные записи провайдера",
+    selectedCount: "Выбрано: {count}",
+    noEligibleAccounts:
+      "Нет готовых авторизованных учётных записей с выбранным провайдером.",
+    manageAccounts: "Управлять учётными записями",
+    removeSelection: "Убрать учётную запись {name}",
+    accountUnavailable: "Недоступная учётная запись",
+    accountUnavailableHelp:
+      "Сервер не вернул безопасное описание; запись нельзя использовать до восстановления готовности.",
+    blockers: {
+      PROVIDER_UNAVAILABLE: "Провайдер пока недоступен этой установке.",
+      AUTHORIZATION_UNAVAILABLE:
+        "Способ авторизации пока не готов к безопасной работе.",
+      RUNTIME_UNAVAILABLE:
+        "Материализация credential или runtime ещё не готова.",
+      UNKNOWN: "Конфигурация провайдера требует внимания администратора.",
+    },
+  },
   administration: {
     title: "Администрирование",
     subtitle: "Готовность core-платформы и необязательных адаптеров",
@@ -616,6 +1922,8 @@ const ru = {
     search: "Поиск по аудиту",
     searchPlaceholder: "Название объекта",
     emptyTitle: "События аудита не найдены",
+    loadMore: "Показать более ранние события",
+    loadingMore: "Загружаем более ранние события…",
     technicalDetails: "Технические сведения",
     operationCode: "Код операции",
     executorValue: {
@@ -651,8 +1959,44 @@ const ru = {
       SYSTEM_ASSISTANT: "Помощник Kodex",
     },
   },
+  attachments: {
+    add: "Добавить файлы",
+    dropHint: "или перетащите сюда",
+    drop: "Отпустите файлы для загрузки",
+    remove: "Убрать загруженный файл «{name}» из вложений",
+    detach: "Убрать файл «{name}» из текущих вложений",
+    retry: "Повторить загрузку файла «{name}»",
+    uploading: "Загружается файл «{name}»",
+    uploadFailed: "Не удалось загрузить файл",
+    syncFailed: "Не удалось подготовить набор вложений",
+    progress: "Подготовлено {uploaded} из {count}",
+    aggregateLimit:
+      "Общий размер вложений не должен превышать 512 МиБ. Уберите лишние файлы.",
+    projectRequired:
+      "Для загрузки файлов откройте помощника в контексте Проекта.",
+    existing: {
+      choose: "Выбрать загруженные",
+      title: "Доступные файлы",
+      hint: "Поиск выполняется на сервере; список подгружается по мере прокрутки.",
+      label: "Выбор загруженных файлов",
+      search: "Найти файл",
+      loading: "Загружаем файлы",
+      loadingMore: "Загружаем ещё",
+      empty: "Доступных проверенных файлов нет",
+      error: "Не удалось загрузить доступные файлы",
+      attached: "Добавлен во вложения",
+      detachHint: "Файл останется в хранилище",
+    },
+    states: {
+      QUEUED: "В очереди",
+      UPLOADING: "Загружается",
+      SCANNING: "Проверяется",
+      UPLOADED: "Готов",
+      FAILED: "Ошибка",
+    },
+  },
   assistant: {
-    title: "Помощник Kodex",
+    title: "Kodex",
     subtitle:
       "Настраивает платформу через те же типизированные команды и ваши полномочия",
     ready: "Всегда готов",
@@ -660,15 +2004,82 @@ const ru = {
     newConversation: "Новый диалог",
     message: "Опишите, что нужно настроить или запустить",
     send: "Отправить помощнику",
+    workContext: "Контекст работы",
+    contextReady: "Готов помочь на этом экране",
+    outcomeHelp:
+      "Опишите результат. Kodex учтёт текущий экран, Проект и открытый объект.",
+    contextConversation: "{context}: новый диалог",
+    contextPrefix: "Контекст текущего экрана: {context}",
+    openForContext: "Открыть Kodex для экрана «{context}»",
+    voiceUnavailable: "Голосовой ввод появится после подключения STT",
     plan: "План изменений",
     applyPlan: "Применить разрешённые изменения",
     audit: "Все изменения попадут в аудит от имени текущего пользователя",
     empty:
       "Например: «Создай Проект отдела продаж и сотрудника для подготовки коммерческих предложений».",
+    open: "Открыть Kodex",
+    history: "История диалогов",
+    chat: "Диалог",
+    context: "Контекст текущего экрана",
+    contextHelp:
+      "Опишите, что нужно сделать на текущем экране. Kodex использует только доступные здесь операции и ваши полномочия.",
+    conversationTitle: "Название диалога",
+    renameConversation: "Переименовать диалог",
+    receipt: "Квитанция",
+    openPlan: "Открыть план",
+    microphoneUnavailable: "Голосовой ввод появится позже",
+    addAttachments: "Добавить файлы",
+    dropAttachments: "Отпустите файлы, чтобы добавить их в сообщение",
+    removeAttachment: "Убрать файл «{name}» из сообщения",
+    attachmentsUnavailable:
+      "Файлы выбраны, но API вложений помощника ещё недоступен. Они не будут отправлены; уберите их, чтобы отправить текст.",
+    attachmentsBlockSend:
+      "Отправка заблокирована: выбранные файлы пока нельзя передать помощнику",
+    planEditor: {
+      back: "Вернуться к диалогу",
+      revision: "Ревизия {revision} · операций: {count}",
+      atomic:
+        "Скрытых изменений нет. План применяется одной транзакцией или не применяется вовсе.",
+      summary: "Что изменит план",
+      operationTitle: "Название операции",
+      operationSummary: "Описание и последствия",
+      target: "Объект",
+      targetKind: "Тип объекта",
+      targetName: "Название объекта",
+      targetRef: "Ссылка на объект",
+      targetVersion: "Версия объекта",
+      commandType: "Команда",
+      action: "Техническое действие",
+      permitted: "Разрешено",
+      parametersTitle: "Параметры операции",
+      actions: {
+        create: "Создать",
+        update: "Изменить",
+        delete: "Удалить",
+        execute: "Выполнить",
+      },
+      expectedVersion: "Ожидаемая версия",
+      before: "Текущее состояние",
+      parameters: "Явные параметры операции, JSON",
+      after: "Состояние после операции, JSON",
+      selected: "Выбрано {selected} из {total}",
+      saveRevision: "Сохранить новую ревизию",
+      validate: "Проверить ревизию",
+      apply: "Применить атомарно",
+      jsonError: "Параметры и итоговое состояние должны быть JSON-объектами.",
+      conflictTitle: "План устарел и не был применён",
+      conflictText:
+        "Ни одна операция не выполнена. Сравните ожидаемые и актуальные значения, затем подготовьте новую ревизию.",
+      expected: "Ожидалось",
+      actual: "Сейчас",
+      receipt: "Квитанция ревизии {revision}: применено операций — {count}.",
+      openFieldEditor: "Открыть поле в расширенном редакторе",
+    },
   },
   states: {
     READY: "Готов",
     ACTIVE: "Активен",
+    PROMOTED: "Promoted",
     DRAFT: "Черновик",
     VALID: "Проверен",
     INVALID: "Есть ошибки",
@@ -699,6 +2110,9 @@ const ru = {
     AVAILABLE: "Доступно",
     UNAVAILABLE: "Недоступно",
     REVOKED: "Отозвано",
+    ALLOWED: "Разрешено",
+    DENIED: "Запрещено",
+    RBAC_STALE: "Требует обновления",
     PAUSED: "Приостановлено",
     NEEDS_ATTENTION: "Требует внимания",
     CLEAN: "Проверен",
@@ -708,6 +2122,7 @@ const ru = {
     PROVISIONING: "Подготавливается",
     BUSY: "Занят",
     RECOVERING: "Восстанавливается",
+    STALE: "Устарел",
     MATERIALIZATION: "Подготавливаются входные данные",
     CONTEXT_VALIDATION: "Проверяется контекст сборки",
     BASE_PULL: "Получается базовое окружение",
@@ -773,6 +2188,9 @@ const en = {
     offline:
       "You are offline. Last received state is shown and actions are temporarily unavailable.",
     reconnecting: "Restoring realtime connection…",
+    preloadFailed:
+      "A newer interface is available. The current page and entered data were preserved; refresh when you are ready.",
+    refreshPage: "Refresh page",
     navigation: "Main navigation",
     projectNavigation: "Project navigation",
     breadcrumbs: "Breadcrumbs",
@@ -797,9 +2215,14 @@ const en = {
     run: "Run",
     files: "Files and knowledge",
     automations: "Automations",
+    environments: "Environments",
+    environment: "Environment",
+    newEnvironment: "New environment",
+    secrets: "Secrets",
     members: "Members",
     access: "Members and access",
     audit: "Audit and diagnostics",
+    providers: "Model accounts",
   },
   common: {
     ...ru.common,
@@ -828,7 +2251,12 @@ const en = {
       "Your role does not allow this action in the selected project.",
     conflict: "State has already changed. Current decision is shown.",
     unavailable: "Temporarily unavailable",
+    available: "Available",
+    disabled: "Disabled",
+    yes: "Yes",
     name: "Name",
+    description: "Description",
+    delete: "Delete",
     purpose: "Purpose",
     status: "Status",
     unknownStatus: "Status unavailable",
@@ -845,7 +2273,8 @@ const en = {
     all: "All",
     active: "Active",
     duration: "Duration",
-    source: "Source",
+    source: "Started through",
+    sourceHint: "This run was started through “{source}”.",
     target: "Target",
     input: "Input",
     download: "Download",
@@ -856,6 +2285,73 @@ const en = {
     next: "Next",
     required: "Required field",
     skipToContent: "Skip to content",
+  },
+  roleImages: {
+    title: "AI employee images",
+    subtitle: "Builds, revisions and software environments for this Project",
+    entity: "AI employee image",
+    new: "New image",
+    editorTitle: "Image configuration",
+    editorSubtitle: "Dockerfile, build, promotion and supply-chain evidence",
+    backToCatalog: "Back to image catalog",
+    search: "Search the loaded catalog",
+    searchLimitation:
+      "The current API has no search parameter. Filtering applies only to loaded pages.",
+    loaded: "Loaded: {count}",
+    loadMore: "Load more",
+    archived: "Archived",
+    empty: "No images found",
+    emptyHelp:
+      "Change the filters or create an image from an available base environment.",
+    unknownRole: "Role name unavailable",
+    generation: "Generation",
+    environment: "Base environment",
+    promotion: "Promotion",
+    promoted: "Promoted",
+    notPromoted: "Not promoted",
+    updated: "Updated: {date}",
+    updatedAt: "Updated",
+    role: "Role",
+    chooseRole: "Choose a role",
+    chooseEnvironment: "Choose a base environment",
+    recommended: "Recommended",
+    agentsCount: "employees: {count}",
+    sourceTitle: "Source Dockerfile",
+    sourceHelp:
+      "The platform must persist an immutable revision and append the protected Kodex runtime contract.",
+    dockerfile: "Full Dockerfile",
+    localDraft: "Local draft",
+    generationLabel: "Generation {generation}",
+    createHelp:
+      "Creating an image saves the source Dockerfile as the first immutable generation.",
+    immutableRevisionHelp:
+      "Saving creates a new generation; previously built generations and digests remain immutable.",
+    createRevision: "Create revision",
+    requestBuild: "Request build",
+    restore: "Restore",
+    confirmArchive:
+      "Archive this image? New builds will be unavailable until it is restored.",
+    confirmRestore: "Restore this image?",
+    buildHistory: "Build history",
+    buildHistoryHelp:
+      "Authoritative attempt, stage, progress and safe diagnostics from the API.",
+    noBuilds: "No builds have been requested yet.",
+    attempt: "Attempt {attempt}",
+    currentState: "Current state",
+    evidence: "Digest, SBOM and provenance",
+    manifestDigest: "OCI manifest digest",
+    vulnerabilityEvidence: "Vulnerability evidence",
+    admissionVerdict: "Admission verdict",
+    noPromotedArtifact: "No promoted artifact has been created yet.",
+    executables: "Detected executables",
+    noVerifiedExecutables: "No verified executables are available yet.",
+    usedByEnvironments: "Used by environments",
+    noEnvironmentDependencies: "No environment uses this artifact.",
+    openEnvironments: "Open environments",
+    validation: {
+      dockerfileRequired: "Dockerfile must not be empty.",
+      fromRequired: "Dockerfile must contain a FROM instruction.",
+    },
   },
   auth: {
     title: "Sign in to Kodex",
@@ -918,6 +2414,77 @@ const en = {
     createAgent: "Create employee",
     createWorkflow: "Create Process",
   },
+  workboard: {
+    greeting: "Good afternoon, {name}",
+    attention: "Needs attention",
+    noAttention:
+      "There are no decisions or active incidents requiring attention.",
+    runningNow: "Running now",
+    noActiveRuns: "There are no active runs.",
+    recentResults: "Recent results",
+    noRecentResults: "There are no recent verified results.",
+    refreshing: "refreshing",
+    source: "Source",
+    initiator: "Initiator",
+    executor: "Executor",
+    executorUnavailable: "not provided by API",
+    resources: "Project resources",
+    projectCollections: "Project resources",
+    resourceCount: "Total: {count}",
+    activeCount: "Active: {count}",
+    pendingCount: "Awaiting decision: {count}",
+    openCollection: "Open list",
+    openCurrentWork: "Open current work",
+    openDecisions: "Open pending decisions",
+    resourceUnavailable: "This section is currently unavailable.",
+    noAutomations: "No automations have been configured yet.",
+    noEnvironments: "No runtime environments have been created yet.",
+    nextRun: "Next run: {date}",
+    moreEnvironments:
+      "Recent environments are shown. Open the full catalog through ‘All’.",
+    coverage: {
+      title: "Attention source coverage",
+      subtitle: "These states are not included in the current Overview API",
+      unavailable: "No API",
+      capabilities: {
+        STOPPED_RUNS: {
+          title: "Stopped runs",
+          description:
+            "The platform does not yet provide a dedicated stopped-run collection.",
+        },
+        PROVIDER_AUTH_EXPIRY: {
+          title: "Provider authorization",
+          description:
+            "Provider account authorization expiry is not available on this screen yet.",
+        },
+        SESSION_CONTINUATION: {
+          title: "Session continuation",
+          description:
+            "The Overview API does not yet return recent sessions that can be continued.",
+        },
+      },
+    },
+    projectActivity: "Active runs: {runs} · decisions: {gates}",
+    allProjectRuns: "All Project runs",
+    allProjectFiles: "All Project files",
+    projectRuns: "Project runs",
+    viewMode: "Run list view",
+    kanban: "Kanban",
+    list: "List",
+    noRuns: "No runs match the selected state.",
+    noRunsInLane: "This column has no runs.",
+    filters: {
+      ALL: "All",
+      ACTIVE: "Active",
+      TERMINAL: "Completed",
+    },
+    lanes: {
+      QUEUED: "Queued",
+      RUNNING: "Running",
+      WAITING_HUMAN: "Awaiting decision",
+      TERMINAL: "Completed",
+    },
+  },
   agents: {
     ...ru.agents,
     title: "AI employees",
@@ -932,7 +2499,7 @@ const en = {
     provider: "Provider",
     model: "Model",
     runtimeRevision: "Runtime revision",
-    avatar: "Avatar URL",
+    avatar: "Avatar",
     instructions: "Instructions",
     capabilities: "Capabilities",
     capabilitiesHelp: "Granted separately and applied to the next run",
@@ -941,6 +2508,17 @@ const en = {
     knowledge: "Knowledge",
     enabled: "Employee enabled",
     currentActivity: "Current activity",
+    catalogSearch: "Search employees",
+    catalogSearchPlaceholder: "Find by name, purpose, or role",
+    catalogClearSearch: "Clear search",
+    catalogView: "Employee catalog view",
+    catalogGrid: "Cards",
+    catalogTable: "Table",
+    catalogResetFilters: "Reset filters",
+    catalogLoaded: "Loaded: {count}",
+    catalogLoadMore: "Load more",
+    catalogLoadingMore: "Loading the next page…",
+    updatedAt: "Updated",
     validate: "Validate instructions",
     publish: "Publish instructions",
     rollback: "Restore published version",
@@ -969,6 +2547,390 @@ const en = {
     catalogTitle: "Work environment catalog",
     catalogDescription:
       "Users choose an environment by purpose; internal images and digests are managed by the platform.",
+  },
+  runtime: {
+    ...ru.runtime,
+    title: "Runtime and work environment",
+    appliesNextTurn:
+      "Published changes are applied to the next turn through a new RuntimeRevision.",
+    modelAndExecution: "Model and execution environment",
+    nextTurnHint: "Changes do not affect a turn already in progress",
+    provider: "Provider",
+    providerHelp: "Derived from the selected runtime profile",
+    profile: "Runtime profile",
+    profileHelp: "Resources, limits and execution model profile",
+    model: "Model",
+    modelHelp: "Validated by the server with the provider account policy",
+    accountPolicy: "Account policy",
+    accountPolicyHelp: "Selects an authorized account for new sessions",
+    policy: {
+      FIXED: "Fixed account",
+      LEAST_USED: "Least used",
+      WEIGHTED: "Weighted",
+    },
+    accounts: "Assigned provider accounts",
+    account: "Account {account}",
+    authorizedAccount: "Authorized and allowed by the server",
+    weight: "Weight",
+    accountCatalogUnavailable: "Adding accounts is not available yet",
+    accountCatalogBlocker:
+      "The current API returns assigned accounts but does not expose a safe provider account catalog. Policy and weights can be changed for the current set; entering internal refs is prohibited.",
+    accountCatalogHelp:
+      "Select one or more ready accounts. Internal identifiers cannot be entered manually.",
+    environment: "Work environment",
+    environmentHelp: "Versioned variables and Secret descriptors",
+    chooseEnvironment: "Choose an environment",
+    searchEnvironment: "Search environments on the server",
+    bindEnvironment: "Assign environment",
+    publishConfiguration: "Publish runtime configuration",
+    overlay: "config.toml overlay",
+    overlayHelp:
+      "Allowed settings are applied on top of the protected platform configuration.",
+    overlayEditor: "Overlay draft",
+    saveDraft: "Save draft",
+    validate: "Validate TOML",
+    publishOverlay: "Publish overlay",
+    effectiveConfig: "Effective config",
+    effectiveHelp:
+      "The read-only view does not contain secret values and shows configuration for the next turn.",
+    safeReadback: "Safe readback",
+    history: "Runtime configuration history",
+    overlayRollbackUnavailable: "Overlay history is unavailable in the API",
+    overlayRollbackBlocker:
+      "Rollback exists, but the contract does not expose previous overlay refs. The UI does not offer a meaningless rollback to the current version.",
+    conflictHelp:
+      "The configuration changed concurrently. Reload authoritative state and repeat the edit.",
+    reload: "Reload state",
+    pickerShown: "Shown: {count}",
+    pickerScroll: "Scroll to load more",
+    environmentsTitle: "Work environments",
+    environmentsSubtitle:
+      "Versioned variables and immutable Secret revision references",
+    newEnvironment: "New environment",
+    environmentsEmpty: "No environments found",
+    environmentsEmptyHelp: "Create an environment or change the search query.",
+    revision: "Revision",
+    variables: "Variables",
+    secretDescriptors: "Secret descriptors",
+    environmentEditorSubtitle: "Publishing creates a new immutable revision",
+    publishRevision: "Publish revision",
+    reauthCompleted: "Fresh OIDC authentication completed",
+    reauthExplicitSaveRequired:
+      "The draft was restored. Review it and explicitly create or publish again.",
+    restoredImageSelection:
+      "Selection restored after OIDC authentication; exact details will load after publishing.",
+    restoredSecretSelection:
+      "Secret reference restored after OIDC authentication.",
+    environmentGeneral: "General settings",
+    environmentGeneralHelp:
+      "The name and purpose are shown when selecting the environment.",
+    variablesHelp:
+      "Non-secret values only. Names are passed to runtime without transformation.",
+    addVariable: "Add variable",
+    variableName: "Variable name",
+    nonSecretValue: "Non-secret value",
+    secretDescriptorsHelp:
+      "References pin an exact Kubernetes Secret revision; values are not read or stored by the UI.",
+    secretBindingsHelp:
+      "Set the variable name and choose an active Project secret. The server assigns immutable Kubernetes metadata when publishing.",
+    addSecretDescriptor: "Add descriptor",
+    addSecretBinding: "Add secret",
+    secretValuesForbidden:
+      "Do not paste a token, password or key. Choose a secret from the protected Project catalog.",
+    secretDescriptor: "Secret descriptor {number}",
+    secretBinding: "Secret variable {number}",
+    runtimeSecret: "Project secret",
+    chooseRuntimeSecret: "Choose a secret",
+    searchRuntimeSecret: "Search secrets on the server",
+    secretNotSelected: "No secret selected",
+    secretRevoked: "The secret is revoked and unavailable to new revisions",
+    currentPublishedSecret: "Secret from the current published revision",
+    currentImmutableDescriptor:
+      "Immutable metadata of the current published revision",
+    descriptorGeneratedOnPublish:
+      "Exact Kubernetes metadata is generated when publishing and remains read-only.",
+    secretTarget: "Kubernetes Secret and key",
+    secretPicker: {
+      loading: "Loading secrets",
+      loadingMore: "Loading the next page",
+      empty: "No active secrets found",
+      error: "Failed to load secrets",
+    },
+    secretName: "Kubernetes Secret name",
+    secretKey: "Secret key",
+    secretUid: "Secret UID",
+    secretResourceVersion: "Secret resourceVersion",
+    revisionHistory: "Revision history",
+    rollback: "Restore as a new revision",
+    environmentConflict:
+      "The environment changed on the server. Reload before publishing.",
+    updatedAt: "Updated",
+    variableNames: "Available variables",
+    secretDescriptorNames: "Secret variables",
+    openEditor: "Open editor",
+    editorSections: "Environment editor sections",
+    editorActions: "Environment editor quick actions",
+    section: {
+      GENERAL: "General",
+      IMAGE_TOOLS: "Image and tools",
+      VALUES: "Variables",
+      SECRETS: "Secrets",
+      POLICY: "Resources and access",
+      READINESS: "Readiness",
+    },
+    notPublished: "Not published yet",
+    versionDigest: "Environment revision digest",
+    imageAndTools: "Image and verified tools",
+    imageAndToolsHelp:
+      "The environment must pin an exact promoted image digest and allow only verified executables.",
+    exactImage: "Exact image revision and digest",
+    choosePromotedImage: "Choose a built and promoted image",
+    searchPromotedImage: "Search promoted images",
+    promotedAndVerified: "Promoted and verified",
+    verifiedTools: "Verified tools",
+    verifiedToolsHelp:
+      "Allow only required executables from the selected image and describe their purpose for the materialized prompt.",
+    selectedToolsCount: "Selected: {selected} of {total}",
+    toolDisplayName: "Name in prompt",
+    toolCommand: "Verified executable",
+    toolUsageHint: "Usage hint",
+    noVerifiedTools: "The image has no verified executables.",
+    chooseImageFirst: "Choose a promoted image first.",
+    secretReferences: "Secret references",
+    createSecret: "Create secret",
+    rotateSecret: "Rotate",
+    revealSecret: "Reveal value",
+    secretActionsUnavailable:
+      "Secret create/rotate/reveal are absent from the current API.",
+    secretLifecycleUnavailable:
+      "Unavailable: the secret-broker lifecycle API is not materialized.",
+    secretRevealUnavailable:
+      "Reveal is unavailable: API, permission readback and fresh OIDC action proof are absent.",
+    secretReferenceIncomplete: "Incomplete secret revision reference",
+    secretMaskedHint: "Safe masked hint",
+    secretMaskedHintUnavailable:
+      "Unavailable: the API does not return a typed display_hint.",
+    editSecretReference: "Edit immutable reference",
+    noSecretReferences: "No secret references added.",
+    resourcesAndAccess: "Resources, network and Kubernetes RBAC",
+    resourcesAndAccessHelp:
+      "The server must calculate effective policy within user grants and installation admission policy.",
+    resources: "Requests and limits",
+    resourcesHelp:
+      "Values use integer millicores and MiB within the platform admission policy.",
+    cpuRequest: "CPU request, millicores",
+    cpuLimit: "CPU limit, millicores",
+    cpuRequestRange: "100 to 8,000",
+    cpuLimitRange: "Request to 16,000",
+    memoryRequest: "Memory request, MiB",
+    memoryLimit: "Memory limit, MiB",
+    memoryRequestRange: "128 to 32,768 MiB",
+    memoryLimitRange: "Request to 65,536 MiB",
+    ephemeralStorageRequest: "Ephemeral storage request, MiB",
+    ephemeralStorageLimit: "Ephemeral storage limit, MiB",
+    ephemeralStorageRequestRange: "256 to 20,480 MiB",
+    ephemeralStorageLimitRange: "Request to 102,400 MiB",
+    resourcesUnavailable:
+      "A typed resource profile is absent from the current RuntimeEnvironment API.",
+    ephemeralVolumes: "Ephemeral volumes",
+    ephemeralVolumesHelp:
+      "Execution-scoped disk or memory emptyDir only. The platform assigns each mount path.",
+    addVolume: "Add volume",
+    noEphemeralVolumes: "No additional ephemeral volumes configured.",
+    volumeKind: "Volume kind",
+    volumeKindLabel: {
+      EPHEMERAL_DISK: "Ephemeral disk",
+      EPHEMERAL_MEMORY: "Memory (tmpfs)",
+    },
+    volumeSize: "Size, MiB",
+    mountPath: "Effective mount path",
+    networkPolicy: "Network policy",
+    networkPolicyHelp:
+      "Deny-by-default is always enabled. The UI exposes only the closed destination registry.",
+    networkDestination: {
+      DNS: "DNS",
+      PROVIDER_PROXY: "Provider proxy",
+      RUNTIME_CALLBACK: "Runtime callback",
+      KUBERNETES_API: "Kubernetes API",
+    },
+    networkDestinationHelp: {
+      DNS: "Name resolution through cluster DNS on TCP/UDP 53.",
+      PROVIDER_PROXY:
+        "Provider calls only through the platform proxy on TCP 8080.",
+      RUNTIME_CALLBACK:
+        "Execution events returned to runtime-controller on TCP 8444.",
+      KUBERNETES_API:
+        "Added only with read access to the current execution on TCP 443.",
+    },
+    mandatoryDestination: "Required",
+    scopedAccessEnabled: "Scoped access",
+    networkPolicyUnavailable:
+      "The API does not expose typed destinations or final NetworkPolicy preview.",
+    kubernetesRbac: "Scoped Kubernetes RBAC",
+    kubernetesRbacHelp:
+      "The profile grants no arbitrary access and is limited to current execution objects.",
+    readOwnExecution: "Allow reading the current execution",
+    readOwnExecutionHelp:
+      "READ_OWN_EXECUTION: exact Pods and Pod logs assigned to the current run only.",
+    kubernetesAccessBoundary:
+      "The server assigns ServiceAccount, resourceNames and the kodex-runtime namespace. List, watch, exec and Secret access are not granted.",
+    kubernetesRbacUnavailable:
+      "The API does not return workload identity, RBAC profile or effective grants.",
+    effectivePolicyPreview: "Effective policy preview",
+    effectivePolicyPreviewHelp:
+      "The draft is sent as typed policy; after publishing this view shows the authoritative normalized server policy.",
+    serverCalculated: "Calculated by server",
+    afterPublish: "After publishing",
+    effectivePolicyAfterPublish:
+      "Digests, exact egress rules and mount paths appear after the first publication.",
+    denyByDefault: "Deny-by-default",
+    kubernetesNamespace: "Runtime namespace",
+    effectiveEgressRules: "Egress rules",
+    effectiveVolumes: "Volumes",
+    policyDigest: {
+      resources: "Resources digest",
+      volumes: "Volumes digest",
+      network: "Network digest",
+      rbac: "RBAC digest",
+    },
+    effectivePolicyUnavailable:
+      "Authoritative resources, network and RBAC preview is unavailable; the UI does not infer it.",
+    catalogCapabilityBoundary:
+      "The catalog shows the exact image and tools. Resources, network and RBAC still require their authoritative API.",
+    readiness: "Environment readiness",
+    readinessHelp:
+      "Local checks are separated from server-side readiness for the selected image digest and effective policy.",
+    readinessCheck: {
+      FORM: "General settings and env values",
+      SECRET_REFS: "Immutable Secret references",
+      IMAGE: "Exact promoted image",
+      TOOLS: "Allowed verified tools",
+      POLICY: "Typed resource, volume, network and RBAC policy",
+      REVISION: "Published immutable revision",
+      EFFECTIVE_POLICY: "Authoritative effective policy",
+      SERVER_READINESS: "Server-side readiness",
+    },
+    readinessState: {
+      READY: "Ready",
+      NEEDS_ATTENTION: "Needs attention",
+      UNAVAILABLE: "Unavailable in API",
+    },
+    safeEffectivePreview: "Safe current revision view",
+    safeEffectivePreviewHelp:
+      "Shows only metadata available from the API and never includes secret plaintext.",
+    revisionHistoryHelp:
+      "Rollback publishes a new revision and does not mutate an old revision.",
+    revisionHistoryEmpty: "No published revisions yet.",
+    errors: {
+      nameRequired: "Enter an environment name.",
+      imageRequired: "Choose a promoted image for the environment.",
+      toolNameRequired: "Enter a tool name without surrounding whitespace.",
+      toolCommand: "The executable has an invalid format.",
+      toolDescriptionRequired:
+        "Enter a tool description without surrounding whitespace.",
+      duplicateTool: "An executable cannot be allowed twice.",
+      variableName: "Variable names must use the VAR_NAME format.",
+      reservedVariableName:
+        "This name is reserved by the platform or runtime environment.",
+      duplicateVariable: "Variable names must be unique within an environment.",
+      secretBindingRequired: "Choose a Project secret.",
+      nameTooLong: "Environment names must not exceed 120 characters.",
+      descriptionTooLong: "Descriptions must not exceed 1,000 characters.",
+      collectionLimit: "A section can contain at most 128 items.",
+      toolNameTooLong: "Tool names must not exceed 160 characters.",
+      toolDescriptionTooLong:
+        "Tool descriptions must not exceed 500 characters.",
+      toolUsageHintTooLong: "Tool usage hints must not exceed 500 characters.",
+      cpuRequestRange:
+        "CPU request must be an integer from 100 to 8,000 millicores.",
+      cpuLimitRange:
+        "CPU limit must be an integer from 100 to 16,000 millicores.",
+      cpuLimitBelowRequest: "CPU limit cannot be lower than CPU request.",
+      memoryRequestRange:
+        "Memory request must be an integer from 128 to 32,768 MiB.",
+      memoryLimitRange:
+        "Memory limit must be an integer from 128 to 65,536 MiB.",
+      memoryLimitBelowRequest:
+        "Memory limit cannot be lower than memory request.",
+      ephemeralStorageRequestRange:
+        "Ephemeral storage request must be an integer from 256 to 20,480 MiB.",
+      ephemeralStorageLimitRange:
+        "Ephemeral storage limit must be an integer from 256 to 102,400 MiB.",
+      ephemeralStorageLimitBelowRequest:
+        "Ephemeral storage limit cannot be lower than its request.",
+      volumeLimit: "At most 16 ephemeral volumes are allowed.",
+      volumeName: "Volume names must be DNS labels up to 32 characters.",
+      reservedVolumeName: "This volume name is reserved by the platform.",
+      duplicateVolume: "Ephemeral volume names must be unique.",
+      volumeKind: "Only EPHEMERAL_DISK and EPHEMERAL_MEMORY are allowed.",
+      volumeSizeRange: "Volume size must be an integer from 16 to 10,240 MiB.",
+      kubernetesAccess: "Unknown Kubernetes access profile.",
+      networkDestinations:
+        "Network policy must include DNS, provider proxy and runtime callback; Kubernetes API is allowed only with READ_OWN_EXECUTION.",
+      secretDescriptorRequired:
+        "Complete all required Secret descriptor fields.",
+      sha256: "SHA-256 must contain 64 lowercase hexadecimal digits.",
+    },
+  },
+  runtimeSecrets: {
+    title: "Project secrets",
+    subtitle:
+      "Protected environment values with revisions, rotation, and controlled reveal",
+    secret: "Secret",
+    search: "Search secrets",
+    searchPlaceholder: "Find by name or description",
+    shown: "Shown: {count}",
+    create: "Create secret",
+    createTitle: "New secret",
+    rotate: "Rotate",
+    rotateTitle: "Rotate secret",
+    rotateHelp:
+      "A new immutable revision will be created. The previous value remains unavailable in the UI.",
+    revoke: "Revoke",
+    revokeTitle: "Revoke secret?",
+    revokeHelp:
+      "The secret and all its revisions will be revoked. New runs will no longer be able to use this value.",
+    reveal: "Reveal value",
+    revealTitle: "One-time secret reveal",
+    revealNamed: "Reveal secret {name}",
+    rotateNamed: "Rotate secret {name}",
+    revokeNamed: "Revoke secret {name}",
+    reauthRequired: "Fresh OIDC authentication is required",
+    reauthHelp:
+      "The server returns the value only to a user with the secret.reveal permission after a separate fresh OIDC sign-in.",
+    reauthenticate: "Sign in again with OIDC",
+    reauthRedirectHelp:
+      "You will be redirected to the identity provider. After confirmation, the platform returns to this secret.",
+    reauthCompleted:
+      "Fresh sign-in confirmed. This one-time authorization applies only to this secret.",
+    revealedValue: "Revealed value",
+    revealEphemeral:
+      "The value exists only in this open dialog memory and is cleared when hidden or closed.",
+    hideValue: "Hide and clear",
+    showEnteredValue: "Show entered value",
+    hideEnteredValue: "Hide entered value",
+    value: "Secret value",
+    valueHelp:
+      "The value is sent directly to the protected API and is not written to browser storage or catalog metadata.",
+    valueType: "Value type",
+    types: {
+      STRING: "String",
+      JSON: "JSON",
+      BINARY: "Base64 binary value",
+    },
+    maskedHint: "Safe masked hint",
+    revision: "Current revision",
+    updatedAt: "Updated",
+    loadMore: "Load more",
+    emptyTitle: "No secrets yet",
+    emptyText:
+      "Create the first secret, then pin its revision in a work environment.",
+    emptySearchText: "Change the search query.",
+    errors: {
+      nameRequired: "Enter a secret name.",
+      required: "Enter a secret value.",
+      "invalid-json": "Enter valid JSON.",
+    },
   },
   "role-environments": {
     standard: {
@@ -1042,6 +3004,57 @@ const en = {
     title: "Runs",
     subtitle: "All active and completed tasks",
     new: "New run",
+    newRun: {
+      subtitle: "Configure the target, files, and work continuation",
+      projectContextLabel: "Project",
+      projectContextPreserved: "The Project context is preserved for this run.",
+      changeProject: "Choose another Project",
+      targetHint: "Choose an AI employee or a published Process.",
+      targetTypeLabel: "Target type",
+      titlePlaceholder: "A short, clear title",
+      titleRequiredHint: "A title is required and will appear in the run list.",
+      taskPlaceholder:
+        "Describe the result, constraints, and completion criteria",
+      taskHint:
+        "The selected AI employee or Process coordinator receives this task.",
+      authorityHint:
+        "The run uses only your current permissions in this Project.",
+      files: {
+        choose: "Choose files",
+        pickerTitle: "Choose input files",
+        pickerSubtitle:
+          "Only validated files from Project “{project}” are available.",
+        confirm: "Add selected",
+        selectedCount: "Selected: {count}",
+        remove: "Remove file {name}",
+        viewMode: "File list view",
+        listView: "List",
+        gridView: "Grid",
+        unavailable: "Unavailable for this run",
+        pickerLabel: "Available files",
+        searchPlaceholder: "Find a file by name",
+        loading: "Loading files…",
+        loadingMore: "Loading more…",
+        empty: "No matching files.",
+        error: "Could not load files.",
+      },
+      session: {
+        newDescription:
+          "Create a separate session without previous work history.",
+        continueDescription:
+          "Continue a compatible session for the same AI employee or Process.",
+        pickerTitle: "Choose a previous session",
+        pickerSubtitle:
+          "Search is limited to sessions compatible with the current target.",
+        pickerLabel: "Available sessions",
+        searchHint: "Start typing a run title or task.",
+        searchPlaceholder: "Find a session",
+        loading: "Loading sessions…",
+        loadingMore: "Loading more…",
+        empty: "No compatible sessions.",
+        error: "Could not load sessions.",
+      },
+    },
     task: "Task",
     runTitle: "Run title",
     targetType: "What to launch",
@@ -1073,6 +3086,7 @@ const en = {
     graph: "Execution graph",
     activity: "Activity",
     context: "Node context",
+    workspaceTools: "Run tools",
     artifacts: "Results and files",
     incidents: "Diagnostics",
     noIncidents: "This run has no active incidents.",
@@ -1082,6 +3096,7 @@ const en = {
     attempt: "Attempt {attempt}",
     previousAttempt: "Open previous attempt",
     continueTask: "Additional task",
+    runContext: "Run context",
     live: "Updates arrive in real time",
     selectedNode: "Selected node",
     noEvents: "Events will appear after execution starts",
@@ -1091,6 +3106,7 @@ const en = {
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     fitGraph: "Fit",
+    minimap: "Graph minimap",
     waitingForActivity: "Waiting to start",
     callback: "Child run response",
     childRuns: "Child runs",
@@ -1099,6 +3115,16 @@ const en = {
     finishedAt: "Finished",
     nodeConversation: "AI employee activity",
     noNodeActivity: "Messages will appear after this node starts working.",
+    sessionNode: "Session",
+    controlNode: "Control stage",
+    platformActor: "Platform",
+    toolParameters: "Safe parameters",
+    toolResult: "Safe result",
+    toolDuration: "Duration: {duration} ms",
+    artifactUnavailable:
+      "A file event was received, but its safe descriptor is unavailable.",
+    renderedPromptUnavailable:
+      "Fully rendered instructions and RuntimeRevision are not provided by the current API. The UI does not reconstruct them from indirect data.",
     usage: {
       title: "Token usage",
       total: "Total",
@@ -1126,6 +3152,7 @@ const en = {
   files: {
     ...ru.files,
     title: "Files and knowledge",
+    trash: "Trash",
     subtitle: "Materials for AI employees and the results of their work",
     emptyTitle: "No files yet",
     emptyText:
@@ -1135,7 +3162,6 @@ const en = {
     tabs: "File views",
     tab: {
       FILES: "Files",
-      KNOWLEDGE: "Knowledge sources",
       RESULTS: "Results",
     },
     search: "Find a file",
@@ -1199,6 +3225,23 @@ const en = {
     sessionPolicy: "Session policy",
     notifications: "Notifications",
     nextRun: "Next run",
+    sectionsLabel: "Automation sections",
+    sections: {
+      OVERVIEW: "Overview",
+      VERSIONS: "Versions",
+      RUNS: "Runs",
+    },
+    versionHistory: "Version history",
+    currentVersion: "Version {version} · current",
+    versionHistoryUnavailable: "Previous versions are not available yet",
+    versionHistoryUnavailableText:
+      "The API exposes only the current automation version and cannot reliably show or restore a previous configuration.",
+    runHistory: "Run history",
+    runHistoryUnavailable: "Complete run history is not available yet",
+    runHistoryUnavailableText:
+      "The API does not link a run to an exact automation. Kodex does not match history by a mutable name, avoiding unrelated or incorrect runs.",
+    notScheduled: "Not scheduled",
+    noRunsYet: "No results yet",
     emptyTitle: "No automations yet",
     emptyText: "Create a schedule for an employee or published Process.",
     chooseTarget: "Choose target",
@@ -1244,6 +3287,36 @@ const en = {
       "No connections yet. The core platform is fully available without them.",
     credentialSetup:
       "After the connection is created, protected credentials are configured through the deployment's authorized materialization method.",
+    credentialValue: "Secret value",
+    credentialValueHelp:
+      "The value is sent once through the protected API, is not stored in the browser, and is only shown as masked after setup.",
+    credentialRequired: "Enter credentials to continue.",
+    credentialsNotRequired:
+      "This connection does not require protected credentials.",
+    credentialsConfigured: "Credentials configured",
+    credentialsNotConfigured: "Credentials not configured",
+    configureCredential: "Configure credentials",
+    configureCredentialNamed: "Configure credentials: {name}",
+    retryCredential: "Retry credential setup",
+    metadataAlreadyCreated:
+      "The connection already exists. Only credentials will be configured; no duplicate will be created.",
+    metadataPreserved:
+      "The connection is preserved. Retry only this step; no duplicate will be created.",
+    credentialFailedTitle: "Credentials were not configured",
+    credentialErrors: {
+      unauthorized:
+        "Your session ended. Sign in again and reopen the connection to retry setup.",
+      forbidden:
+        "You do not have permission to configure credentials for this connection.",
+      notFound:
+        "The connection is no longer available. Refresh the connection list before retrying setup.",
+      conflict:
+        "The connection changed. Close the form, reopen the connection, and retry setup.",
+      unavailable:
+        "The protected credential store is temporarily unavailable. Retry later.",
+      default:
+        "The credentials could not be stored safely. Check the value and retry setup.",
+    },
     connectNamed: "Connect {name}",
     webOnlyReady:
       "Connections are optional: Projects, AI employees, and runs work without external systems.",
@@ -1273,20 +3346,504 @@ const en = {
       DESTRUCTIVE: "destructive action",
     },
   },
+  integrationsRedesign: {
+    tabsLabel: "Integration sections",
+    tabs: {
+      CONNECTIONS: "Connections",
+      CATALOG: "Package catalog",
+      GRANTS: "Grants",
+      APPROVALS: "Pending decisions",
+    },
+    catalogTitle: "Package catalog",
+    catalogDescription:
+      "Typed external-system capabilities. Connect only the packages you need.",
+    packageCount: "Packages: {count}",
+    searchPackages: "Find a package or capability",
+    category: "Category",
+    allCategories: "All categories",
+    firstParty: "first-party",
+    customPackage: "custom package",
+    connectionCount: "Connections: {count}",
+    capabilityCount: "Capabilities: {count}",
+    approvalCapabilityCount: "Human Gate: {count}",
+    packageDetails: "Package details",
+    packageDetailsUnavailable:
+      "The backend does not expose package version, YAML, origin, or history yet.",
+    connectUnavailable:
+      "Connecting requires CREATE_CONNECTION and an available definition.",
+    noPackages: "No packages found",
+    noPackagesHint: "Change the search text or selected category.",
+    zeroConnectionsReady:
+      "The platform remains fully operational without external connections.",
+    connectionsTitle: "Active connections",
+    connectionsDescription:
+      "Health, credential state, and server-authorized actions for each connection.",
+    activeGrants: "active grants",
+    capabilitiesShort: "capabilities",
+    grantsAction: "Grants",
+    grantsTitle: "Connection grants",
+    grantsDescription:
+      "Each grant binds one capability to one AI employee or Process.",
+    grantCount: "Grants: {count}",
+    connectionPicker: "Connection",
+    allConnections: "All connections",
+    targetKind: {
+      AGENT: "AI employee",
+      WORKFLOW: "Process",
+      UNKNOWN: "Unknown recipient",
+    },
+    noGrantsHint:
+      "Choose a manageable connection, Project, recipient, and capability.",
+    grantEditorTitle: "Issue a grant",
+    chooseConnectionHint: "Choose a connection with the MANAGE_GRANTS action.",
+    resourceScopeUnavailable:
+      "Resource scope, credential mode, expiry, and Human Gate policy are not represented by the current API. The UI cannot widen the grant locally.",
+    approvalsTitle: "Human Gate decisions",
+    approvalsDescription:
+      "Immutable intent, effect preview, actor, root initiator, and decision outcome.",
+    backendUnavailableShort: "backend unavailable",
+    approvalQueue: "Pending decisions",
+    approvalReadUnavailable: "Integration decision queue unavailable",
+    approvalReadGap:
+      "The current OwnerGate does not bind a decision to an integration connection, capability, resource scope, and effect preview.",
+    effectPreview: "Effect preview",
+    noIntentSelected: "intent not loaded",
+    approvalFailClosed:
+      "Approve, request changes, and reject are disabled: the UI will not decide without an authoritative integration intent and OCC readback.",
+  },
   decisions: {
     ...ru.decisions,
     title: "Decisions",
-    subtitle: "Durable Human Gates awaiting your choice",
+    subtitle: "Questions that block work until you answer",
     emptyTitle: "No pending decisions",
+    emptyText: "The selected Project has no questions awaiting your answer.",
+    projectFilter: "Project",
+    allProjects: "All Projects",
+    pendingCount: "Awaiting answer: {count}",
+    historyCount: "In history: {count}",
+    pending: "Awaiting answer",
+    history: "History",
+    historyEmpty: "Decision history is empty",
+    historyEmptyText: "The selected Project has no completed decisions yet.",
+    question: "Human decision",
+    fullQuestion: "What needs to be decided",
+    questionUnavailable:
+      "The authoritative question was not provided by the API. Open the run to inspect its context.",
+    consequencesUnavailable:
+      "The consequences were not provided by the API. Inspect the run before taking action.",
+    projectUnavailable: "Project name unavailable",
+    run: "Run",
+    process: "Run and exact node",
+    runUnavailable: "Run title unavailable",
+    openedAt: "Requested",
+    deadline: "Answer deadline",
+    noDeadline: "No deadline specified",
+    evidence: "Evidence",
+    evidenceCount: "Open evidence: {count}",
+    noEvidence: "No additional evidence attached",
     requestedBy: "Requested by",
     consequences: "What happens next",
     comment: "Comment",
+    commentPlaceholder: "Add context for the next step",
+    actionsUnavailable: "Answer is currently unavailable",
+    actionsUnavailableText:
+      "The server did not grant RESOLVE_GATE or any allowed decisions. The UI will not simulate a decision.",
+    urgency: {
+      OVERDUE: "Overdue",
+      SOON: "Urgent",
+      NORMAL: "Normal priority",
+    },
     stale: "Another member has already resolved this decision",
     openRun: "Open run",
+    openNode: "Open the exact run node",
+    outcome: "Recorded decision",
   },
   access: {
+    ...ru.access,
     title: "Members and access",
     subtitle: "Roles and typed permissions in a Project",
+    workspaceTitle: "Members and access",
+    workspaceSubtitle:
+      "OIDC provides identities and groups; Kodex owns application roles, scopes and effective access",
+    workspaceProjectSubtitle:
+      "Access in the selected Project without broadening organization permissions",
+    model: {
+      title: "How access is evaluated",
+      authorityBadge: "Authority: control-plane",
+      organizationContext:
+        "An organization role defines the base boundary; versioned roles and bindings permit exact actions.",
+      projectContext:
+        "The platform role is inherited from the organization; memberships and narrow bindings apply only in the selected Project.",
+      layers: {
+        identity: {
+          title: "Identity",
+          description: "A verified user, OIDC group, or service subject.",
+        },
+        platform: {
+          title: "Platform role",
+          description:
+            "A system role at organization scope: owner, administrator, operator, member, or auditor.",
+        },
+        project: {
+          title: "Project access",
+          description:
+            "Project membership and narrow bindings to an entity kind or instance.",
+        },
+        effective: {
+          title: "Effective decision",
+          description:
+            "The backend matches a typed permission, scope, conditions, and current state.",
+        },
+      },
+      rule: "A role name grants nothing on its own: authority comes from an active version-pinned binding and is always re-evaluated by control-plane.",
+    },
+    loadMore: "Load more",
+    sections: {
+      label: "Access management sections",
+      participants: "Subjects and membership",
+      groups: "OIDC groups",
+      roles: "Roles",
+      bindings: "Assignments",
+      effective: "Effective access",
+    },
+    participants: {
+      title: "Participants",
+      subtitle: "Users and service subjects with application bindings",
+      projectSubtitle:
+        "Platform role, membership, and narrow assignments in the selected Project",
+      search: "Search participants",
+      searchPlaceholder: "Participant name",
+      participant: "Participant",
+      identity: "Identity and groups",
+      bindings: "Bindings",
+      platformRole: "Platform role",
+      projectAccess: "Project access",
+      directIdentity: "Direct identity",
+      assignRole: "Assign role",
+      createBinding: "Create assignment",
+      noPlatformRole: "Not assigned",
+      organizationWide: "Organization scope",
+      noProjectAccess: "No Project access",
+      presentationUnavailable:
+        "Unavailable: the server did not return membership presentation",
+      permissionCount: "Permissions: {count}",
+      scopedBindingCount: "Narrow assignments: {count}",
+      bindingCount: "Active assignments: {count}",
+      empty: "No participants found",
+      emptyHint:
+        "A user appears after the first OIDC sign-in; access remains denied until a binding is assigned.",
+    },
+    groups: {
+      title: "OIDC groups",
+      subtitle: "Verified group read model from the identity provider",
+      search: "Search OIDC groups",
+      searchPlaceholder: "Group name",
+      authorityTitle: "An OIDC group is not a Kodex role",
+      authorityHint:
+        "OIDC reports membership, while application permissions require an explicit binding to a versioned role.",
+      oidcSource: "Source: OIDC token snapshot",
+      members: "Members",
+      bindings: "Bindings",
+      lastSeen: "Last sign-in",
+      roleMappings: "Application assignments",
+      noRoleMappings: "No Kodex role is assigned to this group.",
+      bindingsUnavailable:
+        "Unavailable: the server did not return application assignments.",
+      createMapping: "Create group assignment",
+      empty: "No OIDC groups discovered",
+      emptyHint:
+        "A group appears after a verified member sign-in; an absent group never broadens access.",
+    },
+    rolesWorkspace: {
+      title: "System and custom roles",
+      subtitle:
+        "A role contains a closed permission set; each change creates a new immutable version",
+      create: "Create role",
+      empty: "No roles found",
+      emptyHint: "Create a custom role from registry permissions.",
+      bindingsShort: "bindings",
+      permissionCount: "Permissions: {count}",
+      showPermissions: "Permissions and risk ({count})",
+      systemImmutable: "System role",
+      permissionUnavailable:
+        "Unavailable: the server registry did not confirm this permission definition.",
+      archiveConfirm:
+        "Archive role “{name}”? Existing version-pinned bindings remain active until explicitly changed.",
+    },
+    roleEditor: {
+      createTitle: "New custom role",
+      editTitle: "New role version",
+      description: "Purpose",
+      descriptionPlaceholder:
+        "Which actions and work scenarios this role permits",
+      permissions: "Permissions",
+      permissionsHint:
+        "Select only necessary actions. Risk and meaning come from the server registry.",
+      scopes: "Allowed scopes",
+      scopesHint:
+        "A binding can use only scopes supported by every selected permission.",
+      changeComment: "Change reason",
+      changeCommentPlaceholder: "What changed and why",
+      create: "Create role v1",
+      publishVersion: "Publish new version",
+      newVersion: "A new immutable version will be created",
+      newVersionHint:
+        "Existing bindings remain pinned to the previous version until explicitly reassigned.",
+      history: "Version history ({count})",
+      revision: "Revision {revision}",
+      noComment: "No change reason",
+    },
+    bindingsWorkspace: {
+      title: "Role bindings",
+      subtitle: "Who may use which role version and within which exact scope",
+      filter: "Binding state filter",
+      create: "Create binding",
+      empty: "No bindings found",
+      emptyHint:
+        "Create an allow-binding for a user, OIDC group or service subject.",
+      wholeOrganization: "Entire organization",
+      ownerOnly: "Owned resources only",
+      until: "Until {date}",
+      noConditions: "No additional conditions",
+      permissionCount: "permissions: {count}",
+      assignmentKinds: {
+        PLATFORM_ROLE: "Platform role",
+        PROJECT_MEMBERSHIP: "Project membership",
+        SCOPED_GRANT: "Narrow assignment",
+      },
+      revokeConfirm: "Revoke this binding? The action will be audited.",
+    },
+    bindingEditor: {
+      createTitle: "New role binding",
+      editTitle: "Edit binding",
+      modelTitle: "Allow-only model",
+      modelHint:
+        "Access requires matching subject, pinned role version, permission, scope and conditions.",
+      subjectKind: "Subject kind",
+      subject: "Subject",
+      chooseSubject: "Choose a participant or group",
+      role: "Role version",
+      chooseRole: "Choose an active role",
+      pinnedVersion:
+        "The binding is pinned to this immutable version and does not follow newer versions.",
+      scope: "Scope",
+      scopeHint:
+        "For exact launch permission, choose one AI employee in one Project.",
+      conditions: "Additional conditions",
+      validFrom: "Valid from",
+      validUntil: "Valid until",
+      ownerOnly: "Only resources created by this subject",
+      ownerOnlyHint:
+        "This condition works only for permissions that support it in the server registry.",
+      invalidWindow: "The end date must be later than the start date.",
+      operationCount: "Typed operations: {count}",
+      permissionRegistryUnavailable:
+        "Saving is unavailable: the server registry did not return every permission in the selected role.",
+      create: "Create binding",
+    },
+    effective: {
+      title: "Effective access",
+      subtitle:
+        "Query, explanation and safe simulation from the authoritative permission engine",
+      mode: "Access verification mode",
+      modes: { QUERY: "Check", EXPLAIN: "Explain", SIMULATE: "Simulate" },
+      subject: "Subject",
+      chooseSubject: "Choose a user, group or service",
+      permission: "Action",
+      choosePermission: "Choose a permission",
+      role: "Proposed role",
+      chooseRole: "Choose a role for read-only simulation",
+      actions: {
+        QUERY: "Check access",
+        EXPLAIN: "Explain decision",
+        SIMULATE: "Compare without saving",
+      },
+      result: "Authoritative decision",
+      simulationTitle: "Access comparison",
+      current: "Current",
+      after: "After proposed binding",
+      readOnlySimulation: "Simulation does not persist or grant permissions.",
+      noResult: "Fill in the query parameters",
+      noResultHint:
+        "The result and source chain appear after a control-plane response.",
+      who: "Who",
+      what: "Action",
+      where: "Scope",
+      target: "Target",
+    },
+    subjectKinds: {
+      USER: "User",
+      OIDC_GROUP: "OIDC group",
+      SERVICE: "Service subject",
+    },
+    roleKinds: { SYSTEM: "System roles", CUSTOM: "Custom roles" },
+    risk: { READ: "Read", WRITE: "Write", APPROVE: "Approve", ADMIN: "Admin" },
+    scope: {
+      kind: "Scope kind",
+      project: "Project",
+      chooseProject: "Choose a Project",
+      resourceKind: "Resource kind",
+      agent: "AI employee",
+      chooseAgent: "Choose one AI employee",
+      chooseResource: "Choose an exact resource",
+      agentHint:
+        "This binding does not permit launching any other employee in the same Project.",
+      exactResourceHint:
+        "The backend resolves this instance again inside the selected Project; a ref is not authority.",
+      resourceRef: "Resource instance",
+      resourceRefPlaceholder: "Choose or enter an authoritative ref",
+      resourceRefHint:
+        "Kinds without a dedicated picker use an opaque reference obtained from the Kodex UI.",
+      contractBoundary: "Conditions supported by the current server contract",
+      operationCondition: "Exact operation",
+      operationConditionHint:
+        "The operation is the typed permission from the pinned role version, not an arbitrary string.",
+      values: {
+        ORGANIZATION: "Organization",
+        PROJECT: "Project",
+        RESOURCE_KIND: "Resource kind",
+        RESOURCE_INSTANCE: "Specific resource",
+      },
+      hints: {
+        ORGANIZATION: "All eligible resources in the organization",
+        PROJECT: "All eligible resources in one Project",
+        RESOURCE_KIND: "One resource kind within a Project",
+        RESOURCE_INSTANCE: "One selected resource instance",
+      },
+    },
+    resourceKinds: {
+      ORGANIZATION: "Organization",
+      PROJECT: "Project",
+      AGENT: "AI employee",
+      WORKFLOW: "Workflow",
+      RUN: "Run",
+      OWNER_GATE: "Human Gate",
+      ARTIFACT: "File",
+      SCHEDULE: "Automation",
+      INTEGRATION: "Integration",
+      RUNTIME_ENVIRONMENT: "Runtime environment",
+      ROLE_IMAGE: "Role image",
+      SESSION: "Session",
+      SECRET: "Secret",
+    },
+    platformRoles: {
+      OWNER: "Owner",
+      ADMINISTRATOR: "Administrator",
+      OPERATOR: "Operator",
+      MEMBER: "Member",
+      AUDITOR: "Auditor",
+    },
+    explanation: {
+      DIRECT_BINDING: "A direct subject binding matched",
+      OIDC_GROUP_BINDING: "A verified OIDC group binding matched",
+      SERVICE_BINDING: "A service subject binding matched",
+      ROLE_PERMISSION: "The pinned role version contains the permission",
+      SCOPE_MATCH: "The binding scope matches the target resource",
+      CONDITION_MATCH: "Additional conditions matched",
+      NO_ALLOW_BINDING: "No matching allow-binding exists",
+    },
+    permissionsRegistry: {
+      "organization.view": {
+        name: "View organization",
+        description: "Read the organization profile and eligible resources.",
+      },
+      "organization.manage": {
+        name: "Manage organization",
+        description: "Change organization settings and lifecycle.",
+      },
+      "access.view": {
+        name: "View access",
+        description: "Read roles, bindings and effective access decisions.",
+      },
+      "access.manage": {
+        name: "Manage access",
+        description: "Create roles and change application bindings.",
+      },
+      "project.create": {
+        name: "Create Projects",
+        description: "Create new organization Projects.",
+      },
+      "project.view": {
+        name: "View Project",
+        description: "Read a Project profile and eligible resources.",
+      },
+      "project.manage": {
+        name: "Manage Project",
+        description: "Change Project settings and lifecycle.",
+      },
+      "agent.view": {
+        name: "View AI employees",
+        description: "Read eligible AI employee profiles and state.",
+      },
+      "agent.manage": {
+        name: "Manage AI employees",
+        description: "Create and change eligible AI employees.",
+      },
+      "agent.launch": {
+        name: "Launch AI employees",
+        description: "Create runs for eligible AI employees.",
+      },
+      "workflow.view": {
+        name: "View Workflows",
+        description: "Read eligible Workflows and versions.",
+      },
+      "workflow.manage": {
+        name: "Manage Workflows",
+        description: "Create and change eligible Workflows.",
+      },
+      "workflow.launch": {
+        name: "Launch Workflows",
+        description: "Create runs for eligible Workflows.",
+      },
+      "run.view": {
+        name: "View runs",
+        description: "Read state and results of eligible runs.",
+      },
+      "run.cancel.own": {
+        name: "Cancel own runs",
+        description: "Cancel only runs initiated by the subject.",
+      },
+      "run.cancel.any": {
+        name: "Cancel any run",
+        description: "Cancel eligible runs regardless of initiator.",
+      },
+      "gate.resolve": {
+        name: "Resolve Human Gates",
+        description: "Approve, reject or request changes.",
+      },
+      "artifact.view": {
+        name: "View files",
+        description: "Read metadata of eligible files.",
+      },
+      "artifact.download": {
+        name: "Download files",
+        description: "Read content of eligible verified files.",
+      },
+      "artifact.manage": {
+        name: "Manage files",
+        description: "Upload, bind and change eligible files.",
+      },
+      "schedule.view": {
+        name: "View automations",
+        description: "Read schedules and automation state.",
+      },
+      "schedule.manage": {
+        name: "Manage automations",
+        description: "Create, change and pause automations.",
+      },
+      "integration.view": {
+        name: "View integrations",
+        description: "Read eligible connections and state.",
+      },
+      "integration.manage": {
+        name: "Manage integrations",
+        description: "Create connections and grant bounded capabilities.",
+      },
+      "audit.view": {
+        name: "View audit",
+        description: "Read the safe action and decision journal.",
+      },
+    },
     organizationTitle: "Organization members",
     organizationSubtitle:
       "Platform roles define base access, while Project permissions are assigned separately",
@@ -1345,6 +3902,153 @@ const en = {
       VIEW_AUDIT: "View audit",
     },
   },
+  accessRedesign: {
+    tabsLabel: "Access management sections",
+    tabs: {
+      MEMBERS: "Members",
+      GROUPS: "OIDC groups",
+      ROLES: "Roles",
+      EFFECTIVE: "Effective access",
+      AGENT_SCOPE: "AI employee scope",
+    },
+    membersTitle: "Members and assignments",
+    organizationMembersDescription:
+      "Kodex assigns the platform role; OIDC confirms identity.",
+    projectMembersDescription:
+      "Direct permissions apply only within the current Project.",
+    memberCount: "Members: {count}",
+    systemRole: "system role",
+    projectBindingsUnavailable:
+      "Project bindings and assignment sources are not exposed by the API",
+    rolesTitle: "Kodex roles",
+    rolesDescription:
+      "System roles are immutable; custom roles must be versioned.",
+    createRole: "Create role",
+    systemRoles: "System roles",
+    systemRolesHint:
+      "Closed platform-role set from the current membership contract.",
+    immutable: "Immutable",
+    organizationScope: "Organization",
+    projectScope: "Project",
+    assignedMembers: "assigned",
+    activeMembers: "active",
+    roleDescription: {
+      OWNER:
+        "Full organization management; the server enforces critical constraints.",
+      ADMINISTRATOR:
+        "Platform, integration, and access configuration within authorized boundaries.",
+      OPERATOR:
+        "Run work and perform operational actions in accessible Projects.",
+      MEMBER: "Work only in Projects with separately assigned permissions.",
+      AUDITOR: "View permitted results and audit records without changes.",
+    },
+    customRoles: "Custom roles",
+    customRolesHint:
+      "A new version must not silently change existing bindings.",
+    customRolesUnavailable: "Versioned custom roles are unavailable",
+    customRolesGap:
+      "The generated API has no role definition, version, permission registry, or binding lifecycle.",
+    backendUnavailableShort: "backend unavailable",
+    groupsSearch: "Find an OIDC group",
+    addBinding: "Add binding",
+    subject: "Member",
+    resource: "Resource",
+    action: "Action",
+    why: "Why?",
+    projectSelector: "Project",
+    agentSelector: "AI employees",
+    effectiveResult: "Effective result",
+    failClosed:
+      "Unavailable RBAC operations are disabled. The UI does not calculate authority, bindings, or effective access locally.",
+    surface: {
+      GROUPS: {
+        title: "OIDC groups",
+        description:
+          "Group membership belongs to the identity provider; Kodex stores application role bindings only.",
+        emptyTitle: "Groups and bindings are not loaded",
+        gap: "There is no API for groups, sync state, or bindings to versioned roles and scopes.",
+      },
+      EFFECTIVE: {
+        title: "Effective access",
+        description:
+          "Authoritative result explanation for a member, action, and concrete resource.",
+        emptyTitle: "Explain-access is unavailable",
+        gap: "There is no server-side allow-chain, assignment-source, and scoped-result calculation.",
+      },
+      AGENT_SCOPE: {
+        title: "AI employee scope",
+        description:
+          "One Project, selected AI employee instances, and a closed action set.",
+        emptyTitle: "Entity-scoped binding is unavailable",
+        gap: "The current project membership accepts a flat permission list without agent refs or a versioned binding.",
+      },
+    },
+  },
+  providers: {
+    ...ru.providers,
+    title: "Model accounts",
+    subtitle:
+      "Authorize multiple provider accounts and control their readiness for new sessions",
+    definitions: "Available providers",
+    create: "Add account",
+    definition: "Provider",
+    search: "Search accounts",
+    searchPlaceholder: "Name or safe label",
+    loadMore: "Show more",
+    loadMoreProviders: "Show more providers",
+    emptyTitle: "No provider accounts yet",
+    emptyText:
+      "Add an account and finish secure authorization before launching an AI employee.",
+    externalAccountPending: "External account is not confirmed yet",
+    authorize: "Authorize",
+    revoke: "Revoke",
+    revokeTitle: "Revoke provider account",
+    revokeConfirmation:
+      "The account “{name}” will become unavailable for new runs. Continue?",
+    authorizationTitle: "Authorization: {name}",
+    authorizationMethod: "Authorization method",
+    methods: {
+      DEVICE_CODE: "Device code",
+      API_KEY: "API key",
+    },
+    deviceDescription:
+      "Kodex will request a one-time code. Open the provider page and confirm the intended account.",
+    deviceInstructions:
+      "Open the provider page, enter the code and return here. Kodex observes the result through an explicit protected request.",
+    startDevice: "Get code",
+    openVerification: "Open authorization page",
+    userCode: "One-time code",
+    copyCode: "Copy code",
+    expiresAt: "Code expires at {value}",
+    waitingAuthorization: "Waiting for provider confirmation…",
+    checkAuthorization: "Check now",
+    authorized: "The account is authorized and ready to use.",
+    authorizationFailed:
+      "The provider did not confirm authorization. Request a new code or check the API key.",
+    apiKeyPlaceholder: "Enter the value once",
+    apiKeyDescription:
+      "The value is sent only to materialize the credential and is never returned to the UI.",
+    apiKeySafety:
+      "The field is cleared after submission. Kodex does not retain or show the value again.",
+    authorizeApiKey: "Authorize",
+    selectorLabel: "Provider accounts",
+    selectedCount: "Selected: {count}",
+    noEligibleAccounts:
+      "No ready authorized accounts are available for the selected provider.",
+    manageAccounts: "Manage provider accounts",
+    removeSelection: "Remove account {name}",
+    accountUnavailable: "Unavailable account",
+    accountUnavailableHelp:
+      "The server did not return a safe descriptor; this account cannot be used until readiness is restored.",
+    blockers: {
+      PROVIDER_UNAVAILABLE: "The provider is unavailable in this installation.",
+      AUTHORIZATION_UNAVAILABLE:
+        "The authorization method is not ready for secure use.",
+      RUNTIME_UNAVAILABLE:
+        "Credential materialization or runtime is not ready.",
+      UNKNOWN: "Provider configuration requires administrator attention.",
+    },
+  },
   administration: {
     title: "Administration",
     subtitle: "Core platform and optional adapter readiness",
@@ -1374,6 +4078,8 @@ const en = {
     search: "Search audit",
     searchPlaceholder: "Resource name",
     emptyTitle: "No audit events found",
+    loadMore: "Show earlier events",
+    loadingMore: "Loading earlier events…",
     technicalDetails: "Technical details",
     operationCode: "Operation code",
     executorValue: {
@@ -1409,6 +4115,42 @@ const en = {
       SYSTEM_ASSISTANT: "Kodex Assistant",
     },
   },
+  attachments: {
+    ...ru.attachments,
+    add: "Add files",
+    dropHint: "or drag them here",
+    drop: "Drop files to upload",
+    remove: "Remove uploaded file “{name}” from attachments",
+    detach: "Detach “{name}” from the current attachments",
+    retry: "Retry uploading “{name}”",
+    uploading: "Uploading “{name}”",
+    uploadFailed: "Failed to upload the file",
+    syncFailed: "Failed to prepare the attachment set",
+    progress: "Prepared {uploaded} of {count}",
+    aggregateLimit:
+      "The total attachment size must not exceed 512 MiB. Remove some files.",
+    projectRequired: "Open the assistant in a Project context to upload files.",
+    existing: {
+      choose: "Choose uploaded files",
+      title: "Available files",
+      hint: "Search runs on the server and more files load while scrolling.",
+      label: "Choose uploaded files",
+      search: "Find a file",
+      loading: "Loading files",
+      loadingMore: "Loading more",
+      empty: "No verified files are available",
+      error: "Failed to load available files",
+      attached: "Attached",
+      detachHint: "The file remains in storage",
+    },
+    states: {
+      QUEUED: "Queued",
+      UPLOADING: "Uploading",
+      SCANNING: "Scanning",
+      UPLOADED: "Ready",
+      FAILED: "Failed",
+    },
+  },
   assistant: {
     ...ru.assistant,
     title: "Kodex Assistant",
@@ -1419,15 +4161,82 @@ const en = {
     newConversation: "New conversation",
     message: "Describe what to configure or launch",
     send: "Send to assistant",
+    workContext: "Work context",
+    contextReady: "Ready to help on this screen",
+    outcomeHelp:
+      "Describe the outcome. Kodex will use the current screen, Project and open resource.",
+    contextConversation: "{context}: new conversation",
+    contextPrefix: "Current screen context: {context}",
+    openForContext: "Open Kodex for “{context}”",
+    voiceUnavailable: "Voice input will be available after STT is connected",
     plan: "Change plan",
     applyPlan: "Apply permitted changes",
     audit: "Every change is audited on behalf of the current user",
     empty:
       "For example: “Create a sales Project and an employee for preparing proposals”.",
+    open: "Open Kodex",
+    history: "Conversation history",
+    chat: "Conversation",
+    context: "Current screen context",
+    contextHelp:
+      "Describe what to do on the current screen. Kodex uses only operations available here and your permissions.",
+    conversationTitle: "Conversation title",
+    renameConversation: "Rename conversation",
+    receipt: "Receipt",
+    openPlan: "Open plan",
+    microphoneUnavailable: "Voice input will be available later",
+    addAttachments: "Add files",
+    dropAttachments: "Drop files to add them to the message",
+    removeAttachment: "Remove “{name}” from the message",
+    attachmentsUnavailable:
+      "Files are selected, but the assistant attachment API is not available yet. They will not be sent; remove them to send the text.",
+    attachmentsBlockSend:
+      "Sending is blocked because the selected files cannot be delivered to the assistant yet",
+    planEditor: {
+      back: "Back to conversation",
+      revision: "Revision {revision} · operations: {count}",
+      atomic:
+        "There are no hidden changes. The plan is applied in one transaction or not applied at all.",
+      summary: "What the plan changes",
+      operationTitle: "Operation title",
+      operationSummary: "Description and consequences",
+      target: "Target",
+      targetKind: "Target type",
+      targetName: "Target name",
+      targetRef: "Target reference",
+      targetVersion: "Target version",
+      commandType: "Command",
+      action: "Technical action",
+      permitted: "Permitted",
+      parametersTitle: "Operation parameters",
+      actions: {
+        create: "Create",
+        update: "Update",
+        delete: "Delete",
+        execute: "Execute",
+      },
+      expectedVersion: "Expected version",
+      before: "Current state",
+      parameters: "Explicit operation parameters, JSON",
+      after: "State after operation, JSON",
+      selected: "Selected {selected} of {total}",
+      saveRevision: "Save new revision",
+      validate: "Validate revision",
+      apply: "Apply atomically",
+      jsonError: "Parameters and resulting state must be JSON objects.",
+      conflictTitle: "The plan is stale and was not applied",
+      conflictText:
+        "No operation was executed. Compare expected and current values, then prepare a new revision.",
+      expected: "Expected",
+      actual: "Current",
+      receipt: "Revision {revision} receipt: operations applied — {count}.",
+      openFieldEditor: "Open field in the expanded editor",
+    },
   },
   states: {
     READY: "Ready",
     ACTIVE: "Active",
+    PROMOTED: "Promoted",
     DRAFT: "Draft",
     VALID: "Valid",
     INVALID: "Invalid",
@@ -1458,6 +4267,9 @@ const en = {
     AVAILABLE: "Available",
     UNAVAILABLE: "Unavailable",
     REVOKED: "Revoked",
+    ALLOWED: "Allowed",
+    DENIED: "Denied",
+    RBAC_STALE: "Needs refresh",
     PAUSED: "Paused",
     NEEDS_ATTENTION: "Needs attention",
     CLEAN: "Clean",
@@ -1467,6 +4279,7 @@ const en = {
     PROVISIONING: "Provisioning",
     BUSY: "Busy",
     RECOVERING: "Recovering",
+    STALE: "Stale",
     MATERIALIZATION: "Preparing build input",
     CONTEXT_VALIDATION: "Validating build context",
     BASE_PULL: "Fetching base environment",

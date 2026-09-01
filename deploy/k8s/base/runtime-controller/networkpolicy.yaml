@@ -3,10 +3,8 @@ kind: NetworkPolicy
 metadata: {name: runtime-controller-default-deny}
 spec:
   podSelector:
-    matchExpressions:
-      - key: app.kubernetes.io/name
-        operator: In
-        values: [runtime-controller, agent-runner]
+    matchLabels:
+      app.kubernetes.io/name: runtime-controller
   policyTypes: [Ingress, Egress]
 ---
 apiVersion: networking.k8s.io/v1
@@ -24,7 +22,10 @@ spec:
           podSelector: {matchLabels: {app.kubernetes.io/name: prometheus}}
       ports: [{protocol: TCP, port: 9090}]
     - from:
-        - podSelector:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kodex-runtime
+          podSelector:
             matchLabels:
               app.kubernetes.io/name: agent-runner
               app.kubernetes.io/component: role-runtime
@@ -48,32 +49,3 @@ spec:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
           podSelector: {matchLabels: {app.kubernetes.io/name: sentry-relay}}
       ports: [{protocol: TCP, port: 8443}]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata: {name: agent-runner-exact-paths}
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: agent-runner
-      app.kubernetes.io/component: role-runtime
-      runtime.kodex.dev/managed: "true"
-  policyTypes: [Ingress, Egress]
-  ingress: []
-  egress:
-    - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
-          podSelector: {matchLabels: {k8s-app: kube-dns}}
-      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: runtime-controller
-              app.kubernetes.io/component: internal-controller
-      ports: [{protocol: TCP, port: 8444}]
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: egress-gateway
-              app.kubernetes.io/component: platform-egress
-      ports: [{protocol: TCP, port: 8080}]

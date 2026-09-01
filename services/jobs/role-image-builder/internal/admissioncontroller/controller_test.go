@@ -56,6 +56,9 @@ func TestControllerMaterializesSequentialAdmissionAndPromotion(t *testing.T) {
 	jobs, _ := client.BatchV1().Jobs(testConfig().Namespace).List(ctx, metav1.ListOptions{})
 	for index := range jobs.Items {
 		job := &jobs.Items[index]
+		if job.Labels[idLabel] == id && job.Labels[phaseLabel] != "promote" {
+			t.Fatalf("terminal admission job remains: %s", job.Name)
+		}
 		if job.Spec.Template.Spec.AutomountServiceAccountToken == nil || *job.Spec.Template.Spec.AutomountServiceAccountToken {
 			t.Fatalf("job %s received an implicit Kubernetes token", job.Name)
 		}
@@ -88,12 +91,52 @@ func TestControllerDropsFailedWorkspaceAndBacksOff(t *testing.T) {
 	if len(remaining.Items) != 0 {
 		t.Fatal("failed admission workspace was not removed")
 	}
+	jobs, _ := client.BatchV1().Jobs(testConfig().Namespace).List(ctx, metav1.ListOptions{})
+	for index := range jobs.Items {
+		if jobs.Items[index].Labels[idLabel] == id && jobs.Items[index].Labels[phaseLabel] != "promote" {
+			t.Fatalf("failed admission job remains: %s", jobs.Items[index].Name)
+		}
+	}
 	if err := controller.Reconcile(ctx); err != nil {
 		t.Fatal(err)
 	}
 	remaining, _ = client.CoreV1().PersistentVolumeClaims(testConfig().Namespace).List(ctx, metav1.ListOptions{})
 	if len(remaining.Items) != 0 {
 		t.Fatal("controller ignored retry backoff")
+	}
+}
+
+func TestControllerRoutesTechnicalScanFailureThroughAdmissionRecord(t *testing.T) {
+	client := fake.NewClientset(testPolicy())
+	controller, err := New(client, testRenderer{}, testConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller.now = func() time.Time { return time.Date(2026, 8, 22, 12, 30, 0, 0, time.UTC) }
+	ctx := context.Background()
+	if err := controller.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	workspaces, _ := client.CoreV1().PersistentVolumeClaims(testConfig().Namespace).List(ctx, metav1.ListOptions{})
+	id := workspaces.Items[0].Labels[idLabel]
+	markJobSucceeded(t, client, id, "claim")
+	if err := controller.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	markJobFailed(t, client, id, "scan")
+	if err := controller.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertJob(t, client, id, "admit")
+	if _, err := client.BatchV1().Jobs(testConfig().Namespace).Get(ctx, "mc-admit-"+id+"-sign", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("sign job was created after a technical scan rejection: %v", err)
+	}
+	markJobSucceeded(t, client, id, "admit")
+	if err := controller.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CoreV1().PersistentVolumeClaims(testConfig().Namespace).Get(ctx, "mc-admit-"+id, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("recorded technical rejection workspace remains: %v", err)
 	}
 }
 
@@ -154,7 +197,7 @@ func (testRenderer) Render(_ context.Context, _ *corev1.ConfigMap, environment, 
 	if phase == "claim" {
 		result.PVC = &corev1.PersistentVolumeClaim{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "PersistentVolumeClaim"},
 			ObjectMeta: metav1.ObjectMeta{Name: "mc-admit-" + id, Namespace: testConfig().Namespace, Labels: map[string]string{idLabel: id}},
-				Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 				Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("2Gi")}}}}
 	}
 	return result, nil
@@ -206,6 +249,19 @@ func markJobSucceeded(t *testing.T, client *fake.Clientset, id, phase string) {
 	}
 	job.Status.Succeeded = 1
 	job.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	if _, err := client.BatchV1().Jobs(testConfig().Namespace).UpdateStatus(context.Background(), job, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func markJobFailed(t *testing.T, client *fake.Clientset, id, phase string) {
+	t.Helper()
+	job, err := client.BatchV1().Jobs(testConfig().Namespace).Get(context.Background(), "mc-admit-"+id+"-"+phase, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job.Status.Failed = 1
+	job.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobFailed, Status: corev1.ConditionTrue}}
 	if _, err := client.BatchV1().Jobs(testConfig().Namespace).UpdateStatus(context.Background(), job, metav1.UpdateOptions{}); err != nil {
 		t.Fatal(err)
 	}

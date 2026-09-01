@@ -1,0 +1,188 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secret-broker
+  labels:
+    app.kubernetes.io/name: secret-broker
+    app.kubernetes.io/component: secret-broker
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: secret-broker
+      app.kubernetes.io/component: secret-broker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: secret-broker
+        app.kubernetes.io/component: secret-broker
+    spec:
+      serviceAccountName: secret-broker
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 35
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: secret-broker
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/secret-broker@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: secret-broker-runtime
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: SECRET_BROKER_RUNTIME_NAMESPACE
+              value: kodex-runtime
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: "metadata.labels['kodex.dev/environment']"
+            - name: SECRET_BROKER_CONTROL_PLANE_CA_FILE
+              value: /var/run/config/kodex/secret-broker/control-plane/ca.pem
+            - name: SECRET_BROKER_CONTROL_PLANE_CERTIFICATE_FILE
+              value: /var/run/secrets/kodex/secret-broker/workload-tls/tls.crt
+            - name: SECRET_BROKER_CONTROL_PLANE_PRIVATE_KEY_FILE
+              value: /var/run/secrets/kodex/secret-broker/workload-tls/tls.key
+            - name: SECRET_BROKER_APPLICATION_GRANT_FILE
+              value: /var/run/secrets/kodex/secret-broker/application-grant/application-grant.jws
+            - {name: SECRET_BROKER_SERVER_CERTIFICATE_FILE, value: /var/run/secrets/kodex/secret-broker/server/tls.crt}
+            - {name: SECRET_BROKER_SERVER_PRIVATE_KEY_FILE, value: /var/run/secrets/kodex/secret-broker/server/tls.key}
+            - {name: SECRET_BROKER_CLIENT_CA_FILE, value: /var/run/config/kodex/secret-broker/client/ca.pem}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: otel-collector.observability.svc:4317
+            - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
+              value: otel-collector.observability.svc.cluster.local
+            - name: OTEL_EXPORTER_OTLP_CA_FILE
+              value: /var/run/config/kodex/secret-broker/observability/otel-ca.pem
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.1"
+            - name: SENTRY_DSN_FILE
+              value: /var/run/secrets/kodex/secret-broker/observability/sentry-dsn
+            - name: SENTRY_EXPECTED_HOST
+              value: sentry-relay.observability.svc:8443
+          ports:
+            - name: grpc
+              containerPort: 8443
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          startupProbe: &technicalProbe
+            httpGet:
+              path: /healthz
+              port: metrics
+            timeoutSeconds: 2
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            <<: *technicalProbe
+            httpGet:
+              path: /readyz
+              port: metrics
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            timeoutSeconds: 2
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "2"
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: kube-api-access
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
+            - name: server-tls
+              mountPath: /var/run/secrets/kodex/secret-broker/server
+              readOnly: true
+            - name: client-ca
+              mountPath: /var/run/config/kodex/secret-broker/client
+              readOnly: true
+            - name: workload-tls
+              mountPath: /var/run/secrets/kodex/secret-broker/workload-tls
+              readOnly: true
+            - name: control-plane-ca
+              mountPath: /var/run/config/kodex/secret-broker/control-plane
+              readOnly: true
+            - name: application-grant
+              mountPath: /var/run/secrets/kodex/secret-broker/application-grant
+              readOnly: true
+            - name: provider-auth-state
+              mountPath: /var/lib/kodex-provider-auth
+            - name: otel-ca
+              mountPath: /var/run/config/kodex/secret-broker/observability
+              readOnly: true
+            - name: sentry-dsn
+              mountPath: /var/run/secrets/kodex/secret-broker/observability
+              readOnly: true
+      volumes:
+        - name: kube-api-access
+          projected:
+            defaultMode: 0440
+            sources:
+              - serviceAccountToken: {expirationSeconds: 600, path: token}
+              - configMap:
+                  name: kube-root-ca.crt
+                  items: [{key: ca.crt, path: ca.crt}]
+              - downwardAPI:
+                  items: [{path: namespace, fieldRef: {fieldPath: metadata.namespace}}]
+        - name: server-tls
+          secret:
+            secretName: secret-broker-server-tls
+            defaultMode: 0440
+        - name: client-ca
+          configMap:
+            name: kodex-internal-ca
+            defaultMode: 0440
+            items: [{key: ca.pem, path: ca.pem}]
+        - name: workload-tls
+          secret:
+            secretName: internal-rpc-authority-secret-broker-workload-tls
+            defaultMode: 0440
+        - name: control-plane-ca
+          configMap:
+            name: kodex-internal-ca
+            defaultMode: 0440
+        - name: application-grant
+          emptyDir: {sizeLimit: 1Mi}
+        - name: provider-auth-state
+          emptyDir: {sizeLimit: 32Mi}
+        - name: otel-ca
+          configMap:
+            name: kodex-otel-ca
+            defaultMode: 0440
+        - name: sentry-dsn
+          secret:
+            secretName: kodex-sentry
+            defaultMode: 0440

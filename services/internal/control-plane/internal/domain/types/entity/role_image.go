@@ -28,6 +28,7 @@ type RoleImageRecipeInput struct {
 	Platforms                                                                    []RoleImagePlatform
 	Packages                                                                     []RoleImagePackage
 	Tools                                                                        []RoleImageTool
+	Dockerfile                                                                   string
 }
 
 // RoleEnvironmentSelection содержит только owner-facing выбор из
@@ -36,6 +37,7 @@ type RoleEnvironmentSelection struct {
 	EnvironmentKey        string
 	PackageKeys, ToolKeys []string
 	InstallationBlock     string
+	Dockerfile            string
 }
 
 type RoleImageRecipe struct {
@@ -56,6 +58,7 @@ type ImageBuild struct {
 	Attempt, ProgressPercent                                              uint32
 	LeaseExpiresAt                                                        *time.Time
 	CreatedAt, UpdatedAt                                                  time.Time
+	Dockerfile                                                            string
 }
 
 type ImageArtifact struct {
@@ -70,6 +73,7 @@ type ImageArtifact struct {
 	AdmissionRevision, RoleRuntimeContractRevision                                uint64
 	BuildAttempt                                                                  uint32
 	Platforms                                                                     []RoleImagePlatform
+	Tools                                                                         []RoleImageTool
 	PromotedAt                                                                    *time.Time
 	CreatedAt, UpdatedAt                                                          time.Time
 }
@@ -83,6 +87,7 @@ type RoleImageBuildInput struct {
 	Platforms                                                                    []RoleImagePlatform
 	Packages                                                                     []RoleImagePackage
 	Tools                                                                        []RoleImageTool
+	Dockerfile                                                                   string
 }
 
 type ImageBuildClaim struct {
@@ -114,4 +119,18 @@ type ImagePromotionAuthorization struct {
 	Artifact               ImageArtifact
 	AuthorizationToken     string
 	AuthorizationExpiresAt time.Time
+}
+
+type RoleImageRecipeRevision struct {
+	Ref, RecipeRef, SpecSHA256, ProvenanceSHA256, SourceSHA256 string
+	ImmutableBuildSHA256, ImageArtifactRef, ManifestDigest     string
+	PromotedReference, PromotionReceiptSHA256                  string
+	Revision, RecipeVersion, RecipeGeneration                  uint64
+	CreatedAt                                                  time.Time
+}
+
+type RoleImagePromotionReceipt struct {
+	Ref, RecipeRef, ImageArtifactRef, ProvenanceSHA256, ManifestDigest string
+	ReceiptSHA256, State                                               string
+	CreatedAt                                                          time.Time
 }

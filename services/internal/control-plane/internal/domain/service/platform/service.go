@@ -2,7 +2,6 @@
 package platform
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -12,6 +11,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -22,19 +22,41 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-type Service struct{ repository repository.Repository }
+type Service struct {
+	repository                     repository.Repository
+	credentialMaterializer         CredentialMaterializer
+	providerCredentialMaterializer ProviderCredentialMaterializer
+}
 
-func New(repo repository.Repository) (*Service, error) {
+type Option func(*Service)
+
+func WithCredentialMaterializer(materializer CredentialMaterializer) Option {
+	return func(service *Service) { service.credentialMaterializer = materializer }
+}
+
+func New(repo repository.Repository, options ...Option) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("platform repository is required")
 	}
-	return &Service{repository: repo}, nil
+	service := &Service{repository: repo}
+	for _, option := range options {
+		if option != nil {
+			option(service)
+		}
+	}
+	return service, nil
 }
 
 func (service *Service) Bootstrap(ctx context.Context) error {
 	return service.repository.Bootstrap(ctx)
 }
-func (service *Service) Ready(ctx context.Context) error { return service.repository.Ready(ctx) }
+func (service *Service) Ready(ctx context.Context) error {
+	// Общая readiness подтверждает только owned state control-plane. Downstream
+	// materializer имеет отдельную exact-path readiness: иначе control-plane
+	// исчезает из Service endpoints до старта secret-broker, а secret-broker не
+	// может проверить принадлежащий control-plane runtime-secret work path.
+	return service.repository.Ready(ctx)
+}
 
 func (service *Service) ResolveProofAuthority(ctx context.Context, input repository.ProofPrincipalInput) (repository.ProofAuthority, error) {
 	return service.repository.ResolveProofAuthority(ctx, input)
@@ -161,6 +183,154 @@ func (service *Service) GetAgent(ctx context.Context, p value.Principal, ref str
 	}
 	return service.repository.GetAgent(ctx, p, ref)
 }
+func (service *Service) GetAgentRuntimeConfiguration(ctx context.Context, p value.Principal, ref string) (entity.AgentRuntimeConfigurationView, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	return service.repository.GetAgentRuntimeConfiguration(ctx, p, ref)
+}
+func (service *Service) ListAgentRuntimeConfigurations(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.AgentRuntimeConfiguration, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListAgentRuntimeConfigurations(ctx, p, filter)
+}
+func (service *Service) ListRuntimeEnvironments(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.RuntimeEnvironmentSet, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListRuntimeEnvironments(ctx, p, filter)
+}
+func (service *Service) GetRuntimeEnvironment(ctx context.Context, p value.Principal, ref string) (entity.RuntimeEnvironmentSet, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.RuntimeEnvironmentSet{}, err
+	}
+	return service.repository.GetRuntimeEnvironment(ctx, p, ref)
+}
+func (service *Service) GetRuntimeEnvironmentReadiness(ctx context.Context, p value.Principal, ref string) (entity.RuntimeEnvironmentReadiness, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.RuntimeEnvironmentReadiness{}, err
+	}
+	return service.repository.GetRuntimeEnvironmentReadiness(ctx, p, ref)
+}
+func (service *Service) ListRuntimeEnvironmentAgents(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Agent, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListRuntimeEnvironmentAgents(ctx, p, filter)
+}
+func (service *Service) ListRuntimeEnvironmentVersions(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.RuntimeEnvironmentVersion, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListRuntimeEnvironmentVersions(ctx, p, filter)
+}
+func (service *Service) ListRuntimeSecrets(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.RuntimeSecret, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListRuntimeSecrets(ctx, p, filter)
+}
+func (service *Service) GetRuntimeSecret(ctx context.Context, p value.Principal, ref string) (entity.RuntimeSecret, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.RuntimeSecret{}, err
+	}
+	return service.repository.GetRuntimeSecret(ctx, p, ref)
+}
+func (service *Service) PrepareRuntimeSecretOperation(ctx context.Context, p value.Principal, input repository.RuntimeSecretPrepareInput) (repository.RuntimeSecretPrepareResult, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return repository.RuntimeSecretPrepareResult{}, err
+	}
+	input.Mutation.Operation = "runtime-secret." + strings.ToLower(input.Kind)
+	input.Mutation.IntentDigest = digest(struct {
+		Kind, ProjectRef, SecretRef, Name, Description, ValueType, ExpectedContentSHA256 string
+		ExpectedVersion                                                                  *int64
+	}{input.Kind, input.ProjectRef, input.SecretRef, input.Name, input.Description, input.ValueType, input.ExpectedContentSHA256, input.Mutation.ExpectedVersion})
+	return service.repository.PrepareRuntimeSecretOperation(ctx, p, input)
+}
+func (service *Service) ListRuntimeSecretRecoveryWork(ctx context.Context, p value.Principal, page repository.RuntimeSecretRecoveryPage) ([]entity.RuntimeSecretRecoveryWork, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListRuntimeSecretRecoveryWork(ctx, p, page)
+}
+func (service *Service) ConsumeRuntimeSecretOperation(ctx context.Context, p value.Principal, input repository.RuntimeSecretConsumeInput) (entity.RuntimeSecretOperation, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.RuntimeSecretOperation{}, err
+	}
+	return service.repository.ConsumeRuntimeSecretOperation(ctx, p, input)
+}
+func (service *Service) CompleteRuntimeSecretOperation(ctx context.Context, p value.Principal, input repository.RuntimeSecretCompleteInput) (entity.RuntimeSecret, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.RuntimeSecret{}, err
+	}
+	return service.repository.CompleteRuntimeSecretOperation(ctx, p, input)
+}
+func (service *Service) FailRuntimeSecretOperation(ctx context.Context, p value.Principal, input repository.RuntimeSecretFailInput) (repository.RuntimeSecretFailureResult, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return repository.RuntimeSecretFailureResult{}, err
+	}
+	return service.repository.FailRuntimeSecretOperation(ctx, p, input)
+}
+func (service *Service) RecoverRuntimeSecretMaterialization(ctx context.Context, p value.Principal, input repository.RuntimeSecretRecoveryInput) (repository.RuntimeSecretRecoveryResult, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return repository.RuntimeSecretRecoveryResult{}, err
+	}
+	return service.repository.RecoverRuntimeSecretMaterialization(ctx, p, input)
+}
+func (service *Service) ListTemplateVariables(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.TemplateVariable, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListTemplateVariables(ctx, p, filter)
+}
+func (service *Service) ListProviderDefinitions(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.ProviderDefinition, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListProviderDefinitions(ctx, p, filter)
+}
+func (service *Service) ListProviderAccounts(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.ProviderAccount, string, []string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	return service.repository.ListProviderAccounts(ctx, p, filter)
+}
+func (service *Service) GetProviderAccount(ctx context.Context, p value.Principal, ref string) (entity.ProviderAccount, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.ProviderAccount{}, err
+	}
+	if strings.TrimSpace(ref) == "" {
+		return entity.ProviderAccount{}, errs.ErrInvalid
+	}
+	return service.repository.GetProviderAccount(ctx, p, ref)
+}
+func (service *Service) ListRoleImageRecipeRevisions(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.RoleImageRecipeRevision, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListRoleImageRecipeRevisions(ctx, p, filter)
+}
 func (service *Service) ListAgentInstructionVersions(ctx context.Context, p value.Principal, ref string, page query.Page) ([]entity.InstructionVersion, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -273,25 +443,60 @@ func (service *Service) GetArtifact(ctx context.Context, p value.Principal, ref 
 	}
 	return service.repository.GetArtifact(ctx, p, ref)
 }
+func (service *Service) GetArtifactImpact(ctx context.Context, p value.Principal, ref, action string) (entity.ArtifactImpact, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.ArtifactImpact{}, err
+	}
+	ref = strings.TrimSpace(ref)
+	action = strings.TrimSpace(action)
+	if ref == "" || action != "DELETE" && action != "PURGE" {
+		return entity.ArtifactImpact{}, errs.ErrInvalid
+	}
+	return service.repository.GetArtifactImpact(ctx, p, ref, action)
+}
+func (service *Service) GetAttachmentSet(ctx context.Context, p value.Principal, ref string, page query.Page) (entity.AttachmentSet, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.AttachmentSet{}, "", err
+	}
+	if strings.TrimSpace(ref) == "" || page.Size < 0 || page.Size > 100 || len(page.Token) > 256 {
+		return entity.AttachmentSet{}, "", errs.ErrInvalid
+	}
+	return service.repository.GetAttachmentSet(ctx, p, ref, page)
+}
 func (service *Service) UploadArtifact(ctx context.Context, p value.Principal, mutation value.Mutation, input repository.ArtifactUpload) (entity.Artifact, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return entity.Artifact{}, err
 	}
-	if input.SizeBytes < 0 || input.SizeBytes > repository.MaximumArtifactBytes || input.Reader == nil || strings.TrimSpace(input.ProjectRef) == "" {
+	if input.SizeBytes < 0 || input.SizeBytes > repository.MaximumArtifactBytes || input.Reader == nil ||
+		(strings.TrimSpace(input.ProjectRef) == "" && strings.TrimSpace(input.RunRef) != "") {
 		return entity.Artifact{}, errs.ErrInvalid
 	}
-	body, err := io.ReadAll(io.LimitReader(input.Reader, repository.MaximumArtifactBytes+1))
-	if err != nil || int64(len(body)) != input.SizeBytes {
+	if _, err := input.Reader.Seek(0, io.SeekStart); err != nil {
 		return entity.Artifact{}, errs.ErrInvalid
 	}
-	contentDigest := sha256.Sum256(body)
-	input.Digest = "sha256:" + hex.EncodeToString(contentDigest[:])
-	verdict := artifactpolicy.Inspect(input.FileName, input.MediaType, body)
+	contentDigest := sha256.New()
+	written, err := io.Copy(contentDigest, io.LimitReader(input.Reader, repository.MaximumArtifactBytes+1))
+	if err != nil || written != input.SizeBytes {
+		return entity.Artifact{}, errs.ErrInvalid
+	}
+	actualDigest := "sha256:" + hex.EncodeToString(contentDigest.Sum(nil))
+	if input.Digest != "" && input.Digest != actualDigest {
+		return entity.Artifact{}, errs.ErrInvalid
+	}
+	input.Digest = actualDigest
+	verdict, err := artifactpolicy.InspectReader(input.FileName, input.MediaType, input.Reader, input.SizeBytes)
+	if err != nil {
+		return entity.Artifact{}, errs.ErrUnavailable
+	}
 	input.MediaType = verdict.MediaType
 	input.ScanState = verdict.ScanState
 	input.PreviewState = verdict.PreviewState
-	input.Reader = bytes.NewReader(body)
+	if _, err := input.Reader.Seek(0, io.SeekStart); err != nil {
+		return entity.Artifact{}, errs.ErrUnavailable
+	}
 	mutation.Operation = "artifact.upload"
 	mutation.IntentDigest = digest(struct {
 		ProjectRef, RunRef, FileName, MediaType, Digest string
@@ -301,6 +506,24 @@ func (service *Service) UploadArtifact(ctx context.Context, p value.Principal, m
 		return entity.Artifact{}, errs.ErrInvalid
 	}
 	return service.repository.UploadArtifact(ctx, p, mutation, input)
+}
+
+func (service *Service) PurgeArtifact(ctx context.Context, p value.Principal, mutation value.Mutation, artifactRef, impactDigest string) (string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return "", err
+	}
+	artifactRef = strings.TrimSpace(artifactRef)
+	impactDigest = strings.TrimSpace(impactDigest)
+	if artifactRef == "" || impactDigest == "" || mutation.ExpectedVersion == nil || strings.TrimSpace(mutation.IdempotencyKey) == "" {
+		return "", errs.ErrInvalid
+	}
+	mutation.Operation = "artifact.purge"
+	mutation.IntentDigest = digest(struct {
+		ArtifactRef, ImpactDigest string
+		ExpectedVersion           int64
+	}{ArtifactRef: artifactRef, ImpactDigest: impactDigest, ExpectedVersion: *mutation.ExpectedVersion})
+	return service.repository.PurgeArtifact(ctx, p, mutation, artifactRef, impactDigest)
 }
 func (service *Service) DownloadArtifact(ctx context.Context, p value.Principal, ref, purpose string) (repository.ArtifactDownload, error) {
 	p, err := service.principal(ctx, p)
@@ -330,12 +553,36 @@ func (service *Service) ListSchedules(ctx context.Context, p value.Principal, fi
 	}
 	return service.repository.ListSchedules(ctx, p, filter)
 }
-func (service *Service) ListIntegrationDefinitions(ctx context.Context, p value.Principal, category string) ([]entity.IntegrationDefinition, []string, error) {
+func (service *Service) GetSchedule(ctx context.Context, p value.Principal, ref string) (entity.Schedule, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
-		return nil, nil, err
+		return entity.Schedule{}, err
 	}
-	return service.repository.ListIntegrationDefinitions(ctx, p, category)
+	if strings.TrimSpace(ref) == "" {
+		return entity.Schedule{}, errs.ErrInvalid
+	}
+	return service.repository.GetSchedule(ctx, p, ref)
+}
+func (service *Service) ListScheduleRevisions(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.ScheduleRevision, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListScheduleRevisions(ctx, p, filter)
+}
+func (service *Service) ListScheduleRuns(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.ScheduleRunOccurrence, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListScheduleRuns(ctx, p, filter)
+}
+func (service *Service) ListIntegrationDefinitions(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.IntegrationDefinition, string, []string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	return service.repository.ListIntegrationDefinitions(ctx, p, filter)
 }
 func (service *Service) ListIntegrationConnections(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.IntegrationConnection, string, error) {
 	p, err := service.principal(ctx, p)
@@ -380,6 +627,70 @@ func (service *Service) ListAuditEvents(ctx context.Context, p value.Principal, 
 	return service.repository.ListAuditEvents(ctx, p, filter)
 }
 
+func (service *Service) ListPermissionRegistry(ctx context.Context, p value.Principal) ([]entity.PermissionDefinition, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return service.repository.ListPermissionRegistry(ctx, p)
+}
+
+func (service *Service) ListAccessSubjects(ctx context.Context, p value.Principal, filter query.Filter, kind string) ([]entity.AccessSubject, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListAccessSubjects(ctx, p, filter, kind)
+}
+
+func (service *Service) ListOIDCGroups(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.OIDCGroup, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListOIDCGroups(ctx, p, filter)
+}
+
+func (service *Service) ListAccessRoles(ctx context.Context, p value.Principal, page query.Page, includeArchived bool) ([]entity.AccessRole, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListAccessRoles(ctx, p, page, includeArchived)
+}
+
+func (service *Service) ListAccessRoleVersions(ctx context.Context, p value.Principal, roleRef string, page query.Page) (entity.AccessRole, []entity.AccessRoleVersion, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.AccessRole{}, nil, "", err
+	}
+	return service.repository.ListAccessRoleVersions(ctx, p, roleRef, page)
+}
+
+func (service *Service) ListAccessBindings(ctx context.Context, p value.Principal, filter query.AccessBindingFilter) ([]entity.AccessBinding, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListAccessBindings(ctx, p, filter)
+}
+
+func (service *Service) QueryEffectiveAccess(ctx context.Context, p value.Principal, subjectRef string, target entity.AccessScope, permissionKeys []string, evaluatedAt time.Time) (entity.EffectiveAccess, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.EffectiveAccess{}, err
+	}
+	return service.repository.QueryEffectiveAccess(ctx, p, subjectRef, target, permissionKeys, evaluatedAt)
+}
+
+func (service *Service) SimulateAccess(ctx context.Context, p value.Principal, input command.AccessSimulationInput) (entity.AccessSimulation, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.AccessSimulation{}, err
+	}
+	return service.repository.SimulateAccess(ctx, p, input)
+}
+
 func (service *Service) Execute(ctx context.Context, input command.Command) (command.Result, error) {
 	principal, err := service.principal(ctx, input.Principal)
 	if err != nil {
@@ -390,10 +701,20 @@ func (service *Service) Execute(ctx context.Context, input command.Command) (com
 		return command.Result{}, errs.ErrInvalid
 	}
 	input.Mutation.Operation = "controlplane." + strings.ToLower(string(input.Kind))
+	intentPayload := input.Payload
+	if input.Kind == command.ConfigureConnectionCredential {
+		payload, ok := input.Payload.(command.ConnectionInput)
+		if !ok || payload.CredentialRevision == nil {
+			return command.Result{}, errs.ErrInvalid
+		}
+		intentPayload = struct {
+			Ref, MaterializationRef, ContentSHA256 string
+		}{payload.Ref, payload.MaterializationRef, payload.CredentialRevision.ContentSHA256}
+	}
 	input.Mutation.IntentDigest = digest(struct {
 		Kind    command.Kind
 		Payload any
-	}{input.Kind, input.Payload})
+	}{input.Kind, intentPayload})
 	if err := input.Mutation.Validate(); err != nil {
 		return command.Result{}, errs.ErrInvalid
 	}
@@ -431,6 +752,29 @@ func (service *Service) ReportWarmRuntime(ctx context.Context, p value.Principal
 		return entity.SystemAssistant{}, errs.ErrForbidden
 	}
 	return service.repository.ReportWarmRuntime(ctx, p, input)
+}
+
+func (service *Service) ClaimSessionArchiveTasks(ctx context.Context, p value.Principal, instance string, limit int32) ([]map[string]any, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	if p.CallerWorkload != "session-archive" || p.Permission != "platform.session-archive.tasks.claim" ||
+		strings.TrimSpace(instance) == "" || limit < 1 || limit > 16 {
+		return nil, errs.ErrForbidden
+	}
+	return service.repository.ClaimSessionArchiveTasks(ctx, p, instance, limit)
+}
+
+func (service *Service) RenewSessionArchiveTask(ctx context.Context, p value.Principal, input command.SessionArchiveTaskInput) (map[string]any, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	if p.CallerWorkload != "session-archive" || p.Permission != "platform.session-archive.tasks.renew" {
+		return nil, errs.ErrForbidden
+	}
+	return service.repository.RenewSessionArchiveTask(ctx, p, input)
 }
 func (service *Service) ClaimDueSchedules(ctx context.Context, p value.Principal, instance string, limit int32) ([]map[string]any, error) {
 	p, err := service.principal(ctx, p)
@@ -509,20 +853,39 @@ func knownCommand(kind command.Kind) bool {
 		command.AddMembership, command.ChangeMembership, command.RemoveMembership,
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,
 		command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions,
-		command.RollbackInstructions, command.ChangeAgentCapability, command.ChangeAgentGrant,
+		command.RollbackInstructions, command.PublishAgentRuntimeConfig,
+		command.CreateConfigOverlayDraft, command.ValidateConfigOverlayDraft, command.PublishConfigOverlayDraft,
+		command.RollbackConfigOverlay, command.CreateRuntimeEnvironment, command.PublishRuntimeEnvironment,
+		command.RollbackRuntimeEnvironment, command.SetRuntimeEnvironmentEnabled, command.DeleteRuntimeEnvironment,
+		command.BindAgentRuntimeEnvironment,
+		command.ChangeAgentCapability, command.ChangeAgentGrant,
 		command.CreateWorkflow, command.UpdateWorkflow,
 		command.ValidateWorkflow, command.PublishWorkflow, command.ArchiveWorkflow,
 		command.LaunchRun, command.AddSessionTurn, command.CancelRun, command.RetryRun,
-		command.ResolveOwnerGate, command.ChangeArtifactBinding, command.CreateSchedule,
-		command.UpdateSchedule, command.SetScheduleEnabled, command.CreateConnection,
+		command.ResolveOwnerGate, command.ChangeArtifactBinding, command.DeleteArtifact,
+		command.RestoreArtifact, command.CreateAttachmentSetDraft, command.AddAttachmentSetItems,
+		command.RemoveAttachmentSetItems, command.FinalizeAttachmentSet, command.CreateSchedule,
+		command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.DeleteSchedule,
+		command.CreateProviderAccount, command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey,
+		command.RefreshProviderAuthorization, command.RevokeProviderAccount, command.SetProviderAccountEnabled,
+		command.CreateConnection, command.UpdateConnection, command.DeleteConnection,
+		command.ConfigureConnectionCredential,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant,
-		command.CreateAssistantConversation, command.AddAssistantTurn, command.ApplyAssistantPlan,
+		command.CreateAssistantConversation, command.UpdateAssistantConversation, command.AddAssistantTurn,
+		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,
-		command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
-		command.DelegateExecution, command.ProposeAssistantPlan,
+		command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,
+		command.CompleteExecution,
+		command.DelegateExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
+		command.ProposeRunMetadata, command.RecordRunToolCall,
+		command.CompleteSessionSnapshot, command.CompleteSessionRestore,
+		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
+		command.FailSessionArchiveTask,
 		command.MaterializeOccurrence, command.CompleteConnectionTest,
 		command.CompleteIntegrationInvocation, command.CompleteInteractionDelivery,
-		command.AcceptInteractionMessage:
+		command.AcceptInteractionMessage, command.CreateAccessRole,
+		command.CreateAccessRoleVersion, command.ArchiveAccessRole,
+		command.CreateAccessBinding, command.ChangeAccessBinding, command.RevokeAccessBinding:
 		return true
 	default:
 		return false

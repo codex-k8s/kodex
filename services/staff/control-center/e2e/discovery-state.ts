@@ -11,16 +11,19 @@ import { dirname, isAbsolute, resolve } from "node:path";
 
 export interface DiscoveryRefs {
   readonly analystRef?: string;
+  readonly automationRef?: string;
   readonly continuationRunRef?: string;
   readonly coordinatorRef?: string;
   readonly firstRunRef?: string;
   readonly instructionRunRef?: string;
   readonly projectRef?: string;
   readonly publishedInstructionRef?: string;
+  readonly runtimeEnvironmentRef?: string;
   readonly scheduledRunRef?: string;
   readonly workflowRef?: string;
   readonly workflowRunRef?: string;
   readonly writerRef?: string;
+  readonly uploadedArtifactRef?: string;
 }
 
 interface DiscoveryState {

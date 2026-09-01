@@ -4,8 +4,8 @@ title: Карта интеграций
 type: architecture
 status: approved
 owner: architect
-version: 1.3.0
-updated: 2026-08-25
+version: 1.4.0
+updated: 2026-08-28
 ---
 
 # Карта интеграций
@@ -69,22 +69,38 @@ MCP, версии capabilities/grants и bounded policy. Provider adapter обя
 Версионируемый пакет YAML содержит:
 
 ```yaml
-apiVersion: kodex.io/v1alpha1
-kind: IntegrationDefinition
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
 metadata:
-  name: example-crm
+  key: synthetic
+  version: 1.0.0
+  origin: SHIPPED
 spec:
-  connectionSchema: {}
-  capabilities: []
-  runtime:
-    mode: managed-mcp
-  tools: []
-  riskPolicies: []
-  promptDocumentation: "..."
-  healthCheck: {}
+  name: Synthetic HTTP
+  description: Детерминированный HTTP journal для проверки lifecycle.
+  category: testing
+  adapter: SYNTHETIC_HTTP
+  configurationFields:
+    - key: journal
+      type: STRING
+      required: true
+      maximumLength: 120
+  capabilities:
+    - key: synthetic.journal.read
+      operation: synthetic.journal.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope:
+        kind: SYNTHETIC_JOURNAL
+        connectionFields: [journal]
+      inputFields: []
 ```
 
-Пакет не содержит значений секретов. Поля проходят проверку JSON Schema.
+Канонический контракт находится в
+`contracts/integrations/v1/integration-package.schema.json`; новые adapter и
+resource kind добавляются только вместе с закрытой реализацией loader/gateway.
+Пакет не содержит значений секретов. Поля проходят строгую проверку schema и
+семантических инвариантов, а canonical representation получает SHA-256 digest.
 Декларативные MCP definitions дополняются разделением организаций,
 авторизацией, typed grants, аудитом и server-owned Human Gates, доступными в
 Control Center независимо от interaction adapters.
@@ -146,14 +162,15 @@ server-owned A/AAAA resolution с TTL/CNAME/special-purpose validation. TLS
 
 1. MCP-вызов создает `ToolInvocation` и при необходимости `ApprovalRequest` в одной транзакции.
 2. Если решение нельзя получить в пределах обычного хода, MCP немедленно возвращает структурированный `pending` с непрозрачным идентификатором вызова.
-3. Runner завершает ход, сохраняет архив сессии Codex и переводит сессию в `waiting_approval`; pod может быть вытеснен или удален по TTL.
+3. Runner завершает ход и переводит сессию в `waiting_approval`; до реализации
+   session archive/restore в #1002 session PVC сохраняется и не удаляется.
 4. Решение человека и выполнение операции сохраняются идемпотентно независимо от наличия pod.
 5. Событие outbox ставит ход продолжения в очередь той же сессии и той же учетной записи поставщика.
-6. Контроллер среды выполнения восстанавливает архив, заново генерирует
-   актуальный provider config, возобновляет exact server-owned provider session
-   и передаёт доверенный структурированный результат исходного вызова
-   инструмента. Codex adapter использует `config.toml` и app-server
-   `thread/resume`.
+6. Контроллер среды выполнения использует сохранённый session PVC, заново
+   генерирует актуальный provider config, возобновляет exact server-owned
+   provider session и передаёт доверенный структурированный результат исходного
+   вызова инструмента. Codex adapter использует `config.toml` и app-server
+   `thread/resume`. Восстановление после удаления PVC появится только в #1002.
 7. Отклонение, истечение срока и ошибка продолжают сессию тем же способом и не теряются при перезапуске сервисов.
 
 Открытый сетевой запрос и живой pod не удерживаются с пятницы до понедельника. Корреляция выполняется по неизменяемому идентификатору вызова и хешу аргументов; подменить результат другого вызова нельзя.

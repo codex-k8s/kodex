@@ -31,6 +31,10 @@ function messages() {
       continue: "Продолжить",
       send: "Отправить",
       retry: "Повторить",
+      details: "Подробнее",
+      close: "Закрыть",
+      unavailable: "Недоступно",
+      unknownStatus: "Неизвестное состояние",
       yes: "Да",
       no: "Нет",
     },
@@ -40,6 +44,7 @@ function messages() {
       graph: "Граф выполнения",
       activity: "Ход работы",
       context: "Контекст узла",
+      workspaceTools: "Инструменты запуска",
       connections: "Связи графа",
       artifacts: "Результаты и файлы",
       incidents: "Диагностика",
@@ -72,7 +77,12 @@ function messages() {
       zoomIn: "Увеличить",
       zoomOut: "Уменьшить",
       fitGraph: "Вместить",
+      minimap: "Мини-карта графа",
       waitingForActivity: "Ожидает начала работы",
+      sessionNode: "Сессия",
+      controlNode: "Контрольный этап",
+      toolResult: "Безопасный результат",
+      artifactUnavailable: "Описание файла недоступно",
       source: {
         CONTROL_CENTER: "Control Center",
         AGENT_DELEGATION: "Делегирование",
@@ -87,8 +97,11 @@ function messages() {
     states: {
       COMPLETED: "Готово",
       RUNNING: "Выполняется",
+      WAITING: "Ожидает",
       SUCCEEDED: "Завершён",
+      FAILED: "Ошибка",
       NEEDS_ATTENTION: "Требует внимания",
+      OUTCOME_NEEDS_ATTENTION: "Требует внимания",
       CLEAN: "Проверен",
     },
   };
@@ -119,6 +132,8 @@ describe("RunPage runtime presentation", () => {
         version: 1,
       },
       title: "Проверка отчёта",
+      titleSource: "USER_EDITED",
+      activitySummary: "Отчёт подготовлен",
       state: "SUCCEEDED",
       source: "CONTROL_CENTER",
       initiator: { ref: "usr_public_example", displayName: "Владелец" },
@@ -140,7 +155,7 @@ describe("RunPage runtime presentation", () => {
         report: "Доступ к файлу ограничен",
         run_ref: "run_secret_internal_reference",
       }),
-      inputArtifactRefs: [],
+      safeErrorCode: "REPORT_BLOCKED",
       artifactRefs: [],
       gateRefs: [],
       createdAt: "2026-08-27T12:00:00Z",
@@ -222,12 +237,16 @@ describe("RunPage runtime presentation", () => {
     expect(html).toContain("Завершён");
     expect(html).toContain("status-badge--success");
     expect(html).toContain("Требует внимания");
-    expect(html).toContain("Доступ к файлу ограничен");
     expect(html).toContain("ИИ-сотрудник");
-    expect(html).toContain("Использование токенов");
     expect(html).toContain("История событий временно недоступна");
     expect(html).toContain("Граф выполнения");
-    expect(html).toContain("200 000");
+    expect(html).toContain("run-page-body");
+    expect(html).toContain("run-workspace");
+    expect(html).toContain("run-canvas-summary");
+    expect(html).toContain("token-usage");
+    expect(html).toContain(new Intl.NumberFormat("ru").format(1700));
+    expect(html).toContain("graph-legend");
+    expect(html).not.toContain("run-bottom");
     expect(html).not.toContain("MODEL_REQUEST_RUNNING");
     expect(html).not.toContain("WORKLOAD_SCHEDULED");
     expect(html).not.toContain("run_secret_internal_reference");

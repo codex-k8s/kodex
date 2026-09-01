@@ -1,7 +1,12 @@
 #!/bin/sh
 set -eu
 
+admission_phase=${1:-}
+
 fail() {
+  if [ "$admission_phase" = scan ] || [ "$admission_phase" = sign ]; then
+    write_technical_rejection "$1" || true
+  fi
   echo "image admission failed: $1" >&2
   exit 1
 }
@@ -102,7 +107,6 @@ load_owner_claim() {
   artifact_id=$(jq -er .artifactId /work/owner-claim.json)
   source_ref=$(jq -er .stagingReference /work/owner-claim.json)
   image_digest=$(jq -er .manifestDigest /work/owner-claim.json)
-  image_hex=${image_digest#sha256:}
   spec_sha256=$(jq -er .specSHA256 /work/owner-claim.json)
   immutable_build_sha256=$(jq -er .immutableBuildSHA256 /work/owner-claim.json)
   expected_provenance_sha256=$(jq -er .provenanceSHA256 /work/owner-claim.json)
@@ -124,6 +128,41 @@ load_owner_claim() {
   source_ref="kodex-image-registry-staging-read.kodex-system.svc.cluster.local:5004/${source_ref#*/}"
   subject_name=${source_ref%@*}
   staging_host=${source_ref%%/*}
+}
+
+write_technical_rejection() {
+  reason=$1
+  [ -f /work/owner-claim.json ] || return 0
+  jq -e --argjson policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" '
+    (.artifactId | type == "string" and length > 0) and
+    (.manifestDigest | test("^sha256:[a-f0-9]{64}$")) and
+    (.specSHA256 | test("^[a-f0-9]{64}$")) and
+    (.immutableBuildSHA256 | test("^[a-f0-9]{64}$")) and
+    .policyRevision == $policy and .policySHA256 == $policy_sha
+  ' /work/owner-claim.json >/dev/null || return 0
+  image_digest=$(jq -er .manifestDigest /work/owner-claim.json)
+  spec_sha256=$(jq -er .specSHA256 /work/owner-claim.json)
+  immutable_build_sha256=$(jq -er .immutableBuildSHA256 /work/owner-claim.json)
+  jq -Sjc -n --arg build_type "$EXPECTED_BUILD_TYPE" --arg builder_id "$EXPECTED_BUILDER_ID" \
+    --arg immutable "$immutable_build_sha256" --arg manifest "$image_digest" \
+    --argjson policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" \
+    --arg schema "kodex.dev/image-provenance-binding/v1" --arg spec "$spec_sha256" \
+    '{buildType:$build_type,builderId:$builder_id,immutableBuildSHA256:$immutable,
+      manifestDigest:$manifest,policyRevision:$policy,policySHA256:$policy_sha,
+      schema:$schema,specSHA256:$spec}' >/work/provenance.json
+  jq -Sjc -n --arg phase "$admission_phase" --arg reason "$reason" \
+    '[{schema:"kodex.dev/native-provenance-rejection/v1",phase:$phase,reason:$reason}]' \
+    >/work/native-provenance.json
+  jq -Sjc -n --arg phase "$admission_phase" --arg reason "$reason" \
+    '{schema:"kodex.dev/sbom-unavailable/v1",phase:$phase,reason:$reason}' >/work/sbom.json
+  jq -Sjc -n --arg phase "$admission_phase" --arg reason "$reason" \
+    '{schema:"kodex.dev/vulnerability-evidence-unavailable/v1",phase:$phase,reason:$reason}' \
+    >/work/vulnerability.json
+  sha256sum /work/provenance.json | awk '{print $1}' >/work/provenance.sha256
+  sha256sum /work/sbom.json | awk '{print $1}' >/work/sbom.sha256
+  sha256sum /work/vulnerability.json | awk '{print $1}' >/work/vulnerability.sha256
+  printf '%s\n' REJECTED >/work/verdict
+  write_marker signature.complete
 }
 
 load_promotion_claim() {
@@ -183,15 +222,15 @@ claim_admission() {
 evidence_entries() {
   cat <<'EOF'
 image-digest.subject|application/vnd.kodex.image-digest.v1+text
-image-digest.sig|application/vnd.dev.cosign.signature.v1+text
+image-digest.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 provenance.json|application/vnd.kodex.provenance-binding.v1+json
-provenance.sig|application/vnd.dev.cosign.signature.v1+text
+provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 native-provenance.json|application/vnd.kodex.native-provenance.v1+json
-native-provenance.sig|application/vnd.dev.cosign.signature.v1+text
+native-provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 sbom.json|application/spdx+json
-sbom.sig|application/vnd.dev.cosign.signature.v1+text
+sbom.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 vulnerability.json|application/vnd.kodex.vulnerability-report.v1+json
-vulnerability.sig|application/vnd.dev.cosign.signature.v1+text
+vulnerability.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 signature.binding.json|application/vnd.kodex.signature-binding.v1+json
 admission.receipt.json|application/vnd.kodex.admission-receipt.v1+json
 cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
@@ -338,13 +377,13 @@ verify_recovered_evidence() {
       signed_file="$evidence_directory/$signed_name.json"
       [ "$signed_name" = image-digest ] && signed_file="$evidence_directory/image-digest.subject"
       cosign verify-blob --key "$evidence_directory/cosign.pub" \
-        --signature "$evidence_directory/$signed_name.sig" "$signed_file" >/dev/null 2>&1 ||
+        --bundle "$evidence_directory/$signed_name.sigstore.json" "$signed_file" >/dev/null 2>&1 ||
         fail "durable evidence signature verification failed"
     done
   else
     [ "$signature_identity" = not-applicable-rejected ] || fail "rejected evidence signature identity mismatch"
-    for signature_file in "$evidence_directory"/*.sig; do
-      [ ! -s "$signature_file" ] || fail "rejected evidence contains a signature"
+    for signature_bundle in "$evidence_directory"/*.sigstore.json; do
+      [ ! -s "$signature_bundle" ] || fail "rejected evidence contains a signature bundle"
     done
   fi
 }
@@ -400,12 +439,37 @@ login_registry() {
     jq -n --arg host "$host" --arg auth "$auth" '{auths:{($host):{auth:$auth}}}' >"$docker_directory/config.json"
   fi
   export DOCKER_CONFIG=$docker_directory
-  regctl registry set "$host" --tls enabled \
+  regctl registry set "$host" --skip-check --tls enabled \
     --cacert "$(cat /identity/ca.pem)" \
     --client-cert "$(cat /identity/registry-client.crt)" \
     --client-key "$(cat /identity/registry-client.key)"
-  regctl registry login "$host" --user "$(tr -d '\r\n' <"$username_file")" \
+  regctl registry login "$host" --skip-check \
+    --user "$(tr -d '\r\n' <"$username_file")" \
     --pass-stdin <"$password_file" >/dev/null
+}
+
+write_syft_registry_config() {
+  host=$1
+  username_file=$2
+  password_file=$3
+  jq -n --arg authority "$host" --rawfile username "$username_file" \
+    --rawfile password "$password_file" '
+      {
+        "check-for-app-update": false,
+        parallelism: 1,
+        registry: {
+          "ca-cert": "/identity/ca.pem",
+          auth: [{
+            authority: $authority,
+            username: ($username | rtrimstr("\n") | rtrimstr("\r")),
+            password: ($password | rtrimstr("\n") | rtrimstr("\r")),
+            "tls-cert": "/identity/registry-client.crt",
+            "tls-key": "/identity/registry-client.key"
+          }]
+        }
+      }
+    ' >/tmp/syft.json || fail "Syft registry configuration failed"
+  chmod 0600 /tmp/syft.json
 }
 
 verify_image_and_provenance() {
@@ -418,10 +482,10 @@ verify_image_and_provenance() {
     /work/image-index.json | sort -u >/work/actual-platforms
   cmp -s /work/expected-platforms /work/actual-platforms || fail "image platform set mismatch"
   jq -r '.manifests[] | select(.platform.os != "unknown" and .platform.architecture != "unknown") |
-    [.digest, .platform.os, .platform.architecture, (.platform.variant // "")] | @tsv' \
+    .digest' \
     /work/image-index.json >/work/platform-manifests
   : >/work/native-provenance.jsonl
-  while IFS="$(printf '\t')" read -r platform_digest platform_os platform_arch platform_variant; do
+  while IFS= read -r platform_digest; do
     echo "$platform_digest" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "platform manifest digest is invalid"
     platform_ref="${subject_name}@${platform_digest}"
     regctl image inspect "$platform_ref" --format '{{json .Config.Labels}}' >/work/labels.json
@@ -532,8 +596,19 @@ case "${1:-}" in
     login_registry "$staging_host" /identity/username /identity/password
     [ "$(regctl image digest "$source_ref")" = "$image_digest" ] || fail "staging digest mismatch"
     verify_image_and_provenance
-    syft "$source_ref" -o spdx-json=/work/sbom.json
-    if grype sbom:/work/sbom.json --fail-on high -o json >/work/vulnerability.json; then
+    write_syft_registry_config "$staging_host" /identity/username /identity/password
+    syft --config /tmp/syft.json --from registry "$source_ref" \
+      -o spdx-json=/work/sbom.json || fail "SBOM generation failed"
+    GRYPE_CHECK_FOR_APP_UPDATE=false \
+      grype sbom:/work/sbom.json -o json >/work/vulnerability.raw.json ||
+      fail "vulnerability scan failed"
+    jq -e '.matches | type == "array"' /work/vulnerability.raw.json >/dev/null ||
+      fail "vulnerability scan failed"
+    jq --argjson policy_revision "$POLICY_REVISION" --arg policy_sha256 "$POLICY_SHA256" \
+      -f /opt/kodex/vulnerability-policy.jq \
+      /work/vulnerability.raw.json >/work/vulnerability.json ||
+      fail "vulnerability policy evaluation failed"
+    if jq -e '.kodexPolicy.blockingMatchCount == 0' /work/vulnerability.json >/dev/null; then
       printf '%s\n' ACCEPTED >/work/verdict
     else
       printf '%s\n' REJECTED >/work/verdict
@@ -548,11 +623,14 @@ case "${1:-}" in
     if [ "$(cat /work/verdict)" = ACCEPTED ]; then
       login_registry "$staging_host" /identity/username /identity/password
       verify_image_and_provenance
-      export COSIGN_PASSWORD="$(cat /identity/cosign.password)"
+      COSIGN_PASSWORD=$(cat /identity/cosign.password)
+      export COSIGN_PASSWORD
       printf '%s\n' "$image_digest" >/work/image-digest.subject
-      cosign sign-blob --yes --key /identity/cosign.key --output-signature /work/image-digest.sig /work/image-digest.subject
+      cosign sign-blob --yes --key /identity/cosign.key \
+        --bundle /work/image-digest.sigstore.json /work/image-digest.subject >/dev/null
       for evidence in provenance native-provenance sbom vulnerability; do
-        cosign sign-blob --yes --key /identity/cosign.key --output-signature "/work/$evidence.sig" "/work/$evidence.json"
+        cosign sign-blob --yes --key /identity/cosign.key \
+          --bundle "/work/$evidence.sigstore.json" "/work/$evidence.json" >/dev/null
       done
     fi
     write_marker signature.complete
@@ -564,10 +642,10 @@ case "${1:-}" in
     signature_identity=not-applicable-rejected
     if [ "$verdict" = ACCEPTED ]; then
       login_registry "$staging_host" /identity/username /identity/password
-      cosign verify-blob --key /identity/cosign.pub --signature /work/image-digest.sig /work/image-digest.subject \
+      cosign verify-blob --key /identity/cosign.pub --bundle /work/image-digest.sigstore.json /work/image-digest.subject \
         >/work/signature-verification.json
       for evidence in provenance native-provenance sbom vulnerability; do
-        cosign verify-blob --key /identity/cosign.pub --signature "/work/$evidence.sig" "/work/$evidence.json" \
+        cosign verify-blob --key /identity/cosign.pub --bundle "/work/$evidence.sigstore.json" "/work/$evidence.json" \
           >"/work/$evidence-verification.json"
       done
       signature_identity=$(sha256sum /identity/cosign.pub | awk '{print $1}')
@@ -593,7 +671,7 @@ case "${1:-}" in
     printf '%s\n' "$image_digest" >/work/image-digest.subject
     cp /identity/cosign.pub /work/cosign.pub
     for signature in image-digest provenance native-provenance sbom vulnerability; do
-      [ -f "/work/$signature.sig" ] || : >"/work/$signature.sig"
+      [ -f "/work/$signature.sigstore.json" ] || : >"/work/$signature.sigstore.json"
     done
     evidence_total=0
     while IFS='|' read -r evidence_file evidence_media_type; do

@@ -33,7 +33,10 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-const maximumRequestBytes = 16 << 20
+const (
+	maximumRequestBytes                          = 16 << 20
+	maximumProviderCredentialRefreshRequestBytes = ((runtimecontract.MaximumProviderAuthBytes + 2) / 3 * 4) + (16 << 10)
+)
 
 var progressCodePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{2,63}$`)
 
@@ -218,9 +221,150 @@ func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 		server.mcp(writer, request, parts[2])
+	case "native-tool-call":
+		if request.Method != http.MethodPost {
+			http.NotFound(writer, request)
+			return
+		}
+		server.nativeToolCall(writer, request, parts[2])
+	case "provider-credential-refresh":
+		if request.Method != http.MethodPost {
+			http.NotFound(writer, request)
+			return
+		}
+		server.providerCredentialRefresh(writer, request, parts[2])
 	default:
 		http.NotFound(writer, request)
 	}
+}
+
+func (server *Server) providerCredentialRefresh(writer http.ResponseWriter, request *http.Request, leaseRef string) {
+	input, ok := server.authorize(request, leaseRef)
+	if !ok {
+		http.NotFound(writer, request)
+		return
+	}
+	var payload runtimecontract.RunnerProviderCredentialRefreshRequest
+	if decode(request, &payload, maximumProviderCredentialRefreshRequestBytes) != nil || payload.Validate() != nil ||
+		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest ||
+		payload.PreviousCredentialRevisionRef != input.ProviderCredentialRef ||
+		payload.PreviousContentSHA256 != input.ProviderCredentialSHA256 {
+		http.Error(writer, "invalid provider credential refresh", http.StatusBadRequest)
+		return
+	}
+	defer clear(payload.Authentication)
+	requestContext, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
+	defer cancel()
+	binding, err := server.manager.MaterializeProviderCredentialRefresh(requestContext, input, payload)
+	if errors.Is(err, workload.ErrProviderCredentialRefreshRejected) {
+		http.Error(writer, "provider credential refresh conflict", http.StatusConflict)
+		return
+	}
+	if err != nil {
+		server.logger.WarnContext(request.Context(), "provider credential refresh materialization failed", "failure_class", "kubernetes")
+		http.Error(writer, "provider credential refresh unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	response, err := server.control.Runtime.CommitProviderCredentialRefresh(requestContext, providerCredentialRefreshProjection(input, payload, binding))
+	if err != nil {
+		server.logger.WarnContext(request.Context(), "control-plane provider credential refresh request failed",
+			"grpc_code", status.Code(err).String(), "failure_class", controlFailureClass(err))
+		writeControlError(writer, err)
+		return
+	}
+	if !providerCredentialRefreshReadbackMatches(input, binding, response.GetProviderCredential()) {
+		http.Error(writer, "runtime owner unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	writer.WriteHeader(http.StatusNoContent)
+}
+
+func providerCredentialRefreshProjection(input runtimecontract.RunnerInput, payload runtimecontract.RunnerProviderCredentialRefreshRequest, binding workload.ProviderSecretBinding) *controlplanev1.CommitProviderCredentialRefreshRequest {
+	return &controlplanev1.CommitProviderCredentialRefreshRequest{
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "provider-credential-refresh:"+binding.ContentSHA256)},
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
+		PreviousCredentialRevisionRef: payload.PreviousCredentialRevisionRef,
+		PreviousContentSha256:         payload.PreviousContentSHA256,
+		SecretName:                    binding.Name,
+		SecretUid:                     binding.UID,
+		SecretResourceVersion:         binding.ResourceVersion,
+		ContentSha256:                 binding.ContentSHA256,
+	}
+}
+
+func providerCredentialRefreshReadbackMatches(input runtimecontract.RunnerInput, materialized workload.ProviderSecretBinding, actual *controlplanev1.ProviderCredentialBinding) bool {
+	return actual != nil && actual.GetAccountRef() == input.ProviderAccountRef &&
+		actual.GetCredentialRevisionRef() != "" && actual.GetCredentialRevisionRef() != input.ProviderCredentialRef &&
+		actual.GetCredentialRevision() == int64(input.ProviderCredentialRevision)+1 &&
+		actual.GetSecretName() == materialized.Name && actual.GetSecretUid() == materialized.UID &&
+		actual.GetSecretResourceVersion() == materialized.ResourceVersion &&
+		subtle.ConstantTimeCompare([]byte(actual.GetContentSha256()), []byte(materialized.ContentSHA256)) == 1
+}
+
+func (server *Server) nativeToolCall(writer http.ResponseWriter, request *http.Request, leaseRef string) {
+	input, ok := server.authorize(request, leaseRef)
+	if !ok {
+		http.NotFound(writer, request)
+		return
+	}
+	var payload runtimecontract.RunnerNativeToolCallRequest
+	if decode(request, &payload, 8<<10) != nil || payload.Validate() != nil ||
+		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest {
+		http.Error(writer, "invalid native tool call", http.StatusBadRequest)
+		return
+	}
+	projection, err := nativeToolCallProjection(input, payload)
+	if err != nil {
+		http.Error(writer, "invalid native tool call", http.StatusBadRequest)
+		return
+	}
+	requestContext, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
+	defer cancel()
+	response, err := server.control.Runtime.RecordRunToolCall(requestContext, projection)
+	if status.Code(err) == codes.AlreadyExists {
+		writer.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err != nil {
+		server.logger.WarnContext(request.Context(), "control-plane native tool projection request failed",
+			"tool", payload.Kind, "grpc_code", status.Code(err).String(), "failure_class", controlFailureClass(err))
+		writeControlError(writer, err)
+		return
+	}
+	if response.GetEvent().GetRef() == "" {
+		http.Error(writer, "runtime owner unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	writer.WriteHeader(http.StatusNoContent)
+}
+
+func nativeToolCallProjection(input runtimecontract.RunnerInput, payload runtimecontract.RunnerNativeToolCallRequest) (*controlplanev1.RecordRunToolCallRequest, error) {
+	if input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 || payload.Validate() != nil ||
+		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest {
+		return nil, errors.New("native tool call projection is invalid")
+	}
+	rawParameters, err := json.Marshal(payload.SafeParameters)
+	var normalizedParameters map[string]any
+	if err != nil || json.Unmarshal(rawParameters, &normalizedParameters) != nil {
+		return nil, errors.New("native tool call projection is invalid")
+	}
+	normalizedParameters["codex_item_id"] = payload.CallID
+	parameters, err := structpb.NewStruct(normalizedParameters)
+	if err != nil {
+		return nil, errors.New("native tool call projection is invalid")
+	}
+	state := controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_SUCCEEDED
+	if payload.State == runtimecontract.NativeToolStateFailed {
+		state = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED
+	}
+	correlationKey := "native:" + payload.CallID
+	digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, correlationKey)))
+	return &controlplanev1.RecordRunToolCallRequest{
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, correlationKey+":activity")},
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
+		CallRef: "tcl_" + hex.EncodeToString(digest[:16]), Tool: payload.Kind, SafeParameters: parameters,
+		State: state, DurationMs: payload.DurationMS, SafeResult: payload.SafeResult,
+	}, nil
 }
 
 func (server *Server) artifact(writer http.ResponseWriter, request *http.Request, leaseRef, artifactRef string) {
@@ -340,7 +484,7 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(request.Context()), server.config.RequestTimeout)
 	defer cancel()
 	usage := &controlplanev1.TokenUsage{TotalTokens: payload.Usage.TotalTokens, InputTokens: payload.Usage.InputTokens, CachedInputTokens: payload.Usage.CachedInputTokens, CacheWriteInputTokens: payload.Usage.CacheWriteInputTokens, OutputTokens: payload.Usage.OutputTokens, ReasoningOutputTokens: payload.Usage.ReasoningOutputTokens, ModelContextWindow: payload.Usage.ModelContextWindow}
-	_, err := server.control.Runtime.CompleteExecution(ctx, &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "complete")}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: payload.Success, ResultSummary: payload.ResultSummary, SafeErrorCode: payload.SafeErrorCode, Artifacts: artifacts, Usage: usage})
+	_, err := server.control.Runtime.CompleteExecution(ctx, &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "complete")}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: payload.Success, ResultSummary: payload.ResultSummary, SafeErrorCode: payload.SafeErrorCode, Artifacts: artifacts, Usage: usage, CodexSessionId: payload.CodexSessionID, CodexArchiveRelativePath: payload.ArchiveRelativePath, CodexArchiveSha256: payload.ArchiveSHA256, CodexArchiveSizeBytes: payload.ArchiveSizeBytes})
 	if err != nil && status.Code(err) != codes.AlreadyExists {
 		writeControlError(writer, err)
 		return
@@ -393,9 +537,9 @@ func (server *Server) mcp(writer http.ResponseWriter, request *http.Request, lea
 }
 
 func tools(input runtimecontract.RunnerInput) []map[string]any {
-	result := []map[string]any{}
+	result := []map[string]any{runMetadataTool()}
 	if input.SystemAssistant {
-		result = append(result, configurationCatalogTool(), assistantPlanTool(input))
+		result = append(result, configurationCatalogTool(), assistantPlanTool(input), assistantMetadataTool())
 	}
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, delegationTool(input.DelegationTargets))
@@ -441,12 +585,17 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	var result any
+	startedAt := time.Now()
 	err = nil
 	switch params.Name {
 	case "get_configuration_catalog":
 		result, err = configurationCatalog(input, params.Arguments)
 	case "propose_configuration_plan":
 		result, err = server.proposeAssistantPlan(request.Context(), input, params.Arguments, rpc.ID)
+	case "propose_assistant_metadata":
+		result, err = server.proposeAssistantMetadata(request.Context(), input, params.Arguments, rpc.ID)
+	case "propose_run_metadata":
+		result, err = server.proposeRunMetadata(request.Context(), input, params.Arguments, rpc.ID)
 	case "delegate_agent":
 		result, err = server.delegate(request.Context(), input, params.Arguments, rpc.ID)
 	case "invoke_integration":
@@ -454,11 +603,65 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	default:
 		err = errors.New("tool is not available")
 	}
-	encoded, _ := json.Marshal(result)
+	projectionErr := server.recordToolCall(request.Context(), input, params.Name, params.Arguments, result, err, rpc.ID, time.Since(startedAt))
 	if err != nil {
-		encoded, _ = json.Marshal(map[string]string{"error_code": "TOOL_UNAVAILABLE"})
+		failureClass := "tool_unavailable"
+		var planInputErr *assistantPlanInputError
+		if errors.As(err, &planInputErr) {
+			failureClass = "assistant_plan_" + planInputErr.reason
+		}
+		server.logger.WarnContext(request.Context(), "runtime MCP tool operation failed",
+			"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String(),
+			"failure_class", failureClass)
 	}
-	server.writeMCPResult(writer, rpc.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "isError": err != nil})
+	if projectionErr != nil {
+		server.logger.WarnContext(request.Context(), "runtime MCP tool projection failed",
+			"tool", params.Name, "stage", "projection", "grpc_code", status.Code(projectionErr).String(),
+			"failure_class", controlFailureClass(projectionErr))
+	}
+	if projectionErr != nil {
+		err = errors.Join(err, projectionErr)
+	}
+	encoded, _ := json.Marshal(result)
+	structured := result
+	if err != nil {
+		structured = map[string]any{"error_code": "TOOL_UNAVAILABLE", "retryable": false}
+		var planInputErr *assistantPlanInputError
+		if errors.As(err, &planInputErr) {
+			structured = map[string]any{
+				"error_code": "PLAN_INPUT_INVALID",
+				"retryable":  true,
+				"guidance":   "Read the current tool schema and retry once with exactly the required operation fields and camelCase parameter names.",
+			}
+		}
+		encoded, _ = json.Marshal(structured)
+	}
+	server.writeMCPResult(writer, rpc.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "structuredContent": structured, "isError": err != nil})
+}
+
+type assistantPlanInputError struct{ reason string }
+
+func (planErr *assistantPlanInputError) Error() string { return "assistant plan input is invalid" }
+
+func invalidAssistantPlan(reason string) error {
+	return &assistantPlanInputError{reason: reason}
+}
+
+func controlFailureClass(err error) string {
+	switch status.Convert(err).Message() {
+	case "authority proof permission is rejected":
+		return "authority_proof_permission"
+	case "authority proof request is rejected":
+		return "authority_proof_request"
+	case "internal RPC operation is not registered":
+		return "operation_registry"
+	case "operation is not permitted":
+		return "domain_permission"
+	case "record tool call projection":
+		return "projection_" + strings.ToLower(status.Code(err).String())
+	default:
+		return "control_" + strings.ToLower(status.Code(err).String())
+	}
 }
 
 func decodeMCPToolCallParams(raw json.RawMessage) (mcpToolCallParams, error) {
@@ -480,32 +683,103 @@ func decodeMCPToolCallParams(raw json.RawMessage) (mcpToolCallParams, error) {
 
 func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
 	if !input.SystemAssistant || !onlyKeys(arguments, "summary", "operations") {
-		return nil, errors.New("assistant plan tool is not available")
+		return nil, invalidAssistantPlan("top_level_shape")
 	}
 	summary, _ := arguments["summary"].(string)
 	rawOperations, _ := arguments["operations"].([]any)
 	if strings.TrimSpace(summary) == "" || len(summary) > 2000 || len(rawOperations) == 0 || len(rawOperations) > 32 {
-		return nil, errors.New("assistant plan is invalid")
+		return nil, invalidAssistantPlan("summary_or_count")
 	}
 	operations := make([]*controlplanev1.AssistantPlanOperation, 0, len(rawOperations))
+	currentProjectName := ""
+	if input.AssistantContext != nil && input.AssistantContext.EntityKind == "PROJECT" && input.AssistantContext.EntityRef == input.ProjectRef {
+		currentProjectName = input.AssistantContext.EntityName
+	}
 	for index, raw := range rawOperations {
 		operation, ok := raw.(map[string]any)
-		if !ok || !onlyKeys(operation, "type", "summary", "input") {
-			return nil, errors.New("assistant plan operation is invalid")
+		if !ok || !onlyKeys(operation, "type", "action", "title", "summary", "target", "parameters", "expectedVersion", "before", "after", "selected") {
+			return nil, invalidAssistantPlan("operation_shape")
+		}
+		operation, normalizeErr := normalizeServerHydratedAssistantOperation(operation, summary, input.ProjectRef, currentProjectName)
+		if normalizeErr != nil {
+			return nil, normalizeErr
 		}
 		kind, _ := operation["type"].(string)
+		serverHydrated := assistantServerHydratedOperation(kind)
+		action, _ := operation["action"].(string)
+		title, _ := operation["title"].(string)
 		operationSummary, _ := operation["summary"].(string)
-		bounded, _ := operation["input"].(map[string]any)
-		typeValue, exists := controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+kind]
-		if !exists || typeValue == 0 || strings.TrimSpace(operationSummary) == "" || len(operationSummary) > 500 || bounded == nil {
-			return nil, errors.New("assistant plan operation is invalid")
+		parameters, _ := operation["parameters"].(map[string]any)
+		before, beforeOK := operation["before"].(map[string]any)
+		after, afterOK := operation["after"].(map[string]any)
+		if serverHydrated {
+			if !beforeOK {
+				before, beforeOK = map[string]any{}, true
+			}
+			if !afterOK {
+				after, afterOK = parameters, true
+			}
 		}
-		structure, err := structpb.NewStruct(bounded)
-		if err != nil {
-			return nil, errors.New("assistant plan operation input is invalid")
+		target, targetOK := operation["target"].(map[string]any)
+		selected, selectedOK := operation["selected"].(bool)
+		if serverHydrated {
+			action = assistantServerAction(kind)
+			target = assistantServerTarget(kind, parameters)
+			targetOK = target != nil
+			selected, selectedOK = true, true
+		}
+		typeValue, exists := controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+kind]
+		actionValue, actionExists := controlplanev1.AssistantPlanOperation_Action_value["ACTION_"+action]
+		if !exists || typeValue == 0 {
+			return nil, invalidAssistantPlan("operation_type")
+		}
+		if !actionExists || actionValue == 0 {
+			return nil, invalidAssistantPlan("operation_action")
+		}
+		if strings.TrimSpace(title) == "" || len(title) > 200 {
+			return nil, invalidAssistantPlan("operation_title")
+		}
+		if strings.TrimSpace(operationSummary) == "" || len(operationSummary) > 500 {
+			return nil, invalidAssistantPlan("operation_summary")
+		}
+		if parameters == nil {
+			return nil, invalidAssistantPlan("operation_parameters")
+		}
+		if !beforeOK || !afterOK {
+			return nil, invalidAssistantPlan("operation_projection")
+		}
+		if !targetOK {
+			return nil, invalidAssistantPlan("operation_target")
+		}
+		if !selectedOK || !selected {
+			return nil, invalidAssistantPlan("operation_selection")
+		}
+		parameterStruct, parameterErr := structpb.NewStruct(parameters)
+		beforeStruct, beforeErr := structpb.NewStruct(before)
+		afterStruct, afterErr := structpb.NewStruct(after)
+		if parameterErr != nil || beforeErr != nil || afterErr != nil {
+			return nil, invalidAssistantPlan("operation_struct")
+		}
+		targetKind, _ := target["kind"].(string)
+		targetRef, _ := target["ref"].(string)
+		targetName, _ := target["name"].(string)
+		expectedVersion, expectedOK := exactJSONInt64(operation["expectedVersion"])
+		targetVersion, targetVersionOK := exactJSONInt64(target["version"])
+		if serverHydrated {
+			expectedVersion, expectedOK = 0, false
+			targetVersion, targetVersionOK = 0, false
+		}
+		if expectedOK != targetVersionOK || expectedOK && expectedVersion != targetVersion || targetKind == "" || targetName == "" {
+			return nil, invalidAssistantPlan("operation_target_version")
+		}
+		var expected *int64
+		if expectedOK {
+			expected = &expectedVersion
 		}
 		operations = append(operations, &controlplanev1.AssistantPlanOperation{Ref: fmt.Sprintf("operation-%03d", index+1),
-			Type: controlplanev1.AssistantPlanOperation_Type(typeValue), Summary: strings.TrimSpace(operationSummary), BoundedInput: structure})
+			Type: controlplanev1.AssistantPlanOperation_Type(typeValue), Action: controlplanev1.AssistantPlanOperation_Action(actionValue),
+			Title: strings.TrimSpace(title), Summary: strings.TrimSpace(operationSummary), TargetKind: targetKind, TargetRef: targetRef,
+			TargetName: targetName, ExpectedVersion: expected, Parameters: parameterStruct, Before: beforeStruct, After: afterStruct, Selected: true})
 	}
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
@@ -514,11 +788,252 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
 		Summary: strings.TrimSpace(summary), Operations: operations,
 	})
-	if err != nil || response.GetPlan().GetRef() == "" || response.GetConversation().GetRef() == "" {
+	if err != nil {
+		server.logger.WarnContext(ctx, "control-plane assistant plan request failed",
+			"grpc_code", status.Code(err).String(), "failure_class", controlFailureClass(err))
+		return nil, assistantPlanControlError(err)
+	}
+	if response.GetPlan().GetRef() == "" || response.GetConversation().GetRef() == "" {
 		return nil, errors.New("propose assistant plan")
 	}
-	return map[string]any{"ok": true, "plan_ref": response.GetPlan().GetRef(), "plan_version": response.GetPlan().GetVersion(),
+	return map[string]any{"ok": true, "plan_ref": response.GetPlan().GetRef(), "plan_version": response.GetPlan().GetVersion(), "plan_revision": response.GetPlan().GetRevision(),
 		"conversation_ref": response.GetConversation().GetRef()}, nil
+}
+
+func assistantPlanControlError(err error) error {
+	if status.Code(err) == codes.InvalidArgument {
+		return invalidAssistantPlan("server_validation")
+	}
+	return status.Error(status.Code(err), "propose assistant plan")
+}
+
+func normalizeServerHydratedAssistantOperation(operation map[string]any, planSummary, projectRef, projectName string) (map[string]any, error) {
+	kind, _ := operation["type"].(string)
+	if kind == "" {
+		candidate, _ := operation["action"].(string)
+		if assistantServerHydratedOperation(candidate) {
+			kind = candidate
+		}
+	}
+	if !assistantServerHydratedOperation(kind) {
+		return operation, nil
+	}
+	parameters, ok := operation["parameters"].(map[string]any)
+	if !ok {
+		return operation, nil
+	}
+	normalizedParameters, err := normalizeAssistantParameterNames(parameters)
+	if err != nil {
+		return nil, invalidAssistantPlan("operation_parameter_alias")
+	}
+	if assistantProjectScopedOperation(kind) && strings.TrimSpace(projectRef) != "" {
+		normalizedParameters["projectRef"] = strings.TrimSpace(projectRef)
+	}
+	normalized := make(map[string]any, len(operation)+3)
+	for key, value := range operation {
+		normalized[key] = value
+	}
+	normalized["type"] = kind
+	normalized["parameters"] = normalizedParameters
+	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" {
+		normalized["title"] = assistantOperationTitle(kind, normalizedParameters, projectName)
+	}
+	if operationSummary, _ := normalized["summary"].(string); strings.TrimSpace(operationSummary) == "" {
+		normalized["summary"] = truncateRunes(planSummary, 500)
+	}
+	if kind == "UPDATE_PROJECT" {
+		normalized["summary"] = assistantProjectUpdateSummary(normalizedParameters, projectName)
+	}
+	return normalized, nil
+}
+
+func assistantProjectScopedOperation(kind string) bool {
+	switch kind {
+	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE":
+		return true
+	default:
+		return false
+	}
+}
+
+var assistantParameterAliases = map[string]string{
+	"agent_ref": "agentRef", "artifact_refs": "artifactRefs", "avatar_url": "avatarUrl",
+	"capability_key": "capabilityKey", "completion_criteria": "completionCriteria",
+	"connection_ref": "connectionRef", "coordinator_agent_ref": "coordinatorAgentRef",
+	"day_of_week": "dayOfWeek", "definition_key": "definitionKey", "gate_decisions": "gateDecisions",
+	"human_gate": "humanGate", "input_fields": "inputFields", "max_concurrency": "maxConcurrency",
+	"notification_policy": "notificationPolicy", "parallel_group": "parallelGroup",
+	"project_ref": "projectRef", "public_configuration": "publicConfiguration",
+	"required_capability_keys": "requiredCapabilityKeys", "role_definition_ref": "roleDefinitionRef",
+	"role_description": "roleDescription", "runtime_ref": "runtimeRef", "session_policy": "sessionPolicy",
+	"session_ref": "sessionRef", "target_ref": "targetRef", "target_type": "targetType",
+	"time_of_day": "timeOfDay", "timeout_seconds": "timeoutSeconds", "value_type": "valueType",
+	"workflow_ref": "workflowRef",
+}
+
+func normalizeAssistantParameterNames(value map[string]any) (map[string]any, error) {
+	result := make(map[string]any, len(value))
+	for key, item := range value {
+		normalizedKey := key
+		if alias := assistantParameterAliases[key]; alias != "" {
+			normalizedKey = alias
+		}
+		if _, duplicate := result[normalizedKey]; duplicate {
+			return nil, errors.New("assistant parameter aliases conflict")
+		}
+		normalizedItem, err := normalizeAssistantParameterValue(item)
+		if err != nil {
+			return nil, err
+		}
+		result[normalizedKey] = normalizedItem
+	}
+	return result, nil
+}
+
+func normalizeAssistantParameterValue(value any) (any, error) {
+	switch typed := value.(type) {
+	case map[string]any:
+		return normalizeAssistantParameterNames(typed)
+	case []any:
+		result := make([]any, len(typed))
+		for index, item := range typed {
+			normalized, err := normalizeAssistantParameterValue(item)
+			if err != nil {
+				return nil, err
+			}
+			result[index] = normalized
+		}
+		return result, nil
+	default:
+		return value, nil
+	}
+}
+
+func assistantOperationTitle(kind string, parameters map[string]any, projectName string) string {
+	name, _ := parameters["name"].(string)
+	if kind == "UPDATE_PROJECT" && strings.TrimSpace(projectName) != "" {
+		name = projectName
+	}
+	if strings.TrimSpace(name) == "" {
+		name, _ = parameters["projectRef"].(string)
+	}
+	labels := map[string]string{
+		"CREATE_PROJECT":                "Создать Проект",
+		"UPDATE_PROJECT":                "Изменить Проект",
+		"CREATE_AGENT":                  "Создать ИИ-сотрудника",
+		"CREATE_WORKFLOW":               "Создать Процесс",
+		"CREATE_INTEGRATION_CONNECTION": "Создать подключение",
+		"CREATE_SCHEDULE":               "Создать автоматизацию",
+	}
+	label := labels[kind]
+	if strings.TrimSpace(name) == "" {
+		return label
+	}
+	return truncateRunes(fmt.Sprintf("%s «%s»", label, strings.TrimSpace(name)), 200)
+}
+
+func assistantProjectUpdateSummary(parameters map[string]any, projectName string) string {
+	changes := make([]string, 0, 3)
+	for _, field := range []struct {
+		key, label string
+	}{{"name", "название"}, {"purpose", "назначение"}, {"language", "язык"}} {
+		value, _ := parameters[field.key].(string)
+		if strings.TrimSpace(value) != "" {
+			changes = append(changes, fmt.Sprintf("%s: «%s»", field.label, strings.TrimSpace(value)))
+		}
+	}
+	project := "Проект"
+	if strings.TrimSpace(projectName) != "" {
+		project = fmt.Sprintf("Проект «%s»", strings.TrimSpace(projectName))
+	}
+	if len(changes) == 0 {
+		return "Изменить параметры " + project + "."
+	}
+	return truncateRunes("Изменить "+project+" — "+strings.Join(changes, "; ")+".", 500)
+}
+
+func assistantServerHydratedOperation(kind string) bool {
+	switch kind {
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "UPDATE_PROJECT":
+		return true
+	default:
+		return false
+	}
+}
+
+func assistantServerAction(kind string) string {
+	if kind == "UPDATE_PROJECT" {
+		return "UPDATE"
+	}
+	return "CREATE"
+}
+
+func assistantServerTarget(kind string, parameters map[string]any) map[string]any {
+	if parameters == nil {
+		return nil
+	}
+	targetKind := strings.TrimPrefix(kind, "CREATE_")
+	if kind == "UPDATE_PROJECT" {
+		targetKind = "PROJECT"
+	}
+	name, _ := parameters["name"].(string)
+	if strings.TrimSpace(name) == "" {
+		name, _ = parameters["projectRef"].(string)
+	}
+	if targetKind == "" || strings.TrimSpace(name) == "" {
+		return nil
+	}
+	return map[string]any{"kind": targetKind, "name": strings.TrimSpace(name)}
+}
+
+func exactJSONInt64(value any) (int64, bool) {
+	number, ok := value.(float64)
+	if !ok || number < 1 || number > 9007199254740991 || number != float64(int64(number)) {
+		return 0, false
+	}
+	return int64(number), true
+}
+
+func (server *Server) proposeAssistantMetadata(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
+	if !input.SystemAssistant || !onlyKeys(arguments, "title") {
+		return nil, errors.New("assistant metadata tool is not available")
+	}
+	title, _ := arguments["title"].(string)
+	if strings.TrimSpace(title) == "" || len([]rune(title)) > 160 {
+		return nil, errors.New("assistant metadata is invalid")
+	}
+	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
+	defer cancel()
+	response, err := server.control.Runtime.ProposeAssistantMetadata(requestContext, &controlplanev1.ProposeAssistantMetadataRequest{
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID))},
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Title: strings.TrimSpace(title),
+	})
+	if err != nil || response.GetConversation().GetRef() == "" {
+		return nil, errors.New("propose assistant metadata")
+	}
+	return map[string]any{"ok": true, "conversation_ref": response.GetConversation().GetRef(), "title_revision": response.GetConversation().GetTitleRevision()}, nil
+}
+
+func (server *Server) proposeRunMetadata(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
+	if !onlyKeys(arguments, "title", "activity_summary") {
+		return nil, errors.New("run metadata is invalid")
+	}
+	title, _ := arguments["title"].(string)
+	activity, _ := arguments["activity_summary"].(string)
+	if strings.TrimSpace(title) == "" && strings.TrimSpace(activity) == "" || len([]rune(title)) > 240 || len([]rune(activity)) > 500 {
+		return nil, errors.New("run metadata is invalid")
+	}
+	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
+	defer cancel()
+	response, err := server.control.Runtime.ProposeRunMetadata(requestContext, &controlplanev1.ProposeRunMetadataRequest{
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID))},
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
+		Title: strings.TrimSpace(title), ActivitySummary: strings.TrimSpace(activity),
+	})
+	if err != nil || response.GetRun().GetRef() == "" {
+		return nil, errors.New("propose run metadata")
+	}
+	return map[string]any{"ok": true, "run_ref": response.GetRun().GetRef()}, nil
 }
 
 func onlyKeys(values map[string]any, allowed ...string) bool {
@@ -532,6 +1047,93 @@ func onlyKeys(values map[string]any, allowed ...string) bool {
 		}
 	}
 	return true
+}
+
+func (server *Server) recordToolCall(ctx context.Context, input runtimecontract.RunnerInput, tool string, arguments map[string]any,
+	result any, toolErr error, callID json.RawMessage, duration time.Duration,
+) error {
+	parameters, capabilityRef, grantRef, ok := safeToolCallParameters(input, tool, arguments)
+	if !ok {
+		return errors.New("record tool call projection")
+	}
+	structure, err := structpb.NewStruct(parameters)
+	if err != nil {
+		return errors.New("record tool call projection")
+	}
+	state := controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_SUCCEEDED
+	if toolErr != nil {
+		state = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED
+	}
+	digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, string(callID))))
+	callRef := "tcl_" + hex.EncodeToString(digest[:16])
+	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
+	defer cancel()
+	response, err := server.control.Runtime.RecordRunToolCall(requestContext, &controlplanev1.RecordRunToolCallRequest{
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID)+":activity")},
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
+		CallRef: callRef, Tool: tool, SafeParameters: structure, CapabilityRef: capabilityRef, GrantRef: grantRef,
+		State: state, DurationMs: duration.Milliseconds(), SafeResult: safeToolCallResult(tool, result, toolErr),
+	})
+	if err != nil {
+		server.logger.WarnContext(ctx, "control-plane tool projection request failed",
+			"tool", tool, "grpc_code", status.Code(err).String(), "failure_class", controlFailureClass(err))
+		return status.Error(status.Code(err), "record tool call projection")
+	}
+	if response.GetEvent().GetRef() == "" {
+		return errors.New("record tool call projection")
+	}
+	return nil
+}
+
+func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, arguments map[string]any) (map[string]any, string, string, bool) {
+	switch tool {
+	case "get_configuration_catalog":
+		return map[string]any{}, "platform.configuration.read", "", input.SystemAssistant
+	case "propose_configuration_plan":
+		operations, _ := arguments["operations"].([]any)
+		return map[string]any{"operation_count": len(operations)}, "platform.configuration.plan", "", input.SystemAssistant
+	case "propose_assistant_metadata":
+		title, _ := arguments["title"].(string)
+		return map[string]any{"title": truncateRunes(title, 160)}, "platform.presentation.propose", "", input.SystemAssistant
+	case "propose_run_metadata":
+		title, _ := arguments["title"].(string)
+		activity, _ := arguments["activity_summary"].(string)
+		return map[string]any{"title": truncateRunes(title, 240), "activity_summary": truncateRunes(activity, 500)}, "platform.presentation.propose", "", true
+	case "delegate_agent":
+		target, _ := arguments["target_agent_ref"].(string)
+		step, _ := arguments["workflow_step_key"].(string)
+		return map[string]any{"target_agent_ref": target, "workflow_step_key": step}, "platform.run.delegate", "", true
+	case "invoke_integration":
+		connection, _ := arguments["connection_ref"].(string)
+		capability, _ := arguments["capability_key"].(string)
+		for _, grant := range input.IntegrationGrants {
+			if grant.ConnectionRef == connection && grant.CapabilityKey == capability {
+				return map[string]any{"connection_ref": connection, "capability_key": capability}, capability, grant.Ref, true
+			}
+		}
+	}
+	return nil, "", "", false
+}
+
+func safeToolCallResult(tool string, result any, toolErr error) string {
+	if toolErr != nil {
+		return "TOOL_UNAVAILABLE"
+	}
+	values, _ := result.(map[string]any)
+	for _, key := range []string{"plan_ref", "conversation_ref", "child_run_ref", "run_ref"} {
+		if value, ok := values[key].(string); ok && value != "" {
+			return tool + ":" + value
+		}
+	}
+	return tool + ":completed"
+}
+
+func truncateRunes(value string, maximum int) string {
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) <= maximum {
+		return string(runes)
+	}
+	return string(runes[:maximum])
 }
 
 func (server *Server) delegate(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {

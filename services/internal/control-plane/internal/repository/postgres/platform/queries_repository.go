@@ -13,8 +13,6 @@ var (
 	queryRepositoryBootstrapInsertOwnerClaimContractsOrganizationIdStableKeyState string
 	//go:embed sql/repository_bootstrap_insert_subjects_ref_issuer_display_name.sql
 	queryRepositoryBootstrapInsertSubjectsRefIssuerDisplayName string
-	//go:embed sql/bootstrap_create_system_membership.sql
-	queryRepositoryBootstrapSystemMembership string
 	//go:embed sql/repository_bootstrap_insert_platform_capabilities_stable_key_name_description.sql
 	queryRepositoryBootstrapInsertPlatformCapabilitiesStableKeyNameDescription string
 	//go:embed sql/repository_bootstrap_insert_runtime_profiles_stable_key_provider_runtime_revision.sql
@@ -33,12 +31,14 @@ var (
 	queryProviderCredentialInsertReconciledRevision string
 	//go:embed sql/provider_account__activate_reconciled_credential.sql
 	queryProviderAccountActivateReconciledCredential string
-	//go:embed sql/repository_select_default_provider_account.sql
-	queryRepositorySelectDefaultProviderAccount string
 	//go:embed sql/repository_bootstrap_insert_role_definitions_ref_stable_key_name.sql
 	queryRepositoryBootstrapInsertRoleDefinitionsRefStableKeyName string
 	//go:embed sql/repository_bootstrap_insert_integration_definitions_stable_key_description_capabilities.sql
 	queryRepositoryBootstrapInsertIntegrationDefinitionsStableKeyDescriptionCapabilities string
+	//go:embed sql/repository_reconcile_integration_definition.sql
+	queryRepositoryReconcileIntegrationDefinition string
+	//go:embed sql/repository_disable_unshipped_integration_definitions.sql
+	queryRepositoryDisableUnshippedIntegrationDefinitions string
 	//go:embed sql/repository_bootstrap_insert_agents_ref_system_key_purpose.sql
 	queryRepositoryBootstrapInsertAgentsRefSystemKeyPurpose string
 	//go:embed sql/repository_bootstrap_insert_instruction_versions_ref_agent_id_state.sql
@@ -57,6 +57,12 @@ var (
 	queryRepositoryBootstrapUpdateAssistantCorePrompt string
 	//go:embed sql/repository_bootstrap_insert_assistant_core_prompt_audit.sql
 	queryRepositoryBootstrapInsertAssistantCorePromptAudit string
+	//go:embed sql/repository_bootstrap_select_assistant_runtime_environment.sql
+	queryRepositoryBootstrapSelectAssistantRuntimeEnvironment string
+	//go:embed sql/repository_bootstrap_reconcile_assistant_runtime_environment.sql
+	queryRepositoryBootstrapReconcileAssistantRuntimeEnvironment string
+	//go:embed sql/repository_bootstrap_insert_assistant_runtime_environment_audit.sql
+	queryRepositoryBootstrapInsertAssistantRuntimeEnvironmentAudit string
 	//go:embed sql/principal_resolve_verified_identity.sql
 	queryResolveVerifiedPrincipal string
 	//go:embed sql/proof_owner_lock_installation.sql
@@ -69,12 +75,10 @@ var (
 	queryCreateInstallationOwnerSubject string
 	//go:embed sql/proof_owner_update_subject_profile.sql
 	queryUpdateOIDCSubjectProfile string
-	//go:embed sql/proof_owner_create_membership.sql
-	queryCreateInstallationOwnerMembership string
 	//go:embed sql/proof_owner_claim_installation.sql
 	queryClaimInstallationOwnership string
-	//go:embed sql/proof_owner_check_membership.sql
-	queryCheckInstallationOwnerMembership string
+	//go:embed sql/proof_subject_has_active_binding.sql
+	queryProofSubjectHasActiveBinding string
 	//go:embed sql/proof_system_resolve_identity.sql
 	queryResolveSystemWorkloadIdentity string
 	//go:embed sql/proof_project_authorize_membership.sql

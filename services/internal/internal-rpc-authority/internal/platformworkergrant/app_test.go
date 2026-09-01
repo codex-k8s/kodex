@@ -51,3 +51,12 @@ func TestWriteAtomicRejectsSymlinkDirectory(t *testing.T) {
 		t.Fatal("symlink output directory был принят")
 	}
 }
+
+func TestSupportedWorkloadsIncludeAuthorityCallers(t *testing.T) {
+	t.Parallel()
+	for _, workloadID := range []string{"control-plane", "session-archive"} {
+		if _, ok := supportedWorkloads[workloadID]; !ok {
+			t.Fatalf("%s отсутствует в закрытом реестре platform worker", workloadID)
+		}
+	}
+}

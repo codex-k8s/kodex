@@ -1,0 +1,10 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: session-archive-worker-default-deny
+  namespace: kodex-runtime
+spec:
+  podSelector:
+    matchLabels:
+      session-archive.kodex.dev/managed: "true"
+  policyTypes: [Ingress, Egress]

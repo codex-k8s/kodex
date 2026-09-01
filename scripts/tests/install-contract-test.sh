@@ -172,6 +172,72 @@ jq -e '
     all(.items[]; ((.required // true) | type == "boolean")))
 ' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
   fail 'secret projection registry contract is invalid'
+jq -e '
+  [.secrets[] | select(.name == "kodex-image-registry-staging-read") |
+    .items[] | select(.key == "auth.htpasswd") | .source] == [{
+      "type":"material",
+      "ref":"kodex/image-registry/staging-read-authorized",
+      "field":"htpasswd"
+    }]
+' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
+  fail 'staging-read registry does not consume the authorized identity ACL'
+rg -Fq 'for name in staging-read scanner signer admission promotion-staging' \
+  "$repository_root/tools/install/generate-material.sh" ||
+  fail 'staging-read registry ACL omits an application identity'
+[[ $(rg -F -- 'kodex.dev/provider-account-key=default-openai-codex' \
+  "$repository_root/tools/install/materialize-secrets.sh" | wc -l) -eq 2 ]] ||
+  fail 'fresh and restored default provider metadata do not share the required annotation'
+jq -e '
+  def projection($name): [.secrets[] | select(.name == $name)];
+  def source_ref($name; $type; $ref):
+    projection($name) as $projection |
+    ($projection | length) == 1 and
+    all($projection[0].items[]; .source.type == $type and .source.ref == $ref) and
+    (if $type == "authority" then $projection[0].dynamic == true
+     else ($projection[0].dynamic // false) == false end);
+  def has_source($name; $key; $type; $ref):
+    projection($name) as $projection |
+    ($projection | length) == 1 and
+    any($projection[0].items[];
+      .key == $key and .source.type == $type and .source.ref == $ref);
+  source_ref("control-plane-platform-worker-grant-signer"; "material";
+    "kodex/platform-worker-grants/control-plane") and
+  has_source("control-plane-application-grants"; "control-plane.platform-worker.public.jwk";
+    "material"; "kodex/platform-worker-grants/control-plane") and
+  source_ref("internal-rpc-authority-control-plane-issuer-key"; "authority";
+    "internal-rpc-authority-control-plane-issuer-key") and
+  source_ref("internal-rpc-authority-control-plane-issuer-postgresql"; "database";
+    "ira_control_plane_issuer_g1") and
+  source_ref("internal-rpc-authority-control-plane-issuer-readback-credential"; "authority";
+    "control-plane-issuer-readback-credential") and
+  source_ref("internal-rpc-authority-control-plane-issuer-readback-possession"; "authority";
+    "control-plane-issuer-readback-key") and
+  source_ref("internal-rpc-authority-control-plane-issuer-restore-credential"; "authority";
+    "control-plane-issuer-restore-credential") and
+  source_ref("internal-rpc-authority-control-plane-issuer-restore-ack"; "authority";
+    "control-plane-issuer-restore-ack") and
+  source_ref("internal-rpc-authority-secret-broker-verifier-postgresql"; "database";
+    "ira_secret_broker_verifier_g1") and
+  source_ref("internal-rpc-authority-secret-broker-verifier-readback-credential"; "authority";
+    "secret-broker-verifier-readback-credential") and
+  source_ref("internal-rpc-authority-secret-broker-verifier-readback-possession"; "authority";
+    "secret-broker-verifier-readback-key") and
+  source_ref("internal-rpc-authority-secret-broker-verifier-restore-credential"; "authority";
+    "secret-broker-verifier-restore-credential") and
+  source_ref("internal-rpc-authority-secret-broker-verifier-restore-ack"; "authority";
+    "secret-broker-verifier-restore-ack")
+' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
+  fail 'provider credential authority material projections are incomplete'
+for role in ira_control_plane_issuer_g1 ira_secret_broker_verifier_g1; do
+  rg -Fq "$role" "$repository_root/tools/install/generate-material.sh" ||
+    fail "fresh install does not generate PostgreSQL credential: $role"
+  rg -Fq "$role" \
+    "$repository_root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" ||
+    fail "PostgreSQL credential reconciler omits runtime principal: $role"
+done
+[[ $(rg -F -- '-eq 19' \
+  "$repository_root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" | wc -l) -eq 2 ]] ||
+  fail 'PostgreSQL credential startup and SCRAM readback counts differ from the exact role registry'
 rg -Fq '[.items[].key]' "$repository_root/tools/install/deploy-platform.sh" ||
 	fail 'dynamic Secret readback does not use the projection item registry'
 jq -e '
@@ -446,9 +512,26 @@ rg -Fq 'no ready Kubernetes node became available' \
   fail 'bare-metal installer does not report a node readiness timeout'
 rg -Fq 'dnsutils' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal installer does not install the DNS preflight client'
-rg -Fq 'for command_name in cosign dig go helm kubectl nsc yq' \
+rg -Fq 'for command_name in certutil cosign dig go helm kubectl nsc yq' \
   "$repository_root/tools/install/prepare-host.sh" ||
-  fail 'bare-metal host readback does not require dig'
+  fail 'bare-metal host readback does not require DNS and browser trust clients'
+rg -Fq '  - traefik' "$repository_root/tools/install/prepare-host.sh" ||
+  fail 'bare-metal k3s does not disable the bundled Traefik release'
+rg -Fq 'systemctl restart k3s' "$repository_root/tools/install/prepare-host.sh" ||
+  fail 'bare-metal host apply does not activate changed k3s configuration'
+for resolver_contract in \
+  'k3s_resolver_file=/etc/rancher/k3s/resolv.conf' \
+  'source_file=/run/systemd/resolve/resolv.conf' \
+  'configure_k3s_resolver' \
+  'resolv-conf: "$k3s_resolver_file"' \
+  'readback_k3s_resolver' \
+  "\$1 == \"search\" || \$1 == \"domain\""; do
+  rg -Fq "$resolver_contract" "$repository_root/tools/install/prepare-host.sh" ||
+    fail "bare-metal k3s resolver contract is absent: $resolver_contract"
+done
+rg -Fq -- '--retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 15' \
+  "$repository_root/tools/install/prepare-host.sh" ||
+  fail 'bare-metal artifact downloads do not tolerate transient network failures'
 
 identity_inputs="$temporary_directory/identity-inputs"
 identity_material="$temporary_directory/identity-material"

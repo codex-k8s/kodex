@@ -87,7 +87,7 @@ WITH requested AS (
     SELECT DISTINCT value AS run_ref
     FROM jsonb_array_elements_text(:'requested_run_refs'::jsonb)
 ), run_accounts AS (
-    SELECT requested.run_ref, account.stable_key AS account_key
+    SELECT requested.run_ref, account.ref AS account_ref
     FROM requested
     JOIN control_plane.runs run ON run.ref = requested.run_ref
     JOIN control_plane.sessions session ON session.id = run.session_id
@@ -107,7 +107,7 @@ WITH requested AS (
 )
 SELECT jsonb_build_object(
     'run_accounts', COALESCE(
-        (SELECT jsonb_object_agg(run_ref, account_key ORDER BY run_ref) FROM run_accounts),
+        (SELECT jsonb_object_agg(run_ref, account_ref ORDER BY run_ref) FROM run_accounts),
         '{}'::jsonb
     ),
     'active_accounts', COALESCE((
@@ -129,6 +129,7 @@ readback=$(jq -ce '.' <<<"$readback") || fail 'PostgreSQL discovery readback is 
 jq -e --argjson expected "$expected_accounts_json" --argjson run_refs "$run_refs" '
   .active_accounts == $expected and
   (.run_accounts | keys | sort) == ($run_refs | sort) and
+  (.run_accounts | all(.[]; test("^pacc_[A-Za-z0-9_-]{8,88}$"))) and
   .instruction_runtime_count >= 1 and
   .instruction_runtime_valid == true
 ' <<<"$readback" >/dev/null || fail 'provider account set, run mapping, or instruction revision is inconsistent'
@@ -139,8 +140,8 @@ declare -a affinity_args=(
   --expect-same-session "$first_run=$continuation_run"
   --require-distinct-accounts "${#expected_accounts[@]}"
 )
-while IFS=$'\t' read -r run_ref account_key; do
-  affinity_args+=(--expect-run "$run_ref=$account_key")
+while IFS=$'\t' read -r run_ref account_ref; do
+  affinity_args+=(--expect-run "$run_ref=$account_ref")
 done < <(jq -r '.run_accounts | to_entries[] | [.key, .value] | @tsv' <<<"$readback")
 
 "$(dirname -- "${BASH_SOURCE[0]}")/verify-provider-affinity.sh" "${affinity_args[@]}"

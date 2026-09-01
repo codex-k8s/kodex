@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: kodex-system
 resources:
   - serviceaccount.yaml
+  - credential-rbac.yaml
   - deployment.yaml
   - service.yaml
   - poddisruptionbudget.yaml
@@ -14,6 +15,7 @@ resources:
   - dashboard.yaml
 components:
   - ../../components/internal-rpc-authority-control-plane-verifier
+  - ../../components/internal-rpc-authority-control-plane-issuer
 configMapGenerator:
   - name: control-plane-runtime
     literals:

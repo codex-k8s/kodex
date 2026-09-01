@@ -1,0 +1,147 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: seaweedfs-deny-all
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: seaweedfs
+      app.kubernetes.io/component: object-storage
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: seaweedfs-exact-local-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: seaweedfs
+      app.kubernetes.io/component: object-storage
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-plane
+              app.kubernetes.io/component: internal-service
+      ports:
+        - {protocol: TCP, port: 8333}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: seaweedfs-bucket-bootstrap
+              app.kubernetes.io/component: object-storage-bootstrap
+      ports:
+        - {protocol: TCP, port: 9333}
+        - {protocol: TCP, port: 19333}
+        - {protocol: TCP, port: 8888}
+        - {protocol: TCP, port: 18888}
+        - {protocol: TCP, port: 8333}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: backup-controller
+      ports:
+        - {protocol: TCP, port: 8333}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: artifact-retention
+              app.kubernetes.io/component: retention-job
+      ports:
+        - {protocol: TCP, port: 8333}
+    - from:
+        - podSelector:
+            matchLabels:
+              session-archive.kodex.dev/managed: "true"
+      ports:
+        - {protocol: TCP, port: 8333}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: seaweedfs
+              app.kubernetes.io/component: object-storage
+      ports:
+        - {protocol: TCP, port: 9333}
+        - {protocol: TCP, port: 19333}
+        - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: 18080}
+        - {protocol: TCP, port: 8888}
+        - {protocol: TCP, port: 18888}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: seaweedfs
+              app.kubernetes.io/component: object-storage
+      ports:
+        - {protocol: TCP, port: 9333}
+        - {protocol: TCP, port: 19333}
+        - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: 18080}
+        - {protocol: TCP, port: 8888}
+        - {protocol: TCP, port: 18888}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: seaweedfs-bucket-bootstrap-exact-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: seaweedfs-bucket-bootstrap
+      app.kubernetes.io/component: object-storage-bootstrap
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: seaweedfs
+              app.kubernetes.io/component: object-storage
+      ports:
+        - {protocol: TCP, port: 9333}
+        - {protocol: TCP, port: 19333}
+        - {protocol: TCP, port: 8888}
+        - {protocol: TCP, port: 18888}
+        - {protocol: TCP, port: 8333}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: control-plane-local-object-storage-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: control-plane
+      app.kubernetes.io/component: internal-service
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: seaweedfs
+              app.kubernetes.io/component: object-storage
+      ports:
+        - {protocol: TCP, port: 8333}

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · ИИ-сотрудники · Mobile</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-agents-m .chips { display: flex; gap: 8px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x proximity; scrollbar-width: none; padding: 2px 0 4px; flex: 0 0 auto; min-width: 0; width: 100%; }
+  .p-agents-m .chips::-webkit-scrollbar { display: none; }
+  .p-agents-m .chips .chip { flex: 0 0 auto; scroll-snap-align: start; }
+  .p-agents-m .agent-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; min-height: 72px; border-top: 1px solid var(--line-hair); text-decoration: none; color: inherit; }
+  .p-agents-m .agent-row:first-child { border-top: 0; }
+  .p-agents-m .agent-row:active { background: var(--bg-hover); }
+  .p-agents-m .agent-row__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .p-agents-m .agent-row__name { font-size: 15px; font-weight: 600; line-height: 1.3; display: flex; align-items: center; gap: 8px; }
+  .p-agents-m .agent-row__name > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-agents-m .agent-row__purpose { font-size: 13px; color: var(--sec); line-height: 1.35; }
+  .p-agents-m .agent-row__activity { font-size: 12.5px; color: var(--ink-2); line-height: 1.35; display: flex; gap: 6px; align-items: flex-start; }
+  .p-agents-m .agent-row__activity .ic { flex: 0 0 auto; margin-top: 2px; color: var(--mut); }
+  .p-agents-m .agent-row__activity.is-idle { color: var(--mut); }
+  .p-agents-m .agent-row .ic-chev { color: var(--mut); align-self: center; }
+  .p-agents-m .sticky-bottom { position: sticky; bottom: -96px; margin: 8px -14px -96px; padding: 10px 84px 14px 14px; background: var(--bg); border-top: 1px solid var(--line); flex: 0 0 auto; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">ИИ-сотрудники · mobile 390×844 · маршрут <code>/projects/:projectRef/agents</code></p>
+<div class="frame frame--mobile" id="frame">
+  <main class="page p-agents-m" id="page" aria-label="ИИ-сотрудники">
+    <label class="search search--bg"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Найти сотрудника" aria-label="Найти сотрудника"><button class="search__clear" type="button" aria-label="Очистить"><svg class="ic ic-12"><use href="#i-x"/></svg></button></label>
+    <div class="chips" role="group" aria-label="Фильтры" data-chip-group>
+      <button class="chip" type="button" aria-pressed="true">Все · 8</button>
+      <button class="chip" type="button" aria-pressed="false"><svg class="ic"><use href="#i-spin"/></svg>Выполняют · 2</button>
+      <button class="chip" type="button" aria-pressed="false"><svg class="ic"><use href="#i-shield"/></svg>Ждут решения · 1</button>
+      <button class="chip" type="button" aria-pressed="false"><svg class="ic"><use href="#i-alert"/></svg>Ошибка · 1</button>
+      <button class="chip" type="button" aria-pressed="false"><svg class="ic"><use href="#i-minus"/></svg>Отключены · 1</button>
+    </div>
+    <div class="card" id="agents-list" role="list" aria-label="Сотрудники Проекта"></div>
+    <div class="xs mut center">Показано 8 из 8 · поиск и фильтры выполняются на сервере</div>
+    <div class="sticky-bottom" id="sticky-create">
+      <a class="btn btn--primary btn--block btn--lg" href="#"><svg class="ic"><use href="#i-plus"/></svg>Создать сотрудника</a>
+    </div>
+  </main>
+</div>
+<p class="stage-note">На mobile сотрудники — список строк не ниже 56 px: аватар, имя, назначение, состояние текстом и текущая активность. Фильтры — chips с горизонтальной прокруткой, поиск серверный. Primary action «Создать сотрудника» закреплена внизу над нижней навигацией; переключатель «сетка / таблица» на mobile не нужен. Касание строки открывает профиль сотрудника.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({ title: 'ИИ-сотрудники', sub: 'Корпоративные продажи', nav: 'project.agents', project: Kodex.data.projects[0], decisions: 2 });
+  const ACT = {
+    a1: { text: 'Свободен · последний запуск 2 ч назад', idle: true },
+    a2: { text: 'Собираю структуру документа · «Предложение для компании Север»' },
+    a3: { text: 'Ждёт решения: «Согласовать условия для компании Восток»' },
+    a4: { text: 'Координирует «Обработка нового лида» · 2 ветви' },
+    a5: { text: 'Отключён · не участвует в запусках', idle: true },
+    a6: { text: 'Свободен · последний запуск вчера', idle: true },
+    a7: { text: 'Ошибка на последнем ходе · требует внимания' },
+    a8: { text: 'Свободен · проверок сегодня: 3', idle: true },
+  };
+  const STATE = { ok: ['ok', 'check', 'Готов'], run: ['run', 'spin', 'Выполняет'], gate: ['gate', 'shield', 'Ждёт решения'], err: ['err', 'alert', 'Ошибка'], off: ['off', 'minus', 'Отключён'] };
+  document.getElementById('agents-list').innerHTML = Kodex.data.agents.map((a) => {
+    const [mod, icon, label] = STATE[a.state]; const act = ACT[a.ref];
+    return `<a class="agent-row" href="#" role="listitem" aria-label="${Kodex.esc(a.name)}, ${label}">
+      ${Kodex.avatar(a.initials, 44, a.tone)}
+      <div class="agent-row__main">
+        <div class="agent-row__name"><span>${Kodex.esc(a.name)}</span><span class="pill pill--${mod} pill--sm"><svg class="ic${mod === 'run' ? ' ic-spin' : ''}"><use href="#i-${icon}"/></svg>${label}</span></div>
+        <div class="agent-row__purpose">${Kodex.esc(a.purpose)}</div>
+        <div class="agent-row__activity${act.idle ? ' is-idle' : ''}"><svg class="ic ic-14"><use href="#i-${act.idle ? 'clock' : 'activity'}"/></svg><span>${Kodex.esc(act.text)}</span></div>
+      </div>
+      <svg class="ic ic-chev"><use href="#i-chev-r"/></svg>
+    </a>`;
+  }).join('');
+</script>
+</body>
+</html>

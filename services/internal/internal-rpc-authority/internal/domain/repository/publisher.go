@@ -31,7 +31,7 @@ type PublisherStore interface {
 	SnapshotPublicationReady(
 		context.Context,
 		model.AuthoritySnapshotPublication,
-		int,
+		[]model.SnapshotReadbackTarget,
 	) error
 	PublisherReady(context.Context) error
 }

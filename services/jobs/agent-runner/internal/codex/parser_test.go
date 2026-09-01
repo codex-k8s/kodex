@@ -1,9 +1,12 @@
 package codex
 
 import (
+	"bytes"
 	"encoding/json"
 	"strconv"
 	"testing"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 const (
@@ -32,6 +35,107 @@ func TestProtocolAcceptsStructuredSuccess(t *testing.T) {
 	if state.result.Outcome != "SUCCEEDED" || state.result.FinalMessage != "готово" {
 		t.Fatalf("unexpected result: %#v", state.result)
 	}
+}
+
+func TestNativeToolItemsProduceBoundedRedactedTimelineWithoutMCPDuplicates(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	state.workspaceRoot = "/workspace"
+	items := []struct {
+		kind string
+		raw  string
+	}{
+		{runtimecontract.NativeToolKindShell, `{"aggregatedOutput":"SECRET_OUTPUT","command":"printf SECRET_COMMAND","commandActions":[{"command":"cat SECRET_FILE","name":"cat","path":"/workspace/private.txt","type":"read"}],"cwd":"/workspace","durationMs":25,"exitCode":0,"id":"call-shell","source":"agent","status":"completed","type":"commandExecution"}`},
+		{runtimecontract.NativeToolKindFileChange, `{"changes":[{"diff":"SECRET_DIFF","kind":{"type":"update"},"path":"/workspace/internal/file.go"},{"diff":"SECRET_DIFF_2","kind":{"type":"add"},"path":"/etc/outside"}],"id":"call-file","status":"completed","type":"fileChange"}`},
+		{runtimecontract.NativeToolKindWebSearch, `{"action":{"queries":["SECRET_QUERY"],"type":"search"},"id":"call-web","query":"SECRET_QUERY","results":[{"body":"SECRET_RESULT"}],"type":"webSearch"}`},
+		{runtimecontract.NativeToolKindDynamicTool, `{"arguments":{"password":"SECRET_ARGUMENT","nested":{"token":"SECRET_TOKEN"}},"contentItems":[{"text":"SECRET_RESULT"}],"durationMs":18,"id":"call-dynamic","namespace":"workspace.tools","status":"completed","success":true,"tool":"inspect","type":"dynamicToolCall"}`},
+		{runtimecontract.NativeToolKindImageView, `{"id":"call-image-view","path":"/workspace/assets/example.png","type":"imageView"}`},
+		{runtimecontract.NativeToolKindSleep, `{"durationMs":50,"id":"call-sleep","type":"sleep"}`},
+		{runtimecontract.NativeToolKindImageGeneration, `{"id":"call-image-generation","result":"SECRET_IMAGE_RESULT","revisedPrompt":"SECRET_PROMPT","savedPath":"/workspace/out/generated.png","status":"completed","type":"imageGeneration"}`},
+	}
+	for index, item := range items {
+		startedAt := int64(100 + index*100)
+		if err := state.consumeItem(raw(item.raw), false, startedAt); err != nil {
+			t.Fatalf("start %s: %v", item.kind, err)
+		}
+		if err := state.consumeItem(raw(item.raw), true, startedAt+40); err != nil {
+			t.Fatalf("complete %s: %v", item.kind, err)
+		}
+		if err := state.consumeItem(raw(item.raw), true, 0); err != nil {
+			t.Fatalf("authoritative duplicate %s: %v", item.kind, err)
+		}
+	}
+	mcp := raw(`{"arguments":{"token":"SECRET_MCP"},"durationMs":10,"id":"call-mcp","result":{"content":"SECRET_MCP_RESULT"},"server":"kodex-runtime-tools","status":"completed","tool":"delegate_agent","type":"mcpToolCall"}`)
+	if err := state.consumeItem(mcp, true, 999); err != nil {
+		t.Fatalf("MCP item was not safely ignored: %v", err)
+	}
+	if len(state.toolCallOrder) != len(items) {
+		t.Fatalf("native calls = %d, want %d", len(state.toolCallOrder), len(items))
+	}
+	for index, expected := range items {
+		call := state.toolCalls[state.toolCallOrder[index]]
+		if call.Kind != expected.kind || call.State != runtimecontract.NativeToolStateSucceeded || call.SafeResult != runtimecontract.NativeToolResultCompleted {
+			t.Fatalf("unexpected native projection: %#v", call)
+		}
+		if call.DurationMS <= 0 {
+			t.Fatalf("duration was not retained for %s: %#v", expected.kind, call)
+		}
+	}
+	encoded, err := json.Marshal(state.toolCalls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range [][]byte{
+		[]byte("SECRET_OUTPUT"), []byte("SECRET_COMMAND"), []byte("SECRET_FILE"), []byte("SECRET_DIFF"),
+		[]byte("SECRET_QUERY"), []byte("SECRET_RESULT"), []byte("SECRET_ARGUMENT"), []byte("SECRET_TOKEN"),
+		[]byte("SECRET_IMAGE_RESULT"), []byte("SECRET_PROMPT"), []byte("SECRET_MCP"),
+	} {
+		if bytes.Contains(encoded, forbidden) {
+			t.Fatalf("sensitive native tool data escaped projection: %s", forbidden)
+		}
+	}
+	fileCall := state.toolCalls["call-file"]
+	if got := fileCall.SafeParameters["paths"]; !reflectStringSlice(got, []string{"internal/file.go"}) {
+		t.Fatalf("file paths = %#v", got)
+	}
+	state.result.SessionID = testThreadID
+	state.result.Outcome = "SUCCEEDED"
+	state.threadPath = "/workspace/.kodex/state/codex-home/sessions/test.jsonl"
+	state.terminals = 1
+	state.baselineCaptured = true
+	result, err := state.terminalResult()
+	if err != nil || len(result.ToolCalls) != len(items) || result.ToolCalls[0].CallID != "call-shell" {
+		t.Fatalf("terminal native tool timeline = %#v, err=%v", result.ToolCalls, err)
+	}
+}
+
+func TestNativeToolTerminalStateIsClosedAndCorrelatedByItemID(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	state.workspaceRoot = "/workspace"
+	failed := raw(`{"command":"false","commandActions":[{"command":"false","type":"unknown"}],"cwd":"/workspace","exitCode":1,"id":"call-failed","status":"completed","type":"commandExecution"}`)
+	if err := state.consumeItem(failed, true, 10); err != nil {
+		t.Fatal(err)
+	}
+	call := state.toolCalls["call-failed"]
+	if call.CallID != "call-failed" || call.State != runtimecontract.NativeToolStateFailed || call.SafeResult != runtimecontract.NativeToolResultFailed {
+		t.Fatalf("failed command projection = %#v", call)
+	}
+	unknown := raw(`{"command":"true","commandActions":[],"cwd":"/workspace","id":"call-unknown","status":"future","type":"commandExecution"}`)
+	if err := state.consumeItem(unknown, true, 20); err == nil {
+		t.Fatal("unknown native tool state was accepted")
+	}
+}
+
+func reflectStringSlice(value any, expected []string) bool {
+	items, ok := value.([]string)
+	if !ok || len(items) != len(expected) {
+		return false
+	}
+	for index := range items {
+		if items[index] != expected[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestThreadBindingAcceptsCurrentAppServerOptionalFields(t *testing.T) {

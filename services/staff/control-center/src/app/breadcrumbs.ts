@@ -6,7 +6,6 @@ export interface Breadcrumb {
 export interface BreadcrumbLabels {
   home: string;
   onboarding: string;
-  assistant: string;
   projects: string;
   project: string;
   agents: string;
@@ -17,10 +16,16 @@ export interface BreadcrumbLabels {
   runs: string;
   run: string;
   files: string;
+  filesTrash: string;
   automations: string;
+  environments: string;
+  environment: string;
+  newEnvironment: string;
+  secrets: string;
   integrations: string;
   decisions: string;
   administration: string;
+  providers: string;
   access: string;
   audit: string;
 }
@@ -31,6 +36,7 @@ export interface BreadcrumbContext {
   agentName?: string;
   workflowName?: string;
   runName?: string;
+  environmentName?: string;
 }
 
 function current(label: string): Breadcrumb {
@@ -63,8 +69,6 @@ export function buildBreadcrumbs(
       return [current(labels.home)];
     case "onboarding":
       return [current(labels.onboarding)];
-    case "assistant":
-      return [current(labels.assistant)];
     case "projects":
       return [current(labels.projects)];
     case "project":
@@ -98,7 +102,16 @@ export function buildBreadcrumbs(
         current(context.workflowName ?? labels.workflow),
       ];
     case "new-run":
-      return [...project, current(labels.newRun)];
+      return [
+        ...project,
+        {
+          label: labels.runs,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/runs`
+            : "/runs",
+        },
+        current(labels.newRun),
+      ];
     case "project-runs":
       return [...project, current(labels.runs)];
     case "runs":
@@ -108,10 +121,58 @@ export function buildBreadcrumbs(
         { label: labels.runs, path: "/runs" },
         current(context.runName ?? labels.run),
       ];
+    case "project-run":
+      return [
+        ...project,
+        {
+          label: labels.runs,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/runs`
+            : "/runs",
+        },
+        current(context.runName ?? labels.run),
+      ];
     case "files":
       return [...project, current(labels.files)];
+    case "files-trash":
+      return [
+        ...project,
+        {
+          label: labels.files,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/files`
+            : "/projects",
+        },
+        current(labels.filesTrash),
+      ];
     case "automations":
       return [...project, current(labels.automations)];
+    case "runtime-environments":
+      return [...project, current(labels.environments)];
+    case "runtime-environment-new":
+      return [
+        ...project,
+        {
+          label: labels.environments,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/environments`
+            : "/projects",
+        },
+        current(labels.newEnvironment),
+      ];
+    case "runtime-environment":
+      return [
+        ...project,
+        {
+          label: labels.environments,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/environments`
+            : "/projects",
+        },
+        current(context.environmentName ?? labels.environment),
+      ];
+    case "runtime-secrets":
+      return [...project, current(labels.secrets)];
     case "integrations":
       return [current(labels.integrations)];
     case "decisions":
@@ -125,6 +186,11 @@ export function buildBreadcrumbs(
       return [...project, current(labels.access)];
     case "administration":
       return [current(labels.administration)];
+    case "provider-accounts":
+      return [
+        { label: labels.administration, path: "/administration" },
+        current(labels.providers),
+      ];
     case "audit":
       return [
         { label: labels.administration, path: "/administration" },

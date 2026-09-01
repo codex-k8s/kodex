@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Проект · A. Workboard</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-proj .res-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 16px 6px; }
+  .p-proj .res-head:not(:first-child) { border-top: 1px solid var(--line-hair); margin-top: 4px; }
+  .p-proj .res-head .sec-title { font-size: 11.5px; }
+  .p-proj .res-row { display: flex; align-items: center; gap: 10px; padding: 6px 16px; min-height: 40px; color: inherit; text-decoration: none; }
+  .p-proj .res-row:hover { background: var(--bg-hover); text-decoration: none; }
+  .p-proj .res-row__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .p-proj .res-row__title { font-size: 12.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-proj .res-row__sub { font-size: 11px; color: var(--mut); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .p-proj .res-foot { padding: 6px 16px 10px; }
+  .p-proj .list-row__sub--two { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .p-proj .list-row__sub--two > span { display: flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Обзор Проекта · вариант A «Workboard» (рекомендуемый) · desktop 1440×1024 · маршрут <code>/projects/:projectRef</code></p>
+<div class="frame frame--desktop p-proj" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#/projects">Проекты</a><span>/</span><span>Корпоративные продажи</span></div>
+      <div class="page-title-row">
+        <div style="min-width:0">
+          <div class="page-title"><h1 id="page-title" class="truncate" style="max-width:720px">Корпоративные продажи</h1><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Активен</span></div>
+          <div class="page-sub">Подготовка предложений и аналитика клиентов · владелец Анна Волкова · 5 участников</div>
+        </div>
+        <div class="page-actions">
+          <a class="btn btn--primary btn--lg" href="#/projects/sales/runs/new"><svg class="ic"><use href="#i-run"/></svg>Новый запуск</a>
+          <button class="btn btn--icon btn--lg" type="button" aria-label="Ещё действия" data-tip="Ещё действия" data-tip-pos="bottom" data-menu="#menu-more" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+          <div class="menu" id="menu-more" data-align="right">
+            <a class="menu__item" role="menuitem" href="#/projects/sales/settings"><svg class="ic"><use href="#i-gear"/></svg><span>Настройки Проекта</span></a>
+            <a class="menu__item" role="menuitem" href="#/projects/sales/members"><svg class="ic"><use href="#i-users"/></svg><span>Участники и доступ</span></a>
+            <a class="menu__item" role="menuitem" href="#/administration/audit?project=sales"><svg class="ic"><use href="#i-audit"/></svg><span>Аудит Проекта</span></a>
+            <div class="menu__sep"></div>
+            <button class="menu__item menu__item--danger" role="menuitem" type="button"><svg class="ic"><use href="#i-archive"/></svg><span class="menu__text"><span>Архивировать Проект</span><small>Новые запуски будут запрещены, история сохранится</small></span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="split split--main-aside">
+        <div class="col gap-16">
+
+          <!-- Требует внимания -->
+          <section class="card" aria-labelledby="sec-attention">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-attention">Требует внимания <span class="badge-count" aria-label="2 элемента">2</span></h2>
+              <span class="refresh" data-tip="Обновляется в реальном времени" data-tip-pos="left"><span class="refresh__dot"></span><span class="refresh__text">обновлено 12:04</span></span>
+            </div>
+            <div>
+              <div class="list-row">
+                <span class="list-row__lead" style="background:var(--warn-tint);color:var(--warn);border:1px solid var(--warn-line)"><svg class="ic"><use href="#i-shield"/></svg></span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Согласовать коммерческое предложение</span><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Решение человека</span></div>
+                  <div class="list-row__sub"><span>Запуск «Подготовить предложение для компании Север»</span><span>·</span><span>Запросил: <b>Менеджер продаж</b></span><span>·</span><span class="warn-text">срок сегодня, 18:00</span></div>
+                </div>
+                <a class="btn btn--warn" href="#/decisions/g1">Рассмотреть</a>
+              </div>
+              <div class="list-row">
+                <span class="list-row__lead" style="background:var(--err-tint);color:var(--err);border:1px solid var(--err-line)"><svg class="ic"><use href="#i-alert"/></svg></span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Ошибка на шаге «Автор писем»</span><span class="pill pill--err pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Инцидент</span></div>
+                  <div class="list-row__sub"><span>Запуск «Разослать уточнения по пилоту Онега»</span><span>·</span><span>Остальные ветви завершены</span><span>·</span><span>25 мин назад</span></div>
+                </div>
+                <a class="btn" href="#/runs/r7">Открыть запуск</a>
+              </div>
+            </div>
+          </section>
+
+          <!-- Выполняется -->
+          <section class="card" aria-labelledby="sec-active">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-active">Выполняется <span class="tab__count">4</span></h2>
+              <div class="row gap-10"><span class="refresh is-refreshing"><span class="refresh__dot"></span><span class="refresh__text">обновляется</span></span><a class="sm" href="#/projects/sales/runs">Все запуски Проекта</a></div>
+            </div>
+            <div>
+              <a class="list-row" href="#/runs/r1">
+                <span class="avatar avatar--32 avatar--acc" aria-hidden="true">РП</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Подготовить предложение для компании Север</span></div>
+                  <div class="list-row__sub"><span>Исполнитель: <b>Редактор предложений</b></span><span>·</span><span>Инициатор: <b>Анна Волкова</b></span><span>·</span><span class="source" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></div>
+                  <div class="list-row__phrase">Собираю итоговую структуру документа · шаг 3 из 4</div>
+                </div>
+                <span class="list-row__time">12 мин</span>
+                <span class="list-row__status"><span class="pill pill--run"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span></span>
+              </a>
+              <a class="list-row" href="#/runs/r2">
+                <span class="avatar avatar--32 avatar--ok" aria-hidden="true">АП</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Ежедневная сводка по лидам</span></div>
+                  <div class="list-row__sub"><span>Исполнитель: <b>Аналитик продаж</b></span><span>·</span><span>Инициатор: <b>расписание «По будням, 09:00»</b></span><span>·</span><span class="source" data-tip="Запущено по расписанию автоматизации" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</span></div>
+                  <div class="list-row__phrase">Сверяю новые лиды с историей за прошлую неделю</div>
+                </div>
+                <span class="list-row__time">3 мин</span>
+                <span class="list-row__status"><span class="pill pill--run"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span></span>
+              </a>
+              <a class="list-row" href="#/runs/r3">
+                <span class="avatar avatar--32 avatar--ok" aria-hidden="true">ИР</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Собрать факты о компании Юг</span></div>
+                  <div class="list-row__sub"><span>Исполнитель: <b>Исследователь рынка</b></span><span>·</span><span>Инициатор: <b>Михаил Орлов</b></span><span>·</span><span class="source" data-tip="Запущено через помощника Kodex от имени пользователя" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-bot"/></svg>Kodex</span></div>
+                  <div class="list-row__phrase">Ожидает свободный слот выполнения</div>
+                </div>
+                <span class="list-row__time">—</span>
+                <span class="list-row__status"><span class="pill pill--wait"><svg class="ic"><use href="#i-clock"/></svg>В очереди</span></span>
+              </a>
+              <a class="list-row" href="#/runs/r4">
+                <span class="avatar avatar--32" aria-hidden="true">ЮК</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Проверить условия пилота Ладога</span></div>
+                  <div class="list-row__sub"><span>Исполнитель: <b>Юридический консультант</b></span><span>·</span><span>Инициатор: <b>Елена Крылова</b></span><span>·</span><span class="source" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></div>
+                  <div class="list-row__phrase">Ждёт решения: подтвердить отправку запроса поставщику</div>
+                </div>
+                <span class="list-row__time">41 мин</span>
+                <span class="list-row__status"><span class="pill pill--gate"><svg class="ic"><use href="#i-shield"/></svg>Ждёт решения</span></span>
+              </a>
+            </div>
+          </section>
+
+          <!-- Недавние результаты -->
+          <section class="card" aria-labelledby="sec-results">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-results">Недавние результаты</h2>
+              <a class="sm" href="#/projects/sales/files?source=result">Все файлы Проекта</a>
+            </div>
+            <div>
+              <a class="list-row" href="#/projects/sales/files/f1">
+                <span class="mime mime--pdf">pdf</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Коммерческое предложение — Север.pdf</span></div>
+                  <div class="list-row__sub"><span>Редактор предложений</span><span>·</span><span>Запуск «Подготовить предложение для компании Север»</span><span>·</span><span>сегодня, 11:52</span></div>
+                </div>
+                <span class="xs mut mono nowrap">1,4 МБ</span>
+                <span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span>
+              </a>
+              <a class="list-row" href="#/projects/sales/files/f2">
+                <span class="mime mime--md">md</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Факты о компании Меридиан.md</span></div>
+                  <div class="list-row__sub"><span>Исследователь рынка</span><span>·</span><span>Запуск «Собрать факты о компании Меридиан»</span><span>·</span><span>вчера, 12:05</span></div>
+                </div>
+                <span class="xs mut mono nowrap">28 КБ</span>
+                <span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span>
+              </a>
+              <a class="list-row" href="#/projects/sales/files/f3">
+                <span class="mime mime--xls">xlsx</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Сводка по лидам — 27 августа.xlsx</span></div>
+                  <div class="list-row__sub"><span>Аналитик продаж</span><span>·</span><span>Автоматизация «Ежедневная сводка по лидам»</span><span>·</span><span>вчера, 09:14</span></div>
+                </div>
+                <span class="xs mut mono nowrap">96 КБ</span>
+                <span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span>
+              </a>
+              <a class="list-row" href="#/projects/sales/files/f4">
+                <span class="mime mime--doc">docx</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Ответ на претензию — Прибой.docx</span></div>
+                  <div class="list-row__sub"><span>Юридический консультант</span><span>·</span><span>Запуск «Подготовить ответ на претензию компании Прибой»</span><span>·</span><span>25 августа</span></div>
+                </div>
+                <span class="xs mut mono nowrap">210 КБ</span>
+                <span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span>
+              </a>
+            </div>
+          </section>
+        </div>
+
+        <!-- Ресурсы Проекта -->
+        <aside class="col gap-16" aria-label="Ресурсы Проекта">
+          <section class="card" aria-labelledby="sec-res">
+            <div class="card__head card__head--line">
+              <h2 class="sec-title" id="sec-res">Ресурсы Проекта</h2>
+              <span class="xs mut">за 7 дней: 18 запусков · 12 результатов</span>
+            </div>
+
+            <div class="res-head"><h3 class="sec-title">ИИ-сотрудники <span class="tab__count">5</span></h3><a class="xs" href="#/projects/sales/agents">Открыть всех</a></div>
+            <a class="res-row" href="#/projects/sales/agents/a1"><span class="avatar avatar--24 avatar--ok" aria-hidden="true">АП</span><span class="res-row__main"><span class="res-row__title">Аналитик продаж</span><span class="res-row__sub">Исследование клиентов · gpt-5.1</span></span><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Работает</span></a>
+            <a class="res-row" href="#/projects/sales/agents/a2"><span class="avatar avatar--24 avatar--acc" aria-hidden="true">РП</span><span class="res-row__main"><span class="res-row__title">Редактор предложений</span><span class="res-row__sub">Итоговые документы · gpt-5.1</span></span><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Работает</span></a>
+            <a class="res-row" href="#/projects/sales/agents/a3"><span class="avatar avatar--24" aria-hidden="true">ЮК</span><span class="res-row__main"><span class="res-row__title">Юридический консультант</span><span class="res-row__sub">Условия и риски · gpt-5.1-mini</span></span><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Ждёт</span></a>
+            <a class="res-row" href="#/projects/sales/agents/a4"><span class="avatar avatar--24 avatar--acc" aria-hidden="true">МП</span><span class="res-row__main"><span class="res-row__title">Менеджер продаж</span><span class="res-row__sub">Координатор Процесса · gpt-5.1</span></span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Готов</span></a>
+            <a class="res-row" href="#/projects/sales/agents/a6"><span class="avatar avatar--24 avatar--ok" aria-hidden="true">ИР</span><span class="res-row__main"><span class="res-row__title">Исследователь рынка</span><span class="res-row__sub">Публичные сведения · gpt-5.1</span></span><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>В очереди</span></a>
+
+            <div class="res-head"><h3 class="sec-title">Процессы <span class="tab__count">2</span></h3><a class="xs" href="#/projects/sales/workflows">Все Процессы</a></div>
+            <div class="res-row"><span class="list-row__lead" style="width:24px;height:24px"><svg class="ic ic-14"><use href="#i-wf"/></svg></span><a class="res-row__main" href="#/projects/sales/workflows/w1" style="color:inherit;text-decoration:none"><span class="res-row__title">Обработка нового лида</span><span class="res-row__sub">v3 опубликована · 3 сотрудника · 1 решение человека</span></a><a class="btn btn--sm" href="#/projects/sales/runs/new?workflow=w1">Запустить</a></div>
+            <div class="res-row"><span class="list-row__lead" style="width:24px;height:24px"><svg class="ic ic-14"><use href="#i-wf"/></svg></span><a class="res-row__main" href="#/projects/sales/workflows/w2" style="color:inherit;text-decoration:none"><span class="res-row__title">Подготовка предложения</span><span class="res-row__sub">v1 опубликована · 2 сотрудника · без решений</span></a><a class="btn btn--sm" href="#/projects/sales/runs/new?workflow=w2">Запустить</a></div>
+
+            <div class="res-head"><h3 class="sec-title">Автоматизации <span class="tab__count">2</span></h3><a class="xs" href="#/projects/sales/automations">Все автоматизации</a></div>
+            <a class="res-row" href="#/projects/sales/automations/s1"><span class="list-row__lead" style="width:24px;height:24px"><svg class="ic ic-14"><use href="#i-automation"/></svg></span><span class="res-row__main"><span class="res-row__title">Ежедневная сводка по лидам</span><span class="res-row__sub">По будням в 09:00 · следующий: завтра, 09:00</span></span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активна</span></a>
+            <a class="res-row" href="#/projects/sales/automations/s2"><span class="list-row__lead" style="width:24px;height:24px"><svg class="ic ic-14"><use href="#i-automation"/></svg></span><span class="res-row__main"><span class="res-row__title">Недельное предложение руководителю</span><span class="res-row__sub">По пятницам в 16:00 · следующий: пт, 16:00</span></span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активна</span></a>
+
+            <div class="res-head"><h3 class="sec-title">Окружения <span class="tab__count">3</span></h3><a class="xs" href="#/projects/sales/environments">Все окружения</a></div>
+            <a class="res-row" href="#/projects/sales/environments/e1"><span class="list-row__lead" style="width:24px;height:24px"><svg class="ic ic-14"><use href="#i-layers"/></svg></span><span class="res-row__main"><span class="res-row__title">Офисные документы и PDF</span><span class="res-row__sub">ревизия 4 · 3 сотрудника</span></span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Готово</span></a>
+            <a class="res-row" href="#/projects/sales/environments/e2"><span class="list-row__lead" style="width:24px;height:24px"><svg class="ic ic-14"><use href="#i-layers"/></svg></span><span class="res-row__main"><span class="res-row__title">Юридические документы (OCR)</span><span class="res-row__sub">ревизия 2 · 1 сотрудник</span></span><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Сборка</span></a>
+            <div class="res-foot"><span class="xs mut">Интеграции для Проекта не подключены — на выполнение работы это не влияет.</span></div>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Проект строится вокруг текущей работы, решений и результатов: слева «Требует внимания», «Выполняется» и «Недавние результаты», справа — ресурсы Проекта (сотрудники, Процессы, автоматизации, окружения) как списки с состоянием, а не одинаковые KPI-карточки. Статус-pill закреплён в фиксированной правой колонке и не сдвигает название; источник запуска («Control Center», «Kodex», «Автоматизация») показан иконкой с tooltip отдельно от инициатора и исполнителя. Единственная primary action — «Новый запуск», остальные действия убраны в меню «Ещё». Все ссылки сохраняют project-scoped маршрут.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'project.overview', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Обзор Проекта', object: 'Корпоративные продажи', can: ['объяснить состояние любого запуска', 'запустить сотрудника или Процесс этого Проекта', 'подготовить план изменений сотрудников или автоматизаций'] },
+  });
+</script>
+</body>
+</html>

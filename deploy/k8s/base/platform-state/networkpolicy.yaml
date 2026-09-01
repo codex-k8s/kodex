@@ -15,6 +15,9 @@ spec:
                 operator: In
                 values:
                   - automation-scheduler
+                  - artifact-retention
+                  - backup-controller
+                  - session-archive
                   - control-api-gateway
                   - control-plane
                   - integration-gateway
@@ -26,6 +29,7 @@ spec:
                   - kodex-postgresql-runtime-credentials
                   - role-image-builder
                   - runtime-controller
+                  - secret-broker
       ports:
         - protocol: TCP
           port: 5432

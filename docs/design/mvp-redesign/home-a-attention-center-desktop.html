@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Главная · A. Центр внимания</title>
+<link rel="stylesheet" href="assets/kodex.css">
+</head>
+<body class="stage">
+<p class="stage-label">Главная · вариант A «Центр внимания» (рекомендуемый) · desktop 1440×1024 · маршрут <code>/</code></p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><span>Главная</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Добрый день, Анна</h1></div>
+          <div class="page-sub">Где нужно ваше внимание и что работает прямо сейчас</div>
+        </div>
+        <div class="page-actions">
+          <a class="btn btn--primary btn--lg" href="#"><svg class="ic"><use href="#i-run"/></svg>Новый запуск</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body col gap-16">
+
+      <!-- 1. Требует внимания -->
+      <section class="card" aria-labelledby="sec-attention">
+        <div class="card__head">
+          <h2 class="sec-title" id="sec-attention">Требует внимания <span class="badge-count" aria-label="4 элемента">4</span></h2>
+          <span class="refresh" data-tip="Список обновляется в реальном времени" data-tip-pos="left"><span class="refresh__dot"></span><span class="refresh__text">обновлено 12:04</span></span>
+        </div>
+        <div>
+          <div class="list-row">
+            <span class="list-row__lead" style="background:var(--warn-tint);color:var(--warn);border:1px solid var(--warn-line)"><svg class="ic"><use href="#i-shield"/></svg></span>
+            <div class="list-row__main">
+              <div class="list-row__title"><span>Согласовать коммерческое предложение</span><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Решение человека</span></div>
+              <div class="list-row__sub"><span>Корпоративные продажи</span><span>·</span><span>Запуск «Подготовить предложение для компании Север»</span><span>·</span><span>Запросил: <b>Менеджер продаж</b></span></div>
+            </div>
+            <span class="list-row__time warn-text" style="min-width:auto">срок сегодня, 18:00</span>
+            <a class="btn btn--warn" href="#">Рассмотреть</a>
+          </div>
+          <div class="list-row">
+            <span class="list-row__lead" style="background:var(--err-tint);color:var(--err);border:1px solid var(--err-line)"><svg class="ic"><use href="#i-alert"/></svg></span>
+            <div class="list-row__main">
+              <div class="list-row__title"><span>Ошибка на шаге «Автор писем»</span><span class="pill pill--err pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Инцидент</span></div>
+              <div class="list-row__sub"><span>Клиентская поддержка</span><span>·</span><span>Запуск «Классифицировать входящие письма»</span><span>·</span><span>Остальные ветви завершены</span></div>
+            </div>
+            <span class="list-row__time">14 мин назад</span>
+            <a class="btn" href="#">Открыть запуск</a>
+          </div>
+          <div class="list-row">
+            <span class="list-row__lead"><svg class="ic"><use href="#i-stop"/></svg></span>
+            <div class="list-row__main">
+              <div class="list-row__title"><span>Запуск остановлен по таймауту</span><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-x-circle"/></svg>Остановлен</span></div>
+              <div class="list-row__sub"><span>Юридический отдел</span><span>·</span><span>Запуск «Проверить договор с поставщиком Восток»</span><span>·</span><span>Результат первой попытки сохранён</span></div>
+            </div>
+            <span class="list-row__time">1 ч назад</span>
+            <a class="btn" href="#">Повторить попытку</a>
+          </div>
+          <div class="list-row">
+            <span class="list-row__lead" style="background:var(--warn-tint);color:var(--warn);border:1px solid var(--warn-line)"><svg class="ic"><use href="#i-key"/></svg></span>
+            <div class="list-row__main">
+              <div class="list-row__title"><span>Истекает авторизация учётной записи провайдера</span><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>Через 2 дня</span></div>
+              <div class="list-row__sub"><span>Учётная запись «OpenAI · пул продаж»</span><span>·</span><span>Используют 4 ИИ-сотрудника</span><span>·</span><span>Новые сессии после истечения не запустятся</span></div>
+            </div>
+            <span class="list-row__time">до 30 авг</span>
+            <a class="btn" href="#">Обновить авторизацию</a>
+          </div>
+        </div>
+      </section>
+
+      <div class="split split--main-aside">
+        <div class="col gap-16">
+
+          <!-- 2. Выполняется сейчас -->
+          <section class="card" aria-labelledby="sec-active">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-active">Выполняется сейчас <span class="tab__count">3</span></h2>
+              <div class="row gap-10"><span class="refresh is-refreshing"><span class="refresh__dot"></span><span class="refresh__text">обновляется</span></span><a class="sm" href="#">Все запуски</a></div>
+            </div>
+            <div>
+              <div class="list-row">
+                <span class="avatar avatar--32 avatar--acc" aria-hidden="true">РП</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Подготовить предложение для компании Север</span></div>
+                  <div class="list-row__sub"><span>Корпоративные продажи</span><span>·</span><span>Исполнитель: <b>Редактор предложений</b></span><span>·</span><span>Инициатор: <b>Анна Волкова</b></span><span>·</span><span class="source" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></div>
+                  <div class="list-row__phrase">Собираю итоговую структуру документа · шаг 3 из 4</div>
+                </div>
+                <span class="list-row__time">12 мин</span>
+                <span class="list-row__status"><span class="pill pill--run"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span></span>
+              </div>
+              <div class="list-row">
+                <span class="avatar avatar--32" aria-hidden="true">КО</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Разобрать обращения за неделю</span></div>
+                  <div class="list-row__sub"><span>Клиентская поддержка</span><span>·</span><span>Исполнитель: <b>Классификатор обращений</b></span><span>·</span><span>Инициатор: <b>Михаил Орлов</b></span><span>·</span><span class="source" data-tip="Запущено через помощника Kodex от имени пользователя" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-bot"/></svg>Kodex</span></div>
+                  <div class="list-row__phrase">Ожидает свободный слот выполнения</div>
+                </div>
+                <span class="list-row__time">—</span>
+                <span class="list-row__status"><span class="pill pill--wait"><svg class="ic"><use href="#i-clock"/></svg>В очереди</span></span>
+              </div>
+              <div class="list-row">
+                <span class="avatar avatar--32 avatar--ok" aria-hidden="true">АП</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Ежедневная сводка по лидам</span></div>
+                  <div class="list-row__sub"><span>Корпоративные продажи</span><span>·</span><span>Исполнитель: <b>Аналитик продаж</b></span><span>·</span><span>Инициатор: <b>расписание «По будням, 09:00»</b></span><span>·</span><span class="source" data-tip="Запущено по расписанию автоматизации" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</span></div>
+                  <div class="list-row__phrase">Сверяю новые лиды с историей за прошлую неделю</div>
+                </div>
+                <span class="list-row__time">3 мин</span>
+                <span class="list-row__status"><span class="pill pill--run"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span></span>
+              </div>
+            </div>
+          </section>
+
+          <!-- 3. Продолжить недавние сессии -->
+          <section class="card" aria-labelledby="sec-sessions">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-sessions">Продолжить недавнюю работу</h2>
+              <a class="sm" href="#">Все сессии</a>
+            </div>
+            <div>
+              <div class="list-row">
+                <span class="avatar avatar--32" aria-hidden="true">ЮК</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Проверить договор с поставщиком Восток</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Завершена</span></div>
+                  <div class="list-row__sub"><span>Юридический консультант</span><span>·</span><span>2 хода</span><span>·</span><span>вчера, 17:40</span><span>·</span><span>Итог: выводы и 3 вопроса к поставщику</span></div>
+                </div>
+                <a class="btn btn--sm" href="#">Продолжить</a>
+              </div>
+              <div class="list-row">
+                <span class="avatar avatar--32 avatar--ok" aria-hidden="true">ИР</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Собрать факты о компании Меридиан</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Завершена</span></div>
+                  <div class="list-row__sub"><span>Исследователь рынка</span><span>·</span><span>1 ход</span><span>·</span><span>вчера, 12:05</span><span>·</span><span>Итог: файл «Факты о компании Меридиан.md»</span></div>
+                </div>
+                <a class="btn btn--sm" href="#">Продолжить</a>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="col gap-16">
+          <!-- 4. Проекты -->
+          <section class="card" aria-labelledby="sec-projects">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-projects">Проекты <span class="tab__count">7</span></h2>
+              <a class="sm" href="#">Все Проекты</a>
+            </div>
+            <div>
+              <a class="list-row" href="#">
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Корпоративные продажи</span></div>
+                  <div class="list-row__sub"><span class="row gap-4"><span class="dot-state dot-state--run"></span>2 работают</span><span>·</span><span class="warn-text">1 решение</span><span>·</span><span>4 сотрудника</span></div>
+                </div>
+                <svg class="ic mut"><use href="#i-chev-r"/></svg>
+              </a>
+              <a class="list-row" href="#">
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Клиентская поддержка</span></div>
+                  <div class="list-row__sub"><span class="row gap-4"><span class="dot-state dot-state--err"></span>1 инцидент</span><span>·</span><span>1 в очереди</span><span>·</span><span>2 сотрудника</span></div>
+                </div>
+                <svg class="ic mut"><use href="#i-chev-r"/></svg>
+              </a>
+              <a class="list-row" href="#">
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Юридический отдел</span></div>
+                  <div class="list-row__sub"><span class="row gap-4"><span class="dot-state dot-state--ok"></span>Спокойно</span><span>·</span><span>последний результат вчера</span></div>
+                </div>
+                <svg class="ic mut"><use href="#i-chev-r"/></svg>
+              </a>
+              <a class="list-row" href="#">
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Маркетинг и контент</span></div>
+                  <div class="list-row__sub"><span class="row gap-4"><span class="dot-state dot-state--ok"></span>Спокойно</span><span>·</span><span>автоматизация в пятницу</span></div>
+                </div>
+                <svg class="ic mut"><use href="#i-chev-r"/></svg>
+              </a>
+              <div class="list-more"><span>Показаны 4 из 7 · остальные без событий за неделю</span></div>
+            </div>
+          </section>
+
+          <!-- 5. Последние результаты -->
+          <section class="card" aria-labelledby="sec-results">
+            <div class="card__head">
+              <h2 class="sec-title" id="sec-results">Последние результаты</h2>
+              <a class="sm" href="#">Все файлы</a>
+            </div>
+            <div>
+              <a class="list-row" href="#">
+                <span class="mime mime--pdf">pdf</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span title="Коммерческое предложение — Север.pdf">Коммерческое предложение — Север.pdf</span></div>
+                  <div class="list-row__sub"><span>Редактор предложений</span><span>·</span><span>сегодня, 11:52</span></div>
+                </div>
+                <svg class="ic mut"><use href="#i-download"/></svg>
+              </a>
+              <a class="list-row" href="#">
+                <span class="mime mime--md">md</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Факты о компании Меридиан.md</span></div>
+                  <div class="list-row__sub"><span>Исследователь рынка</span><span>·</span><span>вчера, 12:05</span></div>
+                </div>
+                <svg class="ic mut"><use href="#i-download"/></svg>
+              </a>
+              <a class="list-row" href="#">
+                <span class="mime mime--xls">xlsx</span>
+                <div class="list-row__main">
+                  <div class="list-row__title"><span>Отчёт по обращениям — неделя 34.xlsx</span></div>
+                  <div class="list-row__sub"><span>Классификатор обращений</span><span>·</span><span>вчера, 18:20</span></div>
+                </div>
+                <svg class="ic mut"><use href="#i-download"/></svg>
+              </a>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Главный вопрос экрана — «где нужно моё внимание». Блок «Требует внимания» всегда первый и объединяет Human Gates, инциденты, остановленные запуски и истекающую авторизацию; тип события передаётся иконкой и подписью, а не только цветом. Ниже — активные работы (источник запуска, инициатор и исполнитель показаны раздельно), продолжение сессий, Проекты и результаты. Списки обновляются realtime-индикатором без skeleton; одна primary action «Новый запуск». Kodex вызывается FAB справа снизу.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'home', project: null, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Главная', object: '', can: ['объяснить любое событие из блока внимания', 'запустить работу в выбранном Проекте', 'найти запуск или сотрудника'] },
+  });
+</script>
+</body>
+</html>

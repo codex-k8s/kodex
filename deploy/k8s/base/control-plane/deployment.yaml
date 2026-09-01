@@ -58,6 +58,20 @@ spec:
               value: /var/run/config/kodex/control-plane/observability/otel-ca.pem
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.1"
+            - name: CONTROL_PLANE_OBJECT_STORAGE_ENDPOINT
+              valueFrom: {secretKeyRef: {name: kodex-external-s3, key: endpoint}}
+            - name: CONTROL_PLANE_OBJECT_STORAGE_REGION
+              valueFrom: {secretKeyRef: {name: kodex-external-s3, key: region}}
+            - name: CONTROL_PLANE_OBJECT_STORAGE_BUCKET
+              valueFrom: {secretKeyRef: {name: kodex-external-s3, key: bucket}}
+            - name: CONTROL_PLANE_OBJECT_STORAGE_ACCESS_KEY_FILE
+              value: /var/run/secrets/kodex/control-plane/object-storage/access-key-id
+            - name: CONTROL_PLANE_OBJECT_STORAGE_SECRET_KEY_FILE
+              value: /var/run/secrets/kodex/control-plane/object-storage/secret-access-key
+            - name: CONTROL_PLANE_OBJECT_STORAGE_USE_PATH_STYLE
+              value: "true"
+            - name: CONTROL_PLANE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL
+              value: "false"
             - name: SENTRY_DSN_FILE
               value: /var/run/secrets/kodex/control-plane/observability/sentry-dsn
             - name: SENTRY_EXPECTED_HOST
@@ -72,6 +86,14 @@ spec:
               valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: secretResourceVersion}}
             - name: CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256
               valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: contentSHA256}}
+            - name: CONTROL_PLANE_INTEGRATION_CREDENTIAL_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: CONTROL_PLANE_INTEGRATION_CREDENTIAL_SECRET_NAME
+              value: kodex-integration-credentials
+            - name: CONTROL_PLANE_KUBERNETES_API_TIMEOUT
+              value: 3s
             - name: CONTROL_PLANE_OIDC_ISSUER
               valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcIssuer}}
             - name: CONTROL_PLANE_OIDC_AUDIENCE
@@ -128,10 +150,19 @@ spec:
               valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleRuntimeContractSHA256}}
             - name: CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE
               value: /var/run/config/kodex/control-plane/application-grants/role-image-builder.platform-worker.public.jwk
+            - name: CONTROL_PLANE_SESSION_ARCHIVE_GRANT_TRUST_FILE
+              value: /var/run/config/kodex/control-plane/application-grants/session-archive.platform-worker.public.jwk
             - name: CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE
               value: /var/run/config/kodex/control-plane/application-grants/image-admission.platform-worker.public.jwk
             - name: CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE
               value: /var/run/config/kodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk
+            - name: CONTROL_PLANE_SECRET_BROKER_GRANT_TRUST_FILE
+              value: /var/run/config/kodex/control-plane/application-grants/secret-broker.platform-worker.public.jwk
+            - {name: CONTROL_PLANE_SECRET_BROKER_TARGET, value: "dns:///secret-broker.kodex-system.svc:8443"}
+            - {name: CONTROL_PLANE_SECRET_BROKER_TLS_SERVER_NAME, value: secret-broker.kodex-system.svc.cluster.local}
+            - {name: CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TARGET, value: "dns:///control-plane.kodex-system.svc:8443"}
+            - {name: CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TLS_SERVER_NAME, value: control-plane.kodex-system.svc.cluster.local}
+            - {name: CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_CA_FILE, value: /var/run/config/kodex/control-plane/internal-ca/ca.pem}
           ports:
             - name: grpc
               containerPort: 8443
@@ -177,6 +208,9 @@ spec:
               drop:
                 - ALL
           volumeMounts:
+            - name: kube-api-access
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
             - name: workload-tls
               mountPath: /var/run/secrets/kodex/control-plane/workload-tls
               readOnly: true
@@ -188,6 +222,9 @@ spec:
               readOnly: true
             - name: postgres-ca
               mountPath: /var/run/config/kodex/control-plane/postgres
+              readOnly: true
+            - name: object-storage
+              mountPath: /var/run/secrets/kodex/control-plane/object-storage
               readOnly: true
             - name: nats-credential
               mountPath: /var/run/secrets/kodex/control-plane/nats
@@ -210,6 +247,9 @@ spec:
             - name: application-grants
               mountPath: /var/run/config/kodex/control-plane/application-grants
               readOnly: true
+            - name: provider-application-grant
+              mountPath: /var/run/secrets/kodex/control-plane/application-grant
+              readOnly: true
             - name: role-environments
               mountPath: /var/run/config/kodex/control-plane/role-environments
               readOnly: true
@@ -222,6 +262,23 @@ spec:
             - name: tmp
               mountPath: /tmp
       volumes:
+        - name: kube-api-access
+          projected:
+            defaultMode: 0440
+            sources:
+              - serviceAccountToken:
+                  expirationSeconds: 600
+                  path: token
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+              - downwardAPI:
+                  items:
+                    - path: namespace
+                      fieldRef:
+                        fieldPath: metadata.namespace
         - name: workload-tls
           secret:
             secretName: internal-rpc-authority-control-plane-workload-tls
@@ -244,6 +301,15 @@ spec:
             items:
               - key: ca.pem
                 path: ca.pem
+        - name: object-storage
+          secret:
+            secretName: kodex-external-s3
+            defaultMode: 0440
+            items:
+              - key: access-key
+                path: access-key-id
+              - key: secret-key
+                path: secret-access-key
         - name: nats-credential
           secret:
             secretName: control-plane-nats
@@ -286,6 +352,9 @@ spec:
           secret:
             secretName: control-plane-application-grants
             defaultMode: 292
+        - name: provider-application-grant
+          emptyDir:
+            sizeLimit: 1Mi
         - name: role-environments
           configMap:
             name: kodex-role-environments

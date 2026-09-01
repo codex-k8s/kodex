@@ -27,6 +27,7 @@ const (
 	IssuerSocketPath      = "/run/kodex/internal-rpc-authority/issuer.sock"
 	VerifierSocketPath    = "/run/kodex/internal-rpc-authority/verifier.sock"
 	AuthorizationMetadata = "x-kodex-authorization"
+	proofRetryTimeout     = 500 * time.Millisecond
 )
 
 // LocalConfig задаёт проверяемую идентичность локального authority-сервера.
@@ -148,6 +149,8 @@ func (failure *LocalAuthorityError) Error() string {
 func (failure *LocalAuthorityError) GRPCStatus() *status.Status {
 	message := "authority proof is unavailable"
 	switch failure.code {
+	case codes.Canceled:
+		message = "authority dependency request canceled"
 	case codes.Unavailable:
 		message = "authority dependency is unavailable"
 	case codes.DeadlineExceeded:
@@ -163,13 +166,50 @@ func (failure *LocalAuthorityError) CorrelationID() string {
 }
 
 func newLocalAuthorityError(err error, correlationID string) error {
-	code := status.Code(err)
+	code := authorityFailureCode(err)
 	switch code {
-	case codes.Unavailable, codes.DeadlineExceeded:
+	case codes.Canceled, codes.Unavailable, codes.DeadlineExceeded:
 	default:
 		code = codes.Unauthenticated
 	}
 	return &LocalAuthorityError{code: code, correlationID: correlationID}
+}
+
+func authorityFailureCode(err error) codes.Code {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return codes.Canceled
+	case errors.Is(err, context.DeadlineExceeded):
+		return codes.DeadlineExceeded
+	default:
+		return status.Code(err)
+	}
+}
+
+func authorityProofWithRetry(
+	ctx context.Context,
+	proofs ProofProvider,
+	operationID, method string,
+) (string, string, error) {
+	proof, correlationID, err := proofs.AuthorityProof(ctx, operationID, method)
+	if err == nil || !retryableProofFailure(ctx, err) {
+		return proof, correlationID, err
+	}
+	retryCtx, cancel := context.WithTimeout(ctx, proofRetryTimeout)
+	defer cancel()
+	return proofs.AuthorityProof(retryCtx, operationID, method)
+}
+
+func retryableProofFailure(ctx context.Context, err error) bool {
+	if ctx == nil || ctx.Err() != nil {
+		return false
+	}
+	switch authorityFailureCode(err) {
+	case codes.Canceled, codes.DeadlineExceeded, codes.Unavailable:
+		return true
+	default:
+		return false
+	}
 }
 
 // IssuerUnaryClientInterceptor выпускает и добавляет контекст перед downstream RPC.
@@ -191,7 +231,7 @@ func IssuerUnaryClientInterceptor(
 		if !ok {
 			return status.Error(codes.PermissionDenied, "internal RPC operation is not registered")
 		}
-		proof, correlationID, err := proofs.AuthorityProof(ctx, operationID, method)
+		proof, correlationID, err := authorityProofWithRetry(ctx, proofs, operationID, method)
 		if err != nil {
 			return newLocalAuthorityError(err, correlationID)
 		}
@@ -236,7 +276,7 @@ func IssuerStreamClientInterceptor(
 		if !ok {
 			return nil, status.Error(codes.PermissionDenied, "internal RPC operation is not registered")
 		}
-		proof, correlationID, err := proofs.AuthorityProof(ctx, operationID, method)
+		proof, correlationID, err := authorityProofWithRetry(ctx, proofs, operationID, method)
 		if err != nil {
 			return nil, newLocalAuthorityError(err, correlationID)
 		}

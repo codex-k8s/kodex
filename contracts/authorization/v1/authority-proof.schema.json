@@ -41,6 +41,9 @@
     "authority": {
       "$ref": "#/$defs/authority"
     },
+    "credential_authentication": {
+      "$ref": "#/$defs/credentialAuthentication"
+    },
     "proof_revision": {
       "$ref": "#/$defs/revision"
     },
@@ -126,6 +129,32 @@
         },
         "spiffe_id": {
           "$ref": "#/$defs/spiffeId"
+        }
+      }
+    },
+    "credentialAuthentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "auth_time"
+      ],
+      "properties": {
+        "auth_time": {
+          "$ref": "#/$defs/unixTime"
+        },
+        "acr": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "amr": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
         }
       }
     },

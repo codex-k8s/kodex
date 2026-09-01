@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · ИИ-сотрудник · Runtime и config.toml overlay</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-rt .rt-layout { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; }
+  .p-rt .rt-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .p-rt .code .code__body { max-height: 330px; }
+  .p-rt .code--effective .code__body { max-height: 420px; }
+  .p-rt .field .select { width: 100%; }
+  .p-rt .field-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line-hair); }
+  .p-rt .field-row:first-child { border-top: 0; padding-top: 0; }
+  .p-rt .field-row__k { font-size: 12.5px; color: var(--sec); padding-top: 7px; }
+  .p-rt .field-row__k small { display: block; font-size: 11px; color: var(--mut); margin-top: 2px; line-height: 1.4; }
+  .p-rt .field-row__v { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .p-rt .field-row__v .row { flex-wrap: wrap; }
+  .p-rt .protected { display: flex; flex-direction: column; gap: 6px; }
+  .p-rt .protected__item { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 6px 10px; border-radius: var(--r-2); background: var(--bg-field); border: 1px solid var(--line-hair); }
+  .p-rt .protected__item .mono { font-size: 11.5px; color: var(--ink); }
+  .p-rt .protected__item .ic { color: var(--mut); flex: 0 0 auto; }
+  .p-rt .protected__item .mut { margin-left: auto; white-space: nowrap; }
+  .p-rt .rev-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-top: 1px solid var(--line-hair); font-size: 12.5px; min-height: 40px; }
+  .p-rt .rev-row:first-child { border-top: 0; }
+  .p-rt .rev-row__ver { font-family: var(--font-mono); font-size: 12px; font-weight: 600; width: 28px; }
+  .p-rt .rev-row__meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .p-rt .rev-row__meta small { font-size: 11px; color: var(--mut); }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">ИИ-сотрудник · вкладка «Runtime»: провайдер, пул учётных записей, модель, runtime, окружение и versioned config.toml overlay · desktop 1440×1024</p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page p-rt" id="page" aria-labelledby="page-title">
+    <div class="page-head page-head--tabs">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><a href="#">ИИ-сотрудники</a><span>/</span><span>Аналитик продаж</span></div>
+      <div class="page-title-row">
+        <div class="row gap-12">
+          <span class="avatar avatar--44 avatar--ok" aria-hidden="true">АП</span>
+          <div>
+            <div class="page-title"><h1 id="page-title">Аналитик продаж</h1><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Готов</span><span class="tag tag--ok"><svg class="ic"><use href="#i-tag"/></svg>Инструкции v3 опубликованы</span></div>
+            <div class="page-sub">Исследование клиентов и подготовка фактов · Проект «Корпоративные продажи»</div>
+          </div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn--lg" type="button">Изменить</button>
+          <a class="btn btn--primary btn--lg" href="#"><svg class="ic"><use href="#i-run"/></svg>Запустить</a>
+          <button class="btn btn--lg btn--icon" type="button" aria-label="Ещё действия" data-menu="#menu-agent-more" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+          <div class="menu" id="menu-agent-more" data-align="right">
+            <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-copy"/></svg>Дублировать</button>
+            <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-audit"/></svg>Открыть аудит</button>
+          </div>
+        </div>
+      </div>
+      <div class="tabs tabs--inline" role="tablist" data-tabs aria-label="Разделы сотрудника" style="margin-top:10px">
+        <button class="tab" role="tab" id="tab-profile" aria-controls="panel-profile" aria-selected="false">Профиль</button>
+        <button class="tab" role="tab" id="tab-instr" aria-controls="panel-instr" aria-selected="false">Инструкции<span class="tab__count">v3</span></button>
+        <button class="tab" role="tab" id="tab-runtime" aria-controls="panel-runtime" aria-selected="true">Runtime</button>
+        <button class="tab" role="tab" id="tab-env" aria-controls="panel-env" aria-selected="false">Окружение</button>
+        <button class="tab" role="tab" id="tab-access" aria-controls="panel-access" aria-selected="false">Доступы и знания</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="tabpanel" id="panel-profile" role="tabpanel" aria-labelledby="tab-profile" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Профиль» — см. <code>agent-profile-desktop.html</code>.</span></div></div>
+      <div class="tabpanel" id="panel-instr" role="tabpanel" aria-labelledby="tab-instr" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Инструкции» — см. <code>agent-instructions-desktop.html</code>.</span></div></div>
+      <div class="tabpanel rt-layout" id="panel-runtime" role="tabpanel" aria-labelledby="tab-runtime">
+        <div class="rt-col">
+          <section class="card" aria-labelledby="sec-rt">
+            <div class="card__head card__head--line"><h2 class="sec-title" id="sec-rt">Модель и среда выполнения</h2><span class="xs mut">изменения применяются к следующему ходу</span></div>
+            <div class="card__body card__body--pad">
+              <div class="field-row">
+                <div class="field-row__k">Провайдер<small>Поставщик среды выполнения</small></div>
+                <div class="field-row__v">
+                  <button class="select" type="button" aria-haspopup="listbox" data-menu="#menu-provider" aria-expanded="false"><span class="select__value">OpenAI</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+                  <div class="menu" id="menu-provider"><button class="menu__item" role="menuitemradio" aria-checked="true">OpenAI</button><button class="menu__item" role="menuitemradio" aria-checked="false" disabled>Другие провайдеры появятся позже</button></div>
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field-row__k">Учётная запись<small>Пул и политика выбора для новых сессий</small></div>
+                <div class="field-row__v">
+                  <div class="row">
+                    <button class="select" type="button" aria-haspopup="listbox" data-menu="#menu-pool" aria-expanded="false" style="min-width:300px"><span class="select__value">Пул «Продажи» · least_used</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+                    <span class="tag tag--ok"><svg class="ic"><use href="#i-check"/></svg>3 записи · авторизованы</span>
+                  </div>
+                  <div class="menu" id="menu-pool">
+                    <div class="menu__title">Пулы учётных записей</div>
+                    <button class="menu__item" role="menuitemradio" aria-checked="true"><span class="menu__text"><span>Пул «Продажи» · least_used</span><small>3 учётные записи · последняя проверка 12:01</small></span></button>
+                    <button class="menu__item" role="menuitemradio" aria-checked="false"><span class="menu__text"><span>Пул «Общий» · weighted</span><small>5 учётных записей</small></span></button>
+                    <div class="menu__sep"></div>
+                    <div class="menu__title">Фиксированная привязка</div>
+                    <button class="menu__item" role="menuitemradio" aria-checked="false"><span class="menu__text"><span>OpenAI · продажи-01</span><small>авторизована · лимиты в норме</small></span></button>
+                  </div>
+                  <div class="notice notice--warn notice--sm"><svg class="ic"><use href="#i-key"/></svg><span class="notice__text">У записи «продажи-02» авторизация истекает через 2 дня. Уже начатые сессии сохранят свою запись; новые сессии будут выбирать из оставшихся. <a href="#">Обновить авторизацию</a></span></div>
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field-row__k">Модель<small>Проверяется совместимость с runtime</small></div>
+                <div class="field-row__v">
+                  <button class="select" type="button" aria-haspopup="listbox" data-menu="#menu-model" aria-expanded="false"><span class="select__value mono">gpt-5.1</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+                  <div class="menu" id="menu-model"><button class="menu__item mono" role="menuitemradio" aria-checked="true">gpt-5.1</button><button class="menu__item mono" role="menuitemradio" aria-checked="false">gpt-5.1-mini</button><button class="menu__item mono" role="menuitemradio" aria-checked="false">gpt-5.1-pro<span class="menu__hint">не разрешена политикой пула</span></button></div>
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field-row__k">Runtime-профиль<small>Ресурсы, таймауты, сеть</small></div>
+                <div class="field-row__v">
+                  <div class="row">
+                    <button class="select" type="button" aria-haspopup="listbox" data-menu="#menu-runtime" aria-expanded="false"><span class="select__value">Стандартный</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+                    <span class="tag tag--mono">runtime 2.1</span>
+                    <span class="xs mut">2 CPU · 4 ГБ · таймаут хода 45 мин</span>
+                  </div>
+                  <div class="menu" id="menu-runtime"><button class="menu__item" role="menuitemradio" aria-checked="true">Стандартный</button><button class="menu__item" role="menuitemradio" aria-checked="false">Экономичный</button><button class="menu__item" role="menuitemradio" aria-checked="false">Усиленный<span class="menu__hint">требует роли Администратор</span></button></div>
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field-row__k">Рабочее окружение<small>Образ роли с инструментами</small></div>
+                <div class="field-row__v">
+                  <div class="row">
+                    <button class="combobox" type="button" style="max-width:360px" data-tip="Открыть выбор окружения" data-tip-pos="bottom"><svg class="ic"><use href="#i-layers"/></svg><span class="combobox__text"><span class="combobox__title">Офисные документы и PDF</span><span class="combobox__sub">rev 4 · образ готов · совместимо с runtime 2.1</span></span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+                    <a class="btn" href="#">Выбрать другое</a>
+                  </div>
+                  <span class="field__hint">Выбор из каталога окружений — см. вкладку «Окружение». Смена окружения применится к следующему ходу и создаст новую RuntimeRevision.</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="sec-overlay">
+            <div class="card__head card__head--line">
+              <h2 class="sec-title" id="sec-overlay">Overlay <span class="mono" style="text-transform:none">config.toml</span></h2>
+              <div class="row gap-8"><span class="tag tag--acc">Overlay v2 · применится к следующему ходу</span><span class="xs mut">изменила Анна Волкова · вчера</span></div>
+            </div>
+            <div class="card__body card__body--pad col gap-10">
+              <div class="code" id="overlay-editor">
+                <div class="code__bar"><span><b class="ink2">Черновик overlay v3</b> · TOML</span><span class="toolbar__spacer"></span><button class="btn btn--sm" type="button" id="btn-overlay-validate"><svg class="ic"><use href="#i-shield-check"/></svg>Проверить</button></div>
+                <div id="overlay-mount"></div>
+                <div class="code__foot">
+                  <span class="mono">строка 9</span>
+                  <span class="is-err"><svg class="ic ic-12"><use href="#i-alert"/></svg> <span class="mono">sandbox_mode</span> нельзя отключить: enforced platform policy</span>
+                  <span class="toolbar__spacer"></span>
+                  <span>Секреты в overlay не допускаются · только ссылки</span>
+                </div>
+              </div>
+              <div class="row gap-8">
+                <button class="btn btn--primary" type="button" disabled data-tip="Сначала исправьте ошибку проверки">Сохранить как v3</button>
+                <button class="btn btn--ghost" type="button">Отменить изменения</button>
+                <span class="xs mut right">Overlay накладывается на платформенный config; защищённые параметры перекрыть нельзя</span>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="rt-col" aria-label="Итоговая конфигурация">
+          <section class="card" aria-labelledby="sec-effective">
+            <div class="card__head card__head--line"><h2 class="sec-title" id="sec-effective">Итоговый effective config</h2><span class="tag tag--mono">RuntimeRevision · следующий ход</span></div>
+            <div class="card__body card__body--pad col gap-10">
+              <div class="notice notice--sm"><svg class="ic"><use href="#i-lock"/></svg><span class="notice__text">Только для чтения. Значения секретов не показываются и не входят в TOML — только ссылки на учётные записи и заголовки из переменных окружения.</span></div>
+              <div class="code code--readonly code--effective" id="effective-code">
+                <div class="code__bar"><span>platform policy + overlay v2</span><span class="toolbar__spacer"></span><button class="btn btn--sm btn--ghost" type="button"><svg class="ic"><use href="#i-copy"/></svg>Копировать</button></div>
+                <div id="effective-mount"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="sec-protected">
+            <div class="card__head card__head--line"><h2 class="sec-title" id="sec-protected">Защищённые параметры</h2><span class="xs mut">нельзя переопределить</span></div>
+            <div class="card__body card__body--pad protected">
+              <div class="protected__item"><svg class="ic ic-14"><use href="#i-lock"/></svg><span class="mono">sandbox_mode</span><span class="mut">= "workspace-write"</span></div>
+              <div class="protected__item"><svg class="ic ic-14"><use href="#i-lock"/></svg><span class="mono">approval_policy</span><span class="mut">= "platform"</span></div>
+              <div class="protected__item"><svg class="ic ic-14"><use href="#i-lock"/></svg><span class="mono">mcp_servers.*</span><span class="mut">только из grants</span></div>
+              <div class="protected__item"><svg class="ic ic-14"><use href="#i-lock"/></svg><span class="mono">network.allowed_hosts</span><span class="mut">из integration policy</span></div>
+              <div class="protected__item"><svg class="ic ic-14"><use href="#i-lock"/></svg><span class="mono">tool_timeout_sec</span><span class="mut">≤ 1800 · платформенный максимум</span></div>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="sec-overlay-hist">
+            <div class="card__head card__head--line"><h2 class="sec-title" id="sec-overlay-hist">Версии overlay</h2></div>
+            <div>
+              <div class="rev-row"><span class="rev-row__ver warn-text">v3</span><div class="rev-row__meta"><span>Черновик · 1 ошибка проверки</span><small>Анна Волкова · сейчас</small></div><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-edit"/></svg>Черновик</span></div>
+              <div class="rev-row"><span class="rev-row__ver ok-text">v2</span><div class="rev-row__meta"><span>Активный · применяется к новым ходам</span><small>Анна Волкова · вчера, 16:10</small></div><button class="btn btn--sm" type="button">Сравнить</button></div>
+              <div class="rev-row"><span class="rev-row__ver mut">v1</span><div class="rev-row__meta"><span class="sec">Архивный</span><small>Михаил Орлов · 14 августа</small></div><button class="btn btn--sm" type="button"><svg class="ic"><use href="#i-undo"/></svg>Вернуть</button></div>
+            </div>
+          </section>
+        </aside>
+      </div>
+      <div class="tabpanel" id="panel-env" role="tabpanel" aria-labelledby="tab-env" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Окружение» — см. <code>agent-environment-picker-desktop.html</code>.</span></div></div>
+      <div class="tabpanel" id="panel-access" role="tabpanel" aria-labelledby="tab-access" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Доступы и знания» — возможности, grants и проверенные источники знаний.</span></div></div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Runtime показывает раздельно провайдера, пул учётных записей с policy выбора (least_used / weighted / фиксированная привязка), модель, runtime-профиль, окружение и versioned <code>config.toml</code> overlay. Overlay редактируется как TOML и валидируется: попытка отключить enforced политику (например, <code>sandbox_mode</code>) подсвечивается как ошибка и блокирует сохранение. Справа — итоговый effective config без значений секретов (только ссылки) и список защищённых параметров, которые overlay перекрыть не может. Все изменения применяются к следующему ходу через новую RuntimeRevision.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  const cfg = {
+    nav: 'project.agents', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'ИИ-сотрудник · Runtime', object: 'Аналитик продаж', can: ['объяснить, почему параметр защищён', 'подобрать модель и runtime под задачу', 'подготовить overlay по описанию'] },
+  };
+  Kodex.mount(cfg);
+  // Локальная подсветка TOML: ключ, строка, число, комментарий, секция
+  function tomlBlock(src, opts) {
+    const esc = Kodex.esc; opts = opts || {};
+    const lines = src.split('\n');
+    const gutter = lines.map((_, i) => `<span class="${opts.errLines && opts.errLines.includes(i + 1) ? 'is-err' : ''}">${i + 1}</span>`).join('\n');
+    const body = lines.map((line, i) => {
+      let out;
+      if (/^\s*#/.test(line)) out = `<span class="hl-cm">${esc(line)}</span>`;
+      else if (/^\s*\[/.test(line)) out = `<span class="hl-sec">${esc(line)}</span>`;
+      else {
+        const m = line.match(/^(\s*[\w.\-"*]+)(\s*=\s*)(.*)$/);
+        if (m) {
+          let v = m[3]; let cm = '';
+          const ci = v.indexOf('#'); if (ci >= 0 && !/^"[^"]*#/.test(v)) { cm = v.slice(ci); v = v.slice(0, ci); }
+          v = esc(v).replace(/"([^"]*)"/g, '<span class="hl-str">"$1"</span>').replace(/\b(true|false)\b/g, '<span class="hl-kw">$1</span>').replace(/^(\s*)(\d+(?:\.\d+)?)(\s*)$/, '$1<span class="hl-num">$2</span>$3');
+          out = `<span class="hl-key">${esc(m[1])}</span>${esc(m[2])}${v}${cm ? `<span class="hl-cm">${esc(cm)}</span>` : ''}`;
+        } else out = esc(line);
+      }
+      return `<span class="code__line${opts.errLines && opts.errLines.includes(i + 1) ? ' is-err' : ''}">${out || ' '}</span>`;
+    }).join('');
+    return `<div class="code__body"><pre class="code__gutter" aria-hidden="true">${gutter}</pre><pre class="code__text" ${opts.editable ? 'contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true"' : ''} aria-label="${esc(opts.label || 'TOML')}">${body}</pre></div>`;
+  }
+  const OVERLAY = `# Overlay сотрудника «Аналитик продаж» · v3 (черновик)
+# Накладывается на платформенный config; секреты запрещены.
+
+model = "gpt-5.1"
+model_reasoning_effort = "high"
+
+[history]
+persistence = "save-all"
+
+sandbox_mode = "danger-full-access"
+
+[shell_environment_policy]
+inherit = "core"
+exclude = ["*KEY*", "*TOKEN*", "*SECRET*"]
+
+[notify]
+channel = "control-center"`;
+  document.getElementById('overlay-mount').outerHTML = tomlBlock(OVERLAY, { editable: true, errLines: [9], label: 'Overlay config.toml, черновик v3' });
+
+  const EFFECTIVE = `# Effective config · RuntimeRevision для следующего хода
+# Источники: platform policy (защищено) + overlay v2
+
+model = "gpt-5.1"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"        # platform policy
+approval_policy = "platform"            # platform policy
+tool_timeout_sec = 1800                 # платформенный максимум
+
+[provider]
+name = "openai"
+account_pool = "sales"                  # policy: least_used
+credential = "ref: provider-account/sales-01"   # значение недоступно
+
+[history]
+persistence = "save-all"
+
+[shell_environment_policy]
+inherit = "core"
+exclude = ["*KEY*", "*TOKEN*", "*SECRET*"]
+
+[mcp_servers.kodex_platform]
+transport = "streamable-http"
+required = true
+allowed_tools = ["delegate", "callback", "owner_attention"]
+
+[mcp_servers.github_read]
+transport = "streamable-http"
+required = false
+allowed_tools = ["repo_get", "issue_list"]
+header_env = "KODEX_GH_READ"            # заголовок из переменной окружения
+
+[network]
+allowed_hosts = ["api.github.example"]  # из integration policy`;
+  document.getElementById('effective-mount').outerHTML = tomlBlock(EFFECTIVE, { label: 'Итоговый effective config, только чтение' });
+  document.getElementById('btn-overlay-validate').addEventListener('click', (e) => { const b = e.currentTarget; b.classList.add('is-loading'); setTimeout(() => { b.classList.remove('is-loading'); Kodex.toast(document.getElementById('frame'), 'Проверка overlay: 1 ошибка — sandbox_mode защищён платформой', 'alert'); }, 700); });
+</script>
+</body>
+</html>

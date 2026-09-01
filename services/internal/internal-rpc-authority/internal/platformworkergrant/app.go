@@ -34,6 +34,9 @@ var supportedWorkloads = map[string]struct{}{
 	"integration-gateway":  {},
 	"role-image-builder":   {},
 	"runtime-controller":   {},
+	"session-archive":      {},
+	"secret-broker":        {},
+	"control-plane":        {},
 }
 
 type config struct {

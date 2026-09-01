@@ -196,6 +196,20 @@ func Run(
 		store.Close()
 		return fmt.Errorf("construct readback attestor client: %w", err)
 	}
+	readbackAttestors := []*readbackclient.SecretAttestor{snapshotAttestor}
+	closeReadbackAttestors := func() error {
+		var closeErrors []error
+		for _, attestor := range readbackAttestors {
+			if closeErr := attestor.Close(); closeErr != nil {
+				closeErrors = append(closeErrors, closeErr)
+			}
+		}
+		readbackAttestors = nil
+		return errors.Join(closeErrors...)
+	}
+	defer func() {
+		_ = closeReadbackAttestors()
+	}()
 	var activationAttestor repository.SnapshotAttestor = snapshotAttestor
 	if config.Mode == ModeVerifier && config.ResolverEnabled {
 		resolverAttestor, resolverErr := readbackclient.NewSecretAttestor(
@@ -224,6 +238,7 @@ func Run(
 				resolverErr,
 			)
 		}
+		readbackAttestors = append(readbackAttestors, resolverAttestor)
 		activationAttestor = &proofResolverAttestor{
 			primary:              snapshotAttestor,
 			resolver:             resolverAttestor,
@@ -430,6 +445,13 @@ func Run(
 			Name:    "technical-http",
 			Timeout: config.ShutdownTimeout,
 			Run:     technicalServer.Shutdown,
+		},
+		serviceruntime.ShutdownOperation{
+			Name:    "readback-attestors",
+			Timeout: config.ShutdownTimeout,
+			Run: func(context.Context) error {
+				return closeReadbackAttestors()
+			},
 		},
 		serviceruntime.ShutdownOperation{
 			Name:    "secret-delivery",

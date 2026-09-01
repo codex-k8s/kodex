@@ -5,7 +5,8 @@ package generated
 type ResyncReason string
 
 const (
-	ResyncReasonRetentionExpired    ResyncReason = "RETENTION_EXPIRED"
-	ResyncReasonGapDetected         ResyncReason = "GAP_DETECTED"
-	ResyncReasonProjectionRecovered ResyncReason = "PROJECTION_RECOVERED"
+	ResyncReasonRetentionExpired          ResyncReason = "RETENTION_EXPIRED"
+	ResyncReasonGapDetected               ResyncReason = "GAP_DETECTED"
+	ResyncReasonProjectionRecovered       ResyncReason = "PROJECTION_RECOVERED"
+	ResyncReasonAuthoritativeReadRequired ResyncReason = "AUTHORITATIVE_READ_REQUIRED"
 )

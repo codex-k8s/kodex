@@ -30,6 +30,7 @@ type fakeJetStream struct {
 	err     error
 	subject string
 	payload []byte
+	header  nats.Header
 }
 
 func (stream *fakeJetStream) Stream(context.Context, string) (jetstream.Stream, error) {
@@ -39,6 +40,10 @@ func (stream *fakeJetStream) Stream(context.Context, string) (jetstream.Stream, 
 func (stream *fakeJetStream) PublishMsg(_ context.Context, message *nats.Msg, _ ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
 	stream.subject = message.Subject
 	stream.payload = append([]byte(nil), message.Data...)
+	stream.header = nats.Header{}
+	for key, values := range message.Header {
+		stream.header[key] = append([]string(nil), values...)
+	}
 	return stream.ack, stream.err
 }
 
@@ -102,5 +107,30 @@ func TestUnknownSessionIsNotRevoked(t *testing.T) {
 	store := &Store{jetstream: &fakeJetStream{}, stream: &fakeStream{err: jetstream.ErrMsgNotFound}, replicas: 1, timeout: time.Second}
 	if revoked, err := store.Revoked(context.Background(), "4e5785f6-6bc6-4e8c-b6a1-ec4f8d2ab238"); err != nil || revoked {
 		t.Fatalf("unknown session = %t/%v", revoked, err)
+	}
+}
+
+func TestConsumeOnceUsesSubjectCASAndRejectsReplay(t *testing.T) {
+	t.Parallel()
+	sessionID := "4e5785f6-6bc6-4e8c-b6a1-ec4f8d2ab238"
+	jetStream := &fakeJetStream{ack: &jetstream.PubAck{Stream: StreamName, Sequence: 11}}
+	stream := &fakeStream{}
+	store := &Store{jetstream: jetStream, stream: stream, replicas: 1, timeout: time.Second}
+	won, err := store.ConsumeOnce(context.Background(), sessionID)
+	if err != nil || !won {
+		t.Fatalf("first consume = %t/%v", won, err)
+	}
+	if jetStream.header.Get(jetstream.ExpectedStreamHeader) != StreamName ||
+		jetStream.header.Get(jetstream.ExpectedLastSubjSeqHeader) != "0" ||
+		jetStream.header.Get(jetstream.MsgIDHeader) == "" {
+		t.Fatalf("consume CAS headers are incomplete: %v", jetStream.header)
+	}
+
+	jetStream.ack = nil
+	jetStream.err = errors.New("wrong last sequence")
+	stream.message = &jetstream.RawStreamMsg{Subject: subject(sessionID), Sequence: 11, Data: []byte(revokedValue)}
+	won, err = store.ConsumeOnce(context.Background(), sessionID)
+	if err != nil || won {
+		t.Fatalf("replayed consume = %t/%v", won, err)
 	}
 }

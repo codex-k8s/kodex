@@ -1,2 +1,10 @@
 -- name: workers_completeintegrationtest_update_integration_connections_state_masked_credentials_state_last_test_summary :one
-UPDATE control_plane.integration_connections SET state=$2,masked_credentials_state=$3,last_test_summary=$4,last_tested_at=clock_timestamp(),version=version+1,updated_at=clock_timestamp() WHERE id=$1::uuid AND enabled RETURNING ref,definition_key,name,state,masked_credentials_state,last_test_summary,enabled,version,last_tested_at,created_at,updated_at
+UPDATE control_plane.integration_connections
+SET state=$2,
+    masked_credentials_state=CASE WHEN credential_revision_id IS NULL THEN 'NOT_CONFIGURED' ELSE $3 END,
+    last_test_summary=$4,
+    last_tested_at=clock_timestamp(),
+    version=version+1,
+    updated_at=clock_timestamp()
+WHERE id=$1::uuid AND enabled
+RETURNING ref,definition_key,name,state,masked_credentials_state,last_test_summary,enabled,version,last_tested_at,created_at,updated_at

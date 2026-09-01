@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Kodex · План изменений · конфликт версий</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .modal-wrap:not(.is-open) { display: none; }
+  .p-agent { min-height: 168px; }
+  .p-agent__activity { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--sec); margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line-hair); }
+  .p-plan__status { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--bg-subtle); font-size: 12px; color: var(--sec); min-height: 44px; }
+  .p-plan__group { display: flex; flex-direction: column; gap: 10px; }
+  .p-plan__group-head { display: flex; align-items: center; gap: 8px; }
+  .p-plan__cols { display: grid; grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mut); padding: 0 0 2px; }
+  .p-plan__sel { position: relative; display: block; }
+  .p-plan__sel select { appearance: none; -webkit-appearance: none; width: 100%; min-height: 26px; height: 26px; padding: 0 26px 0 8px; border-radius: var(--r-1); border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 12px; cursor: pointer; }
+  .p-plan__sel select:hover { border-color: var(--line-strong); }
+  .p-plan__sel select:focus { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-tint); outline: none; }
+  .p-plan__sel select:disabled { background: var(--bg-field); color: var(--sec); cursor: default; }
+  .p-plan__sel .ic { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); color: var(--mut); pointer-events: none; }
+  .p-plan .op__after .chip { height: 24px; font-size: 11.5px; padding: 0 8px; }
+  .p-plan .op__after .combobox { min-height: 26px; padding: 3px 8px; font-size: 12px; width: 100%; }
+  .p-plan .op__after .combobox__title { font-size: 12px; -webkit-line-clamp: 1; }
+  .p-plan .op__after .combobox__sub { font-size: 10.5px; }
+  .p-plan .op__foot .ic { width: 13px; height: 13px; color: var(--mut); margin-right: 3px; vertical-align: -2px; }
+  .p-plan .op__foot span { display: inline-flex; align-items: flex-start; gap: 4px; line-height: 1.4; }
+  .p-plan .op__row .lock { display: inline-flex; align-items: center; gap: 5px; color: var(--sec); font-size: 11.5px; }
+  .p-plan .op__row .lock .ic { width: 12px; height: 12px; }
+  .p-plan__foot { flex-wrap: wrap; }
+  .p-plan__foot .btn--lg { height: 36px; }
+  .p-plan__receipt { width: 100%; }
+  .p-plan__cnt { font-family: var(--font-mono); font-size: 11px; color: var(--mut); }
+  .p-plan .op__after .input[readonly], .p-plan .op__after .input[disabled] { background: var(--bg-field); color: var(--sec); }
+  .p-plan__value { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; font-size: 12px; }
+  .p-plan__value .mono { font-size: 11.5px; }
+  .p-plan__editor-modal .modal { height: 660px; }
+  .p-plan__editor-modal .modal__body--flush > .code { flex: 1 1 auto; min-height: 0; border: 0; border-radius: 0; }
+  .p-plan__vars { display: flex; flex-direction: column; gap: 2px; }
+  .p-plan .op--conflict .op__before { text-decoration: none; color: var(--err); font-weight: 500; white-space: normal; }
+  .p-plan .op--conflict .op__after { color: var(--sec); }
+  .p-plan .op--conflict .op__head .op__title::after { content: " · конфликт"; color: var(--err); font-weight: 500; }
+  .p-plan__receipt-list { display: flex; flex-direction: column; }
+  .p-plan__receipt-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line-hair); font-size: 12px; }
+  .p-plan__receipt-row .ic { color: var(--ok); }
+  .p-plan__cnt-stale { font-family: var(--font-mono); font-size: 11px; color: var(--err); }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Kodex · план изменений после stale/conflict (объект изменён другим пользователем) · desktop 1440×1024 · маршрут <code>/projects/:projectRef/agents</code> + drawer Kodex → план</p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><span>ИИ-сотрудники</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">ИИ-сотрудники</h1><span class="tab__count">8</span></div>
+          <div class="page-sub">Команда Проекта «Корпоративные продажи»: назначение, состояние и текущая работа</div>
+        </div>
+        <div class="page-actions">
+          <div class="seg" data-seg data-view-target="#agents-grid" role="group" aria-label="Вид списка">
+            <button class="seg__btn seg__btn--icon" type="button" aria-pressed="true" data-view="grid" aria-label="Сетка" data-tip="Сетка" data-tip-pos="bottom"><svg class="ic"><use href="#i-grid"/></svg></button>
+            <button class="seg__btn seg__btn--icon" type="button" aria-pressed="false" data-view="list" aria-label="Таблица" data-tip="Таблица" data-tip-pos="bottom"><svg class="ic"><use href="#i-list"/></svg></button>
+          </div>
+          <a class="btn btn--primary btn--lg" href="#"><svg class="ic"><use href="#i-plus"/></svg>Создать сотрудника</a>
+        </div>
+      </div>
+    </div>
+    <div class="page-body col gap-14">
+      <div class="toolbar">
+        <label class="search" style="width:300px"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Найти по имени или назначению" aria-label="Найти сотрудника"></label>
+        <div class="row gap-6" data-chip-group="single" role="group" aria-label="Фильтр по состоянию">
+          <button class="chip" type="button" aria-pressed="true">Все</button>
+          <button class="chip" type="button" aria-pressed="false">Работают</button>
+          <button class="chip" type="button" aria-pressed="false">Ждут решения</button>
+          <button class="chip" type="button" aria-pressed="false">Отключены</button>
+        </div>
+        <span class="toolbar__spacer"></span>
+        <span class="refresh"><span class="refresh__dot"></span><span class="refresh__text">обновлено 12:30</span></span>
+      </div>
+      <div class="grid grid--3" id="agents-grid" data-view="grid"></div>
+    </div>
+  </main>
+
+  <div class="layer">
+    <div class="drawer drawer--xl p-plan" id="kodex-panel-live" role="dialog" aria-label="Kodex · План изменений" data-nonmodal>
+      <div class="drawer__head">
+        <a class="btn btn--icon btn--ghost" href="kodex-drawer-project-desktop.html" aria-label="К диалогу" data-tip="К диалогу" data-tip-pos="bottom"><svg class="ic"><use href="#i-back"/></svg></a>
+        <span class="avatar avatar--32 avatar--bot" aria-hidden="true"><svg class="ic"><use href="#i-bot"/></svg></span>
+        <div class="drawer__head-text">
+          <div class="drawer__title">План изменений</div>
+          <div class="drawer__sub">Диалог «Классификатор обращений для продаж» · Экран: <b class="ink2">ИИ-сотрудники</b> · Проект «Корпоративные продажи»</div>
+        </div>
+        <button class="close-btn" type="button" aria-label="Закрыть Kodex" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="p-plan__status" role="status" aria-live="polite">
+        <span class="pill pill--err" id="plan-pill"><svg class="ic"><use href="#i-alert"/></svg><span id="plan-pill-text">План устарел</span></span>
+        <span>Ревизия <b class="mono ink2" id="plan-rev">3</b> · <span id="plan-count">5 операций</span> · основан на состоянии 12:31 · <span class="p-plan__cnt-stale">сервер изменился 12:41</span></span>
+        <span class="right"></span>
+        <button class="btn btn--sm" type="button" id="add-op-btn" disabled data-tip="Редактирование недоступно, пока план не пересобран" data-tip-pos="bottom"><svg class="ic"><use href="#i-plus"/></svg>Добавить операцию</button>
+      </div>
+
+      <div class="drawer__body col gap-16" id="plan-body">
+        <div class="notice notice--err" id="conflict-notice"><svg class="ic"><use href="#i-alert"/></svg><span class="notice__text"><b>План устарел.</b> Сотрудник «Аналитик продаж» изменён Михаилом Орловым в 12:41: окружение уже «Аналитика данных (Python) · rev 3», версия v8. Операция №3 опирается на состояние 12:31. Частичное применение невозможно — пересоберите план, чтобы Kodex учёл текущее состояние.</span><span class="notice__actions"><button class="btn btn--sm" type="button" id="show-diff"><svg class="ic"><use href="#i-eye"/></svg>Что изменилось</button></span></div>
+        <div class="notice notice--sm" id="conflict-diff" hidden><svg class="ic"><use href="#i-history"/></svg><span class="notice__text"><div class="diff"><div class="diff__line diff__line--ctx"><span class="diff__sign"> </span>agent «Аналитик продаж» · v7 → v8 · Михаил Орлов · 12:41 · через Control Center</div><div class="diff__line diff__line--del"><span class="diff__sign">−</span>environment: Стандартное окружение · rev 2</div><div class="diff__line diff__line--add"><span class="diff__sign">+</span>environment: Аналитика данных (Python) · rev 3</div></div></span></div>
+
+        <!-- СОЗДАНИЕ -->
+        <section class="p-plan__group" data-group="create" aria-labelledby="g-create">
+          <div class="p-plan__group-head"><h3 class="sec-title" id="g-create">Создание</h3><span class="p-plan__cnt" data-group-count>2</span></div>
+
+          <article class="op" data-op="1">
+            <div class="op__head">
+              <span class="op__kind op__kind--create">create</span>
+              <span class="op__title">ИИ-сотрудник «Классификатор обращений»</span>
+              <span class="tag tag--mono">№1</span>
+            </div>
+            <div class="op__body">
+              <div class="op__row op__row--3"><span class="op__k">Цель</span><span class="op__after p-plan__value"><svg class="ic ic-14 mut"><use href="#i-folder"/></svg>Проект «Корпоративные продажи»</span></div>
+              <div class="op__row op__row--3"><span class="op__k">Имя</span><span class="op__after"><input class="input" type="text" readonly value="Классификатор обращений" aria-label="Имя сотрудника"></span></div>
+              <div class="op__row op__row--3"><span class="op__k">Назначение</span><span class="op__after"><input class="input" type="text" readonly value="Сортировка входящих обращений по темам" aria-label="Назначение"></span></div>
+              <div class="op__row op__row--3"><span class="op__k">Роль</span><span class="op__after"><input class="input" type="text" readonly value="Классификатор" aria-label="Роль"></span></div>
+              <div class="op__row op__row--3"><span class="op__k">Провайдер</span><span class="op__after"><span class="p-plan__sel"><select aria-label="Провайдер и учётные записи" disabled><option>OpenAI · пул «Продажи» · политика least_used</option><option>OpenAI · пул «Общий» · политика weighted</option><option>OpenAI · фиксированная учётная запись «Продажи-2»</option></select><svg class="ic ic-14"><use href="#i-chev"/></svg></span></span></div>
+              <div class="op__row op__row--3"><span class="op__k">Модель</span><span class="op__after"><span class="p-plan__sel"><select aria-label="Модель" disabled><option>gpt-5.1</option><option selected>gpt-5.1-mini</option></select><svg class="ic ic-14"><use href="#i-chev"/></svg></span></span></div>
+              <div class="op__row op__row--3"><span class="op__k">Runtime</span><span class="op__after"><span class="p-plan__sel"><select aria-label="Runtime" disabled><option>Стандартный</option><option selected>Экономичный</option></select><svg class="ic ic-14"><use href="#i-chev"/></svg></span></span></div>
+              <div class="op__row op__row--3"><span class="op__k">Окружение</span><span class="op__after"><button class="combobox" type="button" id="env-combo" disabled><span class="combobox__text"><span class="combobox__title" id="env-title">Офисные документы и PDF</span><span class="combobox__sub" id="env-sub">rev 4 · образ готов · совместимо с gpt-5.1-mini</span></span><svg class="ic ic-14"><use href="#i-chev"/></svg></button></span></div>
+              <div class="op__row op__row--3"><span class="op__k">Возможности</span><span class="op__after row row--wrap gap-6" id="caps"><span class="chip is-active" data-cap="files">Работа с файлами</span><span class="chip is-active" data-cap="data">Анализ данных</span></span></div>
+              <div class="op__row op__row--3"><span class="op__k">Знания</span><span class="op__after row row--wrap gap-6"><span class="chip is-active">Регламент обработки обращений.md · v2</span></span></div>
+              <div class="op__row op__row--3"><span class="op__k">Состояние</span><span class="op__after p-plan__value sec">Черновик · запуск невозможен до публикации инструкций</span></div>
+            </div>
+            <div class="op__foot">
+              <span><svg class="ic"><use href="#i-link"/></svg>Зависимости: нет</span>
+              <span><svg class="ic"><use href="#i-info"/></svg>Последствия: создаст сотрудника в состоянии «Черновик»; аватар не назначен — можно создать позже с Kodex</span>
+            </div>
+          </article>
+
+          <article class="op" data-op="2">
+            <div class="op__head">
+              <span class="op__kind op__kind--create">create</span>
+              <span class="op__title">Черновик инструкций для «Классификатор обращений»</span>
+              <span class="tag tag--mono">№2</span>
+            </div>
+            <div class="op__body">
+              <div class="op__row op__row--3"><span class="op__k">Цель</span><span class="op__after p-plan__value"><svg class="ic ic-14 mut"><use href="#i-bot"/></svg>Новый сотрудник из операции №1</span></div>
+              <div class="op__row op__row--3"><span class="op__k">Черновик</span><span class="op__after p-plan__value"><span id="md-summary">Markdown · 15 строк · 3 переменные</span><button class="btn btn--sm" type="button" data-modal="#modal-md"><svg class="ic"><use href="#i-eye"/></svg>Посмотреть</button></span></div>
+              <div class="op__row op__row--3"><span class="op__k">Переменные</span><span class="op__after row row--wrap gap-6"><span class="tag tag--mono">{{input.message}}</span><span class="tag tag--mono">{{project.topics}}</span><span class="tag tag--mono">{{input.customer_name}}</span></span></div>
+              <div class="op__row op__row--3"><span class="op__k">Публикация</span><span class="op__after p-plan__value sec">Не входит в план — отдельная операция после проверки</span></div>
+            </div>
+            <div class="op__foot">
+              <span><svg class="ic"><use href="#i-link"/></svg>Зависимости: после операции №1</span>
+              <span><svg class="ic"><use href="#i-info"/></svg>Последствия: создаст черновик v1; история ревизий начнётся с него</span>
+            </div>
+          </article>
+        </section>
+
+        <!-- ИЗМЕНЕНИЕ -->
+        <section class="p-plan__group" data-group="update" aria-labelledby="g-update">
+          <div class="p-plan__group-head"><h3 class="sec-title" id="g-update">Изменение</h3><span class="p-plan__cnt" data-group-count>2</span></div>
+
+          <article class="op op--conflict" data-op="3" id="op3">
+            <div class="op__head">
+              <span class="op__kind op__kind--update">update</span>
+              <span class="op__title">ИИ-сотрудник «Аналитик продаж»</span>
+              <span class="tag tag--mono">№3</span>
+              <span class="tag tag--err"><svg class="ic"><use href="#i-alert"/></svg>изменён на сервере 12:41</span>
+            </div>
+            <div class="op__body">
+              <div class="p-plan__cols" aria-hidden="true"><span>Параметр</span><span>Сейчас на сервере</span><span>В плане</span></div>
+              <div class="op__row"><span class="op__k">Окружение</span><span class="op__before" id="op3-server">Аналитика данных (Python) · rev 3<br><span class="xs mut" style="font-weight:400">Михаил Орлов · 12:41</span></span><span class="op__after"><span class="p-plan__sel"><select aria-label="Окружение" disabled><option>Стандартное окружение · rev 2</option><option selected>Офисные документы и PDF · rev 4</option><option>Аналитика данных (Python) · rev 3</option></select><svg class="ic ic-14"><use href="#i-chev"/></svg></span><span class="xs mut">план ожидал «Стандартное окружение · rev 2»</span></span></div>
+              <div class="op__row"><span class="op__k">Версия</span><span class="op__before">v8</span><span class="op__after p-plan__value sec">план ожидал v7 → v8</span></div>
+            </div>
+            <div class="op__foot">
+              <span><svg class="ic"><use href="#i-link"/></svg>Зависимости: нет</span>
+              <span><svg class="ic"><use href="#i-warning"/></svg>Операция не может быть применена к изменённому объекту: OCC-версия v7 не совпадает с серверной v8</span>
+            </div>
+          </article>
+
+          <article class="op" data-op="4">
+            <div class="op__head">
+              <span class="op__kind op__kind--update">update</span>
+              <span class="op__title">Overlay config.toml для «Классификатор обращений»</span>
+              <span class="tag tag--mono">№4</span>
+            </div>
+            <div class="op__body">
+              <div class="p-plan__cols" aria-hidden="true"><span>Параметр</span><span>Сейчас на сервере</span><span>В плане</span></div>
+              <div class="op__row"><span class="op__k">Overlay</span><span class="op__before">—</span><span class="op__after p-plan__value"><span id="toml-summary">TOML · 12 строк · 4 секции</span><button class="btn btn--sm" type="button" data-modal="#modal-toml"><svg class="ic"><use href="#i-eye"/></svg>Посмотреть TOML</button></span></div>
+              <div class="op__row"><span class="op__k">Учётные данные</span><span class="op__before">—</span><span class="op__after p-plan__value"><span class="mono">ref: provider-account-pool-sales</span><span class="lock" data-tip="Значение секрета никогда не показывается и не входит в план" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-lock"/></svg>значение скрыто</span></span></div>
+              <div class="op__row"><span class="op__k">Enforced</span><span class="op__before">—</span><span class="op__after p-plan__value"><span class="lock"><svg class="ic"><use href="#i-shield"/></svg>sandbox.network = restricted · нельзя отключить</span></span></div>
+            </div>
+            <div class="op__foot">
+              <span><svg class="ic"><use href="#i-link"/></svg>Зависимости: после операции №1</span>
+              <span><svg class="ic"><use href="#i-info"/></svg>Последствия: overlay v1; enforced security/platform policy платформы сохраняются</span>
+            </div>
+          </article>
+        </section>
+
+        <!-- УДАЛЕНИЕ -->
+        <section class="p-plan__group" data-group="delete" aria-labelledby="g-delete">
+          <div class="p-plan__group-head"><h3 class="sec-title" id="g-delete">Удаление</h3><span class="p-plan__cnt" data-group-count>1</span></div>
+
+          <article class="op" data-op="5">
+            <div class="op__head">
+              <span class="op__kind op__kind--delete">delete</span>
+              <span class="op__title">Grant «Электронная почта · отправка писем» у «Автор писем»</span>
+              <span class="tag tag--mono">№5</span>
+            </div>
+            <div class="op__body">
+              <div class="op__row op__row--3"><span class="op__k">Цель</span><span class="op__after p-plan__value"><svg class="ic ic-14 mut"><use href="#i-bot"/></svg>ИИ-сотрудник «Автор писем» · подключение «Электронная почта · Основное»</span></div>
+              <div class="p-plan__cols" aria-hidden="true"><span>Параметр</span><span>Сейчас на сервере</span><span>В плане</span></div>
+              <div class="op__row"><span class="op__k">Grant</span><span class="op__before" title="Отправка писем · write · Human Gate обязателен · выдан 20 августа">Отправка писем · write · Human Gate · с 20 августа</span><span class="op__after p-plan__value">—</span></div>
+              <div class="op__row"><span class="op__k">Подключение</span><span class="op__before">Активно</span><span class="op__after p-plan__value sec">Остаётся активным</span></div>
+            </div>
+            <div class="op__foot">
+              <span><svg class="ic"><use href="#i-link"/></svg>Зависимости: нет</span>
+              <span><svg class="ic"><use href="#i-warning"/></svg>Последствия: сотрудник больше не сможет отправлять письма; активный запуск получит отказ на следующем ходе</span>
+            </div>
+          </article>
+        </section>
+
+        <!-- Последнее успешное применение -->
+        <section class="p-plan__group" aria-labelledby="g-receipt">
+          <div class="p-plan__group-head"><h3 class="sec-title" id="g-receipt">Последнее применение</h3><span class="p-plan__cnt">receipt</span></div>
+          <div class="op">
+            <div class="op__head"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Применено</span><span class="op__title">11:58 · ревизия 2 · 3 операции · одной транзакцией</span><a class="btn btn--sm" href="#"><svg class="ic"><use href="#i-audit"/></svg>Открыть аудит</a></div>
+            <div class="op__body">
+              <div class="op__row op__row--3"><span class="op__k">Записано как</span><span class="op__after p-plan__value">Анна Волкова через Kodex</span></div>
+              <div class="op__row op__row--3"><span class="op__k">Операции</span><span class="op__after"><div class="p-plan__receipt-list"><div class="p-plan__receipt-row" style="border-top:0"><svg class="ic ic-14"><use href="#i-check"/></svg><span class="op__kind op__kind--create">create</span><span>Проект «Корпоративные продажи» · файл «Регламент обработки обращений.md» v2</span></div><div class="p-plan__receipt-row"><svg class="ic ic-14"><use href="#i-check"/></svg><span class="op__kind op__kind--update">update</span><span>«Аналитик продаж» · знания: +«Регламент обработки обращений.md»</span></div><div class="p-plan__receipt-row"><svg class="ic ic-14"><use href="#i-check"/></svg><span class="op__kind op__kind--create">create</span><span>Автоматизация «Еженедельная сводка по обращениям» · приостановлена</span></div></div></span></div>
+              <div class="op__row op__row--3"><span class="op__k">Результат</span><span class="op__after p-plan__value sec">RuntimeRevision для «Аналитик продаж» создана; выполняемые попытки не затронуты</span></div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="drawer__foot p-plan__foot" id="plan-foot">
+        <div class="col gap-4 grow">
+          <div class="xs sec row gap-6"><svg class="ic ic-14 mut"><use href="#i-user"/></svg><span>Будет записано в аудит: <b class="ink2">Анна Волкова через Kodex</b></span></div>
+          <div class="xs mut row gap-6"><svg class="ic ic-14"><use href="#i-lock"/></svg><span>Все операции применяются одной транзакцией или ни одна</span></div>
+        </div>
+        <button class="btn btn--primary btn--lg" type="button" id="plan-rebuild"><svg class="ic"><use href="#i-refresh"/></svg>Пересобрать план</button>
+        <span data-tip="Нельзя применить частично: план опирается на устаревшее состояние" data-tip-pos="top" tabindex="0" style="display:inline-flex"><button class="btn btn--lg" type="button" id="plan-apply" disabled aria-disabled="true">Применить план</button></span>
+        <button class="btn btn--ghost btn--lg" type="button" data-close>Отменить</button>
+      </div>
+
+      <div class="menu" id="menu-add-op" data-align="right">
+        <div class="menu__title">Допустимые операции</div>
+        <button class="menu__item" type="button" data-add-op="schedule"><svg class="ic"><use href="#i-automation"/></svg><span class="menu__text"><span>Создать автоматизацию</span><small>Schedule для нового сотрудника</small></span></button>
+        <button class="menu__item" type="button" data-add-op="grant"><svg class="ic"><use href="#i-key"/></svg><span class="menu__text"><span>Выдать capability</span><small>Интеграция → сотрудник, с Human Gate по политике</small></span></button>
+        <button class="menu__item" type="button" data-add-op="instr"><svg class="ic"><use href="#i-edit"/></svg><span class="menu__text"><span>Обновить инструкции сотрудника</span><small>Новый черновик от опубликованной версии</small></span></button>
+        <button class="menu__item" type="button" data-add-op="wf"><svg class="ic"><use href="#i-wf"/></svg><span class="menu__text"><span>Создать Процесс</span><small>Черновик Workflow с координатором</small></span></button>
+        <div class="menu__sep"></div>
+        <button class="menu__item" type="button" disabled><svg class="ic"><use href="#i-users"/></svg><span class="menu__text"><span>Изменить участников Проекта</span><small>Недоступно: нет права «Управление участниками»</small></span></button>
+      </div>
+      <div class="menu" id="menu-env" data-align="right" style="min-width:300px">
+        <div class="menu__title">Рабочее окружение · совместимые с gpt-5.1-mini</div>
+        <button class="menu__item" type="button" role="menuitemradio" aria-checked="true" data-env="Офисные документы и PDF" data-env-sub="rev 4 · образ готов · совместимо с gpt-5.1-mini"><svg class="ic"><use href="#i-layers"/></svg><span class="menu__text"><span>Офисные документы и PDF</span><small>rev 4 · LibreOffice, pdftotext, pandoc</small></span></button>
+        <button class="menu__item" type="button" role="menuitemradio" aria-checked="false" data-env="Стандартное окружение" data-env-sub="rev 2 · образ готов"><svg class="ic"><use href="#i-layers"/></svg><span class="menu__text"><span>Стандартное окружение</span><small>rev 2 · bash, jq, git</small></span></button>
+        <button class="menu__item" type="button" role="menuitemradio" aria-checked="false" data-env="Юридические документы (OCR)" data-env-sub="rev 6 · образ готов"><svg class="ic"><use href="#i-layers"/></svg><span class="menu__text"><span>Юридические документы (OCR)</span><small>rev 6 · tesseract, ocrmypdf</small></span></button>
+        <button class="menu__item" type="button" role="menuitemradio" aria-checked="false" data-env="Аналитика данных (Python)" data-env-sub="rev 3 · образ собирается"><svg class="ic"><use href="#i-layers"/></svg><span class="menu__text"><span>Аналитика данных (Python)</span><small>rev 3 · образ собирается · 68%</small></span></button>
+        <div class="menu__sep"></div>
+        <div class="xs mut" style="padding:4px 10px 6px">Показаны 4 из 23 · полный список — в async picker окружений</div>
+      </div>
+      <div class="menu" id="menu-caps" data-align="left">
+        <div class="menu__title">Возможности платформы</div>
+        <button class="menu__item" type="button" data-cap-add="Веб-поиск"><svg class="ic"><use href="#i-globe"/></svg><span>Веб-поиск</span></button>
+        <button class="menu__item" type="button" data-cap-add="Таблицы и расчёты"><svg class="ic"><use href="#i-file-text"/></svg><span>Таблицы и расчёты</span></button>
+        <button class="menu__item" type="button" data-cap-add="Делегирование сотрудникам"><svg class="ic"><use href="#i-branch"/></svg><span>Делегирование сотрудникам</span></button>
+      </div>
+    </div>
+
+    <!-- Modal: Markdown-редактор инструкций -->
+    <div class="modal-wrap p-plan__editor-modal" id="modal-md" role="dialog" aria-modal="true" aria-labelledby="modal-md-title">
+      <div class="modal modal--lg">
+        <div class="modal__head">
+          <div class="grow"><div class="modal__title" id="modal-md-title">Черновик инструкций · «Классификатор обращений»</div><div class="modal__sub">Операция №2 · Markdown · при сохранении план получит новую ревизию</div></div>
+          <button class="close-btn" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="modal__body modal__body--flush">
+          <div class="code">
+            <div class="code__bar"><svg class="ic ic-14"><use href="#i-file-text"/></svg><span>instructions.md</span><span class="right"></span><button class="btn btn--sm" type="button"><svg class="ic"><use href="#i-search"/></svg>Поиск</button><button class="btn btn--sm" type="button"><svg class="ic"><use href="#i-eye"/></svg>Предпросмотр</button><button class="btn btn--sm" type="button" data-menu="#menu-vars" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-code"/></svg>Переменные</button></div>
+            <div id="md-editor"></div>
+            <div class="code__foot"><span>15 строк · 3 переменные</span><span class="ok-text row gap-4"><svg class="ic ic-14"><use href="#i-check"/></svg>Структура корректна · секретных значений нет</span></div>
+          </div>
+        </div>
+        <div class="modal__foot"><span class="xs mut grow">Инструкции не могут назначать полномочия, capabilities или секреты — проверка отклонит такой текст.</span><button class="btn btn--lg" type="button" data-close>Отмена</button><button class="btn btn--primary btn--lg" type="button" id="md-save">Сохранить в план</button></div>
+      </div>
+      <div class="menu menu--wide" id="menu-vars" data-align="right">
+        <div class="menu__title">Разрешённые переменные</div>
+        <button class="menu__item" type="button"><span class="menu__text"><span class="mono">{{input.message}}</span><small>string · текст обращения · пример: «Не приходит счёт за август»</small></span></button>
+        <button class="menu__item" type="button"><span class="menu__text"><span class="mono">{{input.customer_name}}</span><small>string · название клиента · пример: «Север»</small></span></button>
+        <button class="menu__item" type="button"><span class="menu__text"><span class="mono">{{project.topics}}</span><small>list · темы Проекта · пример: «Счета, Договор, Доставка»</small></span></button>
+        <button class="menu__item" type="button"><span class="menu__text"><span class="mono">{{run.deadline}}</span><small>datetime · срок запуска · пример: 28.08.2026 18:00</small></span></button>
+      </div>
+    </div>
+
+    <!-- Modal: TOML overlay -->
+    <div class="modal-wrap p-plan__editor-modal" id="modal-toml" role="dialog" aria-modal="true" aria-labelledby="modal-toml-title">
+      <div class="modal modal--lg">
+        <div class="modal__head">
+          <div class="grow"><div class="modal__title" id="modal-toml-title">Overlay config.toml · «Классификатор обращений»</div><div class="modal__sub">Операция №4 · overlay v1 · enforced-ключи платформы защищены и не редактируются</div></div>
+          <button class="close-btn" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="modal__body modal__body--flush">
+          <div class="code">
+            <div class="code__bar"><svg class="ic ic-14"><use href="#i-settings2"/></svg><span>config.overlay.toml</span><span class="right"></span><span class="tag"><svg class="ic"><use href="#i-lock"/></svg>2 enforced-ключа</span><button class="btn btn--sm" type="button"><svg class="ic"><use href="#i-eye"/></svg>Итоговый effective config</button></div>
+            <div id="toml-editor"></div>
+            <div class="code__foot"><span>12 строк · 4 секции</span><span class="ok-text row gap-4"><svg class="ic ic-14"><use href="#i-check"/></svg>Синтаксис корректен · enforced-политики не переопределены</span></div>
+          </div>
+        </div>
+        <div class="modal__foot"><span class="xs mut grow">Секреты задаются только ссылками (ref); значения не сохраняются в TOML, плане и аудите.</span><button class="btn btn--lg" type="button" data-close>Отмена</button><button class="btn btn--primary btn--lg" type="button" id="toml-save">Сохранить в план</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="stage-note">Состояние stale/conflict: пока план готовился, другой пользователь изменил объект операции №3. План не применяется частично — «Применить» недоступно с объяснением, конфликтная операция показывает серверное значение и то, что ожидал план, остальные операции read-only. Единственный путь вперёд — «Пересобрать план»: Kodex строит новую ревизию от текущего состояния, после чего снова нужна проверка. Ниже — audit receipt прошлого успешного применения. Общие принципы плана: операции create/update/delete показаны раздельно, у каждой видны цель, «сейчас на сервере» и «в плане», зависимости и последствия. Поля редактируются прямо в плане; текст инструкций и TOML открываются в отдельных code-editor modal. Любое изменение создаёт новую ревизию и требует проверки — «Применить» недоступно, пока проверка не пройдена. Секреты представлены только ссылками и масками. Применение атомарно и оставляет audit receipt «Анна Волкова через Kodex».</p>
+<script src="assets/kodex.js"></script>
+<script>
+  (function () {
+    const STATE = { ok: ['ok', 'Готов'], run: ['run', 'Выполняет запуск'], gate: ['gate', 'Ждёт решения'], off: ['off', 'Отключён'], err: ['err', 'Ошибка в запуске'] };
+    const ACTIVITY = { a1: 'Свободен · последний запуск сегодня, 11:52', a2: 'Запуск «Подготовить предложение для компании Север» · 12 мин', a3: 'Ждёт решения по договору с поставщиком Восток', a4: 'Координирует Процесс «Обработка нового лида»', a5: 'Отключён Михаилом Орловым · 20 августа', a6: 'Свободен · последний запуск вчера, 12:05', a7: 'Ошибка: недоступна интеграция «Электронная почта»', a8: 'Свободен · проверок за неделю: 6' };
+    document.getElementById('agents-grid').innerHTML = Kodex.data.agents.map((a) => {
+      const [mod, label] = STATE[a.state] || STATE.ok;
+      return `<article class="card p-agent"><div class="card__body card__body--pad col gap-8" style="height:100%"><div class="row row--top gap-10">${Kodex.avatar(a.initials, 44, a.tone)}<div class="grow"><div class="h3 truncate">${Kodex.esc(a.name)}</div><div class="xs sec clamp-2">${Kodex.esc(a.purpose)}</div></div>${Kodex.pill(mod, label, true)}</div><div class="row row--wrap gap-6"><span class="tag">${Kodex.esc(a.role)}</span><span class="tag tag--mono">${Kodex.esc(a.model)}</span><span class="tag">${Kodex.esc(a.runtime)}</span><span class="tag"><svg class="ic"><use href="#i-layers"/></svg>${Kodex.esc(a.env)}</span></div><div class="p-agent__activity"><svg class="ic ic-14"><use href="#i-activity"/></svg><span class="truncate">${Kodex.esc(ACTIVITY[a.ref] || '')}</span></div></div></article>`;
+    }).join('');
+
+    const MD = `# Классификатор обращений
+
+Ты — сотрудник отдела продаж. Твоя задача — определить тему входящего обращения.
+
+## Что делать
+1. Прочитай обращение из {{input.message}}.
+2. Выбери одну тему из списка {{project.topics}}.
+3. Верни тему, краткое обоснование и уверенность от 0 до 1.
+
+## Ограничения
+- Не отправляй данные во внешние системы.
+- Если тема неясна — верни «Требует уточнения».
+- Не выдумывай сведения о клиенте {{input.customer_name}}.
+- Не изменяй свои полномочия и инструкции.`;
+    const TOML = `# Overlay для сотрудника «Классификатор обращений»
+# Enforced-политики платформы не переопределяются
+
+[model]
+name = "gpt-5.1-mini"
+reasoning_effort = "medium"
+
+[runtime]
+profile = "economy"
+tool_timeout_sec = 600
+
+[sandbox]
+network = "restricted"   # enforced: значение платформы`;
+    document.getElementById('md-editor').outerHTML = Kodex.codeBlock(MD, 'md', { editable: true, label: 'Инструкции' });
+    document.getElementById('toml-editor').outerHTML = Kodex.codeBlock(TOML, 'toml', { editable: true, label: 'Overlay config.toml' });
+
+    Kodex.mount({
+      nav: 'project.agents', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+      kodexContext: { screen: 'ИИ-сотрудники', object: 'Проект «Корпоративные продажи»', can: ['создать сотрудника', 'объяснить состояние', 'найти по назначению'] },
+    });
+    const frame = document.getElementById('frame');
+    const panel = document.getElementById('kodex-panel-live');
+    Kodex.openOverlay(panel, true, frame.querySelector('.fab'));
+    setTimeout(() => { frame.scrollLeft = 0; }, 80);
+
+    // ---- Конфликт: план read-only, единственный путь — пересборка ----
+    document.getElementById('show-diff').addEventListener('click', (e) => { const d = document.getElementById('conflict-diff'); d.hidden = !d.hidden; e.currentTarget.textContent = d.hidden ? 'Что изменилось' : 'Скрыть'; });
+    document.getElementById('plan-rebuild').addEventListener('click', (e) => {
+      const b = e.currentTarget; b.classList.add('is-loading');
+      setTimeout(() => {
+        b.classList.remove('is-loading');
+        document.getElementById('conflict-notice').outerHTML = '<div class="notice notice--info"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text"><b>План пересобран Kodex.</b> Ревизия 4 построена от текущего состояния сервера: операция №3 теперь меняет окружение с «Аналитика данных (Python) · rev 3» на «Офисные документы и PDF · rev 4». Проверьте план перед применением.</span></div>';
+        const d = document.getElementById('conflict-diff'); if (d) d.hidden = true;
+        const op3 = document.getElementById('op3'); op3.classList.remove('op--conflict');
+        op3.querySelector('.tag--err').outerHTML = '<span class="tag tag--acc">пересобрано · ревизия 4</span>';
+        op3.querySelector('#op3-server').innerHTML = 'Аналитика данных (Python) · rev 3';
+        op3.querySelector('select').disabled = false;
+        op3.querySelector('.op__after .xs').textContent = 'основано на состоянии 12:41';
+        op3.querySelector('.op__foot').innerHTML = '<span><svg class="ic"><use href="#i-link"/></svg>Зависимости: нет</span><span><svg class="ic"><use href="#i-info"/></svg>Последствия: создаст RuntimeRevision для следующего хода; версия v8 → v9</span>';
+        document.getElementById('plan-rev').textContent = '4';
+        const pill = document.getElementById('plan-pill'); pill.className = 'pill pill--wait'; pill.firstElementChild.innerHTML = '<use href="#i-clock"/>'; document.getElementById('plan-pill-text').textContent = 'Требуется проверка';
+        document.querySelector('.p-plan__cnt-stale').outerHTML = '<span class="mono">ревизия 4 от 12:44</span>';
+        const foot = document.getElementById('plan-foot');
+        foot.querySelector('#plan-rebuild').outerHTML = '<button class="btn btn--lg" type="button" id="plan-validate"><svg class="ic"><use href="#i-shield-check"/></svg>Проверить план</button>';
+        const applyWrap = foot.querySelector('#plan-apply').parentElement; applyWrap.removeAttribute('data-tip'); applyWrap.removeAttribute('tabindex');
+        const apply = document.getElementById('plan-apply'); apply.classList.add('btn--primary'); apply.title = 'Сначала проверьте ревизию 4';
+        document.getElementById('add-op-btn').disabled = false; document.getElementById('add-op-btn').removeAttribute('data-tip');
+        Kodex.toast(frame, 'План пересобран: ревизия 4 учитывает изменения 12:41', 'refresh');
+        document.getElementById('plan-validate').addEventListener('click', (ev) => {
+          const v = ev.currentTarget; v.classList.add('is-loading');
+          setTimeout(() => { v.classList.remove('is-loading'); v.hidden = true; pill.className = 'pill pill--ok'; pill.firstElementChild.innerHTML = '<use href="#i-check"/>'; document.getElementById('plan-pill-text').textContent = 'Проверка пройдена'; apply.disabled = false; apply.removeAttribute('aria-disabled'); apply.title = ''; Kodex.toast(frame, 'Ревизия 4 проверена', 'shield-check'); }, 600);
+        });
+      }, 900);
+    });
+  })();
+</script>
+</body>
+</html>

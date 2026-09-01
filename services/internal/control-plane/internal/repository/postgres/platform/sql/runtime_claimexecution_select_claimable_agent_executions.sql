@@ -6,14 +6,15 @@ SELECT n.id::text,
        r.root_run_id::text,
        COALESCE(r.project_id::text, ''),
        COALESCE(p.ref, ''),
+       initiator.ref,
        r.session_id::text,
        s.ref,
        COALESCE(t.content,r.task),
        a.ref,
        a.runtime_key,
        rp.runtime_revision,
-       rp.provider,
-       rp.model,
+       runtime_config.provider,
+       runtime_config.model,
        pa.id::text,
        pa.ref,
        pcr.id::text,
@@ -37,9 +38,88 @@ SELECT n.id::text,
                  JOIN control_plane.artifacts knowledge_artifact ON knowledge_artifact.id=knowledge_binding.artifact_id
                  WHERE knowledge_binding.target_kind='KNOWLEDGE'
                    AND knowledge_binding.target_ref=a.ref
-                   AND knowledge_artifact.scan_state='CLEAN'),'{}')
+                   AND knowledge_artifact.scan_state='CLEAN'
+                   AND knowledge_artifact.lifecycle_state='ACTIVE'),'{}')
        ELSE '{}'::text[] END,
        r.input,
+       COALESCE(input_attachment_set.ref, ''),
+       COALESCE(input_attachment_set.manifest_digest, ''),
+       COALESCE(input_attachment_set.purpose, ''),
+       CASE WHEN 'platform.artifact.manage'=ANY(a.capabilities) THEN COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+               'ref', runtime_set.ref,
+               'manifestDigest', runtime_set.manifest_digest,
+               'purpose', runtime_set.purpose,
+               'scope', runtime_set.usage_scope,
+               'provenance', runtime_set.provenance,
+               'turnRef', runtime_set.turn_ref
+           ) ORDER BY runtime_set.scope_order, runtime_set.turn_number, runtime_set.ref)
+           FROM (
+               SELECT input_attachment_set.ref,
+                      input_attachment_set.manifest_digest,
+                      input_attachment_set.purpose,
+                      'INPUT'::text AS usage_scope,
+                      'CURRENT_TURN'::text AS provenance,
+                      COALESCE(t.ref, '') AS turn_ref,
+                      0::integer AS scope_order,
+                      COALESCE(t.turn_number, 0)::bigint AS turn_number
+               WHERE input_attachment_set.id IS NOT NULL
+                 AND input_attachment_set.state = 'FINALIZED'
+
+               UNION ALL
+
+               SELECT previous_set.ref,
+                      previous_set.manifest_digest,
+                      previous_set.purpose,
+                      'SESSION'::text,
+                      'SESSION_HISTORY'::text,
+                      previous_turn.ref,
+                      1::integer,
+                      previous_turn.turn_number
+               FROM LATERAL (
+                   SELECT DISTINCT ON (candidate.attachment_set_id)
+                          candidate.id,
+                          candidate.ref,
+                          candidate.turn_number,
+                          candidate.attachment_set_id
+                   FROM control_plane.session_turns AS candidate
+                   WHERE candidate.session_id = s.id
+                     AND candidate.attachment_set_id IS NOT NULL
+                     AND (t.id IS NULL OR candidate.id <> t.id)
+                   ORDER BY candidate.attachment_set_id, candidate.turn_number
+               ) AS previous_turn
+               JOIN control_plane.attachment_sets AS previous_set
+                 ON previous_set.id = previous_turn.attachment_set_id
+                AND previous_set.state = 'FINALIZED'
+               WHERE (input_attachment_set.id IS NULL OR previous_set.id <> input_attachment_set.id)
+                 AND previous_set.item_count = (
+                     SELECT count(*)
+                     FROM control_plane.attachment_set_items AS eligible_item
+                     JOIN control_plane.artifacts AS eligible_artifact
+                       ON eligible_artifact.id = eligible_item.artifact_id
+                     JOIN control_plane.artifact_content AS eligible_content
+                       ON eligible_content.artifact_id = eligible_artifact.id
+                     WHERE eligible_item.attachment_set_id = previous_set.id
+                       AND eligible_artifact.scan_state = 'CLEAN'
+                       AND (
+                           eligible_artifact.lifecycle_state = 'ACTIVE'
+                           OR (
+                               eligible_artifact.lifecycle_state = 'DELETED'
+                               AND eligible_artifact.deleted_at > r.created_at
+                           )
+                       )
+                       AND eligible_artifact.ref = eligible_item.artifact_ref
+                       AND eligible_artifact.revision = eligible_item.artifact_revision
+                       AND eligible_artifact.file_name = eligible_item.file_name
+                       AND eligible_artifact.media_type = eligible_item.media_type
+                       AND eligible_artifact.size_bytes = eligible_item.size_bytes
+                       AND eligible_artifact.digest = eligible_item.digest
+                       AND eligible_artifact.source = eligible_item.source
+                       AND eligible_content.digest = eligible_item.digest
+                       AND eligible_content.size_bytes = eligible_item.size_bytes
+                 )
+           ) AS runtime_set
+       ), '[]'::jsonb) ELSE '[]'::jsonb END,
        CASE WHEN 'platform.artifact.manage'=ANY(a.capabilities) THEN COALESCE((
            SELECT jsonb_agg(jsonb_build_object(
                'ref', runtime_artifact.ref,
@@ -49,24 +129,160 @@ SELECT n.id::text,
                'digest', runtime_artifact.digest,
                'revision', runtime_artifact.revision,
                'version', runtime_artifact.version,
-               'source', runtime_artifact.source
-           ) ORDER BY array_position(root.input_artifact_refs, runtime_artifact.ref) NULLS LAST,
+               'source', runtime_artifact.source,
+               'scope', runtime_artifact.usage_scope,
+               'position', runtime_artifact.position,
+               'attachmentSetRef', runtime_artifact.attachment_set_ref,
+               'attachmentPurpose', runtime_artifact.attachment_purpose,
+               'provenance', runtime_artifact.provenance
+           ) ORDER BY runtime_artifact.scope_order,
+                      runtime_artifact.set_order,
+                      runtime_artifact.position,
                       runtime_artifact.file_name,
                       runtime_artifact.ref)
-           FROM control_plane.artifacts AS runtime_artifact
-           WHERE runtime_artifact.organization_id = r.organization_id
-             AND runtime_artifact.project_id = r.project_id
-             AND runtime_artifact.scan_state = 'CLEAN'
-             AND (
-               runtime_artifact.ref = ANY(root.input_artifact_refs)
-               OR EXISTS (
-                 SELECT 1
-                 FROM control_plane.artifact_bindings AS runtime_binding
-                 WHERE runtime_binding.artifact_id = runtime_artifact.id
-                   AND runtime_binding.target_kind = 'KNOWLEDGE'
-                   AND runtime_binding.target_ref = a.ref
-               )
-             )
+           FROM (
+                   SELECT item.artifact_ref AS ref,
+                          item.file_name,
+                          item.media_type,
+                          item.size_bytes,
+                          item.digest,
+                          item.artifact_revision AS revision,
+                          item.artifact_version AS version,
+                          item.source,
+                          'INPUT'::text AS usage_scope,
+                          item.position,
+                          0::integer AS scope_order,
+                          0::bigint AS set_order,
+                          input_attachment_set.ref AS attachment_set_ref,
+                          input_attachment_set.purpose AS attachment_purpose,
+                          'CURRENT_TURN'::text AS provenance
+                   FROM control_plane.attachment_set_items AS item
+                   JOIN control_plane.artifacts AS artifact ON artifact.id = item.artifact_id
+                   JOIN control_plane.artifact_content AS content ON content.artifact_id = artifact.id
+                   WHERE item.attachment_set_id = input_attachment_set.id
+                     AND artifact.scan_state = 'CLEAN'
+                     AND artifact.lifecycle_state IN ('ACTIVE', 'DELETED')
+                     AND artifact.ref = item.artifact_ref
+                     AND artifact.revision = item.artifact_revision
+                     AND artifact.file_name = item.file_name
+                     AND artifact.media_type = item.media_type
+                     AND artifact.size_bytes = item.size_bytes
+                     AND artifact.digest = item.digest
+                     AND artifact.source = item.source
+                     AND content.digest = item.digest
+                     AND content.size_bytes = item.size_bytes
+                     AND input_attachment_set.state = 'FINALIZED'
+
+                   UNION ALL
+
+                   SELECT previous_item.artifact_ref,
+                          previous_item.file_name,
+                          previous_item.media_type,
+                          previous_item.size_bytes,
+                          previous_item.digest,
+                          previous_item.artifact_revision,
+                          previous_item.artifact_version,
+                          previous_item.source,
+                          'SESSION'::text AS usage_scope,
+                          previous_item.position,
+                          1::integer AS scope_order,
+                          previous_turn.turn_number AS set_order,
+                          previous_set.ref AS attachment_set_ref,
+                          previous_set.purpose AS attachment_purpose,
+                          'SESSION_HISTORY'::text AS provenance
+                   FROM LATERAL (
+                       SELECT DISTINCT ON (candidate.attachment_set_id)
+                              candidate.id,
+                              candidate.ref,
+                              candidate.turn_number,
+                              candidate.attachment_set_id
+                       FROM control_plane.session_turns AS candidate
+                       WHERE candidate.session_id = s.id
+                         AND candidate.attachment_set_id IS NOT NULL
+                         AND (t.id IS NULL OR candidate.id <> t.id)
+                       ORDER BY candidate.attachment_set_id, candidate.turn_number
+                   ) AS previous_turn
+                   JOIN control_plane.attachment_sets AS previous_set
+                     ON previous_set.id = previous_turn.attachment_set_id
+                    AND previous_set.state = 'FINALIZED'
+                   JOIN control_plane.attachment_set_items AS previous_item
+                     ON previous_item.attachment_set_id = previous_set.id
+                   JOIN control_plane.artifacts AS previous_artifact
+                     ON previous_artifact.id = previous_item.artifact_id
+                   JOIN control_plane.artifact_content AS previous_content
+                     ON previous_content.artifact_id = previous_artifact.id
+                   WHERE (input_attachment_set.id IS NULL OR previous_set.id <> input_attachment_set.id)
+                     AND previous_artifact.scan_state = 'CLEAN'
+                     AND (
+                         previous_artifact.lifecycle_state = 'ACTIVE'
+                         OR (
+                             previous_artifact.lifecycle_state = 'DELETED'
+                             AND previous_artifact.deleted_at > r.created_at
+                         )
+                     )
+                     AND previous_artifact.ref = previous_item.artifact_ref
+                     AND previous_artifact.revision = previous_item.artifact_revision
+                     AND previous_artifact.file_name = previous_item.file_name
+                     AND previous_artifact.media_type = previous_item.media_type
+                     AND previous_artifact.size_bytes = previous_item.size_bytes
+                     AND previous_artifact.digest = previous_item.digest
+                     AND previous_artifact.source = previous_item.source
+                     AND previous_content.digest = previous_item.digest
+                     AND previous_content.size_bytes = previous_item.size_bytes
+                     AND previous_set.item_count = (
+                         SELECT count(*)
+                         FROM control_plane.attachment_set_items AS eligible_item
+                         JOIN control_plane.artifacts AS eligible_artifact
+                           ON eligible_artifact.id = eligible_item.artifact_id
+                         JOIN control_plane.artifact_content AS eligible_content
+                           ON eligible_content.artifact_id = eligible_artifact.id
+                         WHERE eligible_item.attachment_set_id = previous_set.id
+                           AND eligible_artifact.scan_state = 'CLEAN'
+                           AND (
+                               eligible_artifact.lifecycle_state = 'ACTIVE'
+                               OR (
+                                   eligible_artifact.lifecycle_state = 'DELETED'
+                                   AND eligible_artifact.deleted_at > r.created_at
+                               )
+                           )
+                           AND eligible_artifact.ref = eligible_item.artifact_ref
+                           AND eligible_artifact.revision = eligible_item.artifact_revision
+                           AND eligible_artifact.file_name = eligible_item.file_name
+                           AND eligible_artifact.media_type = eligible_item.media_type
+                           AND eligible_artifact.size_bytes = eligible_item.size_bytes
+                           AND eligible_artifact.digest = eligible_item.digest
+                           AND eligible_artifact.source = eligible_item.source
+                           AND eligible_content.digest = eligible_item.digest
+                           AND eligible_content.size_bytes = eligible_item.size_bytes
+                     )
+
+                   UNION ALL
+
+                   SELECT knowledge_artifact.ref,
+                          knowledge_artifact.file_name,
+                          knowledge_artifact.media_type,
+                          knowledge_artifact.size_bytes,
+                          knowledge_artifact.digest,
+                          knowledge_artifact.revision,
+                          knowledge_artifact.version,
+                          knowledge_artifact.source,
+                          'KNOWLEDGE'::text AS usage_scope,
+                          row_number() OVER (ORDER BY knowledge_binding.created_at, knowledge_artifact.ref),
+                          2::integer AS scope_order,
+                          0::bigint AS set_order,
+                          ''::text AS attachment_set_ref,
+                          'PROJECT_KNOWLEDGE'::text AS attachment_purpose,
+                          'PROJECT_BINDING'::text AS provenance
+                   FROM control_plane.artifact_bindings AS knowledge_binding
+                   JOIN control_plane.artifacts AS knowledge_artifact ON knowledge_artifact.id = knowledge_binding.artifact_id
+                   JOIN control_plane.artifact_content AS knowledge_content ON knowledge_content.artifact_id = knowledge_artifact.id
+                   WHERE knowledge_binding.target_kind = 'KNOWLEDGE'
+                     AND knowledge_binding.target_ref = a.ref
+                     AND knowledge_artifact.organization_id = r.organization_id
+                     AND knowledge_artifact.project_id = r.project_id
+                     AND knowledge_artifact.scan_state = 'CLEAN'
+                     AND knowledge_artifact.lifecycle_state = 'ACTIVE'
+           ) AS runtime_artifact
        ), '[]'::jsonb) ELSE '[]'::jsonb END,
        n.attempt,
        COALESCE((
@@ -171,6 +387,7 @@ SELECT n.id::text,
                              FROM control_plane.run_nodes delegated
                              WHERE delegated.root_run_id = root.id
                                AND delegated.workflow_step_key = step.value ->> 'Key'
+                               AND delegated.materialization_state = 'MATERIALIZED'
                          )
                    ) target
                ), '[]'::jsonb)
@@ -184,7 +401,13 @@ SELECT n.id::text,
            LIMIT 1
        ), ''),
        COALESCE((
-           SELECT jsonb_agg(jsonb_build_object('role', history.actor_kind, 'content', history.content)
+           SELECT jsonb_agg(jsonb_build_object(
+                                'role', CASE
+                                    WHEN history.actor_kind = 'USER' THEN 'USER'
+                                    ELSE 'ASSISTANT'
+                                END,
+                                'content', history.content
+                            )
                             ORDER BY history.turn_number)
            FROM (
                SELECT previous.actor_kind,
@@ -206,15 +429,56 @@ SELECT n.id::text,
        COALESCE(role_image.recipe_ref, ''),
        COALESCE(role_image.artifact_id::text, ''),
        COALESCE(role_image.artifact_ref, ''),
-       COALESCE(role_image.promoted_reference, $3),
-       COALESCE(role_image.manifest_digest, $4),
-       COALESCE(role_image.role_runtime_contract_revision, $5),
-       COALESCE(role_image.role_runtime_contract_sha256, $6)
+       COALESCE(role_image.recipe_generation, 0),
+       CASE WHEN a.system_key = 'system-assistant' THEN $3
+            ELSE COALESCE(role_image.promoted_reference, '') END,
+       CASE WHEN a.system_key = 'system-assistant' THEN $4
+            ELSE COALESCE(role_image.manifest_digest, '') END,
+       CASE WHEN a.system_key = 'system-assistant' THEN $5
+            ELSE COALESCE(role_image.role_runtime_contract_revision, 0) END,
+       CASE WHEN a.system_key = 'system-assistant' THEN $6
+            ELSE COALESCE(role_image.role_runtime_contract_sha256, '') END,
+       runtime_config.id::text,
+       runtime_config.ref,
+       runtime_config.version_number,
+       runtime_config.digest,
+       provider_policy.id::text,
+       provider_policy.ref,
+       provider_policy.version_number,
+       provider_policy.digest,
+       provider_policy.mode,
+       config_overlay.id::text,
+       config_overlay.ref,
+       config_overlay.version_number,
+       config_overlay.digest,
+       config_overlay.content,
+       environment_binding.id::text,
+       environment_binding.ref,
+       environment_binding.version,
+       environment_binding.digest,
+       runtime_environment.id::text,
+       environment_set.ref,
+       runtime_environment.version_number,
+       runtime_environment.digest,
+       runtime_environment.non_secret_values,
+       runtime_environment.secret_descriptors,
+       runtime_environment.selected_tools,
+       runtime_environment.resource_policy,
+       runtime_environment.volume_policy,
+       runtime_environment.network_policy,
+       runtime_environment.kubernetes_access_profile,
+       runtime_environment.resources_digest,
+       runtime_environment.volumes_digest,
+       runtime_environment.network_digest,
+       runtime_environment.rbac_digest,
+       COALESCE(session_storage.codex_session_id::text, '')
 FROM control_plane.run_nodes n
 JOIN control_plane.runs r ON r.id = n.run_id
 JOIN control_plane.runs root ON root.id = r.root_run_id
+JOIN control_plane.subjects initiator ON initiator.id = root.initiated_by
 LEFT JOIN control_plane.projects p ON p.id = r.project_id
 JOIN control_plane.sessions s ON s.id = r.session_id
+LEFT JOIN control_plane.session_storage session_storage ON session_storage.session_id = s.id
 JOIN control_plane.provider_accounts pa
   ON pa.id = s.provider_account_id
  AND pa.organization_id = r.organization_id
@@ -224,8 +488,17 @@ JOIN control_plane.provider_credential_revisions pcr
   ON pcr.id = pa.current_credential_revision_id
  AND pcr.organization_id = r.organization_id
 JOIN control_plane.agents a ON a.id = n.agent_id
+JOIN control_plane.agent_runtime_config_versions runtime_config ON runtime_config.id = a.current_runtime_config_id
+JOIN control_plane.provider_account_policy_versions provider_policy ON provider_policy.id = runtime_config.provider_account_policy_id
+JOIN control_plane.agent_config_overlay_versions config_overlay ON config_overlay.id = a.current_config_overlay_id AND config_overlay.state = 'PUBLISHED'
+JOIN control_plane.agent_runtime_environment_bindings environment_binding ON environment_binding.agent_id = a.id
+JOIN control_plane.runtime_environment_sets environment_set ON environment_set.id = environment_binding.environment_set_id AND environment_set.state = 'ACTIVE'
+JOIN control_plane.runtime_environment_versions runtime_environment ON runtime_environment.id = environment_set.current_version_id
 JOIN control_plane.role_definitions rd ON rd.id = a.role_definition_id
-JOIN control_plane.runtime_profiles rp ON rp.stable_key = a.runtime_key
+JOIN control_plane.runtime_profiles rp ON rp.stable_key = runtime_config.runtime_profile_key
+  AND rp.provider = runtime_config.provider
+JOIN control_plane.provider_definitions runtime_provider_definition ON runtime_provider_definition.stable_key = runtime_config.provider
+  AND runtime_provider_definition.stable_key = pa.definition_key
 LEFT JOIN control_plane.workflow_versions workflow_version
   ON workflow_version.id = root.workflow_version_id
 JOIN LATERAL (
@@ -238,37 +511,61 @@ JOIN LATERAL (
 ) iv ON true
 LEFT JOIN control_plane.assistant_runtime ar ON ar.agent_id = a.id
 LEFT JOIN control_plane.session_turns t ON t.id = n.turn_id
+LEFT JOIN control_plane.attachment_sets input_attachment_set
+  ON input_attachment_set.id = COALESCE(t.attachment_set_id, root.input_attachment_set_id)
 LEFT JOIN LATERAL (
     SELECT recipe.id AS recipe_id,
            recipe.ref AS recipe_ref,
            artifact.id AS artifact_id,
            artifact.ref AS artifact_ref,
+           artifact.recipe_generation,
            artifact.promoted_reference,
            artifact.manifest_digest,
            artifact.role_runtime_contract_revision,
            artifact.role_runtime_contract_sha256
-    FROM control_plane.role_image_recipes recipe
-    JOIN control_plane.image_artifacts artifact ON artifact.id = recipe.active_image_artifact_id
-    WHERE recipe.organization_id = r.organization_id
-      AND recipe.role_definition_id = rd.id
+    FROM control_plane.image_artifacts artifact
+    JOIN control_plane.role_image_recipes recipe ON recipe.id = artifact.recipe_id
+    WHERE artifact.id = runtime_environment.role_image_artifact_id
+      AND artifact.organization_id = r.organization_id
+      AND recipe.project_id = r.project_id
       AND recipe.state = 'ACTIVE'
       AND artifact.admission_state = 'ACCEPTED'
       AND artifact.promotion_state = 'PROMOTED'
       AND artifact.promoted_reference <> ''
-    ORDER BY recipe.updated_at DESC, recipe.created_at DESC
+      AND artifact.role_runtime_contract_revision = $5
+      AND artifact.role_runtime_contract_sha256 = $6
     LIMIT 1
 ) role_image ON true
 WHERE n.organization_id = $1::uuid
   AND n.type = 'AGENT_EXECUTION'
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
-  AND cardinality(root.input_artifact_refs) = (
-      SELECT count(DISTINCT input_artifact.ref)
-      FROM control_plane.artifacts AS input_artifact
-      WHERE input_artifact.organization_id = r.organization_id
-        AND input_artifact.project_id = r.project_id
-        AND input_artifact.ref = ANY(root.input_artifact_refs)
-        AND input_artifact.scan_state = 'CLEAN'
+  AND COALESCE(session_storage.state, 'LIVE') = 'LIVE'
+  AND (
+      (a.system_key = 'system-assistant' AND runtime_environment.role_image_artifact_id IS NULL)
+      OR
+      (a.system_key IS NULL AND runtime_environment.role_image_artifact_id IS NOT NULL AND role_image.artifact_id IS NOT NULL)
+  )
+  AND (
+      input_attachment_set.id IS NULL
+      OR input_attachment_set.item_count = (
+          SELECT count(*)
+          FROM control_plane.attachment_set_items AS input_item
+          JOIN control_plane.artifacts AS input_artifact ON input_artifact.id = input_item.artifact_id
+          JOIN control_plane.artifact_content AS input_content ON input_content.artifact_id = input_artifact.id
+          WHERE input_item.attachment_set_id = input_attachment_set.id
+            AND input_artifact.scan_state = 'CLEAN'
+            AND input_artifact.lifecycle_state IN ('ACTIVE', 'DELETED')
+            AND input_artifact.ref = input_item.artifact_ref
+            AND input_artifact.revision = input_item.artifact_revision
+            AND input_artifact.file_name = input_item.file_name
+            AND input_artifact.media_type = input_item.media_type
+            AND input_artifact.size_bytes = input_item.size_bytes
+            AND input_artifact.digest = input_item.digest
+            AND input_artifact.source = input_item.source
+            AND input_content.digest = input_item.digest
+            AND input_content.size_bytes = input_item.size_bytes
+      )
   )
   AND NOT EXISTS (
       SELECT 1

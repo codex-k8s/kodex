@@ -6,6 +6,15 @@ packages:
     source: contracts/egress/v1/egress-gateway-policy.schema.json
     consumers:
       - egress-gateway
+  - id: integration-package-v1
+    format: json-schema
+    owner: control-plane
+    source: contracts/integrations/v1/integration-package.schema.json
+    generated:
+      go: libs/go/integrationpackage/shipped_gen.go
+    consumers:
+      - control-plane
+      - integration-gateway
   - id: control-api-gateway-api-v1
     format: openapi
     owner: control-api-gateway
@@ -51,10 +60,10 @@ packages:
       - role-image-builder
       - image-admission
       - image-promotion
-  - id: runtime-controller-agent-runner-input-v3
+  - id: runtime-controller-agent-runner-input-v6
     format: json-schema
     owner: runtime-controller
-    source: contracts/runtime-controller/v3/agent-runner-input.schema.json
+    source: contracts/runtime-controller/v6/agent-runner-input.schema.json
     consumers:
       - runtime-controller
       - agent-runner

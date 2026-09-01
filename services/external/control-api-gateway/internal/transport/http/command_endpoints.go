@@ -1,6 +1,9 @@
 package httptransport
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -14,8 +17,15 @@ import (
 )
 
 const (
-	scheduleActionEnable = "ENABLE"
-	scheduleActionPause  = "PAUSE"
+	scheduleActionEnable  = "ENABLE"
+	scheduleActionPause   = "PAUSE"
+	scheduleActionArchive = "ARCHIVE"
+	maximumArtifactBytes  = 512 << 20
+)
+
+var (
+	errArtifactContentLengthMismatch = errors.New("artifact content length mismatch")
+	errArtifactBodyRead              = errors.New("artifact request body read failed")
 )
 
 func (server *Server) CompleteOnboarding(w http.ResponseWriter, r *http.Request, p generated.CompleteOnboardingParams) {
@@ -171,7 +181,7 @@ func (server *Server) CreateAgent(w http.ResponseWriter, r *http.Request, projec
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Command.CreateAgent(r.Context(), &controlplanev1.CreateAgentRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, RoleDefinitionRef: stringValue(body.RoleDefinitionRef), AvatarUrl: stringValue(body.AvatarUrl), RuntimeRef: stringValue(body.RuntimeRef), InitialInstructions: stringValue(body.InitialInstructions)})
+	response, err := server.control.Command.CreateAgent(r.Context(), &controlplanev1.CreateAgentRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, RoleDefinitionRef: stringValue(body.RoleDefinitionRef), RuntimeRef: stringValue(body.RuntimeRef), InitialInstructions: stringValue(body.InitialInstructions)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -187,7 +197,7 @@ func (server *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ref ge
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.UpdateAgent(r.Context(), &controlplanev1.UpdateAgentRequest{Mutation: m, AgentRef: ref, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, RoleDefinitionRef: stringValue(body.RoleDefinitionRef), AvatarUrl: stringValue(body.AvatarUrl), RuntimeRef: stringValue(body.RuntimeRef)})
+	response, err := server.control.Command.UpdateAgent(r.Context(), &controlplanev1.UpdateAgentRequest{Mutation: m, AgentRef: ref, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, RoleDefinitionRef: stringValue(body.RoleDefinitionRef), RuntimeRef: stringValue(body.RuntimeRef)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -370,7 +380,7 @@ func (server *Server) CreateRun(w http.ResponseWriter, r *http.Request, p genera
 	}
 	input, _ := structpb.NewStruct(valueOrEmpty(body.Input))
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Command.LaunchRun(r.Context(), &controlplanev1.LaunchRunRequest{Mutation: m, ProjectRef: body.ProjectRef, Target: targetProto(string(body.TargetType), body.TargetRef), Title: body.Title, Task: body.Task, Input: input, ArtifactRefs: sliceOrEmpty(body.ArtifactRefs), SessionRef: stringValue(body.SessionRef), Source: controlplanev1.RunSource_RUN_SOURCE_CONTROL_CENTER})
+	response, err := server.control.Command.LaunchRun(r.Context(), &controlplanev1.LaunchRunRequest{Mutation: m, ProjectRef: body.ProjectRef, Target: targetProto(string(body.TargetType), body.TargetRef), Title: stringValue(body.Title), Task: body.Task, Input: input, AttachmentSetRef: stringValue(body.AttachmentSetRef), SessionRef: stringValue(body.SessionRef), Source: controlplanev1.RunSource_RUN_SOURCE_CONTROL_CENTER})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -420,7 +430,7 @@ func (server *Server) AddSessionTurn(w http.ResponseWriter, r *http.Request, ses
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Command.AddSessionTurn(r.Context(), &controlplanev1.AddSessionTurnRequest{Mutation: m, SessionRef: sessionRef, RunRef: body.RunRef, NodeRef: stringValue(body.NodeRef), Task: body.Task, ArtifactRefs: sliceOrEmpty(body.ArtifactRefs)})
+	response, err := server.control.Command.AddSessionTurn(r.Context(), &controlplanev1.AddSessionTurnRequest{Mutation: m, SessionRef: sessionRef, RunRef: body.RunRef, NodeRef: stringValue(body.NodeRef), Task: body.Task, AttachmentSetRef: stringValue(body.AttachmentSetRef)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -436,7 +446,7 @@ func (server *Server) ResolveOwnerGate(w http.ResponseWriter, r *http.Request, r
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.ResolveOwnerGate(r.Context(), &controlplanev1.ResolveOwnerGateRequest{Mutation: m, GateRef: ref, Decision: gateDecision(string(body.Decision)), Comment: stringValue(body.Comment)})
+	response, err := server.control.Command.ResolveOwnerGate(r.Context(), &controlplanev1.ResolveOwnerGateRequest{Mutation: m, GateRef: ref, Decision: gateDecision(string(body.Decision)), Comment: stringValue(body.Comment), AttachmentSetRef: stringValue(body.AttachmentSetRef)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -492,12 +502,17 @@ func (server *Server) CommandSchedule(w http.ResponseWriter, r *http.Request, re
 	if !ok {
 		return
 	}
-	enabled := string(body.Action) == scheduleActionEnable
-	if string(body.Action) != scheduleActionEnable && string(body.Action) != scheduleActionPause {
+	var response proto.Message
+	var err error
+	switch string(body.Action) {
+	case scheduleActionEnable, scheduleActionPause:
+		response, err = server.control.Command.SetScheduleEnabled(r.Context(), &controlplanev1.SetScheduleEnabledRequest{Mutation: m, ScheduleRef: ref, Enabled: string(body.Action) == scheduleActionEnable})
+	case scheduleActionArchive:
+		response, err = server.control.Command.ArchiveSchedule(r.Context(), &controlplanev1.ArchiveScheduleRequest{Mutation: m, ScheduleRef: ref})
+	default:
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	response, err := server.control.Command.SetScheduleEnabled(r.Context(), &controlplanev1.SetScheduleEnabledRequest{Mutation: m, ScheduleRef: ref, Enabled: enabled})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -518,13 +533,39 @@ func (server *Server) CreateIntegrationConnection(w http.ResponseWriter, r *http
 		}
 	}
 	public, _ := structpb.NewStruct(config)
-	response, err := server.control.Command.CreateIntegrationConnection(r.Context(), &controlplanev1.CreateIntegrationConnectionRequest{Mutation: m, DefinitionKey: body.DefinitionKey, Name: body.Name, PublicConfiguration: public})
+	response, err := server.control.Command.CreateIntegrationConnection(r.Context(), &controlplanev1.CreateIntegrationConnectionRequest{
+		Mutation: m, DefinitionKey: body.DefinitionKey, Name: body.Name,
+		PublicConfiguration: public,
+	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
 	writeMessage(w, http.StatusCreated, response, "connection", "")
 }
+
+func (server *Server) ConfigureIntegrationConnectionCredential(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.ConfigureIntegrationConnectionCredentialParams) {
+	body, ok := decodeJSON[generated.IntegrationCredentialInput](w, r)
+	if !ok {
+		return
+	}
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	credential := []byte(stringValue(body.Value))
+	body.Value = nil
+	defer clear(credential)
+	response, err := server.control.Command.ConfigureIntegrationConnectionCredential(r.Context(), &controlplanev1.ConfigureIntegrationConnectionCredentialRequest{
+		Mutation: m, ConnectionRef: ref, CredentialValue: credential,
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "connection", "")
+}
+
 func (server *Server) CommandIntegrationConnection(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.CommandIntegrationConnectionParams) {
 	body, ok := decodeJSON[generated.IntegrationConnectionCommand](w, r)
 	if !ok {
@@ -583,58 +624,155 @@ func (server *Server) ChangeArtifactBinding(w http.ResponseWriter, r *http.Reque
 	}
 	writeMessage(w, http.StatusOK, response, "artifact", "")
 }
+func (server *Server) DeleteArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.DeleteArtifactParams) {
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.DeleteArtifact(r.Context(), &controlplanev1.DeleteArtifactRequest{Mutation: m, ArtifactRef: ref, ImpactDigest: p.XImpactDigest})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "artifact", "")
+}
+func (server *Server) RestoreArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.RestoreArtifactParams) {
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.RestoreArtifact(r.Context(), &controlplanev1.RestoreArtifactRequest{Mutation: m, ArtifactRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "artifact", "")
+}
+func (server *Server) PurgeArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.PurgeArtifactParams) {
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.PurgeArtifact(r.Context(), &controlplanev1.PurgeArtifactRequest{Mutation: m, ArtifactRef: ref, ImpactDigest: p.XImpactDigest})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "")
+}
+func (server *Server) GetArtifactImpact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.GetArtifactImpactParams) {
+	action := controlplanev1.ArtifactImpactAction(controlplanev1.ArtifactImpactAction_value["ARTIFACT_IMPACT_ACTION_"+string(p.Action)])
+	response, err := server.control.Query.GetArtifactImpact(r.Context(), &controlplanev1.GetArtifactImpactRequest{ArtifactRef: ref, Action: action})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	impact := response.GetImpact()
+	activeRuns := make([]generated.ArtifactImpactRun, 0, len(impact.GetActiveRuns()))
+	for _, run := range impact.GetActiveRuns() {
+		item := generated.ArtifactImpactRun{
+			RunRef: run.GetRunRef(), Title: run.GetTitle(),
+			State: generated.ArtifactImpactRunState(strings.TrimPrefix(run.GetState().String(), "RUN_STATE_")),
+		}
+		if run.GetProjectRef() != "" {
+			projectRef := generated.OpaqueRef(run.GetProjectRef())
+			item.ProjectRef = &projectRef
+		}
+		activeRuns = append(activeRuns, item)
+	}
+	writeJSON(w, http.StatusOK, generated.ArtifactImpact{
+		ArtifactRef: impact.GetArtifactRef(), ArtifactVersion: impact.GetArtifactVersion(),
+		Action:       generated.ArtifactImpactAction(strings.TrimPrefix(impact.GetAction().String(), "ARTIFACT_IMPACT_ACTION_")),
+		ImpactDigest: impact.GetImpactDigest(), BindingCount: impact.GetBindingCount(),
+		AttachmentCount: impact.GetAttachmentCount(), ActiveRuntimeCount: impact.GetActiveRuntimeCount(),
+		ActiveRuns: activeRuns, ActiveRunsTruncated: impact.GetActiveRunsTruncated(),
+		Blockers: impact.GetBlockers(), Permitted: impact.GetPermitted(),
+	})
+}
 func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.UploadArtifactParams) {
 	r, ok := withProjectReference(w, r, projectRef)
 	if !ok {
 		return
 	}
+	server.uploadArtifact(w, r, artifactUploadRequest{
+		projectRef:     projectRef,
+		runRef:         stringValue(p.RunRef),
+		fileName:       p.XFileName,
+		idempotencyKey: p.IdempotencyKey,
+	})
+}
+
+func (server *Server) UploadOrganizationArtifact(w http.ResponseWriter, r *http.Request, p generated.UploadOrganizationArtifactParams) {
+	server.uploadArtifact(w, r, artifactUploadRequest{
+		fileName:       p.XFileName,
+		idempotencyKey: p.IdempotencyKey,
+	})
+}
+
+type artifactUploadRequest struct {
+	projectRef     string
+	runRef         string
+	fileName       string
+	idempotencyKey string
+}
+
+type artifactUploadClient interface {
+	Send(*controlplanev1.UploadArtifactRequest) error
+	CloseAndRecv() (*controlplanev1.UploadArtifactResponse, error)
+}
+
+func (server *Server) uploadArtifact(w http.ResponseWriter, r *http.Request, upload artifactUploadRequest) {
 	if r.ContentLength < 0 {
 		writeLocalProblem(w, http.StatusLengthRequired, "CONTENT_LENGTH_REQUIRED", false)
 		return
 	}
-	if r.ContentLength > 16<<20 {
+	if r.ContentLength > maximumArtifactBytes {
 		writeLocalProblem(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", false)
 		return
 	}
-	m, ok := requireMutation(w, p.IdempotencyKey, "")
+	m, ok := requireMutation(w, upload.idempotencyKey, "")
 	if !ok {
 		return
 	}
-	stream, err := server.control.Command.UploadArtifact(r.Context())
+	var stream artifactUploadClient
+	var err error
+	if upload.projectRef == "" {
+		var organizationStream controlplanev1.PlatformCommandService_UploadOrganizationArtifactClient
+		organizationStream, err = server.control.Command.UploadOrganizationArtifact(r.Context())
+		if err == nil {
+			stream = organizationArtifactUploadClient{stream: organizationStream}
+		}
+	} else {
+		stream, err = server.control.Command.UploadArtifact(r.Context())
+	}
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
-	if err = stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Metadata{Metadata: &controlplanev1.UploadArtifactMetadata{Mutation: m, ProjectRef: projectRef, RunRef: stringValue(p.RunRef), FileName: p.XFileName, MediaType: r.Header.Get("Content-Type"), SizeBytes: r.ContentLength}}}); err != nil {
+	if err = stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Metadata{Metadata: &controlplanev1.UploadArtifactMetadata{Mutation: m, ProjectRef: upload.projectRef, RunRef: upload.runRef, FileName: upload.fileName, MediaType: r.Header.Get("Content-Type"), SizeBytes: r.ContentLength}}}); err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
-	buffer := make([]byte, 64<<10)
-	reader := io.LimitReader(r.Body, (16<<20)+1)
-	var received int64
-	for {
-		count, readErr := reader.Read(buffer)
-		if count > 0 {
-			received += int64(count)
-			if received > r.ContentLength || received > 16<<20 {
-				writeLocalProblem(w, http.StatusBadRequest, "CONTENT_LENGTH_MISMATCH", false)
-				return
-			}
-			if err := stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Chunk{Chunk: append([]byte(nil), buffer[:count]...)}}); err != nil {
-				writeRPCProblem(w, err)
-				return
-			}
-		}
-		if readErr == io.EOF {
-			break
-		}
-		if readErr != nil {
-			writeLocalProblem(w, http.StatusBadRequest, "REQUEST_BODY_READ_FAILED", false)
-			return
-		}
-	}
-	if received != r.ContentLength {
+	received, sha256Digest, err := forwardArtifactBody(r.Body, r.ContentLength, func(chunk []byte) error {
+		return stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Chunk{Chunk: chunk}})
+	})
+	if errors.Is(err, errArtifactContentLengthMismatch) {
 		writeLocalProblem(w, http.StatusBadRequest, "CONTENT_LENGTH_MISMATCH", false)
+		return
+	}
+	if errors.Is(err, errArtifactBodyRead) {
+		writeLocalProblem(w, http.StatusBadRequest, "REQUEST_BODY_READ_FAILED", false)
+		return
+	}
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	if err := stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Commit{Commit: &controlplanev1.UploadArtifactCommit{
+		SizeBytes: received,
+		Sha256:    sha256Digest,
+	}}}); err != nil {
+		writeRPCProblem(w, err)
 		return
 	}
 	response, err := stream.CloseAndRecv()
@@ -643,6 +781,64 @@ func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, pro
 		return
 	}
 	writeMessage(w, http.StatusCreated, response, "artifact", "")
+}
+
+type organizationArtifactUploadClient struct {
+	stream controlplanev1.PlatformCommandService_UploadOrganizationArtifactClient
+}
+
+func (client organizationArtifactUploadClient) Send(request *controlplanev1.UploadArtifactRequest) error {
+	converted := &controlplanev1.UploadOrganizationArtifactRequest{}
+	switch part := request.GetPart().(type) {
+	case *controlplanev1.UploadArtifactRequest_Metadata:
+		converted.Part = &controlplanev1.UploadOrganizationArtifactRequest_Metadata{Metadata: part.Metadata}
+	case *controlplanev1.UploadArtifactRequest_Chunk:
+		converted.Part = &controlplanev1.UploadOrganizationArtifactRequest_Chunk{Chunk: part.Chunk}
+	case *controlplanev1.UploadArtifactRequest_Commit:
+		converted.Part = &controlplanev1.UploadOrganizationArtifactRequest_Commit{Commit: part.Commit}
+	}
+	return client.stream.Send(converted)
+}
+
+func (client organizationArtifactUploadClient) CloseAndRecv() (*controlplanev1.UploadArtifactResponse, error) {
+	response, err := client.stream.CloseAndRecv()
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.UploadArtifactResponse{Artifact: response.GetArtifact()}, nil
+}
+
+func forwardArtifactBody(reader io.Reader, declaredSize int64, send func([]byte) error) (int64, string, error) {
+	if reader == nil || send == nil || declaredSize < 0 || declaredSize > maximumArtifactBytes {
+		return 0, "", errArtifactContentLengthMismatch
+	}
+	buffer := make([]byte, 64<<10)
+	bounded := io.LimitReader(reader, maximumArtifactBytes+1)
+	digest := sha256.New()
+	var received int64
+	for {
+		count, readErr := bounded.Read(buffer)
+		if count > 0 {
+			received += int64(count)
+			if received > declaredSize || received > maximumArtifactBytes {
+				return received, "", errArtifactContentLengthMismatch
+			}
+			_, _ = digest.Write(buffer[:count])
+			if err := send(append([]byte(nil), buffer[:count]...)); err != nil {
+				return received, "", err
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return received, "", errArtifactBodyRead
+		}
+	}
+	if received != declaredSize {
+		return received, "", errArtifactContentLengthMismatch
+	}
+	return received, hex.EncodeToString(digest.Sum(nil)), nil
 }
 func (server *Server) DownloadArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.DownloadArtifactParams) {
 	purpose := controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_UNSPECIFIED
@@ -662,7 +858,7 @@ func (server *Server) DownloadArtifact(w http.ResponseWriter, r *http.Request, r
 		writeRPCProblem(w, err)
 		return
 	}
-	if len(metadata.GetData()) != 0 || metadata.GetSizeBytes() < 0 || metadata.GetSizeBytes() > 16<<20 {
+	if len(metadata.GetData()) != 0 || metadata.GetSizeBytes() < 0 || metadata.GetSizeBytes() > maximumArtifactBytes {
 		writeLocalProblem(w, http.StatusBadGateway, "UPSTREAM_ARTIFACT_METADATA_INVALID", false)
 		return
 	}
@@ -695,7 +891,7 @@ func (server *Server) DownloadArtifact(w http.ResponseWriter, r *http.Request, r
 			return
 		}
 		written += int64(len(chunk.GetData()))
-		if written > metadata.GetSizeBytes() || written > 16<<20 {
+		if written > metadata.GetSizeBytes() || written > maximumArtifactBytes {
 			return
 		}
 		if len(chunk.GetData()) > 0 {

@@ -32,15 +32,30 @@ func (verifier *fakeOIDCVerifier) VerifyToken(context.Context, string) (oidcauth
 }
 
 type fakeSessionStore struct {
-	claims      session.Claims
-	openErr     error
-	renewCalls  int
-	renewed     session.Claims
-	renewedCode string
+	claims              session.Claims
+	openErr             error
+	issued              session.Claims
+	issuedCode          string
+	issuedCSRF          string
+	issueErr            error
+	elevation           *session.Elevation
+	issueCalls          int
+	elevationIssueCalls int
+	renewCalls          int
+	renewed             session.Claims
+	renewedCode         string
 }
 
 func (store *fakeSessionStore) Issue(string, string, string, uint64, string, time.Time) (session.Claims, string, string, error) {
-	return session.Claims{}, "", "", errors.New("unexpected issue")
+	store.issueCalls++
+	return store.issued, store.issuedCode, store.issuedCSRF, store.issueErr
+
+}
+
+func (store *fakeSessionStore) IssueWithElevation(_ string, _ string, _ string, _ uint64, _ string, _ time.Time, elevation *session.Elevation) (session.Claims, string, string, error) {
+	store.elevationIssueCalls++
+	store.elevation = elevation
+	return store.issued, store.issuedCode, store.issuedCSRF, store.issueErr
 }
 
 func (store *fakeSessionStore) Open(string) (session.Claims, error) {
@@ -58,6 +73,9 @@ type fakeRevocationStore struct {
 	revokeErr     error
 	checked       string
 	revokedRecord string
+	consumeWon    bool
+	consumeErr    error
+	consumed      string
 }
 
 func (store *fakeRevocationStore) Revoke(_ context.Context, sessionID string) error {
@@ -68,6 +86,11 @@ func (store *fakeRevocationStore) Revoke(_ context.Context, sessionID string) er
 func (store *fakeRevocationStore) Revoked(_ context.Context, sessionID string) (bool, error) {
 	store.checked = sessionID
 	return store.revoked, store.revokedErr
+}
+
+func (store *fakeRevocationStore) ConsumeOnce(_ context.Context, sessionID string) (bool, error) {
+	store.consumed = sessionID
+	return store.consumeWon, store.consumeErr
 }
 
 func TestAuthenticationProblemPreservesSigningKeyOutage(t *testing.T) {
@@ -131,7 +154,7 @@ func TestProjectReferenceBinding(t *testing.T) {
 		wantErr   bool
 	}{
 		{name: "HTTP header", method: http.MethodGet, path: "/api/v1/runs", header: projectID, wantBound: true},
-		{name: "run stream uses run eligibility", method: http.MethodGet, path: "/api/v1/runs/run_12345678/stream"},
+		{name: "session stream resolves run eligibility in commands", method: http.MethodGet, path: "/api/v1/session/stream"},
 		{name: "exact project update path", method: http.MethodPut, path: "/api/v1/projects/" + projectID, wantBound: true},
 		{name: "exact project delete path", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, wantBound: true},
 		{name: "matching exact project header", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: projectID, wantBound: true},
@@ -161,21 +184,18 @@ func TestProjectReferenceBinding(t *testing.T) {
 }
 
 func TestRealtimePathClassification(t *testing.T) {
+	if !isRealtimePath("/api/v1/session/stream") {
+		t.Fatal("session stream was not classified as realtime")
+	}
 	for _, path := range []string{
 		"/api/v1/runs/run_12345678/stream",
 		"/api/v1/platform/stream",
-	} {
-		if !isRealtimePath(path) {
-			t.Fatalf("realtime path was not classified: %s", path)
-		}
-	}
-	for _, path := range []string{
+		"/api/v1/session/stream/extra",
 		"/api/v1/runs",
-		"/api/v1/platform/stream/extra",
 		"/api/v1/platform",
 	} {
 		if isRealtimePath(path) {
-			t.Fatalf("ordinary HTTP path was classified as realtime: %s", path)
+			t.Fatalf("ordinary or legacy HTTP path was classified as realtime: %s", path)
 		}
 	}
 }
@@ -246,8 +266,7 @@ func TestSessionRenewalRunsOnlyAfterCompleteSecurityBoundary(t *testing.T) {
 	}
 
 	realtimeRequest := authenticatedRequest(http.MethodGet, csrf)
-	realtimeRequest.SetPathValue("runRef", "run_12345678")
-	realtimeRequest.URL.Path = "/api/v1/runs/run_12345678/stream"
+	realtimeRequest.URL.Path = "/api/v1/session/stream"
 	beforeRealtime := store.renewCalls
 	realtimeResponse := httptest.NewRecorder()
 	security.Middleware(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -341,7 +360,7 @@ func TestRevocationStoreFailureRejectsBrowserSession(t *testing.T) {
 	response := httptest.NewRecorder()
 	called := false
 	security.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })).ServeHTTP(response, request)
-	if called || response.Code != http.StatusUnauthorized || revocations.checked != claims.SessionID {
+	if called || response.Code != http.StatusServiceUnavailable || revocations.checked != claims.SessionID {
 		t.Fatalf("request passed unavailable revocation store: called=%t status=%d", called, response.Code)
 	}
 }
@@ -355,6 +374,134 @@ func TestRevokeSessionPersistsBrowserSessionID(t *testing.T) {
 	}
 	if revocations.revokedRecord != sessionID {
 		t.Fatalf("revoked session = %q, want %q", revocations.revokedRecord, sessionID)
+	}
+}
+
+func TestIssueSessionRequiresFreshAuthenticationOnlyForTypedPurpose(t *testing.T) {
+	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	principal := oidcauth.Principal{
+		Subject: uuid.NewString(), OrganizationID: uuid.NewString(), SessionID: uuid.NewString(),
+		SessionRevision: 4, ExpiresAt: now.Add(time.Hour),
+	}
+	store := &fakeSessionStore{issued: session.Claims{ExpiresAt: now.Add(15 * time.Minute).Unix()}, issuedCode: "encoded", issuedCSRF: strings.Repeat("c", 43)}
+	security := testBoundary(t, &fakeOIDCVerifier{}, store)
+	security.now = func() time.Time { return now }
+
+	if _, _, _, err := security.IssueSession(principal, "bearer", nil); err != nil {
+		t.Fatalf("normal login without auth_time was rejected: %v", err)
+	}
+	if store.issueCalls != 1 || store.elevationIssueCalls != 0 {
+		t.Fatalf("normal login issued elevation: normal=%d elevation=%d", store.issueCalls, store.elevationIssueCalls)
+	}
+
+	purpose := &SessionPurpose{Kind: session.ElevationKindRuntimeSecretReveal, ProjectRef: "project_sales", SecretRef: "secret_main"}
+	for _, test := range []struct {
+		name            string
+		authenticatedAt time.Time
+	}{
+		{name: "missing auth_time"},
+		{name: "stale auth_time", authenticatedAt: now.Add(-freshAuthenticationWindow - time.Second)},
+		{name: "future auth_time", authenticatedAt: now.Add(freshAuthenticationFutureSkew + time.Second)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := principal
+			candidate.AuthenticatedAt = test.authenticatedAt
+			if _, _, _, err := security.IssueSession(candidate, "bearer", purpose); !errors.Is(err, ErrFreshAuthenticationRequired) {
+				t.Fatalf("freshness error = %v", err)
+			}
+		})
+	}
+
+	principal.AuthenticatedAt = now.Add(-30 * time.Second)
+	if _, _, _, err := security.IssueSession(principal, "bearer", purpose); err != nil {
+		t.Fatalf("fresh purpose was rejected: %v", err)
+	}
+	if store.elevationIssueCalls != 1 || store.elevation == nil || store.elevation.ProjectRef != purpose.ProjectRef ||
+		store.elevation.SecretRef != purpose.SecretRef || store.elevation.Kind != purpose.Kind ||
+		store.elevation.ExpiresAt != now.Add(90*time.Second).Unix() {
+		t.Fatalf("issued elevation is not exact: %#v", store.elevation)
+	}
+
+	invalid := *purpose
+	invalid.SecretRef = "bad/ref"
+	if _, _, _, err := security.IssueSession(principal, "bearer", &invalid); !errors.Is(err, ErrSessionPurposeInvalid) {
+		t.Fatalf("invalid purpose error = %v", err)
+	}
+}
+
+func TestRuntimeSecretRevealElevationIsExactAndOneUse(t *testing.T) {
+	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	original := session.Claims{
+		Subject: uuid.NewString(), OrganizationID: uuid.NewString(), OIDCSessionID: uuid.NewString(),
+		SessionRevision: 3, SessionID: uuid.NewString(), Bearer: "bearer", ExpiresAt: now.Add(10 * time.Minute).Unix(),
+		Elevation: &session.Elevation{Kind: session.ElevationKindRuntimeSecretReveal, ProjectRef: "project_sales", SecretRef: "secret_main", ExpiresAt: now.Add(time.Minute).Unix()},
+	}
+	replacement := original
+	replacement.SessionID = uuid.NewString()
+	replacement.Elevation = nil
+	store := &fakeSessionStore{issued: replacement, issuedCode: "replacement-session", issuedCSRF: strings.Repeat("d", 43)}
+	revocations := &fakeRevocationStore{consumeWon: true}
+	security := testBoundaryWithRevocations(t, &fakeOIDCVerifier{}, store, revocations)
+	security.now = func() time.Time { return now }
+	identity := Identity{BrowserSessionID: original.SessionID, Elevation: original.Elevation}
+	ctx := context.WithValue(context.Background(), identityContextKey{}, identity)
+	ctx = context.WithValue(ctx, authenticatedSessionContextKey{}, authenticatedSession{claims: original, bearerExpiry: now.Add(time.Hour)})
+
+	wrongResponse := httptest.NewRecorder()
+	if err := security.ConsumeRuntimeSecretReveal(ctx, wrongResponse, "project_sales", "secret_other"); !errors.Is(err, ErrElevationRequired) {
+		t.Fatalf("wrong target error = %v", err)
+	}
+	if revocations.consumed != "" || store.issueCalls != 0 {
+		t.Fatal("wrong target consumed elevation")
+	}
+
+	revocations.consumeErr = errors.New("NATS unavailable")
+	unavailableResponse := httptest.NewRecorder()
+	if err := security.ConsumeRuntimeSecretReveal(ctx, unavailableResponse, "project_sales", "secret_main"); !errors.Is(err, ErrElevationUnavailable) {
+		t.Fatalf("unavailable store error = %v", err)
+	}
+	if store.issueCalls != 0 || len(unavailableResponse.Header().Values("Set-Cookie")) != 0 {
+		t.Fatal("unavailable store issued replacement session")
+	}
+	revocations.consumeErr = nil
+	revocations.consumed = ""
+
+	response := httptest.NewRecorder()
+	if err := security.ConsumeRuntimeSecretReveal(ctx, response, "project_sales", "secret_main"); err != nil {
+		t.Fatalf("consume exact elevation: %v", err)
+	}
+	if revocations.consumed != original.SessionID || store.issueCalls != 1 || len(response.Header().Values("Set-Cookie")) != 2 {
+		t.Fatalf("consume result is incomplete: consumed=%q issues=%d cookies=%v", revocations.consumed, store.issueCalls, response.Header().Values("Set-Cookie"))
+	}
+
+	revocations.consumeWon = false
+	replayResponse := httptest.NewRecorder()
+	if err := security.ConsumeRuntimeSecretReveal(ctx, replayResponse, "project_sales", "secret_main"); !errors.Is(err, ErrElevationConsumed) {
+		t.Fatalf("replay error = %v", err)
+	}
+	if store.issueCalls != 1 || len(replayResponse.Header().Values("Set-Cookie")) != 0 {
+		t.Fatal("replay created a replacement session")
+	}
+}
+
+func TestExpiredRuntimeSecretRevealElevationIsRejectedBeforeStore(t *testing.T) {
+	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	elevation := &session.Elevation{Kind: session.ElevationKindRuntimeSecretReveal, ProjectRef: "project_sales", SecretRef: "secret_main", ExpiresAt: now.Add(-time.Second).Unix()}
+	revocations := &fakeRevocationStore{consumeWon: true}
+	security := testBoundaryWithRevocations(t, &fakeOIDCVerifier{}, &fakeSessionStore{}, revocations)
+	security.now = func() time.Time { return now }
+	missingContext := context.WithValue(context.Background(), identityContextKey{}, Identity{BrowserSessionID: uuid.NewString()})
+	missingContext = context.WithValue(missingContext, authenticatedSessionContextKey{}, authenticatedSession{})
+	if err := security.ConsumeRuntimeSecretReveal(missingContext, httptest.NewRecorder(), "project_sales", "secret_main"); !errors.Is(err, ErrElevationRequired) {
+		t.Fatalf("missing elevation error = %v", err)
+	}
+	ctx := context.WithValue(context.Background(), identityContextKey{}, Identity{BrowserSessionID: uuid.NewString(), Elevation: elevation})
+	ctx = context.WithValue(ctx, authenticatedSessionContextKey{}, authenticatedSession{})
+	if err := security.ConsumeRuntimeSecretReveal(ctx, httptest.NewRecorder(), "project_sales", "secret_main"); !errors.Is(err, ErrElevationRequired) {
+		t.Fatalf("expired elevation error = %v", err)
+	}
+	if revocations.consumed != "" {
+		t.Fatal("expired elevation reached authoritative store")
 	}
 }
 

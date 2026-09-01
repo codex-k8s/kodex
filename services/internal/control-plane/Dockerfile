@@ -10,14 +10,19 @@ WORKDIR /workspace
 
 COPY libs/go/cache/ libs/go/cache/
 COPY libs/go/controlplaneapi/ libs/go/controlplaneapi/
+COPY libs/go/controlplaneclient/ libs/go/controlplaneclient/
 COPY libs/go/eventing/ libs/go/eventing/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/i18n/ libs/go/i18n/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
+COPY libs/go/integrationpackage/ libs/go/integrationpackage/
 COPY libs/go/integrationgatewayauth/ libs/go/integrationgatewayauth/
+COPY libs/go/objectstorage/ libs/go/objectstorage/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/oidcidentity/ libs/go/oidcidentity/
 COPY libs/go/oidcverifier/ libs/go/oidcverifier/
+COPY libs/go/runtimecontract/ libs/go/runtimecontract/
+COPY libs/go/runtimesecret/ libs/go/runtimesecret/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
 COPY services/internal/control-plane/ services/internal/control-plane/

@@ -4,6 +4,8 @@ INVALID_REQUEST:
   other: Проверьте данные запроса
 UNAUTHENTICATED:
   other: Войдите, чтобы продолжить
+FRESH_AUTHENTICATION_REQUIRED:
+  other: Войдите повторно, чтобы подтвердить это привилегированное действие
 PERMISSION_DENIED:
   other: У вас нет прав на это действие
 NOT_FOUND:
@@ -76,6 +78,20 @@ DEFAULT_RUNTIME_NAME:
   other: Базовая среда
 DEFAULT_PROVIDER_ACCOUNT_NAME:
   other: Основная учётная запись модели
+PROVIDER_ACCOUNT_CREATED:
+  other: Учётная запись модели создана
+PROVIDER_ACCOUNT_UPDATED:
+  other: Учётная запись модели обновлена
+PROVIDER_DEVICE_AUTHORIZATION_STARTED:
+  other: Авторизация учётной записи модели по коду устройства начата
+PROVIDER_ACCOUNT_AUTHORIZED:
+  other: Учётная запись модели авторизована
+PROVIDER_AUTHORIZATION_FAILED:
+  other: Авторизовать учётную запись модели не удалось
+PROVIDER_ACCOUNT_REVOKED:
+  other: Доступ учётной записи модели отозван
+PROVIDER_CREDENTIAL_REFRESH_COMMITTED:
+  other: Обновлённые учётные данные модели применены
 INSTALLATION_OWNER_NAME:
   other: Владелец установки
 OIDC_USER_NAME:
@@ -106,6 +122,10 @@ ROLE_IMAGE_RECIPE_CHANGED:
   other: Конфигурация среды роли обновлена
 ROLE_IMAGE_BUILD_COMPLETED:
   other: Образ среды роли собран
+ROLE_IMAGE_PROMOTION_REQUESTED:
+  other: Продвижение образа среды роли запрошено
+ROLE_IMAGE_PROMOTED:
+  other: Образ среды роли продвинут
 ONBOARDING_COMPLETED:
   other: Первичная настройка завершена
 PROJECT_CREATED:
@@ -144,6 +164,10 @@ SCHEDULE_CREATED:
   other: Расписание создано
 SCHEDULE_UPDATED:
   other: Расписание обновлено
+SCHEDULE_ARCHIVED:
+  other: Расписание архивировано
+SCHEDULE_DELETED:
+  other: Расписание удалено
 SCHEDULED_RUN_TASK:
   other: Запуск по расписанию
 SCHEDULE_OCCURRENCE_MATERIALIZED:
@@ -154,6 +178,8 @@ INTEGRATION_CONNECTION_CREATED:
   other: Подключение интеграции создано
 INTEGRATION_CONNECTION_UPDATED:
   other: Подключение интеграции обновлено
+INTEGRATION_CONNECTION_DELETED:
+  other: Подключение интеграции удалено
 INTEGRATION_GRANT_UPDATED:
   other: Разрешение интеграции обновлено
 INTEGRATION_CONNECTION_TEST_COMPLETED:
@@ -186,6 +212,8 @@ NEW_ASSISTANT_CONVERSATION:
   other: Новый разговор
 ASSISTANT_CONVERSATION_CREATED:
   other: Разговор с помощником создан
+ASSISTANT_CONVERSATION_TITLE_UPDATED:
+  other: Название разговора обновлено
 ASSISTANT_TURN_QUEUED:
   other: Команда помощнику поставлена в очередь
 ASSISTANT_TURN_ACCEPTED:
@@ -194,6 +222,18 @@ ASSISTANT_PLAN_APPLIED:
   other: План помощника применён
 ASSISTANT_PLAN_PROPOSED:
   other: Помощник подготовил план изменений
+ASSISTANT_PLAN_DRAFT_UPDATED:
+  other: Черновик плана обновлён
+ASSISTANT_PLAN_VALIDATED:
+  other: План проверен
+ASSISTANT_PLAN_REJECTED:
+  other: План отклонён
+ASSISTANT_PLAN_CONFLICT:
+  other: План устарел из-за изменения ресурсов
+RUN_METADATA_UPDATED:
+  other: Сведения о запуске обновлены
+RUNTIME_TOOL_CALL_RECORDED:
+  other: Вызов инструмента записан
 ASSISTANT_INSTRUCTIONS_UPDATED:
   other: Дополнение к инструкциям помощника обновлено
 ASSISTANT_RECOVERY_REQUESTED:
@@ -208,6 +248,10 @@ SYSTEM_ASSISTANT_HEARTBEAT_RECORDED:
   other: Пульс среды выполнения системного помощника зафиксирован
 SYSTEM_ASSISTANT_CORE_PROMPT_UPDATED:
   other: Основные инструкции системного помощника обновлены
+SYSTEM_ASSISTANT_PROVIDER_POLICY_UPDATED:
+  other: Набор учётных записей системного помощника обновлён
+SYSTEM_ASSISTANT_RUNTIME_ENVIRONMENT_UPDATED:
+  other: Рабочее окружение системного помощника обновлено
 SYSTEM_ASSISTANT_LABEL:
   other: Системный · неудаляемый
 ARTIFACT_AVAILABLE:
@@ -242,6 +286,14 @@ INTEGRATION_ACTION_COMPLETED:
   other: Действие интеграции завершено
 INTEGRATION_INVOCATION_COMPLETED:
   other: Вызов интеграции завершён
+INTEGRATION_EFFECT_GATE_NODE_NAME:
+  other: Согласование действия интеграции
+INTEGRATION_EFFECT_GATE_TITLE:
+  other: Согласуйте действие интеграции
+INTEGRATION_EFFECT_GATE_PROMPT:
+  other: Проверьте точное действие и область ресурсов перед выполнением
+INTEGRATION_EFFECT_OWNER_DECISION_REQUIRED:
+  other: Действие интеграции требует вашего решения
 OWNER_DECISION_REQUIRED:
   other: Требуется решение человека
 OWNER_GATE_CANCELLED:
@@ -374,3 +426,281 @@ INTEGRATION_FIELD_CHANNEL_LABEL:
   other: Канал
 INTEGRATION_FIELD_CHANNEL_HELP:
   other: Системное имя канала без внутреннего ID
+AGENT_CONFIG_OVERLAY_CHANGED:
+  other: Конфигурация агента изменена
+AGENT_RUNTIME_CONFIGURATION_PUBLISHED:
+  other: Runtime-конфигурация агента опубликована
+AGENT_RUNTIME_ENVIRONMENT_BOUND:
+  other: Runtime-окружение агента привязано
+CONFIG_OVERLAY_INVALID_OR_PROTECTED:
+  other: Overlay содержит недопустимые или защищённые параметры
+DEFAULT_RUNTIME_ENVIRONMENT:
+  other: Окружение по умолчанию
+DEFAULT_RUNTIME_ENVIRONMENT_DESCRIPTION:
+  other: Безопасное runtime-окружение агента по умолчанию
+RUNTIME_ENVIRONMENT_CREATED:
+  other: Runtime-окружение создано
+RUNTIME_ENVIRONMENT_PUBLISHED:
+  other: Runtime-окружение опубликовано
+RUNTIME_ENVIRONMENT_ENABLED:
+  other: Runtime-окружение включено
+RUNTIME_ENVIRONMENT_DISABLED:
+  other: Runtime-окружение отключено
+RUNTIME_ENVIRONMENT_DELETED:
+  other: Runtime-окружение удалено
+ACCESS_ROLE_CHANGED:
+  other: Роль доступа обновлена
+ACCESS_BINDING_CHANGED:
+  other: Назначение доступа обновлено
+SYSTEM_ROLE_BOOTSTRAP:
+  other: Начальная версия системной роли
+SYSTEM_ROLE_OWNER:
+  other: Владелец
+SYSTEM_ROLE_OWNER_DESCRIPTION:
+  other: Полные полномочия прикладной политики
+SYSTEM_ROLE_ADMINISTRATOR:
+  other: Администратор
+SYSTEM_ROLE_ADMINISTRATOR_DESCRIPTION:
+  other: Полные полномочия администрирования приложения
+SYSTEM_ROLE_OPERATOR:
+  other: Оператор
+SYSTEM_ROLE_OPERATOR_DESCRIPTION:
+  other: Управляет назначенными проектами и ресурсами
+SYSTEM_ROLE_MEMBER:
+  other: Участник
+SYSTEM_ROLE_MEMBER_DESCRIPTION:
+  other: Использует назначенные проекты и ресурсы
+SYSTEM_ROLE_AUDITOR:
+  other: Аудитор
+SYSTEM_ROLE_AUDITOR_DESCRIPTION:
+  other: Читает назначенные ресурсы, политику доступа и аудит
+PERMISSION_ORGANIZATION_VIEW_NAME:
+  other: Просмотр организации
+PERMISSION_ORGANIZATION_VIEW_DESCRIPTION:
+  other: Чтение сведений об организации
+PERMISSION_ORGANIZATION_MANAGE_NAME:
+  other: Управление организацией
+PERMISSION_ORGANIZATION_MANAGE_DESCRIPTION:
+  other: Изменение настроек организации
+PERMISSION_ACCESS_VIEW_NAME:
+  other: Просмотр политики доступа
+PERMISSION_ACCESS_VIEW_DESCRIPTION:
+  other: Чтение ролей, назначений, субъектов и эффективного доступа
+PERMISSION_ACCESS_MANAGE_NAME:
+  other: Управление политикой доступа
+PERMISSION_ACCESS_MANAGE_DESCRIPTION:
+  other: Создание версий ролей и изменение назначений
+PERMISSION_PROJECT_CREATE_NAME:
+  other: Создание проектов
+PERMISSION_PROJECT_CREATE_DESCRIPTION:
+  other: Создание проекта в организации
+PERMISSION_PROJECT_VIEW_NAME:
+  other: Просмотр проектов
+PERMISSION_PROJECT_VIEW_DESCRIPTION:
+  other: Чтение назначенных проектов
+PERMISSION_PROJECT_MANAGE_NAME:
+  other: Управление проектами
+PERMISSION_PROJECT_MANAGE_DESCRIPTION:
+  other: Изменение назначенных проектов
+PERMISSION_AGENT_VIEW_NAME:
+  other: Просмотр ИИ-сотрудников
+PERMISSION_AGENT_VIEW_DESCRIPTION:
+  other: Чтение назначенных ИИ-сотрудников
+PERMISSION_AGENT_MANAGE_NAME:
+  other: Управление ИИ-сотрудниками
+PERMISSION_AGENT_MANAGE_DESCRIPTION:
+  other: Изменение назначенных ИИ-сотрудников
+PERMISSION_AGENT_LAUNCH_NAME:
+  other: Запуск ИИ-сотрудников
+PERMISSION_AGENT_LAUNCH_DESCRIPTION:
+  other: Запуск задач назначенных ИИ-сотрудников
+PERMISSION_WORKFLOW_VIEW_NAME:
+  other: Просмотр workflow
+PERMISSION_WORKFLOW_VIEW_DESCRIPTION:
+  other: Чтение назначенных workflow
+PERMISSION_WORKFLOW_MANAGE_NAME:
+  other: Управление workflow
+PERMISSION_WORKFLOW_MANAGE_DESCRIPTION:
+  other: Изменение назначенных workflow
+PERMISSION_WORKFLOW_LAUNCH_NAME:
+  other: Запуск workflow
+PERMISSION_WORKFLOW_LAUNCH_DESCRIPTION:
+  other: Запуск задач назначенных workflow
+PERMISSION_RUN_VIEW_NAME:
+  other: Просмотр запусков
+PERMISSION_RUN_VIEW_DESCRIPTION:
+  other: Чтение назначенных запусков
+PERMISSION_RUN_CANCEL_OWN_NAME:
+  other: Отмена своих запусков
+PERMISSION_RUN_CANCEL_OWN_DESCRIPTION:
+  other: Отмена запусков, созданных тем же субъектом
+PERMISSION_RUN_CANCEL_ANY_NAME:
+  other: Отмена любого назначенного запуска
+PERMISSION_RUN_CANCEL_ANY_DESCRIPTION:
+  other: Отмена любого запуска в назначенной области
+PERMISSION_GATE_RESOLVE_NAME:
+  other: Решение owner gate
+PERMISSION_GATE_RESOLVE_DESCRIPTION:
+  other: Отправка решения для назначенного owner gate
+PERMISSION_ARTIFACT_VIEW_NAME:
+  other: Просмотр артефактов
+PERMISSION_ARTIFACT_VIEW_DESCRIPTION:
+  other: Чтение метаданных назначенных артефактов
+PERMISSION_ARTIFACT_DOWNLOAD_NAME:
+  other: Скачивание артефактов
+PERMISSION_ARTIFACT_DOWNLOAD_DESCRIPTION:
+  other: Скачивание назначенных артефактов
+PERMISSION_ARTIFACT_MANAGE_NAME:
+  other: Управление артефактами
+PERMISSION_ARTIFACT_MANAGE_DESCRIPTION:
+  other: Изменение назначений артефактов
+PERMISSION_SCHEDULE_VIEW_NAME:
+  other: Просмотр расписаний
+PERMISSION_SCHEDULE_VIEW_DESCRIPTION:
+  other: Чтение назначенных расписаний
+PERMISSION_SCHEDULE_MANAGE_NAME:
+  other: Управление расписаниями
+PERMISSION_SCHEDULE_MANAGE_DESCRIPTION:
+  other: Изменение назначенных расписаний
+PERMISSION_INTEGRATION_VIEW_NAME:
+  other: Просмотр интеграций
+PERMISSION_INTEGRATION_VIEW_DESCRIPTION:
+  other: Чтение назначенных подключений интеграций
+PERMISSION_INTEGRATION_MANAGE_NAME:
+  other: Управление интеграциями
+PERMISSION_INTEGRATION_MANAGE_DESCRIPTION:
+  other: Изменение назначенных подключений интеграций
+PERMISSION_AUDIT_VIEW_NAME:
+  other: Просмотр аудита
+PERMISSION_AUDIT_VIEW_DESCRIPTION:
+  other: Чтение событий аудита в назначенной области
+SESSION_ARCHIVE_TASK_SUCCEEDED:
+  other: Задача архива сессии выполнена
+SESSION_ARCHIVE_TASK_READY:
+  other: Задача архива сессии запланирована для повтора
+SESSION_ARCHIVE_TASK_DEAD_LETTER:
+  other: Задача архива сессии остановлена после исчерпания попыток
+ARTIFACT_DELETED:
+  other: Файл перемещён в корзину
+ARTIFACT_RESTORED:
+  other: Файл восстановлен из корзины
+ARTIFACT_PURGED:
+  other: Файл окончательно удалён
+PERMISSION_ENVIRONMENT_PRIVILEGED_MANAGE_NAME:
+  other: Привилегированное управление окружением
+PERMISSION_ENVIRONMENT_PRIVILEGED_MANAGE_DESCRIPTION:
+  other: Настройка Kubernetes-доступа среды выполнения в пределах её собственного Pod
+PERMISSION_SECRET_VIEW_NAME:
+  other: Просмотр секретов
+PERMISSION_SECRET_VIEW_DESCRIPTION:
+  other: Чтение безопасных масок и метаданных назначенных секретов
+PERMISSION_SECRET_CREATE_NAME:
+  other: Создание секретов
+PERMISSION_SECRET_CREATE_DESCRIPTION:
+  other: Создание секретов в назначенной области
+PERMISSION_SECRET_ROTATE_NAME:
+  other: Ротация секретов
+PERMISSION_SECRET_ROTATE_DESCRIPTION:
+  other: Создание новой версии назначенного секрета
+PERMISSION_SECRET_REVEAL_NAME:
+  other: Раскрытие секретов
+PERMISSION_SECRET_REVEAL_DESCRIPTION:
+  other: Однократное получение полного значения назначенного секрета с аудитом
+PERMISSION_SECRET_REVOKE_NAME:
+  other: Отзыв секретов
+PERMISSION_SECRET_REVOKE_DESCRIPTION:
+  other: Закрытие дальнейшего использования назначенного секрета
+RUNTIME_SECRET_CREATED:
+  other: Runtime-секрет создан
+RUNTIME_SECRET_ROTATED:
+  other: Runtime-секрет ротирован
+RUNTIME_SECRET_REVEALED:
+  other: Значение runtime-секрета раскрыто
+RUNTIME_SECRET_REVOKED:
+  other: Runtime-секрет отозван
+RUNTIME_SECRET_OPERATION_FAILED:
+  other: Операция с runtime-секретом не выполнена
+SYSTEM_BASE_ROLE_IMAGE:
+  other: Базовый системный образ роли
+SYSTEM_ROLE_RUNTIME_POLICY:
+  other: Системная политика среды выполнения
+SYSTEM_ROLE_RUNTIME_SECRETS:
+  other: Системные секреты среды выполнения
+ATTACHMENT_SET_DRAFT_CREATED:
+  other: Черновик набора вложений создан
+ATTACHMENT_SET_DRAFT_REVISED:
+  other: Черновик набора вложений обновлён
+ATTACHMENT_SET_FINALIZED:
+  other: Набор вложений зафиксирован
+PERMISSION_ARTIFACT_BIND_NAME:
+  other: Привязка артефактов
+PERMISSION_ARTIFACT_BIND_DESCRIPTION:
+  other: Привязка назначенных артефактов к разрешённым объектам
+PERMISSION_ARTIFACT_UPLOAD_NAME:
+  other: Загрузка артефактов
+PERMISSION_ARTIFACT_UPLOAD_DESCRIPTION:
+  other: Загрузка артефактов в разрешённую область
+PERMISSION_AGENT_AVATAR_MANAGE_NAME:
+  other: Управление аватаром ИИ-сотрудника
+PERMISSION_AGENT_AVATAR_MANAGE_DESCRIPTION:
+  other: Установка и удаление готового image artifact для назначенного ИИ-сотрудника
+PERMISSION_PROVIDER_ACCOUNT_VIEW_NAME:
+  other: Просмотр provider accounts
+PERMISSION_PROVIDER_ACCOUNT_VIEW_DESCRIPTION:
+  other: Просмотр безопасных описателей и состояний provider accounts без credential values
+PERMISSION_PROVIDER_ACCOUNT_MANAGE_NAME:
+  other: Управление provider accounts
+PERMISSION_PROVIDER_ACCOUNT_MANAGE_DESCRIPTION:
+  other: Создание, включение и отключение назначенных provider accounts
+PERMISSION_PROVIDER_ACCOUNT_AUTHORIZE_NAME:
+  other: Авторизация provider accounts
+PERMISSION_PROVIDER_ACCOUNT_AUTHORIZE_DESCRIPTION:
+  other: Запуск и обновление авторизации назначенных provider accounts
+PERMISSION_PROVIDER_ACCOUNT_REVOKE_NAME:
+  other: Отзыв provider accounts
+PERMISSION_PROVIDER_ACCOUNT_REVOKE_DESCRIPTION:
+  other: Отзыв активной авторизации назначенных provider accounts
+PERMISSION_RUNTIME_ENVIRONMENT_DISABLE_NAME:
+  other: Отключение runtime environment
+PERMISSION_RUNTIME_ENVIRONMENT_DISABLE_DESCRIPTION:
+  other: Отключение назначенного runtime environment после проверки использования
+PERMISSION_RUNTIME_ENVIRONMENT_DELETE_NAME:
+  other: Удаление runtime environment
+PERMISSION_RUNTIME_ENVIRONMENT_DELETE_DESCRIPTION:
+  other: Удаление отключённого runtime environment без активных привязок
+PERMISSION_ARTIFACT_DELETE_NAME:
+  other: Удаление артефактов
+PERMISSION_ARTIFACT_DELETE_DESCRIPTION:
+  other: Перемещение назначенных артефактов в корзину
+PERMISSION_ARTIFACT_RESTORE_NAME:
+  other: Восстановление артефактов
+PERMISSION_ARTIFACT_RESTORE_DESCRIPTION:
+  other: Восстановление назначенных артефактов из корзины
+PERMISSION_ARTIFACT_PURGE_NAME:
+  other: Окончательное удаление артефактов
+PERMISSION_ARTIFACT_PURGE_DESCRIPTION:
+  other: Безвозвратное удаление назначенных артефактов
+PERMISSION_IMAGE_BUILD_NAME:
+  other: Сборка образов ролей
+PERMISSION_IMAGE_BUILD_DESCRIPTION:
+  other: Запуск сборки назначенных образов ролей
+PERMISSION_IMAGE_PROMOTE_NAME:
+  other: Публикация образов ролей
+PERMISSION_IMAGE_PROMOTE_DESCRIPTION:
+  other: Публикация проверенных версий назначенных образов ролей
+PERMISSION_PROMPT_FULL_VIEW_NAME:
+  other: Просмотр полных промптов
+PERMISSION_PROMPT_FULL_VIEW_DESCRIPTION:
+  other: Чтение полностью материализованных промптов назначенных запусков
+PERMISSION_RUN_CANCEL_NAME:
+  other: Отмена запусков
+PERMISSION_RUN_CANCEL_DESCRIPTION:
+  other: Отмена назначенных запусков в разрешённой области
+PERMISSION_SESSION_CANCEL_NAME:
+  other: Отмена сессий
+PERMISSION_SESSION_CANCEL_DESCRIPTION:
+  other: Отмена назначенных сессий в разрешённой области
+SYSTEM_ROLE_EXACT_SENSITIVE_ACCESS:
+  other: Системные точные полномочия для чувствительных операций
+SYSTEM_ROLE_MVP_BACKEND_LIFECYCLES:
+  other: Системные полномочия продуктовых backend lifecycle

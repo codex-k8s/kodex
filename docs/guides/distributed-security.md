@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.7
-updated: 2026-08-26
+version: 1.4.8
+updated: 2026-08-30
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -147,6 +147,17 @@ Client adapter явно собирает все принятые слои:
 3. обязательный application credential;
 4. точный audience, caller, actor class, полный метод и permissions;
 5. correlation, expiry и replay state, если они входят в policy.
+
+Отказ workload-local issuer/resolver классифицируется отдельно от отказа в
+аутентификации. `PermissionDenied` и `Unauthenticated` закрыто отклоняются без
+повтора. `Canceled`, `DeadlineExceeded` или `Unavailable` от authority-
+зависимости при ещё живом контексте вызывающего запроса являются временной
+недоступностью: client adapter может выполнить ровно один ограниченный по
+времени повтор получения proof до открытия business RPC. Исчерпанный контекст
+вызывающего запроса не повторяется. Такой отказ gateway возвращает как
+retryable `503 UNAVAILABLE`, а не как `401`; реальная отмена входящего запроса
+остаётся отдельным `499 CANCELLED`. После открытия business RPC скрытый повтор
+команды запрещён.
 
 Credential не передается по незашифрованному соединению. Для gRPC
 `PerRPCCredentials` требует transport security. Kubernetes readiness workload

@@ -4,11 +4,14 @@ title: Runtime-controller и role Pod
 type: architecture
 status: approved
 owner: architect
-version: 1.0.3
-updated: 2026-08-23
+version: 1.3.0
+updated: 2026-08-30
 ---
 
 # Runtime-controller и role Pod
+
+Документ закрепляет принятые решения `D1-A`-`D3-A`, `D4-B` и
+`D5-A`-`D8-A` без совместимости с прежней моделью прототипа.
 
 ## Граница ответственности
 
@@ -20,23 +23,73 @@ callback route или Human Gate.
 Control-plane выдаёт immutable `RuntimeExecution` с exact:
 
 - organization/project/agent/session/turn/run/node/attempt refs;
-- RuntimeRevision version и SHA-256;
-- promoted role image `repository@sha256` и runtime ABI digest;
+- `RuntimeRevision` version и SHA-256;
+- runtime configuration, provider policy, published overlay, Agent binding и
+  instruction-template refs/versions/SHA-256;
+- immutable `RuntimeEnvironmentRevision` и promoted role image
+  `repository@sha256` с runtime ABI digest;
+- non-secret environment values, exact Secret descriptors, разрешённый набор
+  tools, resources, volumes, network policy и scoped RBAC digests;
 - input/result bounds, capabilities и credential bindings;
 - claim generation, fence и expiry.
 
 Caller-provided owner/root/parent, role name, prompt и external conversation IDs
 не используются как authority.
 
+## RuntimeRevision перед каждым turn
+
+Перед каждым новым turn, retry и continuation control-plane создаёт свежую
+immutable `RuntimeRevision`. Она не копируется из предыдущего execution и не
+меняется после выдачи claim. В revision входят точные опубликованные версии и
+дайджесты Agent, instruction template, typed `config.toml` overlay, provider
+policy, `RuntimeEnvironmentRevision`, promoted image, Secret grants, tool
+manifest, integration/MCP bindings, resources, volumes, network и scoped RBAC.
+
+Изменение образа, окружения, секрета, набора инструментов, конфигурации или
+полномочий не мутирует уже начатый turn. Следующий turn той же Session получает
+новую `RuntimeRevision`, а прежняя остаётся read-only частью lineage. Если хотя
+бы одна ссылка устарела, отозвана, не опубликована, не совпадает по версии или
+дайджесту либо больше не разрешена actor-у, materialization закрыто отклоняется.
+
+Эффективные runtime-полномочия являются пересечением полномочий actor-а,
+опубликованного environment profile и platform admission policy. Поле запроса,
+пользовательский Dockerfile, env value, prompt template или имя инструмента не
+могут расширить это пересечение.
+
 ## Обычный turn
+
+### Installation runtime namespace
+
+Установка использует ровно два namespace с разными назначениями:
+
+- `kodex-system` содержит control-plane, runtime-controller, secret-broker и
+  остальные управляющие сервисы;
+- `kodex-runtime` содержит agent Pods, session PVC, execution tickets,
+  provider credential projections и versioned runtime Secrets.
+
+Namespace-per-Project не используется. Project является логической tenant и
+authority-границей в PostgreSQL и `RuntimeRevision`; его ref не выбирает
+Kubernetes namespace. Все runtime-объекты дополнительно связываются с exact
+Project, Session, Turn, attempt и revision через server-owned metadata и
+admission policy. Это не даёт одному Project namespace-wide полномочий и не
+превращает имя Project в security boundary.
+
+Leader-election Lease runtime-controller остаётся в `kodex-system`. ServiceAccount
+runtime-controller и secret-broker не получают Role над Secrets `kodex-system`:
+cross-namespace RoleBinding выдаёт им только необходимые verbs в
+`kodex-runtime`. `agent-runner` ServiceAccount существует только в
+`kodex-runtime`, не монтирует Kubernetes token и не получает RoleBinding.
 
 Каждый turn, retry и continuation создаёт новый execution-scoped Pod из exact
 promoted role image. Role image содержит собственное окружение, пакеты,
-инструменты и ПО конкретной роли. Supply chain после недоверенного installation
-step добавляет защищённые `kodex-init` и `kodex-agent-runner` из
-trusted base и подтверждает runtime ABI перед promotion.
+инструменты и ПО конкретной роли. Пользователь редактирует полный Dockerfile,
+но supply chain собирает его только вместе с неизменяемым platform-owned final
+wrapper: после недоверенных пользовательских стадий добавляет защищённые
+`kodex-init` и `kodex-agent-runner` из trusted base, назначает обязательный
+container contract и подтверждает runtime ABI перед promotion. Запуск напрямую
+из пользовательской стадии или обход final wrapper запрещены.
 
-Pod использует отдельный ServiceAccount, immutable ConfigMap/input, bounded
+Pod использует отдельный ServiceAccount, immutable Secret input, bounded
 workspace и exact Secret projections. Он не получает namespace-wide access,
 control-plane database DSN, integration/provider master credentials, registry
 push/admin credential или external channel token.
@@ -46,8 +99,142 @@ execution-scoped opaque ticket в отдельном Secret и materialize-ит 
 `agent-runner` не claim-ит Turn повторно: он подтверждает уже выданную attempt
 через exact mTLS callback + ticket, запускает provider runtime, передаёт bounded
 progress, обслуживает разрешённые MCP servers/tools и завершает attempt через
-typed RPC. Provider process работает отдельным UID без Kubernetes token и
-authority credential.
+typed RPC. Provider process работает отдельным UID без Kubernetes token,
+execution ticket, mTLS private key и общих platform credentials.
+
+## Ротация managed OAuth credential
+
+Codex app-server может атомарно переписать свой file-backed `auth.json` после
+успешного OAuth refresh. Provider-sidecar после каждого provider turn сравнивает
+точный SHA-256 файла с credential digest из `RuntimeRevision`. Неизменившийся
+файл удаляется вместе с execution workspace. Изменившийся snapshot до удаления
+передается по закрытому UDS отдельному `provider-credential-relay`, который
+вызывает bounded callback
+`/v1/executions/{lease}/provider-credential-refresh`.
+
+Provider и relay делят только отдельный socket `emptyDir`. Role runtime этот
+volume не монтирует. Relay работает отдельным UID, проверяет peer credentials и
+получает только execution ticket и callback mTLS identity; он не получает
+provider Secret, workspace, MCP authority или Kubernetes token. Provider не
+получает callback credentials, поэтому model-controlled shell или tool не может
+использовать их напрямую.
+
+Runtime-controller принимает callback только по exact relay mTLS client
+identity, ticket, lease, fence, generation и runtime revision digest. Он повторно читает
+закрепленную прежнюю immutable Secret, сверяет UID, resource version и SHA-256,
+разбирает старый и новый managed OAuth snapshot и требует совпадения non-empty
+provider account ID. API key и внешняя подмена логической учетной записи через
+этот path запрещены.
+
+Новый snapshot материализуется как deterministic immutable Secret в
+`kodex-runtime`. После create/get readback runtime-controller передает
+`CommitProviderCredentialRefresh` только metadata Secret и прежней revision.
+Control-plane под блокировкой provider account проверяет текущий lease и
+compare-and-swap, добавляет неизменяемую credential revision и атомарно
+переключает account current revision. Повтор exact callback idempotent;
+устаревшая попытка и несовпадающая Secret закрыто отклоняются.
+
+Rotating OAuth account допускает один активный runtime lease. Проверка
+capacity выполняется в control-plane под row lock перед созданием каждой
+`RuntimeRevision`, поэтому несколько controller replicas и несколько
+кандидатов одного claim не обходят ограничение. API-key account использует
+отдельный bounded concurrency limit. Secret value никогда не проходит через
+control-plane, Role runtime, browser, event, audit или лог.
+
+Wire contract `kodex.agent-runner-input.v6` содержит non-secret environment
+values и только Secret descriptors. Для каждого descriptor runtime-controller
+читает exact immutable source Secret, сверяет name/key, UID,
+`resourceVersion`, UTF-8/size и SHA-256, затем копирует проверенные байты в
+immutable execution ticket под непрозрачным ключом `environment-<hash>`.
+`runtime.json` сохраняет descriptor, но не value. Только `provider-runtime`
+получает `env.secretKeyRef` на exact execution ticket/key; `role-runtime` не
+получает Secret projection. Любой stale UID/resourceVersion, отсутствующий key
+или digest mismatch закрывает materialization до создания Pod.
+
+## Runtime Environment и инструменты
+
+`RuntimeEnvironmentRevision` является immutable snapshot и pin-ит точный
+promoted image `repository@sha256`; mutable tag, `latest` и автоматический
+переход на новую image revision запрещены. Несколько окружений могут ссылаться
+на один digest. Обновление Dockerfile создаёт новую image revision, а перевод
+окружения на неё выполняется отдельной versioned операцией.
+
+Окружение не устанавливает ПО. Оно определяет только:
+
+- обычные process env values и exact versioned Secret references;
+- поднабор инструментов из доказанного image tool manifest и их безопасные
+  пользовательские описания;
+- requests/limits, разрешённые volume kinds и mount policy;
+- типизированные egress/network profiles;
+- workload identity и scoped Kubernetes RBAC profile в пределах authority
+  actor-а и admission policy платформы.
+
+Raw Kubernetes `Role`, `RoleBinding`, `NetworkPolicy`, Pod spec и произвольный
+ServiceAccount не являются полями окружения. Control-plane materialize-ит
+типизированные profiles в exact resources и сохраняет их canonical digests в
+`RuntimeRevision`.
+
+Создание или публикация окружения с Kubernetes access является privileged
+операцией. Помимо exact `environment.privileged.manage` для Project либо
+конкретного `RuntimeEnvironment`, control-plane требует свежий OIDC `auth_time`.
+Истёкшее окно возвращает отдельный `FRESH_AUTHENTICATION_REQUIRED`, не завершает
+обычную browser session и не выполняет команду автоматически: Control Center
+сохраняет bounded черновик, проводит OIDC re-authentication, восстанавливает
+форму и ждёт повторного явного подтверждения пользователя.
+
+Image build для каждого инструмента фиксирует `name`, canonical command,
+executable path, version/probe и result digest в подписанном tool manifest.
+Окружение может выбрать только элементы этого manifest. Перед запуском provider
+process `kodex-init` повторяет bounded executable/readiness probes уже в
+materialized container. Отсутствие executable, несовпавшая version/probe или
+инструмент вне разрешённого набора закрыто завершают attempt до обработки
+пользовательского prompt. В материализованный prompt попадает только этот
+проверенный разрешённый поднабор.
+
+## Secret-broker boundary
+
+Control-center, browser и основной control-plane не получают Kubernetes
+credentials для записи Secret. Специализированный `secret-broker` с минимальным
+namespace-scoped ServiceAccount выполняет create/rotate/revoke и создаёт
+versioned immutable Kubernetes Secret только в `kodex-runtime`. Его
+ServiceAccount находится в `kodex-system`, но cross-namespace RoleBinding не
+даёт читать или менять служебные Secrets control namespace. PostgreSQL хранит
+только metadata:
+scope, owner, type, Kubernetes reference, version, rotation state, timestamps и
+безопасный `display_hint`; plaintext и обратимо зашифрованная копия там не
+хранятся.
+
+Обычные list/get, browser stream, audit, domain events, logs и cache никогда не
+содержат значение. `display_hint` формируется только для строковых значений:
+суммарно не более 15 процентов исходной длины и не более 12 символов; короткие,
+binary и structured secrets не получают фрагментов значения.
+
+Повторное раскрытие реализует принятый D4-B flow: отдельное exact permission,
+свежая OIDC re-authentication и одноразовая короткоживущая reveal authorization.
+Значение возвращает непосредственно `secret-broker` в `no-store` response,
+который нельзя повторить, кэшировать или получить через resource API. Audit
+фиксирует actor, secret/version, основание и исход reveal без значения.
+
+Workload не использует reveal flow. Runtime-controller получает только
+разрешённый `RuntimeRevision` descriptor, читает exact immutable source Secret и
+копирует значение в execution-scoped ticket описанным выше способом. Отзыв или
+rotation закрывает новые turns; уже выданная revision не становится источником
+для следующего execution.
+
+Agent-runner не объединяет TOML как текст. Он повторно разбирает published
+overlay strict parser-ом и кодирует один typed `config.toml`: model,
+approval/sandbox, permissions, auth store, MCP и shell boundary назначает
+сервер; overlay заполняет только закрытый non-authority allowlist; environment
+set управляет только разрешёнными process environment names. Ни overlay, ни
+environment set не могут переопределить server-owned поля.
+
+Instruction template обрабатывается ограниченным Go `text/template` с
+типизированными namespaces и закрытым allowlist функций. Поддерживается `range`
+для подтверждённого списка tools; доступ к filesystem, process environment,
+network, reflection и произвольным функциям отсутствует. Publish требует parse,
+type validation и preview на безопасных descriptors. Рендер использует только
+значения, закреплённые в текущей `RuntimeRevision`; Secret values в template
+catalog и prompt не передаются.
 
 Terminal Pod не переиспользуется для следующего turn. Retry получает новую
 attempt, RuntimeRevision, claim, credentials и Pod; прежний execution остаётся
@@ -113,16 +300,56 @@ server policy. Controller cleanup не определяет terminal Run сам�
 
 ## Network и admission
 
-Base deny-all. Role Pod получает DNS, exact provider egress proxy, exact MCP
+Base deny-all применяется отдельно в `kodex-system` и `kodex-runtime`. Role Pod
+получает DNS, exact provider egress proxy, exact MCP
 service и только разрешённый project access profile. Admission проверяет exact
 image digest, runtime ABI, container layout, ServiceAccount, volumes, commands,
-resources, immutable input binding и execution ticket Secret. Mutable image, extra container, broad token,
-host access и privileged fallback запрещены.
+resources, immutable input binding и execution ticket Secret. Admission также
+требует exact revision/config/environment/tool/network/RBAC digests, запрещает
+`stringData` и лишние ticket keys, а Secret projections разрешает только из
+этого ticket в `provider-runtime`. Mutable image, extra container, raw
+user-supplied Kubernetes policy, broad token, host access и privileged fallback
+запрещены.
+
+Policy выбирает все создаваемые runtime-controller объекты по проверенной
+ServiceAccount identity и namespace, а обязательные labels проверяет внутри
+правил: отсутствие label не может отключить admission. Kubernetes API egress
+сверяется с installation-owned `ConfigMap` parameter и exact `/32`; отсутствие
+параметра закрывает materialization. Startup reconciliation постранично
+перечисляет execution Pods, tickets, ServiceAccounts, Roles, RoleBindings и
+NetworkPolicies и удаляет сироты, не принадлежащие активной попытке текущего
+controller generation.
+
+Staging registry принимает закрытый набор отдельных scanner, signer,
+admission и promotion identities с независимыми mTLS и application
+credentials. Один общий пароль между фазами запрещён. Admission Job не
+повторяет Pod внутри Kubernetes Job: после terminal failure owner-controller
+закрывает текущий run, удаляет его workspace и только затем создаёт новый
+полный run с новым поколением после bounded backoff.
+
+Прежние role images, mutable environment records, старый runner input,
+неверсионированные Secret bindings и fallback на старый Pod contract не
+поддерживаются и не materialize-ятся. Миграционный dual-read/dual-write путь не
+создаётся.
 
 ## Критерии приёмки
 
 - разные роли действительно запускаются в своих Docker images;
+- пользовательский Dockerfile не может удалить или подменить final wrapper и
+  runtime ABI;
+- окружение запускает только закреплённый promoted digest и не следует за tag;
+- выбранный tool доступен в image manifest и проходит probe в materialized Pod;
 - новый turn создаёт новый Pod, а system assistant использует отдельный warm Pod;
+- каждый turn/retry/continuation получает свежую immutable `RuntimeRevision`;
 - stale claim/fence/revision не запускает workload;
+- stale Secret revision или digest не запускает workload, а runner input не
+  содержит Secret values;
+- agent Pods, session PVC, execution tickets, provider projections и runtime
+  Secrets создаются только в `kodex-runtime`, а leader Lease остаётся в
+  `kodex-system`;
+- runtime-controller и secret-broker не могут читать Secrets `kodex-system`, а
+  `agent-runner` не получает Kubernetes API authority;
+- обычные API не возвращают Secret value, а reveal требует permission, свежую
+  OIDC re-authentication и одноразовый `no-store` ответ secret-broker;
 - Mattermost и любая optional integration не участвуют в materialization;
 - cancel/retry/restart не создают две активные attempt одного Turn.

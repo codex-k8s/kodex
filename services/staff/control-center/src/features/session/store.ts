@@ -6,6 +6,17 @@ import {
 } from "oidc-client-ts";
 import { computed, ref } from "vue";
 
+import {
+  consumeOidcIntent,
+  createRuntimeEnvironmentPolicyIntent,
+  createRuntimeSecretRevealIntent,
+  oidcReauthIntentStorageKey,
+  recordRuntimeEnvironmentPolicyReauthCompletion,
+  runtimeEnvironmentPolicyReauthCompletionStorageKey,
+  type OidcIntent,
+  type RuntimeEnvironmentPolicyOperation,
+} from "./reauth";
+
 import { requestSignal } from "@/shared/api/client";
 import {
   createClient,
@@ -36,6 +47,34 @@ export type SessionPhase =
 const sessionRevisionKey = "kodex.session.revision";
 const sessionRenewalIntervalMs = 5 * 60 * 1000;
 const sessionProbeRetryDelaysMs = [250, 500, 1_000] as const;
+const ownerSessionRetryDelaysMs = [250, 500, 1_000] as const;
+const runtimeSecretRevealPendingLifetimeMs = 5 * 60 * 1000;
+
+export interface LoginCompletion {
+  readonly kind: "login" | "runtime-secret" | "runtime-environment-policy";
+  readonly returnPath?: string;
+}
+
+interface PendingRuntimeSecretReveal {
+  readonly expiresAt: number;
+  readonly projectRef: string;
+  readonly secretRef: string;
+}
+
+async function withOwnerSessionRetry<T>(request: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      const normalized = asProblem(error);
+      const retryDelay = ownerSessionRetryDelaysMs[attempt];
+      if (!normalized.retryable || retryDelay === undefined) throw normalized;
+      await new Promise<void>((resolve) =>
+        globalThis.setTimeout(resolve, retryDelay),
+      );
+    }
+  }
+}
 
 function oidcManager(): UserManager {
   const config = runtimeConfig().oidc;
@@ -60,7 +99,9 @@ export const useSessionStore = defineStore("session", () => {
   const revision = ref<number>(
     Number.parseInt(window.sessionStorage.getItem(sessionRevisionKey) ?? "0"),
   );
+  const pendingRuntimeSecretRevealState = ref<PendingRuntimeSecretReveal>();
   let generation = 0;
+  let loginCompletionRequest: Promise<LoginCompletion> | undefined;
   let renewalTimer: number | undefined;
   let renewalRequest: Promise<void> | undefined;
   let renewalController: AbortController | undefined;
@@ -75,6 +116,11 @@ export const useSessionStore = defineStore("session", () => {
     generation += 1;
     revision.value = 0;
     window.sessionStorage.removeItem(sessionRevisionKey);
+    window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
+    window.sessionStorage.removeItem(
+      runtimeEnvironmentPolicyReauthCompletionStorageKey,
+    );
+    pendingRuntimeSecretRevealState.value = undefined;
     phase.value = "unauthenticated";
   }
 
@@ -114,49 +160,198 @@ export const useSessionStore = defineStore("session", () => {
   }
 
   async function beginLogin(): Promise<void> {
+    window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
+    window.sessionStorage.removeItem(
+      runtimeEnvironmentPolicyReauthCompletionStorageKey,
+    );
+    pendingRuntimeSecretRevealState.value = undefined;
     await oidcManager().signinRedirect();
   }
 
-  async function completeLogin(): Promise<void> {
+  async function beginRuntimeSecretRevealReauth(input: {
+    projectRef: string;
+    secretRef: string;
+  }): Promise<void> {
+    const intent = createRuntimeSecretRevealIntent(
+      input.projectRef,
+      input.secretRef,
+    );
+    pendingRuntimeSecretRevealState.value = undefined;
+    window.sessionStorage.removeItem(
+      runtimeEnvironmentPolicyReauthCompletionStorageKey,
+    );
+    window.sessionStorage.setItem(
+      oidcReauthIntentStorageKey,
+      JSON.stringify(intent),
+    );
+    try {
+      await oidcManager().signinRedirect({
+        max_age: 0,
+        prompt: "login",
+        state: intent,
+      });
+    } catch (error) {
+      window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
+      throw error;
+    }
+  }
+
+  async function beginRuntimeEnvironmentPolicyReauth(input: {
+    environmentRef?: string;
+    operation: RuntimeEnvironmentPolicyOperation;
+    projectRef: string;
+  }): Promise<void> {
+    const intent = createRuntimeEnvironmentPolicyIntent(
+      input.projectRef,
+      input.operation,
+      input.environmentRef,
+    );
+    pendingRuntimeSecretRevealState.value = undefined;
+    window.sessionStorage.removeItem(
+      runtimeEnvironmentPolicyReauthCompletionStorageKey,
+    );
+    window.sessionStorage.setItem(
+      oidcReauthIntentStorageKey,
+      JSON.stringify(intent),
+    );
+    try {
+      await oidcManager().signinRedirect({
+        max_age: 0,
+        prompt: "login",
+        state: intent,
+      });
+    } catch (error) {
+      window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
+      throw error;
+    }
+  }
+
+  async function performLoginCompletion(): Promise<LoginCompletion> {
     const current = ++generation;
     phase.value = "checking";
     problem.value = undefined;
     const manager = oidcManager();
+    let accessToken = "";
+    let callbackUser:
+      | Awaited<ReturnType<UserManager["signinRedirectCallback"]>>
+      | undefined;
     try {
-      const user = await manager.signinRedirectCallback();
-      if (!user.access_token) throw new Error("OIDC bearer is unavailable");
+      callbackUser = await manager.signinRedirectCallback();
+      if (!callbackUser.access_token)
+        throw new Error("OIDC bearer is unavailable");
+      const intent: OidcIntent = consumeOidcIntent(
+        callbackUser.state,
+        window.sessionStorage,
+      );
+      accessToken = callbackUser.access_token;
       const oneUseClient = createClient(
         createConfig({
-          auth: () => user.access_token,
+          auth: () => accessToken,
           baseUrl: runtimeConfig().apiBaseUrl,
           credentials: "include",
         }),
       );
-      const response = await unwrap(
-        createOwnerSession({
-          client: oneUseClient,
-          headers: { "Idempotency-Key": idempotencyKey() },
-          signal: requestSignal(),
-        }),
+      const sessionIdempotencyKey = idempotencyKey();
+      const response = await withOwnerSessionRetry(() =>
+        unwrap(
+          createOwnerSession({
+            body:
+              intent.kind === "runtime-secret"
+                ? {
+                    purpose: {
+                      kind: "RUNTIME_SECRET_REVEAL",
+                      projectRef: intent.projectRef,
+                      secretRef: intent.secretRef,
+                    },
+                  }
+                : undefined,
+            client: oneUseClient,
+            headers: { "Idempotency-Key": sessionIdempotencyKey },
+            signal: requestSignal(),
+          }),
+        ),
       );
       const parsedRevision = Number.parseInt(
         response.etag?.replaceAll('"', "") ?? "0",
       );
       if (!Number.isSafeInteger(parsedRevision) || parsedRevision < 1)
         throw new Error("Owner session revision is unavailable");
-      await manager.removeUser();
-      if (current !== generation) return;
+      if (current !== generation)
+        throw new Error("OIDC callback was superseded");
       revision.value = parsedRevision;
       window.sessionStorage.setItem(sessionRevisionKey, String(parsedRevision));
       phase.value = "authenticated";
       startRenewal();
       resetUnauthorizedNotification();
+      if (intent.kind === "runtime-secret") {
+        pendingRuntimeSecretRevealState.value = {
+          expiresAt: Date.now() + runtimeSecretRevealPendingLifetimeMs,
+          projectRef: intent.projectRef,
+          secretRef: intent.secretRef,
+        };
+        return { kind: intent.kind, returnPath: intent.returnPath };
+      }
+      if (intent.kind === "runtime-environment-policy") {
+        recordRuntimeEnvironmentPolicyReauthCompletion(
+          intent,
+          window.sessionStorage,
+        );
+        return { kind: intent.kind, returnPath: intent.returnPath };
+      }
+      return { kind: "login" };
     } catch (error) {
-      if (current !== generation) return;
-      problem.value = asProblem(error);
-      phase.value = "error";
+      if (current === generation) {
+        problem.value = asProblem(error);
+        phase.value = "error";
+      }
       throw error;
+    } finally {
+      accessToken = "";
+      if (callbackUser) {
+        callbackUser.access_token = "";
+        callbackUser.id_token = undefined;
+        callbackUser.refresh_token = undefined;
+      }
+      await manager.removeUser();
     }
+  }
+
+  async function completeLogin(): Promise<LoginCompletion> {
+    if (loginCompletionRequest) return await loginCompletionRequest;
+    const pending = performLoginCompletion();
+    loginCompletionRequest = pending;
+    try {
+      return await pending;
+    } finally {
+      if (loginCompletionRequest === pending)
+        loginCompletionRequest = undefined;
+    }
+  }
+
+  function pendingRuntimeSecretReveal(projectRef: string): string | undefined {
+    const pending = pendingRuntimeSecretRevealState.value;
+    if (!pending) return undefined;
+    if (pending.expiresAt <= Date.now()) {
+      pendingRuntimeSecretRevealState.value = undefined;
+      return undefined;
+    }
+    return pending.projectRef === projectRef ? pending.secretRef : undefined;
+  }
+
+  function hasPendingRuntimeSecretReveal(
+    projectRef: string,
+    secretRef: string,
+  ): boolean {
+    return pendingRuntimeSecretReveal(projectRef) === secretRef;
+  }
+
+  function consumePendingRuntimeSecretReveal(
+    projectRef: string,
+    secretRef: string,
+  ): boolean {
+    if (!hasPendingRuntimeSecretReveal(projectRef, secretRef)) return false;
+    pendingRuntimeSecretRevealState.value = undefined;
+    return true;
   }
 
   async function logout(): Promise<void> {
@@ -236,7 +431,12 @@ export const useSessionStore = defineStore("session", () => {
     canLogout,
     probe,
     beginLogin,
+    beginRuntimeSecretRevealReauth,
+    beginRuntimeEnvironmentPolicyReauth,
     completeLogin,
+    pendingRuntimeSecretReveal,
+    hasPendingRuntimeSecretReveal,
+    consumePendingRuntimeSecretReveal,
     renew,
     logout,
     invalidate: setUnauthenticated,

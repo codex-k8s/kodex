@@ -20,4 +20,5 @@ RETURNING ref, (SELECT recipe.ref FROM control_plane.role_image_recipes recipe W
           provenance_sha256, immutable_build_sha256, safe_error_code, diagnostic_code,
           diagnostic_summary, COALESCE(lease_token_sha256, ''), COALESCE(claimant_workload, ''),
           version, recipe_version, recipe_generation, fence, authority_generation,
-          attempt, progress_percent, lease_expires_at, created_at, updated_at
+          attempt, progress_percent, lease_expires_at, created_at, updated_at,
+          specification

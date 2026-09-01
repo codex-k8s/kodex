@@ -4,23 +4,64 @@ export async function gotoWithRetry(
   page: Page,
   url: string,
   options?: Parameters<Page["goto"]>[1],
+  requirements: { readonly appShell?: boolean } = {},
 ): Promise<void> {
   const retryDelays = [0, 200, 600];
   for (const [index, delay] of retryDelays.entries()) {
     if (delay > 0) await page.waitForTimeout(delay);
     try {
-      await page.goto(url, options);
+      const response = await page.goto(url, options);
+      if (!response) {
+        throw new Error(
+          `Navigation did not return a main document response for ${safeNavigationPath(page.url())}`,
+        );
+      }
+      const contentType = response.headers()["content-type"] ?? "missing";
+      if (!response.ok() || !contentType.toLowerCase().includes("text/html")) {
+        throw new Error(
+          [
+            "Main document navigation failed",
+            `path=${safeNavigationPath(response.url())}`,
+            `status=${String(response.status())}`,
+            `content-type=${safeContentType(contentType)}`,
+          ].join("; "),
+        );
+      }
+      if (requirements.appShell !== false) {
+        await expect(page.locator("#app")).toBeVisible();
+        await expect(page.locator("#main-content")).toBeVisible();
+      }
       return;
     } catch (error) {
+      const emptyAppShell =
+        requirements.appShell !== false && (await hasEmptyAppShell(page));
       if (
         index === retryDelays.length - 1 ||
         !(error instanceof Error) ||
-        !error.message.includes("net::ERR_NETWORK_CHANGED")
+        (!error.message.includes("net::ERR_NETWORK_CHANGED") && !emptyAppShell)
       ) {
         throw error;
       }
     }
   }
+}
+
+async function hasEmptyAppShell(page: Page): Promise<boolean> {
+  const app = page.locator("#app");
+  if ((await app.count()) !== 1) return false;
+  return app.evaluate((element) => element.childElementCount === 0);
+}
+
+function safeNavigationPath(raw: string): string {
+  try {
+    return new URL(raw).pathname.slice(0, 512);
+  } catch {
+    return "invalid-url";
+  }
+}
+
+function safeContentType(value: string): string {
+  return value.replace(/[^A-Za-z0-9!#$&^_.+\-/;= ]/g, "?").slice(0, 160);
 }
 
 export function routeRef(page: Page, segment: string): string {
@@ -54,7 +95,7 @@ export async function waitForConnected(
   page: Page,
   timeout = 30_000,
 ): Promise<void> {
-  const connection = page.locator('.connection-badge[data-state="CONNECTED"]');
+  const connection = page.getByRole("status", { name: "Подключено" });
   await expect(connection).toBeVisible({ timeout });
 }
 
@@ -104,7 +145,11 @@ export async function ensureAgentCapability(
   capabilityName: string | RegExp,
 ): Promise<void> {
   await gotoWithRetry(page, `/projects/${projectRef}/agents/${agentRef}`);
-  const capability = page.getByRole("checkbox", { name: capabilityName });
+  let capability = page.getByRole("checkbox", { name: capabilityName });
+  if ((await capability.count()) === 0) {
+    await page.getByRole("tab", { name: "Возможности" }).click();
+    capability = page.getByRole("checkbox", { name: capabilityName });
+  }
   await expect(capability).toBeVisible();
   if (!(await capability.isChecked())) {
     const response = page.waitForResponse(
@@ -120,7 +165,12 @@ export async function ensureAgentCapability(
 }
 
 export async function launchAgent(page: Page, task: string): Promise<string> {
-  const panel = page.locator(".launch-panel");
+  let panel = page.locator(".launch-panel");
+  if ((await panel.count()) === 0) {
+    await page.getByRole("tab", { name: "Профиль сотрудника" }).click();
+    panel = page.locator(".launch-panel");
+  }
+  await expect(panel).toBeVisible();
   await panel.getByLabel("Задание").fill(task);
   await panel.getByRole("button", { name: "Запустить", exact: true }).click();
   await expect(page).toHaveURL(/\/runs\/[^/]+$/);
@@ -147,7 +197,8 @@ export async function waitForTerminalSuccess(page: Page): Promise<void> {
 
 export async function assertNoDuplicateGraphNodes(page: Page): Promise<void> {
   const refs = await page
-    .locator(".canvas-node")
+    .getByRole("region", { name: "Граф выполнения" })
+    .locator('[role="button"][data-node-ref]')
     .evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute("data-node-ref") ?? ""),
     );

@@ -16,16 +16,21 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/eventing"
 	"github.com/codex-k8s/kodex/libs/go/eventing/natsjetstream"
 	"github.com/codex-k8s/kodex/libs/go/grpcserver"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/credentialmaterializer"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/authorityproof"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/providercredentialcleanup"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/providercredentialclient"
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
 	platformgrpc "github.com/codex-k8s/kodex/services/internal/control-plane/internal/transport/grpc"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -48,9 +53,31 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		return err
 	}
 	defer pool.Close()
-	repository, err := platformrepository.New(pool, config.DefaultRuntimeProvider, config.DefaultRuntimeModel)
+	accessKey, err := readBoundedFile(config.ObjectStorageAccessKeyFile)
+	if err != nil {
+		return fmt.Errorf("read object storage access key: %w", err)
+	}
+	secretKey, err := readBoundedFile(config.ObjectStorageSecretKeyFile)
+	if err != nil {
+		return fmt.Errorf("read object storage secret key: %w", err)
+	}
+	objects, err := s3store.New(startup, s3store.Config{
+		Endpoint: config.ObjectStorageEndpoint, Region: config.ObjectStorageRegion, Bucket: config.ObjectStorageBucket,
+		AccessKeyID: strings.TrimSpace(string(accessKey)), SecretKey: strings.TrimSpace(string(secretKey)),
+		UsePathStyle: config.ObjectStorageUsePathStyle,
+	})
+	if err != nil {
+		return fmt.Errorf("construct object storage: %w", err)
+	}
+	if err := objects.Check(startup); err != nil {
+		return fmt.Errorf("verify object storage: %w", err)
+	}
+	repository, err := platformrepository.New(pool, config.DefaultRuntimeProvider, config.DefaultRuntimeModel, objects)
 	if err != nil {
 		return fmt.Errorf("construct platform repository: %w", err)
+	}
+	if err := repository.ConfigureRuntimeSecrets(config.RuntimeSecretNamespace); err != nil {
+		return fmt.Errorf("configure runtime secrets: %w", err)
 	}
 	if err := repository.ConfigureProviderCredential(platformrepository.ProviderCredentialConfig{
 		SecretName: config.DefaultProviderSecretName, SecretUID: config.DefaultProviderSecretUID,
@@ -73,7 +100,35 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	}); err != nil {
 		return fmt.Errorf("configure role image lifecycle: %w", err)
 	}
-	service, err := platformservice.New(repository)
+	credentialMaterializer, err := credentialmaterializer.InCluster(
+		config.IntegrationCredentialNamespace,
+		config.IntegrationCredentialSecretName,
+		config.KubernetesAPITimeout,
+	)
+	if err != nil {
+		return fmt.Errorf("construct integration credential materializer: %w", err)
+	}
+	providerControl, err := controlplaneclient.Dial(startup, controlplaneclient.Config{
+		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName,
+		CAFile: config.ClientCAFile, ClientCertificateFile: config.ServerCertificateFile,
+		ClientPrivateKeyFile: config.ServerPrivateKeyFile, ApplicationGrantFile: config.ProviderApplicationGrantFile,
+		ResolverTarget: config.ProviderResolverTarget, ResolverTLSServerName: config.ProviderResolverTLSServerName,
+		ResolverCAFile: config.ProviderResolverCAFile, ExpectedIssuerUID: config.ProviderIssuerUID,
+		ExpectedIssuerGID: config.ProviderIssuerGID, DialTimeout: config.ReadinessTimeout,
+		Operations: controlplaneclient.ProviderCredentialMaterializerOperations(),
+	})
+	if err != nil {
+		return fmt.Errorf("construct provider credential materializer client: %w", err)
+	}
+	defer providerControl.Close()
+	providerMaterializer, err := providercredentialclient.New(providerControl)
+	if err != nil {
+		return fmt.Errorf("construct provider credential materializer adapter: %w", err)
+	}
+	service, err := platformservice.New(repository,
+		platformservice.WithCredentialMaterializer(credentialMaterializer),
+		platformservice.WithProviderCredentialMaterializer(providerMaterializer),
+	)
 	if err != nil {
 		return fmt.Errorf("construct platform service: %w", err)
 	}
@@ -90,11 +145,14 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	}
 	workerGrantTrustFiles := map[string]string{
 		"automation-scheduler": config.AutomationGrantTrustFile,
+		"session-archive":      config.SessionArchiveGrantTrustFile,
 		"integration-gateway":  config.IntegrationGrantTrustFile,
 		"runtime-controller":   config.RuntimeGrantTrustFile,
 		"role-image-builder":   config.RoleImageBuilderGrantTrustFile,
 		"image-admission":      config.ImageAdmissionGrantTrustFile,
 		"image-promotion":      config.ImagePromotionGrantTrustFile,
+		"secret-broker":        config.SecretBrokerGrantTrustFile,
+		"control-plane":        config.ControlPlaneGrantTrustFile,
 	}
 	if config.InteractionGrantTrustFile != "" {
 		workerGrantTrustFiles["interaction-gateway"] = config.InteractionGrantTrustFile
@@ -137,7 +195,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err := repository.CheckOutbox(startup); err != nil {
 		return fmt.Errorf("verify outbox: %w", err)
 	}
-	transport, err := platformgrpc.NewServer(service)
+	transport, err := platformgrpc.NewServer(service, roleImageService)
 	if err != nil {
 		return fmt.Errorf("construct gRPC transport: %w", err)
 	}
@@ -176,9 +234,28 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterPlatformCommandServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSystemAssistantServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterRuntimeSecretWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterSessionArchiveWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterInteractionWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterAccessServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRoleImageServiceServer(grpcServer, roleImageTransport)
 	internalrpcauthorityv1.RegisterAuthorityProofResolverServiceServer(grpcServer, proofTransport)
+	cleanupClaimHealth := serviceruntime.NewReadiness()
+	cleanupClaimHealth.Set(true, "ready")
+	cleanupWorker, err := providercredentialcleanup.New(
+		repository,
+		providerMaterializer,
+		cleanupClaimHealth,
+		slog.Default(),
+		providercredentialcleanup.Config{
+			LeaseOwner: config.InstanceID, BatchSize: config.ProviderCleanupBatchSize,
+			PollInterval:     config.ProviderCleanupPollInterval,
+			OperationTimeout: config.ProviderCleanupTimeout,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("construct provider credential cleanup worker: %w", err)
+	}
 	listener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {
 		return errors.New("listen control-plane gRPC")
@@ -188,9 +265,10 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
-		monitorReadiness(service, repository, publisher, readiness, slog.Default(), config),
+		monitorReadiness(service, repository, publisher, cleanupClaimHealth, readiness, slog.Default(), config),
 		monitorOIDCSigningKeys(proofService, slog.Default(), config),
 		runOutboxRelay(repository, publisher, shutdownBase, config),
+		cleanupWorker.Run,
 	)
 	workerDone := make(chan error, 1)
 	go func() { workerDone <- workers.Wait(lifecycle) }()
@@ -364,7 +442,11 @@ type readinessPublisher interface {
 	Check(context.Context) error
 }
 
-func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
+type readinessCondition interface {
+	Ready() (bool, string)
+}
+
+func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, cleanupClaim readinessCondition, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
@@ -372,13 +454,19 @@ func monitorReadiness(service *platformservice.Service, store readinessStore, pu
 			check, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
 			err := errors.Join(service.Ready(check), store.CheckOutbox(check), publisher.Check(check))
 			cancel()
+			reason, errorClass := "direct_infrastructure_unavailable", "direct_infrastructure"
+			if cleanupReady, _ := cleanupClaim.Ready(); err == nil && !cleanupReady {
+				err = errors.New("provider credential cleanup claim is unavailable")
+				reason = "provider_credential_cleanup_claim_unavailable"
+				errorClass = "provider_credential_cleanup_claim"
+			}
 			if err == nil {
 				if readiness.Set(true, "ready") {
 					logger.InfoContext(ctx, "control-plane readiness restored")
 				}
 			} else {
-				if readiness.Set(false, "direct_infrastructure_unavailable") {
-					logger.WarnContext(ctx, "control-plane readiness lost", "error_class", "direct_infrastructure")
+				if readiness.Set(false, reason) {
+					logger.WarnContext(ctx, "control-plane readiness lost", "error_class", errorClass)
 				}
 			}
 			select {

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Kodex · Drawer в контексте Проекта</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .modal-wrap:not(.is-open) { display: none; }
+  .p-agent { min-height: 168px; }
+  .p-agent__activity { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--sec); margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line-hair); }
+  .p-kodex__ctx { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 16px 12px; border-bottom: 1px solid var(--line); background: var(--bg-subtle); }
+  .p-kodex__ctx-title { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mut); }
+  .p-kodex__attr { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; color: var(--sec); line-height: 1.45; }
+  .p-kodex__attr .ic { margin-top: 2px; color: var(--mut); }
+  .p-kodex__attr b { color: var(--ink); font-weight: 500; }
+  .p-kodex__dlg { display: flex; flex-direction: column; gap: 3px; padding-bottom: 10px; border-bottom: 1px solid var(--line-hair); }
+  .p-kodex__dlg-row { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+  .p-kodex__dlg-name { font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-kodex__dlg-input { min-height: 26px; font-size: 13px; padding: 0 8px; flex: 1 1 auto; }
+  .p-kodex__preview { border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg); overflow: hidden; width: 100%; }
+  .p-kodex__preview-head { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--bg-field); border-bottom: 1px solid var(--line-hair); font-size: 11.5px; color: var(--sec); }
+  .p-kodex__preview-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--line-hair); font-size: 12px; min-height: 30px; }
+  .p-kodex__preview-row:first-of-type { border-top: 0; }
+  .p-kodex__preview-row span:nth-child(2) { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-kodex__foot { flex-direction: column; align-items: stretch; }
+  .msg--bot .msg__bubble p + p { margin-top: 6px; }
+  .p-kodex__typing { display: inline-flex; gap: 3px; align-items: center; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Kodex · контекстный drawer на экране «ИИ-сотрудники» Проекта · desktop 1440×1024 · маршрут <code>/projects/:projectRef/agents</code> + drawer</p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><span>ИИ-сотрудники</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">ИИ-сотрудники</h1><span class="tab__count">8</span></div>
+          <div class="page-sub">Команда Проекта «Корпоративные продажи»: назначение, состояние и текущая работа</div>
+        </div>
+        <div class="page-actions">
+          <div class="seg" data-seg data-view-target="#agents-grid" role="group" aria-label="Вид списка">
+            <button class="seg__btn seg__btn--icon" type="button" aria-pressed="true" data-view="grid" aria-label="Сетка" data-tip="Сетка" data-tip-pos="bottom"><svg class="ic"><use href="#i-grid"/></svg></button>
+            <button class="seg__btn seg__btn--icon" type="button" aria-pressed="false" data-view="list" aria-label="Таблица" data-tip="Таблица" data-tip-pos="bottom"><svg class="ic"><use href="#i-list"/></svg></button>
+          </div>
+          <a class="btn btn--primary btn--lg" href="#"><svg class="ic"><use href="#i-plus"/></svg>Создать сотрудника</a>
+        </div>
+      </div>
+    </div>
+    <div class="page-body col gap-14">
+      <div class="toolbar">
+        <label class="search" style="width:300px"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Найти по имени или назначению" aria-label="Найти сотрудника"></label>
+        <div class="row gap-6" data-chip-group="single" role="group" aria-label="Фильтр по состоянию">
+          <button class="chip" type="button" aria-pressed="true">Все</button>
+          <button class="chip" type="button" aria-pressed="false">Работают</button>
+          <button class="chip" type="button" aria-pressed="false">Ждут решения</button>
+          <button class="chip" type="button" aria-pressed="false">Отключены</button>
+        </div>
+        <span class="toolbar__spacer"></span>
+        <span class="refresh"><span class="refresh__dot"></span><span class="refresh__text">обновлено 12:30</span></span>
+      </div>
+      <div class="grid grid--3" id="agents-grid" data-view="grid"></div>
+    </div>
+  </main>
+
+  <div class="layer">
+    <div class="drawer" id="kodex-panel-live" role="dialog" aria-label="Kodex" data-nonmodal>
+      <div class="drawer__head">
+        <span class="avatar avatar--32 avatar--bot" aria-hidden="true"><svg class="ic"><use href="#i-bot"/></svg></span>
+        <div class="drawer__head-text">
+          <div class="drawer__title">Kodex</div>
+          <div class="drawer__sub">Экран: <b class="ink2">ИИ-сотрудники</b> · Проект «Корпоративные продажи»</div>
+        </div>
+        <button class="btn btn--icon btn--ghost" type="button" aria-label="История диалогов" data-tip="История диалогов" data-tip-pos="bottom" data-menu="#kodex-history-menu" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-history"/></svg></button>
+        <button class="close-btn" type="button" aria-label="Закрыть Kodex" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="p-kodex__ctx">
+        <div class="p-kodex__ctx-title">Здесь Kodex может</div>
+        <div class="row row--wrap gap-6">
+          <button class="chip" type="button" data-suggest="Создай сотрудника для "><svg class="ic"><use href="#i-plus"/></svg>Создать сотрудника</button>
+          <button class="chip" type="button" data-suggest="Объясни, почему сотрудник «Автор писем» в состоянии «Ошибка»"><svg class="ic"><use href="#i-info"/></svg>Объяснить состояние</button>
+          <button class="chip" type="button" data-suggest="Найди сотрудников, которые работают с договорами"><svg class="ic"><use href="#i-search"/></svg>Найти по назначению</button>
+        </div>
+        <div class="p-kodex__attr"><svg class="ic ic-14"><use href="#i-user"/></svg><span>Изменения будут записаны как <b>Анна Волкова через Kodex</b>. Доступность действий подтверждается на сервере при применении.</span></div>
+      </div>
+
+      <div class="drawer__body col gap-12">
+        <div class="p-kodex__dlg">
+          <div class="p-kodex__dlg-row">
+            <span class="xs mut shrink0">Диалог</span>
+            <span class="p-kodex__dlg-name" id="dlg-name">Классификатор обращений для продаж</span>
+            <button class="btn btn--sm btn--ghost shrink0" type="button" id="dlg-rename">Переименовать</button>
+          </div>
+          <div class="xs mut">Название предложил Kodex после первого сообщения · можно изменить в любой момент</div>
+        </div>
+
+        <div class="msg msg--user">
+          <div class="msg__meta">Анна Волкова · 12:31</div>
+          <div class="msg__bubble">Создай сотрудника для классификации обращений по темам, с окружением для офисных документов</div>
+        </div>
+
+        <div class="msg msg--bot">
+          <div class="msg__meta">Kodex · 12:31</div>
+          <div class="msg__bubble">
+            <p>Подготовил план из <b>5 операций</b>. Ничего ещё не применено — все параметры видны и редактируются до применения.</p>
+            <p>Для нового сотрудника предлагаю окружение «Офисные документы и PDF» (rev 4) и экономичный runtime; инструкции — черновиком, публикация отдельной операцией.</p>
+          </div>
+          <div class="p-kodex__preview" role="list" aria-label="Краткий план">
+            <div class="p-kodex__preview-head"><svg class="ic ic-14"><use href="#i-settings2"/></svg><span>План · ревизия 3 · проверка пройдена</span><span class="right mono">5</span></div>
+            <div class="p-kodex__preview-row" role="listitem"><span class="op__kind op__kind--create">create</span><span>ИИ-сотрудник «Классификатор обращений»</span></div>
+            <div class="p-kodex__preview-row" role="listitem"><span class="op__kind op__kind--create">create</span><span>Черновик инструкций · Markdown, 3 переменные</span></div>
+            <div class="p-kodex__preview-row" role="listitem"><span class="op__kind op__kind--update">update</span><span>«Аналитик продаж» · окружение → «Офисные документы и PDF»</span></div>
+            <div class="p-kodex__preview-row" role="listitem"><span class="op__kind op__kind--update">update</span><span>Overlay config.toml для нового сотрудника</span></div>
+            <div class="p-kodex__preview-row" role="listitem"><span class="op__kind op__kind--delete">delete</span><span>Grant «Электронная почта · отправка писем» у «Автор писем»</span></div>
+          </div>
+          <div class="msg__actions">
+            <a class="btn btn--primary" href="kodex-plan-editor-desktop.html"><svg class="ic"><use href="#i-edit"/></svg>Открыть план</a>
+            <button class="btn" type="button" data-suggest="Уточни: ">Уточнить</button>
+            <button class="btn btn--ghost" type="button">Отменить план</button>
+          </div>
+        </div>
+
+        <div class="msg msg--user">
+          <div class="msg__meta">Анна Волкова · 12:33</div>
+          <div class="msg__bubble">Почему не «Стандартное окружение»?</div>
+        </div>
+        <div class="msg msg--bot">
+          <div class="msg__meta">Kodex · 12:33</div>
+          <div class="msg__bubble">
+            <p>Обращения приходят как PDF и DOCX: в «Стандартном окружении» нет инструментов извлечения текста из таких файлов, поэтому классификация будет работать только с обычным текстом. «Офисные документы и PDF» содержит их и совместим с выбранной моделью.</p>
+            <p>Если файлы не нужны, замените окружение в операции 1 — план пересчитает зависимости.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="drawer__foot p-kodex__foot">
+        <div class="composer">
+          <div class="composer__area">
+            <textarea id="composer" rows="2" placeholder="Спросите Kodex или опишите, что настроить" aria-label="Сообщение Kodex" data-autosize></textarea>
+            <div class="composer__btns">
+              <button class="composer__mic" type="button" disabled aria-label="Голосовой ввод появится позже" data-tip="Голосовой ввод появится позже"><svg class="ic ic-14"><use href="#i-mic"/></svg></button>
+              <button class="composer__send" type="button" aria-label="Отправить" id="send"><svg class="ic ic-14"><use href="#i-send"/></svg></button>
+            </div>
+          </div>
+          <div class="composer__bar"><span>Enter — отправить · Shift+Enter — новая строка</span><span class="right">Контекст: Проект «Корпоративные продажи»</span></div>
+        </div>
+      </div>
+
+      <div class="menu menu--wide" id="kodex-history-menu" data-align="right">
+        <div class="menu__title">История диалогов</div>
+        <button class="menu__item" type="button"><svg class="ic"><use href="#i-plus"/></svg><span>Новый диалог</span></button>
+        <div class="menu__sep"></div>
+        <button class="menu__item" type="button" aria-checked="true"><span class="menu__text"><span>Классификатор обращений для продаж</span><small>сегодня, 12:31 · ИИ-сотрудники · Корпоративные продажи</small></span></button>
+        <button class="menu__item" type="button"><span class="menu__text"><span>Почему запуск остановился?</span><small>вчера, 17:40 · Запуск «Проверка договора»</small></span></button>
+        <button class="menu__item" type="button"><span class="menu__text"><span>Подключение GitHub</span><small>20 августа · Интеграции</small></span></button>
+        <button class="menu__item" type="button"><span class="menu__text"><span>Настройка отдела продаж</span><small>18 августа · Проект «Корпоративные продажи»</small></span></button>
+        <div class="menu__sep"></div>
+        <div class="xs mut" style="padding:4px 10px 6px">Показаны 4 из 12 · история хранится в Kodex, а не на отдельном экране</div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="stage-note">Kodex — не отдельная страница, а контекстный drawer из FAB. В шапке видно, над каким экраном и объектом он работает, что может сделать здесь и от чьего имени будут записаны изменения; тексты не обещают доступ без серверной проверки. Kodex сам предложил название диалога после первого содержательного сообщения. Ответ содержит краткий план-превью с раздельными create/update/delete — «Открыть план» ведёт в полный редактируемый план. Composer: круглая кнопка отправки внутри поля и disabled-микрофон с tooltip. История диалогов — в меню drawer.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  (function () {
+    const STATE = { ok: ['ok', 'Готов'], run: ['run', 'Выполняет запуск'], gate: ['gate', 'Ждёт решения'], off: ['off', 'Отключён'], err: ['err', 'Ошибка в запуске'] };
+    const ACTIVITY = { a1: 'Свободен · последний запуск сегодня, 11:52', a2: 'Запуск «Подготовить предложение для компании Север» · 12 мин', a3: 'Ждёт решения по договору с поставщиком Восток', a4: 'Координирует Процесс «Обработка нового лида»', a5: 'Отключён Михаилом Орловым · 20 августа', a6: 'Свободен · последний запуск вчера, 12:05', a7: 'Ошибка: недоступна интеграция «Электронная почта»', a8: 'Свободен · проверок за неделю: 6' };
+    const grid = document.getElementById('agents-grid');
+    grid.innerHTML = Kodex.data.agents.map((a) => {
+      const [mod, label] = STATE[a.state] || STATE.ok;
+      return `<article class="card p-agent">
+        <div class="card__body card__body--pad col gap-8" style="height:100%">
+          <div class="row row--top gap-10">
+            ${Kodex.avatar(a.initials, 44, a.tone)}
+            <div class="grow"><div class="h3 truncate">${Kodex.esc(a.name)}</div><div class="xs sec clamp-2">${Kodex.esc(a.purpose)}</div></div>
+            ${Kodex.pill(mod, label, true)}
+          </div>
+          <div class="row row--wrap gap-6"><span class="tag">${Kodex.esc(a.role)}</span><span class="tag tag--mono">${Kodex.esc(a.model)}</span><span class="tag">${Kodex.esc(a.runtime)}</span><span class="tag"><svg class="ic"><use href="#i-layers"/></svg>${Kodex.esc(a.env)}</span></div>
+          <div class="p-agent__activity"><svg class="ic ic-14"><use href="#i-activity"/></svg><span class="truncate">${Kodex.esc(ACTIVITY[a.ref] || '')}</span></div>
+        </div>
+      </article>`;
+    }).join('');
+
+    Kodex.mount({
+      nav: 'project.agents', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+      kodexContext: { screen: 'ИИ-сотрудники', object: 'Проект «Корпоративные продажи»', can: ['создать сотрудника', 'объяснить состояние', 'найти по назначению'] },
+    });
+    const frame = document.getElementById('frame');
+    const panel = document.getElementById('kodex-panel-live');
+    Kodex.openOverlay(panel, true, frame.querySelector('.fab'));
+    setTimeout(() => { document.getElementById('composer').focus({ preventScroll: true }); frame.scrollLeft = 0; }, 80);
+
+    // Подсказки вставляют текст в composer
+    const composer = document.getElementById('composer');
+    panel.addEventListener('click', (e) => {
+      const s = e.target.closest('[data-suggest]'); if (!s) return;
+      composer.value = s.dataset.suggest; composer.dispatchEvent(new Event('input')); composer.focus(); composer.setSelectionRange(composer.value.length, composer.value.length);
+    });
+    document.getElementById('send').addEventListener('click', () => { if (!composer.value.trim()) return; Kodex.toast(frame, 'Сообщение отправлено Kodex'); composer.value = ''; composer.dispatchEvent(new Event('input')); });
+    composer.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('send').click(); } });
+
+    // Переименование диалога
+    const nameEl = document.getElementById('dlg-name'), renameBtn = document.getElementById('dlg-rename');
+    renameBtn.addEventListener('click', () => {
+      const input = Kodex.el(`<input class="input p-kodex__dlg-input" type="text" aria-label="Название диалога" value="${Kodex.esc(nameEl.textContent)}">`);
+      nameEl.replaceWith(input); renameBtn.hidden = true; input.focus(); input.select();
+      const done = () => { nameEl.textContent = input.value.trim() || nameEl.textContent; input.replaceWith(nameEl); renameBtn.hidden = false; renameBtn.focus(); };
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(); if (e.key === 'Escape') { e.stopPropagation(); input.value = nameEl.textContent; done(); } });
+      input.addEventListener('blur', done);
+    });
+  })();
+</script>
+</body>
+</html>

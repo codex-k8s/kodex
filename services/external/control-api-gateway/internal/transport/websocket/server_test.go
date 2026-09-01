@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/websocket/generated"
 	"google.golang.org/grpc"
 )
 
@@ -22,26 +23,80 @@ func (recorder *streamLocalizingRecorder) LocalizeFor(locale, messageID string) 
 
 func TestStreamLocalizerUsesBoundedSelectedLocale(t *testing.T) {
 	writer := &streamLocalizingRecorder{ResponseRecorder: httptest.NewRecorder()}
-	request := httptest.NewRequest(http.MethodGet, "https://owner.example.test/api/v1/platform/stream?locale=ru", nil)
+	request := httptest.NewRequest(http.MethodGet, "https://owner.example.test/api/v1/session/stream?locale=ru", nil)
 	if title := streamLocalizer(writer, request)("STREAM_UNAVAILABLE"); title != "ru:STREAM_UNAVAILABLE" {
 		t.Fatalf("selected locale was ignored: %q", title)
 	}
-	request = httptest.NewRequest(http.MethodGet, "https://owner.example.test/api/v1/platform/stream?locale=unexpected", nil)
+	request = httptest.NewRequest(http.MethodGet, "https://owner.example.test/api/v1/session/stream?locale=unexpected", nil)
 	if title := streamLocalizer(writer, request)("STREAM_UNAVAILABLE"); title != "accept-language:STREAM_UNAVAILABLE" {
 		t.Fatalf("unsupported locale did not use safe fallback: %q", title)
 	}
 }
 
 func TestRequestedProtocolsRequiresExactBaseAndSingleCSRF(t *testing.T) {
-	request := httptest.NewRequest("GET", "https://owner.example.test/api/v1/platform/stream", nil)
-	request.Header.Add("Sec-WebSocket-Protocol", "kodex.platform.v1, csrf.token-value")
-	selection, ok := requestedProtocols(request, platformSubprotocol)
+	request := httptest.NewRequest("GET", "https://owner.example.test/api/v1/session/stream", nil)
+	request.Header.Add("Sec-WebSocket-Protocol", "kodex.session.v1, csrf.token-value")
+	selection, ok := requestedProtocols(request, sessionSubprotocol)
 	if !ok || selection.csrf != "token-value" {
 		t.Fatalf("valid protocol selection rejected: ok=%t csrf=%q", ok, selection.csrf)
 	}
 	request.Header.Add("Sec-WebSocket-Protocol", "csrf.second-token")
-	if _, ok := requestedProtocols(request, platformSubprotocol); ok {
+	if _, ok := requestedProtocols(request, sessionSubprotocol); ok {
 		t.Fatal("duplicate CSRF subprotocol was accepted")
+	}
+	request = httptest.NewRequest("GET", "https://owner.example.test/api/v1/session/stream", nil)
+	request.Header.Add("Sec-WebSocket-Protocol", "kodex.session.v1, csrf.token-value, legacy.protocol")
+	if _, ok := requestedProtocols(request, sessionSubprotocol); ok {
+		t.Fatal("unknown WebSocket subprotocol was accepted")
+	}
+}
+
+func TestValidateSessionResumeRejectsDuplicatesAndBounds(t *testing.T) {
+	valid := generated.SessionResumeEnvelope{
+		Type: "SESSION_RESUME", RequestRef: "request_0001", PlatformAfterSequence: 7,
+		Runs: []generated.RunResumeCursor{{RunRef: "run_root0001", AfterSequence: 3}},
+	}
+	if err := validateSessionResume(valid); err != nil {
+		t.Fatalf("valid session resume rejected: %v", err)
+	}
+	duplicated := valid
+	duplicated.Runs = append(duplicated.Runs, duplicated.Runs[0])
+	if err := validateSessionResume(duplicated); err == nil {
+		t.Fatal("duplicated run cursor was accepted")
+	}
+	tooMany := valid
+	tooMany.Runs = make([]generated.RunResumeCursor, maximumRunSubscriptions+1)
+	for index := range tooMany.Runs {
+		tooMany.Runs[index] = generated.RunResumeCursor{RunRef: "run_root_" + string(rune('A'+index)), AfterSequence: 0}
+	}
+	if err := validateSessionResume(tooMany); err == nil {
+		t.Fatal("unbounded run subscription set was accepted")
+	}
+	invalidCursor := valid
+	invalidCursor.PlatformAfterSequence = -1
+	if err := validateSessionResume(invalidCursor); err == nil {
+		t.Fatal("negative platform cursor was accepted")
+	}
+}
+
+func TestDecodeSessionCommandIsClosedAndTyped(t *testing.T) {
+	command, err := decodeSessionCommand([]byte(`{"type":"SUBSCRIBE_RUN","requestRef":"request_0001","runRef":"run_root0001","afterSequence":4}`))
+	if err != nil {
+		t.Fatalf("valid subscribe command rejected: %v", err)
+	}
+	value, ok := command.(subscribeRunCommand)
+	if !ok || value.RunRef != "run_root0001" || value.AfterSequence != 4 {
+		t.Fatalf("unexpected subscribe command: %#v", command)
+	}
+	invalidPayloads := [][]byte{
+		[]byte(`{"type":"SUBSCRIBE_RUN","requestRef":"request_0001","runRef":"run_root0001","afterSequence":4,"foreign":true}`),
+		[]byte(`{"type":"UNSUBSCRIBE_RUN","requestRef":"request_0001","runRef":"run_root0001"}{}`),
+		[]byte(`{"type":"LEGACY_RESUME","requestRef":"request_0001"}`),
+	}
+	for _, payload := range invalidPayloads {
+		if _, decodeErr := decodeSessionCommand(payload); decodeErr == nil {
+			t.Fatalf("invalid command accepted: %s", payload)
+		}
 	}
 }
 
@@ -57,6 +112,14 @@ func TestDecodePlatformSignalRedactsPayloadAndRejectsMismatch(t *testing.T) {
 	tampered := []byte(`{"eventId":"d561fbb0-02c0-4be7-af7c-5998925632bd","eventName":"AGENT_CHANGED","eventVersion":1,"occurredAt":"2026-08-22T12:00:00Z","organizationRef":"org_example0001","aggregateRef":"agt_example0001","aggregateVersion":2,"sequence":9,"correlationRef":"d1713d76-566d-43c3-a0b2-0ca2307869d0","data":{"kind":"PROJECT","safeSummary":"i18n:AGENT_UPDATED"}}`)
 	if _, ok := decodePlatformSignal(tampered, "org_example0001"); ok {
 		t.Fatal("event name and kind mismatch was accepted")
+	}
+}
+
+func TestDecodePlatformSignalAcceptsRunInvalidationWithoutForwardingRefs(t *testing.T) {
+	payload := []byte(`{"eventId":"d561fbb0-02c0-4be7-af7c-5998925632bd","eventName":"RUN_CHANGED","eventVersion":1,"occurredAt":"2026-08-22T12:00:00Z","organizationRef":"org_example0001","projectRef":"prj_example0001","aggregateRef":"run_example0001","aggregateVersion":3,"sequence":9,"correlationRef":"d1713d76-566d-43c3-a0b2-0ca2307869d0","data":{"kind":"RUN","safeSummary":"i18n:RUN_UPDATED"}}`)
+	signal, ok := decodePlatformSignal(payload, "org_example0001")
+	if !ok || signal.Sequence != 9 || signal.EventName != "RUN_CHANGED" || signal.Kind != "RUN" {
+		t.Fatalf("valid run invalidation rejected: ok=%t signal=%+v", ok, signal)
 	}
 }
 

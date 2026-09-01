@@ -1,0 +1,407 @@
+package httptransport
+
+import (
+	"crypto/sha256"
+	"image"
+	"image/color"
+	"image/png"
+	"net/http"
+	"net/url"
+	"strings"
+
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
+	"google.golang.org/protobuf/types/known/structpb"
+)
+
+func (server *Server) SetAgentAvatar(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.SetAgentAvatarParams) {
+	body, ok := decodeJSON[generated.AgentAvatarInput](w, r)
+	if !ok {
+		return
+	}
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.SetAgentAvatar(r.Context(), &controlplanev1.SetAgentAvatarRequest{
+		Mutation: mutation, AgentRef: ref, ArtifactRef: body.ArtifactRef,
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "agent", "")
+}
+
+func (server *Server) RemoveAgentAvatar(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.RemoveAgentAvatarParams) {
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.RemoveAgentAvatar(r.Context(), &controlplanev1.RemoveAgentAvatarRequest{Mutation: mutation, AgentRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "agent", "")
+}
+
+func (server *Server) GetAgentAvatarContent(w http.ResponseWriter, r *http.Request, ref generated.AgentRef) {
+	response, err := server.control.Query.GetAgent(r.Context(), &controlplanev1.GetAgentRequest{AgentRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	avatar := response.GetAgent().GetAvatar()
+	if avatar.GetSource() == controlplanev1.AgentAvatar_SOURCE_ARTIFACT && avatar.GetArtifactRef() != "" {
+		target := "/api/v1/artifacts/" + url.PathEscape(avatar.GetArtifactRef()) + "/content?purpose=PREVIEW"
+		http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.WriteHeader(http.StatusOK)
+	_ = writeFallbackAvatar(w, ref)
+}
+
+func writeFallbackAvatar(w http.ResponseWriter, ref string) error {
+	digest := sha256.Sum256([]byte("kodex-avatar-v1\x00" + ref))
+	foreground := color.NRGBA{R: 48 + digest[0]%144, G: 48 + digest[1]%144, B: 48 + digest[2]%144, A: 255}
+	background := color.NRGBA{R: 232 + digest[3]%20, G: 232 + digest[4]%20, B: 232 + digest[5]%20, A: 255}
+	bitmap := image.NewNRGBA(image.Rect(0, 0, 64, 64))
+	for y := 0; y < 64; y++ {
+		for x := 0; x < 64; x++ {
+			pixel := background
+			cellX, cellY := x/16, y/16
+			if digest[(cellY*4+cellX)%len(digest)]&1 == 1 {
+				pixel = foreground
+			}
+			bitmap.SetNRGBA(x, y, pixel)
+		}
+	}
+	return png.Encode(w, bitmap)
+}
+
+func (server *Server) ListProviderDefinitions(w http.ResponseWriter, r *http.Request, p generated.ListProviderDefinitionsParams) {
+	response, err := server.control.Query.ListProviderDefinitions(r.Context(), &controlplanev1.ListProviderDefinitionsRequest{
+		Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query),
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "definitions")
+}
+
+func (server *Server) ListProviderAccounts(w http.ResponseWriter, r *http.Request, p generated.ListProviderAccountsParams) {
+	response, err := server.control.Query.ListProviderAccounts(r.Context(), &controlplanev1.ListProviderAccountsRequest{
+		Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query), DefinitionKey: stringValue(p.DefinitionKey),
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "accounts")
+}
+
+func (server *Server) GetProviderAccount(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef) {
+	response, err := server.control.Query.GetProviderAccount(r.Context(), &controlplanev1.GetProviderAccountRequest{AccountRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "account", "")
+}
+
+func (server *Server) CreateProviderAccount(w http.ResponseWriter, r *http.Request, p generated.CreateProviderAccountParams) {
+	body, ok := decodeJSON[generated.ProviderAccountCreateInput](w, r)
+	if !ok {
+		return
+	}
+	mutation, ok := requireMutation(w, p.IdempotencyKey, "")
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.CreateProviderAccount(r.Context(), &controlplanev1.CreateProviderAccountRequest{
+		Mutation: mutation, DefinitionKey: string(body.DefinitionKey), Name: body.Name,
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusCreated, response, "account", "")
+}
+
+func (server *Server) StartProviderAccountDeviceAuthorization(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.StartProviderAccountDeviceAuthorizationParams) {
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.StartProviderAccountDeviceAuthorization(r.Context(), &controlplanev1.StartProviderAccountDeviceAuthorizationRequest{Mutation: mutation, AccountRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusAccepted, response, "account", "")
+}
+
+func (server *Server) AuthorizeProviderAccountApiKey(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.AuthorizeProviderAccountApiKeyParams) {
+	body, ok := decodeJSON[generated.ProviderApiKeyInput](w, r)
+	if !ok || body.ApiKey == nil || strings.TrimSpace(*body.ApiKey) == "" {
+		if ok {
+			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		}
+		return
+	}
+	apiKey := []byte(*body.ApiKey)
+	*body.ApiKey = ""
+	defer func() {
+		for index := range apiKey {
+			apiKey[index] = 0
+		}
+	}()
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.AuthorizeProviderAccountAPIKey(r.Context(), &controlplanev1.AuthorizeProviderAccountAPIKeyRequest{Mutation: mutation, AccountRef: ref, ApiKey: apiKey})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "account", "")
+}
+
+func (server *Server) RefreshProviderAccountAuthorization(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.RefreshProviderAccountAuthorizationParams) {
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.RefreshProviderAccountAuthorization(r.Context(), &controlplanev1.RefreshProviderAccountAuthorizationRequest{Mutation: mutation, AccountRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusAccepted, response, "account", "")
+}
+
+func (server *Server) RevokeProviderAccount(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.RevokeProviderAccountParams) {
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.RevokeProviderAccount(r.Context(), &controlplanev1.RevokeProviderAccountRequest{Mutation: mutation, AccountRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "account", "")
+}
+
+func (server *Server) SetProviderAccountEnabled(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.SetProviderAccountEnabledParams) {
+	body, ok := decodeJSON[generated.EnabledInput](w, r)
+	if !ok {
+		return
+	}
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.SetProviderAccountEnabled(r.Context(), &controlplanev1.SetProviderAccountEnabledRequest{Mutation: mutation, AccountRef: ref, Enabled: body.Enabled})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "account", "")
+}
+
+func (server *Server) ListPromptTemplateVariables(w http.ResponseWriter, r *http.Request, p generated.ListPromptTemplateVariablesParams) {
+	response, err := server.control.Query.ListTemplateVariables(r.Context(), &controlplanev1.ListTemplateVariablesRequest{
+		ProjectRef: stringValue(p.ProjectRef), Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken),
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "variables")
+}
+
+func (server *Server) ValidatePromptTemplate(w http.ResponseWriter, r *http.Request, _ generated.ValidatePromptTemplateParams) {
+	body, ok := decodeJSON[generated.PromptTemplateInput](w, r)
+	if !ok {
+		return
+	}
+	response, err := server.control.Query.ValidatePromptTemplate(r.Context(), &controlplanev1.ValidatePromptTemplateRequest{Template: body.Template})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "")
+}
+
+func (server *Server) PreviewPromptTemplate(w http.ResponseWriter, r *http.Request, _ generated.PreviewPromptTemplateParams) {
+	body, ok := decodeJSON[generated.PromptTemplatePreviewInput](w, r)
+	if !ok {
+		return
+	}
+	response, err := server.control.Query.PreviewPromptTemplate(r.Context(), &controlplanev1.PreviewPromptTemplateRequest{
+		Template: body.Template, TargetKind: stringValue(body.TargetKind), TargetRef: stringValue(body.TargetRef),
+		IncludeFullMaterialization: body.IncludeFullMaterialization != nil && *body.IncludeFullMaterialization,
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "")
+}
+
+func (server *Server) DeleteRuntimeEnvironment(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentRef, p generated.DeleteRuntimeEnvironmentParams) {
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.DeleteRuntimeEnvironment(r.Context(), &controlplanev1.DeleteRuntimeEnvironmentRequest{Mutation: mutation, EnvironmentRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "environment", "")
+}
+
+func (server *Server) SetRuntimeEnvironmentEnabled(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentRef, p generated.SetRuntimeEnvironmentEnabledParams) {
+	body, ok := decodeJSON[generated.EnabledInput](w, r)
+	if !ok {
+		return
+	}
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.SetRuntimeEnvironmentEnabled(r.Context(), &controlplanev1.SetRuntimeEnvironmentEnabledRequest{Mutation: mutation, EnvironmentRef: ref, Enabled: body.Enabled})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "environment", "")
+}
+
+func (server *Server) GetRuntimeEnvironmentReadiness(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentRef) {
+	response, err := server.control.Query.GetRuntimeEnvironmentReadiness(r.Context(), &controlplanev1.GetRuntimeEnvironmentReadinessRequest{EnvironmentRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "readiness", "")
+}
+
+func (server *Server) ListRuntimeEnvironmentAgents(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentRef, p generated.ListRuntimeEnvironmentAgentsParams) {
+	response, err := server.control.Query.ListRuntimeEnvironmentAgents(r.Context(), &controlplanev1.ListRuntimeEnvironmentAgentsRequest{
+		EnvironmentRef: ref, Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken),
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "agents")
+}
+
+func (server *Server) DeleteSchedule(w http.ResponseWriter, r *http.Request, ref generated.ScheduleRef, p generated.DeleteScheduleParams) {
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.DeleteSchedule(r.Context(), &controlplanev1.DeleteScheduleRequest{Mutation: mutation, ScheduleRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "schedule", "")
+}
+
+func (server *Server) ListScheduleRevisions(w http.ResponseWriter, r *http.Request, ref generated.ScheduleRef, p generated.ListScheduleRevisionsParams) {
+	response, err := server.control.Query.ListScheduleRevisions(r.Context(), &controlplanev1.ListScheduleRevisionsRequest{ScheduleRef: ref, Page: page(p.PageSize, p.PageToken)})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "revisions")
+}
+
+func (server *Server) ListScheduleRuns(w http.ResponseWriter, r *http.Request, ref generated.ScheduleRef, p generated.ListScheduleRunsParams) {
+	response, err := server.control.Query.ListScheduleRuns(r.Context(), &controlplanev1.ListScheduleRunsRequest{ScheduleRef: ref, Page: page(p.PageSize, p.PageToken)})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "occurrences")
+}
+
+func (server *Server) UpdateIntegrationConnection(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.UpdateIntegrationConnectionParams) {
+	body, ok := decodeJSON[generated.IntegrationConnectionUpdateInput](w, r)
+	if !ok {
+		return
+	}
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	configuration, _ := structpb.NewStruct(body.PublicConfiguration)
+	response, err := server.control.Command.UpdateIntegrationConnection(r.Context(), &controlplanev1.UpdateIntegrationConnectionRequest{
+		Mutation: mutation, ConnectionRef: ref, Name: body.Name, PublicConfiguration: configuration,
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "connection", "")
+}
+
+func (server *Server) DeleteIntegrationConnection(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.DeleteIntegrationConnectionParams) {
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.DeleteIntegrationConnection(r.Context(), &controlplanev1.DeleteIntegrationConnectionRequest{Mutation: mutation, ConnectionRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "connection", "")
+}
+
+func (server *Server) ListRoleImageRecipeRevisions(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, recipeRef generated.RecipeRef, p generated.ListRoleImageRecipeRevisionsParams) {
+	r, ok := withProjectReference(w, r, projectRef)
+	if !ok {
+		return
+	}
+	response, err := server.control.Query.ListRoleImageRecipeRevisions(r.Context(), &controlplanev1.ListRoleImageRecipeRevisionsRequest{RecipeRef: recipeRef, Page: page(p.PageSize, p.PageToken)})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "revisions")
+}
+
+func (server *Server) PromoteRoleImage(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, recipeRef generated.RecipeRef, p generated.PromoteRoleImageParams) {
+	r, ok := withProjectReference(w, r, projectRef)
+	if !ok {
+		return
+	}
+	body, ok := decodeJSON[generated.RoleImagePromotionInput](w, r)
+	if !ok {
+		return
+	}
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.PromoteRoleImage(r.Context(), &controlplanev1.PromoteRoleImageRequest{
+		Mutation: mutation, RecipeRef: recipeRef, ImageArtifactRef: body.ImageArtifactRef,
+		ExpectedProvenanceSha256: body.ExpectedProvenanceSha256,
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusAccepted, response, "receipt", "")
+}

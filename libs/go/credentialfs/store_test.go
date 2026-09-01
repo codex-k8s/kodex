@@ -50,3 +50,46 @@ func TestStoreReadsBoundedPrivateFile(t *testing.T) {
 		t.Fatalf("получено неожиданное значение длиной %d", len(value))
 	}
 }
+
+func TestStoreReadsProjectedExactSecretKey(t *testing.T) {
+	root := t.TempDir()
+	data := filepath.Join(root, "..2026_08_28")
+	if err := os.Mkdir(data, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "github-token"), []byte("value"), 0o440); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("..2026_08_28", filepath.Join(root, "..data")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..data", "github-token"), filepath.Join(root, "github-token")); err != nil {
+		t.Fatal(err)
+	}
+	store, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := store.ReadKey("github-token")
+	if err != nil || string(value) != "value" {
+		t.Fatalf("ReadKey() = %q, %v", value, err)
+	}
+}
+
+func TestStoreRejectsProjectedKeyOutsideRoot(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "github-token")
+	if err := os.WriteFile(outside, []byte("secret"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "github-token")); err != nil {
+		t.Fatal(err)
+	}
+	store, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReadKey("github-token"); err == nil {
+		t.Fatal("ожидался закрытый отказ для projected key за пределами credential root")
+	}
+}

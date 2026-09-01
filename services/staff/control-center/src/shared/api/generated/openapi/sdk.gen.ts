@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddAssistantTurnData, AddAssistantTurnErrors, AddAssistantTurnResponses, AddPlatformMembershipData, AddPlatformMembershipErrors, AddPlatformMembershipResponses, AddProjectMembershipData, AddProjectMembershipErrors, AddProjectMembershipResponses, AddSessionTurnData, AddSessionTurnErrors, AddSessionTurnResponses, ApplyAssistantPlanData, ApplyAssistantPlanErrors, ApplyAssistantPlanResponses, ChangeArtifactBindingData, ChangeArtifactBindingErrors, ChangeArtifactBindingResponses, ChangeIntegrationGrantData, ChangeIntegrationGrantErrors, ChangeIntegrationGrantResponses, ChangePlatformMembershipData, ChangePlatformMembershipErrors, ChangePlatformMembershipResponses, ChangeProjectMembershipData, ChangeProjectMembershipErrors, ChangeProjectMembershipResponses, CommandAgentData, CommandAgentErrors, CommandAgentInstructionsData, CommandAgentInstructionsErrors, CommandAgentInstructionsResponses, CommandAgentResponses, CommandIntegrationConnectionData, CommandIntegrationConnectionErrors, CommandIntegrationConnectionResponses, CommandRoleImageRecipeData, CommandRoleImageRecipeErrors, CommandRoleImageRecipeResponses, CommandRunData, CommandRunErrors, CommandRunResponses, CommandScheduleData, CommandScheduleErrors, CommandScheduleResponses, CommandSystemAssistantData, CommandSystemAssistantErrors, CommandSystemAssistantResponses, CommandWorkflowData, CommandWorkflowErrors, CommandWorkflowResponses, CompleteOnboardingData, CompleteOnboardingErrors, CompleteOnboardingResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAssistantConversationData, CreateAssistantConversationErrors, CreateAssistantConversationResponses, CreateInstructionDraftData, CreateInstructionDraftErrors, CreateInstructionDraftResponses, CreateIntegrationConnectionData, CreateIntegrationConnectionErrors, CreateIntegrationConnectionResponses, CreateOwnerSessionData, CreateOwnerSessionErrors, CreateOwnerSessionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateRoleImageRecipeData, CreateRoleImageRecipeErrors, CreateRoleImageRecipeResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateScheduleData, CreateScheduleErrors, CreateScheduleResponses, CreateWorkflowData, CreateWorkflowErrors, CreateWorkflowResponses, DeleteOwnerSessionData, DeleteOwnerSessionErrors, DeleteOwnerSessionResponses, DownloadArtifactData, DownloadArtifactErrors, DownloadArtifactResponses, GetAdministrationData, GetAdministrationErrors, GetAdministrationResponses, GetAgentData, GetAgentErrors, GetAgentResponses, GetArtifactData, GetArtifactErrors, GetArtifactResponses, GetBootstrapStateData, GetBootstrapStateErrors, GetBootstrapStateResponses, GetIntegrationConnectionData, GetIntegrationConnectionErrors, GetIntegrationConnectionResponses, GetOverviewData, GetOverviewErrors, GetOverviewResponses, GetOwnerGateData, GetOwnerGateErrors, GetOwnerGateResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetRoleImageRecipeData, GetRoleImageRecipeErrors, GetRoleImageRecipeResponses, GetRunData, GetRunErrors, GetRunGraphData, GetRunGraphErrors, GetRunGraphResponses, GetRunResponses, GetSystemAssistantData, GetSystemAssistantErrors, GetSystemAssistantResponses, GetWorkflowData, GetWorkflowErrors, GetWorkflowResponses, ListAgentInstructionVersionsData, ListAgentInstructionVersionsErrors, ListAgentInstructionVersionsResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListArtifactsData, ListArtifactsErrors, ListArtifactsResponses, ListAssistantConversationsData, ListAssistantConversationsErrors, ListAssistantConversationsResponses, ListAuditEventsData, ListAuditEventsErrors, ListAuditEventsResponses, ListIntegrationConnectionsData, ListIntegrationConnectionsErrors, ListIntegrationConnectionsResponses, ListIntegrationDefinitionsData, ListIntegrationDefinitionsErrors, ListIntegrationDefinitionsResponses, ListOwnerGatesData, ListOwnerGatesErrors, ListOwnerGatesResponses, ListPlatformCapabilitiesData, ListPlatformCapabilitiesErrors, ListPlatformCapabilitiesResponses, ListPlatformMembershipCandidatesData, ListPlatformMembershipCandidatesErrors, ListPlatformMembershipCandidatesResponses, ListPlatformMembershipsData, ListPlatformMembershipsErrors, ListPlatformMembershipsResponses, ListProjectMembershipCandidatesData, ListProjectMembershipCandidatesErrors, ListProjectMembershipCandidatesResponses, ListProjectMembershipsData, ListProjectMembershipsErrors, ListProjectMembershipsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRoleEnvironmentsData, ListRoleEnvironmentsErrors, ListRoleEnvironmentsResponses, ListRoleImageRecipesData, ListRoleImageRecipesErrors, ListRoleImageRecipesResponses, ListRunEventsData, ListRunEventsErrors, ListRunEventsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListRuntimeSelectionsData, ListRuntimeSelectionsErrors, ListRuntimeSelectionsResponses, ListSchedulesData, ListSchedulesErrors, ListSchedulesResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, RemovePlatformMembershipData, RemovePlatformMembershipErrors, RemovePlatformMembershipResponses, RemoveProjectMembershipData, RemoveProjectMembershipErrors, RemoveProjectMembershipResponses, RenewOwnerSessionData, RenewOwnerSessionErrors, RenewOwnerSessionResponses, ResolveOwnerGateData, ResolveOwnerGateErrors, ResolveOwnerGateResponses, SearchPlatformData, SearchPlatformErrors, SearchPlatformResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleImageRecipeData, UpdateRoleImageRecipeErrors, UpdateRoleImageRecipeResponses, UpdateScheduleData, UpdateScheduleErrors, UpdateScheduleResponses, UpdateSystemAssistantOwnerInstructionsData, UpdateSystemAssistantOwnerInstructionsErrors, UpdateSystemAssistantOwnerInstructionsResponses, UpdateWorkflowDraftData, UpdateWorkflowDraftErrors, UpdateWorkflowDraftResponses, UploadArtifactData, UploadArtifactErrors, UploadArtifactResponses } from './types.gen';
+import type { AddAssistantTurnData, AddAssistantTurnErrors, AddAssistantTurnResponses, AddAttachmentSetItemsData, AddAttachmentSetItemsErrors, AddAttachmentSetItemsResponses, AddPlatformMembershipData, AddPlatformMembershipErrors, AddPlatformMembershipResponses, AddProjectMembershipData, AddProjectMembershipErrors, AddProjectMembershipResponses, AddSessionTurnData, AddSessionTurnErrors, AddSessionTurnResponses, ApplyAssistantPlanData, ApplyAssistantPlanErrors, ApplyAssistantPlanResponses, ArchiveAccessRoleData, ArchiveAccessRoleErrors, ArchiveAccessRoleResponses, AuthorizeProviderAccountApiKeyData, AuthorizeProviderAccountApiKeyErrors, AuthorizeProviderAccountApiKeyResponses, BindAgentRuntimeEnvironmentData, BindAgentRuntimeEnvironmentErrors, BindAgentRuntimeEnvironmentResponses, ChangeAccessBindingData, ChangeAccessBindingErrors, ChangeAccessBindingResponses, ChangeArtifactBindingData, ChangeArtifactBindingErrors, ChangeArtifactBindingResponses, ChangeIntegrationGrantData, ChangeIntegrationGrantErrors, ChangeIntegrationGrantResponses, ChangePlatformMembershipData, ChangePlatformMembershipErrors, ChangePlatformMembershipResponses, ChangeProjectMembershipData, ChangeProjectMembershipErrors, ChangeProjectMembershipResponses, CommandAgentData, CommandAgentErrors, CommandAgentInstructionsData, CommandAgentInstructionsErrors, CommandAgentInstructionsResponses, CommandAgentResponses, CommandIntegrationConnectionData, CommandIntegrationConnectionErrors, CommandIntegrationConnectionResponses, CommandRoleImageRecipeData, CommandRoleImageRecipeErrors, CommandRoleImageRecipeResponses, CommandRunData, CommandRunErrors, CommandRunResponses, CommandScheduleData, CommandScheduleErrors, CommandScheduleResponses, CommandSystemAssistantData, CommandSystemAssistantErrors, CommandSystemAssistantResponses, CommandWorkflowData, CommandWorkflowErrors, CommandWorkflowResponses, CompleteOnboardingData, CompleteOnboardingErrors, CompleteOnboardingResponses, ConfigureIntegrationConnectionCredentialData, ConfigureIntegrationConnectionCredentialErrors, ConfigureIntegrationConnectionCredentialResponses, CreateAccessBindingData, CreateAccessBindingErrors, CreateAccessBindingResponses, CreateAccessRoleData, CreateAccessRoleErrors, CreateAccessRoleResponses, CreateAccessRoleVersionData, CreateAccessRoleVersionErrors, CreateAccessRoleVersionResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAssistantConversationData, CreateAssistantConversationErrors, CreateAssistantConversationResponses, CreateAttachmentSetDraftData, CreateAttachmentSetDraftErrors, CreateAttachmentSetDraftResponses, CreateConfigOverlayDraftData, CreateConfigOverlayDraftErrors, CreateConfigOverlayDraftResponses, CreateInstructionDraftData, CreateInstructionDraftErrors, CreateInstructionDraftResponses, CreateIntegrationConnectionData, CreateIntegrationConnectionErrors, CreateIntegrationConnectionResponses, CreateOrganizationAttachmentSetDraftData, CreateOrganizationAttachmentSetDraftErrors, CreateOrganizationAttachmentSetDraftResponses, CreateOwnerSessionData, CreateOwnerSessionErrors, CreateOwnerSessionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateProviderAccountData, CreateProviderAccountErrors, CreateProviderAccountResponses, CreateRoleImageRecipeData, CreateRoleImageRecipeErrors, CreateRoleImageRecipeResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateRuntimeEnvironmentSetData, CreateRuntimeEnvironmentSetErrors, CreateRuntimeEnvironmentSetResponses, CreateRuntimeSecretData, CreateRuntimeSecretErrors, CreateRuntimeSecretResponses, CreateScheduleData, CreateScheduleErrors, CreateScheduleResponses, CreateWorkflowData, CreateWorkflowErrors, CreateWorkflowResponses, DeleteArtifactData, DeleteArtifactErrors, DeleteArtifactResponses, DeleteIntegrationConnectionData, DeleteIntegrationConnectionErrors, DeleteIntegrationConnectionResponses, DeleteOwnerSessionData, DeleteOwnerSessionErrors, DeleteOwnerSessionResponses, DeleteRuntimeEnvironmentData, DeleteRuntimeEnvironmentErrors, DeleteRuntimeEnvironmentResponses, DeleteScheduleData, DeleteScheduleErrors, DeleteScheduleResponses, DownloadArtifactData, DownloadArtifactErrors, DownloadArtifactResponses, ExplainAccessData, ExplainAccessErrors, ExplainAccessResponses, FinalizeAttachmentSetData, FinalizeAttachmentSetErrors, FinalizeAttachmentSetResponses, GetAdministrationData, GetAdministrationErrors, GetAdministrationResponses, GetAgentAvatarContentData, GetAgentAvatarContentErrors, GetAgentAvatarContentResponses, GetAgentData, GetAgentErrors, GetAgentResponses, GetAgentRuntimeConfigurationData, GetAgentRuntimeConfigurationErrors, GetAgentRuntimeConfigurationResponses, GetArtifactData, GetArtifactErrors, GetArtifactImpactData, GetArtifactImpactErrors, GetArtifactImpactResponses, GetArtifactResponses, GetAttachmentSetData, GetAttachmentSetErrors, GetAttachmentSetResponses, GetBootstrapStateData, GetBootstrapStateErrors, GetBootstrapStateResponses, GetIntegrationConnectionData, GetIntegrationConnectionErrors, GetIntegrationConnectionResponses, GetOverviewData, GetOverviewErrors, GetOverviewResponses, GetOwnerGateData, GetOwnerGateErrors, GetOwnerGateResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetProviderAccountData, GetProviderAccountErrors, GetProviderAccountResponses, GetRoleImageRecipeData, GetRoleImageRecipeErrors, GetRoleImageRecipeResponses, GetRunData, GetRunErrors, GetRunGraphData, GetRunGraphErrors, GetRunGraphResponses, GetRunResponses, GetRuntimeEnvironmentReadinessData, GetRuntimeEnvironmentReadinessErrors, GetRuntimeEnvironmentReadinessResponses, GetRuntimeEnvironmentSetData, GetRuntimeEnvironmentSetErrors, GetRuntimeEnvironmentSetResponses, GetRuntimeSecretData, GetRuntimeSecretErrors, GetRuntimeSecretResponses, GetScheduleData, GetScheduleErrors, GetScheduleResponses, GetSystemAssistantData, GetSystemAssistantErrors, GetSystemAssistantResponses, GetWorkflowData, GetWorkflowErrors, GetWorkflowResponses, ListAccessBindingsData, ListAccessBindingsErrors, ListAccessBindingsResponses, ListAccessRolesData, ListAccessRolesErrors, ListAccessRolesResponses, ListAccessRoleVersionsData, ListAccessRoleVersionsErrors, ListAccessRoleVersionsResponses, ListAccessSubjectsData, ListAccessSubjectsErrors, ListAccessSubjectsResponses, ListAgentInstructionVersionsData, ListAgentInstructionVersionsErrors, ListAgentInstructionVersionsResponses, ListAgentRuntimeConfigurationVersionsData, ListAgentRuntimeConfigurationVersionsErrors, ListAgentRuntimeConfigurationVersionsResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListArtifactsData, ListArtifactsErrors, ListArtifactsResponses, ListAssistantConversationsData, ListAssistantConversationsErrors, ListAssistantConversationsResponses, ListAuditEventsData, ListAuditEventsErrors, ListAuditEventsResponses, ListIntegrationConnectionsData, ListIntegrationConnectionsErrors, ListIntegrationConnectionsResponses, ListIntegrationDefinitionsData, ListIntegrationDefinitionsErrors, ListIntegrationDefinitionsResponses, ListOidcGroupsData, ListOidcGroupsErrors, ListOidcGroupsResponses, ListOrganizationArtifactsData, ListOrganizationArtifactsErrors, ListOrganizationArtifactsResponses, ListOwnerGatesData, ListOwnerGatesErrors, ListOwnerGatesResponses, ListPermissionRegistryData, ListPermissionRegistryErrors, ListPermissionRegistryResponses, ListPlatformCapabilitiesData, ListPlatformCapabilitiesErrors, ListPlatformCapabilitiesResponses, ListPlatformMembershipCandidatesData, ListPlatformMembershipCandidatesErrors, ListPlatformMembershipCandidatesResponses, ListPlatformMembershipsData, ListPlatformMembershipsErrors, ListPlatformMembershipsResponses, ListProjectMembershipCandidatesData, ListProjectMembershipCandidatesErrors, ListProjectMembershipCandidatesResponses, ListProjectMembershipsData, ListProjectMembershipsErrors, ListProjectMembershipsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListPromptTemplateVariablesData, ListPromptTemplateVariablesErrors, ListPromptTemplateVariablesResponses, ListProviderAccountsData, ListProviderAccountsErrors, ListProviderAccountsResponses, ListProviderDefinitionsData, ListProviderDefinitionsErrors, ListProviderDefinitionsResponses, ListRoleEnvironmentsData, ListRoleEnvironmentsErrors, ListRoleEnvironmentsResponses, ListRoleImageRecipeRevisionsData, ListRoleImageRecipeRevisionsErrors, ListRoleImageRecipeRevisionsResponses, ListRoleImageRecipesData, ListRoleImageRecipesErrors, ListRoleImageRecipesResponses, ListRunEventsData, ListRunEventsErrors, ListRunEventsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListRuntimeEnvironmentAgentsData, ListRuntimeEnvironmentAgentsErrors, ListRuntimeEnvironmentAgentsResponses, ListRuntimeEnvironmentSetsData, ListRuntimeEnvironmentSetsErrors, ListRuntimeEnvironmentSetsResponses, ListRuntimeEnvironmentVersionsData, ListRuntimeEnvironmentVersionsErrors, ListRuntimeEnvironmentVersionsResponses, ListRuntimeSecretsData, ListRuntimeSecretsErrors, ListRuntimeSecretsResponses, ListRuntimeSelectionsData, ListRuntimeSelectionsErrors, ListRuntimeSelectionsResponses, ListScheduleRevisionsData, ListScheduleRevisionsErrors, ListScheduleRevisionsResponses, ListScheduleRunsData, ListScheduleRunsErrors, ListScheduleRunsResponses, ListSchedulesData, ListSchedulesErrors, ListSchedulesResponses, ListTemplateVariablesData, ListTemplateVariablesErrors, ListTemplateVariablesResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, PreviewPromptTemplateData, PreviewPromptTemplateErrors, PreviewPromptTemplateResponses, PromoteRoleImageData, PromoteRoleImageErrors, PromoteRoleImageResponses, PublishAgentRuntimeConfigurationData, PublishAgentRuntimeConfigurationErrors, PublishAgentRuntimeConfigurationResponses, PublishConfigOverlayDraftData, PublishConfigOverlayDraftErrors, PublishConfigOverlayDraftResponses, PublishRuntimeEnvironmentVersionData, PublishRuntimeEnvironmentVersionErrors, PublishRuntimeEnvironmentVersionResponses, PurgeArtifactData, PurgeArtifactErrors, PurgeArtifactResponses, QueryEffectiveAccessData, QueryEffectiveAccessErrors, QueryEffectiveAccessResponses, RefreshProviderAccountAuthorizationData, RefreshProviderAccountAuthorizationErrors, RefreshProviderAccountAuthorizationResponses, RejectAssistantPlanData, RejectAssistantPlanErrors, RejectAssistantPlanResponses, RemoveAgentAvatarData, RemoveAgentAvatarErrors, RemoveAgentAvatarResponses, RemoveAttachmentSetItemsData, RemoveAttachmentSetItemsErrors, RemoveAttachmentSetItemsResponses, RemovePlatformMembershipData, RemovePlatformMembershipErrors, RemovePlatformMembershipResponses, RemoveProjectMembershipData, RemoveProjectMembershipErrors, RemoveProjectMembershipResponses, RenewOwnerSessionData, RenewOwnerSessionErrors, RenewOwnerSessionResponses, ResolveOwnerGateData, ResolveOwnerGateErrors, ResolveOwnerGateResponses, RestoreArtifactData, RestoreArtifactErrors, RestoreArtifactResponses, RevealRuntimeSecretData, RevealRuntimeSecretErrors, RevealRuntimeSecretResponses, RevokeAccessBindingData, RevokeAccessBindingErrors, RevokeAccessBindingResponses, RevokeProviderAccountData, RevokeProviderAccountErrors, RevokeProviderAccountResponses, RevokeRuntimeSecretData, RevokeRuntimeSecretErrors, RevokeRuntimeSecretResponses, RollbackConfigOverlayData, RollbackConfigOverlayErrors, RollbackConfigOverlayResponses, RollbackRuntimeEnvironmentData, RollbackRuntimeEnvironmentErrors, RollbackRuntimeEnvironmentResponses, RotateRuntimeSecretData, RotateRuntimeSecretErrors, RotateRuntimeSecretResponses, SearchPlatformData, SearchPlatformErrors, SearchPlatformResponses, SetAgentAvatarData, SetAgentAvatarErrors, SetAgentAvatarResponses, SetProviderAccountEnabledData, SetProviderAccountEnabledErrors, SetProviderAccountEnabledResponses, SetRuntimeEnvironmentEnabledData, SetRuntimeEnvironmentEnabledErrors, SetRuntimeEnvironmentEnabledResponses, SimulateAccessData, SimulateAccessErrors, SimulateAccessResponses, StartProviderAccountDeviceAuthorizationData, StartProviderAccountDeviceAuthorizationErrors, StartProviderAccountDeviceAuthorizationResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateAssistantConversationTitleData, UpdateAssistantConversationTitleErrors, UpdateAssistantConversationTitleResponses, UpdateAssistantPlanDraftData, UpdateAssistantPlanDraftErrors, UpdateAssistantPlanDraftResponses, UpdateIntegrationConnectionData, UpdateIntegrationConnectionErrors, UpdateIntegrationConnectionResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleImageRecipeData, UpdateRoleImageRecipeErrors, UpdateRoleImageRecipeResponses, UpdateScheduleData, UpdateScheduleErrors, UpdateScheduleResponses, UpdateSystemAssistantOwnerInstructionsData, UpdateSystemAssistantOwnerInstructionsErrors, UpdateSystemAssistantOwnerInstructionsResponses, UpdateWorkflowDraftData, UpdateWorkflowDraftErrors, UpdateWorkflowDraftResponses, UploadArtifactData, UploadArtifactErrors, UploadArtifactResponses, UploadOrganizationArtifactData, UploadOrganizationArtifactErrors, UploadOrganizationArtifactResponses, ValidateAssistantPlanData, ValidateAssistantPlanErrors, ValidateAssistantPlanResponses, ValidateConfigOverlayDraftData, ValidateConfigOverlayDraftErrors, ValidateConfigOverlayDraftResponses, ValidatePromptTemplateData, ValidatePromptTemplateErrors, ValidatePromptTemplateResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -31,7 +31,11 @@ export const deleteOwnerSession = <ThrowOnError extends boolean = false>(options
 export const createOwnerSession = <ThrowOnError extends boolean = false>(options: Options<CreateOwnerSessionData, ThrowOnError>): RequestResult<CreateOwnerSessionResponses, CreateOwnerSessionErrors, ThrowOnError> => (options.client ?? client).post<CreateOwnerSessionResponses, CreateOwnerSessionErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/session',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 export const renewOwnerSession = <ThrowOnError extends boolean = false>(options: Options<RenewOwnerSessionData, ThrowOnError>): RequestResult<RenewOwnerSessionResponses, RenewOwnerSessionErrors, ThrowOnError> => (options.client ?? client).put<RenewOwnerSessionResponses, RenewOwnerSessionErrors, ThrowOnError>({
@@ -316,6 +320,40 @@ export const updateAgent = <ThrowOnError extends boolean = false>(options: Optio
     }
 });
 
+export const removeAgentAvatar = <ThrowOnError extends boolean = false>(options: Options<RemoveAgentAvatarData, ThrowOnError>): RequestResult<RemoveAgentAvatarResponses, RemoveAgentAvatarErrors, ThrowOnError> => (options.client ?? client).delete<RemoveAgentAvatarResponses, RemoveAgentAvatarErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/avatar',
+    ...options
+});
+
+export const setAgentAvatar = <ThrowOnError extends boolean = false>(options: Options<SetAgentAvatarData, ThrowOnError>): RequestResult<SetAgentAvatarResponses, SetAgentAvatarErrors, ThrowOnError> => (options.client ?? client).put<SetAgentAvatarResponses, SetAgentAvatarErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/avatar',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const getAgentAvatarContent = <ThrowOnError extends boolean = false>(options: Options<GetAgentAvatarContentData, ThrowOnError>): RequestResult<GetAgentAvatarContentResponses, GetAgentAvatarContentErrors, ThrowOnError> => (options.client ?? client).get<GetAgentAvatarContentResponses, GetAgentAvatarContentErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/avatar/content',
+    ...options
+});
+
 export const listAgentInstructionVersions = <ThrowOnError extends boolean = false>(options: Options<ListAgentInstructionVersionsData, ThrowOnError>): RequestResult<ListAgentInstructionVersionsResponses, ListAgentInstructionVersionsErrors, ThrowOnError> => (options.client ?? client).get<ListAgentInstructionVersionsResponses, ListAgentInstructionVersionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -366,6 +404,436 @@ export const commandAgentInstructions = <ThrowOnError extends boolean = false>(o
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+export const getAgentRuntimeConfiguration = <ThrowOnError extends boolean = false>(options: Options<GetAgentRuntimeConfigurationData, ThrowOnError>): RequestResult<GetAgentRuntimeConfigurationResponses, GetAgentRuntimeConfigurationErrors, ThrowOnError> => (options.client ?? client).get<GetAgentRuntimeConfigurationResponses, GetAgentRuntimeConfigurationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/runtime-configuration',
+    ...options
+});
+
+export const publishAgentRuntimeConfiguration = <ThrowOnError extends boolean = false>(options: Options<PublishAgentRuntimeConfigurationData, ThrowOnError>): RequestResult<PublishAgentRuntimeConfigurationResponses, PublishAgentRuntimeConfigurationErrors, ThrowOnError> => (options.client ?? client).put<PublishAgentRuntimeConfigurationResponses, PublishAgentRuntimeConfigurationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/runtime-configuration',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listAgentRuntimeConfigurationVersions = <ThrowOnError extends boolean = false>(options: Options<ListAgentRuntimeConfigurationVersionsData, ThrowOnError>): RequestResult<ListAgentRuntimeConfigurationVersionsResponses, ListAgentRuntimeConfigurationVersionsErrors, ThrowOnError> => (options.client ?? client).get<ListAgentRuntimeConfigurationVersionsResponses, ListAgentRuntimeConfigurationVersionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/runtime-configuration/versions',
+    ...options
+});
+
+export const createConfigOverlayDraft = <ThrowOnError extends boolean = false>(options: Options<CreateConfigOverlayDraftData, ThrowOnError>): RequestResult<CreateConfigOverlayDraftResponses, CreateConfigOverlayDraftErrors, ThrowOnError> => (options.client ?? client).post<CreateConfigOverlayDraftResponses, CreateConfigOverlayDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/config-overlay-drafts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const validateConfigOverlayDraft = <ThrowOnError extends boolean = false>(options: Options<ValidateConfigOverlayDraftData, ThrowOnError>): RequestResult<ValidateConfigOverlayDraftResponses, ValidateConfigOverlayDraftErrors, ThrowOnError> => (options.client ?? client).post<ValidateConfigOverlayDraftResponses, ValidateConfigOverlayDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/config-overlay-drafts/validation',
+    ...options
+});
+
+export const publishConfigOverlayDraft = <ThrowOnError extends boolean = false>(options: Options<PublishConfigOverlayDraftData, ThrowOnError>): RequestResult<PublishConfigOverlayDraftResponses, PublishConfigOverlayDraftErrors, ThrowOnError> => (options.client ?? client).post<PublishConfigOverlayDraftResponses, PublishConfigOverlayDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/config-overlay-drafts/publication',
+    ...options
+});
+
+export const rollbackConfigOverlay = <ThrowOnError extends boolean = false>(options: Options<RollbackConfigOverlayData, ThrowOnError>): RequestResult<RollbackConfigOverlayResponses, RollbackConfigOverlayErrors, ThrowOnError> => (options.client ?? client).post<RollbackConfigOverlayResponses, RollbackConfigOverlayErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/config-overlay-rollbacks',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const bindAgentRuntimeEnvironment = <ThrowOnError extends boolean = false>(options: Options<BindAgentRuntimeEnvironmentData, ThrowOnError>): RequestResult<BindAgentRuntimeEnvironmentResponses, BindAgentRuntimeEnvironmentErrors, ThrowOnError> => (options.client ?? client).put<BindAgentRuntimeEnvironmentResponses, BindAgentRuntimeEnvironmentErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/agents/{agentRef}/runtime-environment-binding',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listRuntimeEnvironmentSets = <ThrowOnError extends boolean = false>(options: Options<ListRuntimeEnvironmentSetsData, ThrowOnError>): RequestResult<ListRuntimeEnvironmentSetsResponses, ListRuntimeEnvironmentSetsErrors, ThrowOnError> => (options.client ?? client).get<ListRuntimeEnvironmentSetsResponses, ListRuntimeEnvironmentSetsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/runtime-environments',
+    ...options
+});
+
+export const createRuntimeEnvironmentSet = <ThrowOnError extends boolean = false>(options: Options<CreateRuntimeEnvironmentSetData, ThrowOnError>): RequestResult<CreateRuntimeEnvironmentSetResponses, CreateRuntimeEnvironmentSetErrors, ThrowOnError> => (options.client ?? client).post<CreateRuntimeEnvironmentSetResponses, CreateRuntimeEnvironmentSetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/runtime-environments',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listTemplateVariables = <ThrowOnError extends boolean = false>(options: Options<ListTemplateVariablesData, ThrowOnError>): RequestResult<ListTemplateVariablesResponses, ListTemplateVariablesErrors, ThrowOnError> => (options.client ?? client).get<ListTemplateVariablesResponses, ListTemplateVariablesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/template-variables',
+    ...options
+});
+
+export const listProviderDefinitions = <ThrowOnError extends boolean = false>(options?: Options<ListProviderDefinitionsData, ThrowOnError>): RequestResult<ListProviderDefinitionsResponses, ListProviderDefinitionsErrors, ThrowOnError> => (options?.client ?? client).get<ListProviderDefinitionsResponses, ListProviderDefinitionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/provider-definitions',
+    ...options
+});
+
+export const listProviderAccounts = <ThrowOnError extends boolean = false>(options?: Options<ListProviderAccountsData, ThrowOnError>): RequestResult<ListProviderAccountsResponses, ListProviderAccountsErrors, ThrowOnError> => (options?.client ?? client).get<ListProviderAccountsResponses, ListProviderAccountsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/provider-accounts',
+    ...options
+});
+
+export const createProviderAccount = <ThrowOnError extends boolean = false>(options: Options<CreateProviderAccountData, ThrowOnError>): RequestResult<CreateProviderAccountResponses, CreateProviderAccountErrors, ThrowOnError> => (options.client ?? client).post<CreateProviderAccountResponses, CreateProviderAccountErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/provider-accounts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const getProviderAccount = <ThrowOnError extends boolean = false>(options: Options<GetProviderAccountData, ThrowOnError>): RequestResult<GetProviderAccountResponses, GetProviderAccountErrors, ThrowOnError> => (options.client ?? client).get<GetProviderAccountResponses, GetProviderAccountErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/provider-accounts/{providerAccountRef}',
+    ...options
+});
+
+export const startProviderAccountDeviceAuthorization = <ThrowOnError extends boolean = false>(options: Options<StartProviderAccountDeviceAuthorizationData, ThrowOnError>): RequestResult<StartProviderAccountDeviceAuthorizationResponses, StartProviderAccountDeviceAuthorizationErrors, ThrowOnError> => (options.client ?? client).post<StartProviderAccountDeviceAuthorizationResponses, StartProviderAccountDeviceAuthorizationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/provider-accounts/{providerAccountRef}/device-authorization',
+    ...options
+});
+
+export const authorizeProviderAccountApiKey = <ThrowOnError extends boolean = false>(options: Options<AuthorizeProviderAccountApiKeyData, ThrowOnError>): RequestResult<AuthorizeProviderAccountApiKeyResponses, AuthorizeProviderAccountApiKeyErrors, ThrowOnError> => (options.client ?? client).post<AuthorizeProviderAccountApiKeyResponses, AuthorizeProviderAccountApiKeyErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/provider-accounts/{providerAccountRef}/api-key-authorization',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const refreshProviderAccountAuthorization = <ThrowOnError extends boolean = false>(options: Options<RefreshProviderAccountAuthorizationData, ThrowOnError>): RequestResult<RefreshProviderAccountAuthorizationResponses, RefreshProviderAccountAuthorizationErrors, ThrowOnError> => (options.client ?? client).post<RefreshProviderAccountAuthorizationResponses, RefreshProviderAccountAuthorizationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/provider-accounts/{providerAccountRef}/authorization-refresh',
+    ...options
+});
+
+export const revokeProviderAccount = <ThrowOnError extends boolean = false>(options: Options<RevokeProviderAccountData, ThrowOnError>): RequestResult<RevokeProviderAccountResponses, RevokeProviderAccountErrors, ThrowOnError> => (options.client ?? client).post<RevokeProviderAccountResponses, RevokeProviderAccountErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/provider-accounts/{providerAccountRef}/revocation',
+    ...options
+});
+
+export const setProviderAccountEnabled = <ThrowOnError extends boolean = false>(options: Options<SetProviderAccountEnabledData, ThrowOnError>): RequestResult<SetProviderAccountEnabledResponses, SetProviderAccountEnabledErrors, ThrowOnError> => (options.client ?? client).put<SetProviderAccountEnabledResponses, SetProviderAccountEnabledErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/provider-accounts/{providerAccountRef}/enabled',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listPromptTemplateVariables = <ThrowOnError extends boolean = false>(options?: Options<ListPromptTemplateVariablesData, ThrowOnError>): RequestResult<ListPromptTemplateVariablesResponses, ListPromptTemplateVariablesErrors, ThrowOnError> => (options?.client ?? client).get<ListPromptTemplateVariablesResponses, ListPromptTemplateVariablesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/prompt-templates/catalog',
+    ...options
+});
+
+export const validatePromptTemplate = <ThrowOnError extends boolean = false>(options: Options<ValidatePromptTemplateData, ThrowOnError>): RequestResult<ValidatePromptTemplateResponses, ValidatePromptTemplateErrors, ThrowOnError> => (options.client ?? client).post<ValidatePromptTemplateResponses, ValidatePromptTemplateErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/prompt-templates/validation',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const previewPromptTemplate = <ThrowOnError extends boolean = false>(options: Options<PreviewPromptTemplateData, ThrowOnError>): RequestResult<PreviewPromptTemplateResponses, PreviewPromptTemplateErrors, ThrowOnError> => (options.client ?? client).post<PreviewPromptTemplateResponses, PreviewPromptTemplateErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/prompt-templates/preview',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const deleteRuntimeEnvironment = <ThrowOnError extends boolean = false>(options: Options<DeleteRuntimeEnvironmentData, ThrowOnError>): RequestResult<DeleteRuntimeEnvironmentResponses, DeleteRuntimeEnvironmentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteRuntimeEnvironmentResponses, DeleteRuntimeEnvironmentErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-environments/{environmentRef}',
+    ...options
+});
+
+export const getRuntimeEnvironmentSet = <ThrowOnError extends boolean = false>(options: Options<GetRuntimeEnvironmentSetData, ThrowOnError>): RequestResult<GetRuntimeEnvironmentSetResponses, GetRuntimeEnvironmentSetErrors, ThrowOnError> => (options.client ?? client).get<GetRuntimeEnvironmentSetResponses, GetRuntimeEnvironmentSetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-environments/{environmentRef}',
+    ...options
+});
+
+export const setRuntimeEnvironmentEnabled = <ThrowOnError extends boolean = false>(options: Options<SetRuntimeEnvironmentEnabledData, ThrowOnError>): RequestResult<SetRuntimeEnvironmentEnabledResponses, SetRuntimeEnvironmentEnabledErrors, ThrowOnError> => (options.client ?? client).put<SetRuntimeEnvironmentEnabledResponses, SetRuntimeEnvironmentEnabledErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-environments/{environmentRef}/enabled',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const getRuntimeEnvironmentReadiness = <ThrowOnError extends boolean = false>(options: Options<GetRuntimeEnvironmentReadinessData, ThrowOnError>): RequestResult<GetRuntimeEnvironmentReadinessResponses, GetRuntimeEnvironmentReadinessErrors, ThrowOnError> => (options.client ?? client).get<GetRuntimeEnvironmentReadinessResponses, GetRuntimeEnvironmentReadinessErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-environments/{environmentRef}/readiness',
+    ...options
+});
+
+export const listRuntimeEnvironmentAgents = <ThrowOnError extends boolean = false>(options: Options<ListRuntimeEnvironmentAgentsData, ThrowOnError>): RequestResult<ListRuntimeEnvironmentAgentsResponses, ListRuntimeEnvironmentAgentsErrors, ThrowOnError> => (options.client ?? client).get<ListRuntimeEnvironmentAgentsResponses, ListRuntimeEnvironmentAgentsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-environments/{environmentRef}/agents',
+    ...options
+});
+
+export const listRuntimeEnvironmentVersions = <ThrowOnError extends boolean = false>(options: Options<ListRuntimeEnvironmentVersionsData, ThrowOnError>): RequestResult<ListRuntimeEnvironmentVersionsResponses, ListRuntimeEnvironmentVersionsErrors, ThrowOnError> => (options.client ?? client).get<ListRuntimeEnvironmentVersionsResponses, ListRuntimeEnvironmentVersionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-environments/{environmentRef}/versions',
+    ...options
+});
+
+export const publishRuntimeEnvironmentVersion = <ThrowOnError extends boolean = false>(options: Options<PublishRuntimeEnvironmentVersionData, ThrowOnError>): RequestResult<PublishRuntimeEnvironmentVersionResponses, PublishRuntimeEnvironmentVersionErrors, ThrowOnError> => (options.client ?? client).post<PublishRuntimeEnvironmentVersionResponses, PublishRuntimeEnvironmentVersionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-environments/{environmentRef}/versions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const rollbackRuntimeEnvironment = <ThrowOnError extends boolean = false>(options: Options<RollbackRuntimeEnvironmentData, ThrowOnError>): RequestResult<RollbackRuntimeEnvironmentResponses, RollbackRuntimeEnvironmentErrors, ThrowOnError> => (options.client ?? client).post<RollbackRuntimeEnvironmentResponses, RollbackRuntimeEnvironmentErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-environments/{environmentRef}/rollbacks',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listRuntimeSecrets = <ThrowOnError extends boolean = false>(options: Options<ListRuntimeSecretsData, ThrowOnError>): RequestResult<ListRuntimeSecretsResponses, ListRuntimeSecretsErrors, ThrowOnError> => (options.client ?? client).get<ListRuntimeSecretsResponses, ListRuntimeSecretsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/runtime-secrets',
+    ...options
+});
+
+export const createRuntimeSecret = <ThrowOnError extends boolean = false>(options: Options<CreateRuntimeSecretData, ThrowOnError>): RequestResult<CreateRuntimeSecretResponses, CreateRuntimeSecretErrors, ThrowOnError> => (options.client ?? client).post<CreateRuntimeSecretResponses, CreateRuntimeSecretErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/runtime-secrets',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const revokeRuntimeSecret = <ThrowOnError extends boolean = false>(options: Options<RevokeRuntimeSecretData, ThrowOnError>): RequestResult<RevokeRuntimeSecretResponses, RevokeRuntimeSecretErrors, ThrowOnError> => (options.client ?? client).delete<RevokeRuntimeSecretResponses, RevokeRuntimeSecretErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-secrets/{secretRef}',
+    ...options
+});
+
+export const getRuntimeSecret = <ThrowOnError extends boolean = false>(options: Options<GetRuntimeSecretData, ThrowOnError>): RequestResult<GetRuntimeSecretResponses, GetRuntimeSecretErrors, ThrowOnError> => (options.client ?? client).get<GetRuntimeSecretResponses, GetRuntimeSecretErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-secrets/{secretRef}',
+    ...options
+});
+
+export const rotateRuntimeSecret = <ThrowOnError extends boolean = false>(options: Options<RotateRuntimeSecretData, ThrowOnError>): RequestResult<RotateRuntimeSecretResponses, RotateRuntimeSecretErrors, ThrowOnError> => (options.client ?? client).post<RotateRuntimeSecretResponses, RotateRuntimeSecretErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-secrets/{secretRef}/rotations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const revealRuntimeSecret = <ThrowOnError extends boolean = false>(options: Options<RevealRuntimeSecretData, ThrowOnError>): RequestResult<RevealRuntimeSecretResponses, RevealRuntimeSecretErrors, ThrowOnError> => (options.client ?? client).post<RevealRuntimeSecretResponses, RevealRuntimeSecretErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/runtime-secrets/{secretRef}/reveal',
+    ...options
 });
 
 export const listRoleEnvironments = <ThrowOnError extends boolean = false>(options?: Options<ListRoleEnvironmentsData, ThrowOnError>): RequestResult<ListRoleEnvironmentsResponses, ListRoleEnvironmentsErrors, ThrowOnError> => (options?.client ?? client).get<ListRoleEnvironmentsResponses, ListRoleEnvironmentsErrors, ThrowOnError>({
@@ -433,6 +901,30 @@ export const commandRoleImageRecipe = <ThrowOnError extends boolean = false>(opt
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listRoleImageRecipeRevisions = <ThrowOnError extends boolean = false>(options: Options<ListRoleImageRecipeRevisionsData, ThrowOnError>): RequestResult<ListRoleImageRecipeRevisionsResponses, ListRoleImageRecipeRevisionsErrors, ThrowOnError> => (options.client ?? client).get<ListRoleImageRecipeRevisionsResponses, ListRoleImageRecipeRevisionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/revisions',
+    ...options
+});
+
+export const promoteRoleImage = <ThrowOnError extends boolean = false>(options: Options<PromoteRoleImageData, ThrowOnError>): RequestResult<PromoteRoleImageResponses, PromoteRoleImageErrors, ThrowOnError> => (options.client ?? client).post<PromoteRoleImageResponses, PromoteRoleImageErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/promotions',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -643,6 +1135,117 @@ export const uploadArtifact = <ThrowOnError extends boolean = false>(options: Op
     }
 });
 
+export const createAttachmentSetDraft = <ThrowOnError extends boolean = false>(options: Options<CreateAttachmentSetDraftData, ThrowOnError>): RequestResult<CreateAttachmentSetDraftResponses, CreateAttachmentSetDraftErrors, ThrowOnError> => (options.client ?? client).post<CreateAttachmentSetDraftResponses, CreateAttachmentSetDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/attachment-sets',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const createOrganizationAttachmentSetDraft = <ThrowOnError extends boolean = false>(options: Options<CreateOrganizationAttachmentSetDraftData, ThrowOnError>): RequestResult<CreateOrganizationAttachmentSetDraftResponses, CreateOrganizationAttachmentSetDraftErrors, ThrowOnError> => (options.client ?? client).post<CreateOrganizationAttachmentSetDraftResponses, CreateOrganizationAttachmentSetDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/attachment-sets',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const getAttachmentSet = <ThrowOnError extends boolean = false>(options: Options<GetAttachmentSetData, ThrowOnError>): RequestResult<GetAttachmentSetResponses, GetAttachmentSetErrors, ThrowOnError> => (options.client ?? client).get<GetAttachmentSetResponses, GetAttachmentSetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/attachment-sets/{attachmentSetRef}',
+    ...options
+});
+
+export const addAttachmentSetItems = <ThrowOnError extends boolean = false>(options: Options<AddAttachmentSetItemsData, ThrowOnError>): RequestResult<AddAttachmentSetItemsResponses, AddAttachmentSetItemsErrors, ThrowOnError> => (options.client ?? client).post<AddAttachmentSetItemsResponses, AddAttachmentSetItemsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/attachment-sets/{attachmentSetRef}/items/additions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const removeAttachmentSetItems = <ThrowOnError extends boolean = false>(options: Options<RemoveAttachmentSetItemsData, ThrowOnError>): RequestResult<RemoveAttachmentSetItemsResponses, RemoveAttachmentSetItemsErrors, ThrowOnError> => (options.client ?? client).post<RemoveAttachmentSetItemsResponses, RemoveAttachmentSetItemsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/attachment-sets/{attachmentSetRef}/items/removals',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const finalizeAttachmentSet = <ThrowOnError extends boolean = false>(options: Options<FinalizeAttachmentSetData, ThrowOnError>): RequestResult<FinalizeAttachmentSetResponses, FinalizeAttachmentSetErrors, ThrowOnError> => (options.client ?? client).post<FinalizeAttachmentSetResponses, FinalizeAttachmentSetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/attachment-sets/{attachmentSetRef}/finalization',
+    ...options
+});
+
+export const listOrganizationArtifacts = <ThrowOnError extends boolean = false>(options?: Options<ListOrganizationArtifactsData, ThrowOnError>): RequestResult<ListOrganizationArtifactsResponses, ListOrganizationArtifactsErrors, ThrowOnError> => (options?.client ?? client).get<ListOrganizationArtifactsResponses, ListOrganizationArtifactsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/artifacts',
+    ...options
+});
+
+export const uploadOrganizationArtifact = <ThrowOnError extends boolean = false>(options: Options<UploadOrganizationArtifactData, ThrowOnError>): RequestResult<UploadOrganizationArtifactResponses, UploadOrganizationArtifactErrors, ThrowOnError> => (options.client ?? client).post<UploadOrganizationArtifactResponses, UploadOrganizationArtifactErrors, ThrowOnError>({
+    bodySerializer: null,
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/artifacts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/octet-stream',
+        ...options.headers
+    }
+});
+
+export const deleteArtifact = <ThrowOnError extends boolean = false>(options: Options<DeleteArtifactData, ThrowOnError>): RequestResult<DeleteArtifactResponses, DeleteArtifactErrors, ThrowOnError> => (options.client ?? client).delete<DeleteArtifactResponses, DeleteArtifactErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/artifacts/{artifactRef}',
+    ...options
+});
+
 export const getArtifact = <ThrowOnError extends boolean = false>(options: Options<GetArtifactData, ThrowOnError>): RequestResult<GetArtifactResponses, GetArtifactErrors, ThrowOnError> => (options.client ?? client).get<GetArtifactResponses, GetArtifactErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -650,6 +1253,36 @@ export const getArtifact = <ThrowOnError extends boolean = false>(options: Optio
             type: 'apiKey'
         }],
     url: '/api/v1/artifacts/{artifactRef}',
+    ...options
+});
+
+export const restoreArtifact = <ThrowOnError extends boolean = false>(options: Options<RestoreArtifactData, ThrowOnError>): RequestResult<RestoreArtifactResponses, RestoreArtifactErrors, ThrowOnError> => (options.client ?? client).post<RestoreArtifactResponses, RestoreArtifactErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/artifacts/{artifactRef}/restore',
+    ...options
+});
+
+export const purgeArtifact = <ThrowOnError extends boolean = false>(options: Options<PurgeArtifactData, ThrowOnError>): RequestResult<PurgeArtifactResponses, PurgeArtifactErrors, ThrowOnError> => (options.client ?? client).delete<PurgeArtifactResponses, PurgeArtifactErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/artifacts/{artifactRef}/purge',
+    ...options
+});
+
+export const getArtifactImpact = <ThrowOnError extends boolean = false>(options: Options<GetArtifactImpactData, ThrowOnError>): RequestResult<GetArtifactImpactResponses, GetArtifactImpactErrors, ThrowOnError> => (options.client ?? client).get<GetArtifactImpactResponses, GetArtifactImpactErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/artifacts/{artifactRef}/impact',
     ...options
 });
 
@@ -701,6 +1334,26 @@ export const createSchedule = <ThrowOnError extends boolean = false>(options: Op
     }
 });
 
+export const deleteSchedule = <ThrowOnError extends boolean = false>(options: Options<DeleteScheduleData, ThrowOnError>): RequestResult<DeleteScheduleResponses, DeleteScheduleErrors, ThrowOnError> => (options.client ?? client).delete<DeleteScheduleResponses, DeleteScheduleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/schedules/{scheduleRef}',
+    ...options
+});
+
+export const getSchedule = <ThrowOnError extends boolean = false>(options: Options<GetScheduleData, ThrowOnError>): RequestResult<GetScheduleResponses, GetScheduleErrors, ThrowOnError> => (options.client ?? client).get<GetScheduleResponses, GetScheduleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/schedules/{scheduleRef}',
+    ...options
+});
+
 export const updateSchedule = <ThrowOnError extends boolean = false>(options: Options<UpdateScheduleData, ThrowOnError>): RequestResult<UpdateScheduleResponses, UpdateScheduleErrors, ThrowOnError> => (options.client ?? client).patch<UpdateScheduleResponses, UpdateScheduleErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -713,6 +1366,26 @@ export const updateSchedule = <ThrowOnError extends boolean = false>(options: Op
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+export const listScheduleRevisions = <ThrowOnError extends boolean = false>(options: Options<ListScheduleRevisionsData, ThrowOnError>): RequestResult<ListScheduleRevisionsResponses, ListScheduleRevisionsErrors, ThrowOnError> => (options.client ?? client).get<ListScheduleRevisionsResponses, ListScheduleRevisionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/schedules/{scheduleRef}/revisions',
+    ...options
+});
+
+export const listScheduleRuns = <ThrowOnError extends boolean = false>(options: Options<ListScheduleRunsData, ThrowOnError>): RequestResult<ListScheduleRunsResponses, ListScheduleRunsErrors, ThrowOnError> => (options.client ?? client).get<ListScheduleRunsResponses, ListScheduleRunsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/schedules/{scheduleRef}/runs',
+    ...options
 });
 
 export const commandSchedule = <ThrowOnError extends boolean = false>(options: Options<CommandScheduleData, ThrowOnError>): RequestResult<CommandScheduleResponses, CommandScheduleErrors, ThrowOnError> => (options.client ?? client).post<CommandScheduleResponses, CommandScheduleErrors, ThrowOnError>({
@@ -763,6 +1436,16 @@ export const createIntegrationConnection = <ThrowOnError extends boolean = false
     }
 });
 
+export const deleteIntegrationConnection = <ThrowOnError extends boolean = false>(options: Options<DeleteIntegrationConnectionData, ThrowOnError>): RequestResult<DeleteIntegrationConnectionResponses, DeleteIntegrationConnectionErrors, ThrowOnError> => (options.client ?? client).delete<DeleteIntegrationConnectionResponses, DeleteIntegrationConnectionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/integration-connections/{connectionRef}',
+    ...options
+});
+
 export const getIntegrationConnection = <ThrowOnError extends boolean = false>(options: Options<GetIntegrationConnectionData, ThrowOnError>): RequestResult<GetIntegrationConnectionResponses, GetIntegrationConnectionErrors, ThrowOnError> => (options.client ?? client).get<GetIntegrationConnectionResponses, GetIntegrationConnectionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -771,6 +1454,34 @@ export const getIntegrationConnection = <ThrowOnError extends boolean = false>(o
         }],
     url: '/api/v1/integration-connections/{connectionRef}',
     ...options
+});
+
+export const updateIntegrationConnection = <ThrowOnError extends boolean = false>(options: Options<UpdateIntegrationConnectionData, ThrowOnError>): RequestResult<UpdateIntegrationConnectionResponses, UpdateIntegrationConnectionErrors, ThrowOnError> => (options.client ?? client).patch<UpdateIntegrationConnectionResponses, UpdateIntegrationConnectionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/integration-connections/{connectionRef}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const configureIntegrationConnectionCredential = <ThrowOnError extends boolean = false>(options: Options<ConfigureIntegrationConnectionCredentialData, ThrowOnError>): RequestResult<ConfigureIntegrationConnectionCredentialResponses, ConfigureIntegrationConnectionCredentialErrors, ThrowOnError> => (options.client ?? client).put<ConfigureIntegrationConnectionCredentialResponses, ConfigureIntegrationConnectionCredentialErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/integration-connections/{connectionRef}/credential',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 export const commandIntegrationConnection = <ThrowOnError extends boolean = false>(options: Options<CommandIntegrationConnectionData, ThrowOnError>): RequestResult<CommandIntegrationConnectionResponses, CommandIntegrationConnectionErrors, ThrowOnError> => (options.client ?? client).post<CommandIntegrationConnectionResponses, CommandIntegrationConnectionErrors, ThrowOnError>({
@@ -863,6 +1574,20 @@ export const createAssistantConversation = <ThrowOnError extends boolean = false
     }
 });
 
+export const updateAssistantConversationTitle = <ThrowOnError extends boolean = false>(options: Options<UpdateAssistantConversationTitleData, ThrowOnError>): RequestResult<UpdateAssistantConversationTitleResponses, UpdateAssistantConversationTitleErrors, ThrowOnError> => (options.client ?? client).put<UpdateAssistantConversationTitleResponses, UpdateAssistantConversationTitleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/assistant-conversations/{conversationRef}/title',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
 export const addAssistantTurn = <ThrowOnError extends boolean = false>(options: Options<AddAssistantTurnData, ThrowOnError>): RequestResult<AddAssistantTurnResponses, AddAssistantTurnErrors, ThrowOnError> => (options.client ?? client).post<AddAssistantTurnResponses, AddAssistantTurnErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -884,7 +1609,53 @@ export const applyAssistantPlan = <ThrowOnError extends boolean = false>(options
             type: 'apiKey'
         }],
     url: '/api/v1/assistant-plans/{planRef}/application',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const updateAssistantPlanDraft = <ThrowOnError extends boolean = false>(options: Options<UpdateAssistantPlanDraftData, ThrowOnError>): RequestResult<UpdateAssistantPlanDraftResponses, UpdateAssistantPlanDraftErrors, ThrowOnError> => (options.client ?? client).put<UpdateAssistantPlanDraftResponses, UpdateAssistantPlanDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/assistant-plans/{planRef}/draft',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const validateAssistantPlan = <ThrowOnError extends boolean = false>(options: Options<ValidateAssistantPlanData, ThrowOnError>): RequestResult<ValidateAssistantPlanResponses, ValidateAssistantPlanErrors, ThrowOnError> => (options.client ?? client).post<ValidateAssistantPlanResponses, ValidateAssistantPlanErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/assistant-plans/{planRef}/validation',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const rejectAssistantPlan = <ThrowOnError extends boolean = false>(options: Options<RejectAssistantPlanData, ThrowOnError>): RequestResult<RejectAssistantPlanResponses, RejectAssistantPlanErrors, ThrowOnError> => (options.client ?? client).post<RejectAssistantPlanResponses, RejectAssistantPlanErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/assistant-plans/{planRef}/rejection',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 export const getAdministration = <ThrowOnError extends boolean = false>(options?: Options<GetAdministrationData, ThrowOnError>): RequestResult<GetAdministrationResponses, GetAdministrationErrors, ThrowOnError> => (options?.client ?? client).get<GetAdministrationResponses, GetAdministrationErrors, ThrowOnError>({
@@ -895,6 +1666,184 @@ export const getAdministration = <ThrowOnError extends boolean = false>(options?
         }],
     url: '/api/v1/administration',
     ...options
+});
+
+export const listPermissionRegistry = <ThrowOnError extends boolean = false>(options?: Options<ListPermissionRegistryData, ThrowOnError>): RequestResult<ListPermissionRegistryResponses, ListPermissionRegistryErrors, ThrowOnError> => (options?.client ?? client).get<ListPermissionRegistryResponses, ListPermissionRegistryErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/permissions',
+    ...options
+});
+
+export const listAccessSubjects = <ThrowOnError extends boolean = false>(options?: Options<ListAccessSubjectsData, ThrowOnError>): RequestResult<ListAccessSubjectsResponses, ListAccessSubjectsErrors, ThrowOnError> => (options?.client ?? client).get<ListAccessSubjectsResponses, ListAccessSubjectsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/subjects',
+    ...options
+});
+
+export const listOidcGroups = <ThrowOnError extends boolean = false>(options?: Options<ListOidcGroupsData, ThrowOnError>): RequestResult<ListOidcGroupsResponses, ListOidcGroupsErrors, ThrowOnError> => (options?.client ?? client).get<ListOidcGroupsResponses, ListOidcGroupsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/oidc-groups',
+    ...options
+});
+
+export const listAccessRoles = <ThrowOnError extends boolean = false>(options?: Options<ListAccessRolesData, ThrowOnError>): RequestResult<ListAccessRolesResponses, ListAccessRolesErrors, ThrowOnError> => (options?.client ?? client).get<ListAccessRolesResponses, ListAccessRolesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/roles',
+    ...options
+});
+
+export const createAccessRole = <ThrowOnError extends boolean = false>(options: Options<CreateAccessRoleData, ThrowOnError>): RequestResult<CreateAccessRoleResponses, CreateAccessRoleErrors, ThrowOnError> => (options.client ?? client).post<CreateAccessRoleResponses, CreateAccessRoleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/roles',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listAccessRoleVersions = <ThrowOnError extends boolean = false>(options: Options<ListAccessRoleVersionsData, ThrowOnError>): RequestResult<ListAccessRoleVersionsResponses, ListAccessRoleVersionsErrors, ThrowOnError> => (options.client ?? client).get<ListAccessRoleVersionsResponses, ListAccessRoleVersionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/roles/{roleRef}/versions',
+    ...options
+});
+
+export const createAccessRoleVersion = <ThrowOnError extends boolean = false>(options: Options<CreateAccessRoleVersionData, ThrowOnError>): RequestResult<CreateAccessRoleVersionResponses, CreateAccessRoleVersionErrors, ThrowOnError> => (options.client ?? client).post<CreateAccessRoleVersionResponses, CreateAccessRoleVersionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/roles/{roleRef}/versions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const archiveAccessRole = <ThrowOnError extends boolean = false>(options: Options<ArchiveAccessRoleData, ThrowOnError>): RequestResult<ArchiveAccessRoleResponses, ArchiveAccessRoleErrors, ThrowOnError> => (options.client ?? client).post<ArchiveAccessRoleResponses, ArchiveAccessRoleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/roles/{roleRef}/archive',
+    ...options
+});
+
+export const listAccessBindings = <ThrowOnError extends boolean = false>(options?: Options<ListAccessBindingsData, ThrowOnError>): RequestResult<ListAccessBindingsResponses, ListAccessBindingsErrors, ThrowOnError> => (options?.client ?? client).get<ListAccessBindingsResponses, ListAccessBindingsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/bindings',
+    ...options
+});
+
+export const createAccessBinding = <ThrowOnError extends boolean = false>(options: Options<CreateAccessBindingData, ThrowOnError>): RequestResult<CreateAccessBindingResponses, CreateAccessBindingErrors, ThrowOnError> => (options.client ?? client).post<CreateAccessBindingResponses, CreateAccessBindingErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/bindings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const revokeAccessBinding = <ThrowOnError extends boolean = false>(options: Options<RevokeAccessBindingData, ThrowOnError>): RequestResult<RevokeAccessBindingResponses, RevokeAccessBindingErrors, ThrowOnError> => (options.client ?? client).delete<RevokeAccessBindingResponses, RevokeAccessBindingErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/bindings/{bindingRef}',
+    ...options
+});
+
+export const changeAccessBinding = <ThrowOnError extends boolean = false>(options: Options<ChangeAccessBindingData, ThrowOnError>): RequestResult<ChangeAccessBindingResponses, ChangeAccessBindingErrors, ThrowOnError> => (options.client ?? client).patch<ChangeAccessBindingResponses, ChangeAccessBindingErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/bindings/{bindingRef}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const queryEffectiveAccess = <ThrowOnError extends boolean = false>(options: Options<QueryEffectiveAccessData, ThrowOnError>): RequestResult<QueryEffectiveAccessResponses, QueryEffectiveAccessErrors, ThrowOnError> => (options.client ?? client).post<QueryEffectiveAccessResponses, QueryEffectiveAccessErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/effective-access/query',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const explainAccess = <ThrowOnError extends boolean = false>(options: Options<ExplainAccessData, ThrowOnError>): RequestResult<ExplainAccessResponses, ExplainAccessErrors, ThrowOnError> => (options.client ?? client).post<ExplainAccessResponses, ExplainAccessErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/effective-access/explain',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const simulateAccess = <ThrowOnError extends boolean = false>(options: Options<SimulateAccessData, ThrowOnError>): RequestResult<SimulateAccessResponses, SimulateAccessErrors, ThrowOnError> => (options.client ?? client).post<SimulateAccessResponses, SimulateAccessErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/administration/access/effective-access/simulate',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 export const listAuditEvents = <ThrowOnError extends boolean = false>(options?: Options<ListAuditEventsData, ThrowOnError>): RequestResult<ListAuditEventsResponses, ListAuditEventsErrors, ThrowOnError> => (options?.client ?? client).get<ListAuditEventsResponses, ListAuditEventsErrors, ThrowOnError>({

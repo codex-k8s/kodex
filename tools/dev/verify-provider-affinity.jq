@@ -24,8 +24,8 @@ def rows_by_run:
             if ($row.session_ref | type) != "string" or ($row.session_ref | length) == 0 then
               "run \($expected.key) has no logical session"
             else empty end,
-            if $row.session_account_key != $expected.value then
-              "run \($expected.key) uses session account \($row.session_account_key) instead of \($expected.value)"
+            if $row.session_account_ref != $expected.value then
+              "run \($expected.key) uses session account ref \($row.session_account_ref) instead of \($expected.value)"
             else empty end,
             if ($row.runtime_revision_count | type) != "number" or $row.runtime_revision_count < 1 then
               "run \($expected.key) has no materialized runtime revision"
@@ -33,8 +33,8 @@ def rows_by_run:
             if $row.runtime_boundary_consistent != true then
               "run \($expected.key) runtime revisions cross the run session or organization boundary"
             else empty end,
-            if (($row.runtime_account_keys // []) | unique_sorted) != [$expected.value] then
-              "run \($expected.key) runtime revisions do not exclusively use account \($expected.value)"
+            if (($row.runtime_account_refs // []) | unique_sorted) != [$expected.value] then
+              "run \($expected.key) runtime revisions do not exclusively use account ref \($expected.value)"
             else empty end
           ][]
       end
@@ -48,7 +48,7 @@ def rows_by_run:
           "session affinity cannot be checked for \($pair.original) and \($pair.continuation)"
         elif $original_matches[0].session_ref != $continuation_matches[0].session_ref then
           "continuation \($pair.continuation) changed logical session from \($original_matches[0].session_ref) to \($continuation_matches[0].session_ref)"
-        elif $original_matches[0].session_account_key != $continuation_matches[0].session_account_key then
+        elif $original_matches[0].session_account_ref != $continuation_matches[0].session_account_ref then
           "continuation \($pair.continuation) changed provider account within logical session"
         else empty end
     ]) as $errors_before_distinct
@@ -59,17 +59,17 @@ def rows_by_run:
     | select(length == 1)
     | .[0]
     | select(.found == true)
-    | .session_account_key
+    | .session_account_ref
     | select(type == "string" and length > 0)
-  ] | unique_sorted) as $observed_accounts
+  ] | unique_sorted) as $observed_account_refs
 | ($errors_before_distinct
-   + if ($observed_accounts | length) < $required_distinct_accounts then
-       ["expected at least \($required_distinct_accounts) distinct provider accounts, observed \($observed_accounts | length)"]
+   + if ($observed_account_refs | length) < $required_distinct_accounts then
+       ["expected at least \($required_distinct_accounts) distinct provider account refs, observed \($observed_account_refs | length)"]
      else [] end) as $errors
 | {
     ok: (($errors | length) == 0),
     checked_runs: ($expected_runs | length),
     checked_session_pairs: ($same_sessions | length),
-    observed_accounts: $observed_accounts,
+    observed_account_refs: $observed_account_refs,
     errors: $errors
   }

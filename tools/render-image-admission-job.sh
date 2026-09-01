@@ -44,8 +44,11 @@ trusted_role_base_repository=$(jq -er '.data.trustedRoleBaseRepository' <<<"$int
 trusted_role_base_digest=$(jq -er '.data.trustedRoleBaseDigest' <<<"$intent")
 role_runtime_contract_revision=$(jq -er '.data.roleRuntimeContractRevision' <<<"$intent")
 role_runtime_contract_sha256=$(jq -er '.data.roleRuntimeContractSHA256' <<<"$intent")
+local_profile=$(jq -r '.metadata.labels["kodex.dev/local-profile"] // ""' <<<"$intent")
 jq -e '.immutable == true and .metadata.labels["kodex.dev/owner-intent"] == "true"' <<<"$intent" >/dev/null ||
   { echo "admission owner intent is not immutable" >&2; exit 78; }
+[[ -z $local_profile || $local_profile == hot-reload ]] ||
+  { echo "admission local profile is invalid" >&2; exit 78; }
 for image in "$tools_image" "$admission_image" "$authority_image"; do
   [[ $image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
     { echo "admission image binding is invalid" >&2; exit 78; }
@@ -104,13 +107,18 @@ EOF
 
 emit_job() {
   local phase=$1 service_account=$2 identity_secret=$3 protected=${4:-false}
-  local workload="" grant_signer_secret=""
+  local workload="" grant_signer_secret="" memory_request=128Mi memory_limit=1Gi tmp_limit=64Mi
+  if [[ $phase == scan ]]; then
+    memory_request=256Mi
+    memory_limit=2Gi
+    tmp_limit=1Gi
+  fi
   if [[ $phase == claim || $phase == admit ]]; then
-    workload=image-admission
-    grant_signer_secret=image-admission-platform-worker-grant-signer
+    workload='image-admission'
+    grant_signer_secret='image-admission-platform-worker-grant-signer'
   elif [[ $phase == promote ]]; then
-    workload=image-promotion
-    grant_signer_secret=image-promotion-platform-worker-grant-signer
+    workload='image-promotion'
+    grant_signer_secret='image-promotion-platform-worker-grant-signer'
   fi
   cat <<EOF
 ---
@@ -128,7 +136,7 @@ metadata:
     kodex.dev/admission-run-sha256: ${run_sha256}
     kodex.dev/admission-policy-revision: "${policy_revision}"
 spec:
-  backoffLimit: 1
+  backoffLimit: 0
   activeDeadlineSeconds: ${deadline}
   ttlSecondsAfterFinished: 3600
   template:
@@ -140,6 +148,11 @@ spec:
         kodex.dev/image-admission-id: ${suffix}
         kodex.dev/environment: ${environment_name}
 EOF
+  if [[ $local_profile == hot-reload ]]; then
+    cat <<EOF
+        kodex.dev/local-profile: hot-reload
+EOF
+  fi
   if [[ $protected == true ]]; then
     cat <<EOF
         kodex.dev/internal-rpc-authority-issuer: enabled
@@ -172,6 +185,13 @@ EOF
           command: [/usr/local/bin/internal-rpc-authority-issuer]
           env:
             - {name: DEPLOYMENT_ENVIRONMENT, value: "${environment_name}"}
+EOF
+    if [[ $local_profile == hot-reload ]]; then
+      cat <<EOF
+            - {name: OTEL_SDK_DISABLED, value: "true"}
+EOF
+    fi
+    cat <<EOF
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: otel-collector.observability.svc:4317}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem}
@@ -198,6 +218,7 @@ EOF
           volumeMounts:
             - {name: authority-sockets, mountPath: /run/kodex}
             - {name: authority-snapshot, mountPath: /var/run/config/kodex/internal-rpc-authority/snapshot, readOnly: true}
+            - {name: authority-bootstrap-roots, mountPath: /usr/local/share/internal-rpc-authority/manifest-root, readOnly: true}
             - {name: authority-manifest-trust, mountPath: /var/run/config/kodex/internal-rpc-authority/manifest-trust, readOnly: true}
             - {name: authority-proof-trust, mountPath: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust, readOnly: true}
             - {name: authority-issuer-key, mountPath: /var/run/secrets/kodex/internal-rpc-authority/issuer, readOnly: true}
@@ -285,7 +306,7 @@ EOF
 EOF
   fi
   cat <<EOF
-          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 1Gi}}
+          resources: {requests: {cpu: 100m, memory: ${memory_request}}, limits: {cpu: "1", memory: ${memory_limit}}}
           securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
       volumes:
 EOF
@@ -300,14 +321,21 @@ EOF
 EOF
   fi
   cat <<EOF
-        - {name: tmp, emptyDir: {sizeLimit: 64Mi}}
+        - {name: tmp, emptyDir: {sizeLimit: ${tmp_limit}}}
         - {name: script, configMap: {name: kodex-image-admission, defaultMode: 0555}}
         - {name: identity, secret: {secretName: ${identity_secret}, defaultMode: 0440}}
 EOF
   if [[ $protected == true ]]; then
     cat <<EOF
-        - {name: authority-sockets, emptyDir: {sizeLimit: 8Mi}}
+        - {name: authority-sockets, emptyDir: {sizeLimit: 64Mi}}
         - {name: authority-snapshot, secret: {secretName: internal-rpc-authority-snapshot, defaultMode: 0440}}
+        - name: authority-bootstrap-roots
+          secret:
+            secretName: internal-rpc-authority-bootstrap-roots
+            defaultMode: 0444
+            items:
+              - {key: manifest-root-public.jwk, path: bootstrap-public.jwk}
+              - {key: manifest-root-metadata.json, path: bootstrap-metadata.json}
         - {name: authority-manifest-trust, secret: {secretName: internal-rpc-authority-${workload}-manifest-trust, defaultMode: 0440}}
         - {name: authority-proof-trust, secret: {secretName: internal-rpc-authority-${workload}-proof-trust, defaultMode: 0440}}
         - {name: authority-issuer-key, secret: {secretName: internal-rpc-authority-${workload}-issuer-key, defaultMode: 0440}}

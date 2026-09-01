@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: secret-broker-runtime
+data:
+  SECRET_BROKER_GRPC_LISTEN: ":8443"
+  SECRET_BROKER_TECHNICAL_LISTEN: ":9090"
+  SECRET_BROKER_CONTROL_PLANE_TARGET: "dns:///control-plane.kodex-system.svc:8443"
+  SECRET_BROKER_CONTROL_PLANE_TLS_SERVER_NAME: "control-plane.kodex-system.svc.cluster.local"
+  SECRET_BROKER_EXPECTED_CLIENT_SPIFFE_ID: "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+  SECRET_BROKER_REQUEST_TIMEOUT: "5s"
+  SECRET_BROKER_SHUTDOWN_TIMEOUT: "20s"
+  SECRET_BROKER_MAXIMUM_SECRET_BYTES: "524288"

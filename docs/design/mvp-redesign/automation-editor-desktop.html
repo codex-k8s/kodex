@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Автоматизации · Редактор</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-ae .form-section { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+  .p-ae .form-section + .form-section { border-top: 1px solid var(--line-hair); }
+  .p-ae .form-section__title { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .p-ae .form-section__hint { font-size: 11.5px; color: var(--mut); }
+  .p-ae__tray { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 32px; padding: 4px 0; }
+  .p-ae__tray .chip { height: 30px; }
+  .p-ae__next { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-hair); font-size: 12.5px; }
+  .p-ae__next:first-child { border-top: 0; }
+  .p-ae__sticky { position: sticky; top: 0; }
+  .p-ae__cron { font-family: var(--font-mono); }
+  .p-ae .radio-card { align-items: flex-start; }
+  .p-ae__actions { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--bg); position: sticky; bottom: 0; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Автоматизации · редактор (новая версия v4) · desktop 1440×1024 · маршрут <code>/projects/:projectRef/automations/:scheduleRef/edit</code></p>
+<div class="frame frame--desktop p-ae" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><a href="automations-desktop.html">Автоматизации</a><span>/</span><span>Ежедневная сводка по лидам</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Изменить автоматизацию</h1><span class="tag tag--mono">v3 → v4</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активно</span></div>
+          <div class="page-sub">Сохранение создаст версию v4 для будущих запусков. Уже запланированные и выполненные запуски остаются связаны с v3.</div>
+        </div>
+        <div class="page-actions">
+          <span class="xs mut">Черновик сохраняется автоматически · 12:03</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="split split--main-aside">
+        <form class="card" id="form" novalidate aria-label="Параметры автоматизации">
+          <div class="form-section">
+            <div class="form-section__title"><h2 class="sec-title">Что и когда запускать</h2></div>
+            <div class="field">
+              <label class="field__label" for="f-name">Название <span class="req">*</span></label>
+              <input class="input" id="f-name" value="Ежедневная сводка по лидам">
+            </div>
+            <div class="field">
+              <span class="field__label" id="lbl-target">Цель запуска</span>
+              <div class="row gap-10" role="group" aria-labelledby="lbl-target">
+                <div class="seg" data-seg role="group" aria-label="Тип цели">
+                  <button class="seg__btn" type="button" aria-pressed="true" data-view="agent"><svg class="ic"><use href="#i-bot"/></svg>ИИ-сотрудник</button>
+                  <button class="seg__btn" type="button" aria-pressed="false" data-view="workflow"><svg class="ic"><use href="#i-wf"/></svg>Процесс</button>
+                </div>
+                <button class="combobox grow" type="button" id="f-target" aria-label="Выбрать сотрудника">
+                  <span class="avatar avatar--24 avatar--ok">АП</span>
+                  <span class="combobox__text"><span class="combobox__title">Аналитик продаж</span><span class="combobox__sub">Исследование клиентов и подготовка фактов · опубликованы инструкции v3</span></span>
+                  <svg class="ic ic-14"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+              <div class="field__hint">Запуск использует опубликованную версию сотрудника на момент срабатывания. Инструкции и права не копируются в расписание.</div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section__title"><h2 class="sec-title">Расписание</h2><span class="form-section__hint">часовой пояс применяется к каждому срабатыванию, включая переход на летнее время</span></div>
+            <div class="form-grid form-grid--3">
+              <div class="field">
+                <label class="field__label" id="lbl-repeat">Повторять</label>
+                <button class="select select--block" type="button" data-menu="#menu-repeat" aria-haspopup="menu" aria-expanded="false" aria-labelledby="lbl-repeat"><span class="select__value" id="repeat-value">Свой cron</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+              </div>
+              <div class="field is-error" id="cron-field">
+                <label class="field__label" for="f-cron">Выражение cron</label>
+                <input class="input p-ae__cron" id="f-cron" value="0 9 * * MON-FRI *" aria-invalid="true" aria-describedby="cron-err">
+                <div class="field__error" id="cron-err"><svg class="ic"><use href="#i-alert"/></svg>Ожидается 5 полей: минута, час, день месяца, месяц, день недели. Получено 6.</div>
+              </div>
+              <div class="field">
+                <label class="field__label" id="lbl-tz">Часовой пояс</label>
+                <button class="select select--block" type="button" data-menu="#menu-tz" aria-haspopup="menu" aria-expanded="false" aria-labelledby="lbl-tz"><span class="select__value">Europe/Saratov (UTC+4)</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+              </div>
+            </div>
+            <div class="notice notice--warn notice--sm"><svg class="ic"><use href="#i-warning"/></svg><span class="notice__text">Пока выражение некорректно, ближайшие запуски не рассчитываются и сохранить v4 нельзя. Текущая версия v3 продолжает работать по расписанию «По будням в 09:00».</span></div>
+            <div class="form-grid">
+              <div class="field">
+                <label class="field__label" id="lbl-misfire">Если запуск пропущен</label>
+                <button class="select select--block" type="button" data-menu="#menu-misfire" aria-haspopup="menu" aria-expanded="false" aria-labelledby="lbl-misfire"><span class="select__value">Пропустить, запустить по следующему расписанию</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+                <div class="field__hint">Пропуск возможен при недоступности платформы в окно запуска; факт пропуска записывается в историю.</div>
+              </div>
+              <div class="field">
+                <label class="field__label" id="lbl-conc">Если предыдущий запуск ещё выполняется</label>
+                <button class="select select--block" type="button" data-menu="#menu-conc" aria-haspopup="menu" aria-expanded="false" aria-labelledby="lbl-conc"><span class="select__value">Не запускать новый, дождаться завершения</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section__title"><h2 class="sec-title">Задача и входные данные</h2></div>
+            <div class="field">
+              <label class="field__label" for="f-task">Задача сотруднику <span class="req">*</span></label>
+              <textarea class="textarea" id="f-task" rows="4" data-autosize>Подготовь сводку по новым лидам за предыдущий рабочий день: источники, сегменты, приоритетные контакты и рекомендации для менеджеров. Используй регламент обработки лидов и актуальные сегменты клиентов.</textarea>
+              <div class="field__hint">Текст задачи не даёт полномочий и не может расширить права сотрудника.</div>
+            </div>
+            <div class="field">
+              <span class="field__label">Входные файлы <span class="mut">· используется точная версия на момент сохранения</span></span>
+              <div class="p-ae__tray" id="files-tray">
+                <span class="chip is-active"><span class="mime" style="width:18px;height:18px;font-size:7px">pdf</span>Регламент обработки лидов.pdf <span class="mono mut">v3</span><button class="chip__x" type="button" aria-label="Убрать файл"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span>
+                <span class="chip is-active"><span class="mime mime--xls" style="width:18px;height:18px;font-size:7px">xls</span>Сегменты клиентов.xlsx <span class="mono mut">v1</span><button class="chip__x" type="button" aria-label="Убрать файл"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span>
+                <button class="btn btn--sm" type="button" id="pick-files"><svg class="ic"><use href="#i-plus"/></svg>Выбрать файлы</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section__title"><h2 class="sec-title">Сессия и уведомления</h2></div>
+            <div class="form-grid" role="radiogroup" aria-label="Политика сессии">
+              <label class="radio-card"><input type="radio" name="session" checked><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Новая сессия для каждого запуска</span><span class="radio-card__sub">Каждое срабатывание начинает работу с чистой истории. Подходит для независимых отчётов.</span></span></label>
+              <label class="radio-card"><input type="radio" name="session"><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Продолжать одну сессию</span><span class="radio-card__sub">Сотрудник помнит предыдущие срабатывания. Учётная запись провайдера закрепляется за сессией.</span></span></label>
+            </div>
+            <div class="form-grid" role="radiogroup" aria-label="Уведомления">
+              <label class="radio-card"><input type="radio" name="notify" checked><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Только Control Center</span><span class="radio-card__sub">Результат и ошибки видны в Проекте и на главной.</span></span></label>
+              <label class="radio-card" aria-disabled="true" style="opacity:.6"><input type="radio" name="notify" disabled><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Внешний канал</span><span class="radio-card__sub">Недоступно: интеграция уведомлений не подключена. Это не мешает работе автоматизации.</span></span></label>
+            </div>
+          </div>
+
+          <div class="p-ae__actions">
+            <button class="btn btn--primary btn--lg" type="button" disabled data-tip="Исправьте ошибку в расписании" data-tip-pos="top"><svg class="ic"><use href="#i-check"/></svg>Сохранить как v4</button>
+            <a class="btn btn--lg" href="automations-desktop.html">Отмена</a>
+            <span class="toolbar__spacer"></span>
+            <button class="btn btn--lg" type="button"><svg class="ic"><use href="#i-pause"/></svg>Приостановить v3</button>
+          </div>
+        </form>
+
+        <aside class="col gap-14 p-ae__sticky" aria-label="Что изменится">
+          <div class="card">
+            <div class="card__head"><h2 class="sec-title">Что изменится</h2><span class="tag tag--mono">v4 · черновик</span></div>
+            <div class="card__body">
+              <div class="kv kv--narrow">
+                <div class="kv__row"><span class="kv__k">Расписание</span><span class="kv__v"><span class="mut" style="text-decoration:line-through">По будням в 09:00</span> → <span class="err-text">не определено</span></span></div>
+                <div class="kv__row"><span class="kv__k">Задача</span><span class="kv__v">дополнена ссылкой на сегменты клиентов</span></div>
+                <div class="kv__row"><span class="kv__k">Файлы</span><span class="kv__v">+ Сегменты клиентов.xlsx <span class="mono mut">v1</span></span></div>
+                <div class="kv__row"><span class="kv__k">Сессия, уведомления</span><span class="kv__v mut">без изменений</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card__head"><h2 class="sec-title">Ближайшие запуски по v3</h2><span class="refresh"><span class="refresh__dot"></span><span class="refresh__text">действующее расписание</span></span></div>
+            <div class="card__body">
+              <div class="p-ae__next"><span class="mono">Пн, 31 авг, 09:00</span><span class="grow mut">через 2 д 21 ч</span><span class="tag tag--mono">v3</span></div>
+              <div class="p-ae__next"><span class="mono">Вт, 1 сен, 09:00</span><span class="grow mut"></span><span class="tag tag--mono">v3</span></div>
+              <div class="p-ae__next"><span class="mono">Ср, 2 сен, 09:00</span><span class="grow mut"></span><span class="tag tag--mono">v3</span></div>
+              <div class="xs mut mt-8">После сохранения v4 эти срабатывания будут пересчитаны по новому расписанию; уже начатые запуски не прерываются.</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card__head"><h2 class="sec-title">Последний результат</h2></div>
+            <div class="card__body">
+              <div class="row gap-8"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span><a class="sm truncate" href="#">Сводка по лидам · 28 августа</a><span class="xs mut right nowrap">4 мин</span></div>
+              <div class="xs mut mt-8">Инициатор: расписание · источник: Автоматизация · исполнитель: Аналитик продаж</div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <div class="menu" id="menu-repeat"><div class="menu__title">Повторять</div><button class="menu__item" role="menuitemradio" aria-checked="false">По будням</button><button class="menu__item" role="menuitemradio" aria-checked="false">Ежедневно</button><button class="menu__item" role="menuitemradio" aria-checked="false">Еженедельно</button><button class="menu__item" role="menuitemradio" aria-checked="false">Ежемесячно</button><div class="menu__sep"></div><button class="menu__item" role="menuitemradio" aria-checked="true">Свой cron</button></div>
+  <div class="menu" id="menu-tz"><div class="menu__search"><label class="search search--bg"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Найти часовой пояс" aria-label="Найти часовой пояс" data-menu-filter></label></div><button class="menu__item" role="menuitemradio" aria-checked="true" data-filter-text="europe/saratov">Europe/Saratov (UTC+4)</button><button class="menu__item" role="menuitemradio" aria-checked="false" data-filter-text="europe/moscow">Europe/Moscow (UTC+3)</button><button class="menu__item" role="menuitemradio" aria-checked="false" data-filter-text="asia/yekaterinburg">Asia/Yekaterinburg (UTC+5)</button><button class="menu__item" role="menuitemradio" aria-checked="false" data-filter-text="utc">UTC</button></div>
+  <div class="menu menu--wide" id="menu-misfire"><button class="menu__item" role="menuitemradio" aria-checked="true">Пропустить, запустить по следующему расписанию</button><button class="menu__item" role="menuitemradio" aria-checked="false">Запустить сразу после восстановления</button></div>
+  <div class="menu menu--wide" id="menu-conc"><button class="menu__item" role="menuitemradio" aria-checked="true">Не запускать новый, дождаться завершения</button><button class="menu__item" role="menuitemradio" aria-checked="false">Поставить в очередь</button><button class="menu__item" role="menuitemradio" aria-checked="false">Запускать параллельно (до 2)</button></div>
+</div>
+<p class="stage-note">Редактор автоматизации — одна страница-форма с липкой сводкой «Что изменится». Расписание задаётся пресетом или cron с часовым поясом; некорректное выражение показывается как ошибка поля (иконка + текст, не только цвет), блокирует сохранение и не влияет на действующую версию v3. Цель выбирается async picker сотрудников, входные файлы — multi picker с фиксацией точной версии. Политика сессии, пропусков и параллельности — явные controls. Сохранение создаёт v4 только для будущих запусков.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'project.automations', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Редактор автоматизации', object: 'Ежедневная сводка по лидам · v4', can: ['исправить выражение cron по описанию', 'предложить расписание словами', 'показать, что изменится в v4'] },
+  });
+  (function () {
+    const { $, $$, esc } = Kodex;
+    const frame = $('#frame');
+    const agents = Kodex.gen.agents(300, 9);
+    Kodex.asyncPicker({ trigger: $('#f-target'), items: agents, placeholder: 'Найти сотрудника', width: 480,
+      render: (a) => `${Kodex.avatar(a.initials, 24, a.tone)}<span class="picker__text"><span class="picker__title">${esc(a.name)}</span><span class="picker__sub"><span>${esc(a.purpose)}</span><span>·</span><span>${esc(a.project)}</span></span></span>${a.state === 'off' ? '<span class="picker__aside"><span class="pill pill--off pill--sm">Отключён</span></span>' : ''}`,
+      match: (a, q) => a.name.toLowerCase().includes(q), onSelect: (a) => { $('#f-target .combobox__title').textContent = a.name; $('#f-target .combobox__sub').textContent = a.purpose; $('#f-target .avatar').textContent = a.initials; } });
+    const files = Kodex.gen.files(1248, 7);
+    Kodex.asyncPicker({ trigger: $('#pick-files'), items: files, multi: true, placeholder: 'Найти файл', width: 460,
+      render: (f) => `<span class="mime mime--${f.mime}" style="width:26px;height:26px;font-size:8px">${f.ext}</span><span class="picker__text"><span class="picker__title">${esc(f.name)}</span><span class="picker__sub"><span class="mono">${Kodex.fmtKb(f.sizeKb)}</span><span>·</span><span class="mono">v${f.ver}</span><span>·</span><span>${esc(f.source)}</span></span></span>${f.scan !== 'ok' ? '<span class="picker__aside"><span class="pill pill--err pill--sm">Недоступен</span></span>' : ''}`,
+      match: (f, q) => f.name.toLowerCase().includes(q), renderSelected: (f) => f.name });
+    // выбор пресета: показать/скрыть cron и ошибку
+    $('#menu-repeat').addEventListener('click', (e) => { const it = e.target.closest('.menu__item'); if (!it) return; const v = it.textContent.trim(); $('#repeat-value').textContent = v; const isCron = v === 'Свой cron'; $('#cron-field').classList.toggle('is-error', isCron); $('#f-cron').disabled = !isCron; $('#cron-err').hidden = !isCron; const save = $('.p-ae__actions .btn--primary'); save.disabled = isCron; if (!isCron) save.removeAttribute('data-tip'); else save.setAttribute('data-tip', 'Исправьте ошибку в расписании'); });
+    // живое исправление cron
+    $('#f-cron').addEventListener('input', (e) => { const ok = e.target.value.trim().split(/\s+/).length === 5; $('#cron-field').classList.toggle('is-error', !ok); $('#cron-err').hidden = ok; e.target.setAttribute('aria-invalid', String(!ok)); $('.p-ae__actions .btn--primary').disabled = !ok; });
+  })();
+</script>
+</body>
+</html>

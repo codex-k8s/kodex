@@ -138,6 +138,7 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 				entry.Role != "AUTHORIZATION_VERIFIER" &&
 				entry.Role != "AUTHORITY_PROOF_RESOLVER") ||
 			entry.WorkloadGeneration == 0 ||
+			entry.WorkloadGeneration > 9_007_199_254_740_991 ||
 			entry.StartupReadbackRequired == nil ||
 			entry.AuthoritySnapshot.SecretName != "internal-rpc-authority-snapshot" ||
 			entry.AuthoritySnapshot.MountPath !=

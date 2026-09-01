@@ -59,27 +59,30 @@ UI выбирает безопасный локализованный текст
 
 ## Пользовательские маршруты
 
-| Route                                                     | Назначение                                                                |
-| --------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `/onboarding`                                             | first-run и проверка горячего Системного помощника                        |
-| `/assistant`                                              | полноразмерный workspace Системного помощника                             |
-| `/`                                                       | глобальная сводка активной работы и ожидающих решений                     |
-| `/projects`                                               | каталог и создание Проектов                                               |
-| `/projects/:projectRef`                                   | обзор выбранного Проекта                                                  |
-| `/projects/:projectRef/agents`                            | ИИ-сотрудники Проекта                                                     |
-| `/projects/:projectRef/agents/:agentRef`                  | профиль, инструкции, capabilities, образ роли и запуск сотрудника         |
-| `/projects/:projectRef/workflows`                         | Процессы Проекта                                                          |
-| `/projects/:projectRef/workflows/:workflowRef`            | настройка, публикация и запуск Процесса                                   |
-| `/projects/:projectRef/runs/new`                          | прямой запуск сотрудника или Процесса                                     |
-| `/runs`, `/projects/:projectRef/runs`                     | глобальный и project-scoped список запусков                               |
-| `/runs/:runRef`                                           | live graph, timeline, Human Gate, artifacts, cancel, retry и continuation |
-| `/projects/:projectRef/files`                             | входные файлы, знания и результаты                                        |
-| `/projects/:projectRef/automations`                       | расписания сотрудников и Процессов                                        |
-| `/integrations`                                           | необязательные connections, tests, capabilities и grants                  |
-| `/decisions`                                              | долговечные Human Gates                                                   |
-| `/administration/access`, `/projects/:projectRef/members` | organization и project access                                             |
-| `/administration`                                         | platform capabilities и диагностика установки                             |
-| `/administration/audit`                                   | аудит действий и ошибок конфигурации                                      |
+| Route                                          | Назначение                                                                |
+| ---------------------------------------------- | ------------------------------------------------------------------------- |
+| `/onboarding`                                  | first-run и проверка горячего Системного помощника                        |
+| `/`                                            | глобальная сводка активной работы и ожидающих решений                     |
+| `/projects`                                    | каталог и создание Проектов                                               |
+| `/projects/:projectRef`                        | обзор выбранного Проекта                                                  |
+| `/projects/:projectRef/agents`                 | ИИ-сотрудники Проекта                                                     |
+| `/projects/:projectRef/agents/:agentRef`       | профиль, инструкции, capabilities, образ роли и запуск сотрудника         |
+| `/projects/:projectRef/workflows`              | Процессы Проекта                                                          |
+| `/projects/:projectRef/workflows/:workflowRef` | настройка, публикация и запуск Процесса                                   |
+| `/projects/:projectRef/runs/new`               | прямой запуск сотрудника или Процесса                                     |
+| `/runs`, `/projects/:projectRef/runs`          | глобальный и project-scoped список запусков                               |
+| `/runs/:runRef`                                | live graph, timeline, Human Gate, artifacts, cancel, retry и continuation |
+| `/projects/:projectRef/files`                  | входные файлы, знания и результаты                                        |
+| `/projects/:projectRef/automations`            | расписания сотрудников и Процессов                                        |
+| `/integrations`                                | необязательные connections, tests, capabilities и grants                  |
+
+Kodex не имеет отдельного полноэкранного маршрута: на каждом каноническом
+экране он открывается через FAB как контекстный desktop drawer или mobile
+bottom sheet. Новый диалог получает server-resolved route/entity context.
+| `/decisions` | долговечные Human Gates |
+| `/administration/access`, `/projects/:projectRef/members` | organization и project access |
+| `/administration` | platform capabilities и диагностика установки |
+| `/administration/audit` | аудит действий и ошибок конфигурации |
 
 Экранный контракт и утверждённые HTML-макеты перечислены в
 `docs/design/mockups/index.md`.
@@ -184,6 +187,30 @@ npm run test:e2e
 `npm run test:e2e:check` выполняет TypeScript-проверку и перечисляет тесты без
 сети, browser binary и credentials для обоих профилей. Это не считается
 фактическим E2E PASS.
+
+Поддерживаемый оркестратор полного локального контура запускается из корня
+репозитория. Он требует точный non-production context, делегирует
+render/deploy/readback существующему `dev.sh`, выполняет auth smoke и полный
+browser E2E, а затем сохраняет отдельный redacted summary без credentials:
+
+```bash
+./dev.sh full-e2e --context default \
+  --resource-prefix local-acceptance-001 \
+  --target test-integration-synthetic
+```
+
+`--check` выполняет только preflight и `test:e2e:check`, не разворачивая стенд.
+`--skip-build` допускается только для уже готового точного local profile и
+заменяет `up` на authoritative `status`/readback. Дополнительные цели передаются
+повторяемым `--target` и ограничены Make-целями `test-*`; их собственные env и
+credential files оркестратор не копирует в summary. Итог находится в
+`.kodex-dev/e2e/<resource-prefix>-summary.json` с mode `0600`.
+
+Перед локальным `up` проверяется ревизия реестра Secret projections и NATS
+material contract. При drift disposable namespaces `kodex-system` и `identity`
+пересоздаются автоматически вместе с installation material. Локальные
+`credentials.env`, `provider-accounts/` и `cache/` сохраняются; другие
+namespaces, включая соседние проекты, reconciler не адресует.
 
 ## Codegen и быстрые проверки
 

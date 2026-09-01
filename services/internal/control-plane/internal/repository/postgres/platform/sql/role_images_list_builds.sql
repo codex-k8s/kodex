@@ -5,7 +5,8 @@ SELECT build.ref, recipe.ref, build.spec_sha256, build.stage, build.staging_refe
        COALESCE(build.lease_token_sha256, ''), COALESCE(build.claimant_workload, ''),
        build.version, build.recipe_version, build.recipe_generation, build.fence,
        build.authority_generation, build.attempt, build.progress_percent,
-       build.lease_expires_at, build.created_at, build.updated_at
+       build.lease_expires_at, build.created_at, build.updated_at,
+       build.specification
 FROM control_plane.image_builds build
 JOIN control_plane.role_image_recipes recipe ON recipe.id = build.recipe_id
 WHERE build.organization_id = $1::uuid

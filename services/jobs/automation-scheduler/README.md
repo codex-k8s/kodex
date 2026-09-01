@@ -4,8 +4,8 @@ title: Automation scheduler
 type: service
 status: approved
 owner: backend
-version: 1.0.0
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-08-28
 ---
 
 # Automation scheduler
@@ -29,7 +29,11 @@ updated: 2026-08-23
 Повтор materialization с тем же occurrence использует стабильный semantic key
 и не создаёт второй Run. Истёкший claim переиздаётся с новым generation;
 прежний lease закрыто отклоняется. Отключённый Schedule либо недоступный target
-не материализуются.
+не материализуются. При архивации `control-plane` атомарно отменяет будущие
+occurrences в `DUE|CLAIMED`, отзывает их leases и очищает `next_run_at`.
+Архивированный Schedule остаётся доступен только для чтения истории и больше
+не попадает в claim или materialization path; уже созданный Run продолжает
+собственный lifecycle.
 
 ## Граница полномочий
 

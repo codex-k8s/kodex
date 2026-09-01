@@ -221,11 +221,44 @@ find_scope_id() {
     '
 }
 
-replace_mapper() {
+reconcile_mapper() {
   local client_uuid=$1 mapper_name=$2 mapper_type=$3 config_json=$4 client_realm=${5:-$realm}
-  keycloak_request create "clients/$client_uuid/protocol-mappers/models" -r "$client_realm" \
-    -s "name=$mapper_name" -s protocol=openid-connect -s "protocolMapper=$mapper_type" \
-    -s "config=$config_json" >/dev/null
+  local mapper_json mapper_count mapper_id
+  config_json=$(jq -ceS 'if type == "object" then . else error("mapper config must be an object") end' \
+    <<<"$config_json") || fail "Keycloak protocol mapper config is invalid: $mapper_name"
+  mapper_json=$(keycloak_request get "clients/$client_uuid/protocol-mappers/models" -r "$client_realm")
+  mapper_count=$(jq -er --arg mapper_name "$mapper_name" \
+    '[.[] | select(.name == $mapper_name)] | length' <<<"$mapper_json") ||
+    fail "Keycloak protocol mapper list is invalid: $mapper_name"
+  case "$mapper_count" in
+    0)
+      keycloak_request create "clients/$client_uuid/protocol-mappers/models" -r "$client_realm" \
+        -s "name=$mapper_name" -s protocol=openid-connect -s "protocolMapper=$mapper_type" \
+        -s "config=$config_json" >/dev/null
+      ;;
+    1)
+      mapper_id=$(jq -er --arg mapper_name "$mapper_name" '
+        [.[] | select(.name == $mapper_name)] | .[0].id |
+        select(type == "string" and length > 0)
+      ' <<<"$mapper_json") || fail "Keycloak protocol mapper ID is invalid: $mapper_name"
+      keycloak_request update "clients/$client_uuid/protocol-mappers/models/$mapper_id" \
+        -r "$client_realm" -s "name=$mapper_name" -s protocol=openid-connect \
+        -s "protocolMapper=$mapper_type" -s "config=$config_json" >/dev/null
+      ;;
+    *) fail "Keycloak protocol mapper is duplicated: $mapper_name" ;;
+  esac
+}
+
+require_mapper_exact() {
+  local mapper_json=$1 mapper_name=$2 mapper_type=$3 config_json=$4
+  config_json=$(jq -ceS 'if type == "object" then . else error("mapper config must be an object") end' \
+    <<<"$config_json") || return 1
+  jq -e --arg mapper_name "$mapper_name" --arg mapper_type "$mapper_type" \
+    --argjson config "$config_json" '
+      [.[] | select(.name == $mapper_name)] |
+      length == 1 and .[0].protocol == "openid-connect" and
+      .[0].protocolMapper == $mapper_type and .[0].config == $config
+    ' <<<"$mapper_json" >/dev/null
 }
 
 read_management_client_secret() {
@@ -244,7 +277,7 @@ read_management_client_secret() {
 
 reconcile_confidential_client() {
   local client_id=$1 origin=$2 namespace_name=$3 secret_name=$4
-  local client_realm=${5:-$realm} client_uuid client_secret attributes mapper_id
+  local client_realm=${5:-$realm} client_uuid client_secret attributes
   client_secret=$(read_management_client_secret "$client_id" "$namespace_name" "$secret_name")
   if ! find_client_id "$client_id" "$client_realm" >/dev/null 2>&1; then
     keycloak_request create clients -r "$client_realm" -s "clientId=$client_id" >/dev/null
@@ -261,23 +294,19 @@ reconcile_confidential_client() {
     -s "redirectUris=[\"$origin/oauth2/callback\"]" \
     -s "webOrigins=[\"$origin\"]" -s "attributes=$attributes" -s "secret=$client_secret" >/dev/null
   unset client_secret
-  while IFS= read -r mapper_id; do
-    [[ -n "$mapper_id" ]] || continue
-    keycloak_request delete "clients/$client_uuid/protocol-mappers/models/$mapper_id" -r "$client_realm" >/dev/null
-  done < <(keycloak_request get "clients/$client_uuid/protocol-mappers/models" -r "$client_realm" |
-    jq -r '.[] | select(.name == "kodex-client-audience" or .name == "kodex-realm-roles") | .id')
-  replace_mapper "$client_uuid" kodex-client-audience oidc-audience-mapper \
+  reconcile_mapper "$client_uuid" kodex-client-audience oidc-audience-mapper \
     "$(jq -cn --arg audience "$client_id" '{
       "included.client.audience":$audience,"access.token.claim":"true",
       "id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"true"
     }')" "$client_realm"
-  replace_mapper "$client_uuid" kodex-realm-roles oidc-usermodel-realm-role-mapper \
+  reconcile_mapper "$client_uuid" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}' \
     "$client_realm"
 }
 
 readback_confidential_client() {
-  local client_id=$1 origin=$2 redirect=$3 client_realm=${4:-$realm} client_uuid client_json mapper_json
+  local client_id=$1 origin=$2 redirect=$3 client_realm=${4:-$realm}
+  local client_uuid client_json mapper_json audience_config roles_config
   client_uuid=$(find_client_id "$client_id" "$client_realm")
   client_json=$(keycloak_request get "clients/$client_uuid" -r "$client_realm")
   jq -e --arg origin "$origin" --arg redirect "$redirect" '
@@ -286,10 +315,15 @@ readback_confidential_client() {
     .serviceAccountsEnabled == false and .redirectUris == [$redirect] and .webOrigins == [$origin]
   ' <<<"$client_json" >/dev/null || fail "management OIDC client readback failed: $client_id"
   mapper_json=$(keycloak_request get "clients/$client_uuid/protocol-mappers/models" -r "$client_realm")
-  jq -e --arg client_id "$client_id" '
-    ([.[] | select(.name == "kodex-client-audience" and .config."included.client.audience" == $client_id)] | length == 1) and
-    ([.[] | select(.name == "kodex-realm-roles" and .config."claim.name" == "realm_access.roles")] | length == 1)
-  ' <<<"$mapper_json" >/dev/null || fail "management OIDC mapper readback failed: $client_id"
+  audience_config=$(jq -cn --arg audience "$client_id" '{
+    "included.client.audience":$audience,"access.token.claim":"true",
+    "id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"true"
+  }')
+  roles_config='{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+  require_mapper_exact "$mapper_json" kodex-client-audience oidc-audience-mapper \
+    "$audience_config" || fail "management OIDC mapper readback failed: $client_id"
+  require_mapper_exact "$mapper_json" kodex-realm-roles oidc-usermodel-realm-role-mapper \
+    "$roles_config" || fail "management OIDC mapper readback failed: $client_id"
 }
 
 ensure_admin_client
@@ -394,23 +428,23 @@ if [[ "$mode" == apply ]]; then
   done < <(keycloak_request get "clients/$control_center_id/protocol-mappers/models" -r "$realm" |
     jq -r '
       .[] | select(.name == "organization-id" or .name == "session-revision" or
-        .name == "control-api-audience" or .name == "realm roles" or
-        .name == "kodex-organization-id" or .name == "kodex-session-revision" or
-        .name == "kodex-control-api-audience" or .name == "kodex-realm-roles") |
+        .name == "control-api-audience" or .name == "realm roles") |
       .id
     ')
-  replace_mapper "$control_center_id" kodex-organization-id oidc-hardcoded-claim-mapper \
+  reconcile_mapper "$control_center_id" kodex-organization-id oidc-hardcoded-claim-mapper \
     "$(jq -cn --arg value "$organization_id" '{
       "claim.name":"organization_id","claim.value":$value,"jsonType.label":"String",
       "access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true",
       "introspection.token.claim":"true"
     }')"
-  replace_mapper "$control_center_id" kodex-session-revision oidc-hardcoded-claim-mapper \
+  reconcile_mapper "$control_center_id" kodex-session-revision oidc-hardcoded-claim-mapper \
     '{"claim.name":"session_revision","claim.value":"1","jsonType.label":"long","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
-  replace_mapper "$control_center_id" kodex-control-api-audience oidc-audience-mapper \
+  reconcile_mapper "$control_center_id" kodex-control-api-audience oidc-audience-mapper \
     '{"included.client.audience":"kodex-control-api","access.token.claim":"true","id.token.claim":"false","userinfo.token.claim":"false","introspection.token.claim":"true"}'
-  replace_mapper "$control_center_id" kodex-realm-roles oidc-usermodel-realm-role-mapper \
+  reconcile_mapper "$control_center_id" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+  reconcile_mapper "$control_center_id" kodex-groups oidc-group-membership-mapper \
+    '{"claim.name":"groups","full.path":"false","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
 
   owner_count=$(keycloak_request get users -r "$realm" -q "username=$owner_username" |
     jq -r --arg username "$owner_username" '[.[] | select(.username == $username)] | length')
@@ -465,13 +499,25 @@ jq -e --arg origin "$public_origin" '
 ' <<<"$client_json" >/dev/null || fail 'Control Center OIDC client readback failed'
 
 mapper_json=$(keycloak_request get "clients/$control_center_id/protocol-mappers/models" -r "$realm")
-jq -e --arg organization_id "$organization_id" '
-  def mapper($name): [.[] | select(.name == $name)] | if length == 1 then .[0] else null end;
-  mapper("kodex-organization-id").config."claim.value" == $organization_id and
-  mapper("kodex-session-revision").config."claim.value" == "1" and
-  mapper("kodex-control-api-audience").config."included.client.audience" == "kodex-control-api" and
-  mapper("kodex-realm-roles").config."claim.name" == "realm_access.roles"
-' <<<"$mapper_json" >/dev/null || fail 'OIDC claim mapper readback failed'
+organization_mapper_config=$(jq -cn --arg value "$organization_id" '{
+  "claim.name":"organization_id","claim.value":$value,"jsonType.label":"String",
+  "access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true",
+  "introspection.token.claim":"true"
+}')
+session_mapper_config='{"claim.name":"session_revision","claim.value":"1","jsonType.label":"long","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+audience_mapper_config='{"included.client.audience":"kodex-control-api","access.token.claim":"true","id.token.claim":"false","userinfo.token.claim":"false","introspection.token.claim":"true"}'
+roles_mapper_config='{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+groups_mapper_config='{"claim.name":"groups","full.path":"false","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+require_mapper_exact "$mapper_json" kodex-organization-id oidc-hardcoded-claim-mapper \
+  "$organization_mapper_config" || fail 'OIDC claim mapper readback failed'
+require_mapper_exact "$mapper_json" kodex-session-revision oidc-hardcoded-claim-mapper \
+  "$session_mapper_config" || fail 'OIDC claim mapper readback failed'
+require_mapper_exact "$mapper_json" kodex-control-api-audience oidc-audience-mapper \
+  "$audience_mapper_config" || fail 'OIDC claim mapper readback failed'
+require_mapper_exact "$mapper_json" kodex-realm-roles oidc-usermodel-realm-role-mapper \
+  "$roles_mapper_config" || fail 'OIDC claim mapper readback failed'
+require_mapper_exact "$mapper_json" kodex-groups oidc-group-membership-mapper \
+  "$groups_mapper_config" || fail 'OIDC claim mapper readback failed'
 
 owner_id=$(keycloak_request get users -r "$realm" -q "username=$owner_username" |
   jq -er --arg username "$owner_username" '

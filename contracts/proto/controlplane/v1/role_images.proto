@@ -62,6 +62,7 @@ message RoleEnvironment {
   bool available = 7;
   string unavailable_message_key = 8;
   bool custom_installation_allowed = 9;
+  string dockerfile_template = 10;
 }
 
 message RoleEnvironmentSelection {
@@ -69,6 +70,7 @@ message RoleEnvironmentSelection {
   repeated string package_keys = 2;
   repeated string tool_keys = 3;
   string installation_block = 4;
+  string dockerfile = 5;
 }
 
 message ListRoleEnvironmentsRequest {}
@@ -95,6 +97,7 @@ message RoleImageRecipeInput {
   string environment_key = 15;
   repeated string package_keys = 16;
   repeated string tool_keys = 17;
+  string dockerfile = 18;
 }
 
 message RoleImageRecipe {
@@ -159,6 +162,7 @@ message ImageBuild {
   google.protobuf.Timestamp lease_expires_at = 18;
   google.protobuf.Timestamp created_at = 19;
   google.protobuf.Timestamp updated_at = 20;
+  string dockerfile = 21;
 }
 
 enum ImageAdmissionVerdict {
@@ -205,6 +209,7 @@ message ImageArtifact {
   google.protobuf.Timestamp promoted_at = 35;
   google.protobuf.Timestamp created_at = 36;
   google.protobuf.Timestamp updated_at = 37;
+  repeated RoleImageTool tools = 38;
 }
 
 enum RoleImageRecipeAction {
@@ -280,6 +285,7 @@ message RoleImageBuildInput {
   string immutable_build_sha256 = 21;
   uint64 role_runtime_contract_revision = 22;
   string role_runtime_contract_sha256 = 23;
+  string dockerfile = 24;
 }
 
 message ClaimImageBuildRequest {

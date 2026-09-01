@@ -1,0 +1,24 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: secret-broker
+  labels:
+    app.kubernetes.io/name: secret-broker
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: secret-broker
+      app.kubernetes.io/component: secret-broker
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 5s
+    - port: auth-metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 5s
+    - port: verify-metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 5s

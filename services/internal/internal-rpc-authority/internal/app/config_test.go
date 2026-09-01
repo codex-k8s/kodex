@@ -19,11 +19,29 @@ func TestApplyWorkloadProfilePinsKubernetesSecrets(t *testing.T) {
 			prefix:     "internal-rpc-authority-runtime-controller-issuer",
 		},
 		{
+			name: "session archive issuer", mode: ModeIssuer,
+			workloadID: "session-archive",
+			spiffeID:   "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+			prefix:     "internal-rpc-authority-session-archive-issuer",
+		},
+		{
 			name: "control plane verifier", mode: ModeVerifier,
 			workloadID: "control-plane",
 			spiffeID:   "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
 			prefix:     "internal-rpc-authority-control-plane-verifier",
 			resolver:   true,
+		},
+		{
+			name: "control plane issuer", mode: ModeIssuer,
+			workloadID: "control-plane",
+			spiffeID:   "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+			prefix:     "internal-rpc-authority-control-plane-issuer",
+		},
+		{
+			name: "secret broker verifier", mode: ModeVerifier,
+			workloadID: "secret-broker",
+			spiffeID:   "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+			prefix:     "internal-rpc-authority-secret-broker-verifier",
 		},
 	}
 	for _, test := range tests {

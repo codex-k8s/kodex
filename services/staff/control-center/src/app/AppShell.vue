@@ -8,13 +8,16 @@ import {
   Gauge,
   Home,
   KeyRound,
+  Layers3,
+  LockKeyhole,
   Menu,
   PlugZap,
+  RefreshCw,
   Search,
   Settings,
-  Sparkles,
   UsersRound,
   Workflow,
+  X,
 } from "@lucide/vue";
 import {
   computed,
@@ -28,8 +31,16 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import { buildBreadcrumbs, type BreadcrumbLabels } from "@/app/breadcrumbs";
+import {
+  activeNavigationSection,
+  routeProjectRef,
+} from "@/app/navigation-context";
+import { resolveShellRealtimeState } from "@/app/realtime-presentation";
+import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
+import { resolveAssistantContext } from "@/features/assistant/context";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import { useRuntimeStore } from "@/features/runtime/store";
 import { useSessionStore } from "@/features/session/store";
 import { selectProjectRef } from "@/shared/project-context";
 import {
@@ -39,11 +50,19 @@ import {
 } from "@/shared/locale";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import CurrentUserSummary from "@/shared/ui/CurrentUserSummary.vue";
+import RealtimeStatus from "@/shared/ui/RealtimeStatus.vue";
+import type { RealtimeStatusLabels } from "@/shared/ui/realtime-status";
+import {
+  useDismissibleLayer,
+  type DismissibleLayerCloseReason,
+} from "@/shared/ui/useDismissibleLayer";
+import { runPath } from "@/shared/routes";
 
 const route = useRoute();
 const router = useRouter();
 const platform = usePlatformStore();
 const realtime = useRealtimeStore();
+const runtime = useRuntimeStore();
 const session = useSessionStore();
 const { locale, t } = useI18n();
 const mobileOpen = ref(false);
@@ -52,25 +71,38 @@ const search = ref("");
 const searchInput = ref<HTMLInputElement>();
 const searchOpen = ref(false);
 const mobileSearchOpen = ref(false);
+const preloadFailed = ref(
+  document.documentElement.dataset.kodexPreload === "failed",
+);
+const searchRoot = ref<HTMLElement>();
+const realtimeStarted = ref(false);
 let disposed = false;
 
-const projectRef = computed(() => {
-  const value = route.params.projectRef;
-  return typeof value === "string" ? value : undefined;
-});
+const projectRef = computed(() => routeProjectRef(route.params));
+const activeSection = computed(() => activeNavigationSection(route.name));
+const fullBleedRunWorkspace = computed(
+  () => route.name === "run" || route.name === "project-run",
+);
 const project = computed(() =>
   projectRef.value ? platform.projects[projectRef.value] : undefined,
 );
 const pendingCount = computed(
   () => platform.gateList.filter((item) => item.state === "OPEN").length,
 );
-const connectionState = computed(() => {
-  if (!online.value || realtime.platformState.state === "offline")
-    return "DEGRADED";
-  if (realtime.platformState.state === "live") return "CONNECTED";
-  if (realtime.platformState.state === "recovering") return "RECOVERING";
-  return "CONNECTING";
-});
+const realtimeState = computed(() =>
+  resolveShellRealtimeState({
+    online: online.value,
+    started: realtimeStarted.value,
+    streamState: realtime.platformState.state,
+  }),
+);
+const realtimeLabels = computed<RealtimeStatusLabels>(() => ({
+  "initial-loading": t("states.CONNECTING"),
+  live: t("states.CONNECTED"),
+  "background-refresh": t("states.TESTING"),
+  reconnecting: t("app.reconnecting"),
+  offline: online.value ? t("states.NOT_CONNECTED") : t("app.offline"),
+}));
 const breadcrumbs = computed(() => {
   const agentRef =
     typeof route.params.agentRef === "string"
@@ -82,10 +114,13 @@ const breadcrumbs = computed(() => {
       : undefined;
   const runRef =
     typeof route.params.runRef === "string" ? route.params.runRef : undefined;
+  const environmentRef =
+    typeof route.params.environmentRef === "string"
+      ? route.params.environmentRef
+      : undefined;
   const labels: BreadcrumbLabels = {
     home: t("nav.home"),
     onboarding: t("nav.onboarding"),
-    assistant: t("nav.assistant"),
     projects: t("nav.projects"),
     project: t("app.project"),
     agents: t("nav.agents"),
@@ -96,10 +131,16 @@ const breadcrumbs = computed(() => {
     runs: t("nav.runs"),
     run: t("nav.run"),
     files: t("nav.files"),
+    filesTrash: t("files.trash"),
     automations: t("nav.automations"),
+    environments: t("nav.environments"),
+    environment: t("nav.environment"),
+    newEnvironment: t("nav.newEnvironment"),
+    secrets: t("nav.secrets"),
     integrations: t("nav.integrations"),
     decisions: t("nav.decisions"),
     administration: t("nav.administration"),
+    providers: t("nav.providers"),
     access: t("nav.access"),
     audit: t("nav.audit"),
   };
@@ -118,10 +159,39 @@ const breadcrumbs = computed(() => {
       ...(runRef && platform.runs[runRef]
         ? { runName: platform.runs[runRef].title }
         : {}),
+      ...(environmentRef && runtime.environments[environmentRef]
+        ? { environmentName: runtime.environments[environmentRef].name }
+        : {}),
     },
     labels,
   );
 });
+const assistantContext = computed(() =>
+  resolveAssistantContext(route, {
+    projects: platform.projects,
+    agents: platform.agents,
+    workflows: platform.workflows,
+    runs: platform.runs,
+  }),
+);
+const assistantRunEvents = computed(() => {
+  if (assistantContext.value.descriptor.entityKind !== "RUN") return [];
+  const runRef = assistantContext.value.descriptor.entityRef;
+  return Object.values(platform.events[runRef] ?? {}).sort(
+    (a, b) => a.sequence - b.sequence,
+  );
+});
+const assistantRefreshRevision = computed(() =>
+  [
+    platform.assistant?.version ?? 0,
+    ...Object.values(platform.conversations)
+      .sort((a, b) => a.ref.localeCompare(b.ref))
+      .map(
+        (item) =>
+          `${item.ref}:${String(item.version)}:${String(item.turns.length)}`,
+      ),
+  ].join("|"),
+);
 
 const globalLinks = computed(() => [
   { name: "home", label: t("nav.home"), path: "/", icon: Home },
@@ -192,6 +262,18 @@ const projectLinks = computed(() => {
       icon: Clock3,
     },
     {
+      name: "runtime-environments",
+      label: t("nav.environments"),
+      path: `${prefix}/environments`,
+      icon: Layers3,
+    },
+    {
+      name: "runtime-secrets",
+      label: t("nav.secrets"),
+      path: `${prefix}/secrets`,
+      icon: LockKeyhole,
+    },
+    {
       name: "project-access",
       label: t("nav.members"),
       path: `${prefix}/members`,
@@ -222,9 +304,16 @@ function openMobileSearch(): void {
   void nextTick(() => searchInput.value?.focus());
 }
 
-function closeSearch(): void {
+function closeSearch(
+  reason:
+    | DismissibleLayerCloseReason
+    | "programmatic"
+    | "route" = "programmatic",
+): void {
   searchOpen.value = false;
   mobileSearchOpen.value = false;
+  if (reason === "programmatic")
+    void nextTick(() => searchInput.value?.focus());
 }
 
 function searchResultPath(result: {
@@ -233,7 +322,7 @@ function searchResultPath(result: {
   projectRef?: string;
 }): string {
   if (result.kind === "PROJECT") return `/projects/${result.ref}`;
-  if (result.kind === "RUN") return `/runs/${result.ref}`;
+  if (result.kind === "RUN") return runPath(result.ref, result.projectRef);
   const project = encodeURIComponent(result.projectRef ?? "");
   const resource = result.kind === "AGENT" ? "agents" : "workflows";
   return `/projects/${project}/${resource}/${encodeURIComponent(result.ref)}`;
@@ -248,6 +337,14 @@ function setOnline(): void {
   online.value = navigator.onLine;
 }
 
+function markPreloadFailed(): void {
+  preloadFailed.value = true;
+}
+
+function refreshAfterPreloadFailure(): void {
+  globalThis.location.assign(globalThis.location.href);
+}
+
 watch(
   projectRef,
   (value) => {
@@ -260,27 +357,37 @@ watch(
   () => route.fullPath,
   () => {
     mobileOpen.value = false;
-    closeSearch();
+    closeSearch("route");
   },
 );
+useDismissibleLayer(searchRoot, closeSearch, {
+  enabled: computed(() => searchOpen.value || mobileSearchOpen.value),
+  returnFocusTo: searchInput,
+});
 onMounted(() => {
   locale.value = currentLocale();
   document.documentElement.lang = locale.value;
   window.addEventListener("online", setOnline);
   window.addEventListener("offline", setOnline);
+  window.addEventListener("kodex:preload-error", markPreloadFailed);
   void Promise.all([
     platform.loadProjects(),
     platform.loadGates(),
     platform.loadBootstrap(),
   ]).finally(() => {
-    if (!disposed) realtime.openPlatform();
+    if (!disposed) {
+      realtimeStarted.value = true;
+      realtime.openPlatform();
+    }
   });
 });
 onBeforeUnmount(() => {
   disposed = true;
   window.removeEventListener("online", setOnline);
   window.removeEventListener("offline", setOnline);
+  window.removeEventListener("kodex:preload-error", markPreloadFailed);
   realtime.closePlatform();
+  runtime.clear();
   platform.clearOwnerState();
 });
 </script>
@@ -306,44 +413,77 @@ onBeforeUnmount(() => {
           <img src="/logo.png" alt="" /> </span
         ><span>Kodex</span>
       </RouterLink>
-      <div class="topbar-project-switcher desktop-only">
-        <label class="sr-only" for="topbar-project-switcher">{{
-          $t("app.project")
-        }}</label>
-        <FolderKanban :size="17" aria-hidden="true" />
-        <select
-          id="topbar-project-switcher"
-          :value="projectRef ?? ''"
-          :title="project?.name ?? $t('app.chooseProject')"
-          @change="changeProject"
+      <div ref="searchRoot" class="global-search-wrap">
+        <form
+          class="global-search"
+          :class="{ 'global-search--open': mobileSearchOpen }"
+          role="search"
+          @submit.prevent="submitSearch"
         >
-          <option value="">{{ $t("app.chooseProject") }}</option>
-          <option
-            v-for="item in platform.projectList"
-            :key="item.ref"
-            :value="item.ref"
-          >
-            {{ item.name }}
-          </option>
-        </select>
+          <label class="sr-only" for="global-search">{{
+            $t("app.search")
+          }}</label>
+          <input
+            id="global-search"
+            ref="searchInput"
+            v-model="search"
+            type="search"
+            :placeholder="$t('app.search')"
+            aria-controls="global-search-results"
+            :aria-expanded="searchOpen"
+          />
+        </form>
+        <section
+          v-if="searchOpen"
+          id="global-search-results"
+          class="global-search-results"
+          :aria-label="$t('app.searchResults')"
+          aria-live="polite"
+        >
+          <header>
+            <strong>{{ $t("app.searchResults") }}</strong>
+            <button
+              class="icon-button"
+              type="button"
+              :aria-label="$t('app.closeSearch')"
+              @click="closeSearch('programmatic')"
+            >
+              <X :size="18" aria-hidden="true" />
+            </button>
+          </header>
+          <p v-if="search.trim().length < 2" class="muted">
+            {{ $t("app.searchHint") }}
+          </p>
+          <p v-else-if="platform.loading.search" class="muted" role="status">
+            {{ $t("common.loading") }}
+          </p>
+          <template v-else-if="platform.problems.search">
+            <p role="alert">{{ platform.problems.search.title }}</p>
+            <button class="button" type="button" @click="submitSearch">
+              {{ $t("common.retry") }}
+            </button>
+          </template>
+          <p v-else-if="platform.searchResults.length === 0" class="muted">
+            {{ $t("app.searchEmpty") }}
+          </p>
+          <div v-else class="search-results-list">
+            <RouterLink
+              v-for="result in platform.searchResults"
+              :key="`${result.kind}:${result.ref}`"
+              class="search-result"
+              :to="searchResultPath(result)"
+              @click="closeSearch('route')"
+            >
+              <span>
+                <small>{{ $t(`app.searchKind.${result.kind}`) }}</small>
+                <strong>{{ result.title }}</strong>
+                <span>{{ result.subtitle }}</span>
+              </span>
+              <StatusBadge :state="result.state" />
+            </RouterLink>
+          </div>
+        </section>
       </div>
-      <form
-        class="global-search"
-        :class="{ 'global-search--open': mobileSearchOpen }"
-        role="search"
-        @submit.prevent="submitSearch"
-      >
-        <label class="sr-only" for="global-search">{{
-          $t("app.search")
-        }}</label>
-        <input
-          id="global-search"
-          ref="searchInput"
-          v-model="search"
-          type="search"
-          :placeholder="$t('app.search')"
-        />
-      </form>
       <button
         class="icon-button mobile-only"
         type="button"
@@ -353,86 +493,38 @@ onBeforeUnmount(() => {
       >
         <Search :size="19" aria-hidden="true" />
       </button>
-      <section
-        v-if="searchOpen"
-        class="global-search-results"
-        :aria-label="$t('app.searchResults')"
-        aria-live="polite"
-        @keydown.esc="closeSearch"
-      >
-        <header>
-          <strong>{{ $t("app.searchResults") }}</strong>
-          <button
-            class="icon-button"
-            type="button"
-            :aria-label="$t('app.closeSearch')"
-            @click="closeSearch"
-          >
-            ×
-          </button>
-        </header>
-        <p v-if="search.trim().length < 2" class="muted">
-          {{ $t("app.searchHint") }}
-        </p>
-        <p v-else-if="platform.loading.search" class="muted" role="status">
-          {{ $t("common.loading") }}
-        </p>
-        <template v-else-if="platform.problems.search">
-          <p role="alert">{{ platform.problems.search.title }}</p>
-          <button class="button" type="button" @click="submitSearch">
-            {{ $t("common.retry") }}
-          </button>
-        </template>
-        <p v-else-if="platform.searchResults.length === 0" class="muted">
-          {{ $t("app.searchEmpty") }}
-        </p>
-        <div v-else class="search-results-list">
-          <RouterLink
-            v-for="result in platform.searchResults"
-            :key="`${result.kind}:${result.ref}`"
-            class="search-result"
-            :to="searchResultPath(result)"
-            @click="closeSearch"
-          >
-            <span>
-              <small>{{ $t(`app.searchKind.${result.kind}`) }}</small>
-              <strong>{{ result.title }}</strong>
-              <span>{{ result.subtitle }}</span>
-            </span>
-            <StatusBadge :state="result.state" />
-          </RouterLink>
-        </div>
-      </section>
-      <RouterLink class="decision-link" to="/decisions">
-        <KeyRound :size="17" aria-hidden="true" />
-        <span class="decision-link__label">{{ $t("nav.decisions") }}</span>
-        <span v-if="pendingCount" class="count-badge">{{ pendingCount }}</span>
-      </RouterLink>
-      <StatusBadge
-        class="connection-badge"
-        :state="connectionState"
-        aria-live="polite"
-      />
-      <CurrentUserSummary
-        v-if="platform.bootstrap"
-        :user="platform.bootstrap.currentUser"
-        :platform-role="platform.bootstrap.platformRole"
-        :locale="locale as SupportedLocale"
-        :can-logout="session.canLogout"
-        @change-locale="changeLocale"
-        @logout="session.logout"
-      />
+      <div class="topbar-actions">
+        <RouterLink class="decision-link" to="/decisions">
+          <KeyRound :size="17" aria-hidden="true" />
+          <span class="decision-link__label">{{ $t("nav.decisions") }}</span>
+          <span v-if="pendingCount" class="count-badge">{{
+            pendingCount
+          }}</span>
+        </RouterLink>
+        <RealtimeStatus
+          class="connection-status"
+          :state="realtimeState"
+          :labels="realtimeLabels"
+          :detail="realtime.platformState.problemTitle"
+        />
+        <CurrentUserSummary
+          v-if="platform.bootstrap"
+          :user="platform.bootstrap.currentUser"
+          :platform-role="platform.bootstrap.platformRole"
+          :locale="locale as SupportedLocale"
+          :can-logout="session.canLogout"
+          @change-locale="changeLocale"
+          @logout="session.logout"
+        />
+      </div>
     </header>
 
-    <div v-if="!online" class="offline-banner" role="status">
-      {{ $t("app.offline") }}
-    </div>
-    <div
-      v-else-if="realtime.platformState.problemTitle"
-      class="offline-banner"
-      role="status"
-    >
-      {{ realtime.platformState.problemTitle }}
+    <div v-if="preloadFailed" class="preload-failure" role="alert">
+      <span>{{ $t("app.preloadFailed") }}</span>
+      <button class="button" type="button" @click="refreshAfterPreloadFailure">
+        <RefreshCw :size="16" aria-hidden="true" />
+        {{ $t("app.refreshPage") }}
+      </button>
     </div>
 
     <button
@@ -447,28 +539,13 @@ onBeforeUnmount(() => {
       class="sidebar"
       :class="{ 'sidebar--open': mobileOpen }"
     >
-      <RouterLink
-        class="assistant-entry"
-        :to="{ path: '/assistant', query: projectRef ? { projectRef } : {} }"
-      >
-        <span class="assistant-entry__mark" aria-hidden="true"
-          ><Sparkles :size="21"
-        /></span>
-        <span
-          ><strong>{{ $t("app.assistantShort") }}</strong
-          ><small>{{ $t("assistant.system") }}</small></span
-        >
-        <StatusBadge
-          v-if="platform.assistant"
-          :state="platform.assistant.runtimeState"
-        />
-      </RouterLink>
       <nav :aria-label="$t('app.navigation')">
         <RouterLink
           v-for="link in globalLinks"
           :key="link.name"
           :to="link.path"
           class="nav-link"
+          :class="{ 'nav-link--active': activeSection === link.name }"
         >
           <span class="nav-link__label"
             ><component :is="link.icon" :size="17" aria-hidden="true" />
@@ -476,7 +553,7 @@ onBeforeUnmount(() => {
           ><span v-if="link.count" class="count-badge">{{ link.count }}</span>
         </RouterLink>
       </nav>
-      <div class="project-switcher project-switcher--sidebar mobile-only">
+      <div class="project-switcher project-switcher--sidebar">
         <label for="sidebar-project-switcher">{{ $t("app.project") }}</label>
         <select
           id="sidebar-project-switcher"
@@ -507,6 +584,7 @@ onBeforeUnmount(() => {
           :key="link.name"
           :to="link.path"
           class="nav-link nav-link--project"
+          :class="{ 'nav-link--active': activeSection === link.name }"
           ><span class="nav-link__label"
             ><component :is="link.icon" :size="16" aria-hidden="true" />
             <span>{{ link.label }}</span></span
@@ -517,6 +595,7 @@ onBeforeUnmount(() => {
         <RouterLink
           :to="administrationLink.path"
           class="nav-link nav-link--administration"
+          :class="{ 'nav-link--active': activeSection === 'administration' }"
         >
           <span class="nav-link__label"
             ><component
@@ -530,7 +609,11 @@ onBeforeUnmount(() => {
       </div>
     </aside>
 
-    <div id="main-content" class="app-content">
+    <div
+      id="main-content"
+      class="app-content"
+      :class="{ 'app-content--run-workspace': fullBleedRunWorkspace }"
+    >
       <nav class="breadcrumbs" :aria-label="$t('app.breadcrumbs')">
         <ol>
           <li v-for="item in breadcrumbs" :key="`${item.path}:${item.label}`">
@@ -547,31 +630,48 @@ onBeforeUnmount(() => {
     </div>
 
     <nav class="mobile-tabs" :aria-label="$t('app.navigation')">
-      <RouterLink to="/"
+      <RouterLink
+        to="/"
+        :class="{ 'mobile-tabs__active': activeSection === 'home' }"
         ><Home :size="18" aria-hidden="true" /><span>{{
           $t("nav.home")
         }}</span></RouterLink
       >
-      <RouterLink to="/projects"
+      <RouterLink
+        to="/projects"
+        :class="{
+          'mobile-tabs__active':
+            activeSection === 'projects' ||
+            (projectRef !== undefined && activeSection !== 'project-runs'),
+        }"
         ><FolderKanban :size="18" aria-hidden="true" /><span>{{
           $t("nav.projects")
         }}</span></RouterLink
       >
-      <RouterLink to="/assistant"
-        ><Sparkles :size="18" aria-hidden="true" /><span>{{
-          $t("app.assistantShort")
-        }}</span></RouterLink
-      >
-      <RouterLink to="/runs"
+      <RouterLink
+        to="/runs"
+        :class="{
+          'mobile-tabs__active':
+            activeSection === 'runs' || activeSection === 'project-runs',
+        }"
         ><Activity :size="18" aria-hidden="true" /><span>{{
           $t("nav.runs")
         }}</span></RouterLink
       >
-      <RouterLink to="/decisions"
+      <RouterLink
+        to="/decisions"
+        :class="{ 'mobile-tabs__active': activeSection === 'decisions' }"
         ><KeyRound :size="18" aria-hidden="true" /><span>{{
           $t("nav.decisions")
         }}</span></RouterLink
       >
     </nav>
+    <AssistantWorkspace
+      :context="assistantContext.descriptor"
+      :project-ref="assistantContext.projectRef"
+      :live="realtime.platformState.state === 'live'"
+      :run-events="assistantRunEvents"
+      :refresh-revision="assistantRefreshRevision"
+    />
   </div>
 </template>

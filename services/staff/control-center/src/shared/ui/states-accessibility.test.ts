@@ -1,13 +1,8 @@
-import { createPinia } from "pinia";
 import { createSSRApp, h, type Component } from "vue";
 import { createI18n } from "vue-i18n";
-import { createMemoryHistory, createRouter } from "vue-router";
 import { renderToString } from "@vue/server-renderer";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import AssistantPage from "@/pages/AssistantPage.vue";
-import { usePlatformStore } from "@/features/platform/store";
-import { useRealtimeStore } from "@/features/realtime/store";
 import { AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -139,95 +134,20 @@ describe("authoritative UI states and accessibility", () => {
 
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
-    expect(html).toContain('aria-label="Новый сотрудник"');
+    expect(html).toMatch(/aria-labelledby="modal-title-[^"]+"/);
+    expect(html).toMatch(/<h2 id="modal-title-[^"]+"[^>]*>/);
+    expect(html).toContain("Новый сотрудник</h2>");
+    expect(html).toContain("modal--md");
     expect(html).toContain('tabindex="-1"');
     expect(html).toMatch(/<button[^>]*aria-label="Закрыть"[^>]*disabled/);
   });
 
-  it("показывает системного помощника полноценным live region без delete CTA", async () => {
-    const pinia = createPinia();
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [
-        {
-          path: "/assistant",
-          component: AssistantPage,
-          meta: { public: true },
-        },
-      ],
+  it("применяет запрошенный семантический размер dialog", async () => {
+    const html = await render(ModalDialog, {
+      title: "Предпросмотр файла",
+      size: "xl",
     });
-    await router.push("/assistant?projectRef=project_sales01");
-    await router.isReady();
-    const platform = usePlatformStore(pinia);
-    platform.assistant = {
-      ref: "agent_system_assistant",
-      version: 1,
-      name: "Помощник Kodex",
-      system: true,
-      removable: false,
-      corePromptRevision: "core-v1",
-      ownerInstructions: "",
-      runtimeState: "READY",
-      readinessSummary: "Готов принимать задания",
-      nextActions: ["OPEN", "CREATE_CONVERSATION", "ADD_TURN", "EDIT"],
-    };
-    platform.conversations.cnv_test12345678 = {
-      ref: "cnv_test12345678",
-      version: 1,
-      title: "Настройка проекта",
-      turns: [
-        {
-          ref: "trn_test12345678",
-          sequence: 1,
-          role: "ASSISTANT",
-          content: "План: `pln_test12345678`, версия 1",
-          state: "COMPLETED",
-          plan: {
-            ref: "pln_test12345678",
-            version: 1,
-            conversationRef: "cnv_test12345678",
-            auditSummary: "Будет создан один проект",
-            applied: false,
-            nextActions: ["APPLY_PLAN"],
-            operations: [
-              {
-                ref: "op_test12345678",
-                type: "CREATE_PROJECT",
-                title: "Создать проект",
-                summary: "Новая рабочая область",
-                permitted: true,
-              },
-            ],
-          },
-          createdAt: "2026-08-27T17:00:00Z",
-        },
-      ],
-      updatedAt: "2026-08-27T17:00:00Z",
-    };
-    useRealtimeStore(pinia).platformState.state = "live";
-    const app = createSSRApp(AssistantPage);
-    app.use(pinia);
-    app.use(router);
-    app.use(
-      createI18n({
-        legacy: false,
-        locale: "ru",
-        messages: { ru: messages() },
-      }),
-    );
 
-    const html = await renderToString(app);
-
-    expect(html).toContain("Помощник готов");
-    expect(html).toContain("Системный и неудаляемый");
-    expect(html).toContain('role="log"');
-    expect(html).toContain('aria-live="polite"');
-    expect(html).toContain("Новый диалог");
-    expect(html).toContain("Отправить помощнику");
-    expect(html).toContain("Будет создан один проект");
-    expect(html).toContain("Создать проект");
-    expect(html).toContain("Применить разрешённые изменения");
-    expect(html).not.toContain("pln_test12345678");
-    expect(html).not.toMatch(/Удалить|Архивировать|Отключить/);
+    expect(html).toContain("modal--xl");
   });
 });

@@ -36,6 +36,50 @@ lock_file="$script_directory/components.lock.json"
 ipv6_ingress_bridge_script="$script_directory/configure-ipv6-ingress-bridge.sh"
 pod_cidr=10.42.0.0/16
 service_cidr=10.43.0.0/16
+k3s_resolver_file=/etc/rancher/k3s/resolv.conf
+
+configure_k3s_resolver() {
+  local source_file temporary_file nameserver_count
+  source_file=/run/systemd/resolve/resolv.conf
+  [[ -r "$source_file" ]] || source_file=/etc/resolv.conf
+  temporary_file=$(mktemp)
+  awk '
+    $1 == "nameserver" &&
+    $2 !~ /^127\./ &&
+    $2 != "::1" &&
+    !seen[$2]++ &&
+    count < 3 {
+      print "nameserver " $2
+      count++
+    }
+  ' "$source_file" >"$temporary_file"
+  nameserver_count=$(wc -l <"$temporary_file")
+  [[ "$nameserver_count" -ge 1 ]] || {
+    rm -f -- "$temporary_file"
+    fail 'no non-loopback upstream DNS server is available for k3s'
+  }
+  {
+    printf '%s\n' '# Managed by Kodex. Host search domains are intentionally excluded.'
+    cat -- "$temporary_file"
+    printf '%s\n' 'options timeout:2 attempts:2'
+  } | install -m 0644 /dev/stdin "$k3s_resolver_file"
+  rm -f -- "$temporary_file"
+}
+
+readback_k3s_resolver() {
+  [[ -f "$k3s_resolver_file" && ! -L "$k3s_resolver_file" ]] ||
+    fail 'dedicated k3s resolver file is absent'
+  awk '
+    $1 == "search" || $1 == "domain" { exit 1 }
+    $1 == "nameserver" {
+      if ($2 ~ /^127\./ || $2 == "::1" || seen[$2]++) exit 1
+      count++
+    }
+    END { if (count < 1 || count > 3) exit 1 }
+  ' "$k3s_resolver_file" || fail 'dedicated k3s resolver is unsafe'
+  grep -Fxq "resolv-conf: \"$k3s_resolver_file\"" /etc/rancher/k3s/config.yaml ||
+    fail 'k3s does not use the dedicated resolver file'
+}
 
 remove_legacy_firewall() {
   systemctl disable --now nftables >/dev/null 2>&1 || true
@@ -82,8 +126,9 @@ if [[ "$mode" == apply ]]; then
   apt-get update -qq
   apt-get upgrade -y -qq
   apt-get install -y -qq \
-    apache2-utils build-essential ca-certificates curl dnsutils gh git iptables jq make \
-    iproute2 openssl python3 ripgrep rsync systemd tar unzip uidmap ufw zstd
+    apache2-utils build-essential ca-certificates curl dnsutils gh git iptables jq \
+    libnss3-tools make iproute2 openssl python3 ripgrep rsync systemd tar unzip \
+    uidmap ufw zstd
 else
   command -v jq >/dev/null 2>&1 || fail 'jq is required'
 fi
@@ -106,6 +151,7 @@ download_artifact() {
   url=$(jq -er --arg name "$name" '.artifacts[] | select(.name == $name) | .url' "$lock_file")
   expected_sha=$(jq -er --arg name "$name" '.artifacts[] | select(.name == $name) | .sha256' "$lock_file")
   curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+    --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 15 \
     "$url" --output "$output"
   actual_sha=$(sha256sum "$output" | awk '{print $1}')
   [[ "$actual_sha" == "$expected_sha" ]] || fail "artifact digest mismatch: $name"
@@ -135,12 +181,22 @@ if [[ "$mode" == apply ]]; then
 
   download_artifact k3s "$temporary_directory/k3s"
   install -m 0755 "$temporary_directory/k3s" /usr/local/bin/k3s
-  ln -sfn /usr/local/bin/k3s /usr/local/bin/kubectl
+  rm -f -- /usr/local/bin/kubectl
+  cat >/usr/local/bin/kubectl <<'EOF'
+#!/bin/sh
+export K3S_CONFIG_FILE=/dev/null
+exec /usr/local/bin/k3s kubectl "$@"
+EOF
+  chmod 0755 /usr/local/bin/kubectl
   ln -sfn /usr/local/bin/k3s /usr/local/bin/crictl
   mkdir -p /etc/rancher/k3s /var/lib/rancher/k3s
+  configure_k3s_resolver
   cat >/etc/rancher/k3s/config.yaml <<EOF
 write-kubeconfig-mode: "0600"
 secrets-encryption: true
+resolv-conf: "$k3s_resolver_file"
+disable:
+  - traefik
 tls-san:
   - "$server_public_ip"
 kubelet-arg:
@@ -173,17 +229,18 @@ WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
   configure_firewall
-  systemctl enable --now k3s
+  systemctl enable k3s >/dev/null
+  systemctl restart k3s
 fi
 
 systemctl is-active --quiet k3s || fail 'k3s service is not active'
-for command_name in cosign dig go helm kubectl nsc yq; do
+for command_name in certutil cosign dig go helm kubectl nsc yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "installed command is absent: $command_name"
 done
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 api_ready=false
 node_ready=false
-for attempt in $(seq 1 120); do
+for _ in $(seq 1 120); do
   if kubectl get --raw=/readyz >/dev/null 2>&1; then
     api_ready=true
     if [[ "$(kubectl get node -o json 2>/dev/null | jq '[.items[] | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))] | length')" -ge 1 ]]; then
@@ -195,6 +252,7 @@ for attempt in $(seq 1 120); do
 done
 [[ "$api_ready" == true ]] || fail 'Kubernetes API did not become ready'
 [[ "$node_ready" == true ]] || fail 'no ready Kubernetes node became available'
+readback_k3s_resolver
 readback_firewall
 if [[ "$mode" == apply ]]; then
   "$ipv6_ingress_bridge_script" --mode apply \

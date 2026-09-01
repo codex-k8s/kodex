@@ -4,8 +4,8 @@ title: Интеграции и согласования
 type: domain
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-08-23
+version: 1.2.0
+updated: 2026-08-28
 ---
 
 # Интеграции и согласования
@@ -16,12 +16,18 @@ updated: 2026-08-23
 
 ## Основные сущности
 
-- `IntegrationDefinition` — неизменяемые имя, версия, схема и инструменты.
-- `IntegrationConnection` — endpoint, конфигурация и ссылки на учетные данные конкретной организации.
+- `IntegrationDefinition` — schema-versioned YAML package с origin и
+  canonical digest, типизированными capabilities и закрытым adapter key.
+- `IntegrationConnection` — public configuration и pin определения конкретной
+  организации.
+- `IntegrationCredentialRevision` — только ref Kubernetes Secret, UID,
+  `resourceVersion` и digest содержимого; secret value не является domain data.
 - `IntegrationCapability` — именованная операция со схемой входа и выхода и уровнем риска.
 - `IntegrationGrant` — право Agent или Workflow на возможность с ограничениями.
 - `IntegrationInvocation` — fenced идемпотентный вызов из конкретной Session,
   Turn и attempt.
+- `IntegrationEffectReceipt` — неизменяемое доказательство одного provider
+  effect с effect/input/response digests и provider ref.
 - `HumanGate` — единое долговечное one-winner решение человека, которым владеет
   control-plane.
 
@@ -30,9 +36,22 @@ updated: 2026-08-23
 1. Токен с областью одной Session и attempt аутентифицирует runtime caller.
 2. Шлюз проверяет определение, версию и работоспособность соединения.
 3. Вычислитель политик проверяет право и ограничения.
-4. Политика риска решает, нужно ли ручное согласование.
-5. Согласованное действие выполняется закрытым типизированным adapter-ом.
-6. Результат возвращается агенту и записывается в аудит.
+4. READ переходит в `READY`; WRITE, SENSITIVE и DESTRUCTIVE в той же
+   транзакции создают отдельный Human Gate и переходят в `WAITING_APPROVAL`.
+5. Worker claim для защищённого effect разрешён только после `APPROVED`.
+6. Согласованное действие выполняется закрытым типизированным adapter-ом.
+7. Успех атомарно фиксирует terminal invocation и одну immutable effect
+   receipt; exact retry читает её, а несовпадение закрыто отклоняется.
+
+## Настройка credential
+
+Connection и credential создаются двумя командами. Browser сначала создаёт
+Connection без secret metadata. Затем специализированная команда с OCC и
+semantic idempotency передаёт значение доверенному materializer. Он записывает
+детерминированный data key в единственный Kubernetes Secret и возвращает
+server-owned metadata; только после этого control-plane создаёт immutable
+revision и активирует её. Повтор того же idempotency key с другим значением
+запрещён. Публичный readback содержит только маскированное состояние.
 
 ## Контракт MCP среды выполнения
 
@@ -63,7 +82,9 @@ updated: 2026-08-23
 
 ## Жизненный цикл согласования
 
-Состояния: `pending`, `approved`, `rejected`, `expired`, `cancelled`, `executing`, `succeeded`, `failed`.
+Состояния invocation: `WAITING_APPROVAL`, `READY`, `RUNNING`, `SUCCEEDED`,
+`FAILED`, `REJECTED`, `CANCELLED`. Решение Human Gate принимается до claim и
+может быть только `APPROVE`, `REJECT` или `CANCEL` для integration effect.
 
 Решение связывается с хешем вызова инструмента. Изменение аргументов после согласования создает новый запрос.
 

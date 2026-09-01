@@ -24,10 +24,14 @@ if rg -q 'func \([^)]*\) (UnmarshalJSON|MarshalJSON)\(' "$generated_dir"; then
   exit 1
 fi
 for required in \
-  resume_envelope.go snapshot_envelope.go event_envelope.go \
-  resync_envelope.go heartbeat_envelope.go problem_envelope.go \
+  session_resume_envelope.go subscribe_run_envelope.go unsubscribe_run_envelope.go \
+  session_ready_envelope.go run_snapshot_envelope.go run_event_envelope.go \
+  run_ready_envelope.go run_resync_envelope.go run_unsubscribed_envelope.go \
+  platform_invalidated_envelope.go platform_ready_envelope.go platform_resync_envelope.go \
+  stream_heartbeat_envelope.go stream_problem_envelope.go session_problem_envelope.go \
   run_graph.go run_node.go run_node_type.go run_node_state.go \
   run_edge.go run_edge_type.go run_event.go run_event_type.go run_state.go \
+  stream_kind.go stream_cursor.go run_resume_cursor.go \
   next_action.go resync_reason.go problem_code.go; do
   if [ ! -f "$generated_dir/$required" ]; then
     echo "named AsyncAPI model is missing: $required" >&2
@@ -47,8 +51,15 @@ if ! rg -q '^[[:space:]]+type: RunEventType;' "$typescript_generated_dir/RunEven
   echo "RunEvent.type lost its TypeScript wire mapping" >&2
   exit 1
 fi
-if ! rg -q '^type RunStream interface \{' "$generated_dir/run_stream.go" ||
-  ! rg -q '^[[:space:]]+isRunStream\(\)' "$generated_dir/run_stream.go"; then
-  echo "RunStream must remain a closed Go union without embedded JSON fields" >&2
+if ! rg -q '^type SessionStream interface \{' "$generated_dir/session_stream.go" ||
+  ! rg -q '^[[:space:]]+isSessionStream\(\)' "$generated_dir/session_stream.go"; then
+  echo "SessionStream must remain a closed Go union without embedded JSON fields" >&2
+  exit 1
+fi
+
+if find "$generated_dir" "$typescript_generated_dir" -maxdepth 1 -type f \
+  \( -name 'run_stream.*' -o -name 'platform_stream.*' -o -name 'resume_envelope.*' \
+  -o -name 'snapshot_envelope.*' -o -name 'ready_envelope.*' \) | grep -q .; then
+  echo "legacy realtime generated models are still present" >&2
   exit 1
 fi

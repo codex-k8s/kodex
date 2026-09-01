@@ -8,29 +8,54 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/callback"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 	"github.com/google/uuid"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
+const (
+	defaultTurnInspectionInterval = 2 * time.Second
+	defaultTerminalCallbackGrace  = 10 * time.Second
+	failureCompletionMaximumTries = 5
+)
+
+var defaultFailureCompletionRetryDelays = [...]time.Duration{
+	500 * time.Millisecond,
+	1500 * time.Millisecond,
+	3 * time.Second,
+	6 * time.Second,
+}
+
+type turnLifecycle interface {
+	ObserveTurnPod(context.Context, runtimecontract.RunnerInput, bool) (workload.TurnPodObservation, error)
+	DeleteTurn(context.Context, string) error
+}
+
 type runtime struct {
-	control           *controlplaneclient.Client
+	control           controlplanev1.RuntimeWorkServiceClient
 	manager           *workload.Manager
+	turns             turnLifecycle
 	coordinator       *callback.Coordinator
 	config            Config
 	assistant         *serviceruntime.Readiness
 	logger            *slog.Logger
 	capacity          chan struct{}
+	inspectInterval   time.Duration
+	terminalGrace     time.Duration
+	completionRetries []time.Duration
 	warmMu            sync.RWMutex
 	warmCompatibility string
 	warmTicket        string
 }
 
-func newRuntime(control *controlplaneclient.Client, manager *workload.Manager, coordinator *callback.Coordinator, config Config, assistant *serviceruntime.Readiness, logger *slog.Logger) *runtime {
-	return &runtime{control: control, manager: manager, coordinator: coordinator, config: config, assistant: assistant, logger: logger, capacity: make(chan struct{}, config.MaximumConcurrentTurns)}
+func newRuntime(control controlplanev1.RuntimeWorkServiceClient, manager *workload.Manager, coordinator *callback.Coordinator, config Config, assistant *serviceruntime.Readiness, logger *slog.Logger) *runtime {
+	return &runtime{control: control, manager: manager, turns: manager, coordinator: coordinator, config: config, assistant: assistant, logger: logger,
+		capacity: make(chan struct{}, config.MaximumConcurrentTurns), inspectInterval: defaultTurnInspectionInterval,
+		terminalGrace: defaultTerminalCallbackGrace, completionRetries: defaultFailureCompletionRetryDelays[:]}
 }
 
 func (runtime *runtime) Run(ctx context.Context) error {
@@ -76,7 +101,7 @@ func (runtime *runtime) Run(ctx context.Context) error {
 func (runtime *runtime) reconcileWarm(ctx context.Context) error {
 	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
 	defer cancel()
-	response, err := runtime.control.Runtime.ReconcileWarmRuntime(request, &controlplanev1.ReconcileWarmRuntimeRequest{WorkloadInstance: runtime.config.PodUID})
+	response, err := runtime.control.ReconcileWarmRuntime(request, &controlplanev1.ReconcileWarmRuntimeRequest{WorkloadInstance: runtime.config.PodUID})
 	if err != nil || response.GetDesiredRevision() == nil {
 		return errors.New("reconcile system assistant warm runtime")
 	}
@@ -120,7 +145,7 @@ func (runtime *runtime) reconcileWarm(ctx context.Context) error {
 func (runtime *runtime) reportWarm(ctx context.Context, revision string, state controlplanev1.AssistantRuntimeState, code string) error {
 	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
 	defer cancel()
-	_, err := runtime.control.Runtime.ReportWarmRuntime(request, &controlplanev1.ReportWarmRuntimeRequest{WorkloadInstance: runtime.config.PodUID, RuntimeRevision: revision, State: state, SafeErrorCode: code})
+	_, err := runtime.control.ReportWarmRuntime(request, &controlplanev1.ReportWarmRuntimeRequest{WorkloadInstance: runtime.config.PodUID, RuntimeRevision: revision, State: state, SafeErrorCode: code})
 	return err
 }
 
@@ -139,7 +164,7 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 		return 0, nil
 	}
 	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
-	response, err := runtime.control.Runtime.ClaimExecution(request, &controlplanev1.ClaimExecutionRequest{WorkloadInstance: runtime.config.PodUID, Limit: int32(limit)})
+	response, err := runtime.control.ClaimExecution(request, &controlplanev1.ClaimExecutionRequest{WorkloadInstance: runtime.config.PodUID, Limit: int32(limit)})
 	cancel()
 	if err != nil {
 		return 0, err
@@ -170,6 +195,7 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 		}
 		if !warmExecution {
 			if err := runtime.manager.EnsureTurn(ctx, input, providerBinding); err != nil {
+				runtime.logger.WarnContext(ctx, "runtime turn materialization failed", "error_class", "kubernetes", "reason", err.Error())
 				<-runtime.capacity
 				runtime.failClaim(ctx, input, execution, "RUNTIME_MATERIALIZATION_FAILED")
 				continue
@@ -186,8 +212,10 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 	defer cancel()
 	renew := time.NewTicker(runtime.config.LeaseRenewInterval)
 	defer renew.Stop()
-	inspect := time.NewTicker(2 * time.Second)
+	inspect := time.NewTicker(runtime.inspectInterval)
 	defer inspect.Stop()
+	var terminalObservedAt time.Time
+	terminalDiagnostic := ""
 	_ = runtime.progress(execution, input, "WORKLOAD_SCHEDULED")
 	for {
 		select {
@@ -197,11 +225,11 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 			}
 			return
 		case <-execution.Done():
-			runtime.completeFailure(context.WithoutCancel(parent), input, "RUNTIME_TIMEOUT")
+			runtime.completeFailure(context.WithoutCancel(parent), input, "RUNTIME_TIMEOUT", "")
 			return
 		case <-renew.C:
 			request, cancelRequest := context.WithTimeout(execution, runtime.config.RequestTimeout)
-			_, err := runtime.control.Runtime.RenewExecution(request, &controlplanev1.RenewExecutionRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
+			_, err := runtime.control.RenewExecution(request, &controlplanev1.RenewExecutionRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
 			cancelRequest()
 			if err != nil {
 				_ = runtime.manager.DeleteTurn(context.WithoutCancel(parent), input.LeaseRef)
@@ -210,12 +238,29 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 			}
 		case <-inspect.C:
 			request, cancelRequest := context.WithTimeout(execution, runtime.config.RequestTimeout)
-			state, err := runtime.manager.TurnPodState(request, input, warmExecution)
+			observation, err := runtime.turns.ObserveTurnPod(request, input, warmExecution)
 			cancelRequest()
-			if err == nil && (state == "FAILED" || state == "SUCCEEDED" || state == "MISSING" || state == "CONFLICT") {
-				runtime.completeFailure(context.WithoutCancel(parent), input, "RUNTIME_WORKLOAD_EXITED")
-				return
+			if err != nil || !terminalTurnState(observation.State) {
+				terminalObservedAt = time.Time{}
+				terminalDiagnostic = ""
+				continue
 			}
+			if terminalObservedAt.IsZero() {
+				terminalObservedAt = time.Now()
+				terminalDiagnostic = observation.DiagnosticCode
+				continue
+			}
+			if time.Since(terminalObservedAt) < runtime.terminalGrace {
+				continue
+			}
+			select {
+			case <-done:
+				return
+			default:
+			}
+			runtime.logger.WarnContext(parent, "runtime terminal callback grace expired", "diagnostic_code", terminalDiagnostic)
+			runtime.completeFailure(context.WithoutCancel(parent), input, "RUNTIME_WORKLOAD_EXITED", terminalDiagnostic)
+			return
 		}
 	}
 }
@@ -223,18 +268,37 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 func (runtime *runtime) progress(ctx context.Context, input runtimecontract.RunnerInput, code string) error {
 	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
 	defer cancel()
-	_, err := runtime.control.Runtime.ReportExecutionProgress(request, &controlplanev1.ReportExecutionProgressRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Progress: "i18n:" + code})
+	_, err := runtime.control.ReportExecutionProgress(request, &controlplanev1.ReportExecutionProgressRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Progress: "i18n:" + code})
 	return err
 }
 
-func (runtime *runtime) completeFailure(base context.Context, input runtimecontract.RunnerInput, code string) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(base), runtime.config.RequestTimeout)
-	defer cancel()
-	_, err := runtime.control.Runtime.CompleteExecution(ctx, &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(input.LeaseRef, "failure:"+code)}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: false, ResultSummary: "i18n:" + code, SafeErrorCode: safeRuntimeErrorCode(code)})
-	if err != nil {
-		runtime.logger.ErrorContext(ctx, "complete failed runtime execution failed", "error_class", "control_plane")
+func (runtime *runtime) completeFailure(base context.Context, input runtimecontract.RunnerInput, code, diagnosticCode string) {
+	request := &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(input.LeaseRef, "failure:"+code)}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: false, ResultSummary: "i18n:" + code, SafeErrorCode: safeRuntimeErrorCode(code)}
+	var err error
+	for attempt := 0; attempt < failureCompletionMaximumTries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(base), runtime.config.RequestTimeout)
+		_, err = runtime.control.CompleteExecution(ctx, request)
+		cancel()
+		if err == nil || status.Code(err) == codes.AlreadyExists {
+			err = nil
+			break
+		}
+		if !transientControlPlaneFailure(err) || attempt >= len(runtime.completionRetries) {
+			break
+		}
+		if !waitWithoutCancel(base, runtime.completionRetries[attempt]) {
+			break
+		}
 	}
-	_ = runtime.manager.DeleteTurn(ctx, input.LeaseRef)
+	if err != nil {
+		runtime.logger.ErrorContext(base, "complete failed runtime execution failed", "error_class", "control_plane", "diagnostic_code", diagnosticCode)
+		return
+	}
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(base), runtime.config.RequestTimeout)
+	defer cancel()
+	if err := runtime.turns.DeleteTurn(cleanup, input.LeaseRef); err != nil {
+		runtime.logger.ErrorContext(cleanup, "failed runtime resource cleanup failed", "error_class", "kubernetes", "diagnostic_code", diagnosticCode)
+	}
 	runtime.coordinator.Complete(input.LeaseRef)
 }
 
@@ -243,7 +307,26 @@ func (runtime *runtime) failClaim(ctx context.Context, input runtimecontract.Run
 		input.LeaseRef, input.LeaseFence, input.LeaseGeneration = execution.GetLease().GetRef(), execution.GetLease().GetFence(), execution.GetLease().GetGeneration()
 	}
 	if input.LeaseRef != "" {
-		runtime.completeFailure(ctx, input, code)
+		runtime.completeFailure(ctx, input, code, "")
+	}
+}
+
+func terminalTurnState(state string) bool {
+	return state == "FAILED" || state == "SUCCEEDED" || state == "MISSING" || state == "CONFLICT"
+}
+
+func transientControlPlaneFailure(err error) bool {
+	return status.Code(err) == codes.Unavailable || status.Code(err) == codes.DeadlineExceeded
+}
+
+func waitWithoutCancel(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 

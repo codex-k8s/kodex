@@ -27,14 +27,24 @@ RUN mkdir -p /out/kodex-protected \
 # Локальный runtime сохраняет тот же защищенный entrypoint и UID-контракт, но
 # не собирает полный набор инструментов роли. Production-образ остается
 # последним stage этого Dockerfile и не зависит от local-runtime.
-FROM docker.io/library/node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 AS local-runtime
+FROM docker.io/library/node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS local-codex-cli
 
-ARG KODEX_CODEX_PACKAGE=@openai/codex@0.144.1
+ARG KODEX_CODEX_PACKAGE=@openai/codex@0.152.0
+
+RUN set -eu; \
+	npm install --global "${KODEX_CODEX_PACKAGE}"; \
+	binary=$(find /usr/local/lib/node_modules/@openai/codex -type f \
+		-path '*/vendor/*/bin/codex' -print -quit); \
+	test -n "$binary" && test -x "$binary"; \
+	"$binary" --version >/dev/null; \
+	install -D -m 0555 "$binary" /out/codex; \
+	npm cache clean --force
+
+FROM docker.io/library/debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS local-runtime
 
 RUN set -eu; \
 	apt-get update; \
 	apt-get install -y --no-install-recommends bubblewrap ca-certificates git openssh-client tini; \
-	npm install --global "${KODEX_CODEX_PACKAGE}"; \
 	groupadd --gid 10001 kodex; \
 	useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin kodex; \
 	mkdir -p /home/kodex /workspace /codex-home /run/secrets/kodex/runtime/provider; \
@@ -42,11 +52,13 @@ RUN set -eu; \
 	chmod 0755 /run/secrets/kodex/runtime/provider; \
 	chmod 0400 /run/secrets/kodex/runtime/provider/auth.json /run/secrets/kodex/runtime/provider/auth.sha256; \
 	chown -R 10001:10001 /home/kodex /workspace /codex-home; \
-	codex --version >/dev/null; \
 	rm -rf /var/lib/apt/lists/* /root/.cache
 
+COPY --from=local-codex-cli --chmod=0555 /out/codex /usr/local/bin/codex
 COPY --chmod=0555 --from=build /out/kodex-go-toolchain-guard /usr/local/bin/kodex-init
 COPY --chmod=0555 --from=runner-build /out/kodex-protected/kodex-agent-runner /usr/local/bin/kodex-agent-runner
+
+RUN codex --version >/dev/null
 
 ENV HOME=/home/kodex \
 	NPM_CONFIG_CACHE=/home/kodex/.npm \
@@ -95,7 +107,7 @@ FROM docker.io/library/node:24-bookworm@sha256:934240a162082fd8b8a2f90cd51144464
 
 ENV GOTOOLCHAIN=local
 
-ARG KODEX_CODEX_PACKAGE=@openai/codex@0.144.1
+ARG KODEX_CODEX_PACKAGE=@openai/codex@0.152.0
 ARG GH_CLI_VERSION=2.95.0
 ARG KUBECTL_VERSION=v1.36.2
 ARG HELM_VERSION=v4.2.1

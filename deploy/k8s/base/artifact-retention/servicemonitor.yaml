@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: artifact-retention
+  labels:
+    app.kubernetes.io/name: artifact-retention
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: artifact-retention
+  namespaceSelector:
+    matchNames: [kodex-system]
+  endpoints:
+    - {port: metrics, path: /metrics, interval: 30s, scrapeTimeout: 5s}

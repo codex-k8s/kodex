@@ -19,24 +19,45 @@ import (
 )
 
 const (
-	SessionCookieName      = "__Host-kodex-session"
-	CSRFCookieName         = "__Host-kodex-csrf"
-	ProjectReferenceHeader = "X-Kodex-Project-ID"
+	SessionCookieName             = "__Host-kodex-session"
+	CSRFCookieName                = "__Host-kodex-csrf"
+	ProjectReferenceHeader        = "X-Kodex-Project-ID"
+	freshAuthenticationWindow     = 2 * time.Minute
+	freshAuthenticationFutureSkew = 30 * time.Second
 )
 
 var (
-	ErrRateLimited     = errors.New("owner rate limit exceeded")
-	ErrUnauthenticated = errors.New("owner credential cannot establish session")
+	ErrRateLimited                  = errors.New("owner rate limit exceeded")
+	ErrUnauthenticated              = errors.New("owner credential cannot establish session")
+	ErrSessionPurposeInvalid        = errors.New("owner session purpose is invalid")
+	ErrFreshAuthenticationRequired  = errors.New("fresh owner authentication is required")
+	ErrElevationRequired            = errors.New("runtime secret reveal elevation is required")
+	ErrElevationConsumed            = errors.New("runtime secret reveal elevation is already consumed")
+	ErrElevationUnavailable         = errors.New("runtime secret reveal elevation store is unavailable")
+	ErrSessionValidationUnavailable = errors.New("owner session validation store is unavailable")
 )
 
 type (
 	identityContextKey              struct{}
 	verifiedAuthorizationContextKey struct{}
+	authenticatedSessionContextKey  struct{}
+	projectReferenceContextKey      struct{}
 )
 
 type verifiedAuthorization struct {
 	principal oidcauth.Principal
 	bearer    string
+}
+
+type authenticatedSession struct {
+	claims       session.Claims
+	bearerExpiry time.Time
+}
+
+type SessionPurpose struct {
+	Kind       string
+	ProjectRef string
+	SecretRef  string
 }
 
 type Identity struct {
@@ -47,6 +68,7 @@ type Identity struct {
 	SessionRevision  uint64
 	CSRFHash         string
 	ExpiresAt        time.Time
+	Elevation        *session.Elevation
 }
 
 type OIDCVerifier interface {
@@ -56,6 +78,7 @@ type OIDCVerifier interface {
 
 type SessionStore interface {
 	Issue(string, string, string, uint64, string, time.Time) (session.Claims, string, string, error)
+	IssueWithElevation(string, string, string, uint64, string, time.Time, *session.Elevation) (session.Claims, string, string, error)
 	Open(string) (session.Claims, error)
 	Renew(session.Claims, time.Time) (session.Claims, string, bool, error)
 }
@@ -63,6 +86,7 @@ type SessionStore interface {
 type RevocationStore interface {
 	Revoke(context.Context, string) error
 	Revoked(context.Context, string) (bool, error)
+	ConsumeOnce(context.Context, string) (bool, error)
 }
 
 type Config struct {
@@ -81,6 +105,7 @@ type Boundary struct {
 	revocations RevocationStore
 	limiter     *ratelimit.Limiter
 	timeout     time.Duration
+	now         func() time.Time
 	stopping    atomic.Bool
 }
 
@@ -98,7 +123,7 @@ func New(config Config) (*Boundary, error) {
 		}
 		origins[origin] = struct{}{}
 	}
-	return &Boundary{origins: origins, verifier: config.Verifier, sessions: config.Sessions, revocations: config.Revocations, limiter: config.Limiter, timeout: config.Timeout}, nil
+	return &Boundary{origins: origins, verifier: config.Verifier, sessions: config.Sessions, revocations: config.Revocations, limiter: config.Limiter, timeout: config.Timeout, now: time.Now}, nil
 }
 
 func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
@@ -221,6 +246,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 			}
 		}
 		ctx = context.WithValue(ctx, identityContextKey{}, identity)
+		ctx = context.WithValue(ctx, authenticatedSessionContextKey{}, authenticatedSession{claims: claims, bearerExpiry: bearerExpiry})
 		if isRealtimePath(request.URL.Path) {
 			next.ServeHTTP(writer, request.WithContext(ctx))
 			return
@@ -294,11 +320,15 @@ func withProjectReference(ctx context.Context, request *http.Request) (context.C
 	if reference == "" {
 		return ctx, nil
 	}
-	return controlplaneclient.WithProjectReference(ctx, reference)
+	ctx, err = controlplaneclient.WithProjectReference(ctx, reference)
+	if err != nil {
+		return nil, err
+	}
+	return context.WithValue(ctx, projectReferenceContextKey{}, reference), nil
 }
 
 func isRealtimePath(path string) bool {
-	return path == "/api/v1/platform/stream" || strings.HasPrefix(path, "/api/v1/runs/") && strings.HasSuffix(path, "/stream")
+	return path == "/api/v1/session/stream"
 }
 
 func exactProjectPathReference(request *http.Request) (string, error) {
@@ -331,18 +361,85 @@ func validOpaqueProjectReference(reference string) bool {
 	return true
 }
 
+func validOpaqueReference(reference string) bool {
+	if len(reference) < 8 || len(reference) > 128 {
+		return false
+	}
+	for _, character := range reference {
+		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' || character == '-' || character == '_' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 func (boundary *Boundary) VerifyAuthorization(ctx context.Context, authorization string) (oidcauth.Principal, string, error) {
 	return boundary.verifier.VerifyAuthorization(ctx, authorization)
 }
 
-func (boundary *Boundary) IssueSession(principal oidcauth.Principal, bearer string) (session.Claims, string, string, error) {
+func (boundary *Boundary) IssueSession(principal oidcauth.Principal, bearer string, purpose *SessionPurpose) (session.Claims, string, string, error) {
 	if !boundary.limiter.Allow(principal.OrganizationID + ":" + principal.Subject) {
 		return session.Claims{}, "", "", ErrRateLimited
 	}
-	if !principal.ExpiresAt.After(time.Now().UTC().Add(time.Minute)) {
+	now := boundary.now().UTC()
+	if !principal.ExpiresAt.After(now.Add(time.Minute)) {
 		return session.Claims{}, "", "", ErrUnauthenticated
 	}
-	return boundary.sessions.Issue(principal.Subject, principal.OrganizationID, principal.SessionID, principal.SessionRevision, bearer, principal.ExpiresAt)
+	if purpose == nil {
+		return boundary.sessions.Issue(principal.Subject, principal.OrganizationID, principal.SessionID, principal.SessionRevision, bearer, principal.ExpiresAt)
+	}
+	if purpose.Kind != session.ElevationKindRuntimeSecretReveal || !validOpaqueReference(purpose.ProjectRef) || !validOpaqueReference(purpose.SecretRef) {
+		return session.Claims{}, "", "", ErrSessionPurposeInvalid
+	}
+	if principal.AuthenticatedAt.IsZero() || principal.AuthenticatedAt.After(now.Add(freshAuthenticationFutureSkew)) ||
+		now.Sub(principal.AuthenticatedAt) > freshAuthenticationWindow {
+		return session.Claims{}, "", "", ErrFreshAuthenticationRequired
+	}
+	elevationExpiry := principal.AuthenticatedAt.Add(freshAuthenticationWindow).UTC()
+	if maximumExpiry := now.Add(freshAuthenticationWindow); elevationExpiry.After(maximumExpiry) {
+		elevationExpiry = maximumExpiry
+	}
+	if elevationExpiry.After(principal.ExpiresAt) {
+		elevationExpiry = principal.ExpiresAt.UTC()
+	}
+	return boundary.sessions.IssueWithElevation(principal.Subject, principal.OrganizationID, principal.SessionID, principal.SessionRevision, bearer, principal.ExpiresAt, &session.Elevation{
+		Kind: purpose.Kind, ProjectRef: purpose.ProjectRef, SecretRef: purpose.SecretRef, ExpiresAt: elevationExpiry.Unix(),
+	})
+}
+
+// ConsumeRuntimeSecretReveal атомарно расходует elevation и заменяет
+// отозванную purpose-session обычной browser session без повышения полномочий.
+func (boundary *Boundary) ConsumeRuntimeSecretReveal(ctx context.Context, writer http.ResponseWriter, projectRef, secretRef string) error {
+	identity, identityOK := IdentityFromContext(ctx)
+	authenticated, sessionOK := ctx.Value(authenticatedSessionContextKey{}).(authenticatedSession)
+	if !identityOK || !sessionOK || identity.Elevation == nil ||
+		identity.Elevation.Kind != session.ElevationKindRuntimeSecretReveal ||
+		identity.Elevation.ProjectRef != projectRef || identity.Elevation.SecretRef != secretRef ||
+		!boundary.now().UTC().Before(time.Unix(identity.Elevation.ExpiresAt, 0).UTC()) {
+		return ErrElevationRequired
+	}
+	won, err := boundary.revocations.ConsumeOnce(ctx, identity.BrowserSessionID)
+	if err != nil {
+		return ErrElevationUnavailable
+	}
+	if !won {
+		return ErrElevationConsumed
+	}
+	claims, encoded, csrf, err := boundary.sessions.Issue(
+		authenticated.claims.Subject,
+		authenticated.claims.OrganizationID,
+		authenticated.claims.OIDCSessionID,
+		authenticated.claims.SessionRevision,
+		authenticated.claims.Bearer,
+		authenticated.bearerExpiry,
+	)
+	if err != nil {
+		return ErrElevationUnavailable
+	}
+	SetOwnerSessionCookies(writer, claims, encoded, csrf)
+	return nil
 }
 
 func (boundary *Boundary) RevokeSession(ctx context.Context, identity Identity) error {
@@ -359,6 +456,11 @@ func (boundary *Boundary) AllowsOrigin(origin string) bool {
 func IdentityFromContext(ctx context.Context) (Identity, bool) {
 	identity, ok := ctx.Value(identityContextKey{}).(Identity)
 	return identity, ok
+}
+
+func ProjectReferenceFromContext(ctx context.Context) (string, bool) {
+	reference, ok := ctx.Value(projectReferenceContextKey{}).(string)
+	return reference, ok && reference != ""
 }
 
 func VerifiedAuthorizationFromContext(ctx context.Context) (oidcauth.Principal, string, bool) {
@@ -381,7 +483,10 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 		return Identity{}, session.Claims{}, time.Time{}, err
 	}
 	revoked, err := boundary.revocations.Revoked(request.Context(), claims.SessionID)
-	if err != nil || revoked {
+	if err != nil {
+		return Identity{}, session.Claims{}, time.Time{}, ErrSessionValidationUnavailable
+	}
+	if revoked {
 		return Identity{}, session.Claims{}, time.Time{}, errors.New("owner session is revoked")
 	}
 	principal, err := boundary.verifier.VerifyToken(request.Context(), claims.Bearer)
@@ -395,7 +500,7 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 	return Identity{
 		Subject: claims.Subject, OrganizationID: claims.OrganizationID, SessionID: claims.OIDCSessionID,
 		BrowserSessionID: claims.SessionID, SessionRevision: claims.SessionRevision, CSRFHash: claims.CSRFHash,
-		ExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC(),
+		ExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC(), Elevation: claims.Elevation,
 	}, claims, principal.ExpiresAt, nil
 }
 
@@ -430,7 +535,7 @@ func SetOwnerSessionCookies(writer http.ResponseWriter, claims session.Claims, e
 }
 
 func authenticationProblem(err error) (int, string, bool) {
-	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) {
+	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) || errors.Is(err, ErrSessionValidationUnavailable) {
 		return http.StatusServiceUnavailable, "UNAVAILABLE", true
 	}
 	return http.StatusUnauthorized, "UNAUTHENTICATED", false

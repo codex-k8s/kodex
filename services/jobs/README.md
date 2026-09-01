@@ -4,8 +4,8 @@ title: Jobs и workers
 type: repository-readme
 status: approved
 owner: backend
-version: 1.0.0
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-08-28
 ---
 
 # Jobs и workers
@@ -19,6 +19,8 @@ immutable input, grant, retry и terminal result принадлежат доме
   server-owned schedule lifecycle через защищённый control-plane path.
 - [role-image-builder](role-image-builder/README.md) собирает exact role image
   через изолированный BuildKit по server-owned fenced attempt.
+- [backup-controller](backup-controller/README.md) создаёт verified PostgreSQL и
+  S3 restore points, применяет retention и выполняет owner-gated restore drill.
 
 Legacy migration/cutover jobs отсутствуют: fresh install использует одну
 baseline schema и не переносит состояние прежнего bot-service.

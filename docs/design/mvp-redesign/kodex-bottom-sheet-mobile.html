@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Kodex · Bottom sheet на mobile</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .modal-wrap:not(.is-open) { display: none; }
+  .p-ksheet { height: 88%; }
+  .p-ksheet .sheet__head { padding: 6px 4px 8px 14px; gap: 10px; }
+  .p-ksheet__title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .p-ksheet__title b { font-size: 15px; font-weight: 600; }
+  .p-ksheet__title span { font-size: 11.5px; color: var(--mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-ksheet__ctx { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 0 10px 14px; border-bottom: 1px solid var(--line); background: var(--bg-subtle); }
+  .p-ksheet__ctx-title { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mut); }
+  .p-ksheet__chips { display: flex; gap: 6px; overflow-x: auto; padding-right: 14px; scrollbar-width: none; }
+  .p-ksheet__chips::-webkit-scrollbar { display: none; }
+  .p-ksheet__chips .chip { flex: 0 0 auto; height: 36px; font-size: 13px; }
+  .p-ksheet__attr { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; color: var(--sec); line-height: 1.45; padding-right: 14px; }
+  .p-ksheet__attr .ic { margin-top: 2px; color: var(--mut); flex: 0 0 auto; }
+  .p-ksheet__attr b { color: var(--ink); font-weight: 500; }
+  .p-ksheet__dlg { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line-hair); min-height: 36px; }
+  .p-ksheet__dlg-name { font-size: 13.5px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+  .p-ksheet .msg { max-width: 100%; }
+  .p-ksheet .msg__bubble { font-size: 14px; line-height: 1.5; }
+  .p-ksheet__preview { border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg); overflow: hidden; width: 100%; }
+  .p-ksheet__preview-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--bg-field); border-bottom: 1px solid var(--line-hair); font-size: 12px; color: var(--sec); }
+  .p-ksheet__preview-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--line-hair); font-size: 13px; min-height: 36px; }
+  .p-ksheet__preview-row:first-of-type { border-top: 0; }
+  .p-ksheet__preview-row span:nth-child(2) { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-ksheet .msg__actions .btn { min-height: 44px; flex: 1 1 auto; }
+  .p-ksheet .sheet__foot { flex-direction: column; padding: 8px 12px 14px; }
+  .p-ksheet .composer textarea { min-height: 56px; }
+  .p-ksheet .composer__btns { bottom: 8px; }
+  .p-mplan .op__row, .p-mplan .op__row--3 { grid-template-columns: 96px minmax(0, 1fr); }
+  .p-mplan .op__before { white-space: normal; }
+  .p-mplan .op__after .input { min-height: 40px; font-size: 14px; }
+  .p-mplan .op__foot { font-size: 11.5px; flex-direction: column; align-items: flex-start; gap: 4px; }
+  .p-mplan .sheet__foot { flex-direction: column; }
+  .p-mplan .sheet__foot .btn { min-height: 46px; }
+  .p-agent-row .list-row__title > span:first-child { font-size: 14px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Kodex · bottom sheet на mobile поверх списка сотрудников · mobile 390×844 · маршрут <code>/projects/:projectRef/agents</code> + sheet</p>
+<div class="frame frame--mobile" id="frame">
+  <main class="page" id="page" aria-label="ИИ-сотрудники">
+    <div class="m-section-title"><h2 class="sec-title">Сотрудники <span class="tab__count">8</span></h2><button class="btn btn--sm btn--ghost" type="button"><svg class="ic"><use href="#i-filter"/></svg>Фильтры</button></div>
+    <div class="card" id="agents-list"></div>
+    <div class="list-more"><span>Показаны 8 из 8</span></div>
+  </main>
+
+  <div class="layer">
+    <div class="sheet p-ksheet" id="kodex-panel-live" role="dialog" aria-modal="true" aria-label="Kodex">
+      <div class="sheet__grip" aria-hidden="true"></div>
+      <div class="sheet__head">
+        <span class="avatar avatar--32 avatar--bot" aria-hidden="true"><svg class="ic"><use href="#i-bot"/></svg></span>
+        <div class="p-ksheet__title"><b>Kodex</b><span>Экран: ИИ-сотрудники · «Корпоративные продажи»</span></div>
+        <button class="m-icon" type="button" aria-label="История диалогов" data-menu="#kodex-history-menu" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-history"/></svg></button>
+        <button class="m-icon" type="button" aria-label="Закрыть Kodex" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="p-ksheet__ctx">
+        <div class="p-ksheet__ctx-title">Здесь Kodex может</div>
+        <div class="p-ksheet__chips">
+          <button class="chip" type="button" data-suggest="Создай сотрудника для "><svg class="ic"><use href="#i-plus"/></svg>Создать сотрудника</button>
+          <button class="chip" type="button" data-suggest="Объясни, почему «Автор писем» в состоянии «Ошибка»"><svg class="ic"><use href="#i-info"/></svg>Объяснить состояние</button>
+          <button class="chip" type="button" data-suggest="Найди сотрудников, которые работают с договорами"><svg class="ic"><use href="#i-search"/></svg>Найти по назначению</button>
+        </div>
+        <div class="p-ksheet__attr"><svg class="ic ic-14"><use href="#i-user"/></svg><span>Изменения будут записаны как <b>Анна Волкова через Kodex</b>. Доступность действий подтверждается на сервере.</span></div>
+      </div>
+
+      <div class="sheet__body col gap-12">
+        <div class="p-ksheet__dlg">
+          <span class="xs mut shrink0">Диалог</span>
+          <span class="p-ksheet__dlg-name">Классификатор обращений для продаж</span>
+          <button class="btn btn--sm btn--ghost shrink0" type="button" aria-label="Переименовать диалог"><svg class="ic"><use href="#i-edit"/></svg></button>
+        </div>
+        <div class="msg msg--user">
+          <div class="msg__meta">Анна Волкова · 12:31</div>
+          <div class="msg__bubble">Создай сотрудника для классификации обращений по темам, с окружением для офисных документов</div>
+        </div>
+        <div class="msg msg--bot">
+          <div class="msg__meta">Kodex · 12:31 · предложил название диалога</div>
+          <div class="msg__bubble"><p>Подготовил план из <b>5 операций</b>. Ничего не применено — все параметры видны и редактируются до применения.</p></div>
+          <div class="p-ksheet__preview" role="list" aria-label="Краткий план">
+            <div class="p-ksheet__preview-head"><svg class="ic ic-14"><use href="#i-settings2"/></svg><span>План · ревизия 3 · проверка пройдена</span></div>
+            <div class="p-ksheet__preview-row" role="listitem"><span class="op__kind op__kind--create">create</span><span>ИИ-сотрудник «Классификатор обращений»</span></div>
+            <div class="p-ksheet__preview-row" role="listitem"><span class="op__kind op__kind--create">create</span><span>Черновик инструкций · 3 переменные</span></div>
+            <div class="p-ksheet__preview-row" role="listitem"><span class="op__kind op__kind--update">update</span><span>«Аналитик продаж» · окружение</span></div>
+            <div class="p-ksheet__preview-row" role="listitem"><span class="op__kind op__kind--update">update</span><span>Overlay config.toml</span></div>
+            <div class="p-ksheet__preview-row" role="listitem"><span class="op__kind op__kind--delete">delete</span><span>Grant «Отправка писем» у «Автор писем»</span></div>
+          </div>
+          <div class="msg__actions">
+            <button class="btn btn--primary" type="button" data-sheet="#m-plan-sheet"><svg class="ic"><use href="#i-edit"/></svg>Открыть план</button>
+            <button class="btn" type="button" data-suggest="Уточни: ">Уточнить</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet__foot">
+        <div class="composer">
+          <div class="composer__area">
+            <textarea id="composer" rows="2" placeholder="Спросите Kodex или опишите, что настроить" aria-label="Сообщение Kodex" data-autosize></textarea>
+            <div class="composer__btns">
+              <button class="composer__mic" type="button" disabled aria-label="Голосовой ввод появится позже" data-tip="Голосовой ввод появится позже" data-tip-pos="left"><svg class="ic"><use href="#i-mic"/></svg></button>
+              <button class="composer__send" type="button" aria-label="Отправить" id="send"><svg class="ic"><use href="#i-send"/></svg></button>
+            </div>
+          </div>
+          <div class="composer__bar"><span>Enter — отправить</span><span class="right">Контекст: «Корпоративные продажи»</span></div>
+        </div>
+      </div>
+
+      <div class="menu menu--wide" id="kodex-history-menu" data-align="right">
+        <div class="menu__title">История диалогов</div>
+        <button class="menu__item" type="button"><svg class="ic"><use href="#i-plus"/></svg><span>Новый диалог</span></button>
+        <div class="menu__sep"></div>
+        <button class="menu__item" type="button" aria-checked="true"><span class="menu__text"><span>Классификатор обращений для продаж</span><small>сегодня, 12:31</small></span></button>
+        <button class="menu__item" type="button"><span class="menu__text"><span>Почему запуск остановился?</span><small>вчера, 17:40</small></span></button>
+        <button class="menu__item" type="button"><span class="menu__text"><span>Подключение GitHub</span><small>20 августа</small></span></button>
+      </div>
+    </div>
+
+    <!-- Компактный план на mobile: отдельный полноэкранный sheet поверх диалога -->
+    <div class="sheet sheet--full p-mplan" id="m-plan-sheet" role="dialog" aria-modal="true" aria-label="План изменений">
+      <div class="sheet__grip" aria-hidden="true"></div>
+      <div class="sheet__head">
+        <button class="m-icon" type="button" aria-label="К диалогу" data-close><svg class="ic"><use href="#i-back"/></svg></button>
+        <div class="sheet__title" style="display:flex;flex-direction:column;gap:1px"><span>План изменений</span><span class="xs mut" style="font-weight:400">ревизия 3 · проверка пройдена · 5 операций</span></div>
+        <span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span>
+      </div>
+      <div class="sheet__body col gap-12">
+        <div class="notice notice--info notice--sm"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Скрытых изменений нет. Редактирование создаёт новую ревизию и требует проверки.</span></div>
+        <div class="sec-title">Создание · 2</div>
+        <article class="op">
+          <div class="op__head"><span class="op__kind op__kind--create">create</span><span class="op__title">ИИ-сотрудник «Классификатор обращений»</span></div>
+          <div class="op__body">
+            <div class="op__row op__row--3"><span class="op__k">Имя</span><span class="op__after"><input class="input" type="text" value="Классификатор обращений" aria-label="Имя"></span></div>
+            <div class="op__row op__row--3"><span class="op__k">Модель</span><span class="op__after"><input class="input" type="text" value="gpt-5.1-mini" aria-label="Модель"></span></div>
+            <div class="op__row op__row--3"><span class="op__k">Окружение</span><span class="op__after p-plan__value">Офисные документы и PDF · rev 4</span></div>
+            <div class="op__row op__row--3"><span class="op__k">Возможности</span><span class="op__after row row--wrap gap-6"><span class="chip is-active">Работа с файлами</span><span class="chip is-active">Анализ данных</span></span></div>
+          </div>
+          <div class="op__foot"><span>Зависимости: нет</span><span>Последствия: сотрудник в состоянии «Черновик»</span></div>
+        </article>
+        <article class="op">
+          <div class="op__head"><span class="op__kind op__kind--create">create</span><span class="op__title">Черновик инструкций</span><button class="btn btn--sm" type="button">Открыть</button></div>
+          <div class="op__foot"><span>Зависимости: после операции №1</span></div>
+        </article>
+        <div class="sec-title">Изменение · 2</div>
+        <article class="op">
+          <div class="op__head"><span class="op__kind op__kind--update">update</span><span class="op__title">«Аналитик продаж» · окружение</span></div>
+          <div class="op__body">
+            <div class="op__row"><span class="op__k">Сейчас</span><span class="op__before">Стандартное окружение · rev 2</span></div>
+            <div class="op__row"><span class="op__k">В плане</span><span class="op__after p-plan__value">Офисные документы и PDF · rev 4</span></div>
+          </div>
+          <div class="op__foot"><span>Последствия: новая RuntimeRevision для следующего хода</span></div>
+        </article>
+        <article class="op">
+          <div class="op__head"><span class="op__kind op__kind--update">update</span><span class="op__title">Overlay config.toml</span><button class="btn btn--sm" type="button">Открыть</button></div>
+          <div class="op__body"><div class="op__row op__row--3"><span class="op__k">Учётные данные</span><span class="op__after p-plan__value xs"><span class="mono">ref: provider-account-pool-sales</span> · значение скрыто</span></div></div>
+        </article>
+        <div class="sec-title">Удаление · 1</div>
+        <article class="op">
+          <div class="op__head"><span class="op__kind op__kind--delete">delete</span><span class="op__title">Grant «Отправка писем» у «Автор писем»</span></div>
+          <div class="op__foot"><span><svg class="ic ic-14"><use href="#i-warning"/></svg>Сотрудник больше не сможет отправлять письма</span></div>
+        </article>
+      </div>
+      <div class="sheet__foot">
+        <div class="xs sec">Будет записано в аудит: <b class="ink2">Анна Волкова через Kodex</b> · одной транзакцией или ни одна</div>
+        <button class="btn btn--primary btn--lg" type="button" id="m-apply">Применить план</button>
+        <button class="btn btn--lg" type="button" data-close>К диалогу</button>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="stage-note">На mobile Kodex открывается из FAB как bottom sheet (~88% высоты) с grip: закрывается свайпом вниз по grip, кнопкой или Escape, focus возвращается на FAB. Шапка sheet показывает экран и объект, подсказки действий прокручиваются горизонтально, атрибуция изменений видна до первого сообщения. Кнопка отправки круглая внутри поля (40×40), микрофон отключён с tooltip, поле ввода не меньше 44px. План открывается вторым полноэкранным sheet поверх диалога с теми же create/update/delete и атомарным применением.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  (function () {
+    const STATE = { ok: ['ok', 'Готов'], run: ['run', 'Выполняет'], gate: ['gate', 'Ждёт решения'], off: ['off', 'Отключён'], err: ['err', 'Ошибка'] };
+    document.getElementById('agents-list').innerHTML = Kodex.data.agents.map((a) => {
+      const [mod, label] = STATE[a.state] || STATE.ok;
+      return `<a class="list-row p-agent-row" href="#">${Kodex.avatar(a.initials, 36, a.tone)}<div class="list-row__main"><div class="list-row__title"><span>${Kodex.esc(a.name)}</span></div><div class="list-row__sub"><span>${Kodex.esc(a.purpose)}</span></div></div>${Kodex.pill(mod, label, true)}</a>`;
+    }).join('');
+    Kodex.mount({ title: 'ИИ-сотрудники', sub: 'Корпоративные продажи', nav: 'project.agents', project: Kodex.data.projects[0], decisions: 2, connection: 'online' });
+    const frame = document.getElementById('frame');
+    const panel = document.getElementById('kodex-panel-live');
+    Kodex.openOverlay(panel, true, frame.querySelector('.fab'));
+    const composer = document.getElementById('composer');
+    panel.addEventListener('click', (e) => {
+      const s = e.target.closest('[data-suggest]'); if (!s) return;
+      composer.value = s.dataset.suggest; composer.dispatchEvent(new Event('input')); composer.focus(); composer.setSelectionRange(composer.value.length, composer.value.length);
+    });
+    document.getElementById('send').addEventListener('click', () => { if (!composer.value.trim()) return; Kodex.toast(frame, 'Сообщение отправлено Kodex'); composer.value = ''; composer.dispatchEvent(new Event('input')); });
+    composer.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('send').click(); } });
+    // Свайп вниз по grip закрывает sheet
+    let sy = null;
+    panel.querySelector('.sheet__grip').addEventListener('pointerdown', (e) => { sy = e.clientY; });
+    panel.addEventListener('pointermove', (e) => { if (sy != null && e.clientY - sy > 60) { sy = null; Kodex.closeOverlay(panel); } });
+    panel.addEventListener('pointerup', () => { sy = null; });
+    document.getElementById('m-apply').addEventListener('click', (e) => {
+      const b = e.currentTarget; b.classList.add('is-loading');
+      setTimeout(() => { b.classList.remove('is-loading'); Kodex.closeOverlay(document.getElementById('m-plan-sheet')); Kodex.toast(frame, 'План применён · ревизия 3 · 5 операций · Анна Волкова через Kodex', 'check-circle'); }, 900);
+    });
+  })();
+</script>
+</body>
+</html>

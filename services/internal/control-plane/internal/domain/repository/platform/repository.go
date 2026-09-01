@@ -38,13 +38,21 @@ type Administration struct {
 	ObservedAt           time.Time
 }
 
-const MaximumArtifactBytes int64 = 16 << 20
+const MaximumArtifactBytes int64 = 512 << 20
+
+// ArtifactReader даёт policy и storage повторно прочитать один bounded
+// file-backed поток без материализации полного содержимого в памяти.
+type ArtifactReader interface {
+	io.Reader
+	io.ReaderAt
+	io.Seeker
+}
 
 type ArtifactUpload struct {
 	ProjectRef, RunRef, FileName, MediaType, Digest string
 	ScanState, PreviewState                         string
 	SizeBytes                                       int64
-	Reader                                          io.Reader
+	Reader                                          ArtifactReader
 }
 
 type ArtifactDownload struct {
@@ -57,13 +65,20 @@ type ArtifactDownload struct {
 // стабильную system identity. Ни один идентификатор из browser payload не
 // является authority без повторного разрешения в PostgreSQL.
 type ProofPrincipalInput struct {
-	ExternalActorID     string
-	ExternalTenantID    string
-	ExternalDisplayName string
-	ExternalEmailHint   string
-	CallerWorkload      string
-	Operation           string
-	ProjectRef          string
+	ExternalActorID         string
+	ExternalTenantID        string
+	ExternalDisplayName     string
+	ExternalEmailHint       string
+	ExternalIssuer          string
+	ExternalGroups          []string
+	ExternalSessionRevision uint64
+	ExternalAuthenticatedAt time.Time
+	ExternalACR             string
+	ExternalAMR             []string
+	OwnerClaim              bool
+	CallerWorkload          string
+	Operation               string
+	ProjectRef              string
 }
 
 // ProofAuthority — внутренние UUID, которые допускаются wire-контрактом
@@ -79,6 +94,66 @@ type WorkerGrantInput struct {
 	Revision   uint64
 	IssuedAt   time.Time
 	ExpiresAt  time.Time
+}
+
+type RuntimeSecretPrepareInput struct {
+	Kind, ProjectRef, SecretRef, Name, Description, ValueType, ExpectedContentSHA256 string
+	Mutation                                                                         value.Mutation
+}
+
+type RuntimeSecretPrepareResult struct {
+	OperationRef, OperationGrant, State, ValueType, FailureCode string
+	ExpiresAt                                                   time.Time
+	TerminalSecret                                              *entity.RuntimeSecret
+}
+
+type RuntimeSecretCompleteInput struct {
+	OperationRef, ClaimantID string
+	ClaimGeneration          int64
+	Materialization          *entity.RuntimeSecretMaterialization
+}
+
+type RuntimeSecretConsumeInput struct {
+	OperationGrant, ClaimantID string
+}
+
+type RuntimeSecretFailInput struct {
+	OperationRef, ClaimantID, FailureCode string
+	ClaimGeneration                       int64
+}
+
+// ProviderCredentialCleanupTask несёт только immutable snapshot, который
+// materializer должен удалить по exact descriptor и fencing generation.
+type ProviderCredentialCleanupTask struct {
+	Ref, AccountRef string
+	Attempt         int32
+	Generation      int64
+	LeaseExpiresAt  time.Time
+	Credential      entity.ProviderCredentialDescriptor
+}
+
+type ProviderCredentialCleanupResult struct {
+	Ref, State, SafeErrorCode, TerminalReceipt string
+	RetryScheduled                             bool
+}
+
+type RuntimeSecretFailureResult struct {
+	OperationRef, State, FailureCode string
+}
+
+type RuntimeSecretRecoveryInput struct {
+	OperationRef    string
+	Materialization entity.RuntimeSecretMaterialization
+}
+
+type RuntimeSecretRecoveryResult struct {
+	Action, OperationState string
+	Secret                 *entity.RuntimeSecret
+}
+
+type RuntimeSecretRecoveryPage struct {
+	Size  int32
+	Token string
 }
 
 type Repository interface {
@@ -101,6 +176,26 @@ type Repository interface {
 	ListMembershipCandidates(context.Context, value.Principal, query.Filter) ([]entity.User, string, error)
 	ListAgents(context.Context, value.Principal, query.Filter) ([]entity.Agent, string, error)
 	GetAgent(context.Context, value.Principal, string) (entity.Agent, error)
+	GetAgentRuntimeConfiguration(context.Context, value.Principal, string) (entity.AgentRuntimeConfigurationView, error)
+	ListAgentRuntimeConfigurations(context.Context, value.Principal, query.Filter) ([]entity.AgentRuntimeConfiguration, string, error)
+	ListRuntimeEnvironments(context.Context, value.Principal, query.Filter) ([]entity.RuntimeEnvironmentSet, string, error)
+	GetRuntimeEnvironment(context.Context, value.Principal, string) (entity.RuntimeEnvironmentSet, error)
+	ListRuntimeEnvironmentVersions(context.Context, value.Principal, query.Filter) ([]entity.RuntimeEnvironmentVersion, string, error)
+	GetRuntimeEnvironmentReadiness(context.Context, value.Principal, string) (entity.RuntimeEnvironmentReadiness, error)
+	ListRuntimeEnvironmentAgents(context.Context, value.Principal, query.Filter) ([]entity.Agent, string, error)
+	ListRuntimeSecrets(context.Context, value.Principal, query.Filter) ([]entity.RuntimeSecret, string, error)
+	GetRuntimeSecret(context.Context, value.Principal, string) (entity.RuntimeSecret, error)
+	PrepareRuntimeSecretOperation(context.Context, value.Principal, RuntimeSecretPrepareInput) (RuntimeSecretPrepareResult, error)
+	ListRuntimeSecretRecoveryWork(context.Context, value.Principal, RuntimeSecretRecoveryPage) ([]entity.RuntimeSecretRecoveryWork, string, error)
+	ConsumeRuntimeSecretOperation(context.Context, value.Principal, RuntimeSecretConsumeInput) (entity.RuntimeSecretOperation, error)
+	CompleteRuntimeSecretOperation(context.Context, value.Principal, RuntimeSecretCompleteInput) (entity.RuntimeSecret, error)
+	FailRuntimeSecretOperation(context.Context, value.Principal, RuntimeSecretFailInput) (RuntimeSecretFailureResult, error)
+	RecoverRuntimeSecretMaterialization(context.Context, value.Principal, RuntimeSecretRecoveryInput) (RuntimeSecretRecoveryResult, error)
+	ListTemplateVariables(context.Context, value.Principal, query.Filter) ([]entity.TemplateVariable, string, error)
+	ListProviderDefinitions(context.Context, value.Principal, query.Filter) ([]entity.ProviderDefinition, string, error)
+	ListProviderAccounts(context.Context, value.Principal, query.Filter) ([]entity.ProviderAccount, string, []string, error)
+	GetProviderAccount(context.Context, value.Principal, string) (entity.ProviderAccount, error)
+	ListRoleImageRecipeRevisions(context.Context, value.Principal, query.Filter) ([]entity.RoleImageRecipeRevision, string, error)
 	ListWorkflows(context.Context, value.Principal, query.Filter) ([]entity.Workflow, string, error)
 	GetWorkflow(context.Context, value.Principal, string) (entity.Workflow, error)
 	ListRuns(context.Context, value.Principal, query.Filter) ([]entity.Run, string, error)
@@ -111,20 +206,39 @@ type Repository interface {
 	GetOwnerGate(context.Context, value.Principal, string) (entity.OwnerGate, error)
 	ListArtifacts(context.Context, value.Principal, query.Filter) ([]entity.Artifact, string, error)
 	GetArtifact(context.Context, value.Principal, string) (entity.Artifact, error)
+	GetArtifactImpact(context.Context, value.Principal, string, string) (entity.ArtifactImpact, error)
+	GetAttachmentSet(context.Context, value.Principal, string, query.Page) (entity.AttachmentSet, string, error)
 	UploadArtifact(context.Context, value.Principal, value.Mutation, ArtifactUpload) (entity.Artifact, error)
 	DownloadArtifact(context.Context, value.Principal, string, string) (ArtifactDownload, error)
+	PurgeArtifact(context.Context, value.Principal, value.Mutation, string, string) (string, error)
 	ReadExecutionArtifact(context.Context, value.Principal, string, string, int64, string) (ArtifactDownload, error)
 	ListSchedules(context.Context, value.Principal, query.Filter) ([]entity.Schedule, string, error)
-	ListIntegrationDefinitions(context.Context, value.Principal, string) ([]entity.IntegrationDefinition, []string, error)
+	GetSchedule(context.Context, value.Principal, string) (entity.Schedule, error)
+	ListScheduleRevisions(context.Context, value.Principal, query.Filter) ([]entity.ScheduleRevision, string, error)
+	ListScheduleRuns(context.Context, value.Principal, query.Filter) ([]entity.ScheduleRunOccurrence, string, error)
+	ListIntegrationDefinitions(context.Context, value.Principal, query.Filter) ([]entity.IntegrationDefinition, string, []string, error)
 	ListIntegrationConnections(context.Context, value.Principal, query.Filter) ([]entity.IntegrationConnection, string, error)
 	GetIntegrationConnection(context.Context, value.Principal, string) (entity.IntegrationConnection, error)
 	GetSystemAssistant(context.Context, value.Principal) (entity.SystemAssistant, error)
 	ListAssistantConversations(context.Context, value.Principal, query.Filter) ([]entity.AssistantConversation, string, error)
 	GetAdministration(context.Context, value.Principal) (Administration, error)
 	ListAuditEvents(context.Context, value.Principal, query.Filter) ([]entity.AuditEvent, string, error)
+	ListPermissionRegistry(context.Context, value.Principal) ([]entity.PermissionDefinition, error)
+	ListAccessSubjects(context.Context, value.Principal, query.Filter, string) ([]entity.AccessSubject, string, error)
+	ListOIDCGroups(context.Context, value.Principal, query.Filter) ([]entity.OIDCGroup, string, error)
+	ListAccessRoles(context.Context, value.Principal, query.Page, bool) ([]entity.AccessRole, string, error)
+	ListAccessRoleVersions(context.Context, value.Principal, string, query.Page) (entity.AccessRole, []entity.AccessRoleVersion, string, error)
+	ListAccessBindings(context.Context, value.Principal, query.AccessBindingFilter) ([]entity.AccessBinding, string, error)
+	QueryEffectiveAccess(context.Context, value.Principal, string, entity.AccessScope, []string, time.Time) (entity.EffectiveAccess, error)
+	SimulateAccess(context.Context, value.Principal, command.AccessSimulationInput) (entity.AccessSimulation, error)
 	Execute(context.Context, command.Command) (command.Result, error)
 	ReconcileWarmRuntime(context.Context, value.Principal, string) (entity.SystemAssistant, map[string]any, bool, error)
 	ReportWarmRuntime(context.Context, value.Principal, command.WarmRuntimeInput) (entity.SystemAssistant, error)
+	ClaimSessionArchiveTasks(context.Context, value.Principal, string, int32) ([]map[string]any, error)
+	RenewSessionArchiveTask(context.Context, value.Principal, command.SessionArchiveTaskInput) (map[string]any, error)
+	ClaimProviderCredentialCleanupTasks(context.Context, string, int32) ([]ProviderCredentialCleanupTask, error)
+	CompleteProviderCredentialCleanupTask(context.Context, string, string, int64, string) (ProviderCredentialCleanupResult, error)
+	FailProviderCredentialCleanupTask(context.Context, string, string, int64, string) (ProviderCredentialCleanupResult, error)
 	ClaimDueSchedules(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	ClaimIntegrationConnectionTests(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	ResolveIntegrationInvocation(context.Context, value.Principal, map[string]string, map[string]any) (map[string]any, error)

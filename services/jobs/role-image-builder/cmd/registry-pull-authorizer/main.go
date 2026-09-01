@@ -141,11 +141,7 @@ func decidePullAuthorization(
 		return denyPullRequest("request_shape")
 	}
 	cn := certificate.Subject.CommonName
-	profiles := map[string]pullProfile{
-		"kodex-image-registry-pull-probe": {"/identity/probe-dockerconfig.json", []string{"kodex/control-plane"}},
-		"kodex-buildkit-base-pull":        {"/identity/buildkit-dockerconfig.json", []string{"kodex/dockerfile", "kodex/agent-runner", "kodex/role-base-documents"}},
-		"role-image-builder-input-read":   {"/identity/input-dockerconfig.json", []string{"kodex/role-image-inputs"}},
-	}
+	profiles := pullProfiles()
 	if profile, ok := profiles[cn]; ok {
 		return decidePullProfileAuthorization(request, profile, registryHost)
 	}
@@ -156,6 +152,15 @@ func decidePullAuthorization(
 		return denyPullRequest("node_repository")
 	}
 	return pullAuthorizationDecision{}
+}
+
+func pullProfiles() map[string]pullProfile {
+	return map[string]pullProfile{
+		"kodex-image-registry-pull-probe": {"/identity/probe-dockerconfig.json", []string{"kodex/control-plane"}},
+		"kodex-buildkit-base-pull":        {"/identity/buildkit-dockerconfig.json", []string{"kodex/dockerfile", "kodex/agent-runner", "kodex/role-base-documents"}},
+		"role-image-builder-input-read":   {"/identity/input-dockerconfig.json", []string{"kodex/role-image-inputs"}},
+		"kodex-node-pull-installer":       {"/identity/pull-dockerconfigjson", []string{"kodex/agent-runner", "kodex/roles"}},
+	}
 }
 
 func decidePullProfileAuthorization(

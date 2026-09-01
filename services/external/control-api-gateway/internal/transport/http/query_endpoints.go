@@ -231,12 +231,75 @@ func (server *Server) ListArtifacts(w http.ResponseWriter, r *http.Request, ref 
 	if !ok {
 		return
 	}
-	response, err := server.control.Query.ListArtifacts(r.Context(), &controlplanev1.ListArtifactsRequest{ProjectRef: ref, RunRef: stringValue(p.RunRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
+	lifecycleState, lifecycleStateOK := artifactLifecycleFilter(p.LifecycleState)
+	artifactType, artifactTypeOK := artifactTypeFilter(p.Type)
+	scanState, scanStateOK := artifactScanStateFilter(p.ScanState)
+	sourceKind, sourceKindOK := artifactSourceFilter(p.SourceKind)
+	if !lifecycleStateOK || !artifactTypeOK || !scanStateOK || !sourceKindOK {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	response, err := server.control.Query.ListArtifacts(r.Context(), &controlplanev1.ListArtifactsRequest{
+		ProjectRef: ref, RunRef: stringValue(p.RunRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query),
+		LifecycleState: lifecycleState, Type: artifactType, ScanState: scanState, SourceKind: sourceKind,
+	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "", "artifacts")
+}
+
+func (server *Server) ListOrganizationArtifacts(w http.ResponseWriter, r *http.Request, p generated.ListOrganizationArtifactsParams) {
+	lifecycleState, lifecycleStateOK := artifactLifecycleFilter(p.LifecycleState)
+	artifactType, artifactTypeOK := artifactTypeFilter(p.Type)
+	scanState, scanStateOK := artifactScanStateFilter(p.ScanState)
+	sourceKind, sourceKindOK := artifactSourceFilter(p.SourceKind)
+	if !lifecycleStateOK || !artifactTypeOK || !scanStateOK || !sourceKindOK {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	response, err := server.control.Query.ListArtifacts(r.Context(), &controlplanev1.ListArtifactsRequest{
+		Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query),
+		LifecycleState: lifecycleState, Type: artifactType, ScanState: scanState, SourceKind: sourceKind,
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "artifacts")
+}
+
+func artifactLifecycleFilter[T ~string](value *T) (controlplanev1.ArtifactLifecycleState, bool) {
+	if value == nil {
+		return controlplanev1.ArtifactLifecycleState_ARTIFACT_LIFECYCLE_STATE_UNSPECIFIED, true
+	}
+	raw, ok := controlplanev1.ArtifactLifecycleState_value["ARTIFACT_LIFECYCLE_STATE_"+string(*value)]
+	return controlplanev1.ArtifactLifecycleState(raw), ok
+}
+
+func artifactTypeFilter[T ~string](value *T) (controlplanev1.ArtifactType, bool) {
+	if value == nil {
+		return controlplanev1.ArtifactType_ARTIFACT_TYPE_UNSPECIFIED, true
+	}
+	raw, ok := controlplanev1.ArtifactType_value["ARTIFACT_TYPE_"+string(*value)]
+	return controlplanev1.ArtifactType(raw), ok
+}
+
+func artifactScanStateFilter[T ~string](value *T) (controlplanev1.ArtifactScanState, bool) {
+	if value == nil {
+		return controlplanev1.ArtifactScanState_ARTIFACT_SCAN_STATE_UNSPECIFIED, true
+	}
+	raw, ok := controlplanev1.ArtifactScanState_value["ARTIFACT_SCAN_STATE_"+string(*value)]
+	return controlplanev1.ArtifactScanState(raw), ok
+}
+
+func artifactSourceFilter[T ~string](value *T) (controlplanev1.ArtifactSource, bool) {
+	if value == nil {
+		return controlplanev1.ArtifactSource_ARTIFACT_SOURCE_UNSPECIFIED, true
+	}
+	raw, ok := controlplanev1.ArtifactSource_value["ARTIFACT_SOURCE_"+string(*value)]
+	return controlplanev1.ArtifactSource(raw), ok
 }
 func (server *Server) GetArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef) {
 	response, err := server.control.Query.GetArtifact(r.Context(), &controlplanev1.GetArtifactRequest{ArtifactRef: ref})
@@ -246,28 +309,42 @@ func (server *Server) GetArtifact(w http.ResponseWriter, r *http.Request, ref ge
 	}
 	writeMessage(w, http.StatusOK, response, "artifact", "")
 }
-func (server *Server) ListSchedules(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef) {
+func (server *Server) ListSchedules(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListSchedulesParams) {
 	r, ok := withProjectReference(w, r, ref)
 	if !ok {
 		return
 	}
-	response, err := server.control.Query.ListSchedules(r.Context(), &controlplanev1.ListSchedulesRequest{ProjectRef: ref, Page: page(nil, nil)})
+	response, err := server.control.Query.ListSchedules(r.Context(), &controlplanev1.ListSchedulesRequest{
+		ProjectRef: ref, Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken),
+	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "", "schedules")
 }
+func (server *Server) GetSchedule(w http.ResponseWriter, r *http.Request, ref generated.ScheduleRef) {
+	response, err := server.control.Query.GetSchedule(r.Context(), &controlplanev1.GetScheduleRequest{ScheduleRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "schedule", "")
+}
 func (server *Server) ListIntegrationDefinitions(w http.ResponseWriter, r *http.Request, p generated.ListIntegrationDefinitionsParams) {
-	response, err := server.control.Query.ListIntegrationDefinitions(r.Context(), &controlplanev1.ListIntegrationDefinitionsRequest{Category: stringValue(p.Category)})
+	response, err := server.control.Query.ListIntegrationDefinitions(r.Context(), &controlplanev1.ListIntegrationDefinitionsRequest{
+		Category: stringValue(p.Category), Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken),
+	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "", "definitions")
 }
-func (server *Server) ListIntegrationConnections(w http.ResponseWriter, r *http.Request) {
-	response, err := server.control.Query.ListIntegrationConnections(r.Context(), &controlplanev1.ListIntegrationConnectionsRequest{Page: page(nil, nil)})
+func (server *Server) ListIntegrationConnections(w http.ResponseWriter, r *http.Request, p generated.ListIntegrationConnectionsParams) {
+	response, err := server.control.Query.ListIntegrationConnections(r.Context(), &controlplanev1.ListIntegrationConnectionsRequest{
+		Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query),
+	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

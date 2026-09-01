@@ -146,6 +146,10 @@ yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "integration-gatewa
     select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
       .podSelector.matchLabels."app.kubernetes.io/name" == "egress-gateway" and
       .podSelector.matchLabels."app.kubernetes.io/component" == "platform-egress")] | length == 1) and
+  ([.spec.egress[] | select(.ports[].protocol == "TCP" and .ports[].port == 8080) | .to[] |
+    select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
+      .podSelector.matchLabels."app.kubernetes.io/name" == "integration-synthetic" and
+      .podSelector.matchLabels."app.kubernetes.io/component" == "integration-fixture")] | length == 1) and
   ([.spec.egress[] | select(.ports[].port == 9090)] | length == 0) and
   ([.spec.egress[] | select(.to == null and .ports[].protocol == "TCP" and .ports[].port == 443)] | length == 0)' \
   "$consumer_render" >/dev/null
@@ -203,11 +207,11 @@ fi
 
 rollout_base="$temporary_directory/rollout-base"
 cp -R "$repository_root/deploy/k8s/base/egress-gateway" "$rollout_base"
-jq '.metadata.revision = "2026-08-07.2"' "$rollout_base/policy.json" >"$rollout_base/policy.next.json"
+jq '.metadata.revision = "2026-08-28.2"' "$rollout_base/policy.json" >"$rollout_base/policy.next.json"
 mv "$rollout_base/policy.next.json" "$rollout_base/policy.json"
 next_digest="$(cd "$repository_root/services/external/egress-gateway" && go run ./cmd/policy-digest "$rollout_base/policy.json")"
 sed -i \
-  -e 's/2026-08-07\.1/2026-08-07.2/g' \
+  -e 's/2026-08-28\.1/2026-08-28.2/g' \
   -e "s/$policy_digest/$next_digest/g" \
   "$rollout_base/deployment.yaml"
 next_render="$temporary_directory/next-policy.yaml"

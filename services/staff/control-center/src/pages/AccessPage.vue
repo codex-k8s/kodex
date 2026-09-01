@@ -1,471 +1,491 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { computed, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import { useRoute, useRouter } from "vue-router";
 
-import { usePlatformStore } from "@/features/platform/store";
+import AccessTabs from "@/features/access/components/AccessTabs.vue";
+import AccessModelOverview from "@/features/access/components/AccessModelOverview.vue";
+import BindingEditorDialog from "@/features/access/components/BindingEditorDialog.vue";
+import BindingsPanel from "@/features/access/components/BindingsPanel.vue";
+import EffectiveAccessPanel from "@/features/access/components/EffectiveAccessPanel.vue";
+import GroupsPanel from "@/features/access/components/GroupsPanel.vue";
+import ParticipantsPanel from "@/features/access/components/ParticipantsPanel.vue";
+import RoleEditorDialog from "@/features/access/components/RoleEditorDialog.vue";
+import RolesPanel from "@/features/access/components/RolesPanel.vue";
+import { accessSections, type AccessSection } from "@/features/access/model";
+import { useAccessStore } from "@/features/access/store";
 import type {
-  Membership,
-  PlatformMembershipCreateInput,
-  ProjectMembershipCreateInput,
+  AccessBinding,
+  AccessBindingChangeInput,
+  AccessBindingInput,
+  AccessRole,
+  AccessRoleInput,
+  AccessSubject,
+  OidcGroup,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
-import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
-import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
-type ProjectPermission = ProjectMembershipCreateInput["permissions"][number];
-type PlatformRole = PlatformMembershipCreateInput["platformRole"];
-
-interface AccessForm {
-  userRef: string;
-  platformRole: PlatformRole;
-  permissions: ProjectPermission[];
-  active: boolean;
-}
-
-const platform = usePlatformStore();
+const access = useAccessStore();
 const route = useRoute();
+const router = useRouter();
+const { t } = useI18n();
+
 const projectRef = computed(() =>
   typeof route.params.projectRef === "string" ? route.params.projectRef : "",
 );
-const organizationScope = computed(() => projectRef.value === "");
-const list = computed(() =>
-  Object.values(
-    organizationScope.value
-      ? platform.platformMemberships
-      : platform.memberships,
-  ),
-);
-const candidates = computed(() =>
-  Object.values(
-    organizationScope.value
-      ? platform.platformMembershipCandidates
-      : platform.membershipCandidates,
-  ),
-);
-const listKey = computed(() =>
-  organizationScope.value ? "platformMembers" : "members",
-);
-const candidateKey = computed(() =>
-  organizationScope.value ? "platformMemberCandidates" : "memberCandidates",
-);
-const canAdd = computed(() =>
-  (organizationScope.value
-    ? platform.platformMembershipActions
-    : platform.projectMembershipActions
-  ).includes("MANAGE_MEMBERS"),
-);
-const selected = ref<Membership>();
-const dialog = ref(false);
-const candidateSearch = ref("");
-const busy = ref(false);
-const problem = ref<AppProblem>();
-const form = reactive<AccessForm>({
-  userRef: "",
-  platformRole: "MEMBER",
-  permissions: ["VIEW"],
-  active: true,
+const routeSection = computed(() => {
+  const raw =
+    route.name === "access" ? route.params.section : route.query.section;
+  return typeof raw === "string" &&
+    accessSections.includes(raw as AccessSection)
+    ? (raw as AccessSection)
+    : "participants";
 });
-const permissions: ProjectPermission[] = [
-  "VIEW",
-  "MANAGE",
-  "MANAGE_MEMBERS",
-  "MANAGE_AGENTS",
-  "MANAGE_WORKFLOWS",
-  "LAUNCH_RUNS",
-  "CANCEL_RUNS",
-  "RESOLVE_GATES",
-  "MANAGE_ARTIFACTS",
-  "MANAGE_SCHEDULES",
-  "MANAGE_INTEGRATIONS",
-  "VIEW_AUDIT",
-];
+const participantSubjects = computed(() =>
+  access.subjects.filter((subject) => subject.kind !== "OIDC_GROUP"),
+);
+const bindingSubjects = computed<AccessSubject[]>(() => [
+  ...access.subjects.filter((subject) => subject.kind !== "OIDC_GROUP"),
+  ...access.groups.map((group) => ({
+    ref: group.ref,
+    kind: "OIDC_GROUP" as const,
+    displayName: group.displayName,
+    active: group.state === "ACTIVE",
+    oidcGroupRefs: [],
+  })),
+]);
+const counts = computed(() => ({
+  participants: participantSubjects.value.length,
+  groups: access.groups.length,
+  roles: access.roles.length,
+  bindings: access.bindings.filter((binding) => binding.state === "ACTIVE")
+    .length,
+}));
+const editorAgentsProjectRef = ref("");
+const editorAgents = computed(
+  () => access.agents[editorAgentsProjectRef.value] ?? [],
+);
+const editorWorkflows = computed(
+  () => access.workflows[editorAgentsProjectRef.value] ?? [],
+);
+const roleDialog = ref(false);
+const bindingDialog = ref(false);
+const selectedRole = ref<AccessRole>();
+const selectedBinding = ref<AccessBinding>();
+const initialSubject = ref<AccessSubject>();
+const mutationBusy = ref(false);
+const mutationProblem = ref<AppProblem>();
+const confirmation = ref<
+  | { kind: "ARCHIVE_ROLE"; role: AccessRole }
+  | { kind: "REVOKE_BINDING"; binding: AccessBinding }
+>();
 
-function edit(membership: Membership): void {
-  if (!membership.nextActions.includes("EDIT")) return;
-  selected.value = membership;
-  Object.assign(form, {
-    userRef: membership.user.ref,
-    platformRole: membership.platformRole,
-    permissions: [...membership.permissions],
-    active: membership.active,
-  });
-  problem.value = undefined;
-  dialog.value = true;
-}
-
-function add(): void {
-  if (!canAdd.value) return;
-  selected.value = undefined;
-  Object.assign(form, {
-    userRef: "",
-    platformRole: "MEMBER",
-    permissions: ["VIEW"],
-    active: true,
-  });
-  problem.value = undefined;
-  candidateSearch.value = "";
-  dialog.value = true;
-  if (organizationScope.value) {
-    void platform.loadPlatformMembershipCandidates();
-  } else {
-    void platform.loadMembershipCandidates(projectRef.value);
-  }
-}
-
-let candidateSearchTimer: ReturnType<typeof setTimeout> | undefined;
-
-function loadCandidates(): void {
-  if (!dialog.value || selected.value) return;
-  if (organizationScope.value) {
-    void platform.loadPlatformMembershipCandidates(candidateSearch.value);
-  } else {
-    void platform.loadMembershipCandidates(
-      projectRef.value,
-      candidateSearch.value,
-    );
-  }
-}
-
-function closeDialog(): void {
-  dialog.value = false;
-  selected.value = undefined;
-  problem.value = undefined;
-}
-
-function togglePermission(permission: ProjectPermission): void {
-  const index = form.permissions.indexOf(permission);
-  if (index >= 0) form.permissions.splice(index, 1);
-  else form.permissions.push(permission);
-}
-
-async function load(): Promise<void> {
-  if (organizationScope.value) {
-    await platform.loadPlatformMembers();
-  } else {
-    await platform.loadMembers(projectRef.value);
-  }
-}
-
-async function submit(): Promise<void> {
-  if (
-    !form.userRef ||
-    (!organizationScope.value && !projectRef.value) ||
-    (selected.value
-      ? !selected.value.nextActions.includes("EDIT")
-      : !canAdd.value)
-  )
+function selectSection(section: AccessSection): void {
+  if (route.name === "project-access") {
+    void router.push({
+      name: "project-access",
+      params: { projectRef: projectRef.value },
+      query: { section },
+    });
     return;
-  busy.value = true;
-  problem.value = undefined;
-  try {
-    if (organizationScope.value) {
-      await platform.savePlatformMembership(
-        {
-          userRef: form.userRef,
-          platformRole: form.platformRole,
-          active: form.active,
-        },
-        selected.value,
-      );
-    } else {
-      await platform.saveMembership(
-        projectRef.value,
-        {
-          userRef: form.userRef,
-          permissions: [...form.permissions],
-          active: form.active,
-        },
-        selected.value,
-      );
-    }
-    await load();
-    closeDialog();
-  } catch (error) {
-    problem.value = asProblem(error);
-  } finally {
-    busy.value = false;
+  }
+  void router.push({ name: "access", params: { section } });
+}
+
+async function loadSection(section = routeSection.value): Promise<void> {
+  if (section === "participants") {
+    await Promise.all([
+      access.loadSubjects(),
+      access.loadBindings({ projectRef: projectRef.value || undefined }),
+    ]);
+  } else if (section === "groups") {
+    await Promise.all([
+      access.loadGroups(),
+      access.loadSubjects(),
+      access.loadBindings({ projectRef: projectRef.value || undefined }),
+    ]);
+  } else if (section === "roles") {
+    await access.loadRoles(true);
+  } else if (section === "bindings") {
+    await Promise.all([
+      access.loadSubjects(),
+      access.loadBindings({
+        projectRef: projectRef.value || undefined,
+        includeRevoked: true,
+      }),
+    ]);
+  } else {
+    await Promise.all([
+      access.loadSubjects(),
+      access.loadPermissions(),
+      access.loadRoles(),
+    ]);
   }
 }
 
-async function revoke(membership: Membership): Promise<void> {
-  if (!membership.nextActions.includes("REVOKE")) return;
-  busy.value = true;
-  problem.value = undefined;
+async function loadBaseline(): Promise<void> {
+  await Promise.all([
+    access.loadPermissions(),
+    access.loadProjects(),
+    access.loadRoles(true),
+    access.loadGroups(),
+    access.loadIntegrations(),
+    access.loadMembershipPresentation(projectRef.value),
+  ]);
+  await loadSection();
+}
+
+async function loadProjectResources(value: string): Promise<void> {
+  editorAgentsProjectRef.value = value;
+  await Promise.all([access.loadAgents(value), access.loadWorkflows(value)]);
+}
+
+function createRole(): void {
+  selectedRole.value = undefined;
+  mutationProblem.value = undefined;
+  roleDialog.value = true;
+}
+
+async function editRole(role: AccessRole): Promise<void> {
+  selectedRole.value = role;
+  mutationProblem.value = undefined;
+  roleDialog.value = true;
+  await access.loadRoleVersions(role.ref);
+}
+
+async function saveRole(input: AccessRoleInput): Promise<void> {
+  mutationBusy.value = true;
+  mutationProblem.value = undefined;
   try {
-    if (organizationScope.value) {
-      await platform.revokePlatformMembership(membership);
-    } else {
-      await platform.revokeMembership(projectRef.value, membership);
-    }
-    await load();
+    await access.saveRole(input, selectedRole.value);
+    roleDialog.value = false;
   } catch (error) {
-    problem.value = asProblem(error);
+    mutationProblem.value = asProblem(error);
+    if (mutationProblem.value.kind === "conflict") await access.loadRoles(true);
   } finally {
-    busy.value = false;
+    mutationBusy.value = false;
   }
 }
 
-watch(projectRef, () => void load());
-watch(candidateSearch, () => {
-  if (candidateSearchTimer) clearTimeout(candidateSearchTimer);
-  candidateSearchTimer = setTimeout(loadCandidates, 250);
+function archiveRole(role: AccessRole): void {
+  mutationProblem.value = undefined;
+  confirmation.value = { kind: "ARCHIVE_ROLE", role };
+}
+
+function revokeBinding(binding: AccessBinding): void {
+  mutationProblem.value = undefined;
+  confirmation.value = { kind: "REVOKE_BINDING", binding };
+}
+
+function closeConfirmation(force = false): void {
+  if (mutationBusy.value && !force) return;
+  confirmation.value = undefined;
+  mutationProblem.value = undefined;
+}
+
+async function confirmMutation(): Promise<void> {
+  const requested = confirmation.value;
+  if (!requested) return;
+  mutationBusy.value = true;
+  mutationProblem.value = undefined;
+  try {
+    if (requested.kind === "ARCHIVE_ROLE") {
+      await access.archiveRole(requested.role);
+    } else {
+      await access.revokeBinding(requested.binding);
+    }
+    closeConfirmation(true);
+  } catch (error) {
+    mutationProblem.value = asProblem(error);
+    if (mutationProblem.value.kind === "conflict") {
+      if (requested.kind === "ARCHIVE_ROLE") {
+        await access.loadRoles(true);
+      } else {
+        await access.loadBindings({
+          projectRef: projectRef.value || undefined,
+          includeRevoked: true,
+        });
+      }
+    }
+  } finally {
+    mutationBusy.value = false;
+  }
+}
+
+function createBinding(subject?: AccessSubject): void {
+  selectedBinding.value = undefined;
+  initialSubject.value = subject;
+  editorAgentsProjectRef.value = projectRef.value;
+  mutationProblem.value = undefined;
+  bindingDialog.value = true;
+}
+
+function createGroupBinding(group: OidcGroup): void {
+  createBinding({
+    ref: group.ref,
+    kind: "OIDC_GROUP",
+    displayName: group.displayName,
+    active: group.state === "ACTIVE",
+    oidcGroupRefs: [],
+  });
+}
+
+function editBinding(binding: AccessBinding): void {
+  selectedBinding.value = binding;
+  initialSubject.value = undefined;
+  editorAgentsProjectRef.value = binding.scope.projectRef ?? "";
+  mutationProblem.value = undefined;
+  bindingDialog.value = true;
+  if (
+    binding.scope.kind === "RESOURCE_INSTANCE" &&
+    ["AGENT", "WORKFLOW"].includes(binding.scope.resourceKind ?? "") &&
+    binding.scope.projectRef
+  )
+    void loadProjectResources(binding.scope.projectRef);
+}
+
+async function saveBinding(
+  input: AccessBindingInput | AccessBindingChangeInput,
+): Promise<void> {
+  mutationBusy.value = true;
+  mutationProblem.value = undefined;
+  try {
+    await access.saveBinding(input, selectedBinding.value);
+    bindingDialog.value = false;
+  } catch (error) {
+    mutationProblem.value = asProblem(error);
+    if (mutationProblem.value.kind === "conflict") {
+      await access.loadBindings({
+        projectRef: projectRef.value || undefined,
+        includeRevoked: true,
+      });
+    }
+  } finally {
+    mutationBusy.value = false;
+  }
+}
+
+watch(routeSection, (section) => void loadSection(section));
+watch(projectRef, (value) => {
+  void Promise.all([loadSection(), access.loadMembershipPresentation(value)]);
 });
-onMounted(() => void load());
-onUnmounted(() => {
-  if (candidateSearchTimer) clearTimeout(candidateSearchTimer);
-});
+onMounted(() => void loadBaseline());
 </script>
 
 <template>
   <PageFrame
-    :title="$t(organizationScope ? 'access.organizationTitle' : 'access.title')"
+    :title="$t('access.workspaceTitle')"
     :subtitle="
-      $t(organizationScope ? 'access.organizationSubtitle' : 'access.subtitle')
+      $t(
+        projectRef
+          ? 'access.workspaceProjectSubtitle'
+          : 'access.workspaceSubtitle',
+      )
     "
   >
-    <template #actions>
-      <button
-        v-if="canAdd"
-        class="button button--primary"
-        type="button"
-        @click="add"
-      >
-        {{ $t(organizationScope ? "access.addOrganization" : "access.add") }}
-      </button>
-    </template>
-    <section class="scope-summary" aria-live="polite">
-      <strong>{{
-        $t(
-          organizationScope
-            ? "access.organizationScope"
-            : "access.projectScope",
-        )
-      }}</strong>
-      <span>{{
-        $t(
-          organizationScope
-            ? "access.organizationScopeHint"
-            : "access.projectScopeHint",
-        )
-      }}</span>
-    </section>
-    <AsyncState
-      :loading="platform.loading[listKey]"
-      :problem="platform.problems[listKey]"
-      :empty="list.length === 0"
-      :empty-title="
-        $t(
-          organizationScope
-            ? 'access.organizationEmptyTitle'
-            : 'access.emptyTitle',
+    <AccessModelOverview :project-context="Boolean(projectRef)" />
+    <AccessTabs
+      :active="routeSection"
+      :counts="counts"
+      @select="selectSection"
+    />
+    <ProblemNotice
+      v-if="access.problems.permissions"
+      :problem="access.problems.permissions"
+      @retry="access.loadPermissions"
+    />
+    <ProblemNotice
+      v-if="mutationProblem && !roleDialog && !bindingDialog && !confirmation"
+      :problem="mutationProblem"
+      compact
+    />
+
+    <ParticipantsPanel
+      v-if="routeSection === 'participants'"
+      :subjects="participantSubjects"
+      :groups="access.groups"
+      :bindings="access.bindings"
+      :platform-memberships="access.platformMemberships"
+      :project-memberships="access.projectMemberships"
+      :project-ref="projectRef"
+      :platform-memberships-unavailable="
+        Boolean(access.problems.platformMemberships)
+      "
+      :project-memberships-unavailable="
+        Boolean(access.problems.projectMemberships)
+      "
+      :loading="access.loading.subjects"
+      :problem="access.problems.subjects"
+      :has-more="Boolean(access.subjectNextPageToken)"
+      @search="access.loadSubjects($event)"
+      @more="access.loadSubjects($event, undefined, true)"
+      @bind="createBinding"
+      @retry="loadSection"
+    />
+    <GroupsPanel
+      v-else-if="routeSection === 'groups'"
+      :groups="access.groups"
+      :bindings="access.bindings"
+      :bindings-unavailable="Boolean(access.problems.bindings)"
+      :loading="access.loading.groups"
+      :problem="access.problems.groups"
+      :has-more="Boolean(access.groupNextPageToken)"
+      @search="access.loadGroups($event)"
+      @more="access.loadGroups($event, true)"
+      @bind="createGroupBinding"
+      @retry="loadSection"
+    />
+    <RolesPanel
+      v-else-if="routeSection === 'roles'"
+      :roles="access.roles"
+      :permissions="access.permissions"
+      :permission-registry-unavailable="Boolean(access.problems.permissions)"
+      :loading="access.loading.roles"
+      :problem="access.problems.roles"
+      :has-more="Boolean(access.roleNextPageToken)"
+      @create="createRole"
+      @edit="editRole"
+      @archive="archiveRole"
+      @more="access.loadRoles(true, true)"
+      @retry="loadSection"
+    />
+    <BindingsPanel
+      v-else-if="routeSection === 'bindings'"
+      :bindings="access.bindings"
+      :roles="access.roles"
+      :projects="access.projects"
+      :agents-by-project="access.agents"
+      :loading="access.loading.bindings"
+      :problem="access.problems.bindings"
+      :has-more="Boolean(access.bindingNextPageToken)"
+      @create="createBinding()"
+      @edit="editBinding"
+      @revoke="revokeBinding"
+      @more="
+        access.loadBindings(
+          { projectRef: projectRef || undefined, includeRevoked: true },
+          true,
         )
       "
-      :empty-text="
-        $t(
-          organizationScope
-            ? 'access.organizationEmptyText'
-            : 'access.emptyText',
-        )
+      @retry="loadSection"
+    />
+    <EffectiveAccessPanel
+      v-else
+      :subjects="bindingSubjects"
+      :permissions="access.permissions"
+      :roles="access.roles"
+      :projects="access.projects"
+      :agents="editorAgents"
+      :workflows="editorWorkflows"
+      :integrations="access.integrations"
+      :effective="access.effective"
+      :explanation="access.explanation"
+      :simulation="access.simulation"
+      :loading="
+        access.loading.effective ||
+        access.loading.explanation ||
+        access.loading.simulation
       "
-      @retry="load"
-    >
-      <div class="entity-list">
-        <article
-          v-for="membership in list"
-          :key="membership.ref"
-          class="entity-row"
-        >
-          <div>
-            <h3>{{ membership.user.displayName }}</h3>
-            <p>
-              {{ membership.user.emailHint }} ·
-              {{ $t(`access.roles.${membership.platformRole}`) }}
-            </p>
-            <p v-if="!organizationScope" class="secondary">
-              {{
-                $t("access.permissionCount", {
-                  count: membership.permissions.length,
-                })
-              }}
-            </p>
-          </div>
-          <StatusBadge :state="membership.active ? 'ACTIVE' : 'DISABLED'" />
-          <div class="entity-row__actions">
-            <button
-              v-if="membership.nextActions.includes('EDIT')"
-              class="button"
-              type="button"
-              @click="edit(membership)"
-            >
-              {{ $t("common.edit") }}</button
-            ><button
-              v-if="membership.nextActions.includes('REVOKE')"
-              class="button button--danger"
-              type="button"
-              :disabled="busy"
-              @click="revoke(membership)"
-            >
-              {{ $t("access.revoke") }}
-            </button>
-          </div>
-        </article>
-      </div>
-    </AsyncState>
-    <ProblemNotice v-if="problem && !dialog" :problem="problem" compact />
+      :problem="
+        access.problems.effective ||
+        access.problems.explanation ||
+        access.problems.simulation
+      "
+      @query="access.queryEffective"
+      @explain="access.explain"
+      @simulate="access.simulate"
+      @load-project-resources="loadProjectResources"
+      @clear="access.clearDecision"
+    />
+
+    <RoleEditorDialog
+      v-if="roleDialog"
+      :role="selectedRole"
+      :permissions="access.permissions"
+      :versions="
+        selectedRole ? (access.roleVersions[selectedRole.ref] ?? []) : []
+      "
+      :busy="mutationBusy"
+      :problem="mutationProblem"
+      @close="roleDialog = false"
+      @save="saveRole"
+    />
+    <BindingEditorDialog
+      v-if="bindingDialog"
+      :binding="selectedBinding"
+      :initial-subject="initialSubject"
+      :default-project-ref="projectRef"
+      :subjects="bindingSubjects"
+      :roles="access.roles"
+      :permissions="access.permissions"
+      :projects="access.projects"
+      :agents="editorAgents"
+      :workflows="editorWorkflows"
+      :integrations="access.integrations"
+      :busy="mutationBusy"
+      :problem="mutationProblem"
+      @close="bindingDialog = false"
+      @save="saveBinding"
+      @load-project-resources="loadProjectResources"
+    />
     <ModalDialog
-      v-if="dialog"
+      v-if="confirmation"
       :title="
-        $t(
-          selected
-            ? 'access.edit'
-            : organizationScope
-              ? 'access.addOrganization'
-              : 'access.add',
-        )
+        confirmation.kind === 'ARCHIVE_ROLE'
+          ? 'Архивировать роль'
+          : 'Отозвать назначение'
       "
-      :busy="busy"
-      @close="closeDialog"
-      ><form id="membership-form" class="form-grid" @submit.prevent="submit">
-        <div v-if="selected" class="field field--wide">
-          <span>{{ $t("access.member") }}</span
-          ><strong>{{ selected.user.displayName }}</strong>
-        </div>
-        <template v-else>
-          <label class="field field--wide"
-            ><span>{{ $t("access.searchMember") }}</span
-            ><input
-              v-model="candidateSearch"
-              type="search"
-              :placeholder="$t('access.searchMemberPlaceholder')"
-              autocomplete="off"
-              autofocus
-          /></label>
-          <AsyncState
-            class="field--wide candidate-state"
-            :loading="platform.loading[candidateKey]"
-            :problem="platform.problems[candidateKey]"
-            :empty="candidates.length === 0"
-            :empty-title="$t('access.noCandidates')"
-            :empty-text="
-              $t(
-                organizationScope
-                  ? 'access.noOrganizationCandidatesText'
-                  : 'access.noCandidatesText',
-              )
-            "
-            @retry="add"
-          >
-            <label class="field field--wide"
-              ><span>{{ $t("access.member") }}</span
-              ><select v-model="form.userRef" required>
-                <option value="" disabled>
-                  {{ $t("access.chooseMember") }}
-                </option>
-                <option
-                  v-for="candidate in candidates"
-                  :key="candidate.ref"
-                  :value="candidate.ref"
-                >
-                  {{ candidate.displayName
-                  }}{{ candidate.emailHint ? ` · ${candidate.emailHint}` : "" }}
-                </option>
-              </select></label
-            >
-          </AsyncState>
-        </template>
-        <label v-if="organizationScope" class="field field--wide"
-          ><span>{{ $t("access.role") }}</span
-          ><select v-model="form.platformRole">
-            <option value="OWNER">{{ $t("access.roles.OWNER") }}</option>
-            <option value="ADMINISTRATOR">
-              {{ $t("access.roles.ADMINISTRATOR") }}
-            </option>
-            <option value="OPERATOR">{{ $t("access.roles.OPERATOR") }}</option>
-            <option value="MEMBER">{{ $t("access.roles.MEMBER") }}</option>
-            <option value="AUDITOR">{{ $t("access.roles.AUDITOR") }}</option>
-          </select></label
-        >
-        <fieldset v-else class="permission-grid field--wide">
-          <legend>{{ $t("access.permissions") }}</legend>
-          <label v-for="permission in permissions" :key="permission"
-            ><input
-              type="checkbox"
-              :checked="form.permissions.includes(permission)"
-              :disabled="permission === 'VIEW'"
-              @change="togglePermission(permission)"
-            />{{ $t(`access.permission.${permission}`) }}</label
-          >
-        </fieldset>
-        <label v-if="selected" class="field field--wide inline-control"
-          ><input v-model="form.active" type="checkbox" />
-          <span>{{ $t("access.active") }}</span></label
-        >
-        <ProblemNotice
-          v-if="problem"
-          class="field--wide"
-          :problem="problem"
-          compact
-        />
-      </form>
-      <template #actions
-        ><button
+      :busy="mutationBusy"
+      size="md"
+      @close="closeConfirmation"
+    >
+      <p class="confirmation-copy">
+        {{
+          confirmation.kind === "ARCHIVE_ROLE"
+            ? t("access.rolesWorkspace.archiveConfirm", {
+                name: confirmation.role.currentVersion.name,
+              })
+            : t("access.bindingsWorkspace.revokeConfirm")
+        }}
+      </p>
+      <ProblemNotice
+        v-if="mutationProblem"
+        :problem="mutationProblem"
+        compact
+      />
+      <template #actions>
+        <button
           class="button"
           type="button"
-          :disabled="busy"
-          @click="closeDialog"
+          :disabled="mutationBusy"
+          @click="closeConfirmation()"
         >
-          {{ $t("common.cancel") }}</button
-        ><button
-          class="button button--primary"
-          form="membership-form"
-          type="submit"
-          :disabled="busy"
+          {{ $t("common.cancel") }}
+        </button>
+        <button
+          class="button button--danger"
+          type="button"
+          :disabled="mutationBusy"
+          @click="confirmMutation"
         >
-          {{ $t(selected ? "common.save" : "access.add") }}
-        </button></template
-      ></ModalDialog
-    >
+          {{
+            mutationBusy
+              ? "Выполняем…"
+              : confirmation.kind === "ARCHIVE_ROLE"
+                ? "Архивировать"
+                : "Отозвать"
+          }}
+        </button>
+      </template>
+    </ModalDialog>
   </PageFrame>
 </template>
 
 <style scoped>
-.scope-summary {
-  display: grid;
-  gap: 4px;
-  margin-bottom: 18px;
-}
-.scope-summary span,
-.secondary {
-  color: var(--text-secondary);
-}
-.candidate-state {
-  min-height: 92px;
-}
-.permission-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  border: 0;
-  padding: 0;
-}
-.permission-grid label,
-.inline-control {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  font-weight: 400;
-}
-.permission-grid input,
-.inline-control input {
-  width: auto;
-  min-height: auto;
-}
-@media (max-width: 620px) {
-  .permission-grid {
-    grid-template-columns: 1fr;
-  }
+.confirmation-copy {
+  margin: 0;
 }
 </style>

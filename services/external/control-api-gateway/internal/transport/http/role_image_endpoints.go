@@ -63,6 +63,10 @@ func (server *Server) GetRoleImageRecipe(writer http.ResponseWriter, request *ht
 	for _, build := range response.GetBuilds() {
 		result.Builds = append(result.Builds, publicRoleImageBuild(build))
 	}
+	if response.GetActiveArtifact() != nil {
+		artifact := publicRoleImageArtifact(response.GetActiveArtifact())
+		result.ActiveArtifact = &artifact
+	}
 	setVersionETag(writer, response.GetRecipe().GetVersion())
 	writeJSON(writer, http.StatusOK, result)
 }
@@ -156,7 +160,7 @@ func (server *Server) CommandRoleImageRecipe(writer http.ResponseWriter, request
 }
 
 func roleEnvironmentSelection(input generated.RoleEnvironmentSelection) *controlplanev1.RoleEnvironmentSelection {
-	result := &controlplanev1.RoleEnvironmentSelection{EnvironmentKey: input.EnvironmentKey}
+	result := &controlplanev1.RoleEnvironmentSelection{EnvironmentKey: input.EnvironmentKey, Dockerfile: input.Dockerfile}
 	if input.PackageKeys != nil {
 		result.PackageKeys = append([]string(nil), (*input.PackageKeys)...)
 	}
@@ -176,6 +180,7 @@ func publicRoleEnvironment(input *controlplanev1.RoleEnvironment) generated.Role
 		SoftwareMessageKeys:   append([]string(nil), input.GetSoftwareMessageKeys()...),
 		Recommended:           input.GetRecommended(), Available: input.GetAvailable(),
 		CustomInstallationAllowed: input.GetCustomInstallationAllowed(),
+		DockerfileTemplate:        input.GetDockerfileTemplate(),
 		Platforms:                 make([]generated.RoleEnvironmentPlatform, 0, len(input.GetPlatforms())),
 	}
 	if value := input.GetUnavailableMessageKey(); value != "" {
@@ -203,8 +208,14 @@ func publicRoleImageRecipe(input *controlplanev1.RoleImageRecipe) generated.Role
 		CreatedAt:          protoTime(input.GetCreatedAt()), UpdatedAt: protoTime(input.GetUpdatedAt()),
 		NextActions: make([]generated.NextAction, 0, len(input.GetNextActions())),
 	}
+	if value := input.GetActiveImageArtifactRef(); value != "" {
+		result.ActiveImageArtifactRef = &value
+	}
+	if value := input.GetPromotedImageReference(); value != "" {
+		result.PromotedImageReference = &value
+	}
 	if environment := input.GetEnvironment(); environment != nil {
-		result.Environment = generated.RoleEnvironmentSelection{EnvironmentKey: environment.GetEnvironmentKey()}
+		result.Environment = generated.RoleEnvironmentSelection{EnvironmentKey: environment.GetEnvironmentKey(), Dockerfile: environment.GetDockerfile()}
 		if values := environment.GetPackageKeys(); len(values) > 0 {
 			copy := append([]string(nil), values...)
 			result.Environment.PackageKeys = &copy
@@ -226,6 +237,7 @@ func publicRoleImageRecipe(input *controlplanev1.RoleImageRecipe) generated.Role
 func publicRoleImageBuild(input *controlplanev1.ImageBuild) generated.RoleImageBuild {
 	result := generated.RoleImageBuild{
 		Ref: input.GetRef(), Version: int64(input.GetVersion()), RecipeRef: input.GetRecipeRef(),
+		RecipeGeneration: int64(input.GetRecipeGeneration()), Dockerfile: input.GetDockerfile(),
 		Attempt: int(input.GetAttempt()), Stage: generated.RoleImageBuildStage(strings.TrimPrefix(input.GetStage().String(), "IMAGE_BUILD_STAGE_")),
 		ProgressPercent: int(input.GetProgressPercent()), CreatedAt: protoTime(input.GetCreatedAt()), UpdatedAt: protoTime(input.GetUpdatedAt()),
 	}
@@ -237,6 +249,32 @@ func publicRoleImageBuild(input *controlplanev1.ImageBuild) generated.RoleImageB
 	}
 	if value := input.GetDiagnosticSummary(); value != "" {
 		result.DiagnosticSummary = &value
+	}
+	return result
+}
+
+func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.RoleImageArtifact {
+	result := generated.RoleImageArtifact{
+		Ref: input.GetRef(), Version: int64(input.GetVersion()), RecipeRef: input.GetRecipeRef(),
+		RecipeGeneration: int64(input.GetRecipeGeneration()), ManifestDigest: input.GetManifestDigest(),
+		AdmissionVerdict: generated.RoleImageArtifactAdmissionVerdict(strings.TrimPrefix(input.GetAdmissionVerdict().String(), "IMAGE_ADMISSION_VERDICT_")),
+		Tools:            make([]generated.RoleImageArtifactTool, 0, len(input.GetTools())),
+	}
+	if value := input.GetPromotedReference(); value != "" {
+		result.PromotedReference = &value
+	}
+	if input.GetPromotedAt() != nil {
+		value := generated.Timestamp(protoTime(input.GetPromotedAt()))
+		result.PromotedAt = &value
+	}
+	if value := input.GetSbomSha256(); value != "" {
+		result.SbomSha256 = &value
+	}
+	if value := input.GetVulnerabilityEvidenceSha256(); value != "" {
+		result.VulnerabilityEvidenceSha256 = &value
+	}
+	for _, tool := range input.GetTools() {
+		result.Tools = append(result.Tools, generated.RoleImageArtifactTool{Name: tool.GetName(), Version: tool.GetVersion()})
 	}
 	return result
 }

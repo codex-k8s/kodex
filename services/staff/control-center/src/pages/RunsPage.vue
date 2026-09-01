@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+
 import { usePlatformStore } from "@/features/platform/store";
-import AsyncState from "@/shared/ui/AsyncState.vue";
+import RunsBoard from "@/features/workboard/components/RunsBoard.vue";
+import WorkboardSection from "@/features/workboard/components/WorkboardSection.vue";
+import {
+  filterRuns,
+  type RunFilter,
+  type RunView,
+} from "@/features/workboard/model";
 import PageFrame from "@/shared/ui/PageFrame.vue";
-import SafeSummary from "@/shared/ui/SafeSummary.vue";
-import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+
 const platform = usePlatformStore();
 const route = useRoute();
 const projectRef = computed(() =>
@@ -19,104 +26,109 @@ const project = computed(() =>
 const canCreateRun = computed(() =>
   project.value?.nextActions.includes("CREATE_RUN"),
 );
-const filter = ref<"ALL" | "ACTIVE" | "TERMINAL">("ALL");
-const list = computed(() =>
-  platform.runList
-    .filter(
-      (run) =>
-        (!projectRef.value || run.projectRef === projectRef.value) &&
-        (filter.value === "ALL" ||
-          (filter.value === "ACTIVE"
-            ? ["QUEUED", "RUNNING", "WAITING_HUMAN", "CANCELLING"].includes(
-                run.state,
-              )
-            : ["SUCCEEDED", "FAILED", "CANCELLED"].includes(run.state))),
-    )
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+const filter = ref<RunFilter>("ALL");
+const view = ref<RunView>(projectRef.value ? "KANBAN" : "LIST");
+const runsReady = ref(false);
+const projectReady = ref(!projectRef.value || Boolean(project.value));
+const scopedRuns = computed(() =>
+  platform.runList.filter(
+    (run) => !projectRef.value || run.projectRef === projectRef.value,
+  ),
 );
-onMounted(
-  () =>
-    void Promise.all([
-      platform.loadRuns(projectRef.value),
-      ...(projectRef.value ? [platform.loadProject(projectRef.value)] : []),
-    ]),
-);
+const list = computed(() => filterRuns(scopedRuns.value, filter.value));
+
+async function refreshRuns(): Promise<void> {
+  await platform.loadRuns(projectRef.value);
+  if (!platform.problems.runs) runsReady.value = true;
+}
+
+async function refreshProject(): Promise<void> {
+  if (!projectRef.value) return;
+  await platform.loadProject(projectRef.value);
+  if (!platform.problems.project) projectReady.value = true;
+}
+
+const refreshing = computed(() => runsReady.value && platform.loading.runs);
+
+async function refresh(): Promise<void> {
+  await Promise.all([refreshRuns(), refreshProject()]);
+}
+
+onMounted(() => void refresh());
+
+watch(projectRef, (next) => {
+  runsReady.value = false;
+  projectReady.value = !next || Boolean(project.value);
+  view.value = next ? "KANBAN" : "LIST";
+  void refresh();
+});
 </script>
+
 <template>
-  <PageFrame :title="$t('runs.title')" :subtitle="$t('runs.subtitle')"
-    ><template #actions
-      ><RouterLink
+  <PageFrame
+    :title="$t('runs.title')"
+    :subtitle="project?.name ?? $t('runs.subtitle')"
+    :eyebrow="project ? $t('app.project') : undefined"
+  >
+    <template #actions>
+      <RouterLink
         v-if="projectRef && canCreateRun"
         class="button button--primary"
         :to="`/projects/${projectRef}/runs/new`"
-        >{{ $t("runs.new") }}</RouterLink
-      ></template
-    >
-    <div class="filter-bar" role="group" :aria-label="$t('common.status')">
+      >
+        {{ $t("runs.new") }}
+      </RouterLink>
+    </template>
+
+    <ProblemNotice
+      v-if="projectRef && platform.problems.project && !projectReady"
+      :problem="platform.problems.project"
+      @retry="refreshProject"
+    />
+
+    <div class="runs-controls" role="group" :aria-label="$t('common.status')">
       <button
         v-for="value in ['ALL', 'ACTIVE', 'TERMINAL'] as const"
         :key="value"
         class="button"
         :class="{ 'button--primary': filter === value }"
         type="button"
+        :aria-pressed="filter === value"
         @click="filter = value"
       >
-        {{
-          value === "ALL"
-            ? $t("common.all")
-            : value === "ACTIVE"
-              ? $t("common.active")
-              : $t("common.result")
-        }}
+        {{ $t(`workboard.filters.${value}`) }}
       </button>
     </div>
-    <AsyncState
+
+    <WorkboardSection
+      :title="project ? $t('workboard.projectRuns') : $t('runs.title')"
+      :count="list.length"
       :loading="platform.loading.runs"
+      :refreshing="refreshing"
+      :ready="runsReady"
       :problem="platform.problems.runs"
       :empty="list.length === 0"
-      :empty-title="$t('common.empty')"
-      @retry="platform.loadRuns(projectRef)"
-      ><div class="entity-list">
-        <RouterLink
-          v-for="run in list"
-          :key="run.ref"
-          :to="`/runs/${run.ref}`"
-          class="entity-row"
-          ><div>
-            <h3>{{ run.title }}</h3>
-            <SafeSummary
-              :content="run.currentActivity ?? run.resultSummary"
-              :fallback="run.target.displayName"
-            />
-          </div>
-          <StatusBadge :state="run.state" />
-          <div class="run-meta">
-            <span>{{ run.target.displayName }}</span
-            ><small>{{ new Date(run.createdAt).toLocaleString() }}</small>
-          </div></RouterLink
-        >
-      </div></AsyncState
-    ></PageFrame
-  >
+      :empty-text="$t('workboard.noRuns')"
+      @retry="refreshRuns"
+    >
+      <RunsBoard
+        v-model:view="view"
+        :runs="list"
+        :preserve-project="Boolean(projectRef)"
+      />
+    </WorkboardSection>
+  </PageFrame>
 </template>
+
 <style scoped>
-.filter-bar {
+.runs-controls {
   display: flex;
   gap: 7px;
   margin-bottom: 16px;
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
-.run-meta {
-  display: flex;
-  flex-direction: column;
-  text-align: right;
-  color: var(--muted);
-}
-@media (max-width: 700px) {
-  .filter-bar {
-    overflow-x: auto;
-  }
-  .run-meta {
-    text-align: left;
-  }
+.runs-controls .button {
+  flex: 0 0 auto;
 }
 </style>

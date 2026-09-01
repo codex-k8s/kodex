@@ -37,7 +37,7 @@ spec:
               app.kubernetes.io/component: interaction-adapter
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: kodex-system
+              kubernetes.io/metadata.name: kodex-runtime
           podSelector:
             matchLabels:
               app.kubernetes.io/name: agent-runner

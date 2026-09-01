@@ -1,8 +1,10 @@
 package grpc
 
 import (
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -12,11 +14,99 @@ import (
 func TestCastScheduleUsesPublicLifecycleStates(t *testing.T) {
 	t.Parallel()
 
-	if got := castSchedule(entity.Schedule{Enabled: true}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_ACTIVE {
+	if got := castSchedule(entity.Schedule{State: "ACTIVE", Enabled: true}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_ACTIVE {
 		t.Fatalf("enabled schedule state = %s", got)
 	}
-	if got := castSchedule(entity.Schedule{Enabled: false}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_PAUSED {
+	if got := castSchedule(entity.Schedule{State: "ACTIVE", Enabled: false}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_PAUSED {
 		t.Fatalf("paused schedule state = %s", got)
+	}
+	if got := castSchedule(entity.Schedule{State: "ARCHIVED", Enabled: false}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_ARCHIVED {
+		t.Fatalf("archived schedule state = %s", got)
+	}
+	if got := castSchedule(entity.Schedule{State: "DELETED", Enabled: false}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_DELETED {
+		t.Fatalf("deleted schedule state = %s", got)
+	}
+	if got := castSchedule(entity.Schedule{State: "UNKNOWN", Enabled: true}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_UNSPECIFIED {
+		t.Fatalf("unknown schedule state = %s", got)
+	}
+}
+
+func TestCastRuntimeEnvironmentPreservesReadinessAndActions(t *testing.T) {
+	t.Parallel()
+
+	environment := castRuntimeEnvironment(entity.RuntimeEnvironmentSet{
+		Ref: "renv_ready", Ready: false,
+		ReadinessBlockers: []string{"PROMOTED_IMAGE_MISSING"},
+		NextActions:       []string{"OPEN", "UPDATE"},
+	})
+	if environment.GetReady() || !reflect.DeepEqual(environment.GetReadinessBlockers(), []string{"PROMOTED_IMAGE_MISSING"}) {
+		t.Fatalf("runtime environment readiness contract is incomplete: %#v", environment)
+	}
+	wantActions := []controlplanev1.NextAction{
+		controlplanev1.NextAction_NEXT_ACTION_OPEN,
+		controlplanev1.NextAction_NEXT_ACTION_UPDATE,
+	}
+	if !reflect.DeepEqual(environment.GetNextActions(), wantActions) {
+		t.Fatalf("runtime environment actions = %v, want %v", environment.GetNextActions(), wantActions)
+	}
+}
+
+func TestCastScheduleMaterializesRevisionAndContinuationContract(t *testing.T) {
+	t.Parallel()
+
+	createdAt := time.Date(2026, time.August, 31, 1, 2, 3, 0, time.UTC)
+	input := map[string]any{"task": "Prepare a bounded report.", "limit": float64(10)}
+	schedule := castSchedule(entity.Schedule{
+		Ref: "sch_contract", Version: 4, ProjectRef: "prj_contract", Name: "Daily report",
+		Target: entity.RunTarget{Type: "AGENT", Ref: "agt_contract"}, State: "ACTIVE", Enabled: true,
+		Preset: "DAILY", CronExpression: "0 9 * * *", Timezone: "UTC", Input: input,
+		SessionPolicy: "CONTINUE_ONE", NotificationPolicy: "CONTROL_CENTER_ONLY",
+		CurrentRevision: entity.ScheduleRevision{
+			Ref: "srev_contract", Revision: 3, Digest: strings.Repeat("a", 64), Name: "Daily report",
+			Target: entity.RunTarget{Type: "AGENT", Ref: "agt_contract"}, Preset: "DAILY",
+			CronExpression: "0 9 * * *", Timezone: "UTC", Input: input,
+			SessionPolicy: "CONTINUE_ONE", NotificationPolicy: "CONTROL_CENTER_ONLY", CreatedAt: createdAt,
+		},
+		ContinueSessionRef: "ses_contract",
+	})
+
+	revision := schedule.GetCurrentRevision()
+	if revision == nil || revision.GetRef() != "srev_contract" || revision.GetRevision() != 3 ||
+		revision.GetDigest() != strings.Repeat("a", 64) || revision.GetTarget().GetAgentRef() != "agt_contract" ||
+		revision.GetCreatedAt().AsTime() != createdAt || !reflect.DeepEqual(revision.GetInput().AsMap(), input) {
+		t.Fatalf("schedule current revision contract is incomplete: %#v", revision)
+	}
+	if schedule.GetContinueSessionRef() != "ses_contract" {
+		t.Fatalf("schedule continuation session = %q", schedule.GetContinueSessionRef())
+	}
+	fields := schedule.ProtoReflect().Descriptor().Fields()
+	if fields.ByJSONName("currentRevision") == nil || fields.ByJSONName("continueSessionRef") == nil {
+		t.Fatal("generated Schedule contract does not expose currentRevision and continueSessionRef")
+	}
+}
+
+func TestCastConnectionUsesCompletePublicStatesAndSnapshot(t *testing.T) {
+	t.Parallel()
+
+	for state, want := range map[string]controlplanev1.ConnectionState{
+		"TESTING":  controlplanev1.ConnectionState_CONNECTION_STATE_TESTING,
+		"DEGRADED": controlplanev1.ConnectionState_CONNECTION_STATE_DEGRADED,
+		"DELETED":  controlplanev1.ConnectionState_CONNECTION_STATE_DELETED,
+		"UNKNOWN":  controlplanev1.ConnectionState_CONNECTION_STATE_UNSPECIFIED,
+	} {
+		if got := connectionState(state); got != want {
+			t.Fatalf("connection state %q = %s, want %s", state, got, want)
+		}
+	}
+	now := time.Now().UTC()
+	connection := castConnection(entity.IntegrationConnection{
+		State: "DELETED", CreatedAt: now, UpdatedAt: now,
+		CredentialRevision: &entity.IntegrationCredentialRevision{Ref: "icr_example", CreatedAt: now},
+	})
+	if connection.GetState() != controlplanev1.ConnectionState_CONNECTION_STATE_DELETED ||
+		connection.GetCredentialRevision().GetRef() != "icr_example" ||
+		connection.GetCreatedAt() == nil || connection.GetUpdatedAt() == nil {
+		t.Fatalf("connection terminal snapshot is incomplete: %#v", connection)
 	}
 }
 
@@ -33,6 +123,26 @@ func TestCastBootstrapIncludesResolvedPlatformIdentity(t *testing.T) {
 	}
 	if state.GetCurrentUser().GetDisplayName() != "Владелец" || state.GetCurrentUser().GetEmailHint() != "o***@example.test" {
 		t.Fatalf("current user was not cast as a minimized summary: %#v", state.GetCurrentUser())
+	}
+}
+
+func TestNextActionsPreserveAllDomainLifecycleCommands(t *testing.T) {
+	t.Parallel()
+
+	actions := nextActions([]string{"UPDATE", "RESTORE", "REQUEST_BUILD", "PURGE"})
+	want := []controlplanev1.NextAction{
+		controlplanev1.NextAction_NEXT_ACTION_UPDATE,
+		controlplanev1.NextAction_NEXT_ACTION_RESTORE,
+		controlplanev1.NextAction_NEXT_ACTION_REQUEST_BUILD,
+		controlplanev1.NextAction_NEXT_ACTION_PURGE,
+	}
+	if len(actions) != len(want) {
+		t.Fatalf("next actions length = %d, want %d: %v", len(actions), len(want), actions)
+	}
+	for index := range want {
+		if actions[index] != want[index] {
+			t.Fatalf("next action %d = %s, want %s", index, actions[index], want[index])
+		}
 	}
 }
 
@@ -64,19 +174,23 @@ func TestCastRunPreservesArtifactAndGateReadback(t *testing.T) {
 	t.Parallel()
 
 	run := castRun(entity.Run{
-		InputArtifactRefs: []string{"art_input"},
-		ArtifactRefs:      []string{"art_output"},
-		GateRefs:          []string{"gat_review"},
+		InputAttachmentSetRef: "aset_abcdefgh",
+		ArtifactRefs:          []string{"art_output"},
+		GateRefs:              []string{"gat_review"},
+		TitleSource:           "USER_EDITED",
 	})
 
-	if len(run.GetInputArtifactRefs()) != 1 || run.GetInputArtifactRefs()[0] != "art_input" {
-		t.Fatalf("run input artifacts were not cast: %v", run.GetInputArtifactRefs())
+	if run.GetInputAttachmentSetRef() != "aset_abcdefgh" {
+		t.Fatalf("run input attachment set was not cast: %q", run.GetInputAttachmentSetRef())
 	}
 	if len(run.GetArtifactRefs()) != 1 || run.GetArtifactRefs()[0] != "art_output" {
 		t.Fatalf("run artifacts were not cast: %v", run.GetArtifactRefs())
 	}
 	if len(run.GetGateRefs()) != 1 || run.GetGateRefs()[0] != "gat_review" {
 		t.Fatalf("run gates were not cast: %v", run.GetGateRefs())
+	}
+	if run.GetTitleSource() != "USER_EDITED" {
+		t.Fatalf("run title source was not cast: %q", run.GetTitleSource())
 	}
 }
 
@@ -134,5 +248,33 @@ func TestCastPlanBoundsOperationTitleWithoutChangingSummary(t *testing.T) {
 	}
 	if operation.GetSummary() != "Полное безопасное описание" {
 		t.Fatalf("operation summary = %q", operation.GetSummary())
+	}
+}
+
+func TestCastConversationUsesPublicAssistantTurnShape(t *testing.T) {
+	t.Parallel()
+
+	conversation := castConversation(entity.AssistantConversation{
+		Ref: "cnv-example", ProjectRef: "prj-example",
+		Turns: []entity.AssistantTurn{{
+			Ref: "trn-example", Sequence: 7, Actor: "SYSTEM_ASSISTANT", Content: "План подготовлен", State: "COMPLETED",
+		}},
+		LatestPlan: &entity.AssistantPlan{
+			Ref: "pln-example", ConversationRef: "cnv-example", ProjectRef: "prj-example",
+			State: "DRAFT", Summary: "План готов", Version: 1, Revision: 1,
+		},
+	})
+	if len(conversation.GetTurns()) != 2 {
+		t.Fatalf("assistant turn count = %d, want 2", len(conversation.GetTurns()))
+	}
+	if turn := conversation.GetTurns()[0]; turn.GetRole() != "ASSISTANT" || turn.GetContent() != "План подготовлен" || turn.GetSequence() != 7 {
+		t.Fatalf("system assistant turn leaked internal role: %#v", turn)
+	}
+	turn := conversation.GetTurns()[1]
+	if turn.GetRole() != "ASSISTANT" || turn.GetState() != "COMPLETED" || turn.GetSequence() != 8 {
+		t.Fatalf("assistant plan turn = role %q state %q", turn.GetRole(), turn.GetState())
+	}
+	if turn.GetPlan().GetConversationRef() != "cnv-example" || turn.GetPlan().GetProjectRef() != "prj-example" {
+		t.Fatalf("assistant plan lineage was lost: %#v", turn.GetPlan())
 	}
 }

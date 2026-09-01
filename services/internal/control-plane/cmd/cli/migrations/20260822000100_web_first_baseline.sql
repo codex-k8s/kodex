@@ -32,6 +32,7 @@ CREATE TABLE control_plane.subjects (
     external_subject_digest text NOT NULL CHECK (external_subject_digest ~ '^[a-f0-9]{64}$'),
     display_name text NOT NULL CHECK (char_length(display_name) BETWEEN 1 AND 160),
     email_masked text NOT NULL DEFAULT '',
+    kind text NOT NULL DEFAULT 'USER' CHECK (kind IN ('USER', 'SERVICE')),
     active boolean NOT NULL DEFAULT true,
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -61,24 +62,6 @@ CREATE TABLE control_plane.worker_grant_high_watermarks (
     CHECK (expires_at > issued_at)
 );
 
-CREATE TABLE control_plane.memberships (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
-    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
-    project_id uuid,
-    subject_id uuid NOT NULL REFERENCES control_plane.subjects(id),
-    role text NOT NULL CHECK (role IN ('OWNER', 'ADMINISTRATOR', 'OPERATOR', 'MEMBER', 'AUDITOR')),
-    permissions text[] NOT NULL DEFAULT '{}',
-    active boolean NOT NULL DEFAULT true,
-    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
-);
-
-CREATE UNIQUE INDEX memberships_platform_one
-    ON control_plane.memberships (organization_id, subject_id)
-    WHERE project_id IS NULL;
-
 CREATE TABLE control_plane.projects (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
@@ -94,13 +77,371 @@ CREATE TABLE control_plane.projects (
     UNIQUE (organization_id, name)
 );
 
-ALTER TABLE control_plane.memberships
-    ADD CONSTRAINT memberships_project_fk
-    FOREIGN KEY (project_id) REFERENCES control_plane.projects(id);
+CREATE TABLE control_plane.permission_registry (
+    permission_key text PRIMARY KEY CHECK (permission_key ~ '^[a-z][a-z0-9_.-]{2,95}$'),
+    name_key text NOT NULL CHECK (char_length(name_key) BETWEEN 1 AND 160),
+    description_key text NOT NULL CHECK (char_length(description_key) BETWEEN 1 AND 240),
+    risk text NOT NULL CHECK (risk IN ('READ', 'WRITE', 'APPROVE', 'ADMIN')),
+    allowed_scopes text[] NOT NULL CHECK (cardinality(allowed_scopes) BETWEEN 1 AND 4),
+    resource_kinds text[] NOT NULL CHECK (cardinality(resource_kinds) BETWEEN 1 AND 9),
+    owner_condition_supported boolean NOT NULL DEFAULT false,
+    registry_version bigint NOT NULL DEFAULT 1 CHECK (registry_version = 1)
+);
 
-CREATE UNIQUE INDEX memberships_project_one
-    ON control_plane.memberships (project_id, subject_id)
-    WHERE project_id IS NOT NULL;
+CREATE TABLE control_plane.oidc_groups (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^grp_[A-Za-z0-9_-]{8,92}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    issuer text NOT NULL CHECK (char_length(issuer) BETWEEN 1 AND 500),
+    external_group_digest text NOT NULL CHECK (external_group_digest ~ '^[a-f0-9]{64}$'),
+    display_name text NOT NULL CHECK (char_length(display_name) BETWEEN 1 AND 200),
+    state text NOT NULL DEFAULT 'ACTIVE' CHECK (state IN ('ACTIVE', 'STALE')),
+    last_seen_at timestamptz NOT NULL,
+    synchronized_at timestamptz NOT NULL,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    UNIQUE (organization_id, issuer, external_group_digest)
+);
+
+CREATE TABLE control_plane.oidc_group_memberships (
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    group_id uuid NOT NULL REFERENCES control_plane.oidc_groups(id),
+    subject_id uuid NOT NULL REFERENCES control_plane.subjects(id),
+    subject_session_revision bigint NOT NULL CHECK (subject_session_revision > 0),
+    synchronized_at timestamptz NOT NULL,
+    PRIMARY KEY (group_id, subject_id)
+);
+
+CREATE INDEX oidc_group_memberships_subject
+    ON control_plane.oidc_group_memberships (organization_id, subject_id, group_id);
+
+CREATE TABLE control_plane.application_roles (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^arole_[A-Za-z0-9_-]{8,90}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    stable_key text,
+    kind text NOT NULL CHECK (kind IN ('SYSTEM', 'CUSTOM')),
+    state text NOT NULL DEFAULT 'ACTIVE' CHECK (state IN ('ACTIVE', 'ARCHIVED')),
+    current_version_id uuid,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    CHECK ((kind = 'SYSTEM' AND stable_key IS NOT NULL) OR (kind = 'CUSTOM' AND stable_key IS NULL))
+);
+
+CREATE UNIQUE INDEX application_roles_system_key
+    ON control_plane.application_roles (organization_id, stable_key)
+    WHERE stable_key IS NOT NULL;
+
+CREATE TABLE control_plane.application_role_versions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^arv_[A-Za-z0-9_-]{8,92}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    role_id uuid NOT NULL REFERENCES control_plane.application_roles(id),
+    revision bigint NOT NULL CHECK (revision > 0),
+    name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 160),
+    description text NOT NULL DEFAULT '' CHECK (char_length(description) <= 2000),
+    permission_keys text[] NOT NULL CHECK (cardinality(permission_keys) BETWEEN 1 AND 100),
+    allowed_scopes text[] NOT NULL CHECK (cardinality(allowed_scopes) BETWEEN 1 AND 4),
+    change_comment text NOT NULL DEFAULT '' CHECK (char_length(change_comment) <= 500),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (role_id, revision)
+);
+
+ALTER TABLE control_plane.application_roles
+    ADD CONSTRAINT application_roles_current_version_fk
+    FOREIGN KEY (current_version_id) REFERENCES control_plane.application_role_versions(id);
+
+CREATE TABLE control_plane.access_bindings (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^abnd_[A-Za-z0-9_-]{8,91}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    subject_kind text NOT NULL CHECK (subject_kind IN ('USER', 'OIDC_GROUP', 'SERVICE')),
+    subject_id uuid REFERENCES control_plane.subjects(id),
+    oidc_group_id uuid REFERENCES control_plane.oidc_groups(id),
+    role_version_id uuid NOT NULL REFERENCES control_plane.application_role_versions(id),
+    scope_kind text NOT NULL CHECK (scope_kind IN ('ORGANIZATION', 'PROJECT', 'RESOURCE_KIND', 'RESOURCE_INSTANCE')),
+    project_id uuid REFERENCES control_plane.projects(id),
+    resource_kind text CHECK (resource_kind IS NULL OR resource_kind IN ('PROJECT', 'AGENT', 'WORKFLOW', 'RUN', 'OWNER_GATE', 'ARTIFACT', 'SCHEDULE', 'INTEGRATION')),
+    resource_id uuid,
+    valid_from timestamptz,
+    valid_until timestamptz,
+    require_owner boolean NOT NULL DEFAULT false,
+    presentation_kind text NOT NULL DEFAULT 'NONE'
+        CHECK (presentation_kind IN ('NONE', 'PLATFORM_MEMBERSHIP', 'PROJECT_MEMBERSHIP')),
+    state text NOT NULL DEFAULT 'ACTIVE' CHECK (state IN ('ACTIVE', 'REVOKED')),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    CHECK ((subject_kind IN ('USER', 'SERVICE') AND subject_id IS NOT NULL AND oidc_group_id IS NULL) OR
+           (subject_kind = 'OIDC_GROUP' AND subject_id IS NULL AND oidc_group_id IS NOT NULL)),
+    CHECK ((scope_kind = 'ORGANIZATION' AND project_id IS NULL AND resource_kind IS NULL AND resource_id IS NULL) OR
+           (scope_kind = 'PROJECT' AND project_id IS NOT NULL AND resource_kind IS NULL AND resource_id IS NULL) OR
+           (scope_kind = 'RESOURCE_KIND' AND resource_kind IS NOT NULL AND resource_id IS NULL) OR
+           (scope_kind = 'RESOURCE_INSTANCE' AND resource_kind IS NOT NULL AND resource_id IS NOT NULL AND
+            (project_id IS NOT NULL OR resource_kind IN ('INTEGRATION', 'ARTIFACT')))),
+    CHECK (valid_until IS NULL OR valid_from IS NULL OR
+           (valid_until > valid_from AND valid_until <= valid_from + interval '366 days'))
+);
+
+CREATE INDEX access_bindings_subject
+    ON control_plane.access_bindings (organization_id, subject_kind, subject_id, oidc_group_id)
+    WHERE state = 'ACTIVE';
+CREATE INDEX access_bindings_scope
+    ON control_plane.access_bindings (organization_id, project_id, resource_kind, resource_id)
+    WHERE state = 'ACTIVE';
+
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION control_plane.protect_application_role_version()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'application role version is immutable';
+END;
+$$;
+-- +goose StatementEnd
+
+CREATE TRIGGER protect_application_role_version
+BEFORE UPDATE OR DELETE ON control_plane.application_role_versions
+FOR EACH ROW EXECUTE FUNCTION control_plane.protect_application_role_version();
+
+-- Legacy membership endpoints remain a read presentation over canonical RBAC.
+-- Narrow resource bindings are never flattened into project-wide permissions.
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION control_plane.legacy_permission_keys(legacy_permissions text[])
+RETURNS text[] LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
+    SELECT COALESCE(array_agg(DISTINCT mapping.permission_key ORDER BY mapping.permission_key), '{}'::text[])
+    FROM unnest(legacy_permissions) requested(permission)
+    JOIN (VALUES
+        ('VIEW', 'project.view'),
+        ('VIEW', 'agent.view'),
+        ('VIEW', 'workflow.view'),
+        ('VIEW', 'run.view'),
+        ('VIEW', 'artifact.view'),
+        ('VIEW', 'artifact.download'),
+        ('VIEW', 'schedule.view'),
+        ('VIEW', 'integration.view'),
+        ('MANAGE', 'project.manage'),
+        ('MANAGE_MEMBERS', 'access.manage'),
+        ('MANAGE_AGENTS', 'agent.manage'),
+        ('MANAGE_WORKFLOWS', 'workflow.manage'),
+        ('LAUNCH_RUNS', 'agent.launch'),
+        ('LAUNCH_RUNS', 'workflow.launch'),
+        ('CANCEL_RUNS', 'run.cancel.any'),
+        ('RESOLVE_GATES', 'gate.resolve'),
+        ('MANAGE_ARTIFACTS', 'artifact.manage'),
+        ('MANAGE_SCHEDULES', 'schedule.manage'),
+        ('MANAGE_INTEGRATIONS', 'integration.manage'),
+        ('VIEW_AUDIT', 'audit.view')
+    ) mapping(legacy_permission, permission_key)
+      ON mapping.legacy_permission = requested.permission;
+$$;
+
+CREATE OR REPLACE FUNCTION control_plane.legacy_permissions(permission_keys text[])
+RETURNS text[] LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
+    SELECT COALESCE(array_agg(DISTINCT mapping.legacy_permission ORDER BY mapping.legacy_permission), '{}'::text[])
+    FROM unnest(permission_keys) requested(permission_key)
+    JOIN (VALUES
+        ('project.view', 'VIEW'),
+        ('agent.view', 'VIEW'),
+        ('workflow.view', 'VIEW'),
+        ('run.view', 'VIEW'),
+        ('artifact.view', 'VIEW'),
+        ('artifact.download', 'VIEW'),
+        ('schedule.view', 'VIEW'),
+        ('integration.view', 'VIEW'),
+        ('project.manage', 'MANAGE'),
+        ('access.manage', 'MANAGE_MEMBERS'),
+        ('agent.manage', 'MANAGE_AGENTS'),
+        ('workflow.manage', 'MANAGE_WORKFLOWS'),
+        ('agent.launch', 'LAUNCH_RUNS'),
+        ('workflow.launch', 'LAUNCH_RUNS'),
+        ('run.cancel.any', 'CANCEL_RUNS'),
+        ('gate.resolve', 'RESOLVE_GATES'),
+        ('artifact.manage', 'MANAGE_ARTIFACTS'),
+        ('schedule.manage', 'MANAGE_SCHEDULES'),
+        ('integration.manage', 'MANAGE_INTEGRATIONS'),
+        ('audit.view', 'VIEW_AUDIT')
+    ) mapping(permission_key, legacy_permission)
+      ON mapping.permission_key = requested.permission_key;
+$$;
+-- +goose StatementEnd
+
+CREATE VIEW control_plane.memberships AS
+SELECT binding.id,
+       binding.ref,
+       binding.organization_id,
+       CASE WHEN binding.presentation_kind = 'PROJECT_MEMBERSHIP' THEN binding.project_id END AS project_id,
+       binding.subject_id,
+       CASE
+         WHEN binding.presentation_kind = 'PLATFORM_MEMBERSHIP' AND role.kind = 'SYSTEM'
+           THEN role.stable_key
+         ELSE 'MEMBER'
+       END AS role,
+       CASE
+         WHEN binding.presentation_kind = 'PROJECT_MEMBERSHIP'
+           THEN control_plane.legacy_permissions(role_version.permission_keys)
+         ELSE '{}'::text[]
+       END AS permissions,
+       binding.state = 'ACTIVE'
+         AND (binding.valid_from IS NULL OR binding.valid_from <= clock_timestamp())
+         AND (binding.valid_until IS NULL OR binding.valid_until > clock_timestamp()) AS active,
+       binding.version,
+       binding.created_at,
+       binding.updated_at
+FROM control_plane.access_bindings binding
+JOIN control_plane.application_role_versions role_version ON role_version.id = binding.role_version_id
+JOIN control_plane.application_roles role ON role.id = role_version.role_id
+WHERE binding.subject_id IS NOT NULL
+  AND binding.presentation_kind IN ('PLATFORM_MEMBERSHIP', 'PROJECT_MEMBERSHIP');
+
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION control_plane.create_project_membership(
+    requested_binding_ref text,
+    requested_organization_id uuid,
+    requested_project_id uuid,
+    requested_subject_id uuid,
+    actor_id uuid,
+    requested_permissions text[]
+)
+RETURNS TABLE(binding_ref text, binding_state text, binding_version bigint)
+LANGUAGE plpgsql AS $$
+DECLARE
+    created_role_id uuid;
+    created_role_version_id uuid;
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM control_plane.projects project
+        JOIN control_plane.subjects subject
+          ON subject.organization_id = project.organization_id
+         AND subject.id = requested_subject_id
+         AND subject.active
+         AND subject.issuer = 'verified-oidc-subject'
+        JOIN control_plane.memberships platform_membership
+          ON platform_membership.organization_id = project.organization_id
+         AND platform_membership.subject_id = subject.id
+         AND platform_membership.project_id IS NULL
+         AND platform_membership.active
+        WHERE project.organization_id = requested_organization_id
+          AND project.id = requested_project_id
+          AND project.lifecycle = 'ACTIVE'
+          AND NOT EXISTS (
+              SELECT 1 FROM control_plane.access_bindings existing
+              WHERE existing.organization_id = project.organization_id
+                AND existing.project_id = project.id
+                AND existing.subject_id = subject.id
+                AND existing.presentation_kind = 'PROJECT_MEMBERSHIP'
+          )
+    ) THEN
+        RETURN;
+    END IF;
+
+    INSERT INTO control_plane.application_roles
+        (ref, organization_id, kind, created_by)
+    VALUES ('arole_' || encode(gen_random_bytes(18), 'hex'), requested_organization_id, 'CUSTOM', actor_id)
+    RETURNING id INTO created_role_id;
+
+    INSERT INTO control_plane.application_role_versions
+        (ref, organization_id, role_id, revision, name, description, permission_keys,
+         allowed_scopes, change_comment, created_by)
+    VALUES ('arv_' || encode(gen_random_bytes(18), 'hex'), requested_organization_id,
+            created_role_id, 1, 'i18n:SYSTEM_ROLE_MEMBER',
+            'i18n:SYSTEM_ROLE_MEMBER_DESCRIPTION',
+            control_plane.legacy_permission_keys(requested_permissions), ARRAY['PROJECT']::text[],
+            'i18n:ACCESS_BINDING_CHANGED', actor_id)
+    RETURNING id INTO created_role_version_id;
+
+    UPDATE control_plane.application_roles
+    SET current_version_id = created_role_version_id,
+        updated_at = clock_timestamp()
+    WHERE id = created_role_id;
+
+    RETURN QUERY
+    INSERT INTO control_plane.access_bindings
+        (ref, organization_id, subject_kind, subject_id, role_version_id, scope_kind,
+         project_id, presentation_kind, state, created_by)
+    SELECT requested_binding_ref,
+           requested_organization_id,
+           subject.kind,
+           subject.id,
+           created_role_version_id,
+           'PROJECT',
+           requested_project_id,
+           'PROJECT_MEMBERSHIP',
+           'ACTIVE',
+           actor_id
+    FROM control_plane.subjects subject
+    WHERE subject.organization_id = requested_organization_id
+      AND subject.id = requested_subject_id
+    RETURNING access_bindings.ref, access_bindings.state, access_bindings.version;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION control_plane.update_project_membership(
+    requested_binding_id uuid,
+    requested_organization_id uuid,
+    requested_project_id uuid,
+    expected_binding_version bigint,
+    requested_permissions text[],
+    requested_active boolean,
+    actor_id uuid
+)
+RETURNS TABLE(binding_ref text, binding_state text, binding_version bigint)
+LANGUAGE plpgsql AS $$
+DECLARE
+    target_role_id uuid;
+    target_role_version bigint;
+    target_revision bigint;
+    target_name text;
+    target_description text;
+    created_role_version_id uuid;
+BEGIN
+    SELECT role.id, role.version, role_version.revision, role_version.name, role_version.description
+    INTO target_role_id, target_role_version, target_revision, target_name, target_description
+    FROM control_plane.access_bindings binding
+    JOIN control_plane.application_role_versions role_version ON role_version.id = binding.role_version_id
+    JOIN control_plane.application_roles role ON role.id = role_version.role_id
+    WHERE binding.id = requested_binding_id
+      AND binding.organization_id = requested_organization_id
+      AND binding.project_id = requested_project_id
+      AND binding.presentation_kind = 'PROJECT_MEMBERSHIP'
+      AND binding.version = expected_binding_version
+      AND role.kind = 'CUSTOM'
+    FOR UPDATE OF binding, role;
+
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+
+    INSERT INTO control_plane.application_role_versions
+        (ref, organization_id, role_id, revision, name, description, permission_keys,
+         allowed_scopes, change_comment, created_by)
+    VALUES ('arv_' || encode(gen_random_bytes(18), 'hex'), requested_organization_id,
+            target_role_id, target_revision + 1, target_name, target_description,
+            control_plane.legacy_permission_keys(requested_permissions), ARRAY['PROJECT']::text[],
+            'i18n:ACCESS_BINDING_CHANGED', actor_id)
+    RETURNING id INTO created_role_version_id;
+
+    UPDATE control_plane.application_roles
+    SET current_version_id = created_role_version_id,
+        version = version + 1,
+        updated_at = clock_timestamp()
+    WHERE id = target_role_id AND version = target_role_version;
+
+    RETURN QUERY
+    UPDATE control_plane.access_bindings
+    SET role_version_id = created_role_version_id,
+        state = CASE WHEN requested_active THEN 'ACTIVE' ELSE 'REVOKED' END,
+        version = version + 1,
+        updated_at = clock_timestamp()
+    WHERE id = requested_binding_id
+      AND version = expected_binding_version
+    RETURNING access_bindings.ref, access_bindings.state, access_bindings.version;
+END;
+$$;
+-- +goose StatementEnd
 
 CREATE TABLE control_plane.platform_capabilities (
     stable_key text PRIMARY KEY,

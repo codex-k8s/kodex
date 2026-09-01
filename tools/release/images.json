@@ -3,6 +3,7 @@
   "images": [
     {"component":"dockerfile","dockerfile":"infra/dockerfile-frontend/Dockerfile"},
     {"component":"control-plane","dockerfile":"services/internal/control-plane/Dockerfile"},
+    {"component":"secret-broker","dockerfile":"services/internal/secret-broker/Dockerfile"},
     {"component":"internal-rpc-authority","dockerfile":"services/internal/internal-rpc-authority/Dockerfile"},
     {"component":"runtime-controller","dockerfile":"services/internal/runtime-controller/Dockerfile"},
     {"component":"integration-gateway","dockerfile":"services/external/integration-gateway/Dockerfile"},
@@ -11,6 +12,9 @@
     {"component":"staff-control-center","dockerfile":"services/staff/control-center/Dockerfile"},
     {"component":"egress-gateway","dockerfile":"services/external/egress-gateway/Dockerfile"},
     {"component":"automation-scheduler","dockerfile":"services/jobs/automation-scheduler/Dockerfile"},
+    {"component":"artifact-retention","dockerfile":"services/jobs/artifact-retention/Dockerfile"},
+    {"component":"session-archive","dockerfile":"services/jobs/session-archive/Dockerfile"},
+    {"component":"backup-controller","dockerfile":"services/jobs/backup-controller/Dockerfile"},
     {"component":"role-image-builder","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"runtime"},
     {"component":"image-admission","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"admission-runtime"},
     {"component":"agent-runner","dockerfile":"services/jobs/agent-runner/Dockerfile"},

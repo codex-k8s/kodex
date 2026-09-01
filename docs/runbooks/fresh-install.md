@@ -4,8 +4,8 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.0.10
-updated: 2026-08-26
+version: 2.2.0
+updated: 2026-08-31
 ---
 
 # Чистое развертывание Kodex
@@ -27,16 +27,23 @@ bare-metal узла уничтожает все Kubernetes workloads, PVC и con
 5. Grafana, Prometheus, Alertmanager и Headlamp;
 6. локальный OCI registry;
 7. GitHub Actions Runner Controller и rootless BuildKit sidecar;
-8. PostgreSQL, Redis/NATS и все deployable Kodex в `kodex-system`.
+8. PostgreSQL, NATS и control-plane deployables в `kodex-system`, а runtime
+   workloads и session-archive workers в `kodex-runtime`.
 
-S3 не является обязательной зависимостью web-first MVP. Внешний S3 включается
-только явной настройкой для backup/export. Встроенный object storage не
-устанавливается скрыто.
+S3-compatible storage является обязательной зависимостью web-first MVP.
+Production использует заранее созданные внешний HTTPS endpoint и bucket;
+встроенный object storage не разворачивается.
 
-При `KODEX_ENABLE_EXTERNAL_S3=true` установщик материализует параметры в
-Secret `kodex-external-s3`. Пока deployable adapter не выбран продуктовым
-профилем, этот Secret не монтируется в Pod и сам по себе не включает хранение
-artifact или backup.
+При установке компонента `secrets` установщик требует S3 env и материализует
+Secret `kodex-external-s3` в `kodex-system` с keys `endpoint`, `region`,
+`bucket`, `access-key`, `secret-key` и credential-only Secret с тем же именем
+и keys `access-key`, `secret-key` в `kodex-runtime`; значения не входят в Git
+или render. При установке только компонента `platform` оператор заранее создаёт
+оба exact Secret, а установщик выполняет закрытый readback. Control-plane
+получает metadata через `secretKeyRef`, credentials через read-only files и
+остаётся not ready, если Secret, bucket либо authenticated `HeadBucket`
+недоступны. Session-archive worker получает только credential projection в
+своём namespace. Bucket создаётся оператором до запуска platform.
 
 Служебный bootstrap registry принадлежит namespace `kodex-infra`; application
 registry и workloads Kodex принадлежат `kodex-system`. Смешивать эти границы
@@ -72,6 +79,39 @@ authority, но направляет raw TLS tunnel на этот внутрен
 namespace пока закрыто отклоняется, чтобы manifests и security policy не
 создавали ложную изоляцию.
 
+### Локальный hot-reload
+
+`dev.sh up` добавляет к web-only render SeaweedFS release 4.41 в
+`kodex-system`: один StatefulSet с PVC, внутренний S3 Service на TCP/8333,
+deny-by-default policy и bucket bootstrap Job. `tools/dev/deploy-local.sh`
+создаёт immutable `kodex-external-s3` из случайных credential files и никогда
+не печатает значения. Job создаёт `kodex-artifacts` до migrations и запуска
+control-plane; повторный apply выполняет exact Secret/job/readiness readback.
+
+Перед первым `dev.sh up` оператор передаёт приватный auth snapshot, который
+текущий Codex CLI подтверждает через `codex login status`:
+
+```bash
+KODEX_DEV_PROVIDER_AUTH_FILE="$HOME/.codex/auth.json" ./dev.sh up
+```
+
+После `provider-import --account-key default-openai-codex` последующие запуски
+автоматически используют
+`.kodex-dev/provider-accounts/default-openai-codex/auth.json`. Синтетический
+credential и режим `local-development` запрещены: они не создают ложный
+`AUTHORIZED` account и не позволяют объявить системного помощника готовым.
+`dev.sh down` удаляет только application namespaces `kodex-runtime`,
+`kodex-system`, `identity` и `kodex-trust`; общие контроллеры k3s сохраняются.
+
+При первом `dev.sh up` локальный профиль создаёт host-only dummy-интерфейс
+`kodex-api0` с адресом `10.254.254.1/32` и настраивает k3s
+`advertise-address` на него. Поэтому точный Kubernetes API destination в
+`NetworkPolicy` не зависит от DHCP, Wi-Fi или VPN. Публичные локальные адреса
+Control Center и SSO при этом остаются на `127.0.0.1.nip.io`; loopback нельзя
+использовать как API endpoint из Pod, поскольку внутри Pod он указывает на сам
+Pod. При доказанном конфликте адрес можно переопределить через
+`KODEX_DEV_KUBERNETES_API_ADDRESS`, выбрав другой приватный IPv4 `/32`.
+
 ## 2. Подготовка `.kodex-env`
 
 ```bash
@@ -96,8 +136,8 @@ chmod 0600 .kodex-env
 - owner PAT и ARC PAT GitHub;
 - registry write identity для existing-Kubernetes без bundled registry;
 - Codex `auth.json` как base64 либо путь к файлу;
-- режим внешних tracing/Sentry exporters и необязательные Sentry/external S3
-  параметры.
+- режим внешних tracing/Sentry exporters, обязательные external S3 параметры и
+  необязательный Sentry DSN.
 
 На доверенном admin host или self-hosted runner файл можно собрать напрямую из
 GitHub Variables/Secrets, предварительно передав их в environment шага:
@@ -110,7 +150,7 @@ GitHub Variables/Secrets, предварительно передав их в en
 
 - Variables: mode, DNS, namespace/context, ingress/OIDC selectors, ACME email;
 - Secrets: Keycloak/owner initial passwords, GitHub PAT, registry password,
-  OpenAI auth, Sentry DSN и S3 credentials;
+  OpenAI auth, Sentry DSN и обязательные S3 credentials;
 - локальный material: `.kodex-material`, CA/private keys и recovery state.
 
 Bundled MVP по умолчанию использует `KODEX_DISABLE_OBSERVABILITY=true`. Это
@@ -190,17 +230,19 @@ Secrets принадлежат installer field manager. Динамические
 создаёт и обновляет только `internal-rpc-authority-publisher`; installer создаёт
 для них пустой generation `0`, но не перезаписывает опубликованное значение.
 
-Provider credential `runtime-provider-openai-default-r1` материализуется как
-immutable revision с `auth.json` и `auth.sha256`. Перед созданием metadata
-ConfigMap installer сверяет фактический digest, UID и `resourceVersion`.
-Повторный запуск с тем же материалом сохраняет revision без изменений. Старый
-mutable `r1`, созданный версией installer до этого инварианта, удаляется только
-при подтверждённом field manager `kodex-install` и создаётся заново; bootstrap
-платформы при следующем старте создаёт новую монотонную credential revision в
-БД и атомарно фиксирует новые UID и `resourceVersion`, не изменяя прежнюю
-immutable revision. Повторный bootstrap после этого является no-op. Изменение уже
-immutable `r1` закрыто отклоняется: ротация credentials должна создавать новую
-revision, а не менять существующую.
+Provider credential на чистой установке материализуется как bootstrap revision
+`runtime-provider-openai-default-r1` с immutable `auth.json` и `auth.sha256`.
+Перед созданием metadata ConfigMap installer сверяет фактический digest, UID и
+`resourceVersion`. После штатной авторизации или ротации metadata указывает на
+новую immutable revision; повторный запуск installer проверяет и сохраняет эту
+активную revision, не сравнивая её с изменившимся bootstrap-файлом и не
+возвращая указатель на `r1`. Если пересоздание installation material удалило
+metadata ConfigMap, installer восстанавливает его только по единственной
+revision с точным digest актуального owner-private `auth.json`. Старый mutable
+`r1`, созданный версией installer до
+этого инварианта, удаляется только при подтверждённом field manager
+`kodex-install` и создаётся заново. Изменение любой уже immutable revision
+закрыто отклоняется: ротация credentials всегда создаёт новую revision.
 
 Platform preflight и readback повторяют проверку immutable, digest и metadata.
 Повреждённый либо рассинхронизированный provider Secret останавливает deploy до
@@ -216,6 +258,13 @@ runtime-controller. Отсутствующий default `StorageClass` либо �
 
 Kubernetes Secrets защищаются k3s encryption at rest. Значения запрещены в
 GitHub artifacts, render, logs, Issue/PR и ConfigMap.
+
+Secret `kodex-external-s3` не выдаётся browser, gateway, agent runtime Pod или
+agent. Специализированный session-archive worker получает в `kodex-runtime`
+только `access-key` и `secret-key`; endpoint, region и bucket передаёт
+контроллер из своей проверенной конфигурации. Production endpoint обязан быть
+HTTPS без `skipTLSVerify`; local HTTP разрешён только для точного Service DNS
+`seaweedfs-s3.kodex-system.svc.cluster.local`.
 
 ## 4. Preflight и reset
 
@@ -304,7 +353,7 @@ Actions; установщик скачивает digest-bound render и прим
 4. повторный public TLS preflight, CRD и foundation; в режиме `deferred`
    публичный Certificate исключается;
 5. Certificate/Bundle readback;
-6. PostgreSQL и NATS;
+6. PostgreSQL, NATS и проверка обязательного внешнего S3 Secret/bucket;
 7. authority и control-plane migrations;
 8. static PostgreSQL role reconciliation;
 9. broker bootstrap;
@@ -366,6 +415,8 @@ labels и затем воссоздаётся из exact render. Такой же
 - Control Center, Grafana и Headlamp закрыты OAuth2 Proxy;
 - Headlamp пропускает только Keycloak `admin` и использует `cluster-admin`;
 - все platform StatefulSet/Deployment готовы, migration Jobs успешны;
+- production control-plane прошёл authenticated `HeadBucket` внешнего S3, а
+  local SeaweedFS, S3 EndpointSlice и `seaweedfs-bucket-bootstrap` готовы;
 - отсутствуют `CrashLoopBackOff`, `ImagePullBackOff`, `ErrImagePull` и
   `CreateContainerConfigError`;
 - API/OIDC и browser E2E пройдены без раскрытия credentials.

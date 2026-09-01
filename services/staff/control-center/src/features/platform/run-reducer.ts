@@ -18,13 +18,14 @@ export interface RunProjection {
 }
 
 const nodeStateRank: Record<RunNode["state"], number> = {
-  QUEUED: 0,
-  RUNNING: 1,
-  WAITING: 2,
-  SUCCEEDED: 3,
-  FAILED: 3,
-  CANCELLED: 3,
-  SKIPPED: 3,
+  PLANNED: 0,
+  QUEUED: 1,
+  RUNNING: 2,
+  WAITING: 3,
+  SUCCEEDED: 4,
+  FAILED: 4,
+  CANCELLED: 4,
+  SKIPPED: 4,
 };
 
 function replaceOrAppend<T extends { ref: string }>(

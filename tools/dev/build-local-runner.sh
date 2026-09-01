@@ -24,17 +24,15 @@ done
 [[ "$source_root" == /* && -f "$source_root/services/jobs/agent-runner/Dockerfile" ]] ||
   fail 'source root is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / ]] || fail 'state directory is invalid'
-for command_name in docker jq sha256sum tar; do
+for command_name in docker jq k3s sha256sum sudo tar; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 docker buildx version >/dev/null 2>&1 || fail 'docker buildx is required'
 [[ -S /run/k3s/containerd/containerd.sock ]] || fail 'local k3s containerd socket is absent'
+sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for local k3s image import'
 
 builder=kodex-local-dev
-if ! docker buildx inspect "$builder" >/dev/null 2>&1; then
-  docker buildx create --name "$builder" --driver docker-container >/dev/null
-fi
-docker buildx inspect "$builder" --bootstrap >/dev/null
+"$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
 
 install -d -m 0700 "$state_directory/cache"
 input_digest=$(
@@ -70,15 +68,9 @@ manifest_digest=$(tar -xOf "$archive" index.json | jq -er '
 [[ "$manifest_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'runner OCI manifest digest is invalid'
 exact_reference="$repository@$manifest_digest"
 
-docker run --rm --user 0 \
-  -v /run/k3s/containerd/containerd.sock:/run/k3s/containerd/containerd.sock \
-  -v "$archive:/image.oci.tar:ro" \
-  --entrypoint /bin/ctr docker.io/rancher/k3s:v1.36.1-k3s1 \
-  --address /run/k3s/containerd/containerd.sock -n k8s.io images import /image.oci.tar >/dev/null
-docker run --rm --user 0 \
-  -v /run/k3s/containerd/containerd.sock:/run/k3s/containerd/containerd.sock \
-  --entrypoint /bin/ctr docker.io/rancher/k3s:v1.36.1-k3s1 \
-  --address /run/k3s/containerd/containerd.sock -n k8s.io images tag --force \
+sudo -n k3s ctr -n k8s.io images import \
+  --base-name "$repository" "$archive" >/dev/null
+sudo -n k3s ctr -n k8s.io images tag --force \
   "$tag" "$exact_reference" >/dev/null
 
 printf '%s\n' "$exact_reference" >"$state_directory/agent-runner-image"

@@ -1,15 +1,16 @@
-import { type Page, type Response } from "@playwright/test";
+import { type Frame, type Page, type Response } from "@playwright/test";
 
 import { gotoWithRetry } from "./helpers";
 
 const authenticationTimeoutMs = 100_000;
-const frontendOIDCTransitionTimeoutMs = 7_500;
+const frontendOIDCRetryTimeoutMs = 7_500;
 const maxFrontendOIDCAttempts = 2;
 const surfacePollIntervalMs = 250;
 const maxTransitions = 5;
 
 type AuthSurface =
   | "authenticated-ui"
+  | "application-failure"
   | "frontend-sign-in"
   | "identity-provider"
   | "pending";
@@ -37,16 +38,29 @@ export async function authenticateOwner(
   let identitySubmissions = 0;
   let frontendOIDCAttempts = 0;
 
-  await gotoWithRetry(page, "/", {
-    timeout: remainingTimeout(deadline),
-    waitUntil: "domcontentloaded",
-  });
+  await gotoWithRetry(
+    page,
+    "/",
+    {
+      timeout: remainingTimeout(deadline),
+      waitUntil: "domcontentloaded",
+    },
+    { appShell: false },
+  );
 
   let surface = await waitForAuthSurface(page, deadline, undefined, {
     identitySubmissions,
     frontendOIDCAttempts,
   });
   for (let transition = 0; transition < maxTransitions; transition += 1) {
+    if (surface === "application-failure") {
+      throw authenticationError(
+        page,
+        "the Control Center bootstrap failed",
+        identitySubmissions,
+        frontendOIDCAttempts,
+      );
+    }
     if (surface === "authenticated-ui") {
       if (
         frontendOIDCAttempts < 1 ||
@@ -152,22 +166,32 @@ async function startFrontendOIDCTransition(
   deadline: number,
   progress: AuthProgress,
 ): Promise<Exclude<AuthSurface, "pending">> {
+  const frontendOrigin = new URL(page.url()).origin;
+  let authenticationProgressObserved = false;
   let failedResponse: string | undefined;
+  const recordNavigation = (frame: Frame): void => {
+    if (frame.parentFrame() !== null) return;
+    authenticationProgressObserved ||= isOIDCProgressLocation(
+      frame.url(),
+      frontendOrigin,
+    );
+  };
   const recordFailedResponse = (response: Response): void => {
     if (response.status() < 400 || !isAuthenticationResponse(response)) return;
     failedResponse = `${String(response.status())}:${response.request().method()}:${safeLocation(response.url())}`;
   };
+  page.on("framenavigated", recordNavigation);
   page.on("response", recordFailedResponse);
   try {
-    await page.getByRole("button", { name: "Войти", exact: true }).click({
-      timeout: remainingTimeout(deadline),
-    });
-    const transitionDeadline = Math.min(
+    await page
+      .getByRole("button", { name: /^(Войти|Повторить)$/ })
+      .click({ timeout: remainingTimeout(deadline) });
+    const retryDeadline = Math.min(
       deadline,
-      Date.now() + frontendOIDCTransitionTimeoutMs,
+      Date.now() + frontendOIDCRetryTimeoutMs,
     );
     let surface: AuthSurface = "pending";
-    while (Date.now() < transitionDeadline) {
+    while (Date.now() < deadline) {
       if (failedResponse) {
         throw authenticationError(
           page,
@@ -180,8 +204,16 @@ async function startFrontendOIDCTransition(
       if (surface !== "pending" && surface !== "frontend-sign-in") {
         return surface;
       }
+      authenticationProgressObserved ||= isOIDCProgressLocation(
+        page.url(),
+        frontendOrigin,
+      );
+      const activeDeadline = authenticationProgressObserved
+        ? deadline
+        : retryDeadline;
+      if (Date.now() >= activeDeadline) break;
       await page.waitForTimeout(
-        Math.min(surfacePollIntervalMs, remainingTimeout(transitionDeadline)),
+        Math.min(surfacePollIntervalMs, remainingTimeout(activeDeadline)),
       );
     }
     if (failedResponse) {
@@ -195,11 +227,14 @@ async function startFrontendOIDCTransition(
     if (surface === "frontend-sign-in") return surface;
     throw authenticationError(
       page,
-      "the frontend OIDC transition remained pending before the retry deadline",
+      authenticationProgressObserved
+        ? "the frontend OIDC transition remained pending before the authentication deadline"
+        : "the frontend OIDC transition remained pending before the retry deadline",
       progress.identitySubmissions,
       progress.frontendOIDCAttempts,
     );
   } finally {
+    page.off("framenavigated", recordNavigation);
     page.off("response", recordFailedResponse);
   }
 }
@@ -295,6 +330,11 @@ async function hasBlankApplicationDocument(page: Page): Promise<boolean> {
 
 async function detectAuthSurface(page: Page): Promise<AuthSurface> {
   try {
+    if (
+      (await page.locator('html[data-kodex-bootstrap="failed"]').count()) > 0
+    ) {
+      return "application-failure";
+    }
     if (await page.locator(".app-shell").isVisible()) {
       return "authenticated-ui";
     }
@@ -315,6 +355,14 @@ async function detectAuthSurface(page: Page): Promise<AuthSurface> {
     }
     if (
       await page.getByRole("button", { name: "Войти", exact: true }).isVisible()
+    ) {
+      return "frontend-sign-in";
+    }
+    if (
+      new URL(page.url()).pathname === "/auth/callback" &&
+      (await page
+        .getByRole("button", { name: "Повторить", exact: true })
+        .isVisible())
     ) {
       return "frontend-sign-in";
     }
@@ -372,10 +420,23 @@ function isAuthenticationResponse(response: Response): boolean {
   try {
     const path = new URL(response.url()).pathname;
     return (
+      path === "/api/v1/session" ||
       path.includes("/.well-known/") ||
       path.includes("/protocol/openid-connect/") ||
       path.endsWith("/authorize") ||
       path.endsWith("/token")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isOIDCProgressLocation(raw: string, frontendOrigin: string): boolean {
+  try {
+    const location = new URL(raw);
+    return (
+      location.origin !== frontendOrigin ||
+      location.pathname === "/auth/callback"
     );
   } catch {
     return false;

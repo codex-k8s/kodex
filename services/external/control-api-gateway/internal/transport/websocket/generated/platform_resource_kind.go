@@ -17,4 +17,5 @@ const (
 	PlatformResourceKindPlatformMembership    PlatformResourceKind = "PLATFORM_MEMBERSHIP"
 	PlatformResourceKindSystemAssistant       PlatformResourceKind = "SYSTEM_ASSISTANT"
 	PlatformResourceKindRoleImageRecipe       PlatformResourceKind = "ROLE_IMAGE_RECIPE"
+	PlatformResourceKindRun                   PlatformResourceKind = "RUN"
 )

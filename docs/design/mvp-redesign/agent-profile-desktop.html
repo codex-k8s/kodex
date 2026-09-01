@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · ИИ-сотрудник · Профиль и аватар</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-agent .head-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .p-agent .avatar-block { display: flex; gap: 16px; align-items: flex-start; }
+  .p-agent .avatar-block__preview { width: 96px; height: 96px; flex: 0 0 96px; }
+  .p-agent .avatar-block__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .p-agent .avatar-preview-big { width: 128px; height: 128px; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; background: var(--acc-av); color: var(--acc-dark); border: 1px solid var(--acc-line); overflow: hidden; }
+  .p-agent .avatar-preview-big svg { width: 128px; height: 128px; display: block; }
+  .p-agent .avatar-variants { display: flex; gap: 10px; justify-content: center; }
+  .p-agent .avatar-variants button { width: 48px; height: 48px; flex: 0 0 48px; border-radius: 50%; border: 2px solid transparent; padding: 0; background: var(--av-bg); color: var(--av-ink); font-weight: 700; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; }
+  .p-agent .avatar-variants button[aria-pressed="true"] { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc-tint); }
+  .p-agent .avatar-variants button svg { width: 48px; height: 48px; }
+  .p-agent .access-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line-hair); font-size: 12.5px; }
+  .p-agent .access-row:first-child { border-top: 0; }
+  .p-agent .access-row .ic { color: var(--mut); margin-top: 2px; flex: 0 0 auto; }
+  .p-agent .access-row__text { flex: 1 1 auto; min-width: 0; }
+  .p-agent .access-row__sub { font-size: 11.5px; color: var(--mut); margin-top: 2px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">ИИ-сотрудник · вкладка «Профиль» с открытым диалогом «Создать аватар с Kodex» · desktop 1440×1024 · маршрут <code>/projects/:projectRef/agents/:agentRef</code></p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page p-agent" id="page" aria-labelledby="page-title">
+    <div class="page-head page-head--tabs">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><a href="#">ИИ-сотрудники</a><span>/</span><span>Аналитик продаж</span></div>
+      <div class="page-title-row">
+        <div class="head-identity">
+          <span class="avatar avatar--44 avatar--ok" aria-hidden="true">АП</span>
+          <div>
+            <div class="page-title"><h1 id="page-title">Аналитик продаж</h1><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Готов</span><span class="tag tag--ok"><svg class="ic"><use href="#i-tag"/></svg>Инструкции v3 опубликованы</span></div>
+            <div class="page-sub">Исследование клиентов и подготовка фактов · Проект «Корпоративные продажи»</div>
+          </div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn--lg" type="button">Изменить</button>
+          <a class="btn btn--primary btn--lg" href="#"><svg class="ic"><use href="#i-run"/></svg>Запустить</a>
+          <button class="btn btn--lg btn--icon" type="button" aria-label="Ещё действия" data-menu="#menu-agent-more" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+          <div class="menu" id="menu-agent-more" data-align="right">
+            <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-copy"/></svg>Дублировать</button>
+            <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-audit"/></svg>Открыть аудит</button>
+            <div class="menu__sep"></div>
+            <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-pause"/></svg>Отключить</button>
+            <button class="menu__item menu__item--danger" role="menuitem"><svg class="ic"><use href="#i-archive"/></svg>Архивировать</button>
+          </div>
+        </div>
+      </div>
+      <div class="tabs tabs--inline" role="tablist" data-tabs aria-label="Разделы сотрудника" style="margin-top:10px">
+        <button class="tab" role="tab" id="tab-profile" aria-controls="panel-profile" aria-selected="true">Профиль</button>
+        <button class="tab" role="tab" id="tab-instr" aria-controls="panel-instr" aria-selected="false">Инструкции<span class="tab__count">v3</span></button>
+        <button class="tab" role="tab" id="tab-runtime" aria-controls="panel-runtime" aria-selected="false">Runtime</button>
+        <button class="tab" role="tab" id="tab-env" aria-controls="panel-env" aria-selected="false">Окружение</button>
+        <button class="tab" role="tab" id="tab-access" aria-controls="panel-access" aria-selected="false">Доступы и знания</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="tabpanel" id="panel-profile" role="tabpanel" aria-labelledby="tab-profile">
+        <div class="split split--main-aside">
+          <div class="col gap-16">
+            <section class="card" aria-labelledby="sec-profile">
+              <div class="card__head card__head--line"><h2 class="sec-title" id="sec-profile">Профиль</h2><span class="xs mut">Изменила Анна Волкова · сегодня, 10:24</span></div>
+              <div class="card__body card__body--pad col gap-14">
+                <div class="form-grid">
+                  <label class="field"><span class="field__label">Имя <span class="req" aria-hidden="true">*</span></span><input class="input" value="Аналитик продаж" aria-label="Имя"></label>
+                  <label class="field"><span class="field__label">Роль</span><button class="select select--block" type="button" aria-haspopup="listbox"><span class="select__value">Аналитик</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button></label>
+                </div>
+                <label class="field"><span class="field__label">Назначение <span class="req" aria-hidden="true">*</span></span><input class="input" value="Исследование клиентов и подготовка фактов" aria-label="Назначение"><span class="field__hint">Короткая формулировка, которую видят коллеги в списках и в графе запуска.</span></label>
+                <label class="field"><span class="field__label">Описание роли</span><textarea class="textarea" rows="4" aria-label="Описание роли">Изучает материалы о клиенте, отделяет подтверждённые факты от предположений и готовит краткое резюме с потребностями, рисками и вопросами для уточнения. Не отправляет данные во внешние системы.</textarea></label>
+                <div class="row row--between">
+                  <label class="switch"><input type="checkbox" checked><span class="switch__track"></span><span class="check__text"><span>Сотрудник включён</span><small>Отключённый сотрудник не принимает новые запуски; текущие сессии завершаются штатно.</small></span></label>
+                </div>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="sec-avatar">
+              <div class="card__head card__head--line"><h2 class="sec-title" id="sec-avatar">Аватар</h2></div>
+              <div class="card__body card__body--pad">
+                <div class="avatar-block">
+                  <span class="avatar avatar--96 avatar--ok avatar-block__preview" aria-hidden="true">АП</span>
+                  <div class="col gap-10 grow">
+                    <div class="sm ink2">Сейчас используются инициалы — это запасной вариант, если изображения нет. Аватар помогает быстрее находить сотрудника в списках и на графе запуска.</div>
+                    <div class="avatar-block__actions">
+                      <button class="btn btn--primary" type="button" data-modal="#avatar-modal"><svg class="ic"><use href="#i-sparkle"/></svg>Создать аватар с Kodex</button>
+                      <button class="btn" type="button"><svg class="ic"><use href="#i-upload"/></svg>Загрузить свой</button>
+                      <button class="btn btn--ghost" type="button" disabled data-tip="Изображение не задано"><svg class="ic"><use href="#i-trash"/></svg>Удалить</button>
+                    </div>
+                    <div class="notice notice--sm"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Аватар не меняет полномочия, инструкции и доступы сотрудника. Загружаемое изображение проходит проверку, PNG или JPEG до 2 МБ.</span></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div class="form-actions">
+              <button class="btn btn--primary" type="button">Сохранить профиль</button>
+              <button class="btn" type="button">Отменить</button>
+              <span class="xs mut right">Изменения профиля не влияют на уже выполняемые ходы — они применятся к следующему запуску.</span>
+            </div>
+          </div>
+
+          <aside class="col gap-16" aria-label="Сводка сотрудника">
+            <section class="card" aria-labelledby="sec-summary">
+              <div class="card__head card__head--line"><h2 class="sec-title" id="sec-summary">Сводка</h2></div>
+              <div class="card__body card__body--pad">
+                <div class="kv">
+                  <div class="kv__row"><span class="kv__k">Модель</span><span class="kv__v mono">gpt-5.1</span></div>
+                  <div class="kv__row"><span class="kv__k">Runtime</span><span class="kv__v">Стандартный · overlay v2</span></div>
+                  <div class="kv__row"><span class="kv__k">Окружение</span><span class="kv__v">Офисные документы и PDF · rev 4</span></div>
+                  <div class="kv__row"><span class="kv__k">Учётная запись</span><span class="kv__v">Пул «Продажи» · least_used</span></div>
+                  <div class="kv__row"><span class="kv__k">Запусков за 30 дней</span><span class="kv__v mono">42 · 2 с ошибкой</span></div>
+                  <div class="kv__row"><span class="kv__k">Участвует в Процессах</span><span class="kv__v"><a href="#">Обработка нового лида v3</a>, <a href="#">Подготовка предложения v1</a></span></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="sec-access">
+              <div class="card__head card__head--line"><h2 class="sec-title" id="sec-access">Доступы и знания</h2><a class="sm" href="#">Открыть вкладку</a></div>
+              <div class="card__body card__body--pad">
+                <div class="access-row"><svg class="ic"><use href="#i-tool"/></svg><div class="access-row__text"><div>Работа с файлами · Анализ данных</div><div class="access-row__sub">Возможности платформы · 2 из 6 включены</div></div></div>
+                <div class="access-row"><svg class="ic"><use href="#i-plug"/></svg><div class="access-row__text"><div>GitHub · чтение репозиториев</div><div class="access-row__sub">Интеграционный grant · подключение «GitHub · основное» · без Human Gate</div></div><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активен</span></div>
+                <div class="access-row"><svg class="ic"><use href="#i-book"/></svg><div class="access-row__text"><div>Описание продукта.pdf · v2</div><div class="access-row__sub">Проверенный источник знаний · привязан 22 августа</div></div><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></div>
+                <div class="access-row"><svg class="ic"><use href="#i-book"/></svg><div class="access-row__text"><div>Сценарии продаж.docx · v1</div><div class="access-row__sub">Проверенный источник знаний · привязан вчера</div></div><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></div>
+                <div class="xs mut mt-10">Сотрудник получает только опубликованные версии источников. Права на интеграции выдаются в разделе «Интеграции» и не редактируются здесь.</div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+      <div class="tabpanel" id="panel-instr" role="tabpanel" aria-labelledby="tab-instr" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Инструкции» — см. <code>agent-instructions-desktop.html</code>.</span></div></div>
+      <div class="tabpanel" id="panel-runtime" role="tabpanel" aria-labelledby="tab-runtime" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Runtime» — см. <code>agent-runtime-desktop.html</code>.</span></div></div>
+      <div class="tabpanel" id="panel-env" role="tabpanel" aria-labelledby="tab-env" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Окружение» — см. <code>agent-environment-picker-desktop.html</code>.</span></div></div>
+      <div class="tabpanel" id="panel-access" role="tabpanel" aria-labelledby="tab-access" hidden><div class="state-block"><svg class="ic"><use href="#i-info"/></svg><span>Вкладка «Доступы и знания»: включённые возможности, интеграционные grants и проверенные источники знаний с версиями — та же структура, что в сводке справа, но с управлением.</span></div></div>
+    </div>
+
+    <!-- Диалог создания аватара -->
+    <div class="modal-wrap" id="avatar-modal" role="dialog" aria-modal="true" aria-labelledby="avatar-modal-title" hidden>
+      <div class="modal" style="width:560px">
+        <div class="modal__head">
+          <div class="grow"><div class="modal__title" id="avatar-modal-title">Создать аватар с Kodex</div><div class="modal__sub">Аналитик продаж · вариант 2 из 3</div></div>
+          <button class="close-btn" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="modal__body col gap-14">
+          <div class="avatar-preview-big" aria-label="Предпросмотр аватара">
+            <svg viewBox="0 0 160 160" aria-hidden="true"><circle cx="80" cy="80" r="80" fill="#DCEBF9"/><circle cx="80" cy="64" r="26" fill="#14589B"/><path d="M28 146c4-30 26-48 52-48s48 18 52 48Z" fill="#14589B"/><rect x="60" y="40" width="40" height="8" rx="4" fill="#1B6FC4"/><rect x="100" y="86" width="26" height="26" rx="6" fill="#1A7A3C"/><path d="M106 99l5 5 9-10" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="center xs mut">Предпросмотр · изображение проверено · нейтральная пиктограмма без текста и логотипов</div>
+          <div class="avatar-variants" role="group" aria-label="Варианты">
+            <button type="button" aria-pressed="false" aria-label="Вариант 1"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="#E7E1F7"/><path d="M15 16h18v16a4 4 0 0 1-4 4H19a4 4 0 0 1-4-4Z" fill="#5D4A98"/><circle cx="20" cy="24" r="2" fill="#fff"/><circle cx="28" cy="24" r="2" fill="#fff"/><path d="M20 30h8" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M24 11v5" stroke="#5D4A98" stroke-width="2" stroke-linecap="round"/><circle cx="24" cy="10" r="2" fill="#5D4A98"/></svg></button>
+            <button type="button" aria-pressed="true" aria-label="Вариант 2, выбран"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="#DCEBF9"/><circle cx="24" cy="19" r="8" fill="#14589B"/><path d="M8 44c1-9 8-14 16-14s15 5 16 14Z" fill="#14589B"/></svg></button>
+            <button type="button" aria-pressed="false" aria-label="Вариант 3"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="#D7EEDF"/><rect x="14" y="14" width="20" height="20" rx="5" fill="#14663A"/></svg></button>
+          </div>
+          <div class="notice notice--info notice--sm"><svg class="ic"><use href="#i-shield-check"/></svg><span class="notice__text"><b>Аватар не меняет полномочия, инструкции и доступы сотрудника.</b> Kodex создаёт изображение по назначению и роли; оно сохраняется только после «Применить».</span></div>
+        </div>
+        <div class="modal__foot">
+          <button class="btn btn--primary" type="button" id="avatar-apply">Применить</button>
+          <button class="btn" type="button" id="avatar-regen"><svg class="ic"><use href="#i-refresh"/></svg>Создать другой</button>
+          <button class="btn btn--ghost" type="button"><svg class="ic"><use href="#i-upload"/></svg>Загрузить свой</button>
+          <button class="btn btn--ghost btn--icon right" type="button" disabled aria-label="Удалить" data-tip="Изображение ещё не сохранено" data-tip-pos="left"><svg class="ic"><use href="#i-trash"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Карточка сотрудника использует вкладки «Профиль / Инструкции / Runtime / Окружение / Доступы и знания». В профиле — редактируемые поля и блок «Аватар»: Kodex предлагает нейтральную пиктограмму с безопасным предпросмотром, варианты можно перебирать, применить, заменить своим файлом или удалить; везде явно сказано, что аватар не влияет на полномочия и инструкции. Без изображения используется fallback с инициалами. Справа — сводка и «Доступы и знания»: только проверенные источники и их версии (никаких chunks, embeddings и vector search в MVP).</p>
+<script src="assets/kodex.js"></script>
+<script>
+  const cfg = {
+    nav: 'project.agents', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'ИИ-сотрудник', object: 'Аналитик продаж', can: ['предложить аватар и описание роли', 'объяснить, какие доступы у сотрудника', 'подготовить план изменения профиля'] },
+  };
+  Kodex.mount(cfg);
+  const frame = document.getElementById('frame');
+  const modal = document.getElementById('avatar-modal');
+  Kodex.openOverlay(modal, true, document.querySelector('[data-modal="#avatar-modal"]'));
+  document.getElementById('avatar-apply').addEventListener('click', () => {
+    Kodex.closeOverlay(modal);
+    const prev = document.querySelector('.avatar-block__preview');
+    prev.classList.add('avatar--gen'); prev.classList.remove('avatar--ok');
+    prev.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true" style="width:96px;height:96px"><circle cx="24" cy="24" r="24" fill="#DCEBF9"/><circle cx="24" cy="19" r="8" fill="#14589B"/><path d="M8 44c1-9 8-14 16-14s15 5 16 14Z" fill="#14589B"/></svg>';
+    document.querySelector('.avatar-block__actions .btn--ghost').disabled = false;
+    Kodex.toast(frame, 'Аватар применён. Полномочия и инструкции не изменились.');
+  });
+  document.getElementById('avatar-regen').addEventListener('click', (e) => { e.currentTarget.classList.add('is-loading'); setTimeout(() => { e.target.closest('.btn').classList.remove('is-loading'); document.querySelector('#avatar-modal .modal__sub').textContent = 'Аналитик продаж · вариант 3 из 3'; }, 900); });
+  document.querySelector('.avatar-variants').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; document.querySelectorAll('.avatar-variants button').forEach((x) => x.setAttribute('aria-pressed', x === b)); });
+</script>
+</body>
+</html>

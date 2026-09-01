@@ -10,6 +10,7 @@ export interface E2EEnvironment {
   readonly checkOnly: boolean;
   readonly profile: E2EProfile;
   readonly resourcePrefix: string;
+  readonly rbacGroup: string;
   readonly runTimeoutMs: number;
   readonly storageState?: BrowserStorageState;
   readonly mattermost?: MattermostE2EEnvironment;
@@ -171,6 +172,10 @@ export function loadE2EEnvironment(): E2EEnvironment {
     ),
     checkOnly,
     profile: selectedProfile,
+    rbacGroup: boundedName(
+      "KODEX_E2E_RBAC_GROUP",
+      process.env.KODEX_E2E_RBAC_GROUP ?? "kodex-e2e-restricted",
+    ),
     resourcePrefix: resourcePrefix(process.env.KODEX_E2E_RESOURCE_PREFIX),
     runTimeoutMs: boundedInteger(process.env.KODEX_E2E_RUN_TIMEOUT_MS),
     storageState: storageState(process.env.KODEX_E2E_STORAGE_STATE),
@@ -182,8 +187,46 @@ export interface E2EAuthEnvironment {
   readonly baseURL: string;
   readonly checkOnly: boolean;
   readonly outputStorageState: string;
+  readonly rbacGroup: string;
   readonly ownerPassword: string;
   readonly ownerUsername: string;
+}
+
+export interface E2EAPISessionEnvironment {
+  readonly baseURL: string;
+  readonly checkOnly: boolean;
+  readonly inputStorageState?: BrowserStorageState;
+  readonly outputStorageState: string;
+}
+
+export function loadE2EAPISessionEnvironment(): E2EAPISessionEnvironment {
+  requireDisposableConfirmation();
+  const inputPath = process.env.KODEX_E2E_STORAGE_STATE;
+  const outputPath =
+    process.env.KODEX_E2E_API_STORAGE_STATE ??
+    (checkOnly ? ".auth/owner-api.json" : "");
+  if (!outputPath) {
+    throw new Error("KODEX_E2E_API_STORAGE_STATE is required");
+  }
+  const input = inputPath
+    ? isAbsolute(inputPath)
+      ? inputPath
+      : resolve(inputPath)
+    : undefined;
+  const output = isAbsolute(outputPath) ? outputPath : resolve(outputPath);
+  if (!checkOnly && input === output) {
+    throw new Error(
+      "KODEX_E2E_API_STORAGE_STATE must differ from the bootstrap storage state",
+    );
+  }
+  return {
+    baseURL: exactHTTPSURL(
+      process.env.KODEX_E2E_BASE_URL ?? "https://kodex.invalid",
+    ),
+    checkOnly,
+    inputStorageState: storageState(inputPath),
+    outputStorageState: output,
+  };
 }
 
 export function loadE2EAuthEnvironment(): E2EAuthEnvironment {
@@ -205,6 +248,10 @@ export function loadE2EAuthEnvironment(): E2EAuthEnvironment {
     ),
     checkOnly,
     outputStorageState: isAbsolute(output) ? output : resolve(output),
+    rbacGroup: boundedName(
+      "KODEX_E2E_RBAC_GROUP",
+      process.env.KODEX_E2E_RBAC_GROUP ?? "kodex-e2e-restricted",
+    ),
     ownerPassword,
     ownerUsername,
   };

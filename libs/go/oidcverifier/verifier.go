@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -21,9 +22,14 @@ import (
 )
 
 const (
-	maximumBearerBytes  = 2300
+	maximumBearerBytes  = 16384
 	maximumDisplayRunes = 160
 	maximumEmailBytes   = 254
+	maximumGroups       = 100
+	maximumGroupRunes   = 200
+	maximumAMRValues    = 16
+	maximumAMRRunes     = 64
+	maximumACRRunes     = 160
 	ownerScope          = "kodex.owner"
 	ownerRealmRole      = "kodex-owner"
 	unknownUserName     = "i18n:OIDC_USER_NAME"
@@ -47,10 +53,16 @@ type Config struct {
 type Principal struct {
 	Subject         string
 	OrganizationID  string
+	Issuer          string
 	SessionID       string
 	DisplayName     string
 	EmailHint       string
+	Groups          []string
+	OwnerClaim      bool
 	SessionRevision uint64
+	AuthenticatedAt time.Time
+	ACR             string
+	AMR             []string
 	ExpiresAt       time.Time
 }
 
@@ -76,15 +88,19 @@ func (transport exactTransport) RoundTrip(request *http.Request) (*http.Response
 }
 
 type claims struct {
-	SessionID       string `json:"sid"`
-	OrganizationID  string `json:"organization_id"`
-	SessionRevision uint64 `json:"session_revision"`
-	TokenID         string `json:"jti"`
-	Scope           string `json:"scope"`
-	Name            string `json:"name"`
-	PreferredName   string `json:"preferred_username"`
-	Email           string `json:"email"`
-	EmailVerified   bool   `json:"email_verified"`
+	SessionID       string   `json:"sid"`
+	OrganizationID  string   `json:"organization_id"`
+	SessionRevision uint64   `json:"session_revision"`
+	TokenID         string   `json:"jti"`
+	Scope           string   `json:"scope"`
+	Name            string   `json:"name"`
+	PreferredName   string   `json:"preferred_username"`
+	Email           string   `json:"email"`
+	EmailVerified   bool     `json:"email_verified"`
+	Groups          []string `json:"groups"`
+	AuthTime        int64    `json:"auth_time"`
+	ACR             string   `json:"acr"`
+	AMR             []string `json:"amr"`
 	RealmAccess     struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access"`
@@ -186,9 +202,14 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 		return Principal{}, errors.New("OIDC bearer exceeds the signing-key grace window")
 	}
 	var values claims
-	if token.Claims(&values) != nil || uuid.Validate(values.OrganizationID) != nil ||
-		values.SessionRevision == 0 || !containsWord(values.Scope, ownerScope) ||
-		!contains(values.RealmAccess.Roles, ownerRealmRole) {
+	if token.Claims(&values) != nil || uuid.Validate(values.OrganizationID) != nil || values.SessionRevision == 0 {
+		return Principal{}, errors.New("OIDC session claims are invalid")
+	}
+	groups, groupsErr := normalizeGroups(values.Groups)
+	amr, amrErr := normalizeBoundedStrings(values.AMR, maximumAMRValues, maximumAMRRunes)
+	acr := strings.TrimSpace(values.ACR)
+	if groupsErr != nil || amrErr != nil || utf8.RuneCountInString(acr) > maximumACRRunes || strings.ContainsAny(acr, "\r\n\x00") ||
+		values.AuthTime < 0 || values.AuthTime > token.Expiry.Unix() {
 		return Principal{}, errors.New("OIDC session claims are invalid")
 	}
 	subject, subjectErr := oidcidentity.Subject(token.Issuer, token.Subject)
@@ -199,11 +220,58 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 	if _, tokenIDErr := oidcidentity.TokenID(token.Issuer, values.TokenID); tokenIDErr != nil {
 		return Principal{}, errors.New("OIDC session claims are invalid")
 	}
+	var authenticatedAt time.Time
+	if values.AuthTime > 0 {
+		authenticatedAt = time.Unix(values.AuthTime, 0).UTC()
+	}
 	return Principal{
-		Subject: subject, OrganizationID: values.OrganizationID, SessionID: sessionID,
+		Subject: subject, OrganizationID: values.OrganizationID, Issuer: token.Issuer, SessionID: sessionID,
 		DisplayName: safeDisplayName(values.Name, values.PreferredName), EmailHint: maskedVerifiedEmail(values.Email, values.EmailVerified),
-		SessionRevision: values.SessionRevision, ExpiresAt: token.Expiry,
+		Groups: groups, OwnerClaim: containsWord(values.Scope, ownerScope) && contains(values.RealmAccess.Roles, ownerRealmRole),
+		SessionRevision: values.SessionRevision, AuthenticatedAt: authenticatedAt, ACR: acr, AMR: amr, ExpiresAt: token.Expiry,
 	}, nil
+}
+
+func normalizeBoundedStrings(values []string, maximumValues, maximumRunes int) ([]string, error) {
+	if len(values) > maximumValues {
+		return nil, errors.New("too many values")
+	}
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" || utf8.RuneCountInString(value) > maximumRunes || strings.ContainsAny(value, "\r\n\x00") {
+			return nil, errors.New("value is invalid")
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func normalizeGroups(values []string) ([]string, error) {
+	if len(values) > maximumGroups {
+		return nil, errors.New("too many OIDC groups")
+	}
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || utf8.RuneCountInString(value) > maximumGroupRunes || strings.ContainsAny(value, "\r\n\x00") {
+			return nil, errors.New("OIDC group is invalid")
+		}
+		if _, duplicate := seen[value]; duplicate {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 func safeDisplayName(name, preferredName string) string {

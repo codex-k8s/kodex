@@ -1,0 +1,56 @@
+package platform
+
+import _ "embed"
+
+var (
+	//go:embed sql/runtime_secrets_list.sql
+	queryRuntimeSecretsList string
+	//go:embed sql/runtime_secret_get.sql
+	queryRuntimeSecretGet string
+	//go:embed sql/runtime_secret_lock_project.sql
+	queryRuntimeSecretLockProject string
+	//go:embed sql/runtime_secret_lock.sql
+	queryRuntimeSecretLock string
+	//go:embed sql/runtime_secret_insert.sql
+	queryRuntimeSecretInsert string
+	//go:embed sql/runtime_secret_lock_by_name.sql
+	queryRuntimeSecretLockByName string
+	//go:embed sql/runtime_secret_has_active_operation.sql
+	queryRuntimeSecretHasActiveOperation string
+	//go:embed sql/runtime_secret_maximum_revision.sql
+	queryRuntimeSecretMaximumRevision string
+	//go:embed sql/runtime_secret_operation_insert.sql
+	queryRuntimeSecretOperationInsert string
+	//go:embed sql/runtime_secret_operation_lock_by_digest.sql
+	queryRuntimeSecretOperationLockByDigest string
+	//go:embed sql/runtime_secret_operation_lock_idempotency.sql
+	queryRuntimeSecretOperationLockIdempotency string
+	//go:embed sql/runtime_secret_operation_reissue.sql
+	queryRuntimeSecretOperationReissue string
+	//go:embed sql/runtime_secret_operation_consume.sql
+	queryRuntimeSecretOperationConsume string
+	//go:embed sql/runtime_secret_operation_lock.sql
+	queryRuntimeSecretOperationLock string
+	//go:embed sql/runtime_secret_recovery_work_list.sql
+	queryRuntimeSecretRecoveryWorkList string
+	//go:embed sql/runtime_secret_revision_insert.sql
+	queryRuntimeSecretRevisionInsert string
+	//go:embed sql/runtime_secret_activate.sql
+	queryRuntimeSecretActivate string
+	//go:embed sql/runtime_secret_revoke.sql
+	queryRuntimeSecretRevoke string
+	//go:embed sql/runtime_secret_operation_complete.sql
+	queryRuntimeSecretOperationComplete string
+	//go:embed sql/runtime_secret_operation_fail.sql
+	queryRuntimeSecretOperationFail string
+	//go:embed sql/runtime_secret_audit.sql
+	queryRuntimeSecretAudit string
+	//go:embed sql/runtime_secret_resolve_binding.sql
+	queryRuntimeSecretResolveBinding string
+	//go:embed sql/runtime_secret_is_referenced.sql
+	queryRuntimeSecretIsReferenced string
+	//go:embed sql/runtime_secret_revision_list.sql
+	queryRuntimeSecretRevisionList string
+	//go:embed sql/runtime_secret_revision_get.sql
+	queryRuntimeSecretRevisionGet string
+)

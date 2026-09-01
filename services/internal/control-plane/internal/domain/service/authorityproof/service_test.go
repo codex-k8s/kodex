@@ -103,6 +103,24 @@ func TestIndexPolicyBindsOIDCProducerToInstallationConfiguration(t *testing.T) {
 	}
 }
 
+func TestIndexPolicyAcceptsPermissionDistinctFromOperation(t *testing.T) {
+	t.Parallel()
+
+	producer := testProducer("runtime-controller", "PLATFORM_WORKER_GRANT")
+	document := testPolicy(producer)
+	document.Policy.OperationBindings[0].Permission = "runtime.session.start"
+	service := &Service{policy: document}
+	if err := service.indexPolicy(); err != nil {
+		t.Fatalf("отдельное RBAC-разрешение отклонено: %v", err)
+	}
+
+	document.Policy.OperationBindings[0].Permission = ""
+	service.policy = document
+	if err := service.indexPolicy(); err == nil {
+		t.Fatal("пустое RBAC-разрешение было принято")
+	}
+}
+
 func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 	t.Parallel()
 

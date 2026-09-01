@@ -5,9 +5,12 @@ package generated
 type ProblemCode string
 
 const (
-	ProblemCodeInternal            ProblemCode = "INTERNAL"
-	ProblemCodeInvalidResume       ProblemCode = "INVALID_RESUME"
-	ProblemCodePlatformUnavailable ProblemCode = "PLATFORM_UNAVAILABLE"
-	ProblemCodeRunUnavailable      ProblemCode = "RUN_UNAVAILABLE"
-	ProblemCodeStreamUnavailable   ProblemCode = "STREAM_UNAVAILABLE"
+	ProblemCodeInternal             ProblemCode = "INTERNAL"
+	ProblemCodeInvalidCommand       ProblemCode = "INVALID_COMMAND"
+	ProblemCodeSessionExpired       ProblemCode = "SESSION_EXPIRED"
+	ProblemCodeSessionReplaced      ProblemCode = "SESSION_REPLACED"
+	ProblemCodePlatformUnavailable  ProblemCode = "PLATFORM_UNAVAILABLE"
+	ProblemCodeRunUnavailable       ProblemCode = "RUN_UNAVAILABLE"
+	ProblemCodeStreamUnavailable    ProblemCode = "STREAM_UNAVAILABLE"
+	ProblemCodeBackpressureExceeded ProblemCode = "BACKPRESSURE_EXCEEDED"
 )

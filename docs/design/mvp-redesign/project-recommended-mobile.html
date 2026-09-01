@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Проект · Обзор (mobile)</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-projm .m-body { padding: 0 0 150px; gap: 0; }
+  .p-projm .m-tabs-proj { position: sticky; top: 0; z-index: 5; background: var(--bg); }
+  .p-projm .m-tabs-proj .tabs { padding: 0 8px; }
+  .p-projm .m-content { padding: 12px 14px 0; display: flex; flex-direction: column; gap: 12px; }
+  .p-projm .att { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line-hair); }
+  .p-projm .att:first-child { border-top: 0; }
+  .p-projm .att__head { display: flex; align-items: flex-start; gap: 10px; }
+  .p-projm .att__lead { width: 32px; height: 32px; flex: 0 0 32px; border-radius: var(--r-2); display: inline-flex; align-items: center; justify-content: center; }
+  .p-projm .att__title { font-size: 14px; font-weight: 600; line-height: 1.35; }
+  .p-projm .att__meta { font-size: 12px; color: var(--mut); line-height: 1.4; }
+  .p-projm .att__meta b { font-weight: 500; color: var(--sec); }
+  .p-projm .run { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-top: 1px solid var(--line-hair); color: inherit; text-decoration: none; }
+  .p-projm .run:first-child { border-top: 0; }
+  .p-projm .run__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .p-projm .run__title { font-size: 14px; font-weight: 600; line-height: 1.35; flex: 1 1 auto; min-width: 0; }
+  .p-projm .run__meta { font-size: 12px; color: var(--mut); display: flex; flex-wrap: wrap; gap: 3px 6px; align-items: center; }
+  .p-projm .run__meta b { font-weight: 500; color: var(--sec); }
+  .p-projm .run__phrase { font-size: 12.5px; color: var(--ink-2); }
+  .p-projm .res { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line-hair); min-height: 52px; color: inherit; text-decoration: none; }
+  .p-projm .res:first-child { border-top: 0; }
+  .p-projm .res__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .p-projm .res__title { font-size: 13.5px; font-weight: 500; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+  .p-projm .res__sub { font-size: 12px; color: var(--mut); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+  .p-projm .m-cta { position: absolute; left: 0; right: 0; bottom: 64px; padding: 10px 14px; background: var(--bg); border-top: 1px solid var(--line); z-index: 6; }
+  .p-projm .m-cta .btn { height: 46px; border-radius: var(--r-3); font-size: 15px; }
+  .p-projm .frame .fab, .frame.p-projm .fab { bottom: 140px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Обзор Проекта · рекомендуемый вариант A · mobile 390×844 · маршрут <code>/projects/:projectRef</code></p>
+<div class="frame frame--mobile p-projm" id="frame">
+  <main class="page" id="page" aria-label="Обзор Проекта">
+    <!-- Разделы Проекта -->
+    <div class="m-tabs-proj">
+      <div class="tabs" role="tablist" aria-label="Разделы Проекта" data-tabs>
+        <button class="tab" role="tab" id="t-overview" aria-selected="true" aria-controls="pane-overview">Обзор</button>
+        <button class="tab" role="tab" id="t-agents" aria-selected="false" aria-controls="pane-agents">Сотрудники <span class="tab__count">5</span></button>
+        <button class="tab" role="tab" id="t-wf" aria-selected="false" aria-controls="pane-wf">Процессы <span class="tab__count">2</span></button>
+        <button class="tab" role="tab" id="t-runs" aria-selected="false" aria-controls="pane-runs">Запуски</button>
+        <button class="tab" role="tab" id="t-files" aria-selected="false" aria-controls="pane-files">Файлы</button>
+        <button class="tab" role="tab" id="t-auto" aria-selected="false" aria-controls="pane-auto">Автоматизации</button>
+      </div>
+    </div>
+
+    <div class="tabpanel m-content" id="pane-overview" role="tabpanel" aria-labelledby="t-overview">
+      <!-- Требует внимания -->
+      <section class="card" aria-labelledby="m-sec-att">
+        <div class="card__head">
+          <h2 class="sec-title" id="m-sec-att">Требует внимания <span class="badge-count">2</span></h2>
+          <span class="refresh"><span class="refresh__dot"></span><span class="refresh__text">12:04</span></span>
+        </div>
+        <div>
+          <div class="att">
+            <div class="att__head">
+              <span class="att__lead" style="background:var(--warn-tint);color:var(--warn);border:1px solid var(--warn-line)"><svg class="ic"><use href="#i-shield"/></svg></span>
+              <div class="grow">
+                <div class="att__title">Согласовать коммерческое предложение</div>
+                <div class="att__meta">Решение человека · запуск «Подготовить предложение для компании Север» · запросил <b>Менеджер продаж</b></div>
+                <div class="att__meta warn-text mt-4">срок сегодня, 18:00</div>
+              </div>
+            </div>
+            <a class="btn btn--warn btn--block" href="#/decisions/g1">Рассмотреть</a>
+          </div>
+          <div class="att">
+            <div class="att__head">
+              <span class="att__lead" style="background:var(--err-tint);color:var(--err);border:1px solid var(--err-line)"><svg class="ic"><use href="#i-alert"/></svg></span>
+              <div class="grow">
+                <div class="att__title">Ошибка на шаге «Автор писем»</div>
+                <div class="att__meta">Инцидент · запуск «Разослать уточнения по пилоту Онега» · остальные ветви завершены · 25 мин назад</div>
+              </div>
+            </div>
+            <a class="btn btn--block" href="#/runs/r7">Открыть запуск</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Выполняется -->
+      <section class="card" aria-labelledby="m-sec-run">
+        <div class="card__head">
+          <h2 class="sec-title" id="m-sec-run">Выполняется <span class="tab__count">4</span></h2>
+          <span class="refresh is-refreshing"><span class="refresh__dot"></span><span class="refresh__text">обновляется</span></span>
+        </div>
+        <div>
+          <a class="run" href="#/runs/r1">
+            <div class="run__top"><span class="run__title">Подготовить предложение для компании Север</span><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Работает</span></div>
+            <div class="run__meta"><span class="avatar avatar--20 avatar--acc" aria-hidden="true">РП</span><b>Редактор предложений</b><span>·</span><span>12 мин</span></div>
+            <div class="run__meta"><span>Инициатор: <b>Анна Волкова</b></span><span>·</span><span class="source"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></div>
+            <div class="run__phrase">Собираю итоговую структуру документа · шаг 3 из 4</div>
+          </a>
+          <a class="run" href="#/runs/r2">
+            <div class="run__top"><span class="run__title">Ежедневная сводка по лидам</span><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Работает</span></div>
+            <div class="run__meta"><span class="avatar avatar--20 avatar--ok" aria-hidden="true">АП</span><b>Аналитик продаж</b><span>·</span><span>3 мин</span></div>
+            <div class="run__meta"><span>Инициатор: <b>расписание «По будням, 09:00»</b></span><span>·</span><span class="source"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</span></div>
+          </a>
+          <a class="run" href="#/runs/r3">
+            <div class="run__top"><span class="run__title">Собрать факты о компании Юг</span><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>В очереди</span></div>
+            <div class="run__meta"><span class="avatar avatar--20 avatar--ok" aria-hidden="true">ИР</span><b>Исследователь рынка</b></div>
+            <div class="run__meta"><span>Инициатор: <b>Михаил Орлов</b></span><span>·</span><span class="source"><svg class="ic"><use href="#i-bot"/></svg>Kodex</span></div>
+          </a>
+          <a class="run" href="#/runs/r4">
+            <div class="run__top"><span class="run__title">Проверить условия пилота Ладога</span><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Решение</span></div>
+            <div class="run__meta"><span class="avatar avatar--20" aria-hidden="true">ЮК</span><b>Юридический консультант</b><span>·</span><span>41 мин</span></div>
+            <div class="run__meta"><span>Инициатор: <b>Елена Крылова</b></span><span>·</span><span class="source"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></div>
+          </a>
+          <a class="list-more" href="#/projects/sales/runs">Все запуски Проекта</a>
+        </div>
+      </section>
+
+      <!-- Недавние результаты -->
+      <section class="card" aria-labelledby="m-sec-res">
+        <div class="card__head"><h2 class="sec-title" id="m-sec-res">Недавние результаты</h2><a class="sm" href="#/projects/sales/files?source=result">Все файлы</a></div>
+        <div>
+          <a class="res" href="#/projects/sales/files/f1"><span class="mime mime--pdf">pdf</span><span class="res__main"><span class="res__title">Коммерческое предложение — Север.pdf</span><span class="res__sub">Редактор предложений · сегодня, 11:52</span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+          <a class="res" href="#/projects/sales/files/f2"><span class="mime mime--md">md</span><span class="res__main"><span class="res__title">Факты о компании Меридиан.md</span><span class="res__sub">Исследователь рынка · вчера, 12:05</span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+          <a class="res" href="#/projects/sales/files/f3"><span class="mime mime--xls">xlsx</span><span class="res__main"><span class="res__title">Сводка по лидам — 27 августа.xlsx</span><span class="res__sub">Аналитик продаж · вчера, 09:14</span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+        </div>
+      </section>
+
+      <!-- Ресурсы Проекта -->
+      <section class="card" aria-labelledby="m-sec-resources">
+        <div class="card__head"><h2 class="sec-title" id="m-sec-resources">Ресурсы Проекта</h2></div>
+        <div>
+          <a class="res" href="#/projects/sales/agents"><span class="list-row__lead"><svg class="ic"><use href="#i-bot"/></svg></span><span class="res__main"><span class="res__title">ИИ-сотрудники · 5</span><span class="res__sub">2 работают · 1 ждёт решения · 2 готовы</span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+          <a class="res" href="#/projects/sales/workflows"><span class="list-row__lead"><svg class="ic"><use href="#i-wf"/></svg></span><span class="res__main"><span class="res__title">Процессы · 2</span><span class="res__sub">Обработка нового лида v3 · Подготовка предложения v1</span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+          <a class="res" href="#/projects/sales/automations"><span class="list-row__lead"><svg class="ic"><use href="#i-automation"/></svg></span><span class="res__main"><span class="res__title">Автоматизации · 2</span><span class="res__sub">следующий запуск: завтра, 09:00</span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+          <a class="res" href="#/projects/sales/environments"><span class="list-row__lead"><svg class="ic"><use href="#i-layers"/></svg></span><span class="res__main"><span class="res__title">Окружения · 3</span><span class="res__sub">1 собирается · 2 готовы</span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+          <a class="res" href="#/projects/sales/members"><span class="list-row__lead"><svg class="ic"><use href="#i-users"/></svg></span><span class="res__main"><span class="res__title">Участники · 5</span><span class="res__sub">владелец Анна Волкова</span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+        </div>
+      </section>
+      <div class="xs mut" style="padding:0 4px 8px">Интеграции для Проекта не подключены — на выполнение работы это не влияет.</div>
+    </div>
+
+    <!-- Прочие вкладки: компактные заглушки с реальным составом -->
+    <div class="tabpanel m-content" id="pane-agents" role="tabpanel" aria-labelledby="t-agents" hidden>
+      <section class="card">
+        <div>
+          <a class="res" href="#/projects/sales/agents/a1"><span class="avatar avatar--32 avatar--ok" aria-hidden="true">АП</span><span class="res__main"><span class="res__title">Аналитик продаж</span><span class="res__sub">Исследование клиентов · gpt-5.1</span></span><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Работает</span></a>
+          <a class="res" href="#/projects/sales/agents/a2"><span class="avatar avatar--32 avatar--acc" aria-hidden="true">РП</span><span class="res__main"><span class="res__title">Редактор предложений</span><span class="res__sub">Итоговые документы · gpt-5.1</span></span><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Работает</span></a>
+          <a class="res" href="#/projects/sales/agents/a3"><span class="avatar avatar--32" aria-hidden="true">ЮК</span><span class="res__main"><span class="res__title">Юридический консультант</span><span class="res__sub">Условия и риски · gpt-5.1-mini</span></span><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Ждёт</span></a>
+          <a class="res" href="#/projects/sales/agents/a4"><span class="avatar avatar--32 avatar--acc" aria-hidden="true">МП</span><span class="res__main"><span class="res__title">Менеджер продаж</span><span class="res__sub">Координатор Процесса · gpt-5.1</span></span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Готов</span></a>
+          <a class="res" href="#/projects/sales/agents/a6"><span class="avatar avatar--32 avatar--ok" aria-hidden="true">ИР</span><span class="res__main"><span class="res__title">Исследователь рынка</span><span class="res__sub">Публичные сведения · gpt-5.1</span></span><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>В очереди</span></a>
+        </div>
+      </section>
+    </div>
+    <div class="tabpanel m-content" id="pane-wf" role="tabpanel" aria-labelledby="t-wf" hidden>
+      <section class="card">
+        <div>
+          <a class="res" href="#/projects/sales/workflows/w1"><span class="list-row__lead"><svg class="ic"><use href="#i-wf"/></svg></span><span class="res__main"><span class="res__title">Обработка нового лида</span><span class="res__sub">v3 · 3 сотрудника · 1 решение человека</span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+          <a class="res" href="#/projects/sales/workflows/w2"><span class="list-row__lead"><svg class="ic"><use href="#i-wf"/></svg></span><span class="res__main"><span class="res__title">Подготовка предложения</span><span class="res__sub">v1 · 2 сотрудника · без решений</span></span><svg class="ic mut"><use href="#i-chev-r"/></svg></a>
+        </div>
+      </section>
+    </div>
+    <div class="tabpanel m-content" id="pane-runs" role="tabpanel" aria-labelledby="t-runs" hidden>
+      <label class="search search--bg"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Поиск по запускам Проекта" aria-label="Поиск по запускам"></label>
+      <div class="xs mut" style="padding:0 4px">Полный список запусков с серверным поиском и фильтрами — см. раздел «Запуски».</div>
+    </div>
+    <div class="tabpanel m-content" id="pane-files" role="tabpanel" aria-labelledby="t-files" hidden>
+      <div class="xs mut" style="padding:0 4px">Файлы Проекта — см. макет <code>files-automations-mobile.html</code>.</div>
+    </div>
+    <div class="tabpanel m-content" id="pane-auto" role="tabpanel" aria-labelledby="t-auto" hidden>
+      <div class="xs mut" style="padding:0 4px">Автоматизации Проекта — см. макет <code>files-automations-mobile.html</code>.</div>
+    </div>
+  </main>
+
+  <!-- Sticky primary action над tab bar -->
+  <div class="m-cta"><a class="btn btn--primary btn--block" href="#/projects/sales/runs/new"><svg class="ic"><use href="#i-run"/></svg>Новый запуск</a></div>
+
+  <!-- Меню «Ещё» в шапке -->
+  <div class="menu" id="m-more" data-align="right">
+    <a class="menu__item" role="menuitem" href="#/projects/sales/settings"><svg class="ic"><use href="#i-gear"/></svg><span>Настройки Проекта</span></a>
+    <a class="menu__item" role="menuitem" href="#/projects/sales/members"><svg class="ic"><use href="#i-users"/></svg><span>Участники и доступ</span></a>
+    <a class="menu__item" role="menuitem" href="#/administration/audit?project=sales"><svg class="ic"><use href="#i-audit"/></svg><span>Аудит Проекта</span></a>
+    <div class="menu__sep"></div>
+    <button class="menu__item menu__item--danger" role="menuitem" type="button"><svg class="ic"><use href="#i-archive"/></svg><span>Архивировать Проект</span></button>
+  </div>
+</div>
+<p class="stage-note">Mobile-версия рекомендуемого варианта A: разделы Проекта — горизонтальный доступный tab control (стрелки, aria-selected), блок «Требует внимания» первым и без длинной прокрутки, затем «Выполняется», результаты и ресурсы компактными списками. Статус каждого запуска — pill справа от названия; инициатор, исполнитель и источник показаны раздельно. Primary action «Новый запуск» закреплена над нижней панелью разделов, FAB Kodex поднят выше неё; все зоны касания ≥44px. Настройки и архивирование — в меню «Ещё» в шапке.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({ title: 'Корпоративные продажи', sub: 'Обзор Проекта', nav: 'project.overview', project: Kodex.data.projects[0], decisions: 2, connection: 'online', moreMenu: '#m-more',
+    kodexContext: { screen: 'Обзор Проекта', object: 'Корпоративные продажи', can: ['объяснить состояние запуска', 'запустить сотрудника или Процесс'] } });
+</script>
+</body>
+</html>

@@ -17,6 +17,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
   readStorageState,
   withoutKodexAPICookies,
+  writeAuthenticatedStorageState,
   writeStorageState,
 } from "./storage-state";
 
@@ -93,6 +94,44 @@ describe("E2E storage state", () => {
       { mode: 0o600 },
     );
     expect(() => readStorageState(path)).toThrow("Kodex API cookie");
+  });
+
+  test("атомарно пишет отдельную краткоживущую API-сессию", async () => {
+    const directory = await protectedDirectory();
+    const path = join(directory, "owner-api.json");
+    await writeAuthenticatedStorageState(
+      path,
+      {
+        cookies: [
+          cookie("KEYCLOAK_SESSION", "sso"),
+          cookie("__Host-kodex-session", "s".repeat(32)),
+          cookie("__Host-kodex-csrf", "c".repeat(43)),
+        ],
+        origins: [],
+      },
+      "https://kodex.example.test",
+    );
+
+    expect((await stat(path)).mode & 0o777).toBe(0o600);
+    const written = JSON.parse(await readFile(path, "utf8")) as {
+      cookies: Array<{ name: string }>;
+    };
+    expect(written.cookies.map((item) => item.name)).toEqual([
+      "KEYCLOAK_SESSION",
+      "__Host-kodex-session",
+      "__Host-kodex-csrf",
+    ]);
+  });
+
+  test("не создаёт API-сессию без точных защищённых cookies", async () => {
+    const directory = await protectedDirectory();
+    await expect(
+      writeAuthenticatedStorageState(
+        join(directory, "owner-api.json"),
+        { cookies: [cookie("KEYCLOAK_SESSION", "sso")], origins: [] },
+        "https://kodex.example.test",
+      ),
+    ).rejects.toThrow("exact Kodex API cookies");
   });
 });
 

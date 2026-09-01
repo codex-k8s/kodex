@@ -4,8 +4,8 @@ title: Сборка окружений ролей
 type: service
 status: approved
 owner: backend
-version: 1.0.0
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-09-01
 ---
 
 # role-image-builder
@@ -85,6 +85,12 @@ read-only способом сравнить будущий phase manifest.
 issuer sidecar, authenticated input registry и реальному bounded BuildKit solve.
 Probe не выполняет сетевых вызовов сам.
 
+Короткий `ROLE_IMAGE_BUILDER_RPC_DEADLINE` применяется только к локальному
+authority RPC. Реальный BuildKit solve получает отдельный bounded budget
+`ROLE_IMAGE_BUILDER_INFRASTRUCTURE_READINESS_TIMEOUT` не менее 180 секунд.
+Интервал следующей проверки отсчитывается после завершения предыдущей, поэтому
+медленный cold path не создаёт непрерывную очередь `--no-cache` solve.
+
 Для `image-admission-controller` действует тот же контракт: `/healthz`
 проверяет только процесс, а `/readyz` читает рассчитанный фоновым monitor
 снимок прямого Kubernetes API и immutable policy. Недоступность
@@ -114,8 +120,9 @@ Probe не выполняет сетевых вызовов сам.
 | expiry | следующий server-side claim после lease deadline повышает attempt/fence; прежний token закрыто отклоняется |
 | attempts exhausted | build больше не попадает в claim selector; новый build создаётся только `REQUEST_BUILD` для актуальной recipe version |
 | claim admission | `image-admission`; одна lease/fence на exact artifact и current policy |
+| policy rotation | `control-plane` перед каждым новым claim в той же owner-транзакции переводит stale `PENDING`/`CLAIMED` artifacts в terminal `REJECTED`, отзывает admission/promotion credentials и выбирает только exact current policy tuple |
 | admission accepted | durable OCI evidence bundle проходит exact readback; owner transaction фиксирует receipt content и реальный OCI manifest digest, promotion identity ещё не выдана |
-| admission rejected | тот же durable evidence bundle фиксируется owner transaction, artifact переходит в `BLOCKED`; promotion неприменим |
+| admission rejected | тот же durable evidence bundle фиксируется owner transaction, artifact переходит в `REJECTED`; promotion неприменим |
 | claim promotion | `image-promotion`; server-side queue выбирает exact artifact и возвращает staging reference, admission revision, receipt digests, fence/generation/JTI и bounded expiry |
 | promotion expiry | следующий специализированный claim заменяет истёкший, повышает fence/generation и отзывает старый claim |
 | authorize promotion | `control-plane`; owner-side расходует current claim до registry copy и выдаёт bounded одноразовый token |
@@ -124,8 +131,13 @@ Probe не выполняет сетевых вызовов сам.
 
 Отдельные `renew admission`, `retry admission` и универсальный CRUD намеренно
 отсутствуют. Истёкший admission claim становится снова доступен через
-server-side queue predicate; rejected artifact immutable и новый результат
-требует новой build attempt. Promotion claim не продлевается: новый
+server-side queue predicate только при совпадении policy revision/digest с
+текущей server configuration. После ротации policy прежние `PENDING` и
+`CLAIMED` artifacts закрываются существующим terminal-состоянием `REJECTED`;
+при этом `admission_verdict` остаётся пустым, потому что policy supersession не
+является scanner verdict и не создаёт отсутствующее evidence. Idempotency replay
+не возвращает claim прежнего policy tuple. Terminal artifact immutable, и новый
+результат требует новой build attempt. Promotion claim не продлевается: новый
 специализированный claim для того же owner-resolved artifact повышает fence и
 делает прежний token непригодным до любых registry-действий.
 

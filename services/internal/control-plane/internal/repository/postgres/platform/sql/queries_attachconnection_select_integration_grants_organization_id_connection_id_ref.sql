@@ -1,5 +1,6 @@
 -- name: queries_attachconnection_select_integration_grants_organization_id_connection_id_ref :many
-SELECT g.ref,g.capability_key,g.target_kind,g.target_ref,COALESCE(a.name,w.name,g.target_ref),g.enabled,g.approval_policy,g.version
+SELECT g.ref,g.capability_key,g.target_kind,g.target_ref,COALESCE(a.name,w.name,g.target_ref),g.enabled,g.approval_policy,g.version,
+	g.risk,g.resource_kind,g.resource_scope,g.resource_scope_digest
 FROM control_plane.integration_grants g
 LEFT JOIN control_plane.agents a ON g.target_kind='AGENT' AND a.ref=g.target_ref AND a.organization_id=g.organization_id
 LEFT JOIN control_plane.workflows w ON g.target_kind='WORKFLOW' AND w.ref=g.target_ref AND w.organization_id=g.organization_id

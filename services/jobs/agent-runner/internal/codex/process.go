@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -30,6 +31,8 @@ const (
 )
 
 var rolloutPathPattern = regexp.MustCompile(`^\.kodex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`)
+
+var ErrAuthorityRequestUnsupported = errors.New("Codex app-server authority request is unsupported")
 
 type streamEvent struct {
 	message wireMessage
@@ -120,13 +123,14 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err != nil {
 		return Result{}, err
 	}
-	archivePath, relativePath, digest, err := captureRollout(input, state.threadPath)
+	archivePath, relativePath, digest, sizeBytes, err := captureRollout(input, state.threadPath)
 	if err != nil {
 		return Result{}, err
 	}
 	result.ArchivePath = archivePath
 	result.ArchiveRelativePath = relativePath
 	result.ArchiveSHA256 = digest
+	result.ArchiveSizeBytes = sizeBytes
 	return result, nil
 }
 
@@ -134,6 +138,9 @@ func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error)
 	command := exec.Command("/usr/local/bin/codex", "app-server", "--strict-config", "--listen", "stdio://")
 	command.Dir = input.WorkspaceRoot
 	command.Env = appServerEnvironment(input, mcpProxyToken)
+	if command.Env == nil {
+		return nil, errors.New("runtime Secret projection is unavailable")
+	}
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
 	stdin, err := command.StdinPipe()
 	if err != nil {
@@ -169,6 +176,16 @@ func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error)
 func appServerEnvironment(input model.Input, mcpProxyToken string) []string {
 	environment := []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + input.CodexHome,
 		"CODEX_HOME=" + input.CodexHome, "KODEX_MCP_PROXY_TOKEN=" + mcpProxyToken}
+	for _, item := range input.EnvironmentValues {
+		environment = append(environment, item.Name+"="+item.Value)
+	}
+	for _, item := range input.SecretProjections {
+		value, present := os.LookupEnv(item.Name)
+		if !present {
+			return nil
+		}
+		environment = append(environment, item.Name+"="+value)
+	}
 	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"} {
 		if value, ok := os.LookupEnv(name); ok && value != "" {
 			environment = append(environment, name+"="+value)
@@ -277,11 +294,11 @@ func (server *appServer) notifyInitialized() error {
 
 func (server *appServer) rejectRequest(message wireMessage) error {
 	if _, allowed := serverRequestMethods[message.method]; !allowed {
-		return errors.New("Codex app-server request method is not allowed")
+		return fmt.Errorf("%w: request method is not allowed", ErrAuthorityRequestUnsupported)
 	}
 	_ = server.write(map[string]any{"id": message.id, "error": map[string]any{
 		"code": int64(-32000), "message": "Server requests are not authorized in agent-runner"}})
-	return errors.New("Codex app-server requested authority that agent-runner does not hold: " + message.method)
+	return fmt.Errorf("%w: %s", ErrAuthorityRequestUnsupported, message.method)
 }
 
 func (server *appServer) handleRequest(state *protocolState, message wireMessage) error {
@@ -441,31 +458,31 @@ func verifyRestoreArchive(input model.Input) error {
 	return nil
 }
 
-func captureRollout(input model.Input, returnedPath string) (string, string, string, error) {
+func captureRollout(input model.Input, returnedPath string) (string, string, string, int64, error) {
 	if !filepath.IsAbs(returnedPath) || filepath.Clean(returnedPath) != returnedPath ||
 		!strings.HasPrefix(returnedPath, input.CodexHome+string(os.PathSeparator)) {
-		return "", "", "", errors.New("Codex app-server returned an unsafe rollout path")
+		return "", "", "", 0, errors.New("Codex app-server returned an unsafe rollout path")
 	}
 	relativePath, err := filepath.Rel(input.WorkspaceRoot, returnedPath)
 	if err != nil {
-		return "", "", "", errors.New("resolve Codex rollout path")
+		return "", "", "", 0, errors.New("resolve Codex rollout path")
 	}
 	relativePath = filepath.ToSlash(relativePath)
 	if !validRolloutRelativePath(relativePath) {
-		return "", "", "", errors.New("Codex app-server rollout identity changed")
+		return "", "", "", 0, errors.New("Codex app-server rollout identity changed")
 	}
 	file, info, err := openProtectedFile(input.WorkspaceRoot, returnedPath)
 	if err != nil {
-		return "", "", "", errors.New("open Codex app-server rollout")
+		return "", "", "", 0, errors.New("open Codex app-server rollout")
 	}
 	digest, hashErr := digestArchive(file, info)
 	groupErr := file.Chown(-1, 29000)
 	modeErr := file.Chmod(0o640)
 	closeErr := file.Close()
 	if hashErr != nil || groupErr != nil || modeErr != nil || closeErr != nil {
-		return "", "", "", errors.New("verify Codex app-server rollout")
+		return "", "", "", 0, errors.New("verify Codex app-server rollout")
 	}
-	return returnedPath, relativePath, digest, nil
+	return returnedPath, relativePath, digest, info.Size(), nil
 }
 
 func validRolloutRelativePath(value string) bool {

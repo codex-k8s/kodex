@@ -7,5 +7,5 @@ SET state = 'CANCELLED',
     lease_expires_at = NULL,
     version = version + 1,
     updated_at = clock_timestamp()
-WHERE schedule_id = $1::uuid
-  AND state = 'CLAIMED'
+WHERE schedule_id = @schedule_id::uuid
+  AND state IN ('DUE', 'CLAIMED')

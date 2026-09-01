@@ -143,7 +143,7 @@ func loadRepositoryPolicy(t *testing.T) *policy.Active {
 	if err != nil {
 		t.Fatal(err)
 	}
-	active, err := policy.Load(value, "2026-08-07.1", "a32b8c5aa305640eaee494b65019804f668466b9dd82a1d5cc84af7f77747d4f")
+	active, err := policy.Load(value, "2026-08-28.1", "68820472113d636607336da46d1481c73126c6ab55ec8e0c59de4077dfc2ad89")
 	if err != nil {
 		t.Fatal(err)
 	}

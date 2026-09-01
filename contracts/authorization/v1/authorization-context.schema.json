@@ -58,6 +58,9 @@
     "permission": {
       "$ref": "#/$defs/permission"
     },
+    "credential_authentication": {
+      "$ref": "#/$defs/credentialAuthentication"
+    },
     "jti": {
       "$ref": "#/$defs/uuid"
     },
@@ -161,6 +164,32 @@
         },
         "spiffe_id": {
           "$ref": "#/$defs/spiffeId"
+        }
+      }
+    },
+    "credentialAuthentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "auth_time"
+      ],
+      "properties": {
+        "auth_time": {
+          "$ref": "#/$defs/unixTime"
+        },
+        "acr": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "amr": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
         }
       }
     },

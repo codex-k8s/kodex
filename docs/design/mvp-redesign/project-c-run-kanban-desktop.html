@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Проект · C. Kanban запусков</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-projc .board { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; min-width: 0; }
+  .p-projc .board__toolbar { flex: 0 0 auto; padding: 12px 24px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .p-projc .board__area { flex: 1 1 auto; min-height: 0; padding: 14px 24px 20px; }
+  .p-projc .board__list { display: none; }
+  .p-projc .board[data-view="list"] .kanban { display: none; }
+  .p-projc .board[data-view="list"] .board__list { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+  .p-projc .kanban__head .sec-title { font-size: 11.5px; display: flex; align-items: center; gap: 6px; }
+  .p-projc .kanban__head .dot-state { width: 8px; height: 8px; }
+  .p-projc .kcard__exec { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--sec); min-width: 0; }
+  .p-projc .kcard__exec span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-projc .kcard__init { font-size: 11px; color: var(--mut); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .p-projc .kcard__init b { font-weight: 500; color: var(--sec); }
+  .p-projc .kcard__time { font-family: var(--font-mono); font-size: 11px; color: var(--mut); white-space: nowrap; }
+  .p-projc .kcard__phrase { font-size: 11.5px; color: var(--ink-2); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .p-projc .kcard__deadline { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--warn); font-weight: 500; }
+  .p-projc .kcard--pin { border-color: var(--acc-line); }
+  .p-projc .kanban__more { font-size: 11.5px; color: var(--mut); text-align: center; padding: 6px 0 2px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Обзор Проекта · вариант C «Kanban запусков» · desktop 1440×1024 · маршрут <code>/projects/:projectRef</code></p>
+<div class="frame frame--desktop p-projc" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#/projects">Проекты</a><span>/</span><span>Корпоративные продажи</span></div>
+      <div class="page-title-row">
+        <div style="min-width:0">
+          <div class="page-title"><h1 id="page-title" class="truncate" style="max-width:720px">Корпоративные продажи</h1><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Активен</span></div>
+          <div class="page-sub">Подготовка предложений и аналитика клиентов · 5 сотрудников · 2 Процесса · 2 автоматизации · <a href="#/decisions?project=sales" class="warn-text">2 ждут решения</a></div>
+        </div>
+        <div class="page-actions">
+          <a class="btn btn--primary btn--lg" href="#/projects/sales/runs/new"><svg class="ic"><use href="#i-run"/></svg>Новый запуск</a>
+          <button class="btn btn--icon btn--lg" type="button" aria-label="Ещё действия" data-tip="Ещё действия" data-tip-pos="bottom" data-menu="#menu-more" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+          <div class="menu" id="menu-more" data-align="right">
+            <a class="menu__item" role="menuitem" href="#/projects/sales/settings"><svg class="ic"><use href="#i-gear"/></svg><span>Настройки Проекта</span></a>
+            <a class="menu__item" role="menuitem" href="#/projects/sales/members"><svg class="ic"><use href="#i-users"/></svg><span>Участники и доступ</span></a>
+            <a class="menu__item" role="menuitem" href="#/administration/audit?project=sales"><svg class="ic"><use href="#i-audit"/></svg><span>Аудит Проекта</span></a>
+            <div class="menu__sep"></div>
+            <button class="menu__item menu__item--danger" role="menuitem" type="button"><svg class="ic"><use href="#i-archive"/></svg><span class="menu__text"><span>Архивировать Проект</span><small>Новые запуски будут запрещены, история сохранится</small></span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body page-body--flush">
+      <div class="board" id="board" data-view="kanban">
+        <div class="board__toolbar toolbar">
+          <button class="chip chip--filter" type="button" data-menu="#menu-agent" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-bot"/></svg>Все сотрудники<svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+          <div class="menu" id="menu-agent">
+            <div class="menu__search"><label class="search search--bg"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Найти сотрудника" aria-label="Найти сотрудника" data-menu-filter></label></div>
+            <button class="menu__item" role="menuitemradio" aria-checked="true" data-filter-text="все сотрудники">Все сотрудники</button>
+            <button class="menu__item" role="menuitemradio" aria-checked="false" data-filter-text="аналитик продаж"><span class="avatar avatar--20 avatar--ok">АП</span>Аналитик продаж</button>
+            <button class="menu__item" role="menuitemradio" aria-checked="false" data-filter-text="редактор предложений"><span class="avatar avatar--20 avatar--acc">РП</span>Редактор предложений</button>
+            <button class="menu__item" role="menuitemradio" aria-checked="false" data-filter-text="юридический консультант"><span class="avatar avatar--20">ЮК</span>Юридический консультант</button>
+            <button class="menu__item" role="menuitemradio" aria-checked="false" data-filter-text="менеджер продаж"><span class="avatar avatar--20 avatar--acc">МП</span>Менеджер продаж</button>
+            <button class="menu__item" role="menuitemradio" aria-checked="false" data-filter-text="исследователь рынка"><span class="avatar avatar--20 avatar--ok">ИР</span>Исследователь рынка</button>
+          </div>
+          <button class="chip chip--filter" type="button" data-menu="#menu-source" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-monitor"/></svg>Любой источник<svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+          <div class="menu" id="menu-source">
+            <button class="menu__item" role="menuitemradio" aria-checked="true">Любой источник</button>
+            <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</button>
+            <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-bot"/></svg>Kodex</button>
+            <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</button>
+            <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-branch"/></svg>Делегирование</button>
+          </div>
+          <button class="chip chip--filter" type="button" data-menu="#menu-period" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-calendar"/></svg>За 7 дней<svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+          <div class="menu" id="menu-period">
+            <button class="menu__item" role="menuitemradio" aria-checked="false">Сегодня</button>
+            <button class="menu__item" role="menuitemradio" aria-checked="true">За 7 дней</button>
+            <button class="menu__item" role="menuitemradio" aria-checked="false">За 30 дней</button>
+            <button class="menu__item" role="menuitemradio" aria-checked="false">Только активные</button>
+          </div>
+          <span class="toolbar__count">21 запуск · фильтры применяются на сервере</span>
+          <span class="toolbar__spacer"></span>
+          <span class="refresh is-refreshing"><span class="refresh__dot"></span><span class="refresh__text">обновляется</span></span>
+          <div class="seg" data-seg data-view-target="#board" role="group" aria-label="Вид">
+            <button class="seg__btn" type="button" aria-pressed="true" data-view="kanban"><svg class="ic"><use href="#i-kanban"/></svg>Kanban</button>
+            <button class="seg__btn" type="button" aria-pressed="false" data-view="list"><svg class="ic"><use href="#i-list"/></svg>Список</button>
+          </div>
+        </div>
+
+        <div class="board__area">
+          <div class="kanban" aria-label="Запуски по состояниям">
+            <!-- В очереди -->
+            <section class="kanban__col" aria-labelledby="col-queued">
+              <div class="kanban__head"><h2 class="sec-title" id="col-queued"><span class="dot-state dot-state--warn"></span>В очереди</h2><span class="badge-count badge-count--mut">3</span></div>
+              <div class="kanban__list">
+                <a class="kcard" href="#/runs/r3">
+                  <span class="kcard__title">Собрать факты о компании Юг</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20 avatar--ok" aria-hidden="true">ИР</span><span>Исследователь рынка</span></span>
+                  <span class="kcard__init">Инициатор: <b>Михаил Орлов</b></span>
+                  <span class="kcard__foot"><span class="source" data-tip="Запущено через помощника Kodex" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-bot"/></svg>Kodex</span><span class="kcard__time">ждёт слот · 2 мин</span></span>
+                </a>
+                <a class="kcard" href="#/runs/r10">
+                  <span class="kcard__title">Классифицировать входящие обращения за август</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20" aria-hidden="true">КО</span><span>Классификатор обращений</span></span>
+                  <span class="kcard__init">Инициатор: <b>Елена Крылова</b></span>
+                  <span class="kcard__foot"><span class="source" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span><span class="kcard__time">ждёт слот · 5 мин</span></span>
+                </a>
+                <a class="kcard" href="#/runs/r11">
+                  <span class="kcard__title">Недельное предложение руководителю</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20 avatar--acc" aria-hidden="true">МП</span><span>Менеджер продаж</span></span>
+                  <span class="kcard__init">Инициатор: <b>расписание «По пятницам, 16:00»</b></span>
+                  <span class="kcard__foot"><span class="source" data-tip="Запущено по расписанию автоматизации" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</span><span class="kcard__time">старт в 16:00</span></span>
+                </a>
+              </div>
+            </section>
+
+            <!-- Работает -->
+            <section class="kanban__col" aria-labelledby="col-running">
+              <div class="kanban__head"><h2 class="sec-title" id="col-running"><span class="dot-state dot-state--run"></span>Работает</h2><span class="badge-count badge-count--acc">4</span></div>
+              <div class="kanban__list">
+                <a class="kcard kcard--pin" href="#/runs/r1">
+                  <span class="kcard__title">Подготовить предложение для компании Север</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20 avatar--acc" aria-hidden="true">РП</span><span>Редактор предложений</span></span>
+                  <span class="kcard__init">Инициатор: <b>Анна Волкова</b></span>
+                  <span class="kcard__phrase">Собираю итоговую структуру документа · шаг 3 из 4</span>
+                  <span class="progress"><span class="progress__bar" style="width:62%"></span></span>
+                  <span class="kcard__foot"><span class="source" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span><span class="kcard__time">12 мин</span></span>
+                </a>
+                <a class="kcard" href="#/runs/r2">
+                  <span class="kcard__title">Ежедневная сводка по лидам</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20 avatar--ok" aria-hidden="true">АП</span><span>Аналитик продаж</span></span>
+                  <span class="kcard__init">Инициатор: <b>расписание «По будням, 09:00»</b></span>
+                  <span class="kcard__phrase">Сверяю новые лиды с историей за прошлую неделю</span>
+                  <span class="kcard__foot"><span class="source" data-tip="Запущено по расписанию автоматизации" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</span><span class="kcard__time">3 мин</span></span>
+                </a>
+                <a class="kcard" href="#/runs/r12">
+                  <span class="kcard__title">Исследование компании Север</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20 avatar--ok" aria-hidden="true">АП</span><span>Аналитик продаж</span></span>
+                  <span class="kcard__init">Инициатор: <b>Менеджер продаж</b> · дочерний запуск</span>
+                  <span class="kcard__phrase">Проверяю публичные сведения и историю контактов</span>
+                  <span class="kcard__foot"><span class="source" data-tip="Запущено другим ИИ-сотрудником по типизированному инструменту" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-branch"/></svg>Делегирование</span><span class="kcard__time">7 мин</span></span>
+                </a>
+                <a class="kcard" href="#/runs/r13">
+                  <span class="kcard__title">Подготовить черновик письма клиенту Кварта</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20 avatar--warn" aria-hidden="true">АП</span><span>Автор писем</span></span>
+                  <span class="kcard__init">Инициатор: <b>Михаил Орлов</b></span>
+                  <span class="kcard__phrase">Подбираю шаблон и формулирую условия пилота</span>
+                  <span class="kcard__foot"><span class="source" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span><span class="kcard__time">1 мин</span></span>
+                </a>
+              </div>
+            </section>
+
+            <!-- Ждёт решения -->
+            <section class="kanban__col" aria-labelledby="col-gate">
+              <div class="kanban__head"><h2 class="sec-title" id="col-gate"><span class="dot-state dot-state--warn"></span>Ждёт решения</h2><span class="badge-count">2</span></div>
+              <div class="kanban__list">
+                <a class="kcard kcard--gate" href="#/runs/r4">
+                  <span class="kcard__title">Проверить условия пилота Ладога</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20" aria-hidden="true">ЮК</span><span>Юридический консультант</span></span>
+                  <span class="kcard__init">Инициатор: <b>Елена Крылова</b></span>
+                  <span class="kcard__phrase">Подтвердить отправку запроса поставщику</span>
+                  <span class="kcard__foot"><span class="kcard__deadline"><svg class="ic ic-12"><use href="#i-clock"/></svg>срок завтра, 12:00</span><span class="kcard__time">41 мин</span></span>
+                  <span class="kcard__foot"><span class="source" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span><span class="btn btn--sm btn--warn">Рассмотреть</span></span>
+                </a>
+                <a class="kcard kcard--gate" href="#/runs/r14">
+                  <span class="kcard__title">Обработка нового лида: компания Север</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20 avatar--acc" aria-hidden="true">МП</span><span>Менеджер продаж</span></span>
+                  <span class="kcard__init">Инициатор: <b>Анна Волкова</b></span>
+                  <span class="kcard__phrase">Согласовать коммерческое предложение</span>
+                  <span class="kcard__foot"><span class="kcard__deadline"><svg class="ic ic-12"><use href="#i-clock"/></svg>срок сегодня, 18:00</span><span class="kcard__time">2 ч 10 мин</span></span>
+                  <span class="kcard__foot"><span class="source" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom" tabindex="0"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span><span class="btn btn--sm btn--warn">Рассмотреть</span></span>
+                </a>
+              </div>
+            </section>
+
+            <!-- Завершён -->
+            <section class="kanban__col" aria-labelledby="col-done">
+              <div class="kanban__head"><h2 class="sec-title" id="col-done"><span class="dot-state dot-state--ok"></span>Завершён</h2><span class="badge-count badge-count--mut">12</span></div>
+              <div class="kanban__list">
+                <a class="kcard" href="#/runs/r5">
+                  <span class="kcard__title">Собрать факты о компании Меридиан</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20 avatar--ok" aria-hidden="true">ИР</span><span>Исследователь рынка</span></span>
+                  <span class="kcard__init">Результат: <b>Факты о компании Меридиан.md</b></span>
+                  <span class="kcard__foot"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span><span class="kcard__time">вчера · 6 мин</span></span>
+                </a>
+                <a class="kcard kcard--err" href="#/runs/r7">
+                  <span class="kcard__title">Разослать уточнения по пилоту Онега</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20 avatar--acc" aria-hidden="true">МП</span><span>Менеджер продаж</span></span>
+                  <span class="kcard__init">Ошибка на шаге «Автор писем» · остальные ветви завершены</span>
+                  <span class="kcard__foot"><span class="pill pill--err pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Ошибка</span><span class="kcard__time">25 мин назад</span></span>
+                </a>
+                <a class="kcard" href="#/runs/r6">
+                  <span class="kcard__title">Сводка по лидам — 27 августа</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20 avatar--ok" aria-hidden="true">АП</span><span>Аналитик продаж</span></span>
+                  <span class="kcard__init">Результат: <b>Сводка по лидам — 27 августа.xlsx</b></span>
+                  <span class="kcard__foot"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span><span class="kcard__time">вчера · 4 мин</span></span>
+                </a>
+                <a class="kcard" href="#/runs/r9">
+                  <span class="kcard__title">Сравнить условия конкурентов для Терра</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20 avatar--ok" aria-hidden="true">ИР</span><span>Исследователь рынка</span></span>
+                  <span class="kcard__init">Остановлен пользователем · результат первой попытки сохранён</span>
+                  <span class="kcard__foot"><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-x-circle"/></svg>Отменён</span><span class="kcard__time">вчера · 2 мин</span></span>
+                </a>
+                <a class="kcard" href="#/runs/r8">
+                  <span class="kcard__title">Подготовить ответ на претензию компании Прибой</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20" aria-hidden="true">ЮК</span><span>Юридический консультант</span></span>
+                  <span class="kcard__init">Результат: <b>Ответ на претензию — Прибой.docx</b></span>
+                  <span class="kcard__foot"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span><span class="kcard__time">25 авг · 9 мин</span></span>
+                </a>
+                <a class="kcard" href="#/runs/r15">
+                  <span class="kcard__title">Утвердить сводку для руководителя</span>
+                  <span class="kcard__exec"><span class="avatar avatar--20 avatar--acc" aria-hidden="true">МП</span><span>Менеджер продаж</span></span>
+                  <span class="kcard__init">Результат: <b>Сводка для руководителя — неделя 34.pdf</b></span>
+                  <span class="kcard__foot"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span><span class="kcard__time">вчера · 11 мин</span></span>
+                </a>
+                <div class="kanban__more">Показаны 6 из 12 · прокрутите для загрузки</div>
+              </div>
+            </section>
+          </div>
+
+          <!-- Списочное представление тех же запусков -->
+          <div class="board__list">
+            <div class="card" style="flex:1 1 auto;min-height:0">
+              <div class="card__scroll">
+                <table class="table table--hover">
+                  <thead><tr><th>Запуск</th><th>Исполнитель</th><th>Инициатор</th><th>Источник</th><th class="num">Время</th><th style="width:132px">Статус</th></tr></thead>
+                  <tbody>
+                    <tr><td><a class="cell-title" href="#/runs/r1">Подготовить предложение для компании Север</a></td><td>Редактор предложений</td><td>Анна Волкова</td><td><span class="source"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></td><td class="num">12 мин</td><td><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r2">Ежедневная сводка по лидам</a></td><td>Аналитик продаж</td><td>Расписание «По будням, 09:00»</td><td><span class="source"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</span></td><td class="num">3 мин</td><td><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r12">Исследование компании Север</a></td><td>Аналитик продаж</td><td>Менеджер продаж</td><td><span class="source"><svg class="ic"><use href="#i-branch"/></svg>Делегирование</span></td><td class="num">7 мин</td><td><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r13">Подготовить черновик письма клиенту Кварта</a></td><td>Автор писем</td><td>Михаил Орлов</td><td><span class="source"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></td><td class="num">1 мин</td><td><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r4">Проверить условия пилота Ладога</a></td><td>Юридический консультант</td><td>Елена Крылова</td><td><span class="source"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></td><td class="num">41 мин</td><td><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Ждёт решения</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r14">Обработка нового лида: компания Север</a></td><td>Менеджер продаж</td><td>Анна Волкова</td><td><span class="source"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></td><td class="num">2 ч 10 мин</td><td><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Ждёт решения</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r3">Собрать факты о компании Юг</a></td><td>Исследователь рынка</td><td>Михаил Орлов</td><td><span class="source"><svg class="ic"><use href="#i-bot"/></svg>Kodex</span></td><td class="num">—</td><td><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>В очереди</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r10">Классифицировать входящие обращения за август</a></td><td>Классификатор обращений</td><td>Елена Крылова</td><td><span class="source"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></td><td class="num">—</td><td><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>В очереди</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r11">Недельное предложение руководителю</a></td><td>Менеджер продаж</td><td>Расписание «По пятницам, 16:00»</td><td><span class="source"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</span></td><td class="num">—</td><td><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>В очереди</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r7">Разослать уточнения по пилоту Онега</a></td><td>Менеджер продаж</td><td>Анна Волкова</td><td><span class="source"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></td><td class="num">18 мин</td><td><span class="pill pill--err pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Ошибка</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r5">Собрать факты о компании Меридиан</a></td><td>Исследователь рынка</td><td>Михаил Орлов</td><td><span class="source"><svg class="ic"><use href="#i-bot"/></svg>Kodex</span></td><td class="num">6 мин</td><td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r6">Сводка по лидам — 27 августа</a></td><td>Аналитик продаж</td><td>Расписание «По будням, 09:00»</td><td><span class="source"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</span></td><td class="num">4 мин</td><td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r9">Сравнить условия конкурентов для Терра</a></td><td>Исследователь рынка</td><td>Михаил Орлов</td><td><span class="source"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></td><td class="num">2 мин</td><td><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-x-circle"/></svg>Отменён</span></td></tr>
+                    <tr><td><a class="cell-title" href="#/runs/r8">Подготовить ответ на претензию компании Прибой</a></td><td>Юридический консультант</td><td>Елена Крылова</td><td><span class="source"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></td><td class="num">9 мин</td><td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="card__foot"><span>Показано 14 из 21 · прокрутите для загрузки следующей страницы</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Вариант C для Проектов с большим числом параллельных работ: запуски сгруппированы в колонки «В очереди / Работает / Ждёт решения / Завершён», каждая прокручивается независимо. Карточка показывает название, исполнителя (аватар), инициатора, источник запуска (иконка + tooltip), длительность и — для ожидающих решения — срок и кнопку «Рассмотреть». Фильтры по сотруднику, источнику и периоду применяются на сервере; переключатель «Kanban / Список» меняет представление тех же данных без изменения размеров layout. Ресурсы Проекта сведены в подзаголовок и открываются через навигацию Проекта, чтобы не дублировать быстрые действия.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'project.overview', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Обзор Проекта · Kanban', object: 'Корпоративные продажи', can: ['объяснить, почему запуск ждёт решения или в очереди', 'запустить сотрудника или Процесс', 'подготовить план изменений'] },
+  });
+</script>
+</body>
+</html>

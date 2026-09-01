@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Интеграции · Подключение GitHub</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-conn .pkg-icon { width: 32px; height: 32px; border-radius: var(--r-2); border: 1px solid var(--line); background: var(--bg-field); color: var(--sec); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .p-conn .steps { padding: 12px 18px; border-bottom: 1px solid var(--line-hair); background: var(--bg-subtle); flex-wrap: wrap; }
+  .p-conn .wizard { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; }
+  .p-conn .step-block { border: 1px solid var(--line); border-radius: var(--r-3); padding: 11px 14px; background: var(--bg); }
+  .p-conn .radio-card { min-height: 40px; padding: 8px 12px; }
+  .p-conn .radio-card__sub { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .p-conn .step-block.is-done { background: var(--bg-subtle); }
+  .p-conn .step-block__head { display: flex; align-items: center; gap: 10px; }
+  .p-conn .step-block__head .h3 { flex: 1 1 auto; }
+  .p-conn .cred { position: relative; }
+  .p-conn .cred .input { padding-right: 40px; font-family: var(--font-mono); letter-spacing: 0.08em; }
+  .p-conn .cred .btn { position: absolute; right: 3px; top: 3px; }
+  .p-conn .check-result { border: 1px solid var(--ok-line); border-radius: var(--r-2); background: var(--ok-soft); padding: 10px 12px; }
+  .p-conn .check-result ul { margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: var(--ink-2); line-height: 1.5; columns: 2; column-gap: 24px; }
+  .p-conn .res-host { display: flex; flex-direction: column; gap: 8px; }
+  .p-conn .res-host .picker--inline { max-height: 320px; }
+  .p-conn .res-host .picker__list { max-height: 136px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Интеграции · Подключение GitHub (onboarding) · desktop 1440×1024 · маршрут <code>/integrations/connections/new?package=github</code></p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page p-conn" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Интеграции</a><span>/</span><a href="#">Подключения</a><span>/</span><span>Новое подключение</span></div>
+      <div class="page-title-row">
+        <div class="row gap-12 row--top">
+          <span class="pkg-icon" style="width:40px;height:40px"><svg class="ic ic-20"><use href="#i-branch"/></svg></span>
+          <div>
+            <div class="page-title"><h1 id="page-title">Подключение GitHub</h1><span class="tag tag--mono">пакет v1.2.0</span><span class="pill pill--info"><svg class="ic"><use href="#i-edit"/></svg>Черновик подключения</span></div>
+            <div class="page-sub">Пять шагов: способ авторизации, учётные данные, проверка, разрешённые ресурсы и включение. Значение секрета после сохранения не возвращается.</div>
+          </div>
+        </div>
+        <div class="page-actions"><button class="btn btn--lg" type="button">Отменить</button></div>
+      </div>
+    </div>
+
+    <div class="page-body col gap-14">
+      <section class="card">
+        <div class="steps" aria-label="Шаги подключения">
+          <span class="step is-done"><span class="step__n"><svg class="ic ic-12"><use href="#i-check"/></svg></span>Способ авторизации</span><span class="step__line"></span>
+          <span class="step is-done"><span class="step__n"><svg class="ic ic-12"><use href="#i-check"/></svg></span>Учётные данные</span><span class="step__line"></span>
+          <span class="step is-done"><span class="step__n"><svg class="ic ic-12"><use href="#i-check"/></svg></span>Проверка</span><span class="step__line"></span>
+          <span class="step is-active" aria-current="step"><span class="step__n">4</span>Ресурсы</span><span class="step__line"></span>
+          <span class="step"><span class="step__n">5</span>Готово</span>
+        </div>
+        <div class="card__body card__body--pad wizard">
+          <div class="col gap-12">
+            <!-- Шаг 1 -->
+            <div class="step-block is-done">
+              <div class="step-block__head"><span class="step is-done"><span class="step__n"><svg class="ic ic-12"><use href="#i-check"/></svg></span></span><span class="h3">Способ авторизации</span><span class="xs mut">выбрано</span><button class="btn btn--sm btn--ghost" type="button">Изменить</button></div>
+              <div class="col gap-8 mt-10" role="radiogroup" aria-label="Способ авторизации">
+                <label class="radio-card is-checked"><input type="radio" name="auth" checked><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">OAuth от имени пользователя <span class="tag tag--acc">рекомендуется</span></span><span class="radio-card__sub">Действия с правами инициатора запуска, не шире его прав в GitHub. Подходит для изменений.</span></span></label>
+                <label class="radio-card"><input type="radio" name="auth"><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Сервисная учётная запись (только чтение, scoped)</span><span class="radio-card__sub">Только capabilities класса read для выбранных репозиториев; изменения недоступны.</span></span></label>
+                <label class="radio-card"><input type="radio" name="auth"><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Токен GitHub App</span><span class="radio-card__sub">Отдельно одобренная service identity для изменений; нужно согласование администратора.</span></span></label>
+              </div>
+            </div>
+
+            <!-- Шаг 2 -->
+            <div class="step-block is-done">
+              <div class="step-block__head"><span class="step is-done"><span class="step__n"><svg class="ic ic-12"><use href="#i-check"/></svg></span></span><span class="h3">Учётные данные</span><span class="xs mut">сохранены в integration-gateway</span></div>
+              <div class="form-grid mt-10">
+                <div class="field"><span class="field__label">Название подключения</span><input class="input" type="text" value="GitHub · Основная организация" aria-label="Название подключения"></div>
+                <div class="field"><span class="field__label">Организация GitHub</span><input class="input" type="text" value="org" aria-label="Организация GitHub"></div>
+                <div class="field" style="grid-column: span 2">
+                  <label class="field__label" for="cred">Учётные данные OAuth <span class="req" aria-hidden="true">*</span></label>
+                  <div class="cred"><input class="input" id="cred" type="password" value="••••••••••••••••••••7f2a" aria-describedby="cred-hint" autocomplete="off"><button class="btn btn--sm btn--icon btn--ghost" type="button" id="cred-eye" aria-label="Показать значение" aria-pressed="false" data-tip="Показать" data-tip-pos="left"><svg class="ic"><use href="#i-eye"/></svg></button></div>
+                  <div class="field__hint" id="cred-hint"><svg class="ic ic-12"><use href="#i-lock"/></svg> После сохранения значение не возвращается: хранится только в integration-gateway, в браузер и Pod сотрудника не передаётся.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Шаг 3 -->
+            <div class="step-block is-done">
+              <div class="step-block__head"><span class="step is-done"><span class="step__n"><svg class="ic ic-12"><use href="#i-check"/></svg></span></span><span class="h3">Проверка подключения</span><button class="btn btn--sm" type="button" id="btn-check"><svg class="ic"><use href="#i-refresh"/></svg>Проверить ещё раз</button></div>
+              <div class="check-result mt-10" id="check-result" role="status">
+                <div class="row gap-8"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверено · 2 с</span><span class="xs mut">сегодня, 12:04 · через egress-gateway</span></div>
+                <ul>
+                  <li>Пользователь подтверждён: a.volkova (OAuth)</li>
+                  <li>Доступ к организации <b>org</b>: чтение репозиториев, Issues, Pull Requests</li>
+                  <li>Права на запись: ветки и PR — доступны через делегированную учётную запись</li>
+                  <li>Права администратора организации: отсутствуют — это ожидаемо</li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- Шаг 4 -->
+            <div class="step-block" style="border-color:var(--acc);box-shadow:0 0 0 2px var(--acc-tint)">
+              <div class="step-block__head"><span class="step is-active"><span class="step__n">4</span></span><span class="h3">Разрешённые ресурсы</span><span class="xs mut">область подключения; разрешения сотрудникам выдаются отдельно</span></div>
+              <div class="field mt-10">
+                <span class="field__label">Репозитории организации org <span class="req" aria-hidden="true">*</span></span>
+                <div class="res-host" id="res-host"></div>
+                <div class="field__hint">Список запрашивается у GitHub постранично, поиск выполняется на сервере. Выбранные репозитории задают границу подключения.</div>
+              </div>
+              <div class="form-grid mt-12">
+                <div class="field"><span class="field__label">Базовые ветки для изменений</span><div class="row gap-6 row--wrap"><span class="chip is-active">main<button class="chip__x" type="button" aria-label="Убрать main"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span><span class="chip is-active">release/*<button class="chip__x" type="button" aria-label="Убрать release/*"><svg class="ic ic-12"><use href="#i-x"/></svg></button></span><button class="chip" type="button"><svg class="ic"><use href="#i-plus"/></svg>Добавить</button></div></div>
+                <div class="field"><span class="field__label">Проверка работоспособности</span><button class="select select--block" type="button" aria-haspopup="listbox"><span class="select__value">Каждые 15 минут</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button></div>
+              </div>
+            </div>
+
+            <!-- Шаг 5 -->
+            <div class="step-block" style="opacity:.7">
+              <div class="step-block__head"><span class="step"><span class="step__n">5</span></span><span class="h3">Включение</span><span class="xs mut">после сохранения ресурсов</span></div>
+              <div class="row gap-14 mt-10">
+                <label class="switch"><input type="checkbox" checked><span class="switch__track"></span><span>Подключение включено</span></label>
+                <span class="xs mut">Выключенное подключение сохраняет разрешения, но все вызовы отклоняются до включения.</span>
+              </div>
+            </div>
+          </div>
+
+          <aside class="col gap-12">
+            <div class="card card--flat">
+              <div class="card__head"><h2 class="sec-title">Итог подключения</h2></div>
+              <div class="card__body">
+                <div class="kv">
+                  <div class="kv__row"><span class="kv__k">Пакет</span><span class="kv__v">GitHub · v1.2.0</span></div>
+                  <div class="kv__row"><span class="kv__k">Авторизация</span><span class="kv__v">OAuth от имени пользователя</span></div>
+                  <div class="kv__row"><span class="kv__k">Владелец</span><span class="kv__v">a.volkova</span></div>
+                  <div class="kv__row"><span class="kv__k">Учётные данные</span><span class="kv__v">токен ****7f2a · истекает через 84 дня</span></div>
+                  <div class="kv__row"><span class="kv__k">Проверка</span><span class="kv__v ok-text">пройдена, 12:04</span></div>
+                  <div class="kv__row"><span class="kv__k">Ресурсы</span><span class="kv__v" id="sum-res">3 репозитория</span></div>
+                  <div class="kv__row"><span class="kv__k">Health</span><span class="kv__v"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Работает · проверка 12:04</span></span></div>
+                </div>
+              </div>
+              <div class="card__foot" style="flex-direction:column;align-items:stretch;gap:8px">
+                <button class="btn btn--primary btn--lg btn--block" type="button" id="btn-save">Сохранить ресурсы и продолжить</button>
+                <button class="btn btn--block" type="button">Сохранить черновик</button>
+              </div>
+            </div>
+            <div class="notice notice--sm"><svg class="ic"><use href="#i-shield"/></svg><span class="notice__text">Подключение задаёт границу ресурсов. Право конкретного сотрудника или Процесса использовать capability выдаётся отдельно в разделе «Разрешения».</span></div>
+            <div class="card">
+              <div class="card__head"><h2 class="sec-title">Существующие подключения</h2></div>
+              <div>
+                <a class="list-row" href="#"><span class="pkg-icon"><svg class="ic"><use href="#i-ticket"/></svg></span><div class="list-row__main"><div class="list-row__title"><span>Jira · Корпоративный трекер</span></div><div class="list-row__sub"><span>сервисная · только чтение</span></div><span class="pill pill--wait pill--sm" style="align-self:flex-start;margin-top:2px"><svg class="ic"><use href="#i-key"/></svg>Требует повторной авторизации</span></div></a>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<p class="stage-note">Onboarding подключения — одностраничный набор шагов со sticky-итогом: способ авторизации (radio-card), безопасный ввод credential с eye-toggle и пояснением, что значение после сохранения не возвращается, проверка с перечнем подтверждённых прав, async multi picker репозиториев с серверным поиском и cursor-подгрузкой (500 элементов), enable/disable и health. Область подключения отделена от разрешений сотрудникам.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  // Eye-toggle: показ значения возможен только до сохранения
+  const eye = document.getElementById('cred-eye'), cred = document.getElementById('cred');
+  eye.addEventListener('click', () => {
+    const show = cred.type === 'password';
+    cred.type = show ? 'text' : 'password';
+    eye.setAttribute('aria-pressed', show); eye.setAttribute('aria-label', show ? 'Скрыть значение' : 'Показать значение'); eye.dataset.tip = show ? 'Скрыть' : 'Показать';
+    eye.innerHTML = `<svg class="ic"><use href="#i-${show ? 'eye-off' : 'eye'}"/></svg>`;
+  });
+  // Повторная проверка подключения
+  const btnCheck = document.getElementById('btn-check'), result = document.getElementById('check-result');
+  btnCheck.addEventListener('click', () => {
+    btnCheck.classList.add('is-loading'); btnCheck.disabled = true;
+    result.innerHTML = '<div class="row gap-8"><span class="spinner"></span><span class="sm">Проверяем подключение через egress-gateway…</span></div>';
+    setTimeout(() => {
+      btnCheck.classList.remove('is-loading'); btnCheck.disabled = false;
+      result.innerHTML = '<div class="row gap-8"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверено · 1 с</span><span class="xs mut">только что · через egress-gateway</span></div><ul><li>Пользователь подтверждён: a.volkova (OAuth)</li><li>Доступ к организации <b>org</b>: чтение репозиториев, Issues, Pull Requests</li><li>Права на запись: ветки и PR — доступны через делегированную учётную запись</li><li>Права администратора организации: отсутствуют — это ожидаемо</li></ul>';
+      Kodex.toast(document.getElementById('frame'), 'Подключение проверено, секрет не раскрывался');
+    }, 1200);
+  });
+  // Async multi picker репозиториев: 500 элементов, серверный поиск, cursor-подгрузка
+  const r = Kodex.gen.rng(21);
+  const words = ['billing', 'crm', 'portal', 'auth', 'gateway', 'reports', 'catalog', 'mobile', 'infra', 'docs', 'analytics', 'notify', 'search', 'ledger', 'support'];
+  const repos = Array.from({ length: 500 }, (_, i) => { const w = Kodex.gen.pick(r, words); const s = Kodex.gen.pick(r, ['service', 'api', 'web', 'worker', 'lib', 'tools']); return { id: 'r' + i, name: `org/${w}-${s}${i > 40 ? '-' + i : ''}`, lang: Kodex.gen.pick(r, ['Go', 'TypeScript', 'Python', 'Kotlin']), visibility: r() < 0.85 ? 'внутренний' : 'публичный', updated: Kodex.gen.pick(r, ['сегодня', 'вчера', '3 дн. назад', '2 нед. назад']) }; });
+  const host = document.getElementById('res-host');
+  const picker = Kodex.asyncPicker({
+    trigger: host, host, inline: true, multi: true, items: repos, placeholder: 'Найти репозиторий (серверный поиск)',
+    selected: [repos[0], repos[3], repos[7]],
+    match: (it, q) => it.name.toLowerCase().includes(q),
+    render: (it) => `<span class="picker__text"><span class="picker__title mono">${Kodex.esc(it.name)}</span><span class="picker__sub"><span>${it.lang}</span><span>·</span><span>${it.visibility}</span><span>·</span><span>обновлён ${it.updated}</span></span></span>`,
+    renderSelected: (it) => it.name,
+    onSelect: (sel) => { const n = sel.length; document.getElementById('sum-res').textContent = n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'репозиторий' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'репозитория' : 'репозиториев'); },
+  });
+  document.getElementById('btn-save').addEventListener('click', () => Kodex.toast(document.getElementById('frame'), 'Ресурсы сохранены: ' + picker.selected().length + ' репозиториев'));
+  Kodex.mount({
+    nav: 'integrations', project: null, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Интеграции · Новое подключение', object: 'GitHub', can: ['объяснить способы авторизации', 'подготовить список ресурсов по описанию', 'перевести вас в защищённую форму ввода учётных данных — значения секретов Kodex не принимает'] },
+  });
+</script>
+</body>
+</html>

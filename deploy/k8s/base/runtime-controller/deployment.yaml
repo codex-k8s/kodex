@@ -117,7 +117,7 @@ spec:
         - name: callback-server-tls
           secret: {secretName: runtime-controller-callback-server-tls, defaultMode: 0440}
         - name: callback-client-ca
-          secret: {secretName: runtime-execution-client-tls, defaultMode: 0440, items: [{key: ca.crt, path: ca.crt}]}
+          configMap: {name: kodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.crt}]}
         - name: otel-ca
           configMap: {name: kodex-otel-ca, defaultMode: 0440}
         - name: sentry-dsn

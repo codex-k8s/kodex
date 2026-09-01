@@ -1,0 +1,212 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: gitlab
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: GitLab
+  description: Чтение проекта, репозитория, merge requests и pipelines, а также ограниченные изменения в одном exact project.
+  category: source-control
+  adapter: GITLAB
+  credential: {secretKey: token, kind: TOKEN}
+  configurationFields:
+    - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
+    - {key: project_path, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+  networkDestinations:
+    - {key: gitlab_api, source: CONFIGURATION, configurationField: base_url, port: 443, tls: REQUIRED}
+  healthCheck: {operation: gitlab.project.metadata.read, timeoutSeconds: 15, maxAttempts: 3}
+  capabilities:
+    - key: gitlab.project.metadata.read
+      name: Прочитать метаданные проекта
+      description: Возвращает безопасную проекцию одного разрешённого GitLab project.
+      operation: gitlab.project.metadata.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields: []
+      outputFields:
+        - {key: id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
+        - {key: path_with_namespace, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: default_branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: visibility, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+        - {key: archived, type: BOOLEAN, required: true}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.repository.file.read
+      name: Прочитать файл репозитория
+      description: Читает один файл exact revision с ограничением размера ответа.
+      operation: gitlab.repository.file.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: file_path, type: STRING, format: PLAIN, required: true, maximumLength: 1024}
+        - {key: ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+      outputFields:
+        - {key: file_path, type: STRING, format: PLAIN, required: true, maximumLength: 1024}
+        - {key: ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: blob_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
+        - {key: encoding, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16, allowedValues: [base64]}
+        - {key: content, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.issue.read
+      name: Прочитать issue
+      description: Возвращает безопасную проекцию одного issue по IID.
+      operation: gitlab.issue.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: issue_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+      outputFields:
+        - {key: iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+        - {key: description, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.issue.create
+      name: Создать issue
+      description: Создаёт issue с effect marker после Human Gate.
+      operation: gitlab.issue.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: description, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+      outputFields:
+        - {key: iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
+    - key: gitlab.issue.update
+      name: Обновить issue
+      description: Изменяет только title, description или state одного issue после Human Gate.
+      operation: gitlab.issue.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: issue_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: false, maximumLength: 512}
+        - {key: description, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+        - {key: state_event, type: STRING, format: IDENTIFIER, required: false, maximumLength: 16, allowedValues: [close, reopen]}
+      outputFields:
+        - {key: iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
+    - key: gitlab.merge_request.read
+      name: Прочитать merge request
+      description: Возвращает безопасную проекцию одного merge request по IID.
+      operation: gitlab.merge_request.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: merge_request_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+      outputFields:
+        - {key: iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+        - {key: source_branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: target_branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.merge_request.discussion.create
+      name: Добавить комментарий к merge request
+      description: Публикует один идемпотентный комментарий после Human Gate.
+      operation: gitlab.merge_request.discussion.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: merge_request_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: body, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      outputFields:
+        - {key: note_id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
+        - {key: merge_request_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
+    - key: gitlab.branch.create
+      name: Создать ветку
+      description: Создаёт exact branch от заданной revision после Human Gate.
+      operation: gitlab.branch.create
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+      outputFields:
+        - {key: name, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: commit_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
+    - key: gitlab.commit.create
+      name: Создать commit с одним файлом
+      description: Создаёт один commit с create/update одного файла после Human Gate.
+      operation: gitlab.commit.create
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: action, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16, allowedValues: [create, update]}
+        - {key: file_path, type: STRING, format: PLAIN, required: true, maximumLength: 1024}
+        - {key: content, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: commit_message, type: STRING, format: PLAIN, required: true, maximumLength: 2048}
+      outputFields:
+        - {key: id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
+        - {key: short_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 45, maxAttempts: 2, retryBackoffMilliseconds: 500}
+    - key: gitlab.merge_request.create
+      name: Создать merge request
+      description: Создаёт merge request между exact branches после Human Gate.
+      operation: gitlab.merge_request.create
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: source_branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: target_branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: description, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+      outputFields:
+        - {key: iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
+    - key: gitlab.pipeline.read
+      name: Прочитать pipeline
+      description: Возвращает безопасную проекцию одного pipeline.
+      operation: gitlab.pipeline.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: pipeline_id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
+      outputFields:
+        - {key: id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+        - {key: ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
+        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.pipeline.retry
+      name: Повторить pipeline
+      description: Запрашивает повтор одного pipeline после Human Gate.
+      operation: gitlab.pipeline.retry
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: pipeline_id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
+      outputFields:
+        - {key: id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}

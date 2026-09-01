@@ -39,12 +39,33 @@ service PlatformQueryService {
   rpc GetOwnerGate(GetOwnerGateRequest) returns (GetOwnerGateResponse);
   rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
   rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
+  rpc GetArtifactImpact(GetArtifactImpactRequest) returns (GetArtifactImpactResponse);
+  rpc GetAttachmentSet(GetAttachmentSetRequest) returns (GetAttachmentSetResponse);
   rpc ListSchedules(ListSchedulesRequest) returns (ListSchedulesResponse);
+  rpc GetSchedule(GetScheduleRequest) returns (GetScheduleResponse);
+  rpc ListScheduleRevisions(ListScheduleRevisionsRequest) returns (ListScheduleRevisionsResponse);
+  rpc ListScheduleRuns(ListScheduleRunsRequest) returns (ListScheduleRunsResponse);
+  rpc ListProviderAccounts(ListProviderAccountsRequest) returns (ListProviderAccountsResponse);
+  rpc GetProviderAccount(GetProviderAccountRequest) returns (GetProviderAccountResponse);
   rpc ListIntegrationDefinitions(ListIntegrationDefinitionsRequest) returns (ListIntegrationDefinitionsResponse);
   rpc ListIntegrationConnections(ListIntegrationConnectionsRequest) returns (ListIntegrationConnectionsResponse);
   rpc GetIntegrationConnection(GetIntegrationConnectionRequest) returns (GetIntegrationConnectionResponse);
   rpc GetAdministration(GetAdministrationRequest) returns (GetAdministrationResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
+  rpc GetAgentRuntimeConfiguration(GetAgentRuntimeConfigurationRequest) returns (GetAgentRuntimeConfigurationResponse);
+  rpc ListAgentRuntimeConfigurationVersions(ListAgentRuntimeConfigurationVersionsRequest) returns (ListAgentRuntimeConfigurationVersionsResponse);
+  rpc ListRuntimeEnvironmentSets(ListRuntimeEnvironmentSetsRequest) returns (ListRuntimeEnvironmentSetsResponse);
+  rpc GetRuntimeEnvironmentSet(GetRuntimeEnvironmentSetRequest) returns (GetRuntimeEnvironmentSetResponse);
+  rpc ListRuntimeEnvironmentVersions(ListRuntimeEnvironmentVersionsRequest) returns (ListRuntimeEnvironmentVersionsResponse);
+  rpc GetRuntimeEnvironmentReadiness(GetRuntimeEnvironmentReadinessRequest) returns (GetRuntimeEnvironmentReadinessResponse);
+  rpc ListRuntimeEnvironmentAgents(ListRuntimeEnvironmentAgentsRequest) returns (ListRuntimeEnvironmentAgentsResponse);
+  rpc ListTemplateVariables(ListTemplateVariablesRequest) returns (ListTemplateVariablesResponse);
+  rpc ListProviderDefinitions(ListProviderDefinitionsRequest) returns (ListProviderDefinitionsResponse);
+  rpc ListRoleImageRecipeRevisions(ListRoleImageRecipeRevisionsRequest) returns (ListRoleImageRecipeRevisionsResponse);
+  rpc ValidatePromptTemplate(ValidatePromptTemplateRequest) returns (ValidatePromptTemplateResponse);
+  rpc PreviewPromptTemplate(PreviewPromptTemplateRequest) returns (PreviewPromptTemplateResponse);
+  rpc ListRuntimeSecrets(ListRuntimeSecretsRequest) returns (ListRuntimeSecretsResponse);
+  rpc GetRuntimeSecret(GetRuntimeSecretRequest) returns (GetRuntimeSecretResponse);
 }
 
 service PlatformCommandService {
@@ -64,6 +85,8 @@ service PlatformCommandService {
   rpc UpdateAgent(UpdateAgentRequest) returns (UpdateAgentResponse);
   rpc SetAgentEnabled(SetAgentEnabledRequest) returns (SetAgentEnabledResponse);
   rpc ArchiveAgent(ArchiveAgentRequest) returns (ArchiveAgentResponse);
+  rpc SetAgentAvatar(SetAgentAvatarRequest) returns (SetAgentAvatarResponse);
+  rpc RemoveAgentAvatar(RemoveAgentAvatarRequest) returns (RemoveAgentAvatarResponse);
   rpc CreateInstructionDraft(CreateInstructionDraftRequest) returns (CreateInstructionDraftResponse);
   rpc ValidateInstructionDraft(ValidateInstructionDraftRequest) returns (ValidateInstructionDraftResponse);
   rpc PublishInstructionDraft(PublishInstructionDraftRequest) returns (PublishInstructionDraftResponse);
@@ -81,23 +104,74 @@ service PlatformCommandService {
   rpc RetryRun(RetryRunRequest) returns (RetryRunResponse);
   rpc ResolveOwnerGate(ResolveOwnerGateRequest) returns (ResolveOwnerGateResponse);
   rpc UploadArtifact(stream UploadArtifactRequest) returns (UploadArtifactResponse);
+  rpc UploadOrganizationArtifact(stream UploadOrganizationArtifactRequest) returns (UploadOrganizationArtifactResponse);
   rpc DownloadArtifact(DownloadArtifactRequest) returns (stream DownloadArtifactResponse);
   rpc ChangeArtifactBinding(ChangeArtifactBindingRequest) returns (ChangeArtifactBindingResponse);
+  rpc DeleteArtifact(DeleteArtifactRequest) returns (DeleteArtifactResponse);
+  rpc RestoreArtifact(RestoreArtifactRequest) returns (RestoreArtifactResponse);
+  rpc PurgeArtifact(PurgeArtifactRequest) returns (PurgeArtifactResponse);
+  rpc CreateAttachmentSetDraft(CreateAttachmentSetDraftRequest) returns (CreateAttachmentSetDraftResponse);
+  rpc CreateOrganizationAttachmentSetDraft(CreateOrganizationAttachmentSetDraftRequest) returns (CreateOrganizationAttachmentSetDraftResponse);
+  rpc AddAttachmentSetItems(AddAttachmentSetItemsRequest) returns (AddAttachmentSetItemsResponse);
+  rpc RemoveAttachmentSetItems(RemoveAttachmentSetItemsRequest) returns (RemoveAttachmentSetItemsResponse);
+  rpc FinalizeAttachmentSet(FinalizeAttachmentSetRequest) returns (FinalizeAttachmentSetResponse);
   rpc CreateSchedule(CreateScheduleRequest) returns (CreateScheduleResponse);
   rpc UpdateSchedule(UpdateScheduleRequest) returns (UpdateScheduleResponse);
   rpc SetScheduleEnabled(SetScheduleEnabledRequest) returns (SetScheduleEnabledResponse);
+  rpc ArchiveSchedule(ArchiveScheduleRequest) returns (ArchiveScheduleResponse);
+  rpc DeleteSchedule(DeleteScheduleRequest) returns (DeleteScheduleResponse);
+  rpc CreateProviderAccount(CreateProviderAccountRequest) returns (CreateProviderAccountResponse);
+  rpc StartProviderAccountDeviceAuthorization(StartProviderAccountDeviceAuthorizationRequest) returns (StartProviderAccountDeviceAuthorizationResponse);
+  rpc AuthorizeProviderAccountAPIKey(AuthorizeProviderAccountAPIKeyRequest) returns (AuthorizeProviderAccountAPIKeyResponse);
+  rpc RefreshProviderAccountAuthorization(RefreshProviderAccountAuthorizationRequest) returns (RefreshProviderAccountAuthorizationResponse);
+  rpc RevokeProviderAccount(RevokeProviderAccountRequest) returns (RevokeProviderAccountResponse);
+  rpc SetProviderAccountEnabled(SetProviderAccountEnabledRequest) returns (SetProviderAccountEnabledResponse);
   rpc CreateIntegrationConnection(CreateIntegrationConnectionRequest) returns (CreateIntegrationConnectionResponse);
+  rpc UpdateIntegrationConnection(UpdateIntegrationConnectionRequest) returns (UpdateIntegrationConnectionResponse);
+  rpc DeleteIntegrationConnection(DeleteIntegrationConnectionRequest) returns (DeleteIntegrationConnectionResponse);
+  rpc ConfigureIntegrationConnectionCredential(ConfigureIntegrationConnectionCredentialRequest) returns (ConfigureIntegrationConnectionCredentialResponse);
   rpc TestIntegrationConnection(TestIntegrationConnectionRequest) returns (TestIntegrationConnectionResponse);
   rpc SetIntegrationConnectionEnabled(SetIntegrationConnectionEnabledRequest) returns (SetIntegrationConnectionEnabledResponse);
   rpc ChangeIntegrationGrant(ChangeIntegrationGrantRequest) returns (ChangeIntegrationGrantResponse);
+  rpc PublishAgentRuntimeConfiguration(PublishAgentRuntimeConfigurationRequest) returns (PublishAgentRuntimeConfigurationResponse);
+  rpc CreateConfigOverlayDraft(CreateConfigOverlayDraftRequest) returns (CreateConfigOverlayDraftResponse);
+  rpc ValidateConfigOverlayDraft(ValidateConfigOverlayDraftRequest) returns (ValidateConfigOverlayDraftResponse);
+  rpc PublishConfigOverlayDraft(PublishConfigOverlayDraftRequest) returns (PublishConfigOverlayDraftResponse);
+  rpc RollbackConfigOverlay(RollbackConfigOverlayRequest) returns (RollbackConfigOverlayResponse);
+  rpc CreateRuntimeEnvironmentSet(CreateRuntimeEnvironmentSetRequest) returns (CreateRuntimeEnvironmentSetResponse);
+  rpc PublishRuntimeEnvironmentVersion(PublishRuntimeEnvironmentVersionRequest) returns (PublishRuntimeEnvironmentVersionResponse);
+  rpc RollbackRuntimeEnvironment(RollbackRuntimeEnvironmentRequest) returns (RollbackRuntimeEnvironmentResponse);
+  rpc SetRuntimeEnvironmentEnabled(SetRuntimeEnvironmentEnabledRequest) returns (SetRuntimeEnvironmentEnabledResponse);
+  rpc DeleteRuntimeEnvironment(DeleteRuntimeEnvironmentRequest) returns (DeleteRuntimeEnvironmentResponse);
+  rpc BindAgentRuntimeEnvironment(BindAgentRuntimeEnvironmentRequest) returns (BindAgentRuntimeEnvironmentResponse);
+  rpc PromoteRoleImage(PromoteRoleImageRequest) returns (PromoteRoleImageResponse);
+  rpc PrepareCreateRuntimeSecret(PrepareCreateRuntimeSecretRequest) returns (PrepareCreateRuntimeSecretResponse);
+  rpc PrepareRotateRuntimeSecret(PrepareRotateRuntimeSecretRequest) returns (PrepareRotateRuntimeSecretResponse);
+  rpc PrepareRevealRuntimeSecret(PrepareRevealRuntimeSecretRequest) returns (PrepareRevealRuntimeSecretResponse);
+  rpc PrepareRevokeRuntimeSecret(PrepareRevokeRuntimeSecretRequest) returns (PrepareRevokeRuntimeSecretResponse);
+}
+
+// RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
+// grant связывает actor, Проект, вид операции и exact Secret revision.
+service RuntimeSecretWorkService {
+  rpc CheckRuntimeSecretWorkReadiness(CheckRuntimeSecretWorkReadinessRequest) returns (CheckRuntimeSecretWorkReadinessResponse);
+  rpc ListRuntimeSecretRecoveryWork(ListRuntimeSecretRecoveryWorkRequest) returns (ListRuntimeSecretRecoveryWorkResponse);
+  rpc ConsumeRuntimeSecretOperation(ConsumeRuntimeSecretOperationRequest) returns (ConsumeRuntimeSecretOperationResponse);
+  rpc CompleteRuntimeSecretOperation(CompleteRuntimeSecretOperationRequest) returns (CompleteRuntimeSecretOperationResponse);
+  rpc FailRuntimeSecretOperation(FailRuntimeSecretOperationRequest) returns (FailRuntimeSecretOperationResponse);
+  rpc RecoverRuntimeSecretMaterialization(RecoverRuntimeSecretMaterializationRequest) returns (RecoverRuntimeSecretMaterializationResponse);
 }
 
 service SystemAssistantService {
   rpc GetSystemAssistant(GetSystemAssistantRequest) returns (GetSystemAssistantResponse);
   rpc ListAssistantConversations(ListAssistantConversationsRequest) returns (ListAssistantConversationsResponse);
   rpc CreateAssistantConversation(CreateAssistantConversationRequest) returns (CreateAssistantConversationResponse);
+  rpc UpdateAssistantConversationTitle(UpdateAssistantConversationTitleRequest) returns (UpdateAssistantConversationTitleResponse);
   rpc AddAssistantTurn(AddAssistantTurnRequest) returns (AddAssistantTurnResponse);
+  rpc UpdateAssistantPlanDraft(UpdateAssistantPlanDraftRequest) returns (UpdateAssistantPlanDraftResponse);
+  rpc ValidateAssistantPlan(ValidateAssistantPlanRequest) returns (ValidateAssistantPlanResponse);
   rpc ApplyAssistantPlan(ApplyAssistantPlanRequest) returns (ApplyAssistantPlanResponse);
+  rpc RejectAssistantPlan(RejectAssistantPlanRequest) returns (RejectAssistantPlanResponse);
   rpc UpdateAssistantOwnerInstructions(UpdateAssistantOwnerInstructionsRequest) returns (UpdateAssistantOwnerInstructionsResponse);
   rpc RecoverSystemAssistant(RecoverSystemAssistantRequest) returns (RecoverSystemAssistantResponse);
 }
@@ -107,9 +181,13 @@ service RuntimeWorkService {
   rpc ReadExecutionArtifact(ReadExecutionArtifactRequest) returns (ReadExecutionArtifactResponse);
   rpc RenewExecution(RenewExecutionRequest) returns (RenewExecutionResponse);
   rpc ReportExecutionProgress(ReportExecutionProgressRequest) returns (ReportExecutionProgressResponse);
+  rpc CommitProviderCredentialRefresh(CommitProviderCredentialRefreshRequest) returns (CommitProviderCredentialRefreshResponse);
   rpc CompleteExecution(CompleteExecutionRequest) returns (CompleteExecutionResponse);
   rpc DelegateExecution(DelegateExecutionRequest) returns (DelegateExecutionResponse);
   rpc ProposeAssistantPlan(ProposeAssistantPlanRequest) returns (ProposeAssistantPlanResponse);
+  rpc ProposeAssistantMetadata(ProposeAssistantMetadataRequest) returns (ProposeAssistantMetadataResponse);
+  rpc ProposeRunMetadata(ProposeRunMetadataRequest) returns (ProposeRunMetadataResponse);
+  rpc RecordRunToolCall(RecordRunToolCallRequest) returns (RecordRunToolCallResponse);
   rpc ReconcileWarmRuntime(ReconcileWarmRuntimeRequest) returns (ReconcileWarmRuntimeResponse);
   rpc ReportWarmRuntime(ReportWarmRuntimeRequest) returns (ReportWarmRuntimeResponse);
   rpc ClaimDueSchedules(ClaimDueSchedulesRequest) returns (ClaimDueSchedulesResponse);
@@ -122,6 +200,19 @@ service RuntimeWorkService {
   rpc CompleteIntegrationInvocation(CompleteIntegrationInvocationRequest) returns (CompleteIntegrationInvocationResponse);
 }
 
+// SessionArchiveWorkService обслуживает только fenced lifecycle долговечного
+// состояния Codex session. Workload не выбирает tenant, session, PVC или
+// object key: все координаты назначает control-plane.
+service SessionArchiveWorkService {
+  rpc ClaimSessionArchiveTasks(ClaimSessionArchiveTasksRequest) returns (ClaimSessionArchiveTasksResponse);
+  rpc RenewSessionArchiveTask(RenewSessionArchiveTaskRequest) returns (RenewSessionArchiveTaskResponse);
+  rpc CompleteSessionSnapshot(CompleteSessionSnapshotRequest) returns (CompleteSessionSnapshotResponse);
+  rpc CompleteSessionRestore(CompleteSessionRestoreRequest) returns (CompleteSessionRestoreResponse);
+  rpc CompleteSessionPVCDeletion(CompleteSessionPVCDeletionRequest) returns (CompleteSessionPVCDeletionResponse);
+  rpc CompleteSessionObjectDeletion(CompleteSessionObjectDeletionRequest) returns (CompleteSessionObjectDeletionResponse);
+  rpc FailSessionArchiveTask(FailSessionArchiveTaskRequest) returns (FailSessionArchiveTaskResponse);
+}
+
 // InteractionWorkService обслуживает только необязательные каналы общения.
 // Внешние channel/user/post ID являются locator metadata и никогда не
 // определяют organization, Project, target или право Human Gate.
@@ -130,6 +221,23 @@ service InteractionWorkService {
   rpc ClaimInteractionDeliveries(ClaimInteractionDeliveriesRequest) returns (ClaimInteractionDeliveriesResponse);
   rpc CompleteInteractionDelivery(CompleteInteractionDeliveryRequest) returns (CompleteInteractionDeliveryResponse);
   rpc AcceptInteractionMessage(AcceptInteractionMessageRequest) returns (AcceptInteractionMessageResponse);
+}
+
+// ProviderCredentialMaterializerService изолирует Codex app-server и право
+// create immutable Kubernetes Secret от основного control-plane. Ни один ответ
+// этого сервиса не содержит credential value.
+service ProviderCredentialMaterializerService {
+  rpc CheckProviderCredentialMaterializerReadiness(CheckProviderCredentialMaterializerReadinessRequest) returns (CheckProviderCredentialMaterializerReadinessResponse);
+  rpc StartDeviceAuthorization(ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) returns (ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse);
+  rpc ObserveDeviceAuthorization(ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest) returns (ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse);
+  rpc MaterializeAPIKey(ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest) returns (ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse);
+  // buf:lint:ignore RPC_REQUEST_STANDARD_NAME
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc DiscardProviderCredentialMaterialization(ProviderCredentialMaterializerServiceDiscardMaterializationRequest) returns (ProviderCredentialMaterializerServiceDiscardMaterializationResponse);
+  // CleanupProviderCredential удаляет только exact credential material,
+  // закреплённый durable task и текущим lease generation. Raw credential
+  // отсутствует в запросе и ответе.
+  rpc CleanupProviderCredential(ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) returns (ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse);
 }
 
 message MutationContext {
@@ -205,6 +313,15 @@ enum NextAction {
   NEXT_ACTION_CREATE_CONNECTION = 30;
   NEXT_ACTION_CREATE_CONVERSATION = 31;
   NEXT_ACTION_COMPLETE_ONBOARDING = 32;
+  NEXT_ACTION_CONFIGURE_CREDENTIAL = 33;
+  NEXT_ACTION_ROTATE = 34;
+  NEXT_ACTION_REVEAL = 35;
+  NEXT_ACTION_PROMOTE = 36;
+  NEXT_ACTION_DELETE = 37;
+  NEXT_ACTION_UPDATE = 38;
+  NEXT_ACTION_RESTORE = 39;
+  NEXT_ACTION_REQUEST_BUILD = 40;
+  NEXT_ACTION_PURGE = 41;
 }
 
 enum EntityLifecycle {
@@ -277,6 +394,7 @@ enum RunNodeState {
   RUN_NODE_STATE_FAILED = 5;
   RUN_NODE_STATE_CANCELLED = 6;
   RUN_NODE_STATE_SKIPPED = 7;
+  RUN_NODE_STATE_PLANNED = 8;
 }
 
 enum RunEdgeType {
@@ -305,6 +423,38 @@ enum RunEventType {
   RUN_EVENT_TYPE_OWNER_GATE_RESOLVED = 13;
   RUN_EVENT_TYPE_ARTIFACT_AVAILABLE = 14;
   RUN_EVENT_TYPE_INCIDENT_LINKED = 15;
+  RUN_EVENT_TYPE_RUN_METADATA_UPDATED = 16;
+  RUN_EVENT_TYPE_TOOL_CALL_RECORDED = 17;
+  RUN_EVENT_TYPE_PLAN_UPDATED = 18;
+}
+
+enum RunEventActorKind {
+  RUN_EVENT_ACTOR_KIND_UNSPECIFIED = 0;
+  RUN_EVENT_ACTOR_KIND_USER = 1;
+  RUN_EVENT_ACTOR_KIND_AGENT = 2;
+  RUN_EVENT_ACTOR_KIND_SYSTEM_ASSISTANT = 3;
+  RUN_EVENT_ACTOR_KIND_PLATFORM = 4;
+  RUN_EVENT_ACTOR_KIND_INTEGRATION = 5;
+}
+
+enum RunEventMessageKind {
+  RUN_EVENT_MESSAGE_KIND_UNSPECIFIED = 0;
+  RUN_EVENT_MESSAGE_KIND_STATE = 1;
+  RUN_EVENT_MESSAGE_KIND_USER_MESSAGE = 2;
+  RUN_EVENT_MESSAGE_KIND_ASSISTANT_MESSAGE = 3;
+  RUN_EVENT_MESSAGE_KIND_INTERMEDIATE_MESSAGE = 4;
+  RUN_EVENT_MESSAGE_KIND_FINAL_MESSAGE = 5;
+  RUN_EVENT_MESSAGE_KIND_TOOL_CALL = 6;
+  RUN_EVENT_MESSAGE_KIND_PLAN_UPDATE = 7;
+  RUN_EVENT_MESSAGE_KIND_ARTIFACT = 8;
+  RUN_EVENT_MESSAGE_KIND_INCIDENT = 9;
+  RUN_EVENT_MESSAGE_KIND_OWNER_GATE = 10;
+}
+
+enum RunToolCallState {
+  RUN_TOOL_CALL_STATE_UNSPECIFIED = 0;
+  RUN_TOOL_CALL_STATE_SUCCEEDED = 1;
+  RUN_TOOL_CALL_STATE_FAILED = 2;
 }
 
 enum OwnerGateState {
@@ -343,12 +493,43 @@ enum ArtifactSource {
   ARTIFACT_SOURCE_INTERACTION_ATTACHMENT = 5;
 }
 
+enum ArtifactLifecycleState {
+  ARTIFACT_LIFECYCLE_STATE_UNSPECIFIED = 0;
+  ARTIFACT_LIFECYCLE_STATE_ACTIVE = 1;
+  ARTIFACT_LIFECYCLE_STATE_DELETED = 2;
+  ARTIFACT_LIFECYCLE_STATE_PURGE_PENDING = 3;
+  ARTIFACT_LIFECYCLE_STATE_PURGED = 4;
+}
+
+enum ArtifactType {
+  ARTIFACT_TYPE_UNSPECIFIED = 0;
+  ARTIFACT_TYPE_TEXT = 1;
+  ARTIFACT_TYPE_DOCUMENT = 2;
+  ARTIFACT_TYPE_IMAGE = 3;
+}
+
+enum AttachmentSetState {
+  ATTACHMENT_SET_STATE_UNSPECIFIED = 0;
+  ATTACHMENT_SET_STATE_DRAFT = 1;
+  ATTACHMENT_SET_STATE_FINALIZED = 2;
+}
+
+enum AttachmentSetPurpose {
+  ATTACHMENT_SET_PURPOSE_UNSPECIFIED = 0;
+  ATTACHMENT_SET_PURPOSE_ASSISTANT_MESSAGE = 1;
+  ATTACHMENT_SET_PURPOSE_SESSION_TURN = 2;
+  ATTACHMENT_SET_PURPOSE_RUN_INPUT = 3;
+  ATTACHMENT_SET_PURPOSE_WORKFLOW_INPUT = 4;
+  ATTACHMENT_SET_PURPOSE_OWNER_GATE_MESSAGE = 5;
+}
+
 enum ScheduleState {
   SCHEDULE_STATE_UNSPECIFIED = 0;
   SCHEDULE_STATE_ACTIVE = 1;
   SCHEDULE_STATE_PAUSED = 2;
   SCHEDULE_STATE_NEEDS_ATTENTION = 3;
   SCHEDULE_STATE_ARCHIVED = 4;
+  SCHEDULE_STATE_DELETED = 5;
 }
 
 enum ConnectionState {
@@ -360,6 +541,41 @@ enum ConnectionState {
   CONNECTION_STATE_DISABLED = 5;
   CONNECTION_STATE_TESTING = 6;
   CONNECTION_STATE_DEGRADED = 7;
+  CONNECTION_STATE_DELETED = 8;
+}
+
+// IntegrationRisk задаёт закрытый класс риска capability.
+enum IntegrationRisk {
+  INTEGRATION_RISK_UNSPECIFIED = 0;
+  INTEGRATION_RISK_READ = 1;
+  INTEGRATION_RISK_WRITE = 2;
+  INTEGRATION_RISK_SENSITIVE = 3;
+  INTEGRATION_RISK_DESTRUCTIVE = 4;
+}
+
+// IntegrationApprovalPolicy задаёт обязательный Human Gate до claim effect.
+enum IntegrationApprovalPolicy {
+  INTEGRATION_APPROVAL_POLICY_UNSPECIFIED = 0;
+  INTEGRATION_APPROVAL_POLICY_NONE = 1;
+  INTEGRATION_APPROVAL_POLICY_HUMAN_EACH_EFFECT = 2;
+}
+
+// IntegrationResourceKind ограничивает provider resource одной typed boundary.
+enum IntegrationResourceKind {
+  INTEGRATION_RESOURCE_KIND_UNSPECIFIED = 0;
+  INTEGRATION_RESOURCE_KIND_SYNTHETIC_JOURNAL = 1;
+  INTEGRATION_RESOURCE_KIND_GITHUB_REPOSITORY = 2;
+  INTEGRATION_RESOURCE_KIND_MATTERMOST_CHANNEL = 3;
+  INTEGRATION_RESOURCE_KIND_GITLAB_PROJECT = 4;
+  INTEGRATION_RESOURCE_KIND_JIRA_PROJECT = 5;
+  INTEGRATION_RESOURCE_KIND_CONFLUENCE_SPACE = 6;
+  INTEGRATION_RESOURCE_KIND_EMAIL_SENDER = 7;
+}
+
+// IntegrationDefinitionOrigin фиксирует источник immutable definition revision.
+enum IntegrationDefinitionOrigin {
+  INTEGRATION_DEFINITION_ORIGIN_UNSPECIFIED = 0;
+  INTEGRATION_DEFINITION_ORIGIN_SHIPPED = 1;
 }
 
 enum AssistantRuntimeState {
@@ -455,6 +671,19 @@ message Agent {
   repeated NextAction next_actions = 19;
   string role_definition_ref = 20;
   string role_definition_name = 21;
+  AgentAvatar avatar = 22;
+}
+
+message AgentAvatar {
+  enum Source {
+    SOURCE_UNSPECIFIED = 0;
+    SOURCE_FALLBACK = 1;
+    SOURCE_ARTIFACT = 2;
+  }
+  Source source = 1;
+  string artifact_ref = 2;
+  int64 artifact_revision = 3;
+  string content_path = 4;
 }
 
 message WorkflowInputField {
@@ -566,12 +795,15 @@ message Run {
   // core_affected=false.
   repeated Incident incidents = 25;
   TokenUsage usage = 26;
-  // input_artifact_refs перечисляет server-resolved входные файлы запуска.
-  repeated string input_artifact_refs = 27;
+  reserved 27;
+  reserved "input_artifact_refs";
   // artifact_refs перечисляет доступные через отдельный owner API результаты.
   repeated string artifact_refs = 28;
   // gate_refs перечисляет долговечные Human Gate корневого запуска.
   repeated string gate_refs = 29;
+  string title_source = 30;
+  string activity_summary = 31;
+  string input_attachment_set_ref = 32;
 }
 
 message RunNode {
@@ -597,6 +829,9 @@ message RunNode {
   google.protobuf.Timestamp started_at = 20;
   google.protobuf.Timestamp finished_at = 21;
   repeated NextAction next_actions = 22;
+  // planned=true означает, что вершина уже является частью immutable workflow
+  // snapshot, но execution lease для неё ещё не материализован.
+  bool planned = 23;
 }
 
 message RunEdge {
@@ -670,6 +905,27 @@ message RunEvent {
   // incident присутствует для безопасной диагностической проекции; secret и
   // сырой ответ внешнего provider в событие не попадают.
   Incident incident = 20;
+  RunEventActor actor = 21;
+  RunEventMessageKind message_kind = 22;
+  RunToolCall tool_call = 23;
+}
+
+message RunEventActor {
+  RunEventActorKind kind = 1;
+  string ref = 2;
+  string name = 3;
+}
+
+message RunToolCall {
+  string ref = 1;
+  string tool = 2;
+  google.protobuf.Struct safe_parameters = 3;
+  string capability_ref = 4;
+  string grant_ref = 5;
+  RunToolCallState state = 6;
+  int64 duration_ms = 7;
+  string safe_result = 8;
+  string audit_ref = 9;
 }
 
 message RunGraph {
@@ -698,8 +954,31 @@ message OwnerGate {
   google.protobuf.Timestamp opened_at = 15;
   google.protobuf.Timestamp expires_at = 16;
   google.protobuf.Timestamp decided_at = 17;
-  repeated string artifact_refs = 18;
+  reserved 18;
+  reserved "artifact_refs";
   repeated NextAction next_actions = 19;
+  string resolution_attachment_set_ref = 20;
+  repeated OwnerGateDecisionConsequence decision_consequences = 21;
+  string source_attachment_set_ref = 22;
+  IntegrationIntent integration_intent = 23;
+}
+
+message OwnerGateDecisionConsequence {
+  OwnerGateDecision decision = 1;
+  string safe_summary = 2;
+  bool executes_external_effect = 3;
+  bool terminal_for_run = 4;
+}
+
+message IntegrationIntent {
+  string connection_ref = 1;
+  string connection_name = 2;
+  string definition_key = 3;
+  string capability_key = 4;
+  string operation = 5;
+  IntegrationResourceScope resource_scope = 6;
+  google.protobuf.Struct effect_preview = 7;
+  string effect_key = 8;
 }
 
 message Artifact {
@@ -719,6 +998,39 @@ message Artifact {
   google.protobuf.Timestamp created_at = 14;
   repeated NextAction next_actions = 15;
   string digest = 16;
+  ArtifactLifecycleState lifecycle_state = 17;
+  google.protobuf.Timestamp deleted_at = 18;
+  google.protobuf.Timestamp purge_after = 19;
+}
+
+message AttachmentSetItem {
+  string artifact_ref = 1;
+  int64 artifact_revision = 2;
+  int64 artifact_version = 3;
+  string display_name = 4;
+  string media_type = 5;
+  int64 size_bytes = 6;
+  string digest = 7;
+  ArtifactSource source = 8;
+  int64 position = 9;
+}
+
+message AttachmentSet {
+  string ref = 1;
+  string family_ref = 2;
+  int64 revision = 3;
+  int64 version = 4;
+  string project_ref = 5;
+  AttachmentSetState state = 6;
+  AttachmentSetPurpose purpose = 7;
+  string source = 8;
+  int64 item_count = 9;
+  int64 total_size_bytes = 10;
+  string manifest_digest = 11;
+  repeated AttachmentSetItem items = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp finalized_at = 14;
+  bool superseded = 15;
 }
 
 message Schedule {
@@ -739,6 +1051,30 @@ message Schedule {
   repeated NextAction next_actions = 15;
   string time_of_day = 16;
   string day_of_week = 17;
+  ScheduleRevision current_revision = 18;
+  string continue_session_ref = 19;
+}
+
+message ScheduleRevision {
+  string ref = 1;
+  int64 revision = 2;
+  string digest = 3;
+  string name = 4;
+  RunTarget target = 5;
+  string preset = 6;
+  string cron_expression = 7;
+  string timezone = 8;
+  google.protobuf.Struct input = 9;
+  string session_policy = 10;
+  string notification_policy = 11;
+  google.protobuf.Timestamp created_at = 12;
+}
+
+message ScheduleRunOccurrence {
+  string schedule_ref = 1;
+  string schedule_revision_ref = 2;
+  int64 schedule_revision = 3;
+  Run run = 4;
 }
 
 message IntegrationCapability {
@@ -747,6 +1083,11 @@ message IntegrationCapability {
   string description = 3;
   string risk = 4;
   bool approval_required = 5;
+  string operation = 6;
+  IntegrationRisk typed_risk = 7;
+  IntegrationApprovalPolicy approval_policy = 8;
+  IntegrationResourceKind resource_kind = 9;
+  repeated IntegrationConfigurationField input_fields = 10;
 }
 
 message IntegrationConfigurationField {
@@ -756,6 +1097,13 @@ message IntegrationConfigurationField {
   string value_type = 4;
   bool required = 5;
   string placeholder = 6;
+  repeated string allowed_values = 7;
+  string format = 8;
+  int64 minimum = 9;
+  int64 maximum = 10;
+  bool has_minimum = 11;
+  bool has_maximum = 12;
+  int32 maximum_length = 13;
 }
 
 message IntegrationDefinition {
@@ -767,6 +1115,30 @@ message IntegrationDefinition {
   bool available = 6;
   repeated IntegrationCapability capabilities = 7;
   repeated IntegrationConfigurationField configuration_fields = 8;
+  string schema_version = 9;
+  string definition_version = 10;
+  IntegrationDefinitionOrigin origin = 11;
+  string digest = 12;
+  string adapter = 13;
+  string credential_secret_key = 14;
+}
+
+// IntegrationResourceScope содержит только server-derived exact resource values.
+message IntegrationResourceScope {
+  IntegrationResourceKind kind = 1;
+  map<string, string> values = 2;
+  string digest = 3;
+}
+
+// IntegrationCredentialRevision содержит identity Kubernetes Secret revision без values.
+message IntegrationCredentialRevision {
+  string ref = 1;
+  int64 revision = 2;
+  string secret_ref = 3;
+  string secret_uid = 4;
+  string secret_resource_version = 5;
+  string content_sha256 = 6;
+  google.protobuf.Timestamp created_at = 7;
 }
 
 message IntegrationGrant {
@@ -784,6 +1156,9 @@ message IntegrationGrant {
   string capability_description = 12;
   string risk = 13;
   string target_name = 14;
+  IntegrationRisk typed_risk = 15;
+  IntegrationApprovalPolicy approval_policy = 16;
+  IntegrationResourceScope resource_scope = 17;
 }
 
 message IntegrationConnection {
@@ -799,6 +1174,12 @@ message IntegrationConnection {
   repeated IntegrationCapability capabilities = 10;
   repeated IntegrationGrant grants = 11;
   repeated NextAction next_actions = 12;
+  string definition_version = 13;
+  string definition_digest = 14;
+  google.protobuf.Struct public_configuration = 15;
+  IntegrationCredentialRevision credential_revision = 16;
+  google.protobuf.Timestamp created_at = 17;
+  google.protobuf.Timestamp updated_at = 18;
 }
 
 message AssistantPlanOperation {
@@ -823,14 +1204,47 @@ message AssistantPlanOperation {
     TYPE_CREATE_INTEGRATION_CONNECTION = 8;
     // Поставить проверку существующего подключения в долговечную очередь.
     TYPE_TEST_INTEGRATION_CONNECTION = 9;
+    // Архивировать обычного ИИ-сотрудника по exact version.
+    TYPE_ARCHIVE_AGENT = 10;
+    // Архивировать универсальный Процесс по exact version.
+    TYPE_ARCHIVE_WORKFLOW = 11;
+    // Изменить Проект по exact version с авторитетным before/after snapshot.
+    TYPE_UPDATE_PROJECT = 12;
+  }
+  enum Action {
+    ACTION_UNSPECIFIED = 0;
+    ACTION_CREATE = 1;
+    ACTION_UPDATE = 2;
+    ACTION_ARCHIVE = 3;
+    ACTION_EXECUTE = 4;
   }
   string ref = 1;
   Type type = 2;
   string title = 3;
   string summary = 4;
-  google.protobuf.Struct bounded_input = 5;
+  google.protobuf.Struct bounded_input = 5 [deprecated = true];
   bool permitted = 6;
   string unavailable_reason = 7;
+  Action action = 8;
+  string target_kind = 9;
+  string target_ref = 10;
+  string target_name = 11;
+  optional int64 expected_version = 12;
+  google.protobuf.Struct parameters = 13;
+  google.protobuf.Struct before = 14;
+  google.protobuf.Struct after = 15;
+  bool selected = 16;
+  repeated string validation_problems = 17;
+}
+
+enum AssistantPlanState {
+  ASSISTANT_PLAN_STATE_UNSPECIFIED = 0;
+  ASSISTANT_PLAN_STATE_DRAFT = 1;
+  ASSISTANT_PLAN_STATE_VALID = 2;
+  ASSISTANT_PLAN_STATE_INVALID = 3;
+  ASSISTANT_PLAN_STATE_STALE = 4;
+  ASSISTANT_PLAN_STATE_APPLIED = 5;
+  ASSISTANT_PLAN_STATE_REJECTED = 6;
 }
 
 message AssistantPlan {
@@ -842,6 +1256,49 @@ message AssistantPlan {
   string audit_summary = 6;
   bool applied = 7;
   repeated NextAction next_actions = 8;
+  AssistantPlanState state = 9;
+  int64 revision = 10;
+  optional int64 validated_revision = 11;
+  string content_digest = 12;
+  repeated string validation_problems = 13;
+  google.protobuf.Timestamp validated_at = 14;
+  google.protobuf.Timestamp applied_at = 15;
+}
+
+message AssistantContextDescriptor {
+  string route = 1;
+  string entity_kind = 2;
+  string entity_ref = 3;
+  string entity_name = 4;
+  optional int64 entity_version = 5;
+  repeated AssistantPlanOperation.Type allowed_operations = 6;
+}
+
+message AssistantPlanOperationReceipt {
+  string operation_ref = 1;
+  string resource_ref = 2;
+  string outcome = 3;
+  string audit_ref = 4;
+}
+
+message AssistantPlanConflict {
+  string operation_ref = 1;
+  string target_ref = 2;
+  string field = 3;
+  google.protobuf.Value expected = 4;
+  google.protobuf.Value actual = 5;
+}
+
+message AssistantPlanReceipt {
+  string ref = 1;
+  string plan_ref = 2;
+  int64 plan_revision = 3;
+  string outcome = 4;
+  repeated AssistantPlanOperationReceipt operations = 5;
+  repeated AssistantPlanConflict conflicts = 6;
+  repeated string audit_refs = 7;
+  repeated string created_resource_refs = 8;
+  google.protobuf.Timestamp created_at = 9;
 }
 
 message AssistantTurn {
@@ -852,6 +1309,7 @@ message AssistantTurn {
   string state = 5;
   AssistantPlan plan = 6;
   google.protobuf.Timestamp created_at = 7;
+  string attachment_set_ref = 8;
 }
 
 message AssistantConversation {
@@ -861,6 +1319,9 @@ message AssistantConversation {
   string project_ref = 4;
   repeated AssistantTurn turns = 5;
   google.protobuf.Timestamp updated_at = 6;
+  string title_source = 7;
+  int64 title_revision = 8;
+  AssistantContextDescriptor context = 9;
 }
 
 message SystemAssistant {
@@ -1348,9 +1809,11 @@ message LaunchRunRequest {
   string title = 4;
   string task = 5;
   google.protobuf.Struct input = 6;
-  repeated string artifact_refs = 7;
+  reserved 7;
+  reserved "artifact_refs";
   string session_ref = 8;
   RunSource source = 9;
+  string attachment_set_ref = 10;
 }
 message LaunchRunResponse {
   Run run = 1;
@@ -1362,7 +1825,9 @@ message AddSessionTurnRequest {
   string run_ref = 3;
   string node_ref = 4;
   string task = 5;
-  repeated string artifact_refs = 6;
+  reserved 6;
+  reserved "artifact_refs";
+  string attachment_set_ref = 7;
 }
 message AddSessionTurnResponse {
   Run run = 1;
@@ -1407,6 +1872,9 @@ message ResolveOwnerGateRequest {
   string gate_ref = 2;
   OwnerGateDecision decision = 3;
   string comment = 4;
+  reserved 5;
+  reserved "artifact_refs";
+  string attachment_set_ref = 6;
 }
 message ResolveOwnerGateResponse {
   OwnerGate gate = 1;
@@ -1419,6 +1887,10 @@ message ListArtifactsRequest {
   string run_ref = 2;
   PageRequest page = 3;
   string query = 4;
+  ArtifactLifecycleState lifecycle_state = 5;
+  ArtifactType type = 6;
+  ArtifactScanState scan_state = 7;
+  ArtifactSource source_kind = 8;
 }
 message ListArtifactsResponse {
   repeated Artifact artifacts = 1;
@@ -1430,6 +1902,57 @@ message GetArtifactRequest {
 message GetArtifactResponse {
   Artifact artifact = 1;
 }
+
+message GetAttachmentSetRequest {
+  string attachment_set_ref = 1;
+  PageRequest page = 2;
+}
+message GetAttachmentSetResponse {
+  AttachmentSet attachment_set = 1;
+  PageInfo page = 2;
+}
+
+message CreateAttachmentSetDraftRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  AttachmentSetPurpose purpose = 3;
+  repeated string artifact_refs = 4;
+}
+message CreateAttachmentSetDraftResponse {
+  AttachmentSet attachment_set = 1;
+}
+message CreateOrganizationAttachmentSetDraftRequest {
+  MutationContext mutation = 1;
+  AttachmentSetPurpose purpose = 2;
+  repeated string artifact_refs = 3;
+}
+message CreateOrganizationAttachmentSetDraftResponse {
+  AttachmentSet attachment_set = 1;
+}
+message AddAttachmentSetItemsRequest {
+  MutationContext mutation = 1;
+  string attachment_set_ref = 2;
+  repeated string artifact_refs = 3;
+  int64 insert_after_position = 4;
+}
+message AddAttachmentSetItemsResponse {
+  AttachmentSet attachment_set = 1;
+}
+message RemoveAttachmentSetItemsRequest {
+  MutationContext mutation = 1;
+  string attachment_set_ref = 2;
+  repeated string artifact_refs = 3;
+}
+message RemoveAttachmentSetItemsResponse {
+  AttachmentSet attachment_set = 1;
+}
+message FinalizeAttachmentSetRequest {
+  MutationContext mutation = 1;
+  string attachment_set_ref = 2;
+}
+message FinalizeAttachmentSetResponse {
+  AttachmentSet attachment_set = 1;
+}
 message UploadArtifactMetadata {
   MutationContext mutation = 1;
   string project_ref = 2;
@@ -1438,13 +1961,28 @@ message UploadArtifactMetadata {
   string media_type = 5;
   int64 size_bytes = 6;
 }
+message UploadArtifactCommit {
+  int64 size_bytes = 1;
+  string sha256 = 2;
+}
 message UploadArtifactRequest {
   oneof part {
     UploadArtifactMetadata metadata = 1;
     bytes chunk = 2;
+    UploadArtifactCommit commit = 3;
   }
 }
 message UploadArtifactResponse {
+  Artifact artifact = 1;
+}
+message UploadOrganizationArtifactRequest {
+  oneof part {
+    UploadArtifactMetadata metadata = 1;
+    bytes chunk = 2;
+    UploadArtifactCommit commit = 3;
+  }
+}
+message UploadOrganizationArtifactResponse {
   Artifact artifact = 1;
 }
 enum ArtifactDownloadPurpose {
@@ -1471,10 +2009,35 @@ message ChangeArtifactBindingRequest {
 message ChangeArtifactBindingResponse {
   Artifact artifact = 1;
 }
+message DeleteArtifactRequest {
+  MutationContext mutation = 1;
+  string artifact_ref = 2;
+  string impact_digest = 3;
+}
+message DeleteArtifactResponse {
+  Artifact artifact = 1;
+}
+message RestoreArtifactRequest {
+  MutationContext mutation = 1;
+  string artifact_ref = 2;
+}
+message RestoreArtifactResponse {
+  Artifact artifact = 1;
+}
+message PurgeArtifactRequest {
+  MutationContext mutation = 1;
+  string artifact_ref = 2;
+  string impact_digest = 3;
+}
+message PurgeArtifactResponse {
+  string artifact_ref = 1;
+  ArtifactLifecycleState lifecycle_state = 2;
+}
 
 message ListSchedulesRequest {
   string project_ref = 1;
   PageRequest page = 2;
+  string query = 3;
 }
 message ListSchedulesResponse {
   repeated Schedule schedules = 1;
@@ -1522,18 +2085,21 @@ message SetScheduleEnabledRequest {
 message SetScheduleEnabledResponse {
   Schedule schedule = 1;
 }
-
 message ListIntegrationDefinitionsRequest {
   string category = 1;
+  PageRequest page = 2;
+  string query = 3;
 }
 message ListIntegrationDefinitionsResponse {
   repeated IntegrationDefinition definitions = 1;
   repeated NextAction next_actions = 2;
   bool core_ready = 3;
+  PageInfo page = 4;
 }
 message ListIntegrationConnectionsRequest {
   PageRequest page = 1;
   string definition_key = 2;
+  string query = 3;
 }
 message ListIntegrationConnectionsResponse {
   repeated IntegrationConnection connections = 1;
@@ -1551,8 +2117,33 @@ message CreateIntegrationConnectionRequest {
   string name = 3;
   reserved 4;
   google.protobuf.Struct public_configuration = 5;
+  reserved 6;
 }
 message CreateIntegrationConnectionResponse {
+  IntegrationConnection connection = 1;
+}
+message UpdateIntegrationConnectionRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  string name = 3;
+  google.protobuf.Struct public_configuration = 4;
+}
+message UpdateIntegrationConnectionResponse {
+  IntegrationConnection connection = 1;
+}
+message DeleteIntegrationConnectionRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+}
+message DeleteIntegrationConnectionResponse {
+  IntegrationConnection connection = 1;
+}
+message ConfigureIntegrationConnectionCredentialRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  bytes credential_value = 3;
+}
+message ConfigureIntegrationConnectionCredentialResponse {
   IntegrationConnection connection = 1;
 }
 message TestIntegrationConnectionRequest {
@@ -1596,30 +2187,70 @@ message ListAssistantConversationsResponse {
 }
 message CreateAssistantConversationRequest {
   MutationContext mutation = 1;
-  string title = 2;
+  reserved 2;
+  reserved "title";
   string project_ref = 3;
+  AssistantContextDescriptor context = 4;
 }
 message CreateAssistantConversationResponse {
+  AssistantConversation conversation = 1;
+}
+message UpdateAssistantConversationTitleRequest {
+  MutationContext mutation = 1;
+  string conversation_ref = 2;
+  string title = 3;
+}
+message UpdateAssistantConversationTitleResponse {
   AssistantConversation conversation = 1;
 }
 message AddAssistantTurnRequest {
   MutationContext mutation = 1;
   string conversation_ref = 2;
   string content = 3;
-  repeated string artifact_refs = 4;
+  reserved 4;
+  reserved "artifact_refs";
+  string attachment_set_ref = 5;
 }
 message AddAssistantTurnResponse {
   AssistantConversation conversation = 1;
   SystemAssistant assistant = 2;
 }
+message UpdateAssistantPlanDraftRequest {
+  MutationContext mutation = 1;
+  string plan_ref = 2;
+  string summary = 3;
+  repeated AssistantPlanOperation operations = 4;
+}
+message UpdateAssistantPlanDraftResponse {
+  AssistantPlan plan = 1;
+}
+message ValidateAssistantPlanRequest {
+  MutationContext mutation = 1;
+  string plan_ref = 2;
+  int64 revision = 3;
+}
+message ValidateAssistantPlanResponse {
+  AssistantPlan plan = 1;
+}
 message ApplyAssistantPlanRequest {
   MutationContext mutation = 1;
   string plan_ref = 2;
+  int64 revision = 3;
 }
 message ApplyAssistantPlanResponse {
   AssistantConversation conversation = 1;
   AssistantPlan plan = 2;
   repeated string created_resource_refs = 3;
+  AssistantPlanReceipt receipt = 4;
+}
+message RejectAssistantPlanRequest {
+  MutationContext mutation = 1;
+  string plan_ref = 2;
+  int64 revision = 3;
+}
+message RejectAssistantPlanResponse {
+  AssistantPlan plan = 1;
+  AssistantPlanReceipt receipt = 2;
 }
 message UpdateAssistantOwnerInstructionsRequest {
   MutationContext mutation = 1;
@@ -1688,6 +2319,55 @@ message RuntimeRevisionSnapshot {
   // Внутренняя неизменяемая привязка credential revision. Она не входит в
   // browser/OpenAPI contracts и не содержит secret value.
   ProviderCredentialBinding provider_credential = 28;
+  string runtime_config_ref = 29;
+  int64 runtime_config_version = 30;
+  string runtime_config_digest = 31;
+  string provider_policy_ref = 32;
+  int64 provider_policy_version = 33;
+  string provider_policy_digest = 34;
+  string config_overlay_ref = 35;
+  int64 config_overlay_version = 36;
+  string config_overlay_digest = 37;
+  string config_overlay = 38;
+  string runtime_environment_ref = 39;
+  int64 runtime_environment_version = 40;
+  string runtime_environment_digest = 41;
+  string environment_binding_ref = 42;
+  int64 environment_binding_version = 43;
+  string environment_binding_digest = 44;
+  repeated RuntimeEnvironmentValue environment_values = 45;
+  repeated RuntimeSecretDescriptor secret_projections = 46;
+  // Provider thread ID назначен Codex app-server и сохранён control-plane из
+  // terminal handoff предыдущего turn.
+  string codex_session_id = 47;
+  AssistantContextDescriptor assistant_context = 48;
+  string attachment_set_ref = 49;
+  string attachment_set_manifest_digest = 50;
+  repeated RuntimeInputArtifact input_artifacts = 51;
+  string attachment_context = 52;
+  int64 role_image_recipe_generation = 53;
+  repeated RuntimeEnvironmentTool environment_tools = 54;
+  RuntimeEnvironmentPolicy environment_policy = 55;
+  RuntimeKubernetesAccess effective_kubernetes_access = 56;
+  repeated RuntimeAttachmentSet attachment_sets = 57;
+}
+
+message RuntimeInputArtifact {
+  Artifact artifact = 1;
+  string scope = 2;
+  int64 position = 3;
+  string attachment_set_ref = 4;
+  string attachment_purpose = 5;
+  string provenance = 6;
+}
+
+message RuntimeAttachmentSet {
+  string ref = 1;
+  string manifest_digest = 2;
+  string purpose = 3;
+  string scope = 4;
+  string provenance = 5;
+  string turn_ref = 6;
 }
 
 message ProviderCredentialBinding {
@@ -1783,10 +2463,173 @@ message CompleteExecutionRequest {
   string safe_error_code = 7;
   repeated CompletedArtifactInput artifacts = 8;
   TokenUsage usage = 9;
+  string codex_session_id = 10;
+  string codex_archive_relative_path = 11;
+  string codex_archive_sha256 = 12;
+  int64 codex_archive_size_bytes = 13;
 }
 message CompleteExecutionResponse {
   Run run = 1;
   RunGraph graph = 2;
+}
+
+enum SessionArchiveTaskKind {
+  SESSION_ARCHIVE_TASK_KIND_UNSPECIFIED = 0;
+  SESSION_ARCHIVE_TASK_KIND_SNAPSHOT = 1;
+  SESSION_ARCHIVE_TASK_KIND_RESTORE = 2;
+  SESSION_ARCHIVE_TASK_KIND_DELETE_PVC = 3;
+  SESSION_ARCHIVE_TASK_KIND_DELETE_OBJECT = 4;
+}
+
+message SessionArchiveBinding {
+  string archive_ref = 1;
+  uint32 format_version = 2;
+  string object_key = 3;
+  string object_version = 4;
+  string object_etag = 5;
+  string object_digest = 6;
+  int64 object_size_bytes = 7;
+  string source_relative_path = 8;
+  string source_sha256 = 9;
+  int64 source_size_bytes = 10;
+}
+
+message SessionArchiveTask {
+  string task_ref = 1;
+  SessionArchiveTaskKind kind = 2;
+  string organization_ref = 3;
+  string project_ref = 4;
+  string session_ref = 5;
+  string provider_account_ref = 6;
+  string runtime_revision_ref = 7;
+  int64 runtime_revision_version = 8;
+  string runtime_revision_digest = 9;
+  string codex_session_id = 10;
+  int64 content_generation = 11;
+  string pvc_name = 12;
+  SessionArchiveBinding archive = 13;
+  WorkLease lease = 14;
+  string input_digest = 15;
+  string source_relative_path = 16;
+  string source_sha256 = 17;
+  int64 source_size_bytes = 18;
+  string target_object_key = 19;
+  string target_object_version = 20;
+  int32 attempt = 21;
+}
+
+message ClaimSessionArchiveTasksRequest {
+  string workload_instance = 1;
+  int32 limit = 2;
+}
+
+message ClaimSessionArchiveTasksResponse {
+  repeated SessionArchiveTask tasks = 1;
+}
+
+message RenewSessionArchiveTaskRequest {
+  string task_ref = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+}
+
+message RenewSessionArchiveTaskResponse {
+  WorkLease lease = 1;
+}
+
+message CompleteSessionSnapshotRequest {
+  MutationContext mutation = 1;
+  string task_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  uint32 format_version = 6;
+  string object_key = 7;
+  string object_version = 8;
+  string object_etag = 9;
+  string object_digest = 10;
+  int64 object_size_bytes = 11;
+  int64 source_size_bytes = 12;
+}
+
+message CompleteSessionRestoreRequest {
+  MutationContext mutation = 1;
+  string task_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  uint32 format_version = 6;
+  string object_key = 7;
+  string object_version = 8;
+  string object_etag = 9;
+  string object_digest = 10;
+  int64 object_size_bytes = 11;
+  string restored_source_sha256 = 12;
+  int64 restored_source_size_bytes = 13;
+}
+
+message CompleteSessionPVCDeletionRequest {
+  MutationContext mutation = 1;
+  string task_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  string pvc_name = 6;
+}
+
+message CompleteSessionObjectDeletionRequest {
+  MutationContext mutation = 1;
+  string task_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  string object_key = 6;
+  string object_version = 7;
+}
+
+message FailSessionArchiveTaskRequest {
+  MutationContext mutation = 1;
+  string task_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  string safe_error_code = 6;
+}
+
+message CompleteSessionSnapshotResponse {
+  string task_ref = 1;
+  string state = 2;
+  string archive_ref = 3;
+  bool retry_scheduled = 4;
+}
+
+message CompleteSessionRestoreResponse {
+  string task_ref = 1;
+  string state = 2;
+  string archive_ref = 3;
+  bool retry_scheduled = 4;
+}
+
+message CompleteSessionPVCDeletionResponse {
+  string task_ref = 1;
+  string state = 2;
+  string archive_ref = 3;
+  bool retry_scheduled = 4;
+}
+
+message CompleteSessionObjectDeletionResponse {
+  string task_ref = 1;
+  string state = 2;
+  string archive_ref = 3;
+  bool retry_scheduled = 4;
+}
+
+message FailSessionArchiveTaskResponse {
+  string task_ref = 1;
+  string state = 2;
+  string archive_ref = 3;
+  bool retry_scheduled = 4;
 }
 message DelegateExecutionRequest {
   MutationContext mutation = 1;
@@ -1814,6 +2657,45 @@ message ProposeAssistantPlanRequest {
 message ProposeAssistantPlanResponse {
   AssistantPlan plan = 1;
   AssistantConversation conversation = 2;
+}
+message ProposeAssistantMetadataRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string title = 5;
+}
+message ProposeAssistantMetadataResponse {
+  AssistantConversation conversation = 1;
+}
+message ProposeRunMetadataRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string title = 5;
+  string activity_summary = 6;
+}
+message ProposeRunMetadataResponse {
+  Run run = 1;
+  RunEvent event = 2;
+}
+message RecordRunToolCallRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string call_ref = 5;
+  string tool = 6;
+  google.protobuf.Struct safe_parameters = 7;
+  string capability_ref = 8;
+  string grant_ref = 9;
+  RunToolCallState state = 10;
+  int64 duration_ms = 11;
+  string safe_result = 12;
+}
+message RecordRunToolCallResponse {
+  RunEvent event = 1;
 }
 message ReconcileWarmRuntimeRequest {
   string workload_instance = 1;
@@ -1866,6 +2748,9 @@ message IntegrationConnectionTestClaim {
   string credential_materialization_ref = 4;
   google.protobuf.Struct public_configuration = 5;
   WorkLease lease = 6;
+  IntegrationCredentialRevision credential_revision = 7;
+  string definition_version = 8;
+  string definition_digest = 9;
 }
 message ClaimIntegrationConnectionTestsRequest {
   string workload_instance = 1;
@@ -1900,6 +2785,10 @@ message ResolveIntegrationInvocationResponse {
   string invocation_ref = 1;
   string grant_ref = 2;
   string operation = 3;
+  string state = 4;
+  string gate_ref = 5;
+  IntegrationRisk risk = 6;
+  IntegrationResourceScope resource_scope = 7;
 }
 message IntegrationInvocationClaim {
   string invocation_ref = 1;
@@ -1910,6 +2799,15 @@ message IntegrationInvocationClaim {
   google.protobuf.Struct public_configuration = 6;
   google.protobuf.Struct bounded_input = 7;
   WorkLease lease = 8;
+  IntegrationCredentialRevision credential_revision = 9;
+  string definition_version = 10;
+  string definition_digest = 11;
+  string operation = 12;
+  IntegrationRisk risk = 13;
+  IntegrationApprovalPolicy approval_policy = 14;
+  IntegrationResourceScope resource_scope = 15;
+  string effect_key = 16;
+  string input_digest = 17;
 }
 message ClaimIntegrationInvocationsRequest {
   string workload_instance = 1;
@@ -1925,6 +2823,18 @@ message GetIntegrationInvocationResponse {
   string state = 1;
   string result_summary = 2;
   string safe_error_code = 3;
+  string gate_ref = 4;
+  string effect_receipt_ref = 5;
+}
+
+// IntegrationEffectReceipt является immutable exactly-once readback одного effect key.
+message IntegrationEffectReceipt {
+  string ref = 1;
+  string effect_key = 2;
+  string input_digest = 3;
+  string provider_effect_ref = 4;
+  string response_digest = 5;
+  string result_summary = 6;
 }
 message CompleteIntegrationInvocationRequest {
   MutationContext mutation = 1;
@@ -1935,6 +2845,7 @@ message CompleteIntegrationInvocationRequest {
   bool success = 6;
   string result_summary = 7;
   string safe_error_code = 8;
+  IntegrationEffectReceipt effect_receipt = 9;
 }
 message CompleteIntegrationInvocationResponse {
   Run run = 1;
@@ -2024,4 +2935,1015 @@ message ListAgentInstructionVersionsRequest {
 message ListAgentInstructionVersionsResponse {
   repeated InstructionVersion instruction_versions = 1;
   PageInfo page = 2;
+}
+
+message GetScheduleRequest {
+  string schedule_ref = 1;
+}
+message GetScheduleResponse {
+  Schedule schedule = 1;
+}
+message ArchiveScheduleRequest {
+  MutationContext mutation = 1;
+  string schedule_ref = 2;
+}
+message ArchiveScheduleResponse {
+  Schedule schedule = 1;
+}
+
+message GetAgentRuntimeConfigurationRequest {
+  string agent_ref = 1;
+}
+message GetAgentRuntimeConfigurationResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message ListAgentRuntimeConfigurationVersionsRequest {
+  string agent_ref = 1;
+  PageRequest page = 2;
+}
+message ListAgentRuntimeConfigurationVersionsResponse {
+  repeated AgentRuntimeConfiguration configurations = 1;
+  PageInfo page = 2;
+}
+message ListRuntimeEnvironmentSetsRequest {
+  string project_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message ListRuntimeEnvironmentSetsResponse {
+  repeated RuntimeEnvironmentSet environments = 1;
+  PageInfo page = 2;
+}
+message GetRuntimeEnvironmentSetRequest {
+  string environment_ref = 1;
+}
+message GetRuntimeEnvironmentSetResponse {
+  RuntimeEnvironmentSet environment = 1;
+}
+message ListRuntimeEnvironmentVersionsRequest {
+  string environment_ref = 1;
+  PageRequest page = 2;
+}
+message ListRuntimeEnvironmentVersionsResponse {
+  repeated RuntimeEnvironmentVersion versions = 1;
+  PageInfo page = 2;
+}
+message ListTemplateVariablesRequest {
+  string project_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message ListTemplateVariablesResponse {
+  repeated TemplateVariable variables = 1;
+  PageInfo page = 2;
+}
+
+enum RuntimeSecretValueType {
+  RUNTIME_SECRET_VALUE_TYPE_UNSPECIFIED = 0;
+  RUNTIME_SECRET_VALUE_TYPE_STRING = 1;
+  RUNTIME_SECRET_VALUE_TYPE_BINARY = 2;
+  RUNTIME_SECRET_VALUE_TYPE_JSON = 3;
+}
+
+enum RuntimeSecretOperationKind {
+  RUNTIME_SECRET_OPERATION_KIND_UNSPECIFIED = 0;
+  RUNTIME_SECRET_OPERATION_KIND_CREATE = 1;
+  RUNTIME_SECRET_OPERATION_KIND_ROTATE = 2;
+  RUNTIME_SECRET_OPERATION_KIND_REVEAL = 3;
+  RUNTIME_SECRET_OPERATION_KIND_REVOKE = 4;
+}
+
+enum RuntimeSecretOperationState {
+  RUNTIME_SECRET_OPERATION_STATE_UNSPECIFIED = 0;
+  RUNTIME_SECRET_OPERATION_STATE_PREPARED = 1;
+  RUNTIME_SECRET_OPERATION_STATE_CLAIMED = 2;
+  RUNTIME_SECRET_OPERATION_STATE_COMPLETED = 3;
+  RUNTIME_SECRET_OPERATION_STATE_FAILED = 4;
+}
+
+enum RuntimeSecretFailureCode {
+  RUNTIME_SECRET_FAILURE_CODE_UNSPECIFIED = 0;
+  RUNTIME_SECRET_FAILURE_CODE_KUBERNETES_UNAVAILABLE = 1;
+  RUNTIME_SECRET_FAILURE_CODE_MATERIALIZATION_CONFLICT = 2;
+  RUNTIME_SECRET_FAILURE_CODE_MATERIALIZATION_INVALID = 3;
+  RUNTIME_SECRET_FAILURE_CODE_STALE_SECRET_VERSION = 4;
+  RUNTIME_SECRET_FAILURE_CODE_RECONCILIATION_FAILED = 5;
+  RUNTIME_SECRET_FAILURE_CODE_GRANT_EXPIRED = 6;
+}
+
+enum RuntimeSecretRecoveryAction {
+  RUNTIME_SECRET_RECOVERY_ACTION_UNSPECIFIED = 0;
+  RUNTIME_SECRET_RECOVERY_ACTION_KEEP = 1;
+  RUNTIME_SECRET_RECOVERY_ACTION_DELETE = 2;
+}
+
+message RuntimeSecretDisplayHint {
+  string prefix = 1;
+  string suffix = 2;
+}
+
+message RuntimeSecret {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  string name = 4;
+  string description = 5;
+  RuntimeSecretValueType value_type = 6;
+  string state = 7;
+  int64 current_revision = 8;
+  RuntimeSecretDisplayHint display_hint = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  string namespace = 12;
+  RuntimeSecretRevisionDescriptor current_revision_descriptor = 13;
+  repeated NextAction next_actions = 14;
+}
+
+message ListRuntimeSecretsRequest {
+  string project_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message ListRuntimeSecretsResponse {
+  repeated RuntimeSecret secrets = 1;
+  PageInfo page = 2;
+}
+message GetRuntimeSecretRequest {
+  string secret_ref = 1;
+}
+message GetRuntimeSecretResponse {
+  RuntimeSecret secret = 1;
+}
+
+message PrepareCreateRuntimeSecretRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string name = 3;
+  string description = 4;
+  RuntimeSecretValueType value_type = 5;
+  // SHA-256 точных bytes, которые будут переданы secret-broker; для BINARY
+  // вычисляется после строгого base64 decode.
+  string expected_content_sha256 = 6;
+}
+message PrepareCreateRuntimeSecretResponse {
+  RuntimeSecretOperationReceipt operation = 1;
+}
+
+message PrepareRotateRuntimeSecretRequest {
+  MutationContext mutation = 1;
+  string secret_ref = 2;
+  RuntimeSecretValueType value_type = 3;
+  string expected_content_sha256 = 4;
+}
+message PrepareRotateRuntimeSecretResponse {
+  RuntimeSecretOperationReceipt operation = 1;
+}
+
+message PrepareRevealRuntimeSecretRequest {
+  MutationContext mutation = 1;
+  string secret_ref = 2;
+}
+message PrepareRevealRuntimeSecretResponse {
+  RuntimeSecretOperationReceipt operation = 1;
+}
+
+message PrepareRevokeRuntimeSecretRequest {
+  MutationContext mutation = 1;
+  string secret_ref = 2;
+}
+message PrepareRevokeRuntimeSecretResponse {
+  RuntimeSecretOperationReceipt operation = 1;
+}
+
+message RuntimeSecretOperationReceipt {
+  string operation_grant = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  RuntimeSecretValueType value_type = 3;
+  string operation_ref = 4;
+  RuntimeSecretOperationState state = 5;
+  RuntimeSecret terminal_secret = 6;
+  RuntimeSecretFailureCode failure_code = 7;
+}
+
+message CheckRuntimeSecretWorkReadinessRequest {}
+message CheckRuntimeSecretWorkReadinessResponse {
+  bool ready = 1;
+}
+
+message ListRuntimeSecretRecoveryWorkRequest {
+  PageRequest page = 1;
+}
+message RuntimeSecretRecoveryWork {
+  string operation_ref = 1;
+  RuntimeSecretOperationKind kind = 2;
+  string claimant_id = 3;
+  int64 claim_generation = 4;
+  string namespace = 5;
+  string secret_ref = 6;
+  int64 target_revision = 7;
+  string secret_key = 8;
+  string expected_content_sha256 = 9;
+}
+message ListRuntimeSecretRecoveryWorkResponse {
+  repeated RuntimeSecretRecoveryWork operations = 1;
+  PageInfo page = 2;
+}
+
+message ConsumeRuntimeSecretOperationRequest {
+  string operation_grant = 1;
+  string claimant_id = 2;
+}
+message ConsumeRuntimeSecretOperationResponse {
+  string operation_ref = 1;
+  RuntimeSecretOperationKind kind = 2;
+  string project_ref = 3;
+  string secret_ref = 4;
+  string name = 5;
+  string description = 6;
+  RuntimeSecretValueType value_type = 7;
+  string namespace = 8;
+  int64 target_revision = 9;
+  repeated string versioned_secret_names = 10;
+  string secret_key = 11;
+  google.protobuf.Timestamp expires_at = 12;
+  int64 claim_generation = 13;
+  google.protobuf.Timestamp lease_deadline = 14;
+  string expected_content_sha256 = 15;
+  repeated RuntimeSecretRevisionDescriptor revision_descriptors = 16;
+}
+
+message RuntimeSecretRevisionDescriptor {
+  int64 revision = 1;
+  string namespace = 2;
+  string secret_name = 3;
+  string secret_key = 4;
+  string secret_uid = 5;
+  string secret_resource_version = 6;
+  string content_sha256 = 7;
+}
+
+message RuntimeSecretMaterialization {
+  string namespace = 1;
+  string secret_name = 2;
+  string secret_key = 3;
+  string secret_uid = 4;
+  string secret_resource_version = 5;
+  string content_sha256 = 6;
+  RuntimeSecretDisplayHint display_hint = 7;
+}
+message CompleteRuntimeSecretOperationRequest {
+  string operation_ref = 1;
+  RuntimeSecretMaterialization materialization = 2;
+  string claimant_id = 3;
+  int64 claim_generation = 4;
+}
+message CompleteRuntimeSecretOperationResponse {
+  RuntimeSecret secret = 1;
+}
+
+message FailRuntimeSecretOperationRequest {
+  string operation_ref = 1;
+  string claimant_id = 2;
+  int64 claim_generation = 3;
+  RuntimeSecretFailureCode failure_code = 4;
+}
+message FailRuntimeSecretOperationResponse {
+  string operation_ref = 1;
+  RuntimeSecretOperationState state = 2;
+  RuntimeSecretFailureCode failure_code = 3;
+}
+
+message RecoverRuntimeSecretMaterializationRequest {
+  string operation_ref = 1;
+  RuntimeSecretMaterialization materialization = 2;
+}
+message RecoverRuntimeSecretMaterializationResponse {
+  RuntimeSecretRecoveryAction action = 1;
+  RuntimeSecretOperationState operation_state = 2;
+  RuntimeSecret secret = 3;
+}
+
+message PublishAgentRuntimeConfigurationRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string runtime_profile_ref = 3;
+  string model = 4;
+  string provider_policy_mode = 5;
+  repeated ProviderAccountCandidate provider_accounts = 6;
+}
+message PublishAgentRuntimeConfigurationResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message CreateConfigOverlayDraftRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string content = 3;
+}
+message CreateConfigOverlayDraftResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message ValidateConfigOverlayDraftRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+}
+message ValidateConfigOverlayDraftResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message PublishConfigOverlayDraftRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+}
+message PublishConfigOverlayDraftResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message RollbackConfigOverlayRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string published_overlay_ref = 3;
+}
+message RollbackConfigOverlayResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message CreateRuntimeEnvironmentSetRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string name = 3;
+  string description = 4;
+  repeated RuntimeEnvironmentValue values = 5;
+  repeated RuntimeSecretBinding secret_bindings = 6;
+  string image_artifact_ref = 7;
+  repeated RuntimeEnvironmentTool tools = 8;
+  RuntimeEnvironmentPolicyInput policy = 9;
+}
+message CreateRuntimeEnvironmentSetResponse {
+  RuntimeEnvironmentSet environment = 1;
+}
+message PublishRuntimeEnvironmentVersionRequest {
+  MutationContext mutation = 1;
+  string environment_ref = 2;
+  string name = 3;
+  string description = 4;
+  repeated RuntimeEnvironmentValue values = 5;
+  repeated RuntimeSecretBinding secret_bindings = 6;
+  string image_artifact_ref = 7;
+  repeated RuntimeEnvironmentTool tools = 8;
+  RuntimeEnvironmentPolicyInput policy = 9;
+}
+message PublishRuntimeEnvironmentVersionResponse {
+  RuntimeEnvironmentSet environment = 1;
+}
+message RollbackRuntimeEnvironmentRequest {
+  MutationContext mutation = 1;
+  string environment_ref = 2;
+  string published_version_ref = 3;
+}
+message RollbackRuntimeEnvironmentResponse {
+  RuntimeEnvironmentSet environment = 1;
+}
+message BindAgentRuntimeEnvironmentRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string environment_ref = 3;
+}
+message BindAgentRuntimeEnvironmentResponse {
+  AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+
+message ProviderAccountCandidate {
+  string account_ref = 1;
+  int32 weight = 2;
+}
+
+message ProviderAccountPolicyVersion {
+  string ref = 1;
+  int64 version = 2;
+  string mode = 3;
+  repeated ProviderAccountCandidate account_candidates = 4;
+  string digest = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message AgentRuntimeConfiguration {
+  string ref = 1;
+  int64 version = 2;
+  string agent_ref = 3;
+  string runtime_profile_ref = 4;
+  string provider = 5;
+  string model = 6;
+  ProviderAccountPolicyVersion provider_policy = 7;
+  string digest = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message ConfigOverlayVersion {
+  string ref = 1;
+  int64 version = 2;
+  int64 revision = 3;
+  string state = 4;
+  string content = 5;
+  string digest = 6;
+  repeated string validation_messages = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp published_at = 9;
+}
+
+message RuntimeEnvironmentValue {
+  string name = 1;
+  string value = 2;
+}
+
+// RuntimeSecretBinding является единственным browser-facing input для
+// привязки активной Runtime Secret revision к имени переменной окружения.
+message RuntimeSecretBinding {
+  string name = 1;
+  string secret_ref = 2;
+}
+
+// RuntimeSecretDescriptor содержит только immutable Secret identity и digest.
+// Secret values не входят ни в один control-plane wire contract.
+message RuntimeSecretDescriptor {
+  string name = 1;
+  string secret_name = 2;
+  string secret_key = 3;
+  string secret_uid = 4;
+  string secret_resource_version = 5;
+  string content_sha256 = 6;
+  string secret_ref = 7;
+  string namespace = 8;
+  int64 revision = 9;
+}
+
+message RuntimeEnvironmentVersion {
+  string ref = 1;
+  int64 version = 2;
+  int64 revision = 3;
+  repeated RuntimeEnvironmentValue values = 4;
+  repeated RuntimeSecretDescriptor secret_descriptors = 5;
+  string digest = 6;
+  google.protobuf.Timestamp created_at = 7;
+  RuntimeEnvironmentImage image = 8;
+  repeated RuntimeEnvironmentTool tools = 9;
+  RuntimeEnvironmentPolicy policy = 10;
+}
+
+enum RuntimeVolumeKind {
+  RUNTIME_VOLUME_KIND_UNSPECIFIED = 0;
+  RUNTIME_VOLUME_KIND_EPHEMERAL_DISK = 1;
+  RUNTIME_VOLUME_KIND_EPHEMERAL_MEMORY = 2;
+}
+
+enum RuntimeNetworkDestination {
+  RUNTIME_NETWORK_DESTINATION_UNSPECIFIED = 0;
+  RUNTIME_NETWORK_DESTINATION_DNS = 1;
+  RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK = 2;
+  RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY = 3;
+  RUNTIME_NETWORK_DESTINATION_KUBERNETES_API = 4;
+}
+
+enum RuntimeNetworkProtocol {
+  RUNTIME_NETWORK_PROTOCOL_UNSPECIFIED = 0;
+  RUNTIME_NETWORK_PROTOCOL_TCP = 1;
+  RUNTIME_NETWORK_PROTOCOL_UDP = 2;
+}
+
+enum RuntimeKubernetesAccessKind {
+  RUNTIME_KUBERNETES_ACCESS_KIND_UNSPECIFIED = 0;
+  RUNTIME_KUBERNETES_ACCESS_KIND_NONE = 1;
+  RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION = 2;
+}
+
+message RuntimeResourcePolicy {
+  int64 cpu_request_milli = 1;
+  int64 cpu_limit_milli = 2;
+  int64 memory_request_mib = 3;
+  int64 memory_limit_mib = 4;
+  int64 ephemeral_storage_request_mib = 5;
+  int64 ephemeral_storage_limit_mib = 6;
+}
+
+message RuntimeVolumeInput {
+  string name = 1;
+  RuntimeVolumeKind kind = 2;
+  int64 size_mib = 3;
+}
+
+message RuntimeVolume {
+  string name = 1;
+  RuntimeVolumeKind kind = 2;
+  int64 size_mib = 3;
+  string mount_path = 4;
+}
+
+message RuntimeEnvironmentPolicyInput {
+  RuntimeResourcePolicy resources = 1;
+  repeated RuntimeVolumeInput volumes = 2;
+  repeated RuntimeNetworkDestination network_destinations = 3;
+  RuntimeKubernetesAccessKind kubernetes_access = 4;
+}
+
+message RuntimeNetworkEgress {
+  RuntimeNetworkDestination destination = 1;
+  RuntimeNetworkProtocol protocol = 2;
+  int32 port = 3;
+}
+
+message RuntimeNetworkPolicy {
+  bool deny_by_default = 1;
+  repeated RuntimeNetworkEgress egress = 2;
+}
+
+message RuntimeKubernetesAccessProfile {
+  RuntimeKubernetesAccessKind kind = 1;
+  string namespace = 2;
+}
+
+message RuntimeKubernetesRule {
+  string api_group = 1;
+  string resource = 2;
+  repeated string verbs = 3;
+  repeated string resource_names = 4;
+}
+
+message RuntimeKubernetesAccess {
+  RuntimeKubernetesAccessProfile profile = 1;
+  string service_account_name = 2;
+  repeated RuntimeKubernetesRule rules = 3;
+  string digest = 4;
+}
+
+message RuntimeEnvironmentPolicy {
+  RuntimeResourcePolicy resources = 1;
+  repeated RuntimeVolume volumes = 2;
+  RuntimeNetworkPolicy network = 3;
+  RuntimeKubernetesAccessProfile kubernetes_access = 4;
+  string resources_digest = 5;
+  string volumes_digest = 6;
+  string network_digest = 7;
+  string rbac_digest = 8;
+}
+
+message RuntimeEnvironmentImage {
+  string artifact_ref = 1;
+  string recipe_ref = 2;
+  int64 recipe_generation = 3;
+  string reference = 4;
+  string digest = 5;
+}
+
+message RuntimeEnvironmentTool {
+  string name = 1;
+  string command = 2;
+  string description = 3;
+  string usage_hint = 4;
+}
+
+message RuntimeEnvironmentSet {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  string name = 4;
+  string description = 5;
+  string state = 6;
+  RuntimeEnvironmentVersion current_version = 7;
+  google.protobuf.Timestamp updated_at = 8;
+  bool ready = 9;
+  repeated string readiness_blockers = 10;
+  repeated NextAction next_actions = 11;
+}
+
+message RuntimeEnvironmentReadiness {
+  string environment_ref = 1;
+  int64 environment_version = 2;
+  string published_version_ref = 3;
+  string published_version_digest = 4;
+  bool ready = 5;
+  repeated string blockers = 6;
+  google.protobuf.Timestamp observed_at = 7;
+}
+
+message GetRuntimeEnvironmentReadinessRequest {
+  string environment_ref = 1;
+}
+message GetRuntimeEnvironmentReadinessResponse {
+  RuntimeEnvironmentReadiness readiness = 1;
+}
+message ListRuntimeEnvironmentAgentsRequest {
+  string environment_ref = 1;
+  PageRequest page = 2;
+  string query = 3;
+}
+message ListRuntimeEnvironmentAgentsResponse {
+  repeated Agent agents = 1;
+  PageInfo page = 2;
+}
+
+message SetRuntimeEnvironmentEnabledRequest {
+  MutationContext mutation = 1;
+  string environment_ref = 2;
+  bool enabled = 3;
+}
+message SetRuntimeEnvironmentEnabledResponse {
+  RuntimeEnvironmentSet environment = 1;
+}
+message DeleteRuntimeEnvironmentRequest {
+  MutationContext mutation = 1;
+  string environment_ref = 2;
+}
+message DeleteRuntimeEnvironmentResponse {
+  RuntimeEnvironmentSet environment = 1;
+}
+
+message AgentRuntimeEnvironmentBinding {
+  string ref = 1;
+  int64 version = 2;
+  string agent_ref = 3;
+  string environment_ref = 4;
+  string digest = 5;
+}
+
+message AgentRuntimeConfigurationView {
+  AgentRuntimeConfiguration configuration = 1;
+  ConfigOverlayVersion published_overlay = 2;
+  ConfigOverlayVersion draft_overlay = 3;
+  AgentRuntimeEnvironmentBinding environment_binding = 4;
+  RuntimeEnvironmentSet environment = 5;
+  string safe_effective_config = 6;
+  int64 agent_version = 7;
+}
+
+message TemplateVariable {
+  string name = 1;
+  string value_type = 2;
+  string description = 3;
+  string example = 4;
+  string source = 5;
+  bool collection = 6;
+  string item_value_type = 7;
+  repeated TemplateVariableField item_fields = 8;
+  string range_example = 9;
+}
+
+message TemplateVariableField {
+  string name = 1;
+  string value_type = 2;
+  string description = 3;
+}
+
+message ProviderDefinition {
+  string key = 1;
+  string name = 2;
+  string description = 3;
+  repeated ProviderAuthorizationMethod authorization_methods = 4;
+  repeated string model_ids = 5;
+  string default_model_id = 6;
+  bool available = 7;
+  bool ready = 8;
+  repeated string readiness_blockers = 9;
+}
+message ListProviderDefinitionsRequest {
+  PageRequest page = 1;
+  string query = 2;
+}
+message ListProviderDefinitionsResponse {
+  repeated ProviderDefinition definitions = 1;
+  PageInfo page = 2;
+}
+
+message RoleImageRecipeRevision {
+  string ref = 1;
+  string recipe_ref = 2;
+  int64 revision = 3;
+  int64 recipe_version = 4;
+  int64 recipe_generation = 5;
+  string spec_sha256 = 6;
+  string provenance_sha256 = 7;
+  string source_sha256 = 8;
+  string immutable_build_sha256 = 9;
+  string image_artifact_ref = 10;
+  string manifest_digest = 11;
+  string promoted_reference = 12;
+  string promotion_receipt_sha256 = 13;
+  google.protobuf.Timestamp created_at = 14;
+}
+message ListRoleImageRecipeRevisionsRequest {
+  string recipe_ref = 1;
+  PageRequest page = 2;
+}
+message ListRoleImageRecipeRevisionsResponse {
+  repeated RoleImageRecipeRevision revisions = 1;
+  PageInfo page = 2;
+}
+message PromoteRoleImageRequest {
+  MutationContext mutation = 1;
+  string recipe_ref = 2;
+  string image_artifact_ref = 3;
+  string expected_provenance_sha256 = 4;
+}
+message RoleImagePromotionReceipt {
+  string ref = 1;
+  string recipe_ref = 2;
+  string image_artifact_ref = 3;
+  string provenance_sha256 = 4;
+  string manifest_digest = 5;
+  string receipt_sha256 = 6;
+  string state = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+message PromoteRoleImageResponse {
+  RoleImagePromotionReceipt receipt = 1;
+}
+
+enum ProviderAccountState {
+  PROVIDER_ACCOUNT_STATE_UNSPECIFIED = 0;
+  PROVIDER_ACCOUNT_STATE_PENDING_AUTHORIZATION = 1;
+  PROVIDER_ACCOUNT_STATE_AUTHORIZED = 2;
+  PROVIDER_ACCOUNT_STATE_REAUTHORIZATION_REQUIRED = 3;
+  PROVIDER_ACCOUNT_STATE_REVOKED = 4;
+  PROVIDER_ACCOUNT_STATE_DISABLED = 5;
+}
+
+enum ProviderAuthorizationMethod {
+  PROVIDER_AUTHORIZATION_METHOD_UNSPECIFIED = 0;
+  PROVIDER_AUTHORIZATION_METHOD_DEVICE_CODE = 1;
+  PROVIDER_AUTHORIZATION_METHOD_API_KEY = 2;
+}
+
+enum ProviderAuthorizationState {
+  PROVIDER_AUTHORIZATION_STATE_UNSPECIFIED = 0;
+  PROVIDER_AUTHORIZATION_STATE_PENDING = 1;
+  PROVIDER_AUTHORIZATION_STATE_AUTHORIZED = 2;
+  PROVIDER_AUTHORIZATION_STATE_EXPIRED = 3;
+  PROVIDER_AUTHORIZATION_STATE_FAILED = 4;
+}
+
+message ProviderAuthorization {
+  string ref = 1;
+  ProviderAuthorizationMethod method = 2;
+  ProviderAuthorizationState state = 3;
+  string verification_uri = 4;
+  string user_code = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  string safe_failure_code = 7;
+}
+
+message ProviderAccount {
+  string ref = 1;
+  int64 version = 2;
+  string definition_key = 3;
+  string name = 4;
+  string external_account_masked = 5;
+  ProviderAccountState state = 6;
+  bool enabled = 7;
+  bool ready = 8;
+  ProviderAuthorization authorization = 9;
+  repeated NextAction next_actions = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message ListProviderAccountsRequest {
+  PageRequest page = 1;
+  string query = 2;
+  ProviderAccountState state = 3;
+  string definition_key = 4;
+}
+message ListProviderAccountsResponse {
+  repeated ProviderAccount accounts = 1;
+  PageInfo page = 2;
+  repeated NextAction next_actions = 3;
+}
+message GetProviderAccountRequest {
+  string account_ref = 1;
+}
+message GetProviderAccountResponse {
+  ProviderAccount account = 1;
+}
+message CreateProviderAccountRequest {
+  MutationContext mutation = 1;
+  string name = 2;
+  string definition_key = 3;
+}
+message CreateProviderAccountResponse {
+  ProviderAccount account = 1;
+}
+message StartProviderAccountDeviceAuthorizationRequest {
+  MutationContext mutation = 1;
+  string account_ref = 2;
+}
+message StartProviderAccountDeviceAuthorizationResponse {
+  ProviderAccount account = 1;
+}
+message AuthorizeProviderAccountAPIKeyRequest {
+  MutationContext mutation = 1;
+  string account_ref = 2;
+  bytes api_key = 3;
+}
+message AuthorizeProviderAccountAPIKeyResponse {
+  ProviderAccount account = 1;
+}
+message RefreshProviderAccountAuthorizationRequest {
+  MutationContext mutation = 1;
+  string account_ref = 2;
+}
+message RefreshProviderAccountAuthorizationResponse {
+  ProviderAccount account = 1;
+}
+message RevokeProviderAccountRequest {
+  MutationContext mutation = 1;
+  string account_ref = 2;
+}
+message RevokeProviderAccountResponse {
+  ProviderAccount account = 1;
+}
+message SetProviderAccountEnabledRequest {
+  MutationContext mutation = 1;
+  string account_ref = 2;
+  bool enabled = 3;
+}
+message SetProviderAccountEnabledResponse {
+  ProviderAccount account = 1;
+}
+
+message ListScheduleRevisionsRequest {
+  string schedule_ref = 1;
+  PageRequest page = 2;
+}
+message ListScheduleRevisionsResponse {
+  repeated ScheduleRevision revisions = 1;
+  PageInfo page = 2;
+}
+message ListScheduleRunsRequest {
+  string schedule_ref = 1;
+  PageRequest page = 2;
+}
+message ListScheduleRunsResponse {
+  repeated ScheduleRunOccurrence occurrences = 1;
+  PageInfo page = 2;
+}
+message DeleteScheduleRequest {
+  MutationContext mutation = 1;
+  string schedule_ref = 2;
+}
+message DeleteScheduleResponse {
+  Schedule schedule = 1;
+}
+
+enum ArtifactImpactAction {
+  ARTIFACT_IMPACT_ACTION_UNSPECIFIED = 0;
+  ARTIFACT_IMPACT_ACTION_DELETE = 1;
+  ARTIFACT_IMPACT_ACTION_PURGE = 2;
+}
+message ArtifactImpact {
+  string artifact_ref = 1;
+  int64 artifact_version = 2;
+  ArtifactImpactAction action = 3;
+  string impact_digest = 4;
+  int64 binding_count = 5;
+  int64 attachment_count = 6;
+  int64 active_runtime_count = 7;
+  repeated string blockers = 8;
+  bool permitted = 9;
+  repeated ArtifactImpactRun active_runs = 10;
+  bool active_runs_truncated = 11;
+}
+message ArtifactImpactRun {
+  string run_ref = 1;
+  string title = 2;
+  RunState state = 3;
+  string project_ref = 4;
+}
+message GetArtifactImpactRequest {
+  string artifact_ref = 1;
+  ArtifactImpactAction action = 2;
+}
+message GetArtifactImpactResponse {
+  ArtifactImpact impact = 1;
+}
+
+message SetAgentAvatarRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string artifact_ref = 3;
+}
+message SetAgentAvatarResponse {
+  Agent agent = 1;
+}
+message RemoveAgentAvatarRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+}
+message RemoveAgentAvatarResponse {
+  Agent agent = 1;
+}
+
+message PromptTemplateDiagnostic {
+  string severity = 1;
+  string code = 2;
+  string message = 3;
+  int32 line = 4;
+  int32 column = 5;
+}
+message ValidatePromptTemplateRequest {
+  string template = 1;
+}
+message ValidatePromptTemplateResponse {
+  bool valid = 1;
+  repeated PromptTemplateDiagnostic diagnostics = 2;
+}
+message PreviewPromptTemplateRequest {
+  string template = 1;
+  string target_kind = 2;
+  string target_ref = 3;
+  bool include_full_materialization = 4;
+}
+message PreviewPromptTemplateResponse {
+  string safe_preview = 1;
+  string full_materialized_prompt = 2;
+  repeated PromptTemplateDiagnostic diagnostics = 3;
+}
+
+message ProviderCredentialDescriptor {
+  string secret_name = 1;
+  string secret_uid = 2;
+  string secret_resource_version = 3;
+  string content_sha256 = 4;
+}
+message CheckProviderCredentialMaterializerReadinessRequest {}
+message CheckProviderCredentialMaterializerReadinessResponse {
+  bool ready = 1;
+}
+message ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest {
+  string attempt_ref = 1;
+  string account_ref = 2;
+}
+message ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse {
+  string materializer_attempt_ref = 1;
+  string verification_uri = 2;
+  string user_code = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  string materializer_attempt_uid = 5;
+  string materializer_attempt_resource_version = 6;
+}
+message ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest {
+  string materializer_attempt_ref = 1;
+}
+message ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse {
+  ProviderAuthorizationState state = 1;
+  ProviderCredentialDescriptor credential = 2;
+  string external_account_masked = 3;
+  string safe_failure_code = 4;
+}
+message ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest {
+  string attempt_ref = 1;
+  string account_ref = 2;
+  bytes api_key = 3;
+}
+message ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse {
+  ProviderCredentialDescriptor credential = 1;
+  string external_account_masked = 2;
+}
+message ProviderCredentialMaterializerServiceDiscardMaterializationRequest {
+  string attempt_ref = 1;
+  string account_ref = 2;
+  string materializer_attempt_ref = 3;
+  string materializer_attempt_uid = 4;
+  string materializer_attempt_resource_version = 5;
+  ProviderCredentialDescriptor credential = 6;
+}
+message ProviderCredentialMaterializerServiceDiscardMaterializationResponse {
+  bool discarded = 1;
+}
+message CommitProviderCredentialRefreshRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string previous_credential_revision_ref = 5;
+  string previous_content_sha256 = 6;
+  string secret_name = 7;
+  string secret_uid = 8;
+  string secret_resource_version = 9;
+  string content_sha256 = 10;
+}
+message CommitProviderCredentialRefreshResponse {
+  ProviderCredentialBinding provider_credential = 1;
+}
+
+// ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest
+// фиксирует exact cleanup task, fencing generation и безопасный descriptor.
+message ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest {
+  // task_ref — opaque control-plane task ref с префиксом pcct_.
+  string task_ref = 1;
+  // account_ref — exact provider account ref с префиксом pacc_.
+  string account_ref = 2;
+  // lease_generation — монотонный fence текущего claim.
+  int64 lease_generation = 3;
+  // credential содержит только exact Secret metadata и SHA-256, без material.
+  ProviderCredentialDescriptor credential = 4;
+}
+// ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse
+// возвращает только ограниченное подтверждение terminal exact-delete.
+message ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse {
+  // terminal_receipt — безопасное идемпотентное подтверждение длиной 1..512 байт.
+  string terminal_receipt = 1;
 }

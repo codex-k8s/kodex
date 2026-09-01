@@ -9,11 +9,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -36,6 +40,9 @@ type Repository struct {
 	defaultRuntimeModel    string
 	providerCredential     ProviderCredentialConfig
 	roleImages             RoleImageConfig
+	objects                objectstorage.Store
+	integrationDefinitions map[string]integrationpackage.Package
+	runtimeSecretNamespace string
 }
 
 // ProviderCredentialConfig содержит только безопасную identity неизменяемой
@@ -57,11 +64,26 @@ type RoleImageConfig struct {
 	LeaseSigningKey                             []byte
 }
 
-func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string) (*Repository, error) {
-	if pool == nil || defaultRuntimeProvider != "openai-codex" || defaultRuntimeModel == "" {
-		return nil, errors.New("PostgreSQL pool is required")
+func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string, objects objectstorage.Store) (*Repository, error) {
+	if pool == nil || defaultRuntimeProvider != "openai-codex" || defaultRuntimeModel == "" || objects == nil {
+		return nil, errors.New("control-plane repository dependencies are required")
 	}
-	return &Repository{pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel}, nil
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		return nil, errors.New("load shipped integration definitions")
+	}
+	return &Repository{
+		pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel,
+		objects: objects, integrationDefinitions: definitions, runtimeSecretNamespace: "kodex-runtime",
+	}, nil
+}
+
+func (repository *Repository) ConfigureRuntimeSecrets(namespace string) error {
+	if !validDNSLabel(namespace) {
+		return errors.New("runtime secret namespace is invalid")
+	}
+	repository.runtimeSecretNamespace = namespace
+	return nil
 }
 
 func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error {
@@ -120,6 +142,9 @@ func (repository *Repository) Ready(ctx context.Context) error {
 	if schemaVersion != 1 {
 		return errors.New("control-plane schema version is unsupported")
 	}
+	if err := repository.objects.Check(ctx); err != nil {
+		return errors.New("artifact object storage is unavailable")
+	}
 	return nil
 }
 
@@ -148,6 +173,12 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		); err != nil {
 			return err
 		}
+		if err := repository.reconcileSystemAssistantRuntimeEnvironment(ctx, tx); err != nil {
+			return err
+		}
+		if err := repository.reconcileIntegrationDefinitions(ctx, tx); err != nil {
+			return err
+		}
 		return tx.Commit(ctx)
 	}
 	organizationRef, err := newRef("org")
@@ -167,8 +198,8 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		organizationID, hex.EncodeToString(systemDigest[:])).Scan(&systemSubjectID); err != nil {
 		return errors.New("create system subject")
 	}
-	if _, err := tx.Exec(ctx, queryRepositoryBootstrapSystemMembership, organizationID, systemSubjectID, allPermissions()); err != nil {
-		return errors.New("create system subject membership")
+	if err := repository.bootstrapAccess(ctx, tx, organizationID, organizationRef, systemSubjectID); err != nil {
+		return err
 	}
 	capabilities := []struct{ key, name, description, risk string }{
 		{"platform.project.manage", "i18n:CAPABILITY_PROJECT_MANAGE_NAME", "i18n:CAPABILITY_PROJECT_MANAGE_DESCRIPTION", "LOW"},
@@ -227,49 +258,8 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		roleRef, organizationID, systemSubjectID).Scan(&systemRoleID); err != nil {
 		return errors.New("seed system assistant role definition")
 	}
-	definitions := []struct {
-		key, name, description, category string
-		capabilities                     []entity.IntegrationCapability
-		fields                           []entity.IntegrationConfigurationField
-	}{
-		{
-			key: "github", name: "GitHub", description: "i18n:INTEGRATION_GITHUB_DESCRIPTION", category: "i18n:INTEGRATION_CATEGORY_DEVELOPMENT",
-			capabilities: []entity.IntegrationCapability{{Key: "github.repository.read", Name: "i18n:INTEGRATION_GITHUB_REPOSITORY_READ_NAME", Description: "i18n:INTEGRATION_GITHUB_REPOSITORY_READ_DESCRIPTION", Risk: "READ"}},
-			fields: []entity.IntegrationConfigurationField{
-				{Key: "owner", Label: "i18n:INTEGRATION_FIELD_GITHUB_OWNER_LABEL", Help: "i18n:INTEGRATION_FIELD_GITHUB_OWNER_HELP", ValueType: "TEXT", Required: true, Placeholder: "i18n:INTEGRATION_FIELD_GITHUB_OWNER_PLACEHOLDER"},
-				{Key: "repository", Label: "i18n:INTEGRATION_FIELD_GITHUB_REPOSITORY_LABEL", Help: "i18n:INTEGRATION_FIELD_GITHUB_REPOSITORY_HELP", ValueType: "TEXT", Required: true, Placeholder: "i18n:INTEGRATION_FIELD_GITHUB_REPOSITORY_PLACEHOLDER"},
-			},
-		},
-		{
-			key: "kubernetes", name: "Kubernetes", description: "i18n:INTEGRATION_KUBERNETES_DESCRIPTION", category: "i18n:INTEGRATION_CATEGORY_INFRASTRUCTURE",
-			capabilities: []entity.IntegrationCapability{{Key: "kubernetes.workload.read", Name: "i18n:INTEGRATION_KUBERNETES_WORKLOAD_READ_NAME", Description: "i18n:INTEGRATION_KUBERNETES_WORKLOAD_READ_DESCRIPTION", Risk: "SENSITIVE"}},
-			fields: []entity.IntegrationConfigurationField{
-				{Key: "server_url", Label: "i18n:INTEGRATION_FIELD_SERVER_URL_LABEL", Help: "i18n:INTEGRATION_FIELD_SERVER_URL_HELP", ValueType: "URL", Required: true, Placeholder: "https://api.example.test"},
-				{Key: "allowed_namespaces", Label: "i18n:INTEGRATION_FIELD_NAMESPACES_LABEL", Help: "i18n:INTEGRATION_FIELD_NAMESPACES_HELP", ValueType: "STRING_LIST", Required: true, Placeholder: "sales, support"},
-			},
-		},
-		{
-			key: "mattermost", name: "Mattermost", description: "i18n:INTEGRATION_MATTERMOST_DESCRIPTION", category: "i18n:INTEGRATION_CATEGORY_COMMUNICATIONS",
-			capabilities: []entity.IntegrationCapability{
-				{Key: "mattermost.inbound", Name: "i18n:INTEGRATION_MATTERMOST_INBOUND_NAME", Description: "i18n:INTEGRATION_MATTERMOST_INBOUND_DESCRIPTION", Risk: "READ"},
-				{Key: "mattermost.notifications", Name: "i18n:INTEGRATION_MATTERMOST_NOTIFICATIONS_NAME", Description: "i18n:INTEGRATION_MATTERMOST_NOTIFICATIONS_DESCRIPTION", Risk: "WRITE"},
-				{Key: "mattermost.result_mirror", Name: "i18n:INTEGRATION_MATTERMOST_RESULT_MIRROR_NAME", Description: "i18n:INTEGRATION_MATTERMOST_RESULT_MIRROR_DESCRIPTION", Risk: "WRITE"},
-				{Key: "mattermost.gate_decisions", Name: "i18n:INTEGRATION_MATTERMOST_GATE_DECISIONS_NAME", Description: "i18n:INTEGRATION_MATTERMOST_GATE_DECISIONS_DESCRIPTION", Risk: "SENSITIVE"},
-			},
-			fields: []entity.IntegrationConfigurationField{
-				{Key: "base_url", Label: "i18n:INTEGRATION_FIELD_BASE_URL_LABEL", Help: "i18n:INTEGRATION_FIELD_BASE_URL_HELP", ValueType: "URL", Required: true, Placeholder: "https://chat.example.test"},
-				{Key: "team_name", Label: "i18n:INTEGRATION_FIELD_TEAM_LABEL", Help: "i18n:INTEGRATION_FIELD_TEAM_HELP", ValueType: "TEXT", Required: true, Placeholder: "operations"},
-				{Key: "channel_name", Label: "i18n:INTEGRATION_FIELD_CHANNEL_LABEL", Help: "i18n:INTEGRATION_FIELD_CHANNEL_HELP", ValueType: "TEXT", Required: true, Placeholder: "ai-employees"},
-			},
-		},
-	}
-	for _, definition := range definitions {
-		capabilityJSON, _ := json.Marshal(definition.capabilities)
-		configurationJSON, _ := json.Marshal(definition.fields)
-		if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertIntegrationDefinitionsStableKeyDescriptionCapabilities,
-			definition.key, definition.name, definition.description, definition.category, capabilityJSON, configurationJSON); err != nil {
-			return errors.New("seed integration definition")
-		}
+	if err := repository.reconcileIntegrationDefinitions(ctx, tx); err != nil {
+		return err
 	}
 	agentRef, err := newRef("agt")
 	if err != nil {
@@ -279,6 +269,13 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertAgentsRefSystemKeyPurpose,
 		agentRef, organizationID, systemRoleID, defaultRuntimeKey).Scan(&agentID); err != nil {
 		return errors.New("create system assistant")
+	}
+	defaultRuntime, err := resolveEnabledRuntime(ctx, tx, defaultRuntimeKey)
+	if err != nil {
+		return errors.New("resolve system assistant runtime")
+	}
+	if err := repository.bootstrapAgentRuntime(ctx, tx, organizationID, agentID, "", defaultRuntime, systemSubjectID); err != nil {
+		return fmt.Errorf("create system assistant runtime configuration: %w", err)
 	}
 	promptRef, err := newRef("ins")
 	if err != nil {
@@ -306,6 +303,103 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		return errors.New("complete bootstrap")
 	}
 	return tx.Commit(ctx)
+}
+
+func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Context, tx pgx.Tx) error {
+	keys := make([]string, 0, len(repository.integrationDefinitions))
+	for _, definition := range integrationpackage.Sorted(repository.integrationDefinitions) {
+		var storedVersion, storedDigest string
+		err := tx.QueryRow(ctx, queryRepositoryReconcileIntegrationDefinition, definition.Metadata.Key).Scan(&storedVersion, &storedDigest)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return errors.New("read integration definition revision")
+		}
+		if err == nil {
+			comparison, compareErr := compareIntegrationDefinitionVersions(storedVersion, definition.Metadata.Version)
+			if compareErr != nil || comparison > 0 || comparison == 0 && storedDigest != definition.Digest {
+				return errors.New("integration definition revision rollback or digest mismatch")
+			}
+		}
+		capabilities := make([]entity.IntegrationCapability, 0, len(definition.Spec.Capabilities))
+		for _, capability := range definition.Spec.Capabilities {
+			capabilities = append(capabilities, entity.IntegrationCapability{
+				Key: capability.Key, Name: capability.Name, Description: capability.Description,
+				Operation: capability.Operation, Risk: capability.Risk,
+				ApprovalPolicy: capability.ApprovalPolicy, ResourceKind: capability.ResourceScope.Kind,
+				InputFields: integrationConfigurationFields(capability.InputFields),
+			})
+		}
+		fields := integrationConfigurationFields(definition.Spec.ConfigurationFields)
+		capabilityJSON, capabilityErr := json.Marshal(capabilities)
+		configurationJSON, configurationErr := json.Marshal(fields)
+		if capabilityErr != nil || configurationErr != nil {
+			return errors.New("encode integration definition")
+		}
+		credentialKey := ""
+		if definition.Spec.Credential != nil {
+			credentialKey = definition.Spec.Credential.SecretKey
+		}
+		if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertIntegrationDefinitionsStableKeyDescriptionCapabilities,
+			definition.Metadata.Key, definition.Spec.Name, definition.Spec.Description, definition.Spec.Category,
+			capabilityJSON, configurationJSON, definition.APIVersion, definition.Metadata.Version,
+			definition.Metadata.Origin, definition.Digest, definition.Spec.Adapter, credentialKey,
+		); err != nil {
+			return errors.New("reconcile integration definition")
+		}
+		keys = append(keys, definition.Metadata.Key)
+	}
+	if _, err := tx.Exec(ctx, queryRepositoryDisableUnshippedIntegrationDefinitions, keys); err != nil {
+		return errors.New("disable unshipped integration definitions")
+	}
+	return nil
+}
+
+func integrationConfigurationFields(fields []integrationpackage.Field) []entity.IntegrationConfigurationField {
+	result := make([]entity.IntegrationConfigurationField, 0, len(fields))
+	for _, field := range fields {
+		valueType := "TEXT"
+		if field.Format == "HTTPS_ORIGIN" || field.Format == "HTTPS_URL" {
+			valueType = "URL"
+		}
+		result = append(result, entity.IntegrationConfigurationField{
+			Key: field.Key, Label: field.Key, ValueType: valueType, Required: field.Required,
+		})
+	}
+	return result
+}
+
+func compareIntegrationDefinitionVersions(left, right string) (int, error) {
+	parse := func(raw string) ([3]uint64, error) {
+		var result [3]uint64
+		parts := strings.Split(raw, ".")
+		if len(parts) != len(result) {
+			return result, errors.New("integration definition version is invalid")
+		}
+		for index, part := range parts {
+			value, err := strconv.ParseUint(part, 10, 32)
+			if err != nil || index == 0 && value == 0 {
+				return result, errors.New("integration definition version is invalid")
+			}
+			result[index] = value
+		}
+		return result, nil
+	}
+	parsedLeft, err := parse(left)
+	if err != nil {
+		return 0, err
+	}
+	parsedRight, err := parse(right)
+	if err != nil {
+		return 0, err
+	}
+	for index := range parsedLeft {
+		if parsedLeft[index] < parsedRight[index] {
+			return -1, nil
+		}
+		if parsedLeft[index] > parsedRight[index] {
+			return 1, nil
+		}
+	}
+	return 0, nil
 }
 
 func (repository *Repository) reconcileProviderCredential(ctx context.Context, tx pgx.Tx) error {
@@ -355,6 +449,10 @@ func (repository *Repository) reconcileProviderCredential(ctx context.Context, t
 	})
 	if err != nil || tag.RowsAffected() != 1 {
 		return errors.New("activate reconciled provider credential revision")
+	}
+	if err := repository.scheduleProviderCredentialCleanup(ctx, tx, organizationID, accountID,
+		currentCredentialID, time.Now().UTC().Add(providerCredentialCleanupRetention)); err != nil {
+		return errors.New("schedule reconciled provider credential cleanup")
 	}
 	return nil
 }
@@ -430,6 +528,73 @@ func (repository *Repository) reconcileSystemAssistantCorePrompt(
 	return nil
 }
 
+func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx context.Context, tx pgx.Tx) error {
+	var organizationID, agentID, environmentID, currentVersionID, currentCoreDigest, currentDigest string
+	var currentVersion int64
+	var rawValues, rawSecrets, rawTools []byte
+	var rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte
+	var resourcesDigest, volumesDigest, networkDigest, rbacDigest string
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapSelectAssistantRuntimeEnvironment).Scan(
+		&organizationID, &agentID, &environmentID, &currentVersionID, &currentVersion,
+		&rawValues, &rawSecrets, &rawTools, &currentCoreDigest, &currentDigest,
+		&rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
+		&resourcesDigest, &volumesDigest, &networkDigest, &rbacDigest,
+	); err != nil {
+		return errors.New("read system assistant runtime environment")
+	}
+	var values []runtimecontract.RuntimeEnvironmentValue
+	var secrets []runtimecontract.RuntimeSecretProjection
+	if err := decodeStoredRuntimeEnvironment(rawValues, rawSecrets, &values, &secrets); err != nil {
+		return errors.New("decode system assistant runtime environment")
+	}
+	var tools []entity.RuntimeEnvironmentTool
+	if err := decodeStrict(rawTools, &tools); err != nil {
+		return errors.New("decode system assistant runtime tools")
+	}
+	policy, err := decodeRuntimeEnvironmentPolicy(rawResources, rawVolumes, rawNetwork, rawKubernetesAccess,
+		resourcesDigest, volumesDigest, networkDigest, rbacDigest)
+	if err != nil || policy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
+		return errors.New("verify system assistant runtime policy")
+	}
+	image := entity.RuntimeEnvironmentImage{
+		Reference: repository.roleImages.DefaultImageReference,
+		Digest:    repository.roleImages.DefaultImageDigest,
+	}
+	expectedCoreDigest, expectedDigest, err := runtimeEnvironmentConfigurationDigests(values, secrets, image, tools, policy)
+	if err != nil {
+		return errors.New("compute system assistant runtime environment digest")
+	}
+	if currentCoreDigest == expectedCoreDigest && currentDigest == expectedDigest {
+		return nil
+	}
+	versionRef, err := newRef("renvv")
+	if err != nil {
+		return err
+	}
+	nextRuntimeRevision := "system-assistant-runtime-" + expectedDigest
+	var activatedVersionID string
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapReconcileAssistantRuntimeEnvironment, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "agent_id": agentID, "environment_id": environmentID,
+		"current_version_id": currentVersionID, "current_version": currentVersion, "version_ref": versionRef,
+		"expected_core_digest": expectedCoreDigest, "expected_digest": expectedDigest,
+		"next_runtime_revision": nextRuntimeRevision,
+	}).Scan(&activatedVersionID); err != nil || activatedVersionID == "" {
+		return errors.New("activate system assistant runtime environment revision")
+	}
+	auditRef, err := newRef("aud")
+	if err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, queryRepositoryBootstrapInsertAssistantRuntimeEnvironmentAudit, pgx.StrictNamedArgs{
+		"audit_ref": auditRef, "organization_id": organizationID, "agent_id": agentID,
+		"environment_id": environmentID,
+	})
+	if err != nil || tag.RowsAffected() != 1 {
+		return errors.New("audit system assistant runtime environment revision")
+	}
+	return nil
+}
+
 func systemAssistantCoreRevisionNumber(revision string) (uint64, bool) {
 	const prefix = "system-assistant-core-v"
 	if !strings.HasPrefix(revision, prefix) {
@@ -439,15 +604,10 @@ func systemAssistantCoreRevisionNumber(revision string) (uint64, bool) {
 	return number, err == nil && number > 0
 }
 
-func defaultProviderAccountID(ctx context.Context, tx pgx.Tx, organizationID string) (string, error) {
-	var providerAccountID string
-	if err := tx.QueryRow(ctx, queryRepositorySelectDefaultProviderAccount, organizationID).Scan(&providerAccountID); err != nil {
-		return "", errs.ErrUnavailable
-	}
-	return providerAccountID, nil
+type scope struct {
+	organizationID, organizationRef, actorID, actorRef, actorName, role, correlationRef string
+	credentialAuthenticatedAt                                                           time.Time
 }
-
-type scope struct{ organizationID, organizationRef, actorID, actorRef, actorName, role, correlationRef string }
 
 func (repository *Repository) ResolvePrincipal(ctx context.Context, principal value.Principal) (value.Principal, error) {
 	if uuid.Validate(principal.ActorID) != nil || uuid.Validate(principal.AuthorityTenant) != nil {
@@ -494,6 +654,9 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 	if utf8.RuneCountInString(displayName) > 160 || len(input.ExternalEmailHint) > 200 || strings.TrimSpace(input.ExternalEmailHint) != input.ExternalEmailHint || strings.ContainsAny(displayName+input.ExternalEmailHint, "\r\n\x00") {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
+	if len(input.ExternalGroups) > 0 && (input.ExternalIssuer == "" || input.ExternalSessionRevision == 0) {
+		return platformrepo.ProofAuthority{}, errs.ErrForbidden
+	}
 	actorDigest := sha256.Sum256([]byte(input.ExternalTenantID + "\x00" + input.ExternalActorID))
 	authority, found, err := repository.resolveClaimedProofAuthority(
 		ctx,
@@ -504,15 +667,37 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 		return platformrepo.ProofAuthority{}, err
 	}
 	if found {
-		if _, err := repository.pool.Exec(
-			ctx,
-			queryUpdateOIDCSubjectProfile,
-			authority.OrganizationID,
-			authority.ActorID,
-			displayName,
-			input.ExternalEmailHint,
-		); err != nil {
+		tx, err := repository.pool.Begin(ctx)
+		if err != nil {
 			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		if _, err := tx.Exec(ctx, queryUpdateOIDCSubjectProfile, authority.OrganizationID, authority.ActorID, displayName, input.ExternalEmailHint); err != nil {
+			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
+		}
+		if err := repository.syncOIDCGroups(ctx, tx, authority.OrganizationID, authority.ActorID, input); err != nil {
+			return platformrepo.ProofAuthority{}, err
+		}
+		if input.ProjectRef != "" {
+			if err := tx.QueryRow(ctx, queryAuthorizeProjectMembership,
+				input.ProjectRef, authority.OrganizationID, authority.ActorID).Scan(&authority.ProjectID, &authority.ProjectVersion); errors.Is(err, pgx.ErrNoRows) {
+				if commitErr := tx.Commit(ctx); commitErr != nil {
+					return platformrepo.ProofAuthority{}, errs.ErrConflict
+				}
+				return platformrepo.ProofAuthority{}, errs.ErrForbidden
+			} else if err != nil {
+				return platformrepo.ProofAuthority{}, errs.ErrUnavailable
+			}
+		} else if allowed, accessErr := repository.subjectHasProofAccess(ctx, tx, authority.OrganizationID, authority.ActorID); accessErr != nil {
+			return platformrepo.ProofAuthority{}, accessErr
+		} else if !allowed {
+			if commitErr := tx.Commit(ctx); commitErr != nil {
+				return platformrepo.ProofAuthority{}, errs.ErrConflict
+			}
+			return platformrepo.ProofAuthority{}, errs.ErrForbidden
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return platformrepo.ProofAuthority{}, errs.ErrConflict
 		}
 		authority.ActorVersion = 1
 		return authority, nil
@@ -532,6 +717,9 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 	if authorityTenant != "" && authorityTenant != input.ExternalTenantID {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
+	if claimState == "PENDING_CLAIM" && !input.OwnerClaim {
+		return platformrepo.ProofAuthority{}, errs.ErrForbidden
+	}
 	err = tx.QueryRow(ctx, queryFindInstallationOwnerSubject, authority.OrganizationID, hex.EncodeToString(actorDigest[:])).Scan(&authority.ActorID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		actorRef, refErr := newRef("usr")
@@ -543,16 +731,17 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
 		}
 		if claimState == "PENDING_CLAIM" {
-			membershipRef, refErr := newRef("mem")
+			if _, err := tx.Exec(ctx, queryClaimInstallationOwnership,
+				authority.OrganizationID, authority.ActorID, input.ExternalTenantID); err != nil {
+				return platformrepo.ProofAuthority{}, errs.ErrUnavailable
+			}
+			bindingRef, refErr := newRef("abnd")
 			if refErr != nil {
 				return platformrepo.ProofAuthority{}, refErr
 			}
-			if _, err := tx.Exec(ctx, queryCreateInstallationOwnerMembership,
-				membershipRef, authority.OrganizationID, authority.ActorID, allPermissions()); err != nil {
-				return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-			}
-			if _, err := tx.Exec(ctx, queryClaimInstallationOwnership,
-				authority.OrganizationID, authority.ActorID, input.ExternalTenantID); err != nil {
+			if _, err := tx.Exec(ctx, queryAccessInsertOwnerBinding, pgx.NamedArgs{
+				"ref": bindingRef, "organization_id": authority.OrganizationID, "subject_id": authority.ActorID,
+			}); err != nil {
 				return platformrepo.ProofAuthority{}, errs.ErrUnavailable
 			}
 			authority.OrganizationVersion++
@@ -563,29 +752,40 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 	if _, err := tx.Exec(ctx, queryUpdateOIDCSubjectProfile, authority.OrganizationID, authority.ActorID, displayName, input.ExternalEmailHint); err != nil {
 		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
 	}
-	var active bool
-	if err := tx.QueryRow(ctx, queryCheckInstallationOwnerMembership, authority.OrganizationID, authority.ActorID).Scan(&active); err != nil {
-		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-	}
-	if !active {
-		if commitErr := tx.Commit(ctx); commitErr != nil {
-			return platformrepo.ProofAuthority{}, errs.ErrConflict
-		}
-		return platformrepo.ProofAuthority{}, errs.ErrForbidden
+	if err := repository.syncOIDCGroups(ctx, tx, authority.OrganizationID, authority.ActorID, input); err != nil {
+		return platformrepo.ProofAuthority{}, err
 	}
 	if input.ProjectRef != "" {
 		if err := tx.QueryRow(ctx, queryAuthorizeProjectMembership,
 			input.ProjectRef, authority.OrganizationID, authority.ActorID).Scan(&authority.ProjectID, &authority.ProjectVersion); errors.Is(err, pgx.ErrNoRows) {
+			if commitErr := tx.Commit(ctx); commitErr != nil {
+				return platformrepo.ProofAuthority{}, errs.ErrConflict
+			}
 			return platformrepo.ProofAuthority{}, errs.ErrForbidden
 		} else if err != nil {
 			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
 		}
+	} else if allowed, accessErr := repository.subjectHasProofAccess(ctx, tx, authority.OrganizationID, authority.ActorID); accessErr != nil {
+		return platformrepo.ProofAuthority{}, accessErr
+	} else if !allowed {
+		if commitErr := tx.Commit(ctx); commitErr != nil {
+			return platformrepo.ProofAuthority{}, errs.ErrConflict
+		}
+		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return platformrepo.ProofAuthority{}, errs.ErrConflict
 	}
 	authority.ActorVersion = 1
 	return authority, nil
+}
+
+func (repository *Repository) subjectHasProofAccess(ctx context.Context, tx pgx.Tx, organizationID, subjectID string) (bool, error) {
+	var allowed bool
+	if err := tx.QueryRow(ctx, queryProofSubjectHasActiveBinding, organizationID, subjectID).Scan(&allowed); err != nil {
+		return false, errs.ErrUnavailable
+	}
+	return allowed, nil
 }
 
 func (repository *Repository) resolveClaimedProofAuthority(
@@ -618,22 +818,6 @@ func (repository *Repository) resolveClaimedProofAuthority(
 		return platformrepo.ProofAuthority{}, false, errs.ErrUnavailable
 	}
 
-	if input.ProjectRef != "" {
-		if err := tx.QueryRow(
-			ctx,
-			queryAuthorizeProjectMembership,
-			input.ProjectRef,
-			authority.OrganizationID,
-			authority.ActorID,
-		).Scan(
-			&authority.ProjectID,
-			&authority.ProjectVersion,
-		); errors.Is(err, pgx.ErrNoRows) {
-			return platformrepo.ProofAuthority{}, false, errs.ErrForbidden
-		} else if err != nil {
-			return platformrepo.ProofAuthority{}, false, errs.ErrUnavailable
-		}
-	}
 	if err := tx.Commit(ctx); err != nil {
 		return platformrepo.ProofAuthority{}, false, errs.ErrConflict
 	}
@@ -680,6 +864,7 @@ func (repository *Repository) resolveScope(ctx context.Context, principal value.
 		return scope{}, errs.ErrUnavailable
 	}
 	result.correlationRef = principal.CorrelationRef
+	result.credentialAuthenticatedAt = principal.CredentialAuthenticatedAt
 	return result, nil
 }
 

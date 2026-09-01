@@ -35,6 +35,11 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 		CallerWorkload:     verified.GetCallerWorkloadId(),
 		CredentialRevision: verified.GetCallerCredentialRevision(),
 	}
+	if authenticatedAt := verified.GetCredentialAuthenticatedAt(); authenticatedAt != nil && authenticatedAt.IsValid() {
+		principal.CredentialAuthenticatedAt = authenticatedAt.AsTime().UTC()
+		principal.CredentialACR = strings.TrimSpace(verified.GetCredentialAcr())
+		principal.CredentialAMR = append([]string(nil), verified.GetCredentialAmr()...)
+	}
 	if verified.GetAuthority().GetProject() != nil {
 		principal.ProjectRef = verified.GetAuthority().GetProject().GetId()
 	}

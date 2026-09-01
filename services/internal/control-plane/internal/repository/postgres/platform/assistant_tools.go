@@ -2,7 +2,11 @@ package platform
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -27,11 +31,13 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 		return commandOutcome{}, err
 	}
 	var conversationID, conversationRef, projectID, projectRef string
+	var assistantRef string
+	var allowedOperations []string
 	var conversationVersion int64
 	actorScope := scope{correlationRef: machineScope.correlationRef}
 	if err := tx.QueryRow(ctx, queryRuntimeProposeassistantplanSelectContext,
 		machineScope.organizationID, lease["runID"],
-	).Scan(&conversationID, &conversationRef, &conversationVersion, &projectID, &projectRef,
+	).Scan(&conversationID, &conversationRef, &conversationVersion, &projectID, &projectRef, &allowedOperations, &assistantRef,
 		&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.role,
 		&actorScope.organizationRef); err != nil {
 		return commandOutcome{}, errs.ErrForbidden
@@ -47,6 +53,17 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		seen[operation.Key] = struct{}{}
+		if !contains(allowedOperations, operation.Type) {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+		operation, err = repository.hydrateAssistantOperation(ctx, tx, machineScope, projectRef, operation)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		operation, err = normalizeAssistantOperation(operation)
+		if err != nil {
+			return commandOutcome{}, err
+		}
 		operation, err = bindAssistantOperationProject(operation, projectRef)
 		if err != nil {
 			return commandOutcome{}, err
@@ -64,23 +81,37 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	rawOperations := asJSON(normalizedOperations)
+	digest := assistantPlanDigest(strings.TrimSpace(payload.Summary), rawOperations)
 	var planID string
 	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertAssistantPlansRefConversationRefOperations,
-		planRef, machineScope.organizationID, conversationRef, strings.TrimSpace(payload.Summary), asJSON(normalizedOperations),
+		planRef, machineScope.organizationID, conversationRef, strings.TrimSpace(payload.Summary), rawOperations, digest,
 	).Scan(&planID); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	revisionRef, err := newRef("prv")
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	var createdAt time.Time
+	if err := tx.QueryRow(ctx, queryConfigurationInsertAssistantPlanRevision,
+		revisionRef, machineScope.organizationID, planID, int64(1), strings.TrimSpace(payload.Summary),
+		rawOperations, digest, "SYSTEM_ASSISTANT", assistantRef,
+	).Scan(&createdAt); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateAssistantConversationsLatestPlanIdVersionUpdatedAt,
 		conversationID, planID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	plan := entity.AssistantPlan{Ref: planRef, Summary: strings.TrimSpace(payload.Summary), State: "PROPOSED", Version: 1,
-		Operations: normalizedOperations, CreatedAt: time.Now().UTC()}
+	plan := entity.AssistantPlan{Ref: planRef, ConversationRef: conversationRef, ProjectRef: projectRef,
+		Summary: strings.TrimSpace(payload.Summary), State: "DRAFT", Version: 1, Revision: 1,
+		ContentDigest: digest, Operations: normalizedOperations, CreatedAt: createdAt}
 	conversation := entity.AssistantConversation{Ref: conversationRef, ProjectRef: projectRef, State: "ACTIVE",
 		Version: conversationVersion + 1, LatestPlan: &plan, UpdatedAt: time.Now().UTC()}
 	proposal := commandOutcome{projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_PLAN",
 		resourceRef: planRef, summary: "i18n:ASSISTANT_PLAN_PROPOSED"}
-	if err := repository.auditAssistantOperation(ctx, tx, actorScope, proposal, "PROPOSE_CONFIGURATION_PLAN"); err != nil {
+	if _, err := repository.auditAssistantOperation(ctx, tx, actorScope, proposal, "PROPOSE_CONFIGURATION_PLAN"); err != nil {
 		return commandOutcome{}, err
 	}
 	if err := repository.emitPlatformEvent(ctx, tx, actorScope, "SYSTEM_ASSISTANT_CHANGED", projectRef, planRef,
@@ -91,9 +122,202 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	return proposal, nil
 }
 
+func assistantPlanDigest(summary string, rawOperations []byte) string {
+	digest := sha256.Sum256(append(append([]byte(strings.TrimSpace(summary)), '\n'), rawOperations...))
+	return fmt.Sprintf("%x", digest[:])
+}
+
+func assistantOperationType(value string) bool {
+	switch value {
+	case "CREATE_PROJECT", "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CHANGE_CAPABILITY",
+		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "LAUNCH_RUN",
+		"CREATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
+		return true
+	default:
+		return false
+	}
+}
+
+func (repository *Repository) hydrateAssistantOperation(
+	ctx context.Context,
+	tx pgx.Tx,
+	machineScope scope,
+	projectRef string,
+	operation entity.AssistantPlanOperation,
+) (entity.AssistantPlanOperation, error) {
+	if operation.Parameters == nil {
+		operation.Parameters = operation.Input
+	}
+	if operation.Parameters == nil || len(operation.Parameters) > 100 {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+
+	if targetKind, targetName, ok := assistantCreateTarget(operation.Type, operation.Parameters); ok {
+		operation.Action = "CREATE"
+		operation.Target = entity.AssistantPlanTarget{Kind: targetKind, Name: targetName}
+		operation.Before = map[string]any{}
+		operation.After = cloneAssistantFields(operation.Parameters)
+		operation.Selected = true
+		return operation, nil
+	}
+	if operation.Type != "UPDATE_PROJECT" {
+		return operation, nil
+	}
+	if !onlyAssistantFields(operation.Parameters, "projectRef", "name", "purpose", "language") {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	requestedProjectRef := assistantString(operation.Parameters, "projectRef")
+	if projectRef == "" || requestedProjectRef != "" && requestedProjectRef != "current" && requestedProjectRef != projectRef {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+
+	var name, purpose, language string
+	var version int64
+	if err := tx.QueryRow(ctx, queryConfigurationHydrateassistantoperationSelectProject,
+		machineScope.organizationID, projectRef,
+	).Scan(&name, &purpose, &language, &version); errors.Is(err, pgx.ErrNoRows) {
+		return entity.AssistantPlanOperation{}, errs.ErrNotFound
+	} else if err != nil {
+		return entity.AssistantPlanOperation{}, errs.ErrUnavailable
+	}
+	return hydrateAssistantProjectOperation(projectRef, name, purpose, language, version, operation)
+}
+
+func hydrateAssistantProjectOperation(
+	projectRef, name, purpose, language string,
+	version int64,
+	operation entity.AssistantPlanOperation,
+) (entity.AssistantPlanOperation, error) {
+	before := map[string]any{"projectRef": projectRef, "name": name, "purpose": purpose, "language": language}
+	after := cloneAssistantFields(before)
+	changed := false
+	for _, field := range []string{"name", "purpose", "language"} {
+		value, exists := operation.Parameters[field]
+		if !exists {
+			continue
+		}
+		text, ok := value.(string)
+		text = strings.TrimSpace(text)
+		if !ok || text == "" {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		after[field] = text
+		changed = changed || text != before[field]
+	}
+	if !changed {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	operation.Action = "UPDATE"
+	operation.Target = entity.AssistantPlanTarget{Kind: "PROJECT", Ref: projectRef, Name: name, Version: &version}
+	operation.Parameters = after
+	operation.Before = before
+	operation.After = cloneAssistantFields(after)
+	operation.ExpectedVersion = &version
+	operation.Selected = true
+	return operation, nil
+}
+
+func assistantCreateTarget(operationType string, parameters map[string]any) (string, string, bool) {
+	var kind string
+	switch operationType {
+	case "CREATE_PROJECT":
+		kind = "PROJECT"
+	case "CREATE_AGENT":
+		kind = "AGENT"
+	case "CREATE_WORKFLOW":
+		kind = "WORKFLOW"
+	case "CREATE_INTEGRATION_CONNECTION":
+		kind = "INTEGRATION_CONNECTION"
+	case "CREATE_SCHEDULE":
+		kind = "SCHEDULE"
+	default:
+		return "", "", false
+	}
+	return kind, assistantString(parameters, "name"), true
+}
+
+func cloneAssistantFields(input map[string]any) map[string]any {
+	result := make(map[string]any, len(input))
+	for key, value := range input {
+		result[key] = value
+	}
+	return result
+}
+
+func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
+	if !assistantOperationType(operation.Type) || strings.TrimSpace(operation.Key) == "" ||
+		strings.TrimSpace(operation.Title) == "" || len(operation.Title) > 200 {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	if operation.Parameters == nil {
+		operation.Parameters = operation.Input
+	}
+	if operation.Parameters == nil || operation.Before == nil || operation.After == nil ||
+		len(operation.Parameters) > 100 || len(operation.Before) > 100 || len(operation.After) > 100 {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	expectedAction := "CREATE"
+	switch operation.Type {
+	case "UPDATE_PROJECT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
+		expectedAction = "UPDATE"
+	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
+		expectedAction = "ARCHIVE"
+	case "LAUNCH_RUN", "TEST_INTEGRATION_CONNECTION":
+		expectedAction = "EXECUTE"
+	}
+	if operation.Action == "" {
+		operation.Action = expectedAction
+	}
+	if operation.Action != expectedAction {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	if expectedAction == "CREATE" && (len(operation.Before) != 0 || !reflect.DeepEqual(operation.Parameters, operation.After)) {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	if expectedAction == "UPDATE" || expectedAction == "ARCHIVE" {
+		if operation.ExpectedVersion == nil || *operation.ExpectedVersion < 1 || operation.Target.Ref == "" || len(operation.Before) == 0 || len(operation.After) == 0 {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+	}
+	if expectedAction == "ARCHIVE" && (len(operation.Parameters) != 0 || assistantString(operation.After, "state") != "ARCHIVED") {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	expectedTargetKind, expectedTargetRef := "", ""
+	switch operation.Type {
+	case "UPDATE_PROJECT":
+		expectedTargetKind = "PROJECT"
+		expectedTargetRef = assistantString(operation.Parameters, "projectRef")
+	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
+		expectedTargetKind = "AGENT"
+		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
+	case "CHANGE_INTEGRATION_GRANT", "TEST_INTEGRATION_CONNECTION":
+		expectedTargetKind = "INTEGRATION_CONNECTION"
+		expectedTargetRef = assistantString(operation.Parameters, "connectionRef")
+	case "ARCHIVE_WORKFLOW":
+		expectedTargetKind = "WORKFLOW"
+	}
+	if expectedTargetKind != "" && operation.Target.Kind != expectedTargetKind {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	if expectedTargetRef != "" && operation.Target.Ref != expectedTargetRef {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	operation.Input = make(map[string]any, len(operation.Parameters)+1)
+	for key, value := range operation.Parameters {
+		operation.Input[key] = value
+	}
+	if operation.ExpectedVersion != nil {
+		operation.Input["expectedVersion"] = *operation.ExpectedVersion
+	}
+	operation.TargetKind, operation.TargetRef = operation.Target.Kind, operation.Target.Ref
+	operation.Permitted = true
+	operation.ValidationProblems = []string{}
+	return operation, nil
+}
+
 func bindAssistantOperationProject(operation entity.AssistantPlanOperation, projectRef string) (entity.AssistantPlanOperation, error) {
 	switch operation.Type {
-	case "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "LAUNCH_RUN":
+	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "LAUNCH_RUN":
 	default:
 		return operation, nil
 	}
@@ -128,6 +352,20 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.CreateProject, command.ProjectInput{Name: name, Purpose: purpose, Language: language}
+	case "UPDATE_PROJECT":
+		if !onlyAssistantFields(operation.Input, "projectRef", "name", "purpose", "language", "expectedVersion") ||
+			!hasAssistantFields(operation.Input, "projectRef", "name", "purpose", "language", "expectedVersion") {
+			return command.Command{}, errs.ErrInvalid
+		}
+		expected, expectedOK := assistantInt64(operation.Input, "expectedVersion")
+		payload := command.ProjectInput{Ref: assistantString(operation.Input, "projectRef"), Name: assistantString(operation.Input, "name"),
+			Purpose: assistantString(operation.Input, "purpose"), Language: assistantString(operation.Input, "language")}
+		if !expectedOK || expected < 1 || payload.Ref == "" || payload.Name == "" || len(payload.Name) > 160 ||
+			payload.Purpose == "" || len(payload.Purpose) > 2000 || !contains([]string{"ru", "en"}, payload.Language) {
+			return command.Command{}, errs.ErrInvalid
+		}
+		result.Kind, result.Payload = command.UpdateProject, payload
+		result.Mutation.ExpectedVersion = &expected
 	case "CREATE_AGENT":
 		if !onlyAssistantFields(operation.Input, "projectRef", "roleDefinitionRef", "name", "purpose", "roleDescription", "avatarUrl", "runtimeRef", "instructions") ||
 			!hasAssistantFields(operation.Input, "projectRef", "name", "purpose", "roleDescription", "instructions") {
@@ -196,6 +434,18 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		}
 		result.Kind, result.Payload = command.TestConnection, command.ConnectionInput{Ref: connectionRef}
 		result.Mutation.ExpectedVersion = &expected
+	case "ARCHIVE_AGENT":
+		if !onlyAssistantFields(operation.Input, "expectedVersion") || operation.Target.Ref == "" || operation.ExpectedVersion == nil {
+			return command.Command{}, errs.ErrInvalid
+		}
+		result.Kind, result.Payload = command.ArchiveAgent, command.AgentInput{Ref: operation.Target.Ref}
+		result.Mutation.ExpectedVersion = operation.ExpectedVersion
+	case "ARCHIVE_WORKFLOW":
+		if !onlyAssistantFields(operation.Input, "expectedVersion") || operation.Target.Ref == "" || operation.ExpectedVersion == nil {
+			return command.Command{}, errs.ErrInvalid
+		}
+		result.Kind, result.Payload = command.ArchiveWorkflow, command.WorkflowInput{Ref: operation.Target.Ref}
+		result.Mutation.ExpectedVersion = operation.ExpectedVersion
 	case "CREATE_SCHEDULE":
 		schedule, err := assistantSchedule(operation.Input)
 		if err != nil {
@@ -322,16 +572,16 @@ func assistantSchedule(input map[string]any) (command.ScheduleInput, error) {
 }
 
 func assistantRun(input map[string]any) (command.LaunchRunInput, error) {
-	if !onlyAssistantFields(input, "projectRef", "targetType", "targetRef", "title", "task", "input", "artifactRefs", "sessionRef") ||
+	if !onlyAssistantFields(input, "projectRef", "targetType", "targetRef", "title", "task", "input", "attachmentSetRef", "sessionRef") ||
 		!hasAssistantFields(input, "projectRef", "targetType", "targetRef", "title", "task", "input") {
 		return command.LaunchRunInput{}, errs.ErrInvalid
 	}
 	boundedInput, boundedInputOK := assistantObjectValue(input, "input")
 	payload := command.LaunchRunInput{ProjectRef: assistantString(input, "projectRef"), Title: assistantString(input, "title"), Task: assistantString(input, "task"),
-		SessionRef: assistantString(input, "sessionRef"), Source: "SYSTEM_ASSISTANT", Input: boundedInput, ArtifactRefs: assistantStrings(input, "artifactRefs"),
+		SessionRef: assistantString(input, "sessionRef"), Source: "SYSTEM_ASSISTANT", Input: boundedInput, AttachmentSetRef: assistantString(input, "attachmentSetRef"),
 		Target: entity.RunTarget{Type: assistantString(input, "targetType"), Ref: assistantString(input, "targetRef")}}
 	if !boundedInputOK || payload.ProjectRef == "" || !contains([]string{"AGENT", "WORKFLOW"}, payload.Target.Type) || payload.Target.Ref == "" || payload.Title == "" || len(payload.Title) > 240 ||
-		payload.Task == "" || len(payload.Task) > 32768 || !validBoundedRunInput(payload.Input) || len(payload.ArtifactRefs) > 50 {
+		payload.Task == "" || len(payload.Task) > 32768 || !validBoundedRunInput(payload.Input) {
 		return command.LaunchRunInput{}, errs.ErrInvalid
 	}
 	return payload, nil

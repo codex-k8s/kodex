@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Доступ · Эффективный доступ</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-access .page-head .tabs { border-bottom: 0; padding: 0; margin-top: 8px; }
+  .p-access .page-head .tab { height: 38px; }
+  .p-access__wrap { flex: 1 1 auto; min-width: 0; width: 100%; display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 14px 24px 20px; }
+  .p-access__cols { flex: 1 1 auto; min-height: 0; display: flex; gap: 16px; min-width: 0; }
+  .p-access__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .p-access__aside { flex: 0 0 380px; display: flex; flex-direction: column; min-height: 0; padding-bottom: 60px; }
+  .p-access__aside > .card { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  .p-access__aside .card__scroll { padding: 12px 16px 16px; }
+  .p-access .table { table-layout: fixed; width: 100%; }
+  .p-access .table th { white-space: normal; line-height: 1.25; padding: 8px 8px; }
+  .p-access .table td { vertical-align: middle; padding: 10px 8px; }
+  .p-access .table th:first-child, .p-access .table td:first-child { padding-left: 14px; }
+  .p-access .table tbody tr { cursor: pointer; }
+  .p-access .chain { display: flex; flex-direction: column; gap: 0; margin-top: 8px; }
+  .p-access .chain__step { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line-hair); font-size: 12.5px; line-height: 1.45; }
+  .p-access .chain__step:first-child { border-top: 0; }
+  .p-access .chain__n { width: 20px; height: 20px; border-radius: 10px; background: var(--acc-tint); color: var(--acc-dark); font-family: var(--font-mono); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; margin-top: 1px; }
+  .p-access .chain--no .chain__n { background: var(--bg-field); color: var(--sec); }
+  .p-access .chain__text b { font-weight: 600; }
+  .p-access .chain__text small { display: block; color: var(--mut); font-size: 11.5px; margin-top: 2px; }
+  .p-access .combobox--inline { width: 300px; }
+  .frame--tablet .p-access__aside { display: none; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Участники и доступ · «Эффективный доступ» (explain-access) · desktop 1440×1024 · маршрут <code>/administration/access/effective</code></p>
+<div class="frame frame--desktop p-access" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head page-head--tabs">
+      <div class="crumbs"><a href="#">Администрирование</a><span>/</span><span>Участники и доступ</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Участники и доступ</h1></div>
+          <div class="page-sub">Identity и группы управляет Keycloak (OIDC); прикладные полномочия — Kodex</div>
+        </div>
+        <div class="page-actions">
+          <div class="seg" data-seg role="group" aria-label="Область доступа">
+            <button class="seg__btn" type="button" aria-pressed="true">Организация</button>
+            <button class="seg__btn" type="button" aria-pressed="false">Проект «Корпоративные продажи»</button>
+          </div>
+          <button class="btn btn--lg" type="button"><svg class="ic"><use href="#i-audit"/></svg>Открыть аудит участника</button>
+        </div>
+      </div>
+      <div class="tabs tabs--inline" role="tablist" aria-label="Разделы доступа">
+        <a class="tab" role="tab" aria-selected="false" tabindex="-1" href="access-members-desktop.html">Участники <span class="tab__count">640</span></a>
+        <a class="tab" role="tab" aria-selected="false" tabindex="-1" href="access-groups-desktop.html">Группы OIDC <span class="tab__count">10</span></a>
+        <a class="tab" role="tab" aria-selected="false" tabindex="-1" href="access-roles-desktop.html">Роли <span class="tab__count">8</span></a>
+        <a class="tab" role="tab" aria-selected="true" href="access-effective-desktop.html">Эффективный доступ</a>
+      </div>
+    </div>
+
+    <div class="page-body page-body--flush">
+      <div class="p-access__wrap">
+        <div class="toolbar">
+          <div class="field" style="flex-direction:row;align-items:center;gap:8px">
+            <span class="field__label">Участник</span>
+            <button class="combobox combobox--inline" type="button" id="user-picker"><span class="avatar avatar--24" aria-hidden="true">ЕК</span><span class="combobox__text"><span class="combobox__title" id="user-name">Елена Крылова</span><span class="combobox__sub" id="user-sub">e.krylova@company.example · Участник · sales-all</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
+          </div>
+          <div class="field" style="flex-direction:row;align-items:center;gap:8px">
+            <span class="field__label">Проект</span>
+            <button class="select" type="button" data-menu="#menu-project" aria-haspopup="menu" aria-expanded="false" style="min-width:230px"><span class="select__value">Корпоративные продажи</span><svg class="ic"><use href="#i-chev"/></svg></button>
+          </div>
+          <div class="field" style="flex-direction:row;align-items:center;gap:8px">
+            <span class="field__label">Сущность</span>
+            <button class="select" type="button" data-menu="#menu-entity" aria-haspopup="menu" aria-expanded="false" style="min-width:200px"><span class="select__value">Все сущности Проекта</span><svg class="ic"><use href="#i-chev"/></svg></button>
+          </div>
+          <span class="toolbar__spacer"></span>
+          <span class="refresh"><span class="refresh__dot"></span><span class="refresh__text">рассчитано сервером только что</span></span>
+        </div>
+
+        <div class="p-access__cols">
+          <div class="p-access__main card">
+            <div class="card__head card__head--line"><h2 class="sec-title">Действия и результат <span class="tab__count">14</span></h2><span class="xs mut">Разрешено 8 · Запрещено 6 · явных запретов нет</span></div>
+            <div class="card__scroll">
+              <table class="table table--hover" aria-label="Эффективный доступ участника">
+                <thead><tr><th style="width:30%">Действие</th><th style="width:12%">Риск</th><th style="width:16%">Результат</th><th style="width:42%">Источник назначения</th></tr></thead>
+                <tbody id="perm-body" data-select-group></tbody>
+              </table>
+            </div>
+          </div>
+
+          <aside class="p-access__aside" aria-label="Объяснение результата">
+            <div class="card" id="why-panel"></div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="menu" id="menu-project"><div class="menu__title">Проект</div>
+    <button class="menu__item" role="menuitemradio" aria-checked="true">Корпоративные продажи</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Клиентская поддержка</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Юридический отдел</button>
+    <div class="menu__sep"></div>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Вся организация</button>
+  </div>
+  <div class="menu" id="menu-entity"><div class="menu__title">Сущность</div>
+    <button class="menu__item" role="menuitemradio" aria-checked="true">Все сущности Проекта</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-bot"/></svg>Аналитик продаж</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-bot"/></svg>Юридический консультант</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-wf"/></svg>Обработка нового лида</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false"><svg class="ic"><use href="#i-plug"/></svg>GitHub · основное подключение</button>
+  </div>
+</div>
+<p class="stage-note">Explain-access: для выбранного участника и области таблица показывает каждое действие с русским названием, описанием, риском, результатом и источником назначения (системная роль, пользовательская роль с версией, OIDC-группа, прямая привязка). Панель «Почему?» разворачивает цепочку вывода для разрешения и для запрета; запрет объясняется отсутствием разрешающей привязки — явных deny в MVP нет. Результат рассчитывается сервером.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'admin', project: null, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Эффективный доступ', object: 'Елена Крылова · Корпоративные продажи', can: ['объяснить, почему действие разрешено или запрещено', 'подготовить план привязки, чтобы открыть действие', 'сравнить доступ двух участников'] },
+  });
+  (function () {
+    const esc = Kodex.esc;
+    const RISK = { read: ['risk', 'Чтение'], write: ['risk risk--write', 'Изменение'], approve: ['risk risk--external', 'Решение'], admin: ['risk risk--admin', 'Администрирование'] };
+    const risk = (r) => `<span class="${RISK[r][0]}">${RISK[r][1]}</span>`;
+    const SRC = {
+      system: (t) => `<span class="tag">Системная роль · ${esc(t)}</span>`,
+      role: (t) => `<a class="tag tag--acc" href="access-roles-desktop.html">Роль «${esc(t)}»</a>`,
+      group: (t) => `<a class="tag tag--warn" href="access-groups-desktop.html"><svg class="ic ic-12"><use href="#i-users"/></svg>OIDC-группа <span class="mono">${esc(t)}</span></a>`,
+      direct: (t) => `<a class="tag tag--acc" href="access-agent-scope-desktop.html">Прямая привязка · ${esc(t)}</a>`,
+    };
+    const ROWS = [
+      { id: 'project.view', name: 'Просмотр Проекта', desc: 'Видеть обзор, сотрудников, Процессы и запуски', risk: 'read', ok: true, src: [['group', 'sales-all'], ['role', 'Запуск выбранных сотрудников v2']],
+        why: ['OIDC-группа <b>sales-all</b> содержит участника (синхронизировано сегодня, 12:00)', 'Группа привязана к роли <b>«Запуск выбранных сотрудников» v2</b>', 'Область привязки — Проект <b>«Корпоративные продажи»</b>', 'Роль включает действие <b>«Просмотр Проекта»</b>'] },
+      { id: 'agent.view.a1', name: 'Просмотр «Аналитик продаж»', desc: 'Открывать профиль и инструкции сотрудника', risk: 'read', ok: true, src: [['group', 'sales-all'], ['role', 'Запуск выбранных сотрудников v2']],
+        why: ['OIDC-группа <b>sales-all</b> → роль <b>«Запуск выбранных сотрудников» v2</b>', 'Область: Проект «Корпоративные продажи», сущности: Аналитик продаж, Редактор предложений', 'Роль включает <b>«Просмотр ИИ-сотрудника»</b>'] },
+      { id: 'agent.launch.a1', name: 'Запуск «Аналитик продаж»', desc: 'Создавать запуск и продолжать сессии сотрудника', risk: 'write', ok: true, src: [['group', 'sales-all'], ['role', 'Запуск выбранных сотрудников v2']],
+        why: ['OIDC-группа <b>sales-all</b> содержит участника', 'Группа привязана к роли <b>«Запуск выбранных сотрудников» v2</b>', 'Область привязки: Проект <b>«Корпоративные продажи»</b> → сущности: <b>Аналитик продаж, Редактор предложений</b>', 'Роль включает действие <b>«Запуск ИИ-сотрудника»</b>; «Аналитик продаж» входит в список'] },
+      { id: 'agent.launch.a2', name: 'Запуск «Редактор предложений»', desc: 'Создавать запуск и продолжать сессии сотрудника', risk: 'write', ok: true, src: [['group', 'sales-all'], ['role', 'Запуск выбранных сотрудников v2']],
+        why: ['OIDC-группа <b>sales-all</b> → роль <b>«Запуск выбранных сотрудников» v2</b>', 'Сущности привязки: Аналитик продаж, <b>Редактор предложений</b>', 'Роль включает <b>«Запуск ИИ-сотрудника»</b>'] },
+      { id: 'agent.launch.a3', name: 'Запуск «Юридический консультант»', desc: 'Создавать запуск и продолжать сессии сотрудника', risk: 'write', ok: false, src: [],
+        why: ['Роль <b>«Запуск выбранных сотрудников» v2</b> действует только на сотрудников из привязки: Аналитик продаж, Редактор предложений', 'Сотрудник <b>«Юридический консультант»</b> не входит в область роли', 'Других разрешающих привязок на это действие нет; явных запретов в MVP не существует'] },
+      { id: 'workflow.launch', name: 'Запуск Процесса «Обработка нового лида»', desc: 'Запускать опубликованную версию Процесса', risk: 'write', ok: false, src: [],
+        why: ['Ни одна роль участника не включает действие <b>«Запуск Процесса»</b>', 'Роль «Запуск выбранных сотрудников» v2 ограничена запуском ИИ-сотрудников', 'Чтобы открыть действие, добавьте привязку роли с этим полномочием'] },
+      { id: 'run.view', name: 'Просмотр запусков', desc: 'Видеть граф, ход работы и результаты', risk: 'read', ok: true, src: [['group', 'sales-all'], ['role', 'Запуск выбранных сотрудников v2']],
+        why: ['OIDC-группа <b>sales-all</b> → роль <b>«Запуск выбранных сотрудников» v2</b>', 'Роль включает <b>«Просмотр запусков»</b> в Проекте «Корпоративные продажи»'] },
+      { id: 'run.cancel.own', name: 'Отмена своих запусков', desc: 'Останавливать запуски, начатые самим участником', risk: 'write', ok: true, src: [['group', 'sales-all'], ['role', 'Запуск выбранных сотрудников v2']],
+        why: ['OIDC-группа <b>sales-all</b> → роль <b>«Запуск выбранных сотрудников» v2</b>', 'Роль включает <b>«Отмена своих запусков»</b>; чужие запуски отменять нельзя'] },
+      { id: 'run.cancel.any', name: 'Отмена любых запусков Проекта', desc: 'Останавливать запуски других участников', risk: 'write', ok: false, src: [],
+        why: ['Действие входит только в системную роль <b>Оператор</b> и выше', 'У участника platform role <b>Участник</b>; привязок Оператора в Проекте нет'] },
+      { id: 'artifact.download', name: 'Скачивание результатов', desc: 'Получать файлы результатов по одноразовой ссылке', risk: 'read', ok: true, src: [['group', 'sales-all'], ['role', 'Запуск выбранных сотрудников v2']],
+        why: ['OIDC-группа <b>sales-all</b> → роль <b>«Запуск выбранных сотрудников» v2</b>', 'Роль включает <b>«Скачивание результатов»</b>'] },
+      { id: 'gate.resolve', name: 'Принятие решений Human Gate', desc: 'Утверждать, отклонять и возвращать на доработку', risk: 'approve', ok: false, src: [],
+        why: ['Действие включено в роли <b>«Согласующий по продажам» v1</b> и <b>Оператор</b>', 'Участник не входит в группу <b>sales-managers</b> и не имеет прямой привязки', 'Явных запретов нет — достаточно добавить привязку'] },
+      { id: 'agent.manage', name: 'Настройка ИИ-сотрудников', desc: 'Изменять профиль, инструкции, runtime и окружение', risk: 'write', ok: false, src: [],
+        why: ['Ни одна привязка участника не включает <b>«Настройка ИИ-сотрудника»</b>', 'Роль «Запуск выбранных сотрудников» v2 намеренно исключает изменение сотрудников'] },
+      { id: 'audit.view', name: 'Просмотр аудита Проекта', desc: 'Читать журнал действий Проекта', risk: 'read', ok: true, src: [['system', 'Участник']],
+        why: ['Системная роль <b>Участник</b> даёт чтение аудита своих действий в Проектах с доступом', 'Доступ к Проекту подтверждён ролью «Запуск выбранных сотрудников» v2'] },
+      { id: 'members.manage', name: 'Управление участниками Проекта', desc: 'Добавлять участников и менять их доступ', risk: 'admin', ok: false, src: [],
+        why: ['Действие входит только в системные роли <b>Администратор</b> и <b>Владелец</b>', 'Platform role участника — <b>Участник</b>; проектные роли это действие не содержат'] },
+    ];
+    let selected = 'agent.launch.a1';
+    const body = document.getElementById('perm-body');
+    body.innerHTML = ROWS.map((r) => `<tr data-id="${r.id}" class="${r.id === selected ? 'is-selected' : ''}" aria-selected="${r.id === selected}">
+      <td><div class="cell-title">${esc(r.name)}</div><div class="cell-sub">${esc(r.desc)}</div></td>
+      <td>${risk(r.risk)}</td>
+      <td>${r.ok ? '<span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Разрешено</span>' : '<span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-minus"/></svg>Запрещено</span>'}</td>
+      <td>${r.src.length ? `<div class="row row--wrap gap-4">${r.src.map(([k, t]) => SRC[k](t)).join('<svg class="ic ic-12 mut"><use href="#i-arrow-r"/></svg>')}</div>` : '<span class="xs mut">нет разрешающей привязки</span>'}</td>
+    </tr>`).join('');
+    function renderWhy(r) {
+      document.getElementById('why-panel').innerHTML = `
+        <div class="card__head card__head--line"><div class="col gap-2 grow" style="min-width:0"><h2 class="sec-title">Почему?</h2><div class="h3">${esc(r.name)}</div></div>${r.ok ? '<span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Разрешено</span>' : '<span class="pill pill--off"><svg class="ic"><use href="#i-minus"/></svg>Запрещено</span>'}</div>
+        <div class="card__scroll">
+          <div class="xs mut">${r.ok ? 'Цепочка вывода разрешения' : 'Почему разрешающая привязка не найдена'}</div>
+          <div class="chain ${r.ok ? '' : 'chain--no'}">${r.why.map((w, i) => `<div class="chain__step"><span class="chain__n">${i + 1}</span><span class="chain__text">${w}</span></div>`).join('')}</div>
+          ${r.ok ? '<div class="notice notice--sm mt-12"><svg class="ic"><use href="#i-shield-check"/></svg><span class="notice__text">Сервер повторит эту проверку при выполнении действия; context интерфейса не является полномочием.</span></div>' : '<div class="notice notice--sm mt-12"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">В MVP нет явных запретов: действие закрыто, пока нет разрешающей привязки. Добавьте привязку роли с этим действием — участнику или его OIDC-группе.</span></div>'}
+        </div>
+        <div class="card__foot card__foot--actions">${r.ok ? '<a class="btn" href="access-groups-desktop.html">Открыть привязку</a>' : '<a class="btn btn--primary" href="access-agent-scope-desktop.html"><svg class="ic"><use href="#i-plus"/></svg>Добавить привязку</a>'}</div>`;
+    }
+    body.addEventListener('click', (e) => { if (e.target.closest('a')) return; const tr = e.target.closest('tr[data-id]'); if (!tr) return; selected = tr.dataset.id; body.querySelectorAll('tr').forEach((x) => { const on = x.dataset.id === selected; x.classList.toggle('is-selected', on); x.setAttribute('aria-selected', on); }); renderWhy(ROWS.find((x) => x.id === selected)); });
+    renderWhy(ROWS.find((x) => x.id === selected));
+
+    const users = Kodex.gen.users(640, 3);
+    users[0] = Object.assign({}, users[0], { name: 'Елена Крылова', initials: 'ЕК', email: 'e.krylova@company.example', dep: 'Продажи', groups: ['sales-all'] });
+    Kodex.asyncPicker({
+      trigger: document.getElementById('user-picker'), items: users, placeholder: 'Имя или email · поиск на сервере', width: 420,
+      render: (u) => `${Kodex.avatar(u.initials, 24)}<span class="picker__text"><span class="picker__title">${esc(u.name)}</span><span class="picker__sub"><span>${esc(u.email)}</span><span>·</span><span>${esc(u.dep)}</span></span></span>`,
+      match: (u, q) => (u.name + ' ' + u.email).toLowerCase().includes(q),
+      onSelect: (u) => { document.getElementById('user-name').textContent = u.name; document.getElementById('user-sub').textContent = u.email + ' · ' + u.dep; document.querySelector('#user-picker .avatar').textContent = u.initials; },
+    });
+  })();
+</script>
+</body>
+</html>

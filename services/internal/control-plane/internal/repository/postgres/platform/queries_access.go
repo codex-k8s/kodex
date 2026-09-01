@@ -1,0 +1,66 @@
+package platform
+
+import _ "embed"
+
+var (
+	//go:embed sql/access_bootstrap_insert_permission.sql
+	queryAccessBootstrapInsertPermission string
+	//go:embed sql/access_insert_role.sql
+	queryAccessInsertRole string
+	//go:embed sql/access_insert_role_version.sql
+	queryAccessInsertRoleVersion string
+	//go:embed sql/access_activate_role_version.sql
+	queryAccessActivateRoleVersion string
+	//go:embed sql/access_insert_binding.sql
+	queryAccessInsertBinding string
+	//go:embed sql/access_list_permissions.sql
+	queryAccessListPermissions string
+	//go:embed sql/access_resolve_subject.sql
+	queryAccessResolveSubject string
+	//go:embed sql/access_resolve_group.sql
+	queryAccessResolveGroup string
+	//go:embed sql/access_list_subjects.sql
+	queryAccessListSubjects string
+	//go:embed sql/access_list_oidc_groups.sql
+	queryAccessListOIDCGroups string
+	//go:embed sql/access_list_roles.sql
+	queryAccessListRoles string
+	//go:embed sql/access_get_role.sql
+	queryAccessGetRole string
+	//go:embed sql/access_resolve_role.sql
+	queryAccessResolveRole string
+	//go:embed sql/access_list_role_versions.sql
+	queryAccessListRoleVersions string
+	//go:embed sql/access_resolve_role_version.sql
+	queryAccessResolveRoleVersion string
+	//go:embed sql/access_list_bindings.sql
+	queryAccessListBindings string
+	//go:embed sql/access_get_binding.sql
+	queryAccessGetBinding string
+	//go:embed sql/access_bindings_for_subject.sql
+	queryAccessBindingsForSubject string
+	//go:embed sql/access_change_binding.sql
+	queryAccessChangeBinding string
+	//go:embed sql/access_revoke_binding.sql
+	queryAccessRevokeBinding string
+	//go:embed sql/access_archive_role.sql
+	queryAccessArchiveRole string
+	//go:embed sql/access_resolve_binding_subject.sql
+	queryAccessResolveBindingSubject string
+	//go:embed sql/access_resolve_target.sql
+	queryAccessResolveTarget string
+	//go:embed sql/access_system_role_version.sql
+	queryAccessSystemRoleVersion string
+	//go:embed sql/access_insert_owner_binding.sql
+	queryAccessInsertOwnerBinding string
+	//go:embed sql/access_sync_upsert_group.sql
+	queryAccessSyncUpsertGroup string
+	//go:embed sql/access_sync_lock_subject.sql
+	queryAccessSyncLockSubject string
+	//go:embed sql/access_sync_list_memberships.sql
+	queryAccessSyncListMemberships string
+	//go:embed sql/access_sync_replace_memberships.sql
+	queryAccessSyncReplaceMemberships string
+	//go:embed sql/access_sync_insert_membership.sql
+	queryAccessSyncInsertMembership string
+)

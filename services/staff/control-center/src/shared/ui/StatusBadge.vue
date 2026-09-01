@@ -52,6 +52,7 @@ const tone = computed(() => {
       "CANCELLING",
       "RECOVERING",
       "DEGRADED",
+      "STALE",
       "OUTCOME_NEEDS_ATTENTION",
     ].includes(props.state)
   )

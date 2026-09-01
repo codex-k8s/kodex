@@ -14,6 +14,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	texti18n "github.com/codex-k8s/kodex/libs/go/i18n"
+	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -24,12 +25,12 @@ import (
 const maximumJSONBody = 1 << 20
 
 type Server struct {
-	control          *controlplaneclient.Client
-	boundary         *boundary.Boundary
-	logger           *slog.Logger
-	realtime         http.Handler
-	platformRealtime http.Handler
-	texts            *texti18n.Localizer
+	control  *controlplaneclient.Client
+	secrets  secretbrokerv1.SecretBrokerServiceClient
+	boundary *boundary.Boundary
+	logger   *slog.Logger
+	realtime http.Handler
+	texts    *texti18n.Localizer
 }
 
 func New(control *controlplaneclient.Client, security *boundary.Boundary, logger *slog.Logger, texts *texti18n.Localizer) (*Server, error) {
@@ -39,18 +40,22 @@ func New(control *controlplaneclient.Client, security *boundary.Boundary, logger
 	return &Server{control: control, boundary: security, logger: logger, texts: texts}, nil
 }
 
-func (server *Server) AttachRealtime(run, platform http.Handler) {
-	server.realtime = run
-	server.platformRealtime = platform
+func (server *Server) AttachSecretBroker(client secretbrokerv1.SecretBrokerServiceClient) error {
+	if client == nil || server.secrets != nil {
+		return errors.New("secret broker attachment is invalid")
+	}
+	server.secrets = client
+	return nil
+}
+
+func (server *Server) AttachRealtime(session http.Handler) {
+	server.realtime = session
 }
 
 func (server *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	if server.realtime != nil {
-		mux.Handle("GET /api/v1/runs/{runRef}/stream", server.realtime)
-	}
-	if server.platformRealtime != nil {
-		mux.Handle("GET /api/v1/platform/stream", server.platformRealtime)
+		mux.Handle("GET /api/v1/session/stream", server.realtime)
 	}
 	generated.HandlerWithOptions(server, generated.StdHTTPServerOptions{BaseRouter: mux, ErrorHandlerFunc: func(writer http.ResponseWriter, _ *http.Request, _ error) {
 		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -87,11 +92,30 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 		writeLocalProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
 		return
 	}
-	claims, encoded, csrf, err := server.boundary.IssueSession(principal, bearer)
+	body, ok := decodeOptionalJSON[generated.OwnerSessionCreateInput](writer, request)
+	if !ok {
+		return
+	}
+	var purpose *boundary.SessionPurpose
+	if body != nil && body.Purpose != nil {
+		secretRef := ""
+		if body.Purpose.SecretRef != nil {
+			secretRef = *body.Purpose.SecretRef
+		}
+		purpose = &boundary.SessionPurpose{
+			Kind: string(body.Purpose.Kind), ProjectRef: body.Purpose.ProjectRef, SecretRef: secretRef,
+		}
+	}
+	claims, encoded, csrf, err := server.boundary.IssueSession(principal, bearer, purpose)
 	if err != nil {
-		if errors.Is(err, boundary.ErrRateLimited) {
+		switch {
+		case errors.Is(err, boundary.ErrRateLimited):
 			writeLocalProblem(writer, http.StatusTooManyRequests, "RATE_LIMITED", true)
-		} else {
+		case errors.Is(err, boundary.ErrSessionPurposeInvalid):
+			writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+		case errors.Is(err, boundary.ErrFreshAuthenticationRequired):
+			writeLocalProblem(writer, http.StatusForbidden, "FRESH_AUTHENTICATION_REQUIRED", false)
+		default:
 			writeLocalProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
 		}
 		return
@@ -141,6 +165,24 @@ func decodeJSON[T any](writer http.ResponseWriter, request *http.Request) (T, bo
 		return result, false
 	}
 	return result, true
+}
+
+func decodeOptionalJSON[T any](writer http.ResponseWriter, request *http.Request) (*T, bool) {
+	decoder := json.NewDecoder(io.LimitReader(request.Body, maximumJSONBody+1))
+	decoder.DisallowUnknownFields()
+	var result T
+	if err := decoder.Decode(&result); errors.Is(err, io.EOF) {
+		return nil, true
+	} else if err != nil {
+		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return nil, false
+	}
+	var extra any
+	if decoder.Decode(&extra) != io.EOF {
+		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return nil, false
+	}
+	return &result, true
 }
 
 func mutation(idempotency, etag string) (*controlplanev1.MutationContext, bool) {
@@ -220,6 +262,11 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 		if coreReady, ok := value["coreReady"].(bool); ok {
 			output["coreReady"] = coreReady
 		}
+		for _, key := range []string{"subject", "evaluatedAt", "role"} {
+			if preserved, ok := value[key]; ok {
+				output[key] = preserved
+			}
+		}
 		value = output
 	}
 	if localizer, ok := writer.(interface{ Localize(string) string }); ok {
@@ -228,6 +275,8 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 	writer.Header().Set("Content-Type", "application/json")
 	writer.Header().Set("Cache-Control", "no-store")
 	if version, ok := value["version"].(float64); ok && version >= 1 {
+		writer.Header().Set("ETag", fmt.Sprintf("\"%.0f\"", version))
+	} else if version, ok := value["agentVersion"].(float64); ok && version >= 1 {
 		writer.Header().Set("ETag", fmt.Sprintf("\"%.0f\"", version))
 	}
 	writer.WriteHeader(statusCode)
@@ -243,7 +292,7 @@ func messageMap(message proto.Message) (map[string]any, error) {
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return nil, err
 	}
-	if err := normalizeProtoIntegers(value, message.ProtoReflect().Descriptor()); err != nil {
+	if err := normalizeProtoJSONShape(value, message.ProtoReflect().Descriptor()); err != nil {
 		return nil, err
 	}
 	normalize(value)
@@ -252,7 +301,7 @@ func messageMap(message proto.Message) (map[string]any, error) {
 
 const maximumSafeJSONInteger = int64(1<<53 - 1)
 
-func normalizeProtoIntegers(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
+func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
 	fields := descriptor.Fields()
 	for index := 0; index < fields.Len(); index++ {
 		field := fields.Get(index)
@@ -262,11 +311,8 @@ func normalizeProtoIntegers(value map[string]any, descriptor protoreflect.Messag
 				value[field.JSONName()] = []any{}
 			} else if field.IsMap() {
 				value[field.JSONName()] = map[string]any{}
-			} else if descriptor.FullName() == "controlplane.v1.TokenUsage" && isProto64BitInteger(field.Kind()) {
-				// OpenAPI/AsyncAPI требуют полный TokenUsage даже до появления
-				// первого provider counter. Для остальных сообщений proto3 zero
-				// не материализуется: пустая строка может означать optional поле.
-				value[field.JSONName()] = float64(0)
+			} else if defaultValue, required := requiredProtoScalarDefault(descriptor, field); required {
+				value[field.JSONName()] = defaultValue
 			}
 			continue
 		}
@@ -293,6 +339,23 @@ func normalizeProtoIntegers(value map[string]any, descriptor protoreflect.Messag
 	return nil
 }
 
+func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
+	// Некоторым proto3 zero values соответствует обязательное поле OpenAPI.
+	// Список явный: другие пустые scalar могут означать отсутствующую ссылку.
+	if descriptor.FullName() == "controlplane.v1.TokenUsage" && isProto64BitInteger(field.Kind()) {
+		return float64(0), true
+	}
+	if field.Kind() == protoreflect.StringKind {
+		switch descriptor.FullName() {
+		case "controlplane.v1.ConfigOverlayVersion":
+			return "", field.JSONName() == "content"
+		case "controlplane.v1.AgentRuntimeConfigurationView":
+			return "", field.JSONName() == "safeEffectiveConfig"
+		}
+	}
+	return nil, false
+}
+
 func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, error) {
 	if field.IsMap() {
 		items, ok := value.(map[string]any)
@@ -309,11 +372,16 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 		return items, nil
 	}
 	if field.Kind() == protoreflect.MessageKind || field.Kind() == protoreflect.GroupKind {
+		if field.Message().FullName() == "google.protobuf.Struct" ||
+			field.Message().FullName() == "google.protobuf.Value" ||
+			field.Message().FullName() == "google.protobuf.ListValue" {
+			return value, nil
+		}
 		item, ok := value.(map[string]any)
 		if !ok {
 			return value, nil
 		}
-		return item, normalizeProtoIntegers(item, field.Message())
+		return item, normalizeProtoJSONShape(item, field.Message())
 	}
 	switch field.Kind() {
 	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
@@ -381,7 +449,19 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 	}
 }
 
-var enumPrefixes = []string{"PLATFORM_ROLE_", "PROJECT_PERMISSION_", "NEXT_ACTION_", "ENTITY_LIFECYCLE_", "AGENT_STATE_", "INSTRUCTION_STATE_", "WORKFLOW_STATE_", "RUN_STATE_", "RUN_SOURCE_", "RUN_NODE_TYPE_", "RUN_NODE_STATE_", "RUN_EDGE_TYPE_", "RUN_EVENT_TYPE_", "OWNER_GATE_STATE_", "OWNER_GATE_DECISION_", "ARTIFACT_SCAN_STATE_", "ARTIFACT_SOURCE_", "SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "TYPE_"}
+var enumPrefixes = []string{
+	"PLATFORM_ROLE_", "PROJECT_PERMISSION_", "NEXT_ACTION_", "ENTITY_LIFECYCLE_",
+	"AGENT_STATE_", "INSTRUCTION_STATE_", "WORKFLOW_STATE_", "RUN_STATE_", "RUN_SOURCE_",
+	"RUN_NODE_TYPE_", "RUN_NODE_STATE_", "RUN_EDGE_TYPE_", "RUN_EVENT_TYPE_",
+	"RUN_EVENT_ACTOR_KIND_", "RUN_EVENT_MESSAGE_KIND_", "RUN_TOOL_CALL_STATE_",
+	"OWNER_GATE_STATE_", "OWNER_GATE_DECISION_", "ARTIFACT_SCAN_STATE_", "ARTIFACT_SOURCE_", "ARTIFACT_LIFECYCLE_STATE_",
+	"ATTACHMENT_SET_STATE_", "ATTACHMENT_SET_PURPOSE_",
+	"SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_",
+	"PROVIDER_ACCOUNT_STATE_", "PROVIDER_AUTHORIZATION_METHOD_", "PROVIDER_AUTHORIZATION_STATE_",
+	"PERMISSION_RISK_", "ACCESS_SUBJECT_KIND_", "ACCESS_SCOPE_KIND_", "ACCESS_RESOURCE_KIND_",
+	"ACCESS_ROLE_KIND_", "ACCESS_ROLE_STATE_", "ACCESS_BINDING_STATE_", "OIDC_GROUP_STATE_",
+	"ACCESS_DECISION_", "ACTION_", "TYPE_",
+}
 
 func normalize(value any) {
 	switch current := value.(type) {
@@ -425,6 +505,7 @@ func normalize(value any) {
 			current["system"] = true
 			current["removable"] = false
 		}
+		normalizeAssistantShape(current)
 		if targetType, targetRef, ok := target(current); ok {
 			current["type"] = targetType
 			current["ref"] = targetRef
@@ -437,6 +518,73 @@ func normalize(value any) {
 			flattenWorkflow(current)
 		}
 		ensureRequiredCollections(current)
+	}
+}
+
+func normalizeAssistantShape(value map[string]any) {
+	if _, hasRoute := value["route"]; hasRoute {
+		if _, hasOperations := value["allowedOperations"]; hasOperations {
+			for _, key := range []string{"entityKind", "entityRef", "entityName"} {
+				if _, exists := value[key]; !exists {
+					value[key] = ""
+				}
+			}
+		}
+	}
+	if _, isPlan := value["auditSummary"]; isPlan {
+		if _, exists := value["applied"]; !exists {
+			value["applied"] = false
+		}
+		for _, key := range []string{"operations", "validationProblems", "nextActions"} {
+			if _, exists := value[key]; !exists {
+				value[key] = []any{}
+			}
+		}
+	}
+	if _, isReceipt := value["planRevision"]; isReceipt {
+		if operations, exists := value["operations"]; exists {
+			value["operationReceipts"] = operations
+			delete(value, "operations")
+		}
+		for _, key := range []string{"operationReceipts", "conflicts", "auditRefs", "createdResourceRefs"} {
+			if _, exists := value[key]; !exists {
+				value[key] = []any{}
+			}
+		}
+	}
+	if _, hasType := value["type"]; !hasType {
+		return
+	}
+	if _, hasAction := value["action"]; !hasAction {
+		return
+	}
+	targetKind, hasTargetKind := value["targetKind"]
+	if !hasTargetKind {
+		return
+	}
+	target := map[string]any{"kind": targetKind, "name": ""}
+	if targetName, exists := value["targetName"]; exists {
+		target["name"] = targetName
+	}
+	if targetRef, exists := value["targetRef"]; exists && targetRef != "" {
+		target["ref"] = targetRef
+	}
+	value["target"] = target
+	delete(value, "targetKind")
+	delete(value, "targetRef")
+	delete(value, "targetName")
+	for _, key := range []string{"parameters", "before", "after"} {
+		if _, exists := value[key]; !exists {
+			value[key] = map[string]any{}
+		}
+	}
+	for _, key := range []string{"selected", "permitted"} {
+		if _, exists := value[key]; !exists {
+			value[key] = false
+		}
+	}
+	if _, exists := value["validationProblems"]; !exists {
+		value["validationProblems"] = []any{}
 	}
 }
 

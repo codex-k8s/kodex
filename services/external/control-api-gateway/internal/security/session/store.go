@@ -26,6 +26,8 @@ const (
 	maximumToken   = 4096
 	maximumBearer  = 2300
 	csrfTokenBytes = 32
+
+	ElevationKindRuntimeSecretReveal = "RUNTIME_SECRET_REVEAL"
 )
 
 type Config struct {
@@ -42,15 +44,25 @@ type Store struct {
 }
 
 type Claims struct {
-	Subject         string `json:"sub"`
-	OrganizationID  string `json:"organization_id"`
-	OIDCSessionID   string `json:"oidc_session_id"`
-	SessionRevision uint64 `json:"session_revision"`
-	SessionID       string `json:"session_id"`
-	Bearer          string `json:"bearer"`
-	CSRFHash        string `json:"csrf_sha256"`
-	IssuedAt        int64  `json:"issued_at"`
-	ExpiresAt       int64  `json:"expires_at"`
+	Subject         string     `json:"sub"`
+	OrganizationID  string     `json:"organization_id"`
+	OIDCSessionID   string     `json:"oidc_session_id"`
+	SessionRevision uint64     `json:"session_revision"`
+	SessionID       string     `json:"session_id"`
+	Bearer          string     `json:"bearer"`
+	CSRFHash        string     `json:"csrf_sha256"`
+	IssuedAt        int64      `json:"issued_at"`
+	ExpiresAt       int64      `json:"expires_at"`
+	Elevation       *Elevation `json:"elevation,omitempty"`
+}
+
+// Elevation связывает короткоживущее полномочие с точной чувствительной операцией.
+// Одноразовость обеспечивается авторитетным server-owned store по SessionID.
+type Elevation struct {
+	Kind       string `json:"kind"`
+	ProjectRef string `json:"project_ref"`
+	SecretRef  string `json:"secret_ref"`
+	ExpiresAt  int64  `json:"expires_at"`
 }
 
 func New(config Config) (*Store, error) {
@@ -75,6 +87,10 @@ func New(config Config) (*Store, error) {
 }
 
 func (store *Store) Issue(subject, organizationID, oidcSessionID string, revision uint64, bearer string, tokenExpiry time.Time) (Claims, string, string, error) {
+	return store.IssueWithElevation(subject, organizationID, oidcSessionID, revision, bearer, tokenExpiry, nil)
+}
+
+func (store *Store) IssueWithElevation(subject, organizationID, oidcSessionID string, revision uint64, bearer string, tokenExpiry time.Time, elevation *Elevation) (Claims, string, string, error) {
 	if store == nil || uuid.Validate(subject) != nil || uuid.Validate(organizationID) != nil || uuid.Validate(oidcSessionID) != nil || revision == 0 ||
 		bearer == "" || len(bearer) > maximumBearer || strings.TrimSpace(bearer) != bearer {
 		return Claims{}, "", "", errors.New("session input is invalid")
@@ -87,6 +103,9 @@ func (store *Store) Issue(subject, organizationID, oidcSessionID string, revisio
 	if !expires.After(now.Add(time.Minute)) {
 		return Claims{}, "", "", errors.New("OIDC bearer lifetime is too short")
 	}
+	if !validElevation(elevation, now, expires) {
+		return Claims{}, "", "", errors.New("session elevation is invalid")
+	}
 	csrfRaw := make([]byte, csrfTokenBytes)
 	if _, err := io.ReadFull(rand.Reader, csrfRaw); err != nil {
 		return Claims{}, "", "", errors.New("generate CSRF token")
@@ -96,7 +115,7 @@ func (store *Store) Issue(subject, organizationID, oidcSessionID string, revisio
 	claims := Claims{
 		Subject: subject, OrganizationID: organizationID, OIDCSessionID: oidcSessionID, SessionRevision: revision,
 		SessionID: uuid.NewString(), Bearer: bearer, CSRFHash: hex.EncodeToString(csrfDigest[:]),
-		IssuedAt: now.Unix(), ExpiresAt: expires.Unix(),
+		IssuedAt: now.Unix(), ExpiresAt: expires.Unix(), Elevation: elevation,
 	}
 	encoded, err := store.seal(claims)
 	if err != nil {
@@ -126,6 +145,9 @@ func (store *Store) Renew(claims Claims, tokenExpiry time.Time) (Claims, string,
 	if expires.Unix() <= claims.ExpiresAt {
 		return claims, "", false, nil
 	}
+	if claims.Elevation != nil && !now.Before(time.Unix(claims.Elevation.ExpiresAt, 0).UTC()) {
+		claims.Elevation = nil
+	}
 	claims.IssuedAt = now.Unix()
 	claims.ExpiresAt = expires.Unix()
 	encoded, err := store.seal(claims)
@@ -148,10 +170,35 @@ func (store *Store) Open(encoded string) (Claims, error) {
 		uuid.Validate(claims.SessionID) != nil || claims.SessionRevision == 0 ||
 		claims.Bearer == "" || len(claims.Bearer) > maximumBearer ||
 		len(claims.CSRFHash) != sha256.Size*2 || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt ||
-		!store.now().UTC().Before(time.Unix(claims.ExpiresAt, 0)) {
+		!store.now().UTC().Before(time.Unix(claims.ExpiresAt, 0)) ||
+		!validElevation(claims.Elevation, time.Unix(claims.IssuedAt, 0).UTC(), time.Unix(claims.ExpiresAt, 0).UTC()) {
 		return Claims{}, errors.New("session token is invalid")
 	}
 	return claims, nil
+}
+
+func validElevation(value *Elevation, now, sessionExpiry time.Time) bool {
+	if value == nil {
+		return true
+	}
+	expires := time.Unix(value.ExpiresAt, 0).UTC()
+	return value.Kind == ElevationKindRuntimeSecretReveal &&
+		validOpaqueReference(value.ProjectRef) && validOpaqueReference(value.SecretRef) &&
+		expires.After(now) && !expires.After(sessionExpiry) && expires.Sub(now) <= 2*time.Minute
+}
+
+func validOpaqueReference(value string) bool {
+	if len(value) < 8 || len(value) > 128 {
+		return false
+	}
+	for _, character := range value {
+		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' || character == '-' || character == '_' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 func VerifyCSRF(claims Claims, token string) bool {
 	if len(token) < 43 || len(token) > 64 {

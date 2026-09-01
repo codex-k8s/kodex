@@ -17,6 +17,7 @@ type Environment struct {
 	SoftwareMessageKeys                                               []string
 	Recommended, Available, CustomInstallationAllowed                 bool
 	Input                                                             entity.RoleImageRecipeInput
+	DockerfileTemplate                                                string
 }
 
 type Catalog struct {
@@ -35,6 +36,8 @@ func NewCatalog(environments []Environment) (*Catalog, error) {
 	for index := range ordered {
 		current := cloneEnvironment(ordered[index])
 		current.Input.EnvironmentKey = current.Key
+		current.DockerfileTemplate = dockerfileTemplate(current.Input)
+		current.Input.Dockerfile = current.DockerfileTemplate
 		if !validCatalogKey(current.Key) || !validMessageKey(current.NameMessageKey) ||
 			!validMessageKey(current.DescriptionMessageKey) || !validOptionalMessageKey(current.UnavailableMessageKey) ||
 			len(current.SoftwareMessageKeys) > 100 || validateRecipe(current.Input) != nil {
@@ -70,9 +73,14 @@ func (catalog *Catalog) List() []Environment {
 
 func (catalog *Catalog) Resolve(selection entity.RoleEnvironmentSelection) (entity.RoleImageRecipeInput, error) {
 	current, ok := catalog.byKey[selection.EnvironmentKey]
+	dockerfile := selection.Dockerfile
+	if dockerfile == "" && ok {
+		dockerfile = current.DockerfileTemplate
+	}
 	if !ok || !current.Available || !uniqueCatalogKeys(selection.PackageKeys) || !uniqueCatalogKeys(selection.ToolKeys) ||
 		!utf8.ValidString(selection.InstallationBlock) || len(selection.InstallationBlock) > 64<<10 ||
-		strings.ContainsRune(selection.InstallationBlock, 0) || selection.InstallationBlock != "" && !current.CustomInstallationAllowed {
+		strings.ContainsRune(selection.InstallationBlock, 0) || selection.InstallationBlock != "" && !current.CustomInstallationAllowed ||
+		validateDockerfile(dockerfile, current.Input.BaseImageReference, current.Input.BaseImageDigest) != nil {
 		return entity.RoleImageRecipeInput{}, errs.ErrInvalid
 	}
 	resolved := cloneRecipeInput(current.Input)
@@ -89,10 +97,15 @@ func (catalog *Catalog) Resolve(selection entity.RoleEnvironmentSelection) (enti
 		}
 	}
 	resolved.InstallationBlock = selection.InstallationBlock
+	resolved.Dockerfile = dockerfile
 	if validateRecipe(resolved) != nil {
 		return entity.RoleImageRecipeInput{}, errs.ErrInvalid
 	}
 	return resolved, nil
+}
+
+func dockerfileTemplate(input entity.RoleImageRecipeInput) string {
+	return "FROM " + input.BaseImageReference + "@" + input.BaseImageDigest + "\n"
 }
 
 func selectPackages(keys []string, input entity.RoleImageRecipeInput) ([]string, []entity.RoleImagePackage) {

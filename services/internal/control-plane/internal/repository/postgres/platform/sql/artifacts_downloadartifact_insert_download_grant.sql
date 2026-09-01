@@ -12,7 +12,7 @@ INSERT INTO control_plane.artifact_download_grants(
 VALUES (
     @grant_ref,
     @organization_id::uuid,
-    @project_id::uuid,
+    NULLIF(@project_id, '')::uuid,
     @artifact_id::uuid,
     @artifact_version,
     @subject_id::uuid,

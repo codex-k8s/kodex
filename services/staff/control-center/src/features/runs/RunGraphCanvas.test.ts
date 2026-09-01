@@ -4,6 +4,7 @@ import { createI18n } from "vue-i18n";
 import { describe, expect, it } from "vitest";
 
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
+import { createRunGraphFlowElements } from "@/features/runs/run-graph-flow";
 import type {
   RunEdge,
   RunNode,
@@ -56,6 +57,8 @@ async function render(): Promise<string> {
         nodes,
         edges,
         selectedRef: "node_agent",
+        futureNodeRefs: ["node_agent"],
+        activeNodeRefs: ["node_root"],
       }),
   });
   app.use(
@@ -73,7 +76,10 @@ async function render(): Promise<string> {
             zoomIn: "Увеличить масштаб",
             zoomOut: "Уменьшить масштаб",
             fitGraph: "Вместить",
+            minimap: "Мини-карта графа",
             waitingForActivity: "Ожидает начала работы",
+            sessionNode: "Сессия",
+            controlNode: "Контрольный этап",
             callback: "Ответ дочернего запуска",
             retry: "Повторить попытку",
             continueTask: "Дополнительное задание",
@@ -89,6 +95,8 @@ async function render(): Promise<string> {
             RUNNING: "Выполняется",
             QUEUED: "В очереди",
             WAITING: "Ожидает",
+            SUCCEEDED: "Завершено",
+            FAILED: "Ошибка",
           },
         },
       },
@@ -109,14 +117,90 @@ describe("RunGraphCanvas", () => {
     expect(html).toContain('aria-level="1"');
     expect(html).toContain('aria-level="2"');
     expect(html).toContain('aria-selected="true"');
+    expect(html).toContain('class="graph-toolbar"');
+    expect(html).toContain('aria-label="Уменьшить масштаб"');
+    expect(html).toContain('aria-label="Увеличить масштаб"');
+    expect(html).toContain('aria-label="Вместить"');
+    expect(html).not.toContain("vue-flow__controls");
+    expect(html).toContain("vue-flow__minimap");
+    expect(html).toContain("Мини-карта графа");
   });
 
-  it("показывает направление и локализует пустую подпись ребра", async () => {
+  it("убирает подписи с рёбер и объясняет связи в легенде", async () => {
     const html = await render();
 
     expect(html).toContain("Подготовка отчёта");
     expect(html).toContain("Делегирование ИИ-сотрудника");
     expect(html).toContain("Аналитик продаж с подробным понятным названием");
+    expect(html).toContain("graph-legend");
+    expect(html).not.toContain("graph-edge-label");
     expect(html).not.toContain(">DELEGATED_TO<");
+  });
+
+  it("отмечает будущие и активные узлы без подмены состояния", () => {
+    const flow = createRunGraphFlowElements(nodes, edges, {
+      selectedRef: "node_agent",
+      futureRefs: new Set(["node_agent"]),
+      activeRefs: new Set(["node_root", "node_agent"]),
+      nodeAccessibleLabel: (node) => `${node.displayName} · ${node.state}`,
+      edgeAccessibleLabel: () => "Делегирование",
+    });
+    const root = flow.nodes.find((node) => node.id === "node_root");
+    const agent = flow.nodes.find((node) => node.id === "node_agent");
+    const edge = flow.edges[0];
+
+    expect(root?.data).toMatchObject({ active: true, future: false });
+    expect(root?.class).toContain("run-flow-node--active");
+    expect(root?.domAttributes).toMatchObject({ "aria-busy": "true" });
+    expect(agent?.data).toMatchObject({
+      active: false,
+      selected: true,
+      future: true,
+      surface: "session",
+    });
+    expect(agent?.class).toEqual(
+      expect.arrayContaining([
+        "run-flow-node--future",
+        "run-flow-node--selected",
+      ]),
+    );
+    expect(agent?.domAttributes).toMatchObject({
+      "data-node-future": "true",
+      "data-node-surface": "session",
+      "data-node-state": "QUEUED",
+    });
+    expect(agent?.domAttributes?.["aria-busy"]).toBeUndefined();
+    expect(edge).toMatchObject({
+      type: "runEdge",
+      source: "node_root",
+      target: "node_agent",
+      data: {
+        accessibleLabel: "Делегирование",
+        color: "var(--accent)",
+      },
+    });
+    expect(edge).not.toHaveProperty("label");
+  });
+
+  it("сохраняет terminal cancel как публичное состояние canvas-ноды", () => {
+    const root = nodes[0];
+    const agent = nodes[1];
+    if (!root || !agent) {
+      throw new Error("Run graph fixture must contain root and agent nodes");
+    }
+    const cancelled = { ...agent, state: "CANCELLED" as const };
+    const flow = createRunGraphFlowElements([root, cancelled], edges, {
+      futureRefs: new Set(),
+      activeRefs: new Set(),
+      nodeAccessibleLabel: (node) => `${node.displayName} · ${node.state}`,
+      edgeAccessibleLabel: () => "Делегирование",
+    });
+    const cancelledNode = flow.nodes.find((node) => node.id === cancelled.ref);
+
+    expect(cancelledNode?.class).toContain("run-flow-node--cancelled");
+    expect(cancelledNode?.domAttributes).toMatchObject({
+      "data-node-state": "CANCELLED",
+    });
+    expect(cancelledNode?.ariaLabel).toContain("CANCELLED");
   });
 });

@@ -162,7 +162,7 @@ func (server *VerifierServer) CheckReadiness(
 func castVerifiedContext(
 	claims model.AuthorizationClaims,
 ) *internalrpcauthorityv1.VerifiedAuthorizationContext {
-	return &internalrpcauthorityv1.VerifiedAuthorizationContext{
+	result := &internalrpcauthorityv1.VerifiedAuthorizationContext{
 		ContractVersion:          uint32(claims.Version),
 		Issuer:                   claims.Issuer,
 		Audience:                 claims.Audience,
@@ -186,6 +186,12 @@ func castVerifiedContext(
 		SignerGeneration:         claims.SignerGeneration,
 		CallerCredentialRevision: claims.CallerCredentialRevision,
 	}
+	if claims.CredentialAuthentication != nil {
+		result.CredentialAuthenticatedAt = timestamppb.New(time.Unix(claims.CredentialAuthentication.AuthenticatedAt, 0))
+		result.CredentialAcr = claims.CredentialAuthentication.ACR
+		result.CredentialAmr = append([]string(nil), claims.CredentialAuthentication.AMR...)
+	}
+	return result
 }
 
 func castAuthority(value model.Authority) *internalrpcauthorityv1.CallerAuthority {

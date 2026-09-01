@@ -9,14 +9,17 @@ require (
 	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
 	github.com/codex-k8s/kodex/libs/go/eventing v0.0.0
 	github.com/codex-k8s/kodex/libs/go/i18n v0.0.0
+	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcverifier v0.0.0
+	github.com/codex-k8s/kodex/libs/go/secretbrokerapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/nats-io/nats.go v1.52.0
 	github.com/oapi-codegen/runtime v1.6.0
 	github.com/prometheus/client_golang v1.23.2
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa
 	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 )
@@ -27,7 +30,6 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0 // indirect
-	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/oidcidentity v0.0.0 // indirect
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/getsentry/sentry-go v0.48.0 // indirect
@@ -53,13 +55,12 @@ require (
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.51.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/crypto v0.53.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 )
 
 replace github.com/codex-k8s/kodex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
@@ -81,5 +82,7 @@ replace github.com/codex-k8s/kodex/libs/go/observability => ../../../libs/go/obs
 replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
 
 replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile
+
+replace github.com/codex-k8s/kodex/libs/go/secretbrokerapi => ../../../libs/go/secretbrokerapi
 
 replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcserver

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Доступ к выбранным ИИ-сотрудникам</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-scope__body { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:16px; padding:16px 24px 24px; min-height:0; }
+  .p-scope__main,.p-scope__aside { display:flex; flex-direction:column; gap:14px; min-width:0; }
+  .p-scope__steps { display:flex; align-items:center; gap:8px; color:var(--mut); font-size:12px; }
+  .p-scope__step { display:flex; align-items:center; gap:6px; }
+  .p-scope__step b { display:grid; place-items:center; width:22px; height:22px; border:1px solid var(--line); border-radius:50%; color:var(--sec); }
+  .p-scope__step.is-current { color:var(--ink); font-weight:600; }
+  .p-scope__step.is-current b { color:var(--acc-dark); border-color:var(--acc-line); background:var(--acc-tint); }
+  .p-scope__line { width:28px; height:1px; background:var(--line); }
+  .p-scope__selected { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .p-scope__agent { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--r-3); background:var(--surface); }
+  .p-scope__agent > div { min-width:0; flex:1; }
+  .p-scope__effective { display:grid; gap:8px; }
+  .p-scope__effect { display:grid; grid-template-columns:22px minmax(0,1fr) auto; align-items:start; gap:8px; padding:9px 0; border-top:1px solid var(--line-hair); }
+  .p-scope__effect:first-child { border-top:0; }
+  .p-scope__effect svg { color:var(--ok); }
+  .p-scope__deny svg { color:var(--mut); }
+  .p-scope__footer { display:flex; justify-content:flex-end; gap:8px; padding-top:4px; }
+  .frame--tablet .p-scope__body { grid-template-columns:1fr; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Участники и доступ · preset «Один Проект и выбранные ИИ-сотрудники» · desktop 1440×1024</p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="access-roles-desktop.html">Участники и доступ</a><span>/</span><a href="access-role-editor-desktop.html">Роль</a><span>/</span><span>Область ИИ-сотрудников</span></div>
+      <div class="page-title-row">
+        <div><div class="page-title"><h1 id="page-title">Запуск выбранных ИИ-сотрудников</h1><span class="tag tag--mono">v3 · черновик</span></div><div class="page-sub">Один Проект, ровно два выбранных сотрудника и только перечисленные действия</div></div>
+        <div class="page-actions"><button class="btn btn--lg" type="button">Сохранить черновик</button><button class="btn btn--primary btn--lg" type="button" id="publish">Опубликовать версию</button></div>
+      </div>
+      <div class="p-scope__steps" aria-label="Шаги настройки">
+        <span class="p-scope__step"><b>1</b>Полномочия</span><span class="p-scope__line"></span>
+        <span class="p-scope__step is-current" aria-current="step"><b>2</b>Область</span><span class="p-scope__line"></span>
+        <span class="p-scope__step"><b>3</b>Проверка</span>
+      </div>
+    </div>
+
+    <div class="p-scope__body">
+      <div class="p-scope__main">
+        <section class="card" aria-labelledby="scope-project">
+          <div class="card__head card__head--line"><h2 class="sec-title" id="scope-project">Проект</h2><span class="tag">Обязательная область</span></div>
+          <div class="card__body card__body--pad col gap-8">
+            <label class="label" for="project-picker">Доступный Проект</label>
+            <button class="combobox" id="project-picker" type="button" data-menu="#project-menu" aria-haspopup="listbox" aria-expanded="false">
+              <span class="combobox__lead"><svg class="ic"><use href="#i-folder"/></svg></span><span class="combobox__text"><b>Корпоративные продажи</b><span class="combobox__sub">Предложения и аналитика клиентов · активен</span></span><svg class="ic"><use href="#i-chev"/></svg>
+            </button>
+            <div class="notice notice--sm"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Участник увидит только этот Проект. Доступ к другим Проектам не наследуется.</span></div>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="scope-agents">
+          <div class="card__head card__head--line"><div><h2 class="sec-title" id="scope-agents">Разрешённые ИИ-сотрудники</h2><div class="xs mut mt-2">Async picker использует серверный поиск и cursor pagination</div></div><span class="badge-count">2</span></div>
+          <div class="card__body card__body--pad">
+            <button class="combobox" type="button" data-modal="#agents-picker" aria-haspopup="dialog"><span class="combobox__lead"><svg class="ic"><use href="#i-search"/></svg></span><span class="combobox__text"><b>Найти и добавить сотрудника</b><span class="combobox__sub">По имени, роли или назначению</span></span><svg class="ic"><use href="#i-plus"/></svg></button>
+            <div class="p-scope__selected">
+              <div class="p-scope__agent"><span class="avatar avatar--acc">АП</span><div><div class="h3">Аналитик продаж</div><div class="xs mut">Аналитик · исследование клиентов</div></div><button class="btn btn--icon btn--ghost" type="button" aria-label="Убрать Аналитика продаж"><svg class="ic"><use href="#i-x"/></svg></button></div>
+              <div class="p-scope__agent"><span class="avatar avatar--ok">РП</span><div><div class="h3">Редактор предложений</div><div class="xs mut">Редактор · коммерческие документы</div></div><button class="btn btn--icon btn--ghost" type="button" aria-label="Убрать Редактора предложений"><svg class="ic"><use href="#i-x"/></svg></button></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="scope-actions">
+          <div class="card__head card__head--line"><h2 class="sec-title" id="scope-actions">Действия в области</h2><span class="xs mut">Только allow-bindings</span></div>
+          <div class="card__body card__body--pad grid grid--2 gap-10">
+            <label class="check-row"><input type="checkbox" checked><span><b>Видеть профиль</b><small>Имя, назначение и состояние</small></span></label>
+            <label class="check-row"><input type="checkbox" checked><span><b>Запускать работу</b><small>Новая или разрешённая сессия</small></span></label>
+            <label class="check-row"><input type="checkbox" checked><span><b>Видеть свои запуски</b><small>Граф, ход работы и результаты</small></span></label>
+            <label class="check-row"><input type="checkbox" checked><span><b>Отменять свои запуски</b><small>Без управления чужими запусками</small></span></label>
+            <label class="check-row"><input type="checkbox"><span><b>Изменять сотрудника</b><small>Не входит в выбранный preset</small></span></label>
+            <label class="check-row"><input type="checkbox"><span><b>Назначать доступы</b><small>Не входит в выбранный preset</small></span></label>
+          </div>
+        </section>
+      </div>
+
+      <aside class="p-scope__aside" aria-label="Итоговый доступ">
+        <section class="card">
+          <div class="card__head card__head--line"><h2 class="sec-title">Эффективный результат</h2><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Валиден</span></div>
+          <div class="card__body card__body--pad p-scope__effective">
+            <div class="p-scope__effect"><svg class="ic"><use href="#i-check"/></svg><div><b>Видит один Проект</b><div class="xs mut">Корпоративные продажи</div></div><span class="risk">Чтение</span></div>
+            <div class="p-scope__effect"><svg class="ic"><use href="#i-check"/></svg><div><b>Запускает двух сотрудников</b><div class="xs mut">Только выбранные экземпляры</div></div><span class="risk risk--write">Изменение</span></div>
+            <div class="p-scope__effect p-scope__deny"><svg class="ic"><use href="#i-minus"/></svg><div><b>Не меняет настройки</b><div class="xs mut">Инструкции, runtime и grants недоступны</div></div><span class="tag">Нет доступа</span></div>
+            <div class="p-scope__effect p-scope__deny"><svg class="ic"><use href="#i-minus"/></svg><div><b>Не видит других сотрудников</b><div class="xs mut">Даже внутри выбранного Проекта</div></div><span class="tag">Нет доступа</span></div>
+          </div>
+        </section>
+        <section class="notice notice--warn"><svg class="ic"><use href="#i-shield"/></svg><span class="notice__text"><b>Версия привязки неизменяема.</b><br>Публикация создаст v3. Существующие bindings на v2 продолжат действовать до явного переназначения.</span></section>
+        <div class="p-scope__footer"><a class="btn" href="access-role-editor-desktop.html">Назад</a><button class="btn btn--primary" type="button">Перейти к проверке</button></div>
+      </aside>
+    </div>
+  </main>
+
+  <div class="menu menu--wide" id="project-menu"><div class="menu__search"><svg class="ic"><use href="#i-search"/></svg><input aria-label="Поиск Проекта" placeholder="Поиск на сервере"></div><button class="menu__item" role="option" aria-selected="true"><svg class="ic"><use href="#i-folder"/></svg><span class="menu__text"><span>Корпоративные продажи</span><small>Активен · 8 сотрудников</small></span><svg class="ic right"><use href="#i-check"/></svg></button><button class="menu__item" role="option"><svg class="ic"><use href="#i-folder"/></svg><span class="menu__text"><span>Клиентская поддержка</span><small>Активен · 12 сотрудников</small></span></button><div class="menu__foot">Показаны 2 из 47 · прокрутите для загрузки</div></div>
+
+  <div class="modal-wrap" id="agents-picker" role="dialog" aria-modal="true" aria-labelledby="agents-picker-title">
+    <div class="modal modal--md"><div class="modal__head"><div class="grow"><div class="modal__title" id="agents-picker-title">Добавить ИИ-сотрудников</div><div class="modal__sub">Корпоративные продажи · можно выбрать несколько</div></div><button class="btn btn--icon btn--ghost" type="button" data-close aria-label="Закрыть"><svg class="ic"><use href="#i-x"/></svg></button></div>
+      <div class="modal__body col gap-10"><div class="field"><label class="label" for="agent-search">Поиск</label><div class="input-wrap"><svg class="ic"><use href="#i-search"/></svg><input id="agent-search" placeholder="Имя, роль или назначение"></div></div><div class="list-box"><label class="list-row"><input type="checkbox" checked><span class="avatar avatar--acc">АП</span><span class="list-row__text"><b>Аналитик продаж</b><small>Аналитик · готов</small></span></label><label class="list-row"><input type="checkbox" checked><span class="avatar avatar--ok">РП</span><span class="list-row__text"><b>Редактор предложений</b><small>Редактор · работает</small></span></label><label class="list-row"><input type="checkbox"><span class="avatar">ЮК</span><span class="list-row__text"><b>Юридический консультант</b><small>Консультант · готов</small></span></label><div class="loading-footer"><span class="spinner"></span>Загружаем следующую страницу</div></div></div>
+      <div class="modal__foot"><span class="sm mut grow">Выбрано: 2</span><button class="btn" type="button" data-close>Отмена</button><button class="btn btn--primary" type="button" data-close>Добавить</button></div>
+    </div>
+  </div>
+</div>
+<p class="stage-note">Обязательный enterprise RBAC-сценарий: один Проект, два конкретных ИИ-сотрудника и закрытый набор действий. Проект и сотрудники выбираются серверными async picker; preview явно показывает как разрешённые, так и недоступные действия.</p>
+<script src="assets/kodex.js"></script>
+<script>
+Kodex.mount({ nav:'admin', project:null, decisions:2, connection:'online', kodexContext:{ screen:'Область роли', object:'Запуск выбранных ИИ-сотрудников', can:['подобрать минимальные полномочия по описанию','объяснить эффективный доступ','подготовить новую версию роли'] } });
+document.getElementById('publish').addEventListener('click', () => Kodex.toast(document.getElementById('frame'), 'Версия v3 опубликована; существующие привязки не изменены.'));
+</script>
+</body>
+</html>

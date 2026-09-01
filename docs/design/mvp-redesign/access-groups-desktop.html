@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Доступ · Группы OIDC</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-access .page-head .tabs { border-bottom: 0; padding: 0; margin-top: 8px; }
+  .p-access .page-head .tab { height: 38px; }
+  .p-access__wrap { flex: 1 1 auto; min-width: 0; width: 100%; display: flex; gap: 16px; min-height: 0; padding: 14px 24px 20px; }
+  .p-access .modal-wrap:not(.is-open) { display: none; }
+  .p-access .kv--narrow .kv__k { flex-basis: 108px; }
+  .p-access__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .p-access__aside { flex: 0 0 340px; display: flex; flex-direction: column; min-height: 0; padding-bottom: 60px; }
+  .p-access__aside > .card { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  .p-access__aside .card__scroll { padding: 12px 16px 16px; }
+  .p-access__tablecard { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  .p-access .table { table-layout: fixed; width: 100%; }
+  .p-access .table th { white-space: normal; line-height: 1.25; padding: 8px 8px; }
+  .p-access .table td { vertical-align: middle; padding: 10px 8px; }
+  .p-access .table th:first-child, .p-access .table td:first-child { padding-left: 14px; }
+  .p-access .table tbody tr { cursor: pointer; }
+  .p-access .binding { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line-hair); }
+  .p-access .binding:first-child { border-top: 0; }
+  .p-access .binding__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .p-access .binding__title { font-size: 12.5px; font-weight: 500; }
+  .p-access .binding__meta { font-size: 11.5px; color: var(--mut); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .p-access .member-mini { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12.5px; }
+  .p-access .member-mini .mut { margin-left: auto; font-size: 11px; }
+  .frame--tablet .p-access__aside { display: none; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Участники и доступ · «Группы OIDC» · desktop 1440×1024 · маршрут <code>/administration/access/groups</code></p>
+<div class="frame frame--desktop p-access" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head page-head--tabs">
+      <div class="crumbs"><a href="#">Администрирование</a><span>/</span><span>Участники и доступ</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Участники и доступ</h1></div>
+          <div class="page-sub">Identity и группы управляет Keycloak (OIDC); прикладные полномочия — Kodex</div>
+        </div>
+        <div class="page-actions">
+          <div class="seg" data-seg role="group" aria-label="Область доступа">
+            <button class="seg__btn" type="button" aria-pressed="true">Организация</button>
+            <button class="seg__btn" type="button" aria-pressed="false">Проект «Корпоративные продажи»</button>
+          </div>
+          <button class="btn btn--primary btn--lg" type="button" data-modal="#modal-binding"><svg class="ic"><use href="#i-plus"/></svg>Добавить привязку</button>
+        </div>
+      </div>
+      <div class="tabs tabs--inline" role="tablist" aria-label="Разделы доступа">
+        <a class="tab" role="tab" aria-selected="false" tabindex="-1" href="access-members-desktop.html">Участники <span class="tab__count">640</span></a>
+        <a class="tab" role="tab" aria-selected="true" href="access-groups-desktop.html">Группы OIDC <span class="tab__count">10</span></a>
+        <a class="tab" role="tab" aria-selected="false" tabindex="-1" href="access-roles-desktop.html">Роли <span class="tab__count">8</span></a>
+        <a class="tab" role="tab" aria-selected="false" tabindex="-1" href="access-effective-desktop.html">Эффективный доступ</a>
+      </div>
+    </div>
+
+    <div class="page-body page-body--flush">
+      <div class="p-access__wrap">
+        <div class="p-access__main">
+          <div class="notice notice--info notice--sm">
+            <svg class="ic"><use href="#i-info"/></svg>
+            <span class="notice__text">Группы синхронизируются из OIDC-провайдера и <b>не редактируются в Kodex</b>. Здесь настраиваются только привязки групп к ролям Kodex и их областям. Роли Проектов и сотрудников не создаются внутри Keycloak.</span>
+          </div>
+          <div class="toolbar">
+            <label class="search" style="width:280px"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Имя группы · поиск на сервере" aria-label="Поиск групп"></label>
+            <button class="chip chip--filter" type="button" data-menu="#menu-binding-filter" aria-haspopup="menu" aria-expanded="false">Привязки: все<svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+            <button class="chip chip--filter" type="button" data-menu="#menu-sync-filter" aria-haspopup="menu" aria-expanded="false">Синхронизация: все<svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+            <span class="toolbar__spacer"></span>
+            <span class="toolbar__count">10 групп</span>
+            <span class="tag" data-tip="Источник identity и групп" data-tip-pos="left"><svg class="ic ic-12"><use href="#i-key"/></svg>Keycloak · realm «company»</span>
+          </div>
+
+          <div class="card p-access__tablecard">
+            <div class="card__scroll">
+              <table class="table table--hover" aria-label="Группы OIDC">
+                <thead>
+                  <tr>
+                    <th style="width:26%">Группа</th>
+                    <th style="width:11%" class="num">Участников</th>
+                    <th style="width:16%">Синхронизировано</th>
+                    <th style="width:30%">Привязки ролей Kodex</th>
+                    <th style="width:17%">Состояние</th>
+                  </tr>
+                </thead>
+                <tbody id="groups-body" data-select-group></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <aside class="p-access__aside" aria-label="Выбранная группа">
+          <div class="card" id="group-panel"></div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <div class="menu" id="menu-binding-filter"><div class="menu__title">Привязки</div>
+    <button class="menu__item" role="menuitemradio" aria-checked="true">Все группы</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">С привязками</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Без привязок</button>
+  </div>
+  <div class="menu" id="menu-sync-filter"><div class="menu__title">Синхронизация</div>
+    <button class="menu__item" role="menuitemradio" aria-checked="true">Все</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Синхронизирована</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Есть расхождения</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Не найдена в OIDC</button>
+  </div>
+  <div class="menu" id="menu-role-pick"><div class="menu__title">Роль Kodex</div>
+    <div class="menu__title" style="padding-top:2px">Системные</div>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Оператор</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Участник</button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Аудитор</button>
+    <div class="menu__sep"></div>
+    <div class="menu__title">Пользовательские</div>
+    <button class="menu__item" role="menuitemradio" aria-checked="true">Запуск выбранных сотрудников <span class="menu__hint">v2</span></button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Согласующий по продажам <span class="menu__hint">v1</span></button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Наблюдатель Проекта <span class="menu__hint">v1</span></button>
+    <button class="menu__item" role="menuitemradio" aria-checked="false">Только просмотр аудита <span class="menu__hint">v3</span></button>
+  </div>
+  <div class="menu" id="menu-group-remove">
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-edit"/></svg>Изменить область</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-audit"/></svg>Показать в аудите</button>
+    <div class="menu__sep"></div>
+    <button class="menu__item menu__item--danger" role="menuitem"><svg class="ic"><use href="#i-trash"/></svg>Удалить привязку</button>
+  </div>
+
+  <!-- Modal: добавить привязку роли к группе -->
+  <div class="modal-wrap" id="modal-binding" role="dialog" aria-modal="true" aria-labelledby="modal-binding-title" hidden>
+    <div class="modal modal--lg">
+      <div class="modal__head">
+        <div><div class="modal__title" id="modal-binding-title">Добавить привязку роли</div><div class="modal__sub">Группа <span class="mono">sales-all</span> · 47 участников получат роль в выбранной области</div></div>
+        <button class="close-btn" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="modal__body">
+        <div class="form-grid">
+          <div class="field">
+            <span class="field__label">Роль Kodex <span class="req" aria-hidden="true">*</span></span>
+            <button class="select select--block" type="button" data-menu="#menu-role-pick" aria-haspopup="menu" aria-expanded="false"><span class="select__value">Запуск выбранных сотрудников · v2</span><svg class="ic"><use href="#i-chev"/></svg></button>
+            <span class="field__hint">Системные роли неизменяемы; пользовательские привязываются к конкретной версии.</span>
+          </div>
+          <div class="field">
+            <span class="field__label">Область действия <span class="req" aria-hidden="true">*</span></span>
+            <div class="col gap-6">
+              <label class="radio-card"><input type="radio" name="scope"><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Организация</span><span class="radio-card__sub">Все Проекты и сущности</span></span></label>
+              <label class="radio-card"><input type="radio" name="scope" checked><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Проект</span><span class="radio-card__sub">Один Проект целиком</span></span></label>
+              <label class="radio-card"><input type="radio" name="scope"><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Конкретные сущности</span><span class="radio-card__sub">ИИ-сотрудник, Процесс или подключение интеграции</span></span></label>
+            </div>
+          </div>
+        </div>
+        <div class="field mt-14">
+          <span class="field__label">Проект</span>
+          <button class="combobox" type="button" style="max-width:420px"><svg class="ic"><use href="#i-folder"/></svg><span class="combobox__text"><span class="combobox__title">Корпоративные продажи</span><span class="combobox__sub">Предложения и аналитика клиентов · 4 ИИ-сотрудника</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
+        </div>
+        <div class="notice notice--sm mt-14"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Роль «Запуск выбранных сотрудников» ограничивает запуск списком сотрудников внутри Проекта. После добавления привязки проверьте результат на вкладке «Эффективный доступ».</span></div>
+      </div>
+      <div class="modal__foot"><span class="xs mut">Будет записано в аудит: Анна Волкова</span><span class="grow"></span><button class="btn" type="button" data-close>Отмена</button><button class="btn btn--primary" type="button" data-close>Добавить привязку</button></div>
+    </div>
+  </div>
+</div>
+<p class="stage-note">Группы — только чтение из Keycloak: состав, время синхронизации и расхождения показаны, но не редактируются. Единственная операция Kodex — привязка группы к роли и области (Организация / Проект / конкретные сущности). Тысячи ролей в Keycloak не нужны: прикладные роли и их версии живут в Kodex, группа провайдера лишь ссылается на них. Группа, отсутствующая в OIDC, помечена состоянием без удаления привязок.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'admin', project: null, decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Участники и доступ', object: 'Группы OIDC', can: ['подготовить план привязки группы к роли', 'объяснить, кто получит доступ через группу', 'найти группу по имени'] },
+  });
+  (function () {
+    const esc = Kodex.esc;
+    const GROUPS = [
+      { id: 'sales-all', desc: 'Все сотрудники отдела продаж', members: 47, sync: 'сегодня, 12:00', state: 'ok', bindings: [['Запуск выбранных сотрудников', 'v2', 'Проект «Корпоративные продажи» · 2 ИИ-сотрудника'], ['Наблюдатель Проекта', 'v1', 'Проект «Клиентская поддержка»']] },
+      { id: 'sales-managers', desc: 'Руководители направлений продаж', members: 12, sync: 'сегодня, 12:00', state: 'ok', bindings: [['Оператор', 'системная', 'Проект «Корпоративные продажи»'], ['Согласующий по продажам', 'v1', 'Проект «Корпоративные продажи»']] },
+      { id: 'support-l1', desc: 'Первая линия поддержки', members: 31, sync: 'сегодня, 12:00', state: 'ok', bindings: [['Оператор', 'системная', 'Проект «Клиентская поддержка»']] },
+      { id: 'support-l2', desc: 'Вторая линия поддержки', members: 9, sync: 'сегодня, 12:00', state: 'ok', bindings: [['Оператор', 'системная', 'Проект «Клиентская поддержка»']] },
+      { id: 'legal', desc: 'Юридический отдел', members: 6, sync: 'сегодня, 12:00', state: 'ok', bindings: [['Участник', 'системная', 'Проект «Юридический отдел»']] },
+      { id: 'finance', desc: 'Бухгалтерия и финансы', members: 8, sync: 'сегодня, 12:00', state: 'diff', bindings: [['Участник', 'системная', 'Проект «Бухгалтерия»']] },
+      { id: 'marketing', desc: 'Маркетинг', members: 14, sync: 'сегодня, 12:00', state: 'ok', bindings: [] },
+      { id: 'content', desc: 'Контент-команда', members: 5, sync: 'сегодня, 12:00', state: 'ok', bindings: [['Оператор', 'системная', 'Проект «Маркетинг и контент»']] },
+      { id: 'platform-admins', desc: 'Администраторы платформы Kodex', members: 3, sync: 'сегодня, 12:00', state: 'ok', bindings: [['Администратор', 'системная', 'Организация']] },
+      { id: 'hr-legacy', desc: 'Старая кадровая группа', members: 0, sync: '19 августа', state: 'missing', bindings: [['Участник', 'системная', 'Проект «Кадровая служба»']] },
+    ];
+    const MEMBERS = ['Михаил Орлов', 'Елена Крылова', 'Елена Фёдорова', 'Павел Зайцев', 'Мария Фёдорова', 'Артём Беляев'];
+    const state = (s) => s === 'ok' ? '<span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Синхронизирована</span>' : s === 'diff' ? '<span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Есть расхождения</span>' : '<span class="pill pill--err pill--sm"><svg class="ic"><use href="#i-x-circle"/></svg>Не найдена в OIDC</span>';
+    const vtag = (v) => v === 'системная' ? '<span class="tag">Системная</span>' : `<span class="tag tag--mono">${esc(v)}</span>`;
+    let selected = 'sales-all';
+    const body = document.getElementById('groups-body');
+    body.innerHTML = GROUPS.map((g) => `<tr data-id="${g.id}" class="${g.id === selected ? 'is-selected' : ''}" aria-selected="${g.id === selected}">
+      <td><div class="col gap-2" style="min-width:0"><span class="cell-title mono truncate">${esc(g.id)}</span><span class="cell-sub truncate">${esc(g.desc)}</span></div></td>
+      <td class="num">${g.members}</td>
+      <td><span class="sm">${esc(g.sync)}</span></td>
+      <td>${g.bindings.length ? `<div class="row row--wrap gap-4">${g.bindings.map(([r, v, sc]) => `<span class="tag ${v === 'системная' ? '' : 'tag--acc'}" data-tip="${esc(sc)}" data-tip-pos="bottom">${esc(r)}${v === 'системная' ? '' : ' · ' + esc(v)}</span>`).join('')}</div>` : '<span class="xs mut">нет привязок</span>'}</td>
+      <td>${state(g.state)}</td>
+    </tr>`).join('');
+    function renderPanel(g) {
+      document.getElementById('group-panel').innerHTML = `
+        <div class="card__head card__head--line">
+          <div class="col gap-2 grow" style="min-width:0"><div class="h3 mono truncate">${esc(g.id)}</div><div class="xs mut truncate">${esc(g.desc)}</div></div>
+          <a class="btn btn--sm btn--icon" href="#" aria-label="Открыть группу в Keycloak" data-tip="Открыть в Keycloak" data-tip-pos="left"><svg class="ic"><use href="#i-external"/></svg></a>
+        </div>
+        <div class="card__scroll">
+          <div class="kv kv--narrow">
+            <div class="kv__row"><span class="kv__k">Источник</span><span class="kv__v"><span class="tag"><svg class="ic ic-12"><use href="#i-key"/></svg>Keycloak</span></span></div>
+            <div class="kv__row"><span class="kv__k">Участников</span><span class="kv__v mono">${g.members}</span></div>
+            <div class="kv__row"><span class="kv__k">Синхронизация</span><span class="kv__v">${esc(g.sync)} · ${g.state === 'ok' ? 'без расхождений' : g.state === 'diff' ? '<span class="warn-text">2 участника отключены в OIDC</span>' : '<span class="err-text">группа не найдена в OIDC</span>'}</span></div>
+          </div>
+          <div class="row row--between mt-14"><div class="sec-title">Участники</div><a class="xs" href="access-members-desktop.html">Все в списке участников</a></div>
+          <div class="mt-4">${g.members ? MEMBERS.slice(0, Math.min(6, g.members)).map((m) => `<div class="member-mini"><span class="avatar avatar--24" aria-hidden="true">${esc(m.split(' ').map((w) => w[0]).join(''))}</span><span class="truncate">${esc(m)}</span></div>`).join('') + (g.members > 6 ? `<div class="xs mut" style="padding:4px 0 0 32px">и ещё ${g.members - 6}</div>` : '') : '<div class="xs mut">В OIDC у группы нет участников</div>'}</div>
+          <div class="row row--between mt-14"><div class="sec-title">Привязки ролей</div><span class="tab__count">${g.bindings.length}</span></div>
+          <div class="mt-4">${g.bindings.length ? g.bindings.map(([r, v, sc]) => `<div class="binding"><div class="binding__text"><span class="binding__title">${esc(r)}</span><span class="binding__meta"><span>${esc(sc)}</span></span><span class="binding__meta">${vtag(v)}</span></div><button class="btn btn--sm btn--icon btn--ghost" type="button" data-menu="#menu-group-remove" aria-haspopup="menu" aria-expanded="false" aria-label="Действия с привязкой"><svg class="ic"><use href="#i-dots"/></svg></button></div>`).join('') : '<div class="empty empty--compact empty--left"><div class="empty__title">Привязок нет</div><div class="empty__text">Участники группы не получают ролей Kodex автоматически.</div></div>'}</div>
+          <button class="btn btn--block mt-10" type="button" data-modal="#modal-binding"><svg class="ic"><use href="#i-plus"/></svg>Добавить привязку</button>
+          <div class="notice notice--sm mt-12"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Состав группы меняется только в Keycloak. Изменение привязки применяется ко всем участникам группы после следующего входа или синхронизации.</span></div>
+        </div>`;
+    }
+    body.addEventListener('click', (e) => { const tr = e.target.closest('tr[data-id]'); if (!tr) return; selected = tr.dataset.id; body.querySelectorAll('tr').forEach((r) => { const on = r.dataset.id === selected; r.classList.toggle('is-selected', on); r.setAttribute('aria-selected', on); }); renderPanel(GROUPS.find((g) => g.id === selected)); });
+    renderPanel(GROUPS[0]);
+  })();
+</script>
+</body>
+</html>

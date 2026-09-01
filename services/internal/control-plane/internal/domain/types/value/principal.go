@@ -4,17 +4,21 @@ package value
 import (
 	"errors"
 	"strings"
+	"time"
 )
 
 // Principal выводится только из проверенного internal authorization context.
 type Principal struct {
-	ActorID            string
-	AuthorityTenant    string
-	Permission         string
-	CorrelationRef     string
-	CallerWorkload     string
-	ProjectRef         string
-	CredentialRevision uint64
+	ActorID                   string
+	AuthorityTenant           string
+	Permission                string
+	CorrelationRef            string
+	CallerWorkload            string
+	ProjectRef                string
+	CredentialRevision        uint64
+	CredentialAuthenticatedAt time.Time
+	CredentialACR             string
+	CredentialAMR             []string
 }
 
 func (principal Principal) Validate() error {

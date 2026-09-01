@@ -28,6 +28,7 @@ const (
 	provenanceBindingSchema = "kodex.dev/image-provenance-binding/v1"
 	expectedBuilderID       = "spiffe://kodex.local/ns/kodex-system/sa/role-image-builder"
 	expectedBuildType       = "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md"
+	provenanceAttestation   = "mode=min,version=v1,builder-id=" + expectedBuilderID
 )
 
 type Config struct {
@@ -175,7 +176,7 @@ func (executor *Executor) Prepare(
 		input.GetRoleRuntimeContractRevision() != executor.config.RoleRuntimeContractRevision ||
 		input.GetRoleRuntimeContractSha256() != executor.config.RoleRuntimeContractSHA256 ||
 		!strings.HasPrefix(input.GetContextRef(), "oci://") ||
-		strings.ContainsAny(input.GetInstallationBlock(), "\x00\r") {
+		strings.ContainsAny(input.GetInstallationBlock(), "\x00\r") || !validOwnerDockerfile(input) {
 		return nil, "INPUT_FETCH_REJECTED", ErrInvalidContext
 	}
 	root, err := os.MkdirTemp(executor.config.WorkspaceRoot, "image-build-")
@@ -253,22 +254,21 @@ func (executor *Executor) Build(
 		"--opt", "label:kodex.dev/immutable-build-sha256=" + input.GetImmutableBuildSha256(),
 		"--opt", fmt.Sprintf("label:kodex.dev/policy-revision=%d", input.GetPolicyRevision()),
 		"--opt", "label:kodex.dev/policy-sha256=" + input.GetPolicySha256(),
-		"--opt", "attest:provenance=mode=min,builder-id=" + expectedBuilderID, "--progress=rawjson",
+		"--opt", "attest:provenance=" + provenanceAttestation, "--progress=rawjson",
 		"--output", "type=image,name=" + tag + ",push=true", "--metadata-file", metadataFile}
 	command := exec.CommandContext(ctx, executor.config.Binary, args...)
 	command.Env = append(os.Environ(), "DOCKER_CONFIG="+filepath.Dir(executor.config.BuildKitPullDockerConfig), "HOME="+prepared.root)
-	stdout, err := command.StdoutPipe()
+	progress, err := buildProgressPipe(command)
 	if err != nil {
 		return controlclient.BuildEvidence{}, Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build graph was rejected"}
 	}
-	command.Stderr = io.Discard
 	if err := command.Start(); err != nil {
 		return controlclient.BuildEvidence{}, Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build graph did not start"}
 	}
 	tracker := newBuildPhaseTracker()
 	lastStage := controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL
 	var progressionErr error
-	scanner := bufio.NewScanner(stdout)
+	scanner := bufio.NewScanner(progress)
 	scanner.Buffer(make([]byte, 64<<10), 1<<20)
 	for scanner.Scan() {
 		if progressionErr != nil {
@@ -318,6 +318,11 @@ func (executor *Executor) Build(
 		ImmutableBuildSHA256: input.GetImmutableBuildSha256()}, nil
 }
 
+func buildProgressPipe(command *exec.Cmd) (io.ReadCloser, error) {
+	command.Stdout = io.Discard
+	return command.StderrPipe()
+}
+
 func provenanceBindingSHA256(input *controlplanev1.RoleImageBuildInput, manifestDigest string) (string, error) {
 	document, err := json.Marshal(map[string]any{
 		"buildType":            expectedBuildType,
@@ -344,10 +349,45 @@ func dockerfile(
 		"--mount=type=bind,target=/workspace/source,readonly",
 		"--mount=type=bind,from=kodex-install,source=install.sh,target=/run/kodex/install.sh,readonly",
 	}
-	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s AS trusted-runtime\nFROM %s@%s\nRUN %s /bin/sh /run/kodex/install.sh\nCOPY --from=trusted-runtime /usr/local/bin/kodex-init /usr/local/bin/kodex-init\nCOPY --from=trusted-runtime /usr/local/bin/kodex-agent-runner /usr/local/bin/kodex-agent-runner\nUSER 10001:10001\nENTRYPOINT [\"/usr/local/bin/kodex-init\",\"entrypoint\",\"/usr/local/bin/kodex-agent-runner\"]\nCMD [\"runtime-session\"]\nLABEL kodex.dev/spec-sha256=%q kodex.dev/runtime-contract-sha256=%q\n",
+	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s AS trusted-runtime\n%s\nUSER root\nRUN %s /bin/sh /run/kodex/install.sh\nCOPY --from=trusted-runtime /usr/local/bin/kodex-init /usr/local/bin/kodex-init\nCOPY --from=trusted-runtime /usr/local/bin/kodex-agent-runner /usr/local/bin/kodex-agent-runner\nUSER 10001:10001\nENTRYPOINT [\"/usr/local/bin/kodex-init\",\"entrypoint\",\"/usr/local/bin/kodex-agent-runner\"]\nCMD [\"runtime-session\"]\nLABEL kodex.dev/spec-sha256=%q kodex.dev/runtime-contract-sha256=%q\n",
 		frontendRepository, input.GetFrontendSha256(), trustedRuntimeRepository, trustedRuntimeDigest,
-		input.GetBaseImageReference(), input.GetBaseImageDigest(), strings.Join(mounts, " "), input.GetSpecSha256(),
+		strings.TrimSpace(input.GetDockerfile()), strings.Join(mounts, " "), input.GetSpecSha256(),
 		input.GetRoleRuntimeContractSha256()))
+}
+
+func validOwnerDockerfile(input *controlplanev1.RoleImageBuildInput) bool {
+	dockerfile := input.GetDockerfile()
+	if dockerfile == "" || len(dockerfile) > 256<<10 || strings.ContainsAny(dockerfile, "\x00\r") {
+		return false
+	}
+	expectedBase := input.GetBaseImageReference() + "@" + input.GetBaseImageDigest()
+	foundFrom := false
+	for _, rawLine := range strings.Split(dockerfile, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" {
+			continue
+		}
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "# syntax=") || strings.HasPrefix(lower, "#syntax=") {
+			return false
+		}
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) > 0 && strings.EqualFold(fields[0], "FROM") {
+			if foundFrom || len(fields) != 2 && len(fields) != 4 || fields[1] != expectedBase ||
+				len(fields) == 4 && !strings.EqualFold(fields[2], "AS") || strings.HasSuffix(line, "\\") {
+				return false
+			}
+			foundFrom = true
+			continue
+		}
+		if !foundFrom {
+			return false
+		}
+	}
+	return foundFrom
 }
 
 func installationScript(input *controlplanev1.RoleImageBuildInput) []byte {

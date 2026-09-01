@@ -2,10 +2,14 @@ package callback
 
 import (
 	"encoding/json"
+	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
@@ -15,10 +19,19 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	}
 	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678", DelegationTargets: []runtimecontract.RunnerDelegationTarget{{Ref: "agt_12345678", Name: "Analyst"}}}
 	available := tools(input)
-	if len(available) != 3 || available[0]["name"] != "get_configuration_catalog" || available[1]["name"] != "propose_configuration_plan" {
+	if len(available) != 5 {
 		t.Fatalf("unexpected assistant tool catalog: %#v", available)
 	}
-	schema := available[1]["inputSchema"].(map[string]any)
+	var planTool map[string]any
+	for _, tool := range available {
+		if tool["name"] == "propose_configuration_plan" {
+			planTool = tool
+		}
+	}
+	if planTool == nil {
+		t.Fatal("assistant plan tool is absent")
+	}
+	schema := planTool["inputSchema"].(map[string]any)
 	if schema["additionalProperties"] != false {
 		t.Fatal("assistant tool schema must reject unknown top-level fields")
 	}
@@ -27,14 +40,33 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatalf("assistant plan must be bounded, got %#v", operations["maxItems"])
 	}
 	oneOf := operations["items"].(map[string]any)["oneOf"].([]map[string]any)
-	if len(oneOf) != 9 {
+	if len(oneOf) != 12 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 	byType := make(map[string]map[string]any, len(oneOf))
+	operationByType := make(map[string]map[string]any, len(oneOf))
+	schemaByType := make(map[string]map[string]any, len(oneOf))
 	for _, operation := range oneOf {
 		properties := operation["properties"].(map[string]any)
 		operationType := properties["type"].(map[string]any)["const"].(string)
-		byType[operationType] = properties["input"].(map[string]any)
+		byType[operationType] = properties["parameters"].(map[string]any)
+		operationByType[operationType] = properties
+		schemaByType[operationType] = operation
+	}
+	createProject := operationByType["CREATE_PROJECT"]
+	createBefore := createProject["before"].(map[string]any)
+	createAfter := createProject["after"].(map[string]any)
+	if createBefore["additionalProperties"] != false || createAfter["additionalProperties"] != false ||
+		!reflect.DeepEqual(createAfter["required"], byType["CREATE_PROJECT"]["required"]) {
+		t.Fatalf("create operation schema is not canonical: before=%#v after=%#v parameters=%#v", createBefore, createAfter, byType["CREATE_PROJECT"])
+	}
+	createRequired := schemaByType["CREATE_PROJECT"]["required"].([]string)
+	if !reflect.DeepEqual(createRequired, []string{"type", "title", "summary", "parameters"}) {
+		t.Fatalf("create operation must leave server-owned envelope optional: %#v", createRequired)
+	}
+	updateProject := operationByType["UPDATE_PROJECT"]
+	if updateProject == nil || !reflect.DeepEqual(schemaByType["UPDATE_PROJECT"]["required"].([]string), []string{"type", "title", "summary", "parameters"}) {
+		t.Fatalf("project update must leave authority fields to the server: %#v", updateProject)
 	}
 	workflowProperties := byType["CREATE_WORKFLOW"]["properties"].(map[string]any)
 	if workflowProperties["projectRef"].(map[string]any)["enum"].([]string)[0] != input.ProjectRef ||
@@ -51,8 +83,8 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		}
 	}
 	grant := byType["CHANGE_INTEGRATION_GRANT"]
-	if len(grant["oneOf"].([]map[string]any)) != 2 || !containsString(grant["required"].([]string), "expectedVersion") {
-		t.Fatalf("integration grant schema lost target exclusivity or OCC: %#v", grant)
+	if len(grant["oneOf"].([]map[string]any)) != 2 {
+		t.Fatalf("integration grant schema lost target exclusivity: %#v", grant)
 	}
 	scheduleProperties := byType["CREATE_SCHEDULE"]["properties"].(map[string]any)
 	if scheduleProperties["timeOfDay"] == nil || scheduleProperties["cronExpression"] != nil {
@@ -72,8 +104,20 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	}
 	catalog := result.(map[string]any)
 	agents := catalog["agents"].([]map[string]string)
-	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" {
+	schemas := catalog["operation_schemas"].([]map[string]any)
+	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 12 {
 		t.Fatalf("unexpected configuration catalog: %#v", catalog)
+	}
+	workflowFound := false
+	for _, schema := range schemas {
+		properties := schema["properties"].(map[string]any)
+		if properties["type"].(map[string]any)["const"] != "CREATE_WORKFLOW" {
+			continue
+		}
+		workflowFound = properties["parameters"].(map[string]any)["properties"].(map[string]any)["steps"] != nil
+	}
+	if !workflowFound {
+		t.Fatal("configuration catalog does not expose the exact workflow contract")
 	}
 	if _, err := configurationCatalog(input, map[string]any{"projectRef": "untrusted"}); err == nil {
 		t.Fatal("configuration catalog accepted caller input")
@@ -136,5 +180,95 @@ func TestDecodeMCPToolCallParamsRejectsUnknownAuthorityFields(t *testing.T) {
 	}`))
 	if err == nil {
 		t.Fatal("unknown authority-like field was accepted")
+	}
+}
+
+func TestAssistantPlanInputErrorsKeepAClosedFailureClass(t *testing.T) {
+	t.Parallel()
+	server := &Server{}
+	_, err := server.proposeAssistantPlan(t.Context(), runtimecontract.RunnerInput{SystemAssistant: true}, map[string]any{
+		"summary": "Create one agent",
+		"operations": []any{map[string]any{
+			"action":     "DELETE_PROJECT",
+			"parameters": map[string]any{"name": "Analyst"},
+		}}}, json.RawMessage(`1`))
+	var inputErr *assistantPlanInputError
+	if !errors.As(err, &inputErr) {
+		t.Fatalf("expected a typed assistant plan input error, got %v", err)
+	}
+	if inputErr.reason != "operation_type" {
+		t.Fatalf("unexpected safe failure class: %q", inputErr.reason)
+	}
+}
+
+func TestAssistantPlanControlValidationRemainsRetryableInputError(t *testing.T) {
+	t.Parallel()
+	err := assistantPlanControlError(status.Error(codes.InvalidArgument, "request is invalid"))
+	var inputErr *assistantPlanInputError
+	if !errors.As(err, &inputErr) || inputErr.reason != "server_validation" {
+		t.Fatalf("expected closed server validation error, got %v", err)
+	}
+	if code := status.Code(assistantPlanControlError(status.Error(codes.Unavailable, "down"))); code != codes.Unavailable {
+		t.Fatalf("transient control error code changed: %s", code)
+	}
+}
+
+func TestNormalizeServerHydratedAssistantOperationAcceptsBoundedModelShorthand(t *testing.T) {
+	t.Parallel()
+	parameters := map[string]any{
+		"project_ref":      "prj_12345678",
+		"name":             "Analyst",
+		"role_description": "Sales analyst",
+	}
+	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
+		"action":     "CREATE_AGENT",
+		"parameters": parameters,
+	}, "Create one analyst", "prj_12345678", "Sales")
+	if err != nil {
+		t.Fatalf("normalize model shorthand: %v", err)
+	}
+	if operation["type"] != "CREATE_AGENT" || operation["title"] != "Создать ИИ-сотрудника «Analyst»" ||
+		operation["summary"] != "Create one analyst" {
+		t.Fatalf("unexpected normalized envelope: %#v", operation)
+	}
+	normalized := operation["parameters"].(map[string]any)
+	if normalized["projectRef"] != "prj_12345678" || normalized["roleDescription"] != "Sales analyst" {
+		t.Fatalf("parameter aliases were not normalized: %#v", normalized)
+	}
+	if _, exists := normalized["project_ref"]; exists {
+		t.Fatalf("snake_case alias survived normalization: %#v", normalized)
+	}
+}
+
+func TestNormalizeServerHydratedAssistantOperationRejectsAliasCollision(t *testing.T) {
+	t.Parallel()
+	_, err := normalizeServerHydratedAssistantOperation(map[string]any{
+		"type": "CREATE_AGENT",
+		"parameters": map[string]any{
+			"projectRef":  "prj_12345678",
+			"project_ref": "prj_87654321",
+		},
+	}, "Create one analyst", "prj_12345678", "Sales")
+	var inputErr *assistantPlanInputError
+	if !errors.As(err, &inputErr) || inputErr.reason != "operation_parameter_alias" {
+		t.Fatalf("expected a closed alias collision, got %v", err)
+	}
+}
+
+func TestNormalizeServerHydratedAssistantOperationPinsCurrentProject(t *testing.T) {
+	t.Parallel()
+	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
+		"action":     "UPDATE_PROJECT",
+		"parameters": map[string]any{"purpose": "Updated purpose"},
+	}, "Update current project", "prj_current1", "Sales")
+	if err != nil {
+		t.Fatalf("normalize project update: %v", err)
+	}
+	parameters := operation["parameters"].(map[string]any)
+	if parameters["projectRef"] != "prj_current1" {
+		t.Fatalf("current project was not server-pinned: %#v", parameters)
+	}
+	if operation["title"] != "Изменить Проект «Sales»" || operation["summary"] != "Изменить Проект «Sales» — назначение: «Updated purpose»." {
+		t.Fatalf("project update is not explicit: %#v", operation)
 	}
 }

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Kodex · Drawer в контексте сотрудника</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .modal-wrap:not(.is-open) { display: none; }
+  .p-kodex__ctx { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 16px 12px; border-bottom: 1px solid var(--line); background: var(--bg-subtle); }
+  .p-kodex__ctx-title { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mut); }
+  .p-kodex__attr { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; color: var(--sec); line-height: 1.45; }
+  .p-kodex__attr .ic { margin-top: 2px; color: var(--mut); }
+  .p-kodex__attr b { color: var(--ink); font-weight: 500; }
+  .p-kodex__dlg { display: flex; flex-direction: column; gap: 3px; padding-bottom: 10px; border-bottom: 1px solid var(--line-hair); }
+  .p-kodex__dlg-row { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+  .p-kodex__dlg-name { font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-kodex__foot { flex-direction: column; align-items: stretch; }
+  .chip:disabled { background: var(--bg-field); color: var(--faint); cursor: not-allowed; border-color: var(--line); }
+  .chip:disabled .ic { color: var(--faint); }
+  .p-kodex__evidence { border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg); width: 100%; overflow: hidden; }
+  .p-kodex__evidence-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-top: 1px solid var(--line-hair); font-size: 12px; }
+  .p-kodex__evidence-row:first-child { border-top: 0; background: var(--bg-field); color: var(--sec); font-size: 11.5px; }
+  .p-kodex__evidence-row .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-run-row .list-row__status { width: 120px; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Kodex · контекстный drawer на экране ИИ-сотрудника «Аналитик продаж» · desktop 1440×1024 · маршрут <code>/projects/:projectRef/agents/:agentRef</code> + drawer</p>
+<div class="frame frame--desktop" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head page-head--tabs">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><a href="#">ИИ-сотрудники</a><span>/</span><span>Аналитик продаж</span></div>
+      <div class="page-title-row">
+        <div class="row gap-12 row--top">
+          <span class="avatar avatar--44 avatar--ok" aria-hidden="true">АП</span>
+          <div>
+            <div class="page-title"><h1 id="page-title">Аналитик продаж</h1><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Готов</span><span class="tag"><svg class="ic"><use href="#i-tag"/></svg>Инструкции v3 опубликованы</span></div>
+            <div class="page-sub">Исследование клиентов и подготовка фактов для предложений</div>
+          </div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn--lg" type="button"><svg class="ic"><use href="#i-edit"/></svg>Изменить</button>
+          <a class="btn btn--primary btn--lg" href="#"><svg class="ic"><use href="#i-run"/></svg>Запустить</a>
+          <button class="btn btn--icon btn--lg" type="button" aria-label="Другие действия" data-tip="Другие действия" data-tip-pos="bottom"><svg class="ic"><use href="#i-dots"/></svg></button>
+        </div>
+      </div>
+      <div class="tabs tabs--inline" role="tablist" data-tabs style="margin-top:8px">
+        <button class="tab" role="tab" id="tab-profile" aria-selected="true" aria-controls="panel-profile" type="button">Профиль</button>
+        <button class="tab" role="tab" id="tab-instr" aria-selected="false" aria-controls="panel-other" type="button">Инструкции <span class="tab__count">v3</span></button>
+        <button class="tab" role="tab" id="tab-runtime" aria-selected="false" aria-controls="panel-other" type="button">Runtime</button>
+        <button class="tab" role="tab" id="tab-env" aria-selected="false" aria-controls="panel-other" type="button">Окружение</button>
+        <button class="tab" role="tab" id="tab-access" aria-selected="false" aria-controls="panel-other" type="button">Доступы и знания</button>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="tabpanel" id="panel-profile" role="tabpanel" aria-labelledby="tab-profile">
+        <div class="split split--main-aside">
+          <div class="col gap-16">
+            <section class="card" aria-labelledby="sec-recent">
+              <div class="card__head"><h2 class="sec-title" id="sec-recent">Последние запуски</h2><div class="row gap-10"><span class="refresh"><span class="refresh__dot"></span><span class="refresh__text">обновлено 12:40</span></span><a class="sm" href="#">Все запуски сотрудника</a></div></div>
+              <div>
+                <a class="list-row p-run-row" href="#">
+                  <div class="list-row__main">
+                    <div class="list-row__title"><span>Подготовить предложение для компании Север</span></div>
+                    <div class="list-row__sub"><span>Ветвь Процесса «Обработка нового лида»</span><span>·</span><span>Инициатор: <b>Анна Волкова</b></span><span>·</span><span class="source" tabindex="0" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span><span>·</span><span>сегодня, 11:52</span></div>
+                  </div>
+                  <span class="list-row__time">6 мин</span>
+                  <span class="list-row__status"><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Завершён</span></span>
+                </a>
+                <a class="list-row p-run-row" href="#">
+                  <div class="list-row__main">
+                    <div class="list-row__title"><span>Ежедневная сводка по лидам</span></div>
+                    <div class="list-row__sub"><span>Инициатор: <b>расписание «По будням, 09:00»</b></span><span>·</span><span class="source" tabindex="0" data-tip="Запущено по расписанию автоматизации" data-tip-pos="bottom"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</span><span>·</span><span>сегодня, 09:00</span></div>
+                  </div>
+                  <span class="list-row__time">4 мин</span>
+                  <span class="list-row__status"><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Завершён</span></span>
+                </a>
+                <a class="list-row p-run-row" href="#">
+                  <div class="list-row__main">
+                    <div class="list-row__title"><span>Собрать факты о компании Меридиан</span></div>
+                    <div class="list-row__sub"><span>Инициатор: <b>Михаил Орлов</b></span><span>·</span><span class="source" tabindex="0" data-tip="Запущено через помощника Kodex от имени пользователя" data-tip-pos="bottom"><svg class="ic"><use href="#i-bot"/></svg>Kodex</span><span>·</span><span>вчера, 12:05</span></div>
+                  </div>
+                  <span class="list-row__time">9 мин</span>
+                  <span class="list-row__status"><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Завершён</span></span>
+                </a>
+              </div>
+            </section>
+            <section class="card" aria-labelledby="sec-knowledge">
+              <div class="card__head"><h2 class="sec-title" id="sec-knowledge">Назначенные источники</h2><a class="sm" href="#">Доступы и знания</a></div>
+              <div>
+                <div class="list-row"><span class="mime mime--pdf">pdf</span><div class="list-row__main"><div class="list-row__title"><span>Описание продукта.pdf</span></div><div class="list-row__sub"><span>v2</span><span>·</span><span>проверен</span><span>·</span><span>назначен 22 августа</span></div></div><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></div>
+                <div class="list-row"><span class="mime mime--doc">docx</span><div class="list-row__main"><div class="list-row__title"><span>Сценарии продаж.docx</span></div><div class="list-row__sub"><span>v1</span><span>·</span><span>назначен 20 августа</span></div></div><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span></div>
+                <div class="list-row"><span class="mime mime--xls">xlsx</span><div class="list-row__main"><div class="list-row__title"><span>Прайс-лист 2026.xlsx</span></div><div class="list-row__sub"><span>v1</span><span>·</span><span>назначен 24 августа</span><span>·</span><span>не передаётся в запуски, пока проверка не пройдена</span></div></div><span class="pill pill--err pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Изолирован</span></div>
+              </div>
+            </section>
+          </div>
+          <div class="col gap-16">
+            <section class="card" aria-labelledby="sec-summary">
+              <div class="card__head"><h2 class="sec-title" id="sec-summary">Профиль</h2></div>
+              <div class="card__body">
+                <div class="kv">
+                  <div class="kv__row"><span class="kv__k">Назначение</span><span class="kv__v">Исследование клиента и подготовка фактов</span></div>
+                  <div class="kv__row"><span class="kv__k">Роль</span><span class="kv__v">Аналитик</span></div>
+                  <div class="kv__row"><span class="kv__k">Провайдер</span><span class="kv__v">OpenAI · пул «Продажи» · политика least_used</span></div>
+                  <div class="kv__row"><span class="kv__k">Модель</span><span class="kv__v mono">gpt-5.1</span></div>
+                  <div class="kv__row"><span class="kv__k">Runtime</span><span class="kv__v">Стандартный</span></div>
+                  <div class="kv__row"><span class="kv__k">Окружение</span><span class="kv__v">Стандартное окружение · rev 2</span></div>
+                  <div class="kv__row"><span class="kv__k">Возможности</span><span class="kv__v">Работа с файлами · Анализ данных</span></div>
+                  <div class="kv__row"><span class="kv__k">Интеграции</span><span class="kv__v">Не подключены</span></div>
+                  <div class="kv__row"><span class="kv__k">Изменил</span><span class="kv__v">Анна Волкова · сегодня, 10:24</span></div>
+                </div>
+              </div>
+            </section>
+            <section class="card" aria-labelledby="sec-audit">
+              <div class="card__head"><h2 class="sec-title" id="sec-audit">Последние изменения</h2><a class="sm" href="#">Аудит</a></div>
+              <div>
+                <div class="list-row"><div class="list-row__main"><div class="list-row__title"><span>Опубликованы инструкции v3</span></div><div class="list-row__sub"><span>Анна Волкова</span><span>·</span><span>сегодня, 10:24</span></div></div></div>
+                <div class="list-row"><div class="list-row__main"><div class="list-row__title"><span>Назначен файл «Прайс-лист 2026.xlsx»</span></div><div class="list-row__sub"><span>Михаил Орлов через Kodex</span><span>·</span><span>24 августа</span></div></div></div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="tabpanel" id="panel-other" role="tabpanel" hidden><div class="empty"><div class="empty__title">Содержимое вкладки показано в отдельных макетах</div><div class="empty__text">agent-instructions-desktop.html, agent-runtime-desktop.html, agent-environment-picker-desktop.html</div></div></div>
+    </div>
+  </main>
+
+  <div class="layer">
+    <div class="drawer" id="kodex-panel-live" role="dialog" aria-label="Kodex" data-nonmodal>
+      <div class="drawer__head">
+        <span class="avatar avatar--32 avatar--bot" aria-hidden="true"><svg class="ic"><use href="#i-bot"/></svg></span>
+        <div class="drawer__head-text">
+          <div class="drawer__title">Kodex</div>
+          <div class="drawer__sub">Экран: <b class="ink2">ИИ-сотрудник «Аналитик продаж»</b> · Проект «Корпоративные продажи»</div>
+        </div>
+        <button class="btn btn--icon btn--ghost" type="button" aria-label="История диалогов" data-tip="История диалогов" data-tip-pos="bottom" data-menu="#kodex-history-menu" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-history"/></svg></button>
+        <button class="close-btn" type="button" aria-label="Закрыть Kodex" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="p-kodex__ctx">
+        <div class="p-kodex__ctx-title">Здесь Kodex может</div>
+        <div class="row row--wrap gap-6">
+          <button class="chip" type="button" data-suggest="Измени инструкции «Аналитика продаж»: "><svg class="ic"><use href="#i-edit"/></svg>Изменить инструкции</button>
+          <button class="chip" type="button" data-suggest="Смени окружение «Аналитика продаж» на "><svg class="ic"><use href="#i-layers"/></svg>Сменить окружение</button>
+          <button class="chip" type="button" disabled aria-disabled="true" data-tip="Нужно право «Управление сотрудниками» в Проекте" data-tip-pos="bottom"><svg class="ic"><use href="#i-key"/></svg>Выдать доступ к GitHub</button>
+          <button class="chip" type="button" data-suggest="Покажи последние запуски «Аналитика продаж» с ошибками"><svg class="ic"><use href="#i-run"/></svg>Показать последние запуски</button>
+        </div>
+        <div class="p-kodex__attr"><svg class="ic ic-14"><use href="#i-user"/></svg><span>Изменения будут записаны как <b>Анна Волкова через Kodex</b>. Набор действий зависит от ваших полномочий и подтверждается на сервере при применении.</span></div>
+      </div>
+
+      <div class="drawer__body col gap-12">
+        <div class="p-kodex__dlg">
+          <div class="p-kodex__dlg-row">
+            <span class="xs mut shrink0">Диалог</span>
+            <span class="p-kodex__dlg-name">Прайс-лист в запуске для компании Север</span>
+            <button class="btn btn--sm btn--ghost shrink0" type="button">Переименовать</button>
+          </div>
+          <div class="xs mut">Название предложил Kodex после первого сообщения</div>
+        </div>
+
+        <div class="msg msg--user">
+          <div class="msg__meta">Анна Волкова · 12:40</div>
+          <div class="msg__bubble">Почему сотрудник в последнем запуске не использовал прайс-лист?</div>
+        </div>
+
+        <div class="msg msg--bot">
+          <div class="msg__meta">Kodex · 12:40</div>
+          <div class="msg__bubble">
+            <p>В запуске <a href="#">«Подготовить предложение для компании Север»</a> файл <b>«Прайс-лист 2026.xlsx» v1</b> не был передан сотруднику: на момент запуска он находился в состоянии <b>«Изолирован»</b> — проверка содержимого не пройдена. В запуск попадают только проверенные версии.</p>
+            <p>Сотрудник работал с «Описание продукта.pdf» v2 и «Сценарии продаж.docx» v1, поэтому в предложении нет цен из прайс-листа.</p>
+          </div>
+          <div class="p-kodex__evidence" role="list" aria-label="На чём основан ответ">
+            <div class="p-kodex__evidence-row"><svg class="ic ic-14"><use href="#i-audit"/></svg><span class="grow">На чём основан ответ</span></div>
+            <div class="p-kodex__evidence-row" role="listitem"><svg class="ic ic-14 mut"><use href="#i-run"/></svg><span class="grow">Журнал запуска · шаг «Подготовка входных данных» · 11:47</span></div>
+            <div class="p-kodex__evidence-row" role="listitem"><span class="mime" style="width:22px;height:22px;font-size:8px">xls</span><span class="grow">Метаданные файла: v1 · состояние «Изолирован» с 24 августа</span><a class="xs" href="#">Открыть</a></div>
+            <div class="p-kodex__evidence-row" role="listitem"><svg class="ic ic-14 mut"><use href="#i-lock"/></svg><span class="grow">Содержимое изолированного файла не читалось</span></div>
+          </div>
+          <div class="msg__actions">
+            <button class="btn btn--primary" type="button" id="recheck"><svg class="ic"><use href="#i-refresh"/></svg>Проверить файл заново</button>
+            <a class="btn" href="#">Открыть запуск</a>
+          </div>
+        </div>
+
+        <div class="msg msg--bot" id="recheck-msg" hidden>
+          <div class="msg__meta">Kodex · сейчас</div>
+          <div class="msg__bubble"><p>Поставил повторную проверку файла «Прайс-лист 2026.xlsx» v1. Пока проверка идёт, файл остаётся изолированным; результат появится в разделе «Файлы» и здесь.</p></div>
+        </div>
+      </div>
+
+      <div class="drawer__foot p-kodex__foot">
+        <div class="composer">
+          <div class="composer__area">
+            <textarea id="composer" rows="2" placeholder="Спросите Kodex о сотруднике или опишите изменение" aria-label="Сообщение Kodex" data-autosize></textarea>
+            <div class="composer__btns">
+              <button class="composer__mic" type="button" disabled aria-label="Голосовой ввод появится позже" data-tip="Голосовой ввод появится позже"><svg class="ic ic-14"><use href="#i-mic"/></svg></button>
+              <button class="composer__send" type="button" aria-label="Отправить" id="send"><svg class="ic ic-14"><use href="#i-send"/></svg></button>
+            </div>
+          </div>
+          <div class="composer__bar"><span>Enter — отправить · Shift+Enter — новая строка</span><span class="right">Контекст: «Аналитик продаж»</span></div>
+        </div>
+      </div>
+
+      <div class="menu menu--wide" id="kodex-history-menu" data-align="right">
+        <div class="menu__title">История диалогов</div>
+        <button class="menu__item" type="button"><svg class="ic"><use href="#i-plus"/></svg><span>Новый диалог</span></button>
+        <div class="menu__sep"></div>
+        <button class="menu__item" type="button" aria-checked="true"><span class="menu__text"><span>Прайс-лист в запуске для компании Север</span><small>сегодня, 12:40 · ИИ-сотрудник «Аналитик продаж»</small></span></button>
+        <button class="menu__item" type="button"><span class="menu__text"><span>Классификатор обращений для продаж</span><small>сегодня, 12:31 · ИИ-сотрудники · Корпоративные продажи</small></span></button>
+        <button class="menu__item" type="button"><span class="menu__text"><span>Почему запуск остановился?</span><small>вчера, 17:40 · Запуск «Проверка договора»</small></span></button>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="stage-note">Тот же drawer в контексте конкретного сотрудника: набор предлагаемых действий отличается от списка сотрудников, а действие «Выдать доступ к GitHub» недоступно по полномочиям (disabled + tooltip, проверка на сервере). Ответ Kodex опирается только на безопасные данные — журнал запуска и метаданные файла; содержимое изолированного файла не читалось. Предложенное действие «Проверить файл заново» создаёт обычную серверную операцию от имени пользователя.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  (function () {
+    Kodex.mount({
+      nav: 'project.agents', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+      kodexContext: { screen: 'ИИ-сотрудник «Аналитик продаж»', object: 'Проект «Корпоративные продажи»', can: ['изменить инструкции', 'сменить окружение', 'показать последние запуски'] },
+    });
+    const frame = document.getElementById('frame');
+    const panel = document.getElementById('kodex-panel-live');
+    Kodex.openOverlay(panel, true, frame.querySelector('.fab'));
+    const composer = document.getElementById('composer');
+    setTimeout(() => { composer.focus({ preventScroll: true }); frame.scrollLeft = 0; }, 80);
+    panel.addEventListener('click', (e) => {
+      const s = e.target.closest('[data-suggest]'); if (!s) return;
+      composer.value = s.dataset.suggest; composer.dispatchEvent(new Event('input')); composer.focus(); composer.setSelectionRange(composer.value.length, composer.value.length);
+    });
+    document.getElementById('send').addEventListener('click', () => { if (!composer.value.trim()) return; Kodex.toast(frame, 'Сообщение отправлено Kodex'); composer.value = ''; composer.dispatchEvent(new Event('input')); });
+    composer.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('send').click(); } });
+    document.getElementById('recheck').addEventListener('click', (e) => {
+      const b = e.currentTarget; b.classList.add('is-loading');
+      setTimeout(() => { b.classList.remove('is-loading'); b.disabled = true; b.textContent = 'Проверка поставлена'; document.getElementById('recheck-msg').hidden = false; document.getElementById('recheck-msg').scrollIntoView({ block: 'nearest' }); Kodex.toast(frame, 'Повторная проверка файла поставлена · записано как Анна Волкова через Kodex'); }, 700);
+    });
+  })();
+</script>
+</body>
+</html>

@@ -1,10 +1,14 @@
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  Artifact,
+  AuditEvent,
+  IntegrationConnection,
   Project,
   ProjectPage,
   Run,
+  RunPage,
   RunEvent,
   RunWorkspace,
   SearchResult,
@@ -17,8 +21,44 @@ const searchPlatformMock = vi.hoisted(() => vi.fn());
 const listAuditEventsMock = vi.hoisted(() => vi.fn());
 const getRunGraphMock = vi.hoisted(() => vi.fn());
 const listRunEventsMock = vi.hoisted(() => vi.fn());
+const listRunsMock = vi.hoisted(() => vi.fn());
 const listAgentInstructionVersionsMock = vi.hoisted(() => vi.fn());
 const downloadArtifactMock = vi.hoisted(() => vi.fn());
+const getArtifactMock = vi.hoisted(() =>
+  vi.fn<typeof import("@/shared/api/generated/openapi/sdk.gen").getArtifact>(),
+);
+const getArtifactImpactMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").getArtifactImpact
+  >(),
+);
+const deleteArtifactMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").deleteArtifact
+  >(),
+);
+const createIntegrationConnectionMock = vi.hoisted(() => vi.fn());
+const configureIntegrationConnectionCredentialMock = vi.hoisted(() => vi.fn());
+const updateIntegrationConnectionMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").updateIntegrationConnection
+  >(),
+);
+const deleteIntegrationConnectionMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").deleteIntegrationConnection
+  >(),
+);
+const uploadArtifactMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").uploadArtifact
+  >(),
+);
+const uploadOrganizationArtifactMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").uploadOrganizationArtifact
+  >(),
+);
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   ...(await importOriginal<
@@ -29,11 +69,23 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   listAuditEvents: listAuditEventsMock,
   getRunGraph: getRunGraphMock,
   listRunEvents: listRunEventsMock,
+  listRuns: listRunsMock,
   listAgentInstructionVersions: listAgentInstructionVersionsMock,
   downloadArtifact: downloadArtifactMock,
+  getArtifact: getArtifactMock,
+  getArtifactImpact: getArtifactImpactMock,
+  deleteArtifact: deleteArtifactMock,
+  createIntegrationConnection: createIntegrationConnectionMock,
+  configureIntegrationConnectionCredential:
+    configureIntegrationConnectionCredentialMock,
+  updateIntegrationConnection: updateIntegrationConnectionMock,
+  deleteIntegrationConnection: deleteIntegrationConnectionMock,
+  uploadArtifact: uploadArtifactMock,
+  uploadOrganizationArtifact: uploadOrganizationArtifactMock,
 }));
 vi.mock("@/shared/api/client", () => ({
-  requestSignal: () => new AbortController().signal,
+  requestSignal: (parent?: AbortSignal) =>
+    parent ?? new AbortController().signal,
 }));
 
 import { usePlatformStore } from "@/features/platform/store";
@@ -114,6 +166,8 @@ function run(sequence: number): Run {
       version: 1,
     },
     title: "Согласованный запуск",
+    titleSource: "USER_EDITED",
+    activitySummary: "Выполняется согласованный запуск",
     source: "CONTROL_CENTER",
     initiator: { ref: "user_owner", displayName: "Владелец" },
     state: sequence >= 2 ? "WAITING_HUMAN" : "RUNNING",
@@ -130,7 +184,6 @@ function run(sequence: number): Run {
       reasoningOutputTokens: 0,
       modelContextWindow: 0,
     },
-    inputArtifactRefs: [],
     artifactRefs: [],
     gateRefs: [],
     incidents: [],
@@ -170,6 +223,64 @@ function runEvent(sequence: number): RunEvent {
   };
 }
 
+function integrationConnection(
+  version: number,
+  credentialsConfigured = false,
+): IntegrationConnection {
+  return {
+    ref: "connection_github",
+    version,
+    definitionKey: "github",
+    name: "Основная организация",
+    state: credentialsConfigured ? "CONNECTED" : "NOT_CONNECTED",
+    credentialsConfigured,
+    credentialsHint: credentialsConfigured ? "••••••••" : "Не настроены",
+    capabilities: [],
+    grants: [],
+    nextActions: [],
+    definitionVersion: "1.0.0",
+    definitionDigest: "sha256:definition",
+    publicConfiguration: { organization: "codex-k8s" },
+  };
+}
+
+function artifact(ref: string, projectRef?: string): Artifact {
+  return {
+    ref,
+    version: 1,
+    ...(projectRef ? { projectRef } : {}),
+    fileName: `${ref}.txt`,
+    mediaType: "text/plain",
+    sizeBytes: 7,
+    digest: `sha256:${"a".repeat(64)}`,
+    scanState: "CLEAN",
+    source: "INTERACTION_ATTACHMENT",
+    revision: 1,
+    lifecycleState: "ACTIVE",
+    agentBindings: [],
+    previewAvailable: true,
+    createdAt: "2026-08-29T00:00:00Z",
+    nextActions: [],
+  };
+}
+
+function auditEvent(ref: string, occurredAt: string): AuditEvent {
+  return {
+    ref,
+    projectRef: "project_sales",
+    initiator: { ref: "user_owner", displayName: "Владелец" },
+    executor: "CONTROL_CENTER",
+    source: "CONTROL_CENTER",
+    action: "schedule.create",
+    resourceType: "SCHEDULE",
+    resourceRef: "schedule_quarterly",
+    resourceName: "Квартальный отчёт",
+    outcome: "SUCCEEDED",
+    safeSummary: "Автоматизация создана",
+    occurredAt,
+  };
+}
+
 describe("platform store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -178,9 +289,23 @@ describe("platform store", () => {
     listAuditEventsMock.mockReset();
     getRunGraphMock.mockReset();
     listRunEventsMock.mockReset();
+    listRunsMock.mockReset();
     listAgentInstructionVersionsMock.mockReset();
     downloadArtifactMock.mockReset();
+    getArtifactMock.mockReset();
+    getArtifactImpactMock.mockReset();
+    deleteArtifactMock.mockReset();
+    createIntegrationConnectionMock.mockReset();
+    configureIntegrationConnectionCredentialMock.mockReset();
+    updateIntegrationConnectionMock.mockReset();
+    deleteIntegrationConnectionMock.mockReset();
+    uploadArtifactMock.mockReset();
+    uploadOrganizationArtifactMock.mockReset();
     selectProjectRef(undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("не позволяет старому HTTP response перезаписать новый", async () => {
@@ -238,9 +363,32 @@ describe("platform store", () => {
     expect(store.projects.project_second?.version).toBe(2);
   });
 
+  it("обновляет список запусков по authoritative readback без замены существующего объекта", async () => {
+    const first = run(1);
+    const second = run(2);
+    const runResponse = (
+      items: Run[],
+    ): { data: RunPage; response: Response } => ({
+      data: { items },
+      response: new Response(null, { status: 200 }),
+    });
+    listRunsMock
+      .mockResolvedValueOnce(runResponse([first]))
+      .mockResolvedValueOnce(runResponse([second]));
+    const store = usePlatformStore();
+
+    await store.loadRuns("project_owner");
+    const original = store.runs.run_consistent01;
+    await store.loadRuns("project_owner");
+
+    expect(store.runs.run_consistent01).toBe(original);
+    expect(store.runs.run_consistent01?.version).toBe(2);
+    expect(store.runs.run_consistent01?.state).toBe("WAITING_HUMAN");
+  });
+
   it("передаёт поиск аудита авторитетному owner API", async () => {
     listAuditEventsMock.mockResolvedValue({
-      data: { items: [] },
+      data: { items: [], nextPageToken: "" },
       response: new Response(null, { status: 200 }),
     });
     const store = usePlatformStore();
@@ -256,6 +404,44 @@ describe("platform store", () => {
         },
       }),
     );
+  });
+
+  it("добавляет audit cursor-страницу без повторов и зацикливания", async () => {
+    const first = auditEvent("aud_first_page", "2026-08-31T12:00:00Z");
+    const second = auditEvent("aud_second_page", "2026-08-31T11:00:00Z");
+    listAuditEventsMock
+      .mockResolvedValueOnce({
+        data: { items: [first], nextPageToken: "audit-page-2" },
+        response: new Response(null, { status: 200 }),
+      })
+      .mockResolvedValueOnce({
+        data: { items: [first, second], nextPageToken: "audit-page-2" },
+        response: new Response(null, { status: 200 }),
+      });
+    const store = usePlatformStore();
+
+    await store.loadAudit("project_sales", " Квартальный отчёт ");
+    await Promise.all([
+      store.loadMoreAudit("project_sales", " Квартальный отчёт "),
+      store.loadMoreAudit("project_sales", " Квартальный отчёт "),
+    ]);
+
+    expect(listAuditEventsMock).toHaveBeenCalledTimes(2);
+    expect(listAuditEventsMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: {
+          projectRef: "project_sales",
+          query: "Квартальный отчёт",
+          pageSize: 100,
+          pageToken: "audit-page-2",
+        },
+      }),
+    );
+    expect(store.auditEvents.map((event) => event.ref)).toEqual([
+      first.ref,
+      second.ref,
+    ]);
+    expect(store.auditNextPageToken).toBeUndefined();
   });
 
   it("собирает опубликованные revisions инструкций из bounded pages", async () => {
@@ -322,7 +508,11 @@ describe("platform store", () => {
       response: new Response(null, { status: 200 }),
     });
     listRunEventsMock.mockResolvedValue({
-      data: { items: [runEvent(1), runEvent(2), runEvent(3)] },
+      data: {
+        items: [runEvent(1), runEvent(2), runEvent(3)],
+        currentSequence: 3,
+        complete: true,
+      },
       response: new Response(null, { status: 200 }),
     });
     const store = usePlatformStore();
@@ -337,7 +527,7 @@ describe("platform store", () => {
     ]);
   });
 
-  it("сохраняет authoritative Run и граф при временной ошибке event catch-up", async () => {
+  it("не публикует новый Run и граф при временной ошибке event catch-up", async () => {
     const workspace: RunWorkspace = {
       run: run(2),
       graph: {
@@ -365,13 +555,60 @@ describe("platform store", () => {
 
     await store.loadRun("run_consistent01");
 
-    expect(store.runs.run_consistent01).toEqual(workspace.run);
-    expect(store.graphs.run_consistent01).toEqual(workspace.graph);
+    expect(store.runs.run_consistent01).toBeUndefined();
+    expect(store.graphs.run_consistent01).toBeUndefined();
     expect(store.problems.run).toMatchObject({
       code: "RUN_EVENTS_UNAVAILABLE",
       kind: "unavailable",
     });
     expect(store.loading.run).toBe(false);
+  });
+
+  it("пагинирует события до sequence авторитетного graph snapshot", async () => {
+    const workspace: RunWorkspace = {
+      run: run(3),
+      graph: {
+        runRef: "run_consistent01",
+        revision: 3,
+        sequence: 3,
+        nodes: [],
+        edges: [],
+      },
+    };
+    getRunGraphMock.mockResolvedValue({
+      data: workspace,
+      response: new Response(null, { status: 200 }),
+    });
+    listRunEventsMock
+      .mockResolvedValueOnce({
+        data: {
+          items: [runEvent(1), runEvent(2)],
+          currentSequence: 3,
+          complete: false,
+        },
+        response: new Response(null, { status: 200 }),
+      })
+      .mockResolvedValueOnce({
+        data: {
+          items: [runEvent(3)],
+          currentSequence: 3,
+          complete: true,
+        },
+        response: new Response(null, { status: 200 }),
+      });
+    const store = usePlatformStore();
+
+    await store.loadRun("run_consistent01");
+
+    expect(listRunEventsMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ query: { afterSequence: 2, limit: 500 } }),
+    );
+    expect(Object.keys(store.events.run_consistent01 ?? {})).toEqual([
+      "1",
+      "2",
+      "3",
+    ]);
   });
 
   it("заменяет разрешённые действия коллекции только авторитетным ответом", async () => {
@@ -425,6 +662,122 @@ describe("platform store", () => {
     expect(downloadArtifactMock).toHaveBeenCalledTimes(2);
   });
 
+  it("выбирает область загрузки вложения по наличию Проекта", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const organizationArtifact = artifact("artifact_organization");
+    const projectArtifact = artifact("artifact_project", "project_owner");
+    uploadOrganizationArtifactMock.mockResolvedValue({
+      data: organizationArtifact,
+      request: new Request("http://localhost/api/v1/artifacts"),
+      response: new Response(null, { status: 201 }),
+    });
+    uploadArtifactMock.mockResolvedValue({
+      data: projectArtifact,
+      request: new Request(
+        "http://localhost/api/v1/projects/project_owner/artifacts",
+      ),
+      response: new Response(null, { status: 201 }),
+    });
+    const store = usePlatformStore();
+
+    const organizationFile = new File(["global"], "global.txt", {
+      type: "text/plain",
+    });
+    const projectFile = new File(["project"], "project.txt", {
+      type: "text/plain",
+    });
+    const organizationController = new AbortController();
+    const projectController = new AbortController();
+    await store.uploadAttachmentArtifact(
+      undefined,
+      organizationFile,
+      organizationController.signal,
+    );
+    await store.uploadAttachmentArtifact(
+      "project_owner",
+      projectFile,
+      projectController.signal,
+    );
+
+    const organizationCall = uploadOrganizationArtifactMock.mock.calls[0]?.[0];
+    expect(organizationCall?.body).toBe(organizationFile);
+    expect(organizationCall?.headers["X-File-Name"]).toBe("global.txt");
+    expect(organizationCall?.signal).toBe(organizationController.signal);
+    const projectCall = uploadArtifactMock.mock.calls[0]?.[0];
+    expect(projectCall?.path).toEqual({ projectRef: "project_owner" });
+    expect(projectCall?.body).toBe(projectFile);
+    expect(projectCall?.headers["X-File-Name"]).toBe("project.txt");
+    expect(projectCall?.signal).toBe(projectController.signal);
+    expect(store.artifacts.artifact_organization).toEqual(organizationArtifact);
+    expect(store.artifacts.artifact_project).toEqual(projectArtifact);
+  });
+
+  it("читает avatar artifact и перемещает его в общую корзину с OCC", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const active = {
+      ...artifact("art_avatar01", "project_owner"),
+      fileName: "agent-avatar.png",
+      mediaType: "image/png",
+      nextActions: ["DELETE" as never],
+    };
+    const deleted = {
+      ...active,
+      version: 2,
+      lifecycleState: "DELETED" as const,
+      nextActions: [],
+    };
+    getArtifactMock.mockResolvedValue({
+      data: active,
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    getArtifactImpactMock.mockResolvedValue({
+      data: {
+        action: "DELETE",
+        activeRuns: [],
+        activeRunsTruncated: false,
+        activeRuntimeCount: 0,
+        artifactRef: active.ref,
+        artifactVersion: active.version,
+        attachmentCount: 0,
+        bindingCount: 0,
+        blockers: [],
+        impactDigest: "d".repeat(64),
+        permitted: true,
+      },
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    deleteArtifactMock.mockResolvedValue({
+      data: deleted,
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await expect(store.readArtifact(active.ref)).resolves.toEqual(active);
+    await expect(store.deleteProjectArtifact(active)).resolves.toEqual(deleted);
+
+    expect(getArtifactMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: { artifactRef: active.ref } }),
+    );
+    expect(getArtifactImpactMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { artifactRef: active.ref },
+        query: { action: "DELETE" },
+      }),
+    );
+    const deleteCall = deleteArtifactMock.mock.calls[0]?.[0];
+    expect(deleteCall?.path).toEqual({ artifactRef: active.ref });
+    expect(deleteCall?.headers["If-Match"]).toBe('"1"');
+    expect(deleteCall?.headers["X-Impact-Digest"]).toBe("d".repeat(64));
+    expect(store.artifacts[active.ref]?.lifecycleState).toBe("DELETED");
+  });
+
   it("очищает owner state и project context при завершении сессии", async () => {
     listProjectsMock.mockResolvedValue(response([project("project_owner")]));
     const store = usePlatformStore();
@@ -436,5 +789,161 @@ describe("platform store", () => {
     expect(store.projectList).toEqual([]);
     expect(store.projectCollectionActions).toEqual([]);
     expect(selectedProjectRef()).toBeUndefined();
+  });
+
+  it("настраивает credential отдельной versioned-командой и хранит только masked readback", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const created = integrationConnection(4);
+    const configured = integrationConnection(5, true);
+    createIntegrationConnectionMock.mockResolvedValue({
+      data: created,
+      response: new Response(null, { status: 201 }),
+    });
+    configureIntegrationConnectionCredentialMock.mockResolvedValue({
+      data: configured,
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+    const rawCredential = "test-only-secret-value";
+
+    const metadata = await store.connectIntegration({
+      definitionKey: "github",
+      name: "Основная организация",
+      publicConfiguration: { organization: "codex-k8s" },
+    });
+    const result = await store.configureConnectionCredential(
+      metadata,
+      rawCredential,
+      "credential-request-key",
+    );
+
+    expect(result).toEqual(configured);
+    expect(configureIntegrationConnectionCredentialMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { connectionRef: created.ref },
+        body: { value: rawCredential },
+        headers: {
+          "If-Match": '"4"',
+          "Idempotency-Key": "credential-request-key",
+          "X-CSRF-Token": "a".repeat(43),
+        },
+      }),
+    );
+    expect(store.connections[created.ref]).toEqual(configured);
+    expect(JSON.stringify(store.connections)).not.toContain(rawCredential);
+  });
+
+  it("сохраняет созданное подключение при временной ошибке credential-шагa", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const created = integrationConnection(4);
+    createIntegrationConnectionMock.mockResolvedValue({
+      data: created,
+      response: new Response(null, { status: 201 }),
+    });
+    configureIntegrationConnectionCredentialMock.mockResolvedValue({
+      error: {
+        status: 503,
+        code: "CREDENTIAL_STORE_UNAVAILABLE",
+        retryable: true,
+      },
+      response: new Response(null, { status: 503 }),
+    });
+    const store = usePlatformStore();
+
+    const metadata = await store.connectIntegration({
+      definitionKey: "github",
+      name: "Основная организация",
+    });
+    await expect(
+      store.configureConnectionCredential(
+        metadata,
+        "test-only-secret-value",
+        "credential-request-key",
+      ),
+    ).rejects.toMatchObject({
+      code: "CREDENTIAL_STORE_UNAVAILABLE",
+      retryable: true,
+    });
+
+    expect(store.connections[created.ref]).toEqual(created);
+  });
+
+  it("изменяет и удаляет подключение отдельными OCC-командами без credential value", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const current = {
+      ...integrationConnection(4, true),
+      nextActions: ["UPDATE", "DELETE"] as IntegrationConnection["nextActions"],
+    };
+    const updated = {
+      ...current,
+      version: 5,
+      name: "GitHub для тестов",
+      publicConfiguration: { organization: "codex-k8s-fixtures" },
+    };
+    const deleted = {
+      ...updated,
+      version: 6,
+      state: "DELETED" as const,
+      nextActions: [],
+    };
+    updateIntegrationConnectionMock.mockResolvedValue({
+      data: updated,
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    deleteIntegrationConnectionMock.mockResolvedValue({
+      data: deleted,
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    const updateResult = await store.updateConnection(current, {
+      name: updated.name,
+      publicConfiguration: updated.publicConfiguration,
+    });
+    const deleteResult = await store.deleteConnection(updateResult);
+    const updateHeaders =
+      updateIntegrationConnectionMock.mock.calls[0]?.[0].headers;
+    const deleteHeaders =
+      deleteIntegrationConnectionMock.mock.calls[0]?.[0].headers;
+
+    expect(updateIntegrationConnectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { connectionRef: current.ref },
+        body: {
+          name: updated.name,
+          publicConfiguration: updated.publicConfiguration,
+        },
+        headers: {
+          "If-Match": '"4"',
+          "Idempotency-Key": updateHeaders?.["Idempotency-Key"],
+          "X-CSRF-Token": "a".repeat(43),
+        },
+      }),
+    );
+    expect(deleteIntegrationConnectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { connectionRef: current.ref },
+        headers: {
+          "If-Match": '"5"',
+          "Idempotency-Key": deleteHeaders?.["Idempotency-Key"],
+          "X-CSRF-Token": "a".repeat(43),
+        },
+      }),
+    );
+    expect(updateHeaders?.["Idempotency-Key"]).toHaveLength(36);
+    expect(deleteHeaders?.["Idempotency-Key"]).toHaveLength(36);
+    expect(deleteResult).toEqual(deleted);
+    expect(store.connections[current.ref]).toEqual(deleted);
+    expect(JSON.stringify(store.connections)).not.toContain(
+      "test-only-secret-value",
+    );
   });
 });

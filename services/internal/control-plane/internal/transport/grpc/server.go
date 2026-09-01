@@ -11,13 +11,20 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
+	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
+)
+
+const (
+	controlPlaneErrorDomain           = "kodex.control-plane"
+	freshAuthenticationRequiredReason = "FRESH_AUTHENTICATION_REQUIRED"
 )
 
 type Server struct {
@@ -25,15 +32,19 @@ type Server struct {
 	controlplanev1.UnimplementedPlatformCommandServiceServer
 	controlplanev1.UnimplementedSystemAssistantServiceServer
 	controlplanev1.UnimplementedRuntimeWorkServiceServer
+	controlplanev1.UnimplementedRuntimeSecretWorkServiceServer
+	controlplanev1.UnimplementedSessionArchiveWorkServiceServer
 	controlplanev1.UnimplementedInteractionWorkServiceServer
-	service *platformservice.Service
+	controlplanev1.UnimplementedAccessServiceServer
+	service    *platformservice.Service
+	roleImages *roleimageservice.Service
 }
 
-func NewServer(service *platformservice.Service) (*Server, error) {
-	if service == nil {
-		return nil, errors.New("platform service is required")
+func NewServer(service *platformservice.Service, roleImages *roleimageservice.Service) (*Server, error) {
+	if service == nil || roleImages == nil {
+		return nil, errors.New("platform and role image services are required")
 	}
-	return &Server{service: service}, nil
+	return &Server{service: service, roleImages: roleImages}, nil
 }
 
 func principal(ctx context.Context, method string) (value.Principal, error) {
@@ -195,6 +206,8 @@ func transportError(err error) error {
 		return status.Error(codes.InvalidArgument, "request is invalid")
 	case errors.Is(err, errs.ErrUnauthorized):
 		return status.Error(codes.Unauthenticated, "authentication is required")
+	case errors.Is(err, errs.ErrFreshAuthenticationRequired):
+		return statusErrorWithReason(codes.PermissionDenied, "fresh authentication is required", freshAuthenticationRequiredReason)
 	case errors.Is(err, errs.ErrForbidden):
 		return status.Error(codes.PermissionDenied, "operation is not permitted")
 	case errors.Is(err, errs.ErrNotFound):
@@ -216,4 +229,13 @@ func transportError(err error) error {
 	default:
 		return status.Error(codes.Internal, "control-plane operation failed")
 	}
+}
+
+func statusErrorWithReason(code codes.Code, message, reason string) error {
+	base := status.New(code, message)
+	withDetails, err := base.WithDetails(&errdetails.ErrorInfo{Reason: reason, Domain: controlPlaneErrorDomain})
+	if err != nil {
+		return base.Err()
+	}
+	return withDetails.Err()
 }

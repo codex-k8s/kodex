@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -22,11 +24,11 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 	}{
 		{
 			relative:             "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
-			wantStartupReadbacks: 7,
+			wantStartupReadbacks: 11,
 		},
 		{
 			relative:             "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
-			wantStartupReadbacks: 8,
+			wantStartupReadbacks: 11,
 		},
 	} {
 		source, err := os.ReadFile(filepath.Join(repositoryRoot, testCase.relative))
@@ -44,6 +46,14 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 		if len(registry.Targets) == 0 {
 			t.Fatalf("реестр %s не содержит целей", testCase.relative)
 		}
+		for _, targetID := range []string{
+			"control-plane.authorization-issuer",
+			"secret-broker.authorization-verifier",
+		} {
+			if _, ok := registry.Targets[targetID]; !ok {
+				t.Fatalf("реестр %s не содержит цель %s", testCase.relative, targetID)
+			}
+		}
 		if got := registry.StartupReadbackTargetCount(); got != testCase.wantStartupReadbacks {
 			t.Fatalf(
 				"реестр %s содержит %d обязательных startup readback, ожидалось %d",
@@ -51,6 +61,26 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 				got,
 				testCase.wantStartupReadbacks,
 			)
+		}
+		startupTargets := registry.StartupReadbackTargets()
+		startupTargetKeys := make([]string, 0, len(startupTargets))
+		for _, target := range startupTargets {
+			startupTargetKeys = append(
+				startupTargetKeys,
+				target.WorkloadID+"\x00"+target.Role+"\x00"+
+					strconv.FormatUint(target.WorkloadGeneration, 10),
+			)
+			if target.WorkloadID == "image-admission" ||
+				target.WorkloadID == "image-promotion" {
+				t.Fatalf(
+					"реестр %s включил динамическую цель %s в startup readback",
+					testCase.relative,
+					target.WorkloadID,
+				)
+			}
+		}
+		if !sort.StringsAreSorted(startupTargetKeys) {
+			t.Fatalf("реестр %s вернул недетерминированный порядок startup readback", testCase.relative)
 		}
 	}
 }

@@ -5,7 +5,6 @@ import { buildBreadcrumbs, type BreadcrumbLabels } from "@/app/breadcrumbs";
 const labels: BreadcrumbLabels = {
   home: "Главная",
   onboarding: "Первичная настройка",
-  assistant: "Помощник Kodex",
   projects: "Проекты",
   project: "Проект",
   agents: "ИИ-сотрудники",
@@ -16,12 +15,18 @@ const labels: BreadcrumbLabels = {
   runs: "Запуски",
   run: "Запуск",
   files: "Файлы и знания",
+  filesTrash: "Корзина",
   automations: "Автоматизации",
+  environments: "Окружения",
+  environment: "Окружение",
+  newEnvironment: "Новое окружение",
+  secrets: "Секреты",
   integrations: "Интеграции",
   decisions: "Решения",
   administration: "Администрирование",
   access: "Участники и доступ",
   audit: "Аудит и диагностика",
+  providers: "Учётные записи моделей",
 };
 
 describe("breadcrumbs", () => {
@@ -59,6 +64,106 @@ describe("breadcrumbs", () => {
     expect(buildBreadcrumbs({ routeName: "audit" }, labels)).toEqual([
       { label: "Администрирование", path: "/administration" },
       { label: "Аудит и диагностика" },
+    ]);
+  });
+
+  it("связывает учётные записи моделей с разделом администрирования", () => {
+    expect(
+      buildBreadcrumbs({ routeName: "provider-accounts" }, labels),
+    ).toEqual([
+      { label: "Администрирование", path: "/administration" },
+      { label: "Учётные записи моделей" },
+    ]);
+  });
+
+  it("сохраняет контекст проекта в ссылке на запуск", () => {
+    expect(
+      buildBreadcrumbs(
+        {
+          routeName: "project-run",
+          project: { ref: "project_sales", name: "Корпоративные продажи" },
+          runName: "Квалификация лида",
+        },
+        labels,
+      ),
+    ).toEqual([
+      { label: "Проекты", path: "/projects" },
+      {
+        label: "Корпоративные продажи",
+        path: "/projects/project_sales",
+      },
+      { label: "Запуски", path: "/projects/project_sales/runs" },
+      { label: "Квалификация лида" },
+    ]);
+  });
+
+  it("сохраняет контекст проекта в маршруте редактора окружения", () => {
+    expect(
+      buildBreadcrumbs(
+        {
+          routeName: "runtime-environment-new",
+          project: { ref: "project_sales", name: "Продажи" },
+        },
+        labels,
+      ),
+    ).toEqual([
+      { label: "Проекты", path: "/projects" },
+      { label: "Продажи", path: "/projects/project_sales" },
+      {
+        label: "Окружения",
+        path: "/projects/project_sales/environments",
+      },
+      { label: "Новое окружение" },
+    ]);
+  });
+
+  it("сохраняет контекст проекта в каталоге runtime-секретов", () => {
+    expect(
+      buildBreadcrumbs(
+        {
+          routeName: "runtime-secrets",
+          project: { ref: "project_sales", name: "Продажи" },
+        },
+        labels,
+      ),
+    ).toEqual([
+      { label: "Проекты", path: "/projects" },
+      { label: "Продажи", path: "/projects/project_sales" },
+      { label: "Секреты" },
+    ]);
+  });
+
+  it("показывает канонический deep link корзины внутри файлов Проекта", () => {
+    expect(
+      buildBreadcrumbs(
+        {
+          routeName: "files-trash",
+          project: { ref: "project_sales", name: "Продажи" },
+        },
+        labels,
+      ),
+    ).toEqual([
+      { label: "Проекты", path: "/projects" },
+      { label: "Продажи", path: "/projects/project_sales" },
+      { label: "Файлы и знания", path: "/projects/project_sales/files" },
+      { label: "Корзина" },
+    ]);
+  });
+
+  it("связывает новый запуск со списком запусков текущего Проекта", () => {
+    expect(
+      buildBreadcrumbs(
+        {
+          routeName: "new-run",
+          project: { ref: "project_sales", name: "Продажи" },
+        },
+        labels,
+      ),
+    ).toEqual([
+      { label: "Проекты", path: "/projects" },
+      { label: "Продажи", path: "/projects/project_sales" },
+      { label: "Запуски", path: "/projects/project_sales/runs" },
+      { label: "Новый запуск" },
     ]);
   });
 });

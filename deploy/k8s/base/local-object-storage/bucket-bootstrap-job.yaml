@@ -1,0 +1,116 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seaweedfs-bucket-bootstrap
+  labels:
+    app.kubernetes.io/name: seaweedfs-bucket-bootstrap
+    app.kubernetes.io/component: object-storage-bootstrap
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: seaweedfs-bucket-bootstrap
+        app.kubernetes.io/component: object-storage-bootstrap
+    spec:
+      serviceAccountName: seaweedfs-bucket-bootstrap
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        runAsGroup: 10000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrap
+          image: __KODEX_AWS_CLI_IMAGE__
+          imagePullPolicy: IfNotPresent
+          command: [/bin/sh, -ec]
+          env:
+            - {name: HOME, value: /tmp}
+            - {name: AWS_DEFAULT_REGION, value: us-east-1}
+            - {name: AWS_EC2_METADATA_DISABLED, value: "true"}
+            - {name: AWS_MAX_ATTEMPTS, value: "2"}
+            - {name: AWS_RETRY_MODE, value: standard}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: {name: kodex-external-s3, key: access-key}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: {name: kodex-external-s3, key: secret-key}
+          args:
+            - |
+              endpoint=http://seaweedfs-s3:8333
+              AWS_ACCESS_KEY_ID=$(printf '%s' "$AWS_ACCESS_KEY_ID" | tr -d '\r\n')
+              AWS_SECRET_ACCESS_KEY=$(printf '%s' "$AWS_SECRET_ACCESS_KEY" | tr -d '\r\n')
+              export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+              [ "${#AWS_ACCESS_KEY_ID}" -eq 32 ] && [ "${#AWS_SECRET_ACCESS_KEY}" -eq 64 ] || {
+                printf 'SeaweedFS S3 credential shape is invalid\n' >&2
+                exit 1
+              }
+              case "$AWS_ACCESS_KEY_ID$AWS_SECRET_ACCESS_KEY" in
+                *[!a-f0-9]*) printf 'SeaweedFS S3 credential shape is invalid\n' >&2; exit 1 ;;
+              esac
+              aws_s3api() {
+                aws --endpoint-url="$endpoint" --cli-connect-timeout 2 --cli-read-timeout 3 s3api "$@"
+              }
+              attempt=0
+              until aws_s3api list-buckets >/dev/null 2>&1; do
+                attempt=$((attempt + 1))
+                [ "$attempt" -lt 60 ] || { printf 'SeaweedFS S3 readiness timed out\n' >&2; exit 1; }
+                sleep 2
+              done
+              for bucket in kodex-artifacts kodex-backups kodex-restore-fixture kodex-session-archives; do
+                aws_s3api head-bucket --bucket "$bucket" >/dev/null 2>&1 ||
+                  aws_s3api create-bucket --bucket "$bucket" >/dev/null
+                aws_s3api put-bucket-versioning --bucket "$bucket" \
+                  --versioning-configuration Status=Enabled >/dev/null
+                status=$(aws_s3api get-bucket-versioning \
+                  --bucket "$bucket" --query Status --output text)
+                [ "$status" = Enabled ] || {
+                  printf 'SeaweedFS bucket versioning readback failed\n' >&2
+                  exit 1
+                }
+                probe_key="_kodex-bootstrap/${HOSTNAME}-write-readback.txt"
+                printf 'kodex local object storage write probe\n' > /tmp/write-probe.txt
+                version_id=$(aws_s3api put-object --bucket "$bucket" --key "$probe_key" \
+                  --body /tmp/write-probe.txt --query VersionId --output text)
+                [ -n "$version_id" ] && [ "$version_id" != None ] || {
+                  printf 'SeaweedFS versioned write receipt is absent\n' >&2
+                  exit 1
+                }
+                aws_s3api get-object --bucket "$bucket" --key "$probe_key" \
+                  --version-id "$version_id" /tmp/write-readback.txt >/dev/null
+                [ "$(cat /tmp/write-readback.txt)" = 'kodex local object storage write probe' ] || {
+                  printf 'SeaweedFS object readback mismatches the written payload\n' >&2
+                  exit 1
+                }
+                aws_s3api delete-object --bucket "$bucket" --key "$probe_key" \
+                  --version-id "$version_id" >/dev/null
+                remaining=$(aws_s3api list-object-versions --bucket "$bucket" \
+                  --prefix "$probe_key" --query 'length(Versions || `[]`)' --output text)
+                [ "$remaining" = 0 ] || {
+                  printf 'SeaweedFS write probe cleanup readback failed\n' >&2
+                  exit 1
+                }
+              done
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10000
+            runAsGroup: 10000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 8Mi}

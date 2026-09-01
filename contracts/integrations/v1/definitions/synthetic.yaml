@@ -1,0 +1,71 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: synthetic
+  version: 3.0.0
+  origin: SHIPPED
+spec:
+  name: Synthetic HTTP
+  description: Детерминированная HTTP-интеграция для проверки read/write lifecycle без внешнего провайдера.
+  category: testing
+  adapter: SYNTHETIC_HTTP
+  configurationFields:
+    - key: journal
+      type: STRING
+      format: IDENTIFIER
+      required: true
+      maximumLength: 120
+  networkDestinations:
+    - key: local_fixture
+      source: STATIC
+      hostname: integration-synthetic.kodex-system.svc.cluster.local
+      port: 8080
+      tls: NONE
+  healthCheck:
+    operation: synthetic.journal.read
+    timeoutSeconds: 5
+    maxAttempts: 3
+  capabilities:
+    - key: synthetic.journal.read
+      name: Прочитать synthetic journal
+      description: Возвращает текущее состояние локального детерминированного журнала.
+      operation: synthetic.journal.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope:
+        kind: SYNTHETIC_JOURNAL
+        connectionFields: [journal]
+      inputFields: []
+      outputFields:
+        - {key: journal, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 2147483647}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 5
+        maxAttempts: 3
+        retryBackoffMilliseconds: 100
+    - key: synthetic.journal.write
+      name: Изменить synthetic journal
+      description: Выполняет versioned create, update или delete по exact effect key после Human Gate.
+      operation: synthetic.journal.write
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope:
+        kind: SYNTHETIC_JOURNAL
+        connectionFields: [journal]
+      inputFields:
+        - {key: action, type: STRING, format: IDENTIFIER, required: false, maximumLength: 16, allowedValues: [CREATE, UPDATE, DELETE]}
+        - {key: value, type: STRING, format: PLAIN, required: false, maximumLength: 4096}
+        - {key: expected_sequence, type: INTEGER, required: false, minimum: 1, maximum: 2147483647}
+        - {key: fault, type: STRING, format: IDENTIFIER, required: false, maximumLength: 32, allowedValues: [NONE, RETRYABLE_ONCE, TERMINAL]}
+      outputFields:
+        - {key: journal, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
+        - {key: effect_key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
+        - {key: sequence, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: value, type: STRING, format: PLAIN, required: true, maximumLength: 4096}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 1}
+      execution:
+        idempotency: PROVIDER_NATIVE
+        timeoutSeconds: 5
+        maxAttempts: 3
+        retryBackoffMilliseconds: 100

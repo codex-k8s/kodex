@@ -7,7 +7,6 @@ import { withoutKodexAPICookies, writeStorageState } from "./storage-state";
 
 const environment = loadE2EAuthEnvironment();
 const topLevelRoutes = [
-  ["/assistant", "Помощник Kodex"],
   ["/projects", "Проекты"],
   ["/runs", "Запуски"],
   ["/integrations", "Интеграции"],
@@ -43,15 +42,47 @@ test("локальный OIDC, API и основные экраны доступ
     { mode: "local" },
   );
   expect((await session).status()).toBe(204);
-  await page.locator("details.current-user-menu > summary").click();
-  await expect(
-    page.getByRole("button", { name: "Выйти", exact: true }),
-  ).toBeVisible();
+  const currentUserMenu = page.locator("button[aria-haspopup='menu']");
+  const logout = page.getByRole("button", { name: "Выйти", exact: true });
+  await currentUserMenu.click();
+  await expect(logout).toBeVisible();
+  await page
+    .getByRole("heading", { level: 1, name: /Добрый день/ })
+    .click();
+  await expect(logout).toBeHidden();
 
-  const projectsStatus = await page.evaluate(async () =>
-    fetch("/api/v1/projects?pageSize=1").then((response) => response.status),
+  const projectsReadback = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/projects?pageSize=1");
+    return {
+      status: response.status,
+      problem: response.ok ? "" : await response.text(),
+    };
+  });
+  expect(projectsReadback.status, projectsReadback.problem).toBe(200);
+
+  const oidcGroups = await page.evaluate(async (expectedGroup) => {
+    const response = await fetch(
+      `/api/v1/administration/access/oidc-groups?query=${encodeURIComponent(expectedGroup)}&pageSize=10`,
+    );
+    if (!response.ok) {
+      throw new Error(
+        `OIDC group readback failed with ${String(response.status)}`,
+      );
+    }
+    return (await response.json()) as {
+      items: Array<{
+        displayName: string;
+        memberCount: number;
+        state: string;
+      }>;
+    };
+  }, environment.rbacGroup);
+  const exactOIDCGroups = oidcGroups.items.filter(
+    (group) => group.displayName === environment.rbacGroup,
   );
-  expect(projectsStatus).toBe(200);
+  expect(exactOIDCGroups).toHaveLength(1);
+  expect(exactOIDCGroups[0]).toMatchObject({ state: "ACTIVE" });
+  expect(exactOIDCGroups[0]?.memberCount).toBeGreaterThanOrEqual(1);
 
   await gotoWithRetry(page, "/onboarding");
   await expect(
@@ -67,6 +98,8 @@ test("локальный OIDC, API и основные экраны доступ
       page.getByRole("heading", { level: 1, name: heading }),
     ).toBeVisible();
   }
+  await page.getByRole("button", { name: "Открыть Kodex" }).click();
+  await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
   expect(browserFailures).toEqual([]);
   await writeStorageState(
     environment.outputStorageState,

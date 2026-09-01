@@ -41,6 +41,7 @@ func castRoleImageRecipeInput(input entity.RoleImageRecipeInput) *controlplanev1
 		EnvironmentKey:     input.EnvironmentKey,
 		PackageKeys:        append([]string(nil), input.PackageKeys...),
 		ToolKeys:           append([]string(nil), input.ToolKeys...),
+		Dockerfile:         input.Dockerfile,
 	}
 	for _, item := range input.Platforms {
 		result.Platforms = append(result.Platforms, &controlplanev1.RoleImagePlatform{
@@ -78,6 +79,7 @@ func castRoleImageRecipe(input entity.RoleImageRecipe) *controlplanev1.RoleImage
 			PackageKeys:       append([]string(nil), input.Input.PackageKeys...),
 			ToolKeys:          append([]string(nil), input.Input.ToolKeys...),
 			InstallationBlock: input.Input.InstallationBlock,
+			Dockerfile:        input.Input.Dockerfile,
 		},
 	}
 }
@@ -90,6 +92,7 @@ func castRoleEnvironment(input roleimageservice.Environment) *controlplanev1.Rol
 		Recommended:           input.Recommended, Available: input.Available,
 		UnavailableMessageKey:     input.UnavailableMessageKey,
 		CustomInstallationAllowed: input.CustomInstallationAllowed,
+		DockerfileTemplate:        input.DockerfileTemplate,
 	}
 	for _, item := range input.Input.Platforms {
 		result.Platforms = append(result.Platforms, &controlplanev1.RoleImagePlatform{
@@ -108,6 +111,7 @@ func domainRoleEnvironmentSelection(input *controlplanev1.RoleEnvironmentSelecti
 		PackageKeys:       append([]string(nil), input.GetPackageKeys()...),
 		ToolKeys:          append([]string(nil), input.GetToolKeys()...),
 		InstallationBlock: input.GetInstallationBlock(),
+		Dockerfile:        input.GetDockerfile(),
 	}
 }
 
@@ -129,7 +133,7 @@ func castImageBuild(input entity.ImageBuild) *controlplanev1.ImageBuild {
 		ProvenanceSha256: input.ProvenanceSHA256, ImmutableBuildSha256: input.ImmutableBuildSHA256,
 		SafeErrorCode: input.SafeErrorCode, DiagnosticCode: input.DiagnosticCode,
 		DiagnosticSummary: input.DiagnosticSummary, CreatedAt: timestamp(input.CreatedAt),
-		UpdatedAt: timestamp(input.UpdatedAt),
+		UpdatedAt: timestamp(input.UpdatedAt), Dockerfile: input.Dockerfile,
 	}
 	if input.LeaseExpiresAt != nil {
 		result.LeaseExpiresAt = timestamp(*input.LeaseExpiresAt)
@@ -177,6 +181,9 @@ func castImageArtifact(input entity.ImageArtifact) *controlplanev1.ImageArtifact
 			Os: item.OS, Architecture: item.Architecture, Variant: item.Variant,
 		})
 	}
+	for _, item := range input.Tools {
+		result.Tools = append(result.Tools, &controlplanev1.RoleImageTool{Name: item.Name, Version: item.Version})
+	}
 	return result
 }
 
@@ -196,6 +203,7 @@ func castRoleImageBuildInput(input entity.RoleImageBuildInput) *controlplanev1.R
 		ImmutableBuildSha256:        input.ImmutableBuildSHA256,
 		RoleRuntimeContractRevision: input.RoleRuntimeContractRevision,
 		RoleRuntimeContractSha256:   input.RoleRuntimeContractSHA256,
+		Dockerfile:                  input.Dockerfile,
 	}
 }
 

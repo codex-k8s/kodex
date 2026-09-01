@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
 set -eu
+umask 0000
 
 fail() {
   printf 'Kodex development Go command failed: %s\n' "$*" >&2

@@ -367,7 +367,7 @@ func (graph *Graph) Ready(
 	if err := graph.config.Store.SnapshotPublicationReady(
 		ctx,
 		expected,
-		graph.config.Registry.StartupReadbackTargetCount(),
+		graph.config.Registry.StartupReadbackTargets(),
 	); err != nil {
 		return err
 	}

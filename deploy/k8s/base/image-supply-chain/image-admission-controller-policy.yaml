@@ -26,6 +26,11 @@ spec:
       expression: object.metadata.labels['kodex.dev/image-admission-id']
     - name: protected
       expression: variables.phase in ['claim', 'admit', 'promote']
+    - name: localProfile
+      expression: >-
+        has(params.metadata.labels) &&
+        'kodex.dev/local-profile' in params.metadata.labels &&
+        params.metadata.labels['kodex.dev/local-profile'] == 'hot-reload'
     - name: workload
       expression: >-
         variables.phase == 'promote' ? 'image-promotion' : 'image-admission'
@@ -60,6 +65,9 @@ spec:
     - name: issuerEnvironmentNames
       expression: >-
         variables.protected ? variables.issuer.env.map(item, item.name).join(',') : ''
+    - name: issuerMountNames
+      expression: >-
+        variables.protected ? variables.issuer.volumeMounts.map(mount, mount.name).join(',') : ''
     - name: grantAgent
       expression: >-
         variables.protected ? variables.pod.initContainers[2] : variables.main
@@ -83,10 +91,13 @@ spec:
         object.metadata.annotations['kodex.dev/admission-run-sha256'].matches(
           '^[a-f0-9]{64}$') &&
         object.metadata.annotations['kodex.dev/admission-policy-revision'] ==
-          params.spec.policyRevision
+          params.spec.policyRevision &&
+        (variables.localProfile ?
+          object.spec.template.metadata.labels['kodex.dev/local-profile'] == 'hot-reload' :
+          !('kodex.dev/local-profile' in object.spec.template.metadata.labels))
       message: Image admission Job identity is outside the owner contract.
     - expression: >-
-        object.spec.backoffLimit == 1 &&
+        object.spec.backoffLimit == 0 &&
         object.spec.activeDeadlineSeconds == 720 &&
         object.spec.ttlSecondsAfterFinished == 3600 &&
         (!has(object.spec.parallelism) || object.spec.parallelism == 1) &&
@@ -213,7 +224,9 @@ spec:
     - expression: >-
         !variables.protected ||
         (variables.issuerEnvironmentNames ==
-          'DEPLOYMENT_ENVIRONMENT,OTEL_EXPORTER_OTLP_ENDPOINT,' +
+          'DEPLOYMENT_ENVIRONMENT,' +
+          (variables.localProfile ? 'OTEL_SDK_DISABLED,' : '') +
+          'OTEL_EXPORTER_OTLP_ENDPOINT,' +
           'OTEL_EXPORTER_OTLP_TLS_SERVER_NAME,OTEL_EXPORTER_OTLP_CA_FILE,' +
           'OTEL_TRACES_SAMPLER_ARG,SENTRY_DSN_FILE,SENTRY_EXPECTED_HOST,' +
           'INTERNAL_RPC_AUTHORITY_WORKLOAD_ID,INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID,' +
@@ -237,6 +250,8 @@ spec:
              !has(item.valueFrom) && has(item.value) &&
              (item.name == 'DEPLOYMENT_ENVIRONMENT' ?
                 item.value == object.spec.template.metadata.labels['kodex.dev/environment'] :
+              item.name == 'OTEL_SDK_DISABLED' ?
+                variables.localProfile && item.value == 'true' :
               item.name == 'OTEL_EXPORTER_OTLP_ENDPOINT' ?
                 item.value == 'otel-collector.observability.svc:4317' :
               item.name == 'OTEL_EXPORTER_OTLP_TLS_SERVER_NAME' ?
@@ -269,6 +284,23 @@ spec:
       message: Image admission authority sidecar configuration differs from the exact contract.
     - expression: >-
         !variables.protected ||
+        (variables.issuerMountNames ==
+          'authority-sockets,authority-snapshot,authority-bootstrap-roots,' +
+          'authority-manifest-trust,authority-proof-trust,authority-issuer-key,' +
+          'authority-workload-tls,authority-readback-ca,authority-readback-credential,' +
+          'authority-readback-possession,authority-restore-ca,' +
+          'authority-restore-certificate,authority-restore-role-trust,' +
+          'authority-restore-credential,authority-restore-ack,authority-postgresql,' +
+          'authority-postgresql-ca,authority-observability,authority-sentry-dsn' &&
+         variables.issuer.volumeMounts.exists(mount,
+           mount.name == 'authority-bootstrap-roots' &&
+           mount.mountPath == '/usr/local/share/internal-rpc-authority/manifest-root' &&
+           has(mount.readOnly) && mount.readOnly == true &&
+           !has(mount.subPath) && !has(mount.subPathExpr) &&
+           !has(mount.mountPropagation)))
+      message: Image admission authority trust mount differs from the exact contract.
+    - expression: >-
+        !variables.protected ||
         (variables.grantEnvironmentNames ==
           'PLATFORM_WORKER_GRANT_WORKLOAD_ID,PLATFORM_WORKER_GRANT_OUTPUT_FILE' &&
          variables.grantAgent.env.all(item,
@@ -284,7 +316,8 @@ spec:
         variables.volumeNames ==
           (variables.protected ?
             'work,tmp,script,identity,authority-sockets,authority-snapshot,' +
-            'authority-manifest-trust,authority-proof-trust,authority-issuer-key,' +
+            'authority-bootstrap-roots,authority-manifest-trust,' +
+            'authority-proof-trust,authority-issuer-key,' +
             'authority-workload-tls,control-plane-ca,application-grant,' +
             'platform-worker-grant-signer,' +
             'authority-readback-ca,authority-readback-credential,' +
@@ -309,7 +342,8 @@ spec:
               (!has(volume.persistentVolumeClaim.readOnly) ||
                volume.persistentVolumeClaim.readOnly == false)) :
           volume.name == 'tmp' ?
-            has(volume.emptyDir) && string(volume.emptyDir.sizeLimit) == '64Mi' :
+            has(volume.emptyDir) && string(volume.emptyDir.sizeLimit) ==
+              (variables.phase == 'scan' ? '1Gi' : '64Mi') :
           volume.name == 'script' ?
             has(volume.configMap) &&
             volume.configMap.name == 'kodex-image-admission' &&
@@ -318,10 +352,19 @@ spec:
             has(volume.secret) && volume.secret.secretName == variables.expectedIdentity :
           volume.name == 'authority-sockets' ?
             variables.protected && has(volume.emptyDir) &&
-            string(volume.emptyDir.sizeLimit) == '8Mi' :
+            string(volume.emptyDir.sizeLimit) == '64Mi' :
           volume.name == 'authority-snapshot' ?
             variables.protected && has(volume.secret) &&
             volume.secret.secretName == 'internal-rpc-authority-snapshot' :
+          volume.name == 'authority-bootstrap-roots' ?
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName == 'internal-rpc-authority-bootstrap-roots' &&
+            volume.secret.defaultMode == 292 &&
+            has(volume.secret.items) && volume.secret.items.size() == 2 &&
+            volume.secret.items[0].key == 'manifest-root-public.jwk' &&
+            volume.secret.items[0].path == 'bootstrap-public.jwk' &&
+            volume.secret.items[1].key == 'manifest-root-metadata.json' &&
+            volume.secret.items[1].path == 'bootstrap-metadata.json' :
           volume.name == 'authority-manifest-trust' ?
             variables.protected && has(volume.secret) &&
             volume.secret.secretName ==

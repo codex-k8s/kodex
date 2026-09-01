@@ -142,6 +142,51 @@ SQL
 [[ "$static_identity_assertion" == $'BEGIN\nSET\nSET\nCURRENT\nROLLBACK' ]] ||
   fail 'static database identity readback rejected'
 
+psql "$authority_admin_dsn" --no-password --set ON_ERROR_STOP=1 >/dev/null <<'SQL'
+INSERT INTO internal_rpc_authority.authority_snapshot_history (
+  source_revision, source_digest_sha256, key_set_revision, policy_revision,
+  signer_generation, predecessor_revision, predecessor_digest_sha256,
+  canonical_payload, published_at, snapshot_compact_jws,
+  publication_intent_id, publication_input_digest_sha256,
+  expected_readback_count
+) VALUES (
+  1, repeat('1', 64), 1, 1, 1, 0, repeat('0', 64),
+  '{"source_revision":1}'::jsonb, clock_timestamp(), repeat('j', 64),
+  '10000000-0000-4000-8000-000000000010', repeat('2', 64), 2
+);
+INSERT INTO internal_rpc_authority.authority_rotation_intents (
+  intent_id, source_revision, source_digest_sha256, status, created_at, updated_at
+) VALUES (
+  '10000000-0000-4000-8000-000000000010', 1, repeat('1', 64),
+  'PREPARED', clock_timestamp(), clock_timestamp()
+);
+INSERT INTO internal_rpc_authority.authority_snapshot_readbacks (
+  readback_id, workload_id, role, workload_generation,
+  source_revision, digest_sha256, verified_at
+) VALUES
+  ('10000000-0000-4000-8000-000000000011', 'required-a',
+   'AUTHORIZATION_ISSUER', 1, 1, repeat('1', 64), clock_timestamp()),
+  ('10000000-0000-4000-8000-000000000012', 'required-b',
+   'AUTHORIZATION_VERIFIER', 1, 1, repeat('1', 64), clock_timestamp()),
+  ('10000000-0000-4000-8000-000000000013', 'optional-dynamic',
+   'AUTHORIZATION_ISSUER', 1, 1, repeat('1', 64), clock_timestamp());
+SQL
+
+promotion_assertion=$(psql "$authority_admin_dsn" --no-password --set ON_ERROR_STOP=1 \
+  --tuples-only --no-align <<'SQL'
+SET SESSION AUTHORIZATION ira_publisher_g4;
+SET ROLE internal_rpc_authority_publisher;
+SELECT internal_rpc_authority.publisher_promote_snapshot(
+  '10000000-0000-4000-8000-000000000010', 1, repeat('1', 64), 2,
+  ARRAY['required-a', 'required-b'],
+  ARRAY['AUTHORIZATION_ISSUER', 'AUTHORIZATION_VERIFIER'],
+  ARRAY[1, 1]::bigint[]
+);
+SQL
+)
+[[ "$promotion_assertion" == $'SET\nSET\nt' ]] ||
+  fail 'optional dynamic readback blocked exact snapshot promotion'
+
 if psql "$authority_admin_dsn" --no-password --set ON_ERROR_STOP=1 \
   >/dev/null 2>&1 <<'SQL'; then
 SELECT internal_rpc_authority.reconcile_runtime_database_identity(

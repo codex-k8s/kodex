@@ -26,6 +26,59 @@ func TestAssistantOperationCommandUsesClosedSpecializedRegistry(t *testing.T) {
 	}
 }
 
+func TestAssistantOperationCommandBuildsHydratedProjectUpdate(t *testing.T) {
+	t.Parallel()
+	version := int64(7)
+	operation := entity.AssistantPlanOperation{
+		Type: "UPDATE_PROJECT", Summary: "Rename project",
+		Target:          entity.AssistantPlanTarget{Kind: "PROJECT", Ref: "prj_12345678", Name: "Sales", Version: &version},
+		ExpectedVersion: &version,
+		Input: map[string]any{
+			"projectRef": "prj_12345678", "name": "Enterprise sales", "purpose": "Qualify leads", "language": "en", "expectedVersion": version,
+		},
+	}
+	mapped, err := assistantOperationCommand(operation)
+	if err != nil || mapped.Kind != command.UpdateProject || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != version {
+		t.Fatalf("map project update: command=%#v err=%v", mapped, err)
+	}
+	payload := mapped.Payload.(command.ProjectInput)
+	if payload.Ref != "prj_12345678" || payload.Name != "Enterprise sales" || payload.Purpose != "Qualify leads" || payload.Language != "en" {
+		t.Fatalf("unexpected hydrated project payload: %#v", payload)
+	}
+}
+
+func TestAssistantCreateTargetUsesClosedKinds(t *testing.T) {
+	t.Parallel()
+	parameters := map[string]any{"name": "Analyst"}
+	if kind, name, ok := assistantCreateTarget("CREATE_AGENT", parameters); !ok || kind != "AGENT" || name != "Analyst" {
+		t.Fatalf("unexpected agent target: kind=%q name=%q ok=%v", kind, name, ok)
+	}
+	if _, _, ok := assistantCreateTarget("DELETE_AGENT", parameters); ok {
+		t.Fatal("unknown operation received a server-owned target")
+	}
+}
+
+func TestHydrateAssistantProjectOperationBuildsCompleteAuthoritativeSnapshot(t *testing.T) {
+	t.Parallel()
+	operation, err := hydrateAssistantProjectOperation("prj_12345678", "Sales", "Qualify leads", "en", 7,
+		entity.AssistantPlanOperation{Type: "UPDATE_PROJECT", Parameters: map[string]any{"projectRef": "current", "name": "Enterprise sales"}})
+	if err != nil {
+		t.Fatalf("hydrate project operation: %v", err)
+	}
+	if operation.Action != "UPDATE" || operation.Target.Kind != "PROJECT" || operation.Target.Ref != "prj_12345678" ||
+		operation.ExpectedVersion == nil || *operation.ExpectedVersion != 7 || !operation.Selected {
+		t.Fatalf("project authority envelope is incomplete: %#v", operation)
+	}
+	if assistantString(operation.Before, "name") != "Sales" || assistantString(operation.After, "name") != "Enterprise sales" ||
+		assistantString(operation.After, "purpose") != "Qualify leads" || assistantString(operation.Parameters, "language") != "en" {
+		t.Fatalf("project before/after snapshot is incomplete: before=%#v after=%#v parameters=%#v", operation.Before, operation.After, operation.Parameters)
+	}
+	if _, err := hydrateAssistantProjectOperation("prj_12345678", "Sales", "Qualify leads", "en", 7,
+		entity.AssistantPlanOperation{Type: "UPDATE_PROJECT", Parameters: map[string]any{"name": "Sales"}}); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("no-op project update must be rejected, got %v", err)
+	}
+}
+
 func TestAssistantOperationProjectBindingUsesConversationAuthority(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{Type: "CREATE_AGENT", Summary: "Create analyst", Input: map[string]any{

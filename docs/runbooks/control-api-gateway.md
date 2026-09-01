@@ -4,8 +4,8 @@ title: Диагностика control-api-gateway
 type: runbook
 status: approved
 owner: sre
-version: 2.2.0
-updated: 2026-08-26
+version: 2.3.0
+updated: 2026-08-28
 ---
 
 # Диагностика control-api-gateway
@@ -78,21 +78,44 @@ startup: verifier закрыт до успешного refresh, а запрос 
 `503`. Пользовательский текст выбирается из YAML i18n по locale; raw
 gRPC/provider diagnostics не возвращаются.
 
-## Realtime Run
+## Realtime owner session
 
-Для `/api/v1/runs/{runRef}/stream` проверить:
+Для единственного `/api/v1/session/stream` проверить:
 
-1. authorization использует тот же owner rule, что HTTP Run detail;
-2. первое сообщение содержит authoritative snapshot и sequence;
-3. последующие deltas возрастают по sequence;
-4. reconnect передаёт `afterSequence` и восстанавливает gap;
-5. недоступный диапазон приводит к новому snapshot, не phantom node;
-6. duplicate event не применяется дважды;
-7. slow client получает bounded backpressure/close и может reconnect.
+1. handshake требует действующую owner session, exact Origin и CSRF subprotocol;
+2. browser открывает один socket и передаёт platform cursor и не более 32 Run
+   subscriptions в `SESSION_RESUME`;
+3. dynamic `SUBSCRIBE_RUN`/`UNSUBSCRIBE_RUN` не перезапускает route и не
+   сбрасывает остальные подписки;
+4. authorization каждой Run subscription использует тот же owner rule, что
+   HTTP Run detail;
+5. новая Run subscription получает authoritative snapshot/catch-up и точный
+   cursor, последующие deltas возрастают по sequence;
+6. разрыв одного Run восстанавливается независимо и не очищает platform state
+   или другие Runs;
+7. недоступный диапазон приводит к новому snapshot, не phantom node, а duplicate
+   event не применяется дважды;
+8. slow client получает bounded backpressure/close и может reconnect со всеми
+   сохранёнными cursors.
+
+RunEvent readback обязан сохранять server-resolved `actor`, `messageKind` и
+bounded `toolCall`. Для planned workflow node state `PLANNED` допустим до
+materialization; gateway не заменяет его локальным `QUEUED` и не скрывает из
+snapshot.
 
 WebSocket не передаёт raw stdout/stderr, Codex JSONL, provider response,
 arbitrary tool payload, secret или file body. Artifact скачивается отдельным
 HTTP path после owner authorization.
+
+## Assistant HTTP lifecycle
+
+- создание conversation не принимает авторитетный title; context entity и
+  allowed operations разрешает control-plane;
+- ручной title update требует `If-Match`, `Idempotency-Key` и CSRF;
+- draft edit создаёт новую revision, validation работает с точной revision;
+- apply принимает только validated revision, reject создаёт receipt без effect;
+- `409` не преобразуется в локальное исправление payload: клиент повторно читает
+  plan/version/receipt и показывает server-owned state.
 
 ## Частые причины
 

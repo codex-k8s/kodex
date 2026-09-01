@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Автоматизации · Список и детали</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-auto__body { flex-direction: row; }
+  .p-auto__main { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  .p-auto__toolbar { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 12px 24px; border-bottom: 1px solid var(--line); background: var(--bg); min-height: 57px; }
+  .p-auto__scroll { flex: 1 1 auto; min-height: 0; overflow: auto; background: var(--bg); }
+  .p-auto table col.c-sched { width: 152px; } .p-auto table col.c-state { width: 124px; } .p-auto table col.c-next { width: 124px; } .p-auto table col.c-last { width: 148px; } .p-auto table col.c-menu { width: 44px; }
+  .p-auto .cell-sub .avatar { vertical-align: middle; margin-right: 4px; }
+  .p-auto .cell-sub .ic { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; }
+  .p-auto .table td { padding-top: 9px; padding-bottom: 9px; }
+  .p-auto .table tbody tr { cursor: pointer; }
+  .p-auto__aside { flex: 0 0 400px; border-left: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+  .p-auto__aside-head { flex: 0 0 auto; padding: 14px 16px 12px; border-bottom: 1px solid var(--line); }
+  .p-auto__aside-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px 16px 16px; }
+  .p-auto__aside-foot { flex: 0 0 auto; padding: 12px 16px 14px; border-top: 1px solid var(--line); display: flex; gap: 8px; }
+  .p-auto__occ { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line-hair); font-size: 12.5px; }
+  .p-auto__occ:first-child { border-top: 0; }
+  .p-auto__occ .mono { font-size: 11.5px; }
+  .p-auto__occ .pill { flex: 0 0 auto; }
+  .p-auto__ver { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line-hair); font-size: 12.5px; }
+  .p-auto__ver:first-child { border-top: 0; }
+  .p-auto__foot { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 8px 24px; border-top: 1px solid var(--line); background: var(--bg-subtle); font-size: 11.5px; color: var(--sec); }
+  .p-auto .menu [data-tip] { display: block; }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Автоматизации · список с панелью деталей · desktop 1440×1024 · маршрут <code>/projects/:projectRef/automations</code></p>
+<div class="frame frame--desktop p-auto" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><span>Автоматизации</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Автоматизации</h1><span class="tag">6 расписаний</span></div>
+          <div class="page-sub">Регулярные запуски ИИ-сотрудников и Процессов по расписанию. Ручной запуск не создаёт скрытое расписание.</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn--primary btn--lg" type="button"><svg class="ic"><use href="#i-plus"/></svg>Создать автоматизацию</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body page-body--flush p-auto__body">
+      <div class="p-auto__main">
+        <div class="p-auto__toolbar">
+          <label class="search" style="width:250px;flex:0 0 250px"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Поиск по названию и цели" aria-label="Поиск автоматизаций"></label>
+          <button class="chip chip--filter" type="button" data-menu="#menu-state" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-filter"/></svg><span>Состояние: все</span><svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+          <button class="chip chip--filter" type="button" data-menu="#menu-target" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-bot"/></svg><span>Цель: все</span><svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+          <span class="toolbar__spacer"></span>
+          <span class="refresh" data-tip="Следующие запуски пересчитываются на сервере" data-tip-pos="left"><span class="refresh__dot"></span><span class="refresh__text">обновлено 12:04</span></span>
+        </div>
+        <div class="p-auto__scroll">
+          <table class="table table--hover table--fixed" aria-label="Автоматизации Проекта">
+            <colgroup><col><col class="c-sched"><col class="c-state"><col class="c-next"><col class="c-last"><col class="c-menu"></colgroup>
+            <thead><tr><th>Название и цель</th><th>Расписание</th><th>Состояние · версия</th><th>Следующий</th><th>Последний результат</th><th><span class="sr-only">Действия</span></th></tr></thead>
+            <tbody data-select-group>
+              <tr class="is-selected" data-select-row tabindex="0">
+                <td><div class="cell-title">Ежедневная сводка по лидам</div><div class="cell-sub"><span class="avatar avatar--20 avatar--ok">АП</span>Аналитик продаж · ИИ-сотрудник</div></td>
+                <td><div>По будням в 09:00</div><div class="cell-sub">Europe/Saratov</div></td>
+                <td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активно</span><div class="cell-sub mono">v3</div></td>
+                <td><div>Пн, 31 авг, 09:00</div><div class="cell-sub">через 2 д 21 ч</div></td>
+                <td><div class="row gap-6"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span></div><div class="cell-sub"><a href="#">сегодня, 09:00 · 4 мин</a></div></td>
+                                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-active" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+              <tr data-select-row tabindex="0">
+                <td><div class="cell-title">Недельное предложение руководителю</div><div class="cell-sub"><svg class="ic"><use href="#i-wf"/></svg>Подготовка сводки · Процесс v2</div></td>
+                <td><div>Каждую пятницу в 16:00</div><div class="cell-sub">Europe/Saratov</div></td>
+                <td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активно</span><div class="cell-sub mono">v1</div></td>
+                <td><div>Сегодня, 16:00</div><div class="cell-sub">через 3 ч 56 мин</div></td>
+                <td><div><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span></div><div class="cell-sub"><a href="#">21 авг, 16:00 · 11 мин</a></div></td>
+                                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-active" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+              <tr data-select-row tabindex="0">
+                <td><div class="cell-title">Проверка новых договоров</div><div class="cell-sub"><span class="avatar avatar--20">ЮК</span>Юридический консультант · ИИ-сотрудник</div></td>
+                <td><div>Ежедневно в 07:30</div><div class="cell-sub">Europe/Saratov</div></td>
+                <td><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-pause"/></svg>Приостановлено</span><div class="cell-sub mono">v2</div></td>
+                <td><span class="mut">—</span><div class="cell-sub">после возобновления</div></td>
+                <td><div><span class="pill pill--err pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Ошибка</span></div><div class="cell-sub"><a href="#">25 авг, 07:30 · 2 мин</a></div></td>
+                                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-paused" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+              <tr data-select-row tabindex="0">
+                <td><div class="cell-title">Классификация входящих писем</div><div class="cell-sub"><span class="avatar avatar--20">КО</span>Классификатор обращений · ИИ-сотрудник</div></td>
+                <td><div>Каждый час, 08:00–20:00</div><div class="cell-sub">Europe/Saratov</div></td>
+                <td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активно</span><div class="cell-sub mono">v5</div></td>
+                <td><div>Сегодня, 13:00</div><div class="cell-sub">через 56 мин</div></td>
+                <td><div><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span></div><div class="cell-sub"><a href="#">сегодня, 12:00 · 1 мин</a></div></td>
+                                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-active" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+              <tr data-select-row tabindex="0">
+                <td><div class="cell-title">Пробный отчёт по рынку</div><div class="cell-sub"><span class="avatar avatar--20 avatar--ok">ИР</span>Исследователь рынка · ИИ-сотрудник</div></td>
+                <td><div>Понедельник в 10:00</div><div class="cell-sub">Europe/Saratov</div></td>
+                <td><span class="pill pill--info pill--sm"><svg class="ic"><use href="#i-edit"/></svg>Черновик</span><div class="cell-sub mono">v1</div></td>
+                <td><span class="mut">не запланировано</span></td>
+                <td><span class="mut">—</span></td>
+                                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-draft" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+              <tr data-select-row tabindex="0" style="color:var(--sec)">
+                <td><div class="cell-title" style="color:var(--sec)">Сверка счетов за день</div><div class="cell-sub"><svg class="ic"><use href="#i-wf"/></svg>Сверка счетов · Процесс v1</div></td>
+                <td><div>По будням в 18:00</div><div class="cell-sub">Europe/Saratov</div></td>
+                <td><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-archive"/></svg>Архив</span><div class="cell-sub mono">v4</div></td>
+                <td><span class="mut">—</span></td>
+                <td><div><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span></div><div class="cell-sub"><a href="#">12 авг, 18:00</a></div></td>
+                                <td><button class="btn btn--sm btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-archived" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="p-auto__foot">
+          <svg class="ic ic-14 warn-text"><use href="#i-alert"/></svg>
+          <span>Уведомление о запуске «Проверка новых договоров» 25 августа не доставлено во внешний канал. Сам запуск завершился ошибкой сотрудника — доставка на результат не влияет.</span>
+          <a class="right" href="#">Открыть запуск</a>
+        </div>
+      </div>
+
+      <!-- Детали выбранной автоматизации -->
+      <aside class="p-auto__aside" aria-labelledby="aside-title">
+        <div class="p-auto__aside-head">
+          <div class="row row--top gap-10">
+            <div class="grow">
+              <h2 class="h2" id="aside-title">Ежедневная сводка по лидам</h2>
+              <div class="row gap-6 mt-6"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Активно</span><span class="tag tag--mono">v3 · активная версия</span></div>
+            </div>
+            <button class="btn btn--icon btn--ghost" type="button" aria-label="Действия" data-menu="#menu-active" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+          </div>
+        </div>
+        <div class="p-auto__aside-scroll">
+          <div class="kv">
+            <div class="kv__row"><span class="kv__k">Цель</span><span class="kv__v row gap-6"><span class="avatar avatar--20 avatar--ok">АП</span>Аналитик продаж <span class="mut">· ИИ-сотрудник</span></span></div>
+            <div class="kv__row"><span class="kv__k">Расписание</span><span class="kv__v">По будням в 09:00 · Europe/Saratov (UTC+4)</span></div>
+            <div class="kv__row"><span class="kv__k">Задача</span><span class="kv__v clamp-2">Подготовь сводку по новым лидам за предыдущий рабочий день: источники, сегменты, приоритетные контакты и рекомендации для менеджеров.</span></div>
+            <div class="kv__row"><span class="kv__k">Входные файлы</span><span class="kv__v"><a href="#">Регламент обработки лидов.pdf</a> <span class="mono mut">v3</span> · <a href="#">Сегменты клиентов.xlsx</a> <span class="mono mut">v1</span></span></div>
+            <div class="kv__row"><span class="kv__k">Сессия</span><span class="kv__v">Новая сессия для каждого запуска</span></div>
+            <div class="kv__row"><span class="kv__k">Пропуски</span><span class="kv__v">Пропустить, запустить по следующему расписанию</span></div>
+            <div class="kv__row"><span class="kv__k">Уведомления</span><span class="kv__v">Только Control Center</span></div>
+            <div class="kv__row"><span class="kv__k">Источник запусков</span><span class="kv__v row gap-6"><svg class="ic ic-14 mut"><use href="#i-automation"/></svg>Автоматизация · инициатор: расписание, владелец — Анна Волкова</span></div>
+          </div>
+
+          <div class="row row--between mt-16"><div class="sec-title">История запусков</div><a class="xs" href="#">Все запуски</a></div>
+          <div class="mt-4">
+            <div class="p-auto__occ"><span class="mono mut" style="width:96px">сегодня, 09:00</span><span class="grow truncate"><a href="#">Сводка по лидам · 28 августа</a></span><span class="mono mut">4 мин</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span></div>
+            <div class="p-auto__occ"><span class="mono mut" style="width:96px">27 авг, 09:00</span><span class="grow truncate"><a href="#">Сводка по лидам · 27 августа</a></span><span class="mono mut">5 мин</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span></div>
+            <div class="p-auto__occ"><span class="mono mut" style="width:96px">26 авг, 09:00</span><span class="grow truncate"><a href="#">Сводка по лидам · 26 августа</a></span><span class="mono mut">4 мин</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span></div>
+            <div class="p-auto__occ"><span class="mono mut" style="width:96px">25 авг, 09:00</span><span class="grow truncate sec">Пропущен: платформа была недоступна в окно запуска</span><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-minus"/></svg>Пропущен</span></div>
+            <div class="p-auto__occ"><span class="mono mut" style="width:96px">22 авг, 09:00</span><span class="grow truncate"><a href="#">Сводка по лидам · 22 августа</a></span><span class="mono mut">6 мин</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Успешно</span></div>
+          </div>
+
+          <div class="sec-title mt-16">Версии</div>
+          <div class="mt-4">
+            <div class="p-auto__ver"><span class="mono b ok-text">v3</span><span class="grow">Активна для будущих запусков · с 21 августа · Анна Волкова</span></div>
+            <div class="p-auto__ver"><span class="mono b mut">v2</span><span class="grow sec">14–21 августа · изменено время запуска</span><a class="xs" href="#">Открыть</a></div>
+            <div class="p-auto__ver"><span class="mono b mut">v1</span><span class="grow sec">создана 5 августа</span><a class="xs" href="#">Открыть</a></div>
+          </div>
+          <div class="notice notice--sm mt-10"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Изменение создаёт новую версию для будущих запусков. Уже выполненные запуски навсегда связаны со своей версией.</span></div>
+        </div>
+        <div class="p-auto__aside-foot">
+          <a class="btn btn--primary btn--lg grow" href="automation-editor-desktop.html"><svg class="ic"><use href="#i-edit"/></svg>Изменить</a>
+          <button class="btn btn--lg" type="button"><svg class="ic"><use href="#i-pause"/></svg>Пауза</button>
+          <button class="btn btn--lg" type="button" data-tip="Запустить сейчас вне расписания" data-tip-pos="top"><svg class="ic"><use href="#i-run"/></svg>Запустить</button>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <div class="menu" id="menu-state"><div class="menu__title">Состояние</div><button class="menu__item" role="menuitemradio" aria-checked="true">Все</button><button class="menu__item" role="menuitemradio" aria-checked="false">Активные</button><button class="menu__item" role="menuitemradio" aria-checked="false">Приостановленные</button><button class="menu__item" role="menuitemradio" aria-checked="false">Черновики</button><button class="menu__item" role="menuitemradio" aria-checked="false">Архив</button></div>
+  <div class="menu" id="menu-target"><div class="menu__title">Цель</div><button class="menu__item" role="menuitemradio" aria-checked="true">Все</button><button class="menu__item" role="menuitemradio" aria-checked="false">ИИ-сотрудники</button><button class="menu__item" role="menuitemradio" aria-checked="false">Процессы</button></div>
+  <!-- Меню строк по состоянию -->
+  <div class="menu" id="menu-active" data-align="right">
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-edit"/></svg>Изменить<span class="menu__hint">создаст новую версию</span></button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-run"/></svg>Запустить сейчас</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-pause"/></svg>Приостановить</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-archive"/></svg>Архивировать</button>
+    <div class="menu__sep"></div>
+    <div data-tip="Удаление доступно только для черновика, который ни разу не запускался" data-tip-pos="left" class="tip-wide"><button class="menu__item" role="menuitem" disabled><svg class="ic"><use href="#i-trash"/></svg>Удалить</button></div>
+  </div>
+  <div class="menu" id="menu-paused" data-align="right">
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-edit"/></svg>Изменить<span class="menu__hint">создаст новую версию</span></button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-play"/></svg>Возобновить</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-archive"/></svg>Архивировать</button>
+    <div class="menu__sep"></div>
+    <div data-tip="Удаление доступно только для черновика, который ни разу не запускался" data-tip-pos="left" class="tip-wide"><button class="menu__item" role="menuitem" disabled><svg class="ic"><use href="#i-trash"/></svg>Удалить</button></div>
+  </div>
+  <div class="menu" id="menu-draft" data-align="right">
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-edit"/></svg>Изменить черновик</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-check"/></svg>Активировать</button>
+    <div class="menu__sep"></div>
+    <button class="menu__item menu__item--danger" role="menuitem"><svg class="ic"><use href="#i-trash"/></svg>Удалить черновик<span class="menu__hint">без запусков</span></button>
+  </div>
+  <div class="menu" id="menu-archived" data-align="right">
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-history"/></svg>История запусков</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-copy"/></svg>Создать копию</button>
+    <div class="menu__sep"></div>
+    <div data-tip="Архив хранит историю запусков и не удаляется" data-tip-pos="left" class="tip-wide"><button class="menu__item" role="menuitem" disabled><svg class="ic"><use href="#i-trash"/></svg>Удалить</button></div>
+  </div>
+</div>
+<p class="stage-note">Автоматизация — расписание с человеческим описанием и часовым поясом, целью (сотрудник или Процесс), состоянием, следующим запуском и последним результатом со ссылкой на Run. Активная версия видна в таблице; правая панель показывает summary, историю occurrence (включая пропуск по misfire-политике) и версии. Меню строки зависит от состояния: пауза/возобновить/архивировать; физическое удаление доступно только черновику без запусков, для остальных — disabled с объяснением. Сбой доставки уведомления показан отдельно и не меняет результат запуска.</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'project.automations', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Автоматизации', object: 'Ежедневная сводка по лидам', can: ['объяснить, почему запуск был пропущен', 'подготовить изменение расписания как план', 'создать похожую автоматизацию'] },
+  });
+  (function () {
+    const { $, $$ } = Kodex;
+    // выбор строки клавиатурой
+    $('#frame').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-select-row]')) { e.preventDefault(); e.target.click(); } });
+    $$('[data-select-row]').forEach((tr) => tr.addEventListener('click', (e) => { if (e.target.closest('button,a')) return; const title = $('.cell-title', tr).textContent.trim(); $('#aside-title').textContent = title; }));
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Дизайн-система MVP</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .ds-section { padding: 22px 28px; border-bottom: 1px solid var(--line); }
+  .ds-section:last-child { border-bottom: 0; }
+  .ds-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+  .ds-h h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .ds-h .mut { font-size: 12px; }
+  .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px 24px; }
+  .ds-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ds-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ds-item { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .ds-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mut); }
+  .ds-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ds-note { font-size: 11.5px; color: var(--sec); line-height: 1.5; }
+  .ds-sw { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+  .ds-sw i { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(16,22,30,.12); flex: 0 0 auto; }
+  .ds-sw code { font-family: var(--font-mono); font-size: 10.5px; color: var(--mut); }
+  .ds-zone { display: grid; grid-template-columns: 180px 1fr; gap: 6px 14px; font-size: 12.5px; }
+  .ds-zone b { font-weight: 500; }
+  .ds-demo-list.is-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .ds-demo-list.is-grid .list-row { border: 1px solid var(--line); border-radius: var(--r-2); padding: 10px; }
+  .ds-demo-list .list-row { min-height: 48px; }
+  .ds-demo-box { border: 1px solid var(--line); border-radius: var(--r-3); background: var(--bg); overflow: hidden; }
+  .frame--free .modal-wrap, .frame--free .drawer, .frame--free .scrim { position: fixed; }
+  .frame--free .layer { position: fixed; }
+  .ds-focus { box-shadow: var(--focus); border-radius: var(--r-2); }
+  .ds-hover { background: var(--bg-hover); border-color: var(--line-strong); }
+  .ds-pressed { background: var(--bg-active); }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Дизайн-система MVP-редизайна · оболочка, controls, состояния · desktop 1440×1024 + галерея</p>
+
+<!-- ===================== 1. Оболочка и realtime ===================== -->
+<div class="frame frame--desktop" id="frame-shell">
+  <main class="page" aria-labelledby="ds-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Администрирование</a><span>/</span><span>Дизайн-система</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="ds-title">Оболочка и realtime</h1><span class="pill pill--info"><svg class="ic"><use href="#i-info"/></svg>Демонстрация</span></div>
+          <div class="page-sub">Слева — стабильная навигация по глобальному и проектному контексту; сверху — растянутый глобальный поиск, «Решения», состояние соединения и меню пользователя</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn" type="button" data-menu="#ds-more" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg>Ещё</button>
+          <div class="menu" id="ds-more" data-align="right"><button class="menu__item"><svg class="ic"><use href="#i-copy"/></svg><span>Скопировать ссылку</span></button><button class="menu__item"><svg class="ic"><use href="#i-download"/></svg><span>Экспортировать</span></button><div class="menu__sep"></div><button class="menu__item menu__item--danger"><svg class="ic"><use href="#i-trash"/></svg><span>Удалить</span></button></div>
+          <button class="btn btn--primary btn--lg" type="button"><svg class="ic"><use href="#i-run"/></svg>Новый запуск</button>
+        </div>
+      </div>
+    </div>
+    <div class="page-body col gap-16">
+      <div class="split split--equal">
+        <section class="card">
+          <div class="card__head card__head--line"><h2 class="sec-title">Зоны оболочки</h2></div>
+          <div class="card__body card__body--pad ds-zone">
+            <b>Глобальная навигация</b><span>Главная · Проекты · Запуски · Решения (счётчик) · Интеграции; внизу — Администрирование.</span>
+            <b>Переключатель Проекта</b><span>Внутри навигации. Меню с серверным поиском Проектов; выбранный Проект сохраняется при переходе к его сотруднику, Процессу, автоматизации или Run.</span>
+            <b>Разделы Проекта</b><span>Обзор · ИИ-сотрудники · Процессы · Запуски · Файлы · Автоматизации · Окружения · Участники. Активным остаётся <em>тип</em> открытой сущности; клик возвращает к списку этого типа.</span>
+            <b>Глобальный поиск</b><span>Растянут на всю ширину верхней строки; серверный, от 2 символов, результаты — только доступные объекты. <kbd>Ctrl</kbd>+<kbd>K</kbd>.</span>
+            <b>Справа от поиска</b><span>«Решения» с числом ожидающих, realtime connection status, меню пользователя (профиль, язык, тема, выход).</span>
+            <b>FAB Kodex</b><span>Иконка бота справа снизу, не перекрывает содержимое (у прокручиваемых областей есть нижний отступ). Открывает контекстный drawer; на mobile — bottom sheet.</span>
+          </div>
+        </section>
+        <section class="card">
+          <div class="card__head card__head--line"><h2 class="sec-title">Realtime без перезагрузки</h2><span class="refresh"><span class="refresh__dot"></span><span class="refresh__text">обновлено 12:04</span></span></div>
+          <div class="card__body card__body--pad col gap-12">
+            <p class="sm sec">Подтверждённые данные остаются на экране. Фоновое обновление обозначается небольшим индикатором в заголовке секции; полный skeleton допустим только при первом открытии. Переподключение WebSocket не выглядит как reload страницы.</p>
+            <div class="ds-row">
+              <button class="btn" type="button" id="ds-reconnect"><svg class="ic"><use href="#i-wifi"/></svg>Симулировать переподключение</button>
+              <button class="btn" type="button" id="ds-offline"><svg class="ic"><use href="#i-wifi-off"/></svg>Показать «Нет соединения»</button>
+              <button class="btn btn--ghost" type="button" id="ds-online">Вернуть «В сети»</button>
+            </div>
+            <div class="ds-demo-box" id="ds-rt-list">
+              <div class="list-row"><span class="avatar avatar--32 avatar--acc" aria-hidden="true">РП</span><div class="list-row__main"><div class="list-row__title"><span>Подготовить предложение для компании Север</span></div><div class="list-row__sub"><span>Редактор предложений</span><span>·</span><span class="source" tabindex="0" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></div></div><span class="list-row__time" id="ds-rt-time">12 мин</span><span class="list-row__status"><span class="pill pill--run"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span></span></div>
+              <div class="list-row"><span class="avatar avatar--32 avatar--ok" aria-hidden="true">АП</span><div class="list-row__main"><div class="list-row__title"><span>Ежедневная сводка по лидам</span></div><div class="list-row__sub"><span>Аналитик продаж</span><span>·</span><span class="source" tabindex="0" data-tip="Запущено по расписанию автоматизации" data-tip-pos="bottom"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</span></div></div><span class="list-row__time">3 мин</span><span class="list-row__status"><span class="pill pill--run"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span></span></div>
+            </div>
+            <div class="xs mut">При переподключении строки не исчезают: меняется только индикатор и статус соединения в верхней строке; догруженные события добавляются без скачка.</div>
+          </div>
+        </section>
+      </div>
+      <div class="split split--equal">
+        <section class="card">
+          <div class="card__head card__head--line"><h2 class="sec-title">Первое открытие · skeleton</h2><span class="refresh is-refreshing"><span class="refresh__dot"></span><span class="refresh__text">загрузка</span></span></div>
+          <div class="skeleton-list" aria-busy="true" aria-label="Загрузка списка">
+            <div class="row gap-12"><span class="skeleton skeleton--circle"></span><span class="col gap-6 grow"><span class="skeleton skeleton--title"></span><span class="skeleton skeleton--text" style="width:80%"></span></span><span class="skeleton" style="width:90px;height:22px;border-radius:11px"></span></div>
+            <div class="row gap-12"><span class="skeleton skeleton--circle"></span><span class="col gap-6 grow"><span class="skeleton skeleton--title" style="width:50%"></span><span class="skeleton skeleton--text" style="width:70%"></span></span><span class="skeleton" style="width:90px;height:22px;border-radius:11px"></span></div>
+            <div class="row gap-12"><span class="skeleton skeleton--circle"></span><span class="col gap-6 grow"><span class="skeleton skeleton--title" style="width:65%"></span><span class="skeleton skeleton--text" style="width:85%"></span></span><span class="skeleton" style="width:90px;height:22px;border-radius:11px"></span></div>
+          </div>
+          <div class="card__foot">Размеры строк skeleton совпадают с реальными строками — layout не прыгает после загрузки.</div>
+        </section>
+        <section class="card">
+          <div class="card__head card__head--line"><h2 class="sec-title">Фоновое обновление · содержимое остаётся</h2><span class="refresh is-refreshing"><span class="refresh__dot"></span><span class="refresh__text">обновляется</span></span></div>
+          <div>
+            <div class="list-row"><span class="avatar avatar--32" aria-hidden="true">КО</span><div class="list-row__main"><div class="list-row__title"><span>Разобрать обращения за неделю</span></div><div class="list-row__sub"><span>Классификатор обращений</span><span>·</span><span>Kodex · Михаил Орлов</span></div></div><span class="list-row__status"><span class="pill pill--wait"><svg class="ic"><use href="#i-clock"/></svg>В очереди</span></span></div>
+            <div class="list-row"><span class="avatar avatar--32" aria-hidden="true">ЮК</span><div class="list-row__main"><div class="list-row__title"><span>Проверить условия пилота Ладога</span></div><div class="list-row__sub"><span>Юридический консультант</span><span>·</span><span>Control Center · Елена Крылова</span></div></div><span class="list-row__status"><span class="pill pill--gate"><svg class="ic"><use href="#i-shield"/></svg>Ждёт решения</span></span></div>
+          </div>
+          <div class="card__foot">Индикатор «обновляется» — единственное изменение; строки не заменяются skeleton и не мигают.</div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ===================== 2. Галерея controls ===================== -->
+<p class="stage-label">Галерея controls и состояний · светлая тема</p>
+<div class="frame frame--free" id="frame-gallery">
+
+  <section class="ds-section">
+    <div class="ds-h"><h2>Палитра и типографика</h2><span class="mut">холодная нейтраль · синий акцент · IBM Plex Sans / Mono · табличные цифры</span></div>
+    <div class="ds-grid ds-grid--3">
+      <div class="ds-item"><div class="ds-label">Цвета</div>
+        <div class="ds-sw"><i style="background:var(--acc)"></i>Акцент — действие, активное состояние <code>#1B6FC4</code></div>
+        <div class="ds-sw"><i style="background:var(--ok)"></i>Успех — готов, завершён, в сети <code>#1A7A3C</code></div>
+        <div class="ds-sw"><i style="background:var(--warn)"></i>Внимание — решение человека, ожидание <code>#8A6410</code></div>
+        <div class="ds-sw"><i style="background:var(--err)"></i>Ошибка — сбой, изоляция <code>#A32E2E</code></div>
+        <div class="ds-sw"><i style="background:var(--ink)"></i>Текст основной <code>#10161E</code> · вторичный <code>#4E5A68</code> · приглушённый <code>#7C8794</code></div>
+        <div class="ds-sw"><i style="background:var(--bg-field)"></i>Поверхности: белая · панельная <code>#FBFCFD</code> · полотно <code>#F7F9FB</code> · поле <code>#F3F6F9</code></div>
+        <div class="ds-sw"><i style="background:var(--line)"></i>Границы <code>#DFE4EA</code> · усиленная <code>#C9D1DA</code> · волосяная <code>#EFF2F5</code></div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Типографика</div>
+        <span style="font-size:19px;font-weight:600;letter-spacing:-0.015em">Заголовок экрана · 19/600</span>
+        <span class="h2">Заголовок панели · 15/600</span>
+        <span class="sec-title">Заголовок секции · 12,5/600 caps</span>
+        <span>Основной текст интерфейса · 13/400 · межстрочный 1,45</span>
+        <span class="xs sec">Подпись и метаданные · 11,5/400</span>
+        <span class="mono sm">Числа, время, версии · IBM Plex Mono 12</span>
+      </div>
+      <div class="ds-item"><div class="ds-label">Размеры</div>
+        <div class="ds-zone"><b>Радиусы</b><span>6 · 8 · 10 · 12 px</span><b>Высота controls</b><span>desktop 32 px, мелкие 26, крупные 36; mobile ≥ 44 px</span><b>Отступы</b><span>карточка 16, строка списка 11×16, страница 18×24</span><b>Фокус</b><span>двойное кольцо 2 px фон + 2 px акцент, видимо на любом фоне</span><b>Тени</b><span>только у всплывающих слоёв (menu, drawer, modal)</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="ds-h"><h2>Кнопки и icon-buttons</h2><span class="mut">стабильная высота, иконка + tooltip для общеизвестных действий, состояние не только цветом</span></div>
+    <div class="ds-grid ds-grid--3">
+      <div class="ds-item"><div class="ds-label">Виды</div>
+        <div class="ds-row"><button class="btn btn--primary" type="button">Основное действие</button><button class="btn" type="button">Обычное</button><button class="btn btn--ghost" type="button">Тихое</button><button class="btn btn--danger" type="button">Разрушительное</button><button class="btn btn--warn" type="button">Рассмотреть</button><button class="btn btn--link" type="button">Ссылка</button></div>
+        <div class="ds-row"><button class="btn btn--primary btn--sm" type="button">Мелкая 26</button><button class="btn btn--sm" type="button">Мелкая</button><button class="btn btn--primary" type="button">Обычная 32</button><button class="btn btn--primary btn--lg" type="button">Крупная 36</button></div>
+        <div class="ds-row"><span class="btn-group"><button class="btn" type="button">Список</button><button class="btn" type="button" aria-pressed="true" style="background:var(--acc-tint);color:var(--acc-dark)">Сетка</button></span><button class="btn" type="button"><svg class="ic"><use href="#i-plus"/></svg>С иконкой</button><button class="btn" type="button">Меню<svg class="ic"><use href="#i-chev"/></svg></button></div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Состояния</div>
+        <div class="ds-row"><button class="btn btn--primary" type="button">Обычная</button><button class="btn btn--primary" type="button" style="background:var(--acc-dark)">Hover</button><button class="btn btn--primary ds-focus" type="button">Focus</button><button class="btn btn--primary" type="button" disabled>Недоступна</button><button class="btn btn--primary is-loading" type="button">Сохраняем</button></div>
+        <div class="ds-row"><button class="btn" type="button">Обычная</button><button class="btn ds-hover" type="button">Hover</button><button class="btn ds-pressed" type="button">Pressed</button><button class="btn ds-focus" type="button">Focus</button><button class="btn" type="button" disabled>Недоступна</button><button class="btn is-loading" type="button">Проверяем</button></div>
+        <div class="ds-note">Недоступная кнопка сохраняет размер и текст; причина недоступности — в tooltip. Загрузка не меняет ширину.</div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Icon-buttons с tooltip</div>
+        <div class="ds-row">
+          <button class="btn btn--icon" type="button" aria-label="Изменить" data-tip="Изменить"><svg class="ic"><use href="#i-edit"/></svg></button>
+          <button class="btn btn--icon" type="button" aria-label="Скопировать ссылку" data-tip="Скопировать ссылку"><svg class="ic"><use href="#i-link"/></svg></button>
+          <button class="btn btn--icon" type="button" aria-label="Скачать" data-tip="Скачать"><svg class="ic"><use href="#i-download"/></svg></button>
+          <button class="btn btn--icon btn--danger" type="button" aria-label="Удалить" data-tip="Удалить"><svg class="ic"><use href="#i-trash"/></svg></button>
+          <button class="btn btn--icon" type="button" aria-label="Ещё действия" data-tip="Ещё действия"><svg class="ic"><use href="#i-dots"/></svg></button>
+          <button class="btn btn--icon btn--sm" type="button" aria-label="Уменьшить" data-tip="Уменьшить"><svg class="ic"><use href="#i-zoom-out"/></svg></button>
+          <button class="btn btn--icon btn--sm" type="button" aria-label="Увеличить" data-tip="Увеличить"><svg class="ic"><use href="#i-zoom-in"/></svg></button>
+          <button class="btn btn--icon btn--ghost" type="button" aria-label="Закрыть" data-tip="Закрыть"><svg class="ic"><use href="#i-x"/></svg></button>
+          <button class="btn btn--icon" type="button" aria-label="Повторить попытку недоступно до завершения" data-tip="Доступно после завершения запуска" disabled><svg class="ic"><use href="#i-refresh"/></svg></button>
+        </div>
+        <div class="ds-note">Каждая icon-button имеет <code>aria-label</code> и tooltip (наведение и фокус). Кнопки «Обновить» в интерфейсе нет — данные приходят realtime.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="ds-h"><h2>Статусы, источники, риски</h2><span class="mut">текст + иконка, цвет — дополнительный носитель</span></div>
+    <div class="ds-grid ds-grid--3">
+      <div class="ds-item"><div class="ds-label">Status badges</div>
+        <div class="ds-row"><span class="pill pill--run"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span><span class="pill pill--ok"><svg class="ic"><use href="#i-check"/></svg>Завершён</span><span class="pill pill--wait"><svg class="ic"><use href="#i-clock"/></svg>В очереди</span><span class="pill pill--gate"><svg class="ic"><use href="#i-shield"/></svg>Ждёт решения</span><span class="pill pill--err"><svg class="ic"><use href="#i-alert"/></svg>Ошибка</span><span class="pill pill--off"><svg class="ic"><use href="#i-x-circle"/></svg>Отменён</span><span class="pill pill--off"><svg class="ic"><use href="#i-minus"/></svg>Отключён</span><span class="pill pill--info"><svg class="ic"><use href="#i-edit"/></svg>Черновик</span></div>
+        <div class="ds-row"><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Проверяется</span><span class="pill pill--err pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Изолирован</span><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Решение человека</span><span class="pill pill--wait pill--sm"><svg class="ic"><use href="#i-clock"/></svg>Через 2 дня</span></div>
+        <div class="ds-row"><span class="tag">Инструкции v3</span><span class="tag tag--acc">gpt-5.1</span><span class="tag tag--ok">Совместимо</span><span class="tag tag--warn">Требует runtime ≥ 2.1</span><span class="tag tag--err">Отозвано</span><span class="tag tag--mono">rev 4</span><span class="badge-count">2</span><span class="badge-count badge-count--acc">12</span></div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Источник запуска · инициатор · исполнитель</div>
+        <div class="ds-row"><span class="source" tabindex="0" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span><span class="source" tabindex="0" data-tip="Запущено через помощника Kodex от имени пользователя" data-tip-pos="bottom"><svg class="ic"><use href="#i-bot"/></svg>Kodex</span><span class="source" tabindex="0" data-tip="Запущено по расписанию автоматизации" data-tip-pos="bottom"><svg class="ic"><use href="#i-automation"/></svg>Автоматизация</span><span class="source" tabindex="0" data-tip="Запущено другим ИИ-сотрудником по типизированному инструменту" data-tip-pos="bottom"><svg class="ic"><use href="#i-branch"/></svg>Делегирование</span></div>
+        <div class="list-row" style="border:1px solid var(--line);border-radius:var(--r-2)"><span class="avatar avatar--32 avatar--acc" aria-hidden="true">РП</span><div class="list-row__main"><div class="list-row__title"><span>Подготовить предложение</span></div><div class="list-row__sub"><span>Исполнитель: <b>Редактор предложений</b></span><span>·</span><span>Инициатор: <b>Анна Волкова</b></span><span>·</span><span class="source" tabindex="0" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></div></div><span class="list-row__status"><span class="pill pill--run"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняется</span></span></div>
+        <div class="ds-note">Три разных понятия показываются раздельно: <b>источник</b> (откуда пришёл запуск), <b>инициатор</b> (кто/что его создал) и <b>исполнитель</b> (ИИ-сотрудник). Статус закреплён справа в колонке фиксированной ширины и не сдвигает название.</div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Риск, состояние, прогресс</div>
+        <div class="ds-row"><span class="risk">read · чтение</span><span class="risk risk--write">write · изменение</span><span class="risk risk--code">code_change</span><span class="risk risk--external">external_communication</span><span class="risk risk--destructive">destructive</span><span class="risk risk--financial">financial</span></div>
+        <div class="ds-row"><span class="row gap-4 xs"><span class="dot-state dot-state--run"></span>2 работают</span><span class="row gap-4 xs"><span class="dot-state dot-state--warn"></span>1 решение</span><span class="row gap-4 xs"><span class="dot-state dot-state--err"></span>1 инцидент</span><span class="row gap-4 xs"><span class="dot-state dot-state--ok"></span>спокойно</span></div>
+        <div class="col gap-6"><span class="progress"><span class="progress__bar" style="width:62%"></span></span><span class="progress progress--indeterminate"><span class="progress__bar"></span></span><span class="progress progress--warn"><span class="progress__bar" style="width:30%"></span></span></div>
+        <div class="row gap-10 xs sec"><span class="spinner"></span>Загружаем… <span class="spinner spinner--sm"></span> мелкий</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="ds-h"><h2>Поля ввода</h2><span class="mut">стабильные размеры · видимый фокус · disabled / read-only / error · подсказка не прыгает</span></div>
+    <div class="ds-grid ds-grid--3">
+      <div class="ds-item">
+        <label class="field"><span class="field__label">Название <span class="req">*</span></span><input class="input" value="Аналитик продаж"><span class="field__hint">Видно участникам Проекта</span></label>
+        <label class="field"><span class="field__label">Focus</span><input class="input" style="border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-tint)" value="Ввод с фокусом"></label>
+        <label class="field"><span class="field__label">Только чтение</span><input class="input" readonly value="Корпоративные продажи"></label>
+        <label class="field"><span class="field__label">Недоступно</span><input class="input" disabled placeholder="Недоступно по правам"></label>
+        <label class="field is-error"><span class="field__label">Задача <span class="req">*</span></span><textarea class="textarea" rows="2" placeholder="Опишите, что нужно сделать"></textarea><span class="field__error"><svg class="ic"><use href="#i-alert"/></svg>Задача обязательна: без неё сотрудник не получит постановку</span></label>
+      </div>
+      <div class="ds-item">
+        <div class="field"><span class="field__label">Select · конечный enum</span><button class="select select--block" type="button" data-menu="#ds-select-menu" aria-haspopup="menu" aria-expanded="false"><span class="select__value">Стандартный</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+          <div class="menu" id="ds-select-menu"><button class="menu__item" role="menuitemradio" aria-checked="true"><span>Стандартный</span><svg class="ic ic-14"><use href="#i-check"/></svg></button><button class="menu__item" role="menuitemradio" aria-checked="false"><span>Экономичный</span></button><button class="menu__item" role="menuitemradio" aria-checked="false"><span>Расширенный</span></button></div></div>
+        <div class="field"><span class="field__label">Select · placeholder и disabled</span><div class="ds-row"><button class="select" type="button"><span class="select__value is-placeholder">Выберите модель</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button><button class="select" type="button" disabled><span class="select__value">gpt-5.1</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button></div></div>
+        <div class="field"><span class="field__label">Combobox · фиксированная ширина, максимум две строки</span><button class="combobox" type="button" aria-haspopup="dialog"><span class="combobox__text"><span class="combobox__title">Подготовить предложение для компании Север с учётом обновлённого регламента и требований к пилотному внедрению на 50 сотрудников</span><span class="combobox__sub">Редактор предложений · вчера · 3 хода</span></span><svg class="ic ic-14"><use href="#i-chev"/></svg></button></div>
+        <div class="field"><span class="field__label">Combobox · пусто</span><button class="combobox is-placeholder" type="button"><span class="combobox__text"><span class="combobox__title">Выберите сессию для продолжения</span></span><svg class="ic ic-14"><use href="#i-chev"/></svg></button></div>
+        <label class="search"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Серверный поиск · от 2 символов" aria-label="Поиск"><button class="search__clear" type="button" aria-label="Очистить"><svg class="ic ic-12"><use href="#i-x"/></svg></button></label>
+      </div>
+      <div class="ds-item">
+        <div class="ds-label">Checkbox · radio · switch</div>
+        <label class="check"><input type="checkbox" checked><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text">Запускать работу<small>Разрешает создавать запуски в Проекте</small></span></label>
+        <label class="check"><input type="checkbox" id="ds-ind"><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text">Частично выбрано (indeterminate)</span></label>
+        <label class="check"><input type="checkbox" disabled><span class="check__box"><svg class="ic"><use href="#i-check"/></svg></span><span class="check__text">Недоступно</span></label>
+        <div class="ds-row"><label class="radio"><input type="radio" name="ds-r" checked><span class="radio__dot"></span><span class="radio__text">Новая сессия</span></label><label class="radio"><input type="radio" name="ds-r"><span class="radio__dot"></span><span class="radio__text">Продолжить существующую</span></label></div>
+        <div class="col gap-6">
+          <label class="radio-card"><input type="radio" name="ds-rc" checked><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Новая сессия</span><span class="radio-card__sub">История начнётся заново, провайдер выберет свободную учётную запись</span></span></label>
+          <label class="radio-card"><input type="radio" name="ds-rc"><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Продолжить существующую</span><span class="radio-card__sub">Та же учётная запись и история; новый ход встанет в очередь FIFO</span></span></label>
+        </div>
+        <div class="ds-row"><label class="switch"><input type="checkbox" checked><span class="switch__track"></span>Сотрудник включён</label><label class="switch"><input type="checkbox"><span class="switch__track"></span>Уведомлять</label><label class="switch"><input type="checkbox" disabled checked><span class="switch__track"></span>Системный</label></div>
+        <div class="ds-note">Radio-card одинаковой высоты вне зависимости от выбора: выделение — рамкой и фоном, без смены размеров.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="ds-h"><h2>Menu / Popover · Tabs · Segmented</h2><span class="mut">закрытие по outside click и Escape, стрелки, возврат фокуса; без native &lt;details&gt;</span></div>
+    <div class="ds-grid ds-grid--3">
+      <div class="ds-item"><div class="ds-label">Menu / Popover</div>
+        <div class="ds-row">
+          <button class="btn" type="button" data-menu="#ds-menu-1" aria-haspopup="menu" aria-expanded="false">Действия<svg class="ic"><use href="#i-chev"/></svg></button>
+          <div class="menu" id="ds-menu-1"><div class="menu__title">Запуск</div><button class="menu__item"><svg class="ic"><use href="#i-activity"/></svg><span>Ход работы</span><span class="menu__hint">H</span></button><button class="menu__item"><svg class="ic"><use href="#i-link"/></svg><span>Скопировать ссылку</span></button><button class="menu__item" disabled><svg class="ic"><use href="#i-refresh"/></svg><span class="menu__text"><span>Повторить попытку</span><small>Доступно после завершения</small></span></button><div class="menu__sep"></div><button class="menu__item menu__item--danger"><svg class="ic"><use href="#i-x-circle"/></svg><span>Отменить запуск</span></button></div>
+          <button class="btn" type="button" data-menu="#ds-menu-2" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-filter"/></svg>Состояние: все</button>
+          <div class="menu" id="ds-menu-2"><div class="menu__search"><label class="search search--bg"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Фильтр" aria-label="Фильтр" data-menu-filter></label></div><button class="menu__item" role="menuitemradio" aria-checked="true" data-filter-text="все"><span>Все</span><svg class="ic ic-14"><use href="#i-check"/></svg></button><button class="menu__item" role="menuitemradio" aria-checked="false" data-filter-text="выполняется"><span>Выполняется</span></button><button class="menu__item" role="menuitemradio" aria-checked="false" data-filter-text="ждёт решения"><span>Ждёт решения</span></button><button class="menu__item" role="menuitemradio" aria-checked="false" data-filter-text="завершён"><span>Завершён</span></button><button class="menu__item" role="menuitemradio" aria-checked="false" data-filter-text="ошибка"><span>Ошибка</span></button></div>
+        </div>
+        <div class="ds-note">Меню размещается в слое поверх содержимого, не обрезается контейнерами, переворачивается у края. Пункт может быть недоступен с пояснением.</div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Tabs</div>
+        <div class="tabs tabs--inline" role="tablist" data-tabs aria-label="Пример вкладок">
+          <button class="tab" role="tab" id="ds-tab-1" aria-controls="ds-tp-1" aria-selected="true">Профиль</button>
+          <button class="tab" role="tab" id="ds-tab-2" aria-controls="ds-tp-2" aria-selected="false">Инструкции <span class="tab__count">v3</span></button>
+          <button class="tab" role="tab" id="ds-tab-3" aria-controls="ds-tp-3" aria-selected="false">Runtime</button>
+          <button class="tab" role="tab" id="ds-tab-4" aria-controls="ds-tp-4" aria-selected="false">Доступы и знания <span class="badge-count badge-count--mut">4</span></button>
+        </div>
+        <div class="tabpanel sm sec" id="ds-tp-1" role="tabpanel" aria-labelledby="ds-tab-1">Панель «Профиль». Стрелки ← → переключают вкладки, Tab уходит в содержимое.</div>
+        <div class="tabpanel sm sec" id="ds-tp-2" role="tabpanel" aria-labelledby="ds-tab-2" hidden>Панель «Инструкции».</div>
+        <div class="tabpanel sm sec" id="ds-tp-3" role="tabpanel" aria-labelledby="ds-tab-3" hidden>Панель «Runtime».</div>
+        <div class="tabpanel sm sec" id="ds-tp-4" role="tabpanel" aria-labelledby="ds-tab-4" hidden>Панель «Доступы и знания».</div>
+        <div class="ds-label" style="margin-top:8px">Chips-фильтры</div>
+        <div class="ds-row" data-chip-group="multi"><button class="chip" type="button" aria-pressed="true">Корпоративные продажи</button><button class="chip" type="button" aria-pressed="false">Клиентская поддержка</button><button class="chip" type="button" aria-pressed="true">Решения</button><button class="chip" type="button" aria-pressed="false">Инциденты</button></div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Segmented · list/grid без изменения размера layout</div>
+        <div class="row row--between">
+          <span class="toolbar__count">Показано 3 из 3</span>
+          <div class="seg" data-seg data-view-target="#ds-demo-list" role="group" aria-label="Вид">
+            <button class="seg__btn seg__btn--icon" type="button" data-view="list" aria-pressed="true" aria-label="Список" data-tip="Список" data-tip-pos="bottom"><svg class="ic"><use href="#i-list"/></svg></button>
+            <button class="seg__btn seg__btn--icon" type="button" data-view="grid" aria-pressed="false" aria-label="Сетка" data-tip="Сетка" data-tip-pos="bottom"><svg class="ic"><use href="#i-grid"/></svg></button>
+          </div>
+        </div>
+        <div class="ds-demo-box"><div class="ds-demo-list is-list" id="ds-demo-list">
+          <div class="list-row"><span class="mime mime--pdf">pdf</span><div class="list-row__main"><div class="list-row__title"><span>Описание продукта.pdf</span></div><div class="list-row__sub"><span>4,2 МБ · v2</span></div></div></div>
+          <div class="list-row"><span class="mime mime--doc">docx</span><div class="list-row__main"><div class="list-row__title"><span>Сценарии продаж.docx</span></div><div class="list-row__sub"><span>820 КБ · v1</span></div></div></div>
+          <div class="list-row"><span class="mime mime--xls">xlsx</span><div class="list-row__main"><div class="list-row__title"><span>Прайс-лист 2026.xlsx</span></div><div class="list-row__sub"><span>260 КБ · v1</span></div></div></div>
+        </div></div>
+        <div class="ds-row"><div class="seg seg--lg" data-seg role="group" aria-label="Что запускаем"><button class="seg__btn" type="button" aria-pressed="false">ИИ-сотрудник</button><button class="seg__btn" type="button" aria-pressed="true">Процесс</button></div><div class="seg" data-seg role="group" aria-label="Scope"><button class="seg__btn" type="button" aria-pressed="true">Организация</button><button class="seg__btn" type="button" aria-pressed="false">Проект</button></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="ds-h"><h2>AsyncEntityPicker и AsyncMultiPicker</h2><span class="mut">серверный поиск с debounce 250 мс · loading · empty · error · cursor pagination · infinite scroll · 1 248 и 300 элементов</span></div>
+    <div class="ds-grid ds-grid--3">
+      <div class="ds-item"><div class="ds-label">AsyncEntityPicker · dropdown (файлы, 1 248)</div>
+        <button class="combobox is-placeholder" type="button" id="ds-picker-file"><span class="combobox__text"><span class="combobox__title">Выберите файл</span></span><svg class="ic ic-14"><use href="#i-chev"/></svg></button>
+        <div class="ds-note">Откройте и введите «прайс», «xyz» (пусто) или «ошибка» (ошибка с повтором). Прокрутка списка догружает страницы по курсору; длинные названия занимают максимум две строки, ширина dropdown фиксирована.</div>
+        <div class="ds-label" style="margin-top:6px">Статические состояния</div>
+        <div class="ds-grid" style="grid-template-columns:repeat(3,1fr);gap:8px">
+          <div class="picker picker--inline" style="min-height:120px"><div class="picker__search"><label class="search search--bg"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" value="прай" aria-label="Поиск"></label></div><div class="picker__list"><div class="picker__state"><span class="spinner"></span><span>Ищем на сервере…</span></div></div></div>
+          <div class="picker picker--inline" style="min-height:120px"><div class="picker__search"><label class="search search--bg"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" value="xyz" aria-label="Поиск"></label></div><div class="picker__list"><div class="picker__state"><svg class="ic ic-20"><use href="#i-search"/></svg><span>По запросу «xyz» ничего не найдено</span></div></div></div>
+          <div class="picker picker--inline" style="min-height:120px"><div class="picker__search"><label class="search search--bg"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" value="прай" aria-label="Поиск"></label></div><div class="picker__list"><div class="picker__state"><svg class="ic ic-20 err-text"><use href="#i-alert"/></svg><span>Не удалось получить список</span><button class="btn btn--sm" type="button">Повторить</button></div></div></div>
+        </div>
+      </div>
+      <div class="ds-item" style="grid-column: span 2"><div class="ds-label">AsyncMultiPicker · inline (ИИ-сотрудники, 300) · selected tray и счётчик</div>
+        <div id="ds-picker-multi" style="max-height:360px;display:flex;flex-direction:column"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="ds-h"><h2>Modal · Drawer · Bottom sheet</h2><span class="mut">focus trap, Escape, возврат фокуса на вызвавший элемент, scrim для модальных</span></div>
+    <div class="ds-grid ds-grid--3">
+      <div class="ds-item"><div class="ds-label">Вызов</div>
+        <div class="ds-row"><button class="btn" type="button" data-modal="#ds-modal">Открыть modal</button><button class="btn" type="button" data-drawer="#ds-drawer">Открыть drawer</button><button class="btn" type="button" id="ds-toast-btn">Показать toast</button></div>
+        <div class="ds-note">Modal — для решения «здесь и сейчас» (подтверждение, picker). Drawer — для контекстной панели (Kodex, ход работы, детали) — не теряет экран. Bottom sheet — mobile-эквивалент обоих; см. mobile frame ниже. При открытии фокус уходит на первый элемент, Tab зациклен внутри, Escape закрывает и возвращает фокус.</div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Notices и banners</div>
+        <div class="notice notice--info"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Изменения применятся к следующему ходу: текущая попытка не меняется.</span></div>
+        <div class="notice notice--ok"><svg class="ic"><use href="#i-check-circle"/></svg><span class="notice__text">Платформа готова к работе с нулём подключений.</span></div>
+        <div class="notice notice--warn"><svg class="ic"><use href="#i-warning"/></svg><span class="notice__text"><b>Уведомление не доставлено</b> во внешний канал. На результат запуска это не влияет.</span><span class="notice__actions"><button class="btn btn--sm" type="button">Повторить</button></span></div>
+        <div class="notice notice--err"><svg class="ic"><use href="#i-alert"/></svg><span class="notice__text"><b>План устарел.</b> Объект изменён другим участником — пересоберите план; частичное применение невозможно.</span></div>
+        <div class="banner banner--err" style="border-radius:var(--r-2);border:1px solid var(--err-line)"><svg class="ic"><use href="#i-wifi-off"/></svg>Нет соединения · показан последний подтверждённый снимок 12:04<button class="btn btn--sm" type="button">Подробнее</button></div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Empty · error · forbidden · conflict</div>
+        <div class="empty empty--compact" style="border:1px dashed var(--line-strong);border-radius:var(--r-3)"><span class="empty__icon"><svg class="ic"><use href="#i-inbox"/></svg></span><div class="empty__title">Запусков пока нет</div><div class="empty__text">Создайте запуск вручную или настройте автоматизацию. Kodex может помочь с постановкой задачи.</div><button class="btn btn--primary btn--sm" type="button">Новый запуск</button></div>
+        <div class="state-block state-block--err"><svg class="ic"><use href="#i-alert"/></svg><span class="grow">Не удалось загрузить результаты. Остальные секции работают.</span><button class="btn btn--sm" type="button">Повторить</button></div>
+        <div class="state-block state-block--forbidden"><svg class="ic"><use href="#i-lock"/></svg><span class="grow">Нет доступа к аудиту этого Проекта. Запросите право «Просмотр аудита» у владельца.</span></div>
+        <div class="state-block"><svg class="ic"><use href="#i-history"/></svg><span class="grow">Версия устарела: объект изменён 12:41. Перечитайте, чтобы продолжить.</span><button class="btn btn--sm" type="button">Перечитать</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="ds-h"><h2>Списки, таблицы, карточки</h2><span class="mut">одна карточка — один уровень; статус справа; ключ-значение; summary-strip вместо KPI-«каши»</span></div>
+    <div class="ds-grid ds-grid--3">
+      <div class="ds-item" style="grid-column: span 2"><div class="ds-label">Таблица с sticky header, hover и выбором</div>
+        <div class="ds-demo-box" style="max-height:200px;overflow:auto">
+          <table class="table table--hover">
+            <thead><tr><th>Сотрудник</th><th>Роль</th><th>Состояние</th><th>Модель</th><th class="num">Запусков</th><th></th></tr></thead>
+            <tbody>
+              <tr class="is-selected"><td><div class="row gap-10"><span class="avatar avatar--24 avatar--ok">АП</span><div><div class="cell-title">Аналитик продаж</div><div class="cell-sub">Исследование клиентов</div></div></div></td><td>Аналитик</td><td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Готов</span></td><td class="mono">gpt-5.1</td><td class="num">42</td><td><button class="btn btn--icon btn--sm btn--ghost" type="button" aria-label="Ещё" data-tip="Ещё"><svg class="ic"><use href="#i-dots"/></svg></button></td></tr>
+              <tr><td><div class="row gap-10"><span class="avatar avatar--24 avatar--acc">РП</span><div><div class="cell-title">Редактор предложений</div><div class="cell-sub">Итоговые документы</div></div></div></td><td>Редактор</td><td><span class="pill pill--run pill--sm"><svg class="ic ic-spin"><use href="#i-spin"/></svg>Выполняет</span></td><td class="mono">gpt-5.1</td><td class="num">18</td><td><button class="btn btn--icon btn--sm btn--ghost" type="button" aria-label="Ещё" data-tip="Ещё"><svg class="ic"><use href="#i-dots"/></svg></button></td></tr>
+              <tr><td><div class="row gap-10"><span class="avatar avatar--24">ЮК</span><div><div class="cell-title">Юридический консультант</div><div class="cell-sub">Условия и риски</div></div></div></td><td>Консультант</td><td><span class="pill pill--off pill--sm"><svg class="ic"><use href="#i-minus"/></svg>Отключён</span></td><td class="mono">gpt-5.1-mini</td><td class="num">7</td><td><button class="btn btn--icon btn--sm btn--ghost" type="button" aria-label="Ещё" data-tip="Ещё"><svg class="ic"><use href="#i-dots"/></svg></button></td></tr>
+              <tr><td><div class="row gap-10"><span class="avatar avatar--24 avatar--acc">МП</span><div><div class="cell-title">Менеджер продаж</div><div class="cell-sub">Координатор Процесса</div></div></div></td><td>Координатор</td><td><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Готов</span></td><td class="mono">gpt-5.1</td><td class="num">31</td><td><button class="btn btn--icon btn--sm btn--ghost" type="button" aria-label="Ещё" data-tip="Ещё"><svg class="ic"><use href="#i-dots"/></svg></button></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="summary-strip"><span class="summary-strip__item"><b>4</b>сотрудника</span><span class="summary-strip__item"><b>2</b>Процесса</span><span class="summary-strip__item is-run"><b>2</b>работают</span><span class="summary-strip__item is-warn"><b>1</b>ждёт решения</span><span class="summary-strip__item"><b>12</b>результатов за неделю</span></div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Ключ-значение · аватары · MIME</div>
+        <div class="kv"><div class="kv__row"><span class="kv__k">Назначение</span><span class="kv__v">Исследование клиента и подготовка фактов</span></div><div class="kv__row"><span class="kv__k">Окружение</span><span class="kv__v">Офисные документы и PDF · <span class="mono">rev 4</span></span></div><div class="kv__row"><span class="kv__k">Учётная запись</span><span class="kv__v">Пул продаж · least_used · <span class="mut">значение скрыто</span></span></div></div>
+        <div class="ds-row"><span class="avatar avatar--20">АВ</span><span class="avatar avatar--24 avatar--acc">РП</span><span class="avatar">АП</span><span class="avatar avatar--32 avatar--ok">ИР</span><span class="avatar avatar--36 avatar--warn">АП</span><span class="avatar avatar--44 avatar--gen" data-tip="Аватар создан Kodex">КО</span><span class="avatar avatar--32 avatar--bot"><svg class="ic"><use href="#i-bot"/></svg></span><span class="avatar-stack"><span class="avatar avatar--24">АВ</span><span class="avatar avatar--24 avatar--acc">МО</span><span class="avatar avatar--24 avatar--ok">ЕК</span><span class="avatar avatar--24">+3</span></span></div>
+        <div class="ds-row"><span class="mime mime--pdf">pdf</span><span class="mime mime--doc">docx</span><span class="mime mime--xls">xlsx</span><span class="mime mime--img">png</span><span class="mime mime--md">md</span><span class="mime mime--txt">txt</span><span class="mime mime--zip">zip</span><span class="mime mime--lg mime--pdf">pdf</span></div>
+        <div class="ds-note">Аватар без изображения — инициалы; сгенерированный Kodex — с подсказкой. Аватар никогда не меняет полномочия.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="ds-h"><h2>Текст, код и специальные блоки</h2><span class="mut">textarea/code-editor shell · ход работы · операция плана · сообщения Kodex</span></div>
+    <div class="ds-grid ds-grid--3">
+      <div class="ds-item"><div class="ds-label">Code-editor shell · Markdown с {{variables}}</div>
+        <div class="code" id="ds-code-md"><div class="code__bar"><span>Инструкции · черновик v4</span><span class="right row gap-6"><button class="btn btn--sm" type="button"><svg class="ic"><use href="#i-search"/></svg>Найти</button><button class="btn btn--sm" type="button">Проверить</button></span></div></div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Code-editor shell · TOML overlay с ошибкой</div>
+        <div class="code" id="ds-code-toml"><div class="code__bar"><span>config.toml · overlay v2</span><span class="right xs err-text">1 ошибка</span></div></div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Ход работы · блоки событий</div>
+        <div class="ds-demo-box" style="padding:0 12px">
+          <div class="act act--user"><div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-user"/></svg></span></div><div class="act__main"><div class="act__head"><b>Анна Волкова</b><span>задача</span><span class="act__time">12:04</span></div><div class="act__text">Подготовить коммерческое предложение для компании Север к встрече 27 августа.</div></div></div>
+          <div class="act act--tool"><div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-tool"/></svg></span></div><div class="act__main"><div class="act__head"><b>Редактор предложений</b><span>вызов инструмента</span><span class="act__time">12:13</span></div><div class="act__block"><div class="act__block-head"><svg class="ic ic-14"><use href="#i-files"/></svg><span class="mono">files.search</span><span class="mut">· Файлы Проекта · чтение</span><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>1,2 с</span></div><div class="act__block-body">Запрос: «прайс 2026» · найдено 2 файла · <a href="#">Полный результат · Artifact</a></div></div></div></div>
+          <div class="act act--error"><div class="act__rail"><span class="act__icon"><svg class="ic"><use href="#i-alert"/></svg></span></div><div class="act__main"><div class="act__head"><b>Автор писем</b><span>ошибка</span><span class="act__time">12:20</span></div><div class="act__block act__block--error"><div class="act__block-head"><svg class="ic ic-14"><use href="#i-terminal"/></svg><span class="mono">pandoc</span><span class="pill pill--err pill--sm"><svg class="ic"><use href="#i-alert"/></svg>Код 1</span></div><div class="act__block-body">Команда завершилась с ошибкой: не найден входной файл. Полный вывод сохранён в диагностике запуска.</div></div></div></div>
+        </div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Операция плана Kodex</div>
+        <div class="op"><div class="op__head"><span class="op__kind op__kind--update">update</span><span class="op__title">ИИ-сотрудник «Аналитик продаж»</span><button class="btn btn--icon btn--sm btn--ghost" type="button" aria-label="Удалить операцию" data-tip="Удалить операцию"><svg class="ic"><use href="#i-trash"/></svg></button></div><div class="op__body"><div class="op__row"><span class="op__k">Окружение</span><span class="op__before">Стандартное окружение</span><span class="op__after"><button class="select" type="button"><span class="select__value">Офисные документы и PDF · rev 4</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button></span></div><div class="op__row"><span class="op__k">Учётная запись</span><span class="op__before">—</span><span class="op__after">ref: пул продаж · <span class="mut">значение скрыто</span></span></div></div><div class="op__foot"><span>Зависит от: операция 1</span><span>·</span><span>Последствие: новая RuntimeRevision для следующего хода</span></div></div>
+        <div class="op op--conflict"><div class="op__head"><span class="op__kind op__kind--delete">delete</span><span class="op__title">Grant «Электронная почта · отправка»</span><span class="tag tag--err">конфликт</span></div><div class="op__foot"><span>Сервер: grant уже отозван 12:41 (Михаил Орлов). Пересоберите план.</span></div></div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Сообщения Kodex и composer</div>
+        <div class="col gap-8" style="padding:4px 0">
+          <div class="msg msg--user"><div class="msg__meta">Анна Волкова · 10:08</div><div class="msg__bubble">Создай сотрудника для классификации обращений</div></div>
+          <div class="msg msg--bot"><div class="msg__meta">Kodex · 10:08</div><div class="msg__bubble">Подготовил план из 3 операций. Ничего не применено — откройте план и проверьте параметры.</div><div class="msg__actions"><button class="btn btn--sm btn--primary" type="button">Открыть план</button><button class="btn btn--sm" type="button">Изменить</button></div></div>
+        </div>
+        <div class="composer"><div class="composer__area"><textarea rows="2" placeholder="Спросите Kodex или опишите, что настроить" aria-label="Сообщение Kodex"></textarea><div class="composer__btns"><button class="composer__mic" type="button" disabled aria-label="Голосовой ввод появится позже" data-tip="Голосовой ввод появится позже"><svg class="ic ic-14"><use href="#i-mic"/></svg></button><button class="composer__send" type="button" aria-label="Отправить"><svg class="ic ic-14"><use href="#i-send"/></svg></button></div></div><div class="composer__bar"><span>Enter — отправить · Shift+Enter — новая строка</span></div></div>
+      </div>
+      <div class="ds-item"><div class="ds-label">Шаги, kanban-карточка, tooltip</div>
+        <div class="steps"><span class="step is-done"><span class="step__n">1</span>Способ</span><span class="step__line"></span><span class="step is-done"><span class="step__n">2</span>Учётные данные</span><span class="step__line"></span><span class="step is-active"><span class="step__n">3</span>Проверка</span><span class="step__line"></span><span class="step"><span class="step__n">4</span>Ресурсы</span></div>
+        <a class="kcard kcard--gate" href="#"><div class="kcard__title">Проверить условия пилота Ладога</div><div class="kcard__meta"><span>Юридический консультант</span><span>·</span><span class="source" tabindex="0" data-tip="Запущено вручную из Control Center" data-tip-pos="bottom"><svg class="ic"><use href="#i-monitor"/></svg>Control Center</span></div><div class="kcard__foot"><span class="pill pill--gate pill--sm"><svg class="ic"><use href="#i-shield"/></svg>Ждёт решения</span><span class="xs mono warn-text">до 18:00</span></div></a>
+        <div class="ds-row"><button class="btn btn--sm" type="button" data-tip="Подсказка сверху">Tooltip ↑</button><button class="btn btn--sm" type="button" data-tip="Подсказка снизу" data-tip-pos="bottom">Tooltip ↓</button><button class="btn btn--sm tip-wide" type="button" data-tip="Длинная подсказка переносится на несколько строк и не выходит за экран" data-tip-pos="bottom">Длинный tooltip</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- overlays галереи -->
+  <div class="layer">
+    <div class="modal-wrap" id="ds-modal" role="dialog" aria-modal="true" aria-labelledby="ds-modal-title" hidden>
+      <div class="modal">
+        <div class="modal__head"><div><div class="modal__title" id="ds-modal-title">Отменить запуск?</div><div class="modal__sub">Все активные ветви, ожидания решений и дочерние Run будут закрыты согласованно.</div></div><button class="close-btn" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button></div>
+        <div class="modal__body col gap-10"><label class="field"><span class="field__label">Причина (необязательно)</span><textarea class="textarea" rows="2" placeholder="Будет сохранена в аудите"></textarea></label><div class="notice notice--info notice--sm"><svg class="ic"><use href="#i-info"/></svg><span class="notice__text">Результаты завершённых узлов сохранятся. Повторить попытку можно после отмены.</span></div></div>
+        <div class="modal__foot"><span class="grow xs mut">Действие записывается на ваше имя</span><button class="btn" type="button" data-close>Оставить</button><button class="btn btn--danger" type="button" data-close>Отменить запуск</button></div>
+      </div>
+    </div>
+    <div class="drawer" id="ds-drawer" role="dialog" aria-label="Пример drawer" hidden>
+      <div class="drawer__head"><div class="drawer__head-text"><div class="drawer__title">Детали узла</div><div class="drawer__sub">Редактор предложений · попытка 1</div></div><button class="close-btn" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button></div>
+      <div class="drawer__body col gap-12"><div class="kv"><div class="kv__row"><span class="kv__k">Способ запуска</span><span class="kv__v">Делегирование от «Менеджер продаж»</span></div><div class="kv__row"><span class="kv__k">Задача</span><span class="kv__v">Собрать итоговую структуру документа из фактов и прайс-листа</span></div><div class="kv__row"><span class="kv__k">Статус</span><span class="kv__v">Выполняется · шаг 3 из 4</span></div></div><label class="field"><span class="field__label">Комментарий</span><input class="input" placeholder="Фокус попадает сюда по Tab"></label></div>
+      <div class="drawer__foot"><button class="btn" type="button" data-close>Закрыть</button><button class="btn btn--primary" type="button">Открыть сессию</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 3. Mobile ===================== -->
+<p class="stage-label">Mobile 390×844 · оболочка, bottom sheet, зоны касания ≥ 44 px</p>
+<div class="frame frame--mobile" id="frame-mobile">
+  <main class="page">
+    <section class="card"><div class="card__head"><h2 class="sec-title">Требует внимания <span class="badge-count">2</span></h2></div>
+      <div class="list-row" style="padding:12px 14px"><span class="list-row__lead" style="background:var(--warn-tint);color:var(--warn);border:1px solid var(--warn-line)"><svg class="ic"><use href="#i-shield"/></svg></span><div class="list-row__main"><div class="list-row__title"><span>Согласовать предложение</span></div><div class="list-row__sub"><span>срок сегодня, 18:00</span></div></div><button class="btn btn--warn btn--sm" type="button" data-sheet="#m-sheet">Рассмотреть</button></div>
+      <div class="list-row" style="padding:12px 14px"><span class="list-row__lead" style="background:var(--err-tint);color:var(--err);border:1px solid var(--err-line)"><svg class="ic"><use href="#i-alert"/></svg></span><div class="list-row__main"><div class="list-row__title"><span>Ошибка на шаге «Автор писем»</span></div><div class="list-row__sub"><span>14 мин назад</span></div></div><button class="btn btn--sm" type="button">Открыть</button></div>
+    </section>
+    <div class="m-section-title"><h2 class="sec-title">Controls на mobile</h2></div>
+    <label class="search"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Поиск" aria-label="Поиск"></label>
+    <div class="row gap-6" data-chip-group="single" style="overflow-x:auto"><button class="chip" type="button" aria-pressed="true">Все</button><button class="chip" type="button" aria-pressed="false">Работают</button><button class="chip" type="button" aria-pressed="false">Решения</button></div>
+    <label class="radio-card"><input type="radio" name="m-rc" checked><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Новая сессия</span><span class="radio-card__sub">История начнётся заново</span></span></label>
+    <label class="radio-card"><input type="radio" name="m-rc"><span class="radio__dot"></span><span class="radio-card__text"><span class="radio-card__title">Продолжить существующую</span><span class="radio-card__sub">Та же учётная запись и история</span></span></label>
+    <div class="row gap-8"><button class="btn btn--primary grow" type="button">Запустить</button><button class="btn grow" type="button">Отмена</button></div>
+    <label class="switch"><input type="checkbox" checked><span class="switch__track"></span>Сотрудник включён</label>
+  </main>
+  <div class="layer">
+    <div class="sheet" id="m-sheet" role="dialog" aria-label="Решение" hidden>
+      <div class="sheet__grip"></div>
+      <div class="sheet__head"><div class="sheet__title">Согласовать коммерческое предложение</div><button class="m-icon" type="button" aria-label="Закрыть" data-close><svg class="ic"><use href="#i-x"/></svg></button></div>
+      <div class="sheet__body col gap-10"><div class="kv"><div class="kv__row"><span class="kv__k">Запросил</span><span class="kv__v">Менеджер продаж</span></div><div class="kv__row"><span class="kv__k">Срок</span><span class="kv__v">сегодня, 18:00</span></div><div class="kv__row"><span class="kv__k">Файл</span><span class="kv__v">Коммерческое предложение — Север.pdf · безопасный предпросмотр</span></div></div><label class="field"><span class="field__label">Комментарий</span><textarea class="textarea" rows="2" placeholder="Необязательно"></textarea></label></div>
+      <div class="sheet__foot" style="flex-direction:column"><button class="btn btn--primary btn--block" type="button" data-close>Утвердить</button><div class="row gap-8"><button class="btn grow" type="button" data-close>Запросить изменения</button><button class="btn btn--danger grow" type="button" data-close>Отклонить</button></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 4. Тёмная полоса ===================== -->
+<p class="stage-label">Ключевые controls в тёмной теме · графит без синевы, статусы сохраняют контраст</p>
+<div class="frame frame--free" id="frame-dark" data-theme="dark" style="width:1440px"></div>
+
+<p class="stage-note">Дизайн-система — единственный источник токенов и поведения для всех макетов пакета: <code>assets/kodex.css</code> (светлая и тёмная тема, оболочка, controls, состояния) и <code>assets/kodex.js</code> (оболочка, меню, drawer/sheet/modal с focus trap, tabs, segmented, async pickers с cursor-пагинацией, canvas, подсветка кода, синтетические данные). Все controls имеют стабильные размеры, keyboard navigation, видимый фокус, доступные названия и состояния disabled/read-only/error; native <code>&lt;details&gt;</code> как меню не используется. Отличия от старого пакета: помощник вынесен из навигации в FAB и контекстный drawer; переключатель Проекта — внутри навигации, поиск растянут; realtime-индикатор вместо кнопок «Обновить»; source/initiator/executor разделены; добавлены async pickers, tablet-режим и тёмная тема.</p>
+
+<script src="assets/kodex.js"></script>
+<script>
+  // 1. Оболочка
+  const shellFrame = Kodex.mount({ frame: '#frame-shell', nav: 'admin', project: Kodex.data.projects[0], decisions: 2, connection: 'online', kodexContext: { screen: 'Дизайн-система', can: ['объяснить любой компонент'] } });
+  document.getElementById('ds-reconnect').addEventListener('click', () => Kodex.simulateReconnect(shellFrame));
+  document.getElementById('ds-offline').addEventListener('click', () => { Kodex.setConnection(shellFrame, 'offline'); Kodex.toast(shellFrame, 'Соединение потеряно: показан последний подтверждённый снимок', 'wifi-off'); });
+  document.getElementById('ds-online').addEventListener('click', () => Kodex.setConnection(shellFrame, 'online'));
+
+  // 2. Галерея (без оболочки): только поведение
+  Kodex.injectSprite();
+  const gallery = document.getElementById('frame-gallery');
+  Kodex.bindBehaviours(gallery);
+  document.getElementById('ds-ind').indeterminate = true;
+  document.getElementById('ds-toast-btn').addEventListener('click', () => Kodex.toast(gallery, 'Изменения сохранены как версия v3'));
+  if (!gallery.querySelector('.toast-host')) gallery.appendChild(Kodex.el('<div class="toast-host" aria-live="polite" style="position:fixed"></div>'));
+
+  const files = Kodex.gen.files(1248);
+  Kodex.asyncPicker({
+    trigger: document.getElementById('ds-picker-file'), items: files, placeholder: 'Найти файл по имени', width: 460,
+    match: (it, q) => it.name.toLowerCase().includes(q) || it.context.toLowerCase().includes(q),
+    render: (it) => `<span class="mime mime--${it.mime}">${it.ext}</span><span class="picker__text"><span class="picker__title">${Kodex.esc(it.name)}</span><span class="picker__sub"><span>${Kodex.fmtKb(it.sizeKb)}</span><span>·</span><span>v${it.ver}</span><span>·</span><span>${Kodex.esc(it.context)}</span></span></span><span class="picker__aside">${Kodex.pill(it.scan === 'ok' ? 'ok' : it.scan === 'err' ? 'err' : 'run', it.scan === 'ok' ? 'Проверен' : it.scan === 'err' ? 'Изолирован' : 'Проверяется', true)}</span>`,
+    onSelect: (it) => { const t = document.getElementById('ds-picker-file'); t.classList.remove('is-placeholder'); t.querySelector('.combobox__text').innerHTML = `<span class="combobox__title">${Kodex.esc(it.name)}</span><span class="combobox__sub">${Kodex.fmtKb(it.sizeKb)} · v${it.ver} · ${Kodex.esc(it.context)}</span>`; },
+  });
+  const agents = Kodex.gen.agents(300);
+  Kodex.asyncPicker({
+    inline: true, host: document.getElementById('ds-picker-multi'), trigger: document.getElementById('ds-picker-multi'), items: agents, multi: true, placeholder: 'Найти сотрудника по имени или назначению',
+    selected: [agents[0], agents[1]],
+    match: (it, q) => it.name.toLowerCase().includes(q) || it.purpose.toLowerCase().includes(q) || it.project.toLowerCase().includes(q),
+    render: (it) => `${Kodex.avatar(it.initials, 28, it.tone)}<span class="picker__text"><span class="picker__title">${Kodex.esc(it.name)}</span><span class="picker__sub"><span>${Kodex.esc(it.purpose)}</span><span>·</span><span>${Kodex.esc(it.project)}</span></span></span><span class="picker__aside">${Kodex.pill(it.state === 'ok' ? 'ok' : 'off', it.state === 'ok' ? 'Готов' : 'Отключён', true)}</span>`,
+    renderSelected: (it) => it.name,
+  });
+
+  const md = `# Роль\nТы — аналитик продаж компании {{organization.name}}.\n\n## Задача\n- Изучи материалы клиента {{client.name}} из входных файлов.\n- Отделяй **подтверждённые факты** от предположений.\n- Подготовь резюме, потребности, риски и вопросы.\n\n## Ограничения\n- Не отправляй данные во внешние системы без явного разрешения.\n- Не используй {{client.phone}} — переменная недоступна в этом контексте.`;
+  document.getElementById('ds-code-md').insertAdjacentHTML('beforeend', Kodex.codeBlock(md, 'md', { editable: true, errLines: [12], label: 'Инструкции' }) + '<div class="code__foot"><span>Markdown · строка 12</span><span class="is-err">Неизвестная переменная {{client.phone}}</span><span class="right">автосохранение черновика</span></div>');
+  const toml = `# Overlay сотрудника · применяется поверх платформенной политики\n[model]\nname = "gpt-5.1"\nreasoning_effort = "medium"\n\n[sandbox]\n# enforced platform policy — переопределить нельзя\nsandbox_mode = "danger-full-access"\n\n[mcp_servers.project_files]\nrequired = true\ntool_timeout_sec = 600`;
+  document.getElementById('ds-code-toml').insertAdjacentHTML('beforeend', Kodex.codeBlock(toml, 'toml', { editable: true, errLines: [8], label: 'config.toml overlay' }) + '<div class="code__foot"><span>TOML · overlay v2</span><span class="is-err">строка 8: sandbox_mode защищён платформенной политикой</span></div>');
+
+  // 3. Mobile
+  Kodex.mount({ frame: '#frame-mobile', title: 'Главная', nav: 'home', decisions: 2 });
+
+  // 4. Тёмная полоса — тот же markup ключевых controls
+  const dark = document.getElementById('frame-dark');
+  const pick = (sel) => gallery.querySelector(sel).cloneNode(true);
+  const sect = (title, nodes) => { const s = Kodex.el(`<section class="ds-section"><div class="ds-h"><h2>${title}</h2></div><div class="ds-grid ds-grid--3"></div></section>`); nodes.forEach((n) => s.querySelector('.ds-grid').appendChild(n)); return s; };
+  const items = gallery.querySelectorAll('.ds-section');
+  const clone = (section, idx) => { const it = items[section].querySelectorAll(':scope > .ds-grid > .ds-item')[idx].cloneNode(true); it.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id')); it.querySelectorAll('[data-menu]').forEach((n) => n.removeAttribute('data-menu')); return it; };
+  dark.appendChild(sect('Кнопки, статусы, поля, состояния — тёмная тема', [clone(1, 0), clone(1, 1), clone(2, 0), clone(3, 0), clone(3, 2), clone(6, 1), clone(6, 2), clone(8, 1), clone(8, 2)]));
+  Kodex.bindBehaviours(dark);
+</script>
+</body>
+</html>

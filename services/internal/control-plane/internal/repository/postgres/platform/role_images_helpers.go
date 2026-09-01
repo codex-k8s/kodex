@@ -10,13 +10,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+const roleImageTransactionAttempts = 3
+
+var errRoleImageTransactionRetry = errors.New("retry role image transaction")
 
 type roleImageRowScanner interface{ Scan(...any) error }
 
@@ -28,10 +34,17 @@ type lockedRecipe struct {
 type lockedArtifact struct {
 	ID, RecipeID, AdmissionState, AdmissionTokenSHA256, PromotionState string
 	PromotionTokenSHA256, AuthorizationTokenSHA256                     string
+	PromotionRequestID                                                 string
 	AdmissionFence, AdmissionAuthorityGeneration                       uint64
 	PromotionFence, PromotionAuthorityGeneration                       uint64
 	AdmissionExpiresAt, PromotionExpiresAt, AuthorizationExpiresAt     *time.Time
 	Artifact                                                           entity.ImageArtifact
+}
+
+type lockedPromotionRequest struct {
+	ID, Ref, ExpectedProvenanceSHA256, ManifestDigest, ReceiptSHA256 string
+	State, RequestedBy                                               string
+	CreatedAt                                                        time.Time
 }
 
 type lockedBuild struct {
@@ -44,24 +57,23 @@ type lockedBuild struct {
 	Build                   entity.ImageBuild
 }
 
-func scanRecipe(row roleImageRowScanner) (entity.RoleImageRecipe, error) {
+func scanRecipe(row roleImageRowScanner) (entity.RoleImageRecipe, string, error) {
 	var recipe entity.RoleImageRecipe
 	var specification []byte
-	var canManage bool
+	var ownerSubjectRef string
 	err := row.Scan(&recipe.Ref, &recipe.ProjectRef, &recipe.RoleDefinitionRef, &recipe.Name,
 		&recipe.State, &specification, &recipe.Generation, &recipe.SpecSHA256,
 		&recipe.PolicyRevision, &recipe.PolicySHA256, &recipe.RoleRuntimeContractRevision,
 		&recipe.RoleRuntimeContractSHA256, &recipe.ActiveImageArtifactRef,
 		&recipe.PromotedImageReference, &recipe.Version, &recipe.CreatedAt, &recipe.UpdatedAt,
-		&canManage)
+		&ownerSubjectRef)
 	if err != nil {
-		return entity.RoleImageRecipe{}, err
+		return entity.RoleImageRecipe{}, "", err
 	}
 	if err := json.Unmarshal(specification, &recipe.Input); err != nil {
-		return entity.RoleImageRecipe{}, errors.New("decode role image recipe specification")
+		return entity.RoleImageRecipe{}, "", errors.New("decode role image recipe specification")
 	}
-	recipe.NextActions = roleImageActions(recipe, canManage)
-	return recipe, nil
+	return recipe, ownerSubjectRef, nil
 }
 
 func scanLockedRecipe(row roleImageRowScanner) (lockedRecipe, error) {
@@ -86,14 +98,23 @@ func scanLockedRecipe(row roleImageRowScanner) (lockedRecipe, error) {
 
 func scanBuild(row roleImageRowScanner) (entity.ImageBuild, error) {
 	var result entity.ImageBuild
+	var specification []byte
 	err := row.Scan(&result.Ref, &result.RecipeRef, &result.SpecSHA256, &result.Stage,
 		&result.StagingReference, &result.ManifestDigest, &result.ProvenanceSHA256,
 		&result.ImmutableBuildSHA256, &result.SafeErrorCode, &result.DiagnosticCode,
 		&result.DiagnosticSummary, &result.LeaseTokenSHA256, &result.ClaimantWorkload,
 		&result.Version, &result.RecipeVersion, &result.RecipeGeneration, &result.Fence,
 		&result.AuthorityGeneration, &result.Attempt, &result.ProgressPercent,
-		&result.LeaseExpiresAt, &result.CreatedAt, &result.UpdatedAt)
-	return result, err
+		&result.LeaseExpiresAt, &result.CreatedAt, &result.UpdatedAt, &specification)
+	if err != nil {
+		return entity.ImageBuild{}, err
+	}
+	var recipe entity.RoleImageRecipeInput
+	if err := json.Unmarshal(specification, &recipe); err != nil {
+		return entity.ImageBuild{}, errors.New("decode image build specification")
+	}
+	result.Dockerfile = recipe.Dockerfile
+	return result, nil
 }
 
 func scanLockedBuild(row roleImageRowScanner) (lockedBuild, error) {
@@ -145,6 +166,7 @@ func scanRoleImageArtifact(row roleImageRowScanner) (entity.ImageArtifact, error
 	result.ContextSHA256, result.BuilderSHA256 = recipe.ContextSHA256, recipe.BuilderSHA256
 	result.FrontendSHA256, result.ToolchainSHA256 = recipe.FrontendSHA256, recipe.ToolchainSHA256
 	result.Platforms = append([]entity.RoleImagePlatform(nil), recipe.Platforms...)
+	result.Tools = append([]entity.RoleImageTool(nil), recipe.Tools...)
 	return result, nil
 }
 
@@ -172,7 +194,7 @@ func scanLockedArtifact(row roleImageRowScanner) (lockedArtifact, error) {
 		&result.PromotionState, &result.PromotionTokenSHA256, &result.PromotionFence,
 		&result.PromotionAuthorityGeneration, &result.PromotionExpiresAt,
 		&result.AuthorizationTokenSHA256, &result.AuthorizationExpiresAt,
-		&result.RecipeID)
+		&result.RecipeID, &result.PromotionRequestID)
 	if err != nil {
 		return lockedArtifact{}, err
 	}
@@ -184,6 +206,17 @@ func scanLockedArtifact(row roleImageRowScanner) (lockedArtifact, error) {
 	result.Artifact.ContextSHA256, result.Artifact.BuilderSHA256 = recipe.ContextSHA256, recipe.BuilderSHA256
 	result.Artifact.FrontendSHA256, result.Artifact.ToolchainSHA256 = recipe.FrontendSHA256, recipe.ToolchainSHA256
 	result.Artifact.Platforms = append([]entity.RoleImagePlatform(nil), recipe.Platforms...)
+	result.Artifact.Tools = append([]entity.RoleImageTool(nil), recipe.Tools...)
+	return result, nil
+}
+
+func scanLockedPromotionRequest(row roleImageRowScanner) (lockedPromotionRequest, error) {
+	var result lockedPromotionRequest
+	if err := row.Scan(&result.ID, &result.Ref, &result.ExpectedProvenanceSHA256,
+		&result.ManifestDigest, &result.ReceiptSHA256, &result.State,
+		&result.RequestedBy, &result.CreatedAt); err != nil {
+		return lockedPromotionRequest{}, err
+	}
 	return result, nil
 }
 
@@ -213,6 +246,42 @@ func (repository *Repository) roleImageToken(purpose, ref string, attempt uint32
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
+func (repository *Repository) roleImagePromotionToken(purpose string, artifact entity.ImageArtifact,
+	promotionRequestReceiptSHA256 string, fence, generation uint64, expiresAt time.Time) string {
+	payload, _ := json.Marshal(struct {
+		Purpose, ArtifactRef, RecipeRef, BuildRef, ManifestDigest, ProvenanceSHA256 string
+		ImmutableBuildSHA256, SBOMSHA256, VulnerabilityEvidenceSHA256               string
+		SignatureIdentity, SignatureSHA256, AdmissionReceiptSHA256                  string
+		AdmissionReceiptOCIManifestDigest, PromotionRequestReceiptSHA256            string
+		PromotedReference, PolicySHA256, RoleRuntimeContractSHA256                  string
+		ArtifactVersion, RecipeVersion, RecipeGeneration, BuildVersion              uint64
+		PolicyRevision, AdmissionRevision, RoleRuntimeContractRevision              uint64
+		BuildAttempt                                                                uint32
+		Fence, AuthorityGeneration                                                  uint64
+		ExpiresAtUnix                                                               int64
+	}{
+		Purpose: purpose, ArtifactRef: artifact.Ref, RecipeRef: artifact.RecipeRef,
+		BuildRef: artifact.BuildRef, ManifestDigest: artifact.ManifestDigest,
+		ProvenanceSHA256: artifact.ProvenanceSHA256, ImmutableBuildSHA256: artifact.ImmutableBuildSHA256,
+		SBOMSHA256: artifact.SBOMSHA256, VulnerabilityEvidenceSHA256: artifact.VulnerabilityEvidenceSHA256,
+		SignatureIdentity: artifact.SignatureIdentity, SignatureSHA256: artifact.SignatureSHA256,
+		AdmissionReceiptSHA256:            artifact.AdmissionReceiptSHA256,
+		AdmissionReceiptOCIManifestDigest: artifact.AdmissionReceiptOCIManifestDigest,
+		PromotionRequestReceiptSHA256:     promotionRequestReceiptSHA256,
+		PromotedReference:                 repository.roleImages.PromotedRepository + "@" + artifact.ManifestDigest,
+		PolicySHA256:                      artifact.PolicySHA256, RoleRuntimeContractSHA256: artifact.RoleRuntimeContractSHA256,
+		ArtifactVersion: artifact.Version, RecipeVersion: artifact.RecipeVersion,
+		RecipeGeneration: artifact.RecipeGeneration, BuildVersion: artifact.BuildVersion,
+		PolicyRevision: artifact.PolicyRevision, AdmissionRevision: artifact.AdmissionRevision,
+		RoleRuntimeContractRevision: artifact.RoleRuntimeContractRevision,
+		BuildAttempt:                artifact.BuildAttempt, Fence: fence, AuthorityGeneration: generation,
+		ExpiresAtUnix: expiresAt.UTC().Unix(),
+	})
+	mac := hmac.New(sha256.New, repository.roleImages.LeaseSigningKey)
+	_, _ = mac.Write(payload)
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
 func tokenDigest(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
@@ -221,6 +290,73 @@ func tokenDigest(token string) string {
 func tokenMatches(token, expectedDigest string) bool {
 	actual := tokenDigest(token)
 	return len(expectedDigest) == len(actual) && subtle.ConstantTimeCompare([]byte(actual), []byte(expectedDigest)) == 1
+}
+
+func exactSHA256(input string) bool {
+	if len(input) != 64 {
+		return false
+	}
+	for _, character := range input {
+		if character < '0' || character > '9' && character < 'a' || character > 'f' {
+			return false
+		}
+	}
+	return true
+}
+
+func exactManifestDigest(input string) bool {
+	return strings.HasPrefix(input, "sha256:") && exactSHA256(strings.TrimPrefix(input, "sha256:"))
+}
+
+func exactSignatureIdentity(input string) bool {
+	if len(input) == 0 || len(input) > 256 {
+		return false
+	}
+	for index, character := range input {
+		if character >= 'A' && character <= 'Z' || character >= 'a' && character <= 'z' ||
+			character >= '0' && character <= '9' || index > 0 && strings.ContainsRune("._:/@+-", character) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func retryRoleImageTransaction[T any](ctx context.Context, operation func() (T, error)) (T, error) {
+	var zero T
+	for attempt := 0; attempt < roleImageTransactionAttempts; attempt++ {
+		result, err := operation()
+		if err == nil {
+			return result, nil
+		}
+		if !errors.Is(err, errRoleImageTransactionRetry) && !errors.Is(err, errs.ErrUnavailable) {
+			return zero, err
+		}
+		if attempt+1 == roleImageTransactionAttempts || ctx.Err() != nil {
+			if errors.Is(err, errs.ErrUnavailable) {
+				return zero, errs.ErrUnavailable
+			}
+			return zero, errs.ErrConflict
+		}
+		delay := time.Duration(attempt+1) * 5 * time.Millisecond
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return zero, errs.ErrUnavailable
+		case <-timer.C:
+		}
+	}
+	return zero, errs.ErrUnavailable
+}
+
+func (repository *Repository) lockRoleImageIdempotency(ctx context.Context, tx pgx.Tx, current scope,
+	operation, key string) error {
+	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, current.organizationID,
+		current.actorID, operation, key); err != nil {
+		return errors.Join(errRoleImageTransactionRetry, errs.ErrUnavailable)
+	}
+	return nil
 }
 
 func (repository *Repository) loadRoleImageReceipt(ctx context.Context, tx pgx.Tx, current scope, operation, key, intent string, target any) (bool, error) {
@@ -250,7 +386,7 @@ func (repository *Repository) storeRoleImageReceipt(ctx context.Context, tx pgx.
 	}
 	if _, err := tx.Exec(ctx, queryCommandsExecuteInsertIdempotencyReceiptsOrganizationIdOperationIntentDigest,
 		current.organizationID, current.actorID, operation, key, intent, responseType, payload); err != nil {
-		return errs.ErrConflict
+		return mapRoleImageWriteError(err)
 	}
 	return nil
 }
@@ -272,14 +408,42 @@ func mapRoleImageWriteError(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errs.ErrConflict
 	}
+	if roleImageTransactionConflict(err) {
+		return errors.Join(errRoleImageTransactionRetry, errs.ErrConflict)
+	}
+	var pgError *pgconn.PgError
+	if errors.As(err, &pgError) {
+		switch pgError.Code {
+		case "23505":
+			return errs.ErrConflict
+		case "23503", "23514":
+			return errs.ErrInvalid
+		}
+	}
 	return mapWriteError(err)
 }
 
 func committed(tx pgx.Tx, ctx context.Context) error {
 	if err := tx.Commit(ctx); err != nil {
-		return errs.ErrConflict
+		return roleImageCommitError(err)
 	}
 	return nil
+}
+
+func roleImageCommitError(err error) error {
+	if roleImageTransactionConflict(err) || errors.Is(err, pgx.ErrTxCommitRollback) {
+		return errors.Join(errRoleImageTransactionRetry, errs.ErrConflict)
+	}
+	var pgError *pgconn.PgError
+	if errors.As(err, &pgError) {
+		return mapRoleImageWriteError(err)
+	}
+	return errors.Join(errRoleImageTransactionRetry, errs.ErrUnavailable)
+}
+
+func roleImageTransactionConflict(err error) bool {
+	var pgError *pgconn.PgError
+	return errors.As(err, &pgError) && (pgError.Code == "40001" || pgError.Code == "40P01")
 }
 
 func newRoleImageBuildInput(recipe entity.RoleImageRecipe, immutableBuildSHA256 string) entity.RoleImageBuildInput {
@@ -291,6 +455,7 @@ func newRoleImageBuildInput(recipe entity.RoleImageRecipe, immutableBuildSHA256 
 		ContextRef: recipe.Input.ContextRef, ContextSHA256: recipe.Input.ContextSHA256,
 		BuilderSHA256: recipe.Input.BuilderSHA256, FrontendSHA256: recipe.Input.FrontendSHA256,
 		InstallationBlock: recipe.Input.InstallationBlock, ToolchainSHA256: recipe.Input.ToolchainSHA256,
+		Dockerfile:     recipe.Input.Dockerfile,
 		PolicyRevision: recipe.PolicyRevision, PolicySHA256: recipe.PolicySHA256,
 		ImmutableBuildSHA256:        immutableBuildSHA256,
 		RoleRuntimeContractRevision: recipe.RoleRuntimeContractRevision,

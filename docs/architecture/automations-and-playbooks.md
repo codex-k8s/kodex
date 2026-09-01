@@ -4,7 +4,7 @@ title: Workflow, делегирование и расписания
 type: architecture
 status: approved
 owner: architect
-version: 1.0.0
+version: 1.1.0
 updated: 2026-08-22
 ---
 
@@ -92,6 +92,41 @@ bounded input вместе с digest и заранее двигает `next_run_
 теряется: control-plane выдаёт для той же immutable occurrence новый lease и
 монотонное поколение, после чего прежние lease/fence закрыто отклоняются.
 
+### Архивация Schedule
+
+`Schedule` является защищённым исполняемым видом. Внешний actor определяется
+OIDC session и server-owned authority proof; `scheduleRef` остаётся только
+locator. Рабочая карта архивации:
+
+```text
+POST /api/v1/schedules/{scheduleRef}/commands action=ARCHIVE
+-> control-api-gateway
+-> PlatformCommandService.ArchiveSchedule
+-> MANAGE_SCHEDULES по сохранённому Project владельца Schedule
+-> idempotency receipt + SELECT FOR UPDATE + expected version
+-> Schedule=ARCHIVED, enabled=false, next_run_at=NULL
+-> DUE|CLAIMED occurrence=CANCELLED и lease/fence очищены
+-> audit + SCHEDULE_CHANGED + command receipt
+-> один PostgreSQL commit
+-> GetSchedule возвращает read-only исторический snapshot
+```
+
+`GetSchedule` и `ListSchedules` используют один eligibility rule: Owner и
+Administrator видят ресурс в своей Organization, Project member требует
+`VIEW`, а `nextActions` добавляет изменения только при `MANAGE_SCHEDULES`.
+Архивированный Schedule всегда имеет только `OPEN`.
+
+| Переход | Блокировка и authority | Атомарный результат |
+| --- | --- | --- |
+| get archived | organization + Project eligibility по сохранённому owner | безопасный snapshot и ETag, без mutation actions |
+| archive active/paused | Schedule `FOR UPDATE`, `MANAGE_SCHEDULES`, OCC, idempotency | terminal state, cleared next run, cancelled future occurrences/leases, audit/event/receipt |
+| archive replay | тот же actor/operation/key и тот же intent digest | сохранённый результат без второго события или audit |
+| archive stale version | owner resolution выполняется до OCC | `VERSION_MISMATCH`, изменений нет |
+| update/enable archived | terminal state под блокировкой | закрытый conflict, изменений нет |
+| claim after archive | owner-side worker query требует `ACTIVE` и `enabled` | claim отсутствует |
+| materialize against cancelled lease | exact occurrence/lease/fence больше не существует | скрытый `NOT_FOUND`, Run не создаётся |
+| already materialized Run | immutable occurrence уже связан с Run | Schedule архивируется, Run продолжает обычный lifecycle |
+
 ## Результат и уведомления
 
 Terminal Run сохраняет structured result и Artifact bindings. Notification
@@ -109,5 +144,6 @@ retryable incident и не меняет успешный Run outcome.
 | gate resolve | winner receipt + Gate terminal + one continuation |
 | schedule due | occurrence claim exact attempt/fence/input |
 | schedule materialize | occurrence linked to one Run + event |
+| schedule archive | Schedule terminal + future occurrences/leases cancelled + audit/platform event; materialized Run unchanged |
 | cancel | full graph/claims/leases/grants/gates terminal |
 | retry | new attempt/revision/lease + immutable predecessor lineage |

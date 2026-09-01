@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Activity, ListChecks, PanelRightOpen } from "@lucide/vue";
+import {
+  type ComponentPublicInstance,
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import {
@@ -8,7 +17,17 @@ import {
 } from "@/features/platform/run-refresh";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
+import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
+import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
+import RunTokenUsage from "@/features/runs/RunTokenUsage.vue";
+import type { PresentedRunEvent } from "@/features/runs/run-activity";
+import {
+  indexRunSessionOwnership,
+  projectRunSessionGraph,
+  resolveRunSessionSelection,
+} from "@/features/runs/run-session-graph";
 import type {
   Artifact,
   OwnerGate,
@@ -16,8 +35,15 @@ import type {
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem, asProblem } from "@/shared/api/problem";
+import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
+import type {
+  AttachmentComposerHandle,
+  AttachmentComposerState,
+} from "@/shared/ui/attachment-composer";
 import PageFrame from "@/shared/ui/PageFrame.vue";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -27,6 +53,14 @@ const route = useRoute();
 const router = useRouter();
 const translator = useI18n();
 const runRef = computed(() => String(route.params.runRef));
+const requestedNodeRef = computed(() =>
+  typeof route.query.nodeRef === "string" ? route.query.nodeRef : undefined,
+);
+const routeProjectRef = computed(() =>
+  typeof route.params.projectRef === "string"
+    ? route.params.projectRef
+    : undefined,
+);
 const run = computed(() => platform.runs[runRef.value]);
 const graph = computed(
   () =>
@@ -68,6 +102,9 @@ const runSubtitle = computed(
     safeRuntimeText(run.value?.currentActivity) ??
     run.value?.target.displayName,
 );
+const runInputSummary = computed(() =>
+  safeRuntimeText(run.value?.inputSummary),
+);
 
 const presentedGraph = computed(() =>
   graph.value
@@ -87,6 +124,15 @@ const presentedGraph = computed(() =>
         })),
       }
     : undefined,
+);
+const sessionGraph = computed(() =>
+  presentedGraph.value
+    ? projectRunSessionGraph(presentedGraph.value)
+    : undefined,
+);
+const allRunNodes = computed(() => presentedGraph.value?.nodes ?? []);
+const sessionOwnership = computed(() =>
+  indexRunSessionOwnership(allRunNodes.value),
 );
 
 function stateLabel(state?: string): string | undefined {
@@ -136,12 +182,7 @@ function eventFallback(event: RunEvent): string {
   }
 }
 
-type PresentedEvent = RunEvent & {
-  displaySummary: string;
-  displayProgress?: string;
-};
-
-const eventList = computed<PresentedEvent[]>(() =>
+const eventList = computed<PresentedRunEvent[]>(() =>
   Object.values(platform.events[graph.value?.runRef ?? runRef.value] ?? {})
     .sort((a, b) => a.sequence - b.sequence)
     .map((event) => ({
@@ -155,6 +196,9 @@ const gateList = computed(() =>
     (g) => g.runRef === runRef.value || g.runRef === run.value?.rootRunRef,
   ),
 );
+const openGateList = computed(() =>
+  gateList.value.filter((gate) => gate.state === "OPEN"),
+);
 const artifactList = computed(() =>
   Object.values(platform.artifacts).filter(
     (a) => a.runRef === runRef.value || a.runRef === run.value?.rootRunRef,
@@ -163,34 +207,34 @@ const artifactList = computed(() =>
 const incidentList = computed(() => run.value?.incidents ?? []);
 const selectedRef = ref<string>();
 const openedStreamRef = ref<string>();
-const selectedNode = computed(
-  () =>
-    graph.value?.nodes.find((n) => n.ref === selectedRef.value) ??
-    graph.value?.nodes.find((n) => n.state === "RUNNING") ??
-    graph.value?.nodes[0],
+const selectedNode = computed(() =>
+  sessionGraph.value?.nodes.find((node) => node.ref === selectedRef.value),
 );
-const selectedNodeEvents = computed(() =>
-  eventList.value
-    .filter((event) => event.nodeRef === selectedNode.value?.ref)
-    .slice(-20),
+const selectedAgent = computed(() =>
+  selectedNode.value?.agentRef
+    ? platform.agents[selectedNode.value.agentRef]
+    : undefined,
+);
+const selectedRun = computed(() =>
+  selectedNode.value
+    ? (platform.runs[selectedNode.value.runRef] ?? run.value)
+    : run.value,
+);
+const futureNodeRefs = computed(() =>
+  (sessionGraph.value?.nodes ?? [])
+    .filter(
+      (node) =>
+        (node.state === "QUEUED" || node.state === "WAITING") &&
+        !node.startedAt,
+    )
+    .map((node) => node.ref),
+);
+const activeNodeRefs = computed(() =>
+  (sessionGraph.value?.nodes ?? [])
+    .filter((node) => node.state === "RUNNING")
+    .map((node) => node.ref),
 );
 const lifecycleState = computed(() => run.value?.state);
-const usageItems = computed(() => {
-  const usage = run.value?.usage;
-  if (!usage || (usage.totalTokens === 0 && usage.modelContextWindow === 0))
-    return [];
-  return [
-    ["total", usage.totalTokens],
-    ["input", usage.inputTokens],
-    ["cached", usage.cachedInputTokens],
-    ["output", usage.outputTokens],
-    ["reasoning", usage.reasoningOutputTokens],
-    ["contextWindow", usage.modelContextWindow],
-  ] as const;
-});
-function formatTokenCount(value: number): string {
-  return new Intl.NumberFormat(translator.locale.value).format(value);
-}
 
 const resultOutcomeState = computed(() => {
   if (!run.value) return undefined;
@@ -204,23 +248,29 @@ const resultOutcomeState = computed(() => {
   return run.value.state === "SUCCEEDED" ? "OUTCOME_SUCCEEDED" : undefined;
 });
 
-const selectedNodeRole = computed(() => {
-  const role = safeRuntimeText(selectedNode.value?.role);
-  return (
-    role ??
-    (selectedNode.value
-      ? translator.t(`runs.nodeTypes.${selectedNode.value.type}`)
-      : undefined)
-  );
-});
-const selectedNodeProgress = computed(() =>
-  safeRuntimeText(selectedNode.value?.progressSummary),
-);
 const turn = ref("");
-const comment = ref("");
+const comments = ref<Record<string, string>>({});
+const turnAttachmentComposer = ref<AttachmentComposerHandle>();
+const turnAttachmentState = ref<AttachmentComposerState>({
+  count: 0,
+  uploadedCount: 0,
+  totalBytes: 0,
+  busy: false,
+  hasErrors: false,
+  overLimit: false,
+  ready: true,
+});
+const gateAttachmentStates = ref<Record<string, AttachmentComposerState>>({});
+const gateAttachmentComposers = new Map<string, AttachmentComposerHandle>();
 const busy = ref(false);
 const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
+const activityOpen = ref(false);
+const activityNodeRef = ref<string>();
+const nodeInspectorOpen = ref(false);
+const nodeDetailsOpen = ref(false);
+const gateDialogOpen = ref(false);
+const activityTrigger = ref<HTMLButtonElement>();
 const hasAuthoritativeSnapshot = computed(() =>
   Boolean(run.value && graph.value),
 );
@@ -238,6 +288,23 @@ const refreshKey = computed(() => {
   const rootRef = graph.value?.runRef ?? run.value?.rootRunRef ?? runRef.value;
   return authoritativeRunRefreshKey(run.value, platform.events[rootRef] ?? {});
 });
+
+watch(
+  [sessionGraph, requestedNodeRef],
+  ([snapshot, nodeRef]) => {
+    const requestedSessionRef = nodeRef
+      ? sessionOwnership.value.get(nodeRef)
+      : undefined;
+    selectedRef.value = resolveRunSessionSelection(
+      snapshot?.nodes ?? [],
+      sessionOwnership.value,
+      selectedRef.value,
+      nodeRef,
+    );
+    if (requestedSessionRef) nodeInspectorOpen.value = true;
+  },
+  { immediate: true },
+);
 
 async function refreshAuthoritativeState(ref: string): Promise<void> {
   await platform.loadRun(ref);
@@ -268,7 +335,9 @@ async function command(action: "CANCEL" | "RETRY") {
   try {
     const next = await platform.changeRun(run.value, { action });
     if (action === "RETRY" && next.ref !== runRef.value)
-      await router.replace(`/runs/${next.ref}`);
+      await router.replace(
+        runPath(next.ref, routeProjectRef.value ?? next.projectRef),
+      );
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -276,18 +345,28 @@ async function command(action: "CANCEL" | "RETRY") {
   }
 }
 async function continueRun() {
-  if (!run.value?.nextActions.includes("ADD_TURN") || !turn.value.trim())
+  if (
+    !run.value?.nextActions.includes("ADD_TURN") ||
+    !turn.value.trim() ||
+    !turnAttachmentState.value.ready
+  )
     return;
   busy.value = true;
   problem.value = undefined;
   try {
+    const attachmentSetRef = await turnAttachmentComposer.value?.finalize();
     const next = await platform.continueSession(run.value.sessionRef, {
       runRef: run.value.ref,
       nodeRef: selectedNode.value?.ref,
       task: turn.value.trim(),
+      ...(attachmentSetRef ? { attachmentSetRef } : {}),
     });
     turn.value = "";
-    if (next.ref !== runRef.value) await router.replace(`/runs/${next.ref}`);
+    turnAttachmentComposer.value?.clear();
+    if (next.ref !== runRef.value)
+      await router.replace(
+        runPath(next.ref, routeProjectRef.value ?? next.projectRef),
+      );
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -306,11 +385,16 @@ async function decide(
   busy.value = true;
   problem.value = undefined;
   try {
+    const attachmentSetRef = await gateAttachmentComposers
+      .get(gate.ref)
+      ?.finalize();
     await platform.decide(gate, {
       decision,
-      comment: comment.value.trim() || undefined,
+      comment: comments.value[gate.ref]?.trim() || undefined,
+      ...(attachmentSetRef ? { attachmentSetRef } : {}),
     });
-    comment.value = "";
+    Reflect.deleteProperty(comments.value, gate.ref);
+    Reflect.deleteProperty(gateAttachmentStates.value, gate.ref);
   } catch (error) {
     problem.value = asProblem(error);
     await platform.loadGates(run.value?.projectRef, run.value?.rootRunRef);
@@ -318,8 +402,56 @@ async function decide(
     busy.value = false;
   }
 }
+function setGateAttachmentComposer(
+  gateRef: string,
+  component: Element | ComponentPublicInstance | null,
+): void {
+  const handle = component as AttachmentComposerHandle | null;
+  if (handle && typeof handle.finalize === "function")
+    gateAttachmentComposers.set(gateRef, handle);
+  else gateAttachmentComposers.delete(gateRef);
+}
+function gateAttachmentsReady(gateRef: string): boolean {
+  return gateAttachmentStates.value[gateRef]?.ready ?? true;
+}
+function gateNodeName(gate: OwnerGate): string {
+  return (
+    presentedGraph.value?.nodes.find((node) => node.ref === gate.nodeRef)
+      ?.displayName ?? translator.t("decisions.openNode")
+  );
+}
+function inspectGateNode(gate: OwnerGate): void {
+  const sessionRef = sessionOwnership.value.get(gate.nodeRef);
+  const node = sessionGraph.value?.nodes.find(
+    (candidate) => candidate.ref === sessionRef,
+  );
+  if (!node) return;
+  select(node);
+  gateDialogOpen.value = false;
+  nodeInspectorOpen.value = true;
+}
 function select(node: RunNode) {
   selectedRef.value = node.ref;
+}
+function openNodeDetails(node: RunNode): void {
+  select(node);
+  nodeDetailsOpen.value = true;
+}
+function openActivity(nodeRef?: string): void {
+  activityNodeRef.value = nodeRef;
+  activityOpen.value = true;
+}
+function closeActivity(): void {
+  activityOpen.value = false;
+  void nextTick(() => activityTrigger.value?.focus());
+}
+function openNodeActivity(nodeRef: string): void {
+  nodeInspectorOpen.value = false;
+  openActivity(nodeRef);
+}
+function openSelectedDetails(): void {
+  nodeInspectorOpen.value = false;
+  nodeDetailsOpen.value = true;
 }
 async function downloadArtifact(artifact: Artifact): Promise<void> {
   if (!artifact.nextActions.includes("DOWNLOAD")) return;
@@ -356,11 +488,27 @@ watch(refreshKey, (next) => {
   lastRefreshKey = next;
   void refreshScheduler.request(runRef.value);
 });
+watch(
+  () => openGateList.value.length,
+  (count) => {
+    if (count === 0) gateDialogOpen.value = false;
+  },
+);
 watch(runRef, async (next, previous) => {
   refreshScheduler.cancel();
   if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
   else realtime.closeRun(previous);
   lastRefreshKey = undefined;
+  activityOpen.value = false;
+  activityNodeRef.value = undefined;
+  selectedRef.value = undefined;
+  nodeInspectorOpen.value = false;
+  nodeDetailsOpen.value = false;
+  gateDialogOpen.value = false;
+  turn.value = "";
+  turnAttachmentComposer.value?.clear();
+  gateAttachmentStates.value = {};
+  comments.value = {};
   await load(next);
   if (runRef.value === next) openCurrentStream();
 });
@@ -375,7 +523,10 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <PageFrame :title="run?.title ?? $t('runs.title')" :subtitle="runSubtitle"
+  <PageFrame
+    class="run-page"
+    :title="run?.title ?? $t('runs.title')"
+    :subtitle="runSubtitle"
     ><template #actions
       ><div v-if="run" class="run-statuses">
         <span>
@@ -408,306 +559,271 @@ onBeforeUnmount(() => {
       :loading="platform.loading.run && !hasAuthoritativeSnapshot"
       :problem="fatalLoadProblem"
       @retry="load"
-      ><div v-if="run && graph" class="run-summary">
-        <span>{{ run.target.displayName }}</span
-        ><span>{{ $t(`runs.source.${run.source}`) }}</span
-        ><span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span
-        ><RouterLink
-          v-if="run.retryOfRunRef"
-          :to="`/runs/${run.retryOfRunRef}`"
-          >{{ $t("runs.previousAttempt") }}</RouterLink
-        >
-        <span>{{ new Date(run.createdAt).toLocaleString() }}</span
-        ><span
-          class="live-indicator"
-          :class="`live-indicator--${realtime.state[graph?.runRef ?? runRef]?.state ?? 'connecting'}`"
-          >● {{ $t("runs.live") }}</span
-        >
-      </div>
-      <div
-        v-if="streamState?.problemTitle"
-        class="offline-banner"
-        role="status"
-      >
-        {{ streamState.problemTitle }}
-      </div>
-      <ProblemNotice v-if="refreshProblem" :problem="refreshProblem" compact />
-      <dl
-        v-if="usageItems.length"
-        class="token-usage"
-        :aria-label="$t('runs.usage.title')"
-      >
-        <div v-for="item in usageItems" :key="item[0]">
-          <dt>{{ $t(`runs.usage.${item[0]}`) }}</dt>
-          <dd>{{ formatTokenCount(item[1]) }}</dd>
-        </div>
-      </dl>
-      <ProblemNotice v-if="problem" :problem="problem" compact />
-      <section
-        v-if="gateList.some((g) => g.state === 'OPEN')"
-        class="gate-strip"
-      >
-        <article
-          v-for="gate in gateList.filter((g) => g.state === 'OPEN')"
-          :key="gate.ref"
-        >
-          <div>
-            <h2>{{ gate.title }}</h2>
-            <p>{{ gate.contextSummary }}</p>
-            <strong>{{ gate.consequencesSummary }}</strong>
-          </div>
-          <label class="field"
-            ><span>{{ $t("decisions.comment") }}</span
-            ><input v-model="comment" maxlength="1000"
-          /></label>
-          <div class="gate-actions">
-            <button
-              v-if="
-                gate.nextActions.includes('RESOLVE_GATE') &&
-                gate.allowedDecisions.includes('APPROVE')
-              "
-              class="button button--primary"
-              type="button"
-              :disabled="busy"
-              @click="decide(gate, 'APPROVE')"
-            >
-              {{ $t("common.approve") }}</button
-            ><button
-              v-if="
-                gate.nextActions.includes('RESOLVE_GATE') &&
-                gate.allowedDecisions.includes('REQUEST_CHANGES')
-              "
-              class="button"
-              type="button"
-              :disabled="busy"
-              @click="decide(gate, 'REQUEST_CHANGES')"
-            >
-              {{ $t("common.requestChanges") }}</button
-            ><button
-              v-if="
-                gate.nextActions.includes('RESOLVE_GATE') &&
-                gate.allowedDecisions.includes('REJECT')
-              "
-              class="button button--danger"
-              type="button"
-              :disabled="busy"
-              @click="decide(gate, 'REJECT')"
-            >
-              {{ $t("common.reject") }}
-            </button>
-          </div>
-        </article>
-      </section>
-      <div v-if="run && presentedGraph" class="run-workspace">
-        <section class="graph-panel">
-          <div class="workspace-heading">
-            <h2>{{ $t("runs.graph") }}</h2>
-            <span>{{ presentedGraph.nodes.length }}</span>
-          </div>
-          <RunGraphCanvas
-            :nodes="presentedGraph.nodes"
-            :edges="presentedGraph.edges"
-            :selected-ref="selectedNode?.ref"
-            @select="select"
-          />
-        </section>
-        <section class="timeline-panel">
-          <div class="workspace-heading">
-            <h2>{{ $t("runs.activity") }}</h2>
-          </div>
-          <ol class="timeline">
-            <li v-for="event in eventList" :key="event.sequence">
-              <span class="timeline__marker" aria-hidden="true" />
-              <div>
-                <SafeMarkdown :content="event.displaySummary" />
-                <SafeMarkdown
-                  v-if="event.displayProgress"
-                  :content="event.displayProgress"
-                />
-                <small>{{
-                  new Date(event.occurredAt).toLocaleTimeString()
-                }}</small>
-              </div>
-            </li>
-          </ol>
-          <p v-if="!eventList.length" class="empty-compact">
-            {{ $t("runs.noEvents") }}
-          </p>
-        </section>
-        <aside class="node-panel">
-          <div class="workspace-heading">
-            <h2>{{ $t("runs.context") }}</h2>
-          </div>
-          <template v-if="selectedNode"
-            ><StatusBadge :state="selectedNode.state" />
-            <h3>{{ selectedNode.displayName }}</h3>
-            <SafeMarkdown
-              v-if="selectedNode.inputSummary"
-              :content="selectedNode.inputSummary"
-            />
-            <SafeMarkdown
-              v-if="selectedNodeProgress"
-              :content="selectedNodeProgress"
-            />
-            <ProblemNotice
-              v-if="selectedNode.safeErrorCode"
-              :problem="
-                asProblem({
-                  status: 500,
-                  code: selectedNode.safeErrorCode,
-                  detail: selectedNode.safeErrorMessage,
-                  correlationId: '',
-                })
-              "
-              compact
-            />
-            <dl class="metadata">
-              <div>
-                <dt>
-                  {{ $t("runs.attempt", { attempt: selectedNode.attempt }) }}
-                </dt>
-                <dd>{{ selectedNodeRole }}</dd>
-              </div>
-            </dl>
-            <div v-if="selectedNode.integrationNames?.length" class="chip-list">
-              <span v-for="name in selectedNode.integrationNames" :key="name">{{
-                name
-              }}</span>
-            </div>
-            <dl class="node-relations">
-              <div v-if="selectedNode.callbackSummary">
-                <dt>{{ $t("runs.callback") }}</dt>
-                <dd>
-                  <SafeMarkdown :content="selectedNode.callbackSummary" />
-                </dd>
-              </div>
-              <div v-if="selectedNode.artifactRefs.length">
-                <dt>{{ $t("runs.artifacts") }}</dt>
-                <dd>{{ selectedNode.artifactRefs.length }}</dd>
-              </div>
-              <div v-if="selectedNode.childRunRefs.length">
-                <dt>{{ $t("runs.childRuns") }}</dt>
-                <dd class="node-links">
-                  <RouterLink
-                    v-for="childRef in selectedNode.childRunRefs"
-                    :key="childRef"
-                    :to="`/runs/${childRef}`"
-                  >
-                    {{ $t("runs.openChildRun") }}
-                  </RouterLink>
-                </dd>
-              </div>
-              <div v-if="selectedNode.startedAt">
-                <dt>{{ $t("runs.startedAt") }}</dt>
-                <dd>{{ new Date(selectedNode.startedAt).toLocaleString() }}</dd>
-              </div>
-              <div v-if="selectedNode.finishedAt">
-                <dt>{{ $t("runs.finishedAt") }}</dt>
-                <dd>
-                  {{ new Date(selectedNode.finishedAt).toLocaleString() }}
-                </dd>
-              </div>
-            </dl>
-            <section class="node-conversation" aria-live="polite">
-              <h3>{{ $t("runs.nodeConversation") }}</h3>
-              <ol v-if="selectedNodeEvents.length">
-                <li v-for="event in selectedNodeEvents" :key="event.sequence">
-                  <SafeMarkdown :content="event.displaySummary" />
-                  <SafeMarkdown
-                    v-if="event.displayProgress"
-                    :content="event.displayProgress"
-                  />
-                  <time :datetime="event.occurredAt">
-                    {{ new Date(event.occurredAt).toLocaleTimeString() }}
-                  </time>
-                </li>
-              </ol>
-              <p v-else>{{ $t("runs.noNodeActivity") }}</p>
-            </section></template
+    >
+      <div v-if="run && sessionGraph" class="run-page-body">
+        <div class="run-notices" aria-live="polite">
+          <div
+            v-if="streamState?.problemTitle"
+            class="offline-banner"
+            role="status"
           >
-        </aside>
-      </div>
-      <section v-if="run" class="run-bottom">
-        <article v-if="run.resultSummary" class="panel run-result">
-          <div class="workspace-heading">
-            <h2>{{ $t("common.result") }}</h2>
-            <StatusBadge
-              v-if="resultOutcomeState"
-              :state="resultOutcomeState"
-            />
+            {{ streamState.problemTitle }}
           </div>
-          <SafeMarkdown :content="run.resultSummary" />
-        </article>
-        <article class="panel run-incidents" aria-live="polite">
-          <h2>{{ $t("runs.incidents") }}</h2>
-          <div v-if="incidentList.length" class="incident-list">
-            <article
-              v-for="incident in incidentList"
-              :key="incident.ref"
-              class="incident-row"
+          <ProblemNotice
+            v-if="refreshProblem"
+            :problem="refreshProblem"
+            compact
+          />
+          <ProblemNotice v-if="problem" :problem="problem" compact />
+        </div>
+        <div class="run-workspace">
+          <nav
+            class="run-workspace-toolbar"
+            role="toolbar"
+            :aria-label="$t('runs.workspaceTools')"
+          >
+            <button
+              class="icon-button"
+              type="button"
+              :disabled="!selectedNode"
+              :aria-label="$t('runs.context')"
+              :title="$t('runs.context')"
+              @click="nodeInspectorOpen = true"
             >
-              <div>
-                <strong>{{ incident.safeSummary }}</strong>
-                <p>{{ incident.safeNextStep }}</p>
-                <small v-if="!incident.coreAffected">
-                  {{ $t("runs.coreUnaffected") }}
-                </small>
+              <PanelRightOpen :size="18" aria-hidden="true" />
+            </button>
+            <button
+              ref="activityTrigger"
+              class="icon-button"
+              type="button"
+              :aria-label="$t('runs.activity')"
+              :title="$t('runs.activity')"
+              @click="openActivity()"
+            >
+              <Activity :size="18" aria-hidden="true" />
+            </button>
+            <button
+              v-if="openGateList.length"
+              class="icon-button run-toolbar-action--attention"
+              type="button"
+              :aria-label="$t('decisions.title')"
+              :title="$t('decisions.title')"
+              @click="gateDialogOpen = true"
+            >
+              <ListChecks :size="18" aria-hidden="true" />
+              <span class="run-toolbar-count">{{ openGateList.length }}</span>
+            </button>
+          </nav>
+
+          <aside class="run-canvas-summary">
+            <div>
+              <strong>{{ run.target.displayName }}</strong>
+              <span>{{ $t(`runs.source.${run.source}`) }}</span>
+            </div>
+            <StatusBadge :state="run.state" />
+            <span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span>
+            <RouterLink
+              v-if="run.retryOfRunRef"
+              :to="
+                runPath(run.retryOfRunRef, routeProjectRef ?? run.projectRef)
+              "
+            >
+              {{ $t("runs.previousAttempt") }}
+            </RouterLink>
+            <span
+              class="live-indicator"
+              :class="`live-indicator--${streamState?.state ?? 'connecting'}`"
+            >
+              ● {{ $t("runs.live") }} · #{{ sessionGraph.sequence }}
+            </span>
+            <RunTokenUsage :usage="run.usage" compact />
+          </aside>
+
+          <section id="run-graph-panel" class="graph-panel">
+            <div class="graph-panel__canvas">
+              <RunGraphCanvas
+                :nodes="sessionGraph.nodes"
+                :edges="sessionGraph.edges"
+                :selected-ref="selectedNode?.ref"
+                :future-node-refs="futureNodeRefs"
+                :active-node-refs="activeNodeRefs"
+                @select="select"
+                @details="openNodeDetails"
+              />
+            </div>
+          </section>
+        </div>
+        <ModalDialog
+          v-if="gateDialogOpen && openGateList.length"
+          :title="$t('decisions.title')"
+          size="lg"
+          :busy="busy"
+          @close="gateDialogOpen = false"
+        >
+          <div class="gate-dialog">
+            <article v-for="gate in openGateList" :key="gate.ref">
+              <div class="gate-question">
+                <p class="eyebrow">{{ $t("decisions.question") }}</p>
+                <h2>{{ gate.title }}</h2>
+                <dl>
+                  <div>
+                    <dt>{{ $t("decisions.requestedBy") }}</dt>
+                    <dd>{{ gate.requestedBy.displayName }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ $t("decisions.process") }}</dt>
+                    <dd>
+                      <button
+                        class="button button--ghost"
+                        type="button"
+                        @click="inspectGateNode(gate)"
+                      >
+                        {{ gateNodeName(gate) }}
+                      </button>
+                    </dd>
+                  </div>
+                </dl>
+                <h3>{{ $t("decisions.fullQuestion") }}</h3>
+                <SafeMarkdown :content="gate.contextSummary" />
+                <h3>{{ $t("decisions.consequences") }}</h3>
+                <SafeMarkdown :content="gate.consequencesSummary" />
               </div>
-              <StatusBadge :state="incident.severity" />
+              <div class="gate-response">
+                <label class="field"
+                  ><span>{{ $t("decisions.comment") }}</span
+                  ><textarea v-model="comments[gate.ref]" maxlength="1000" />
+                </label>
+                <AttachmentComposer
+                  :ref="
+                    (component) =>
+                      setGateAttachmentComposer(gate.ref, component)
+                  "
+                  compact
+                  purpose="OWNER_GATE_MESSAGE"
+                  :project-ref="run?.projectRef"
+                  :disabled="busy"
+                  @change="gateAttachmentStates[gate.ref] = $event"
+                />
+                <div class="gate-actions">
+                  <button
+                    v-if="
+                      gate.nextActions.includes('RESOLVE_GATE') &&
+                      gate.allowedDecisions.includes('APPROVE')
+                    "
+                    class="button button--primary"
+                    type="button"
+                    :disabled="busy || !gateAttachmentsReady(gate.ref)"
+                    @click="decide(gate, 'APPROVE')"
+                  >
+                    {{ $t("common.approve") }}</button
+                  ><button
+                    v-if="
+                      gate.nextActions.includes('RESOLVE_GATE') &&
+                      gate.allowedDecisions.includes('REQUEST_CHANGES')
+                    "
+                    class="button"
+                    type="button"
+                    :disabled="busy || !gateAttachmentsReady(gate.ref)"
+                    @click="decide(gate, 'REQUEST_CHANGES')"
+                  >
+                    {{ $t("common.requestChanges") }}</button
+                  ><button
+                    v-if="
+                      gate.nextActions.includes('RESOLVE_GATE') &&
+                      gate.allowedDecisions.includes('REJECT')
+                    "
+                    class="button button--danger"
+                    type="button"
+                    :disabled="busy || !gateAttachmentsReady(gate.ref)"
+                    @click="decide(gate, 'REJECT')"
+                  >
+                    {{ $t("common.reject") }}
+                  </button>
+                </div>
+              </div>
             </article>
           </div>
-          <p v-else>{{ $t("runs.noIncidents") }}</p>
-        </article>
-        <article class="panel">
-          <h2>{{ $t("runs.artifacts") }}</h2>
-          <div v-if="artifactList.length" class="artifact-list">
-            <button
-              v-for="artifact in artifactList"
-              :key="artifact.ref"
-              class="artifact-row"
-              type="button"
-              :disabled="
-                downloadBusyRef === artifact.ref ||
-                !artifact.nextActions.includes('DOWNLOAD')
-              "
-              @click="downloadArtifact(artifact)"
-            >
-              <span>{{ artifact.fileName }}</span
-              ><StatusBadge :state="artifact.scanState" /><span
-                >{{ artifact.sizeBytes }} B</span
-              >
-            </button>
-          </div>
-          <p v-else>{{ $t("common.empty") }}</p>
-        </article>
-        <article v-if="run.nextActions.includes('ADD_TURN')" class="panel">
-          <h2>{{ $t("common.continue") }}</h2>
-          <label class="field"
-            ><span>{{ $t("runs.continueTask") }}</span
-            ><textarea v-model="turn" maxlength="8000" /></label
-          ><button
-            class="button button--primary"
-            type="button"
-            :disabled="busy || !turn.trim()"
-            @click="continueRun"
+        </ModalDialog>
+        <ModalDialog
+          v-if="selectedNode && nodeInspectorOpen"
+          :title="$t('runs.context')"
+          size="xl"
+          @close="nodeInspectorOpen = false"
+        >
+          <RunNodeInspector
+            :node="selectedNode"
+            :nodes="allRunNodes"
+            :artifacts="artifactList"
+            :project-ref="routeProjectRef ?? run.projectRef"
+            :run="selectedRun"
+            :agent="selectedAgent"
+            @close="nodeInspectorOpen = false"
+            @activity="openNodeActivity"
+            @details="openSelectedDetails"
+          />
+        </ModalDialog>
+        <ModalDialog
+          v-if="activityOpen"
+          :title="$t('runs.activity')"
+          size="full"
+          @close="closeActivity"
+        >
+          <RunActivityDrawer
+            :open="true"
+            :run="run"
+            :nodes="allRunNodes"
+            :events="eventList"
+            :artifacts="artifactList"
+            :initiator-summary="runInputSummary"
+            :initial-node-ref="activityNodeRef"
+            @close="closeActivity"
+            @download="downloadArtifact"
           >
-            {{ $t("common.send") }}
-          </button>
-        </article>
+            <template v-if="run.nextActions.includes('ADD_TURN')" #composer>
+              <form class="run-continuation" @submit.prevent="continueRun">
+                <label class="field">
+                  <span>{{ $t("runs.continueTask") }}</span>
+                  <textarea v-model="turn" maxlength="8000" />
+                </label>
+                <AttachmentComposer
+                  ref="turnAttachmentComposer"
+                  compact
+                  purpose="SESSION_TURN"
+                  :project-ref="run.projectRef"
+                  :disabled="busy"
+                  @change="turnAttachmentState = $event"
+                />
+                <button
+                  class="button button--primary"
+                  type="submit"
+                  :disabled="busy || !turn.trim() || !turnAttachmentState.ready"
+                >
+                  {{ $t("common.send") }}
+                </button>
+              </form>
+            </template>
+          </RunActivityDrawer>
+        </ModalDialog>
+        <RunSessionDetailsDialog
+          v-if="selectedNode && nodeDetailsOpen"
+          :run="selectedRun ?? run"
+          :root-run="run"
+          :node="selectedNode"
+          :nodes="allRunNodes"
+          :events="eventList"
+          :artifacts="artifactList"
+          :agent="selectedAgent"
+          @close="nodeDetailsOpen = false"
+          @download="downloadArtifact"
+        />
+      </div>
+      <section v-else class="run-empty-state">
+        <p>{{ $t("common.empty") }}</p>
       </section></AsyncState
     ></PageFrame
   >
 </template>
 <style scoped>
-.run-summary {
-  display: flex;
-  gap: 18px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin: -10px 0 16px;
-  color: var(--muted);
-  font-size: 0.86rem;
-}
 .run-statuses,
 .run-statuses > span {
   display: flex;
@@ -720,49 +836,45 @@ onBeforeUnmount(() => {
 .run-statuses small {
   color: var(--subtle);
 }
-.token-usage {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-  gap: 1px;
-  margin: 0 0 16px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--border);
-}
-.token-usage > div {
-  min-width: 0;
-  padding: 9px 11px;
-  background: var(--surface);
-}
-.token-usage dt {
-  color: var(--subtle);
-  font-size: 0.74rem;
-}
-.token-usage dd {
-  margin: 2px 0 0;
-  font-family: var(--font-mono);
-  font-size: 0.86rem;
-  font-weight: 600;
-}
-.incident-list {
-  display: grid;
-  gap: 8px;
-}
-.incident-row {
+.run-page.run-page {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--warning-soft);
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
 }
-.incident-row p {
-  margin: 4px 0;
+.run-page :deep(.page-header) {
+  flex: 0 0 auto;
 }
-.incident-row small {
+.run-page-body {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  margin: 0 calc(var(--page-frame-gutter) * -1);
+  overflow: hidden;
+}
+.run-notices {
+  position: absolute;
+  z-index: 26;
+  top: 68px;
+  left: 50%;
+  display: grid;
+  width: min(680px, calc(100% - 32px));
+  gap: 8px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+.run-notices > * {
+  pointer-events: auto;
+}
+.run-empty-state {
+  display: grid;
+  min-height: 420px;
+  place-items: center;
   color: var(--muted);
 }
 .live-indicator {
@@ -772,22 +884,61 @@ onBeforeUnmount(() => {
 .live-indicator--live {
   color: var(--success);
 }
-.gate-strip {
-  margin-bottom: 16px;
-}
-.gate-strip article {
+.gate-dialog {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.5fr) auto;
-  align-items: end;
+  gap: 16px;
+}
+.gate-dialog article {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  align-items: start;
   gap: 16px;
   padding: 16px;
   border: 1px solid #ead8ac;
   border-radius: 10px;
   background: var(--warning-soft);
 }
-.gate-strip h2,
-.gate-strip p {
+.gate-dialog h2,
+.gate-dialog p {
   margin-bottom: 4px;
+}
+.gate-question {
+  min-width: 0;
+}
+.gate-question h3 {
+  margin: 14px 0 5px;
+  font-size: 0.82rem;
+}
+.gate-question :deep(p) {
+  margin: 0;
+}
+.gate-question dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 10px 0 0;
+}
+.gate-question dl > div {
+  display: grid;
+  gap: 3px;
+}
+.gate-question dt {
+  color: var(--subtle);
+  font-size: 0.72rem;
+}
+.gate-question dd {
+  margin: 0;
+}
+.gate-question dd .button {
+  min-height: 0;
+  padding: 0;
+}
+.gate-response {
+  display: grid;
+  gap: 10px;
+}
+.gate-response textarea {
+  min-height: 92px;
 }
 .gate-actions {
   display: flex;
@@ -795,199 +946,170 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 .run-workspace {
-  display: grid;
-  grid-template-columns: minmax(360px, 1.25fr) minmax(300px, 0.8fr) minmax(
-      260px,
-      0.65fr
-    );
-  min-height: 590px;
-  border: 1px solid var(--border);
-  border-radius: 11px;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  border-block: 1px solid var(--border);
   background: var(--surface);
   overflow: hidden;
 }
-.graph-panel,
-.timeline-panel,
-.node-panel {
-  padding: 15px;
-  overflow: auto;
-}
-.timeline-panel,
-.node-panel {
-  border-left: 1px solid var(--border);
-}
-.workspace-heading {
+.run-workspace-toolbar {
+  position: absolute;
+  z-index: 20;
+  top: 14px;
+  left: 50%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-.workspace-heading h2 {
-  margin: 0 0 12px;
-}
-.timeline {
-  display: grid;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.timeline li {
-  position: relative;
-  display: grid;
-  grid-template-columns: 18px 1fr;
-  gap: 8px;
-  padding: 0 0 18px;
-}
-.timeline li::before {
-  position: absolute;
-  left: 5px;
-  top: 8px;
-  bottom: -2px;
-  width: 1px;
-  background: var(--border);
-  content: "";
-}
-.timeline li:last-child::before {
-  display: none;
-}
-.timeline__marker {
-  z-index: 1;
-  width: 11px;
-  height: 11px;
-  margin-top: 5px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-.timeline p {
-  margin: 4px 0;
-}
-.timeline :deep(.safe-markdown > p),
-.node-conversation :deep(.safe-markdown > p) {
-  margin: 0;
-}
-.timeline small {
-  color: var(--subtle);
-}
-.metadata dt {
-  color: var(--subtle);
-  font-size: 0.8rem;
-}
-.metadata dd {
-  margin: 4px 0;
-}
-.node-relations {
-  display: grid;
-  gap: 10px;
-  margin-top: 16px;
-}
-.node-relations dt {
-  color: var(--subtle);
-  font-size: 0.78rem;
-}
-.node-relations dd {
-  margin: 3px 0 0;
-}
-.node-links {
-  display: grid;
-  gap: 4px;
-}
-.node-conversation {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-}
-.node-conversation ol {
-  display: grid;
-  gap: 10px;
-  padding: 0;
-  list-style: none;
-}
-.node-conversation li {
-  padding: 9px;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 8px 24px rgba(16, 22, 30, 0.1);
+  backdrop-filter: blur(8px);
+  transform: translateX(-50%);
 }
-.node-conversation p {
-  margin: 4px 0;
+.run-workspace-toolbar .icon-button {
+  position: relative;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
 }
-.node-conversation time {
-  color: var(--subtle);
+.run-workspace-toolbar .icon-button:first-child {
+  border-radius: 7px 0 0 7px;
+}
+.run-workspace-toolbar .icon-button:last-child {
+  border-right: 0;
+  border-radius: 0 7px 7px 0;
+}
+.run-toolbar-count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--warning);
+  color: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  place-items: center;
+}
+.run-toolbar-action--attention {
+  animation: attention-outline 1.6s ease-in-out infinite;
+}
+@keyframes attention-outline {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 1px transparent,
+      0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 1px var(--warning),
+      0 0 0 4px color-mix(in srgb, var(--warning) 22%, transparent);
+  }
+}
+.run-canvas-summary {
+  position: absolute;
+  z-index: 14;
+  top: 14px;
+  left: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: min(360px, calc(100% - 190px));
+  gap: 6px 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 8px 24px rgba(16, 22, 30, 0.1);
+  backdrop-filter: blur(8px);
+}
+.run-canvas-summary > div {
+  display: grid;
+  min-width: 0;
+}
+.run-canvas-summary strong,
+.run-canvas-summary span,
+.run-canvas-summary a {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-canvas-summary > div span,
+.run-canvas-summary > span,
+.run-canvas-summary a {
+  color: var(--muted);
   font-size: 0.75rem;
 }
-.chip-list {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.chip-list span {
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  font-size: 0.78rem;
-}
-.run-bottom {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-top: 16px;
-}
-.run-result {
+.run-canvas-summary .live-indicator {
   grid-column: 1 / -1;
+  margin-left: 0;
+  white-space: normal;
 }
-.artifact-list {
-  display: grid;
+.graph-panel {
+  min-width: 0;
+  min-height: 0;
 }
-.artifact-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
+.graph-panel {
+  position: absolute;
+  inset: 0;
+  background: var(--canvas);
+}
+.graph-panel__canvas {
   width: 100%;
-  gap: 12px;
-  padding: 10px 0;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
+  height: 100%;
+  min-height: 0;
 }
-.empty-compact {
-  color: var(--muted);
+.run-continuation {
+  display: grid;
+  gap: 9px;
 }
-@media (max-width: 1150px) {
-  .run-workspace {
-    grid-template-columns: 1fr 1fr;
-  }
-  .node-panel {
-    grid-column: 1/-1;
-    border-left: 0;
-    border-top: 1px solid var(--border);
+.run-continuation > .button {
+  justify-self: end;
+}
+.run-page-body :deep(.modal--full .modal__body) {
+  display: flex;
+  overflow: hidden;
+}
+.run-page-body :deep(.modal--full .modal__footer:empty),
+.run-page-body :deep(.modal--xl .modal__footer:empty),
+.run-page-body :deep(.modal--lg .modal__footer:empty) {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .run-toolbar-action--attention {
+    animation: none;
+    box-shadow: inset 0 0 0 1px var(--warning);
   }
 }
 @media (max-width: 760px) {
-  .gate-strip article,
-  .run-workspace,
-  .run-bottom {
-    grid-template-columns: 1fr;
+  .run-page-body {
+    min-height: 0;
   }
-  .timeline-panel,
-  .node-panel {
-    border-left: 0;
-    border-top: 1px solid var(--border);
+  .run-notices {
+    top: 116px;
+    width: calc(100% - 16px);
   }
   .run-summary .live-indicator {
     margin-left: 0;
   }
-  .graph-panel,
-  .timeline-panel,
-  .node-panel {
-    max-height: none;
+  .gate-dialog article {
+    grid-template-columns: 1fr;
   }
-  .artifact-row {
-    grid-template-columns: 1fr auto;
+  .run-canvas-summary {
+    top: 62px;
+    left: 8px;
+    width: min(320px, calc(100% - 16px));
   }
-  .artifact-row span:last-child {
-    display: none;
+  .run-workspace-toolbar {
+    top: 8px;
+    left: 8px;
+    transform: none;
   }
 }
 </style>

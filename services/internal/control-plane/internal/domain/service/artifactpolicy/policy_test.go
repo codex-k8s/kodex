@@ -3,6 +3,7 @@ package artifactpolicy
 import (
 	"archive/zip"
 	"bytes"
+	"io"
 	"testing"
 )
 
@@ -23,6 +24,42 @@ func TestInspect(t *testing.T) {
 			verdict := Inspect(test.fileName, test.mediaType, test.body)
 			if verdict.ScanState != test.state || verdict.PreviewState != test.preview {
 				t.Fatalf("unexpected verdict: %#v", verdict)
+			}
+		})
+	}
+}
+
+func TestInspectReaderStreamsTextLargerThanLegacyLimit(t *testing.T) {
+	t.Parallel()
+	const size = int64(17 << 20)
+	reader := io.NewSectionReader(repeatedByteReaderAt{size: size, value: 'a'}, 0, size)
+	verdict, err := InspectReader("notes.txt", "text/plain", reader, size)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verdict.ScanState != ScanClean || verdict.PreviewState != PreviewAvailable {
+		t.Fatalf("unexpected verdict: %#v", verdict)
+	}
+}
+
+func TestInspectReaderQuarantinesDeclaredOrNamedActiveContent(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name, fileName, mediaType string
+	}{
+		{name: "declared", fileName: "page.txt", mediaType: "text/html"},
+		{name: "extension", fileName: "page.html", mediaType: "text/plain"},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			body := []byte("plain text")
+			verdict, err := InspectReader(test.fileName, test.mediaType, bytes.NewReader(body), int64(len(body)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if verdict.ScanState != ScanQuarantined || verdict.PreviewState != PreviewBlocked {
+				t.Fatalf("active content was not quarantined: %#v", verdict)
 			}
 		})
 	}
@@ -62,4 +99,26 @@ func officeArchive(t *testing.T, macro bool) []byte {
 		t.Fatal(err)
 	}
 	return buffer.Bytes()
+}
+
+type repeatedByteReaderAt struct {
+	size  int64
+	value byte
+}
+
+func (reader repeatedByteReaderAt) ReadAt(target []byte, offset int64) (int, error) {
+	if offset >= reader.size {
+		return 0, io.EOF
+	}
+	count := len(target)
+	if remaining := reader.size - offset; int64(count) > remaining {
+		count = int(remaining)
+	}
+	for index := 0; index < count; index++ {
+		target[index] = reader.value
+	}
+	if count != len(target) {
+		return count, io.EOF
+	}
+	return count, nil
 }

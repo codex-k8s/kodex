@@ -4,12 +4,13 @@ metadata:
   name: runtime-controller-runtime
 data:
   RUNTIME_CONTROLLER_TECHNICAL_LISTEN: ":9090"
+  RUNTIME_CONTROLLER_RUNTIME_NAMESPACE: "kodex-runtime"
   RUNTIME_CONTROLLER_CALLBACK_LISTEN: ":8444"
   RUNTIME_CONTROLLER_CALLBACK_TLS_SERVER_NAME: "runtime-controller-callback.kodex-system.svc.cluster.local"
   RUNTIME_CONTROLLER_CALLBACK_SERVER_CERTIFICATE_FILE: "/var/run/secrets/kodex/runtime-controller/callback-server/tls.crt"
   RUNTIME_CONTROLLER_CALLBACK_SERVER_PRIVATE_KEY_FILE: "/var/run/secrets/kodex/runtime-controller/callback-server/tls.key"
   RUNTIME_CONTROLLER_CALLBACK_CLIENT_CA_FILE: "/var/run/config/kodex/runtime-controller/callback-client/ca.crt"
-  RUNTIME_CONTROLLER_CALLBACK_EXPECTED_CLIENT_SPIFFE_ID: "spiffe://kodex.local/ns/kodex-system/sa/agent-runner"
+  RUNTIME_CONTROLLER_CALLBACK_EXPECTED_CLIENT_SPIFFE_ID: "spiffe://kodex.local/ns/kodex-runtime/sa/agent-runner"
   RUNTIME_CONTROLLER_CALLBACK_CLIENT_CA_SECRET: "runtime-execution-client-tls"
   RUNTIME_CONTROLLER_CALLBACK_CLIENT_TLS_SECRET: "runtime-execution-client-tls"
   RUNTIME_CONTROLLER_CONTROL_PLANE_TARGET: "dns:///control-plane.kodex-system.svc:8443"
@@ -24,8 +25,6 @@ data:
   RUNTIME_CONTROLLER_SESSION_PVC_SIZE: "20Gi"
   RUNTIME_CONTROLLER_RUNNER_SERVICE_ACCOUNT: "agent-runner"
   RUNTIME_CONTROLLER_MAXIMUM_CONCURRENT_TURNS: "16"
-  RUNTIME_CONTROLLER_TURN_CPU_MILLI: "2000"
-  RUNTIME_CONTROLLER_TURN_MEMORY_BYTES: "4294967296"
   RUNTIME_CONTROLLER_POLL_INTERVAL: "500ms"
   RUNTIME_CONTROLLER_INFRASTRUCTURE_CHECK_INTERVAL: "10s"
   RUNTIME_CONTROLLER_LEASE_RENEW_INTERVAL: "10s"
@@ -33,3 +32,10 @@ data:
   RUNTIME_CONTROLLER_EXECUTION_TIMEOUT: "1h"
   RUNTIME_CONTROLLER_SHUTDOWN_TIMEOUT: "30s"
   RUNTIME_CONTROLLER_WARM_LONG_POLL: "20s"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: runtime-materialization-admission-parameters
+data:
+  kubernetes-api-service-cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__

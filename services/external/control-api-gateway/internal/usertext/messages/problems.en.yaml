@@ -4,6 +4,8 @@ INVALID_REQUEST:
   other: Check the request data
 UNAUTHENTICATED:
   other: Sign in to continue
+FRESH_AUTHENTICATION_REQUIRED:
+  other: Sign in again to confirm this privileged action
 PERMISSION_DENIED:
   other: You do not have permission for this action
 NOT_FOUND:
@@ -76,6 +78,20 @@ DEFAULT_RUNTIME_NAME:
   other: Default runtime
 DEFAULT_PROVIDER_ACCOUNT_NAME:
   other: Default model account
+PROVIDER_ACCOUNT_CREATED:
+  other: Model account created
+PROVIDER_ACCOUNT_UPDATED:
+  other: Model account updated
+PROVIDER_DEVICE_AUTHORIZATION_STARTED:
+  other: Model account device authorization started
+PROVIDER_ACCOUNT_AUTHORIZED:
+  other: Model account authorized
+PROVIDER_AUTHORIZATION_FAILED:
+  other: Model account authorization failed
+PROVIDER_ACCOUNT_REVOKED:
+  other: Model account access revoked
+PROVIDER_CREDENTIAL_REFRESH_COMMITTED:
+  other: Refreshed model credentials activated
 INSTALLATION_OWNER_NAME:
   other: Installation owner
 OIDC_USER_NAME:
@@ -106,6 +122,10 @@ ROLE_IMAGE_RECIPE_CHANGED:
   other: The role environment configuration was updated
 ROLE_IMAGE_BUILD_COMPLETED:
   other: The role environment image was built
+ROLE_IMAGE_PROMOTION_REQUESTED:
+  other: Role environment image promotion requested
+ROLE_IMAGE_PROMOTED:
+  other: Role environment image promoted
 ONBOARDING_COMPLETED:
   other: Initial setup is complete
 PROJECT_CREATED:
@@ -144,6 +164,10 @@ SCHEDULE_CREATED:
   other: Schedule created
 SCHEDULE_UPDATED:
   other: Schedule updated
+SCHEDULE_ARCHIVED:
+  other: Schedule archived
+SCHEDULE_DELETED:
+  other: Schedule deleted
 SCHEDULED_RUN_TASK:
   other: Scheduled run
 SCHEDULE_OCCURRENCE_MATERIALIZED:
@@ -154,6 +178,8 @@ INTEGRATION_CONNECTION_CREATED:
   other: Integration connection created
 INTEGRATION_CONNECTION_UPDATED:
   other: Integration connection updated
+INTEGRATION_CONNECTION_DELETED:
+  other: Integration connection deleted
 INTEGRATION_GRANT_UPDATED:
   other: Integration permission updated
 INTEGRATION_CONNECTION_TEST_COMPLETED:
@@ -186,6 +212,8 @@ NEW_ASSISTANT_CONVERSATION:
   other: New conversation
 ASSISTANT_CONVERSATION_CREATED:
   other: Assistant conversation created
+ASSISTANT_CONVERSATION_TITLE_UPDATED:
+  other: Assistant conversation title updated
 ASSISTANT_TURN_QUEUED:
   other: Assistant command queued
 ASSISTANT_TURN_ACCEPTED:
@@ -194,6 +222,18 @@ ASSISTANT_PLAN_APPLIED:
   other: Assistant plan applied
 ASSISTANT_PLAN_PROPOSED:
   other: Assistant change plan proposed
+ASSISTANT_PLAN_DRAFT_UPDATED:
+  other: Assistant plan draft updated
+ASSISTANT_PLAN_VALIDATED:
+  other: Assistant plan validated
+ASSISTANT_PLAN_REJECTED:
+  other: Assistant plan rejected
+ASSISTANT_PLAN_CONFLICT:
+  other: Assistant plan became stale because resources changed
+RUN_METADATA_UPDATED:
+  other: Run metadata updated
+RUNTIME_TOOL_CALL_RECORDED:
+  other: Runtime tool call recorded
 ASSISTANT_INSTRUCTIONS_UPDATED:
   other: Assistant instruction supplement updated
 ASSISTANT_RECOVERY_REQUESTED:
@@ -208,6 +248,10 @@ SYSTEM_ASSISTANT_HEARTBEAT_RECORDED:
   other: System assistant runtime heartbeat recorded
 SYSTEM_ASSISTANT_CORE_PROMPT_UPDATED:
   other: System assistant core instructions upgraded
+SYSTEM_ASSISTANT_PROVIDER_POLICY_UPDATED:
+  other: System assistant provider account pool updated
+SYSTEM_ASSISTANT_RUNTIME_ENVIRONMENT_UPDATED:
+  other: System assistant runtime environment updated
 SYSTEM_ASSISTANT_LABEL:
   other: System · non-removable
 ARTIFACT_AVAILABLE:
@@ -242,6 +286,14 @@ INTEGRATION_ACTION_COMPLETED:
   other: Integration action completed
 INTEGRATION_INVOCATION_COMPLETED:
   other: Integration invocation completed
+INTEGRATION_EFFECT_GATE_NODE_NAME:
+  other: Integration action approval
+INTEGRATION_EFFECT_GATE_TITLE:
+  other: Approve integration action
+INTEGRATION_EFFECT_GATE_PROMPT:
+  other: Review the exact action and resource scope before execution
+INTEGRATION_EFFECT_OWNER_DECISION_REQUIRED:
+  other: Integration action requires your approval
 OWNER_DECISION_REQUIRED:
   other: Human decision required
 OWNER_GATE_CANCELLED:
@@ -374,3 +426,281 @@ INTEGRATION_FIELD_CHANNEL_LABEL:
   other: Channel
 INTEGRATION_FIELD_CHANNEL_HELP:
   other: Channel system name without an internal ID
+AGENT_CONFIG_OVERLAY_CHANGED:
+  other: Agent configuration changed
+AGENT_RUNTIME_CONFIGURATION_PUBLISHED:
+  other: Agent runtime configuration published
+AGENT_RUNTIME_ENVIRONMENT_BOUND:
+  other: Agent runtime environment bound
+CONFIG_OVERLAY_INVALID_OR_PROTECTED:
+  other: Overlay contains invalid or protected parameters
+DEFAULT_RUNTIME_ENVIRONMENT:
+  other: Default environment
+DEFAULT_RUNTIME_ENVIRONMENT_DESCRIPTION:
+  other: Default safe agent runtime environment
+RUNTIME_ENVIRONMENT_CREATED:
+  other: Runtime environment created
+RUNTIME_ENVIRONMENT_PUBLISHED:
+  other: Runtime environment published
+RUNTIME_ENVIRONMENT_ENABLED:
+  other: Runtime environment enabled
+RUNTIME_ENVIRONMENT_DISABLED:
+  other: Runtime environment disabled
+RUNTIME_ENVIRONMENT_DELETED:
+  other: Runtime environment deleted
+ACCESS_ROLE_CHANGED:
+  other: Access role updated
+ACCESS_BINDING_CHANGED:
+  other: Access binding updated
+SYSTEM_ROLE_BOOTSTRAP:
+  other: Initial system role version
+SYSTEM_ROLE_OWNER:
+  other: Owner
+SYSTEM_ROLE_OWNER_DESCRIPTION:
+  other: Full application policy authority
+SYSTEM_ROLE_ADMINISTRATOR:
+  other: Administrator
+SYSTEM_ROLE_ADMINISTRATOR_DESCRIPTION:
+  other: Full application administration authority
+SYSTEM_ROLE_OPERATOR:
+  other: Operator
+SYSTEM_ROLE_OPERATOR_DESCRIPTION:
+  other: Operates assigned projects and resources
+SYSTEM_ROLE_MEMBER:
+  other: Member
+SYSTEM_ROLE_MEMBER_DESCRIPTION:
+  other: Uses assigned projects and resources
+SYSTEM_ROLE_AUDITOR:
+  other: Auditor
+SYSTEM_ROLE_AUDITOR_DESCRIPTION:
+  other: Reads assigned resources, access policy, and audit events
+PERMISSION_ORGANIZATION_VIEW_NAME:
+  other: View organization
+PERMISSION_ORGANIZATION_VIEW_DESCRIPTION:
+  other: Read organization details
+PERMISSION_ORGANIZATION_MANAGE_NAME:
+  other: Manage organization
+PERMISSION_ORGANIZATION_MANAGE_DESCRIPTION:
+  other: Change organization settings
+PERMISSION_ACCESS_VIEW_NAME:
+  other: View access policy
+PERMISSION_ACCESS_VIEW_DESCRIPTION:
+  other: Read roles, bindings, subjects, and effective access
+PERMISSION_ACCESS_MANAGE_NAME:
+  other: Manage access policy
+PERMISSION_ACCESS_MANAGE_DESCRIPTION:
+  other: Create role versions and change bindings
+PERMISSION_PROJECT_CREATE_NAME:
+  other: Create projects
+PERMISSION_PROJECT_CREATE_DESCRIPTION:
+  other: Create a project in the organization
+PERMISSION_PROJECT_VIEW_NAME:
+  other: View projects
+PERMISSION_PROJECT_VIEW_DESCRIPTION:
+  other: Read assigned projects
+PERMISSION_PROJECT_MANAGE_NAME:
+  other: Manage projects
+PERMISSION_PROJECT_MANAGE_DESCRIPTION:
+  other: Change assigned projects
+PERMISSION_AGENT_VIEW_NAME:
+  other: View AI employees
+PERMISSION_AGENT_VIEW_DESCRIPTION:
+  other: Read assigned AI employees
+PERMISSION_AGENT_MANAGE_NAME:
+  other: Manage AI employees
+PERMISSION_AGENT_MANAGE_DESCRIPTION:
+  other: Change assigned AI employees
+PERMISSION_AGENT_LAUNCH_NAME:
+  other: Launch AI employees
+PERMISSION_AGENT_LAUNCH_DESCRIPTION:
+  other: Start runs for assigned AI employees
+PERMISSION_WORKFLOW_VIEW_NAME:
+  other: View workflows
+PERMISSION_WORKFLOW_VIEW_DESCRIPTION:
+  other: Read assigned workflows
+PERMISSION_WORKFLOW_MANAGE_NAME:
+  other: Manage workflows
+PERMISSION_WORKFLOW_MANAGE_DESCRIPTION:
+  other: Change assigned workflows
+PERMISSION_WORKFLOW_LAUNCH_NAME:
+  other: Launch workflows
+PERMISSION_WORKFLOW_LAUNCH_DESCRIPTION:
+  other: Start runs for assigned workflows
+PERMISSION_RUN_VIEW_NAME:
+  other: View runs
+PERMISSION_RUN_VIEW_DESCRIPTION:
+  other: Read assigned runs
+PERMISSION_RUN_CANCEL_OWN_NAME:
+  other: Cancel own runs
+PERMISSION_RUN_CANCEL_OWN_DESCRIPTION:
+  other: Cancel runs initiated by the same subject
+PERMISSION_RUN_CANCEL_ANY_NAME:
+  other: Cancel any assigned run
+PERMISSION_RUN_CANCEL_ANY_DESCRIPTION:
+  other: Cancel any run in the assigned scope
+PERMISSION_GATE_RESOLVE_NAME:
+  other: Resolve owner gates
+PERMISSION_GATE_RESOLVE_DESCRIPTION:
+  other: Submit decisions for assigned owner gates
+PERMISSION_ARTIFACT_VIEW_NAME:
+  other: View artifacts
+PERMISSION_ARTIFACT_VIEW_DESCRIPTION:
+  other: Read assigned artifact metadata
+PERMISSION_ARTIFACT_DOWNLOAD_NAME:
+  other: Download artifacts
+PERMISSION_ARTIFACT_DOWNLOAD_DESCRIPTION:
+  other: Download assigned artifacts
+PERMISSION_ARTIFACT_MANAGE_NAME:
+  other: Manage artifacts
+PERMISSION_ARTIFACT_MANAGE_DESCRIPTION:
+  other: Change assigned artifact bindings
+PERMISSION_SCHEDULE_VIEW_NAME:
+  other: View schedules
+PERMISSION_SCHEDULE_VIEW_DESCRIPTION:
+  other: Read assigned schedules
+PERMISSION_SCHEDULE_MANAGE_NAME:
+  other: Manage schedules
+PERMISSION_SCHEDULE_MANAGE_DESCRIPTION:
+  other: Change assigned schedules
+PERMISSION_INTEGRATION_VIEW_NAME:
+  other: View integrations
+PERMISSION_INTEGRATION_VIEW_DESCRIPTION:
+  other: Read assigned integration connections
+PERMISSION_INTEGRATION_MANAGE_NAME:
+  other: Manage integrations
+PERMISSION_INTEGRATION_MANAGE_DESCRIPTION:
+  other: Change assigned integration connections
+PERMISSION_AUDIT_VIEW_NAME:
+  other: View audit events
+PERMISSION_AUDIT_VIEW_DESCRIPTION:
+  other: Read audit events in the assigned scope
+SESSION_ARCHIVE_TASK_SUCCEEDED:
+  other: Session archive task completed
+SESSION_ARCHIVE_TASK_READY:
+  other: Session archive task scheduled for retry
+SESSION_ARCHIVE_TASK_DEAD_LETTER:
+  other: Session archive task stopped after exhausting retries
+ARTIFACT_DELETED:
+  other: File moved to trash
+ARTIFACT_RESTORED:
+  other: File restored from trash
+ARTIFACT_PURGED:
+  other: File permanently deleted
+PERMISSION_ENVIRONMENT_PRIVILEGED_MANAGE_NAME:
+  other: Manage privileged environments
+PERMISSION_ENVIRONMENT_PRIVILEGED_MANAGE_DESCRIPTION:
+  other: Configure runtime Kubernetes access within the runtime's own Pod boundary
+PERMISSION_SECRET_VIEW_NAME:
+  other: View secrets
+PERMISSION_SECRET_VIEW_DESCRIPTION:
+  other: Read safe hints and metadata for assigned secrets
+PERMISSION_SECRET_CREATE_NAME:
+  other: Create secrets
+PERMISSION_SECRET_CREATE_DESCRIPTION:
+  other: Create secrets in the assigned scope
+PERMISSION_SECRET_ROTATE_NAME:
+  other: Rotate secrets
+PERMISSION_SECRET_ROTATE_DESCRIPTION:
+  other: Create a new version of an assigned secret
+PERMISSION_SECRET_REVEAL_NAME:
+  other: Reveal secrets
+PERMISSION_SECRET_REVEAL_DESCRIPTION:
+  other: Retrieve an assigned secret value once with an audit record
+PERMISSION_SECRET_REVOKE_NAME:
+  other: Revoke secrets
+PERMISSION_SECRET_REVOKE_DESCRIPTION:
+  other: Prevent further use of an assigned secret
+RUNTIME_SECRET_CREATED:
+  other: Runtime secret created
+RUNTIME_SECRET_ROTATED:
+  other: Runtime secret rotated
+RUNTIME_SECRET_REVEALED:
+  other: Runtime secret value revealed
+RUNTIME_SECRET_REVOKED:
+  other: Runtime secret revoked
+RUNTIME_SECRET_OPERATION_FAILED:
+  other: Runtime secret operation failed
+SYSTEM_BASE_ROLE_IMAGE:
+  other: System base role image
+SYSTEM_ROLE_RUNTIME_POLICY:
+  other: System runtime policy
+SYSTEM_ROLE_RUNTIME_SECRETS:
+  other: System runtime secrets
+ATTACHMENT_SET_DRAFT_CREATED:
+  other: Attachment set draft created
+ATTACHMENT_SET_DRAFT_REVISED:
+  other: Attachment set draft revised
+ATTACHMENT_SET_FINALIZED:
+  other: Attachment set finalized
+PERMISSION_ARTIFACT_BIND_NAME:
+  other: Bind artifacts
+PERMISSION_ARTIFACT_BIND_DESCRIPTION:
+  other: Bind assigned artifacts to permitted objects
+PERMISSION_ARTIFACT_UPLOAD_NAME:
+  other: Upload artifacts
+PERMISSION_ARTIFACT_UPLOAD_DESCRIPTION:
+  other: Upload artifacts into a permitted scope
+PERMISSION_AGENT_AVATAR_MANAGE_NAME:
+  other: Manage AI employee avatars
+PERMISSION_AGENT_AVATAR_MANAGE_DESCRIPTION:
+  other: Set and remove a prepared image artifact for an assigned AI employee
+PERMISSION_PROVIDER_ACCOUNT_VIEW_NAME:
+  other: View provider accounts
+PERMISSION_PROVIDER_ACCOUNT_VIEW_DESCRIPTION:
+  other: View safe provider account descriptors and states without credential values
+PERMISSION_PROVIDER_ACCOUNT_MANAGE_NAME:
+  other: Manage provider accounts
+PERMISSION_PROVIDER_ACCOUNT_MANAGE_DESCRIPTION:
+  other: Create, enable, and disable assigned provider accounts
+PERMISSION_PROVIDER_ACCOUNT_AUTHORIZE_NAME:
+  other: Authorize provider accounts
+PERMISSION_PROVIDER_ACCOUNT_AUTHORIZE_DESCRIPTION:
+  other: Start and refresh authorization for assigned provider accounts
+PERMISSION_PROVIDER_ACCOUNT_REVOKE_NAME:
+  other: Revoke provider accounts
+PERMISSION_PROVIDER_ACCOUNT_REVOKE_DESCRIPTION:
+  other: Revoke active authorization for assigned provider accounts
+PERMISSION_RUNTIME_ENVIRONMENT_DISABLE_NAME:
+  other: Disable runtime environments
+PERMISSION_RUNTIME_ENVIRONMENT_DISABLE_DESCRIPTION:
+  other: Disable an assigned runtime environment after usage checks
+PERMISSION_RUNTIME_ENVIRONMENT_DELETE_NAME:
+  other: Delete runtime environments
+PERMISSION_RUNTIME_ENVIRONMENT_DELETE_DESCRIPTION:
+  other: Delete a disabled runtime environment without active bindings
+PERMISSION_ARTIFACT_DELETE_NAME:
+  other: Delete artifacts
+PERMISSION_ARTIFACT_DELETE_DESCRIPTION:
+  other: Move assigned artifacts to trash
+PERMISSION_ARTIFACT_RESTORE_NAME:
+  other: Restore artifacts
+PERMISSION_ARTIFACT_RESTORE_DESCRIPTION:
+  other: Restore assigned artifacts from trash
+PERMISSION_ARTIFACT_PURGE_NAME:
+  other: Permanently delete artifacts
+PERMISSION_ARTIFACT_PURGE_DESCRIPTION:
+  other: Permanently remove assigned artifacts
+PERMISSION_IMAGE_BUILD_NAME:
+  other: Build role images
+PERMISSION_IMAGE_BUILD_DESCRIPTION:
+  other: Start builds for assigned role images
+PERMISSION_IMAGE_PROMOTE_NAME:
+  other: Promote role images
+PERMISSION_IMAGE_PROMOTE_DESCRIPTION:
+  other: Promote verified versions of assigned role images
+PERMISSION_PROMPT_FULL_VIEW_NAME:
+  other: View full prompts
+PERMISSION_PROMPT_FULL_VIEW_DESCRIPTION:
+  other: Read fully materialized prompts for assigned runs
+PERMISSION_RUN_CANCEL_NAME:
+  other: Cancel runs
+PERMISSION_RUN_CANCEL_DESCRIPTION:
+  other: Cancel assigned runs in the permitted scope
+PERMISSION_SESSION_CANCEL_NAME:
+  other: Cancel sessions
+PERMISSION_SESSION_CANCEL_DESCRIPTION:
+  other: Cancel assigned sessions in the permitted scope
+SYSTEM_ROLE_EXACT_SENSITIVE_ACCESS:
+  other: System exact permissions for sensitive operations
+SYSTEM_ROLE_MVP_BACKEND_LIFECYCLES:
+  other: System permissions for product backend lifecycles

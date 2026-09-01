@@ -11,7 +11,7 @@ GRPC_GO_PLUGIN_LOCAL_VERSION := 1.6.2
 CONTROL_API_GATEWAY_ASYNCAPI_PARSER_VERSION := 3.6.3
 OAPI_CODEGEN_VERSION := v2.7.1
 
-.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-openapi-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-service-infrastructure-bootstrap test-management-surfaces test-install-contract test-authority-policy-codegen test-control-plane-postgres test-internal-rpc-authority-postgres test-go test-go-all tidy-go govulncheck gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
+.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-openapi-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-service-infrastructure-bootstrap test-management-surfaces test-install-contract test-authority-policy-codegen test-control-plane-postgres test-internal-rpc-authority-postgres test-session-archive-seaweedfs-e2e test-integration-synthetic test-full-local-e2e-entrypoint test-local-e2e-oidc-group-fixture-contract test-local-backup-controller-credentials-contract test-local-go-cache-contract test-local-image-cache-import-contract test-local-kubernetes-api-egress-contract test-local-object-storage-capacity-contract test-local-provider-account-persistence-contract test-local-material-contract-revision test-integration-deployed-e2e-check test-integration-deployed-e2e test-go test-go-all tidy-go govulncheck gen-integration-packages check-integration-package-codegen gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -39,8 +39,10 @@ test-web-only-release:
 test-service-infrastructure-bootstrap:
 	@./scripts/tests/service-infrastructure-bootstrap-test.sh
 	@./scripts/tests/nats-operator-material-test.sh
+	@./scripts/tests/local-storage-e2e-reliability-contract-test.sh
 
 test-management-surfaces:
+	@./scripts/tests/keycloak-protocol-mapper-reconcile-test.sh
 	@./scripts/tests/management-surfaces-test.sh
 
 test-install-contract:
@@ -53,8 +55,55 @@ test-authority-policy-codegen:
 test-control-plane-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh
 
+test-session-archive-seaweedfs-e2e:
+	@./scripts/tests/session-archive-seaweedfs-e2e-test.sh
+
 test-internal-rpc-authority-postgres:
 	@./scripts/tests/internal-rpc-authority-postgres-test.sh
+
+test-integration-synthetic:
+	@./scripts/tests/integration-synthetic-test.sh
+
+test-full-local-e2e-entrypoint:
+	@./scripts/tests/full-local-e2e-entrypoint-test.sh
+
+test-local-e2e-oidc-group-fixture-contract:
+	@./scripts/tests/local-e2e-oidc-group-fixture-test.sh
+
+test-local-go-cache-contract:
+	@./scripts/tests/local-go-cache-contract-test.sh
+
+test-local-kubernetes-api-egress-contract:
+	@./scripts/tests/local-kubernetes-api-egress-contract-test.sh
+
+test-local-object-storage-capacity-contract:
+	@./scripts/tests/local-object-storage-capacity-contract-test.sh
+
+test-local-provider-account-persistence-contract:
+	@./scripts/tests/local-provider-account-persistence-contract-test.sh
+
+test-local-backup-controller-credentials-contract:
+	@./scripts/tests/local-backup-controller-credentials-contract-test.sh
+
+test-local-image-cache-import-contract:
+	@./scripts/tests/local-image-cache-import-contract-test.sh
+
+.PHONY: test-platform-worker-grant-workloads-contract
+test-platform-worker-grant-workloads-contract:
+	@./scripts/tests/platform-worker-grant-workloads-contract-test.sh
+
+test-local-material-contract-revision:
+	@./scripts/tests/local-material-contract-revision-test.sh
+
+test-integration-deployed-e2e-check:
+	@cd services/staff/control-center && \
+		KODEX_E2E_CHECK_ONLY=1 KODEX_E2E_PROFILE=web-only KODEX_E2E_RESOURCE_PREFIX=check-only \
+		./node_modules/.bin/tsc --noEmit -p tsconfig.e2e.json && \
+		KODEX_E2E_CHECK_ONLY=1 KODEX_E2E_PROFILE=web-only KODEX_E2E_RESOURCE_PREFIX=check-only \
+		./node_modules/.bin/playwright test --config playwright.integration.config.ts --list
+
+test-integration-deployed-e2e:
+	@./scripts/tests/integration-deployed-e2e.sh
 
 test-go: test-go-toolchain-contract check-sql-boundary
 	@./scripts/test-go-modules.sh
@@ -71,6 +120,17 @@ tidy-go: check-go-toolchain
 govulncheck: check-go-toolchain
 	$(if $(filter file,$(origin GOVULNCHECK_VERSION)),,$(error GOVULNCHECK_VERSION нельзя переопределять))
 	@GOVULNCHECK_VERSION='$(GOVULNCHECK_VERSION)' ./scripts/govulncheck-go-modules.sh
+
+gen-integration-packages: check-go-toolchain
+	@cd libs/go/integrationpackage && env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/packagegen \
+		-contracts ../../../contracts/integrations/v1/definitions -output shipped_gen.go
+	@gofmt -w libs/go/integrationpackage/shipped_gen.go
+
+check-integration-package-codegen: check-go-toolchain
+	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
+		cd libs/go/integrationpackage && env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/packagegen \
+		-contracts ../../../contracts/integrations/v1/definitions -output "$$tmp"; \
+		gofmt -w "$$tmp"; cmp -s shipped_gen.go "$$tmp" || { echo 'integration package generated code is stale' >&2; exit 1; }
 
 gen-openapi: gen-openapi-go gen-openapi-ts
 

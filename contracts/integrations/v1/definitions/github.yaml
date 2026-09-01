@@ -1,0 +1,101 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: github
+  version: 2.0.0
+  origin: SHIPPED
+spec:
+  name: GitHub
+  description: Метаданные репозитория и управляемые операции с issue в одном точно ограниченном репозитории.
+  category: source-control
+  adapter: GITHUB
+  credential:
+    secretKey: token
+    kind: TOKEN
+  configurationFields:
+    - key: owner
+      type: STRING
+      format: IDENTIFIER
+      required: true
+      maximumLength: 100
+    - key: repository
+      type: STRING
+      format: IDENTIFIER
+      required: true
+      maximumLength: 100
+  networkDestinations:
+    - key: github_api
+      source: STATIC
+      hostname: api.github.com
+      port: 443
+      tls: REQUIRED
+  healthCheck:
+    operation: github.repository.metadata.read
+    timeoutSeconds: 15
+    maxAttempts: 3
+  capabilities:
+    - key: github.repository.metadata.read
+      name: Прочитать метаданные репозитория
+      description: Возвращает безопасную проекцию состояния одного разрешённого репозитория.
+      operation: github.repository.metadata.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields: []
+      outputFields:
+        - {key: full_name, type: STRING, format: IDENTIFIER, required: true, maximumLength: 220}
+        - {key: default_branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: visibility, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+        - {key: private, type: BOOLEAN, required: true}
+        - {key: archived, type: BOOLEAN, required: true}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 20
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.issue.create
+      name: Создать issue
+      description: Создаёт issue с детерминированной меткой эффекта после Human Gate.
+      operation: github.issue.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 256}
+        - {key: body, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+      outputFields:
+        - {key: number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 256}
+        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 2
+        retryBackoffMilliseconds: 500
+    - key: github.issue.update
+      name: Обновить issue
+      description: Изменяет только разрешённые поля существующего issue после Human Gate.
+      operation: github.issue.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {key: issue_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+        - {key: body, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+        - {key: state, type: STRING, format: IDENTIFIER, required: false, maximumLength: 16, allowedValues: [open, closed]}
+      outputFields:
+        - {key: number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 256}
+        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 500

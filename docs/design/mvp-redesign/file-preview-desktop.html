@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Файлы · Безопасный предпросмотр</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  .p-pv .modal-wrap:not(.is-open) { display: none; }
+  .p-pv__body { flex-direction: column; }
+  .p-pv__toolbar { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 12px 24px; border-bottom: 1px solid var(--line); background: var(--bg); min-height: 57px; }
+  .p-pv__scroll { flex: 1 1 auto; min-height: 0; overflow: auto; background: var(--bg-subtle); }
+  .p-pv__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 12px; padding: 14px 24px 8px; }
+  .p-pv .file-tile { background: var(--bg); }
+  .p-pv .file-tile.is-current { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc-tint); }
+  .p-pv .check { min-height: 20px; } .p-pv .check__box { margin-top: 0; }
+  .p-pv .file-tile__check .check__box { background: var(--bg); }
+  /* modal предпросмотра */
+  .pv__layout { display: flex; flex: 1 1 auto; min-height: 0; }
+  .pv__doc { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--bg-canvas); }
+  .pv__doc-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--bg); font-size: 12px; color: var(--sec); }
+  .pv__doc-bar .mono { font-size: 11.5px; }
+  .pv__page-wrap { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 20px; display: flex; justify-content: center; }
+  .pv__page { width: 440px; min-height: 560px; background: var(--bg); border: 1px solid var(--line); box-shadow: var(--shadow-1); padding: 40px 36px; display: flex; flex-direction: column; gap: 8px; }
+  .pv__page span { display: block; height: 7px; border-radius: 4px; background: var(--line); }
+  .pv__page span.t { height: 12px; background: var(--line-strong); width: 62%; margin-bottom: 10px; }
+  .pv__page span.h { height: 9px; background: var(--line-strong); width: 40%; margin-top: 12px; }
+  .pv__page .tbl { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 10px; }
+  .pv__page .tbl span { height: 8px; }
+  .pv__side { flex: 0 0 360px; display: flex; flex-direction: column; min-height: 0; }
+  .pv__side-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 14px 16px; }
+  .pv__ver { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line-hair); font-size: 12.5px; }
+  .pv__ver:first-child { border-top: 0; }
+  .pv__bind { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line-hair); font-size: 12.5px; }
+  .pv__bind:first-child { border-top: 0; }
+  .pv__bind .select { min-width: 84px; height: 26px; min-height: 26px; font-size: 11.5px; padding: 0 8px; }
+  .pv__unsupported { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px dashed var(--line-strong); border-radius: var(--r-2); font-size: 12px; color: var(--sec); }
+</style>
+</head>
+<body class="stage">
+<p class="stage-label">Файлы · безопасный предпросмотр (modal) · desktop 1440×1024 · маршрут <code>/projects/:projectRef/files/:artifactRef</code></p>
+<div class="frame frame--desktop p-pv" id="frame">
+  <main class="page" id="page" aria-labelledby="page-title">
+    <div class="page-head">
+      <div class="crumbs"><a href="#">Проекты</a><span>/</span><a href="#">Корпоративные продажи</a><span>/</span><span>Файлы</span></div>
+      <div class="page-title-row">
+        <div>
+          <div class="page-title"><h1 id="page-title">Файлы</h1><span class="tag">1 248 файлов</span></div>
+          <div class="page-sub">Материалы для ИИ-сотрудников и результаты их работы</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn--lg" type="button" id="open-preview" data-modal="#preview-modal"><svg class="ic"><use href="#i-eye"/></svg>Предпросмотр</button>
+          <button class="btn btn--primary btn--lg" type="button"><svg class="ic"><use href="#i-upload"/></svg>Загрузить файл</button>
+        </div>
+      </div>
+    </div>
+    <div class="page-body page-body--flush p-pv__body">
+      <div class="p-pv__toolbar">
+        <label class="search" style="width:300px;flex:0 0 300px"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Поиск по имени и метаданным" aria-label="Серверный поиск файлов"></label>
+        <button class="chip chip--filter" type="button" data-menu="#menu-f-type" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-file"/></svg><span>Тип: все</span><svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+        <button class="chip chip--filter" type="button" data-menu="#menu-f-type" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-shield-check"/></svg><span>Проверка: все</span><svg class="ic ic-chev"><use href="#i-chev"/></svg></button>
+        <span class="toolbar__spacer"></span>
+        <span class="toolbar__count" id="files-count">Показано 0 из 1 248</span>
+        <div class="seg" data-seg role="group" aria-label="Вид списка">
+          <button class="seg__btn seg__btn--icon" type="button" aria-pressed="false" data-view="list" aria-label="Список"><svg class="ic"><use href="#i-list"/></svg></button>
+          <button class="seg__btn seg__btn--icon" type="button" aria-pressed="true" data-view="grid" aria-label="Сетка"><svg class="ic"><use href="#i-grid"/></svg></button>
+        </div>
+      </div>
+      <div class="p-pv__scroll" id="scroll-grid">
+        <div class="p-pv__grid" id="files-grid" role="list"></div>
+        <div class="list-more" id="files-grid-more"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="menu" id="menu-f-type"><div class="menu__title">Тип файла</div><button class="menu__item" role="menuitemradio" aria-checked="true">Все типы</button><button class="menu__item" role="menuitemradio" aria-checked="false">PDF</button><button class="menu__item" role="menuitemradio" aria-checked="false">Документы</button><button class="menu__item" role="menuitemradio" aria-checked="false">Таблицы</button></div>
+
+  <!-- Modal безопасного предпросмотра -->
+  <div class="modal-wrap" id="preview-modal">
+    <div class="modal modal--xl" role="dialog" aria-modal="true" aria-labelledby="pv-title" style="height:820px">
+      <div class="modal__head">
+        <span class="mime mime--pdf mime--lg" style="margin-top:-2px">pdf</span>
+        <div class="grow" style="min-width:0">
+          <div class="row gap-8"><h2 class="modal__title truncate" id="pv-title">Описание продукта — Север.pdf</h2><span class="pill pill--ok pill--sm"><svg class="ic"><use href="#i-check"/></svg>Проверен</span><span class="tag tag--mono">v2</span></div>
+          <div class="modal__sub">Безопасный предпросмотр без скачивания · содержимое отрисовано платформой, активный контент не исполняется</div>
+        </div>
+        <button class="btn btn--icon btn--ghost" type="button" aria-label="Действия с файлом" data-menu="#menu-pv" aria-haspopup="menu" aria-expanded="false"><svg class="ic"><use href="#i-dots"/></svg></button>
+        <button class="close-btn" type="button" aria-label="Закрыть предпросмотр" data-close><svg class="ic"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="modal__body modal__body--flush">
+        <div class="pv__layout">
+          <div class="pv__doc">
+            <div class="pv__doc-bar">
+              <button class="btn btn--sm btn--icon" type="button" aria-label="Предыдущая страница" disabled><svg class="ic"><use href="#i-chev-l"/></svg></button>
+              <span class="mono">Страница <b>1</b> из <b>12</b></span>
+              <button class="btn btn--sm btn--icon" type="button" aria-label="Следующая страница"><svg class="ic"><use href="#i-chev-r"/></svg></button>
+              <span class="vdivider" style="height:18px"></span>
+              <button class="btn btn--sm btn--icon" type="button" aria-label="Уменьшить"><svg class="ic"><use href="#i-zoom-out"/></svg></button>
+              <span class="mono">100%</span>
+              <button class="btn btn--sm btn--icon" type="button" aria-label="Увеличить"><svg class="ic"><use href="#i-zoom-in"/></svg></button>
+              <span class="toolbar__spacer"></span>
+              <label class="search search--bg" style="width:220px"><svg class="ic ic-14"><use href="#i-search"/></svg><input type="search" placeholder="Найти в документе" aria-label="Найти в документе"></label>
+            </div>
+            <div class="pv__page-wrap">
+              <div class="pv__page" aria-label="Страница 1 · заглушка содержимого">
+                <span class="t"></span><span style="width:92%"></span><span style="width:88%"></span><span style="width:95%"></span><span style="width:74%"></span>
+                <span class="h"></span><span style="width:90%"></span><span style="width:86%"></span><span style="width:60%"></span>
+                <div class="tbl"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                <span class="h"></span><span style="width:93%"></span><span style="width:70%"></span>
+              </div>
+            </div>
+          </div>
+          <aside class="pv__side" aria-label="Сведения о файле">
+            <div class="pv__side-scroll">
+              <div class="notice notice--ok notice--sm"><svg class="ic"><use href="#i-shield-check"/></svg><span class="notice__text"><b>Проверен</b> сегодня, 09:42. Целостность подтверждена, файл разрешён для назначения и запусков.</span></div>
+              <div class="kv kv--narrow mt-12">
+                <div class="kv__row"><span class="kv__k">Тип</span><span class="kv__v">PDF · 12 страниц · текстовый слой есть</span></div>
+                <div class="kv__row"><span class="kv__k">Размер</span><span class="kv__v mono">4,2 МБ</span></div>
+                <div class="kv__row"><span class="kv__k">Источник</span><span class="kv__v">Загрузила <b class="m">Анна Волкова</b> через Control Center, сегодня 09:41</span></div>
+                <div class="kv__row"><span class="kv__k">Папка</span><span class="kv__v">Клиенты / Север</span></div>
+                <div class="kv__row"><span class="kv__k">Хранение</span><span class="kv__v">S3-совместимое хранилище платформы · до 28 августа 2027</span></div>
+              </div>
+
+              <div class="sec-title mt-14">Версии</div>
+              <div class="mt-4">
+                <div class="pv__ver"><span class="mono b ok-text">v2</span><span class="grow">Текущая · сегодня, 09:41</span><a class="xs" href="#">Сравнить с v1</a></div>
+                <div class="pv__ver"><span class="mono b mut">v1</span><span class="grow sec">22 августа · Михаил Орлов</span><a class="xs" href="#">Открыть</a></div>
+              </div>
+
+              <div class="row row--between mt-14"><div class="sec-title">Назначен сотрудникам</div><button class="btn btn--sm" type="button" id="pv-assign"><svg class="ic"><use href="#i-plus"/></svg>Назначить</button></div>
+              <div class="mt-4" id="pv-binds">
+                <div class="pv__bind"><span class="avatar avatar--24 avatar--ok">АП</span><span class="grow truncate">Аналитик продаж</span><button class="select" type="button" data-menu="#menu-ver" aria-haspopup="menu" aria-expanded="false"><span class="select__value">v2</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button></div>
+                <div class="pv__bind"><span class="avatar avatar--24 avatar--acc">РП</span><span class="grow truncate">Редактор предложений</span><button class="select" type="button" data-menu="#menu-ver" aria-haspopup="menu" aria-expanded="false"><span class="select__value warn-text">v1</span><svg class="ic ic-14"><use href="#i-chev"/></svg></button></div>
+              </div>
+              <div class="xs mut mt-6">Сотрудник получает ровно назначенную версию; смена версии применится к его следующему запуску.</div>
+
+              <div class="sec-title mt-14">Использован в запусках</div>
+              <div class="col gap-4 mt-8 sm">
+                <a href="#" class="row gap-6"><svg class="ic ic-14 mut"><use href="#i-run"/></svg><span class="truncate">Подготовить предложение для компании Север</span><span class="xs mut right nowrap">сегодня</span></a>
+                <a href="#" class="row gap-6"><svg class="ic ic-14 mut"><use href="#i-run"/></svg><span class="truncate">Собрать факты о компании Север</span><span class="xs mut right nowrap">21 авг</span></a>
+              </div>
+
+              <div class="sec-title mt-14">Для неподдерживаемых типов</div>
+              <div class="pv__unsupported mt-8"><svg class="ic"><use href="#i-eye-off"/></svg><span>Предпросмотр недоступен: тип не входит в безопасный список. Доступно только скачивание по одноразовой ссылке.</span></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+      <div class="modal__foot">
+        <button class="btn btn--primary" type="button"><svg class="ic"><use href="#i-download"/></svg>Скачать</button>
+        <span class="xs mut">одноразовая ссылка · действует 5 минут · записывается в аудит</span>
+        <span class="toolbar__spacer"></span>
+        <button class="btn" type="button"><svg class="ic"><use href="#i-run"/></svg>Использовать в запуске</button>
+        <button class="btn" type="button" data-close>Закрыть</button>
+      </div>
+    </div>
+  </div>
+  <div class="menu" id="menu-pv" data-align="right">
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-upload"/></svg>Загрузить новую версию</button>
+    <button class="menu__item" role="menuitem"><svg class="ic"><use href="#i-history"/></svg>Происхождение и аудит</button>
+    <div class="menu__sep"></div>
+    <button class="menu__item menu__item--danger" role="menuitem"><svg class="ic"><use href="#i-trash"/></svg>Удалить</button>
+  </div>
+  <div class="menu" id="menu-ver"><div class="menu__title">Версия для сотрудника</div><button class="menu__item" role="menuitemradio" aria-checked="true">v2 · текущая</button><button class="menu__item" role="menuitemradio" aria-checked="false">v1</button><div class="menu__sep"></div><button class="menu__item menu__item--danger" role="menuitem">Снять назначение</button></div>
+</div>
+<p class="stage-note">Предпросмотр открывается как modal--xl поверх списка: слева страница документа, отрисованная платформой (навигация по страницам, масштаб, поиск в документе), справа — сведения. Содержимое не скачивается на устройство и не исполняется; для типов вне безопасного списка показывается понятное ограничение. Назначение сотрудникам — async multi picker с tray выбранных; у каждого назначения видна точная версия. Скачивание — одноразовая ссылка с аудитом. Modal имеет focus trap, закрывается по Escape и возвращает фокус кнопке «Предпросмотр».</p>
+<script src="assets/kodex.js"></script>
+<script>
+  Kodex.mount({
+    nav: 'project.files', project: Kodex.data.projects[0], decisions: 2, connection: 'online',
+    kodexContext: { screen: 'Файлы · предпросмотр', object: 'Описание продукта — Север.pdf', can: ['кратко пересказать документ', 'назначить файл сотруднику', 'подготовить запуск с этим файлом'] },
+  });
+  (function () {
+    const { $, $$, esc, ic } = Kodex;
+    const files = Kodex.gen.files(1248, 7);
+    files[0].name = 'Описание продукта — Север.pdf'; files[0].ext = 'pdf'; files[0].mime = 'pdf'; files[0].sizeKb = 4300; files[0].ver = 2; files[0].scan = 'ok';
+    const SCAN = { ok: ['ok', 'check', 'Проверен', ''], run: ['run', 'spin', 'Проверяется', 'ic-spin'], err: ['err', 'alert', 'Изолирован', ''] };
+    const scanPill = (s) => { const [m, i, t, x] = SCAN[s]; return `<span class="pill pill--${m} pill--sm">${ic(i, null, x)}${t}</span>`; };
+    const tile = (f, i) => `<div class="file-tile${i === 0 ? ' is-current' : ''}" role="listitem" data-id="${f.id}" tabindex="0"><span class="file-tile__check"><label class="check" aria-label="Выбрать ${esc(f.name)}"><input type="checkbox"><span class="check__box">${ic('check')}</span></label></span><div class="file-tile__preview"><span class="mime mime--${f.mime} mime--lg">${f.ext}</span></div><div class="file-tile__name" title="${esc(f.name)}">${esc(f.name)}</div><div class="file-tile__meta"><span class="mono">${Kodex.fmtKb(f.sizeKb)}</span><span>·</span><span class="mono">v${f.ver}</span><span class="right">${scanPill(f.scan)}</span></div></div>`;
+    Kodex.infiniteList({ scroll: $('#scroll-grid'), list: $('#files-grid'), items: files, render: tile, pageSize: 40, footer: $('#files-grid-more'), total: files.length, onChange: ({ shown, total }) => { $('#files-count').textContent = `Показано ${shown} из ${total.toLocaleString('ru-RU')}`; } });
+    // назначение сотрудникам: multi picker с tray
+    const agents = Kodex.gen.agents(300, 9);
+    Kodex.asyncPicker({ trigger: $('#pv-assign'), items: agents, multi: true, placeholder: 'Найти сотрудника', width: 340, selected: [agents[0], agents[1]],
+      render: (a) => `${Kodex.avatar(a.initials, 24, a.tone)}<span class="picker__text"><span class="picker__title">${esc(a.name)}</span><span class="picker__sub"><span>${esc(a.purpose)}</span><span>·</span><span>${esc(a.project)}</span></span></span>`,
+      match: (a, q) => a.name.toLowerCase().includes(q) || a.project.toLowerCase().includes(q), renderSelected: (a) => a.name,
+      onSelect: (list) => { const known = $$('#pv-binds .pv__bind').length; if (list.length > known) Kodex.toast($('#frame'), `Назначение будет применено к следующему запуску сотрудника`, 'bot'); } });
+    // modal открыт при загрузке
+    Kodex.openOverlay($('#preview-modal'), true, $('#open-preview'));
+  })();
+</script>
+</body>
+</html>

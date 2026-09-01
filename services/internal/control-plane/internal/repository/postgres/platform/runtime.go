@@ -9,16 +9,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -29,7 +31,8 @@ func (repository *Repository) ReadExecutionArtifact(ctx context.Context, princip
 	}
 	fenceDigest := sha256.Sum256([]byte(fence))
 	item := entity.Artifact{}
-	var body []byte
+	var objectKey, objectVersion, objectETag, objectDigest string
+	var objectSize int64
 	err = repository.pool.QueryRow(ctx, queryRuntimeReadexecutionartifactSelectArtifactContent, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"lease_ref":       leaseRef,
@@ -39,7 +42,8 @@ func (repository *Repository) ReadExecutionArtifact(ctx context.Context, princip
 	}).Scan(
 		&item.Ref, &item.ProjectRef, &item.RunRef, &item.SessionRef, &item.FileName,
 		&item.MediaType, &item.Digest, &item.ScanState, &item.PreviewState, &item.Source,
-		&item.SizeBytes, &item.Revision, &item.Version, &item.CreatedAt, &body,
+		&item.SizeBytes, &item.Revision, &item.Version, &item.CreatedAt,
+		&objectKey, &objectVersion, &objectETag, &objectDigest, &objectSize,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return platformrepo.ArtifactDownload{}, errs.ErrNotFound
@@ -47,10 +51,21 @@ func (repository *Repository) ReadExecutionArtifact(ctx context.Context, princip
 	if err != nil {
 		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
 	}
-	if int64(len(body)) != item.SizeBytes || item.SizeBytes < 0 || item.SizeBytes > platformrepo.MaximumArtifactBytes {
+	if objectKey == "" || objectDigest != item.Digest || objectSize != item.SizeBytes ||
+		item.SizeBytes < 0 || item.SizeBytes > platformrepo.MaximumArtifactBytes {
 		return platformrepo.ArtifactDownload{}, errs.ErrConflict
 	}
-	return platformrepo.ArtifactDownload{Artifact: item, Reader: io.NopCloser(bytes.NewReader(body))}, nil
+	object, err := repository.objects.Get(ctx, objectKey, objectVersion)
+	if err != nil {
+		return platformrepo.ArtifactDownload{}, mapObjectStorageError(err)
+	}
+	if object.Digest != objectDigest || object.SizeBytes != objectSize ||
+		(objectVersion != "" && object.VersionID != objectVersion) ||
+		(objectETag != "" && object.ETag != objectETag) {
+		_ = object.Body.Close()
+		return platformrepo.ArtifactDownload{}, errs.ErrConflict
+	}
+	return platformrepo.ArtifactDownload{Artifact: item, Reader: object.Body}, nil
 }
 
 func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -61,33 +76,237 @@ func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, sc
 		return repository.renewExecution(ctx, tx, scope, input)
 	case command.ReportExecutionProgress:
 		return repository.reportProgress(ctx, tx, scope, input)
+	case command.CommitProviderCredentialRefresh:
+		return repository.commitProviderCredentialRefresh(ctx, tx, scope, input)
 	case command.CompleteExecution:
 		return repository.completeExecution(ctx, tx, scope, input)
 	case command.DelegateExecution:
 		return repository.delegateExecution(ctx, tx, scope, input)
 	case command.ProposeAssistantPlan:
 		return repository.proposeAssistantPlan(ctx, tx, scope, input)
+	case command.ProposeAssistantMetadata:
+		return repository.proposeAssistantMetadata(ctx, tx, scope, input)
+	case command.ProposeRunMetadata:
+		return repository.proposeRunMetadata(ctx, tx, scope, input)
+	case command.RecordRunToolCall:
+		return repository.recordRunToolCall(ctx, tx, scope, input)
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
 }
 
+func (repository *Repository) proposeAssistantMetadata(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {
+	payload, ok := input.Payload.(command.ProposeAssistantMetadataInput)
+	title := strings.TrimSpace(payload.Title)
+	if !ok || title == "" || len([]rune(title)) > 160 {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	lease, err := repository.lease(ctx, tx, machineScope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	var conversationID, conversationRef, projectID, projectRef string
+	var assistantRef string
+	var allowedOperations []string
+	var conversationVersion int64
+	actorScope := scope{correlationRef: machineScope.correlationRef}
+	if err := tx.QueryRow(ctx, queryRuntimeProposeassistantplanSelectContext,
+		machineScope.organizationID, lease["runID"],
+	).Scan(&conversationID, &conversationRef, &conversationVersion, &projectID, &projectRef, &allowedOperations, &assistantRef,
+		&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.role,
+		&actorScope.organizationRef); err != nil {
+		return commandOutcome{}, errs.ErrForbidden
+	}
+	_ = allowedOperations
+	_ = assistantRef
+	var conversation entity.AssistantConversation
+	if err := tx.QueryRow(ctx, queryRuntimeProposeassistantmetadataUpdateConversation, conversationID, title).Scan(
+		&conversation.Ref, &conversation.Title, &conversation.TitleSource, &conversation.TitleRevision,
+		&conversation.State, &conversation.Version, &conversation.CreatedAt, &conversation.UpdatedAt,
+	); err != nil {
+		return commandOutcome{}, errs.ErrAlreadyResolved
+	}
+	conversation.ProjectRef = projectRef
+	return commandOutcome{result: command.Result{Conversation: &conversation}, projectID: projectID, projectRef: projectRef,
+		resourceKind: "ASSISTANT_CONVERSATION", resourceRef: conversationRef,
+		summary: "i18n:ASSISTANT_CONVERSATION_TITLE_UPDATED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+}
+
+func (repository *Repository) proposeRunMetadata(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	payload, ok := input.Payload.(command.ProposeRunMetadataInput)
+	title, activity := strings.TrimSpace(payload.Title), strings.TrimSpace(payload.ActivitySummary)
+	if !ok || (title == "" && activity == "") || len([]rune(title)) > 240 || len([]rune(activity)) > 500 {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	lease, err := repository.lease(ctx, tx, scope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if _, err := tx.Exec(ctx, queryRuntimeProposerunmetadataUpdateRun, lease["runID"], title, activity); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"),
+		stringMap(lease, "runRef"), "RUN_METADATA_UPDATED", stringMap(lease, "nodeRef"), "", "", "",
+		activity, "", "")
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	run, _, err := repository.readRunGraphTx(ctx, tx, scope, stringMap(lease, "runRef"))
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	run.TitleSource, run.ActivitySummary = "AGENT_PROPOSED", activity
+	return commandOutcome{result: command.Result{Run: &run, Event: &event}, projectID: stringMap(lease, "projectID"),
+		projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN", resourceRef: stringMap(lease, "runRef"),
+		summary: "i18n:RUN_METADATA_UPDATED"}, nil
+}
+
+func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	payload, ok := input.Payload.(command.RunToolCallInput)
+	if !ok || !validToolCallProjection(payload) {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	lease, err := repository.lease(ctx, tx, scope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	var actorRef, actorName string
+	var systemAssistant, grantAllowed bool
+	if err := tx.QueryRow(ctx, queryRuntimeRecordtoolcallSelectActorAndGrant, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "node_id": lease["nodeID"], "generation": payload.Generation,
+		"grant_ref": payload.GrantRef, "capability_ref": payload.CapabilityRef,
+	}).Scan(&actorRef, &actorName, &systemAssistant, &grantAllowed); errors.Is(err, pgx.ErrNoRows) {
+		return commandOutcome{}, errs.ErrNotFound
+	} else if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	} else if !grantAllowed {
+		return commandOutcome{}, errs.ErrForbidden
+	}
+	if !toolCapabilityMatches(payload.Tool, payload.CapabilityRef, payload.GrantRef != "", systemAssistant) {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	auditRef, err := newRef("aud")
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	projectID := nullUUID(stringMap(lease, "projectID"))
+	if _, err := tx.Exec(ctx, queryCommandsExecuteInsertAuditEventsRefProjectIdAction, auditRef, scope.organizationID,
+		projectID, scope.actorID, "runtime.tool."+payload.Tool, "RUN_NODE", stringMap(lease, "nodeRef"),
+		"i18n:RUNTIME_TOOL_CALL_RECORDED", scope.correlationRef); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	toolCall := &entity.RunToolCall{Ref: payload.CallRef, Tool: payload.Tool, SafeParameters: payload.SafeParameters,
+		CapabilityRef: payload.CapabilityRef, GrantRef: payload.GrantRef, State: payload.State,
+		DurationMS: payload.DurationMS, SafeResult: strings.TrimSpace(payload.SafeResult), AuditRef: auditRef}
+	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"),
+		payload.CallRef, "TOOL_CALL_RECORDED", stringMap(lease, "nodeRef"), "", "", "",
+		"i18n:RUNTIME_TOOL_CALL_RECORDED", "", "")
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	actorKind := "AGENT"
+	if systemAssistant {
+		actorKind = "SYSTEM_ASSISTANT"
+	}
+	if _, err := tx.Exec(ctx, queryRuntimeRecordtoolcallUpdateEvent, scope.organizationID, actorKind, actorRef,
+		actorName, asJSON(toolCall), event.Ref); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryRuntimeRecordtoolcallUpdateOutbox, scope.organizationID, asJSON(toolCall), event.Ref); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	event.Actor = entity.RunEventActor{Kind: actorKind, Ref: actorRef, Name: actorName}
+	event.MessageKind, event.ToolCall = "TOOL_CALL", toolCall
+	return commandOutcome{result: command.Result{Event: &event}, projectID: stringMap(lease, "projectID"),
+		projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN_TOOL_CALL", resourceRef: payload.CallRef,
+		summary: "i18n:RUNTIME_TOOL_CALL_RECORDED"}, nil
+}
+
+func validToolCallProjection(input command.RunToolCallInput) bool {
+	if len(input.CallRef) < 8 || len(input.CallRef) > 96 || len(input.Tool) < 1 || len(input.Tool) > 120 ||
+		(input.State != "SUCCEEDED" && input.State != "FAILED") || input.DurationMS < 0 || input.DurationMS > 86_400_000 ||
+		len([]rune(input.SafeResult)) > 2000 || input.SafeParameters == nil || len(input.SafeParameters) > 32 ||
+		len(asJSON(input.SafeParameters)) > 4096 {
+		return false
+	}
+	return !containsSensitiveToolKey(input.SafeParameters)
+}
+
+func containsSensitiveToolKey(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, item := range typed {
+			normalized := strings.ToLower(strings.ReplaceAll(key, "_", ""))
+			if strings.Contains(normalized, "secret") || strings.Contains(normalized, "token") ||
+				strings.Contains(normalized, "password") || strings.Contains(normalized, "credential") ||
+				strings.Contains(normalized, "payload") || strings.Contains(normalized, "raw") || containsSensitiveToolKey(item) {
+				return true
+			}
+		}
+	case []any:
+		for _, item := range typed {
+			if containsSensitiveToolKey(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func toolCapabilityMatches(tool, capability string, integration, systemAssistant bool) bool {
+	if integration {
+		return tool == "invoke_integration" && capability != ""
+	}
+	switch tool {
+	case runtimecontract.NativeToolKindShell, runtimecontract.NativeToolKindFileChange,
+		runtimecontract.NativeToolKindWebSearch, runtimecontract.NativeToolKindDynamicTool,
+		runtimecontract.NativeToolKindImageView, runtimecontract.NativeToolKindImageGeneration,
+		runtimecontract.NativeToolKindSleep:
+		return capability == ""
+	}
+	expected := map[string]string{
+		"get_configuration_catalog":  "platform.configuration.read",
+		"propose_configuration_plan": "platform.configuration.plan",
+		"propose_assistant_metadata": "platform.presentation.propose",
+		"propose_run_metadata":       "platform.presentation.propose",
+		"delegate_agent":             "platform.run.delegate",
+	}
+	if (tool == "get_configuration_catalog" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !systemAssistant {
+		return false
+	}
+	return expected[tool] != "" && expected[tool] == capability
+}
+
 type claimableExecution struct {
-	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef               string
-	sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision             string
-	provider, model, providerAccountID, providerAccountRef                         string
-	providerCredentialID, providerCredentialRef                                    string
-	providerSecretName, providerSecretUID, providerSecretResourceVersion           string
-	providerCredentialSHA256, instructionRef, instructionDigest, instructions      string
-	turnRef, stableKey, callbackEdgeRef, turnID, agentID                           string
-	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef     string
-	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest string
-	roleRuntimeContractSHA256                                                      string
-	providerCredentialRevisionNumber, generation, roleRuntimeContractRevision      int64
-	attempt                                                                        int32
-	capabilities, knowledge                                                        []string
-	rawInput, rawArtifacts, rawIntegrationGrants, rawDelegationTargets             []byte
-	rawSessionContext                                                              []byte
+	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef                      string
+	initiatorRef                                                                          string
+	sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision                    string
+	provider, model, providerAccountID, providerAccountRef                                string
+	providerCredentialID, providerCredentialRef                                           string
+	providerSecretName, providerSecretUID, providerSecretResourceVersion                  string
+	providerCredentialSHA256, instructionRef, instructionDigest, instructions             string
+	turnRef, stableKey, callbackEdgeRef, turnID, agentID                                  string
+	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef            string
+	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest        string
+	roleRuntimeContractSHA256                                                             string
+	runtimeConfigID, runtimeConfigRef, runtimeConfigDigest                                string
+	providerPolicyID, providerPolicyRef, providerPolicyDigest, providerPolicyMode         string
+	configOverlayID, configOverlayRef, configOverlayDigest, configOverlay                 string
+	environmentBindingID, environmentBindingRef, environmentBindingDigest                 string
+	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                 string
+	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext       string
+	codexSessionID                                                                        string
+	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration               int64
+	roleRuntimeContractRevision                                                           int64
+	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                     int64
+	environmentBindingVersion, runtimeEnvironmentVersion                                  int64
+	attempt                                                                               int32
+	capabilities, knowledge                                                               []string
+	rawInput, rawAttachmentSets, rawArtifacts, rawIntegrationGrants, rawDelegationTargets []byte
+	rawSessionContext                                                                     []byte
+	rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools                       []byte
+	rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy, rawKubernetesAccessProfile      []byte
+	resourcesDigest, volumesDigest, networkDigest, rbacDigest                             string
 }
 
 func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -103,14 +322,14 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		repository.roleImages.DefaultImageDigest, repository.roleImages.RoleRuntimeContractRevision,
 		repository.roleImages.RoleRuntimeContractSHA256)
 	if err != nil {
-		return commandOutcome{}, fmt.Errorf("select claimable executions: %w", errs.ErrUnavailable)
+		return commandOutcome{}, fmt.Errorf("select claimable executions: %v: %w", err, errs.ErrUnavailable)
 	}
 	defer rows.Close()
 	claimable := make([]claimableExecution, 0, payload.Limit)
 	for rows.Next() {
 		candidate := claimableExecution{}
 		if err := rows.Scan(&candidate.nodeID, &candidate.nodeRef, &candidate.runID, &candidate.runRef,
-			&candidate.rootRunID, &candidate.projectID, &candidate.projectRef, &candidate.sessionID,
+			&candidate.rootRunID, &candidate.projectID, &candidate.projectRef, &candidate.initiatorRef, &candidate.sessionID,
 			&candidate.sessionRef, &candidate.task, &candidate.agentRef, &candidate.runtimeKey,
 			&candidate.runtimeRevision, &candidate.provider, &candidate.model, &candidate.providerAccountID,
 			&candidate.providerAccountRef, &candidate.providerCredentialID, &candidate.providerCredentialRef,
@@ -118,26 +337,64 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.providerSecretUID, &candidate.providerSecretResourceVersion,
 			&candidate.providerCredentialSHA256, &candidate.instructionRef, &candidate.instructionDigest,
 			&candidate.instructions, &candidate.capabilities, &candidate.knowledge, &candidate.rawInput,
-			&candidate.rawArtifacts,
+			&candidate.inputAttachmentSetRef, &candidate.inputAttachmentSetManifestDigest, &candidate.inputAttachmentContext,
+			&candidate.rawAttachmentSets, &candidate.rawArtifacts,
 			&candidate.attempt, &candidate.generation, &candidate.turnRef, &candidate.stableKey,
 			&candidate.rawIntegrationGrants, &candidate.rawDelegationTargets, &candidate.callbackEdgeRef,
 			&candidate.rawSessionContext, &candidate.turnID, &candidate.agentID,
 			&candidate.roleDefinitionID, &candidate.roleDefinitionRef, &candidate.roleImageRecipeID,
 			&candidate.roleImageRecipeRef, &candidate.roleImageArtifactID, &candidate.roleImageArtifactRef,
+			&candidate.roleImageRecipeGeneration,
 			&candidate.imageReference, &candidate.imageManifestDigest,
-			&candidate.roleRuntimeContractRevision, &candidate.roleRuntimeContractSHA256); err != nil {
-			return commandOutcome{}, fmt.Errorf("scan claimable execution: %w", errs.ErrUnavailable)
+			&candidate.roleRuntimeContractRevision, &candidate.roleRuntimeContractSHA256,
+			&candidate.runtimeConfigID, &candidate.runtimeConfigRef, &candidate.runtimeConfigVersion, &candidate.runtimeConfigDigest,
+			&candidate.providerPolicyID, &candidate.providerPolicyRef, &candidate.providerPolicyVersion, &candidate.providerPolicyDigest, &candidate.providerPolicyMode,
+			&candidate.configOverlayID, &candidate.configOverlayRef, &candidate.configOverlayVersion, &candidate.configOverlayDigest, &candidate.configOverlay,
+			&candidate.environmentBindingID, &candidate.environmentBindingRef, &candidate.environmentBindingVersion, &candidate.environmentBindingDigest,
+			&candidate.runtimeEnvironmentID, &candidate.runtimeEnvironmentRef, &candidate.runtimeEnvironmentVersion, &candidate.runtimeEnvironmentDigest,
+			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
+			&candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
+			&candidate.resourcesDigest, &candidate.volumesDigest, &candidate.networkDigest, &candidate.rbacDigest,
+			&candidate.codexSessionID); err != nil {
+			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
 		claimable = append(claimable, candidate)
 	}
 	if err := rows.Err(); err != nil {
-		return commandOutcome{}, fmt.Errorf("iterate claimable executions: %w", errs.ErrUnavailable)
+		return commandOutcome{}, fmt.Errorf("iterate claimable executions: %v: %w", err, errs.ErrUnavailable)
 	}
 	rows.Close()
+
+	providerAccountCapacity := make(map[string]int64)
+	providerAccountIDs := make([]string, 0)
+	for _, candidate := range claimable {
+		if _, exists := providerAccountCapacity[candidate.providerAccountID]; exists {
+			continue
+		}
+		providerAccountCapacity[candidate.providerAccountID] = 0
+		providerAccountIDs = append(providerAccountIDs, candidate.providerAccountID)
+	}
+	sort.Strings(providerAccountIDs)
+	for _, providerAccountID := range providerAccountIDs {
+		var maximumConcurrentExecutions int64
+		if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionLockProviderAccount,
+			providerAccountID, scope.organizationID).Scan(&maximumConcurrentExecutions); err != nil {
+			return commandOutcome{}, fmt.Errorf("lock provider account claim capacity: %w", errs.ErrUnavailable)
+		}
+		providerAccountCapacity[providerAccountID] = maximumConcurrentExecutions
+	}
 
 	var items []map[string]any
 	var firstProjectID, firstProjectRef, firstRunRef string
 	for _, candidate := range claimable {
+		var activeExecutions int64
+		if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionCountActiveProviderLeases,
+			candidate.providerAccountID, scope.organizationID).Scan(&activeExecutions); err != nil {
+			return commandOutcome{}, fmt.Errorf("count active provider account leases: %w", errs.ErrUnavailable)
+		}
+		if activeExecutions >= providerAccountCapacity[candidate.providerAccountID] {
+			continue
+		}
 		nodeID, nodeRef, runID, runRef := candidate.nodeID, candidate.nodeRef, candidate.runID, candidate.runRef
 		rootRunID, projectID, projectRef := candidate.rootRunID, candidate.projectID, candidate.projectRef
 		sessionID, sessionRef, task, agentRef := candidate.sessionID, candidate.sessionRef, candidate.task, candidate.agentRef
@@ -150,6 +407,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		providerCredentialSHA256 := candidate.providerCredentialSHA256
 		instructionRef, instructionDigest, instructions := candidate.instructionRef, candidate.instructionDigest, candidate.instructions
 		capabilities, knowledge, rawInput := candidate.capabilities, candidate.knowledge, candidate.rawInput
+		inputAttachmentSetRef, inputAttachmentSetManifestDigest := candidate.inputAttachmentSetRef, candidate.inputAttachmentSetManifestDigest
+		inputAttachmentContext := candidate.inputAttachmentContext
+		rawAttachmentSets := candidate.rawAttachmentSets
 		rawArtifacts := candidate.rawArtifacts
 		attempt, generation, turnRef, stableKey := candidate.attempt, candidate.generation, candidate.turnRef, candidate.stableKey
 		rawIntegrationGrants, rawDelegationTargets := candidate.rawIntegrationGrants, candidate.rawDelegationTargets
@@ -158,15 +418,24 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		roleDefinitionID, roleDefinitionRef := candidate.roleDefinitionID, candidate.roleDefinitionRef
 		roleImageRecipeID, roleImageRecipeRef := candidate.roleImageRecipeID, candidate.roleImageRecipeRef
 		roleImageArtifactID, roleImageArtifactRef := candidate.roleImageArtifactID, candidate.roleImageArtifactRef
+		roleImageRecipeGeneration := candidate.roleImageRecipeGeneration
 		imageReference, imageManifestDigest := candidate.imageReference, candidate.imageManifestDigest
 		roleRuntimeContractRevision := candidate.roleRuntimeContractRevision
 		roleRuntimeContractSHA256 := candidate.roleRuntimeContractSHA256
+		runtimeConfigID, runtimeConfigRef, runtimeConfigVersion, runtimeConfigDigest := candidate.runtimeConfigID, candidate.runtimeConfigRef, candidate.runtimeConfigVersion, candidate.runtimeConfigDigest
+		providerPolicyID, providerPolicyRef, providerPolicyVersion, providerPolicyDigest := candidate.providerPolicyID, candidate.providerPolicyRef, candidate.providerPolicyVersion, candidate.providerPolicyDigest
+		configOverlayID, configOverlayRef, configOverlayVersion, configOverlayDigest, configOverlay := candidate.configOverlayID, candidate.configOverlayRef, candidate.configOverlayVersion, candidate.configOverlayDigest, candidate.configOverlay
+		environmentBindingID, environmentBindingRef, environmentBindingVersion, environmentBindingDigest := candidate.environmentBindingID, candidate.environmentBindingRef, candidate.environmentBindingVersion, candidate.environmentBindingDigest
+		runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentVersion, runtimeEnvironmentDigest := candidate.runtimeEnvironmentID, candidate.runtimeEnvironmentRef, candidate.runtimeEnvironmentVersion, candidate.runtimeEnvironmentDigest
+		codexSessionID := candidate.codexSessionID
 		fence, err := newRef("fnc")
 		if err != nil {
 			return commandOutcome{}, err
 		}
 		fenceDigest := sha256.Sum256([]byte(fence))
 		leaseRef, _ := newRef("lea")
+		podName := runtimecontract.RuntimeTurnPodName(leaseRef)
+		serviceAccountName := runtimecontract.RuntimeServiceAccountName(leaseRef)
 		inputDigest := sha256.Sum256(rawInput)
 		var inputMap map[string]any
 		_ = jsonUnmarshal(rawInput, &inputMap)
@@ -176,22 +445,84 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		_ = jsonUnmarshal(rawIntegrationGrants, &integrationGrants)
 		var artifacts []map[string]any
 		_ = jsonUnmarshal(rawArtifacts, &artifacts)
+		var attachmentSets []map[string]string
+		_ = jsonUnmarshal(rawAttachmentSets, &attachmentSets)
 		var sessionContext []map[string]string
 		_ = jsonUnmarshal(rawSessionContext, &sessionContext)
+		var environmentValues []runtimecontract.RuntimeEnvironmentValue
+		var secretProjections []runtimecontract.RuntimeSecretProjection
+		if err := decodeStoredRuntimeEnvironment(candidate.rawEnvironmentValues, candidate.rawSecretProjections, &environmentValues, &secretProjections); err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		environmentTools, err := runtimecontract.DecodeRuntimeEnvironmentTools(candidate.rawEnvironmentTools)
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		environmentPolicy, err := decodeRuntimeEnvironmentPolicy(candidate.rawResourcePolicy, candidate.rawVolumePolicy,
+			candidate.rawNetworkPolicy, candidate.rawKubernetesAccessProfile, candidate.resourcesDigest,
+			candidate.volumesDigest, candidate.networkDigest, candidate.rbacDigest)
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		effectiveKubernetesAccess, err := runtimecontract.RuntimeKubernetesAccessForExecution(
+			environmentPolicy.KubernetesAccess, serviceAccountName, podName)
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if environmentPolicy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
+			if projectRef == "" || candidate.initiatorRef == "" {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			initiatorScope := scope
+			initiatorScope.actorRef = candidate.initiatorRef
+			target, resolveErr := repository.resolveAccessTarget(ctx, tx, scope.organizationID, entity.AccessScope{
+				ProjectRef: projectRef, ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: runtimeEnvironmentRef,
+			})
+			if resolveErr != nil || repository.requireAccess(ctx, tx, initiatorScope, "environment.privileged.manage", target) != nil {
+				return commandOutcome{}, errs.ErrNotFound
+			}
+		}
+		environmentImage := runtimecontract.RuntimeEnvironmentImage{
+			ArtifactRef: roleImageArtifactRef, RecipeRef: roleImageRecipeRef, RecipeGeneration: roleImageRecipeGeneration,
+			Reference: imageReference, Digest: imageManifestDigest,
+		}
+		canonicalOverlay, verifiedOverlayDigest, err := runtimecontract.CanonicalConfigOverlay(configOverlay)
+		if err != nil || canonicalOverlay != configOverlay || verifiedOverlayDigest != configOverlayDigest {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(environmentValues, secretProjections, environmentImage, environmentTools, environmentPolicy)
+		if err != nil || verifiedEnvironmentDigest != runtimeEnvironmentDigest {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		var rawAssistantContext []byte
+		if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionSelectAssistantContext, scope.organizationID, sessionID).Scan(&rawAssistantContext); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		var assistantContext map[string]any
+		_ = jsonUnmarshal(rawAssistantContext, &assistantContext)
 		resolvedInstructionsDigest := sha256.Sum256([]byte(instructions))
 		resolvedInstructionsDigestHex := hex.EncodeToString(resolvedInstructionsDigest[:])
 		integrationGrantsDigest := sha256.Sum256(rawIntegrationGrants)
 		integrationGrantsDigestHex := hex.EncodeToString(integrationGrantsDigest[:])
-		revisionDigest := sha256.Sum256([]byte(strings.Join([]string{
+		revisionDigestHex := runtimeRevisionDigest(runtimeEnvironmentDigest,
 			runtimeRevision, provider, model, resolvedInstructionsDigestHex,
 			providerAccountRef, providerCredentialRef, providerSecretName,
 			providerSecretUID, providerSecretResourceVersion, providerCredentialSHA256,
 			strings.Join(capabilities, ","), strings.Join(knowledge, ","),
-			integrationGrantsDigestHex, string(rawArtifacts), string(rawDelegationTargets), string(rawSessionContext),
+			integrationGrantsDigestHex, inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext,
+			string(rawAttachmentSets),
+			string(rawArtifacts), string(rawDelegationTargets), string(rawSessionContext), string(rawAssistantContext),
 			roleDefinitionRef, roleImageRecipeRef, roleImageArtifactRef, imageReference,
 			imageManifestDigest, roleRuntimeContractSHA256, hex.EncodeToString(inputDigest[:]),
-		}, "\x00")))
-		revisionDigestHex := hex.EncodeToString(revisionDigest[:])
+			runtimeConfigRef, strconv.FormatInt(runtimeConfigVersion, 10), runtimeConfigDigest,
+			providerPolicyRef, strconv.FormatInt(providerPolicyVersion, 10), providerPolicyDigest,
+			configOverlayRef, strconv.FormatInt(configOverlayVersion, 10), configOverlayDigest,
+			runtimeEnvironmentRef, strconv.FormatInt(runtimeEnvironmentVersion, 10),
+			environmentPolicy.ResourcesDigest, environmentPolicy.VolumesDigest, environmentPolicy.NetworkDigest,
+			environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest,
+			environmentBindingRef, strconv.FormatInt(environmentBindingVersion, 10), environmentBindingDigest,
+			codexSessionID,
+		)
 		revisionRef, err := newRef("rrev")
 		if err != nil {
 			return commandOutcome{}, err
@@ -211,15 +542,33 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"providerCredentialSHA256":         providerCredentialSHA256,
 			"instructionDigest":                instructionDigest, "instructions": instructions,
 			"capabilities": capabilities, "integrationGrants": integrationGrants,
-			"knowledgeArtifactRefs": knowledge, "artifacts": artifacts, "delegationTargets": delegationTargets,
-			"callbackEdgeRef": callbackEdgeRef, "sessionContext": sessionContext,
+			"knowledgeArtifactRefs": knowledge, "artifacts": artifacts,
+			"attachmentSetRef": inputAttachmentSetRef, "attachmentSetManifestDigest": inputAttachmentSetManifestDigest,
+			"attachmentContext": inputAttachmentContext,
+			"attachmentSets":    attachmentSets,
+			"delegationTargets": delegationTargets,
+			"callbackEdgeRef":   callbackEdgeRef, "sessionContext": sessionContext,
 			"input": inputMap, "inputDigest": hex.EncodeToString(inputDigest[:]),
 			"revisionDigest": revisionDigestHex, "runtimeRevisionRef": revisionRef,
 			"runtimeRevisionVersion": generation, "roleDefinitionRef": roleDefinitionRef,
 			"roleImageRecipeRef": roleImageRecipeRef, "roleImageArtifactRef": roleImageArtifactRef,
-			"imageReference": imageReference, "imageManifestDigest": imageManifestDigest,
+			"roleImageRecipeGeneration": roleImageRecipeGeneration,
+			"imageReference":            imageReference, "imageManifestDigest": imageManifestDigest,
 			"roleRuntimeContractRevision": roleRuntimeContractRevision,
 			"roleRuntimeContractSHA256":   roleRuntimeContractSHA256,
+			"runtimeConfigRef":            runtimeConfigRef, "runtimeConfigVersion": runtimeConfigVersion, "runtimeConfigDigest": runtimeConfigDigest,
+			"providerPolicyRef": providerPolicyRef, "providerPolicyVersion": providerPolicyVersion, "providerPolicyDigest": providerPolicyDigest,
+			"providerPolicyMode": candidate.providerPolicyMode,
+			"configOverlayRef":   configOverlayRef, "configOverlayVersion": configOverlayVersion, "configOverlayDigest": configOverlayDigest, "configOverlay": configOverlay,
+			"runtimeEnvironmentRef": runtimeEnvironmentRef, "runtimeEnvironmentVersion": runtimeEnvironmentVersion, "runtimeEnvironmentDigest": runtimeEnvironmentDigest,
+			"environmentBindingRef": environmentBindingRef, "environmentBindingVersion": environmentBindingVersion, "environmentBindingDigest": environmentBindingDigest,
+			"environmentValues": environmentValues, "secretProjections": secretProjections,
+			"environmentImage": environmentImage, "environmentTools": environmentTools,
+			"environmentPolicy": environmentPolicy, "effectiveKubernetesAccess": effectiveKubernetesAccess,
+			"codexSessionID": codexSessionID,
+		}
+		if len(assistantContext) != 0 {
+			snapshot["assistantContext"] = assistantContext
 		}
 		rawSnapshot, err := json.Marshal(snapshot)
 		if err != nil || len(rawSnapshot) > 256<<10 {
@@ -236,7 +585,14 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			providerCredentialSHA256, instructionRef, resolvedInstructionsDigestHex,
 			hex.EncodeToString(inputDigest[:]), capabilities, integrationGrantsDigestHex,
 			imageReference, imageManifestDigest, roleRuntimeContractRevision,
-			roleRuntimeContractSHA256, revisionDigestHex, rawSnapshot).Scan(&runtimeRevisionID); err != nil {
+			roleRuntimeContractSHA256, runtimeConfigID, providerPolicyID, configOverlayID,
+			runtimeEnvironmentID, environmentBindingID, runtimeConfigRef, runtimeConfigVersion, runtimeConfigDigest,
+			providerPolicyRef, providerPolicyVersion, providerPolicyDigest, configOverlayRef, configOverlayVersion,
+			configOverlayDigest, runtimeEnvironmentRef, runtimeEnvironmentVersion, runtimeEnvironmentDigest,
+			environmentBindingRef, environmentBindingVersion, environmentBindingDigest,
+			environmentPolicy.ResourcesDigest, environmentPolicy.VolumesDigest, environmentPolicy.NetworkDigest,
+			environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest,
+			revisionDigestHex, rawSnapshot).Scan(&runtimeRevisionID); err != nil {
 			return commandOutcome{}, fmt.Errorf("insert runtime revision: %w", errs.ErrConflict)
 		}
 		expiresAt := time.Now().UTC().Add(30 * time.Second)
@@ -264,17 +620,160 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: firstRunRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED"}, nil
 }
 
+func (repository *Repository) commitProviderCredentialRefresh(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {
+	payload, ok := input.Payload.(command.ProviderCredentialRefreshInput)
+	if !ok || !validProviderCredentialRefresh(payload) {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	lease, err := repository.lease(ctx, tx, machineScope, command.LeaseInput{
+		LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation,
+	}, true)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+
+	var accountID, currentCredentialID string
+	if err := tx.QueryRow(ctx, queryRuntimeCommitprovidercredentialrefreshLockProviderAccount,
+		machineScope.organizationID, lease["runtimeRevisionID"]).Scan(&accountID, &currentCredentialID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrNotFound
+		}
+		return commandOutcome{}, fmt.Errorf("lock provider account for credential refresh: %w", errs.ErrUnavailable)
+	}
+
+	var accountRef, pinnedCredentialID, pinnedCredentialRef, pinnedContentSHA256 string
+	if err := tx.QueryRow(ctx, queryRuntimeCommitprovidercredentialrefreshSelectPinnedCredential,
+		machineScope.organizationID, lease["runtimeRevisionID"], accountID).Scan(
+		&accountRef, &pinnedCredentialID, &pinnedCredentialRef, &pinnedContentSHA256,
+	); err != nil {
+		return commandOutcome{}, fmt.Errorf("read pinned provider credential: %w", errs.ErrUnavailable)
+	}
+	if payload.PreviousCredentialRevisionRef != pinnedCredentialRef || payload.PreviousContentSHA256 != pinnedContentSHA256 {
+		return commandOutcome{}, errs.ErrConflict
+	}
+
+	var existingCredentialID, existingCredentialRef, existingSecretName, existingSecretUID string
+	var existingSecretResourceVersion, existingContentSHA256 string
+	var existingRevisionNumber int64
+	existingErr := tx.QueryRow(ctx, queryRuntimeCommitprovidercredentialrefreshSelectExistingRevision,
+		accountID, payload.SecretUID, payload.SecretResourceVersion).Scan(
+		&existingCredentialID, &existingCredentialRef, &existingRevisionNumber, &existingSecretName,
+		&existingSecretUID, &existingSecretResourceVersion, &existingContentSHA256,
+	)
+	if existingErr == nil {
+		if existingSecretName != payload.SecretName || existingSecretUID != payload.SecretUID ||
+			existingSecretResourceVersion != payload.SecretResourceVersion || existingContentSHA256 != payload.ContentSHA256 ||
+			currentCredentialID != existingCredentialID {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		return providerCredentialRefreshOutcome(lease, accountRef, existingCredentialRef, existingRevisionNumber,
+			existingSecretName, existingSecretUID, existingSecretResourceVersion, existingContentSHA256), nil
+	}
+	if !errors.Is(existingErr, pgx.ErrNoRows) {
+		return commandOutcome{}, fmt.Errorf("read existing provider credential refresh: %w", errs.ErrUnavailable)
+	}
+	if currentCredentialID != pinnedCredentialID {
+		return commandOutcome{}, errs.ErrConflict
+	}
+
+	credentialRef, err := newRef("pcr")
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	var credentialID string
+	var revisionNumber int64
+	if err := tx.QueryRow(ctx, queryRuntimeCommitprovidercredentialrefreshInsertRevision, pgx.StrictNamedArgs{
+		"ref": credentialRef, "organization_id": machineScope.organizationID, "provider_account_id": accountID,
+		"secret_name": payload.SecretName, "secret_uid": payload.SecretUID,
+		"secret_resource_version": payload.SecretResourceVersion, "content_sha256": payload.ContentSHA256,
+	}).Scan(&credentialID, &revisionNumber); err != nil {
+		return commandOutcome{}, fmt.Errorf("insert provider credential refresh revision: %w", errs.ErrConflict)
+	}
+	tag, err := tx.Exec(ctx, queryRuntimeCommitprovidercredentialrefreshActivateRevision,
+		accountID, pinnedCredentialID, credentialID)
+	if err != nil {
+		return commandOutcome{}, fmt.Errorf("activate provider credential refresh revision: %w", errs.ErrUnavailable)
+	}
+	if tag.RowsAffected() != 1 {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	if err := repository.scheduleProviderCredentialCleanup(ctx, tx, machineScope.organizationID, accountID,
+		pinnedCredentialID, time.Now().UTC().Add(providerCredentialCleanupRetention)); err != nil {
+		return commandOutcome{}, err
+	}
+	return providerCredentialRefreshOutcome(lease, accountRef, credentialRef, revisionNumber,
+		payload.SecretName, payload.SecretUID, payload.SecretResourceVersion, payload.ContentSHA256), nil
+}
+
+func validProviderCredentialRefresh(input command.ProviderCredentialRefreshInput) bool {
+	if input.LeaseRef == "" || input.Fence == "" || input.Generation < 1 ||
+		len(input.PreviousCredentialRevisionRef) < 8 || len(input.PreviousCredentialRevisionRef) > 96 ||
+		len(input.PreviousContentSHA256) != 64 || len(input.ContentSHA256) != 64 ||
+		len(input.SecretName) < 1 || len(input.SecretName) > 63 ||
+		len(input.SecretResourceVersion) < 1 || len(input.SecretResourceVersion) > 128 {
+		return false
+	}
+	secretUID, err := uuid.Parse(input.SecretUID)
+	if err != nil || secretUID.String() != input.SecretUID {
+		return false
+	}
+	for _, digest := range []string{input.PreviousContentSHA256, input.ContentSHA256} {
+		if _, err := hex.DecodeString(digest); err != nil || strings.ToLower(digest) != digest {
+			return false
+		}
+	}
+	for index, character := range input.SecretName {
+		if character >= 'a' && character <= 'z' || character >= '0' && character <= '9' ||
+			character == '-' && index > 0 && index < len(input.SecretName)-1 {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func providerCredentialRefreshOutcome(lease map[string]any, accountRef, credentialRef string, revisionNumber int64,
+	secretName, secretUID, secretResourceVersion, contentSHA256 string,
+) commandOutcome {
+	return commandOutcome{
+		result: command.Result{Runtime: map[string]any{
+			"providerAccountRef": accountRef, "providerCredentialRevisionRef": credentialRef,
+			"providerCredentialRevisionNumber": revisionNumber, "providerSecretName": secretName,
+			"providerSecretUID": secretUID, "providerSecretResourceVersion": secretResourceVersion,
+			"providerCredentialSHA256": contentSHA256,
+		}},
+		projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"),
+		resourceKind: "PROVIDER_ACCOUNT", resourceRef: accountRef,
+		summary: "i18n:PROVIDER_CREDENTIAL_REFRESH_COMMITTED",
+	}
+}
+
 func jsonUnmarshal(raw []byte, target any) error { return json.Unmarshal(raw, target) }
+
+func runtimeRevisionDigest(runtimeEnvironmentDigest string, parts ...string) string {
+	material := append(append([]string(nil), parts...), "runtime-environment", runtimeEnvironmentDigest)
+	digest := sha256.Sum256([]byte(strings.Join(material, "\x00")))
+	return hex.EncodeToString(digest[:])
+}
+
+func decodeStoredRuntimeEnvironment(rawValues, rawSecrets []byte, values *[]runtimecontract.RuntimeEnvironmentValue, secrets *[]runtimecontract.RuntimeSecretProjection) error {
+	decodedValues, decodedSecrets, err := runtimecontract.DecodeRuntimeEnvironment(rawValues, rawSecrets)
+	if err != nil {
+		return err
+	}
+	*values, *secrets = decodedValues, decodedSecrets
+	return nil
+}
 
 func (repository *Repository) lease(ctx context.Context, tx pgx.Tx, scope scope, payload command.LeaseInput, lock bool) (map[string]any, error) {
 	leaseQuery := queryRuntimeLeaseSelectRuntimeLeasesOrganizationIdRef
 	if lock {
 		leaseQuery = queryRuntimeLeaseForUpdateSelectRuntimeLeasesOrganizationIdRef
 	}
-	var leaseID, runID, nodeID, rootRunID, projectID, projectRef, runRef, nodeRef, storedDigest, state, turnRef string
+	var leaseID, runID, nodeID, rootRunID, projectID, projectRef, runRef, nodeRef, storedDigest, state, turnRef, runtimeRevisionID string
 	var generation int64
 	var expiresAt time.Time
-	err := tx.QueryRow(ctx, leaseQuery, scope.organizationID, payload.LeaseRef).Scan(&leaseID, &runID, &nodeID, &rootRunID, &projectID, &projectRef, &runRef, &nodeRef, &storedDigest, &generation, &state, &expiresAt, &turnRef)
+	err := tx.QueryRow(ctx, leaseQuery, scope.organizationID, payload.LeaseRef).Scan(&leaseID, &runID, &nodeID, &rootRunID, &projectID, &projectRef, &runRef, &nodeRef, &storedDigest, &generation, &state, &expiresAt, &turnRef, &runtimeRevisionID)
 	if err != nil {
 		return nil, errs.ErrNotFound
 	}
@@ -282,7 +781,7 @@ func (repository *Repository) lease(ctx context.Context, tx pgx.Tx, scope scope,
 	if storedDigest != hex.EncodeToString(digest[:]) || generation != payload.Generation || state != "CLAIMED" || time.Now().After(expiresAt) {
 		return nil, errs.ErrForbidden
 	}
-	return map[string]any{"leaseID": leaseID, "runID": runID, "nodeID": nodeID, "rootRunID": rootRunID, "projectID": projectID, "projectRef": projectRef, "runRef": runRef, "nodeRef": nodeRef, "turnRef": turnRef, "generation": generation}, nil
+	return map[string]any{"leaseID": leaseID, "runID": runID, "nodeID": nodeID, "rootRunID": rootRunID, "projectID": projectID, "projectRef": projectRef, "runRef": runRef, "nodeRef": nodeRef, "turnRef": turnRef, "runtimeRevisionID": runtimeRevisionID, "generation": generation}, nil
 }
 
 func (repository *Repository) renewExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -335,6 +834,12 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if !ok || !payload.Usage.Valid() || payload.Success && payload.SafeErrorCode != "" || !payload.Success && !runtimeSafeErrorCode(payload.SafeErrorCode) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	hasArchiveBinding := payload.CodexSessionID != "" || payload.ArchiveRelativePath != "" || payload.ArchiveSHA256 != "" || payload.ArchiveSizeBytes != 0
+	if hasArchiveBinding && (runtimecontract.ValidateCodexArchiveIdentity(payload.CodexSessionID, payload.ArchiveRelativePath) != nil ||
+		len(payload.ArchiveSHA256) != 64 ||
+		payload.ArchiveSizeBytes < 1 || payload.ArchiveSizeBytes > runtimecontract.MaximumSessionSourceBytes) {
+		return commandOutcome{}, errs.ErrInvalid
+	}
 	lease, err := repository.lease(ctx, tx, scope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
 	if err != nil {
 		return commandOutcome{}, err
@@ -342,6 +847,14 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	var lockedRootID string
 	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionLockRootRun, lease["rootRunID"]).Scan(&lockedRootID); err != nil || lockedRootID != stringMap(lease, "rootRunID") {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if !payload.Success && payload.SafeErrorCode == "PROVIDER_AUTH_REJECTED" {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionMarkProviderReauthorizationRequired, pgx.StrictNamedArgs{
+			"organization_id":     scope.organizationID,
+			"runtime_revision_id": lease["runtimeRevisionID"],
+		}); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 	}
 	if len(payload.Artifacts) > 0 {
 		var allowed bool
@@ -372,42 +885,57 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunsId, lease["runID"]).Scan(&sessionID, &targetType); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	if hasArchiveBinding && targetType != "SYSTEM_ASSISTANT" {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpsertSessionStorage, pgx.StrictNamedArgs{
+			"organization_id":      scope.organizationID,
+			"session_id":           sessionID,
+			"runtime_revision_id":  lease["runtimeRevisionID"],
+			"codex_session_id":     payload.CodexSessionID,
+			"source_relative_path": payload.ArchiveRelativePath,
+			"source_sha256":        payload.ArchiveSHA256,
+			"source_size_bytes":    payload.ArchiveSizeBytes,
+			"retention_seconds":    int64((30 * 24 * time.Hour) / time.Second),
+		}); err != nil {
+			return commandOutcome{}, fmt.Errorf("record session storage binding: %w", errs.ErrUnavailable)
+		}
+	}
 	artifactRefs := []string{}
 	var artifactBytes int64
 	for _, artifact := range payload.Artifacts {
 		projectID := stringMap(lease, "projectID")
-		if projectID == "" || len(payload.Artifacts) > 16 || artifact.FileName == "" || safeFileName(artifact.FileName) != artifact.FileName || artifact.SizeBytes != int64(len(artifact.Content)) || artifact.SizeBytes < 0 || artifact.SizeBytes > 1<<20 {
+		prepared, preparedErr := preparedArtifact(artifact)
+		if preparedErr != nil || len(payload.Artifacts) > 16 ||
+			artifact.FileName == "" || safeFileName(artifact.FileName) != artifact.FileName ||
+			artifact.SizeBytes < 0 || artifact.SizeBytes > 1<<20 {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		artifactBytes += artifact.SizeBytes
 		if artifactBytes > maximumArtifactBytes {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		digest := sha256.Sum256(artifact.Content)
-		digestHex := hex.EncodeToString(digest[:])
-		if !strings.EqualFold(strings.TrimSpace(artifact.SHA256), digestHex) {
+		if prepared.ObjectKey != artifactObjectKey(scope.organizationRef, scope.actorRef, stringMap(lease, "projectRef"), prepared.Ref, prepared.Digest) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		verdict := artifactpolicy.Inspect(artifact.FileName, artifact.MediaType, artifact.Content)
-		if verdict.ScanState != artifactpolicy.ScanClean {
-			return commandOutcome{}, errs.ErrInvalid
-		}
-		ref, _ := newRef("art")
 		receiptRef, _ := newRef("obj")
 		var artifactID string
-		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionInsertArtifactsRefProjectIdNodeId, ref, scope.organizationID, projectID, lease["runID"], lease["nodeID"], artifact.FileName, verdict.MediaType, artifact.SizeBytes, "sha256:"+digestHex, verdict.ScanState, receiptRef, verdict.PreviewState, scope.actorID).Scan(&artifactID); err != nil {
+		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionInsertArtifactsRefProjectIdNodeId,
+			prepared.Ref, scope.organizationID, projectID, lease["runID"], lease["nodeID"],
+			artifact.FileName, prepared.MediaType, artifact.SizeBytes, prepared.Digest,
+			prepared.ScanState, receiptRef, prepared.PreviewState).Scan(&artifactID); err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertArtifactContentArtifactId, artifactID, artifact.Content); err != nil {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertArtifactContentArtifactId,
+			artifactID, prepared.ObjectKey, prepared.ObjectVersion, prepared.ObjectETag,
+			prepared.Digest, prepared.SizeBytes); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertArtifactBindingsArtifactIdTargetRef, artifactID, stringMap(lease, "runRef"), scope.actorID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, stringMap(lease, "rootRunID"), ref, "ARTIFACT_AVAILABLE", stringMap(lease, "nodeRef"), "", "", ref, "i18n:RESULT_ARTIFACT_AVAILABLE", runState, nodeState); err != nil {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, stringMap(lease, "rootRunID"), prepared.Ref, "ARTIFACT_AVAILABLE", stringMap(lease, "nodeRef"), "", "", prepared.Ref, "i18n:RESULT_ARTIFACT_AVAILABLE", runState, nodeState); err != nil {
 			return commandOutcome{}, err
 		}
-		artifactRefs = append(artifactRefs, ref)
+		artifactRefs = append(artifactRefs, prepared.Ref)
 	}
 	usage, err := json.Marshal(payload.Usage)
 	if err != nil {
@@ -451,7 +979,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectSessionsId, sessionID).Scan(&next); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, lease["runID"], next, nonEmptyResult(payload), artifactRefs, map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, lease["runID"], next, nonEmptyResult(payload), map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
@@ -544,7 +1072,11 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event, CreatedRefs: artifactRefs}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN_NODE", resourceRef: stringMap(lease, "nodeRef"), summary: "i18n:RUNTIME_EXECUTION_COMPLETED"}, nil
+	outcome := commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event, CreatedRefs: artifactRefs}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN_NODE", resourceRef: stringMap(lease, "nodeRef"), summary: "i18n:RUNTIME_EXECUTION_COMPLETED"}
+	if targetType == "SYSTEM_ASSISTANT" {
+		outcome.platformEvent = "SYSTEM_ASSISTANT_CHANGED"
+	}
+	return outcome, nil
 }
 
 type storedRunUsage struct {
@@ -602,12 +1134,12 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, err
 	}
 	var capabilityAllowed, relationshipAllowed bool
-	var workflowInstructions, workflowStepName string
+	var workflowInstructions, workflowStepName, plannedNodeID, plannedNodeRef, plannedEdgeRef string
 	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectRunNodesId, pgx.StrictNamedArgs{
 		"parent_node_id":    lease["nodeID"],
 		"target_agent_ref":  payload.TargetAgentRef,
 		"workflow_step_key": payload.WorkflowStepKey,
-	}).Scan(&capabilityAllowed, &relationshipAllowed, &workflowInstructions, &workflowStepName); err != nil || !capabilityAllowed || !relationshipAllowed {
+	}).Scan(&capabilityAllowed, &relationshipAllowed, &workflowInstructions, &workflowStepName, &plannedNodeID, &plannedNodeRef, &plannedEdgeRef); err != nil || !capabilityAllowed || !relationshipAllowed {
 		return commandOutcome{}, errs.ErrForbidden
 	}
 	var agentID, agentName, role string
@@ -615,12 +1147,16 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	childRef, _ := newRef("run")
-	var providerAccountID, initiatorID, parentRunID string
+	var initiatorID, parentRunID string
 	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectRunsId, pgx.StrictNamedArgs{
 		"parent_run_id":   lease["runID"],
 		"organization_id": scope.organizationID,
-	}).Scan(&providerAccountID, &initiatorID, &parentRunID); err != nil {
+	}).Scan(&initiatorID, &parentRunID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	providerAccountID, err := repository.selectProviderAccountForAgent(ctx, tx, scope.organizationID, payload.TargetAgentRef)
+	if err != nil {
+		return commandOutcome{}, err
 	}
 	childSessionRef, _ := newRef("ses")
 	var childSessionID string
@@ -671,26 +1207,42 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 	if _, err := tx.Exec(ctx, queryRuntimeDelegateexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, childSessionID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	nodeRef, _ := newRef("nod")
-	var nodeID string
-	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertRunNodesRefRootRunIdParentNodeId, pgx.StrictNamedArgs{
-		"node_ref":          nodeRef,
-		"organization_id":   scope.organizationID,
-		"root_run_id":       lease["rootRunID"],
-		"run_id":            childID,
-		"parent_node_id":    lease["nodeID"],
-		"display_name":      agentName,
-		"role":              role,
-		"agent_id":          agentID,
-		"turn_id":           turnID,
-		"workflow_step_key": payload.WorkflowStepKey,
-		"input_summary":     truncate(childTask, 1000),
-	}).Scan(&nodeID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+	nodeRef := plannedNodeRef
+	if nodeRef == "" {
+		nodeRef, _ = newRef("nod")
 	}
-	delegateEdgeRef, _ := newRef("edg")
-	if _, err := tx.Exec(ctx, queryRuntimeDelegateexecutionInsertDelegationEdge, delegateEdgeRef, scope.organizationID, lease["rootRunID"], lease["nodeID"], nodeID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+	var nodeID string
+	if plannedNodeID != "" {
+		nodeID = plannedNodeID
+		if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionMaterializePlannedNode, pgx.StrictNamedArgs{
+			"node_id": plannedNodeID, "run_id": childID, "turn_id": turnID,
+			"input_summary": truncate(childTask, 1000),
+		}).Scan(&nodeRef); err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+	} else {
+		if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertRunNodesRefRootRunIdParentNodeId, pgx.StrictNamedArgs{
+			"node_ref":          nodeRef,
+			"organization_id":   scope.organizationID,
+			"root_run_id":       lease["rootRunID"],
+			"run_id":            childID,
+			"parent_node_id":    lease["nodeID"],
+			"display_name":      agentName,
+			"role":              role,
+			"agent_id":          agentID,
+			"turn_id":           turnID,
+			"workflow_step_key": payload.WorkflowStepKey,
+			"input_summary":     truncate(childTask, 1000),
+		}).Scan(&nodeID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+	}
+	delegateEdgeRef := plannedEdgeRef
+	if delegateEdgeRef == "" {
+		delegateEdgeRef, _ = newRef("edg")
+		if _, err := tx.Exec(ctx, queryRuntimeDelegateexecutionInsertDelegationEdge, delegateEdgeRef, scope.organizationID, lease["rootRunID"], lease["nodeID"], nodeID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 	}
 	callbackEdgeRef, _ := newRef("edg")
 	if _, err := tx.Exec(ctx, queryRuntimeDelegateexecutionInsertCallbackEdge, callbackEdgeRef, scope.organizationID, lease["rootRunID"], nodeID, lease["nodeID"]); err != nil {
@@ -767,11 +1319,10 @@ func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx
 func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, tx pgx.Tx, scope scope, parentNodeID, projectID string) (bool, error) {
 	var parentRunID, rootRunID, agentID, displayName, role, sessionID, agentRef, workflowVersionID string
 	var attempt int32
-	var humanGateAfter bool
 	err := tx.QueryRow(ctx, queryRuntimeCallbackResolveContinuation, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"parent_node_id":  parentNodeID,
-	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &humanGateAfter)
+	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -820,7 +1371,7 @@ func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, 
 		"agent_id":          agentID,
 		"turn_id":           turnID,
 		"workflow_step_key": workflowStepKey,
-		"human_gate_after":  humanGateAfter,
+		"human_gate_after":  false,
 		"attempt":           attempt + 1,
 		"input_summary":     continuationTask,
 	}).Scan(&nodeID); err != nil {

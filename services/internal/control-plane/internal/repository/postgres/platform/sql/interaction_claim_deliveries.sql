@@ -51,7 +51,7 @@ WITH expired AS (
 SELECT
     claimed.ref,
     c.ref,
-    c.credential_materialization_ref,
+    COALESCE(c.credential_materialization_ref, credential_revision.ref),
     c.public_configuration->>'base_url',
     c.public_configuration->>'team_name',
     c.public_configuration->>'channel_name',
@@ -65,5 +65,7 @@ SELECT
     claimed.lease_expires_at
 FROM claimed
 JOIN control_plane.integration_connections c ON c.id = claimed.connection_id
+LEFT JOIN control_plane.integration_credential_revisions credential_revision
+  ON credential_revision.id = c.credential_revision_id
 JOIN control_plane.projects project ON project.id = claimed.project_id
 ORDER BY claimed.created_at

@@ -2,20 +2,25 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
+import { openAssistantWorkspace } from "@/features/assistant/events";
+import { assistantEffectiveRuntimeState } from "@/features/assistant/model";
 import { usePlatformStore } from "@/features/platform/store";
+import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import { asProblem, type AppProblem } from "@/shared/api/problem";
 
 const platform = usePlatformStore();
 const router = useRouter();
 const busy = ref(false);
 const problem = ref<AppProblem>();
-const assistantReady = computed(
-  () => platform.bootstrap?.assistant.runtimeState === "READY",
+const assistantState = computed(() =>
+  platform.bootstrap?.assistant
+    ? assistantEffectiveRuntimeState(platform.bootstrap.assistant)
+    : "PROVISIONING",
 );
+const assistantReady = computed(() => assistantState.value === "READY");
 const canFinish = computed(() =>
   platform.bootstrap?.nextActions.includes("COMPLETE_ONBOARDING"),
 );
@@ -58,9 +63,8 @@ onMounted(async () => {
             <p>{{ $t("onboarding.webOnly") }}</p>
           </div>
           <StatusBadge
-            :state="
-              platform.bootstrap?.assistant.runtimeState ?? 'PROVISIONING'
-            "
+            :state="assistantState"
+            :label="platform.bootstrap?.assistant.readinessSummary"
           />
         </div>
         <ol class="onboarding-steps">
@@ -70,11 +74,13 @@ onMounted(async () => {
         </ol>
         <ProblemNotice v-if="problem" :problem="problem" compact />
         <div class="onboarding-actions">
-          <RouterLink
+          <button
             class="button button--primary button--large"
-            to="/assistant"
-            >{{ $t("onboarding.startAssistant") }}</RouterLink
+            type="button"
+            @click="openAssistantWorkspace"
           >
+            {{ $t("onboarding.startAssistant") }}
+          </button>
           <button
             v-if="canFinish"
             class="button button--secondary button--large"

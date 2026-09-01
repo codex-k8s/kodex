@@ -6,9 +6,237 @@ export type ClientOptions = {
 
 export type OpaqueRef = string;
 
+export type OwnerSessionCreateInput = {
+    purpose?: OwnerSessionPurpose;
+};
+
+export type OwnerSessionPurpose = {
+    kind: 'RUNTIME_SECRET_CREATE' | 'RUNTIME_SECRET_ROTATE' | 'RUNTIME_SECRET_REVOKE' | 'RUNTIME_SECRET_REVEAL';
+    projectRef: OpaqueRef;
+    /**
+     * Обязателен для ROTATE, REVOKE и REVEAL; отсутствует для CREATE
+     */
+    secretRef?: OpaqueRef;
+};
+
 export type Timestamp = string;
 
-export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING';
+export type PermissionRisk = 'READ' | 'WRITE' | 'APPROVE' | 'ADMIN';
+
+export type AccessSubjectKind = 'USER' | 'OIDC_GROUP' | 'SERVICE';
+
+export type AccessScopeKind = 'ORGANIZATION' | 'PROJECT' | 'RESOURCE_KIND' | 'RESOURCE_INSTANCE';
+
+export type AccessResourceKind = 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN' | 'SESSION' | 'OWNER_GATE' | 'ARTIFACT' | 'SCHEDULE' | 'INTEGRATION' | 'RUNTIME_ENVIRONMENT' | 'ROLE_IMAGE' | 'SECRET';
+
+export type AccessRoleKind = 'SYSTEM' | 'CUSTOM';
+
+export type AccessRoleState = 'ACTIVE' | 'ARCHIVED';
+
+export type AccessBindingState = 'ACTIVE' | 'REVOKED';
+
+export type OidcGroupState = 'ACTIVE' | 'STALE';
+
+export type AccessDecision = 'ALLOWED' | 'DENIED';
+
+export type PermissionDefinition = {
+    key: string;
+    nameKey: string;
+    descriptionKey: string;
+    risk: PermissionRisk;
+    allowedScopes: Array<AccessScopeKind>;
+    resourceKinds: Array<AccessResourceKind>;
+    ownerConditionSupported: boolean;
+};
+
+export type PermissionDefinitionPage = {
+    items: Array<PermissionDefinition>;
+};
+
+export type AccessSubject = {
+    ref: OpaqueRef;
+    kind: AccessSubjectKind;
+    displayName: string;
+    active: boolean;
+    oidcGroupRefs: Array<OpaqueRef>;
+};
+
+export type AccessSubjectPage = {
+    items: Array<AccessSubject>;
+    nextPageToken?: string;
+};
+
+export type OidcGroup = {
+    ref: OpaqueRef;
+    displayName: string;
+    state: OidcGroupState;
+    memberCount: number;
+    bindingCount: number;
+    lastSeenAt: Timestamp;
+    syncedAt: Timestamp;
+};
+
+export type OidcGroupPage = {
+    items: Array<OidcGroup>;
+    nextPageToken?: string;
+};
+
+export type AccessRoleVersion = {
+    ref: OpaqueRef;
+    roleRef: OpaqueRef;
+    revision: number;
+    name: string;
+    description: string;
+    permissionKeys: Array<string>;
+    allowedScopes: Array<AccessScopeKind>;
+    changeComment: string;
+    createdAt: Timestamp;
+    createdBy: UserSummary;
+};
+
+export type AccessRole = {
+    ref: OpaqueRef;
+    version: number;
+    kind: AccessRoleKind;
+    state: AccessRoleState;
+    currentVersion: AccessRoleVersion;
+    bindingCount: number;
+    updatedAt: Timestamp;
+};
+
+export type AccessRolePage = {
+    items: Array<AccessRole>;
+    nextPageToken?: string;
+};
+
+export type AccessRoleVersionPage = {
+    role: AccessRole;
+    items: Array<AccessRoleVersion>;
+    nextPageToken?: string;
+};
+
+export type AccessScope = {
+    kind: AccessScopeKind;
+    projectRef?: OpaqueRef;
+    resourceKind?: AccessResourceKind;
+    resourceRef?: OpaqueRef;
+};
+
+export type AccessConditions = {
+    validFrom?: Timestamp;
+    validUntil?: Timestamp;
+    requireOwner: boolean;
+};
+
+export type AccessBinding = {
+    ref: OpaqueRef;
+    version: number;
+    state: AccessBindingState;
+    subject: AccessSubject;
+    roleVersion: AccessRoleVersion;
+    scope: AccessScope;
+    conditions: AccessConditions;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+};
+
+export type AccessBindingPage = {
+    items: Array<AccessBinding>;
+    nextPageToken?: string;
+};
+
+export type AccessExplanationStep = {
+    code: 'DIRECT_BINDING' | 'OIDC_GROUP_BINDING' | 'SERVICE_BINDING' | 'ROLE_PERMISSION' | 'SCOPE_MATCH' | 'CONDITION_MATCH' | 'NO_ALLOW_BINDING';
+    bindingRef?: OpaqueRef;
+    roleRef?: OpaqueRef;
+    roleVersionRef?: OpaqueRef;
+    sourceKind: AccessSubjectKind;
+    sourceRef?: OpaqueRef;
+    scope?: AccessScope;
+};
+
+export type EffectiveAccessDecision = {
+    permissionKey: string;
+    decision: AccessDecision;
+    target: AccessScope;
+    explanation: Array<AccessExplanationStep>;
+};
+
+export type AccessRoleInput = {
+    name: string;
+    description: string;
+    permissionKeys: Array<string>;
+    allowedScopes: Array<AccessScopeKind>;
+    changeComment: string;
+};
+
+export type AccessBindingInput = {
+    subjectKind: AccessSubjectKind;
+    subjectRef: OpaqueRef;
+    roleVersionRef: OpaqueRef;
+    scope: AccessScope;
+    conditions: AccessConditions;
+};
+
+export type AccessBindingChangeInput = {
+    roleVersionRef: OpaqueRef;
+    scope: AccessScope;
+    conditions: AccessConditions;
+};
+
+export type EffectiveAccessQuery = {
+    subjectRef?: OpaqueRef;
+    target: AccessScope;
+    permissionKeys: Array<string>;
+};
+
+export type EffectiveAccessPage = {
+    subject: AccessSubject;
+    items: Array<EffectiveAccessDecision>;
+    evaluatedAt: Timestamp;
+};
+
+export type ExplainAccessInput = {
+    subjectRef?: OpaqueRef;
+    permissionKey: string;
+    target: AccessScope;
+};
+
+export type ExplainAccessResult = {
+    subject: AccessSubject;
+    result: EffectiveAccessDecision;
+    evaluatedAt: Timestamp;
+};
+
+export type AccessRoleDraft = {
+    permissionKeys: Array<string>;
+    allowedScopes: Array<AccessScopeKind>;
+};
+
+export type AccessBindingDraft = {
+    subjectKind: AccessSubjectKind;
+    subjectRef: OpaqueRef;
+    scope: AccessScope;
+    conditions: AccessConditions;
+};
+
+export type SimulateAccessInput = {
+    subjectRef: OpaqueRef;
+    permissionKey: string;
+    target: AccessScope;
+    role: AccessRoleDraft;
+    binding: AccessBindingDraft;
+    evaluatedAt?: Timestamp;
+};
+
+export type SimulateAccessResult = {
+    subject: AccessSubject;
+    current: EffectiveAccessDecision;
+    simulated: EffectiveAccessDecision;
+    evaluatedAt: Timestamp;
+};
+
+export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING' | 'CONFIGURE_CREDENTIAL' | 'ROTATE' | 'REVEAL' | 'PROMOTE' | 'DELETE' | 'PURGE';
 
 export type Problem = {
     type: string;
@@ -161,6 +389,7 @@ export type Agent = {
     purpose: string;
     roleDescription: string;
     avatarUrl?: string;
+    avatar?: AgentAvatar;
     state: 'DRAFT' | 'READY' | 'RUNNING' | 'DISABLED' | 'ARCHIVED';
     enabled: boolean;
     system: boolean;
@@ -188,12 +417,26 @@ export type AgentInput = {
      * Непрозрачный ref роли из авторитетного каталога; при отсутствии сервер атомарно создаёт роль агента
      */
     roleDefinitionRef?: OpaqueRef;
-    avatarUrl?: string;
     /**
      * Непрозрачный ref из runtime catalog; при отсутствии сервер выбирает безопасный default
      */
     runtimeRef?: OpaqueRef;
     initialInstructions?: string;
+};
+
+export type AgentAvatar = {
+    source: 'FALLBACK' | 'ARTIFACT';
+    artifactRef?: OpaqueRef;
+    artifactRevision?: number;
+    contentPath: string;
+};
+
+export type AgentAvatarInput = {
+    artifactRef: OpaqueRef;
+};
+
+export type EnabledInput = {
+    enabled: boolean;
 };
 
 export type RuntimeSelection = {
@@ -221,6 +464,362 @@ export type AgentPage = {
     nextPageToken?: string;
 };
 
+export type ProviderAccountCandidate = {
+    accountRef: OpaqueRef;
+    weight: number;
+};
+
+export type ProviderAccountPolicyVersion = {
+    ref: OpaqueRef;
+    version: number;
+    mode: 'FIXED' | 'LEAST_USED' | 'WEIGHTED';
+    accountCandidates: Array<ProviderAccountCandidate>;
+    digest: string;
+    createdAt: Timestamp;
+};
+
+export type AgentRuntimeConfiguration = {
+    ref: OpaqueRef;
+    version: number;
+    agentRef: OpaqueRef;
+    runtimeProfileRef: OpaqueRef;
+    provider: string;
+    model: string;
+    providerPolicy: ProviderAccountPolicyVersion;
+    digest: string;
+    createdAt: Timestamp;
+};
+
+export type AgentRuntimeConfigurationInput = {
+    runtimeProfileRef: OpaqueRef;
+    model: string;
+    providerPolicyMode: 'FIXED' | 'LEAST_USED' | 'WEIGHTED';
+    providerAccounts: Array<ProviderAccountCandidate>;
+};
+
+export type ConfigOverlayVersion = {
+    ref: OpaqueRef;
+    version: number;
+    revision: number;
+    state: string;
+    content: string;
+    digest: string;
+    validationMessages: Array<string>;
+    createdAt: Timestamp;
+    publishedAt?: Timestamp;
+};
+
+export type ConfigOverlayDraftInput = {
+    content: string;
+};
+
+export type ConfigOverlayRollbackInput = {
+    publishedOverlayRef: OpaqueRef;
+};
+
+export type RuntimeEnvironmentValue = {
+    name: string;
+    value: string;
+};
+
+export type RuntimeSecretValueType = 'STRING' | 'BINARY' | 'JSON';
+
+export type RuntimeSecretDisplayHint = {
+    prefix: string;
+    suffix: string;
+};
+
+export type RuntimeSecret = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef: OpaqueRef;
+    name: string;
+    description: string;
+    valueType: RuntimeSecretValueType;
+    state: 'ACTIVE' | 'REVOKED';
+    currentRevision: number;
+    displayHint?: RuntimeSecretDisplayHint;
+    nextActions: Array<NextAction>;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+};
+
+export type RuntimeSecretPage = {
+    items: Array<RuntimeSecret>;
+    nextPageToken: string;
+};
+
+export type RuntimeSecretCreateInput = {
+    name: string;
+    description: string;
+    valueType: RuntimeSecretValueType;
+    value: string;
+};
+
+export type RuntimeSecretRotateInput = {
+    valueType: RuntimeSecretValueType;
+    value: string;
+};
+
+export type RuntimeSecretReveal = {
+    value: string;
+    valueType: RuntimeSecretValueType;
+};
+
+/**
+ * Descriptor immutable Kubernetes Secret revision; значение Secret запрещено.
+ */
+export type RuntimeSecretDescriptor = {
+    name: string;
+    secretRef: OpaqueRef;
+    secretName: string;
+    secretKey: string;
+    secretUid: string;
+    secretResourceVersion: string;
+    contentSha256: string;
+};
+
+export type RuntimeSecretBinding = {
+    name: string;
+    secretRef: OpaqueRef;
+};
+
+export type RuntimeEnvironmentVersion = {
+    ref: OpaqueRef;
+    version: number;
+    revision: number;
+    values: Array<RuntimeEnvironmentValue>;
+    secretDescriptors: Array<RuntimeSecretDescriptor>;
+    digest: string;
+    createdAt: Timestamp;
+    image: RuntimeEnvironmentImage;
+    tools: Array<RuntimeEnvironmentTool>;
+    policy: RuntimeEnvironmentPolicy;
+};
+
+export type RuntimeEnvironmentImage = {
+    artifactRef: OpaqueRef;
+    recipeRef: OpaqueRef;
+    recipeGeneration: number;
+    reference: string;
+    digest: string;
+};
+
+export type RuntimeEnvironmentTool = {
+    name: string;
+    command: string;
+    description: string;
+    usageHint: string;
+};
+
+export type RuntimeVolumeKind = 'EPHEMERAL_DISK' | 'EPHEMERAL_MEMORY';
+
+export type RuntimeNetworkDestination = 'DNS' | 'RUNTIME_CALLBACK' | 'PROVIDER_PROXY' | 'KUBERNETES_API';
+
+export type RuntimeNetworkProtocol = 'TCP' | 'UDP';
+
+export type RuntimeKubernetesAccessKind = 'NONE' | 'READ_OWN_EXECUTION';
+
+export type RuntimeResourcePolicy = {
+    cpuRequestMilli: number;
+    cpuLimitMilli: number;
+    memoryRequestMib: number;
+    memoryLimitMib: number;
+    ephemeralStorageRequestMib: number;
+    ephemeralStorageLimitMib: number;
+};
+
+export type RuntimeVolumeInput = {
+    name: string;
+    kind: RuntimeVolumeKind;
+    sizeMib: number;
+};
+
+export type RuntimeVolume = {
+    name: string;
+    kind: RuntimeVolumeKind;
+    sizeMib: number;
+    mountPath: string;
+};
+
+export type RuntimeEnvironmentPolicyInput = {
+    resources: RuntimeResourcePolicy;
+    volumes: Array<RuntimeVolumeInput>;
+    networkDestinations: Array<RuntimeNetworkDestination>;
+    kubernetesAccess: RuntimeKubernetesAccessKind;
+};
+
+export type RuntimeNetworkEgress = {
+    destination: RuntimeNetworkDestination;
+    protocol: RuntimeNetworkProtocol;
+    port: number;
+};
+
+export type RuntimeNetworkPolicy = {
+    denyByDefault: true;
+    egress: Array<RuntimeNetworkEgress>;
+};
+
+export type RuntimeKubernetesAccessProfile = {
+    kind: RuntimeKubernetesAccessKind;
+    namespace: 'kodex-runtime';
+};
+
+export type RuntimeEnvironmentPolicy = {
+    resources: RuntimeResourcePolicy;
+    volumes: Array<RuntimeVolume>;
+    network: RuntimeNetworkPolicy;
+    kubernetesAccess: RuntimeKubernetesAccessProfile;
+    resourcesDigest: string;
+    volumesDigest: string;
+    networkDigest: string;
+    rbacDigest: string;
+};
+
+export type RuntimeEnvironmentSet = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef: OpaqueRef;
+    name: string;
+    description: string;
+    state: 'ACTIVE' | 'DISABLED' | 'DELETED';
+    currentVersion: RuntimeEnvironmentVersion;
+    updatedAt: Timestamp;
+    ready: boolean;
+    readinessBlockers: Array<string>;
+    nextActions: Array<NextAction>;
+};
+
+export type RuntimeEnvironmentReadiness = {
+    environmentRef: OpaqueRef;
+    environmentVersion: number;
+    publishedVersionRef: OpaqueRef;
+    publishedVersionDigest: string;
+    ready: boolean;
+    blockers: Array<string>;
+    observedAt: Timestamp;
+};
+
+export type RuntimeEnvironmentInput = {
+    name: string;
+    description: string;
+    imageArtifactRef: OpaqueRef;
+    tools: Array<RuntimeEnvironmentTool>;
+    values: Array<RuntimeEnvironmentValue>;
+    secretBindings: Array<RuntimeSecretBinding>;
+    policy: RuntimeEnvironmentPolicyInput;
+};
+
+export type RuntimeEnvironmentRollbackInput = {
+    publishedVersionRef: OpaqueRef;
+};
+
+export type AgentRuntimeEnvironmentBinding = {
+    ref: OpaqueRef;
+    version: number;
+    agentRef: OpaqueRef;
+    environmentRef: OpaqueRef;
+    digest: string;
+};
+
+export type RuntimeEnvironmentBindingInput = {
+    environmentRef: OpaqueRef;
+};
+
+export type AgentRuntimeConfigurationView = {
+    configuration: AgentRuntimeConfiguration;
+    publishedOverlay: ConfigOverlayVersion;
+    draftOverlay?: ConfigOverlayVersion;
+    environmentBinding: AgentRuntimeEnvironmentBinding;
+    environment: RuntimeEnvironmentSet;
+    safeEffectiveConfig: string;
+    agentVersion: number;
+};
+
+export type AgentRuntimeConfigurationPage = {
+    items: Array<AgentRuntimeConfiguration>;
+    nextPageToken?: string;
+};
+
+export type RuntimeEnvironmentPage = {
+    items: Array<RuntimeEnvironmentSet>;
+    nextPageToken?: string;
+};
+
+export type RuntimeEnvironmentVersionPage = {
+    items: Array<RuntimeEnvironmentVersion>;
+    nextPageToken?: string;
+};
+
+export type TemplateVariable = {
+    name: string;
+    valueType: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP' | 'OBJECT' | 'COLLECTION';
+    description: string;
+    example: string;
+    source: 'SYSTEM' | 'USER' | 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'ENVIRONMENT' | 'RUNTIME' | 'TOOLS' | 'INPUT_FILES' | 'SESSION_FILES' | 'RUN_FILES' | 'WORKFLOW_FILES' | 'PROJECT_FILES';
+    collection: boolean;
+    itemValueType?: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP' | 'OBJECT';
+    itemFields: Array<TemplateVariableField>;
+    rangeExample?: string;
+};
+
+export type TemplateVariableField = {
+    name: string;
+    valueType: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP';
+    description: string;
+};
+
+export type TemplateVariablePage = {
+    items: Array<TemplateVariable>;
+    nextPageToken?: string;
+};
+
+export type ProviderDefinition = {
+    key: 'openai-codex';
+    name: string;
+    description: string;
+    authorizationMethods: Array<'DEVICE_CODE' | 'API_KEY'>;
+    modelIds: Array<string>;
+    defaultModelId: string;
+    available: boolean;
+    ready: boolean;
+    readinessBlockers: Array<string>;
+};
+
+export type ProviderDefinitionPage = {
+    items: Array<ProviderDefinition>;
+    nextPageToken: string;
+};
+
+export type PromptTemplateInput = {
+    template: string;
+};
+
+export type PromptTemplatePreviewInput = PromptTemplateInput & {
+    targetKind?: 'SYNTHETIC' | 'SESSION' | 'RUN';
+    targetRef?: OpaqueRef;
+    includeFullMaterialization?: boolean;
+};
+
+export type PromptTemplateDiagnostic = {
+    severity: 'ERROR' | 'WARNING';
+    code: string;
+    message: string;
+    line: number;
+    column: number;
+};
+
+export type PromptTemplateValidation = {
+    valid: boolean;
+    diagnostics: Array<PromptTemplateDiagnostic>;
+};
+
+export type PromptTemplatePreview = {
+    safePreview: string;
+    fullMaterializedPrompt?: string;
+    diagnostics: Array<PromptTemplateDiagnostic>;
+};
+
 export type RoleEnvironmentPlatform = {
     os: 'linux';
     architecture: 'amd64' | 'arm64';
@@ -237,6 +836,7 @@ export type RoleEnvironment = {
     available: boolean;
     unavailableMessageKey?: string;
     customInstallationAllowed: boolean;
+    dockerfileTemplate: string;
 };
 
 export type RoleEnvironmentPage = {
@@ -251,6 +851,7 @@ export type RoleEnvironmentSelection = {
      * Дополнительный declarative build fragment; доступен только для явно разрешённого окружения
      */
     installationBlock?: string;
+    dockerfile: string;
 };
 
 export type RoleImageRecipe = {
@@ -263,6 +864,8 @@ export type RoleImageRecipe = {
     environment: RoleEnvironmentSelection;
     generation: number;
     promotedImageReady: boolean;
+    activeImageArtifactRef?: OpaqueRef;
+    promotedImageReference?: string;
     createdAt: Timestamp;
     updatedAt: Timestamp;
     nextActions: Array<NextAction>;
@@ -272,6 +875,8 @@ export type RoleImageBuild = {
     ref: OpaqueRef;
     version: number;
     recipeRef: OpaqueRef;
+    recipeGeneration: number;
+    dockerfile: string;
     attempt: number;
     stage: 'QUEUED' | 'MATERIALIZATION' | 'CONTEXT_VALIDATION' | 'BASE_PULL' | 'SOLVING' | 'INSTALLATION' | 'TRUSTED_RUNTIME_FINALIZATION' | 'STAGING_PUSH' | 'PROVENANCE' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'DEAD_LETTER';
     progressPercent: number;
@@ -305,12 +910,72 @@ export type RoleImageRecipePage = {
 export type RoleImageRecipeDetail = {
     recipe: RoleImageRecipe;
     builds: Array<RoleImageBuild>;
+    activeArtifact?: RoleImageArtifact;
+};
+
+export type RoleImageArtifactTool = {
+    name: string;
+    version: string;
+};
+
+export type RoleImageArtifact = {
+    ref: OpaqueRef;
+    version: number;
+    recipeRef: OpaqueRef;
+    recipeGeneration: number;
+    manifestDigest: string;
+    provenanceSha256: string;
+    promotedReference?: string;
+    admissionVerdict: 'ACCEPTED' | 'REJECTED';
+    sbomSha256?: string;
+    vulnerabilityEvidenceSha256?: string;
+    tools: Array<RoleImageArtifactTool>;
+    promotedAt?: Timestamp;
+    promotionReceiptSha256?: string;
 };
 
 export type RoleImageRecipeCommandReceipt = {
     recipe: RoleImageRecipe;
     imageBuild?: RoleImageBuild;
     reused: boolean;
+};
+
+export type RoleImageRecipeRevision = {
+    ref: OpaqueRef;
+    recipeRef: OpaqueRef;
+    revision: number;
+    recipeVersion: number;
+    recipeGeneration: number;
+    specSha256: string;
+    provenanceSha256: string;
+    sourceSha256: string;
+    immutableBuildSha256: string;
+    imageArtifactRef: OpaqueRef;
+    manifestDigest: string;
+    promotedReference?: string;
+    promotionReceiptSha256: string;
+    createdAt: Timestamp;
+};
+
+export type RoleImageRecipeRevisionPage = {
+    items: Array<RoleImageRecipeRevision>;
+    nextPageToken: string;
+};
+
+export type RoleImagePromotionInput = {
+    imageArtifactRef: OpaqueRef;
+    expectedProvenanceSha256: string;
+};
+
+export type RoleImagePromotionReceipt = {
+    ref: OpaqueRef;
+    recipeRef: OpaqueRef;
+    imageArtifactRef: OpaqueRef;
+    provenanceSha256: string;
+    manifestDigest: string;
+    receiptSha256: string;
+    state: 'QUEUED' | 'PROMOTING' | 'PROMOTED' | 'FAILED';
+    createdAt: Timestamp;
 };
 
 export type WorkflowInputField = {
@@ -426,6 +1091,8 @@ export type Run = {
     retryOfRunRef?: OpaqueRef;
     target: RunTarget;
     title: string;
+    titleSource: 'SERVER_DEFAULT' | 'AGENT_PROPOSED' | 'USER_EDITED';
+    activitySummary: string;
     inputSummary?: string;
     state: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
     source: 'CONTROL_CENTER' | 'SYSTEM_ASSISTANT' | 'SCHEDULE' | 'INTEGRATION' | 'AGENT_DELEGATION' | 'MATTERMOST';
@@ -438,7 +1105,7 @@ export type Run = {
     safeErrorCode?: string;
     safeErrorMessage?: string;
     usage: TokenUsage;
-    inputArtifactRefs: Array<OpaqueRef>;
+    inputAttachmentSetRef?: OpaqueRef;
     artifactRefs: Array<OpaqueRef>;
     gateRefs: Array<OpaqueRef>;
     createdAt: Timestamp;
@@ -453,7 +1120,8 @@ export type RunNode = {
     runRef: OpaqueRef;
     parentNodeRef?: OpaqueRef;
     type: 'ROOT_PROCESS' | 'AGENT_EXECUTION' | 'HUMAN_GATE' | 'EXTERNAL_ACTION';
-    state: 'QUEUED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
+    state: 'PLANNED' | 'QUEUED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
+    planned?: boolean;
     displayName: string;
     role?: string;
     agentRef?: OpaqueRef;
@@ -503,7 +1171,7 @@ export type RunEvent = {
     ref: OpaqueRef;
     runRef: OpaqueRef;
     sequence: number;
-    type: 'RUN_CREATED' | 'RUN_STATE_CHANGED' | 'NODE_ADDED' | 'NODE_STATE_CHANGED' | 'EDGE_ADDED' | 'TURN_QUEUED' | 'TURN_STARTED' | 'TURN_PROGRESS' | 'TURN_COMPLETED' | 'DELEGATION_CREATED' | 'CALLBACK_DELIVERED' | 'OWNER_GATE_OPENED' | 'OWNER_GATE_RESOLVED' | 'ARTIFACT_AVAILABLE' | 'INCIDENT_LINKED';
+    type: 'RUN_CREATED' | 'RUN_STATE_CHANGED' | 'RUN_METADATA_UPDATED' | 'NODE_ADDED' | 'NODE_STATE_CHANGED' | 'EDGE_ADDED' | 'TURN_QUEUED' | 'TURN_STARTED' | 'TURN_PROGRESS' | 'TURN_COMPLETED' | 'DELEGATION_CREATED' | 'CALLBACK_DELIVERED' | 'OWNER_GATE_OPENED' | 'OWNER_GATE_RESOLVED' | 'ARTIFACT_AVAILABLE' | 'INCIDENT_LINKED' | 'TOOL_CALL_RECORDED' | 'PLAN_UPDATED';
     nodeRef?: OpaqueRef;
     edgeRef?: OpaqueRef;
     gateRef?: OpaqueRef;
@@ -511,7 +1179,10 @@ export type RunEvent = {
     summary: string;
     progress?: string;
     runState?: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
-    nodeState?: 'QUEUED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
+    nodeState?: 'PLANNED' | 'QUEUED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
+    actor?: RunEventActor;
+    messageKind?: 'STATE' | 'USER_MESSAGE' | 'ASSISTANT_MESSAGE' | 'INTERMEDIATE_MESSAGE' | 'FINAL_MESSAGE' | 'TOOL_CALL' | 'PLAN_UPDATE' | 'ARTIFACT' | 'INCIDENT' | 'OWNER_GATE';
+    toolCall?: RunToolCall;
     occurredAt: Timestamp;
     graphRevision: number;
     run: RunDelta;
@@ -520,6 +1191,26 @@ export type RunEvent = {
     gate?: OwnerGate;
     artifact?: Artifact;
     incident?: Incident;
+};
+
+export type RunEventActor = {
+    kind: 'USER' | 'AGENT' | 'SYSTEM_ASSISTANT' | 'PLATFORM' | 'INTEGRATION';
+    ref: string;
+    name: string;
+};
+
+export type RunToolCall = {
+    ref: OpaqueRef;
+    tool: string;
+    safeParameters: {
+        [key: string]: unknown;
+    };
+    capabilityRef?: string;
+    grantRef?: OpaqueRef;
+    state: 'SUCCEEDED' | 'FAILED';
+    durationMs: number;
+    safeResult: string;
+    auditRef: OpaqueRef;
 };
 
 export type RunGraph = {
@@ -539,12 +1230,12 @@ export type RunInput = {
     projectRef: OpaqueRef;
     targetRef: OpaqueRef;
     targetType: 'AGENT' | 'WORKFLOW';
-    title: string;
+    title?: string;
     task: string;
     input?: {
         [key: string]: unknown;
     };
-    artifactRefs?: Array<OpaqueRef>;
+    attachmentSetRef?: OpaqueRef;
     sessionRef?: OpaqueRef;
 };
 
@@ -557,7 +1248,7 @@ export type TurnInput = {
     runRef: OpaqueRef;
     nodeRef?: OpaqueRef;
     task: string;
-    artifactRefs?: Array<OpaqueRef>;
+    attachmentSetRef?: OpaqueRef;
 };
 
 export type RunPage = {
@@ -589,13 +1280,37 @@ export type OwnerGate = {
     openedAt: Timestamp;
     expiresAt?: Timestamp;
     decidedAt?: Timestamp;
-    artifactRefs: Array<OpaqueRef>;
+    resolutionAttachmentSetRef?: OpaqueRef;
+    sourceAttachmentSetRef?: OpaqueRef;
+    decisionConsequences: Array<OwnerGateDecisionConsequence>;
+    integrationIntent?: IntegrationIntent;
     nextActions: Array<NextAction>;
+};
+
+export type OwnerGateDecisionConsequence = {
+    decision: 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'CANCEL';
+    safeSummary: string;
+    executesExternalEffect: boolean;
+    terminalForRun: boolean;
+};
+
+export type IntegrationIntent = {
+    connectionRef: OpaqueRef;
+    connectionName: string;
+    definitionKey: string;
+    capabilityKey: string;
+    operation: string;
+    resourceScope: IntegrationResourceScope;
+    effectPreview: {
+        [key: string]: unknown;
+    };
+    effectKey: string;
 };
 
 export type GateResolution = {
     decision: 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'CANCEL';
     comment?: string;
+    attachmentSetRef?: OpaqueRef;
 };
 
 export type GateResolutionReceipt = {
@@ -607,7 +1322,7 @@ export type GateResolutionReceipt = {
 export type Artifact = {
     ref: OpaqueRef;
     version: number;
-    projectRef: OpaqueRef;
+    projectRef?: OpaqueRef;
     runRef?: OpaqueRef;
     sessionRef?: OpaqueRef;
     fileName: string;
@@ -617,6 +1332,9 @@ export type Artifact = {
     scanState: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
     source: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
     revision: number;
+    lifecycleState: 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
+    deletedAt?: Timestamp;
+    purgeAfter?: Timestamp;
     agentBindings: Array<OpaqueRef>;
     previewAvailable: boolean;
     createdAt: Timestamp;
@@ -633,13 +1351,93 @@ export type ArtifactPage = {
     nextPageToken?: string;
 };
 
+export type AttachmentSetPurpose = 'ASSISTANT_MESSAGE' | 'SESSION_TURN' | 'RUN_INPUT' | 'WORKFLOW_INPUT' | 'OWNER_GATE_MESSAGE';
+
+export type AttachmentSetItem = {
+    artifactRef: OpaqueRef;
+    artifactRevision: number;
+    artifactVersion: number;
+    displayName: string;
+    mediaType: string;
+    sizeBytes: number;
+    digest: string;
+    source: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
+    position: number;
+};
+
+export type AttachmentSet = {
+    ref: string;
+    familyRef: string;
+    revision: number;
+    version: number;
+    projectRef?: OpaqueRef;
+    state: 'DRAFT' | 'FINALIZED';
+    purpose: AttachmentSetPurpose;
+    source: 'CONTROL_CENTER' | 'SYSTEM_ASSISTANT' | 'RUNTIME';
+    itemCount: number;
+    totalSizeBytes: number;
+    manifestDigest?: string;
+    items: Array<AttachmentSetItem>;
+    createdAt: Timestamp;
+    finalizedAt?: Timestamp;
+    superseded: boolean;
+};
+
+export type AttachmentSetPage = {
+    attachmentSet: AttachmentSet;
+    nextPageToken?: string;
+};
+
+export type AttachmentSetDraftInput = {
+    purpose: AttachmentSetPurpose;
+    artifactRefs?: Array<OpaqueRef>;
+};
+
+export type AttachmentSetAddItemsInput = {
+    artifactRefs: Array<OpaqueRef>;
+    insertAfterPosition?: number;
+};
+
+export type AttachmentSetRemoveItemsInput = {
+    artifactRefs: Array<OpaqueRef>;
+};
+
+export type ArtifactPurgeReceipt = {
+    artifactRef: OpaqueRef;
+    lifecycleState: 'PURGED';
+};
+
+export type ArtifactImpact = {
+    artifactRef: OpaqueRef;
+    artifactVersion: number;
+    action: 'DELETE' | 'PURGE';
+    impactDigest: string;
+    bindingCount: number;
+    attachmentCount: number;
+    activeRuntimeCount: number;
+    /**
+     * Безопасная bounded-проекция active Runs; порядок createdAt DESC, runRef DESC.
+     */
+    activeRuns: Array<ArtifactImpactRun>;
+    activeRunsTruncated: boolean;
+    blockers: Array<string>;
+    permitted: boolean;
+};
+
+export type ArtifactImpactRun = {
+    runRef: OpaqueRef;
+    title: string;
+    state: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING';
+    projectRef?: OpaqueRef;
+};
+
 export type Schedule = {
     ref: OpaqueRef;
     version: number;
     projectRef: OpaqueRef;
     name: string;
     target: RunTarget;
-    state: 'ACTIVE' | 'PAUSED' | 'NEEDS_ATTENTION' | 'ARCHIVED';
+    state: 'ACTIVE' | 'PAUSED' | 'NEEDS_ATTENTION' | 'ARCHIVED' | 'DELETED';
     preset: string;
     cronExpression?: string;
     timeOfDay?: string;
@@ -653,6 +1451,42 @@ export type Schedule = {
     nextRunAt?: Timestamp;
     lastOutcome?: string;
     nextActions: Array<NextAction>;
+    currentRevision: ScheduleRevision;
+    continueSessionRef?: OpaqueRef;
+};
+
+export type ScheduleRevision = {
+    ref: OpaqueRef;
+    revision: number;
+    digest: string;
+    name: string;
+    target: RunTarget;
+    preset: string;
+    cronExpression: string;
+    timezone: string;
+    input: {
+        [key: string]: unknown;
+    };
+    sessionPolicy: 'NEW_EACH_RUN' | 'CONTINUE_ONE';
+    notificationPolicy: 'CONTROL_CENTER_ONLY' | 'CONTROL_CENTER_AND_OPTIONAL_CHANNELS';
+    createdAt: Timestamp;
+};
+
+export type ScheduleRevisionPage = {
+    items: Array<ScheduleRevision>;
+    nextPageToken: string;
+};
+
+export type ScheduleRunOccurrence = {
+    scheduleRef: OpaqueRef;
+    scheduleRevisionRef: OpaqueRef;
+    scheduleRevision: number;
+    run: Run;
+};
+
+export type ScheduleRunOccurrencePage = {
+    items: Array<ScheduleRunOccurrence>;
+    nextPageToken: string;
 };
 
 export type ScheduleInput = {
@@ -671,7 +1505,47 @@ export type ScheduleInput = {
 };
 
 export type ScheduleCommand = {
-    action: 'ENABLE' | 'PAUSE';
+    action: 'ENABLE' | 'PAUSE' | 'ARCHIVE';
+};
+
+export type ProviderAuthorization = {
+    ref: OpaqueRef;
+    method: 'DEVICE_CODE' | 'API_KEY';
+    state: 'PENDING' | 'AUTHORIZED' | 'EXPIRED' | 'FAILED';
+    verificationUri?: string;
+    userCode?: string;
+    expiresAt?: Timestamp;
+    safeFailureCode?: string;
+};
+
+export type ProviderAccount = {
+    ref: OpaqueRef;
+    version: number;
+    definitionKey: 'openai-codex';
+    name: string;
+    externalAccountMasked: string;
+    state: 'PENDING_AUTHORIZATION' | 'AUTHORIZED' | 'REAUTHORIZATION_REQUIRED' | 'REVOKED' | 'DISABLED';
+    enabled: boolean;
+    ready: boolean;
+    authorization?: ProviderAuthorization;
+    nextActions: Array<NextAction>;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+};
+
+export type ProviderAccountPage = {
+    items: Array<ProviderAccount>;
+    nextPageToken: string;
+    nextActions: Array<NextAction>;
+};
+
+export type ProviderAccountCreateInput = {
+    definitionKey: 'openai-codex';
+    name: string;
+};
+
+export type ProviderApiKeyInput = {
+    apiKey: string;
 };
 
 export type IntegrationCapability = {
@@ -680,15 +1554,24 @@ export type IntegrationCapability = {
     description: string;
     risk: 'READ' | 'WRITE' | 'SENSITIVE' | 'DESTRUCTIVE';
     approvalRequired: boolean;
+    operation: string;
+    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
+    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER';
+    inputFields: Array<IntegrationConfigurationField>;
 };
 
 export type IntegrationConfigurationField = {
     key: string;
     label: string;
     help: string;
-    valueType: 'TEXT' | 'URL' | 'STRING_LIST';
+    valueType: 'TEXT' | 'URL' | 'STRING_LIST' | 'INTEGER' | 'BOOLEAN';
     required: boolean;
     placeholder?: string;
+    allowedValues?: Array<string>;
+    format?: string;
+    minimum?: number;
+    maximum?: number;
+    maximumLength?: number;
 };
 
 export type IntegrationDefinition = {
@@ -700,6 +1583,24 @@ export type IntegrationDefinition = {
     available: boolean;
     capabilities: Array<IntegrationCapability>;
     configurationFields: Array<IntegrationConfigurationField>;
+    schemaVersion: string;
+    definitionVersion: string;
+    origin: 'SHIPPED';
+    digest: string;
+    adapter: 'SYNTHETIC_HTTP' | 'GITHUB' | 'GITLAB' | 'JIRA' | 'CONFLUENCE' | 'EMAIL_HTTPS' | 'MATTERMOST_INTERACTION';
+    credentialSecretKey?: string;
+};
+
+export type IntegrationResourceScope = {
+    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER';
+    values: {
+        [key: string]: string;
+    };
+    digest: string;
+};
+
+export type IntegrationCredentialInput = {
+    value: string;
 };
 
 export type IntegrationGrant = {
@@ -710,6 +1611,9 @@ export type IntegrationGrant = {
     workflowRef?: OpaqueRef;
     targetName: string;
     enabled: boolean;
+    risk: 'READ' | 'WRITE' | 'SENSITIVE' | 'DESTRUCTIVE';
+    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
+    resourceScope: IntegrationResourceScope;
 };
 
 export type IntegrationConnection = {
@@ -717,7 +1621,7 @@ export type IntegrationConnection = {
     version: number;
     definitionKey: string;
     name: string;
-    state: 'NOT_CONNECTED' | 'TESTING' | 'CONNECTED' | 'DEGRADED' | 'DISABLED';
+    state: 'NOT_CONNECTED' | 'TESTING' | 'CONNECTED' | 'DEGRADED' | 'DISABLED' | 'DELETED';
     credentialsConfigured: boolean;
     credentialsHint: string;
     lastTestedAt?: Timestamp;
@@ -725,12 +1629,26 @@ export type IntegrationConnection = {
     capabilities: Array<IntegrationCapability>;
     grants: Array<IntegrationGrant>;
     nextActions: Array<NextAction>;
+    definitionVersion: string;
+    definitionDigest: string;
+    publicConfiguration: {
+        [key: string]: unknown;
+    };
+    createdAt?: Timestamp;
+    updatedAt?: Timestamp;
 };
 
 export type IntegrationConnectionInput = {
     definitionKey: string;
     name: string;
     publicConfiguration?: {
+        [key: string]: unknown;
+    };
+};
+
+export type IntegrationConnectionUpdateInput = {
+    name: string;
+    publicConfiguration: {
         [key: string]: unknown;
     };
 };
@@ -748,21 +1666,51 @@ export type IntegrationGrantInput = {
 
 export type AssistantPlanOperation = {
     ref: OpaqueRef;
-    type: 'CREATE_PROJECT' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION';
+    type: 'CREATE_PROJECT' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW';
+    action: 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'EXECUTE';
     title: string;
     summary: string;
+    target: AssistantPlanTarget;
+    expectedVersion?: number;
+    parameters: {
+        [key: string]: unknown;
+    };
+    before: {
+        [key: string]: unknown;
+    };
+    after: {
+        [key: string]: unknown;
+    };
+    selected: boolean;
     permitted: boolean;
     unavailableReason?: string;
+    validationProblems: Array<string>;
+};
+
+export type AssistantPlanOperationInput = AssistantPlanOperation;
+
+export type AssistantPlanTarget = {
+    kind: string;
+    ref?: OpaqueRef;
+    name: string;
+    version?: number;
 };
 
 export type AssistantPlan = {
     ref: OpaqueRef;
     version: number;
+    revision: number;
+    validatedRevision?: number;
+    state: 'DRAFT' | 'VALID' | 'INVALID' | 'STALE' | 'APPLIED' | 'REJECTED';
     conversationRef: OpaqueRef;
     projectRef?: OpaqueRef;
     operations: Array<AssistantPlanOperation>;
     auditSummary: string;
     applied: boolean;
+    contentDigest: string;
+    validationProblems: Array<string>;
+    validatedAt?: Timestamp;
+    appliedAt?: Timestamp;
     nextActions: Array<NextAction>;
 };
 
@@ -773,6 +1721,7 @@ export type AssistantTurn = {
     content: string;
     state: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED';
     plan?: AssistantPlan;
+    attachmentSetRef?: OpaqueRef;
     createdAt: Timestamp;
 };
 
@@ -780,15 +1729,56 @@ export type AssistantConversation = {
     ref: OpaqueRef;
     version: number;
     title: string;
+    titleSource: 'SERVER_DEFAULT' | 'AGENT_PROPOSED' | 'USER_EDITED';
+    titleRevision: number;
+    context: AssistantContextDescriptor;
     projectRef?: OpaqueRef;
     turns: Array<AssistantTurn>;
     updatedAt: Timestamp;
 };
 
+export type AssistantContextDescriptor = {
+    route: string;
+    entityKind: string;
+    entityRef: string;
+    entityName: string;
+    entityVersion?: number;
+    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW'>;
+};
+
 export type AssistantPlanReceipt = {
-    plan: AssistantPlan;
-    conversation: AssistantConversation;
+    ref: OpaqueRef;
+    planRef: OpaqueRef;
+    planRevision: number;
+    outcome: 'APPLIED' | 'CONFLICT' | 'REJECTED';
+    operationReceipts: Array<{
+        operationRef: OpaqueRef;
+        resourceRef: OpaqueRef;
+        outcome: 'APPLIED';
+        auditRef: OpaqueRef;
+    }>;
+    conflicts: Array<{
+        operationRef: OpaqueRef;
+        targetRef: string;
+        field: string;
+        expected: unknown;
+        actual: unknown;
+    }>;
+    auditRefs: Array<OpaqueRef>;
     createdResourceRefs: Array<OpaqueRef>;
+    createdAt: Timestamp;
+};
+
+export type AssistantPlanApplicationResponse = {
+    conversation: AssistantConversation;
+    plan: AssistantPlan;
+    createdResourceRefs: Array<OpaqueRef>;
+    receipt: AssistantPlanReceipt;
+};
+
+export type AssistantPlanDecisionResponse = {
+    plan: AssistantPlan;
+    receipt: AssistantPlanReceipt;
 };
 
 export type AuditEvent = {
@@ -854,7 +1844,15 @@ export type ProjectRefQuery = OpaqueRef;
 
 export type MembershipRef = OpaqueRef;
 
+export type AccessRoleRef = OpaqueRef;
+
+export type AccessBindingRef = OpaqueRef;
+
 export type AgentRef = OpaqueRef;
+
+export type RuntimeEnvironmentRef = OpaqueRef;
+
+export type SecretRef = OpaqueRef;
 
 export type RecipeRef = OpaqueRef;
 
@@ -872,9 +1870,26 @@ export type GateRef = OpaqueRef;
 
 export type ArtifactRef = OpaqueRef;
 
+/**
+ * Digest свежего server-side impact/preflight для exact action и artifact version
+ */
+export type ImpactDigest = string;
+
+export type AttachmentSetRef = string;
+
+export type ArtifactLifecycleStateQuery = 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
+
+export type ArtifactTypeQuery = 'TEXT' | 'DOCUMENT' | 'IMAGE';
+
+export type ArtifactScanStateQuery = 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+
+export type ArtifactSourceKindQuery = 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
+
 export type ScheduleRef = OpaqueRef;
 
 export type ConnectionRef = OpaqueRef;
+
+export type ProviderAccountRef = OpaqueRef;
 
 export type ConversationRef = OpaqueRef;
 
@@ -917,7 +1932,7 @@ export type DeleteOwnerSessionResponses = {
 export type DeleteOwnerSessionResponse = DeleteOwnerSessionResponses[keyof DeleteOwnerSessionResponses];
 
 export type CreateOwnerSessionData = {
-    body?: never;
+    body?: OwnerSessionCreateInput;
     headers: {
         'Idempotency-Key': string;
     };
@@ -1691,6 +2706,97 @@ export type UpdateAgentResponses = {
 
 export type UpdateAgentResponse = UpdateAgentResponses[keyof UpdateAgentResponses];
 
+export type RemoveAgentAvatarData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/avatar';
+};
+
+export type RemoveAgentAvatarErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RemoveAgentAvatarError = RemoveAgentAvatarErrors[keyof RemoveAgentAvatarErrors];
+
+export type RemoveAgentAvatarResponses = {
+    /**
+     * Пользовательский avatar удалён, активирован server-generated fallback
+     */
+    200: Agent;
+};
+
+export type RemoveAgentAvatarResponse = RemoveAgentAvatarResponses[keyof RemoveAgentAvatarResponses];
+
+export type SetAgentAvatarData = {
+    body: AgentAvatarInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/avatar';
+};
+
+export type SetAgentAvatarErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SetAgentAvatarError = SetAgentAvatarErrors[keyof SetAgentAvatarErrors];
+
+export type SetAgentAvatarResponses = {
+    /**
+     * Готовый image Artifact привязан как avatar
+     */
+    200: Agent;
+};
+
+export type SetAgentAvatarResponse = SetAgentAvatarResponses[keyof SetAgentAvatarResponses];
+
+export type GetAgentAvatarContentData = {
+    body?: never;
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/avatar/content';
+};
+
+export type GetAgentAvatarContentErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetAgentAvatarContentError = GetAgentAvatarContentErrors[keyof GetAgentAvatarContentErrors];
+
+export type GetAgentAvatarContentResponses = {
+    /**
+     * Готовое изображение либо deterministic server fallback
+     */
+    200: Blob | File;
+};
+
+export type GetAgentAvatarContentResponse = GetAgentAvatarContentResponses[keyof GetAgentAvatarContentResponses];
+
 export type ListAgentInstructionVersionsData = {
     body?: never;
     path: {
@@ -1818,6 +2924,1136 @@ export type CommandAgentInstructionsResponses = {
 };
 
 export type CommandAgentInstructionsResponse = CommandAgentInstructionsResponses[keyof CommandAgentInstructionsResponses];
+
+export type GetAgentRuntimeConfigurationData = {
+    body?: never;
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/runtime-configuration';
+};
+
+export type GetAgentRuntimeConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetAgentRuntimeConfigurationError = GetAgentRuntimeConfigurationErrors[keyof GetAgentRuntimeConfigurationErrors];
+
+export type GetAgentRuntimeConfigurationResponses = {
+    /**
+     * Опубликованная runtime-конфигурация и безопасный effective readback
+     */
+    200: AgentRuntimeConfigurationView;
+};
+
+export type GetAgentRuntimeConfigurationResponse = GetAgentRuntimeConfigurationResponses[keyof GetAgentRuntimeConfigurationResponses];
+
+export type PublishAgentRuntimeConfigurationData = {
+    body: AgentRuntimeConfigurationInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/runtime-configuration';
+};
+
+export type PublishAgentRuntimeConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishAgentRuntimeConfigurationError = PublishAgentRuntimeConfigurationErrors[keyof PublishAgentRuntimeConfigurationErrors];
+
+export type PublishAgentRuntimeConfigurationResponses = {
+    /**
+     * Новая runtime-конфигурация опубликована
+     */
+    200: AgentRuntimeConfigurationView;
+};
+
+export type PublishAgentRuntimeConfigurationResponse = PublishAgentRuntimeConfigurationResponses[keyof PublishAgentRuntimeConfigurationResponses];
+
+export type ListAgentRuntimeConfigurationVersionsData = {
+    body?: never;
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/agents/{agentRef}/runtime-configuration/versions';
+};
+
+export type ListAgentRuntimeConfigurationVersionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListAgentRuntimeConfigurationVersionsError = ListAgentRuntimeConfigurationVersionsErrors[keyof ListAgentRuntimeConfigurationVersionsErrors];
+
+export type ListAgentRuntimeConfigurationVersionsResponses = {
+    /**
+     * История опубликованных runtime-конфигураций
+     */
+    200: AgentRuntimeConfigurationPage;
+};
+
+export type ListAgentRuntimeConfigurationVersionsResponse = ListAgentRuntimeConfigurationVersionsResponses[keyof ListAgentRuntimeConfigurationVersionsResponses];
+
+export type CreateConfigOverlayDraftData = {
+    body: ConfigOverlayDraftInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/config-overlay-drafts';
+};
+
+export type CreateConfigOverlayDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateConfigOverlayDraftError = CreateConfigOverlayDraftErrors[keyof CreateConfigOverlayDraftErrors];
+
+export type CreateConfigOverlayDraftResponses = {
+    /**
+     * Черновик config.toml overlay создан
+     */
+    201: AgentRuntimeConfigurationView;
+};
+
+export type CreateConfigOverlayDraftResponse = CreateConfigOverlayDraftResponses[keyof CreateConfigOverlayDraftResponses];
+
+export type ValidateConfigOverlayDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/config-overlay-drafts/validation';
+};
+
+export type ValidateConfigOverlayDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateConfigOverlayDraftError = ValidateConfigOverlayDraftErrors[keyof ValidateConfigOverlayDraftErrors];
+
+export type ValidateConfigOverlayDraftResponses = {
+    /**
+     * Черновик проверен строгим TOML parser и закрытым allowlist
+     */
+    200: AgentRuntimeConfigurationView;
+};
+
+export type ValidateConfigOverlayDraftResponse = ValidateConfigOverlayDraftResponses[keyof ValidateConfigOverlayDraftResponses];
+
+export type PublishConfigOverlayDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/config-overlay-drafts/publication';
+};
+
+export type PublishConfigOverlayDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishConfigOverlayDraftError = PublishConfigOverlayDraftErrors[keyof PublishConfigOverlayDraftErrors];
+
+export type PublishConfigOverlayDraftResponses = {
+    /**
+     * Проверенный overlay опубликован
+     */
+    200: AgentRuntimeConfigurationView;
+};
+
+export type PublishConfigOverlayDraftResponse = PublishConfigOverlayDraftResponses[keyof PublishConfigOverlayDraftResponses];
+
+export type RollbackConfigOverlayData = {
+    body: ConfigOverlayRollbackInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/config-overlay-rollbacks';
+};
+
+export type RollbackConfigOverlayErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RollbackConfigOverlayError = RollbackConfigOverlayErrors[keyof RollbackConfigOverlayErrors];
+
+export type RollbackConfigOverlayResponses = {
+    /**
+     * Выбранная опубликованная версия повторно опубликована
+     */
+    200: AgentRuntimeConfigurationView;
+};
+
+export type RollbackConfigOverlayResponse = RollbackConfigOverlayResponses[keyof RollbackConfigOverlayResponses];
+
+export type BindAgentRuntimeEnvironmentData = {
+    body: RuntimeEnvironmentBindingInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/runtime-environment-binding';
+};
+
+export type BindAgentRuntimeEnvironmentErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type BindAgentRuntimeEnvironmentError = BindAgentRuntimeEnvironmentErrors[keyof BindAgentRuntimeEnvironmentErrors];
+
+export type BindAgentRuntimeEnvironmentResponses = {
+    /**
+     * Агент привязан к опубликованному environment set
+     */
+    200: AgentRuntimeConfigurationView;
+};
+
+export type BindAgentRuntimeEnvironmentResponse = BindAgentRuntimeEnvironmentResponses[keyof BindAgentRuntimeEnvironmentResponses];
+
+export type ListRuntimeEnvironmentSetsData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/runtime-environments';
+};
+
+export type ListRuntimeEnvironmentSetsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRuntimeEnvironmentSetsError = ListRuntimeEnvironmentSetsErrors[keyof ListRuntimeEnvironmentSetsErrors];
+
+export type ListRuntimeEnvironmentSetsResponses = {
+    /**
+     * Поисковый cursor-каталог environment sets Проекта
+     */
+    200: RuntimeEnvironmentPage;
+};
+
+export type ListRuntimeEnvironmentSetsResponse = ListRuntimeEnvironmentSetsResponses[keyof ListRuntimeEnvironmentSetsResponses];
+
+export type CreateRuntimeEnvironmentSetData = {
+    body: RuntimeEnvironmentInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/runtime-environments';
+};
+
+export type CreateRuntimeEnvironmentSetErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateRuntimeEnvironmentSetError = CreateRuntimeEnvironmentSetErrors[keyof CreateRuntimeEnvironmentSetErrors];
+
+export type CreateRuntimeEnvironmentSetResponses = {
+    /**
+     * Versioned environment set создан
+     */
+    201: RuntimeEnvironmentSet;
+};
+
+export type CreateRuntimeEnvironmentSetResponse = CreateRuntimeEnvironmentSetResponses[keyof CreateRuntimeEnvironmentSetResponses];
+
+export type ListTemplateVariablesData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/template-variables';
+};
+
+export type ListTemplateVariablesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListTemplateVariablesError = ListTemplateVariablesErrors[keyof ListTemplateVariablesErrors];
+
+export type ListTemplateVariablesResponses = {
+    /**
+     * Server-owned cursor-каталог безопасных template variables
+     */
+    200: TemplateVariablePage;
+};
+
+export type ListTemplateVariablesResponse = ListTemplateVariablesResponses[keyof ListTemplateVariablesResponses];
+
+export type ListProviderDefinitionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/provider-definitions';
+};
+
+export type ListProviderDefinitionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListProviderDefinitionsError = ListProviderDefinitionsErrors[keyof ListProviderDefinitionsErrors];
+
+export type ListProviderDefinitionsResponses = {
+    /**
+     * Безопасный server-owned каталог providers и способов авторизации
+     */
+    200: ProviderDefinitionPage;
+};
+
+export type ListProviderDefinitionsResponse = ListProviderDefinitionsResponses[keyof ListProviderDefinitionsResponses];
+
+export type ListProviderAccountsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        definitionKey?: 'openai-codex';
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/provider-accounts';
+};
+
+export type ListProviderAccountsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListProviderAccountsError = ListProviderAccountsErrors[keyof ListProviderAccountsErrors];
+
+export type ListProviderAccountsResponses = {
+    /**
+     * Provider accounts текущей organization без credential values
+     */
+    200: ProviderAccountPage;
+};
+
+export type ListProviderAccountsResponse = ListProviderAccountsResponses[keyof ListProviderAccountsResponses];
+
+export type CreateProviderAccountData = {
+    body: ProviderAccountCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/provider-accounts';
+};
+
+export type CreateProviderAccountErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateProviderAccountError = CreateProviderAccountErrors[keyof CreateProviderAccountErrors];
+
+export type CreateProviderAccountResponses = {
+    /**
+     * Provider account descriptor создан
+     */
+    201: ProviderAccount;
+};
+
+export type CreateProviderAccountResponse = CreateProviderAccountResponses[keyof CreateProviderAccountResponses];
+
+export type GetProviderAccountData = {
+    body?: never;
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}';
+};
+
+export type GetProviderAccountErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetProviderAccountError = GetProviderAccountErrors[keyof GetProviderAccountErrors];
+
+export type GetProviderAccountResponses = {
+    /**
+     * Provider account status и pending authorization descriptor
+     */
+    200: ProviderAccount;
+};
+
+export type GetProviderAccountResponse = GetProviderAccountResponses[keyof GetProviderAccountResponses];
+
+export type StartProviderAccountDeviceAuthorizationData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/device-authorization';
+};
+
+export type StartProviderAccountDeviceAuthorizationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type StartProviderAccountDeviceAuthorizationError = StartProviderAccountDeviceAuthorizationErrors[keyof StartProviderAccountDeviceAuthorizationErrors];
+
+export type StartProviderAccountDeviceAuthorizationResponses = {
+    /**
+     * Device authorization начата; повторный GET наблюдает pending state
+     */
+    202: ProviderAccount;
+};
+
+export type StartProviderAccountDeviceAuthorizationResponse = StartProviderAccountDeviceAuthorizationResponses[keyof StartProviderAccountDeviceAuthorizationResponses];
+
+export type AuthorizeProviderAccountApiKeyData = {
+    body: ProviderApiKeyInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/api-key-authorization';
+};
+
+export type AuthorizeProviderAccountApiKeyErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type AuthorizeProviderAccountApiKeyError = AuthorizeProviderAccountApiKeyErrors[keyof AuthorizeProviderAccountApiKeyErrors];
+
+export type AuthorizeProviderAccountApiKeyResponses = {
+    /**
+     * API key materialized вне БД; ответ содержит только descriptor/status
+     */
+    200: ProviderAccount;
+};
+
+export type AuthorizeProviderAccountApiKeyResponse = AuthorizeProviderAccountApiKeyResponses[keyof AuthorizeProviderAccountApiKeyResponses];
+
+export type RefreshProviderAccountAuthorizationData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/authorization-refresh';
+};
+
+export type RefreshProviderAccountAuthorizationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RefreshProviderAccountAuthorizationError = RefreshProviderAccountAuthorizationErrors[keyof RefreshProviderAccountAuthorizationErrors];
+
+export type RefreshProviderAccountAuthorizationResponses = {
+    /**
+     * Pending authorization observed or authorized account refreshed
+     */
+    200: ProviderAccount;
+};
+
+export type RefreshProviderAccountAuthorizationResponse = RefreshProviderAccountAuthorizationResponses[keyof RefreshProviderAccountAuthorizationResponses];
+
+export type RevokeProviderAccountData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/revocation';
+};
+
+export type RevokeProviderAccountErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevokeProviderAccountError = RevokeProviderAccountErrors[keyof RevokeProviderAccountErrors];
+
+export type RevokeProviderAccountResponses = {
+    /**
+     * Account revoked and removed from runtime eligibility
+     */
+    200: ProviderAccount;
+};
+
+export type RevokeProviderAccountResponse = RevokeProviderAccountResponses[keyof RevokeProviderAccountResponses];
+
+export type SetProviderAccountEnabledData = {
+    body: EnabledInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/enabled';
+};
+
+export type SetProviderAccountEnabledErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SetProviderAccountEnabledError = SetProviderAccountEnabledErrors[keyof SetProviderAccountEnabledErrors];
+
+export type SetProviderAccountEnabledResponses = {
+    /**
+     * Runtime eligibility изменена без изменения credential revision
+     */
+    200: ProviderAccount;
+};
+
+export type SetProviderAccountEnabledResponse = SetProviderAccountEnabledResponses[keyof SetProviderAccountEnabledResponses];
+
+export type ListPromptTemplateVariablesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/prompt-templates/catalog';
+};
+
+export type ListPromptTemplateVariablesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListPromptTemplateVariablesError = ListPromptTemplateVariablesErrors[keyof ListPromptTemplateVariablesErrors];
+
+export type ListPromptTemplateVariablesResponses = {
+    /**
+     * Типизированный каталог разрешённых Go template namespaces без secrets
+     */
+    200: TemplateVariablePage;
+};
+
+export type ListPromptTemplateVariablesResponse = ListPromptTemplateVariablesResponses[keyof ListPromptTemplateVariablesResponses];
+
+export type ValidatePromptTemplateData = {
+    body: PromptTemplateInput;
+    headers: {
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/prompt-templates/validation';
+};
+
+export type ValidatePromptTemplateErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidatePromptTemplateError = ValidatePromptTemplateErrors[keyof ValidatePromptTemplateErrors];
+
+export type ValidatePromptTemplateResponses = {
+    /**
+     * Строгая синтаксическая и namespace-проверка
+     */
+    200: PromptTemplateValidation;
+};
+
+export type ValidatePromptTemplateResponse = ValidatePromptTemplateResponses[keyof ValidatePromptTemplateResponses];
+
+export type PreviewPromptTemplateData = {
+    body: PromptTemplatePreviewInput;
+    headers: {
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/prompt-templates/preview';
+};
+
+export type PreviewPromptTemplateErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PreviewPromptTemplateError = PreviewPromptTemplateErrors[keyof PreviewPromptTemplateErrors];
+
+export type PreviewPromptTemplateResponses = {
+    /**
+     * Synthetic safe preview; полный prompt только с exact prompt.full.view
+     */
+    200: PromptTemplatePreview;
+};
+
+export type PreviewPromptTemplateResponse = PreviewPromptTemplateResponses[keyof PreviewPromptTemplateResponses];
+
+export type DeleteRuntimeEnvironmentData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}';
+};
+
+export type DeleteRuntimeEnvironmentErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DeleteRuntimeEnvironmentError = DeleteRuntimeEnvironmentErrors[keyof DeleteRuntimeEnvironmentErrors];
+
+export type DeleteRuntimeEnvironmentResponses = {
+    /**
+     * Неиспользуемый environment terminally deleted с сохранением immutable revisions
+     */
+    200: RuntimeEnvironmentSet;
+};
+
+export type DeleteRuntimeEnvironmentResponse = DeleteRuntimeEnvironmentResponses[keyof DeleteRuntimeEnvironmentResponses];
+
+export type GetRuntimeEnvironmentSetData = {
+    body?: never;
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}';
+};
+
+export type GetRuntimeEnvironmentSetErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeEnvironmentSetError = GetRuntimeEnvironmentSetErrors[keyof GetRuntimeEnvironmentSetErrors];
+
+export type GetRuntimeEnvironmentSetResponses = {
+    /**
+     * Environment set без Secret values
+     */
+    200: RuntimeEnvironmentSet;
+};
+
+export type GetRuntimeEnvironmentSetResponse = GetRuntimeEnvironmentSetResponses[keyof GetRuntimeEnvironmentSetResponses];
+
+export type SetRuntimeEnvironmentEnabledData = {
+    body: EnabledInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}/enabled';
+};
+
+export type SetRuntimeEnvironmentEnabledErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SetRuntimeEnvironmentEnabledError = SetRuntimeEnvironmentEnabledErrors[keyof SetRuntimeEnvironmentEnabledErrors];
+
+export type SetRuntimeEnvironmentEnabledResponses = {
+    /**
+     * Runtime environment lifecycle изменён
+     */
+    200: RuntimeEnvironmentSet;
+};
+
+export type SetRuntimeEnvironmentEnabledResponse = SetRuntimeEnvironmentEnabledResponses[keyof SetRuntimeEnvironmentEnabledResponses];
+
+export type GetRuntimeEnvironmentReadinessData = {
+    body?: never;
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}/readiness';
+};
+
+export type GetRuntimeEnvironmentReadinessErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeEnvironmentReadinessError = GetRuntimeEnvironmentReadinessErrors[keyof GetRuntimeEnvironmentReadinessErrors];
+
+export type GetRuntimeEnvironmentReadinessResponses = {
+    /**
+     * Readiness exact published revision и зависимостей
+     */
+    200: RuntimeEnvironmentReadiness;
+};
+
+export type GetRuntimeEnvironmentReadinessResponse = GetRuntimeEnvironmentReadinessResponses[keyof GetRuntimeEnvironmentReadinessResponses];
+
+export type ListRuntimeEnvironmentAgentsData = {
+    body?: never;
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-environments/{environmentRef}/agents';
+};
+
+export type ListRuntimeEnvironmentAgentsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRuntimeEnvironmentAgentsError = ListRuntimeEnvironmentAgentsErrors[keyof ListRuntimeEnvironmentAgentsErrors];
+
+export type ListRuntimeEnvironmentAgentsResponses = {
+    /**
+     * Cursor-список ИИ-сотрудников, использующих environment
+     */
+    200: AgentPage;
+};
+
+export type ListRuntimeEnvironmentAgentsResponse = ListRuntimeEnvironmentAgentsResponses[keyof ListRuntimeEnvironmentAgentsResponses];
+
+export type ListRuntimeEnvironmentVersionsData = {
+    body?: never;
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-environments/{environmentRef}/versions';
+};
+
+export type ListRuntimeEnvironmentVersionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRuntimeEnvironmentVersionsError = ListRuntimeEnvironmentVersionsErrors[keyof ListRuntimeEnvironmentVersionsErrors];
+
+export type ListRuntimeEnvironmentVersionsResponses = {
+    /**
+     * История environment revisions без Secret values
+     */
+    200: RuntimeEnvironmentVersionPage;
+};
+
+export type ListRuntimeEnvironmentVersionsResponse = ListRuntimeEnvironmentVersionsResponses[keyof ListRuntimeEnvironmentVersionsResponses];
+
+export type PublishRuntimeEnvironmentVersionData = {
+    body: RuntimeEnvironmentInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}/versions';
+};
+
+export type PublishRuntimeEnvironmentVersionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishRuntimeEnvironmentVersionError = PublishRuntimeEnvironmentVersionErrors[keyof PublishRuntimeEnvironmentVersionErrors];
+
+export type PublishRuntimeEnvironmentVersionResponses = {
+    /**
+     * Новая environment revision опубликована
+     */
+    200: RuntimeEnvironmentSet;
+};
+
+export type PublishRuntimeEnvironmentVersionResponse = PublishRuntimeEnvironmentVersionResponses[keyof PublishRuntimeEnvironmentVersionResponses];
+
+export type RollbackRuntimeEnvironmentData = {
+    body: RuntimeEnvironmentRollbackInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        environmentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}/rollbacks';
+};
+
+export type RollbackRuntimeEnvironmentErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RollbackRuntimeEnvironmentError = RollbackRuntimeEnvironmentErrors[keyof RollbackRuntimeEnvironmentErrors];
+
+export type RollbackRuntimeEnvironmentResponses = {
+    /**
+     * Выбранная environment revision повторно опубликована
+     */
+    200: RuntimeEnvironmentSet;
+};
+
+export type RollbackRuntimeEnvironmentResponse = RollbackRuntimeEnvironmentResponses[keyof RollbackRuntimeEnvironmentResponses];
+
+export type ListRuntimeSecretsData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/runtime-secrets';
+};
+
+export type ListRuntimeSecretsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRuntimeSecretsError = ListRuntimeSecretsErrors[keyof ListRuntimeSecretsErrors];
+
+export type ListRuntimeSecretsResponses = {
+    /**
+     * Метаданные Runtime Secrets без значений
+     */
+    200: RuntimeSecretPage;
+};
+
+export type ListRuntimeSecretsResponse = ListRuntimeSecretsResponses[keyof ListRuntimeSecretsResponses];
+
+export type CreateRuntimeSecretData = {
+    body: RuntimeSecretCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/runtime-secrets';
+};
+
+export type CreateRuntimeSecretErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateRuntimeSecretError = CreateRuntimeSecretErrors[keyof CreateRuntimeSecretErrors];
+
+export type CreateRuntimeSecretResponses = {
+    /**
+     * Immutable первая версия Runtime Secret создана
+     */
+    201: RuntimeSecret;
+};
+
+export type CreateRuntimeSecretResponse = CreateRuntimeSecretResponses[keyof CreateRuntimeSecretResponses];
+
+export type RevokeRuntimeSecretData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        secretRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secrets/{secretRef}';
+};
+
+export type RevokeRuntimeSecretErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevokeRuntimeSecretError = RevokeRuntimeSecretErrors[keyof RevokeRuntimeSecretErrors];
+
+export type RevokeRuntimeSecretResponses = {
+    /**
+     * Runtime Secret и все его версии отозваны
+     */
+    200: RuntimeSecret;
+};
+
+export type RevokeRuntimeSecretResponse = RevokeRuntimeSecretResponses[keyof RevokeRuntimeSecretResponses];
+
+export type GetRuntimeSecretData = {
+    body?: never;
+    path: {
+        secretRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secrets/{secretRef}';
+};
+
+export type GetRuntimeSecretErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeSecretError = GetRuntimeSecretErrors[keyof GetRuntimeSecretErrors];
+
+export type GetRuntimeSecretResponses = {
+    /**
+     * Метаданные Runtime Secret без значения
+     */
+    200: RuntimeSecret;
+};
+
+export type GetRuntimeSecretResponse = GetRuntimeSecretResponses[keyof GetRuntimeSecretResponses];
+
+export type RotateRuntimeSecretData = {
+    body: RuntimeSecretRotateInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        secretRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secrets/{secretRef}/rotations';
+};
+
+export type RotateRuntimeSecretErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RotateRuntimeSecretError = RotateRuntimeSecretErrors[keyof RotateRuntimeSecretErrors];
+
+export type RotateRuntimeSecretResponses = {
+    /**
+     * Новая immutable версия Runtime Secret создана
+     */
+    200: RuntimeSecret;
+};
+
+export type RotateRuntimeSecretResponse = RotateRuntimeSecretResponses[keyof RotateRuntimeSecretResponses];
+
+export type RevealRuntimeSecretData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        secretRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secrets/{secretRef}/reveal';
+};
+
+export type RevealRuntimeSecretErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevealRuntimeSecretError = RevealRuntimeSecretErrors[keyof RevealRuntimeSecretErrors];
+
+export type RevealRuntimeSecretResponses = {
+    /**
+     * Одноразовая выдача значения после fresh OIDC re-auth
+     */
+    200: RuntimeSecretReveal;
+};
+
+export type RevealRuntimeSecretResponse = RevealRuntimeSecretResponses[keyof RevealRuntimeSecretResponses];
 
 export type ListRoleEnvironmentsData = {
     body?: never;
@@ -1999,6 +4235,70 @@ export type CommandRoleImageRecipeResponses = {
 };
 
 export type CommandRoleImageRecipeResponse = CommandRoleImageRecipeResponses[keyof CommandRoleImageRecipeResponses];
+
+export type ListRoleImageRecipeRevisionsData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+        recipeRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/revisions';
+};
+
+export type ListRoleImageRecipeRevisionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRoleImageRecipeRevisionsError = ListRoleImageRecipeRevisionsErrors[keyof ListRoleImageRecipeRevisionsErrors];
+
+export type ListRoleImageRecipeRevisionsResponses = {
+    /**
+     * Immutable recipe/build/promotion history
+     */
+    200: RoleImageRecipeRevisionPage;
+};
+
+export type ListRoleImageRecipeRevisionsResponse = ListRoleImageRecipeRevisionsResponses[keyof ListRoleImageRecipeRevisionsResponses];
+
+export type PromoteRoleImageData = {
+    body: RoleImagePromotionInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+        recipeRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/promotions';
+};
+
+export type PromoteRoleImageErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PromoteRoleImageError = PromoteRoleImageErrors[keyof PromoteRoleImageErrors];
+
+export type PromoteRoleImageResponses = {
+    /**
+     * Exact admitted artifact поставлен на promotion по совпавшему provenance digest
+     */
+    202: RoleImagePromotionReceipt;
+};
+
+export type PromoteRoleImageResponse = PromoteRoleImageResponses[keyof PromoteRoleImageResponses];
 
 export type ListWorkflowsData = {
     body?: never;
@@ -2389,6 +4689,7 @@ export type ListOwnerGatesResponses = {
      */
     200: {
         items: Array<OwnerGate>;
+        nextPageToken: string;
     };
 };
 
@@ -2464,6 +4765,10 @@ export type ListArtifactsData = {
     };
     query?: {
         runRef?: OpaqueRef;
+        lifecycleState?: 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
+        type?: 'TEXT' | 'DOCUMENT' | 'IMAGE';
+        scanState?: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+        sourceKind?: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
         query?: string;
         pageSize?: number;
         pageToken?: string;
@@ -2490,6 +4795,9 @@ export type ListArtifactsResponses = {
 export type ListArtifactsResponse = ListArtifactsResponses[keyof ListArtifactsResponses];
 
 export type UploadArtifactData = {
+    /**
+     * Поток одного файла размером до 512 MiB; gateway и control-plane сверяют Content-Length и SHA-256 без полной буферизации тела.
+     */
     body: Blob | File;
     headers: {
         'Idempotency-Key': string;
@@ -2523,6 +4831,294 @@ export type UploadArtifactResponses = {
 
 export type UploadArtifactResponse = UploadArtifactResponses[keyof UploadArtifactResponses];
 
+export type CreateAttachmentSetDraftData = {
+    body: AttachmentSetDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/attachment-sets';
+};
+
+export type CreateAttachmentSetDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateAttachmentSetDraftError = CreateAttachmentSetDraftErrors[keyof CreateAttachmentSetDraftErrors];
+
+export type CreateAttachmentSetDraftResponses = {
+    /**
+     * Создана первая append-only draft-ревизия набора
+     */
+    201: AttachmentSet;
+};
+
+export type CreateAttachmentSetDraftResponse = CreateAttachmentSetDraftResponses[keyof CreateAttachmentSetDraftResponses];
+
+export type CreateOrganizationAttachmentSetDraftData = {
+    body: AttachmentSetDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/attachment-sets';
+};
+
+export type CreateOrganizationAttachmentSetDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateOrganizationAttachmentSetDraftError = CreateOrganizationAttachmentSetDraftErrors[keyof CreateOrganizationAttachmentSetDraftErrors];
+
+export type CreateOrganizationAttachmentSetDraftResponses = {
+    /**
+     * Создана первая append-only draft-ревизия набора организационного помощника
+     */
+    201: AttachmentSet;
+};
+
+export type CreateOrganizationAttachmentSetDraftResponse = CreateOrganizationAttachmentSetDraftResponses[keyof CreateOrganizationAttachmentSetDraftResponses];
+
+export type GetAttachmentSetData = {
+    body?: never;
+    path: {
+        attachmentSetRef: string;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/attachment-sets/{attachmentSetRef}';
+};
+
+export type GetAttachmentSetErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetAttachmentSetError = GetAttachmentSetErrors[keyof GetAttachmentSetErrors];
+
+export type GetAttachmentSetResponses = {
+    /**
+     * Exact draft или finalized revision с bounded ordered page items
+     */
+    200: AttachmentSetPage;
+};
+
+export type GetAttachmentSetResponse = GetAttachmentSetResponses[keyof GetAttachmentSetResponses];
+
+export type AddAttachmentSetItemsData = {
+    body: AttachmentSetAddItemsInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        attachmentSetRef: string;
+    };
+    query?: never;
+    url: '/api/v1/attachment-sets/{attachmentSetRef}/items/additions';
+};
+
+export type AddAttachmentSetItemsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type AddAttachmentSetItemsError = AddAttachmentSetItemsErrors[keyof AddAttachmentSetItemsErrors];
+
+export type AddAttachmentSetItemsResponses = {
+    /**
+     * Создана новая draft-ревизия с добавленными ordered items
+     */
+    201: AttachmentSet;
+};
+
+export type AddAttachmentSetItemsResponse = AddAttachmentSetItemsResponses[keyof AddAttachmentSetItemsResponses];
+
+export type RemoveAttachmentSetItemsData = {
+    body: AttachmentSetRemoveItemsInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        attachmentSetRef: string;
+    };
+    query?: never;
+    url: '/api/v1/attachment-sets/{attachmentSetRef}/items/removals';
+};
+
+export type RemoveAttachmentSetItemsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RemoveAttachmentSetItemsError = RemoveAttachmentSetItemsErrors[keyof RemoveAttachmentSetItemsErrors];
+
+export type RemoveAttachmentSetItemsResponses = {
+    /**
+     * Создана новая draft-ревизия без удалённых items
+     */
+    201: AttachmentSet;
+};
+
+export type RemoveAttachmentSetItemsResponse = RemoveAttachmentSetItemsResponses[keyof RemoveAttachmentSetItemsResponses];
+
+export type FinalizeAttachmentSetData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        attachmentSetRef: string;
+    };
+    query?: never;
+    url: '/api/v1/attachment-sets/{attachmentSetRef}/finalization';
+};
+
+export type FinalizeAttachmentSetErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type FinalizeAttachmentSetError = FinalizeAttachmentSetErrors[keyof FinalizeAttachmentSetErrors];
+
+export type FinalizeAttachmentSetResponses = {
+    /**
+     * Создана immutable finalized-ревизия, пригодная для server-owned binding
+     */
+    201: AttachmentSet;
+};
+
+export type FinalizeAttachmentSetResponse = FinalizeAttachmentSetResponses[keyof FinalizeAttachmentSetResponses];
+
+export type ListOrganizationArtifactsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        lifecycleState?: 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
+        type?: 'TEXT' | 'DOCUMENT' | 'IMAGE';
+        scanState?: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+        sourceKind?: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/artifacts';
+};
+
+export type ListOrganizationArtifactsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationArtifactsError = ListOrganizationArtifactsErrors[keyof ListOrganizationArtifactsErrors];
+
+export type ListOrganizationArtifactsResponses = {
+    /**
+     * Файлы организационного помощника текущего владельца
+     */
+    200: ArtifactPage;
+};
+
+export type ListOrganizationArtifactsResponse = ListOrganizationArtifactsResponses[keyof ListOrganizationArtifactsResponses];
+
+export type UploadOrganizationArtifactData = {
+    /**
+     * Поток одного файла организационного помощника размером до 512 MiB; gateway и control-plane сверяют Content-Length и SHA-256 без полной буферизации тела.
+     */
+    body: Blob | File;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'X-File-Name': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/artifacts';
+};
+
+export type UploadOrganizationArtifactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UploadOrganizationArtifactError = UploadOrganizationArtifactErrors[keyof UploadOrganizationArtifactErrors];
+
+export type UploadOrganizationArtifactResponses = {
+    /**
+     * Artifact принят в организационную область и синхронно проверен обязательной встроенной policy
+     */
+    201: Artifact;
+};
+
+export type UploadOrganizationArtifactResponse = UploadOrganizationArtifactResponses[keyof UploadOrganizationArtifactResponses];
+
+export type DeleteArtifactData = {
+    body?: never;
+    headers: {
+        /**
+         * Digest свежего server-side impact/preflight для exact action и artifact version
+         */
+        'X-Impact-Digest': string;
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        artifactRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/artifacts/{artifactRef}';
+};
+
+export type DeleteArtifactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DeleteArtifactError = DeleteArtifactErrors[keyof DeleteArtifactErrors];
+
+export type DeleteArtifactResponses = {
+    /**
+     * Artifact перемещён в корзину на 30 дней и исключён из новых запусков
+     */
+    200: Artifact;
+};
+
+export type DeleteArtifactResponse = DeleteArtifactResponses[keyof DeleteArtifactResponses];
+
 export type GetArtifactData = {
     body?: never;
     path: {
@@ -2550,6 +5146,103 @@ export type GetArtifactResponses = {
 
 export type GetArtifactResponse = GetArtifactResponses[keyof GetArtifactResponses];
 
+export type RestoreArtifactData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        artifactRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/artifacts/{artifactRef}/restore';
+};
+
+export type RestoreArtifactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RestoreArtifactError = RestoreArtifactErrors[keyof RestoreArtifactErrors];
+
+export type RestoreArtifactResponses = {
+    /**
+     * Artifact восстановлен до окончательной очистки
+     */
+    200: Artifact;
+};
+
+export type RestoreArtifactResponse = RestoreArtifactResponses[keyof RestoreArtifactResponses];
+
+export type PurgeArtifactData = {
+    body?: never;
+    headers: {
+        /**
+         * Digest свежего server-side impact/preflight для exact action и artifact version
+         */
+        'X-Impact-Digest': string;
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        artifactRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/artifacts/{artifactRef}/purge';
+};
+
+export type PurgeArtifactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PurgeArtifactError = PurgeArtifactErrors[keyof PurgeArtifactErrors];
+
+export type PurgeArtifactResponses = {
+    /**
+     * Содержимое удалено из object storage, metadata сохранена как audit tombstone
+     */
+    200: ArtifactPurgeReceipt;
+};
+
+export type PurgeArtifactResponse = PurgeArtifactResponses[keyof PurgeArtifactResponses];
+
+export type GetArtifactImpactData = {
+    body?: never;
+    path: {
+        artifactRef: OpaqueRef;
+    };
+    query: {
+        action: 'DELETE' | 'PURGE';
+    };
+    url: '/api/v1/artifacts/{artifactRef}/impact';
+};
+
+export type GetArtifactImpactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetArtifactImpactError = GetArtifactImpactErrors[keyof GetArtifactImpactErrors];
+
+export type GetArtifactImpactResponses = {
+    /**
+     * Server-side impact/preflight для exact lifecycle action
+     */
+    200: ArtifactImpact;
+};
+
+export type GetArtifactImpactResponse = GetArtifactImpactResponses[keyof GetArtifactImpactResponses];
+
 export type DownloadArtifactData = {
     body?: never;
     path: {
@@ -2572,7 +5265,7 @@ export type DownloadArtifactError = DownloadArtifactErrors[keyof DownloadArtifac
 
 export type DownloadArtifactResponses = {
     /**
-     * Защищённое содержимое artifact
+     * Поток защищённого содержимого artifact размером до 512 MiB
      */
     200: Blob | File;
 };
@@ -2616,7 +5309,11 @@ export type ListSchedulesData = {
     path: {
         projectRef: OpaqueRef;
     };
-    query?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
     url: '/api/v1/projects/{projectRef}/schedules';
 };
 
@@ -2635,6 +5332,7 @@ export type ListSchedulesResponses = {
      */
     200: {
         items: Array<Schedule>;
+        nextPageToken: string;
     };
 };
 
@@ -2671,6 +5369,65 @@ export type CreateScheduleResponses = {
 
 export type CreateScheduleResponse = CreateScheduleResponses[keyof CreateScheduleResponses];
 
+export type DeleteScheduleData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        scheduleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/schedules/{scheduleRef}';
+};
+
+export type DeleteScheduleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DeleteScheduleError = DeleteScheduleErrors[keyof DeleteScheduleErrors];
+
+export type DeleteScheduleResponses = {
+    /**
+     * Расписание terminally deleted, immutable revisions и run history сохранены
+     */
+    200: Schedule;
+};
+
+export type DeleteScheduleResponse = DeleteScheduleResponses[keyof DeleteScheduleResponses];
+
+export type GetScheduleData = {
+    body?: never;
+    path: {
+        scheduleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/schedules/{scheduleRef}';
+};
+
+export type GetScheduleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetScheduleError = GetScheduleErrors[keyof GetScheduleErrors];
+
+export type GetScheduleResponses = {
+    /**
+     * Расписание, включая read-only историю после архивации
+     */
+    200: Schedule;
+};
+
+export type GetScheduleResponse = GetScheduleResponses[keyof GetScheduleResponses];
+
 export type UpdateScheduleData = {
     body: ScheduleInput;
     headers: {
@@ -2702,6 +5459,66 @@ export type UpdateScheduleResponses = {
 };
 
 export type UpdateScheduleResponse = UpdateScheduleResponses[keyof UpdateScheduleResponses];
+
+export type ListScheduleRevisionsData = {
+    body?: never;
+    path: {
+        scheduleRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/schedules/{scheduleRef}/revisions';
+};
+
+export type ListScheduleRevisionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListScheduleRevisionsError = ListScheduleRevisionsErrors[keyof ListScheduleRevisionsErrors];
+
+export type ListScheduleRevisionsResponses = {
+    /**
+     * Immutable revision history
+     */
+    200: ScheduleRevisionPage;
+};
+
+export type ListScheduleRevisionsResponse = ListScheduleRevisionsResponses[keyof ListScheduleRevisionsResponses];
+
+export type ListScheduleRunsData = {
+    body?: never;
+    path: {
+        scheduleRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/schedules/{scheduleRef}/runs';
+};
+
+export type ListScheduleRunsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListScheduleRunsError = ListScheduleRunsErrors[keyof ListScheduleRunsErrors];
+
+export type ListScheduleRunsResponses = {
+    /**
+     * Cursor run history этой автоматизации
+     */
+    200: ScheduleRunOccurrencePage;
+};
+
+export type ListScheduleRunsResponse = ListScheduleRunsResponses[keyof ListScheduleRunsResponses];
 
 export type CommandScheduleData = {
     body: ScheduleCommand;
@@ -2740,6 +5557,9 @@ export type ListIntegrationDefinitionsData = {
     path?: never;
     query?: {
         category?: string;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
     };
     url: '/api/v1/integration-definitions';
 };
@@ -2761,6 +5581,7 @@ export type ListIntegrationDefinitionsResponses = {
         items: Array<IntegrationDefinition>;
         coreReady: boolean;
         nextActions: Array<NextAction>;
+        nextPageToken: string;
     };
 };
 
@@ -2769,7 +5590,11 @@ export type ListIntegrationDefinitionsResponse = ListIntegrationDefinitionsRespo
 export type ListIntegrationConnectionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
     url: '/api/v1/integration-connections';
 };
 
@@ -2788,6 +5613,7 @@ export type ListIntegrationConnectionsResponses = {
      */
     200: {
         items: Array<IntegrationConnection>;
+        nextPageToken: string;
     };
 };
 
@@ -2822,6 +5648,38 @@ export type CreateIntegrationConnectionResponses = {
 
 export type CreateIntegrationConnectionResponse = CreateIntegrationConnectionResponses[keyof CreateIntegrationConnectionResponses];
 
+export type DeleteIntegrationConnectionData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}';
+};
+
+export type DeleteIntegrationConnectionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DeleteIntegrationConnectionError = DeleteIntegrationConnectionErrors[keyof DeleteIntegrationConnectionErrors];
+
+export type DeleteIntegrationConnectionResponses = {
+    /**
+     * Connection disabled and terminally deleted; grants revoked
+     */
+    200: IntegrationConnection;
+};
+
+export type DeleteIntegrationConnectionResponse = DeleteIntegrationConnectionResponses[keyof DeleteIntegrationConnectionResponses];
+
 export type GetIntegrationConnectionData = {
     body?: never;
     path: {
@@ -2848,6 +5706,70 @@ export type GetIntegrationConnectionResponses = {
 };
 
 export type GetIntegrationConnectionResponse = GetIntegrationConnectionResponses[keyof GetIntegrationConnectionResponses];
+
+export type UpdateIntegrationConnectionData = {
+    body: IntegrationConnectionUpdateInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}';
+};
+
+export type UpdateIntegrationConnectionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UpdateIntegrationConnectionError = UpdateIntegrationConnectionErrors[keyof UpdateIntegrationConnectionErrors];
+
+export type UpdateIntegrationConnectionResponses = {
+    /**
+     * Connection metadata изменена по OCC; credential revision не затронута
+     */
+    200: IntegrationConnection;
+};
+
+export type UpdateIntegrationConnectionResponse = UpdateIntegrationConnectionResponses[keyof UpdateIntegrationConnectionResponses];
+
+export type ConfigureIntegrationConnectionCredentialData = {
+    body: IntegrationCredentialInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/credential';
+};
+
+export type ConfigureIntegrationConnectionCredentialErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ConfigureIntegrationConnectionCredentialError = ConfigureIntegrationConnectionCredentialErrors[keyof ConfigureIntegrationConnectionCredentialErrors];
+
+export type ConfigureIntegrationConnectionCredentialResponses = {
+    /**
+     * Credential безопасно материализован в Kubernetes Secret и привязан как новая server-owned ревизия
+     */
+    200: IntegrationConnection;
+};
+
+export type ConfigureIntegrationConnectionCredentialResponse = ConfigureIntegrationConnectionCredentialResponses[keyof ConfigureIntegrationConnectionCredentialResponses];
 
 export type CommandIntegrationConnectionData = {
     body: IntegrationConnectionCommand;
@@ -3033,8 +5955,8 @@ export type ListAssistantConversationsResponse = ListAssistantConversationsRespo
 
 export type CreateAssistantConversationData = {
     body: {
-        title: string;
         projectRef?: OpaqueRef;
+        context?: AssistantContextDescriptor;
     };
     headers: {
         'Idempotency-Key': string;
@@ -3063,10 +5985,44 @@ export type CreateAssistantConversationResponses = {
 
 export type CreateAssistantConversationResponse = CreateAssistantConversationResponses[keyof CreateAssistantConversationResponses];
 
+export type UpdateAssistantConversationTitleData = {
+    body: {
+        title: string;
+    };
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        conversationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/assistant-conversations/{conversationRef}/title';
+};
+
+export type UpdateAssistantConversationTitleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UpdateAssistantConversationTitleError = UpdateAssistantConversationTitleErrors[keyof UpdateAssistantConversationTitleErrors];
+
+export type UpdateAssistantConversationTitleResponses = {
+    /**
+     * Авторитетный title диалога обновлён владельцем
+     */
+    200: AssistantConversation;
+};
+
+export type UpdateAssistantConversationTitleResponse = UpdateAssistantConversationTitleResponses[keyof UpdateAssistantConversationTitleResponses];
+
 export type AddAssistantTurnData = {
     body: {
         content: string;
-        artifactRefs?: Array<OpaqueRef>;
+        attachmentSetRef?: OpaqueRef;
     };
     headers: {
         'Idempotency-Key': string;
@@ -3098,7 +6054,9 @@ export type AddAssistantTurnResponses = {
 export type AddAssistantTurnResponse = AddAssistantTurnResponses[keyof AddAssistantTurnResponses];
 
 export type ApplyAssistantPlanData = {
-    body?: never;
+    body: {
+        revision: number;
+    };
     headers: {
         'If-Match': string;
         'Idempotency-Key': string;
@@ -3124,10 +6082,113 @@ export type ApplyAssistantPlanResponses = {
     /**
      * Typed operations применены в пределах прав пользователя
      */
-    200: AssistantPlanReceipt;
+    200: AssistantPlanApplicationResponse;
 };
 
 export type ApplyAssistantPlanResponse = ApplyAssistantPlanResponses[keyof ApplyAssistantPlanResponses];
+
+export type UpdateAssistantPlanDraftData = {
+    body: {
+        summary: string;
+        operations: Array<AssistantPlanOperationInput>;
+    };
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        planRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/assistant-plans/{planRef}/draft';
+};
+
+export type UpdateAssistantPlanDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UpdateAssistantPlanDraftError = UpdateAssistantPlanDraftErrors[keyof UpdateAssistantPlanDraftErrors];
+
+export type UpdateAssistantPlanDraftResponses = {
+    /**
+     * Создана новая immutable revision draft
+     */
+    200: AssistantPlan;
+};
+
+export type UpdateAssistantPlanDraftResponse = UpdateAssistantPlanDraftResponses[keyof UpdateAssistantPlanDraftResponses];
+
+export type ValidateAssistantPlanData = {
+    body: {
+        revision: number;
+    };
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        planRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/assistant-plans/{planRef}/validation';
+};
+
+export type ValidateAssistantPlanErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateAssistantPlanError = ValidateAssistantPlanErrors[keyof ValidateAssistantPlanErrors];
+
+export type ValidateAssistantPlanResponses = {
+    /**
+     * Validation readback для точной revision
+     */
+    200: AssistantPlan;
+};
+
+export type ValidateAssistantPlanResponse = ValidateAssistantPlanResponses[keyof ValidateAssistantPlanResponses];
+
+export type RejectAssistantPlanData = {
+    body: {
+        revision: number;
+    };
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        planRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/assistant-plans/{planRef}/rejection';
+};
+
+export type RejectAssistantPlanErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RejectAssistantPlanError = RejectAssistantPlanErrors[keyof RejectAssistantPlanErrors];
+
+export type RejectAssistantPlanResponses = {
+    /**
+     * Draft отклонён с immutable receipt
+     */
+    200: AssistantPlanDecisionResponse;
+};
+
+export type RejectAssistantPlanResponse = RejectAssistantPlanResponses[keyof RejectAssistantPlanResponses];
 
 export type GetAdministrationData = {
     body?: never;
@@ -3153,6 +6214,443 @@ export type GetAdministrationResponses = {
 };
 
 export type GetAdministrationResponse = GetAdministrationResponses[keyof GetAdministrationResponses];
+
+export type ListPermissionRegistryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/access/permissions';
+};
+
+export type ListPermissionRegistryErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListPermissionRegistryError = ListPermissionRegistryErrors[keyof ListPermissionRegistryErrors];
+
+export type ListPermissionRegistryResponses = {
+    /**
+     * Закрытый versioned registry прикладных полномочий
+     */
+    200: PermissionDefinitionPage;
+};
+
+export type ListPermissionRegistryResponse = ListPermissionRegistryResponses[keyof ListPermissionRegistryResponses];
+
+export type ListAccessSubjectsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+        kind?: AccessSubjectKind;
+    };
+    url: '/api/v1/administration/access/subjects';
+};
+
+export type ListAccessSubjectsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListAccessSubjectsError = ListAccessSubjectsErrors[keyof ListAccessSubjectsErrors];
+
+export type ListAccessSubjectsResponses = {
+    /**
+     * Доступные для binding пользователи, OIDC-группы и service subjects
+     */
+    200: AccessSubjectPage;
+};
+
+export type ListAccessSubjectsResponse = ListAccessSubjectsResponses[keyof ListAccessSubjectsResponses];
+
+export type ListOidcGroupsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/administration/access/oidc-groups';
+};
+
+export type ListOidcGroupsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOidcGroupsError = ListOidcGroupsErrors[keyof ListOidcGroupsErrors];
+
+export type ListOidcGroupsResponses = {
+    /**
+     * Read model групп из проверенных OIDC token snapshots
+     */
+    200: OidcGroupPage;
+};
+
+export type ListOidcGroupsResponse = ListOidcGroupsResponses[keyof ListOidcGroupsResponses];
+
+export type ListAccessRolesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+        includeArchived?: boolean;
+    };
+    url: '/api/v1/administration/access/roles';
+};
+
+export type ListAccessRolesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListAccessRolesError = ListAccessRolesErrors[keyof ListAccessRolesErrors];
+
+export type ListAccessRolesResponses = {
+    /**
+     * Системные и пользовательские application roles
+     */
+    200: AccessRolePage;
+};
+
+export type ListAccessRolesResponse = ListAccessRolesResponses[keyof ListAccessRolesResponses];
+
+export type CreateAccessRoleData = {
+    body: AccessRoleInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/access/roles';
+};
+
+export type CreateAccessRoleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateAccessRoleError = CreateAccessRoleErrors[keyof CreateAccessRoleErrors];
+
+export type CreateAccessRoleResponses = {
+    /**
+     * Пользовательская роль и immutable v1 созданы атомарно
+     */
+    201: AccessRole;
+};
+
+export type CreateAccessRoleResponse = CreateAccessRoleResponses[keyof CreateAccessRoleResponses];
+
+export type ListAccessRoleVersionsData = {
+    body?: never;
+    path: {
+        roleRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/administration/access/roles/{roleRef}/versions';
+};
+
+export type ListAccessRoleVersionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListAccessRoleVersionsError = ListAccessRoleVersionsErrors[keyof ListAccessRoleVersionsErrors];
+
+export type ListAccessRoleVersionsResponses = {
+    /**
+     * Immutable история версий роли
+     */
+    200: AccessRoleVersionPage;
+};
+
+export type ListAccessRoleVersionsResponse = ListAccessRoleVersionsResponses[keyof ListAccessRoleVersionsResponses];
+
+export type CreateAccessRoleVersionData = {
+    body: AccessRoleInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        roleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/administration/access/roles/{roleRef}/versions';
+};
+
+export type CreateAccessRoleVersionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateAccessRoleVersionError = CreateAccessRoleVersionErrors[keyof CreateAccessRoleVersionErrors];
+
+export type CreateAccessRoleVersionResponses = {
+    /**
+     * Новая immutable версия роли создана, прежние bindings не перепривязаны
+     */
+    201: AccessRole;
+};
+
+export type CreateAccessRoleVersionResponse = CreateAccessRoleVersionResponses[keyof CreateAccessRoleVersionResponses];
+
+export type ArchiveAccessRoleData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        roleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/administration/access/roles/{roleRef}/archive';
+};
+
+export type ArchiveAccessRoleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ArchiveAccessRoleError = ArchiveAccessRoleErrors[keyof ArchiveAccessRoleErrors];
+
+export type ArchiveAccessRoleResponses = {
+    /**
+     * Роль архивирована; уже созданные bindings остаются pinned к своей версии
+     */
+    200: AccessRole;
+};
+
+export type ArchiveAccessRoleResponse = ArchiveAccessRoleResponses[keyof ArchiveAccessRoleResponses];
+
+export type ListAccessBindingsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+        subjectKind?: AccessSubjectKind;
+        subjectRef?: OpaqueRef;
+        roleRef?: OpaqueRef;
+        projectRef?: OpaqueRef;
+        includeRevoked?: boolean;
+    };
+    url: '/api/v1/administration/access/bindings';
+};
+
+export type ListAccessBindingsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListAccessBindingsError = ListAccessBindingsErrors[keyof ListAccessBindingsErrors];
+
+export type ListAccessBindingsResponses = {
+    /**
+     * Version-pinned bindings и их bounded scopes
+     */
+    200: AccessBindingPage;
+};
+
+export type ListAccessBindingsResponse = ListAccessBindingsResponses[keyof ListAccessBindingsResponses];
+
+export type CreateAccessBindingData = {
+    body: AccessBindingInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/access/bindings';
+};
+
+export type CreateAccessBindingErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateAccessBindingError = CreateAccessBindingErrors[keyof CreateAccessBindingErrors];
+
+export type CreateAccessBindingResponses = {
+    /**
+     * Binding создан
+     */
+    201: AccessBinding;
+};
+
+export type CreateAccessBindingResponse = CreateAccessBindingResponses[keyof CreateAccessBindingResponses];
+
+export type RevokeAccessBindingData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        bindingRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/administration/access/bindings/{bindingRef}';
+};
+
+export type RevokeAccessBindingErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevokeAccessBindingError = RevokeAccessBindingErrors[keyof RevokeAccessBindingErrors];
+
+export type RevokeAccessBindingResponses = {
+    /**
+     * Binding отозван
+     */
+    200: AccessBinding;
+};
+
+export type RevokeAccessBindingResponse = RevokeAccessBindingResponses[keyof RevokeAccessBindingResponses];
+
+export type ChangeAccessBindingData = {
+    body: AccessBindingChangeInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        bindingRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/administration/access/bindings/{bindingRef}';
+};
+
+export type ChangeAccessBindingErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ChangeAccessBindingError = ChangeAccessBindingErrors[keyof ChangeAccessBindingErrors];
+
+export type ChangeAccessBindingResponses = {
+    /**
+     * Binding изменён по OCC
+     */
+    200: AccessBinding;
+};
+
+export type ChangeAccessBindingResponse = ChangeAccessBindingResponses[keyof ChangeAccessBindingResponses];
+
+export type QueryEffectiveAccessData = {
+    body: EffectiveAccessQuery;
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/access/effective-access/query';
+};
+
+export type QueryEffectiveAccessErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type QueryEffectiveAccessError = QueryEffectiveAccessErrors[keyof QueryEffectiveAccessErrors];
+
+export type QueryEffectiveAccessResponses = {
+    /**
+     * Эффективные allow-only решения, рассчитанные control-plane
+     */
+    200: EffectiveAccessPage;
+};
+
+export type QueryEffectiveAccessResponse = QueryEffectiveAccessResponses[keyof QueryEffectiveAccessResponses];
+
+export type ExplainAccessData = {
+    body: ExplainAccessInput;
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/access/effective-access/explain';
+};
+
+export type ExplainAccessErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ExplainAccessError = ExplainAccessErrors[keyof ExplainAccessErrors];
+
+export type ExplainAccessResponses = {
+    /**
+     * Безопасное объяснение одного решения
+     */
+    200: ExplainAccessResult;
+};
+
+export type ExplainAccessResponse = ExplainAccessResponses[keyof ExplainAccessResponses];
+
+export type SimulateAccessData = {
+    body: SimulateAccessInput;
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/access/effective-access/simulate';
+};
+
+export type SimulateAccessErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SimulateAccessError = SimulateAccessErrors[keyof SimulateAccessErrors];
+
+export type SimulateAccessResponses = {
+    /**
+     * Read-only сравнение текущего и предлагаемого решения
+     */
+    200: SimulateAccessResult;
+};
+
+export type SimulateAccessResponse = SimulateAccessResponses[keyof SimulateAccessResponses];
 
 export type ListAuditEventsData = {
     body?: never;
@@ -3181,6 +6679,7 @@ export type ListAuditEventsResponses = {
      */
     200: {
         items: Array<AuditEvent>;
+        nextPageToken: string;
     };
 };
 

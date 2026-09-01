@@ -4,7 +4,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 
 export const runGraphNodeWidth = 224;
-export const runGraphNodeHeight = 106;
+export const runGraphNodeHeight = 132;
 
 const horizontalGap = 96;
 const verticalGap = 36;

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kodex · Валидация MVP-редизайна</title>
+<link rel="stylesheet" href="assets/kodex.css">
+<style>
+  body { margin:0; background:#e8edf2; color:#17212d; font-family:var(--font-sans); }
+  .v-head { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:16px; min-height:58px; padding:10px 20px; border-bottom:1px solid #c8d2dc; background:rgba(248,250,252,.96); backdrop-filter:blur(10px); }
+  .v-head h1 { margin:0; font-size:16px; }
+  .v-head p { margin:2px 0 0; color:#667585; font-size:11.5px; }
+  .v-head__actions { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+  .v-main { display:grid; gap:18px; padding:18px; }
+  .v-section { display:grid; gap:10px; }
+  .v-section__head { display:flex; align-items:end; justify-content:space-between; gap:12px; }
+  .v-section h2 { margin:0; font-size:14px; }
+  .v-section__head p { margin:0; color:#667585; font-size:11.5px; }
+  .v-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:14px; align-items:start; }
+  .v-card { min-width:0; border:1px solid #c8d2dc; border-radius:8px; background:#f8fafc; overflow:hidden; box-shadow:0 2px 8px rgba(28,42,56,.06); }
+  .v-card__head { display:flex; align-items:center; gap:8px; min-height:42px; padding:7px 10px; border-bottom:1px solid #d8e0e8; }
+  .v-card__head b { font-size:12px; }
+  .v-card__head span { color:#667585; font-size:10.5px; }
+  .v-card__head a { margin-left:auto; color:#146fc1; font-size:11px; }
+  .v-view { position:relative; overflow:hidden; background:#f3f6f9; }
+  .v-view iframe { display:block; border:0; transform-origin:top left; background:#f4f7fa; }
+  .v-view--desktop { height:320px; }
+  .v-view--desktop iframe { width:1440px; height:1024px; transform:scale(.34); }
+  .v-view--tablet { height:360px; }
+  .v-view--tablet iframe { width:1024px; height:768px; transform:scale(.46); }
+  .v-view--mobile { width:390px; max-width:100%; height:560px; margin:0 auto; }
+  .v-view--mobile iframe { width:390px; height:844px; transform:scale(.66); }
+  .v-matrix { width:100%; border-collapse:collapse; font-size:11.5px; }
+  .v-matrix th,.v-matrix td { padding:9px 10px; border:1px solid #d8e0e8; text-align:left; vertical-align:top; }
+  .v-matrix th { background:#eef3f7; }
+  .v-pass { color:#157347; font-weight:600; }
+  .v-manual { color:#8a5a00; font-weight:600; }
+  .v-note { padding:12px; border:1px solid #c8d2dc; border-radius:7px; background:#fff; font-size:11.5px; line-height:1.5; }
+  @media (max-width:800px) { .v-head { align-items:flex-start; flex-direction:column; } .v-head__actions { margin-left:0; } .v-grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header class="v-head"><div><h1>Валидация MVP-редизайна Kodex</h1><p>Desktop 1440×1024 · tablet 1024×768 · mobile 390×844 · light/dark/reduced motion</p></div><div class="v-head__actions"><button class="btn" type="button" id="theme">Переключить dark</button><button class="btn" type="button" id="motion">Reduced motion</button><a class="btn btn--primary" href="index.md">Открыть реестр</a></div></header>
+<main class="v-main">
+  <section class="v-section"><div class="v-section__head"><div><h2>Ключевые desktop-экраны</h2><p>Канонические главная, Проект, Run и Kodex</p></div></div><div class="v-grid">
+    <article class="v-card"><div class="v-card__head"><b>Attention Center</b><span>light/dark · background refresh</span><a href="home-a-attention-center-desktop.html">1:1</a></div><div class="v-view v-view--desktop"><iframe title="Главная" src="home-a-attention-center-desktop.html#embed"></iframe></div></article>
+    <article class="v-card"><div class="v-card__head"><b>Project Workboard</b><span>project context · partial failure</span><a href="project-a-workboard-desktop.html">1:1</a></div><div class="v-view v-view--desktop"><iframe title="Проект" src="project-a-workboard-desktop.html#embed"></iframe></div></article>
+    <article class="v-card"><div class="v-card__head"><b>Live Run</b><span>canvas · inspector · realtime</span><a href="live-run-desktop.html">1:1</a></div><div class="v-view v-view--desktop"><iframe title="Live Run" src="live-run-desktop.html#embed"></iframe></div></article>
+    <article class="v-card"><div class="v-card__head"><b>Контекстный Kodex</b><span>drawer · полный план</span><a href="kodex-plan-editor-desktop.html">1:1</a></div><div class="v-view v-view--desktop"><iframe title="Kodex" src="kodex-plan-editor-desktop.html#embed"></iframe></div></article>
+  </div></section>
+
+  <section class="v-section"><div class="v-section__head"><div><h2>Tablet и mobile</h2><p>Стабильные размеры, перенос текста и touch targets не менее 44×44</p></div></div><div class="v-grid">
+    <article class="v-card"><div class="v-card__head"><b>Главная · tablet</b><span>1024×768</span><a href="home-a-attention-center-desktop.html#tablet">1:1</a></div><div class="v-view v-view--tablet"><iframe title="Главная tablet" src="home-a-attention-center-desktop.html#tablet,embed"></iframe></div></article>
+    <article class="v-card"><div class="v-card__head"><b>Новый запуск · mobile</b><span>390×844</span><a href="new-run-mobile.html">1:1</a></div><div class="v-view v-view--mobile"><iframe title="Новый запуск mobile" src="new-run-mobile.html#embed"></iframe></div></article>
+    <article class="v-card"><div class="v-card__head"><b>Live Run · mobile</b><span>graph/activity tabs</span><a href="live-run-mobile.html">1:1</a></div><div class="v-view v-view--mobile"><iframe title="Live Run mobile" src="live-run-mobile.html#embed"></iframe></div></article>
+    <article class="v-card"><div class="v-card__head"><b>RBAC · mobile</b><span>roles · effective access</span><a href="access-mobile.html">1:1</a></div><div class="v-view v-view--mobile"><iframe title="RBAC mobile" src="access-mobile.html#embed"></iframe></div></article>
+  </div></section>
+
+  <section class="v-section"><div class="v-section__head"><div><h2>Dark theme</h2><p>Статусы сохраняют контраст и не превращаются в однотонную синюю палитру</p></div></div><div class="v-grid">
+    <article class="v-card"><div class="v-card__head"><b>Главная · dark</b><a href="home-a-attention-center-desktop.html#dark">1:1</a></div><div class="v-view v-view--desktop"><iframe title="Главная dark" src="home-a-attention-center-desktop.html#dark,embed"></iframe></div></article>
+    <article class="v-card"><div class="v-card__head"><b>Live Run · dark</b><a href="live-run-desktop.html#dark">1:1</a></div><div class="v-view v-view--desktop"><iframe title="Live Run dark" src="live-run-desktop.html#dark,embed"></iframe></div></article>
+    <article class="v-card"><div class="v-card__head"><b>Kodex · dark</b><a href="kodex-plan-editor-desktop.html#dark">1:1</a></div><div class="v-view v-view--desktop"><iframe title="Kodex dark" src="kodex-plan-editor-desktop.html#dark,embed"></iframe></div></article>
+  </div></section>
+
+  <section class="v-section"><div class="v-section__head"><div><h2>Состояния и интерактивность</h2><p>Статический макет показывает контракт; исполняемое поведение доказывается browser E2E</p></div></div><table class="v-matrix"><thead><tr><th>Сценарий</th><th>Макет</th><th>Проверка</th><th>Критерий</th></tr></thead><tbody>
+    <tr><td>Первое открытие / background refresh</td><td><a href="design-system.html">Design system</a></td><td class="v-pass">Показано</td><td>Текущие данные не исчезают при refresh.</td></tr>
+    <tr><td>Dropdown outside click / Escape</td><td><a href="design-system.html">Controls</a></td><td class="v-pass">Интерактивно</td><td>Меню закрывается, focus возвращается инициатору.</td></tr>
+    <tr><td>Async picker 1000+ элементов</td><td><a href="new-run-file-picker-desktop.html">File picker</a></td><td class="v-pass">Интерактивно</td><td>Серверный поиск, loading footer, cursor append без layout shift.</td></tr>
+    <tr><td>Canvas pan/zoom/fit</td><td><a href="live-run-desktop.html">Live Run</a></td><td class="v-pass">Интерактивно</td><td>Viewport сохраняется при realtime update.</td></tr>
+    <tr><td>Human Gate / cancel / error</td><td><a href="live-run-tool-details-desktop.html">Run states</a></td><td class="v-pass">Показано</td><td>Цвет дублируется текстом и иконкой.</td></tr>
+    <tr><td>Forbidden / offline snapshot / conflict</td><td><a href="kodex-plan-conflict-desktop.html">Conflict</a></td><td class="v-pass">Показано</td><td>Нет частичного применения и ложного success.</td></tr>
+    <tr><td>Keyboard/focus trap/restore</td><td>Modal, drawer, bottom sheet</td><td class="v-manual">Browser E2E</td><td>Tab не покидает overlay, после закрытия focus возвращается.</td></tr>
+    <tr><td>Screen reader live update</td><td>Realtime status</td><td class="v-manual">Browser E2E</td><td>Обновление объявляется без повторного чтения страницы.</td></tr>
+  </tbody></table><div class="v-note"><b>Осознанное ограничение.</b> HTML-макеты используют синтетические данные и локальный JavaScript. Они не доказывают authorization, persistence, S3, provider или integration side effects. Эти свойства входят в implementation E2E из <code>implementation-plan.md</code>.</div></section>
+</main>
+<script>
+const setHash = (flag, enabled) => document.querySelectorAll('iframe').forEach((frame) => { const url = new URL(frame.src); const flags = new Set(url.hash.slice(1).split(',').filter(Boolean)); enabled ? flags.add(flag) : flags.delete(flag); frame.src = url.pathname + (flags.size ? '#' + [...flags].join(',') : ''); });
+let dark = false, reduced = false;
+document.getElementById('theme').addEventListener('click', (event) => { dark = !dark; event.currentTarget.setAttribute('aria-pressed', String(dark)); setHash('dark', dark); });
+document.getElementById('motion').addEventListener('click', (event) => { reduced = !reduced; event.currentTarget.setAttribute('aria-pressed', String(reduced)); setHash('reduce-motion', reduced); });
+</script>
+</body>
+</html>

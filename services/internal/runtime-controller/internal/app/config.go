@@ -16,13 +16,17 @@ const (
 	controlPlaneTarget        = "dns:///control-plane.kodex-system.svc:8443"
 	controlPlaneTLSServerName = "control-plane.kodex-system.svc.cluster.local"
 	callbackTLSServerName     = "runtime-controller-callback.kodex-system.svc.cluster.local"
+	defaultControlNamespace   = "kodex-system"
+	defaultRuntimeNamespace   = "kodex-runtime"
+	runtimeCallbackClientID   = "spiffe://kodex.local/ns/kodex-runtime/sa/agent-runner"
 )
 
 var sha256TextPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 type Config struct {
 	Environment                    string        `env:"DEPLOYMENT_ENVIRONMENT"`
-	Namespace                      string        `env:"POD_NAMESPACE"`
+	ControlNamespace               string        `env:"POD_NAMESPACE"`
+	RuntimeNamespace               string        `env:"RUNTIME_CONTROLLER_RUNTIME_NAMESPACE"`
 	PodUID                         string        `env:"POD_UID"`
 	PodIP                          string        `env:"POD_IP"`
 	TechnicalListen                string        `env:"RUNTIME_CONTROLLER_TECHNICAL_LISTEN"`
@@ -45,12 +49,11 @@ type Config struct {
 	RoleRuntimeContractRevision    uint64        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION"`
 	RoleRuntimeContractSHA256      string        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256"`
 	ProviderHTTPSProxy             string        `env:"RUNTIME_CONTROLLER_PROVIDER_HTTPS_PROXY"`
+	KubernetesAPIServiceIP         string        `env:"KUBERNETES_SERVICE_HOST"`
 	StorageClass                   string        `env:"RUNTIME_CONTROLLER_STORAGE_CLASS"`
 	SessionPVCSize                 string        `env:"RUNTIME_CONTROLLER_SESSION_PVC_SIZE"`
 	RunnerServiceAccount           string        `env:"RUNTIME_CONTROLLER_RUNNER_SERVICE_ACCOUNT"`
 	MaximumConcurrentTurns         int           `env:"RUNTIME_CONTROLLER_MAXIMUM_CONCURRENT_TURNS"`
-	TurnCPUMilli                   int64         `env:"RUNTIME_CONTROLLER_TURN_CPU_MILLI"`
-	TurnMemoryBytes                int64         `env:"RUNTIME_CONTROLLER_TURN_MEMORY_BYTES"`
 	PollInterval                   time.Duration `env:"RUNTIME_CONTROLLER_POLL_INTERVAL"`
 	InfrastructureCheckInterval    time.Duration `env:"RUNTIME_CONTROLLER_INFRASTRUCTURE_CHECK_INTERVAL"`
 	LeaseRenewInterval             time.Duration `env:"RUNTIME_CONTROLLER_LEASE_RENEW_INTERVAL"`
@@ -62,12 +65,12 @@ type Config struct {
 
 func loadConfig() (Config, error) {
 	config := Config{
-		Environment: "development", Namespace: "kodex-system",
+		Environment: "development", ControlNamespace: defaultControlNamespace, RuntimeNamespace: defaultRuntimeNamespace,
 		TechnicalListen: ":9090", CallbackListen: ":8444", CallbackTLSServerName: callbackTLSServerName,
 		CallbackServerCertificateFile:  "/var/run/secrets/kodex/runtime-controller/callback-server/tls.crt",
 		CallbackServerPrivateKeyFile:   "/var/run/secrets/kodex/runtime-controller/callback-server/tls.key",
 		CallbackClientCAFile:           "/var/run/config/kodex/runtime-controller/callback-client/ca.crt",
-		CallbackExpectedClientSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/agent-runner",
+		CallbackExpectedClientSPIFFEID: runtimeCallbackClientID,
 		CallbackClientCASecret:         "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
 		ControlPlaneTarget: controlPlaneTarget, ControlPlaneTLSServerName: controlPlaneTLSServerName,
 		ControlPlaneCAFile:          "/var/run/config/kodex/runtime-controller/control-plane/ca.pem",
@@ -76,8 +79,9 @@ func loadConfig() (Config, error) {
 		ApplicationGrantFile:        "/var/run/secrets/kodex/runtime-controller/application-grant/application-grant.jws",
 		DefaultRoleImageReference:   "registry-pull.invalid/kodex/agent-runner@sha256:" + strings.Repeat("0", 64),
 		ProviderHTTPSProxy:          "http://egress-gateway.kodex-system.svc:8080",
+		KubernetesAPIServiceIP:      "10.43.0.1",
 		StorageClass:                "", SessionPVCSize: "20Gi",
-		RunnerServiceAccount: "agent-runner", MaximumConcurrentTurns: 16, TurnCPUMilli: 2000, TurnMemoryBytes: 4 << 30,
+		RunnerServiceAccount: "agent-runner", MaximumConcurrentTurns: 16,
 		PollInterval: 500 * time.Millisecond, InfrastructureCheckInterval: 10 * time.Second,
 		LeaseRenewInterval: 10 * time.Second, RequestTimeout: 5 * time.Second,
 		ExecutionTimeout: 60 * time.Minute, ShutdownTimeout: 30 * time.Second, WarmLongPoll: 20 * time.Second,
@@ -90,8 +94,10 @@ func loadConfig() (Config, error) {
 
 func (config Config) validate() error {
 	if config.PodUID == "" || len(config.PodUID) > 128 || net.ParseIP(config.PodIP) == nil ||
-		config.Namespace == "" || config.Environment == "" || config.ControlPlaneTarget != controlPlaneTarget ||
-		config.ControlPlaneTLSServerName != controlPlaneTLSServerName || config.CallbackTLSServerName != callbackTLSServerName {
+		config.ControlNamespace != defaultControlNamespace || config.RuntimeNamespace != defaultRuntimeNamespace ||
+		config.ControlNamespace == config.RuntimeNamespace || config.Environment == "" || config.ControlPlaneTarget != controlPlaneTarget ||
+		config.ControlPlaneTLSServerName != controlPlaneTLSServerName || config.CallbackTLSServerName != callbackTLSServerName ||
+		config.CallbackExpectedClientSPIFFEID != runtimeCallbackClientID {
 		return errors.New("runtime controller identity is invalid")
 	}
 	for _, address := range []string{config.TechnicalListen, config.CallbackListen} {
@@ -119,8 +125,8 @@ func (config Config) validate() error {
 		config.RoleRuntimeContractRevision == 0 || !sha256TextPattern.MatchString(config.RoleRuntimeContractSHA256) {
 		return errors.New("runtime role image policy is invalid")
 	}
-	if config.MaximumConcurrentTurns < 1 || config.MaximumConcurrentTurns > 128 || config.TurnCPUMilli < 100 ||
-		config.TurnCPUMilli > 16000 || config.TurnMemoryBytes < 128<<20 || config.TurnMemoryBytes > 64<<30 ||
+	if config.MaximumConcurrentTurns < 1 || config.MaximumConcurrentTurns > 128 ||
+		net.ParseIP(config.KubernetesAPIServiceIP) == nil ||
 		config.PollInterval < 100*time.Millisecond || config.PollInterval > 10*time.Second ||
 		config.InfrastructureCheckInterval < 5*time.Second || config.InfrastructureCheckInterval > time.Minute ||
 		config.LeaseRenewInterval < time.Second || config.LeaseRenewInterval > 20*time.Second ||
