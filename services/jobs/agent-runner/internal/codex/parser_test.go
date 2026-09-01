@@ -146,9 +146,10 @@ func TestThreadBindingAcceptsCurrentAppServerOptionalFields(t *testing.T) {
 		"instructionSources":[],"model":"codex","modelProvider":"openai",
 		"multiAgentMode":"explicitRequestOnly","reasoningEffort":null,
 		"runtimeWorkspaceRoots":["/workspace"],"sandbox":{"type":"readOnly"},"serviceTier":null,
-		"thread":{"cliVersion":"0.144.1","createdAt":1,"cwd":"/workspace","ephemeral":false,
+		"thread":{"canAcceptDirectInput":true,"cliVersion":"0.152.0","createdAt":1,"cwd":"/workspace","ephemeral":false,
 		"extra":null,"historyMode":"save-all","id":"` + testThreadID + `","modelProvider":"openai",
-		"preview":"","sessionId":"` + testThreadID + `","source":"startup",
+		"preview":"","projectId":null,"section":"default","sectionEnteredAt":null,
+		"sessionId":"` + testThreadID + `","source":"startup",
 		"status":{"type":"idle"},"turns":[],"updatedAt":1}}`)
 	if err := state.bindThread(response, "codex", "/workspace", "never"); err != nil {
 		t.Fatalf("current app-server thread response was rejected: %v", err)

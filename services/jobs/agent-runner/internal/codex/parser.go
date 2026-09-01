@@ -259,9 +259,10 @@ func (state *protocolState) bindThreadRead(raw json.RawMessage) error {
 
 func parseThread(raw json.RawMessage) (string, string, error) {
 	fields, err := decodeObject(raw, schema([]string{"cliVersion", "createdAt", "cwd", "ephemeral", "id", "modelProvider",
-		"preview", "sessionId", "source", "status", "turns", "updatedAt"}, "agentNickname", "agentRole", "cliVersion",
-		"createdAt", "cwd", "ephemeral", "extra", "forkedFromId", "gitInfo", "historyMode", "id", "modelProvider",
-		"name", "parentThreadId", "path", "preview", "recencyAt", "sessionId", "source", "status", "threadSource", "turns", "updatedAt"))
+		"preview", "sessionId", "source", "status", "turns", "updatedAt"}, "agentNickname", "agentRole", "canAcceptDirectInput",
+		"cliVersion", "createdAt", "cwd", "ephemeral", "extra", "forkedFromId", "gitInfo", "historyMode", "id", "modelProvider",
+		"name", "parentThreadId", "path", "preview", "projectId", "recencyAt", "section", "sectionEnteredAt", "sessionId",
+		"source", "status", "threadSource", "turns", "updatedAt"))
 	if err != nil {
 		return "", "", err
 	}
