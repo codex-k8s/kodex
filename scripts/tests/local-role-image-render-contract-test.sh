@@ -76,6 +76,9 @@ for admission_tools_dockerfile in \
   rg 'RUN for tool in .*bash' "$admission_tools_dockerfile" >/dev/null ||
     fail "image admission runtime does not verify the renderer shell: $admission_tools_dockerfile"
 done
+rg -F 'regctl registry set "$host" --skip-check --tls enabled' \
+  "$source_root/deploy/k8s/base/image-supply-chain/image-admission.sh" >/dev/null ||
+  fail 'authenticated registry configuration still performs an unauthenticated connectivity check'
 rg -F -- "-name 'agent-runner-*.oci.tar' -print | LC_ALL=C sort" \
   "$source_root/tools/dev/seed-local-image-supply-chain.sh" >/dev/null ||
   fail 'runner OCI cache selection is not deterministic'

@@ -439,7 +439,7 @@ login_registry() {
     jq -n --arg host "$host" --arg auth "$auth" '{auths:{($host):{auth:$auth}}}' >"$docker_directory/config.json"
   fi
   export DOCKER_CONFIG=$docker_directory
-  regctl registry set "$host" --tls enabled \
+  regctl registry set "$host" --skip-check --tls enabled \
     --cacert "$(cat /identity/ca.pem)" \
     --client-cert "$(cat /identity/registry-client.crt)" \
     --client-key "$(cat /identity/registry-client.key)"
