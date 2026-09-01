@@ -17,6 +17,8 @@ builder_identity=spiffe://kodex.local/ns/kodex-system/sa/role-image-builder
 build_type=https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
 tools_digest=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 policy_revision=7
+grype_database_url=https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.9_2026-08-31T00:36:25Z_1788158251.tar.zst
+grype_database_sha256=70e70f6232f41281063bd2a0a20600758ae12d6e60ba571b16070f950e2f99d3
 jq -n --arg image "$image_hex" --arg base "$base_hex" --arg frontend "$frontend_hex" \
   --arg subject "$subject" \
   --arg builder "$builder_identity" --arg build_type "$build_type" \
@@ -408,6 +410,31 @@ for runtime_tool in curl openssl pgrep; do
       echo "admission tools image omits runtime readiness tool: $runtime_tool" >&2
       exit 1
     }
+done
+for dockerfile in \
+  "$repository_root/infra/admission-tools/Dockerfile" \
+  "$repository_root/tools/dev/Dockerfile.local-image-supply-chain"; do
+  grep -Fq "ADD --checksum=sha256:$grype_database_sha256" "$dockerfile" || {
+    echo "admission tools image does not pin the Grype database checksum: $dockerfile" >&2
+    exit 1
+  }
+  grep -Fq "$grype_database_url" "$dockerfile" || {
+    echo "admission tools image does not pin the Grype database URL: $dockerfile" >&2
+    exit 1
+  }
+  for contract in \
+    'GRYPE_DB_CACHE_DIR=/var/lib/grype/db' \
+    'GRYPE_DB_AUTO_UPDATE=false' \
+    'GRYPE_DB_VALIDATE_AGE=true' \
+    'GRYPE_DB_MAX_ALLOWED_BUILT_AGE=720h' \
+    'GRYPE_CHECK_FOR_APP_UPDATE=false' \
+    'grype db import /tmp/grype-db.tar.zst' \
+    'grype db status >/dev/null'; do
+    grep -Fq "$contract" "$dockerfile" || {
+      echo "admission tools image omits the offline Grype database contract: $contract" >&2
+      exit 1
+    }
+  done
 done
 grep -Fq 'client-cert "$(cat "${certificate_file}")"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/cleanup.sh"

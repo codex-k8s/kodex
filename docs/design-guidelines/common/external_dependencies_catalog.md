@@ -86,6 +86,7 @@ promoted system role image и always-hot runtime contract.
 | `cosign` | `v3.1.3` | owner-side generation of image-signing material and runtime OCI verification |
 | `syft` | `v1.51.0` | формирование SBOM при admission role image |
 | `grype` | `v0.117.0` | проверка уязвимостей SBOM при admission role image |
+| Grype vulnerability database | `v6.1.9`, built `2026-08-31T06:37:31Z`, `sha256:70e70f6232f41281063bd2a0a20600758ae12d6e60ba571b16070f950e2f99d3` | закреплённая offline-база admission; runtime-обновление запрещено, допустимый возраст ограничен 720 часами |
 | `regctl` | `v0.11.5` | OCI readback, evidence artifacts и promotion role image |
 | Kubernetes Secrets | Kubernetes API + encryption at rest | exact RBAC и workload-bound delivery без значений в manifests |
 | Keycloak/OIDC provider | environment contract | browser identity; конкретный public domain задаёт deploy owner |
