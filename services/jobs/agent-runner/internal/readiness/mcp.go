@@ -210,23 +210,9 @@ func exactMCPTransport(binding model.TLSBinding) (*http.Transport, error) {
 }
 
 func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token string) error {
-	payload := []byte(`{"jsonrpc":"2.0","id":"agent-runner-readiness","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"kodex-agent-runner","version":"1"}}}`)
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(payload))
-	if err != nil {
-		return errors.New("create MCP readiness request")
-	}
-	request.Header.Set("Authorization", "Bearer "+token)
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json, text/event-stream")
-	response, err := client.Do(request)
-	if err != nil {
-		return errors.New("required MCP path is unavailable")
-	}
-	defer response.Body.Close()
-	mediaType, _, mediaErr := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	raw, err := io.ReadAll(io.LimitReader(response.Body, maximumMCPBodyBytes+1))
-	if err != nil || len(raw) == 0 || len(raw) > maximumMCPBodyBytes || response.StatusCode != http.StatusOK ||
-		mediaErr != nil || mediaType != "application/json" {
+	initialize := []byte(`{"jsonrpc":"2.0","id":"agent-runner-readiness","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"kodex-agent-runner","version":"1"}}}`)
+	raw, mediaType, statusCode, err := postMCP(ctx, client, endpoint, token, initialize)
+	if err != nil || len(raw) == 0 || statusCode != http.StatusOK || mediaType != "application/json" {
 		return errors.New("required MCP readiness response is invalid")
 	}
 	var result struct {
@@ -242,5 +228,60 @@ func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token
 		len(result.Result) == 0 || len(result.Error) != 0 || strings.TrimSpace(string(result.Result)) == "null" {
 		return errors.New("required MCP initialization failed")
 	}
+
+	initialized := []byte(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	raw, _, statusCode, err = postMCP(ctx, client, endpoint, token, initialized)
+	if err != nil || statusCode != http.StatusAccepted || len(raw) != 0 {
+		return errors.New("required MCP initialized notification failed")
+	}
+
+	list := []byte(`{"jsonrpc":"2.0","id":"agent-runner-tools","method":"tools/list","params":{}}`)
+	raw, mediaType, statusCode, err = postMCP(ctx, client, endpoint, token, list)
+	if err != nil || len(raw) == 0 || statusCode != http.StatusOK || mediaType != "application/json" {
+		return errors.New("required MCP tool catalog is unavailable")
+	}
+	var catalog struct {
+		JSONRPC string `json:"jsonrpc"`
+		ID      string `json:"id"`
+		Result  struct {
+			Tools []json.RawMessage `json:"tools"`
+		} `json:"result"`
+		Error json.RawMessage `json:"error"`
+	}
+	decoder = json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&catalog) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
+		catalog.JSONRPC != "2.0" || catalog.ID != "agent-runner-tools" ||
+		len(catalog.Error) != 0 || len(catalog.Result.Tools) == 0 || len(catalog.Result.Tools) > 256 {
+		return errors.New("required MCP tool catalog is invalid")
+	}
 	return nil
+}
+
+func postMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token string, payload []byte) ([]byte, string, int, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(payload))
+	if err != nil {
+		return nil, "", 0, errors.New("create MCP readiness request")
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json, text/event-stream")
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, "", 0, errors.New("required MCP path is unavailable")
+	}
+	defer response.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(response.Body, maximumMCPBodyBytes+1))
+	if err != nil || len(raw) > maximumMCPBodyBytes {
+		return nil, "", 0, errors.New("read required MCP response")
+	}
+	mediaType := ""
+	if value := response.Header.Get("Content-Type"); value != "" {
+		parsed, _, mediaErr := mime.ParseMediaType(value)
+		if mediaErr != nil {
+			return nil, "", 0, errors.New("required MCP response media type is invalid")
+		}
+		mediaType = parsed
+	}
+	return raw, mediaType, response.StatusCode, nil
 }

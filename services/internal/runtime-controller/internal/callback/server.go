@@ -519,8 +519,25 @@ func (server *Server) mcp(writer http.ResponseWriter, request *http.Request, lea
 		http.NotFound(writer, request)
 		return
 	}
+	server.serveMCP(writer, request, input)
+}
+
+func (server *Server) serveMCP(writer http.ResponseWriter, request *http.Request, input runtimecontract.RunnerInput) {
 	var rpc mcpRequest
-	if decode(request, &rpc, 1<<20) != nil || rpc.JSONRPC != "2.0" || len(rpc.ID) == 0 {
+	if decode(request, &rpc, 1<<20) != nil || rpc.JSONRPC != "2.0" || rpc.Method == "" {
+		http.Error(writer, "invalid MCP message", http.StatusBadRequest)
+		return
+	}
+	if len(rpc.ID) == 0 {
+		if rpc.Method == "notifications/initialized" && !emptyMCPParams(rpc.Params) {
+			http.Error(writer, "invalid MCP notification", http.StatusBadRequest)
+			return
+		}
+		writer.Header().Set("Cache-Control", "no-store")
+		writer.WriteHeader(http.StatusAccepted)
+		return
+	}
+	if rpc.Method == "notifications/initialized" {
 		server.writeMCPError(writer, rpc.ID, -32600, "Invalid Request")
 		return
 	}
@@ -534,6 +551,16 @@ func (server *Server) mcp(writer http.ResponseWriter, request *http.Request, lea
 	default:
 		server.writeMCPError(writer, rpc.ID, -32601, "Method not found")
 	}
+}
+
+func emptyMCPParams(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return true
+	}
+	var params struct{}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(&params) == nil && errors.Is(decoder.Decode(&struct{}{}), io.EOF)
 }
 
 func tools(input runtimecontract.RunnerInput) []map[string]any {
