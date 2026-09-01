@@ -417,8 +417,8 @@ func parseTokenUsage(raw json.RawMessage) (runtimecontract.TokenUsage, error) {
 
 func parseTokenUsageBreakdown(raw json.RawMessage, contextWindow int64) (runtimecontract.TokenUsage, error) {
 	fields, err := decodeObject(raw, schema(
-		[]string{"cachedInputTokens", "inputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens"},
-		"cachedInputTokens", "inputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens",
+		[]string{"cacheWriteInputTokens", "cachedInputTokens", "inputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens"},
+		"cacheWriteInputTokens", "cachedInputTokens", "inputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens",
 	))
 	if err != nil {
 		return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage breakdown is invalid")
@@ -431,6 +431,7 @@ func parseTokenUsageBreakdown(raw json.RawMessage, contextWindow int64) (runtime
 		{fields["totalTokens"], &usage.TotalTokens},
 		{fields["inputTokens"], &usage.InputTokens},
 		{fields["cachedInputTokens"], &usage.CachedInputTokens},
+		{fields["cacheWriteInputTokens"], &usage.CacheWriteInputTokens},
 		{fields["outputTokens"], &usage.OutputTokens},
 		{fields["reasoningOutputTokens"], &usage.ReasoningOutputTokens},
 	}

@@ -183,7 +183,7 @@ func TestTokenUsageNotificationProducesCurrentTurnDelta(t *testing.T) {
 	}
 	want := struct {
 		total, input, cached, cacheWrite, output, reasoning, window int64
-	}{70, 60, 40, 0, 10, 3, 200000}
+	}{70, 60, 40, 10, 10, 3, 200000}
 	if result.Usage.TotalTokens != want.total || result.Usage.InputTokens != want.input ||
 		result.Usage.CachedInputTokens != want.cached || result.Usage.CacheWriteInputTokens != want.cacheWrite ||
 		result.Usage.OutputTokens != want.output || result.Usage.ReasoningOutputTokens != want.reasoning ||
@@ -193,11 +193,11 @@ func TestTokenUsageNotificationProducesCurrentTurnDelta(t *testing.T) {
 }
 
 func TestTokenUsageDeltaNeverBecomesNegative(t *testing.T) {
-	baseline, err := parseTokenUsage(raw(`{"total":{"totalTokens":100,"inputTokens":80,"cachedInputTokens":20,"outputTokens":20,"reasoningOutputTokens":5},"last":{"totalTokens":50,"inputTokens":40,"cachedInputTokens":10,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":200000}`))
+	baseline, err := parseTokenUsage(raw(`{"total":{"totalTokens":100,"inputTokens":80,"cachedInputTokens":20,"cacheWriteInputTokens":10,"outputTokens":20,"reasoningOutputTokens":5},"last":{"totalTokens":50,"inputTokens":40,"cachedInputTokens":10,"cacheWriteInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":200000}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	final, err := parseTokenUsage(raw(`{"total":{"totalTokens":90,"inputTokens":70,"cachedInputTokens":15,"outputTokens":20,"reasoningOutputTokens":4},"last":{"totalTokens":40,"inputTokens":30,"cachedInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":200000}`))
+	final, err := parseTokenUsage(raw(`{"total":{"totalTokens":90,"inputTokens":70,"cachedInputTokens":15,"cacheWriteInputTokens":8,"outputTokens":20,"reasoningOutputTokens":4},"last":{"totalTokens":40,"inputTokens":30,"cachedInputTokens":5,"cacheWriteInputTokens":3,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":200000}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,27 +211,28 @@ func TestTokenUsageDeltaNeverBecomesNegative(t *testing.T) {
 func TestTokenUsageNotificationRejectsInconsistentBreakdown(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID = testThreadID
-	invalid := raw(`{"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","tokenUsage":{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":11,"outputTokens":10,"reasoningOutputTokens":0},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":11,"outputTokens":10,"reasoningOutputTokens":0},"modelContextWindow":200000}}`)
+	invalid := raw(`{"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","tokenUsage":{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":11,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":0},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":11,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":0},"modelContextWindow":200000}}`)
 	if err := state.notification("thread/tokenUsage/updated", invalid); err == nil {
 		t.Fatal("inconsistent token usage was accepted")
 	}
 }
 
 func tokenUsageNotification(turnID string, total, input, cached, cacheWrite, output, reasoning int64) json.RawMessage {
-	_ = cacheWrite
 	return raw(`{"threadId":"` + testThreadID + `","turnId":"` + turnID + `","tokenUsage":{"total":{"totalTokens":` +
 		itoa(total) + `,"inputTokens":` + itoa(input) + `,"cachedInputTokens":` + itoa(cached) +
+		`,"cacheWriteInputTokens":` + itoa(cacheWrite) +
 		`,"outputTokens":` + itoa(output) +
 		`,"reasoningOutputTokens":` + itoa(reasoning) + `},"last":{"totalTokens":` + itoa(total) +
 		`,"inputTokens":` + itoa(input) + `,"cachedInputTokens":` + itoa(cached) +
+		`,"cacheWriteInputTokens":` + itoa(cacheWrite) +
 		`,"outputTokens":` + itoa(output) +
 		`,"reasoningOutputTokens":` + itoa(reasoning) + `},"modelContextWindow":200000}}`)
 }
 
 func TestTokenUsageAllowsUnknownContextWindow(t *testing.T) {
 	for _, input := range []json.RawMessage{
-		raw(`{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2}}`),
-		raw(`{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":null}`),
+		raw(`{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":2},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":2}}`),
+		raw(`{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":2},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":null}`),
 	} {
 		usage, err := parseTokenUsage(input)
 		if err != nil || usage.ModelContextWindow != 0 || usage.CacheWriteInputTokens != 0 {
