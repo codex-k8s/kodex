@@ -112,10 +112,11 @@ done
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 [[ "$repository_root" == "$source_root" ]] || fail 'source root must match the current worktree'
 lock_file="$repository_root/tools/dev/components.lock.json"
-components_lock_digest=$(sha256sum "$lock_file" | awk '{print $1}')
-[[ "$components_lock_digest" =~ ^[a-f0-9]{64}$ &&
-  "$components_lock_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
-  fail 'local component lock digest is invalid'
+runtime_contract_file="$repository_root/contracts/runtime-controller/v6/agent-runner-input.schema.json"
+runtime_contract_digest=$(jq -cS . "$runtime_contract_file" | sha256sum | awk '{print $1}')
+[[ "$runtime_contract_digest" =~ ^[a-f0-9]{64}$ &&
+  "$runtime_contract_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+  fail 'local role runtime contract digest is invalid'
 seaweedfs_image=$(jq -er '
   .images[] | select(.name == "seaweedfs" and .version == "4.41") | .reference
 ' "$lock_file") || fail 'SeaweedFS image lock is absent'
@@ -315,7 +316,7 @@ ADMISSION_TOOLS_SHA256="$admission_tools_sha256" \
 PROMOTED_PULL_HOST="$promoted_pull_host" \
 RUNNER_DIGEST="$runner_digest" \
 SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
-COMPONENTS_LOCK_DIGEST="$components_lock_digest" \
+RUNTIME_CONTRACT_DIGEST="$runtime_contract_digest" \
 FRONTEND_SHA256="$frontend_sha256" \
 ROLE_INPUT_MANIFEST_DIGEST="$role_image_input_manifest_digest" \
 ROLE_INPUT_PAYLOAD_SHA256="$role_image_input_payload_sha256" \
@@ -364,13 +365,13 @@ ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
     .data.nodeReadbackImage = (strenv(PROMOTED_PULL_HOST) + "/kodex/agent-runner@" + strenv(RUNNER_DIGEST)) |
     .data.roleImageInputRepository = "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-image-inputs" |
     .data.policyRevision = "1" |
-    .data.policySHA256 = strenv(COMPONENTS_LOCK_DIGEST) |
+    .data.policySHA256 = "0000000000000000000000000000000000000000000000000000000000000000" |
     .data.trustedRoleBaseRepository = "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner" |
     .data.trustedRoleBaseDigest = strenv(RUNNER_DIGEST) |
     .data.frontendSHA256 = strenv(FRONTEND_SHA256) |
     .data.toolchainSHA256 = strenv(ADMISSION_TOOLS_SHA256) |
     .data.roleRuntimeContractRevision = "1" |
-    .data.roleRuntimeContractSHA256 = strenv(COMPONENTS_LOCK_DIGEST)
+    .data.roleRuntimeContractSHA256 = strenv(RUNTIME_CONTRACT_DIGEST)
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime");
     .data.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256 = strenv(ADMISSION_TOOLS_SHA256)
@@ -409,6 +410,20 @@ ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
         "role-environments.documents.local-unavailable" |
       to_json
     )
+  )
+' "$render"
+
+admission_policy_payload=$(yq -o=json -I=0 '
+  select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
+  .data | del(.orchestrationRevision, .policySHA256)
+' "$render" | jq -cS .)
+admission_policy_digest=$(printf '%s\n' "$admission_policy_payload" | sha256sum | awk '{print $1}')
+[[ "$admission_policy_digest" =~ ^[a-f0-9]{64}$ &&
+  "$admission_policy_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+  fail 'local image admission policy digest is invalid'
+POLICY_SHA256="$admission_policy_digest" yq -i '
+  with(select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy");
+    .data.policySHA256 = strenv(POLICY_SHA256)
   )
 ' "$render"
 

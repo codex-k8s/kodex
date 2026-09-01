@@ -332,6 +332,12 @@ if [[ "$profile" == "web-with-mattermost" ]]; then
   ' "$rendered"
 fi
 
+runtime_contract_file="$repository_root/contracts/runtime-controller/v6/agent-runner-input.schema.json"
+runtime_contract_digest=$(jq -cS . "$runtime_contract_file" | sha256sum | awk '{print $1}')
+[[ "$runtime_contract_digest" =~ ^[a-f0-9]{64}$ &&
+  "$runtime_contract_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+  fail 'role runtime contract digest is invalid'
+
 LOCK_DIGEST="$lock_sha256" \
 REGISTRY_PUSH="$registry_push" \
 NODE_PULL="$node_pull" \
@@ -345,6 +351,7 @@ ADMISSION_REF="$admission_ref" \
 ADMISSION_TOOLS_REF="$admission_tools_ref" \
 ADMISSION_TOOLS_DIGEST="$admission_tools_digest" \
 SOURCE_SHA="$source_sha" \
+RUNTIME_CONTRACT_DIGEST="$runtime_contract_digest" \
 TRUSTED_ROLE_BASE_REPOSITORY="kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner" \
 FRONTEND_SHA256="$frontend_sha256" yq -i '
   (.. | select(tag == "!!str")) |= sub(
@@ -363,14 +370,14 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
     .data.nodeReadbackImage = (strenv(PULL_REGISTRY_HOST) + "/" + strenv(REPOSITORY_PREFIX) + "/agent-runner@" + strenv(AGENT_RUNNER_DIGEST)) |
     .data.roleImageInputRepository = "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-image-inputs" |
     .data.policyRevision = "1" |
-    .data.policySHA256 = strenv(LOCK_DIGEST) |
+    .data.policySHA256 = "0000000000000000000000000000000000000000000000000000000000000000" |
     .data.trustedRoleBaseRepository = strenv(TRUSTED_ROLE_BASE_REPOSITORY) |
     .data.trustedRoleBaseDigest = strenv(AGENT_RUNNER_DIGEST) |
     .data.builderSHA256 = "8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4" |
     .data.frontendSHA256 = strenv(FRONTEND_SHA256) |
     .data.toolchainSHA256 = strenv(LOCK_DIGEST) |
     .data.roleRuntimeContractRevision = "1" |
-    .data.roleRuntimeContractSHA256 = strenv(LOCK_DIGEST)
+    .data.roleRuntimeContractSHA256 = strenv(RUNTIME_CONTRACT_DIGEST)
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime");
     .data.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256 = strenv(LOCK_DIGEST)
@@ -397,6 +404,20 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
       select(.name == "READBACK_IMAGE").value) =
         (strenv(PULL_REGISTRY_HOST) + "/" + strenv(REPOSITORY_PREFIX) +
           "/control-plane@" + strenv(CONTROL_PLANE_DIGEST))
+  )
+' "$rendered"
+
+admission_policy_payload=$(yq -o=json -I=0 '
+  select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
+  .data | del(.orchestrationRevision, .policySHA256)
+' "$rendered" | jq -cS .)
+admission_policy_digest=$(printf '%s\n' "$admission_policy_payload" | sha256sum | awk '{print $1}')
+[[ "$admission_policy_digest" =~ ^[a-f0-9]{64}$ &&
+  "$admission_policy_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+  fail 'image admission policy digest is invalid'
+POLICY_SHA256="$admission_policy_digest" yq -i '
+  with(select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy");
+    .data.policySHA256 = strenv(POLICY_SHA256)
   )
 ' "$rendered"
 

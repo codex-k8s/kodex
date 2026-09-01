@@ -141,16 +141,22 @@ policy_json=$(yq -o=json -I=0 '
   select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy")
 ' "$render")
 [[ -n "$policy_json" && "$policy_json" != null ]] || fail 'rendered owner intent is absent'
-expected_components_lock_digest=$(sha256sum "$source_root/tools/dev/components.lock.json" | awk '{print $1}')
-jq -e --arg digest "$expected_components_lock_digest" '
-  .data.policySHA256 == $digest and
-  .data.roleRuntimeContractSHA256 == $digest
+expected_runtime_contract_digest=$(
+  jq -cS . "$source_root/contracts/runtime-controller/v6/agent-runner-input.schema.json" |
+    sha256sum | awk '{print $1}'
+)
+actual_policy_digest=$(jq -cS '.data | del(.orchestrationRevision, .policySHA256)' \
+  <<<"$policy_json" | sha256sum | awk '{print $1}')
+jq -e --arg policy "$actual_policy_digest" --arg runtime "$expected_runtime_contract_digest" '
+  .data.policySHA256 == $policy and
+  .data.roleRuntimeContractSHA256 == $runtime
 ' <<<"$policy_json" >/dev/null ||
-  fail 'local policy or role runtime contract identity is not pinned to the component lock'
+  fail 'local policy or role runtime contract identity is not content-addressed'
 source_revision=$(git -C "$source_root" rev-parse HEAD)
 source_digest=$(printf '%s' "$source_revision" | sha256sum | awk '{print $1}')
-[[ "$expected_components_lock_digest" != "$source_digest" ]] ||
-  fail 'component lock and source revision digests unexpectedly collide'
+[[ "$actual_policy_digest" != "$source_digest" &&
+  "$expected_runtime_contract_digest" != "$source_digest" ]] ||
+  fail 'policy, role runtime contract, and source revision identities unexpectedly collide'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   all(.[] | select(.kind == "Deployment" or .kind == "StatefulSet" or
       .kind == "Job");
