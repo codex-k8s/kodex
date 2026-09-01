@@ -29,6 +29,7 @@ import {
   launchAgent,
   publishAgent,
   readJsonWithNetworkRetry,
+  retryReadOnlyBrowserAction,
   routeRef,
   waitForConnected,
   waitForTerminalSuccess,
@@ -128,41 +129,57 @@ async function requestLatestKodexPlan(
   });
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const knownUserTurnRefs = new Set(
+      await dialog
+        .locator("article.assistant-message--user[data-turn-ref]")
+        .evaluateAll((messages) =>
+          messages
+            .map((message) => message.getAttribute("data-turn-ref") ?? "")
+            .filter(Boolean),
+        ),
+    );
     await composer.fill(prompt);
-    const appendResponse = page.waitForResponse((response) => {
-      const request = response.request();
-      return (
-        request.method() === "POST" &&
-        /^\/api\/v1\/assistant-conversations\/[^/]+\/turns$/.test(
-          new URL(response.url()).pathname,
-        )
-      );
-    });
     await dialog.getByRole("button", { name: "Отправить помощнику" }).click();
-    const appended = await appendResponse;
-    expect(appended.status(), await appended.text()).toBe(202);
-    const conversation = (await appended.json()) as {
-      turns?: Array<{
-        ref?: string;
-        role?: string;
-        sequence?: number;
-        content?: string;
-      }>;
-    };
-    const userTurn = conversation.turns
-      ?.filter((turn) => turn.role === "USER" && turn.content === prompt)
-      .toSorted((left, right) => (right.sequence ?? 0) - (left.sequence ?? 0))
-      .at(0);
-    expect(userTurn?.ref).toMatch(/^trn_[A-Za-z0-9_-]+$/);
-    expect(
-      Number.isSafeInteger(userTurn?.sequence) && (userTurn?.sequence ?? 0) > 0,
-    ).toBe(true);
+    let userTurnRef = "";
+    await expect
+      .poll(
+        async () => {
+          const candidates = await dialog
+            .locator("article.assistant-message--user[data-turn-ref]")
+            .filter({ hasText: prompt })
+            .evaluateAll((messages) =>
+              messages.map((message) => ({
+                ref: message.getAttribute("data-turn-ref") ?? "",
+                sequence: message.getAttribute("data-turn-sequence") ?? "",
+              })),
+            );
+          const appended = candidates.find(
+            (candidate) =>
+              candidate.ref && !knownUserTurnRefs.has(candidate.ref),
+          );
+          userTurnRef = appended?.ref ?? "";
+          return appended;
+        },
+        {
+          message: "авторитетный USER-turn должен появиться после отправки",
+          timeout: 30_000,
+        },
+      )
+      .toMatchObject({
+        ref: expect.stringMatching(/^trn_[A-Za-z0-9_-]+$/),
+        sequence: expect.stringMatching(/^[1-9][0-9]*$/),
+      });
     const currentUserMessage = dialog.locator(
-      `article.assistant-message--user[data-turn-ref="${userTurn?.ref ?? ""}"]`,
+      `article.assistant-message--user[data-turn-ref="${userTurnRef}"]`,
     );
     await expect(currentUserMessage).toHaveCount(1);
+    const userTurnSequence = Number.parseInt(
+      (await currentUserMessage.getAttribute("data-turn-sequence")) ?? "",
+      10,
+    );
+    expect(Number.isSafeInteger(userTurnSequence)).toBe(true);
     const currentAssistantMessage = dialog.locator(
-      `article.assistant-message--assistant[data-turn-sequence="${String((userTurn?.sequence ?? 0) + 1)}"]`,
+      `article.assistant-message--assistant[data-turn-sequence="${String(userTurnSequence + 1)}"]`,
     );
     await expect(currentAssistantMessage).toHaveCount(1, {
       timeout: 120_000,
@@ -2578,71 +2595,120 @@ test.describe("web-only fresh installation", () => {
       `Role badges must remain compact, received heights: ${roleTagHeights.join(", ")}`,
     ).toBe(true);
 
-    const setup = await page.evaluate(
-      async ({
-        exactAgentRef,
-        expectedGroupName,
-        expectedRoleName,
-        otherAgentRef,
-        projectRef,
-      }) => {
-        const [rolesResponse, groupsResponse] = await Promise.all([
-          fetch(
-            "/api/v1/administration/access/roles?pageSize=100&includeArchived=false",
-          ),
-          fetch("/api/v1/administration/access/oidc-groups?pageSize=100"),
-        ]);
-        if (!rolesResponse.ok || !groupsResponse.ok)
-          throw new Error("RBAC catalog readback failed");
-        const roles = (await rolesResponse.json()) as {
-          items: Array<{
-            ref: string;
-            currentVersion: { ref: string; name: string };
-          }>;
-        };
-        const role = roles.items.find(
-          (item) => item.currentVersion.name === expectedRoleName,
-        );
-        if (!role) throw new Error("E2E access role is absent");
-        const groups = (await groupsResponse.json()) as {
-          items: Array<{
-            ref: string;
-            displayName: string;
-            memberCount: number;
-            state: string;
-          }>;
-        };
-        const matchingGroups = groups.items.filter(
-          (group) => group.displayName === expectedGroupName,
-        );
-        if (
-          matchingGroups.length !== 1 ||
-          matchingGroups[0]?.state !== "ACTIVE" ||
-          matchingGroups[0].memberCount < 1
-        ) {
-          throw new Error("Ожидаемая активная OIDC-группа не синхронизирована");
-        }
-        const candidate = {
-          ...matchingGroups[0],
-          kind: "OIDC_GROUP" as const,
-        };
-        const bindingsResponse = await fetch(
-          `/api/v1/administration/access/bindings?pageSize=100&projectRef=${encodeURIComponent(projectRef)}&roleRef=${encodeURIComponent(role.ref)}&includeRevoked=false`,
-        );
-        if (!bindingsResponse.ok)
-          throw new Error("RBAC binding catalog readback failed");
-        const bindings = (await bindingsResponse.json()) as {
-          items: Array<{
-            subject: { ref: string };
-            scope: { resourceKind?: string; resourceRef?: string };
-          }>;
-        };
-        const existing = bindings.items.find(
-          (binding) =>
-            binding.scope.resourceKind === "AGENT" &&
-            binding.scope.resourceRef === exactAgentRef,
-        );
-        if (existing?.subject.ref === candidate.ref) {
+    const setup = await retryReadOnlyBrowserAction(page, () =>
+      page.evaluate(
+        async ({
+          exactAgentRef,
+          expectedGroupName,
+          expectedRoleName,
+          otherAgentRef,
+          projectRef,
+        }) => {
+          const [rolesResponse, groupsResponse] = await Promise.all([
+            fetch(
+              "/api/v1/administration/access/roles?pageSize=100&includeArchived=false",
+            ),
+            fetch("/api/v1/administration/access/oidc-groups?pageSize=100"),
+          ]);
+          if (!rolesResponse.ok || !groupsResponse.ok)
+            throw new Error("RBAC catalog readback failed");
+          const roles = (await rolesResponse.json()) as {
+            items: Array<{
+              ref: string;
+              currentVersion: { ref: string; name: string };
+            }>;
+          };
+          const role = roles.items.find(
+            (item) => item.currentVersion.name === expectedRoleName,
+          );
+          if (!role) throw new Error("E2E access role is absent");
+          const groups = (await groupsResponse.json()) as {
+            items: Array<{
+              ref: string;
+              displayName: string;
+              memberCount: number;
+              state: string;
+            }>;
+          };
+          const matchingGroups = groups.items.filter(
+            (group) => group.displayName === expectedGroupName,
+          );
+          if (
+            matchingGroups.length !== 1 ||
+            matchingGroups[0]?.state !== "ACTIVE" ||
+            matchingGroups[0].memberCount < 1
+          ) {
+            throw new Error(
+              "Ожидаемая активная OIDC-группа не синхронизирована",
+            );
+          }
+          const candidate = {
+            ...matchingGroups[0],
+            kind: "OIDC_GROUP" as const,
+          };
+          const bindingsResponse = await fetch(
+            `/api/v1/administration/access/bindings?pageSize=100&projectRef=${encodeURIComponent(projectRef)}&roleRef=${encodeURIComponent(role.ref)}&includeRevoked=false`,
+          );
+          if (!bindingsResponse.ok)
+            throw new Error("RBAC binding catalog readback failed");
+          const bindings = (await bindingsResponse.json()) as {
+            items: Array<{
+              subject: { ref: string };
+              scope: { resourceKind?: string; resourceRef?: string };
+            }>;
+          };
+          const existing = bindings.items.find(
+            (binding) =>
+              binding.scope.resourceKind === "AGENT" &&
+              binding.scope.resourceRef === exactAgentRef,
+          );
+          if (existing?.subject.ref === candidate.ref) {
+            return {
+              candidate,
+              exactAgentRef,
+              otherAgentRef,
+              projectRef,
+              roleRef: role.ref,
+              roleVersionRef: role.currentVersion.ref,
+            };
+          }
+          const csrfPrefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
+          const csrf = document.cookie
+            .split("; ")
+            .find((part) => part.startsWith(csrfPrefix))
+            ?.slice(csrfPrefix.length);
+          if (!csrf) throw new Error("E2E CSRF cookie is absent");
+          const response = await fetch(
+            "/api/v1/administration/access/effective-access/query",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-Token": decodeURIComponent(csrf),
+              },
+              body: JSON.stringify({
+                subjectRef: candidate.ref,
+                permissionKeys: ["agent.launch"],
+                target: {
+                  kind: "RESOURCE_INSTANCE",
+                  projectRef,
+                  resourceKind: "AGENT",
+                  resourceRef: exactAgentRef,
+                },
+              }),
+            },
+          );
+          if (!response.ok) {
+            throw new Error(
+              `Исходное решение OIDC-group RBAC недоступно: ${String(response.status)} ${await response.text()}`,
+            );
+          }
+          const body = (await response.json()) as {
+            items: Array<{ decision: string }>;
+          };
+          if (body.items[0]?.decision !== "DENIED") {
+            throw new Error("OIDC-группа имеет неожиданный исходный доступ");
+          }
           return {
             candidate,
             exactAgentRef,
@@ -2651,81 +2717,38 @@ test.describe("web-only fresh installation", () => {
             roleRef: role.ref,
             roleVersionRef: role.currentVersion.ref,
           };
-        }
-        const csrfPrefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
-        const csrf = document.cookie
-          .split("; ")
-          .find((part) => part.startsWith(csrfPrefix))
-          ?.slice(csrfPrefix.length);
-        if (!csrf) throw new Error("E2E CSRF cookie is absent");
-        const response = await fetch(
-          "/api/v1/administration/access/effective-access/query",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-CSRF-Token": decodeURIComponent(csrf),
-            },
-            body: JSON.stringify({
-              subjectRef: candidate.ref,
-              permissionKeys: ["agent.launch"],
-              target: {
-                kind: "RESOURCE_INSTANCE",
-                projectRef,
-                resourceKind: "AGENT",
-                resourceRef: exactAgentRef,
-              },
-            }),
-          },
-        );
-        if (!response.ok) {
-          throw new Error(
-            `Исходное решение OIDC-group RBAC недоступно: ${String(response.status)} ${await response.text()}`,
-          );
-        }
-        const body = (await response.json()) as {
-          items: Array<{ decision: string }>;
-        };
-        if (body.items[0]?.decision !== "DENIED") {
-          throw new Error("OIDC-группа имеет неожиданный исходный доступ");
-        }
-        return {
-          candidate,
-          exactAgentRef,
-          otherAgentRef,
+        },
+        {
+          exactAgentRef: coordinatorRef,
+          expectedGroupName: environment.rbacGroup,
+          expectedRoleName: accessRoleName,
+          otherAgentRef: analystRef,
           projectRef,
-          roleRef: role.ref,
-          roleVersionRef: role.currentVersion.ref,
-        };
-      },
-      {
-        exactAgentRef: coordinatorRef,
-        expectedGroupName: environment.rbacGroup,
-        expectedRoleName: accessRoleName,
-        otherAgentRef: analystRef,
-        projectRef,
-      },
+        },
+      ),
     );
 
-    const existingBinding = await page.evaluate(
-      async ({ exactAgentRef, projectRef, roleRef, subjectRef }) => {
-        const response = await fetch(
-          `/api/v1/administration/access/bindings?pageSize=100&projectRef=${encodeURIComponent(projectRef)}&roleRef=${encodeURIComponent(roleRef)}&subjectRef=${encodeURIComponent(subjectRef)}&includeRevoked=false`,
-        );
-        if (!response.ok) throw new Error("RBAC binding readback failed");
-        const body = (await response.json()) as {
-          items: Array<{ scope: { resourceRef?: string } }>;
-        };
-        return body.items.some(
-          (item) => item.scope.resourceRef === exactAgentRef,
-        );
-      },
-      {
-        exactAgentRef: coordinatorRef,
-        projectRef,
-        roleRef: setup.roleRef,
-        subjectRef: setup.candidate.ref,
-      },
+    const existingBinding = await retryReadOnlyBrowserAction(page, () =>
+      page.evaluate(
+        async ({ exactAgentRef, projectRef, roleRef, subjectRef }) => {
+          const response = await fetch(
+            `/api/v1/administration/access/bindings?pageSize=100&projectRef=${encodeURIComponent(projectRef)}&roleRef=${encodeURIComponent(roleRef)}&subjectRef=${encodeURIComponent(subjectRef)}&includeRevoked=false`,
+          );
+          if (!response.ok) throw new Error("RBAC binding readback failed");
+          const body = (await response.json()) as {
+            items: Array<{ scope: { resourceRef?: string } }>;
+          };
+          return body.items.some(
+            (item) => item.scope.resourceRef === exactAgentRef,
+          );
+        },
+        {
+          exactAgentRef: coordinatorRef,
+          projectRef,
+          roleRef: setup.roleRef,
+          subjectRef: setup.candidate.ref,
+        },
+      ),
     );
     if (!existingBinding) {
       await gotoWithRetry(page, "/administration/access/bindings");

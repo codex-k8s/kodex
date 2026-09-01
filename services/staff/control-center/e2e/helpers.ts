@@ -13,23 +13,32 @@ export async function readJsonWithNetworkRetry<T>(
     throw new Error("Read-only browser JSON path must start with /api/");
   }
 
+  return retryReadOnlyBrowserAction(page, () =>
+    page.evaluate(async (requestPath) => {
+      const response = await fetch(requestPath);
+      const rawBody = await response.text();
+      if (!rawBody) {
+        throw new Error(
+          `Read-only browser JSON response is empty: status=${String(response.status)}`,
+        );
+      }
+      return {
+        body: JSON.parse(rawBody) as T,
+        status: response.status,
+      };
+    }, path),
+  );
+}
+
+export async function retryReadOnlyBrowserAction<T>(
+  page: Page,
+  action: () => Promise<T>,
+): Promise<T> {
   const retryDelays = [0, 200, 600];
   for (const [index, delay] of retryDelays.entries()) {
     if (delay > 0) await page.waitForTimeout(delay);
     try {
-      return await page.evaluate(async (requestPath) => {
-        const response = await fetch(requestPath);
-        const rawBody = await response.text();
-        if (!rawBody) {
-          throw new Error(
-            `Read-only browser JSON response is empty: status=${String(response.status)}`,
-          );
-        }
-        return {
-          body: JSON.parse(rawBody) as T,
-          status: response.status,
-        };
-      }, path);
+      return await action();
     } catch (error) {
       if (
         index === retryDelays.length - 1 ||

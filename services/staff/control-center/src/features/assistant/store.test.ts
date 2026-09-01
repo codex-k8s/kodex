@@ -161,10 +161,7 @@ describe("assistant workspace store", () => {
     await store.send("Создай сотрудника");
 
     expect(createConversationMock).toHaveBeenCalledWith(context, "prj_sales");
-    expect(appendTurnMock).toHaveBeenCalledWith(
-      "cnv_sales",
-      "Создай сотрудника",
-    );
+    expect(appendTurnMock).toHaveBeenCalledWith(created, "Создай сотрудника");
     expect(store.selectedConversation?.turns).toHaveLength(1);
   });
 
@@ -290,7 +287,7 @@ describe("assistant workspace store", () => {
     await store.send("Изучи вложения", "aset_contracts");
 
     expect(appendTurnMock).toHaveBeenCalledWith(
-      "cnv_sales",
+      initial,
       "Изучи вложения",
       "aset_contracts",
     );

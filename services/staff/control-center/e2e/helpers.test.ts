@@ -1,7 +1,10 @@
 import type { Page } from "@playwright/test";
 import { describe, expect, test, vi } from "vitest";
 
-import { readJsonWithNetworkRetry } from "./helpers";
+import {
+  readJsonWithNetworkRetry,
+  retryReadOnlyBrowserAction,
+} from "./helpers";
 
 describe("read-only JSON readback в браузере", () => {
   test("повторяет только временный сетевой сбой", async () => {
@@ -41,5 +44,22 @@ describe("read-only JSON readback в браузере", () => {
     await expect(
       readJsonWithNetworkRetry(page, "https://example.test/secret"),
     ).rejects.toThrow("must start with /api/");
+  });
+
+  test("повторяет произвольное безопасное read-only действие", async () => {
+    const action = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("page.evaluate: TypeError: Failed to fetch"),
+      )
+      .mockResolvedValueOnce({ ready: true });
+    const waitForTimeout = vi.fn().mockResolvedValue(undefined);
+    const page = { waitForTimeout } as unknown as Page;
+
+    await expect(retryReadOnlyBrowserAction(page, action)).resolves.toEqual({
+      ready: true,
+    });
+    expect(action).toHaveBeenCalledTimes(2);
+    expect(waitForTimeout).toHaveBeenCalledWith(200);
   });
 });
