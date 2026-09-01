@@ -495,24 +495,19 @@ test.describe("web-only fresh installation", () => {
 
   test("первый вход, горячий помощник и первый Проект", async ({ page }) => {
     await gotoWithRetry(page, "/onboarding");
-    const preflight = await page.evaluate(async () => {
-      const [bootstrapResponse, assistantResponse] = await Promise.all([
-        fetch("/api/v1/bootstrap"),
-        fetch("/api/v1/system-assistant"),
-      ]);
-      const bootstrap = bootstrapResponse.ok
-        ? ((await bootstrapResponse.json()) as { onboardingComplete?: boolean })
-        : undefined;
-      const assistant = assistantResponse.ok
-        ? ((await assistantResponse.json()) as { ref?: string })
-        : undefined;
-      return {
-        assistantRef: assistant?.ref ?? "",
-        assistantStatus: assistantResponse.status,
-        bootstrapStatus: bootstrapResponse.status,
-        onboardingComplete: bootstrap?.onboardingComplete ?? false,
-      };
-    });
+    const bootstrapResponse = await readJsonWithNetworkRetry<{
+      onboardingComplete?: boolean;
+    }>(page, "/api/v1/bootstrap");
+    const assistantResponse = await readJsonWithNetworkRetry<{ ref?: string }>(
+      page,
+      "/api/v1/system-assistant",
+    );
+    const preflight = {
+      assistantRef: assistantResponse.body.ref ?? "",
+      assistantStatus: assistantResponse.status,
+      bootstrapStatus: bootstrapResponse.status,
+      onboardingComplete: bootstrapResponse.body.onboardingComplete ?? false,
+    };
     expect(preflight.bootstrapStatus).toBe(200);
     expect(preflight.assistantStatus).toBe(200);
     expect(preflight.assistantRef).toMatch(/^agt_[A-Za-z0-9_-]+$/);
