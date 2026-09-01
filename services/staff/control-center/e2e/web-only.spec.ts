@@ -3157,7 +3157,10 @@ test.describe("web-only fresh installation", () => {
             grandparentClassName:
               badge.parentElement?.parentElement?.getAttribute("class") ?? "",
             height: box.height,
+            layoutHeight: (badge as HTMLElement).offsetHeight,
+            layoutWidth: (badge as HTMLElement).offsetWidth,
             parentHeight: parentBox?.height ?? 0,
+            parentLayoutHeight: badge.parentElement?.offsetHeight ?? 0,
             parentClassName: badge.parentElement?.getAttribute("class") ?? "",
             text: badge.textContent.trim(),
             width: box.width,
@@ -3171,12 +3174,14 @@ test.describe("web-only fresh installation", () => {
       expect(["inline-flex", "flex"], diagnostic).toContain(sample.display);
       expect(sample.alignSelf, diagnostic).not.toBe("stretch");
       expect(Number(sample.flexGrow), diagnostic).toBe(0);
-      expect(sample.height, diagnostic).toBeGreaterThan(0);
-      expect(sample.height, diagnostic).toBeLessThanOrEqual(32);
-      if (sample.parentHeight > 48) {
-        expect(sample.height, diagnostic).toBeLessThan(sample.parentHeight);
+      expect(sample.layoutHeight, diagnostic).toBeGreaterThan(0);
+      expect(sample.layoutHeight, diagnostic).toBeLessThanOrEqual(32);
+      if (sample.parentLayoutHeight > 48) {
+        expect(sample.layoutHeight, diagnostic).toBeLessThan(
+          sample.parentLayoutHeight,
+        );
       }
-      expect(sample.width, diagnostic).toBeLessThan(640);
+      expect(sample.layoutWidth, diagnostic).toBeLessThan(640);
     }
   });
 
