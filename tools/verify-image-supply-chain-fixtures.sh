@@ -625,6 +625,15 @@ if grep -Fq 'issuedAt' \
   echo "admission receipt contains non-deterministic issue time" >&2
   exit 1
 fi
+if grep -Eq -- '--output-signature|--signature([ =]|$)' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
+  echo "admission still uses removed Cosign detached-signature flags" >&2
+  exit 1
+fi
+grep -Fq -- '--bundle /work/image-digest.sigstore.json' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq -- '--bundle "$evidence_directory/$signed_name.sigstore.json"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq 'load_promotion_claim' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 promotion_uses_emptydir=$(yq eval-all 'select(.kind == "Job" and .metadata.labels."kodex.dev/image-admission-phase" == "promote") |
@@ -658,20 +667,22 @@ set -eu
 [ "${1:-}" = verify-blob ] || exit 1
 shift
 public_key=
-signature=
+bundle=
 payload=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --key) public_key=$2; shift 2 ;;
-    --signature) signature=$2; shift 2 ;;
+    --bundle) bundle=$2; shift 2 ;;
     --*) exit 1 ;;
     *) payload=$1; shift ;;
   esac
 done
-[ -r "$public_key" ] && [ -r "$signature" ] && [ -r "$payload" ] || exit 1
+[ -r "$public_key" ] && [ -r "$bundle" ] && [ -r "$payload" ] || exit 1
 decoded_signature=$(mktemp)
 trap 'rm -f -- "$decoded_signature"' EXIT HUP INT TERM
-base64 -d <"$signature" >"$decoded_signature"
+jq -er '.mediaType == "application/vnd.dev.sigstore.bundle.v0.3+json" and
+  (.messageSignature.signature | type == "string" and length > 0)' "$bundle" >/dev/null
+jq -er '.messageSignature.signature' "$bundle" | base64 -d >"$decoded_signature"
 openssl dgst -sha256 -verify "$public_key" -signature "$decoded_signature" "$payload" >/dev/null
 EOF
 chmod 0555 "$temporary_directory/bin/cosign"
@@ -690,15 +701,15 @@ chmod 0555 "$temporary_directory/bin/regctl"
 evidence_entries_fixture() {
   cat <<'EOF'
 image-digest.subject|application/vnd.kodex.image-digest.v1+text
-image-digest.sig|application/vnd.dev.cosign.signature.v1+text
+image-digest.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 provenance.json|application/vnd.kodex.provenance-binding.v1+json
-provenance.sig|application/vnd.dev.cosign.signature.v1+text
+provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 native-provenance.json|application/vnd.kodex.native-provenance.v1+json
-native-provenance.sig|application/vnd.dev.cosign.signature.v1+text
+native-provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 sbom.json|application/spdx+json
-sbom.sig|application/vnd.dev.cosign.signature.v1+text
+sbom.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 vulnerability.json|application/vnd.kodex.vulnerability-report.v1+json
-vulnerability.sig|application/vnd.dev.cosign.signature.v1+text
+vulnerability.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 signature.binding.json|application/vnd.kodex.signature-binding.v1+json
 admission.receipt.json|application/vnd.kodex.admission-receipt.v1+json
 cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
@@ -737,10 +748,14 @@ EOF
 
 sign_evidence_fixture() {
   payload_file=$1
-  signature_file=$2
-  openssl dgst -sha256 -sign "$temporary_directory/evidence-private.pem" "$payload_file" |
-    base64 | tr -d '\n' >"$signature_file"
-  printf '\n' >>"$signature_file"
+  bundle_file=$2
+  signature=$(openssl dgst -sha256 -sign "$temporary_directory/evidence-private.pem" "$payload_file" |
+    base64 | tr -d '\n')
+  jq -cn --arg signature "$signature" \
+    '{mediaType:"application/vnd.dev.sigstore.bundle.v0.3+json",
+      verificationMaterial:{publicKey:{hint:"fixture"}},
+      messageSignature:{messageDigest:{algorithm:"SHA2_256",digest:"fixture"},signature:$signature}}' \
+    >"$bundle_file"
 }
 
 expect_evidence_failure() {
@@ -801,7 +816,7 @@ EOF
 for signed_name in image-digest provenance native-provenance sbom vulnerability; do
   signed_file="$evidence_source/$signed_name.json"
   [[ $signed_name == image-digest ]] && signed_file="$evidence_source/image-digest.subject"
-  sign_evidence_fixture "$signed_file" "$evidence_source/$signed_name.sig"
+  sign_evidence_fixture "$signed_file" "$evidence_source/$signed_name.sigstore.json"
 done
 signature_identity=$(sha256sum "$evidence_source/cosign.pub" | awk '{print $1}')
 cat >"$evidence_source/signature.binding.json" <<EOF
@@ -879,10 +894,14 @@ jq '.layers[0].annotations["org.opencontainers.image.title"] = "foreign.json"' \
 expect_evidence_failure "OCI evidence manifest with foreign layer" "$evidence_recovered" \
   "$temporary_directory/evidence-foreign.json"
 cp -a "$evidence_recovered" "$temporary_directory/evidence-signature-mutated"
-printf 'A' >>"$temporary_directory/evidence-signature-mutated/sbom.sig"
+jq '.messageSignature.signature += "A"' \
+  "$temporary_directory/evidence-signature-mutated/sbom.sigstore.json" \
+  >"$temporary_directory/evidence-signature-mutated/sbom.sigstore.next.json"
+mv "$temporary_directory/evidence-signature-mutated/sbom.sigstore.next.json" \
+  "$temporary_directory/evidence-signature-mutated/sbom.sigstore.json"
 write_evidence_manifest_fixture "$temporary_directory/evidence-signature-mutated" \
   "$temporary_directory/evidence-signature-mutated.json"
-expect_evidence_failure "mutated detached evidence signature" \
+expect_evidence_failure "mutated Sigstore evidence bundle" \
   "$temporary_directory/evidence-signature-mutated" "$temporary_directory/evidence-signature-mutated.json"
 
 auth=$(printf 'pull-reader:current-password' | base64 | tr -d '\n')

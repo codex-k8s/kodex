@@ -222,15 +222,15 @@ claim_admission() {
 evidence_entries() {
   cat <<'EOF'
 image-digest.subject|application/vnd.kodex.image-digest.v1+text
-image-digest.sig|application/vnd.dev.cosign.signature.v1+text
+image-digest.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 provenance.json|application/vnd.kodex.provenance-binding.v1+json
-provenance.sig|application/vnd.dev.cosign.signature.v1+text
+provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 native-provenance.json|application/vnd.kodex.native-provenance.v1+json
-native-provenance.sig|application/vnd.dev.cosign.signature.v1+text
+native-provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 sbom.json|application/spdx+json
-sbom.sig|application/vnd.dev.cosign.signature.v1+text
+sbom.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 vulnerability.json|application/vnd.kodex.vulnerability-report.v1+json
-vulnerability.sig|application/vnd.dev.cosign.signature.v1+text
+vulnerability.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 signature.binding.json|application/vnd.kodex.signature-binding.v1+json
 admission.receipt.json|application/vnd.kodex.admission-receipt.v1+json
 cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
@@ -377,13 +377,13 @@ verify_recovered_evidence() {
       signed_file="$evidence_directory/$signed_name.json"
       [ "$signed_name" = image-digest ] && signed_file="$evidence_directory/image-digest.subject"
       cosign verify-blob --key "$evidence_directory/cosign.pub" \
-        --signature "$evidence_directory/$signed_name.sig" "$signed_file" >/dev/null 2>&1 ||
+        --bundle "$evidence_directory/$signed_name.sigstore.json" "$signed_file" >/dev/null 2>&1 ||
         fail "durable evidence signature verification failed"
     done
   else
     [ "$signature_identity" = not-applicable-rejected ] || fail "rejected evidence signature identity mismatch"
-    for signature_file in "$evidence_directory"/*.sig; do
-      [ ! -s "$signature_file" ] || fail "rejected evidence contains a signature"
+    for signature_bundle in "$evidence_directory"/*.sigstore.json; do
+      [ ! -s "$signature_bundle" ] || fail "rejected evidence contains a signature bundle"
     done
   fi
 }
@@ -626,9 +626,11 @@ case "${1:-}" in
       COSIGN_PASSWORD=$(cat /identity/cosign.password)
       export COSIGN_PASSWORD
       printf '%s\n' "$image_digest" >/work/image-digest.subject
-      cosign sign-blob --yes --key /identity/cosign.key --output-signature /work/image-digest.sig /work/image-digest.subject
+      cosign sign-blob --yes --key /identity/cosign.key \
+        --bundle /work/image-digest.sigstore.json /work/image-digest.subject >/dev/null
       for evidence in provenance native-provenance sbom vulnerability; do
-        cosign sign-blob --yes --key /identity/cosign.key --output-signature "/work/$evidence.sig" "/work/$evidence.json"
+        cosign sign-blob --yes --key /identity/cosign.key \
+          --bundle "/work/$evidence.sigstore.json" "/work/$evidence.json" >/dev/null
       done
     fi
     write_marker signature.complete
@@ -640,10 +642,10 @@ case "${1:-}" in
     signature_identity=not-applicable-rejected
     if [ "$verdict" = ACCEPTED ]; then
       login_registry "$staging_host" /identity/username /identity/password
-      cosign verify-blob --key /identity/cosign.pub --signature /work/image-digest.sig /work/image-digest.subject \
+      cosign verify-blob --key /identity/cosign.pub --bundle /work/image-digest.sigstore.json /work/image-digest.subject \
         >/work/signature-verification.json
       for evidence in provenance native-provenance sbom vulnerability; do
-        cosign verify-blob --key /identity/cosign.pub --signature "/work/$evidence.sig" "/work/$evidence.json" \
+        cosign verify-blob --key /identity/cosign.pub --bundle "/work/$evidence.sigstore.json" "/work/$evidence.json" \
           >"/work/$evidence-verification.json"
       done
       signature_identity=$(sha256sum /identity/cosign.pub | awk '{print $1}')
@@ -669,7 +671,7 @@ case "${1:-}" in
     printf '%s\n' "$image_digest" >/work/image-digest.subject
     cp /identity/cosign.pub /work/cosign.pub
     for signature in image-digest provenance native-provenance sbom vulnerability; do
-      [ -f "/work/$signature.sig" ] || : >"/work/$signature.sig"
+      [ -f "/work/$signature.sigstore.json" ] || : >"/work/$signature.sigstore.json"
     done
     evidence_total=0
     while IFS='|' read -r evidence_file evidence_media_type; do
