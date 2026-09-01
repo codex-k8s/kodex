@@ -787,7 +787,14 @@ patch_go_job control-plane-broker-bootstrap bootstrap services/internal/control-
 NODE_IMAGE='docker.io/library/node:24.17.0-alpine3.23@sha256:7c70d1235c0b4c2bc9eeed5393d19f1bbdde6885ba0d58ba62bb385d7b0f3ff1' \
 SOURCE_ROOT="$source_root" CACHE_ROOT="$cache_root" PUBLIC_HOST="$public_host" \
 SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" yq -i '
-  select(.kind != "ServersTransport" or .metadata.name != "staff-control-center") |
+  with(select(.kind == "ServersTransport" and .metadata.name == "staff-control-center");
+    .metadata.name = "control-api-gateway" |
+    .spec = {
+      "serverName":"control-api-gateway.kodex-system.svc",
+      "insecureSkipVerify":false,
+      "rootCAs":[{"secret":"control-api-gateway-public-tls-material"}]
+    }
+  ) |
   with(select(.kind == "Deployment" and .metadata.name == "staff-control-center");
     .spec.replicas = 1 |
     .spec.template.spec.securityContext.runAsNonRoot = false |
@@ -830,10 +837,20 @@ SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" yq -i '
     del(.metadata.annotations."traefik.ingress.kubernetes.io/service.serverstransport") |
     .spec.ports = [{"name":"http","port":8080,"targetPort":"http","protocol":"TCP"}]
   ) |
-  with(select(.kind == "Ingress" and
-      (.metadata.name == "staff-control-center" or .metadata.name == "staff-control-center-api"));
-    del(.metadata.annotations."traefik.ingress.kubernetes.io/router.middlewares") |
+  with(select(.kind == "Service" and .metadata.name == "control-api-gateway");
+    .metadata.annotations."traefik.ingress.kubernetes.io/service.serverstransport" =
+      "kodex-system-control-api-gateway@kubernetescrd"
+  ) |
+  with(select(.kind == "Ingress" and .metadata.name == "staff-control-center");
+    .metadata.annotations."traefik.ingress.kubernetes.io/router.middlewares" =
+      "kodex-system-staff-control-center-retry@kubernetescrd" |
     .spec.rules[].http.paths[].backend.service.port.name = "http"
+  ) |
+  with(select(.kind == "Ingress" and .metadata.name == "staff-control-center-api");
+    del(.metadata.annotations."traefik.ingress.kubernetes.io/router.middlewares") |
+    .spec.rules[].http.paths[].backend.service = {
+      "name":"control-api-gateway","port":{"name":"https"}
+    }
   ) |
   with(select(.kind == "ConfigMap" and (.metadata.name | test("^staff-control-center-runtime-")));
     .immutable = false |
@@ -853,6 +870,23 @@ SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" yq -i '
     } | to_json)
   )
 ' "$render"
+
+cat >>"$render" <<'YAML'
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: staff-control-center-retry
+  namespace: kodex-system
+  labels:
+    app.kubernetes.io/name: staff-control-center
+    app.kubernetes.io/part-of: kodex
+    kodex.dev/local-profile: hot-reload
+spec:
+  retry:
+    attempts: 4
+    initialInterval: 100ms
+YAML
 
 PUBLIC_HOST="$public_host" yq -i '
   with(select(.kind == "Deployment" and .metadata.name == "staff-control-center");
@@ -985,6 +1019,33 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
 ' >/dev/null || fail 'runtime-controller image annotations do not match effective local containers'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center")' "$output" >/dev/null ||
   fail 'frontend development workload is absent'
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  any(.[];
+    .kind == "ServersTransport" and .metadata.name == "control-api-gateway" and
+    .metadata.namespace == "kodex-system" and
+    .spec.serverName == "control-api-gateway.kodex-system.svc" and
+    .spec.insecureSkipVerify == false and
+    .spec.rootCAs == [{secret:"control-api-gateway-public-tls-material"}] and
+    ((.spec.rootCAsSecrets // []) | length) == 0) and
+  any(.[];
+    .kind == "Service" and .metadata.name == "control-api-gateway" and
+    .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
+      "kodex-system-control-api-gateway@kubernetescrd") and
+  any(.[];
+    .kind == "Ingress" and .metadata.name == "staff-control-center-api" and
+    .spec.rules[0].http.paths == [{
+      path:"/api/v1",pathType:"Prefix",
+      backend:{service:{name:"control-api-gateway",port:{name:"https"}}}
+    }]) and
+  any(.[];
+    .kind == "Ingress" and .metadata.name == "staff-control-center" and
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      "kodex-system-staff-control-center-retry@kubernetescrd") and
+  any(.[];
+    .kind == "Middleware" and .metadata.name == "staff-control-center-retry" and
+    .metadata.namespace == "kodex-system" and
+    .spec.retry == {attempts:4,initialInterval:"100ms"})
+' >/dev/null || fail 'local Control API direct Ingress transport is invalid'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$output" >/dev/null ||
   fail 'Control Plane development workload is absent'
 yq -o=json -I=0 '.' "$output" | jq -s -e --arg runnerImage "$runtime_runner_image" '

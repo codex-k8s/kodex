@@ -146,7 +146,6 @@ async function requestLatestKodexPlan(
         async () => {
           const candidates = await dialog
             .locator("article.assistant-message--user[data-turn-ref]")
-            .filter({ hasText: prompt })
             .evaluateAll((messages) =>
               messages.map((message) => ({
                 ref: message.getAttribute("data-turn-ref") ?? "",

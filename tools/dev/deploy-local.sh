@@ -83,6 +83,30 @@ readback_local_frontend_transport() {
     serverstransport.traefik.io/staff-control-center >/dev/null 2>&1; then
     fail 'obsolete local frontend ServersTransport is still present'
   fi
+  kubectl -n "$namespace" get \
+    serverstransport.traefik.io/control-api-gateway -o json | jq -e '
+      .spec.serverName == "control-api-gateway.kodex-system.svc" and
+      .spec.insecureSkipVerify == false and
+      .spec.rootCAs == [{secret:"control-api-gateway-public-tls-material"}] and
+      ((.spec.rootCAsSecrets // []) | length) == 0
+    ' >/dev/null || fail 'local Control API ServersTransport readback failed'
+  kubectl -n "$namespace" get service/control-api-gateway -o json | jq -e '
+    .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
+      "kodex-system-control-api-gateway@kubernetescrd"
+  ' >/dev/null || fail 'local Control API Service transport readback failed'
+  kubectl -n "$namespace" get ingress/staff-control-center-api -o json | jq -e '
+    .spec.rules[0].http.paths == [{
+      path:"/api/v1",pathType:"Prefix",
+      backend:{service:{name:"control-api-gateway",port:{name:"https"}}}
+    }]
+  ' >/dev/null || fail 'local Control API direct Ingress readback failed'
+  kubectl -n "$namespace" get ingress/staff-control-center -o json | jq -e '
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      "kodex-system-staff-control-center-retry@kubernetescrd"
+  ' >/dev/null || fail 'local frontend retry Ingress readback failed'
+  kubectl -n "$namespace" get middleware.traefik.io/staff-control-center-retry -o json | jq -e '
+    .spec.retry == {attempts:4,initialInterval:"100ms"}
+  ' >/dev/null || fail 'local frontend retry Middleware readback failed'
 }
 
 apply_image_admission_crd() {
