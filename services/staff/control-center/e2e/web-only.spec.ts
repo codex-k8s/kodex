@@ -555,6 +555,10 @@ test.describe("web-only fresh installation", () => {
     ].join(" ");
     await applyLatestKodexPlan(page, prompt, projectName);
 
+    const assistantDialog = page.getByRole("dialog", { name: "Kodex" });
+    await assistantDialog.getByRole("button", { name: "Закрыть" }).click();
+    await expect(assistantDialog).toHaveCount(0);
+
     await gotoWithRetry(page, "/projects");
     const projectLink = page.getByRole("link", {
       name: new RegExp(projectName),
