@@ -1232,7 +1232,8 @@ yq -e 'select(.kind == "StatefulSet" and .metadata.name == "seaweedfs")' "$outpu
   fail 'SeaweedFS local workload is absent'
 yq -e '
   select(.kind == "Job" and .metadata.name == "seaweedfs-bucket-bootstrap") |
-  any(.spec.template.spec.containers[];
+  .spec.template.spec.containers[] |
+  select(
     .name == "bootstrap" and
     .resources.requests.cpu == "500m" and
     .resources.requests.memory == "256Mi" and
