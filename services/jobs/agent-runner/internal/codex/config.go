@@ -28,8 +28,17 @@ type runtimeConfig struct {
 	CLIAuthCredentialStore string                       `toml:"cli_auth_credentials_store"`
 	History                historyConfig                `toml:"history"`
 	ShellEnvironmentPolicy shellEnvironmentPolicy       `toml:"shell_environment_policy"`
+	Features               runtimeFeatures              `toml:"features"`
 	MCPServers             map[string]mcpServerConfig   `toml:"mcp_servers"`
 	Permissions            map[string]permissionProfile `toml:"permissions"`
+}
+
+type runtimeFeatures struct {
+	CodeMode runtimeCodeModeConfig `toml:"code_mode"`
+}
+
+type runtimeCodeModeConfig struct {
+	DirectOnlyToolNamespaces []string `toml:"direct_only_tool_namespaces"`
 }
 
 type permissionProfile struct {
@@ -110,6 +119,9 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		Personality: overlay.Personality, AllowLoginShell: &allowLoginShell, ApprovalPolicy: input.CodexApprovalPolicy,
 		DefaultPermissions: permissionProfileName, CLIAuthCredentialStore: "file",
 		History: historyConfig{Persistence: historyPersistence},
+		Features: runtimeFeatures{CodeMode: runtimeCodeModeConfig{
+			DirectOnlyToolNamespaces: []string{"mcp__kodex"},
+		}},
 		Permissions: map[string]permissionProfile{permissionProfileName: {Extends: permissionBase,
 			Filesystem: map[string]string{
 				filepath.Join(input.CodexHome, "auth.json"): "deny",
@@ -130,6 +142,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	if err != nil || len(metadata.Undecoded()) != 0 || decoded.Model != input.Model ||
 		!decoded.MCPServers["kodex"].Required ||
 		decoded.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
+		!slices.Equal(decoded.Features.CodeMode.DirectOnlyToolNamespaces, []string{"mcp__kodex"}) ||
 		decoded.DefaultPermissions != permissionProfileName || decoded.Permissions[permissionProfileName].Extends != permissionBase ||
 		decoded.ShellEnvironmentPolicy.Inherit != "all" || !slices.Equal(decoded.ShellEnvironmentPolicy.IncludeOnly, includeOnly) ||
 		decoded.Permissions[permissionProfileName].Filesystem[filepath.Join(input.CodexHome, "auth.json")] != "deny" {
