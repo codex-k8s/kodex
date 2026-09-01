@@ -1028,7 +1028,7 @@ test.describe("web-only fresh installation", () => {
   test("runtime сотрудника публикует policy, config.toml overlay и окружение", async ({
     page,
   }) => {
-    requireRefs("projectRef", "coordinatorRef");
+    requireRefs("projectRef", "coordinatorRef", "analystRef");
     if (!discoveryMode || !runtimeEnvironmentRef) {
       await gotoWithRetry(page, `/projects/${projectRef}/environments/new`);
       await expectPageHeading(page, "Новое окружение");
@@ -3670,15 +3670,19 @@ async function uploadFilesWorkspaceArtifact(
     (candidate) =>
       candidate.request().method() === "POST" &&
       new URL(candidate.url()).pathname ===
-        `/api/v1/projects/${projectRef}/artifacts` &&
-      candidate.request().headers()["x-file-name"] === fileName,
+        `/api/v1/projects/${projectRef}/artifacts`,
   );
-  await page.locator('.files-workspace input[type="file"]').setInputFiles({
+  const fileChooser = page.waitForEvent("filechooser");
+  await uploadButton.click();
+  await (
+    await fileChooser
+  ).setFiles({
     name: fileName,
     mimeType: "text/plain",
     buffer: Buffer.from(content, "utf8"),
   });
   const upload = await response;
+  expect(upload.request().headers()["x-file-name"]).toBe(fileName);
   expect(upload.status(), await upload.text()).toBe(201);
   return (await upload.json()) as ArtifactReadback;
 }

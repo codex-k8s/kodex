@@ -42,9 +42,19 @@ type brokerRequest struct {
 }
 
 type brokerResponse struct {
-	Result Result `json:"result"`
-	OK     bool   `json:"ok"`
+	Result  Result                `json:"result"`
+	Failure providerBrokerFailure `json:"failure,omitempty"`
+	OK      bool                  `json:"ok"`
 }
+
+type providerBrokerFailure string
+
+const (
+	providerBrokerFailureAuthentication providerBrokerFailure = "AUTHENTICATION"
+	providerBrokerFailureAuthority      providerBrokerFailure = "AUTHORITY"
+	providerBrokerFailureMCP            providerBrokerFailure = "MCP"
+	providerBrokerFailureProvider       providerBrokerFailure = "PROVIDER"
+)
 
 type providerAuthenticationSnapshot struct {
 	AuthMode     string          `json:"auth_mode"`
@@ -148,10 +158,44 @@ func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcp
 	decoder := json.NewDecoder(bufio.NewReaderSize(connection, 64<<10))
 	decoder.DisallowUnknownFields()
 	var response brokerResponse
-	if err := decoder.Decode(&response); err != nil || !decodeEOF(decoder) || !response.OK {
+	if err := decoder.Decode(&response); err != nil || !decodeEOF(decoder) {
 		return Result{}, errors.New("isolated Codex provider failed")
 	}
+	if !response.OK {
+		return Result{}, providerBrokerError(response.Failure)
+	}
+	if response.Failure != "" {
+		return Result{}, errors.New("isolated Codex provider response is invalid")
+	}
 	return response.Result, nil
+}
+
+func providerBrokerError(failure providerBrokerFailure) error {
+	switch failure {
+	case providerBrokerFailureAuthentication:
+		return ErrProviderAuthentication
+	case providerBrokerFailureAuthority:
+		return ErrAuthorityRequestUnsupported
+	case providerBrokerFailureMCP:
+		return ErrRequiredMCPUnavailable
+	case providerBrokerFailureProvider:
+		return errors.New("isolated Codex provider failed")
+	default:
+		return errors.New("isolated Codex provider response is invalid")
+	}
+}
+
+func classifyProviderBrokerFailure(err error) providerBrokerFailure {
+	switch {
+	case errors.Is(err, ErrProviderAuthentication):
+		return providerBrokerFailureAuthentication
+	case errors.Is(err, ErrAuthorityRequestUnsupported):
+		return providerBrokerFailureAuthority
+	case errors.Is(err, ErrRequiredMCPUnavailable):
+		return providerBrokerFailureMCP
+	default:
+		return providerBrokerFailureProvider
+	}
 }
 
 // ServeProviderBroker запускается только в container UID 10002 без Kubernetes
@@ -218,7 +262,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	}
 	auth, err := readProviderAuthentication(request.Input)
 	if err != nil {
-		return err
+		return writeProviderBrokerFailure(connection, err)
 	}
 	defer clear(auth)
 	expectedDigest, err := pinnedProviderDigest(request.Input)
@@ -237,20 +281,27 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	}
 	bridge, err := startProviderMCPBridge(ctx, request.MCPSocket, request.MCPProxyToken)
 	if err != nil {
-		return err
+		return writeProviderBrokerFailure(connection, err)
 	}
 	defer bridge.Close()
 	if err := PrepareHomeWithAuth(request.Input, bridge.URL(), auth); err != nil {
-		return err
+		return writeProviderBrokerFailure(connection, err)
 	}
 	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, executeLocal, credentialrelay.Commit)
 	if err != nil {
-		return err
+		return writeProviderBrokerFailure(connection, err)
 	}
 	if result.Outcome != "SUCCEEDED" {
 		log.Printf("Codex provider turn completed with safe failure code: %s", result.FailureCode)
 	}
 	return json.NewEncoder(connection).Encode(brokerResponse{Result: result, OK: true})
+}
+
+func writeProviderBrokerFailure(connection io.Writer, err error) error {
+	return json.NewEncoder(connection).Encode(brokerResponse{
+		Failure: classifyProviderBrokerFailure(err),
+		OK:      false,
+	})
 }
 
 func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string,

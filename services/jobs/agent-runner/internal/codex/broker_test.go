@@ -126,6 +126,34 @@ func TestExecuteProviderTurnFailsClosedWhenRelayFails(t *testing.T) {
 	assertRemoved(t, authPath)
 }
 
+func TestProviderBrokerFailurePreservesSafeClass(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     error
+		failure providerBrokerFailure
+		want    error
+	}{
+		{name: "authentication", err: ErrProviderAuthentication, failure: providerBrokerFailureAuthentication, want: ErrProviderAuthentication},
+		{name: "authority", err: ErrAuthorityRequestUnsupported, failure: providerBrokerFailureAuthority, want: ErrAuthorityRequestUnsupported},
+		{name: "mcp", err: ErrRequiredMCPUnavailable, failure: providerBrokerFailureMCP, want: ErrRequiredMCPUnavailable},
+		{name: "provider", err: errors.New("transport"), failure: providerBrokerFailureProvider},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := classifyProviderBrokerFailure(test.err); got != test.failure {
+				t.Fatalf("classifyProviderBrokerFailure() = %q, want %q", got, test.failure)
+			}
+			err := providerBrokerError(test.failure)
+			if test.want != nil && !errors.Is(err, test.want) {
+				t.Fatalf("providerBrokerError() = %v, want %v", err, test.want)
+			}
+			if err == nil {
+				t.Fatal("providerBrokerError() returned nil")
+			}
+		})
+	}
+}
+
 func providerTurnFixture(t *testing.T, authentication []byte) (model.Input, string) {
 	t.Helper()
 	root := t.TempDir()

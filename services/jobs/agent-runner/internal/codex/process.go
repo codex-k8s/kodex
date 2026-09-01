@@ -80,7 +80,7 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 		return Result{}, server.abort(ctx, state, err)
 	}
 	if _, err := server.call(ctx, state, "account/read", map[string]bool{"refreshToken": false}); err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, server.abort(ctx, state, errors.Join(ErrProviderAuthentication, err))
 	}
 	threadParams := map[string]any{"approvalPolicy": input.CodexApprovalPolicy, "cwd": input.WorkspaceRoot,
 		"model": input.Model}

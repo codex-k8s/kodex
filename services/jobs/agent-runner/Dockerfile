@@ -35,9 +35,14 @@ RUN set -eu; \
 	npm install --global "${KODEX_CODEX_PACKAGE}"; \
 	binary=$(find /usr/local/lib/node_modules/@openai/codex -type f \
 		-path '*/vendor/*/bin/codex' -print -quit); \
+	code_mode_host=$(find /usr/local/lib/node_modules/@openai/codex -type f \
+		-path '*/vendor/*/bin/codex-code-mode-host' -print -quit); \
 	test -n "$binary" && test -x "$binary"; \
+	test -n "$code_mode_host" && test -x "$code_mode_host"; \
 	"$binary" --version >/dev/null; \
+	"$code_mode_host" --help >/dev/null; \
 	install -D -m 0555 "$binary" /out/codex; \
+	install -D -m 0555 "$code_mode_host" /out/codex-code-mode-host; \
 	npm cache clean --force
 
 FROM docker.io/library/debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS local-runtime
@@ -55,10 +60,12 @@ RUN set -eu; \
 	rm -rf /var/lib/apt/lists/* /root/.cache
 
 COPY --from=local-codex-cli --chmod=0555 /out/codex /usr/local/bin/codex
+COPY --from=local-codex-cli --chmod=0555 /out/codex-code-mode-host /usr/local/bin/codex-code-mode-host
 COPY --chmod=0555 --from=build /out/kodex-go-toolchain-guard /usr/local/bin/kodex-init
 COPY --chmod=0555 --from=runner-build /out/kodex-protected/kodex-agent-runner /usr/local/bin/kodex-agent-runner
 
-RUN codex --version >/dev/null
+RUN codex --version >/dev/null \
+	&& codex-code-mode-host --help >/dev/null
 
 ENV HOME=/home/kodex \
 	NPM_CONFIG_CACHE=/home/kodex/.npm \
@@ -219,6 +226,10 @@ RUN set -eu; \
 		"@playwright/test@${PLAYWRIGHT_VERSION}" \
 		"@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" \
 		"wait-on@${WAIT_ON_VERSION}"; \
+	code_mode_host=$(find /usr/local/lib/node_modules/@openai/codex -type f \
+		-path '*/vendor/*/bin/codex-code-mode-host' -print -quit); \
+	test -n "$code_mode_host" && test -x "$code_mode_host"; \
+	ln -sf "$code_mode_host" /usr/local/bin/codex-code-mode-host; \
 	playwright install --with-deps chromium; \
 	chmod -R a+rX "${PLAYWRIGHT_BROWSERS_PATH}"; \
 	node --version; \
@@ -263,6 +274,7 @@ RUN set -eu; \
 	command -v playwright-mcp >/dev/null; \
 	wait-on --version >/dev/null; \
 	codex --version >/dev/null; \
+	codex-code-mode-host --help >/dev/null; \
 	rm -rf /var/lib/apt/lists/* /root/.cache
 
 RUN groupadd --gid "${KODEX_AGENT_RUNNER_GID}" kodex \
