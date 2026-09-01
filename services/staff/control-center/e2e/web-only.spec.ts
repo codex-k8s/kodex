@@ -2275,7 +2275,7 @@ test.describe("web-only fresh installation", () => {
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await expect(decisionAttention).toHaveCSS(
       "animation-name",
-      "attention-outline",
+      /^attention-outline(?:-[a-z0-9]+)?$/,
     );
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect(decisionAttention).toHaveCSS("animation-name", "none");

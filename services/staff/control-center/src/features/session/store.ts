@@ -78,6 +78,10 @@ async function withOwnerSessionRetry<T>(request: () => Promise<T>): Promise<T> {
 
 function oidcManager(): UserManager {
   const config = runtimeConfig().oidc;
+  const requestTimeoutInSeconds = Math.max(
+    1,
+    Math.ceil(runtimeConfig().requestTimeoutMs / 1_000),
+  );
   return new UserManager({
     authority: config.authority,
     client_id: config.clientId,
@@ -85,6 +89,7 @@ function oidcManager(): UserManager {
     post_logout_redirect_uri: config.postLogoutRedirectUri,
     response_type: "code",
     scope: config.scope,
+    requestTimeoutInSeconds,
     loadUserInfo: false,
     automaticSilentRenew: false,
     monitorSession: false,
