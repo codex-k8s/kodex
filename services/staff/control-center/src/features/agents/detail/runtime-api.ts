@@ -16,7 +16,9 @@ import type {
   RuntimeSelection,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
-import { unwrap } from "@/shared/api/problem";
+import { asProblem, unwrap } from "@/shared/api/problem";
+
+const readRetryDelaysMs = [0, 200, 600] as const;
 
 function versionHeaders(headers: MutationHeaders): {
   "If-Match": string;
@@ -35,19 +37,25 @@ function versionHeaders(headers: MutationHeaders): {
 export async function loadAgentRuntime(
   agentRef: string,
 ): Promise<AgentRuntimeConfigurationView> {
-  return (
-    await unwrap(
-      getAgentRuntimeConfiguration({
-        path: { agentRef },
-        signal: requestSignal(),
-      }),
-    )
-  ).data;
+  return readWithRetry(
+    async () =>
+      (
+        await unwrap(
+          getAgentRuntimeConfiguration({
+            path: { agentRef },
+            signal: requestSignal(),
+          }),
+        )
+      ).data,
+  );
 }
 
 export async function loadRuntimeCatalog(): Promise<RuntimeSelection[]> {
-  return (await unwrap(listRuntimeSelections({ signal: requestSignal() }))).data
-    .items;
+  return readWithRetry(
+    async () =>
+      (await unwrap(listRuntimeSelections({ signal: requestSignal() }))).data
+        .items,
+  );
 }
 
 export async function saveAgentRuntime(
@@ -55,18 +63,23 @@ export async function saveAgentRuntime(
   input: AgentRuntimeConfigurationInput,
   agentVersion: number,
 ): Promise<AgentRuntimeConfigurationView> {
-  return (
-    await mutate(
-      (headers) =>
-        publishAgentRuntimeConfiguration({
-          path: { agentRef },
-          body: input,
-          headers: versionHeaders(headers),
-          signal: requestSignal(),
-        }),
-      agentVersion,
-    )
-  ).data;
+  return reconcileRuntimeMutation(
+    agentRef,
+    async () =>
+      (
+        await mutate(
+          (headers) =>
+            publishAgentRuntimeConfiguration({
+              path: { agentRef },
+              body: input,
+              headers: versionHeaders(headers),
+              signal: requestSignal(),
+            }),
+          agentVersion,
+        )
+      ).data,
+    (view) => runtimeConfigurationMatches(view, input),
+  );
 }
 
 export async function saveOverlayDraft(
@@ -74,18 +87,23 @@ export async function saveOverlayDraft(
   content: string,
   agentVersion: number,
 ): Promise<AgentRuntimeConfigurationView> {
-  return (
-    await mutate(
-      (headers) =>
-        createConfigOverlayDraft({
-          path: { agentRef },
-          body: { content },
-          headers: versionHeaders(headers),
-          signal: requestSignal(),
-        }),
-      agentVersion,
-    )
-  ).data;
+  return reconcileRuntimeMutation(
+    agentRef,
+    async () =>
+      (
+        await mutate(
+          (headers) =>
+            createConfigOverlayDraft({
+              path: { agentRef },
+              body: { content },
+              headers: versionHeaders(headers),
+              signal: requestSignal(),
+            }),
+          agentVersion,
+        )
+      ).data,
+    (view) => view.draftOverlay?.content === content,
+  );
 }
 
 export async function changeOverlay(
@@ -97,17 +115,26 @@ export async function changeOverlay(
     action === "VALIDATE"
       ? validateConfigOverlayDraft
       : publishConfigOverlayDraft;
-  return (
-    await mutate(
-      (headers) =>
-        request({
-          path: { agentRef },
-          headers: versionHeaders(headers),
-          signal: requestSignal(),
-        }),
-      agentVersion,
-    )
-  ).data;
+  return reconcileRuntimeMutation(
+    agentRef,
+    async () =>
+      (
+        await mutate(
+          (headers) =>
+            request({
+              path: { agentRef },
+              headers: versionHeaders(headers),
+              signal: requestSignal(),
+            }),
+          agentVersion,
+        )
+      ).data,
+    action === "VALIDATE"
+      ? (view) => view.draftOverlay?.state === "VALID"
+      : (view) =>
+          view.draftOverlay === undefined &&
+          view.publishedOverlay.state === "PUBLISHED",
+  );
 }
 
 export async function bindRuntimeEnvironment(
@@ -115,18 +142,23 @@ export async function bindRuntimeEnvironment(
   environmentRef: string,
   agentVersion: number,
 ): Promise<AgentRuntimeConfigurationView> {
-  return (
-    await mutate(
-      (headers) =>
-        bindAgentRuntimeEnvironment({
-          path: { agentRef },
-          body: { environmentRef },
-          headers: versionHeaders(headers),
-          signal: requestSignal(),
-        }),
-      agentVersion,
-    )
-  ).data;
+  return reconcileRuntimeMutation(
+    agentRef,
+    async () =>
+      (
+        await mutate(
+          (headers) =>
+            bindAgentRuntimeEnvironment({
+              path: { agentRef },
+              body: { environmentRef },
+              headers: versionHeaders(headers),
+              signal: requestSignal(),
+            }),
+          agentVersion,
+        )
+      ).data,
+    (view) => view.environment.ref === environmentRef,
+  );
 }
 
 export async function searchRuntimeEnvironments(
@@ -134,17 +166,89 @@ export async function searchRuntimeEnvironments(
   search: string,
   pageToken?: string,
 ): Promise<RuntimeEnvironmentPage> {
+  return readWithRetry(
+    async () =>
+      (
+        await unwrap(
+          listRuntimeEnvironmentSets({
+            path: { projectRef },
+            query: {
+              ...(search.trim() ? { query: search.trim() } : {}),
+              ...(pageToken ? { pageToken } : {}),
+              pageSize: 30,
+            },
+            signal: requestSignal(),
+          }),
+        )
+      ).data,
+  );
+}
+
+async function readWithRetry<T>(request: () => Promise<T>): Promise<T> {
+  let lastProblem = asProblem(new Error("Runtime read did not start"));
+  for (const delayMs of readRetryDelaysMs) {
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) =>
+        globalThis.setTimeout(resolve, delayMs),
+      );
+    }
+    try {
+      return await request();
+    } catch (error) {
+      lastProblem = asProblem(error);
+      if (!lastProblem.retryable || delayMs === readRetryDelaysMs.at(-1)) {
+        throw lastProblem;
+      }
+    }
+  }
+  throw lastProblem;
+}
+
+async function reconcileRuntimeMutation(
+  agentRef: string,
+  mutateRuntime: () => Promise<AgentRuntimeConfigurationView>,
+  matchesIntent: (view: AgentRuntimeConfigurationView) => boolean,
+): Promise<AgentRuntimeConfigurationView> {
+  try {
+    return await mutateRuntime();
+  } catch (error) {
+    const mutationProblem = asProblem(error);
+    if (!mutationProblem.retryable) throw mutationProblem;
+    try {
+      const authoritative = await loadAgentRuntime(agentRef);
+      if (matchesIntent(authoritative)) return authoritative;
+    } catch {
+      // Сохраняем исходную ошибку, если авторитетная сверка недоступна.
+    }
+    throw mutationProblem;
+  }
+}
+
+function runtimeConfigurationMatches(
+  view: AgentRuntimeConfigurationView,
+  input: AgentRuntimeConfigurationInput,
+): boolean {
+  const current = view.configuration;
   return (
-    await unwrap(
-      listRuntimeEnvironmentSets({
-        path: { projectRef },
-        query: {
-          ...(search.trim() ? { query: search.trim() } : {}),
-          ...(pageToken ? { pageToken } : {}),
-          pageSize: 30,
-        },
-        signal: requestSignal(),
-      }),
+    current.runtimeProfileRef === input.runtimeProfileRef &&
+    current.model === input.model &&
+    current.providerPolicy.mode === input.providerPolicyMode &&
+    providerAccountsMatch(
+      current.providerPolicy.accountCandidates,
+      input.providerAccounts,
     )
-  ).data;
+  );
+}
+
+function providerAccountsMatch(
+  current: ReadonlyArray<{ accountRef: string; weight: number }>,
+  requested: ReadonlyArray<{ accountRef: string; weight: number }>,
+): boolean {
+  if (current.length !== requested.length) return false;
+  const byReference = new Map(
+    current.map((item) => [item.accountRef, item.weight] as const),
+  );
+  return requested.every(
+    (item) => byReference.get(item.accountRef) === item.weight,
+  );
 }

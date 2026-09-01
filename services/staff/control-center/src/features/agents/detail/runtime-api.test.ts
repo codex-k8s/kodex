@@ -26,6 +26,7 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
   validateConfigOverlayDraft: mocks.validateConfigOverlayDraft,
 }));
 vi.mock("@/shared/api/problem", () => ({
+  asProblem: (error: unknown) => error,
   unwrap: (value: unknown) => Promise.resolve(value),
 }));
 vi.mock("@/shared/api/mutation", () => ({
@@ -41,7 +42,9 @@ vi.mock("@/shared/api/mutation", () => ({
 }));
 
 import {
+  loadAgentRuntime,
   loadRuntimeCatalog,
+  saveAgentRuntime,
   saveOverlayDraft,
   searchRuntimeEnvironments,
 } from "@/features/agents/detail/runtime-api";
@@ -96,5 +99,86 @@ describe("agent detail runtime api", () => {
       },
       signal: mocks.signal,
     });
+  });
+
+  it("после неопределённого ответа мутации принимает только совпавший авторитетный runtime", async () => {
+    const uncertain = Object.assign(new Error("response body was lost"), {
+      retryable: true,
+    });
+    const input = {
+      runtimeProfileRef: "runtime_openai",
+      model: "gpt-5.6-sol",
+      providerPolicyMode: "FIXED" as const,
+      providerAccounts: [{ accountRef: "account-2", weight: 1 }],
+    };
+    const authoritative = {
+      agentVersion: 9,
+      configuration: {
+        runtimeProfileRef: input.runtimeProfileRef,
+        model: input.model,
+        providerPolicy: {
+          mode: input.providerPolicyMode,
+          accountCandidates: input.providerAccounts,
+        },
+      },
+    };
+    mocks.publishAgentRuntimeConfiguration.mockRejectedValueOnce(uncertain);
+    mocks.getAgentRuntimeConfiguration.mockResolvedValueOnce({
+      data: authoritative,
+    });
+
+    await expect(saveAgentRuntime("agent_sales", input, 8)).resolves.toBe(
+      authoritative,
+    );
+    expect(mocks.publishAgentRuntimeConfiguration).toHaveBeenCalledTimes(1);
+    expect(mocks.getAgentRuntimeConfiguration).toHaveBeenCalledTimes(1);
+  });
+
+  it("не скрывает неопределённый ответ мутации при несовпавшем readback", async () => {
+    const uncertain = Object.assign(new Error("response body was lost"), {
+      retryable: true,
+    });
+    mocks.publishAgentRuntimeConfiguration.mockRejectedValueOnce(uncertain);
+    mocks.getAgentRuntimeConfiguration.mockResolvedValueOnce({
+      data: {
+        configuration: {
+          runtimeProfileRef: "runtime_old",
+          model: "gpt-5.5-sol",
+          providerPolicy: { mode: "LEAST_USED", accountCandidates: [] },
+        },
+      },
+    });
+
+    await expect(
+      saveAgentRuntime(
+        "agent_sales",
+        {
+          runtimeProfileRef: "runtime_openai",
+          model: "gpt-5.6-sol",
+          providerPolicyMode: "FIXED",
+          providerAccounts: [{ accountRef: "account-2", weight: 1 }],
+        },
+        8,
+      ),
+    ).rejects.toBe(uncertain);
+    expect(mocks.publishAgentRuntimeConfiguration).toHaveBeenCalledTimes(1);
+    expect(mocks.getAgentRuntimeConfiguration).toHaveBeenCalledTimes(1);
+  });
+
+  it("повторяет безопасное runtime-чтение после временного сетевого сбоя", async () => {
+    vi.useFakeTimers();
+    const transient = Object.assign(new Error("Failed to fetch"), {
+      retryable: true,
+    });
+    const authoritative = { agentVersion: 4 };
+    mocks.getAgentRuntimeConfiguration
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce({ data: authoritative });
+
+    const result = loadAgentRuntime("agent_sales");
+    await vi.runAllTimersAsync();
+    await expect(result).resolves.toBe(authoritative);
+    expect(mocks.getAgentRuntimeConfiguration).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
 });
