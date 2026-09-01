@@ -58,11 +58,12 @@ type shellEnvironmentPolicy struct {
 }
 
 type mcpServerConfig struct {
-	URL                   string `toml:"url"`
-	Required              bool   `toml:"required"`
-	BearerTokenEnvVar     string `toml:"bearer_token_env_var"`
-	StartupTimeoutSeconds int    `toml:"startup_timeout_sec"`
-	ToolTimeoutSeconds    int    `toml:"tool_timeout_sec"`
+	URL                      string `toml:"url"`
+	Required                 bool   `toml:"required"`
+	BearerTokenEnvVar        string `toml:"bearer_token_env_var"`
+	StartupTimeoutSeconds    int    `toml:"startup_timeout_sec"`
+	ToolTimeoutSeconds       int    `toml:"tool_timeout_sec"`
+	DefaultToolsApprovalMode string `toml:"default_tools_approval_mode"`
 }
 
 func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
@@ -131,8 +132,8 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		ShellEnvironmentPolicy: shellEnvironmentPolicy{Inherit: "all", IgnoreDefaultExcludes: true,
 			IncludeOnly: includeOnly, Set: environmentSet},
 		MCPServers: map[string]mcpServerConfig{"kodex": {URL: mcpURL,
-			BearerTokenEnvVar: "KODEX_MCP_PROXY_TOKEN",
-			Required:          true, StartupTimeoutSeconds: 15, ToolTimeoutSeconds: 60}}}
+			BearerTokenEnvVar: "KODEX_MCP_PROXY_TOKEN", DefaultToolsApprovalMode: "approve",
+			Required: true, StartupTimeoutSeconds: 15, ToolTimeoutSeconds: 60}}}
 	var raw bytes.Buffer
 	if err := toml.NewEncoder(&raw).Encode(config); err != nil {
 		return errors.New("encode Codex configuration")
@@ -142,6 +143,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	if err != nil || len(metadata.Undecoded()) != 0 || decoded.Model != input.Model ||
 		!decoded.MCPServers["kodex"].Required ||
 		decoded.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
+		decoded.MCPServers["kodex"].DefaultToolsApprovalMode != "approve" ||
 		!slices.Equal(decoded.Features.CodeMode.DirectOnlyToolNamespaces, []string{"mcp__kodex"}) ||
 		decoded.DefaultPermissions != permissionProfileName || decoded.Permissions[permissionProfileName].Extends != permissionBase ||
 		decoded.ShellEnvironmentPolicy.Inherit != "all" || !slices.Equal(decoded.ShellEnvironmentPolicy.IncludeOnly, includeOnly) ||

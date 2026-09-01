@@ -43,6 +43,7 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 		profile.Filesystem["/run/secrets"] != "deny" ||
 		profile.Filesystem["/var/run/secrets"] != "" ||
 		config.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
+		config.MCPServers["kodex"].DefaultToolsApprovalMode != "approve" ||
 		!slices.Equal(config.Features.CodeMode.DirectOnlyToolNamespaces, []string{"mcp__kodex"}) {
 		t.Fatalf("provider permission boundary is incomplete: %#v", config)
 	}
