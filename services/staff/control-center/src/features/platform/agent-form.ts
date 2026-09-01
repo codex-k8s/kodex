@@ -15,3 +15,11 @@ export function isAgentDraftComplete(input: AgentDraft): boolean {
     input.runtimeRef,
   ].every((value) => value.trim().length > 0);
 }
+
+export function resolveAgentRuntimeRef(
+  current: string,
+  available: readonly string[],
+): string {
+  if (available.includes(current)) return current;
+  return available[0] ?? "";
+}

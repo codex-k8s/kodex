@@ -110,6 +110,12 @@ async function openKodex(page: Page, newConversation = false): Promise<void> {
   await expect(dialog.locator("article.assistant-message")).toHaveCount(0);
 }
 
+async function closeKodex(page: Page): Promise<void> {
+  const dialog = page.getByRole("dialog", { name: "Kodex" });
+  await dialog.getByRole("button", { name: "Закрыть" }).click();
+  await expect(dialog).toHaveCount(0);
+}
+
 async function requestLatestKodexPlan(
   page: Page,
   prompt: string,
@@ -555,9 +561,7 @@ test.describe("web-only fresh installation", () => {
     ].join(" ");
     await applyLatestKodexPlan(page, prompt, projectName);
 
-    const assistantDialog = page.getByRole("dialog", { name: "Kodex" });
-    await assistantDialog.getByRole("button", { name: "Закрыть" }).click();
-    await expect(assistantDialog).toHaveCount(0);
+    await closeKodex(page);
 
     await gotoWithRetry(page, "/projects");
     const projectLink = page.getByRole("link", {
@@ -941,6 +945,7 @@ test.describe("web-only fresh installation", () => {
         "Не запускай его и не меняй другие объекты.",
       ].join(" ");
       await applyLatestKodexPlan(page, prompt, analystName);
+      await closeKodex(page);
 
       await gotoWithRetry(page, `/projects/${projectRef}/agents`);
       const analystLink = page.getByRole("link", {
@@ -2174,6 +2179,7 @@ test.describe("web-only fresh installation", () => {
         "Не создавай и не меняй сотрудников, не запускай Процесс и не создавай другие объекты.",
       ].join(" ");
       await applyLatestKodexPlan(page, prompt, workflowName);
+      await closeKodex(page);
 
       await gotoWithRetry(page, `/projects/${projectRef}/workflows`);
       const workflowLink = page.getByRole("link", {

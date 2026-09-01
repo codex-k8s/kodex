@@ -17,7 +17,10 @@ import {
 } from "@/features/agents/catalog/model";
 import { useAgentCatalogStore } from "@/features/agents/catalog/store";
 import { usePlatformStore } from "@/features/platform/store";
-import { isAgentDraftComplete } from "@/features/platform/agent-form";
+import {
+  isAgentDraftComplete,
+  resolveAgentRuntimeRef,
+} from "@/features/platform/agent-form";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -102,6 +105,17 @@ watch(catalogView, (value) => {
     // Выбор вида остаётся рабочим в текущей сессии без localStorage.
   }
 });
+
+watch(
+  runtimes,
+  (available) => {
+    form.runtimeRef = resolveAgentRuntimeRef(
+      form.runtimeRef,
+      available.map((runtime) => runtime.ref),
+    );
+  },
+  { immediate: true },
+);
 
 watch(catalogQuery, (value) => {
   if (searchTimer !== undefined) window.clearTimeout(searchTimer);
