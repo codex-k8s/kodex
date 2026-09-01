@@ -522,6 +522,20 @@ grep -Fq 'regctl artifact put "$@" "$evidence_tag"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq 'regctl artifact get "$evidence_reference" --file "$evidence_name"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq '"check-for-app-update": false' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq '"ca-cert": "/identity/ca.pem"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq '"tls-cert": "/identity/registry-client.crt"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq '"tls-key": "/identity/registry-client.key"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'syft --config /tmp/syft.json --from registry "$source_ref"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'fail "SBOM generation failed"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'fail "vulnerability scan failed"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 if rg -q -- '--slurpfile|admission\.evidence\.json' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
   echo "admission evidence still reserializes signed payloads" >&2

@@ -448,6 +448,29 @@ login_registry() {
     --pass-stdin <"$password_file" >/dev/null
 }
 
+write_syft_registry_config() {
+  host=$1
+  username_file=$2
+  password_file=$3
+  jq -n --arg authority "$host" --rawfile username "$username_file" \
+    --rawfile password "$password_file" '
+      {
+        "check-for-app-update": false,
+        registry: {
+          "ca-cert": "/identity/ca.pem",
+          auth: [{
+            authority: $authority,
+            username: ($username | rtrimstr("\n") | rtrimstr("\r")),
+            password: ($password | rtrimstr("\n") | rtrimstr("\r")),
+            "tls-cert": "/identity/registry-client.crt",
+            "tls-key": "/identity/registry-client.key"
+          }]
+        }
+      }
+    ' >/tmp/syft.json || fail "Syft registry configuration failed"
+  chmod 0600 /tmp/syft.json
+}
+
 verify_image_and_provenance() {
   regctl manifest get "$source_ref" --format raw-body >/work/image-index.json
   jq -e '.manifests | type == "array" and length >= 2' /work/image-index.json >/dev/null ||
@@ -572,10 +595,15 @@ case "${1:-}" in
     login_registry "$staging_host" /identity/username /identity/password
     [ "$(regctl image digest "$source_ref")" = "$image_digest" ] || fail "staging digest mismatch"
     verify_image_and_provenance
-    syft "$source_ref" -o spdx-json=/work/sbom.json
-    if grype sbom:/work/sbom.json --fail-on high -o json >/work/vulnerability.json; then
+    write_syft_registry_config "$staging_host" /identity/username /identity/password
+    syft --config /tmp/syft.json --from registry "$source_ref" \
+      -o spdx-json=/work/sbom.json || fail "SBOM generation failed"
+    if GRYPE_CHECK_FOR_APP_UPDATE=false \
+      grype sbom:/work/sbom.json --fail-on high -o json >/work/vulnerability.json; then
       printf '%s\n' ACCEPTED >/work/verdict
     else
+      jq -e '.matches | type == "array"' /work/vulnerability.json >/dev/null ||
+        fail "vulnerability scan failed"
       printf '%s\n' REJECTED >/work/verdict
     fi
     sha256sum /work/sbom.json | awk '{print $1}' >/work/sbom.sha256
