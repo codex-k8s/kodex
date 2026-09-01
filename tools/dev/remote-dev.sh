@@ -8,7 +8,7 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 host-preflight|host-apply|up|status|smoke|e2e|down|teleport" \
+    "Usage: $0 host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport" \
     '  [--env-file <private-path>] [--resource-prefix <slug>]' \
     '  [--run-timeout-ms <milliseconds>]' >&2
 }
@@ -30,7 +30,7 @@ while (($# > 0)); do
   esac
 done
 case "$command_name" in
-  host-preflight|host-apply|up|status|smoke|e2e|down|teleport) ;;
+  host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport) ;;
   *) usage; fail 'command is invalid' ;;
 esac
 
@@ -74,6 +74,17 @@ if [[ "$command_name" == host-apply ]]; then
   KUBECONFIG="$kubeconfig" kubectl get --raw=/readyz >/dev/null ||
     fail 'operator kubeconfig readback failed'
   printf 'Kodex remote host preparation completed; start a new SSH session before up\n'
+  exit 0
+fi
+if [[ "$command_name" == host-readback ]]; then
+  sudo -n "$repository_root/tools/install/prepare-host.sh" --mode readback \
+    "${host_arguments[@]}"
+  id -nG | tr ' ' '\n' | grep -Fxq docker ||
+    fail 'operator is not a member of the docker group'
+  docker info >/dev/null 2>&1 || fail 'Docker daemon is unavailable to the operator'
+  KUBECONFIG="$kubeconfig" kubectl get --raw=/readyz >/dev/null ||
+    fail 'operator kubeconfig readback failed'
+  printf 'Kodex remote host readback completed\n'
   exit 0
 fi
 

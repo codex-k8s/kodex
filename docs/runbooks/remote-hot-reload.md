@@ -69,6 +69,7 @@ Teleport Community Edition использует отдельный GitHub OAuth 
 ```bash
 ./tools/dev/remote-dev.sh host-preflight --env-file .kodex-remote-env
 ./tools/dev/remote-dev.sh host-apply --env-file .kodex-remote-env
+./tools/dev/remote-dev.sh host-readback --env-file .kodex-remote-env
 ```
 
 После `host-apply` нужно открыть новую SSH-сессию, чтобы применилось членство

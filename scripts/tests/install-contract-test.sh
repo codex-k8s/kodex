@@ -535,7 +535,7 @@ jq -e '
 for remote_contract in \
   'KODEX_DEV_TLS_MODE=public-acme' \
   'preflight-public-hosts.sh' \
-  'host-preflight|host-apply|up|status|smoke|e2e|down|teleport' \
+  'host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport' \
   'KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET'; do
   rg -Fq -- "$remote_contract" \
     "$repository_root/tools/dev/remote-dev.sh" "$repository_root/dev.sh" \
