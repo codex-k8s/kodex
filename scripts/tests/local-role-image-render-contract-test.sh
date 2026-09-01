@@ -141,6 +141,16 @@ policy_json=$(yq -o=json -I=0 '
   select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy")
 ' "$render")
 [[ -n "$policy_json" && "$policy_json" != null ]] || fail 'rendered owner intent is absent'
+expected_components_lock_digest=$(sha256sum "$source_root/tools/dev/components.lock.json" | awk '{print $1}')
+jq -e --arg digest "$expected_components_lock_digest" '
+  .data.policySHA256 == $digest and
+  .data.roleRuntimeContractSHA256 == $digest
+' <<<"$policy_json" >/dev/null ||
+  fail 'local policy or role runtime contract identity is not pinned to the component lock'
+source_revision=$(git -C "$source_root" rev-parse HEAD)
+source_digest=$(printf '%s' "$source_revision" | sha256sum | awk '{print $1}')
+[[ "$expected_components_lock_digest" != "$source_digest" ]] ||
+  fail 'component lock and source revision digests unexpectedly collide'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   all(.[] | select(.kind == "Deployment" or .kind == "StatefulSet" or
       .kind == "Job");
@@ -229,7 +239,6 @@ expected_frontend_sha256=$("$source_root/tools/dev/resolve-local-dockerfile-fron
 actual_frontend_sha256=$(jq -er '.data.frontendSHA256' <<<"$policy_json")
 [[ "$actual_frontend_sha256" == "$expected_frontend_sha256" ]] ||
   fail 'owner intent frontend digest does not match the versioned frontend source'
-source_revision=$(git -C "$source_root" rev-parse HEAD)
 jobs="$temporary_directory/admission-jobs.yaml"
 IMAGE_ADMISSION_POLICY_JSON="$policy_json" \
   "$source_root/tools/render-image-admission-job.sh" staging \

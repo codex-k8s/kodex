@@ -112,6 +112,10 @@ done
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 [[ "$repository_root" == "$source_root" ]] || fail 'source root must match the current worktree'
 lock_file="$repository_root/tools/dev/components.lock.json"
+components_lock_digest=$(sha256sum "$lock_file" | awk '{print $1}')
+[[ "$components_lock_digest" =~ ^[a-f0-9]{64}$ &&
+  "$components_lock_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+  fail 'local component lock digest is invalid'
 seaweedfs_image=$(jq -er '
   .images[] | select(.name == "seaweedfs" and .version == "4.41") | .reference
 ' "$lock_file") || fail 'SeaweedFS image lock is absent'
@@ -311,6 +315,7 @@ ADMISSION_TOOLS_SHA256="$admission_tools_sha256" \
 PROMOTED_PULL_HOST="$promoted_pull_host" \
 RUNNER_DIGEST="$runner_digest" \
 SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
+COMPONENTS_LOCK_DIGEST="$components_lock_digest" \
 FRONTEND_SHA256="$frontend_sha256" \
 ROLE_INPUT_MANIFEST_DIGEST="$role_image_input_manifest_digest" \
 ROLE_INPUT_PAYLOAD_SHA256="$role_image_input_payload_sha256" \
@@ -359,13 +364,13 @@ ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
     .data.nodeReadbackImage = (strenv(PROMOTED_PULL_HOST) + "/kodex/agent-runner@" + strenv(RUNNER_DIGEST)) |
     .data.roleImageInputRepository = "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-image-inputs" |
     .data.policyRevision = "1" |
-    .data.policySHA256 = strenv(SOURCE_DIGEST) |
+    .data.policySHA256 = strenv(COMPONENTS_LOCK_DIGEST) |
     .data.trustedRoleBaseRepository = "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner" |
     .data.trustedRoleBaseDigest = strenv(RUNNER_DIGEST) |
     .data.frontendSHA256 = strenv(FRONTEND_SHA256) |
     .data.toolchainSHA256 = strenv(ADMISSION_TOOLS_SHA256) |
     .data.roleRuntimeContractRevision = "1" |
-    .data.roleRuntimeContractSHA256 = strenv(SOURCE_DIGEST)
+    .data.roleRuntimeContractSHA256 = strenv(COMPONENTS_LOCK_DIGEST)
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime");
     .data.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256 = strenv(ADMISSION_TOOLS_SHA256)
