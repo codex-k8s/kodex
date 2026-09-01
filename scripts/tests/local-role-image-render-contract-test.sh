@@ -99,6 +99,9 @@ seed_rootless_writes=$(rg -c --fixed-strings 'docker run --rm --network host --u
   "$source_root/tools/dev/seed-local-image-supply-chain.sh")
 [[ "$seed_rootless_writes" == 1 ]] ||
   fail 'rootless Docker registry seed must use container root for its private bind mount'
+rg -Fq -- "-ec 'rm -rf /work/docker /work/home'" \
+  "$source_root/tools/dev/seed-local-image-supply-chain.sh" ||
+  fail 'registry seed cleanup cannot remove container-owned temporary state'
 rg -F '$gomodcache/cache/download/sumdb/sum.golang.org' \
   "$source_root/tools/dev/run-go-hot-reload.sh" >/dev/null ||
   fail 'hot-reload bootstrap does not prepare the module-cache SumDB path'

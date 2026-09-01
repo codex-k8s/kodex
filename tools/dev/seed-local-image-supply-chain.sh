@@ -93,6 +93,11 @@ temporary_directory=$(mktemp -d)
 port_forward_pid=""
 cleanup() {
   [[ -z "$port_forward_pid" ]] || kill "$port_forward_pid" >/dev/null 2>&1 || true
+  if [[ -d "$temporary_directory/docker" || -d "$temporary_directory/home" ]]; then
+    docker run --rm --user 0:0 \
+      -v "$temporary_directory:/work" --entrypoint /bin/sh "$tools_tag" \
+      -ec 'rm -rf /work/docker /work/home' >/dev/null 2>&1 || true
+  fi
   rm -rf -- "$temporary_directory"
 }
 trap cleanup EXIT
