@@ -28,6 +28,7 @@ const (
 	provenanceBindingSchema = "kodex.dev/image-provenance-binding/v1"
 	expectedBuilderID       = "spiffe://kodex.local/ns/kodex-system/sa/role-image-builder"
 	expectedBuildType       = "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md"
+	provenanceAttestation   = "mode=min,version=v1,builder-id=" + expectedBuilderID
 )
 
 type Config struct {
@@ -253,7 +254,7 @@ func (executor *Executor) Build(
 		"--opt", "label:kodex.dev/immutable-build-sha256=" + input.GetImmutableBuildSha256(),
 		"--opt", fmt.Sprintf("label:kodex.dev/policy-revision=%d", input.GetPolicyRevision()),
 		"--opt", "label:kodex.dev/policy-sha256=" + input.GetPolicySha256(),
-		"--opt", "attest:provenance=mode=min,builder-id=" + expectedBuilderID, "--progress=rawjson",
+		"--opt", "attest:provenance=" + provenanceAttestation, "--progress=rawjson",
 		"--output", "type=image,name=" + tag + ",push=true", "--metadata-file", metadataFile}
 	command := exec.CommandContext(ctx, executor.config.Binary, args...)
 	command.Env = append(os.Environ(), "DOCKER_CONFIG="+filepath.Dir(executor.config.BuildKitPullDockerConfig), "HOME="+prepared.root)

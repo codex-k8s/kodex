@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+func TestProvenanceAttestationPinsSLSAV1(t *testing.T) {
+	t.Parallel()
+
+	want := "mode=min,version=v1,builder-id=spiffe://kodex.local/ns/kodex-system/sa/role-image-builder"
+	if provenanceAttestation != want {
+		t.Fatalf("provenance attestation = %q, want %q", provenanceAttestation, want)
+	}
+}
+
 func TestBuildKitReadinessUsesSupportedTinyLocalExport(t *testing.T) {
 	t.Parallel()
 	dockerfile := string(buildKitReadinessDockerfile(
