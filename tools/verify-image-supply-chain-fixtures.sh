@@ -580,6 +580,41 @@ grep -Fq 'fail "SBOM generation failed"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq 'fail "vulnerability scan failed"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'kodex.dev/fix-available-high-or-critical/v1' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/vulnerability-policy.jq"
+grep -Fq 'unresolvedNoFixMatchCount' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/vulnerability-policy.jq"
+grep -Fq '.kodexPolicy.blockingMatchCount == 0' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+if grep -Fq -- '--fail-on high' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
+  echo "admission discards the complete vulnerability report through fail-on" >&2
+  exit 1
+fi
+cat >"$temporary_directory/vulnerability-no-fix.json" <<'EOF'
+{"matches":[{"vulnerability":{"severity":"Critical","fix":{"state":"wont-fix","versions":[]}}}]}
+EOF
+jq --argjson policy_revision 1 --arg policy_sha256 "$(printf 'a%.0s' {1..64})" \
+  -f "$repository_root/deploy/k8s/base/image-supply-chain/vulnerability-policy.jq" \
+  "$temporary_directory/vulnerability-no-fix.json" >"$temporary_directory/vulnerability-no-fix.result.json"
+jq -e '
+  .kodexPolicy.highOrCriticalMatchCount == 1 and
+  .kodexPolicy.blockingMatchCount == 0 and
+  .kodexPolicy.unresolvedNoFixMatchCount == 1 and
+  (.matches | length) == 1
+' "$temporary_directory/vulnerability-no-fix.result.json" >/dev/null
+cat >"$temporary_directory/vulnerability-fixable.json" <<'EOF'
+{"matches":[{"vulnerability":{"severity":"High","fix":{"state":"fixed","versions":["2.0.0"]}}}]}
+EOF
+jq --argjson policy_revision 1 --arg policy_sha256 "$(printf 'b%.0s' {1..64})" \
+  -f "$repository_root/deploy/k8s/base/image-supply-chain/vulnerability-policy.jq" \
+  "$temporary_directory/vulnerability-fixable.json" >"$temporary_directory/vulnerability-fixable.result.json"
+jq -e '
+  .kodexPolicy.highOrCriticalMatchCount == 1 and
+  .kodexPolicy.blockingMatchCount == 1 and
+  .kodexPolicy.unresolvedNoFixMatchCount == 0 and
+  (.matches | length) == 1
+' "$temporary_directory/vulnerability-fixable.result.json" >/dev/null
 if rg -q -- '--slurpfile|admission\.evidence\.json' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
   echo "admission evidence still reserializes signed payloads" >&2

@@ -23,7 +23,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
 
 FROM docker.io/library/node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 AS codex-cli
 
-ARG KODEX_CODEX_PACKAGE=@openai/codex@0.144.1
+ARG KODEX_CODEX_PACKAGE=@openai/codex@0.152.0
 
 RUN set -eu; \
     npm install --global "${KODEX_CODEX_PACKAGE}"; \

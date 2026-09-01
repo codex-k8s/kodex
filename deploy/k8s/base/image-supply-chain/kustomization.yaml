@@ -27,6 +27,7 @@ configMapGenerator:
     files:
       - image-admission.sh
       - provenance-policy.jq
+      - vulnerability-policy.jq
   - name: kodex-registry-readiness
     files:
       - registry-readiness.sh

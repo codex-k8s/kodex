@@ -599,12 +599,18 @@ case "${1:-}" in
     write_syft_registry_config "$staging_host" /identity/username /identity/password
     syft --config /tmp/syft.json --from registry "$source_ref" \
       -o spdx-json=/work/sbom.json || fail "SBOM generation failed"
-    if GRYPE_CHECK_FOR_APP_UPDATE=false \
-      grype sbom:/work/sbom.json --fail-on high -o json >/work/vulnerability.json; then
+    GRYPE_CHECK_FOR_APP_UPDATE=false \
+      grype sbom:/work/sbom.json -o json >/work/vulnerability.raw.json ||
+      fail "vulnerability scan failed"
+    jq -e '.matches | type == "array"' /work/vulnerability.raw.json >/dev/null ||
+      fail "vulnerability scan failed"
+    jq --argjson policy_revision "$POLICY_REVISION" --arg policy_sha256 "$POLICY_SHA256" \
+      -f /opt/kodex/vulnerability-policy.jq \
+      /work/vulnerability.raw.json >/work/vulnerability.json ||
+      fail "vulnerability policy evaluation failed"
+    if jq -e '.kodexPolicy.blockingMatchCount == 0' /work/vulnerability.json >/dev/null; then
       printf '%s\n' ACCEPTED >/work/verdict
     else
-      jq -e '.matches | type == "array"' /work/vulnerability.json >/dev/null ||
-        fail "vulnerability scan failed"
       printf '%s\n' REJECTED >/work/verdict
     fi
     sha256sum /work/sbom.json | awk '{print $1}' >/work/sbom.sha256
