@@ -515,7 +515,7 @@ OIDC_HOST="$oidc_host" yq -i '
         "image":strenv(RUNTIME_RUNNER_IMAGE),
         "imagePullPolicy":"IfNotPresent",
         "command":["/bin/sh","-ec"],
-        "args":["binary=$(find /usr/local/lib/node_modules/@openai/codex -type f -path \"*/vendor/*/bin/codex\" -print -quit); test -n \"$binary\"; test -x \"$binary\"; temporary=/codex/.codex.tmp; rm -f \"$temporary\"; cp \"$binary\" \"$temporary\"; chmod 0555 \"$temporary\"; mv -f \"$temporary\" /codex/codex"],
+        "args":["binary=/usr/local/bin/codex; test -x \"$binary\"; \"$binary\" --version >/dev/null; temporary=/codex/.codex.tmp; rm -f \"$temporary\"; cp \"$binary\" \"$temporary\"; chmod 0555 \"$temporary\"; mv -f \"$temporary\" /codex/codex"],
         "resources":{"requests":{"cpu":"10m","memory":"64Mi"},"limits":{"cpu":"100m","memory":"256Mi"}},
         "securityContext":{"runAsNonRoot":true,"runAsUser":10001,"runAsGroup":29000,"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
         "volumeMounts":[{"name":"codex-cli","mountPath":"/codex"}]
@@ -972,6 +972,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg runnerImage "$runtime_runner_imag
       .resources.requests.memory == "64Mi" and
       .resources.limits.cpu == "100m" and
       .resources.limits.memory == "256Mi" and
+      any(.args[]?; contains("binary=/usr/local/bin/codex")) and
       any(.args[]?; contains("mv -f \"$temporary\" /codex/codex")) and
       any(.volumeMounts[]?; .name == "codex-cli" and .mountPath == "/codex")) and
     any(.spec.template.spec.containers[]?;

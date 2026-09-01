@@ -323,7 +323,9 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       .resources.requests.cpu == "10m" and
       .resources.requests.memory == "64Mi" and
       .resources.limits.cpu == "100m" and
-      .resources.limits.memory == "256Mi"))
+      .resources.limits.memory == "256Mi" and
+      any(.args[]?; contains("binary=/usr/local/bin/codex")) and
+      all(.args[]?; contains("node_modules/@openai/codex") | not)))
 ' >/dev/null || fail 'secret-broker Codex CLI init resources are not bounded for a clean local install'
 
 if rg -n '__KODEX_[A-Z0-9_]+__|\.invalid|@sha256:0{64}' "$render" "$jobs" >/dev/null; then
