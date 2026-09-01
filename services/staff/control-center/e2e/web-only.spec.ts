@@ -543,7 +543,9 @@ test.describe("web-only fresh installation", () => {
     if (discoveryMode && projectRef) {
       await gotoWithRetry(page, `/projects/${projectRef}`);
       await expectPageHeading(page, projectName);
-      const currentUser = page.locator("button[aria-haspopup='menu']");
+      const currentUser = page.getByRole("button", {
+        name: /owner.*роль: Владелец/i,
+      });
       await expect(currentUser).toBeVisible();
       await expect(currentUser).toHaveAttribute(
         "aria-label",
@@ -572,7 +574,9 @@ test.describe("web-only fresh installation", () => {
     await expect(page).toHaveURL(/\/projects\/[^/]+$/);
     projectRef = routeRef(page, "projects");
     persistRefs();
-    const currentUser = page.locator("button[aria-haspopup='menu']");
+    const currentUser = page.getByRole("button", {
+      name: /owner.*роль: Владелец/i,
+    });
     await expect(currentUser).toBeVisible();
     await expect(currentUser).toHaveAttribute(
       "aria-label",
@@ -3135,6 +3139,9 @@ test.describe("web-only fresh installation", () => {
     requireRefs("projectRef", "workflowRunRef");
     await page.setViewportSize({ width: 1920, height: 1080 });
     await gotoWithRetry(page, `/projects/${projectRef}/runs/${workflowRunRef}`);
+    await expect
+      .poll(() => page.locator(".status-badge:visible").count())
+      .toBeGreaterThanOrEqual(4);
     const samples = await page.locator(".status-badge").evaluateAll((badges) =>
       badges.flatMap((badge) => {
         const box = badge.getBoundingClientRect();
