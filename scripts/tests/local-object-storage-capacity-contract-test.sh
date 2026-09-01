@@ -31,6 +31,9 @@ volume_max=$(yq -r '
 ((volume_max >= 32)) ||
   fail 'SeaweedFS cannot allocate independent collections for all required buckets'
 
+[[ "$(yq -r '.spec.activeDeadlineSeconds' "$bootstrap")" == 900 ]] ||
+  fail 'SeaweedFS bucket bootstrap deadline must cover bounded versioned write readback'
+
 for marker in 'put-object --bucket "$bucket"' 'get-object --bucket "$bucket"' \
   'delete-object --bucket "$bucket"' 'list-object-versions --bucket "$bucket"'; do
   grep -Fq "$marker" "$bootstrap" || fail "bootstrap has no required write-path check: $marker"
