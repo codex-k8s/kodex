@@ -86,7 +86,7 @@ test("локальный OIDC, API и основные экраны доступ
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: /^(Настроим Kodex|Проекты)$/,
+      name: /^(Настроим Kodex|Проекты|Добрый день, .+)$/,
     }),
   ).toBeVisible();
 
