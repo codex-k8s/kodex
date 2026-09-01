@@ -107,7 +107,11 @@ EOF
 
 emit_job() {
   local phase=$1 service_account=$2 identity_secret=$3 protected=${4:-false}
-  local workload="" grant_signer_secret=""
+  local workload="" grant_signer_secret="" memory_request=128Mi memory_limit=1Gi
+  if [[ $phase == scan ]]; then
+    memory_request=256Mi
+    memory_limit=2Gi
+  fi
   if [[ $phase == claim || $phase == admit ]]; then
     workload='image-admission'
     grant_signer_secret='image-admission-platform-worker-grant-signer'
@@ -301,7 +305,7 @@ EOF
 EOF
   fi
   cat <<EOF
-          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 1Gi}}
+          resources: {requests: {cpu: 100m, memory: ${memory_request}}, limits: {cpu: "1", memory: ${memory_limit}}}
           securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
       volumes:
 EOF

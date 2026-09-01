@@ -480,6 +480,21 @@ if ! yq eval-all -e '
   echo "admission Job retained an internal pod retry" >&2
   exit 1
 fi
+if ! yq eval-all -e '
+  select(.kind == "Job" and .metadata.labels."kodex.dev/image-admission-phase" == "scan") |
+  .spec.template.spec.containers[0].resources.requests.memory == "256Mi" and
+  .spec.template.spec.containers[0].resources.limits.memory == "2Gi"
+' "$temporary_directory/admission.yaml" >/dev/null 2>&1; then
+  echo "scan Job does not have its bounded memory profile" >&2
+  exit 1
+fi
+if yq eval-all -e '
+  select(.kind == "Job" and .metadata.labels."kodex.dev/image-admission-phase" != "scan") |
+  select(.spec.template.spec.containers[0].resources.limits.memory != "1Gi")
+' "$temporary_directory/admission.yaml" >/dev/null 2>&1; then
+  echo "non-scan admission Job changed its memory profile" >&2
+  exit 1
+fi
 if yq eval-all -e '
   select(.kind == "Job") |
   select(
@@ -523,6 +538,8 @@ grep -Fq 'regctl artifact put "$@" "$evidence_tag"' \
 grep -Fq 'regctl artifact get "$evidence_reference" --file "$evidence_name"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq '"check-for-app-update": false' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'parallelism: 1' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq '"ca-cert": "/identity/ca.pem"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"

@@ -456,6 +456,7 @@ write_syft_registry_config() {
     --rawfile password "$password_file" '
       {
         "check-for-app-update": false,
+        parallelism: 1,
         registry: {
           "ca-cert": "/identity/ca.pem",
           auth: [{
