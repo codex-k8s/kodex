@@ -787,6 +787,7 @@ patch_go_job control-plane-broker-bootstrap bootstrap services/internal/control-
 NODE_IMAGE='docker.io/library/node:24.17.0-alpine3.23@sha256:7c70d1235c0b4c2bc9eeed5393d19f1bbdde6885ba0d58ba62bb385d7b0f3ff1' \
 SOURCE_ROOT="$source_root" CACHE_ROOT="$cache_root" PUBLIC_HOST="$public_host" \
 SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" yq -i '
+  select(.kind != "ServersTransport" or .metadata.name != "staff-control-center") |
   with(select(.kind == "Deployment" and .metadata.name == "staff-control-center");
     .spec.replicas = 1 |
     .spec.template.spec.securityContext.runAsNonRoot = false |

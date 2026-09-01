@@ -155,6 +155,7 @@ case "$command_name" in
       --state-directory "$state_directory")
     [[ -z "$resource_prefix" ]] || e2e_arguments+=(--resource-prefix "$resource_prefix")
     [[ -z "$run_timeout_ms" ]] || e2e_arguments+=(--run-timeout-ms "$run_timeout_ms")
-    "$repository_root/dev.sh" e2e "${e2e_arguments[@]}"
+    KODEX_E2E_BASE_HOST_RESOLUTION=loopback \
+      "$repository_root/dev.sh" e2e "${e2e_arguments[@]}"
     ;;
 esac

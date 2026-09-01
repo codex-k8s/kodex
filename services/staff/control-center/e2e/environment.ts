@@ -25,6 +25,24 @@ export interface MattermostE2EEnvironment {
   readonly outageConnectionName: string;
 }
 
+export interface ChromiumLaunchOptions {
+  readonly args: string[];
+}
+
+export function discoveryChromiumLaunchOptions(
+  baseURL: string,
+  resolution = process.env.KODEX_E2E_BASE_HOST_RESOLUTION,
+): ChromiumLaunchOptions | undefined {
+  if (resolution === undefined || resolution === "") return undefined;
+  if (resolution !== "loopback") {
+    throw new Error("KODEX_E2E_BASE_HOST_RESOLUTION must be empty or loopback");
+  }
+  const host = new URL(exactHTTPSURL(baseURL)).hostname;
+  return {
+    args: [`--host-resolver-rules=MAP ${host} 127.0.0.1`],
+  };
+}
+
 const checkOnly = process.env.KODEX_E2E_CHECK_ONLY === "1";
 const disposableConfirmation =
   "I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION";

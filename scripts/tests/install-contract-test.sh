@@ -536,6 +536,7 @@ for remote_contract in \
   'KODEX_DEV_TLS_MODE=public-acme' \
   'preflight-public-hosts.sh' \
   'prepare-playwright-browser.sh' \
+  'KODEX_E2E_BASE_HOST_RESOLUTION=loopback' \
   'host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport' \
   'KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET'; do
   rg -Fq -- "$remote_contract" \

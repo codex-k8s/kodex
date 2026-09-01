@@ -45,6 +45,6 @@ export default defineConfig({
     clearMocks: true,
     restoreMocks: true,
     environment: "node",
-    include: ["src/**/*.test.ts", "e2e/storage-state.test.ts"],
+    include: ["src/**/*.test.ts", "e2e/**/*.test.ts"],
   },
 });

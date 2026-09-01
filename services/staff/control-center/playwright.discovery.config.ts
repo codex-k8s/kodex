@@ -1,8 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
-import { loadE2EEnvironment } from "./e2e/environment";
+import {
+  discoveryChromiumLaunchOptions,
+  loadE2EEnvironment,
+} from "./e2e/environment";
 
 const environment = loadE2EEnvironment();
+const launchOptions = discoveryChromiumLaunchOptions(environment.baseURL);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -24,6 +28,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "off",
     video: "off",
+    launchOptions,
   },
   projects: [
     {

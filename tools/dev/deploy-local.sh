@@ -69,6 +69,22 @@ apply_render() {
   kubectl apply --server-side --force-conflicts --field-manager=kodex-local-dev -f "$output" >/dev/null
 }
 
+cleanup_local_frontend_transport() {
+  kubectl get customresourcedefinition/serverstransports.traefik.io >/dev/null 2>&1 || return 0
+  kubectl -n "$namespace" delete \
+    serverstransport.traefik.io/staff-control-center \
+    --ignore-not-found --wait=true --timeout=2m >/dev/null ||
+    fail 'obsolete local frontend ServersTransport cleanup failed'
+}
+
+readback_local_frontend_transport() {
+  kubectl get customresourcedefinition/serverstransports.traefik.io >/dev/null 2>&1 || return 0
+  if kubectl -n "$namespace" get \
+    serverstransport.traefik.io/staff-control-center >/dev/null 2>&1; then
+    fail 'obsolete local frontend ServersTransport is still present'
+  fi
+}
+
 apply_image_admission_crd() {
   local output="$temporary_directory/image-admission-crd.yaml"
   yq 'select(.kind == "CustomResourceDefinition" and
@@ -1007,6 +1023,7 @@ if [[ "$mode" == apply ]]; then
     select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "Job" and
       .kind != "Secret" and .kind != "CustomResourceDefinition")
   '
+  cleanup_local_frontend_transport
   ensure_session_archive_worker_secret
   cleanup_legacy_session_archive_worker_resources
   wait_certificates
@@ -1057,6 +1074,7 @@ else
   readback_session_archive_worker_secret
 fi
 
+readback_local_frontend_transport
 wait_certificates
 readback_local_object_storage_secret
 expected_backup_credentials="$temporary_directory/backup-controller-credentials-expected.json"

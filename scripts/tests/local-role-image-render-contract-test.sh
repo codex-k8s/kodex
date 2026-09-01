@@ -102,6 +102,9 @@ seed_rootless_writes=$(rg -c --fixed-strings 'docker run --rm --network host --u
 rg -Fq -- "-ec 'rm -rf /work/docker /work/home'" \
   "$source_root/tools/dev/seed-local-image-supply-chain.sh" ||
   fail 'registry seed cleanup cannot remove container-owned temporary state'
+rg -Fq 'serverstransport.traefik.io/staff-control-center' \
+  "$source_root/tools/dev/deploy-local.sh" ||
+  fail 'local deploy does not remove the obsolete frontend ServersTransport'
 rg -F '$gomodcache/cache/download/sumdb/sum.golang.org' \
   "$source_root/tools/dev/run-go-hot-reload.sh" >/dev/null ||
   fail 'hot-reload bootstrap does not prepare the module-cache SumDB path'
@@ -178,6 +181,13 @@ source_digest=$(printf '%s' "$source_revision" | sha256sum | awk '{print $1}')
   "$expected_runtime_contract_digest" != "$source_digest" ]] ||
   fail 'policy, role runtime contract, and source revision identities unexpectedly collide'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
+  all(.[];
+    .kind != "ServersTransport" or .metadata.name != "staff-control-center") and
+  any(.[];
+    .kind == "Service" and .metadata.name == "staff-control-center" and
+    (.metadata.annotations // {} |
+      has("traefik.ingress.kubernetes.io/service.serverstransport") | not) and
+    .spec.ports == [{"name":"http","port":8080,"targetPort":"http","protocol":"TCP"}]) and
   any(.[];
     .kind == "Role" and .metadata.name == "image-admission-controller" and
     any(.rules[];
@@ -269,7 +279,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       any(.env[];
         .name == "READBACK_IMAGE" and
         .value == "pull.127.0.0.1.nip.io/kodex/control-plane@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")))
-' >/dev/null || fail 'hot-reload tool, evidence PVC, or pull readiness contract is invalid'
+' >/dev/null || fail 'hot-reload frontend, tool, evidence PVC, or pull readiness contract is invalid'
 expected_frontend_sha256=$("$source_root/tools/dev/resolve-local-dockerfile-frontend.sh" \
   --source-root "$source_root" --format digest)
 actual_frontend_sha256=$(jq -er '.data.frontendSHA256' <<<"$policy_json")
