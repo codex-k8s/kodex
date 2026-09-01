@@ -3,10 +3,22 @@ package codex
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
+
+func TestProtocolErrorReportsOnlyMethodAndCode(t *testing.T) {
+	t.Parallel()
+	err := protocolError("turn/start", json.RawMessage(`{"code":-32602,"message":"secret diagnostic"}`))
+	if err == nil || err.Error() != "Codex app-server returned a protocol error for turn/start (code -32602)" {
+		t.Fatalf("protocol error = %v", err)
+	}
+	if strings.Contains(err.Error(), "secret diagnostic") {
+		t.Fatal("protocol error exposed the upstream diagnostic")
+	}
+}
 
 func TestAppServerEnvironmentPreservesOnlyRequiredEgressProxy(t *testing.T) {
 	t.Setenv("HTTP_PROXY", "http://egress-gateway:8080")

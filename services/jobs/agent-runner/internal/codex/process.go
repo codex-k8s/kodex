@@ -249,7 +249,7 @@ func (server *appServer) call(ctx context.Context, state *protocolState, method 
 					return nil, errors.New("Codex app-server response correlation failed")
 				}
 				if event.message.kind == messageError {
-					return nil, errors.New("Codex app-server returned a protocol error")
+					return nil, protocolError(method, event.message.payload)
 				}
 				return event.message.payload, nil
 			default:
@@ -257,6 +257,14 @@ func (server *appServer) call(ctx context.Context, state *protocolState, method 
 			}
 		}
 	}
+}
+
+func protocolError(method string, raw json.RawMessage) error {
+	code, err := decodeRPCError(raw)
+	if err != nil {
+		return errors.New("Codex app-server returned an invalid protocol error")
+	}
+	return fmt.Errorf("Codex app-server returned a protocol error for %s (code %d)", method, code)
 }
 
 func (server *appServer) waitTerminal(ctx context.Context, state *protocolState) error {
