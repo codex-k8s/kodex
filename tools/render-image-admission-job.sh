@@ -131,7 +131,7 @@ metadata:
     kodex.dev/admission-run-sha256: ${run_sha256}
     kodex.dev/admission-policy-revision: "${policy_revision}"
 spec:
-  backoffLimit: 1
+  backoffLimit: 0
   activeDeadlineSeconds: ${deadline}
   ttlSecondsAfterFinished: 3600
   template:

@@ -320,6 +320,13 @@ ServiceAccount identity и namespace, а обязательные labels про�
 NetworkPolicies и удаляет сироты, не принадлежащие активной попытке текущего
 controller generation.
 
+Staging registry принимает закрытый набор отдельных scanner, signer,
+admission и promotion identities с независимыми mTLS и application
+credentials. Один общий пароль между фазами запрещён. Admission Job не
+повторяет Pod внутри Kubernetes Job: после terminal failure owner-controller
+закрывает текущий run, удаляет его workspace и только затем создаёт новый
+полный run с новым поколением после bounded backoff.
+
 Прежние role images, mutable environment records, старый runner input,
 неверсионированные Secret bindings и fallback на старый Pod contract не
 поддерживаются и не materialize-ятся. Миграционный dual-read/dual-write путь не

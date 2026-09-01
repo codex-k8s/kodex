@@ -472,6 +472,14 @@ done
   "$temporary_directory/admission.yaml" | grep -c '^mc-admit-') -eq 5 ]]
 [[ $(yq eval-all 'select(.kind == "Job") | .metadata.name' \
   "$temporary_directory/admission-production.yaml" | grep -c '^mc-admit-') -eq 5 ]]
+if ! yq eval-all -e '
+  select(.kind == "Job") |
+  .spec.backoffLimit == 0
+' "$temporary_directory/admission.yaml" "$temporary_directory/admission-production.yaml" \
+  >/dev/null 2>&1; then
+  echo "admission Job retained an internal pod retry" >&2
+  exit 1
+fi
 if yq eval-all -e '
   select(.kind == "Job") |
   select(

@@ -97,7 +97,7 @@ spec:
           !('kodex.dev/local-profile' in object.spec.template.metadata.labels))
       message: Image admission Job identity is outside the owner contract.
     - expression: >-
-        object.spec.backoffLimit == 1 &&
+        object.spec.backoffLimit == 0 &&
         object.spec.activeDeadlineSeconds == 720 &&
         object.spec.ttlSecondsAfterFinished == 3600 &&
         (!has(object.spec.parallelism) || object.spec.parallelism == 1) &&

@@ -172,6 +172,18 @@ jq -e '
     all(.items[]; ((.required // true) | type == "boolean")))
 ' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
   fail 'secret projection registry contract is invalid'
+jq -e '
+  [.secrets[] | select(.name == "kodex-image-registry-staging-read") |
+    .items[] | select(.key == "auth.htpasswd") | .source] == [{
+      "type":"material",
+      "ref":"kodex/image-registry/staging-read-authorized",
+      "field":"htpasswd"
+    }]
+' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
+  fail 'staging-read registry does not consume the authorized identity ACL'
+rg -Fq 'for name in staging-read scanner signer admission promotion-staging' \
+  "$repository_root/tools/install/generate-material.sh" ||
+  fail 'staging-read registry ACL omits an application identity'
 [[ $(rg -F -- 'kodex.dev/provider-account-key=default-openai-codex' \
   "$repository_root/tools/install/materialize-secrets.sh" | wc -l) -eq 2 ]] ||
   fail 'fresh and restored default provider metadata do not share the required annotation'

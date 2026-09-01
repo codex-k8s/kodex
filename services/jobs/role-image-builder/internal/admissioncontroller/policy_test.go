@@ -79,6 +79,9 @@ func TestAdmissionPoliciesAcceptExactRenderedResources(t *testing.T) {
 		if err := prepareRendered(rendered, "kodex-system", runID, phase); err != nil {
 			t.Fatalf("prepare %s: %v", phase, err)
 		}
+		if rendered.Job.Spec.BackoffLimit == nil || *rendered.Job.Spec.BackoffLimit != 0 {
+			t.Fatalf("phase %s must delegate retries to the owner controller", phase)
+		}
 		job, err := runtime.DefaultUnstructuredConverter.ToUnstructured(rendered.Job)
 		if err != nil {
 			t.Fatal(err)

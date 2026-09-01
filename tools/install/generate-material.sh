@@ -319,6 +319,16 @@ create_registry_credential promotion "$internal_promotion_host"
 create_registry_credential release-source "$release_registry_host" \
   "$release_registry_username_file" "$release_registry_password_file"
 
+# Staging-read registry принимает разные application identities. Общий ACL
+# содержит только их bcrypt-записи и не раздаёт потребителям общий пароль.
+staging_read_acl_directory="$output_directory/registry/staging-read-authorized"
+mkdir -p "$staging_read_acl_directory"
+: >"$staging_read_acl_directory/htpasswd"
+for name in staging-read scanner signer admission promotion-staging; do
+  cat -- "$output_directory/registry/$name/htpasswd" >>"$staging_read_acl_directory/htpasswd"
+done
+chmod 0600 "$staging_read_acl_directory/htpasswd"
+
 for name in pull buildkit-base-pull staging-read evidence-probe evidence-admission evidence-promotion admin scanner signer admission promotion-staging promotion; do
   for field in username password; do
     put_material "kodex/image-registry/$name" "$field" "$output_directory/registry/$name/$field"
@@ -326,6 +336,8 @@ for name in pull buildkit-base-pull staging-read evidence-probe evidence-admissi
   put_material "kodex/image-registry/$name" htpasswd "$output_directory/registry/$name/htpasswd"
   put_material "kodex/image-registry/$name" dockerconfigjson "$output_directory/registry/$name/dockerconfig.json"
 done
+put_material kodex/image-registry/staging-read-authorized htpasswd \
+  "$staging_read_acl_directory/htpasswd"
 put_material kodex/role-image-builder/input-read docker-config \
   "$output_directory/registry/input-read/dockerconfig.json"
 put_material kodex/release-registry/pull dockerconfigjson \

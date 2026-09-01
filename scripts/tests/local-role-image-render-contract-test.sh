@@ -256,6 +256,7 @@ yq -o=json -I=0 '.' "$jobs" | jq -s -e '
     .metadata.labels["kodex.dev/image-admission-phase"]] | sort) ==
       (["admit","claim","promote","scan","sign"] | sort) and
   all(.[] | select(.kind == "Job");
+    .spec.backoffLimit == 0 and
     .spec.template.metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
     (.spec.template.spec.containers | length) > 0 and
     all(.spec.template.spec.containers[];
