@@ -285,6 +285,10 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     ([.spec.validations[].expression] | join(" ") | contains(
       "container.securityContext.allowPrivilegeEscalation == false")) and
     ([.spec.validations[].expression] | join(" ") | contains(
+      "providerContainers[0].securityContext.appArmorProfile.type == '\''Localhost'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "providerContainers[0].securityContext.appArmorProfile.localhostProfile == '\''kodex-provider-runtime'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
       "runtime-provider-credential-relay")) and
     ([.spec.validations[].expression] | join(" ") | contains(
       "params.data['\''nodeReadbackImage'\'']")) and
