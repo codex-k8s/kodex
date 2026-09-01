@@ -647,7 +647,7 @@ test.describe("web-only fresh installation", () => {
     await expect(renderedUsage).toContainText(
       new Intl.NumberFormat("ru-RU").format(usageBeforeReload.totalTokens),
     );
-    await page.reload();
+    await gotoWithRetry(page, page.url());
     await waitForConnected(page);
     await expectRunState(page, "Завершён");
     expect(await readRunUsage(page, firstRunRef)).toEqual(usageBeforeReload);

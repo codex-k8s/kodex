@@ -825,7 +825,7 @@ onBeforeUnmount(() => {
 </template>
 <style scoped>
 .run-statuses,
-.run-statuses > span {
+.run-statuses > span:not(.status-badge) {
   display: flex;
   align-items: center;
   gap: 8px;
