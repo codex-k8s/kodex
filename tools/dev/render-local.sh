@@ -378,7 +378,8 @@ RUNTIME_CONTRACT_DIGEST="$runtime_contract_digest" \
 FRONTEND_SHA256="$frontend_sha256" \
 ROLE_INPUT_MANIFEST_DIGEST="$role_image_input_manifest_digest" \
 ROLE_INPUT_PAYLOAD_SHA256="$role_image_input_payload_sha256" \
-ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
+ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" \
+PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
   with(select(.kind == "PersistentVolumeClaim" and
       (.metadata.name == "kodex-image-registry-staging" or
        .metadata.name == "kodex-image-registry-promoted" or
@@ -431,6 +432,10 @@ ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
     .data.roleRuntimeContractRevision = "1" |
     .data.roleRuntimeContractSHA256 = strenv(RUNTIME_CONTRACT_DIGEST) |
     .data.providerAppArmorProfile = strenv(PROVIDER_APPARMOR_PROFILE)
+  ) |
+  with(select(.kind == "ImageAdmissionPolicyParameters" and
+      .metadata.name == "kodex-image-admission-policy");
+    .spec.providerAppArmorProfile = strenv(PROVIDER_APPARMOR_PROFILE)
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime");
     .data.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256 = strenv(ADMISSION_TOOLS_SHA256)

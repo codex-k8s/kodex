@@ -167,6 +167,7 @@ render="$temporary_directory/render.yaml"
   --image-admission-image registry.local.kodex/kodex/image-admission@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee \
   --image-admission-tools-image registry.local.kodex/kodex/image-admission-tools@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
   --authority-image registry.local.kodex/kodex/internal-rpc-authority@sha256:1111111111111111111111111111111111111111111111111111111111111111 \
+  --provider-apparmor-profile kodex-provider-runtime \
   --authority-source-revision 1 \
   --role-image-input-manifest-digest sha256:2222222222222222222222222222222222222222222222222222222222222222 \
   --role-image-input-payload-sha256 3333333333333333333333333333333333333333333333333333333333333333 \
@@ -183,6 +184,14 @@ policy_json=$(yq -o=json -I=0 '
   select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy")
 ' "$render")
 [[ -n "$policy_json" && "$policy_json" != null ]] || fail 'rendered owner intent is absent'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  (first(.[] | select(.kind == "ConfigMap" and
+    .metadata.name == "kodex-image-admission-policy")) | .data) as $intent |
+  (first(.[] | select(.kind == "ImageAdmissionPolicyParameters" and
+    .metadata.name == "kodex-image-admission-policy")) | .spec) as $parameters |
+  $intent == $parameters and
+  $intent.providerAppArmorProfile == "kodex-provider-runtime"
+' >/dev/null || fail 'provider AppArmor profile is not projected into admission parameters'
 expected_runtime_contract_digest=$(
   jq -cS . "$source_root/contracts/runtime-controller/v6/agent-runner-input.schema.json" |
     sha256sum | awk '{print $1}'
