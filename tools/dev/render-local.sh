@@ -928,6 +928,15 @@ FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" 
   with(select(.kind == "NetworkPolicy" and .metadata.name == "staff-control-center-ingress");
     .spec.ingress[].ports = [{"protocol":"TCP","port":8080}]
   ) |
+  with(select(.kind == "NetworkPolicy" and .metadata.name == "control-api-gateway-exact-runtime-paths");
+    .spec.ingress += [{
+      "from":[{
+        "namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},
+        "podSelector":{"matchLabels":{"app.kubernetes.io/name":"traefik"}}
+      }],
+      "ports":[{"protocol":"TCP","port":8443}]
+    }]
+  ) |
   with(select(.kind == "Service" and .metadata.name == "control-api-gateway");
     .metadata.annotations."traefik.ingress.kubernetes.io/service.serverstransport" =
       "kodex-system-control-api-gateway@kubernetescrd"
@@ -1152,7 +1161,17 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
         podSelector:{matchLabels:{"app.kubernetes.io/name":"traefik"}}
       }],
       ports:[{protocol:"TCP",port:8080}]
-    }])
+    }]) and
+  any(.[];
+    .kind == "NetworkPolicy" and .metadata.name == "control-api-gateway-exact-runtime-paths" and
+    .metadata.namespace == "kodex-system" and
+    any(.spec.ingress[];
+      .from == [{
+        namespaceSelector:{matchLabels:{"kubernetes.io/metadata.name":"kube-system"}},
+        podSelector:{matchLabels:{"app.kubernetes.io/name":"traefik"}}
+      }] and
+      .ports == [{protocol:"TCP",port:8443}]
+    ))
 ' >/dev/null || fail 'local Control API direct Ingress transport is invalid'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$output" >/dev/null ||
   fail 'Control Plane development workload is absent'
