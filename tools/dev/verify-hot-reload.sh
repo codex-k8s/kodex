@@ -86,6 +86,8 @@ go_port=""
 vue_port=""
 go_forward_pid=""
 vue_forward_pid=""
+go_forward_log="$backup_directory/go-port-forward.log"
+vue_forward_log="$backup_directory/vue-port-forward.log"
 source_modified=false
 cleanup() {
   local exit_code=$?
@@ -117,7 +119,12 @@ PY
 }
 
 start_port_forward() {
-  local service=$1 remote_port=$2 local_port=$3 log_file=$4 pid_variable=$5 pid
+  local service=$1 remote_port=$2 local_port=$3 log_file=$4 pid_variable=$5 pid previous_pid
+  previous_pid=${!pid_variable:-}
+  if [[ -n "$previous_pid" ]]; then
+    kill "$previous_pid" 2>/dev/null || true
+    wait "$previous_pid" 2>/dev/null || true
+  fi
   kubectl -n kodex-system port-forward --address 127.0.0.1 \
     "service/$service" "$local_port:$remote_port" >"$log_file" 2>&1 &
   pid=$!
@@ -130,14 +137,26 @@ start_port_forward() {
   fail "port-forward did not start for $service"
 }
 
+ensure_port_forward() {
+  local service=$1 remote_port=$2 local_port=$3 log_file=$4 pid_variable=$5 current_pid
+  current_pid=${!pid_variable:-}
+  if [[ -n "$current_pid" ]] && kill -0 "$current_pid" 2>/dev/null; then
+    return 0
+  fi
+  start_port_forward "$service" "$remote_port" "$local_port" "$log_file" "$pid_variable"
+}
+
 wait_for_status() {
-  local expected=$1
+  local expected=$1 last_status=unreachable
   for _ in $(seq 1 300); do
-    [[ "$(curl --silent --output /dev/null --write-out '%{http_code}' \
-      --max-time 2 "http://127.0.0.1:$go_port/healthz" || true)" == "$expected" ]] && return 0
+    ensure_port_forward control-api-gateway 9090 "$go_port" \
+      "$go_forward_log" go_forward_pid
+    last_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+      --max-time 2 "http://127.0.0.1:$go_port/healthz" || true)
+    [[ "$last_status" == "$expected" ]] && return 0
     sleep 1
   done
-  fail "Go hot reload did not expose HTTP $expected"
+  fail "Go hot reload did not expose HTTP $expected; last observed status: $last_status"
 }
 
 read_vue_module() {
@@ -150,6 +169,8 @@ read_vue_module() {
 wait_for_vue_marker() {
   local public_host=$1 marker=$2 present=$3 module
   for _ in $(seq 1 180); do
+    ensure_port_forward staff-control-center 8080 "$vue_port" \
+      "$vue_forward_log" vue_forward_pid
     module=$(read_vue_module "$public_host" "$RANDOM" 2>/dev/null || true)
     if [[ "$present" == true && "$module" == *"$marker"* ]]; then
       return 0
@@ -163,11 +184,13 @@ wait_for_vue_marker() {
 }
 
 go_port=$(reserve_port)
-vue_port=$(reserve_port)
+while [[ -z "$vue_port" || "$vue_port" == "$go_port" ]]; do
+  vue_port=$(reserve_port)
+done
 start_port_forward control-api-gateway 9090 "$go_port" \
-  "$backup_directory/go-port-forward.log" go_forward_pid
+  "$go_forward_log" go_forward_pid
 start_port_forward staff-control-center 8080 "$vue_port" \
-  "$backup_directory/vue-port-forward.log" vue_forward_pid
+  "$vue_forward_log" vue_forward_pid
 public_host=$(kubectl -n kodex-system get ingress/staff-control-center \
   -o jsonpath='{.spec.rules[0].host}')
 [[ "$public_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$public_host" == *.* ]] ||
