@@ -129,6 +129,24 @@ for cleanup_contract in \
     fail "local admission revision cleanup omits contract: $cleanup_contract"
 done
 
+deployment_readback_filter="$source_root/tools/dev/readback-rendered-deployments.jq"
+[[ -f "$deployment_readback_filter" && ! -L "$deployment_readback_filter" ]] ||
+  fail 'rendered Deployment readback filter is unavailable'
+policy_fixture='{"policySHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
+workloads_fixture='{"items":[
+  {"metadata":{"name":"runtime-controller"},"spec":{"template":{"metadata":{"annotations":{"kodex.dev/runtime-admission-policy-sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},"spec":{"containers":[{"name":"runtime-controller","env":[]}]}}}},
+  {"metadata":{"name":"oauth2-control-center"},"spec":{"template":{"metadata":{"annotations":{}},"spec":{"containers":[{"name":"oauth2-proxy","env":[]}]}}}}
+]}'
+jq -e --argjson policy "$policy_fixture" \
+  --argjson expected_deployments '["runtime-controller"]' \
+  -f "$deployment_readback_filter" <<<"$workloads_fixture" >/dev/null ||
+  fail 'rendered Deployment readback rejects an unrelated managed surface'
+if jq -e --argjson policy "$policy_fixture" \
+  --argjson expected_deployments '["runtime-controller","secret-broker"]' \
+  -f "$deployment_readback_filter" <<<"$workloads_fixture" >/dev/null; then
+  fail 'rendered Deployment readback accepts an absent expected workload'
+fi
+
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 install -d -m 0700 "$cache_root"
