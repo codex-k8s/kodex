@@ -571,7 +571,7 @@ for teleport_contract in \
   rg -Fq -- "$teleport_contract" "$repository_root/infra/teleport/bootstrap.sh" ||
     fail "Teleport access contract is absent: $teleport_contract"
 done
-rg -Fq '  - traefik' "$repository_root/tools/install/prepare-host.sh" ||
+rg -Fq '.disable = ["traefik"]' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal k3s does not disable the bundled Traefik release'
 rg -Fq 'systemctl restart k3s' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal host apply does not activate changed k3s configuration'
@@ -588,7 +588,7 @@ for resolver_contract in \
   'k3s_resolver_file=/etc/rancher/k3s/resolv.conf' \
   'source_file=/run/systemd/resolve/resolv.conf' \
   'configure_k3s_resolver' \
-  'resolv-conf: "$k3s_resolver_file"' \
+  '."resolv-conf" = strenv(K3S_RESOLVER_FILE)' \
   'readback_k3s_resolver' \
   "\$1 == \"search\" || \$1 == \"domain\""; do
   rg -Fq "$resolver_contract" "$repository_root/tools/install/prepare-host.sh" ||

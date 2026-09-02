@@ -267,18 +267,20 @@ EOF
   configure_k3s_resolver
   local_api_address=$(read_local_api_address)
   SERVER_PUBLIC_IP="$server_public_ip" K3S_RESOLVER_FILE="$k3s_resolver_file" \
-    LOCAL_API_ADDRESS="$local_api_address" yq -n -o=yaml '
+    yq -n -o=yaml '
       ."write-kubeconfig-mode" = "0600" |
       ."secrets-encryption" = true |
       ."resolv-conf" = strenv(K3S_RESOLVER_FILE) |
       .disable = ["traefik"] |
       ."tls-san" = [strenv(SERVER_PUBLIC_IP)] |
-      ."kubelet-arg" = ["max-pods=250"] |
-      if strenv(LOCAL_API_ADDRESS) != "" then
-        ."advertise-address" = strenv(LOCAL_API_ADDRESS) |
-        ."tls-san" += [strenv(LOCAL_API_ADDRESS)]
-      else . end
+      ."kubelet-arg" = ["max-pods=250"]
     ' >/etc/rancher/k3s/config.yaml
+  if [[ -n "$local_api_address" ]]; then
+    LOCAL_API_ADDRESS="$local_api_address" yq -i '
+      ."advertise-address" = strenv(LOCAL_API_ADDRESS) |
+      ."tls-san" += [strenv(LOCAL_API_ADDRESS)]
+    ' /etc/rancher/k3s/config.yaml
+  fi
   chmod 0600 /etc/rancher/k3s/config.yaml
   cat >/etc/systemd/system/k3s.service <<'EOF'
 [Unit]
