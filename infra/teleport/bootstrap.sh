@@ -221,10 +221,10 @@ kubectl -n teleport get ingress teleport-proxy -o json | jq -e --arg host "$host
     .metadata.annotations["traefik.ingress.kubernetes.io/service.serversscheme"] == "https"
   ' >/dev/null || fail 'Teleport Ingress readback failed'
 kubectl -n teleport exec deployment/teleport-auth -- \
-  tctl get role/kodex-k8s-admin -o json | jq -e '
+  tctl get role/kodex-k8s-admin --format=json | jq -e '
     length == 1 and .[0].spec.allow.kubernetes_groups == ["system:masters"]
   ' >/dev/null || fail 'Teleport Kubernetes administrator role readback failed'
-kubectl -n teleport exec deployment/teleport-auth -- tctl get github/github -o json | jq -e \
+kubectl -n teleport exec deployment/teleport-auth -- tctl get github/github --format=json | jq -e \
   --arg host "$host" --arg organization "$github_organization" --arg team "$github_team" '
     length == 1 and
     .[0].spec.redirect_url == ("https://" + $host + "/v1/webapi/github/callback") and
