@@ -251,6 +251,8 @@ func safeFailureCode(code string) string {
 		return "PROVIDER_RESPONSE_INVALID"
 	case "RUNTIME_INPUT_INVALID", "RUNTIME_WORKSPACE_INVALID":
 		return "RUNTIME_INPUT_INVALID"
+	case "RUNTIME_MCP_UNAVAILABLE":
+		return "RUNTIME_MCP_UNAVAILABLE"
 	default:
 		return "RUNTIME_UNAVAILABLE"
 	}

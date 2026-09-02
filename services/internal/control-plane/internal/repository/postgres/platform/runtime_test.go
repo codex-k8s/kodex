@@ -102,6 +102,17 @@ func TestDirectRootWithoutProcessNode(t *testing.T) {
 	}
 }
 
+func TestRuntimeSafeErrorCodeAcceptsMCPUnavailable(t *testing.T) {
+	t.Parallel()
+
+	if !runtimeSafeErrorCode("RUNTIME_MCP_UNAVAILABLE") {
+		t.Fatal("RUNTIME_MCP_UNAVAILABLE was rejected by the runtime completion boundary")
+	}
+	if runtimeSafeErrorCode("RUNTIME_MCP_INTERNAL_DIAGNOSTIC") {
+		t.Fatal("unknown runtime MCP failure code was accepted")
+	}
+}
+
 func TestDecodeRunUsageValidatesStoredTurnBreakdown(t *testing.T) {
 	t.Parallel()
 

@@ -37,6 +37,7 @@ var rolloutPathPattern = regexp.MustCompile(`^\.kodex/state/codex-home/sessions/
 var (
 	ErrAuthorityRequestUnsupported = errors.New("Codex app-server authority request is unsupported")
 	ErrRequiredMCPUnavailable      = errors.New("Codex required MCP runtime is unavailable")
+	errAccountReadResponseInvalid  = errors.New("Codex app-server account/read response is invalid")
 )
 
 type streamEvent struct {
@@ -79,8 +80,9 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err := server.notifyInitialized(); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
-	if _, err := server.call(ctx, state, "account/read", map[string]bool{"refreshToken": false}); err != nil {
-		return Result{}, server.abort(ctx, state, errors.Join(ErrProviderAuthentication, err))
+	raw, err = server.call(ctx, state, "account/read", map[string]bool{"refreshToken": false})
+	if err := classifyAccountReadResponse(raw, err); err != nil {
+		return Result{}, server.abort(ctx, state, err)
 	}
 	threadParams := map[string]any{"approvalPolicy": input.CodexApprovalPolicy, "cwd": input.WorkspaceRoot,
 		"model": input.Model}
@@ -140,6 +142,88 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	result.ArchiveSHA256 = digest
 	result.ArchiveSizeBytes = sizeBytes
 	return result, nil
+}
+
+func classifyAccountReadResponse(raw json.RawMessage, callErr error) error {
+	if callErr != nil {
+		return callErr
+	}
+	fields, err := decodeObject(raw, schema([]string{"requiresOpenaiAuth"}, "account", "requiresOpenaiAuth"))
+	if err != nil {
+		return errAccountReadResponseInvalid
+	}
+	var requiresOpenAIAuth bool
+	if strictDecode(fields["requiresOpenaiAuth"], &requiresOpenAIAuth) != nil {
+		return errAccountReadResponseInvalid
+	}
+	account, present := fields["account"]
+	if !present || bytes.Equal(bytes.TrimSpace(account), []byte("null")) {
+		if requiresOpenAIAuth {
+			return ErrProviderAuthentication
+		}
+		return nil
+	}
+	if validateAccountReadAccount(account) != nil {
+		return errAccountReadResponseInvalid
+	}
+	return nil
+}
+
+func validateAccountReadAccount(raw json.RawMessage) error {
+	fields, err := decodeObject(raw, schema([]string{"type"}, "type", "email", "planType", "usesCodexManagedCredentials"))
+	if err != nil {
+		return err
+	}
+	accountType, err := decodeBoundedString(fields["type"], 64)
+	if err != nil {
+		return err
+	}
+	switch accountType {
+	case "apiKey":
+		if len(fields) != 1 {
+			return errors.New("Codex app-server API key account is invalid")
+		}
+	case "chatgpt":
+		email, hasEmail := fields["email"]
+		planType, hasPlanType := fields["planType"]
+		if len(fields) != 3 || !hasEmail || !hasPlanType || validateAccountEmail(email) != nil || !validAccountPlanType(planType) {
+			return errors.New("Codex app-server ChatGPT account is invalid")
+		}
+	case "amazonBedrock":
+		managed, hasManaged := fields["usesCodexManagedCredentials"]
+		if len(fields) > 2 || hasManaged && strictDecode(managed, new(bool)) != nil {
+			return errors.New("Codex app-server Amazon Bedrock account is invalid")
+		}
+	default:
+		return errors.New("Codex app-server account type is invalid")
+	}
+	return nil
+}
+
+func validateAccountEmail(raw json.RawMessage) error {
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil
+	}
+	var email string
+	if strictDecode(raw, &email) != nil || len(email) > 4096 {
+		return errors.New("Codex app-server account email is invalid")
+	}
+	return nil
+}
+
+func validAccountPlanType(raw json.RawMessage) bool {
+	planType, err := decodeBoundedString(raw, 64)
+	if err != nil {
+		return false
+	}
+	switch planType {
+	case "free", "go", "plus", "pro", "prolite", "team", "self_serve_business_prolite",
+		"self_serve_business_usage_based", "business", "ent26", "enterprise_cbp_automation",
+		"enterprise_cbp_usage_based", "enterprise", "edu", "edu_plus", "edu_pro", "unknown":
+		return true
+	default:
+		return false
+	}
 }
 
 func (server *appServer) waitRequiredMCP(ctx context.Context, state *protocolState, requiredTools []string) error {

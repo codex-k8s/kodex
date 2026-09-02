@@ -2,6 +2,7 @@ package codex
 
 import (
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -18,6 +19,43 @@ func TestProtocolErrorReportsOnlyMethodAndCode(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "secret diagnostic") {
 		t.Fatal("protocol error exposed the upstream diagnostic")
+	}
+}
+
+func TestClassifyAccountReadResponse(t *testing.T) {
+	t.Parallel()
+
+	availabilityErr := errors.New("Codex app-server is unavailable")
+	protocolErr := protocolError("account/read", json.RawMessage(`{"code":-32603,"message":"internal"}`))
+	tests := []struct {
+		name     string
+		raw      json.RawMessage
+		callErr  error
+		wantErr  bool
+		wantAuth bool
+	}{
+		{name: "explicit authentication required", raw: json.RawMessage(`{"account":null,"requiresOpenaiAuth":true}`), wantErr: true, wantAuth: true},
+		{name: "API key account", raw: json.RawMessage(`{"account":{"type":"apiKey"},"requiresOpenaiAuth":true}`)},
+		{name: "ChatGPT account", raw: json.RawMessage(`{"account":{"type":"chatgpt","email":null,"planType":"pro"},"requiresOpenaiAuth":true}`)},
+		{name: "external Bedrock account", raw: json.RawMessage(`{"account":{"type":"amazonBedrock","usesCodexManagedCredentials":false},"requiresOpenaiAuth":false}`)},
+		{name: "provider without OpenAI account", raw: json.RawMessage(`{"requiresOpenaiAuth":false}`)},
+		{name: "transport unavailable", callErr: availabilityErr, wantErr: true},
+		{name: "protocol failure", callErr: protocolErr, wantErr: true},
+		{name: "invalid top-level schema", raw: json.RawMessage(`{"account":null,"requiresOpenaiAuth":"true"}`), wantErr: true},
+		{name: "invalid account schema", raw: json.RawMessage(`{"account":{"type":"chatgpt","email":null},"requiresOpenaiAuth":false}`), wantErr: true},
+		{name: "unknown account field", raw: json.RawMessage(`{"account":{"type":"apiKey","token":"hidden"},"requiresOpenaiAuth":false}`), wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			err := classifyAccountReadResponse(test.raw, test.callErr)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("classifyAccountReadResponse() error = %v, wantErr %v", err, test.wantErr)
+			}
+			if got := errors.Is(err, ErrProviderAuthentication); got != test.wantAuth {
+				t.Fatalf("errors.Is(error, ErrProviderAuthentication) = %v, want %v; error = %v", got, test.wantAuth, err)
+			}
+		})
 	}
 }
 

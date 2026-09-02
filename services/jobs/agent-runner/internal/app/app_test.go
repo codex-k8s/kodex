@@ -33,6 +33,15 @@ func TestRuntimeExecutionFailureCodePreservesAuthorityBoundary(t *testing.T) {
 	}
 }
 
+func TestRuntimeMCPFailureCodeIsPreservedForCompletion(t *testing.T) {
+	t.Parallel()
+
+	code := runtimeExecutionFailureCode(codex.ErrRequiredMCPUnavailable)
+	if got := safeFailureCode(code); got != "RUNTIME_MCP_UNAVAILABLE" {
+		t.Fatalf("safeFailureCode(runtimeExecutionFailureCode()) = %q, want %q", got, "RUNTIME_MCP_UNAVAILABLE")
+	}
+}
+
 type nativeToolRecorderStub struct {
 	calls []runtimecontract.NativeToolCall
 	err   error
