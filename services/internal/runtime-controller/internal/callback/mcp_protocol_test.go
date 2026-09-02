@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestMCPAcceptsInitializedNotificationWithoutAResponse(t *testing.T) {
@@ -51,5 +53,14 @@ func TestMCPStillReturnsSystemAssistantToolsAfterInitialization(t *testing.T) {
 
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"name":"get_configuration_catalog"`)) {
 		t.Fatalf("tools/list response = %d %q", response.Code, response.Body.String())
+	}
+}
+
+func TestControlFailureClassPreservesAuthoritySnapshotRollback(t *testing.T) {
+	t.Parallel()
+
+	err := status.Error(codes.FailedPrecondition, "authorization snapshot rollback rejected")
+	if got := controlFailureClass(err); got != "authority_snapshot_rollback" {
+		t.Fatalf("control failure class = %q, want authority_snapshot_rollback", got)
 	}
 }

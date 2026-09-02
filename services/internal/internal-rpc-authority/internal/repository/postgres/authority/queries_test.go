@@ -48,7 +48,6 @@ func TestContextAcceptanceUsesExactSnapshotReceiptArguments(t *testing.T) {
 		"WITH exact_snapshot AS MATERIALIZED (",
 		"validate_snapshot_attestation_receipt(",
 		"@attestation_receipt_id",
-		"current.readback_attestation_receipt_id = @attestation_receipt_id",
 		"WHERE NOT EXISTS (SELECT 1 FROM exact_snapshot)",
 		"readback_attestation_receipt_id =\n            EXCLUDED.readback_attestation_receipt_id",
 		"IS DISTINCT FROM EXCLUDED.readback_attestation_receipt_id",
@@ -58,6 +57,12 @@ func TestContextAcceptanceUsesExactSnapshotReceiptArguments(t *testing.T) {
 		if !strings.Contains(verifierAcceptContextSQL, required) {
 			t.Fatalf("context acceptance query lost receipt invariant %q", required)
 		}
+	}
+	if strings.Contains(
+		verifierAcceptContextSQL,
+		"current.readback_attestation_receipt_id = @attestation_receipt_id",
+	) {
+		t.Fatal("exact snapshot is still pinned to one replica receipt")
 	}
 	if strings.Contains(
 		verifierAcceptContextSQL,

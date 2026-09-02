@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   bindAgentRuntimeEnvironment: vi.fn(),
@@ -51,6 +51,7 @@ import {
 
 describe("agent detail runtime api", () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.useRealTimers());
 
   it("читает runtime catalog и передаёт серверу cursor-поиск окружений", async () => {
     mocks.listRuntimeSelections.mockResolvedValue({
@@ -165,20 +166,40 @@ describe("agent detail runtime api", () => {
     expect(mocks.getAgentRuntimeConfiguration).toHaveBeenCalledTimes(1);
   });
 
-  it("повторяет безопасное runtime-чтение после временного сетевого сбоя", async () => {
+  it("использует расширенный bounded retry для runtime-конфигурации", async () => {
     vi.useFakeTimers();
+    const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
     const transient = Object.assign(new Error("Failed to fetch"), {
       retryable: true,
     });
     const authoritative = { agentVersion: 4 };
     mocks.getAgentRuntimeConfiguration
       .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(transient)
       .mockResolvedValueOnce({ data: authoritative });
 
     const result = loadAgentRuntime("agent_sales");
     await vi.runAllTimersAsync();
     await expect(result).resolves.toBe(authoritative);
-    expect(mocks.getAgentRuntimeConfiguration).toHaveBeenCalledTimes(2);
-    vi.useRealTimers();
+    expect(mocks.getAgentRuntimeConfiguration).toHaveBeenCalledTimes(5);
+    expect(timeoutSpy.mock.calls.map((call) => call[1])).toEqual([
+      200, 600, 1_500, 3_000,
+    ]);
+  });
+
+  it("не расширяет короткий retry для runtime-каталога", async () => {
+    vi.useFakeTimers();
+    const transient = Object.assign(new Error("Failed to fetch"), {
+      retryable: true,
+    });
+    mocks.listRuntimeSelections.mockRejectedValue(transient);
+
+    const result = loadRuntimeCatalog();
+    const rejected = expect(result).rejects.toBe(transient);
+    await vi.runAllTimersAsync();
+    await rejected;
+    expect(mocks.listRuntimeSelections).toHaveBeenCalledTimes(3);
   });
 });

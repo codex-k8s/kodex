@@ -632,7 +632,7 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	}
 	projectionErr := server.recordToolCall(request.Context(), input, params.Name, params.Arguments, result, err, rpc.ID, time.Since(startedAt))
 	if err != nil {
-		failureClass := "tool_unavailable"
+		failureClass := controlFailureClass(err)
 		var planInputErr *assistantPlanInputError
 		if errors.As(err, &planInputErr) {
 			failureClass = "assistant_plan_" + planInputErr.reason
@@ -684,6 +684,8 @@ func controlFailureClass(err error) string {
 		return "operation_registry"
 	case "operation is not permitted":
 		return "domain_permission"
+	case "authorization snapshot rollback rejected":
+		return "authority_snapshot_rollback"
 	case "record tool call projection":
 		return "projection_" + strings.ToLower(status.Code(err).String())
 	default:

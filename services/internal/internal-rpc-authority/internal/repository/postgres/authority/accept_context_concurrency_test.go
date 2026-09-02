@@ -121,6 +121,38 @@ func TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock(t *testin
 		t.Fatalf("release watermark row lock: %v", err)
 	}
 
+	const replicaReceiptID = "00000000-0000-4000-8000-000000000003"
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO internal_rpc_authority.test_receipts (
+			receipt_id, workload_id, source_revision, source_digest_sha256
+		) VALUES ($1, $2, $3, $4)`,
+		replicaReceiptID,
+		workloadID,
+		state.SourceRevision,
+		state.SourceDigestSHA256,
+	); err != nil {
+		t.Fatalf("seed exact snapshot replica receipt: %v", err)
+	}
+	replicaState := state
+	replicaState.AttestationReceiptID = replicaReceiptID
+	if err := store.AcceptVerification(
+		ctx,
+		replicaState,
+		contextReservationForConcurrencyTest(workloadID, parallelReads+1),
+	); err != nil {
+		t.Fatalf("accept exact snapshot from another attested replica: %v", err)
+	}
+	var persistedReceiptID string
+	if err := pool.QueryRow(ctx, `
+		SELECT readback_attestation_receipt_id::text
+		FROM internal_rpc_authority.authority_snapshot_watermarks
+		WHERE target_workload_id = $1`, workloadID).Scan(&persistedReceiptID); err != nil {
+		t.Fatalf("read exact snapshot workload receipt: %v", err)
+	}
+	if persistedReceiptID != receiptID {
+		t.Fatalf("exact snapshot verification replaced shared receipt: got %s want %s", persistedReceiptID, receiptID)
+	}
+
 	replayed := contextReservationForConcurrencyTest(workloadID, 1)
 	if err := store.AcceptVerification(ctx, state, replayed); !errors.Is(err, domainrepository.ErrReplay) {
 		t.Fatalf("duplicate replay reservation error = %v, want ErrReplay", err)
@@ -132,7 +164,7 @@ func TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock(t *testin
 	if err := store.AcceptVerification(
 		ctx,
 		state,
-		contextReservationForConcurrencyTest(workloadID, parallelReads+1),
+		contextReservationForConcurrencyTest(workloadID, parallelReads+2),
 	); !errors.Is(err, domainrepository.ErrSnapshotRollback) {
 		t.Fatalf("closed restore fence error = %v, want ErrSnapshotRollback", err)
 	}
@@ -145,7 +177,7 @@ func TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock(t *testin
 	if err := store.AcceptVerification(
 		ctx,
 		invalidReceiptState,
-		contextReservationForConcurrencyTest(workloadID, parallelReads+2),
+		contextReservationForConcurrencyTest(workloadID, parallelReads+3),
 	); !errors.Is(err, domainrepository.ErrSnapshotRollback) {
 		t.Fatalf("invalid receipt error = %v, want ErrSnapshotRollback", err)
 	}
@@ -174,7 +206,7 @@ func TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock(t *testin
 	if err := store.AcceptVerification(
 		ctx,
 		advanced,
-		contextReservationForConcurrencyTest(workloadID, parallelReads+3),
+		contextReservationForConcurrencyTest(workloadID, parallelReads+4),
 	); err != nil {
 		t.Fatalf("advance snapshot watermark: %v", err)
 	}
@@ -194,7 +226,7 @@ func TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock(t *testin
 	if err := store.AcceptVerification(
 		ctx,
 		state,
-		contextReservationForConcurrencyTest(workloadID, parallelReads+4),
+		contextReservationForConcurrencyTest(workloadID, parallelReads+5),
 	); !errors.Is(err, domainrepository.ErrSnapshotRollback) {
 		t.Fatalf("snapshot rollback error = %v, want ErrSnapshotRollback", err)
 	}

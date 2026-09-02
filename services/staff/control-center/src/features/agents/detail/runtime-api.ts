@@ -19,6 +19,9 @@ import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { asProblem, unwrap } from "@/shared/api/problem";
 
 const readRetryDelaysMs = [0, 200, 600] as const;
+const runtimeConfigurationReadRetryDelaysMs = [
+  0, 200, 600, 1_500, 3_000,
+] as const;
 
 function versionHeaders(headers: MutationHeaders): {
   "If-Match": string;
@@ -47,6 +50,7 @@ export async function loadAgentRuntime(
           }),
         )
       ).data,
+    runtimeConfigurationReadRetryDelaysMs,
   );
 }
 
@@ -184,9 +188,12 @@ export async function searchRuntimeEnvironments(
   );
 }
 
-async function readWithRetry<T>(request: () => Promise<T>): Promise<T> {
+async function readWithRetry<T>(
+  request: () => Promise<T>,
+  retryDelaysMs: readonly number[] = readRetryDelaysMs,
+): Promise<T> {
   let lastProblem = asProblem(new Error("Runtime read did not start"));
-  for (const delayMs of readRetryDelaysMs) {
+  for (const delayMs of retryDelaysMs) {
     if (delayMs > 0) {
       await new Promise<void>((resolve) =>
         globalThis.setTimeout(resolve, delayMs),
@@ -196,7 +203,7 @@ async function readWithRetry<T>(request: () => Promise<T>): Promise<T> {
       return await request();
     } catch (error) {
       lastProblem = asProblem(error);
-      if (!lastProblem.retryable || delayMs === readRetryDelaysMs.at(-1)) {
+      if (!lastProblem.retryable || delayMs === retryDelaysMs.at(-1)) {
         throw lastProblem;
       }
     }

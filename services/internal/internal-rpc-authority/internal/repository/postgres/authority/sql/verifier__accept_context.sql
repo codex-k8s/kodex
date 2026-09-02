@@ -8,7 +8,6 @@ WITH exact_snapshot AS MATERIALIZED (
       AND current.key_set_revision = @key_set_revision
       AND current.policy_revision = @policy_revision
       AND current.signer_generation = @signer_generation
-      AND current.readback_attestation_receipt_id = @attestation_receipt_id
       AND internal_rpc_authority.runtime_restore_fence_allows_work()
       AND internal_rpc_authority.validate_snapshot_attestation_receipt(
           @attestation_receipt_id,

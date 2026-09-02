@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   AgentRuntimeConfigurationView,
@@ -11,6 +11,7 @@ import type {
 import { defaultRuntimeEnvironmentPolicy } from "@/features/runtime/environment-form";
 
 const getAgentRuntimeConfigurationMock = vi.hoisted(() => vi.fn());
+const listAgentRuntimeConfigurationVersionsMock = vi.hoisted(() => vi.fn());
 const createRuntimeEnvironmentSetMock = vi.hoisted(() => vi.fn());
 const deleteRuntimeEnvironmentMock = vi.hoisted(() => vi.fn());
 const getRuntimeEnvironmentReadinessMock = vi.hoisted(() => vi.fn());
@@ -61,6 +62,8 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   getRuntimeEnvironmentReadiness: getRuntimeEnvironmentReadinessMock,
   getRoleImageRecipe: getRoleImageRecipeMock,
   listRoleImageRecipes: listRoleImageRecipesMock,
+  listAgentRuntimeConfigurationVersions:
+    listAgentRuntimeConfigurationVersionsMock,
   listRuntimeEnvironmentAgents: listRuntimeEnvironmentAgentsMock,
   listRuntimeEnvironmentSets: listRuntimeEnvironmentSetsMock,
   listRuntimeEnvironmentVersions: listRuntimeEnvironmentVersionsMock,
@@ -160,9 +163,12 @@ function response<T>(data: T): { data: T; response: Response } {
 }
 
 describe("runtime store", () => {
+  afterEach(() => vi.useRealTimers());
+
   beforeEach(() => {
     setActivePinia(createPinia());
     getAgentRuntimeConfigurationMock.mockReset();
+    listAgentRuntimeConfigurationVersionsMock.mockReset();
     createRuntimeEnvironmentSetMock.mockReset();
     deleteRuntimeEnvironmentMock.mockReset();
     getRoleImageRecipeMock.mockReset();
@@ -201,6 +207,41 @@ describe("runtime store", () => {
     await oldLoad;
 
     expect(store.agentViews.agent_sales?.configuration.model).toBe("gpt-new");
+  });
+
+  it("повторяет безопасное чтение runtime-конфигурации и версий в расширенном бюджете", async () => {
+    vi.useFakeTimers();
+    const transient = new Error("Failed to fetch");
+    const authoritative = view("gpt-5.6-sol", 5);
+    getAgentRuntimeConfigurationMock
+      .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce(response(authoritative));
+    listAgentRuntimeConfigurationVersionsMock
+      .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce(
+        response({ items: [authoritative.configuration] }),
+      );
+    const store = useRuntimeStore();
+
+    const runtimeLoad = store.loadAgentRuntime("agent_sales");
+    await vi.runAllTimersAsync();
+    await runtimeLoad;
+    const versionsLoad = store.loadAgentVersions("agent_sales");
+    await vi.runAllTimersAsync();
+    await versionsLoad;
+
+    expect(getAgentRuntimeConfigurationMock).toHaveBeenCalledTimes(5);
+    expect(listAgentRuntimeConfigurationVersionsMock).toHaveBeenCalledTimes(5);
+    expect(store.agentViews.agent_sales).toEqual(authoritative);
+    expect(store.agentVersions.agent_sales).toEqual([
+      authoritative.configuration,
+    ]);
   });
 
   it("передаёт серверу поиск и cursor без локальной подмены каталога", async () => {
