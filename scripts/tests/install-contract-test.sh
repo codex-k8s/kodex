@@ -514,12 +514,14 @@ rg -Fq 'no ready Kubernetes node became available' \
   fail 'bare-metal installer does not report a node readiness timeout'
 rg -Fq 'dnsutils' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal installer does not install the DNS preflight client'
-rg -Fq 'for command_name in certutil codex cosign dig docker go helm node npm kubectl nsc yq' \
+rg -Fq 'for command_name in certutil codex cosign dig docker go helm node npm kubectl nsc tsh yq' \
   "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal host readback does not require the development toolchain'
 for host_tool_contract in \
   'docker.io docker-buildx docker-compose-v2' \
   '"name": "node"' \
+  '"name": "teleport-client"' \
+  'tsh version --format=json' \
   "'@openai/codex@0.152.0'" \
   'systemctl enable --now docker'; do
   rg -Fq -- "$host_tool_contract" \

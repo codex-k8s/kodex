@@ -161,7 +161,7 @@ with open(sys.argv[1], encoding="utf-8") as source:
     lock = json.load(source)
 if lock.get("schemaVersion") != 1:
     raise SystemExit(1)
-if len(lock.get("artifacts", [])) != 7 or len(lock.get("charts", [])) != 2:
+if len(lock.get("artifacts", [])) != 8 or len(lock.get("charts", [])) != 2:
     raise SystemExit(1)
 PY
 
@@ -220,6 +220,11 @@ if [[ "$mode" == apply ]]; then
   nsc_binary=$(find "$temporary_directory/nsc" -type f -name nsc -print -quit)
   [[ -n "$nsc_binary" ]] || fail 'nsc binary is absent from the archive'
   install -m 0755 "$nsc_binary" /usr/local/bin/nsc
+
+  download_artifact teleport-client "$temporary_directory/teleport-client.tar.gz"
+  tar -xzf "$temporary_directory/teleport-client.tar.gz" -C "$temporary_directory" \
+    teleport/tsh
+  install -m 0755 "$temporary_directory/teleport/tsh" /usr/local/bin/tsh
 
   download_artifact k3s "$temporary_directory/k3s"
   install -m 0755 "$temporary_directory/k3s" /usr/local/bin/k3s
@@ -280,9 +285,12 @@ EOF
 fi
 
 systemctl is-active --quiet k3s || fail 'k3s service is not active'
-for command_name in certutil codex cosign dig docker go helm node npm kubectl nsc yq; do
+for command_name in certutil codex cosign dig docker go helm node npm kubectl nsc tsh yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "installed command is absent: $command_name"
 done
+teleport_client_version=$(jq -er '.artifacts[] | select(.name == "teleport-client") | .version' "$lock_file")
+[[ "$(tsh version --format=json | jq -r .version)" == "$teleport_client_version" ]] ||
+  fail 'installed Teleport client version differs from the component lock'
 systemctl is-active --quiet docker || fail 'Docker service is not active'
 docker buildx version >/dev/null 2>&1 || fail 'Docker buildx is unavailable'
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml

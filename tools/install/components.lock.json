@@ -42,6 +42,12 @@
       "version": "v2.15.0",
       "url": "https://github.com/nats-io/nsc/releases/download/v2.15.0/nsc-linux-amd64.zip",
       "sha256": "7d55eda757dc9f233675a3038fcf8779bcda99753b1603f7009fc8537e126b7e"
+    },
+    {
+      "name": "teleport-client",
+      "version": "18.11.0",
+      "url": "https://cdn.teleport.dev/teleport-v18.11.0-linux-amd64-bin.tar.gz",
+      "sha256": "8d3dba03ea6b6e0d72c97e190da0595e8f0d70f5573c3a26b1908cf60caf6e3f"
     }
   ],
   "charts": [
