@@ -313,7 +313,7 @@ if [[ "$mode" == apply ]]; then
     {
       kind:"role",version:"v8",metadata:{name:"kodex-dev-access"},
       spec:{
-        options:{max_session_ttl:"8h0m0s"},
+        options:{max_session_ttl:"8h0m0s",forward_agent:false,ssh_file_copy:false},
         allow:{
           logins:[env.SSH_LOGIN],
           node_labels:{environment:"development"},
@@ -370,19 +370,38 @@ HOST="$host" BACKEND_ADDRESS="$backend_address" TELEPORT_KUBECONFIG="$teleport_k
 teleport_ctl --config="$config_file" get "role/$role_name" --format=json | jq -e \
   --arg login "$ssh_login" --arg group "$kubernetes_group" '
     length == 1 and
+    (.[0].spec | keys | sort) == ["allow","deny","options"] and
+    (.[0].spec.allow | keys | sort) ==
+      ["kubernetes_groups","kubernetes_labels","kubernetes_resources","logins","node_labels"] and
     .[0].spec.allow.logins == [$login] and
     .[0].spec.allow.node_labels.environment == "development" and
+    .[0].spec.allow.node_labels == {"environment":"development"} and
     .[0].spec.allow.kubernetes_labels.environment == "development" and
+    .[0].spec.allow.kubernetes_labels == {"environment":"development"} and
     .[0].spec.allow.kubernetes_groups == [$group] and
-    ((.[0].spec.allow.kubernetes_groups | index("system:masters")) == null)
+    .[0].spec.allow.kubernetes_resources ==
+      [{"api_group":"*","kind":"*","name":"*","namespace":"*","verbs":["*"]}] and
+    .[0].spec.deny == {} and
+    .[0].spec.options.forward_agent == false and
+    .[0].spec.options.ssh_file_copy == false and
+    .[0].spec.options.create_db_user == false and
+    .[0].spec.options.create_desktop_user == false and
+    .[0].spec.options.max_session_ttl == "8h0m0s"
   ' >/dev/null || fail 'Teleport bounded development role readback failed'
 teleport_ctl --config="$config_file" get github/github --format=json | jq -e \
-  --arg host "$host" --arg organization "$github_organization" --arg team "$github_team" '
+  --arg host "$host" --arg organization "$github_organization" --arg team "$github_team" \
+  --rawfile client_id "$github_client_id_file" --rawfile client_secret "$github_client_secret_file" '
     length == 1 and
+    (.[0].spec | keys | sort) ==
+      ["api_endpoint_url","client_id","client_secret","display","endpoint_url","redirect_url","teams_to_logins","teams_to_roles"] and
+    .[0].spec.client_id == ($client_id | rtrimstr("\n")) and
+    .[0].spec.client_secret == ($client_secret | rtrimstr("\n")) and
+    .[0].spec.display == "GitHub" and
+    .[0].spec.endpoint_url == "" and .[0].spec.api_endpoint_url == "" and
+    .[0].spec.teams_to_logins == null and
     .[0].spec.redirect_url == ("https://" + $host + "/v1/webapi/github/callback") and
-    any(.[0].spec.teams_to_roles[]?;
-      .organization == $organization and .team == $team and
-      (.roles | index("kodex-dev-access") != null))
+    .[0].spec.teams_to_roles ==
+      [{"organization":$organization,"team":$team,"roles":["kodex-dev-access"]}]
   ' >/dev/null || fail 'Teleport GitHub connector readback failed'
 curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
   --resolve "$host:3080:$backend_address" --cacert "$ca_certificate_file" \

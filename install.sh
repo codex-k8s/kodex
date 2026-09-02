@@ -149,9 +149,13 @@ if ! component_selected registry && any_component_selected secrets platform &&
   kodex_require_env KODEX_RELEASE_REGISTRY_USERNAME KODEX_RELEASE_REGISTRY_PASSWORD || exit 1
 fi
 if component_selected host; then
+  host_operator_user=${KODEX_HOST_OPERATOR_USER:-${SUDO_USER:-}}
+  [[ -n "$host_operator_user" ]] ||
+    fail 'KODEX_HOST_OPERATOR_USER is required when no sudo operator is available'
   "$repository_root/tools/install/prepare-host.sh" --mode apply \
     --server-public-ip "$KODEX_SERVER_PUBLIC_IP" \
-    --server-public-ipv6-address "${KODEX_SERVER_PUBLIC_IPV6_ADDRESS:-}"
+    --server-public-ipv6-address "${KODEX_SERVER_PUBLIC_IPV6_ADDRESS:-}" \
+    --operator-user "$host_operator_user"
 fi
 
 export KUBECONFIG=$KODEX_KUBECONFIG

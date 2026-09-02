@@ -47,14 +47,17 @@ bootstrap использует временную приватную копию 
 
 ## Предварительные условия
 
-1. Все публичные DNS-имена из `.kodex-remote-env` имеют точные `A`/`AAAA`,
+1. Все публичные DNS-имена из `/srv/kodex-dev/private/remote.env` имеют точные `A`/`AAAA`,
    указывающие только на разрешённые ingress-адреса.
 2. Входящие TCP-порты `22`, `80`, `443` доступны извне. Другие входящие
    соединения host firewall запрещает.
-3. Оператор входит по SSH-ключу и имеет passwordless `sudo`.
+3. Оператор входит по SSH-ключу и имеет passwordless `sudo`. Host bootstrap
+   закрепляет его как единственную break-glass SSH identity, запрещает пароль,
+   keyboard-interactive и root login и проверяет effective `sshd -T` policy.
 4. Репозиторий клонирован в `/srv/kodex-dev/workspace` от имени оператора.
-5. Приватный `.kodex-remote-env` создан по
-   [примеру](../../.kodex-remote-env.example) и имеет mode `0600`.
+5. Приватный `/srv/kodex-dev/private/remote.env` создан по
+   [примеру](../../.kodex-remote-env.example), находится вне source checkout,
+   а каталог и файл имеют mode `0700` и `0600`.
 6. Как минимум один приватный Codex `auth.json` импортирован в
    `/srv/kodex-dev/state/provider-accounts/default-openai-codex/auth.json`.
 
@@ -108,9 +111,10 @@ Teleport Community Edition использует отдельный GitHub OAuth 
 
 ```bash
 EXPECTED_SHA=$(git rev-parse HEAD)
-./tools/dev/remote-dev.sh host-preflight --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
-./tools/dev/remote-dev.sh host-apply --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
-./tools/dev/remote-dev.sh host-readback --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
+REMOTE_ENV=/srv/kodex-dev/private/remote.env
+./tools/dev/remote-dev.sh host-preflight --env-file "$REMOTE_ENV" --expected-sha "$EXPECTED_SHA"
+./tools/dev/remote-dev.sh host-apply --env-file "$REMOTE_ENV" --expected-sha "$EXPECTED_SHA"
+./tools/dev/remote-dev.sh host-readback --env-file "$REMOTE_ENV" --expected-sha "$EXPECTED_SHA"
 ```
 
 После `host-apply` нужно открыть новую SSH-сессию, чтобы применилось членство
@@ -121,17 +125,15 @@ firewall и загруженный AppArmor profile. Root-owned k3s kubeconfig �
 ## Пользовательский вход через Teleport
 
 Локальный Teleport-профиль Kodex нужно изолировать от рабочих Teleport-кластеров.
-Проверенный wrapper `tsh-kodex` запускает pinned `tsh` с отдельным `HOME`:
+Repo-owned установщик загружает pinned клиент, проверяет digest и создаёт
+wrapper `tsh-kodex` с отдельным `HOME`:
 
 ```bash
-#!/usr/bin/env bash
-set -euo pipefail
-REAL_HOME=$(getent passwd "$(id -u)" | cut -d: -f6)
-export HOME="${KODEX_TSH_HOME:-${REAL_HOME}/.tsh-kodex-home}"
-exec "${REAL_HOME}/.local/lib/kodex-teleport/tsh" "$@"
+./tools/dev/install-tsh-client.sh apply
+./tools/dev/install-tsh-client.sh readback
 ```
 
-После code-owned `teleport` или `up` readback пользователь выполняет:
+После отдельного code-owned `teleport` и до application `up` пользователь выполняет:
 
 ```bash
 tsh-kodex login --proxy=teleport.kodex.works:443 --auth=github
@@ -150,12 +152,13 @@ KUBECONFIG="$HOME/.tsh-kodex-home/.kube/config" kubectl auth can-i create cluste
 ## Запуск и проверка
 
 ```bash
-./tools/dev/remote-dev.sh up --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
-./tools/dev/remote-dev.sh status --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
-./tools/dev/remote-dev.sh smoke --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
-./tools/dev/remote-dev.sh e2e --env-file .kodex-remote-env \
+./tools/dev/remote-dev.sh teleport --env-file "$REMOTE_ENV" --expected-sha "$EXPECTED_SHA"
+./tools/dev/remote-dev.sh up --env-file "$REMOTE_ENV" --expected-sha "$EXPECTED_SHA"
+./tools/dev/remote-dev.sh status --env-file "$REMOTE_ENV" --expected-sha "$EXPECTED_SHA"
+./tools/dev/remote-dev.sh smoke --env-file "$REMOTE_ENV" --expected-sha "$EXPECTED_SHA"
+./tools/dev/remote-dev.sh e2e --env-file "$REMOTE_ENV" \
   --resource-prefix remote-e2e-001 --expected-sha "$EXPECTED_SHA"
-./tools/dev/remote-dev.sh acceptance --env-file .kodex-remote-env \
+./tools/dev/remote-dev.sh acceptance --env-file "$REMOTE_ENV" \
   --resource-prefix remote-acceptance-001 --run-timeout-ms 1800000 \
   --expected-sha "$EXPECTED_SHA"
 ```
@@ -167,9 +170,14 @@ Vite отслеживают изменения исходников без пе�
 
 `e2e` запускает только browser discovery и остаётся диагностической командой.
 Канонический owner gate использует `acceptance`: он требует чистый exact SHA до
-и после выполнения и последовательно проверяет deployment readback, реальный
-hot reload Go и Vue, browser/API сценарии, synthetic integration, сборку и
-допуск RoleImage, session archive и disposable backup/restore drill.
+и после выполнения, сначала проверяет Teleport, затем deployment readback,
+реальный hot reload Go и Vue, browser/API сценарии, synthetic integration,
+сборку и допуск RoleImage, session archive и disposable backup/restore drill,
+после чего повторяет Teleport readback. Для быстрого сбора независимых дефектов
+`tools/dev/full-local-e2e.sh` принимает повторяемый `--batch` со значениями
+`hot-reload`, `browser`, `integration`, `role-image`, `archive`, `backup`.
+Профили GitHub и provider API key всегда получают явный итог `PASS`, `FAIL` или
+`NOT RUN`; отсутствие credentials больше не маскируется как выполненная проверка.
 
 Hot reload проверяется без постоянного тестового endpoint. Repo-owned скрипт
 временно меняет существующий ответ gateway `/healthz` и маркер в `App.vue`,
@@ -195,18 +203,18 @@ Linux cache `~/.cache/ms-playwright`; для новых сценариев та�
 Check-Host. Внешние сервисы используются только для публичных DNS-имён и
 одноразового challenge path; credentials и приватные адреса им не передаются.
 
-Если OAuth App был создан после основного запуска, Teleport применяется
-отдельно:
+Host-owned Teleport применяется отдельно до application rollout. Повторный
+`up` обновляет только Kubernetes route и не перезапускает access plane:
 
 ```bash
-./tools/dev/remote-dev.sh teleport --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
+./tools/dev/remote-dev.sh teleport --env-file "$REMOTE_ENV" --expected-sha "$EXPECTED_SHA"
 ```
 
 ## Завершение
 
 ```bash
 KODEX_DEV_CONFIRM_DOWN=I_UNDERSTAND_THIS_REMOVES_KODEX_FROM_THE_BOUND_DISPOSABLE_CLUSTER \
-  ./tools/dev/remote-dev.sh down --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
+  ./tools/dev/remote-dev.sh down --env-file "$REMOTE_ENV" --expected-sha "$EXPECTED_SHA"
 ```
 
 Команда удаляет application namespaces, но оставляет общие dev-контроллеры и

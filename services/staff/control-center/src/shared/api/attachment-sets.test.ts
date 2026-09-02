@@ -45,8 +45,10 @@ vi.mock("@/shared/api/mutation", () => ({
 }));
 
 import {
+  AttachmentTerminalScanError,
   createAttachmentDraft,
   uploadCleanAttachmentArtifact,
+  waitForCleanAttachmentArtifact,
 } from "@/shared/api/attachment-sets";
 
 function attachmentSet(purpose: AttachmentSet["purpose"]): AttachmentSet {
@@ -157,4 +159,20 @@ describe("AttachmentSet endpoint routing", () => {
     });
     expect(onScanning).not.toHaveBeenCalled();
   });
+
+  it.each(["FAILED", "QUARANTINED"] as const)(
+    "возвращает типизированный конечный результат сканирования %s",
+    async (scanState) => {
+      const terminal = { ...artifact(), scanState };
+
+      await expect(
+        waitForCleanAttachmentArtifact(terminal, new AbortController().signal),
+      ).rejects.toEqual(
+        expect.objectContaining<Partial<AttachmentTerminalScanError>>({
+          name: "AttachmentTerminalScanError",
+          scanState,
+        }),
+      );
+    },
+  );
 });

@@ -4,8 +4,8 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.2.0
-updated: 2026-08-31
+version: 2.2.1
+updated: 2026-09-02
 ---
 
 # Чистое развертывание Kodex
@@ -122,8 +122,9 @@ chmod 0600 .kodex-env
 Файл заполняется владельцем и не коммитится. Он содержит только входные
 параметры конкретной установки:
 
-- режим, kubeconfig/context, публичный IPv4 и необязательный точный глобальный
-  IPv6 адрес bare-metal сервера;
+- режим, kubeconfig/context, публичный IPv4, точный непривилегированный
+  `KODEX_HOST_OPERATOR_USER` с настроенным SSH-ключом и необязательный точный
+  глобальный IPv6 адрес bare-metal сервера;
 - DNS Control Center, SSO, Grafana, Headlamp и registry;
 - необязательный отдельный DNS SAN для восстановления Control Center TLS после
   внешнего ACME duplicate-certificate rate limit;

@@ -137,6 +137,7 @@ jq -e '
   .version == 1 and .status == "passed" and .context == "fixture-local" and
   .resourcePrefix == "contract-full" and .buildMode == "rebuilt" and
   .browser == {status:"passed",counts:{passed:7}} and
+  .batches == ["hot-reload","browser","integration","role-image","archive","backup"] and
   .additionalTargets == ["test-extra"] and
   [.phases[].name] == ["local-render-deploy","go-and-vue-hot-reload-readback",
     "browser-auth-and-full-e2e","deployed-integration-synthetic",
@@ -164,6 +165,27 @@ jq -e '.status == "passed" and .buildMode == "reused"' \
   "$state_directory/e2e/contract-reuse-summary.json" >/dev/null ||
   fail '--skip-build summary is invalid'
 
+: >"$command_log"
+"$fixture_root/tools/dev/full-local-e2e.sh" --skip-build \
+  --kubeconfig "$kubeconfig" --context fixture-local \
+  --state-directory "$state_directory" --resource-prefix contract-batches \
+  --run-timeout-ms 60000 --batch backup --batch integration >/dev/null
+grep -Fq 'dev status ' "$command_log" || fail 'selected batches did not perform readback'
+grep -Fq 'storage-e2e integration-deployed-e2e.sh ' "$command_log" ||
+  fail 'selected integration batch was not executed'
+grep -Fq 'storage-e2e local-backup-restore-e2e.sh ' "$command_log" ||
+  fail 'selected backup batch was not executed'
+if grep -Eq '^(dev e2e|hot-reload|storage-e2e local-role-image-supply-chain-e2e.sh|storage-e2e local-session-archive-e2e.sh)' "$command_log"; then
+  fail 'unselected E2E batch was executed'
+fi
+jq -e '
+  .status == "passed" and .buildMode == "reused" and
+  .batches == ["integration","backup"] and
+  [.phases[].name] == ["local-readback","deployed-integration-synthetic",
+    "backup-and-disposable-restore-drill"]
+' "$state_directory/e2e/contract-batches-summary.json" >/dev/null ||
+  fail 'selected batch summary or canonical order is invalid'
+
 if "$fixture_root/tools/dev/full-local-e2e.sh" --check \
   --kubeconfig "$kubeconfig" --context production-cluster \
   --state-directory "$state_directory" --resource-prefix contract-prod >/dev/null 2>&1; then
@@ -174,6 +196,18 @@ if "$fixture_root/tools/dev/full-local-e2e.sh" --check \
   --state-directory "$state_directory" --resource-prefix contract-target \
   --target deploy-production >/dev/null 2>&1; then
   fail 'unsafe additional target was accepted'
+fi
+if "$fixture_root/tools/dev/full-local-e2e.sh" --check \
+  --kubeconfig "$kubeconfig" --context fixture-local \
+  --state-directory "$state_directory" --resource-prefix contract-batch \
+  --batch unknown >/dev/null 2>&1; then
+  fail 'unknown E2E batch was accepted'
+fi
+if "$fixture_root/tools/dev/full-local-e2e.sh" --check \
+  --kubeconfig "$kubeconfig" --context fixture-local \
+  --state-directory "$state_directory" --resource-prefix contract-batch \
+  --batch browser --batch browser >/dev/null 2>&1; then
+  fail 'duplicated E2E batch was accepted'
 fi
 
 printf 'Kodex full local E2E entrypoint tests passed\n'

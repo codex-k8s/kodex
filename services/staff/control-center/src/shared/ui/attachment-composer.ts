@@ -8,7 +8,13 @@ export type AttachmentUploadState =
   | "UPLOADING"
   | "SCANNING"
   | "UPLOADED"
+  | "QUARANTINED"
   | "FAILED";
+
+export type AttachmentUploadFailure =
+  | "RETRYABLE"
+  | "TERMINAL_FAILED"
+  | "QUARANTINED";
 
 export interface AttachmentUploadQueueItem {
   key: string;
@@ -18,6 +24,7 @@ export interface AttachmentUploadQueueItem {
   mediaType: string;
   size: number;
   state: AttachmentUploadState;
+  failure?: AttachmentUploadFailure;
   artifactRef?: string;
   error?: string;
   progress?: AttachmentUploadProgress;
@@ -68,6 +75,7 @@ export interface AttachmentUploadQueueOptions {
     request: AttachmentUploadRequest,
   ) => Promise<{ ref: string }>;
   disabled: () => boolean;
+  classifyFailure?: (error: unknown) => AttachmentUploadFailure;
   formatError: (error: unknown) => string;
   reservedBytes?: () => number;
   concurrency?: number;
@@ -110,7 +118,9 @@ export function attachmentQueueState(
   const busy = items.some((item) =>
     ["QUEUED", "UPLOADING", "SCANNING"].includes(item.state),
   );
-  const hasErrors = items.some((item) => item.state === "FAILED");
+  const hasErrors = items.some((item) =>
+    ["FAILED", "QUARANTINED"].includes(item.state),
+  );
   const overLimit = totalBytes > attachmentAggregateLimitBytes;
   return {
     references: refs,
@@ -192,7 +202,11 @@ export function createAttachmentUploadQueue(
   function retry(key: string): void {
     const item = items.value.find((candidate) => candidate.key === key);
     if (!item || item.state !== "FAILED") return;
+    if (item.failure === "TERMINAL_FAILED") {
+      item.idempotencyKey = crypto.randomUUID();
+    }
     item.state = "QUEUED";
+    item.failure = undefined;
     item.error = undefined;
     item.progress = undefined;
     process();
@@ -247,13 +261,16 @@ export function createAttachmentUploadQueue(
       const current = items.value.find((candidate) => candidate.key === key);
       if (current !== item) return;
       current.state = "UPLOADED";
+      current.failure = undefined;
       current.artifactRef = artifact.ref;
       current.error = undefined;
       current.progress = undefined;
     } catch (error) {
       const current = items.value.find((candidate) => candidate.key === key);
       if (current !== item) return;
-      current.state = "FAILED";
+      current.failure = options.classifyFailure?.(error) ?? "RETRYABLE";
+      current.state =
+        current.failure === "QUARANTINED" ? "QUARANTINED" : "FAILED";
       current.error = options.formatError(error);
       current.progress = undefined;
     } finally {

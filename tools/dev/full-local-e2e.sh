@@ -12,6 +12,7 @@ usage() {
     '  [--kubeconfig <path>] [--state-directory <path>]' \
     '  [--cluster-marker <root-owned-path>] [--expected-sha <40-hex-commit>]' \
     '  [--resource-prefix <slug>] [--run-timeout-ms <milliseconds>]' \
+    '  [--batch browser|integration|role-image|archive|backup|hot-reload]...' \
     '  [--target <test-make-target>]...' >&2
 }
 
@@ -26,6 +27,9 @@ expected_sha=""
 check_only=false
 skip_build=false
 targets=()
+batches=()
+canonical_batches=(hot-reload browser integration role-image archive backup)
+declare -A selected_batches=()
 
 while (($# > 0)); do
   case "$1" in
@@ -38,11 +42,32 @@ while (($# > 0)); do
     --run-timeout-ms) run_timeout_ms=${2:-}; shift 2 ;;
     --cluster-marker) cluster_marker=${2:-}; shift 2 ;;
     --expected-sha) expected_sha=${2:-}; shift 2 ;;
+    --batch)
+      batch=${2:-}
+      case "$batch" in
+        browser|integration|role-image|archive|backup|hot-reload) ;;
+        *) usage; fail "unsupported E2E batch: $batch" ;;
+      esac
+      [[ -z "${selected_batches[$batch]:-}" ]] || fail "E2E batch is duplicated: $batch"
+      selected_batches[$batch]=1
+      batches+=("$batch")
+      shift 2
+      ;;
     --target) targets+=("${2:-}"); shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+
+if ((${#batches[@]} == 0)); then
+  for batch in "${canonical_batches[@]}"; do
+    selected_batches[$batch]=1
+  done
+fi
+
+batch_selected() {
+  [[ -n "${selected_batches[$1]:-}" ]]
+}
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 [[ -f "$kubeconfig" && -r "$kubeconfig" && ! -L "$kubeconfig" ]] ||
@@ -147,7 +172,7 @@ run_phase() {
 }
 
 write_summary() {
-  local exit_code=$1 status=failed finished_at browser_summary targets_json temporary_summary
+  local exit_code=$1 status=failed finished_at browser_summary targets_json batches_json temporary_summary
   [[ "$exit_code" -ne 0 ]] || status=passed
   finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   browser_summary=null
@@ -164,6 +189,13 @@ write_summary() {
   else
     targets_json=$(printf '%s\n' "${targets[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')
   fi
+  batches_json=$(
+    for batch in "${canonical_batches[@]}"; do
+      if batch_selected "$batch"; then
+        printf '%s\n' "$batch"
+      fi
+    done | jq -Rsc 'split("\n") | map(select(length > 0))'
+  )
   temporary_summary=$(mktemp "$summary_path.XXXXXX")
   jq -n \
     --arg status "$status" \
@@ -176,6 +208,7 @@ write_summary() {
     --argjson exit_code "$exit_code" \
     --argjson phases "$(<"$phases_file")" \
     --argjson browser "$browser_summary" \
+    --argjson batches "$batches_json" \
     --argjson targets "$targets_json" '
       {
         version:1,
@@ -189,6 +222,7 @@ write_summary() {
         buildMode:$build_mode,
         phases:$phases,
         browser:$browser,
+        batches:$batches,
         additionalTargets:$targets
       }
     ' >"$temporary_summary"
@@ -225,11 +259,15 @@ hot_reload_arguments=(
   --resource-prefix "$resource_prefix"
 )
 [[ -z "$expected_sha" ]] || hot_reload_arguments+=(--expected-sha "$expected_sha")
-run_phase go-and-vue-hot-reload-readback \
-  "$repository_root/tools/dev/verify-hot-reload.sh" "${hot_reload_arguments[@]}"
-run_phase browser-auth-and-full-e2e "$repository_root/dev.sh" e2e \
-  "${common_arguments[@]}" --resource-prefix "$resource_prefix" \
-  --run-timeout-ms "$run_timeout_ms"
+if batch_selected hot-reload; then
+  run_phase go-and-vue-hot-reload-readback \
+    "$repository_root/tools/dev/verify-hot-reload.sh" "${hot_reload_arguments[@]}"
+fi
+if batch_selected browser; then
+  run_phase browser-auth-and-full-e2e "$repository_root/dev.sh" e2e \
+    "${common_arguments[@]}" --resource-prefix "$resource_prefix" \
+    --run-timeout-ms "$run_timeout_ms"
+fi
 run_deployed_integration_e2e() {
   local credentials_file="$state_directory/credentials.env" endpoint_ip dns_suffix public_host node_ca_file
   [[ -f "$credentials_file" && ! -L "$credentials_file" &&
@@ -259,20 +297,28 @@ run_deployed_integration_e2e() {
     NODE_EXTRA_CA_CERTS="$node_ca_file" \
     "$repository_root/scripts/tests/integration-deployed-e2e.sh"
 }
-run_phase deployed-integration-synthetic run_deployed_integration_e2e
-run_phase role-image-build-admit-promote-runtime-readback env \
-  KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
-  "$repository_root/scripts/tests/local-role-image-supply-chain-e2e.sh" \
-  "${common_arguments[@]}" --resource-prefix "$resource_prefix" \
-  --timeout-seconds "$((run_timeout_ms / 1000))"
-run_phase session-archive-write-restore-delete-readback env \
-  KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
-  "$repository_root/scripts/tests/local-session-archive-e2e.sh" \
-  "${common_arguments[@]}"
-run_phase backup-and-disposable-restore-drill env \
-  KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
-  "$repository_root/scripts/tests/local-backup-restore-e2e.sh" \
-  "${common_arguments[@]}"
+if batch_selected integration; then
+  run_phase deployed-integration-synthetic run_deployed_integration_e2e
+fi
+if batch_selected role-image; then
+  run_phase role-image-build-admit-promote-runtime-readback env \
+    KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+    "$repository_root/scripts/tests/local-role-image-supply-chain-e2e.sh" \
+    "${common_arguments[@]}" --resource-prefix "$resource_prefix" \
+    --timeout-seconds "$((run_timeout_ms / 1000))"
+fi
+if batch_selected archive; then
+  run_phase session-archive-write-restore-delete-readback env \
+    KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+    "$repository_root/scripts/tests/local-session-archive-e2e.sh" \
+    "${common_arguments[@]}"
+fi
+if batch_selected backup; then
+  run_phase backup-and-disposable-restore-drill env \
+    KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+    "$repository_root/scripts/tests/local-backup-restore-e2e.sh" \
+    "${common_arguments[@]}"
+fi
 for target in "${targets[@]}"; do
   run_phase "additional:$target" make --no-print-directory -C "$repository_root" "$target"
 done

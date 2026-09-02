@@ -179,7 +179,7 @@ describe("attachment upload queue", () => {
     expect(queue.state.value.ready).toBe(true);
   });
 
-  it("показывает ошибку, позволяет retry и не включает удалённый ref в command", async () => {
+  it("для транспортной ошибки повторяет ту же попытку с прежним idempotency key", async () => {
     const upload = vi
       .fn<
         (
@@ -213,6 +213,64 @@ describe("attachment upload queue", () => {
     queue.remove(required(queue.items.value[0]).key);
     expect(queue.state.value.references).toEqual([]);
     expect(queue.state.value.ready).toBe(true);
+  });
+
+  it("после конечного FAILED создаёт новую попытку загрузки с новым idempotency key", async () => {
+    const upload = vi
+      .fn<
+        (
+          source: File,
+          request: AttachmentUploadRequest,
+        ) => Promise<{ ref: string }>
+      >()
+      .mockRejectedValueOnce(new Error("terminal scan failure"))
+      .mockResolvedValueOnce({ ref: "art_retry" });
+    const queue = createAttachmentUploadQueue({
+      upload,
+      disabled: () => false,
+      classifyFailure: () => "TERMINAL_FAILED",
+      formatError: () => "Проверка файла завершилась ошибкой",
+    });
+
+    queue.enqueue([file("retry.txt", 10)]);
+    await flushQueue();
+    const firstKey = upload.mock.calls[0]?.[1].idempotencyKey;
+
+    queue.retry(required(queue.items.value[0]).key);
+    await flushQueue();
+
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(upload.mock.calls[1]?.[1].idempotencyKey).not.toBe(firstKey);
+    expect(queue.state.value.references).toEqual(["art_retry"]);
+  });
+
+  it("не позволяет retry для QUARANTINED и требует убрать файл", async () => {
+    const upload = vi.fn().mockRejectedValue(new Error("quarantined"));
+    const queue = createAttachmentUploadQueue({
+      upload,
+      disabled: () => false,
+      classifyFailure: () => "QUARANTINED",
+      formatError: () =>
+        "Файл изолирован проверкой безопасности. Удалите его и выберите другой файл.",
+    });
+
+    queue.enqueue([file("unsafe.txt", 10)]);
+    await flushQueue();
+    const item = required(queue.items.value[0]);
+
+    expect(item).toMatchObject({
+      state: "QUARANTINED",
+      failure: "QUARANTINED",
+      error:
+        "Файл изолирован проверкой безопасности. Удалите его и выберите другой файл.",
+    });
+    queue.retry(item.key);
+    await flushQueue();
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(queue.state.value).toMatchObject({ hasErrors: true, ready: false });
+
+    queue.remove(item.key);
+    expect(queue.state.value).toMatchObject({ hasErrors: false, ready: true });
   });
 
   it("не начинает upload, пока aggregate превышает лимит", () => {

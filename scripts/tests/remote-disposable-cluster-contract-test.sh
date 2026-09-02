@@ -42,7 +42,13 @@ case "${1:-} ${2:-}" in
   'stat -c') printf '0:0:600\n' ;;
   'cat --') cat "${KODEX_TEST_MARKER_FILE:?}" ;;
   'cat /etc/rancher/k3s/k3s.yaml') cat "${KODEX_TEST_KUBECONFIG_SOURCE:?}" ;;
-  *) printf 'unexpected sudo call: %s\n' "$*" >&2; exit 1 ;;
+  *)
+    if [[ -x ${1:-} || ${1:-} == env ]]; then
+      exec "$@"
+    fi
+    printf 'unexpected sudo call: %s\n' "$*" >&2
+    exit 1
+    ;;
 esac
 EOF
 cat >"$fake_bin/id" <<'EOF'
@@ -158,7 +164,8 @@ jq -e --arg revision "$source_revision" --arg digest "$source_digest" '
   .headSHA == $revision and .renderedSHA == $revision and
   .currentContentSHA256 == $digest and .renderedContentSHA256 == $digest and
   .renderedDirty == false and .dirty == false and
-  .renderContentMatches == true and .shaAttested == true
+  .renderContentMatches == true and .liveWorkloadsMatch == true and
+  .shaAttested == true
 ' "$source_state/source-provenance-status.json" >/dev/null ||
   fail 'clean source provenance was not attested'
 
@@ -184,9 +191,30 @@ if "$source_fixture/dev.sh" status --kubeconfig "$kubeconfig" --context default 
 fi
 
 fixture_root="$temporary_directory/repository"
-mkdir -p "$fixture_root/tools/dev" "$fixture_root/tools/install"
+mkdir -p "$fixture_root/tools/dev" "$fixture_root/tools/install" \
+  "$fixture_root/infra/teleport"
 cp "$repository_root/tools/dev/remote-dev.sh" "$fixture_root/tools/dev/remote-dev.sh"
 cp "$repository_root/tools/install/load-env.sh" "$fixture_root/tools/install/load-env.sh"
+cat >"$fixture_root/tools/install/prepare-host.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${KODEX_TEST_HOST_COMMAND_LOG:?}"
+[[ "$*" == *'--mode readback'* ]]
+[[ "$*" == *'--operator-user '* ]]
+EOF
+cat >"$fixture_root/infra/teleport/bootstrap-host.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${KODEX_TEST_TELEPORT_HOST_COMMAND_LOG:?}"
+[[ "$*" == *'--mode readback'* ]]
+EOF
+cat >"$fixture_root/infra/teleport/bootstrap.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${KODEX_TEST_TELEPORT_ROUTE_COMMAND_LOG:?}"
+[[ "$*" == *'--mode apply'* || "$*" == *'--mode readback'* ]]
+[[ -f ${KUBECONFIG:?} ]]
+EOF
 cat >"$fixture_root/dev.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -202,7 +230,10 @@ done
 printf '%s\n' "$kubeconfig" >"${KODEX_TEST_TEMP_KUBECONFIG_LOG:?}"
 EOF
 chmod +x "$fixture_root/dev.sh" "$fixture_root/tools/dev/remote-dev.sh" \
-  "$fixture_root/tools/install/load-env.sh"
+  "$fixture_root/tools/install/load-env.sh" \
+  "$fixture_root/tools/install/prepare-host.sh" \
+  "$fixture_root/infra/teleport/bootstrap-host.sh" \
+  "$fixture_root/infra/teleport/bootstrap.sh"
 git -C "$fixture_root" init -q
 git -C "$fixture_root" config user.name 'Kodex contract'
 git -C "$fixture_root" config user.email 'contract@kodex.local'
@@ -222,12 +253,41 @@ KODEX_REMOTE_PROMOTED_PULL_HOST=pull.example.test
 KODEX_REMOTE_ACME_EMAIL=owner@example.test
 KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES=192.0.2.10
 KODEX_REMOTE_STATE_DIRECTORY=$temporary_directory/remote-state
+KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_ID=fixture-client
+KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET=fixture-secret
 EOF
 chmod 0600 "$env_file"
 remote_command_log="$temporary_directory/remote-command.log"
 temporary_kubeconfig_log="$temporary_directory/temporary-kubeconfig.log"
+host_command_log="$temporary_directory/host-command.log"
+teleport_host_command_log="$temporary_directory/teleport-host-command.log"
+teleport_route_command_log="$temporary_directory/teleport-route-command.log"
 export KODEX_TEST_REMOTE_COMMAND_LOG="$remote_command_log"
 export KODEX_TEST_TEMP_KUBECONFIG_LOG="$temporary_kubeconfig_log"
+export KODEX_TEST_HOST_COMMAND_LOG="$host_command_log"
+export KODEX_TEST_TELEPORT_HOST_COMMAND_LOG="$teleport_host_command_log"
+export KODEX_TEST_TELEPORT_ROUTE_COMMAND_LOG="$teleport_route_command_log"
+
+env_symlink="$temporary_directory/remote-link.env"
+ln -s "$env_file" "$env_symlink"
+if "$fixture_root/tools/dev/remote-dev.sh" status --env-file "$env_symlink" \
+  --expected-sha "$expected_sha" >/dev/null 2>&1; then
+  fail 'remote command accepted a symlinked private env'
+fi
+chmod 0644 "$env_file"
+if "$fixture_root/tools/dev/remote-dev.sh" status --env-file "$env_file" \
+  --expected-sha "$expected_sha" >/dev/null 2>&1; then
+  fail 'remote command accepted a group/world-readable private env'
+fi
+chmod 0600 "$env_file"
+checkout_env="$fixture_root/.kodex-remote-env"
+cp "$env_file" "$checkout_env"
+chmod 0600 "$checkout_env"
+if "$fixture_root/tools/dev/remote-dev.sh" status --env-file "$checkout_env" \
+  --expected-sha "$expected_sha" >/dev/null 2>&1; then
+  fail 'remote command accepted private env inside the source checkout'
+fi
+rm -f -- "$checkout_env"
 
 jq -n --arg ca_sha256 "$ca_sha256" '{version:1,
   clusterUID:"11111111-1111-1111-1111-111111111111",
@@ -240,6 +300,14 @@ rg -F -- "--expected-sha $expected_sha" "$remote_command_log" >/dev/null ||
   fail 'remote command omitted the expected SHA'
 temporary_kubeconfig=$(<"$temporary_kubeconfig_log")
 [[ ! -e "$temporary_kubeconfig" ]] || fail 'temporary kubeconfig survived the remote command'
+rg -F -- '--mode readback' "$host_command_log" >/dev/null ||
+  fail 'remote up omitted host hardening readback'
+rg -F -- '--operator-user ' "$host_command_log" >/dev/null ||
+  fail 'remote up omitted the exact SSH operator identity'
+rg -F -- '--mode readback' "$teleport_host_command_log" >/dev/null ||
+  fail 'remote up omitted host-owned Teleport readback'
+rg -F -- '--mode apply' "$teleport_route_command_log" >/dev/null ||
+  fail 'remote up omitted the in-cluster Teleport route apply'
 
 printf '\n# dirty\n' >>"$fixture_root/dev.sh"
 if "$fixture_root/tools/dev/remote-dev.sh" up --env-file "$env_file" \

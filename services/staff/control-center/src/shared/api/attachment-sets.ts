@@ -22,6 +22,27 @@ const attachmentMutationBatchSize = 100;
 const artifactScanIntervalMs = 1_000;
 const artifactScanAttempts = 120;
 
+export type AttachmentTerminalScanState = Extract<
+  Artifact["scanState"],
+  "FAILED" | "QUARANTINED"
+>;
+
+export class AttachmentTerminalScanError extends Error {
+  override readonly name = "AttachmentTerminalScanError";
+
+  constructor(readonly scanState: AttachmentTerminalScanState) {
+    super(`Attachment scan reached terminal state: ${scanState}`);
+  }
+}
+
+export function attachmentTerminalScanState(
+  error: unknown,
+): AttachmentTerminalScanState | undefined {
+  return error instanceof AttachmentTerminalScanError
+    ? error.scanState
+    : undefined;
+}
+
 export interface AttachmentUploadRequest {
   idempotencyKey: string;
   signal: AbortSignal;
@@ -77,7 +98,9 @@ export async function waitForCleanAttachmentArtifact(
       artifact.scanState === "QUARANTINED" ||
       artifact.scanState === "FAILED"
     )
-      throw new Error(`Attachment is not safe to use: ${artifact.scanState}`);
+      throw new AttachmentTerminalScanError(
+        artifact.scanState === "QUARANTINED" ? "QUARANTINED" : "FAILED",
+      );
 
     await wait(artifactScanIntervalMs, signal);
     artifact = await readAttachmentArtifact(artifact.ref, signal);

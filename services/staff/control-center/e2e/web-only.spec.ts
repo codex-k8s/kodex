@@ -1236,7 +1236,8 @@ test.describe("web-only fresh installation", () => {
         ".provider-selector__trigger",
       );
       await accountPicker.click();
-      const eligibleAccount = accountSelector
+      const eligibleAccount = page
+        .getByRole("dialog", { name: "Учётные записи провайдера" })
         .locator('button[role="option"]:not(:disabled)')
         .first();
       await expect(eligibleAccount).toBeVisible();

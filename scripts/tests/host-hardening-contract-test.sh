@@ -98,6 +98,20 @@ for sysctl_contract in \
   rg -Fq "$sysctl_contract" "$prepare_host" ||
     fail "host-owned sysctl contract is absent: $sysctl_contract"
 done
+
+for ssh_contract in \
+  'sshd_drop_in=/etc/ssh/sshd_config.d/60-kodex-breakglass.conf' \
+  'PasswordAuthentication no' \
+  'KbdInteractiveAuthentication no' \
+  'PermitRootLogin no' \
+  'AuthenticationMethods publickey' \
+  'AllowUsers $operator_user' \
+  '/usr/sbin/sshd -T -C "user=$operator_user,host=localhost,addr=127.0.0.1"' \
+  '[[ "$(awk '\''$1 == "allowusers" { print; count++ } END { if (count != 1) exit 1 }'\'' <<<"$effective")" == "allowusers $operator_user" ]]' \
+  'usermod -aG docker "$operator_user"'; do
+  rg -Fq -- "$ssh_contract" "$prepare_host" ||
+    fail "host SSH boundary is absent: $ssh_contract"
+done
 for forbidden_tuning_contract in \
   'kodex-local-host-tuning' \
   '/host-proc-sys-fs-inotify' \

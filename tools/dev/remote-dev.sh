@@ -17,7 +17,7 @@ command_name=${1:-}
 [[ -n "$command_name" ]] || { usage; exit 1; }
 shift
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-env_file="$repository_root/.kodex-remote-env"
+env_file=/srv/kodex-dev/private/remote.env
 resource_prefix=""
 run_timeout_ms=""
 expected_sha=""
@@ -31,6 +31,15 @@ while (($# > 0)); do
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+[[ ! -L "$env_file" ]] || fail 'private remote env must not be a symlink'
+env_file=$(realpath -e -- "$env_file") || fail 'private remote env is absent'
+case "$env_file" in
+  "$repository_root"|"$repository_root"/*)
+    fail 'private remote env must be stored outside the source checkout'
+    ;;
+esac
+[[ -f "$env_file" && $((8#$(stat -c '%a' "$env_file") & 8#077)) == 0 ]] ||
+  fail 'private remote env must be a private regular file outside the source checkout'
 case "$command_name" in
   host-preflight|host-apply|host-readback|up|status|smoke|e2e|acceptance|down|teleport) ;;
   *) usage; fail 'command is invalid' ;;
@@ -151,7 +160,7 @@ create_cluster_marker() {
 }
 
 validate_source_checkout() {
-  local expected_origin actual_origin actual_sha
+  local expected_origin actual_origin actual_sha path base
   [[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]] || fail 'expected source SHA is required and must use 40 lowercase hex characters'
   expected_origin=${KODEX_REMOTE_EXPECTED_ORIGIN_URL:-https://github.com/codex-k8s/kodex.git}
   case "$expected_origin" in
@@ -163,6 +172,18 @@ validate_source_checkout() {
   [[ "$actual_origin" == "$expected_origin" ]] || fail 'source origin URL does not match the expected repository'
   actual_sha=$(git -C "$repository_root" rev-parse HEAD)
   [[ "$actual_sha" == "$expected_sha" ]] || fail 'source HEAD does not match the expected SHA'
+  for path in .env .kodex-env .kodex-remote-env; do
+    [[ ! -e "$repository_root/$path" ]] ||
+      fail 'private env files are forbidden inside the remote source checkout'
+  done
+  while IFS= read -r -d '' path; do
+    base=${path##*/}
+    case "$base" in
+      .env|.kodex-env|.kodex-remote-env|auth.json|*.key|*.p12|*.pfx)
+        fail 'untracked private material is forbidden inside the remote source checkout'
+        ;;
+    esac
+  done < <(git -C "$repository_root" ls-files --others --exclude-standard -z)
   case "$command_name" in
     host-preflight|host-apply|host-readback|up|acceptance|teleport)
       [[ -z "$(git -C "$repository_root" status --porcelain --untracked-files=all)" ]] ||
@@ -177,6 +198,7 @@ validate_source_checkout
 host_arguments=(
   --server-public-ip "$KODEX_REMOTE_SERVER_PUBLIC_IP"
   --server-public-ipv6-address "${KODEX_REMOTE_SERVER_PUBLIC_IPV6_ADDRESS:-}"
+  --operator-user "$(id -un)"
 )
 if [[ "$command_name" == host-preflight ]]; then
   sudo -n "$repository_root/tools/install/prepare-host.sh" --mode preflight \
@@ -213,6 +235,13 @@ fi
 
 create_temporary_kubeconfig
 verify_cluster_marker
+case "$command_name" in
+  up|status|smoke|e2e|acceptance)
+    sudo -n "$repository_root/tools/install/prepare-host.sh" --mode readback \
+      "${host_arguments[@]}"
+    export KODEX_DEV_PROVIDER_APPARMOR_PROFILE=kodex-provider-runtime
+    ;;
+esac
 export KODEX_DEV_KUBECONFIG="$kubeconfig"
 export KODEX_DEV_KUBE_CONTEXT="$context"
 export KODEX_DEV_TLS_MODE=public-acme
@@ -263,16 +292,20 @@ prepare_teleport_credentials() {
   )
 }
 
-teleport_credentials_available() {
-  [[ -n "${KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_ID:-}" &&
-    -n "${KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET:-}" ]]
-}
-
 apply_teleport() {
   prepare_teleport_credentials
   sudo -n "$repository_root/infra/teleport/bootstrap-host.sh" --mode preflight \
     "${teleport_host_arguments[@]}"
   sudo -n "$repository_root/infra/teleport/bootstrap-host.sh" --mode apply \
+    "${teleport_host_arguments[@]}"
+  sudo -n env KUBECONFIG="$kubeconfig" \
+    "$repository_root/infra/teleport/bootstrap.sh" --mode apply \
+      "${teleport_route_arguments[@]}"
+}
+
+apply_teleport_route() {
+  prepare_teleport_credentials
+  sudo -n "$repository_root/infra/teleport/bootstrap-host.sh" --mode readback \
     "${teleport_host_arguments[@]}"
   sudo -n env KUBECONFIG="$kubeconfig" \
     "$repository_root/infra/teleport/bootstrap.sh" --mode apply \
@@ -301,21 +334,13 @@ case "$command_name" in
     "$repository_root/dev.sh" up --kubeconfig "$kubeconfig" --context "$context" \
       --state-directory "$state_directory" --cluster-marker "$cluster_marker" \
       --expected-sha "$expected_sha"
-    if teleport_credentials_available; then
-      apply_teleport
-    else
-      printf 'Kodex Teleport is pending dedicated GitHub OAuth credentials\n'
-    fi
+    apply_teleport_route
     ;;
   status)
     "$repository_root/dev.sh" status --kubeconfig "$kubeconfig" \
       --context "$context" --state-directory "$state_directory" \
       --cluster-marker "$cluster_marker" --expected-sha "$expected_sha"
-    if teleport_credentials_available; then
-      readback_teleport
-    else
-      printf 'Kodex Teleport readback is pending dedicated GitHub OAuth credentials\n'
-    fi
+    readback_teleport
     ;;
   smoke|down)
     "$repository_root/dev.sh" "$command_name" --kubeconfig "$kubeconfig" \
@@ -332,6 +357,7 @@ case "$command_name" in
       "$repository_root/dev.sh" e2e "${e2e_arguments[@]}"
     ;;
   acceptance)
+    readback_teleport
     acceptance_arguments=(--skip-build --kubeconfig "$kubeconfig" --context "$context" \
       --state-directory "$state_directory" --cluster-marker "$cluster_marker" \
       --expected-sha "$expected_sha")
@@ -339,5 +365,6 @@ case "$command_name" in
     [[ -z "$run_timeout_ms" ]] || acceptance_arguments+=(--run-timeout-ms "$run_timeout_ms")
     KODEX_E2E_BASE_HOST_RESOLUTION=loopback \
       "$repository_root/dev.sh" full-e2e "${acceptance_arguments[@]}"
+    readback_teleport
     ;;
 esac

@@ -38,6 +38,7 @@ usage() {
     '  --image-admission-image <repository@sha256:digest>' \
     '  --image-admission-tools-image <repository@sha256:digest>' \
     '  --authority-image <repository@sha256:digest>' \
+    '  [--provider-apparmor-profile <name>]' \
     '  --authority-source-revision <positive integer>' \
     '  --role-image-input-manifest-digest <sha256:digest>' \
     '  --role-image-input-payload-sha256 <sha256>' \
@@ -63,6 +64,7 @@ role_image_builder_image=""
 image_admission_image=""
 image_admission_tools_image=""
 authority_image=""
+provider_apparmor_profile=""
 authority_source_revision=""
 role_image_input_manifest_digest=""
 role_image_input_payload_sha256=""
@@ -88,6 +90,7 @@ while (($# > 0)); do
     --image-admission-image) image_admission_image=${2:-}; shift 2 ;;
     --image-admission-tools-image) image_admission_tools_image=${2:-}; shift 2 ;;
     --authority-image) authority_image=${2:-}; shift 2 ;;
+    --provider-apparmor-profile) provider_apparmor_profile=${2:-}; shift 2 ;;
     --authority-source-revision) authority_source_revision=${2:-}; shift 2 ;;
     --role-image-input-manifest-digest) role_image_input_manifest_digest=${2:-}; shift 2 ;;
     --role-image-input-payload-sha256) role_image_input_payload_sha256=${2:-}; shift 2 ;;
@@ -127,6 +130,8 @@ for exact_image in "$role_image_builder_image" "$image_admission_image" \
   [[ "$exact_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
     fail 'local supply-chain image must use an exact manifest digest'
 done
+[[ -z "$provider_apparmor_profile" || "$provider_apparmor_profile" == kodex-provider-runtime ]] ||
+  fail 'provider AppArmor profile is not approved'
 [[ "$authority_source_revision" =~ ^[1-9][0-9]*$ &&
   "$authority_source_revision" -le 9007199254740991 ]] ||
   fail 'local authority source revision is invalid'
@@ -249,7 +254,8 @@ INGRESS_CLASS="$ingress_class" CLUSTER_ISSUER="$cluster_issuer" \
 KUBERNETES_SERVICE_CIDR="$kubernetes_service_cidr" \
 SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
 SEAWEEDFS_IMAGE="$seaweedfs_image" AWS_CLI_IMAGE="$aws_cli_image" \
-PROMOTED_PULL_HOST="$promoted_pull_host" yq -i '
+PROMOTED_PULL_HOST="$promoted_pull_host" \
+PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
   (.. | select(tag == "!!str")) |= (
     sub("__KODEX_PUBLIC_HOST__"; strenv(PUBLIC_HOST)) |
     sub("__KODEX_PUBLIC_ORIGIN__"; strenv(PUBLIC_ORIGIN)) |
@@ -314,8 +320,6 @@ SOURCE_DIRTY="$source_dirty" yq -n '
 # BuildKit, admission/promotion и builder должны быть реально достижимы.
 yq -i '
   select(
-    (.kind != "NetworkPolicy" or
-      (.metadata.name | test("^(artifact-retention|backup-controller|control-plane|seaweedfs|integration-gateway|integration-synthetic|session-archive|kodex-image|kodex-buildkit|role-image-builder|image-admission)"))) and
     .kind != "PodDisruptionBudget" and
     .kind != "ServiceMonitor" and
     .kind != "PodMonitor" and
@@ -426,7 +430,7 @@ ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
     .data.toolchainSHA256 = strenv(ADMISSION_TOOLS_SHA256) |
     .data.roleRuntimeContractRevision = "1" |
     .data.roleRuntimeContractSHA256 = strenv(RUNTIME_CONTRACT_DIGEST) |
-    .data.providerAppArmorProfile = "kodex-provider-runtime"
+    .data.providerAppArmorProfile = strenv(PROVIDER_APPARMOR_PROFILE)
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime");
     .data.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256 = strenv(ADMISSION_TOOLS_SHA256)
@@ -546,8 +550,8 @@ OIDC_HOST="$oidc_host" yq -i '
     .data.oidcConnectAddress = "sso.identity.svc.cluster.local:443" |
     .data.oidcTlsServerName = strenv(OIDC_HOST)
   ) |
-  with(select(.kind == "NetworkPolicy" and .metadata.name == "control-plane-exact-runtime-paths");
-    (.spec.egress[].ports[] | select(.port == "__KODEX_OIDC_TARGET_PORT__").port) = 8443
+  with(select(.kind == "NetworkPolicy");
+    (.spec.egress[]?.ports[]? | select(.port == "__KODEX_OIDC_TARGET_PORT__").port) = 8443
   ) |
   with(select(.kind == "NetworkPolicy");
     (.spec.egress[]? |
@@ -883,9 +887,11 @@ FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" 
     .spec.template.spec.securityContext.runAsGroup = 0 |
     .spec.template.spec.volumes = (
       ((.spec.template.spec.volumes // []) |
-        map(select(.name != "dev-source" and .name != "dev-node-modules"))) +
+        map(select(.name != "dev-source" and .name != "dev-frontend-source" and
+          .name != "dev-frontend-runner" and .name != "dev-node-modules"))) +
       [
-        {"name":"dev-source","hostPath":{"path":strenv(SOURCE_ROOT),"type":"Directory"}},
+        {"name":"dev-frontend-source","hostPath":{"path":(strenv(SOURCE_ROOT) + "/services/staff/control-center"),"type":"Directory"}},
+        {"name":"dev-frontend-runner","hostPath":{"path":(strenv(SOURCE_ROOT) + "/tools/dev/run-frontend.sh"),"type":"File"}},
         {"name":"dev-node-modules","hostPath":{"path":(strenv(CACHE_ROOT) + "/node-modules"),"type":"Directory"}}
       ]
     ) |
@@ -902,7 +908,8 @@ FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" 
       .securityContext.runAsGroup = 0 |
       .securityContext.readOnlyRootFilesystem = false |
       .volumeMounts = [
-        {"name":"dev-source","mountPath":"/workspace","readOnly":true},
+        {"name":"dev-frontend-source","mountPath":"/workspace/services/staff/control-center","readOnly":true},
+        {"name":"dev-frontend-runner","mountPath":"/workspace/tools/dev/run-frontend.sh","readOnly":true},
         {"name":"dev-node-modules","mountPath":"/workspace/services/staff/control-center/node_modules"},
         (((.volumeMounts // [])[] | select(.name == "runtime-config")) |
           .mountPath = "/workspace/services/staff/control-center/public/config" |
@@ -1457,6 +1464,29 @@ RUNNER_IMAGE="$runner_image" yq -o=json -I=0 '.' "$output" | jq -s -e \
     any(.spec.template.spec.containers[];
       .name == "role-image-builder" and .image == $builderImage))
 ' >/dev/null || fail 'local RoleImage supply-chain render contract is invalid'
+
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  . as $resources |
+  [$resources[] | select(.kind == "Deployment")] as $workloads |
+  [$resources[] | select(.kind == "NetworkPolicy")] as $policies |
+  def namespace: (.metadata.namespace // "default");
+  def selects($policy; $workload):
+    ($policy | namespace) == ($workload | namespace) and
+    all((($policy.spec.podSelector.matchLabels // {}) | to_entries)[];
+      $workload.spec.template.metadata.labels[.key] == .value);
+  def deny_all($policy):
+    (($policy.spec.policyTypes // []) | sort) == ["Egress", "Ingress"] and
+    (($policy.spec.ingress // []) | length) == 0 and
+    (($policy.spec.egress // []) | length) == 0;
+  all($workloads[];
+    . as $workload |
+    any($policies[]; selects(.; $workload) and deny_all(.))) and
+  all($policies[];
+    . as $policy |
+    all(($policy.spec.egress // [])[];
+      (($policy.metadata.name | test("egress-gateway")) or
+       ((.to // []) | length) > 0)))
+' >/dev/null || fail 'local workload NetworkPolicy boundary is incomplete or has destination-less egress'
 
 target_registry=$(yq -N -r '
   select(.kind == "ConfigMap" and

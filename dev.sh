@@ -227,6 +227,66 @@ calculate_local_source_fingerprint() {
   ) | sha256sum | awk '{print $1}'
 }
 
+live_workloads_match=false
+verify_live_workload_source() {
+  local render=$1 encoded workload kind namespace name live expected_projection actual_projection
+  local projection
+  projection='
+    def kodex_annotations:
+      (. // {} | with_entries(select(.key | startswith("kodex.dev/"))));
+    def mounts:
+      [(. // [])[] | {
+        name,
+        mountPath,
+        readOnly: (.readOnly // false),
+        subPath: (.subPath // ""),
+        subPathExpr: (.subPathExpr // "")
+      }] | sort_by(.name, .mountPath, .subPath, .subPathExpr);
+    def containers:
+      [(. // [])[] | {
+        name,
+        image,
+        volumeMounts: (.volumeMounts | mounts)
+      }] | sort_by(.name);
+    {
+      kind,
+      namespace: (.metadata.namespace // "default"),
+      name: .metadata.name,
+      workloadAnnotations: (.metadata.annotations | kodex_annotations),
+      templateAnnotations: (.spec.template.metadata.annotations | kodex_annotations),
+      hostPaths: ([.spec.template.spec.volumes[]? |
+        select(.hostPath != null) |
+        {name, path: .hostPath.path, type: (.hostPath.type // "")}]
+        | sort_by(.name, .path)),
+      initContainers: (.spec.template.spec.initContainers | containers),
+      containers: (.spec.template.spec.containers | containers)
+    }
+  '
+  while IFS= read -r encoded; do
+    workload=$(base64 --decode <<<"$encoded") || fail 'rendered workload projection is invalid'
+    kind=$(jq -er '.kind | select(. == "Deployment" or . == "StatefulSet" or . == "DaemonSet")' <<<"$workload") ||
+      fail 'rendered workload kind is invalid'
+    namespace=$(jq -er '.metadata.namespace // "default"' <<<"$workload") ||
+      fail 'rendered workload namespace is invalid'
+    name=$(jq -er '.metadata.name | select(type == "string" and length > 0)' <<<"$workload") ||
+      fail 'rendered workload name is invalid'
+    live=$(kubectl -n "$namespace" get "$kind" "$name" -o json) ||
+      fail "live workload is absent: $kind $namespace/$name"
+    jq -e '.metadata.generation > 0 and .status.observedGeneration == .metadata.generation' <<<"$live" >/dev/null ||
+      fail "live workload generation is not observed: $kind $namespace/$name"
+    expected_projection=$(jq -cS "$projection" <<<"$workload") ||
+      fail 'rendered workload source projection failed'
+    actual_projection=$(jq -cS "$projection" <<<"$live") ||
+      fail 'live workload source projection failed'
+    [[ "$actual_projection" == "$expected_projection" ]] ||
+      fail "live workload source projection differs from render: $kind $namespace/$name"
+  done < <(yq -o=json -I=0 '.' "$render" | jq -sr '
+    [.[] | select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet") |
+      @base64] | .[]
+  ')
+  live_workloads_match=true
+}
+
 record_source_provenance_evidence() {
   local evidence_file=$1 evidence_command=$2 render_provenance current_revision
   local current_fingerprint source_dirty rendered_revision rendered_fingerprint rendered_dirty
@@ -272,6 +332,7 @@ record_source_provenance_evidence() {
     --arg current_content_sha256 "$current_fingerprint" \
     --argjson rendered_dirty "$rendered_dirty" --argjson dirty "$source_dirty" \
     --argjson render_matches "$render_matches" \
+    --argjson live_workloads_match "$live_workloads_match" \
     --argjson sha_attested "$sha_attested" '
       {
         version: 1,
@@ -284,6 +345,7 @@ record_source_provenance_evidence() {
         currentContentSHA256: $current_content_sha256,
         dirty: $dirty,
         renderContentMatches: $render_matches,
+        liveWorkloadsMatch: $live_workloads_match,
         shaAttested: $sha_attested
       }
     ' >"$temporary_evidence"
@@ -298,6 +360,7 @@ require_exact_source_attestation() {
   jq -e '
     .shaAttested == true and
     .renderContentMatches == true and
+    .liveWorkloadsMatch == true and
     .renderedDirty == false and
     .dirty == false
   ' "$evidence_file" >/dev/null ||
@@ -384,6 +447,9 @@ cluster_issuer=${KODEX_DEV_CLUSTER_ISSUER:-kodex-local}
 acme_email=${KODEX_DEV_ACME_EMAIL:-}
 oidc_ca_file="$state_directory/kodex-local-ca.crt"
 node_extra_ca_file="$state_directory/kodex-local-ca.crt"
+provider_apparmor_profile=${KODEX_DEV_PROVIDER_APPARMOR_PROFILE:-}
+[[ -z "$provider_apparmor_profile" || "$provider_apparmor_profile" == kodex-provider-runtime ]] ||
+  fail 'KODEX_DEV_PROVIDER_APPARMOR_PROFILE is not approved'
 if [[ "$tls_mode" == public-acme ]]; then
   [[ "$cluster_issuer" == letsencrypt-production ]] ||
     fail 'public development TLS requires letsencrypt-production'
@@ -440,7 +506,6 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
   fi
   record_source_provenance_evidence "$source_evidence" "$command_name"
   if [[ "$command_name" == e2e ]]; then
-    require_exact_source_attestation "$source_evidence"
     e2e_start_head=$(jq -r '.headSHA' "$source_evidence")
     e2e_start_fingerprint=$(jq -r '.currentContentSHA256' "$source_evidence")
     "$repository_root/tools/dev/build-local-session-archive.sh" \
@@ -449,6 +514,11 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
   "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
     --render "$state_directory/render.yaml" --state-directory "$state_directory" \
     --tls-mode "$tls_mode"
+  verify_live_workload_source "$state_directory/render.yaml"
+  record_source_provenance_evidence "$source_evidence" "$command_name"
+  if [[ "$command_name" == e2e ]]; then
+    require_exact_source_attestation "$source_evidence"
+  fi
   if [[ "$command_name" == status ]]; then
     printf 'Control Center: https://%s\nCredentials: %s\n' "$public_host" "$credentials_file"
     exit 0
@@ -680,6 +750,7 @@ api_endpoint_port=$(jq -er '
   --image-admission-image "$image_admission_image" \
   --image-admission-tools-image "$image_admission_tools_image" \
   --authority-image "$authority_image" \
+  --provider-apparmor-profile "$provider_apparmor_profile" \
   --authority-source-revision "$authority_source_revision" \
   --role-image-input-manifest-digest "$role_image_input_manifest_digest" \
   --role-image-input-payload-sha256 "$role_image_input_payload_sha256" \

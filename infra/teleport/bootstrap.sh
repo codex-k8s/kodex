@@ -71,10 +71,12 @@ done
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
-"$repository_root/tools/dev/preflight-public-hosts.sh" --hosts "$host" \
-  --allowed-ipv4-addresses "$allowed_ipv4_addresses" \
-  --allowed-ipv6-addresses "$allowed_ipv6_addresses" \
-  --context "$context" --backend-address "$backend_address"
+if [[ "$mode" != readback ]]; then
+  "$repository_root/tools/dev/preflight-public-hosts.sh" --hosts "$host" \
+    --allowed-ipv4-addresses "$allowed_ipv4_addresses" \
+    --allowed-ipv6-addresses "$allowed_ipv6_addresses" \
+    --context "$context" --backend-address "$backend_address"
+fi
 if [[ "$mode" == preflight ]]; then
   printf 'Kodex Teleport route preflight completed\n'
   exit 0
@@ -86,6 +88,25 @@ transport_name=teleport-host
 certificate_name=teleport-tls
 role_name=kodex-teleport-dev-observer
 binding_name=kodex-teleport-dev-observers
+
+render_kubernetes_role() {
+  yq -n -o=yaml '
+    .apiVersion = "rbac.authorization.k8s.io/v1" |
+    .kind = "ClusterRole" |
+    .metadata.name = "kodex-teleport-dev-observer" |
+    .metadata.labels."app.kubernetes.io/part-of" = "kodex-dev" |
+    .rules = [
+      {"nonResourceURLs":["/api","/api/*","/apis","/apis/*","/healthz","/livez","/readyz","/version"],"verbs":["get"]},
+      {"apiGroups":[""],"resources":["configmaps","endpoints","events","namespaces","nodes","persistentvolumeclaims","persistentvolumes","pods","pods/log","replicationcontrollers","resourcequotas","serviceaccounts","services"],"verbs":["get","list","watch"]},
+      {"apiGroups":["apps"],"resources":["daemonsets","deployments","replicasets","statefulsets"],"verbs":["get","list","watch"]},
+      {"apiGroups":["batch"],"resources":["cronjobs","jobs"],"verbs":["get","list","watch"]},
+      {"apiGroups":["networking.k8s.io"],"resources":["ingresses","networkpolicies"],"verbs":["get","list","watch"]},
+      {"apiGroups":["cert-manager.io"],"resources":["certificates","certificaterequests","clusterissuers","issuers"],"verbs":["get","list","watch"]},
+      {"apiGroups":["apiextensions.k8s.io"],"resources":["customresourcedefinitions"],"verbs":["get","list","watch"]},
+      {"apiGroups":["admissionregistration.k8s.io"],"resources":["mutatingwebhookconfigurations","validatingadmissionpolicies","validatingadmissionpolicybindings","validatingwebhookconfigurations"],"verbs":["get","list","watch"]}
+    ]
+  '
+}
 
 if [[ "$mode" == apply ]]; then
   if helm --namespace "$namespace" status teleport >/dev/null 2>&1; then
@@ -162,22 +183,8 @@ if [[ "$mode" == apply ]]; then
       }]
     ' | kubectl apply --server-side --field-manager=kodex-teleport-route -f - >/dev/null
 
-  yq -n -o=yaml '
-      .apiVersion = "rbac.authorization.k8s.io/v1" |
-      .kind = "ClusterRole" |
-      .metadata.name = "kodex-teleport-dev-observer" |
-      .metadata.labels."app.kubernetes.io/part-of" = "kodex-dev" |
-      .rules = [
-        {"nonResourceURLs":["/api","/api/*","/apis","/apis/*","/healthz","/livez","/readyz","/version"],"verbs":["get"]},
-        {"apiGroups":[""],"resources":["configmaps","endpoints","events","namespaces","nodes","persistentvolumeclaims","persistentvolumes","pods","pods/log","replicationcontrollers","resourcequotas","serviceaccounts","services"],"verbs":["get","list","watch"]},
-        {"apiGroups":["apps"],"resources":["daemonsets","deployments","replicasets","statefulsets"],"verbs":["get","list","watch"]},
-        {"apiGroups":["batch"],"resources":["cronjobs","jobs"],"verbs":["get","list","watch"]},
-        {"apiGroups":["networking.k8s.io"],"resources":["ingresses","networkpolicies"],"verbs":["get","list","watch"]},
-        {"apiGroups":["cert-manager.io"],"resources":["certificates","certificaterequests","clusterissuers","issuers"],"verbs":["get","list","watch"]},
-        {"apiGroups":["apiextensions.k8s.io"],"resources":["customresourcedefinitions"],"verbs":["get","list","watch"]},
-        {"apiGroups":["admissionregistration.k8s.io"],"resources":["mutatingwebhookconfigurations","validatingadmissionpolicies","validatingadmissionpolicybindings","validatingwebhookconfigurations"],"verbs":["get","list","watch"]}
-      ]
-    ' | kubectl apply --server-side --field-manager=kodex-teleport-route -f - >/dev/null
+  render_kubernetes_role |
+    kubectl apply --server-side --field-manager=kodex-teleport-route -f - >/dev/null
   KUBERNETES_GROUP="$kubernetes_group" yq -n -o=yaml '
       .apiVersion = "rbac.authorization.k8s.io/v1" |
       .kind = "ClusterRoleBinding" |
@@ -216,16 +223,24 @@ kubectl -n "$namespace" get ingress "$service_name" -o json | jq -e \
     .spec.tls[0].secretName == "teleport-tls" and
     .spec.rules[0].http.paths[0].backend.service.name == "teleport-host"
   ' >/dev/null || fail 'Teleport host Ingress readback failed'
-kubectl get clusterrole "$role_name" -o json | jq -e '
-  all(.rules[]; ((.resources // []) | index("secrets")) == null) and
-  all(.rules[]; ((.verbs // []) | index("create")) == null) and
-  all(.rules[]; ((.verbs // []) | index("update")) == null) and
-  all(.rules[]; ((.verbs // []) | index("patch")) == null) and
-  all(.rules[]; ((.verbs // []) | index("delete")) == null)
-' >/dev/null || fail 'Teleport Kubernetes role is not bounded read-only access'
+expected_role=$(render_kubernetes_role | yq -o=json -I=0 '.')
+actual_role=$(kubectl get clusterrole "$role_name" -o json)
+jq -n -e --argjson expected "$expected_role" --argjson actual "$actual_role" '
+  def normalize_rule:
+    {
+      apiGroups: ((.apiGroups // []) | sort),
+      nonResourceURLs: ((.nonResourceURLs // []) | sort),
+      resourceNames: ((.resourceNames // []) | sort),
+      resources: ((.resources // []) | sort),
+      verbs: ((.verbs // []) | sort)
+    } | with_entries(select((.value | length) > 0));
+  def normalize_rules: [.rules[] | normalize_rule] | sort_by(tojson);
+  ($actual | normalize_rules) == ($expected | normalize_rules) and
+  ($actual.metadata.labels["app.kubernetes.io/part-of"] == "kodex-dev")
+' >/dev/null || fail 'Teleport Kubernetes role differs from the exact bounded read-only profile'
 kubectl get clusterrolebinding "$binding_name" -o json | jq -e \
   --arg group "$kubernetes_group" '
-    .roleRef.name == "kodex-teleport-dev-observer" and
+    .roleRef == {"apiGroup":"rbac.authorization.k8s.io","kind":"ClusterRole","name":"kodex-teleport-dev-observer"} and
     .subjects == [{"apiGroup":"rbac.authorization.k8s.io","kind":"Group","name":$group}]
   ' >/dev/null || fail 'Teleport Kubernetes group binding readback failed'
 curl --proto '=https' --tlsv1.2 --fail --silent --show-error \

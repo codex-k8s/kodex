@@ -61,7 +61,7 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
   tools/install/reconcile-pull-docker-config.sh \
   tools/install/release-platform.sh tools/install/reset-host.sh \
   tools/install/verify-oidc-target.sh tools/install/write-env-file.sh \
-  tools/dev/preflight-public-hosts.sh tools/dev/remote-dev.sh \
+  tools/dev/install-tsh-client.sh tools/dev/preflight-public-hosts.sh tools/dev/remote-dev.sh \
   infra/teleport/bootstrap.sh infra/teleport/bootstrap-host.sh; do
   [[ -x "$repository_root/$script" ]] || fail "installer entrypoint is not executable: $script"
   bash -n "$repository_root/$script"
@@ -565,7 +565,8 @@ for teleport_contract in \
   '.spec.insecureSkipVerify = false' \
   '.spec.rootCAsSecrets = ["teleport-host-internal-ca"]' \
   'kodex-teleport-dev-observer' \
-  'all(.rules[]; ((.resources // []) | index("secrets")) == null)'; do
+  'expected_role=$(render_kubernetes_role' \
+  '($actual | normalize_rules) == ($expected | normalize_rules)'; do
   rg -Fq -- "$teleport_contract" "$repository_root/infra/teleport/bootstrap.sh" ||
     fail "Teleport route contract is absent: $teleport_contract"
 done
@@ -574,7 +575,8 @@ for teleport_host_contract in \
   'systemctl enable teleport' \
   'kind:"role",version:"v8",metadata:{name:"kodex-dev-access"}' \
   'kubernetes_groups:[env.KUBERNETES_GROUP]' \
-  'index("system:masters")) == null' \
+  '(.[0].spec | keys | sort) == ["allow","deny","options"]' \
+  '.[0].spec.allow.kubernetes_groups == [$group]' \
   'jq -n --rawfile client_id "$github_client_id_file"' \
   'https://$host/v1/webapi/github/callback' \
   'SSL_CERT_FILE="$trust_bundle_file" tctl "$@"' \

@@ -67,6 +67,8 @@ test-integration-synthetic:
 test-full-local-e2e-entrypoint:
 	@./scripts/tests/full-local-e2e-entrypoint-test.sh
 	@./scripts/tests/hot-reload-verifier-contract-test.sh
+	@./scripts/tests/integration-deployed-e2e-contract-test.sh
+	@./scripts/tests/local-kubernetes-e2e-diagnostics-contract-test.sh
 
 test-local-e2e-oidc-group-fixture-contract:
 	@./scripts/tests/local-e2e-oidc-group-fixture-test.sh

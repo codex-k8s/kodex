@@ -8,17 +8,19 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 --mode preflight|apply|readback --server-public-ip <IPv4> [--server-public-ipv6-address <IPv6>]" >&2
+    "Usage: $0 --mode preflight|apply|readback --server-public-ip <IPv4> --operator-user <name> [--server-public-ipv6-address <IPv6>]" >&2
 }
 
 mode=""
 server_public_ip=""
 server_public_ipv6_address=""
+operator_user=""
 while (($# > 0)); do
   case "$1" in
     --mode) mode="${2:-}"; shift 2 ;;
     --server-public-ip) server_public_ip="${2:-}"; shift 2 ;;
     --server-public-ipv6-address) server_public_ipv6_address="${2:-}"; shift 2 ;;
+    --operator-user) operator_user="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -27,6 +29,9 @@ done
 case "$mode" in preflight|apply|readback) ;; *) fail 'mode is invalid' ;; esac
 [[ "$server_public_ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
   fail 'server public IPv4 is invalid'
+[[ "$operator_user" =~ ^[a-z_][a-z0-9_-]{0,30}$ && "$operator_user" != root ]] ||
+  fail 'unprivileged host operator user is required'
+id "$operator_user" >/dev/null 2>&1 || fail 'host operator user is absent'
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] ||
   fail 'only Linux x86_64 is supported by the bare-metal profile'
 ((EUID == 0)) || fail 'host preparation must run as root'
@@ -42,6 +47,7 @@ k3s_resolver_file=/etc/rancher/k3s/resolv.conf
 hot_reload_sysctl_file=/etc/sysctl.d/99-kodex-hot-reload.conf
 local_api_interface=kodex-api0
 local_api_service=kodex-local-api-address.service
+sshd_drop_in=/etc/ssh/sshd_config.d/60-kodex-breakglass.conf
 locked_host_packages=(containerd docker-buildx docker-compose-v2 docker.io runc)
 
 validate_host_contract() {
@@ -372,6 +378,44 @@ configure_firewall() {
   ufw --force enable >/dev/null
 }
 
+configure_sshd() {
+  local temporary_file
+  temporary_file=$(mktemp)
+  cat >"$temporary_file" <<EOF
+# Managed by Kodex. Public break-glass SSH is key-only and owner-scoped.
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+PermitRootLogin no
+AuthenticationMethods publickey
+AllowUsers $operator_user
+EOF
+  install -d -m 0755 /etc/ssh/sshd_config.d
+  install -m 0644 -o root -g root "$temporary_file" "$sshd_drop_in"
+  rm -f -- "$temporary_file"
+  /usr/sbin/sshd -t || fail 'managed SSH configuration is invalid'
+  systemctl reload ssh
+}
+
+readback_sshd() {
+  local effective
+  [[ -f "$sshd_drop_in" && ! -L "$sshd_drop_in" &&
+    "$(stat -c '%u:%g:%a' "$sshd_drop_in")" == 0:0:644 ]] ||
+    fail 'managed SSH configuration is absent or unsafe'
+  systemctl is-active --quiet ssh || fail 'SSH service is not active'
+  /usr/sbin/sshd -t || fail 'SSH configuration readback failed'
+  effective=$(/usr/sbin/sshd -T -C "user=$operator_user,host=localhost,addr=127.0.0.1") ||
+    fail 'effective SSH configuration readback failed'
+  grep -Fxq 'pubkeyauthentication yes' <<<"$effective" || fail 'SSH public-key authentication is disabled'
+  grep -Fxq 'passwordauthentication no' <<<"$effective" || fail 'SSH password authentication is enabled'
+  grep -Fxq 'kbdinteractiveauthentication no' <<<"$effective" || fail 'SSH keyboard-interactive authentication is enabled'
+  grep -Fxq 'permitrootlogin no' <<<"$effective" || fail 'SSH root login is enabled'
+  grep -Fxq 'authenticationmethods publickey' <<<"$effective" || fail 'SSH authentication methods are not key-only'
+  [[ "$(awk '$1 == "allowusers" { print; count++ } END { if (count != 1) exit 1 }' <<<"$effective")" == "allowusers $operator_user" ]] ||
+    fail 'SSH allowed users differ from the exact operator identity'
+}
+
 readback_firewall() {
   local status expected_rules actual_rules
   command -v nft >/dev/null 2>&1 && nft list table inet kodex_fw >/dev/null 2>&1 &&
@@ -469,7 +513,7 @@ if [[ "$mode" == apply ]]; then
   apt-get install -y -qq --allow-downgrades --allow-change-held-packages \
     apache2-utils apparmor apparmor-utils build-essential ca-certificates curl dnsutils gh git iptables jq \
     libnss3-tools make iproute2 openssl python3 ripgrep rsync systemd tar unzip \
-    uidmap ufw xz-utils zstd "${locked_package_arguments[@]}"
+    openssh-server uidmap ufw xz-utils zstd "${locked_package_arguments[@]}"
   apt-mark hold "${locked_host_packages[@]}" >/dev/null
 else
   command -v python3 >/dev/null 2>&1 || fail 'python3 is required'
@@ -650,11 +694,10 @@ WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
   configure_hot_reload_sysctl
+  configure_sshd
   configure_firewall
   systemctl enable --now docker >/dev/null
-  if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != root ]]; then
-    usermod -aG docker "$SUDO_USER"
-  fi
+  usermod -aG docker "$operator_user"
   systemctl enable k3s >/dev/null
   systemctl restart k3s
 fi
@@ -722,6 +765,7 @@ done
 [[ "$node_ready" == true ]] || fail 'no ready Kubernetes node became available'
 readback_k3s_resolver
 readback_k3s_forwarding
+readback_sshd
 readback_firewall
 readback_hot_reload_sysctl
 readback_provider_apparmor_profile

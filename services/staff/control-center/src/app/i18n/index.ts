@@ -1968,6 +1968,10 @@ const ru = {
     retry: "Повторить загрузку файла «{name}»",
     uploading: "Загружается файл «{name}»",
     uploadFailed: "Не удалось загрузить файл",
+    scanFailed:
+      "Проверка файла завершилась ошибкой. Повторите загрузку новой попыткой.",
+    quarantinedReplace:
+      "Файл изолирован проверкой безопасности. Удалите его и выберите другой файл.",
     syncFailed: "Не удалось подготовить набор вложений",
     progress: "Подготовлено {uploaded} из {count}",
     aggregateLimit:
@@ -1992,6 +1996,7 @@ const ru = {
       UPLOADING: "Загружается",
       SCANNING: "Проверяется",
       UPLOADED: "Готов",
+      QUARANTINED: "Изолирован",
       FAILED: "Ошибка",
     },
   },
@@ -4125,6 +4130,9 @@ const en = {
     retry: "Retry uploading “{name}”",
     uploading: "Uploading “{name}”",
     uploadFailed: "Failed to upload the file",
+    scanFailed: "File scanning failed. Retry it as a new upload attempt.",
+    quarantinedReplace:
+      "The file was quarantined by the security scan. Remove it and choose another file.",
     syncFailed: "Failed to prepare the attachment set",
     progress: "Prepared {uploaded} of {count}",
     aggregateLimit:
@@ -4148,6 +4156,7 @@ const en = {
       UPLOADING: "Uploading",
       SCANNING: "Scanning",
       UPLOADED: "Ready",
+      QUARANTINED: "Quarantined",
       FAILED: "Failed",
     },
   },

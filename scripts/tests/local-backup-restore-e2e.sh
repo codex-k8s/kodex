@@ -77,15 +77,16 @@ approval_id="e2e-approval-$suffix"
 target_prefix="$restore_id"
 job_name="backup-controller-$restore_id"
 job_selector="app.kubernetes.io/name=backup-controller,app.kubernetes.io/component=restore-drill,app.kubernetes.io/managed-by=kodex-local-e2e,kodex.dev/local-profile=hot-reload,kodex.dev/e2e-run=$suffix"
+failure_bundle="$state_directory/e2e/$suffix-backup-kubernetes"
 target_databases=()
 port_forward_pid=""
 cleanup() {
+  local exit_code=$?
+  trap - EXIT
   if [[ -n "$port_forward_pid" ]]; then
     kill "$port_forward_pid" >/dev/null 2>&1 || true
     wait "$port_forward_pid" >/dev/null 2>&1 || true
   fi
-  kodex_e2e_delete_owned_jobs kodex-system "$job_selector" \
-    '^backup-controller-e2e-restore-[0-9]{14}-[0-9]+$' 2m >/dev/null 2>&1 || true
   kubectl -n kodex-system delete secret/backup-controller-repository \
     secret/backup-controller-restore-targets secret/backup-controller-restore-approval \
     --ignore-not-found --wait=false >/dev/null 2>&1 || true
@@ -97,6 +98,14 @@ cleanup() {
         --command "DROP DATABASE IF EXISTS \"$database\";" >/dev/null 2>&1 || true
   done
   rm -rf -- "$temporary_directory"
+  if ((exit_code == 0)); then
+    kodex_e2e_delete_owned_jobs kodex-system "$job_selector" \
+      '^backup-controller-e2e-restore-[0-9]{14}-[0-9]+$' 2m >/dev/null 2>&1 || true
+  elif ! kodex_e2e_retain_owned_terminal_jobs_on_failure kodex-system "$job_selector" \
+    '^backup-controller-e2e-restore-[0-9]{14}-[0-9]+$' "$failure_bundle"; then
+    printf 'Local backup restore E2E failed to retain safe Kubernetes diagnostics\n' >&2
+  fi
+  exit "$exit_code"
 }
 trap cleanup EXIT
 

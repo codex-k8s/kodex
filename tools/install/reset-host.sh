@@ -58,6 +58,7 @@ for path in \
   /srv/kodex-dev \
   /var/lib/teleport \
   /var/lib/cni \
+  /var/lib/kodex-dev \
   /var/lib/kubelet \
   /var/lib/rancher/k3s \
   /var/log/pods \
@@ -81,4 +82,6 @@ command -v iptables-save >/dev/null 2>&1 && iptables-save | grep -q 'KUBE-\|CNI-
 } || true
 command -v nft >/dev/null 2>&1 && nft list table inet kodex_fw >/dev/null 2>&1 &&
   fail 'legacy kodex_fw nftables policy remains active'
+[[ ! -e /var/lib/kodex-dev/cluster-identity.json ]] ||
+  fail 'disposable cluster identity marker remains after reset'
 printf 'Kodex host reset completed; all Kubernetes workloads and persistent data were removed\n'
