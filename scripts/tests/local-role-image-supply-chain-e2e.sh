@@ -58,10 +58,8 @@ jq -e '
 
 frontend_directory="$repository_root/services/staff/control-center"
 storage_state="$state_directory/e2e/owner.json"
-ca_file="$state_directory/kodex-local-ca.crt"
 owner_username_file="$state_directory/inputs/owner-username"
 owner_password_file="$state_directory/inputs/owner-password"
-[[ -f "$ca_file" && ! -L "$ca_file" ]] || fail 'local HTTPS CA is absent'
 [[ -f "$owner_username_file" && -r "$owner_username_file" && ! -L "$owner_username_file" ]] ||
   fail 'local owner username is absent or unsafe'
 [[ -f "$owner_password_file" && -r "$owner_password_file" && ! -L "$owner_password_file" ]] ||
@@ -70,7 +68,23 @@ install -d -m 0700 "$state_directory/e2e"
 state="$state_directory/e2e/$resource_prefix-role-image.json"
 [[ ! -e "$state" && ! -L "$state" ]] || fail 'RoleImage E2E state already exists'
 
-base_url=https://control.127.0.0.1.nip.io/
+tls_mode=${KODEX_DEV_TLS_MODE:-local-ca}
+case "$tls_mode" in
+  local-ca)
+    base_url=https://control.127.0.0.1.nip.io/
+    ca_file="$state_directory/kodex-local-ca.crt"
+    [[ -f "$ca_file" && ! -L "$ca_file" ]] || fail 'local HTTPS CA is absent'
+    ;;
+  public-acme)
+    public_host=${KODEX_DEV_PUBLIC_HOST:-}
+    [[ "$public_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ &&
+      "$public_host" == *.* && "$public_host" != *..* ]] ||
+      fail 'public-acme RoleImage E2E host is invalid'
+    base_url="https://$public_host/"
+    ca_file=""
+    ;;
+  *) fail 'RoleImage E2E TLS mode is invalid' ;;
+esac
 KODEX_E2E_BASE_URL="${base_url%/}" \
   KODEX_E2E_OWNER_USERNAME="$(<"$owner_username_file")" \
   KODEX_E2E_OWNER_PASSWORD="$(<"$owner_password_file")" \

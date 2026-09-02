@@ -8,6 +8,7 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 entrypoint="$repository_root/tools/dev/full-local-e2e.sh"
+role_image_entrypoint="$repository_root/scripts/tests/local-role-image-supply-chain-e2e.sh"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 fixture_root="$temporary_directory/repository"
@@ -99,6 +100,16 @@ chmod +x "$fake_bin"/* "$fixture_root/dev.sh" \
 export PATH="$fake_bin:$PATH"
 export KODEX_TEST_COMMAND_LOG="$command_log"
 export KODEX_TEST_CONTEXT=fixture-local
+
+for public_role_image_contract in \
+  'tls_mode=${KODEX_DEV_TLS_MODE:-local-ca}' \
+  'public-acme)' \
+  'public_host=${KODEX_DEV_PUBLIC_HOST:-}' \
+  'base_url="https://$public_host/"' \
+  'ca_file=""'; do
+  rg -Fq -- "$public_role_image_contract" "$role_image_entrypoint" ||
+    fail "public RoleImage E2E contract is absent: $public_role_image_contract"
+done
 
 "$fixture_root/tools/dev/full-local-e2e.sh" --check \
   --kubeconfig "$kubeconfig" --context fixture-local \
