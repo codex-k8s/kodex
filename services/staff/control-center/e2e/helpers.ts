@@ -34,7 +34,7 @@ export async function retryReadOnlyBrowserAction<T>(
   page: Page,
   action: () => Promise<T>,
 ): Promise<T> {
-  const retryDelays = [0, 200, 600];
+  const retryDelays = [0, 200, 600, 1_500, 3_000];
   for (const [index, delay] of retryDelays.entries()) {
     if (delay > 0) await page.waitForTimeout(delay);
     try {

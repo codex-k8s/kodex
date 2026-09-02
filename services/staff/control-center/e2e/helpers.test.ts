@@ -62,4 +62,27 @@ describe("read-only JSON readback в браузере", () => {
     expect(action).toHaveBeenCalledTimes(2);
     expect(waitForTimeout).toHaveBeenCalledWith(200);
   });
+
+  test("ограниченно повторяет read-only действие после нескольких сетевых сбоев", async () => {
+    const action = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("page.evaluate: TypeError: Failed to fetch"),
+      )
+      .mockRejectedValueOnce(
+        new Error("page.evaluate: TypeError: Failed to fetch"),
+      )
+      .mockRejectedValueOnce(
+        new Error("page.evaluate: TypeError: Failed to fetch"),
+      )
+      .mockResolvedValueOnce({ ready: true });
+    const waitForTimeout = vi.fn().mockResolvedValue(undefined);
+    const page = { waitForTimeout } as unknown as Page;
+
+    await expect(retryReadOnlyBrowserAction(page, action)).resolves.toEqual({
+      ready: true,
+    });
+    expect(action).toHaveBeenCalledTimes(4);
+    expect(waitForTimeout.mock.calls).toEqual([[200], [600], [1_500]]);
+  });
 });

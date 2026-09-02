@@ -1,4 +1,4 @@
-const retryDelaysMs = [200, 600] as const;
+const retryDelaysMs = [200, 600, 1_500, 3_000] as const;
 
 export function lazyPage<T>(load: () => Promise<T>): () => Promise<T> {
   return async () => {

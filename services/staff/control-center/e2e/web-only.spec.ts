@@ -2204,15 +2204,14 @@ test.describe("web-only fresh installation", () => {
 
     let resumeExistingRun = false;
     if (discoveryMode && workflowRunRef && workflowRunRef !== "new") {
-      const state = await page.evaluate(async (runRef) => {
-        const response = await fetch(
-          `/api/v1/runs/${encodeURIComponent(runRef)}`,
-        );
-        if (!response.ok) return "MISSING";
-        return (
-          ((await response.json()) as { state?: string }).state ?? "MISSING"
-        );
-      }, workflowRunRef);
+      const runReadback = await readJsonWithNetworkRetry<{ state?: string }>(
+        page,
+        `/api/v1/runs/${encodeURIComponent(workflowRunRef)}`,
+      );
+      const state =
+        runReadback.status === 200
+          ? (runReadback.body.state ?? "MISSING")
+          : "MISSING";
       resumeExistingRun = ![
         "MISSING",
         "SUCCEEDED",
@@ -2294,24 +2293,18 @@ test.describe("web-only fresh installation", () => {
           expect.stringContaining(writerName),
         ]),
       );
-    const authoritativeGraph = await page.evaluate(async (runRef) => {
-      const response = await fetch(
-        `/api/v1/runs/${encodeURIComponent(runRef)}/graph`,
-      );
-      if (!response.ok)
-        throw new Error(`graph read failed: ${String(response.status)}`);
-      const body = (await response.json()) as {
-        graph: {
-          edges: Array<{
-            sourceNodeRef: string;
-            targetNodeRef: string;
-            type: string;
-          }>;
-          nodes: Array<{ ref: string; type: string }>;
-        };
+    const authoritativeGraphReadback = await readJsonWithNetworkRetry<{
+      graph: {
+        edges: Array<{
+          sourceNodeRef: string;
+          targetNodeRef: string;
+          type: string;
+        }>;
+        nodes: Array<{ ref: string; type: string }>;
       };
-      return body.graph;
-    }, workflowRunRef);
+    }>(page, `/api/v1/runs/${encodeURIComponent(workflowRunRef)}/graph`);
+    expect(authoritativeGraphReadback.status).toBe(200);
+    const authoritativeGraph = authoritativeGraphReadback.body.graph;
     const authoritativeNodeRefs = new Set(
       authoritativeGraph.nodes.map((node) => node.ref),
     );
@@ -2508,18 +2501,15 @@ test.describe("web-only fresh installation", () => {
     ).toHaveAttribute("href", `/projects/${projectRef}/runs/${cancelledRef}`);
     await expect
       .poll(
-        () =>
-          page.evaluate(async (runRef) => {
-            const response = await fetch(
-              `/api/v1/runs/${encodeURIComponent(runRef)}/graph`,
-            );
-            if (!response.ok) return -1;
-            const body = (await response.json()) as {
-              graph: { edges: Array<{ type: string }> };
-            };
-            return body.graph.edges.filter((edge) => edge.type === "RETRY_OF")
-              .length;
-          }, retriedRef),
+        async () => {
+          const readback = await readJsonWithNetworkRetry<{
+            graph: { edges: Array<{ type: string }> };
+          }>(page, `/api/v1/runs/${encodeURIComponent(retriedRef)}/graph`);
+          if (readback.status !== 200) return -1;
+          return readback.body.graph.edges.filter(
+            (edge) => edge.type === "RETRY_OF",
+          ).length;
+        },
         { timeout: 30_000 },
       )
       .toBe(1);
@@ -3661,18 +3651,22 @@ async function readRequestAttachmentSet(
     attachmentSetRef?: string;
   };
   expect(request.attachmentSetRef).toMatch(/^aset_[A-Za-z0-9_-]+$/);
-  const attachmentSet = await page.evaluate(async (ref) => {
-    const read = await fetch(
-      `/api/v1/attachment-sets/${encodeURIComponent(ref ?? "")}?pageSize=100`,
-    );
-    if (!read.ok) {
-      throw new Error(`attachment set readback failed: ${String(read.status)}`);
-    }
-    const body = (await read.json()) as {
-      attachmentSet: AttachmentSetReadback;
-    };
-    return body.attachmentSet;
-  }, request.attachmentSetRef);
+  const attachmentSet = await retryReadOnlyBrowserAction(page, () =>
+    page.evaluate(async (ref) => {
+      const read = await fetch(
+        `/api/v1/attachment-sets/${encodeURIComponent(ref ?? "")}?pageSize=100`,
+      );
+      if (!read.ok) {
+        throw new Error(
+          `attachment set readback failed: ${String(read.status)}`,
+        );
+      }
+      const body = (await read.json()) as {
+        attachmentSet: AttachmentSetReadback;
+      };
+      return body.attachmentSet;
+    }, request.attachmentSetRef),
+  );
   expect(attachmentSet.ref).toBe(request.attachmentSetRef);
   expect(attachmentSet.state).toBe("FINALIZED");
   expect(
