@@ -6,6 +6,24 @@ fail() {
   exit 1
 }
 
+calculate_source_content_fingerprint() {
+  (
+    cd -- "$source_root"
+    printf 'BASE_TREE\0%s\0' "$(git rev-parse 'HEAD^{tree}')"
+    git diff --no-ext-diff --binary HEAD --
+    while IFS= read -r -d '' path; do
+      printf 'UNTRACKED\0%s\0' "$path"
+      if [[ -L "$path" ]]; then
+        printf 'SYMLINK\0%s\0' "$(readlink -- "$path")"
+      elif [[ -f "$path" ]]; then
+        sha256sum -- "$path"
+      else
+        printf 'OTHER\0'
+      fi
+    done < <(git ls-files --others --exclude-standard -z)
+  ) | sha256sum | awk '{print $1}'
+}
+
 usage() {
   printf '%s\n' \
     "Usage: $0 --source-root <path> --cache-root <path> --output <path>" \
@@ -217,7 +235,10 @@ render="$temporary_directory/local.yaml"
 } >"$render"
 
 source_revision=$(git -C "$source_root" rev-parse HEAD)
-source_digest=$(printf '%s' "$source_revision" | sha256sum | awk '{print $1}')
+source_digest=$(calculate_source_content_fingerprint)
+[[ "$source_digest" =~ ^[a-f0-9]{64}$ ]] || fail 'source content fingerprint is invalid'
+source_dirty=false
+[[ -z "$(git -C "$source_root" status --porcelain --untracked-files=all)" ]] || source_dirty=true
 oidc_issuer="https://$oidc_host/realms/kodex"
 oidc_jwks_url="$oidc_issuer/protocol/openid-connect/certs"
 public_origin="https://$public_host"
@@ -254,6 +275,8 @@ PROMOTED_PULL_HOST="$promoted_pull_host" yq -i '
   with(select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job");
     .spec.template.metadata.labels."kodex.dev/environment" = "staging" |
     .spec.template.metadata.labels."kodex.dev/local-profile" = "hot-reload" |
+    .spec.template.metadata.annotations."kodex.dev/source-revision" = strenv(SOURCE_REVISION) |
+    .spec.template.metadata.annotations."kodex.dev/source-content-sha256" = strenv(SOURCE_DIGEST) |
     (.spec.template.spec.containers[] | select(.startupProbe != null) |
       .startupProbe.failureThreshold) = 180 |
     (.spec.template.spec.containers[] | select(.startupProbe != null) |
@@ -264,6 +287,29 @@ PROMOTED_PULL_HOST="$promoted_pull_host" yq -i '
     .metadata.labels."kodex.dev/local-profile" = "hot-reload"
   )
 ' "$render"
+
+printf '\n---\n' >>"$render"
+SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
+SOURCE_DIRTY="$source_dirty" yq -n '
+  {
+    "apiVersion":"v1",
+    "kind":"ConfigMap",
+    "metadata":{
+      "name":"kodex-dev-source-provenance",
+      "namespace":"kodex-system",
+      "labels":{
+        "app.kubernetes.io/part-of":"kodex",
+        "kodex.dev/environment":"staging",
+        "kodex.dev/local-profile":"hot-reload"
+      }
+    },
+    "data":{
+      "sourceRevision":strenv(SOURCE_REVISION),
+      "sourceContentSHA256":strenv(SOURCE_DIGEST),
+      "sourceDirty":strenv(SOURCE_DIRTY)
+    }
+  }
+' >>"$render"
 
 # Локальный профиль запускает полный RoleImage supply-chain. Наблюдаемость и
 # retention CronJob остаются за пределами hot-reload контура, но registry,

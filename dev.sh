@@ -13,7 +13,8 @@ usage() {
     "       $0 full-e2e [--check] [--skip-build] [--resource-prefix <slug>]" \
     "         [--target <test-make-target>]..." \
     "       $0 provider-authorize|provider-import|provider-list [provider options]" \
-    '  [--state-directory <path>]' >&2
+    '  [--state-directory <path>] [--cluster-marker <root-owned-path>]' \
+    '  [--expected-sha <40-hex-commit>]' >&2
 }
 
 command_name=${1:-}
@@ -39,6 +40,8 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 state_directory="$repository_root/.kodex-dev"
 resource_prefix="local-e2e-$(date -u +%Y%m%d%H%M%S)"
 run_timeout_ms=900000
+cluster_marker=""
+expected_sha=""
 while (($# > 0)); do
   case "$1" in
     --kubeconfig) kubeconfig=${2:-}; shift 2 ;;
@@ -46,11 +49,17 @@ while (($# > 0)); do
     --state-directory) state_directory=${2:-}; shift 2 ;;
     --resource-prefix) resource_prefix=${2:-}; shift 2 ;;
     --run-timeout-ms) run_timeout_ms=${2:-}; shift 2 ;;
+    --cluster-marker) cluster_marker=${2:-}; shift 2 ;;
+    --expected-sha) expected_sha=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 case "$command_name" in up|status|smoke|e2e|down) ;; *) usage; fail 'command is invalid' ;; esac
+if [[ "${KODEX_DEV_TLS_MODE:-local-ca}" == public-acme ]]; then
+  [[ -n "$cluster_marker" ]] || fail 'public development requires a disposable cluster marker'
+  [[ -n "$expected_sha" ]] || fail 'public development requires an expected source SHA'
+fi
 if [[ "$command_name" == e2e ]]; then
   [[ "$resource_prefix" =~ ^[a-z0-9]([a-z0-9-]{2,38}[a-z0-9])$ ]] ||
     fail 'E2E resource prefix must be a lowercase 4-40 character slug'
@@ -65,7 +74,75 @@ export KUBECONFIG=$kubeconfig
 kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
 [[ "$context" != *prod* && "$context" != *production* ]] || fail 'production context is forbidden'
 
+capture_cluster_identity() {
+  local config_json ca_data ca_file cluster_uid api_endpoint ca_sha256
+  cluster_uid=$(kubectl get namespace kube-system -o jsonpath='{.metadata.uid}') ||
+    fail 'Kubernetes cluster UID readback failed'
+  [[ "$cluster_uid" =~ ^[A-Za-z0-9-]{16,128}$ ]] || fail 'Kubernetes cluster UID is invalid'
+  config_json=$(kubectl config view --minify --raw -o json) ||
+    fail 'Kubernetes cluster configuration readback failed'
+  api_endpoint=$(jq -er '
+    .clusters | select(length == 1) | .[0].cluster.server |
+    select(type == "string" and test("^https://[^[:space:]]+$"))
+  ' <<<"$config_json") || fail 'Kubernetes API endpoint is invalid'
+  ca_data=$(jq -r '.clusters[0].cluster["certificate-authority-data"] // ""' \
+    <<<"$config_json")
+  if [[ -n "$ca_data" ]]; then
+    ca_sha256=$(printf '%s' "$ca_data" | base64 --decode 2>/dev/null | sha256sum |
+      awk '{print $1}') || fail 'Kubernetes CA data is invalid'
+  else
+    ca_file=$(jq -er '
+      .clusters[0].cluster["certificate-authority"] |
+      select(type == "string" and startswith("/"))
+    ' <<<"$config_json") || fail 'Kubernetes CA reference is absent'
+    [[ -f "$ca_file" && ! -L "$ca_file" ]] || fail 'Kubernetes CA file is invalid'
+    ca_sha256=$(sha256sum -- "$ca_file" | awk '{print $1}')
+  fi
+  [[ "$ca_sha256" =~ ^[a-f0-9]{64}$ ]] || fail 'Kubernetes CA digest is invalid'
+  jq -cn --arg cluster_uid "$cluster_uid" --arg api_endpoint "$api_endpoint" \
+    --arg ca_sha256 "$ca_sha256" '{version:1,clusterUID:$cluster_uid,
+      apiEndpoint:$api_endpoint,caSHA256:$ca_sha256}'
+}
+
+verify_disposable_cluster_marker() {
+  local marker_stat marker_json current_json
+  [[ "$cluster_marker" == /var/lib/kodex-dev/cluster-identity.json ]] ||
+    fail 'disposable cluster marker path is invalid'
+  if ! sudo -n test -f "$cluster_marker" || sudo -n test -L "$cluster_marker"; then
+    fail 'disposable cluster marker is absent or unsafe'
+  fi
+  marker_stat=$(sudo -n stat -c '%u:%g:%a' -- "$cluster_marker") ||
+    fail 'disposable cluster marker metadata readback failed'
+  [[ "$marker_stat" == 0:0:600 ]] || fail 'disposable cluster marker ownership or mode is invalid'
+  marker_json=$(sudo -n cat -- "$cluster_marker") ||
+    fail 'disposable cluster marker readback failed'
+  jq -e '
+    .version == 1 and
+    (.clusterUID | type == "string" and test("^[A-Za-z0-9-]{16,128}$")) and
+    (.apiEndpoint | type == "string" and test("^https://[^[:space:]]+$")) and
+    (.caSHA256 | type == "string" and test("^[a-f0-9]{64}$"))
+  ' <<<"$marker_json" >/dev/null || fail 'disposable cluster marker is invalid'
+  current_json=$(capture_cluster_identity)
+  jq -e --argjson current "$current_json" '
+    .clusterUID == $current.clusterUID and
+    .apiEndpoint == $current.apiEndpoint and
+    .caSHA256 == $current.caSHA256
+  ' <<<"$marker_json" >/dev/null || fail 'Kubernetes cluster identity does not match the disposable marker'
+}
+
+if [[ -n "$expected_sha" ]]; then
+  [[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]] || fail 'expected source SHA is invalid'
+  [[ "$(git -C "$repository_root" rev-parse HEAD)" == "$expected_sha" ]] ||
+    fail 'source HEAD does not match the expected SHA'
+fi
+if [[ -n "$cluster_marker" ]]; then
+  verify_disposable_cluster_marker
+fi
+
 if [[ "$command_name" == down ]]; then
+  [[ "${KODEX_DEV_CONFIRM_DOWN:-}" == \
+    I_UNDERSTAND_THIS_REMOVES_KODEX_FROM_THE_BOUND_DISPOSABLE_CLUSTER ]] ||
+    fail 'down requires the exact disposable environment confirmation'
   local_admission_resources=(
     internal-rpc-authority-restore-anchor-forward-only
     internal-rpc-authority-restore-pitr-cluster-owner
@@ -135,7 +212,7 @@ read_authority_snapshot_revision() {
 calculate_local_source_fingerprint() {
   (
     cd -- "$repository_root"
-    printf 'HEAD\0%s\0' "$(git rev-parse HEAD)"
+    printf 'BASE_TREE\0%s\0' "$(git rev-parse 'HEAD^{tree}')"
     git diff --no-ext-diff --binary HEAD --
     while IFS= read -r -d '' path; do
       printf 'UNTRACKED\0%s\0' "$path"
@@ -148,6 +225,72 @@ calculate_local_source_fingerprint() {
       fi
     done < <(git ls-files --others --exclude-standard -z)
   ) | sha256sum | awk '{print $1}'
+}
+
+record_source_provenance_evidence() {
+  local evidence_file=$1 evidence_command=$2 render_provenance current_revision
+  local current_fingerprint source_dirty rendered_revision rendered_fingerprint rendered_dirty
+  local render_matches sha_attested temporary_evidence
+  [[ -f "$state_directory/render.yaml" && ! -L "$state_directory/render.yaml" ]] ||
+    fail 'rendered source provenance is absent'
+  render_provenance=$(yq -o=json -I=0 '
+    select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "kodex-dev-source-provenance")
+  ' "$state_directory/render.yaml" | jq -sc '
+    select(length == 1) | .[0].data |
+    select((.sourceRevision | type == "string" and test("^[a-f0-9]{40}$")) and
+      (.sourceContentSHA256 | type == "string" and test("^[a-f0-9]{64}$")) and
+      (.sourceDirty == "true" or .sourceDirty == "false"))
+  ') || fail 'rendered source provenance is invalid'
+  [[ -n "$render_provenance" ]] || fail 'rendered source provenance is invalid'
+  rendered_revision=$(jq -r '.sourceRevision' <<<"$render_provenance")
+  rendered_fingerprint=$(jq -r '.sourceContentSHA256' <<<"$render_provenance")
+  rendered_dirty=$(jq -r '.sourceDirty' <<<"$render_provenance")
+  current_revision=$(git -C "$repository_root" rev-parse HEAD)
+  current_fingerprint=$(calculate_local_source_fingerprint)
+  [[ "$current_fingerprint" =~ ^[a-f0-9]{64}$ ]] || fail 'source content fingerprint is invalid'
+  [[ "$rendered_revision" == "$current_revision" ]] ||
+    fail 'rendered source revision does not match the current HEAD'
+  if [[ -n "$expected_sha" && "$current_revision" != "$expected_sha" ]]; then
+    fail 'source HEAD does not match the expected SHA'
+  fi
+  source_dirty=false
+  [[ -z "$(git -C "$repository_root" status --porcelain --untracked-files=all)" ]] ||
+    source_dirty=true
+  render_matches=false
+  [[ "$rendered_fingerprint" == "$current_fingerprint" ]] && render_matches=true
+  sha_attested=false
+  if [[ "$rendered_dirty" == false && "$source_dirty" == false && "$render_matches" == true ]]; then
+    sha_attested=true
+  fi
+  install -d -m 0700 "$(dirname -- "$evidence_file")"
+  temporary_evidence=$(mktemp "$(dirname -- "$evidence_file")/.source-provenance.XXXXXX")
+  jq -n --arg command "$evidence_command" \
+    --arg expected_sha "$expected_sha" --arg head_sha "$current_revision" \
+    --arg rendered_sha "$rendered_revision" \
+    --arg rendered_content_sha256 "$rendered_fingerprint" \
+    --arg current_content_sha256 "$current_fingerprint" \
+    --argjson rendered_dirty "$rendered_dirty" --argjson dirty "$source_dirty" \
+    --argjson render_matches "$render_matches" \
+    --argjson sha_attested "$sha_attested" '
+      {
+        version: 1,
+        command: $command,
+        expectedSHA: (if $expected_sha == "" then null else $expected_sha end),
+        headSHA: $head_sha,
+        renderedSHA: $rendered_sha,
+        renderedContentSHA256: $rendered_content_sha256,
+        renderedDirty: $rendered_dirty,
+        currentContentSHA256: $current_content_sha256,
+        dirty: $dirty,
+        renderContentMatches: $render_matches,
+        shaAttested: $sha_attested
+      }
+    ' >"$temporary_evidence"
+  chmod 0600 "$temporary_evidence"
+  mv -- "$temporary_evidence" "$evidence_file"
+  printf 'Source HEAD: %s\nSource content SHA-256: %s\nSource SHA attested: %s\n' \
+    "$current_revision" "$current_fingerprint" "$sha_attested"
 }
 
 resolve_local_authority_source_revision() {
@@ -277,7 +420,16 @@ if [[ "$command_name" == up && "$tls_mode" == public-acme ]]; then
 fi
 
 if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" == e2e ]]; then
+  source_evidence="$state_directory/source-provenance-$command_name.json"
+  e2e_start_head=""
+  e2e_start_fingerprint=""
   if [[ "$command_name" == e2e ]]; then
+    source_evidence="$state_directory/e2e/$resource_prefix-source-provenance.json"
+  fi
+  record_source_provenance_evidence "$source_evidence" "$command_name"
+  if [[ "$command_name" == e2e ]]; then
+    e2e_start_head=$(jq -r '.headSHA' "$source_evidence")
+    e2e_start_fingerprint=$(jq -r '.currentContentSHA256' "$source_evidence")
     "$repository_root/tools/dev/build-local-session-archive.sh" \
       --source-root "$repository_root" --state-directory "$state_directory"
   fi
@@ -330,6 +482,14 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
       npm --prefix "$frontend_directory" run test:e2e:discovery; then
       fail 'local browser E2E failed'
     fi
+    record_source_provenance_evidence "$source_evidence" "$command_name"
+    [[ "$(jq -r '.headSHA' "$source_evidence")" == "$e2e_start_head" &&
+      "$(jq -r '.currentContentSHA256' "$source_evidence")" == "$e2e_start_fingerprint" ]] ||
+      fail 'source content changed while E2E was running'
+    temporary_source_evidence=$(mktemp "$state_directory/e2e/.source-provenance.XXXXXX")
+    jq '.stableDuringCommand = true' "$source_evidence" >"$temporary_source_evidence"
+    chmod 0600 "$temporary_source_evidence"
+    mv -- "$temporary_source_evidence" "$source_evidence"
     jq -e '
       .version == 1 and .status == "passed" and
       (.results | length) > 0 and all(.results[]; .status == "passed")
@@ -339,7 +499,8 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
       --context "$context" --kubeconfig "$kubeconfig" --state "$run_state" \
       --expect-account default-openai-codex \
       --expect-account openai-codex-account-2
-    printf 'Kodex local full E2E completed: %s\nReport: %s\n' "$resource_prefix" "$report"
+    printf 'Kodex local full E2E completed: %s\nReport: %s\nSource evidence: %s\n' \
+      "$resource_prefix" "$report" "$source_evidence"
     exit 0
   fi
   printf 'Kodex local browser smoke completed\n'
@@ -497,6 +658,7 @@ api_endpoint_port=$(jq -er '
   --role-image-input-manifest-digest "$role_image_input_manifest_digest" \
   --role-image-input-payload-sha256 "$role_image_input_payload_sha256" \
   --role-image-input-source-sha256 "$role_image_input_source_sha256"
+record_source_provenance_evidence "$state_directory/source-provenance-up.json" up
 "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode apply \
   --render "$state_directory/render.yaml" --state-directory "$state_directory"
 commit_local_authority_source_state

@@ -176,7 +176,44 @@ jq -e --arg policy "$actual_policy_digest" --arg runtime "$expected_runtime_cont
 ' <<<"$policy_json" >/dev/null ||
   fail 'local policy or role runtime contract identity is not content-addressed'
 source_revision=$(git -C "$source_root" rev-parse HEAD)
-source_digest=$(printf '%s' "$source_revision" | sha256sum | awk '{print $1}')
+source_digest=$(
+  cd -- "$source_root"
+  {
+    printf 'BASE_TREE\0%s\0' "$(git rev-parse 'HEAD^{tree}')"
+    git diff --no-ext-diff --binary HEAD --
+    while IFS= read -r -d '' path; do
+      printf 'UNTRACKED\0%s\0' "$path"
+      if [[ -L "$path" ]]; then
+        printf 'SYMLINK\0%s\0' "$(readlink -- "$path")"
+      elif [[ -f "$path" ]]; then
+        sha256sum -- "$path"
+      else
+        printf 'OTHER\0'
+      fi
+    done < <(git ls-files --others --exclude-standard -z)
+  } | sha256sum | awk '{print $1}'
+)
+source_dirty=false
+[[ -z "$(git -C "$source_root" status --porcelain --untracked-files=all)" ]] || source_dirty=true
+yq -o=json -I=0 '.' "$render" | jq -s -e \
+  --arg source_revision "$source_revision" --arg source_digest "$source_digest" \
+  --arg source_dirty "$source_dirty" '
+    . as $resources |
+    (first($resources[] | select(.kind == "ConfigMap" and
+      .metadata.namespace == "kodex-system" and
+      .metadata.name == "kodex-dev-source-provenance")) | .data) as $provenance |
+    $provenance == {
+      sourceRevision:$source_revision,
+      sourceContentSHA256:$source_digest,
+      sourceDirty:$source_dirty
+    } and
+    all($resources[] | select(.kind == "Deployment" or .kind == "StatefulSet" or
+      .kind == "Job");
+      .spec.template.metadata.annotations["kodex.dev/source-revision"] ==
+        $source_revision and
+      .spec.template.metadata.annotations["kodex.dev/source-content-sha256"] ==
+        $source_digest)
+  ' >/dev/null || fail 'rendered source provenance is not bound to the actual worktree content'
 [[ "$actual_policy_digest" != "$source_digest" &&
   "$expected_runtime_contract_digest" != "$source_digest" ]] ||
   fail 'policy, role runtime contract, and source revision identities unexpectedly collide'

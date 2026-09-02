@@ -544,9 +544,11 @@ for remote_contract in \
   'preflight-public-hosts.sh' \
   'prepare-playwright-browser.sh' \
   'KODEX_E2E_BASE_HOST_RESOLUTION=loopback' \
-  'KUBECONFIG="$kubeconfig" "$repository_root/infra/teleport/bootstrap.sh"' \
-  'host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport' \
-  'KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET'; do
+  'cluster_marker=/var/lib/kodex-dev/cluster-identity.json' \
+  'sudo -n cat /etc/rancher/k3s/k3s.yaml' \
+  'trap cleanup EXIT' \
+  '--expected-sha <40-hex-commit>' \
+  'host-preflight|host-apply|host-readback|up|status|smoke|e2e|down'; do
   rg -Fq -- "$remote_contract" \
     "$repository_root/tools/dev/remote-dev.sh" "$repository_root/dev.sh" \
     "$repository_root/.kodex-remote-env.example" ||
@@ -625,5 +627,7 @@ for surface in control-center grafana headlamp; do
   [[ "$(stat -c '%a' "$cookie_secret")" == 600 ]] ||
     fail "generated OAuth2 Proxy cookie Secret mode is invalid: $surface"
 done
+
+"$repository_root/scripts/tests/remote-disposable-cluster-contract-test.sh" >/dev/null
 
 printf 'Kodex install contract tests passed\n'
