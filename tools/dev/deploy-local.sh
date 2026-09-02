@@ -275,7 +275,7 @@ reconcile_local_statefulset_rollout() {
       "$current_revision" != "$update_revision" ]] || continue
     while IFS= read -r pod; do
       [[ -n "$pod" ]] || continue
-      kubectl -n "$namespace" delete "pod/$pod" --wait=true --timeout=3m >/dev/null
+      kubectl -n "$namespace" delete "pod/$pod" --ignore-not-found --wait=true --timeout=3m >/dev/null
     done < <(kubectl -n "$namespace" get pods -o json | jq -r --arg workload "$workload" '
       .items[] |
       select(any(.metadata.ownerReferences[]?;
