@@ -42,9 +42,10 @@ export function idempotencyKey(): string {
 export async function mutate<T>(
   request: (headers: MutationHeaders) => Promise<GeneratedResponse<T>>,
   version?: number,
+  requestIdempotencyKey = idempotencyKey(),
 ): Promise<ApiReadback<NonNullable<T>>> {
   const headers: MutationHeaders = {
-    "Idempotency-Key": idempotencyKey(),
+    "Idempotency-Key": requestIdempotencyKey,
     "X-CSRF-Token": csrfToken(),
   };
   if (version !== undefined) headers["If-Match"] = etag(version);

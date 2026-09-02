@@ -206,6 +206,9 @@ describe("attachment upload queue", () => {
     queue.retry(item.key);
     await flushQueue();
     expect(queue.state.value.references).toEqual(["art_retry"]);
+    expect(upload.mock.calls[0]?.[1].idempotencyKey).toBe(
+      upload.mock.calls[1]?.[1].idempotencyKey,
+    );
 
     queue.remove(required(queue.items.value[0]).key);
     expect(queue.state.value.references).toEqual([]);

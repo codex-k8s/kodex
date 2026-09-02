@@ -29,4 +29,19 @@ describe("mutate HTTP boundary", () => {
     });
     expect(headers["Idempotency-Key"]).toMatch(/^[0-9a-f-]{36}$/);
   });
+
+  it("сохраняет выданный вызывающей стороной idempotency key", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const request = vi
+      .fn<(headers: MutationHeaders) => Promise<{ response: Response }>>()
+      .mockResolvedValue({ response: new Response(null, { status: 204 }) });
+
+    await mutate(request, undefined, "stable-upload-idempotency-key");
+
+    expect(request.mock.calls[0]?.[0]?.["Idempotency-Key"]).toBe(
+      "stable-upload-idempotency-key",
+    );
+  });
 });

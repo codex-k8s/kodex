@@ -348,13 +348,18 @@ async function exerciseAttachmentComposer(
       .filter({ hasText: failedName });
     await expect(failedItem).toHaveClass(/attachment-composer__item--failed/);
     await page.unroute("**/api/v1/**", rejectFirstUpload);
-    const retryResponse = waitForArtifactUpload(page, uploadPath, failedName);
-    await failedItem
-      .getByRole("button", {
-        name: `Повторить загрузку файла «${failedName}»`,
-      })
-      .click();
-    const retriedUpload = await retryResponse;
+    const retriedUpload = await uploadArtifactWithNetworkRetry(
+      page,
+      composer,
+      uploadPath,
+      failedName,
+      () =>
+        failedItem
+          .getByRole("button", {
+            name: `Повторить загрузку файла «${failedName}»`,
+          })
+          .click(),
+    );
     expect(retriedUpload.status(), await retriedUpload.text()).toBe(201);
     await expect(
       failedItem.locator(".attachment-composer__ready"),
@@ -370,7 +375,6 @@ async function exerciseAttachmentComposer(
   }
   expect(rejected, `retry fixture was not used on ${surface}`).toBe(true);
 
-  const droppedResponse = waitForArtifactUpload(page, uploadPath, droppedName);
   const dataTransfer = await page.evaluateHandle(
     ({ content, fileName }) => {
       const transfer = new DataTransfer();
@@ -384,14 +388,23 @@ async function exerciseAttachmentComposer(
     },
     { content: `drop fixture for ${surface}`, fileName: droppedName },
   );
+  let droppedResponse: Response;
   try {
-    await composer.dispatchEvent("dragenter", { dataTransfer });
-    await expect(composer).toHaveClass(/attachment-composer--dragging/);
-    await composer.dispatchEvent("drop", { dataTransfer });
+    droppedResponse = await uploadArtifactWithNetworkRetry(
+      page,
+      composer,
+      uploadPath,
+      droppedName,
+      async () => {
+        await composer.dispatchEvent("dragenter", { dataTransfer });
+        await expect(composer).toHaveClass(/attachment-composer--dragging/);
+        await composer.dispatchEvent("drop", { dataTransfer });
+      },
+    );
   } finally {
     await dataTransfer.dispose();
   }
-  expect((await droppedResponse).status()).toBe(201);
+  expect(droppedResponse.status()).toBe(201);
   const droppedItem = composer
     .locator(".attachment-composer__item")
     .filter({ hasText: droppedName });
@@ -405,13 +418,18 @@ async function exerciseAttachmentComposer(
     .click();
   await expect(droppedItem).toHaveCount(0);
 
-  const finalResponse = waitForArtifactUpload(page, uploadPath, finalName);
-  await composer.locator('input[type="file"]').setInputFiles({
-    name: finalName,
-    mimeType: "text/plain",
-    buffer: Buffer.from(`${marker}\n`, "utf8"),
-  });
-  const response = await finalResponse;
+  const response = await uploadArtifactWithNetworkRetry(
+    page,
+    composer,
+    uploadPath,
+    finalName,
+    () =>
+      composer.locator('input[type="file"]').setInputFiles({
+        name: finalName,
+        mimeType: "text/plain",
+        buffer: Buffer.from(`${marker}\n`, "utf8"),
+      }),
+  );
   expect(response.status(), await response.text()).toBe(201);
   const artifact = (await response.json()) as { ref?: string };
   expect(artifact.ref).toMatch(/^art_[A-Za-z0-9_-]+$/);
@@ -432,6 +450,52 @@ function waitForArtifactUpload(
     return (
       request.method() === "POST" &&
       new URL(response.url()).pathname === uploadPath &&
+      request.headers()["x-file-name"] === fileName
+    );
+  });
+}
+
+async function uploadArtifactWithNetworkRetry(
+  page: Page,
+  composer: Locator,
+  uploadPath: string,
+  fileName: string,
+  start: () => Promise<unknown>,
+): Promise<Response> {
+  const item = composer
+    .locator(".attachment-composer__item")
+    .filter({ hasText: fileName });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const requestPromise = waitForArtifactUploadRequest(
+      page,
+      uploadPath,
+      fileName,
+    );
+    if (attempt === 0) {
+      await start();
+    } else {
+      await expect(item).toHaveClass(/attachment-composer__item--failed/);
+      await item
+        .getByRole("button", {
+          name: `Повторить загрузку файла «${fileName}»`,
+        })
+        .click();
+    }
+    const response = await (await requestPromise).response();
+    if (response) return response;
+  }
+  throw new Error(`Artifact upload retry budget exhausted: ${fileName}`);
+}
+
+function waitForArtifactUploadRequest(
+  page: Page,
+  uploadPath: string,
+  fileName: string,
+): Promise<Request> {
+  return page.waitForRequest((request) => {
+    return (
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === uploadPath &&
       request.headers()["x-file-name"] === fileName
     );
   });

@@ -23,6 +23,7 @@ const artifactScanIntervalMs = 1_000;
 const artifactScanAttempts = 120;
 
 export interface AttachmentUploadRequest {
+  idempotencyKey: string;
   signal: AbortSignal;
   onProgress: (progress: { loadedBytes: number; totalBytes: number }) => void;
   onScanning: () => void;
@@ -92,27 +93,30 @@ export async function uploadCleanAttachmentArtifact(
 ): Promise<Artifact> {
   assertAttachmentScope(projectRef, purpose);
   const uploaded = (
-    await mutate((headers) =>
-      projectRef
-        ? uploadArtifact({
-            path: { projectRef },
-            body: file,
-            headers: {
-              "Idempotency-Key": headers["Idempotency-Key"],
-              "X-CSRF-Token": headers["X-CSRF-Token"],
-              "X-File-Name": file.name,
-            },
-            signal: requestSignal(request.signal),
-          })
-        : uploadOrganizationArtifact({
-            body: file,
-            headers: {
-              "Idempotency-Key": headers["Idempotency-Key"],
-              "X-CSRF-Token": headers["X-CSRF-Token"],
-              "X-File-Name": file.name,
-            },
-            signal: requestSignal(request.signal),
-          }),
+    await mutate(
+      (headers) =>
+        projectRef
+          ? uploadArtifact({
+              path: { projectRef },
+              body: file,
+              headers: {
+                "Idempotency-Key": headers["Idempotency-Key"],
+                "X-CSRF-Token": headers["X-CSRF-Token"],
+                "X-File-Name": file.name,
+              },
+              signal: requestSignal(request.signal),
+            })
+          : uploadOrganizationArtifact({
+              body: file,
+              headers: {
+                "Idempotency-Key": headers["Idempotency-Key"],
+                "X-CSRF-Token": headers["X-CSRF-Token"],
+                "X-File-Name": file.name,
+              },
+              signal: requestSignal(request.signal),
+            }),
+      undefined,
+      request.idempotencyKey,
     )
   ).data;
   request.onProgress({ loadedBytes: file.size, totalBytes: file.size });

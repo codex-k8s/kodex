@@ -12,6 +12,7 @@ export type AttachmentUploadState =
 
 export interface AttachmentUploadQueueItem {
   key: string;
+  idempotencyKey: string;
   file: File;
   name: string;
   mediaType: string;
@@ -28,6 +29,7 @@ export interface AttachmentUploadProgress {
 }
 
 export interface AttachmentUploadRequest {
+  idempotencyKey: string;
   signal: AbortSignal;
   onProgress: (progress: AttachmentUploadProgress) => void;
   onScanning: () => void;
@@ -85,6 +87,7 @@ export function stageAttachments(
     if (staged.has(key)) continue;
     staged.set(key, {
       key,
+      idempotencyKey: crypto.randomUUID(),
       file,
       name: file.name,
       mediaType: file.type || "application/octet-stream",
@@ -210,6 +213,7 @@ export function createAttachmentUploadQueue(
     activeUploads.value += 1;
     try {
       const artifact = await options.upload(item.file, {
+        idempotencyKey: item.idempotencyKey,
         signal: controller.signal,
         onProgress: (progress) => {
           const current = items.value.find(
