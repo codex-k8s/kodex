@@ -5313,9 +5313,10 @@ type RoleImageRecipeCreateInput struct {
 
 // RoleImageRecipeDetail defines model for RoleImageRecipeDetail.
 type RoleImageRecipeDetail struct {
-	ActiveArtifact *RoleImageArtifact `json:"activeArtifact,omitempty"`
-	Builds         []RoleImageBuild   `json:"builds"`
-	Recipe         RoleImageRecipe    `json:"recipe"`
+	ActiveArtifact     *RoleImageArtifact `json:"activeArtifact,omitempty"`
+	Builds             []RoleImageBuild   `json:"builds"`
+	PromotionCandidate *RoleImageArtifact `json:"promotionCandidate,omitempty"`
+	Recipe             RoleImageRecipe    `json:"recipe"`
 }
 
 // RoleImageRecipePage defines model for RoleImageRecipePage.

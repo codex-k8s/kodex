@@ -240,6 +240,7 @@ message GetRoleImageRecipeResponse {
   RoleImageRecipe recipe = 1;
   repeated ImageBuild builds = 2;
   ImageArtifact active_artifact = 3;
+  ImageArtifact promotion_candidate = 4;
 }
 
 message ManageRoleImageRecipeRequest {

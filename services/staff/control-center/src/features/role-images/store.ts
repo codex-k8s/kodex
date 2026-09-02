@@ -112,7 +112,8 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       if (!showLoading) {
         recipes[detail.recipe.ref] = detail.recipe;
         builds[detail.recipe.ref] = detail.builds;
-        artifacts[detail.recipe.ref] = detail.activeArtifact;
+        artifacts[detail.recipe.ref] =
+          detail.promotionCandidate ?? detail.activeArtifact;
         return;
       }
       const [dependencyItems, revisionPage] = await Promise.all([
@@ -124,7 +125,8 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       if (current !== detailGeneration) return;
       recipes[detail.recipe.ref] = detail.recipe;
       builds[detail.recipe.ref] = detail.builds;
-      artifacts[detail.recipe.ref] = detail.activeArtifact;
+      artifacts[detail.recipe.ref] =
+        detail.promotionCandidate ?? detail.activeArtifact;
       dependencies[detail.recipe.ref] = dependencyItems;
       revisions[detail.recipe.ref] = revisionPage.items;
       revisionNextPageToken[detail.recipe.ref] = revisionPage.nextPageToken;

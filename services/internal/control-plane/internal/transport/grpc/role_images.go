@@ -261,16 +261,19 @@ func (server *RoleImageServer) GetRoleImageRecipe(ctx context.Context, request *
 	if err != nil {
 		return nil, err
 	}
-	recipe, builds, artifact, err := server.service.Get(ctx, p, request.GetRecipeRef())
+	detail, err := server.service.Get(ctx, p, request.GetRecipeRef())
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.GetRoleImageRecipeResponse{Recipe: castRoleImageRecipe(recipe)}
-	for _, item := range builds {
+	response := &controlplanev1.GetRoleImageRecipeResponse{Recipe: castRoleImageRecipe(detail.Recipe)}
+	for _, item := range detail.Builds {
 		response.Builds = append(response.Builds, castImageBuild(item))
 	}
-	if artifact != nil {
-		response.ActiveArtifact = castImageArtifact(*artifact)
+	if detail.ActiveArtifact != nil {
+		response.ActiveArtifact = castImageArtifact(*detail.ActiveArtifact)
+	}
+	if detail.PromotionCandidate != nil {
+		response.PromotionCandidate = castImageArtifact(*detail.PromotionCandidate)
 	}
 	return response, nil
 }

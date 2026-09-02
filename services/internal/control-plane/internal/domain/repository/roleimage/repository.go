@@ -31,6 +31,13 @@ type ManageResult struct {
 	Reused   bool
 }
 
+type Detail struct {
+	Recipe             entity.RoleImageRecipe
+	Builds             []entity.ImageBuild
+	ActiveArtifact     *entity.ImageArtifact
+	PromotionCandidate *entity.ImageArtifact
+}
+
 type BuildLeaseInput struct {
 	Principal                            value.Principal
 	IdempotencyKey, BuildRef, LeaseToken string
@@ -86,7 +93,7 @@ type PromotionRequestInput struct {
 type Repository interface {
 	ResolvePrincipal(context.Context, value.Principal) (value.Principal, error)
 	List(context.Context, value.Principal, Filter) ([]entity.RoleImageRecipe, string, error)
-	Get(context.Context, value.Principal, string) (entity.RoleImageRecipe, []entity.ImageBuild, *entity.ImageArtifact, error)
+	Get(context.Context, value.Principal, string) (Detail, error)
 	Manage(context.Context, ManageInput) (ManageResult, error)
 	ClaimBuild(context.Context, value.Principal, string) (entity.ImageBuildClaim, error)
 	RenewBuild(context.Context, BuildLeaseInput) (entity.ImageBuildClaim, error)

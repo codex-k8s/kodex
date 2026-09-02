@@ -142,9 +142,13 @@ func scanLockedBuild(row roleImageRowScanner) (lockedBuild, error) {
 }
 
 func scanRoleImageArtifact(row roleImageRowScanner) (entity.ImageArtifact, error) {
+	return scanRoleImageArtifactWith(row)
+}
+
+func scanRoleImageArtifactWith(row roleImageRowScanner, additionalDestinations ...any) (entity.ImageArtifact, error) {
 	var result entity.ImageArtifact
 	var specification []byte
-	err := row.Scan(&result.Ref, &result.RecipeRef, &result.SpecSHA256, &result.BuildRef,
+	destinations := []any{&result.Ref, &result.RecipeRef, &result.SpecSHA256, &result.BuildRef,
 		&result.StagingReference, &result.ManifestDigest, &result.ImmutableBuildSHA256,
 		&result.ProvenanceSHA256, &specification, &result.PolicySHA256,
 		&result.SBOMSHA256, &result.VulnerabilityEvidenceSHA256,
@@ -154,7 +158,9 @@ func scanRoleImageArtifact(row roleImageRowScanner) (entity.ImageArtifact, error
 		&result.RoleRuntimeContractSHA256, &result.Version, &result.RecipeVersion,
 		&result.RecipeGeneration, &result.BuildVersion, &result.PolicyRevision,
 		&result.AdmissionRevision, &result.RoleRuntimeContractRevision,
-		&result.BuildAttempt, &result.PromotedAt, &result.CreatedAt, &result.UpdatedAt)
+		&result.BuildAttempt, &result.PromotedAt, &result.CreatedAt, &result.UpdatedAt}
+	destinations = append(destinations, additionalDestinations...)
+	err := row.Scan(destinations...)
 	if err != nil {
 		return entity.ImageArtifact{}, err
 	}

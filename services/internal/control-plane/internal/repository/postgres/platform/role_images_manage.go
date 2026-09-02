@@ -67,36 +67,37 @@ func (repository *Repository) List(ctx context.Context, principal value.Principa
 	return result, "", nil
 }
 
-func (repository *Repository) Get(ctx context.Context, principal value.Principal, ref string) (entity.RoleImageRecipe, []entity.ImageBuild, *entity.ImageArtifact, error) {
+func (repository *Repository) Get(ctx context.Context, principal value.Principal, ref string) (roleimagerepo.Detail, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return entity.RoleImageRecipe{}, nil, nil, err
+		return roleimagerepo.Detail{}, err
 	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
-		return entity.RoleImageRecipe{}, nil, nil, errs.ErrUnavailable
+		return roleimagerepo.Detail{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	target, err := repository.resolveRoleImageAccessTarget(ctx, tx, current, ref, "")
 	if err != nil {
-		return entity.RoleImageRecipe{}, nil, nil, err
+		return roleimagerepo.Detail{}, err
 	}
 	authorization, err := repository.loadRoleImageAccessContext(ctx, tx, current)
 	if err != nil {
-		return entity.RoleImageRecipe{}, nil, nil, err
+		return roleimagerepo.Detail{}, err
 	}
 	if !authorization.allowed("project.view", target) {
-		return entity.RoleImageRecipe{}, nil, nil, errs.ErrNotFound
+		return roleimagerepo.Detail{}, errs.ErrNotFound
 	}
-	canManage := authorization.allowed("image.build", target)
-	recipe, builds, artifact, err := repository.getRoleImageRecipe(ctx, tx, current, ref, canManage)
+	canBuild := authorization.allowed("image.build", target)
+	canPromote := authorization.allowed("image.promote", target)
+	detail, err := repository.getRoleImageRecipe(ctx, tx, current, ref, canBuild, canPromote)
 	if err != nil {
-		return entity.RoleImageRecipe{}, nil, nil, err
+		return roleimagerepo.Detail{}, err
 	}
 	if err := committed(tx, ctx); err != nil {
-		return entity.RoleImageRecipe{}, nil, nil, err
+		return roleimagerepo.Detail{}, err
 	}
-	return recipe, builds, artifact, nil
+	return detail, nil
 }
 
 type roleImageQuerier interface {
@@ -104,7 +105,7 @@ type roleImageQuerier interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 }
 
-func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier roleImageQuerier, current scope, ref string, canManage bool) (entity.RoleImageRecipe, []entity.ImageBuild, *entity.ImageArtifact, error) {
+func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier roleImageQuerier, current scope, ref string, canBuild, canPromote bool) (roleimagerepo.Detail, error) {
 	row := querier.QueryRow(ctx, queryRoleImagesGetRecipe, current.organizationID, ref)
 	var internalID string
 	var recipe entity.RoleImageRecipe
@@ -115,39 +116,54 @@ func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier ro
 		&recipe.RoleRuntimeContractSHA256, &recipe.ActiveImageArtifactRef,
 		&recipe.PromotedImageReference, &recipe.Version, &recipe.CreatedAt, &recipe.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.RoleImageRecipe{}, nil, nil, errs.ErrNotFound
+		return roleimagerepo.Detail{}, errs.ErrNotFound
 	}
 	if err != nil || decodeJSON(specification, &recipe.Input) != nil {
-		return entity.RoleImageRecipe{}, nil, nil, errs.ErrUnavailable
+		return roleimagerepo.Detail{}, errs.ErrUnavailable
 	}
-	recipe.NextActions = roleImageActions(recipe, canManage)
+	recipe.NextActions = roleImageActions(recipe, canBuild)
 	rows, err := querier.Query(ctx, queryRoleImagesListBuilds, current.organizationID, internalID)
 	if err != nil {
-		return entity.RoleImageRecipe{}, nil, nil, errs.ErrUnavailable
+		return roleimagerepo.Detail{}, errs.ErrUnavailable
 	}
 	builds := make([]entity.ImageBuild, 0)
 	for rows.Next() {
 		build, scanErr := scanBuild(rows)
 		if scanErr != nil {
 			rows.Close()
-			return entity.RoleImageRecipe{}, nil, nil, errs.ErrUnavailable
+			return roleimagerepo.Detail{}, errs.ErrUnavailable
 		}
 		builds = append(builds, build)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return entity.RoleImageRecipe{}, nil, nil, errs.ErrUnavailable
+		return roleimagerepo.Detail{}, errs.ErrUnavailable
 	}
-	var artifact *entity.ImageArtifact
+	var activeArtifact *entity.ImageArtifact
 	if recipe.ActiveImageArtifactRef != "" {
 		item, artifactErr := scanRoleImageArtifact(querier.QueryRow(ctx, queryRoleImagesGetActiveArtifact,
 			current.organizationID, recipe.ActiveImageArtifactRef))
 		if artifactErr != nil {
-			return entity.RoleImageRecipe{}, nil, nil, errs.ErrUnavailable
+			return roleimagerepo.Detail{}, errs.ErrUnavailable
 		}
-		artifact = &item
+		activeArtifact = &item
 	}
-	return recipe, builds, artifact, nil
+	var promotionCandidate *entity.ImageArtifact
+	var candidateCanBePromoted bool
+	item, candidateErr := scanRoleImageArtifactWith(querier.QueryRow(ctx, queryRoleImagesGetPromotionCandidate,
+		current.organizationID, internalID), &candidateCanBePromoted)
+	if candidateErr == nil {
+		promotionCandidate = &item
+		if canPromote && candidateCanBePromoted {
+			recipe.NextActions = append(recipe.NextActions, "PROMOTE")
+		}
+	} else if !errors.Is(candidateErr, pgx.ErrNoRows) {
+		return roleimagerepo.Detail{}, errs.ErrUnavailable
+	}
+	return roleimagerepo.Detail{
+		Recipe: recipe, Builds: builds, ActiveArtifact: activeArtifact,
+		PromotionCandidate: promotionCandidate,
+	}, nil
 }
 
 func (repository *Repository) Manage(ctx context.Context, input roleimagerepo.ManageInput) (roleimagerepo.ManageResult, error) {
@@ -217,10 +233,11 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 			repository.roleImages.RoleRuntimeContractSHA256, current.actorID).Scan(&recipeID); err != nil {
 			return roleimagerepo.ManageResult{}, "", "", mapRoleImageWriteError(err)
 		}
-		recipe, _, _, err := repository.getRoleImageRecipe(ctx, tx, current, ref, true)
+		detail, err := repository.getRoleImageRecipe(ctx, tx, current, ref, true, false)
 		if err != nil {
 			return roleimagerepo.ManageResult{}, "", "", err
 		}
+		recipe := detail.Recipe
 		build, err := repository.insertRoleImageBuild(ctx, tx, current, recipeID, recipe)
 		return roleImageManageResult(recipe, build, nil, false), projectID, input.ProjectRef, err
 	case "UPDATE", "ARCHIVE", "RESTORE", "REQUEST_BUILD":
@@ -271,10 +288,11 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 				return roleimagerepo.ManageResult{}, "", "", mapRoleImageWriteError(err)
 			}
 		}
-		recipe, _, activeArtifact, err := repository.getRoleImageRecipe(ctx, tx, current, input.RecipeRef, true)
+		detail, err := repository.getRoleImageRecipe(ctx, tx, current, input.RecipeRef, true, false)
 		if err != nil {
 			return roleimagerepo.ManageResult{}, "", "", err
 		}
+		recipe, activeArtifact := detail.Recipe, detail.ActiveArtifact
 		if input.Action == "ARCHIVE" {
 			return roleImageManageResult(recipe, nil, activeArtifact, false), locked.ProjectID, locked.Recipe.ProjectRef, nil
 		}

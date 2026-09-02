@@ -67,6 +67,10 @@ func (server *Server) GetRoleImageRecipe(writer http.ResponseWriter, request *ht
 		artifact := publicRoleImageArtifact(response.GetActiveArtifact())
 		result.ActiveArtifact = &artifact
 	}
+	if response.GetPromotionCandidate() != nil {
+		artifact := publicRoleImageArtifact(response.GetPromotionCandidate())
+		result.PromotionCandidate = &artifact
+	}
 	setVersionETag(writer, response.GetRecipe().GetVersion())
 	writeJSON(writer, http.StatusOK, result)
 }

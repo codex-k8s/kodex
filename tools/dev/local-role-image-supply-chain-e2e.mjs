@@ -288,15 +288,15 @@ async function prepare() {
     }
     if (
       !promotionRequested &&
-      detail.activeArtifact?.admissionVerdict === "ACCEPTED" &&
+      detail.promotionCandidate?.admissionVerdict === "ACCEPTED" &&
       detail.recipe?.promotedImageReady !== true
     ) {
       const artifactRef = boundedString(
-        detail.activeArtifact.ref,
+        detail.promotionCandidate.ref,
         "admitted artifact ref",
       );
       const provenanceSHA256 = exactSHA256(
-        detail.activeArtifact.provenanceSha256,
+        detail.promotionCandidate.provenanceSha256,
         "admitted artifact provenance",
       );
       const recipeVersion = Number(detail.recipe?.version);

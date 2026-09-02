@@ -78,13 +78,13 @@ func (service *Service) List(ctx context.Context, principal value.Principal, fil
 	return service.repository.List(ctx, principal, filter)
 }
 
-func (service *Service) Get(ctx context.Context, principal value.Principal, ref string) (entity.RoleImageRecipe, []entity.ImageBuild, *entity.ImageArtifact, error) {
+func (service *Service) Get(ctx context.Context, principal value.Principal, ref string) (repository.Detail, error) {
 	principal, err := service.resolvePrincipal(ctx, principal)
 	if err != nil {
-		return entity.RoleImageRecipe{}, nil, nil, err
+		return repository.Detail{}, err
 	}
 	if err := authorize(principal, permissionGetRecipe, "control-api-gateway"); err != nil || !validRef(ref, "imgrec") {
-		return entity.RoleImageRecipe{}, nil, nil, firstError(err, errs.ErrInvalid)
+		return repository.Detail{}, firstError(err, errs.ErrInvalid)
 	}
 	return service.repository.Get(ctx, principal, ref)
 }
