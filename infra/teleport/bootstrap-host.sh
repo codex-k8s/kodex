@@ -61,7 +61,7 @@ address = ipaddress.ip_address(sys.argv[1])
 if address.version != 4 or not address.is_private or address.is_loopback or address.is_unspecified:
     raise SystemExit(1)
 PY
-for command_name in curl getent id jq openssl passwd python3 sha256sum stat systemctl \
+for command_name in cmp curl getent id jq openssl passwd python3 sha256sum stat systemctl \
   tctl teleport useradd yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -73,10 +73,12 @@ done
 config_file=/etc/teleport.yaml
 data_directory=/var/lib/teleport
 certificate_directory=$data_directory/certs
+system_ca_file=/etc/ssl/certs/ca-certificates.crt
 ca_key_file=$certificate_directory/internal-ca.key
 ca_certificate_file=$certificate_directory/internal-ca.crt
 proxy_key_file=$certificate_directory/proxy.key
 proxy_certificate_file=$certificate_directory/proxy.crt
+trust_bundle_file=$certificate_directory/trust-bundle.pem
 teleport_kubeconfig=$data_directory/kubeconfig
 unit_file=/etc/systemd/system/teleport.service
 role_name=kodex-dev-access
@@ -153,6 +155,7 @@ Restart=on-failure
 RestartSec=5s
 LimitNOFILE=1048576
 PrivateTmp=true
+Environment=SSL_CERT_FILE=/var/lib/teleport/certs/trust-bundle.pem
 
 [Install]
 WantedBy=multi-user.target
@@ -161,6 +164,8 @@ EOF
 
 ensure_certificates() {
   install -d -m 0700 -o root -g root "$certificate_directory"
+  [[ -f "$system_ca_file" && -s "$system_ca_file" ]] ||
+    fail 'system CA bundle is unavailable'
   if [[ ! -s "$ca_key_file" || ! -s "$ca_certificate_file" ]]; then
     openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$ca_key_file" >/dev/null 2>&1
     openssl req -x509 -new -sha256 -key "$ca_key_file" -out "$ca_certificate_file" \
@@ -196,16 +201,26 @@ ensure_certificates() {
   fi
   chmod 0600 "$proxy_key_file"
   chmod 0644 "$proxy_certificate_file"
+
+  [[ ! -e "$trust_bundle_file" || (-f "$trust_bundle_file" && ! -L "$trust_bundle_file") ]] ||
+    fail 'Teleport trust bundle path is unsafe'
+  local temporary_bundle
+  temporary_bundle=$(mktemp "$certificate_directory/.trust-bundle.XXXXXX")
+  cat "$system_ca_file" "$ca_certificate_file" >"$temporary_bundle"
+  chmod 0644 "$temporary_bundle"
+  mv -- "$temporary_bundle" "$trust_bundle_file"
 }
 
 readback_certificates() {
-  for path in "$ca_certificate_file" "$proxy_certificate_file"; do
+  for path in "$ca_certificate_file" "$proxy_certificate_file" "$trust_bundle_file"; do
     [[ -f "$path" && ! -L "$path" ]] || fail 'Teleport certificate is absent or unsafe'
   done
   [[ -f "$ca_key_file" && -f "$proxy_key_file" && ! -L "$ca_key_file" && ! -L "$proxy_key_file" &&
     "$(stat -c '%a' "$ca_key_file")" == 600 && "$(stat -c '%a' "$proxy_key_file")" == 600 ]] ||
     fail 'Teleport private key permissions are invalid'
-  openssl verify -CAfile "$ca_certificate_file" "$proxy_certificate_file" >/dev/null ||
+  cmp --silent "$trust_bundle_file" <(cat "$system_ca_file" "$ca_certificate_file") ||
+    fail 'Teleport trust bundle differs from the supported CA set'
+  openssl verify -CAfile "$trust_bundle_file" "$proxy_certificate_file" >/dev/null ||
     fail 'Teleport backend certificate chain is invalid'
   openssl x509 -in "$proxy_certificate_file" -noout -checkhost "$host" >/dev/null ||
     fail 'Teleport backend certificate identity is invalid'

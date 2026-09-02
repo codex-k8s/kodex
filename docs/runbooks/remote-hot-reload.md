@@ -26,9 +26,12 @@ namespaces при этом глобально не отключается.
 
 Teleport Auth, Proxy, SSH и Kubernetes services работают как root-owned
 `systemd`-служба на хосте и хранят состояние вне disposable k3s. В кластере
-остаются только публичный сертификат, проверяющий внутреннюю CA маршрут
-Traefik и ограниченный Kubernetes RBAC. Поэтому пересоздание k3s не удаляет
-access plane: после нового bootstrap маршрут привязывается к тому же Teleport.
+остаются только публичный сертификат Let's Encrypt, проверяющий внутреннюю CA
+маршрут Traefik и ограниченный Kubernetes RBAC. Между Traefik и host Teleport
+используется отдельный приватный TLS-сертификат; `systemd`-служба получает
+точный trust bundle из системных CA и этой внутренней CA. Поэтому пересоздание
+k3s не удаляет access plane: после нового bootstrap маршрут привязывается к
+тому же Teleport.
 
 Прямой SSH на порт `22` остаётся break-glass доступом установщика. Обычный
 GitHub-пользователь входит через Teleport как отдельный Linux-пользователь
@@ -81,6 +84,7 @@ Teleport Community Edition использует отдельный GitHub OAuth 
 - host-owned Teleport Auth, Proxy, SSH и Kubernetes services;
 - GitHub connector `v3` и callback path;
 - Teleport role labels, SSH login и Kubernetes group mapping.
+- пользовательский CA через `SSL_CERT_FILE` для приватного TLS backend.
 
 ## Установка
 

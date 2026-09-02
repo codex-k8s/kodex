@@ -272,6 +272,13 @@ for teleport_ownership_contract in \
   rg -Fq -- "$teleport_ownership_contract" "$repository_root/tools/dev/remote-dev.sh" ||
     fail "host-owned Teleport orchestration is absent: $teleport_ownership_contract"
 done
+for teleport_tls_contract in \
+  'Environment=SSL_CERT_FILE=/var/lib/teleport/certs/trust-bundle.pem' \
+  'cat "$system_ca_file" "$ca_certificate_file" >"$temporary_bundle"' \
+  'openssl verify -CAfile "$trust_bundle_file" "$proxy_certificate_file"'; do
+  rg -Fq -- "$teleport_tls_contract" "$repository_root/infra/teleport/bootstrap-host.sh" ||
+    fail "host Teleport backend trust contract is absent: $teleport_tls_contract"
+done
 for marker_contract in \
   'create_cluster_marker' \
   'sudo -n install -m 0600 -o root -g root "$temporary_marker" "$cluster_marker"' \
