@@ -575,6 +575,15 @@ rg -Fq '  - traefik' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal k3s does not disable the bundled Traefik release'
 rg -Fq 'systemctl restart k3s' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal host apply does not activate changed k3s configuration'
+for stable_api_contract in \
+  'local_api_interface=kodex-api0' \
+  'local_api_service=kodex-local-api-address.service' \
+  'read_local_api_address' \
+  '."advertise-address" = strenv(LOCAL_API_ADDRESS)' \
+  '."tls-san" += [strenv(LOCAL_API_ADDRESS)]'; do
+  rg -Fq "$stable_api_contract" "$repository_root/tools/install/prepare-host.sh" ||
+    fail "bare-metal host apply does not preserve the stable API endpoint: $stable_api_contract"
+done
 for resolver_contract in \
   'k3s_resolver_file=/etc/rancher/k3s/resolv.conf' \
   'source_file=/run/systemd/resolve/resolv.conf' \

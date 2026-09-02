@@ -39,6 +39,33 @@ provider_apparmor_profile_target=/etc/apparmor.d/kodex-provider-runtime
 pod_cidr=10.42.0.0/16
 service_cidr=10.43.0.0/16
 k3s_resolver_file=/etc/rancher/k3s/resolv.conf
+local_api_interface=kodex-api0
+local_api_service=kodex-local-api-address.service
+
+read_local_api_address() {
+  local address_with_prefix address
+  systemctl is-enabled --quiet "$local_api_service" 2>/dev/null || return 0
+  systemctl is-active --quiet "$local_api_service" ||
+    fail 'stable API address service is enabled but inactive'
+  ip -d link show dev "$local_api_interface" |
+    grep -Eq '(^|[[:space:]])dummy([[:space:]]|$)' ||
+    fail 'stable API address interface is not a dummy interface'
+  address_with_prefix=$(ip -4 -o address show dev "$local_api_interface" |
+    awk 'NR == 1 {print $4} NR > 1 {exit 2}') ||
+    fail 'stable API interface has multiple IPv4 addresses'
+  [[ "$address_with_prefix" == */32 ]] ||
+    fail 'stable API interface does not have one IPv4 /32 address'
+  address=${address_with_prefix%/32}
+  python3 - "$address" <<'PY' || fail 'stable API address is not a private non-loopback IPv4 address'
+import ipaddress
+import sys
+
+address = ipaddress.ip_address(sys.argv[1])
+if address.version != 4 or not address.is_private or address.is_loopback or address.is_unspecified:
+    raise SystemExit(1)
+PY
+  printf '%s' "$address"
+}
 
 configure_provider_apparmor_profile() {
   [[ -f "$provider_apparmor_profile_source" && ! -L "$provider_apparmor_profile_source" ]] ||
@@ -238,17 +265,20 @@ EOF
   ln -sfn /usr/local/bin/k3s /usr/local/bin/crictl
   mkdir -p /etc/rancher/k3s /var/lib/rancher/k3s
   configure_k3s_resolver
-  cat >/etc/rancher/k3s/config.yaml <<EOF
-write-kubeconfig-mode: "0600"
-secrets-encryption: true
-resolv-conf: "$k3s_resolver_file"
-disable:
-  - traefik
-tls-san:
-  - "$server_public_ip"
-kubelet-arg:
-  - "max-pods=250"
-EOF
+  local_api_address=$(read_local_api_address)
+  SERVER_PUBLIC_IP="$server_public_ip" K3S_RESOLVER_FILE="$k3s_resolver_file" \
+    LOCAL_API_ADDRESS="$local_api_address" yq -n -o=yaml '
+      ."write-kubeconfig-mode" = "0600" |
+      ."secrets-encryption" = true |
+      ."resolv-conf" = strenv(K3S_RESOLVER_FILE) |
+      .disable = ["traefik"] |
+      ."tls-san" = [strenv(SERVER_PUBLIC_IP)] |
+      ."kubelet-arg" = ["max-pods=250"] |
+      if strenv(LOCAL_API_ADDRESS) != "" then
+        ."advertise-address" = strenv(LOCAL_API_ADDRESS) |
+        ."tls-san" += [strenv(LOCAL_API_ADDRESS)]
+      else . end
+    ' >/etc/rancher/k3s/config.yaml
   chmod 0600 /etc/rancher/k3s/config.yaml
   cat >/etc/systemd/system/k3s.service <<'EOF'
 [Unit]
