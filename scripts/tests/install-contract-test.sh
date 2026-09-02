@@ -523,7 +523,7 @@ rg -Fq 'for command_name in certutil codex cosign dig docker go helm node npm ku
   "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal host readback does not require the development toolchain'
 for host_tool_contract in \
-  'docker.io docker-buildx docker-compose-v2' \
+  'locked_host_packages=(containerd docker-buildx docker-compose-v2 docker.io runc)' \
   '"name": "node"' \
   '"name": "teleport-client"' \
   'tsh version --format=json' \
@@ -543,7 +543,7 @@ for remote_contract in \
   'sudo -n cat /etc/rancher/k3s/k3s.yaml' \
   'trap cleanup EXIT' \
   '--expected-sha <40-hex-commit>' \
-  'host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport'; do
+  'host-preflight|host-apply|host-readback|up|status|smoke|e2e|acceptance|down|teleport'; do
   rg -Fq -- "$remote_contract" \
     "$repository_root/tools/dev/remote-dev.sh" "$repository_root/dev.sh" \
     "$repository_root/.kodex-remote-env.example" ||
@@ -590,7 +590,11 @@ fi
 for public_preflight_contract in \
   'challenge_path="/.well-known/acme-challenge/$challenge_token"' \
   '[[ "$body" == "$challenge_token" ]]' \
-  'socket.create_connection((sys.argv[1], 443)'; do
+  'socket.create_connection((sys.argv[1], 443)' \
+  'https://letsdebug.net' \
+  '.result.ok == true' \
+  'https://check-host.net/check-tcp' \
+  'successful >= 1'; do
   rg -Fq -- "$public_preflight_contract" "$repository_root/tools/dev/preflight-public-hosts.sh" ||
     fail "public certificate preflight contract is absent: $public_preflight_contract"
 done

@@ -32,6 +32,7 @@ data:
   toolchainSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
   roleRuntimeContractRevision: "1"
   roleRuntimeContractSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
+  providerAppArmorProfile: ""
   scannerIdentity: kodex-image-scanner
   signerIdentity: kodex-image-signer
   admissionOwnerIdentity: kodex-image-admission-owner

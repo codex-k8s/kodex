@@ -10,6 +10,7 @@ usage() {
   printf '%s\n' \
     "Usage: $0 [--check] [--skip-build] --context <exact-context>" \
     '  [--kubeconfig <path>] [--state-directory <path>]' \
+    '  [--cluster-marker <root-owned-path>] [--expected-sha <40-hex-commit>]' \
     '  [--resource-prefix <slug>] [--run-timeout-ms <milliseconds>]' \
     '  [--target <test-make-target>]...' >&2
 }
@@ -20,6 +21,8 @@ context=""
 state_directory="$repository_root/.kodex-dev"
 resource_prefix="full-local-e2e-$(date -u +%Y%m%d%H%M%S)"
 run_timeout_ms=900000
+cluster_marker=""
+expected_sha=""
 check_only=false
 skip_build=false
 targets=()
@@ -33,6 +36,8 @@ while (($# > 0)); do
     --state-directory) state_directory=${2:-}; shift 2 ;;
     --resource-prefix) resource_prefix=${2:-}; shift 2 ;;
     --run-timeout-ms) run_timeout_ms=${2:-}; shift 2 ;;
+    --cluster-marker) cluster_marker=${2:-}; shift 2 ;;
+    --expected-sha) expected_sha=${2:-}; shift 2 ;;
     --target) targets+=("${2:-}"); shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
@@ -51,6 +56,13 @@ done
   fail 'E2E run timeout must be between 60000 and 1800000 milliseconds'
 [[ "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
   fail 'production context is forbidden'
+if [[ -n "$expected_sha" ]]; then
+  [[ "$expected_sha" =~ ^[a-f0-9]{40}$ &&
+    "$(git -C "$repository_root" rev-parse HEAD)" == "$expected_sha" ]] ||
+    fail 'source HEAD does not match the expected SHA'
+  [[ -z "$(git -C "$repository_root" status --porcelain --untracked-files=all)" ]] ||
+    fail 'acceptance E2E requires a clean source checkout'
+fi
 for command_name in bash date jq kubectl make npm; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -157,6 +169,7 @@ write_summary() {
     --arg status "$status" \
     --arg context "$context" \
     --arg resource_prefix "$resource_prefix" \
+    --arg expected_sha "$expected_sha" \
     --arg started_at "$started_at" \
     --arg finished_at "$finished_at" \
     --arg build_mode "$([[ "$skip_build" == true ]] && printf reused || printf rebuilt)" \
@@ -169,6 +182,7 @@ write_summary() {
         status:$status,
         context:$context,
         resourcePrefix:$resource_prefix,
+        expectedSHA:(if $expected_sha == "" then null else $expected_sha end),
         startedAt:$started_at,
         finishedAt:$finished_at,
         exitCode:$exit_code,
@@ -197,14 +211,55 @@ common_arguments=(
   --context "$context"
   --state-directory "$state_directory"
 )
+[[ -z "$cluster_marker" ]] || common_arguments+=(--cluster-marker "$cluster_marker")
+[[ -z "$expected_sha" ]] || common_arguments+=(--expected-sha "$expected_sha")
 if [[ "$skip_build" == true ]]; then
   run_phase local-readback "$repository_root/dev.sh" status "${common_arguments[@]}"
 else
   run_phase local-render-deploy "$repository_root/dev.sh" up "${common_arguments[@]}"
 fi
+hot_reload_arguments=(
+  --kubeconfig "$kubeconfig"
+  --context "$context"
+  --state-directory "$state_directory"
+  --resource-prefix "$resource_prefix"
+)
+[[ -z "$expected_sha" ]] || hot_reload_arguments+=(--expected-sha "$expected_sha")
+run_phase go-and-vue-hot-reload-readback \
+  "$repository_root/tools/dev/verify-hot-reload.sh" "${hot_reload_arguments[@]}"
 run_phase browser-auth-and-full-e2e "$repository_root/dev.sh" e2e \
   "${common_arguments[@]}" --resource-prefix "$resource_prefix" \
   --run-timeout-ms "$run_timeout_ms"
+run_deployed_integration_e2e() {
+  local credentials_file="$state_directory/credentials.env" endpoint_ip dns_suffix public_host node_ca_file
+  [[ -f "$credentials_file" && ! -L "$credentials_file" &&
+    $((8#$(stat -c '%a' "$credentials_file") & 8#077)) == 0 ]] ||
+    fail 'local owner credentials are absent or unsafe'
+  # shellcheck disable=SC1090
+  source "$credentials_file"
+  endpoint_ip=${KODEX_DEV_ENDPOINT_IP:-127.0.0.1}
+  dns_suffix=${endpoint_ip//./.}.nip.io
+  public_host=${KODEX_DEV_PUBLIC_HOST:-control.$dns_suffix}
+  node_ca_file=${NODE_EXTRA_CA_CERTS:-}
+  if [[ "${KODEX_DEV_TLS_MODE:-local-ca}" == local-ca ]]; then
+    node_ca_file="$state_directory/kodex-local-ca.crt"
+    [[ -f "$node_ca_file" && ! -L "$node_ca_file" ]] ||
+      fail 'local CA file is absent or unsafe'
+  fi
+  KODEX_E2E_BASE_URL="https://$public_host" \
+    KODEX_E2E_OWNER_USERNAME="$KODEX_LOCAL_OWNER_USERNAME" \
+    KODEX_E2E_OWNER_PASSWORD="$KODEX_LOCAL_OWNER_PASSWORD" \
+    KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+    KODEX_E2E_RESOURCE_PREFIX="$resource_prefix" \
+    KODEX_E2E_KUBECONFIG="$kubeconfig" \
+    KODEX_E2E_KUBE_CONTEXT="$context" \
+    KODEX_E2E_REPOSITORY_ROOT="$repository_root" \
+    KODEX_E2E_STATE_DIRECTORY="$state_directory" \
+    KODEX_E2E_BASE_HOST_RESOLUTION="${KODEX_E2E_BASE_HOST_RESOLUTION:-}" \
+    NODE_EXTRA_CA_CERTS="$node_ca_file" \
+    "$repository_root/scripts/tests/integration-deployed-e2e.sh"
+}
+run_phase deployed-integration-synthetic run_deployed_integration_e2e
 run_phase role-image-build-admit-promote-runtime-readback env \
   KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
   "$repository_root/scripts/tests/local-role-image-supply-chain-e2e.sh" \
@@ -221,5 +276,11 @@ run_phase backup-and-disposable-restore-drill env \
 for target in "${targets[@]}"; do
   run_phase "additional:$target" make --no-print-directory -C "$repository_root" "$target"
 done
+
+if [[ -n "$expected_sha" ]]; then
+  [[ "$(git -C "$repository_root" rev-parse HEAD)" == "$expected_sha" &&
+    -z "$(git -C "$repository_root" status --porcelain --untracked-files=all)" ]] ||
+    fail 'source checkout changed during acceptance E2E'
+fi
 
 printf 'Kodex full local E2E completed: %s\n' "$resource_prefix"

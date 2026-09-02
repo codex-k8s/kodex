@@ -161,31 +161,23 @@ air_module=$(jq -er '.tools.air.module' "$lock_file") || fail 'Air module lock i
 air_version=$(jq -er '.tools.air.version' "$lock_file") || fail 'Air version lock is absent'
 [[ "$air_module" == "github.com/air-verse/air" && "$air_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
   fail 'Air tool lock is invalid'
-# These directories are mounted directly as hostPath volumes. k3s may remap
-# container root to an unprivileged host UID, so the local-only shared caches
-# must be writable independently of the private state directory permissions.
+# Module data and development tools are primed by the trusted host process and
+# mounted read-only. Only workload-specific build caches remain writable.
 go_module_cache="$cache_root/go-mod-v2"
 go_sumdb_cache="$cache_root/go-sumdb"
 go_prime_cache="$cache_root/go-build/host-prime"
-install -d -m 0777 \
+install -d -m 0755 \
   "$go_module_cache/cache/download/sumdb/sum.golang.org" \
   "$go_sumdb_cache/sum.golang.org" \
-  "$go_prime_cache" \
-  "$cache_root/go-build" \
   "$cache_root/go-tools" \
   "$cache_root/node-modules"
-chmod 0777 \
+install -d -m 0777 "$go_prime_cache"
+install -d -m 0755 "$cache_root/go-build"
+chmod -R u+rwX \
   "$go_module_cache" \
-  "$go_module_cache/cache" \
-  "$go_module_cache/cache/download" \
-  "$go_module_cache/cache/download/sumdb" \
-  "$go_module_cache/cache/download/sumdb/sum.golang.org" \
   "$go_sumdb_cache" \
-  "$go_sumdb_cache/sum.golang.org" \
-  "$go_prime_cache" \
-  "$cache_root/go-build" \
-  "$cache_root/go-tools" \
-  "$cache_root/node-modules"
+  "$cache_root/go-tools"
+chmod 0777 "$go_prime_cache" "$cache_root/node-modules"
 install -d -m 0777 "$source_root/services/staff/control-center/node_modules"
 chmod 0777 "$source_root/services/staff/control-center/node_modules"
 
@@ -221,9 +213,11 @@ if [[ ! -x "$air_binary" || "$current_air_contract" != "$air_contract" ]]; then
   [[ -x "$air_binary" ]] || fail 'Air installation did not produce an executable'
   printf '%s\n' "$air_contract" >"$air_contract_file"
 fi
-for owned_cache in "$go_module_cache" "$go_sumdb_cache" "$go_prime_cache"; do
-  find "$owned_cache" -user "$(id -u)" -exec chmod a+rwX {} +
-done
+air_digest=$(sha256sum -- "$air_binary" | awk '{print $1}')
+[[ "$air_digest" =~ ^[a-f0-9]{64}$ ]] || fail 'Air executable digest is invalid'
+chmod -R a-w "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools"
+find "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools" -type d -exec chmod a+rx {} +
+find "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools" -type f -exec chmod a+r {} +
 
 temporary_directory=$(mktemp -d)
 render="$temporary_directory/local.yaml"
@@ -430,7 +424,8 @@ ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
     .data.frontendSHA256 = strenv(FRONTEND_SHA256) |
     .data.toolchainSHA256 = strenv(ADMISSION_TOOLS_SHA256) |
     .data.roleRuntimeContractRevision = "1" |
-    .data.roleRuntimeContractSHA256 = strenv(RUNTIME_CONTRACT_DIGEST)
+    .data.roleRuntimeContractSHA256 = strenv(RUNTIME_CONTRACT_DIGEST) |
+    .data.providerAppArmorProfile = "kodex-provider-runtime"
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime");
     .data.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256 = strenv(ADMISSION_TOOLS_SHA256)
@@ -637,7 +632,6 @@ add_development_volumes() {
           {"name":"dev-source","hostPath":{"path":strenv(SOURCE_ROOT),"type":"Directory"}},
           {"name":"dev-go-mod","hostPath":{"path":(strenv(CACHE_ROOT) + "/go-mod-v2"),"type":"Directory"}},
           {"name":"dev-go-sumdb","hostPath":{"path":(strenv(CACHE_ROOT) + "/go-sumdb"),"type":"Directory"}},
-          {"name":"dev-go-build","hostPath":{"path":(strenv(CACHE_ROOT) + "/go-build"),"type":"Directory"}},
           {"name":"dev-go-tools","hostPath":{"path":(strenv(CACHE_ROOT) + "/go-tools"),"type":"Directory"}}
         ]
       ) |
@@ -649,14 +643,24 @@ add_development_volumes() {
 patch_go_container() {
   local kind=$1 workload=$2 container=$3 module=$4 package=$5
   shift 5
-  local command_args
+  local command_args cache_key build_volume build_cache_path
   command_args=$(printf '%s\n' "$@" | jq -Rsc 'split("\n") | map(select(length > 0))')
+  cache_key="$workload-$container"
+  build_volume="dev-build-$container"
+  build_cache_path="$cache_root/go-build/$cache_key"
+  install -d -m 0777 "$build_cache_path"
   add_development_volumes "$kind" "$workload"
   KIND="$kind" WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
-  COMMAND_ARGS="$command_args" CACHE_KEY="$workload-$container" \
+  COMMAND_ARGS="$command_args" BUILD_VOLUME="$build_volume" BUILD_CACHE_PATH="$build_cache_path" \
+  AIR_DIGEST="$air_digest" \
   GO_IMAGE='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83' \
   yq -i '
     with(select(.kind == strenv(KIND) and .metadata.name == strenv(WORKLOAD));
+      .spec.template.spec.volumes = (((.spec.template.spec.volumes // []) |
+        map(select(.name != strenv(BUILD_VOLUME)))) + [{
+          "name":strenv(BUILD_VOLUME),
+          "hostPath":{"path":strenv(BUILD_CACHE_PATH),"type":"Directory"}
+        }]) |
       .spec.replicas = 1 |
       (.spec.template.spec.containers[] | select(.name == strenv(CONTAINER))) |= (
         .image = strenv(GO_IMAGE) |
@@ -669,25 +673,26 @@ patch_go_container() {
         .securityContext.readOnlyRootFilesystem = false |
         .volumeMounts = (((.volumeMounts // []) |
           map(select(.name != "dev-source" and .name != "dev-go-mod" and .name != "dev-go-sumdb" and
-            .name != "dev-go-build" and .name != "dev-go-tools"))) +
+            .name != "dev-go-build" and .name != "dev-go-tools" and .name != strenv(BUILD_VOLUME)))) +
           [
             {"name":"dev-source","mountPath":"/workspace","readOnly":true},
-            {"name":"dev-go-mod","mountPath":"/go/pkg/mod"},
-            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb"},
-            {"name":"dev-go-build","mountPath":"/go/build-cache"},
-            {"name":"dev-go-tools","mountPath":"/go/tools"}
+            {"name":"dev-go-mod","mountPath":"/go/pkg/mod","readOnly":true},
+            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb","readOnly":true},
+            {"name":strenv(BUILD_VOLUME),"mountPath":"/go/build-cache"},
+            {"name":"dev-go-tools","mountPath":"/go/tools","readOnly":true}
           ]) |
         .env = (((.env // []) | map(select(.name != "GOMODCACHE" and .name != "GOCACHE" and
           .name != "GOWORK" and .name != "GOTOOLCHAIN" and .name != "GOTMPDIR" and .name != "HOME" and
-          .name != "KODEX_DEV_AIR_VERSION"))) +
+          .name != "KODEX_DEV_AIR_VERSION" and .name != "KODEX_DEV_AIR_SHA256"))) +
           [
             {"name":"GOMODCACHE","value":"/go/pkg/mod"},
-            {"name":"GOCACHE","value":("/go/build-cache/" + strenv(CACHE_KEY))},
+            {"name":"GOCACHE","value":"/go/build-cache/cache"},
             {"name":"GOWORK","value":"off"},
             {"name":"GOTOOLCHAIN","value":"local"},
-            {"name":"GOTMPDIR","value":("/go/build-cache/" + strenv(CACHE_KEY) + "/tmp")},
-            {"name":"HOME","value":("/go/build-cache/" + strenv(CACHE_KEY) + "/home")},
-            {"name":"KODEX_DEV_AIR_VERSION","value":"v1.63.4"}
+            {"name":"GOTMPDIR","value":"/go/build-cache/tmp"},
+            {"name":"HOME","value":"/go/build-cache/home"},
+            {"name":"KODEX_DEV_AIR_VERSION","value":"v1.63.4"},
+            {"name":"KODEX_DEV_AIR_SHA256","value":strenv(AIR_DIGEST)}
           ])
       )
     )
@@ -696,11 +701,21 @@ patch_go_container() {
 
 patch_go_init_container() {
   local workload=$1 container=$2 module=$3 package=$4
+  local cache_key build_volume build_cache_path
+  cache_key="$workload-$container"
+  build_volume="dev-build-$container"
+  build_cache_path="$cache_root/go-build/$cache_key"
+  install -d -m 0777 "$build_cache_path"
   WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
-  CACHE_KEY="$workload-$container" \
+  BUILD_VOLUME="$build_volume" BUILD_CACHE_PATH="$build_cache_path" \
   GO_IMAGE='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83' \
   yq -i '
     with(select(.kind == "Deployment" and .metadata.name == strenv(WORKLOAD));
+      .spec.template.spec.volumes = (((.spec.template.spec.volumes // []) |
+        map(select(.name != strenv(BUILD_VOLUME)))) + [{
+          "name":strenv(BUILD_VOLUME),
+          "hostPath":{"path":strenv(BUILD_CACHE_PATH),"type":"Directory"}
+        }]) |
       (.spec.template.spec.initContainers[] | select(.name == strenv(CONTAINER))) |= (
         .image = strenv(GO_IMAGE) |
         .imagePullPolicy = "IfNotPresent" |
@@ -718,24 +733,24 @@ patch_go_init_container() {
         } |
         .volumeMounts = (((.volumeMounts // []) |
           map(select(.name != "dev-source" and .name != "dev-go-mod" and .name != "dev-go-sumdb" and
-            .name != "dev-go-build" and .name != "dev-go-tools"))) +
+            .name != "dev-go-build" and .name != "dev-go-tools" and .name != strenv(BUILD_VOLUME)))) +
           [
             {"name":"dev-source","mountPath":"/workspace","readOnly":true},
-            {"name":"dev-go-mod","mountPath":"/go/pkg/mod"},
-            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb"},
-            {"name":"dev-go-build","mountPath":"/go/build-cache"},
-            {"name":"dev-go-tools","mountPath":"/go/tools"}
+            {"name":"dev-go-mod","mountPath":"/go/pkg/mod","readOnly":true},
+            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb","readOnly":true},
+            {"name":strenv(BUILD_VOLUME),"mountPath":"/go/build-cache"},
+            {"name":"dev-go-tools","mountPath":"/go/tools","readOnly":true}
           ]) |
         .env = (((.env // []) | map(select(.name != "GOMODCACHE" and .name != "GOCACHE" and
           .name != "GOWORK" and .name != "GOTOOLCHAIN" and .name != "GOTMPDIR" and
           .name != "HOME"))) +
           [
             {"name":"GOMODCACHE","value":"/go/pkg/mod"},
-            {"name":"GOCACHE","value":("/go/build-cache/" + strenv(CACHE_KEY))},
+            {"name":"GOCACHE","value":"/go/build-cache/cache"},
             {"name":"GOWORK","value":"off"},
             {"name":"GOTOOLCHAIN","value":"local"},
-            {"name":"GOTMPDIR","value":("/go/build-cache/" + strenv(CACHE_KEY) + "/tmp")},
-            {"name":"HOME","value":("/go/build-cache/" + strenv(CACHE_KEY) + "/home")}
+            {"name":"GOTMPDIR","value":"/go/build-cache/tmp"},
+            {"name":"HOME","value":"/go/build-cache/home"}
           ])
       )
     )
@@ -745,14 +760,23 @@ patch_go_init_container() {
 patch_go_job() {
   local workload=$1 container=$2 module=$3 package=$4
   shift 4
-  local args_json
+  local args_json cache_key build_volume build_cache_path
   args_json=$(printf '%s\n' "$@" | jq -Rsc 'split("\n") | map(select(length > 0))')
+  cache_key="$workload-$container"
+  build_volume="dev-build-$container"
+  build_cache_path="$cache_root/go-build/$cache_key"
+  install -d -m 0777 "$build_cache_path"
   add_development_volumes Job "$workload"
   WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
-  COMMAND_ARGS="$args_json" CACHE_KEY="$workload-$container" \
+  COMMAND_ARGS="$args_json" BUILD_VOLUME="$build_volume" BUILD_CACHE_PATH="$build_cache_path" \
   GO_IMAGE='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83' \
   yq -i '
     with(select(.kind == "Job" and .metadata.name == strenv(WORKLOAD));
+      .spec.template.spec.volumes = (((.spec.template.spec.volumes // []) |
+        map(select(.name != strenv(BUILD_VOLUME)))) + [{
+          "name":strenv(BUILD_VOLUME),
+          "hostPath":{"path":strenv(BUILD_CACHE_PATH),"type":"Directory"}
+        }]) |
       (.spec.template.spec.containers[] | select(.name == strenv(CONTAINER))) |= (
         .image = strenv(GO_IMAGE) |
         .imagePullPolicy = "IfNotPresent" |
@@ -762,24 +786,24 @@ patch_go_job() {
         .resources = {"requests":{"cpu":"50m","memory":"128Mi"}} |
         .volumeMounts = (((.volumeMounts // []) |
           map(select(.name != "dev-source" and .name != "dev-go-mod" and .name != "dev-go-sumdb" and
-            .name != "dev-go-build" and .name != "dev-go-tools"))) +
+            .name != "dev-go-build" and .name != "dev-go-tools" and .name != strenv(BUILD_VOLUME)))) +
           [
             {"name":"dev-source","mountPath":"/workspace","readOnly":true},
-            {"name":"dev-go-mod","mountPath":"/go/pkg/mod"},
-            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb"},
-            {"name":"dev-go-build","mountPath":"/go/build-cache"},
-            {"name":"dev-go-tools","mountPath":"/go/tools"}
+            {"name":"dev-go-mod","mountPath":"/go/pkg/mod","readOnly":true},
+            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb","readOnly":true},
+            {"name":strenv(BUILD_VOLUME),"mountPath":"/go/build-cache"},
+            {"name":"dev-go-tools","mountPath":"/go/tools","readOnly":true}
           ]) |
         .env = (((.env // []) | map(select(.name != "GOMODCACHE" and .name != "GOCACHE" and
           .name != "GOWORK" and .name != "GOTOOLCHAIN" and .name != "GOTMPDIR" and
           .name != "HOME"))) +
           [
             {"name":"GOMODCACHE","value":"/go/pkg/mod"},
-            {"name":"GOCACHE","value":("/go/build-cache/" + strenv(CACHE_KEY))},
+            {"name":"GOCACHE","value":"/go/build-cache/cache"},
             {"name":"GOWORK","value":"off"},
             {"name":"GOTOOLCHAIN","value":"local"},
-            {"name":"GOTMPDIR","value":("/go/build-cache/" + strenv(CACHE_KEY) + "/tmp")},
-            {"name":"HOME","value":("/go/build-cache/" + strenv(CACHE_KEY) + "/home")}
+            {"name":"GOTMPDIR","value":"/go/build-cache/tmp"},
+            {"name":"HOME","value":"/go/build-cache/home"}
           ])
       )
     )

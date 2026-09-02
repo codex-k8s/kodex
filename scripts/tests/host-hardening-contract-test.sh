@@ -18,6 +18,10 @@ bash -n "$prepare_host" "$bootstrap_cluster"
 
 jq -e '
   .schemaVersion == 1 and
+  .host.os == {id:"ubuntu",version:"24.04",codename:"noble"} and
+  (.host.packages | keys | sort) ==
+    (["containerd","docker-buildx","docker-compose-v2","docker.io","runc"] | sort) and
+  all(.host.packages[]; type == "string" and length > 0) and
   (.artifacts | length) == 10 and (.charts | length) == 1 and
   ([.artifacts[].name] | unique | length) == 10 and
   all(.artifacts[];
@@ -32,6 +36,19 @@ jq -e '
     .name == "codex-linux-x64" and .version == "0.152.0-linux-x64" and
     (.url | endswith("/codex-0.152.0-linux-x64.tgz")) and has("integrity"))
 ' "$lock_file" >/dev/null || fail 'component integrity lock is invalid'
+
+if rg -n 'apt-get[[:space:]]+upgrade' "$prepare_host" >/dev/null; then
+  fail 'unbounded host package upgrade remains'
+fi
+for package_contract in \
+  'validate_host_contract' \
+  'locked_host_package_version' \
+  'apt-get install -y -qq --allow-downgrades --allow-change-held-packages' \
+  'apt-mark hold "${locked_host_packages[@]}"' \
+  'readback_locked_host_packages'; do
+  rg -Fq -- "$package_contract" "$prepare_host" ||
+    fail "host package lock contract is absent: $package_contract"
+done
 
 for forbidden_firewall_rule in \
   'ufw allow from "$pod_cidr"' \

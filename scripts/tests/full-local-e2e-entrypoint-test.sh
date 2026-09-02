@@ -18,6 +18,11 @@ kubeconfig="$temporary_directory/kubeconfig"
 mkdir -p "$fixture_root/tools/dev" "$fixture_root/scripts/tests" \
   "$fixture_root/services/staff/control-center" "$fake_bin"
 cp "$entrypoint" "$fixture_root/tools/dev/full-local-e2e.sh"
+cat >"$fixture_root/tools/dev/verify-hot-reload.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'hot-reload %s\n' "$*" >>"${KODEX_TEST_COMMAND_LOG:?}"
+EOF
 printf '{}\n' >"$fixture_root/services/staff/control-center/package.json"
 mkdir -p "$fixture_root/services/staff/control-center/node_modules/.bin"
 printf '#!/usr/bin/env bash\nexit 0\n' \
@@ -27,6 +32,13 @@ printf '#!/usr/bin/env bash\nexit 0\n' \
 chmod +x "$fixture_root/services/staff/control-center/node_modules/.bin/tsc" \
   "$fixture_root/services/staff/control-center/node_modules/.bin/playwright"
 printf 'fixture\n' >"$kubeconfig"
+install -d -m 0700 "$state_directory"
+cat >"$state_directory/credentials.env" <<'EOF'
+KODEX_LOCAL_OWNER_USERNAME=contract-owner
+KODEX_LOCAL_OWNER_PASSWORD=contract-password
+KODEX_DEV_TLS_MODE=public-acme
+EOF
+chmod 0600 "$state_directory/credentials.env"
 
 cat >"$fake_bin/kubectl" <<'EOF'
 #!/usr/bin/env bash
@@ -72,8 +84,8 @@ if [[ "$command_name" == e2e ]]; then
     >"$state_directory/e2e/$resource_prefix-report.json"
 fi
 EOF
-for local_e2e in local-role-image-supply-chain-e2e.sh local-session-archive-e2e.sh \
-  local-backup-restore-e2e.sh; do
+for local_e2e in integration-deployed-e2e.sh local-role-image-supply-chain-e2e.sh \
+  local-session-archive-e2e.sh local-backup-restore-e2e.sh; do
   cat >"$fixture_root/scripts/tests/$local_e2e" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -81,7 +93,8 @@ printf 'storage-e2e %s %s\n' "$(basename "$0")" "$*" >>"${KODEX_TEST_COMMAND_LOG
 EOF
 done
 chmod +x "$fake_bin"/* "$fixture_root/dev.sh" \
-  "$fixture_root/tools/dev/full-local-e2e.sh" "$fixture_root/scripts/tests"/*.sh
+  "$fixture_root/tools/dev/full-local-e2e.sh" "$fixture_root/tools/dev/verify-hot-reload.sh" \
+  "$fixture_root/scripts/tests"/*.sh
 
 export PATH="$fake_bin:$PATH"
 export KODEX_TEST_COMMAND_LOG="$command_log"
@@ -107,6 +120,10 @@ KODEX_TEST_CREDENTIAL='must-not-be-persisted' \
     --run-timeout-ms 60000 --target test-extra >/dev/null
 grep -Fq 'dev up ' "$command_log" || fail 'full run did not delegate deployment to dev.sh up'
 grep -Fq 'dev e2e ' "$command_log" || fail 'full run did not delegate browser E2E to dev.sh e2e'
+grep -Fq 'hot-reload --kubeconfig ' "$command_log" ||
+  fail 'full run did not verify Go and Vue hot reload'
+grep -Fq 'storage-e2e integration-deployed-e2e.sh ' "$command_log" ||
+  fail 'full run did not execute deployed integration E2E'
 grep -Fq 'storage-e2e local-role-image-supply-chain-e2e.sh ' "$command_log" ||
   fail 'full run did not execute role image supply chain readback'
 grep -Fq 'storage-e2e local-session-archive-e2e.sh ' "$command_log" ||
@@ -121,7 +138,8 @@ jq -e '
   .resourcePrefix == "contract-full" and .buildMode == "rebuilt" and
   .browser == {status:"passed",counts:{passed:7}} and
   .additionalTargets == ["test-extra"] and
-  [.phases[].name] == ["local-render-deploy","browser-auth-and-full-e2e",
+  [.phases[].name] == ["local-render-deploy","go-and-vue-hot-reload-readback",
+    "browser-auth-and-full-e2e","deployed-integration-synthetic",
     "role-image-build-admit-promote-runtime-readback",
     "session-archive-write-restore-delete-readback","backup-and-disposable-restore-drill",
     "additional:test-extra"] and

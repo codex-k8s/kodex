@@ -42,6 +42,58 @@ k3s_resolver_file=/etc/rancher/k3s/resolv.conf
 hot_reload_sysctl_file=/etc/sysctl.d/99-kodex-hot-reload.conf
 local_api_interface=kodex-api0
 local_api_service=kodex-local-api-address.service
+locked_host_packages=(containerd docker-buildx docker-compose-v2 docker.io runc)
+
+validate_host_contract() {
+  local expected_id expected_version expected_codename
+  read -r expected_id expected_version expected_codename < <(python3 - "$lock_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    lock = json.load(source)
+expected_packages = {"containerd", "docker-buildx", "docker-compose-v2", "docker.io", "runc"}
+host = lock.get("host", {})
+operating_system = host.get("os", {})
+packages = host.get("packages", {})
+if (lock.get("schemaVersion") != 1 or operating_system !=
+        {"id": "ubuntu", "version": "24.04", "codename": "noble"} or
+        set(packages) != expected_packages or
+        any(not isinstance(value, str) or not value for value in packages.values())):
+    raise SystemExit(1)
+print(operating_system["id"], operating_system["version"], operating_system["codename"])
+PY
+  ) || fail 'host package lock is invalid'
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  [[ "${ID:-}" == "$expected_id" && "${VERSION_ID:-}" == "$expected_version" &&
+    "${VERSION_CODENAME:-}" == "$expected_codename" ]] ||
+    fail 'host operating system differs from the repository lock'
+}
+
+locked_host_package_version() {
+  python3 - "$lock_file" "$1" <<'PY' || fail 'host package version is absent from the repository lock'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    value = json.load(source).get("host", {}).get("packages", {}).get(sys.argv[2])
+if not isinstance(value, str) or not value:
+    raise SystemExit(1)
+print(value)
+PY
+}
+
+readback_locked_host_packages() {
+  local package expected actual
+  for package in "${locked_host_packages[@]}"; do
+    expected=$(locked_host_package_version "$package")
+    actual=$(dpkg-query -W -f='${Version}' "$package" 2>/dev/null) ||
+      fail 'locked host package is not installed'
+    [[ "$actual" == "$expected" ]] || fail 'installed host package differs from the repository lock'
+    apt-mark showhold | grep -Fxq "$package" || fail 'locked host package is not held'
+  done
+}
 
 read_local_api_address() {
   local address_with_prefix address
@@ -406,14 +458,19 @@ EOF
     fail 'fs.inotify.max_user_watches differs from the supported value'
 }
 
+validate_host_contract
 if [[ "$mode" == apply ]]; then
+  locked_package_arguments=()
+  for package in "${locked_host_packages[@]}"; do
+    locked_package_arguments+=("$package=$(locked_host_package_version "$package")")
+  done
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get upgrade -y -qq
-  apt-get install -y -qq \
+  apt-get install -y -qq --allow-downgrades --allow-change-held-packages \
     apache2-utils apparmor apparmor-utils build-essential ca-certificates curl dnsutils gh git iptables jq \
     libnss3-tools make iproute2 openssl python3 ripgrep rsync systemd tar unzip \
-    uidmap ufw xz-utils zstd docker.io docker-buildx docker-compose-v2
+    uidmap ufw xz-utils zstd "${locked_package_arguments[@]}"
+  apt-mark hold "${locked_host_packages[@]}" >/dev/null
 else
   command -v python3 >/dev/null 2>&1 || fail 'python3 is required'
 fi
@@ -647,6 +704,7 @@ jq -e --arg version "$(locked_artifact_version codex-linux-x64)" '.version == $v
   fail 'installed Codex platform package version differs from the component lock'
 systemctl is-active --quiet docker || fail 'Docker service is not active'
 docker buildx version >/dev/null 2>&1 || fail 'Docker buildx is unavailable'
+readback_locked_host_packages
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 api_ready=false
 node_ready=false

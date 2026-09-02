@@ -105,12 +105,12 @@ rg -Fq -- "-ec 'rm -rf /work/docker /work/home'" \
 rg -Fq 'serverstransport.traefik.io/staff-control-center' \
   "$source_root/tools/dev/deploy-local.sh" ||
   fail 'local deploy does not remove the obsolete frontend ServersTransport'
-rg -F '$gomodcache/cache/download/sumdb/sum.golang.org' \
+rg -F 'chmod -R a-w "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools"' \
+  "$source_root/tools/dev/render-local.sh" >/dev/null ||
+  fail 'host priming does not make shared Go material read-only'
+rg -F 'test ! -w "$readonly_directory"' \
   "$source_root/tools/dev/run-go-hot-reload.sh" >/dev/null ||
-  fail 'hot-reload bootstrap does not prepare the module-cache SumDB path'
-rg -F '$gopath/pkg/sumdb/sum.golang.org' \
-  "$source_root/tools/dev/run-go-hot-reload.sh" >/dev/null ||
-  fail 'hot-reload bootstrap does not prepare the GOPATH SumDB path'
+  fail 'hot-reload bootstrap does not reject a writable shared Go path'
 configure_calls=$(rg -c --fixed-strings 'tools/deploy/configure-keycloak.sh' "$source_root/dev.sh")
 origin_argument_uses=$(rg -c --fixed-strings '"${keycloak_origin_arguments[@]}"' "$source_root/dev.sh")
 [[ "$configure_calls" == 2 && "$origin_argument_uses" == 2 ]] ||
@@ -322,11 +322,21 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       .name == "dev-go-tools" and (.hostPath.path | endswith("/go-tools"))) and
     any(.spec.template.spec.volumes[];
       .name == "dev-go-sumdb" and (.hostPath.path | endswith("/go-sumdb"))) and
+    any(.spec.template.spec.volumes[];
+      .name == "dev-build-publisher" and
+      (.hostPath.path | endswith("/go-build/internal-rpc-authority-publisher-publisher"))) and
     any(.spec.template.spec.containers[];
       .name == "publisher" and .command == ["/workspace/tools/dev/run-go-hot-reload.sh"] and
-      any(.volumeMounts[]; .name == "dev-go-tools" and .mountPath == "/go/tools") and
-      any(.volumeMounts[]; .name == "dev-go-sumdb" and .mountPath == "/go/pkg/sumdb") and
+      any(.volumeMounts[]; .name == "dev-go-tools" and .mountPath == "/go/tools" and
+        .readOnly == true) and
+      any(.volumeMounts[]; .name == "dev-go-mod" and .mountPath == "/go/pkg/mod" and
+        .readOnly == true) and
+      any(.volumeMounts[]; .name == "dev-go-sumdb" and .mountPath == "/go/pkg/sumdb" and
+        .readOnly == true) and
+      any(.volumeMounts[]; .name == "dev-build-publisher" and
+        .mountPath == "/go/build-cache" and (.readOnly // false) == false) and
       any(.env[]; .name == "GOMODCACHE" and .value == "/go/pkg/mod") and
+      any(.env[]; .name == "GOCACHE" and .value == "/go/build-cache/cache") and
       any(.env[]; .name == "GOTMPDIR" and (.value | startswith("/go/build-cache/"))) and
       all(.env[]; .name != "GOSUMDB" or .value != "off"))) and
   any(.[];

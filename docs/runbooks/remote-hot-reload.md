@@ -4,7 +4,7 @@ title: Удалённый hot-reload контур Kodex
 type: runbook
 status: approved
 owner: manager
-version: 1.1.0
+version: 1.2.0
 updated: 2026-09-02
 ---
 
@@ -18,11 +18,15 @@ cert-manager, SeaweedFS, Kodex с монтированием исходнико�
 Edition. Для публичных интерфейсов используются реальные сертификаты Let's
 Encrypt. Production-данные и production-секреты в контур не переносятся.
 
-Host bootstrap также устанавливает именованный AppArmor profile
+Только bare-metal bootstrap удалённого контура устанавливает именованный AppArmor profile
 `kodex-provider-runtime`. Он точечно разрешает `userns` только provider-контейнеру,
 чтобы Codex мог создать внутренний bubblewrap sandbox с запретом чтения
 `auth.json`, `/run/secrets` и `/proc`. Системное ограничение unprivileged user
 namespaces при этом глобально не отключается.
+Portable base и профиль установки в существующий Kubernetes не предполагают
+наличие node-local AppArmor profile: параметр остаётся пустым, а поле
+`securityContext.appArmorProfile` не материализуется. Удалённый renderer задаёт
+его только после code-owned host readback загруженного профиля.
 
 Teleport Auth, Proxy, SSH и Kubernetes services работают как root-owned
 `systemd`-служба на хосте и хранят состояние вне disposable k3s. В кластере
@@ -56,9 +60,17 @@ bootstrap использует временную приватную копию 
 
 DNS/HTTP preflight выполняется до создания любого публичного `Certificate`.
 Он публикует через Traefik одноразовый exact HTTP-01 path, требует вернуть
-уникальный token через каждый разрешённый `A`/`AAAA` и отдельно проверяет TCP
-`443`. Произвольный `1xx-4xx` больше не считается успешной проверкой. Ошибка
-preflight закрыто останавливает установку и не расходует попытку ACME.
+уникальный token через каждый разрешённый `A`/`AAAA`, затем проверяет тот же
+path с внешних узлов LetsDebug и доступность TCP `443` с узлов Check-Host.
+Локальная hairpin-проверка не заменяет эти внешние probes. Произвольный
+`1xx-4xx`, неполный body, недоступный внешний API или отсутствие хотя бы одного
+успешного внешнего TCP readback закрыто останавливают установку и не расходуют
+попытку ACME.
+
+Host bootstrap не выполняет `apt upgrade`. Ubuntu release и версии
+`containerd`, `docker-buildx`, `docker-compose-v2`, `docker.io`, `runc`
+зафиксированы в `tools/install/components.lock.json`; apply устанавливает exact
+версии, ставит packages на hold, а readback сравнивает фактические версии и hold.
 
 ## GitHub OAuth для Teleport
 
@@ -106,6 +118,35 @@ EXPECTED_SHA=$(git rev-parse HEAD)
 firewall и загруженный AppArmor profile. Root-owned k3s kubeconfig используется
 только через временный файл внутри entrypoint и удаляется после команды.
 
+## Пользовательский вход через Teleport
+
+Локальный Teleport-профиль Kodex нужно изолировать от рабочих Teleport-кластеров.
+Проверенный wrapper `tsh-kodex` запускает pinned `tsh` с отдельным `HOME`:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+REAL_HOME=$(getent passwd "$(id -u)" | cut -d: -f6)
+export HOME="${KODEX_TSH_HOME:-${REAL_HOME}/.tsh-kodex-home}"
+exec "${REAL_HOME}/.local/lib/kodex-teleport/tsh" "$@"
+```
+
+После code-owned `teleport` или `up` readback пользователь выполняет:
+
+```bash
+tsh-kodex login --proxy=teleport.kodex.works:443 --auth=github
+tsh-kodex ssh kodex-teleport@kodex.works
+tsh-kodex kube login kodex-dev
+KUBECONFIG="$HOME/.tsh-kodex-home/.kube/config" kubectl get --raw=/readyz
+KUBECONFIG="$HOME/.tsh-kodex-home/.kube/config" kubectl auth can-i get pods --all-namespaces
+KUBECONFIG="$HOME/.tsh-kodex-home/.kube/config" kubectl auth can-i get secrets --all-namespaces
+KUBECONFIG="$HOME/.tsh-kodex-home/.kube/config" kubectl auth can-i create clusterrolebindings
+```
+
+Ожидаемый результат: SSH, `/readyz` и чтение pod разрешены; чтение Secret и
+создание ClusterRoleBinding запрещены. Break-glass SSH-сессию нельзя закрывать,
+пока новая Teleport SSH-сессия и Kubernetes readback не подтверждены.
+
 ## Запуск и проверка
 
 ```bash
@@ -114,6 +155,9 @@ firewall и загруженный AppArmor profile. Root-owned k3s kubeconfig �
 ./tools/dev/remote-dev.sh smoke --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
 ./tools/dev/remote-dev.sh e2e --env-file .kodex-remote-env \
   --resource-prefix remote-e2e-001 --expected-sha "$EXPECTED_SHA"
+./tools/dev/remote-dev.sh acceptance --env-file .kodex-remote-env \
+  --resource-prefix remote-acceptance-001 --run-timeout-ms 1800000 \
+  --expected-sha "$EXPECTED_SHA"
 ```
 
 `up` монтирует текущий worktree в Go- и Vue-workloads через `hostPath`. Air и
@@ -121,12 +165,35 @@ Vite отслеживают изменения исходников без пе�
 Тяжёлые runtime/supply-chain образы пересобираются только при изменении их
 входов и импортируются напрямую в containerd k3s.
 
+`e2e` запускает только browser discovery и остаётся диагностической командой.
+Канонический owner gate использует `acceptance`: он требует чистый exact SHA до
+и после выполнения и последовательно проверяет deployment readback, реальный
+hot reload Go и Vue, browser/API сценарии, synthetic integration, сборку и
+допуск RoleImage, session archive и disposable backup/restore drill.
+
+Hot reload проверяется без постоянного тестового endpoint. Repo-owned скрипт
+временно меняет существующий ответ gateway `/healthz` и маркер в `App.vue`,
+наблюдает `204 -> 202 -> 204` и появление/исчезновение маркера в Vite-модуле,
+после чего восстанавливает файлы и повторно требует чистый exact SHA. При
+сигнале `INT`/`TERM` восстановление выполняется через `trap`; оставшийся dirty
+checkout закрыто блокирует следующий rollout.
+
+Browser discovery сохраняет скриншоты `1920x1080` и `1440x900` только в
+приватном state directory. Redacted report содержит имя evidence, viewport,
+размер, SHA-256 и source SHA, но не абсолютный путь и не содержимое изображения.
+Успешный browser gate требует шесть уникальных visual evidence на том же SHA.
+
 Перед первым browser smoke entrypoint устанавливает системные зависимости и
 только Chromium через зафиксированный в `package-lock.json` локальный
 Playwright. Браузер хранится в cache пользователя, после установки entrypoint
 обязан реально запустить и закрыть его. Проверены актуальные документы
 Playwright 1.61 через Context7: `install-deps chromium`, `install chromium` и
-Linux cache `~/.cache/ms-playwright`.
+Linux cache `~/.cache/ms-playwright`; для новых сценариев также проверены
+`Locator.drop`, viewport, `TestInfo.attach` и custom reporter attachments.
+
+Для внешнего ACME preflight проверены официальные API-документы LetsDebug и
+Check-Host. Внешние сервисы используются только для публичных DNS-имён и
+одноразового challenge path; credentials и приватные адреса им не передаются.
 
 Если OAuth App был создан после основного запуска, Teleport применяется
 отдельно:

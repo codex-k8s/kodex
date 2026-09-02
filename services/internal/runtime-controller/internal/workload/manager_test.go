@@ -1164,13 +1164,24 @@ func testManagerConfig() Config {
 		ControllerPodUID: "controller-pod-uid", ControllerPodIP: "10.0.0.10",
 		CallbackTLSServerName:  "runtime-controller-callback.kodex-system.svc.cluster.local",
 		CallbackClientCASecret: "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
-		ProviderHTTPSProxy:     "http://egress-gateway.kodex-system.svc:8080",
-		KubernetesAPIServiceIP: "10.43.0.1",
-		StorageClass:           "", SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner",
+		ProviderHTTPSProxy:      "http://egress-gateway.kodex-system.svc:8080",
+		ProviderAppArmorProfile: "kodex-provider-runtime",
+		KubernetesAPIServiceIP:  "10.43.0.1",
+		StorageClass:            "", SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner",
 		PromotedRoleImageRepository: "registry.example/kodex/roles",
 		DefaultRoleImageReference:   "registry.example/kodex/agent-runner@" + testDefaultDigest,
 		RoleRuntimeContractRevision: 1,
 		RoleRuntimeContractSHA256:   testContractDigest,
+	}
+}
+
+func TestProviderSandboxSecurityContextDoesNotAssumeNodeLocalAppArmor(t *testing.T) {
+	securityContext := providerSandboxSecurityContext(10002, "")
+	if securityContext.AppArmorProfile != nil {
+		t.Fatalf("base provider AppArmor profile = %#v", securityContext.AppArmorProfile)
+	}
+	if securityContext.SeccompProfile == nil || securityContext.SeccompProfile.Type != corev1.SeccompProfileTypeUnconfined {
+		t.Fatalf("base provider seccomp profile = %#v", securityContext.SeccompProfile)
 	}
 }
 

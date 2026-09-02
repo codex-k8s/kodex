@@ -7,10 +7,11 @@ import {
 
 const environment = loadE2EEnvironment();
 const launchOptions = discoveryChromiumLaunchOptions(environment.baseURL);
+const privateOutputDirectory = process.env.KODEX_E2E_PRIVATE_OUTPUT_DIR;
 
 export default defineConfig({
   testDir: "./e2e",
-  outputDir: "./test-results/discovery",
+  outputDir: privateOutputDirectory || "./test-results/discovery",
   fullyParallel: false,
   forbidOnly: true,
   workers: 1,

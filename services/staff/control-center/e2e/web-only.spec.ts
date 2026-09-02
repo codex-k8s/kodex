@@ -5,6 +5,7 @@ import {
   type Request,
   type Response,
   type Route,
+  type TestInfo,
 } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -89,6 +90,17 @@ async function openKodex(page: Page, newConversation = false): Promise<void> {
   await expect(dialog).toBeVisible();
   if (!newConversation) return;
   await startNewKodexConversation(page, dialog);
+}
+
+async function attachVisualEvidence(
+  page: Page,
+  testInfo: TestInfo,
+  name: string,
+): Promise<void> {
+  await testInfo.attach(name, {
+    body: await page.screenshot({ animations: "disabled", fullPage: false }),
+    contentType: "image/png",
+  });
 }
 
 async function startNewKodexConversation(
@@ -382,35 +394,24 @@ async function exerciseAttachmentComposer(
   }
   expect(rejected, `retry fixture was not used on ${surface}`).toBe(true);
 
-  const dataTransfer = await page.evaluateHandle(
-    ({ content, fileName }) => {
-      const transfer = new DataTransfer();
-      transfer.items.add(
-        new File([content], fileName, {
-          type: "text/plain",
-          lastModified: 1_700_000_000_000,
-        }),
-      );
-      return transfer;
-    },
-    { content: `drop fixture for ${surface}`, fileName: droppedName },
+  await composer.dispatchEvent("dragenter");
+  await expect(composer).toHaveClass(/attachment-composer--dragging/);
+  await composer.dispatchEvent("dragleave");
+  await expect(composer).not.toHaveClass(/attachment-composer--dragging/);
+  const droppedResponse = await uploadArtifactWithNetworkRetry(
+    page,
+    composer,
+    uploadPath,
+    droppedName,
+    () =>
+      composer.drop({
+        files: {
+          name: droppedName,
+          mimeType: "text/plain",
+          buffer: Buffer.from(`drop fixture for ${surface}`, "utf8"),
+        },
+      }),
   );
-  let droppedResponse: Response;
-  try {
-    droppedResponse = await uploadArtifactWithNetworkRetry(
-      page,
-      composer,
-      uploadPath,
-      droppedName,
-      async () => {
-        await composer.dispatchEvent("dragenter", { dataTransfer });
-        await expect(composer).toHaveClass(/attachment-composer--dragging/);
-        await composer.dispatchEvent("drop", { dataTransfer });
-      },
-    );
-  } finally {
-    await dataTransfer.dispose();
-  }
   expect(droppedResponse.status()).toBe(201);
   const droppedItem = composer
     .locator(".attachment-composer__item")
@@ -1215,11 +1216,44 @@ test.describe("web-only fresh installation", () => {
     ).trim();
     const modelName = (await modelPicker.locator("strong").innerText()).trim();
 
+    const accountSelector = runtimePanel.locator(".provider-selector");
+    const accountStatus = runtimePanel
+      .locator(".runtime-panel__account-capability")
+      .locator(".status-badge")
+      .first();
+    let runtimeChanged = false;
+    if ((await accountStatus.getAttribute("data-state")) === "UNAVAILABLE") {
+      const selectedRows = accountSelector.locator(
+        ".provider-selector__selected-row",
+      );
+      while ((await selectedRows.count()) > 0) {
+        await selectedRows
+          .first()
+          .locator("button.icon-button--danger")
+          .click();
+      }
+      const accountPicker = accountSelector.locator(
+        ".provider-selector__trigger",
+      );
+      await accountPicker.click();
+      const eligibleAccount = accountSelector
+        .locator('button[role="option"]:not(:disabled)')
+        .first();
+      await expect(eligibleAccount).toBeVisible();
+      await eligibleAccount.click();
+      await accountPicker.click();
+      await expect(accountStatus).toHaveAttribute("data-state", "READY");
+      runtimeChanged = true;
+    }
+
     const policy = runtimePanel.getByLabel("Политика учётных записей");
     const policyBefore = await policy.inputValue();
     const policyAfter = "LEAST_USED";
     if (policyBefore !== policyAfter) {
       await policy.selectOption(policyAfter);
+      runtimeChanged = true;
+    }
+    if (runtimeChanged) {
       const runtimePublication = page.waitForResponse(
         (response) =>
           response.request().method() === "PUT" &&
@@ -3072,7 +3106,9 @@ test.describe("web-only fresh installation", () => {
     );
   });
 
-  test("финальная визуальная приёмка: run canvas", async ({ page }) => {
+  test("финальная визуальная приёмка: run canvas", async ({
+    page,
+  }, testInfo) => {
     requireRefs("projectRef", "workflowRunRef");
     await page.setViewportSize({ width: 1920, height: 1080 });
     await gotoWithRetry(page, `/projects/${projectRef}/runs/${workflowRunRef}`);
@@ -3194,6 +3230,7 @@ test.describe("web-only fresh installation", () => {
         expectNoIntersection(leftPanel, rightPanel);
       }
     }
+    await attachVisualEvidence(page, testInfo, "visual-1920x1080-run-canvas");
   });
 
   test("финальная визуальная приёмка: badges", async ({ page }) => {
@@ -3272,7 +3309,9 @@ test.describe("web-only fresh installation", () => {
     expect(overflow.panel).toBeLessThanOrEqual(1);
   });
 
-  test("финальная визуальная приёмка: files workspace", async ({ page }) => {
+  test("финальная визуальная приёмка: files workspace", async ({
+    page,
+  }, testInfo) => {
     requireRefs("projectRef", "uploadedArtifactRef");
     await page.setViewportSize({ width: 1920, height: 1080 });
     await gotoWithRetry(
@@ -3319,11 +3358,16 @@ test.describe("web-only fresh installation", () => {
     expectNear(detailsBox.right, layoutBox.right, "details right edge");
     expect(collectionBox.right).toBeLessThanOrEqual(detailsBox.left + 1);
     expect(collectionBox.width).toBeGreaterThan(detailsBox.width * 3);
+    await attachVisualEvidence(
+      page,
+      testInfo,
+      "visual-1920x1080-files-workspace",
+    );
   });
 
   test("финальная визуальная приёмка: assistant entity drawer", async ({
     page,
-  }) => {
+  }, testInfo) => {
     requireRefs("projectRef", "coordinatorRef");
     await page.setViewportSize({ width: 1920, height: 1080 });
     const agentPath = `/projects/${projectRef}/agents/${coordinatorRef}`;
@@ -3364,6 +3408,74 @@ test.describe("web-only fresh installation", () => {
       expect(Number.isFinite(item.overflow)).toBe(true);
       expect(item.overflow).toBeLessThanOrEqual(1);
     }
+    await attachVisualEvidence(
+      page,
+      testInfo,
+      "visual-1920x1080-assistant-drawer",
+    );
+  });
+
+  test("финальная визуальная приёмка: desktop 1440", async ({
+    page,
+  }, testInfo) => {
+    requireRefs(
+      "projectRef",
+      "workflowRunRef",
+      "uploadedArtifactRef",
+      "coordinatorRef",
+    );
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    await gotoWithRetry(page, `/projects/${projectRef}/runs/${workflowRunRef}`);
+    const workspace = page.locator(".run-workspace");
+    await expectInsideViewport(page, workspace, "run workspace at 1440");
+    await expectInsideViewport(
+      page,
+      workspace.locator(".run-canvas-summary"),
+      "run summary at 1440",
+    );
+    await expectInsideViewport(
+      page,
+      workspace.locator(".graph-toolbar"),
+      "graph toolbar at 1440",
+    );
+    await expectInsideViewport(
+      page,
+      workspace.locator(".graph-legend"),
+      "graph legend at 1440",
+    );
+    await attachVisualEvidence(page, testInfo, "visual-1440x900-run-canvas");
+
+    await gotoWithRetry(
+      page,
+      `/projects/${projectRef}/files?artifactRef=${encodeURIComponent(uploadedArtifactRef)}`,
+    );
+    await expectInsideViewport(
+      page,
+      page.locator(".files-workspace"),
+      "files workspace at 1440",
+    );
+    await attachVisualEvidence(
+      page,
+      testInfo,
+      "visual-1440x900-files-workspace",
+    );
+
+    await gotoWithRetry(
+      page,
+      `/projects/${projectRef}/agents/${coordinatorRef}`,
+    );
+    await openKodex(page);
+    await expectInsideViewport(
+      page,
+      page.getByRole("dialog", { name: "Kodex" }),
+      "Kodex drawer at 1440",
+    );
+    await attachVisualEvidence(
+      page,
+      testInfo,
+      "visual-1440x900-assistant-drawer",
+    );
   });
 
   test("административные экраны и security boundary дают ожидаемый readback", async ({

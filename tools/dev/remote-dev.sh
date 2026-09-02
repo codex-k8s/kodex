@@ -8,7 +8,7 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport" \
+    "Usage: $0 host-preflight|host-apply|host-readback|up|status|smoke|e2e|acceptance|down|teleport" \
     '  [--env-file <private-path>] [--resource-prefix <slug>]' \
     '  [--run-timeout-ms <milliseconds>] [--expected-sha <40-hex-commit>]' >&2
 }
@@ -32,7 +32,7 @@ while (($# > 0)); do
   esac
 done
 case "$command_name" in
-  host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport) ;;
+  host-preflight|host-apply|host-readback|up|status|smoke|e2e|acceptance|down|teleport) ;;
   *) usage; fail 'command is invalid' ;;
 esac
 
@@ -164,7 +164,7 @@ validate_source_checkout() {
   actual_sha=$(git -C "$repository_root" rev-parse HEAD)
   [[ "$actual_sha" == "$expected_sha" ]] || fail 'source HEAD does not match the expected SHA'
   case "$command_name" in
-    host-preflight|host-apply|host-readback|up|teleport)
+    host-preflight|host-apply|host-readback|up|acceptance|teleport)
       [[ -z "$(git -C "$repository_root" status --porcelain --untracked-files=all)" ]] ||
         fail 'initial remote deployment requires a clean source checkout'
       ;;
@@ -330,5 +330,14 @@ case "$command_name" in
     [[ -z "$run_timeout_ms" ]] || e2e_arguments+=(--run-timeout-ms "$run_timeout_ms")
     KODEX_E2E_BASE_HOST_RESOLUTION=loopback \
       "$repository_root/dev.sh" e2e "${e2e_arguments[@]}"
+    ;;
+  acceptance)
+    acceptance_arguments=(--skip-build --kubeconfig "$kubeconfig" --context "$context" \
+      --state-directory "$state_directory" --cluster-marker "$cluster_marker" \
+      --expected-sha "$expected_sha")
+    [[ -z "$resource_prefix" ]] || acceptance_arguments+=(--resource-prefix "$resource_prefix")
+    [[ -z "$run_timeout_ms" ]] || acceptance_arguments+=(--run-timeout-ms "$run_timeout_ms")
+    KODEX_E2E_BASE_HOST_RESOLUTION=loopback \
+      "$repository_root/dev.sh" full-e2e "${acceptance_arguments[@]}"
     ;;
 esac

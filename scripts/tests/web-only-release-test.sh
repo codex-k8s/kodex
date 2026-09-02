@@ -232,6 +232,10 @@ yq -e 'select(.kind == "ValidatingAdmissionPolicy" and
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   map(select(.kind != null)) as $resources |
   any($resources[];
+    .kind == "ConfigMap" and
+    .metadata.name == "kodex-image-admission-policy" and
+    .data.providerAppArmorProfile == "") and
+  any($resources[];
     .kind == "ValidatingAdmissionPolicy" and
     .metadata.name == "runtime-execution-ticket-exact-projection" and
     .spec.failurePolicy == "Fail" and
@@ -285,9 +289,13 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     ([.spec.validations[].expression] | join(" ") | contains(
       "container.securityContext.allowPrivilegeEscalation == false")) and
     ([.spec.validations[].expression] | join(" ") | contains(
-      "providerContainers[0].securityContext.appArmorProfile.type == '\''Localhost'\''")) and
+      "params.data['\''providerAppArmorProfile'\''] == '\'''\''")) and
     ([.spec.validations[].expression] | join(" ") | contains(
-      "providerContainers[0].securityContext.appArmorProfile.localhostProfile == '\''kodex-provider-runtime'\''")) and
+      "!has(variables.providerContainers[0].securityContext.appArmorProfile)")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "params.data['\''providerAppArmorProfile'\''] == '\''kodex-provider-runtime'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "providerContainers[0].securityContext.appArmorProfile.localhostProfile")) and
     ([.spec.validations[].expression] | join(" ") | contains(
       "runtime-provider-credential-relay")) and
     ([.spec.validations[].expression] | join(" ") | contains(

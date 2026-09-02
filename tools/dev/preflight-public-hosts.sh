@@ -141,6 +141,65 @@ cleanup() {
   rm -rf -- "$temporary_directory"
 }
 trap cleanup EXIT
+
+verify_external_http01() {
+  local host=$1 submission probe_id result status
+  submission=$(jq -cn --arg domain "$host" --arg path "$challenge_token" \
+    --arg expected "$challenge_token" '{method:"http-01",domain:$domain,
+      options:{http_request_path:$path,http_expect_response:$expected}}' |
+    curl --fail --silent --show-error --max-time 20 \
+      -H 'content-type: application/json' --data-binary @- https://letsdebug.net) ||
+    fail "external HTTP-01 probe could not be submitted: $host"
+  probe_id=$(jq -er --arg host "$host" '
+    select(.Domain == $host) | .ID |
+    select(type == "number" and . > 0 and floor == .)
+  ' <<<"$submission") || fail "external HTTP-01 probe response is invalid: $host"
+  for _ in $(seq 1 90); do
+    result=$(curl --fail --silent --show-error --max-time 10 \
+      -H 'accept: application/json' "https://letsdebug.net/$host/$probe_id") ||
+      fail "external HTTP-01 probe readback failed: $host"
+    status=$(jq -r '.status // ""' <<<"$result")
+    if [[ "$status" == Complete ]]; then
+      jq -e --arg host "$host" --argjson id "$probe_id" '
+        .domain == $host and .id == $id and .method == "http-01" and
+        .status == "Complete" and .result.ok == true and
+        ([.result.problems[]? | select(.severity == "Error" or .severity == "Fatal")] | length) == 0
+      ' <<<"$result" >/dev/null || fail "external HTTP-01 route verification failed: $host"
+      return
+    fi
+    [[ "$status" == Pending || "$status" == Processing || -z "$status" ]] ||
+      fail "external HTTP-01 probe entered an unexpected state: $host"
+    sleep 1
+  done
+  fail "external HTTP-01 probe timed out: $host"
+}
+
+verify_external_https_port() {
+  local host=$1 submission request_id result successful
+  submission=$(curl --fail --silent --show-error --max-time 20 \
+    -H 'accept: application/json' --get \
+    --data-urlencode "host=$host:443" --data-urlencode 'max_nodes=3' \
+    https://check-host.net/check-tcp) ||
+    fail "external HTTPS port probe could not be submitted: $host"
+  request_id=$(jq -er '
+    select(.ok == 1 and (.nodes | type == "object") and (.nodes | length) >= 1) |
+    .request_id | select(type == "string" and test("^[A-Za-z0-9_-]+$"))
+  ' <<<"$submission") || fail "external HTTPS port probe response is invalid: $host"
+  for _ in $(seq 1 30); do
+    result=$(curl --fail --silent --show-error --max-time 10 \
+      -H 'accept: application/json' "https://check-host.net/check-result/$request_id") ||
+      fail "external HTTPS port probe readback failed: $host"
+    successful=$(jq '[to_entries[] | .value[]? |
+      select(type == "object" and has("time") and (.time | type == "number"))] | length' \
+      <<<"$result") || fail "external HTTPS port probe result is invalid: $host"
+    if ((successful >= 1)); then
+      return
+    fi
+    sleep 1
+  done
+  fail "external HTTPS port is unreachable: $host"
+}
+
 install -d -m 0700 "$temporary_directory/.well-known/acme-challenge"
 printf '%s' "$challenge_token" >"$temporary_directory$challenge_path"
 python3 -m http.server "$preflight_port" --bind "$backend_address" \
@@ -257,6 +316,8 @@ PY
       checked_https_addresses[$address]=true
     fi
   done
+  verify_external_http01 "$host"
+  verify_external_https_port "$host"
 done
 
 [[ "$(printf '%s\n' "${observed_ipv4[@]}" | sed '/^$/d' | sort -u)" == "$allowed_ipv4_output" ]] ||

@@ -293,6 +293,17 @@ record_source_provenance_evidence() {
     "$current_revision" "$current_fingerprint" "$sha_attested"
 }
 
+require_exact_source_attestation() {
+  local evidence_file=$1
+  jq -e '
+    .shaAttested == true and
+    .renderContentMatches == true and
+    .renderedDirty == false and
+    .dirty == false
+  ' "$evidence_file" >/dev/null ||
+    fail 'exact source SHA attestation is required for acceptance E2E'
+}
+
 resolve_local_authority_source_revision() {
   local current_revision source_fingerprint state_file state_revision state_fingerprint
   current_revision=$(read_authority_snapshot_revision)
@@ -429,6 +440,7 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
   fi
   record_source_provenance_evidence "$source_evidence" "$command_name"
   if [[ "$command_name" == e2e ]]; then
+    require_exact_source_attestation "$source_evidence"
     e2e_start_head=$(jq -r '.headSHA' "$source_evidence")
     e2e_start_fingerprint=$(jq -r '.currentContentSHA256' "$source_evidence")
     "$repository_root/tools/dev/build-local-session-archive.sh" \
@@ -475,6 +487,8 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
       KODEX_E2E_RESOURCE_PREFIX="$resource_prefix" \
       KODEX_E2E_RUN_STATE="$run_state" \
       KODEX_E2E_DISCOVERY_REPORT="$report" \
+      KODEX_E2E_PRIVATE_OUTPUT_DIR="$state_directory/e2e/$resource_prefix-playwright" \
+      KODEX_E2E_EXPECTED_SHA="$e2e_start_head" \
       KODEX_E2E_RUN_TIMEOUT_MS="$run_timeout_ms" \
       KODEX_E2E_KUBECONFIG="$kubeconfig" \
       KODEX_E2E_KUBE_CONTEXT="$context" \
@@ -485,6 +499,7 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
       fail 'local browser E2E failed'
     fi
     record_source_provenance_evidence "$source_evidence" "$command_name"
+    require_exact_source_attestation "$source_evidence"
     [[ "$(jq -r '.headSHA' "$source_evidence")" == "$e2e_start_head" &&
       "$(jq -r '.currentContentSHA256' "$source_evidence")" == "$e2e_start_fingerprint" ]] ||
       fail 'source content changed while E2E was running'
@@ -492,9 +507,17 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
     jq '.stableDuringCommand = true' "$source_evidence" >"$temporary_source_evidence"
     chmod 0600 "$temporary_source_evidence"
     mv -- "$temporary_source_evidence" "$source_evidence"
-    jq -e '
+    jq -e --arg expected_sha "$e2e_start_head" '
       .version == 1 and .status == "passed" and
-      (.results | length) > 0 and all(.results[]; .status == "passed")
+      .sourceSHA == $expected_sha and
+      (.results | length) > 0 and all(.results[]; .status == "passed") and
+      (.visualEvidence | length) == 6 and
+      ([.visualEvidence[].name] | unique | length) == 6 and
+      ([.visualEvidence[].viewport] | sort | unique) == ["1440x900", "1920x1080"] and
+      all(.visualEvidence[];
+        .bytes > 0 and (.sha256 | test("^[a-f0-9]{64}$")) and
+        .sourceSHA == $expected_sha and
+        (.name | test("^visual-(1440x900|1920x1080)-[a-z0-9-]+$")))
     ' "$report" >/dev/null || fail 'local browser E2E report is not fully successful'
     chmod 0600 "$run_state" "$report"
     "$repository_root/tools/dev/verify-discovery-readback.sh" \

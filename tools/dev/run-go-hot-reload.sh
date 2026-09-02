@@ -31,33 +31,28 @@ gocache=${GOCACHE:-/go/build-cache/$name}
 gotmpdir=${GOTMPDIR:-$gocache/tmp}
 home=${HOME:-$gocache/home}
 for writable_directory in \
-  "$gomodcache" \
-  "$gomodcache/cache/download/sumdb/sum.golang.org" \
-  "$gopath/pkg/sumdb/sum.golang.org" \
   "$gocache" \
   "$gotmpdir" \
-  "$home" \
-  /go/tools; do
+  "$home"; do
   mkdir -p -- "$writable_directory" || fail "cannot create writable Go path: $writable_directory"
   test -w "$writable_directory" || fail "Go path is not writable: $writable_directory"
 done
+for readonly_directory in "$gomodcache" "$gopath/pkg/sumdb/sum.golang.org" /go/tools; do
+  test -r "$readonly_directory" || fail "read-only Go path is unavailable: $readonly_directory"
+  test ! -w "$readonly_directory" || fail "shared Go path must be read-only: $readonly_directory"
+done
 
 air_version=${KODEX_DEV_AIR_VERSION:-v1.63.4}
+air_sha256=${KODEX_DEV_AIR_SHA256:-}
 air_binary=/go/tools/air
+printf '%s' "$air_sha256" | grep -Eq '^[a-f0-9]{64}$' ||
+  fail 'Air executable digest is invalid'
+actual_air_sha256=$(sha256sum "$air_binary" | awk '{print $1}') ||
+  fail 'Air executable digest readback failed'
+[ "$actual_air_sha256" = "$air_sha256" ] || fail 'Air executable digest differs from the rendered contract'
 air_is_usable() {
-  [ -x "$air_binary" ] && "$air_binary" -v >/dev/null 2>&1
+  [ -x "$air_binary" ] && "$air_binary" -v 2>/dev/null | grep -Fq "$air_version"
 }
-if ! air_is_usable; then
-  install_lock=/go/tools/.air-install.lock
-  while ! mkdir "$install_lock" 2>/dev/null; do sleep 1; done
-  if ! air_is_usable; then
-    rm -f -- "$air_binary"
-    CGO_ENABLED=0 GOBIN=/go/tools GOMODCACHE="$gomodcache" GOCACHE="$gocache" \
-      GOTMPDIR="$gotmpdir" HOME="$home" GOWORK=off \
-      go install "github.com/air-verse/air@$air_version"
-  fi
-  rmdir "$install_lock"
-fi
 air_is_usable || fail 'Air executable is unavailable'
 
 runtime_root="/tmp/kodex-dev-$name"
