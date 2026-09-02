@@ -130,7 +130,6 @@ render_config() {
       .ssh_service.labels.environment = "development" |
       .kubernetes_service.enabled = true |
       .kubernetes_service.listen_addr = "127.0.0.1:3026" |
-      .kubernetes_service.kube_cluster_name = strenv(KUBE_CLUSTER_NAME) |
       .kubernetes_service.kubeconfig_file = strenv(TELEPORT_KUBECONFIG) |
       .kubernetes_service.labels.environment = "development"
     ' >"$output"
@@ -228,6 +227,42 @@ readback_certificates() {
     fail 'Teleport backend certificate expires too soon'
 }
 
+install_teleport_kubeconfig() {
+  local candidate
+  candidate=$(mktemp "$data_directory/.kubeconfig.XXXXXX")
+  if ! KUBE_CLUSTER_NAME="$kube_cluster_name" yq -o=yaml '
+    select(
+      (.clusters | length) == 1 and (.contexts | length) == 1 and
+      (.users | length) == 1
+    ) |
+    .clusters[0].name = strenv(KUBE_CLUSTER_NAME) |
+    .contexts[0].name = strenv(KUBE_CLUSTER_NAME) |
+    .contexts[0].context.cluster = strenv(KUBE_CLUSTER_NAME) |
+    ."current-context" = strenv(KUBE_CLUSTER_NAME)
+  ' "$kubeconfig" >"$candidate"; then
+    rm -f -- "$candidate"
+    fail 'root-owned Kubernetes configuration cannot be normalized for Teleport'
+  fi
+  chmod 0600 "$candidate"
+  mv -- "$candidate" "$teleport_kubeconfig"
+}
+
+readback_teleport_kubeconfig() {
+  [[ -f "$teleport_kubeconfig" && ! -L "$teleport_kubeconfig" &&
+    "$(stat -c '%u' "$teleport_kubeconfig")" == 0 &&
+    "$(stat -c '%a' "$teleport_kubeconfig")" == 600 ]] ||
+    fail 'Teleport Kubernetes configuration is unsafe'
+  KUBE_CLUSTER_NAME="$kube_cluster_name" yq -e '
+    (.clusters | length) == 1 and (.contexts | length) == 1 and
+    (.users | length) == 1 and
+    .clusters[0].name == strenv(KUBE_CLUSTER_NAME) and
+    .contexts[0].name == strenv(KUBE_CLUSTER_NAME) and
+    .contexts[0].context.cluster == strenv(KUBE_CLUSTER_NAME) and
+    ."current-context" == strenv(KUBE_CLUSTER_NAME)
+  ' "$teleport_kubeconfig" >/dev/null ||
+    fail 'Teleport Kubernetes configuration differs from the supported profile'
+}
+
 if [[ "$mode" == preflight ]]; then
   validate_identity_inputs
   [[ -d /run/systemd/system ]] || fail 'systemd is required'
@@ -245,7 +280,7 @@ if [[ "$mode" == apply ]]; then
 
   install -d -m 0700 -o root -g root "$data_directory"
   ensure_certificates
-  install -m 0600 -o root -g root "$kubeconfig" "$teleport_kubeconfig"
+  install_teleport_kubeconfig
 
   temporary_directory=$(mktemp -d)
   cleanup() { rm -rf -- "$temporary_directory"; }
@@ -311,6 +346,7 @@ systemctl is-active --quiet teleport || fail 'Teleport host service is not activ
   $((8#$(stat -c '%a' "$config_file") & 8#077)) == 0 ]] || fail 'Teleport host configuration is unsafe'
 teleport configure --test="$config_file" >/dev/null || fail 'Teleport host configuration readback failed'
 readback_certificates
+readback_teleport_kubeconfig
 HOST="$host" BACKEND_ADDRESS="$backend_address" TELEPORT_KUBECONFIG="$teleport_kubeconfig" \
   yq -e '
   .auth_service.enabled == true and

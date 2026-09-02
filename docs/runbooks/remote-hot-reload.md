@@ -38,7 +38,8 @@ GitHub-пользователь входит через Teleport как отде
 `kodex-teleport` без `sudo`. Постоянный административный kubeconfig не
 копируется в домашний каталог оператора и не выдаётся пользователю: code-owned
 bootstrap использует временную приватную копию root-owned k3s kubeconfig, а
-пользователь работает через `tsh kube login`.
+в приватной копии Teleport единственный context получает имя `kodex-dev`.
+Пользователь работает через `tsh kube login`.
 
 ## Предварительные условия
 
@@ -85,6 +86,8 @@ Teleport Community Edition использует отдельный GitHub OAuth 
 - GitHub connector `v3` и callback path;
 - Teleport role labels, SSH login и Kubernetes group mapping.
 - пользовательский CA через `SSL_CERT_FILE` для приватного TLS backend.
+- static kubeconfig без взаимоисключающего `kube_cluster_name`; имя кластера
+  задаётся единственным context `kodex-dev`.
 
 ## Установка
 

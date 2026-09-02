@@ -279,6 +279,66 @@ for teleport_tls_contract in \
   rg -Fq -- "$teleport_tls_contract" "$repository_root/infra/teleport/bootstrap-host.sh" ||
     fail "host Teleport backend trust contract is absent: $teleport_tls_contract"
 done
+for teleport_kubeconfig_contract in \
+  'install_teleport_kubeconfig' \
+  '.clusters[0].name = strenv(KUBE_CLUSTER_NAME)' \
+  '.contexts[0].name = strenv(KUBE_CLUSTER_NAME)' \
+  '."current-context" = strenv(KUBE_CLUSTER_NAME)' \
+  'readback_teleport_kubeconfig'; do
+  rg -Fq -- "$teleport_kubeconfig_contract" "$repository_root/infra/teleport/bootstrap-host.sh" ||
+    fail "host Teleport kubeconfig contract is absent: $teleport_kubeconfig_contract"
+done
+if rg -Fq '.kubernetes_service.kube_cluster_name' \
+  "$repository_root/infra/teleport/bootstrap-host.sh"; then
+  fail 'host Teleport combines mutually exclusive kubeconfig and cluster name fields'
+fi
+
+extract_teleport_function() {
+  local function_name=$1
+  awk -v signature="^${function_name}\\(\\) \\{$" '
+    $0 ~ signature { capture = 1 }
+    capture { print }
+    capture && /^}$/ { exit }
+  ' "$repository_root/infra/teleport/bootstrap-host.sh"
+}
+teleport_fixture_directory=$temporary_directory/teleport
+data_directory=$teleport_fixture_directory/data
+kubeconfig=$teleport_fixture_directory/source-kubeconfig
+teleport_kubeconfig=$data_directory/kubeconfig
+kube_cluster_name=kodex-dev
+mkdir -p "$data_directory"
+cat >"$kubeconfig" <<'EOF'
+apiVersion: v1
+kind: Config
+clusters:
+  - name: default
+    cluster:
+      server: https://127.0.0.1:6443
+contexts:
+  - name: default
+    context:
+      cluster: default
+      user: default
+current-context: default
+users:
+  - name: default
+    user:
+      token: fixture
+EOF
+# shellcheck disable=SC1090
+source <(extract_teleport_function install_teleport_kubeconfig)
+install_teleport_kubeconfig
+yq -e '
+  .clusters[0].name == "kodex-dev" and
+  .contexts[0].name == "kodex-dev" and
+  .contexts[0].context.cluster == "kodex-dev" and
+  .contexts[0].context.user == "default" and
+  ."current-context" == "kodex-dev"
+' "$teleport_kubeconfig" >/dev/null ||
+  fail 'host Teleport kubeconfig normalization is not executable'
+yq -e '.clusters[0].name == "default" and ."current-context" == "default"' \
+  "$kubeconfig" >/dev/null || fail 'host Teleport mutated the root-owned source kubeconfig'
+
 for marker_contract in \
   'create_cluster_marker' \
   'sudo -n install -m 0600 -o root -g root "$temporary_marker" "$cluster_marker"' \
