@@ -416,7 +416,8 @@ if [[ "$command_name" == up && "$tls_mode" == public-acme ]]; then
     --allowed-ipv4-addresses "${KODEX_DEV_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES:-}" \
     --allowed-ipv6-addresses "${KODEX_DEV_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES:-}" \
     --dns-timeout-seconds "${KODEX_DEV_PUBLIC_TLS_DNS_TIMEOUT_SECONDS:-10}" \
-    --http-timeout-seconds "${KODEX_DEV_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS:-10}"
+    --http-timeout-seconds "${KODEX_DEV_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS:-10}" \
+    --context "$context" --backend-address "${KODEX_DEV_KUBERNETES_API_ADDRESS:-10.254.254.1}"
 fi
 
 if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" == e2e ]]; then
@@ -662,6 +663,25 @@ record_source_provenance_evidence "$state_directory/source-provenance-up.json" u
 "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode apply \
   --render "$state_directory/render.yaml" --state-directory "$state_directory"
 commit_local_authority_source_state
+
+management_surface_arguments=(
+  --context "$context"
+  --oidc-issuer "https://$oidc_host/realms/kodex"
+  --oidc-connect-address sso.identity.svc.cluster.local:443
+  --oidc-target-port 8443
+  --control-center-host "$public_host"
+  --grafana-host "$grafana_host"
+  --headlamp-host "$headlamp_host"
+  --ingress-class "$ingress_class"
+  --cluster-issuer "$cluster_issuer"
+  --ingress-namespace kube-system
+  --ingress-pod-name traefik
+  --kubernetes-api-service-cidr "$api_service_ip/32"
+  --kubernetes-api-endpoint-cidrs "$api_endpoint_ip/32"
+  --kubernetes-api-endpoint-ports "$api_endpoint_port"
+)
+"$repository_root/infra/management-surfaces/bootstrap.sh" \
+  --mode reconcile "${management_surface_arguments[@]}"
 
 provider_metadata=("$state_directory"/provider-accounts/*/account.json)
 restored_provider_accounts=0

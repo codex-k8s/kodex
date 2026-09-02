@@ -216,6 +216,7 @@ cat >"$env_file" <<EOF
 KODEX_REMOTE_SERVER_PUBLIC_IP=192.0.2.10
 KODEX_REMOTE_CONTROL_HOST=control.example.test
 KODEX_REMOTE_OIDC_HOST=sso.example.test
+KODEX_REMOTE_TELEPORT_HOST=teleport.example.test
 KODEX_REMOTE_REGISTRY_HOST=registry.example.test
 KODEX_REMOTE_PROMOTED_PULL_HOST=pull.example.test
 KODEX_REMOTE_ACME_EMAIL=owner@example.test
@@ -260,10 +261,17 @@ if "$fixture_root/tools/dev/remote-dev.sh" status --env-file "$env_file" \
   fail 'remote command accepted an unexpected HEAD'
 fi
 
-if rg -n 'KODEX_REMOTE_KUBECONFIG|infra/teleport/bootstrap\.sh|k3s/k3s\.yaml.*kodex-dev-remote' \
+if rg -n 'KODEX_REMOTE_KUBECONFIG|k3s/k3s\.yaml.*kodex-dev-remote' \
   "$repository_root/tools/dev/remote-dev.sh" >/dev/null; then
-  fail 'remote flow retains a permanent kubeconfig or in-cluster Teleport ownership'
+  fail 'remote flow retains a permanent operator kubeconfig'
 fi
+for teleport_ownership_contract in \
+  'infra/teleport/bootstrap-host.sh' \
+  'infra/teleport/bootstrap.sh' \
+  'teleport_backend_address=10.254.254.1'; do
+  rg -Fq -- "$teleport_ownership_contract" "$repository_root/tools/dev/remote-dev.sh" ||
+    fail "host-owned Teleport orchestration is absent: $teleport_ownership_contract"
+done
 for marker_contract in \
   'create_cluster_marker' \
   'sudo -n install -m 0600 -o root -g root "$temporary_marker" "$cluster_marker"' \

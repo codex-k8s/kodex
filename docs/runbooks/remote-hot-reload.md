@@ -4,8 +4,8 @@ title: Удалённый hot-reload контур Kodex
 type: runbook
 status: approved
 owner: manager
-version: 1.0.2
-updated: 2026-09-01
+version: 1.1.0
+updated: 2026-09-02
 ---
 
 # Удалённый hot-reload контур Kodex
@@ -24,9 +24,18 @@ Host bootstrap также устанавливает именованный AppA
 `auth.json`, `/run/secrets` и `/proc`. Системное ограничение unprivileged user
 namespaces при этом глобально не отключается.
 
-Teleport размещается в отдельном namespace того же disposable k3s. Прямой SSH
-на порт `22` остаётся аварийным доступом. Traefik занимает публичные `80/443` и
-маршрутизирует Teleport по отдельному DNS-имени.
+Teleport Auth, Proxy, SSH и Kubernetes services работают как root-owned
+`systemd`-служба на хосте и хранят состояние вне disposable k3s. В кластере
+остаются только публичный сертификат, проверяющий внутреннюю CA маршрут
+Traefik и ограниченный Kubernetes RBAC. Поэтому пересоздание k3s не удаляет
+access plane: после нового bootstrap маршрут привязывается к тому же Teleport.
+
+Прямой SSH на порт `22` остаётся break-glass доступом установщика. Обычный
+GitHub-пользователь входит через Teleport как отдельный Linux-пользователь
+`kodex-teleport` без `sudo`. Постоянный административный kubeconfig не
+копируется в домашний каталог оператора и не выдаётся пользователю: code-owned
+bootstrap использует временную приватную копию root-owned k3s kubeconfig, а
+пользователь работает через `tsh kube login`.
 
 ## Предварительные условия
 
@@ -42,7 +51,10 @@ Teleport размещается в отдельном namespace того же di
    `/srv/kodex-dev/state/provider-accounts/default-openai-codex/auth.json`.
 
 DNS/HTTP preflight выполняется до создания любого публичного `Certificate`.
-Ошибка preflight закрыто останавливает установку и не расходует попытку ACME.
+Он публикует через Traefik одноразовый exact HTTP-01 path, требует вернуть
+уникальный token через каждый разрешённый `A`/`AAAA` и отдельно проверяет TCP
+`443`. Произвольный `1xx-4xx` больше не считается успешной проверкой. Ошибка
+preflight закрыто останавливает установку и не расходует попытку ACME.
 
 ## GitHub OAuth для Teleport
 
@@ -57,15 +69,18 @@ Teleport Community Edition использует отдельный GitHub OAuth 
 - доступ получает только команда из
   `KODEX_REMOTE_GITHUB_ORGANIZATION/KODEX_REMOTE_GITHUB_TEAM`.
 
-Участникам этой команды Teleport назначает роль `kodex-k8s-admin`, которая
-отображается в Kubernetes group `system:masters`. Это допустимо только для
-одноразового dev-контура и не является production-моделью доступа.
+Участникам этой команды Teleport назначает роль `kodex-dev-access`. Она
+разрешает SSH только на host с label `environment=development` и отображается
+в Kubernetes group `kodex-teleport-dev-observers`. ClusterRole разрешает только
+`get/list/watch` диагностических ресурсов и намеренно исключает `Secret`,
+мутации, `pods/exec`, impersonation и `system:masters`. Изменения контура
+выполняет только code-owned bootstrap через break-glass identity установщика.
 
 Проверены актуальные документы Teleport 18 через Context7:
 
-- `teleport-cluster` Helm chart в `standalone`/`multiplex` режиме за Ingress;
+- host-owned Teleport Auth, Proxy, SSH и Kubernetes services;
 - GitHub connector `v3` и callback path;
-- Kubernetes Access и отображение роли в `system:masters`.
+- Teleport role labels, SSH login и Kubernetes group mapping.
 
 ## Установка
 
@@ -73,23 +88,25 @@ Teleport Community Edition использует отдельный GitHub OAuth 
 применяет изменения:
 
 ```bash
-./tools/dev/remote-dev.sh host-preflight --env-file .kodex-remote-env
-./tools/dev/remote-dev.sh host-apply --env-file .kodex-remote-env
-./tools/dev/remote-dev.sh host-readback --env-file .kodex-remote-env
+EXPECTED_SHA=$(git rev-parse HEAD)
+./tools/dev/remote-dev.sh host-preflight --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
+./tools/dev/remote-dev.sh host-apply --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
+./tools/dev/remote-dev.sh host-readback --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
 ```
 
 После `host-apply` нужно открыть новую SSH-сессию, чтобы применилось членство
 оператора в группе `docker`. Readback обязан подтвердить k3s, Docker buildx,
-firewall, загруженный AppArmor profile и пользовательский kubeconfig.
+firewall и загруженный AppArmor profile. Root-owned k3s kubeconfig используется
+только через временный файл внутри entrypoint и удаляется после команды.
 
 ## Запуск и проверка
 
 ```bash
-./tools/dev/remote-dev.sh up --env-file .kodex-remote-env
-./tools/dev/remote-dev.sh status --env-file .kodex-remote-env
-./tools/dev/remote-dev.sh smoke --env-file .kodex-remote-env
+./tools/dev/remote-dev.sh up --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
+./tools/dev/remote-dev.sh status --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
+./tools/dev/remote-dev.sh smoke --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
 ./tools/dev/remote-dev.sh e2e --env-file .kodex-remote-env \
-  --resource-prefix remote-e2e-001
+  --resource-prefix remote-e2e-001 --expected-sha "$EXPECTED_SHA"
 ```
 
 `up` монтирует текущий worktree в Go- и Vue-workloads через `hostPath`. Air и
@@ -108,15 +125,18 @@ Linux cache `~/.cache/ms-playwright`.
 отдельно:
 
 ```bash
-./tools/dev/remote-dev.sh teleport --env-file .kodex-remote-env
+./tools/dev/remote-dev.sh teleport --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
 ```
 
 ## Завершение
 
 ```bash
-./tools/dev/remote-dev.sh down --env-file .kodex-remote-env
+KODEX_DEV_CONFIRM_DOWN=I_UNDERSTAND_THIS_REMOVES_KODEX_FROM_THE_BOUND_DISPOSABLE_CLUSTER \
+  ./tools/dev/remote-dev.sh down --env-file .kodex-remote-env --expected-sha "$EXPECTED_SHA"
 ```
 
 Команда удаляет application namespaces, но оставляет общие dev-контроллеры и
-Teleport для диагностики. Перед production-релизом сервер очищается полностью,
-после чего production-инсталлятор запускается на чистом хосте.
+host-owned Teleport для диагностики. Она требует отдельную точную фразу
+подтверждения disposable-среды и сверяет UID, API endpoint и CA текущего
+кластера с root-owned marker. Перед production-релизом сервер очищается
+полностью, после чего production-инсталлятор запускается на чистом хосте.

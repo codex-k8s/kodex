@@ -68,13 +68,6 @@
       "version": "v1.21.1",
       "repository": "oci://quay.io/jetstack/charts/cert-manager",
       "sha256": "c27101f3f3e2349fb4a9e704316105bf7b52ad73b8c8257d3498ef7f2f6a4adc"
-    },
-    {
-      "name": "teleport-cluster",
-      "version": "18.11.0",
-      "repository": "https://charts.releases.teleport.dev",
-      "chart": "teleport-cluster",
-      "sha256": "1a0bd89d3d21abaa899768c0ef9b2fe75138f0835e6a12dd0b9109debcc1eb3a"
     }
   ]
 }

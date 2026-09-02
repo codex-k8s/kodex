@@ -10,7 +10,8 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --hosts <comma-separated-DNS> --allowed-ipv4-addresses <comma-list>" \
     '  [--allowed-ipv6-addresses <comma-list>] [--dns-timeout-seconds <1-99>]' \
-    '  [--http-timeout-seconds <1-99>]' >&2
+    '  [--http-timeout-seconds <1-99>] --context <exact-context>' \
+    '  --backend-address <private-IPv4>' >&2
 }
 
 hosts_raw=""
@@ -18,6 +19,8 @@ allowed_ipv4_raw=""
 allowed_ipv6_raw=""
 dns_timeout_seconds=10
 http_timeout_seconds=10
+context=""
+backend_address=""
 while (($# > 0)); do
   case "$1" in
     --hosts) hosts_raw=${2:-}; shift 2 ;;
@@ -25,6 +28,8 @@ while (($# > 0)); do
     --allowed-ipv6-addresses) allowed_ipv6_raw=${2:-}; shift 2 ;;
     --dns-timeout-seconds) dns_timeout_seconds=${2:-}; shift 2 ;;
     --http-timeout-seconds) http_timeout_seconds=${2:-}; shift 2 ;;
+    --context) context=${2:-}; shift 2 ;;
+    --backend-address) backend_address=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -34,9 +39,21 @@ done
   fail 'DNS timeout must be between 1 and 99 seconds'
 [[ "$http_timeout_seconds" =~ ^[1-9][0-9]?$ ]] ||
   fail 'HTTP timeout must be between 1 and 99 seconds'
-for command_name in curl dig python3 timeout; do
+for command_name in curl dig jq kubectl python3 timeout; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
+[[ -n "$context" && "$(kubectl config current-context)" == "$context" ]] ||
+  fail 'Kubernetes context mismatch'
+[[ "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
+  fail 'production context is forbidden'
+python3 - "$backend_address" <<'PY' || fail 'preflight backend address must be a private non-loopback IPv4 address'
+import ipaddress
+import sys
+
+address = ipaddress.ip_address(sys.argv[1])
+if address.version != 4 or not address.is_private or address.is_loopback or address.is_unspecified:
+    raise SystemExit(1)
+PY
 
 canonical_address_list() {
   local family=$1 raw=$2
@@ -101,7 +118,83 @@ for host in "${hosts[@]}"; do
     "$host" != *..* && -z "${seen_hosts[$host]:-}" ]] ||
     fail "public DNS host is invalid or duplicated: $host"
   seen_hosts[$host]=true
+done
 
+preflight_namespace=kodex-acme-preflight
+preflight_name="kodex-acme-preflight-$$-$RANDOM"
+challenge_token="$preflight_name-$RANDOM"
+challenge_path="/.well-known/acme-challenge/$challenge_token"
+preflight_port=18080
+temporary_directory=$(mktemp -d)
+responder_pid=""
+cleanup() {
+  if [[ -n "$responder_pid" ]]; then
+    kill "$responder_pid" >/dev/null 2>&1 || true
+    wait "$responder_pid" >/dev/null 2>&1 || true
+  fi
+  kubectl -n "$preflight_namespace" delete ingress "$preflight_name" \
+    --ignore-not-found --wait=true --timeout=1m >/dev/null 2>&1 || true
+  kubectl -n "$preflight_namespace" delete endpointslice "$preflight_name" \
+    --ignore-not-found --wait=true --timeout=1m >/dev/null 2>&1 || true
+  kubectl -n "$preflight_namespace" delete service "$preflight_name" \
+    --ignore-not-found --wait=true --timeout=1m >/dev/null 2>&1 || true
+  rm -rf -- "$temporary_directory"
+}
+trap cleanup EXIT
+install -d -m 0700 "$temporary_directory/.well-known/acme-challenge"
+printf '%s' "$challenge_token" >"$temporary_directory$challenge_path"
+python3 -m http.server "$preflight_port" --bind "$backend_address" \
+  --directory "$temporary_directory" >"$temporary_directory/responder.log" 2>&1 &
+responder_pid=$!
+for _ in $(seq 1 30); do
+  kill -0 "$responder_pid" >/dev/null 2>&1 || fail 'ACME preflight responder terminated unexpectedly'
+  if curl --fail --silent --show-error --noproxy '*' \
+    --resolve "preflight.local:$preflight_port:$backend_address" \
+    "http://preflight.local:$preflight_port$challenge_path" | grep -Fxq "$challenge_token"; then
+    break
+  fi
+  sleep 1
+done
+curl --fail --silent --show-error --noproxy '*' \
+  --resolve "preflight.local:$preflight_port:$backend_address" \
+  "http://preflight.local:$preflight_port$challenge_path" | grep -Fxq "$challenge_token" ||
+  fail 'ACME preflight responder is unavailable'
+
+hosts_json=$(printf '%s\n' "${hosts[@]}" | jq -R . | jq -s .)
+kubectl create namespace "$preflight_namespace" --dry-run=client -o yaml |
+  kubectl apply --server-side --field-manager=kodex-acme-preflight -f - >/dev/null
+jq -n --arg namespace "$preflight_namespace" --arg name "$preflight_name" '
+  {
+    apiVersion:"v1",kind:"Service",metadata:{namespace:$namespace,name:$name,
+      labels:{"app.kubernetes.io/part-of":"kodex-acme-preflight"}},
+    spec:{ports:[{name:"http",protocol:"TCP",port:80,targetPort:18080}]}
+  }
+' | kubectl apply --server-side --field-manager=kodex-acme-preflight -f - >/dev/null
+jq -n --arg namespace "$preflight_namespace" --arg name "$preflight_name" \
+  --arg backend "$backend_address" '
+  {
+    apiVersion:"discovery.k8s.io/v1",kind:"EndpointSlice",
+    metadata:{namespace:$namespace,name:$name,
+      labels:{"kubernetes.io/service-name":$name,"app.kubernetes.io/part-of":"kodex-acme-preflight"}},
+    addressType:"IPv4",ports:[{name:"http",protocol:"TCP",port:18080}],
+    endpoints:[{addresses:[$backend],conditions:{ready:true}}]
+  }
+' | kubectl apply --server-side --field-manager=kodex-acme-preflight -f - >/dev/null
+jq -n --arg namespace "$preflight_namespace" --arg name "$preflight_name" \
+  --arg path "$challenge_path" --argjson hosts "$hosts_json" '
+  {
+    apiVersion:"networking.k8s.io/v1",kind:"Ingress",
+    metadata:{namespace:$namespace,name:$name,
+      labels:{"app.kubernetes.io/part-of":"kodex-acme-preflight"},
+      annotations:{"traefik.ingress.kubernetes.io/router.entrypoints":"web"}},
+    spec:{ingressClassName:"traefik",rules:($hosts | map({host:.,http:{paths:[{
+      path:$path,pathType:"Exact",backend:{service:{name:$name,port:{number:80}}}
+    }]}}))}
+  }
+' | kubectl apply --server-side --field-manager=kodex-acme-preflight -f - >/dev/null
+
+declare -A checked_https_addresses=()
+for host in "${hosts[@]}"; do
   dns_output=$(timeout "$((dns_timeout_seconds + 2))s" \
     dig +time="$dns_timeout_seconds" +tries=1 +short A "$host") ||
     fail "DNS A lookup failed: $host"
@@ -116,27 +209,53 @@ for host in "${hosts[@]}"; do
     printf '%s\n' "${allowed_ipv4[@]}" | grep -Fxq -- "$address" ||
       fail "DNS host resolves to an unauthorized IPv4 address: $host/$address"
     observed_ipv4+=("$address")
-    http_code=$(timeout "${http_timeout_seconds}s" curl --silent --show-error \
-      --output /dev/null --write-out '%{http_code}' --noproxy '*' \
-      --connect-timeout "$http_timeout_seconds" --max-time "$http_timeout_seconds" \
-      --resolve "$host:80:$address" --header "Host: $host" \
-      "http://$host/.well-known/acme-challenge/kodex-preflight-$$-$RANDOM") ||
-      fail "HTTP-01 endpoint is unreachable: $host/$address"
-    [[ "$http_code" =~ ^[1-4][0-9]{2}$ ]] ||
-      fail "HTTP-01 endpoint returned an invalid status: $host/$address/$http_code"
+    challenge_verified=false
+    for _ in $(seq 1 "$http_timeout_seconds"); do
+      if body=$(curl --fail --silent --show-error --noproxy '*' \
+        --connect-timeout 2 --max-time 3 --resolve "$host:80:$address" \
+        "http://$host$challenge_path" 2>/dev/null) && [[ "$body" == "$challenge_token" ]]; then
+        challenge_verified=true
+        break
+      fi
+      sleep 1
+    done
+    [[ "$challenge_verified" == true ]] || fail "exact HTTP-01 route is unreachable: $host/$address"
+    if [[ -z "${checked_https_addresses[$address]:-}" ]]; then
+      python3 - "$address" "$http_timeout_seconds" <<'PY' || fail "HTTPS endpoint is unreachable: $host/$address"
+import socket
+import sys
+
+with socket.create_connection((sys.argv[1], 443), timeout=int(sys.argv[2])):
+    pass
+PY
+      checked_https_addresses[$address]=true
+    fi
   done
   for address in "${host_ipv6[@]}"; do
     printf '%s\n' "${allowed_ipv6[@]}" | grep -Fxq -- "$address" ||
       fail "DNS host resolves to an unauthorized IPv6 address: $host/$address"
     observed_ipv6+=("$address")
-    http_code=$(timeout "${http_timeout_seconds}s" curl --silent --show-error \
-      --output /dev/null --write-out '%{http_code}' --noproxy '*' \
-      --connect-timeout "$http_timeout_seconds" --max-time "$http_timeout_seconds" \
-      --resolve "$host:80:[$address]" --header "Host: $host" \
-      "http://$host/.well-known/acme-challenge/kodex-preflight-$$-$RANDOM") ||
-      fail "HTTP-01 endpoint is unreachable: $host/$address"
-    [[ "$http_code" =~ ^[1-4][0-9]{2}$ ]] ||
-      fail "HTTP-01 endpoint returned an invalid status: $host/$address/$http_code"
+    challenge_verified=false
+    for _ in $(seq 1 "$http_timeout_seconds"); do
+      if body=$(curl --fail --silent --show-error --noproxy '*' \
+        --connect-timeout 2 --max-time 3 --resolve "$host:80:[$address]" \
+        "http://$host$challenge_path" 2>/dev/null) && [[ "$body" == "$challenge_token" ]]; then
+        challenge_verified=true
+        break
+      fi
+      sleep 1
+    done
+    [[ "$challenge_verified" == true ]] || fail "exact HTTP-01 route is unreachable: $host/$address"
+    if [[ -z "${checked_https_addresses[$address]:-}" ]]; then
+      python3 - "$address" "$http_timeout_seconds" <<'PY' || fail "HTTPS endpoint is unreachable: $host/$address"
+import socket
+import sys
+
+with socket.create_connection((sys.argv[1], 443), timeout=int(sys.argv[2])):
+    pass
+PY
+      checked_https_addresses[$address]=true
+    fi
   done
 done
 

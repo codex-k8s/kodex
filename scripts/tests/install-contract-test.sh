@@ -62,7 +62,7 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
   tools/install/release-platform.sh tools/install/reset-host.sh \
   tools/install/verify-oidc-target.sh tools/install/write-env-file.sh \
   tools/dev/preflight-public-hosts.sh tools/dev/remote-dev.sh \
-  infra/teleport/bootstrap.sh; do
+  infra/teleport/bootstrap.sh infra/teleport/bootstrap-host.sh; do
   [[ -x "$repository_root/$script" ]] || fail "installer entrypoint is not executable: $script"
   bash -n "$repository_root/$script"
 done
@@ -534,11 +534,6 @@ for host_tool_contract in \
     "$repository_root/tools/install/components.lock.json" ||
     fail "bare-metal development tool contract is absent: $host_tool_contract"
 done
-jq -e '
-  any(.charts[]; .name == "teleport-cluster" and .version == "18.11.0" and
-    (.sha256 | test("^[a-f0-9]{64}$")))
-' "$repository_root/tools/install/components.lock.json" >/dev/null ||
-  fail 'Teleport chart lock is invalid'
 for remote_contract in \
   'KODEX_DEV_TLS_MODE=public-acme' \
   'preflight-public-hosts.sh' \
@@ -548,7 +543,7 @@ for remote_contract in \
   'sudo -n cat /etc/rancher/k3s/k3s.yaml' \
   'trap cleanup EXIT' \
   '--expected-sha <40-hex-commit>' \
-  'host-preflight|host-apply|host-readback|up|status|smoke|e2e|down'; do
+  'host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport'; do
   rg -Fq -- "$remote_contract" \
     "$repository_root/tools/dev/remote-dev.sh" "$repository_root/dev.sh" \
     "$repository_root/.kodex-remote-env.example" ||
@@ -564,19 +559,38 @@ for browser_contract in \
     fail "remote Playwright preparation contract is absent: $browser_contract"
 done
 for teleport_contract in \
-  '.proxyListenerMode = "multiplex"' \
-  '.service.type = "ClusterIP"' \
-  'teleport-teleport-public@kubernetescrd' \
+  'teleport-teleport-host@kubernetescrd' \
   '.kind = "ServersTransport"' \
   '.spec.serverName = strenv(HOST)' \
   '.spec.insecureSkipVerify = false' \
-  '/v1/webapi/github/callback' \
-  'kubernetes_groups:["system:masters"]' \
-  'tctl get role/kodex-k8s-admin --format=json' \
-  'tctl get github/github --format=json' \
-  'kubectl -n teleport exec -i deployment/teleport-auth -- tctl create -f -'; do
+  '.spec.rootCAsSecrets = ["teleport-host-internal-ca"]' \
+  'kodex-teleport-dev-observer' \
+  'all(.rules[]; ((.resources // []) | index("secrets")) == null)'; do
   rg -Fq -- "$teleport_contract" "$repository_root/infra/teleport/bootstrap.sh" ||
-    fail "Teleport access contract is absent: $teleport_contract"
+    fail "Teleport route contract is absent: $teleport_contract"
+done
+for teleport_host_contract in \
+  '/etc/systemd/system/teleport.service' \
+  'systemctl enable teleport' \
+  'kind:"role",version:"v8",metadata:{name:"kodex-dev-access"}' \
+  'kubernetes_groups:[env.KUBERNETES_GROUP]' \
+  'index("system:masters")) == null' \
+  'jq -n --rawfile client_id "$github_client_id_file"' \
+  'https://$host/v1/webapi/github/callback' \
+  'tctl --config="$config_file" get github/github --format=json'; do
+  rg -Fq -- "$teleport_host_contract" "$repository_root/infra/teleport/bootstrap-host.sh" ||
+    fail "Teleport host contract is absent: $teleport_host_contract"
+done
+if rg -n 'kubernetes_groups:\["system:masters"\]|kubectl -n teleport exec|teleport-cluster' \
+  "$repository_root/infra/teleport/bootstrap.sh" >/dev/null; then
+  fail 'retired in-cluster or owner-level Teleport access remains'
+fi
+for public_preflight_contract in \
+  'challenge_path="/.well-known/acme-challenge/$challenge_token"' \
+  '[[ "$body" == "$challenge_token" ]]' \
+  'socket.create_connection((sys.argv[1], 443)'; do
+  rg -Fq -- "$public_preflight_contract" "$repository_root/tools/dev/preflight-public-hosts.sh" ||
+    fail "public certificate preflight contract is absent: $public_preflight_contract"
 done
 rg -Fq '.disable = ["traefik"]' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal k3s does not disable the bundled Traefik release'

@@ -8,7 +8,7 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 host-preflight|host-apply|host-readback|up|status|smoke|e2e|down" \
+    "Usage: $0 host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport" \
     '  [--env-file <private-path>] [--resource-prefix <slug>]' \
     '  [--run-timeout-ms <milliseconds>] [--expected-sha <40-hex-commit>]' >&2
 }
@@ -32,7 +32,7 @@ while (($# > 0)); do
   esac
 done
 case "$command_name" in
-  host-preflight|host-apply|host-readback|up|status|smoke|e2e|down) ;;
+  host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport) ;;
   *) usage; fail 'command is invalid' ;;
 esac
 
@@ -41,16 +41,20 @@ source "$repository_root/tools/install/load-env.sh"
 kodex_load_env "$env_file" || exit 1
 KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES=${KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES:-}
 kodex_require_env KODEX_REMOTE_SERVER_PUBLIC_IP KODEX_REMOTE_CONTROL_HOST \
-  KODEX_REMOTE_OIDC_HOST KODEX_REMOTE_REGISTRY_HOST \
+  KODEX_REMOTE_OIDC_HOST KODEX_REMOTE_TELEPORT_HOST KODEX_REMOTE_REGISTRY_HOST \
   KODEX_REMOTE_PROMOTED_PULL_HOST KODEX_REMOTE_ACME_EMAIL \
   KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES || exit 1
 KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES=${KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES:-}
 KODEX_REMOTE_GRAFANA_HOST=${KODEX_REMOTE_GRAFANA_HOST:-grafana.kodex.works}
 KODEX_REMOTE_HEADLAMP_HOST=${KODEX_REMOTE_HEADLAMP_HOST:-headlamp.kodex.works}
+KODEX_REMOTE_GITHUB_ORGANIZATION=${KODEX_REMOTE_GITHUB_ORGANIZATION:-codex-k8s}
+KODEX_REMOTE_GITHUB_TEAM=${KODEX_REMOTE_GITHUB_TEAM:-kodex-teleport-admins}
 state_directory=${KODEX_REMOTE_STATE_DIRECTORY:-/srv/kodex-dev/state}
 context=${KODEX_REMOTE_KUBE_CONTEXT:-default}
 cluster_marker=/var/lib/kodex-dev/cluster-identity.json
 legacy_kubeconfig="$HOME/.kube/kodex-dev-remote"
+teleport_backend_address=10.254.254.1
+teleport_backend_ca=/var/lib/teleport/certs/internal-ca.crt
 [[ "$state_directory" == /* && "$state_directory" != / && "$state_directory" != "$HOME" ]] ||
   fail 'remote state directory is invalid'
 
@@ -160,7 +164,7 @@ validate_source_checkout() {
   actual_sha=$(git -C "$repository_root" rev-parse HEAD)
   [[ "$actual_sha" == "$expected_sha" ]] || fail 'source HEAD does not match the expected SHA'
   case "$command_name" in
-    host-preflight|host-apply|host-readback|up)
+    host-preflight|host-apply|host-readback|up|teleport)
       [[ -z "$(git -C "$repository_root" status --porcelain --untracked-files=all)" ]] ||
         fail 'initial remote deployment requires a clean source checkout'
       ;;
@@ -221,9 +225,71 @@ export KODEX_DEV_GRAFANA_HOST="$KODEX_REMOTE_GRAFANA_HOST"
 export KODEX_DEV_HEADLAMP_HOST="$KODEX_REMOTE_HEADLAMP_HOST"
 export KODEX_DEV_REGISTRY_HOST="$KODEX_REMOTE_REGISTRY_HOST"
 export KODEX_DEV_PROMOTED_PULL_HOST="$KODEX_REMOTE_PROMOTED_PULL_HOST"
-export KODEX_DEV_PUBLIC_TLS_HOSTS="$KODEX_REMOTE_CONTROL_HOST,$KODEX_REMOTE_OIDC_HOST"
+export KODEX_DEV_PUBLIC_TLS_HOSTS="$KODEX_REMOTE_CONTROL_HOST,$KODEX_REMOTE_OIDC_HOST,$KODEX_REMOTE_TELEPORT_HOST,$KODEX_REMOTE_GRAFANA_HOST,$KODEX_REMOTE_HEADLAMP_HOST"
 export KODEX_DEV_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES="$KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES"
 export KODEX_DEV_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES="$KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES"
+
+teleport_host_arguments=(
+  --host "$KODEX_REMOTE_TELEPORT_HOST"
+  --backend-address "$teleport_backend_address"
+  --kube-cluster-name kodex-dev
+  --kubeconfig /etc/rancher/k3s/k3s.yaml
+  --github-organization "$KODEX_REMOTE_GITHUB_ORGANIZATION"
+  --github-team "$KODEX_REMOTE_GITHUB_TEAM"
+)
+teleport_route_arguments=(
+  --context "$context"
+  --host "$KODEX_REMOTE_TELEPORT_HOST"
+  --backend-address "$teleport_backend_address"
+  --backend-ca-file "$teleport_backend_ca"
+  --ingress-class traefik
+  --cluster-issuer letsencrypt-production
+  --allowed-ipv4-addresses "$KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES"
+  --allowed-ipv6-addresses "$KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES"
+)
+
+prepare_teleport_credentials() {
+  kodex_require_env KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_ID \
+    KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET || exit 1
+  install -d -m 0700 "$state_directory/inputs"
+  teleport_client_id_file="$state_directory/inputs/teleport-github-client-id"
+  teleport_client_secret_file="$state_directory/inputs/teleport-github-client-secret"
+  printf '%s' "$KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_ID" >"$teleport_client_id_file"
+  printf '%s' "$KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET" >"$teleport_client_secret_file"
+  chmod 0600 "$teleport_client_id_file" "$teleport_client_secret_file"
+  teleport_host_arguments+=(
+    --github-client-id-file "$teleport_client_id_file"
+    --github-client-secret-file "$teleport_client_secret_file"
+  )
+}
+
+teleport_credentials_available() {
+  [[ -n "${KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_ID:-}" &&
+    -n "${KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET:-}" ]]
+}
+
+apply_teleport() {
+  prepare_teleport_credentials
+  sudo -n "$repository_root/infra/teleport/bootstrap-host.sh" --mode preflight \
+    "${teleport_host_arguments[@]}"
+  sudo -n "$repository_root/infra/teleport/bootstrap-host.sh" --mode apply \
+    "${teleport_host_arguments[@]}"
+  KUBECONFIG="$kubeconfig" "$repository_root/infra/teleport/bootstrap.sh" --mode apply \
+    "${teleport_route_arguments[@]}"
+}
+
+readback_teleport() {
+  prepare_teleport_credentials
+  sudo -n "$repository_root/infra/teleport/bootstrap-host.sh" --mode readback \
+    "${teleport_host_arguments[@]}"
+  KUBECONFIG="$kubeconfig" "$repository_root/infra/teleport/bootstrap.sh" --mode readback \
+    "${teleport_route_arguments[@]}"
+}
+
+if [[ "$command_name" == teleport ]]; then
+  apply_teleport
+  exit 0
+fi
 
 case "$command_name" in
   up)
@@ -233,8 +299,23 @@ case "$command_name" in
     "$repository_root/dev.sh" up --kubeconfig "$kubeconfig" --context "$context" \
       --state-directory "$state_directory" --cluster-marker "$cluster_marker" \
       --expected-sha "$expected_sha"
+    if teleport_credentials_available; then
+      apply_teleport
+    else
+      printf 'Kodex Teleport is pending dedicated GitHub OAuth credentials\n'
+    fi
     ;;
-  status|smoke|down)
+  status)
+    "$repository_root/dev.sh" status --kubeconfig "$kubeconfig" \
+      --context "$context" --state-directory "$state_directory" \
+      --cluster-marker "$cluster_marker" --expected-sha "$expected_sha"
+    if teleport_credentials_available; then
+      readback_teleport
+    else
+      printf 'Kodex Teleport readback is pending dedicated GitHub OAuth credentials\n'
+    fi
+    ;;
+  smoke|down)
     "$repository_root/dev.sh" "$command_name" --kubeconfig "$kubeconfig" \
       --context "$context" --state-directory "$state_directory" \
       --cluster-marker "$cluster_marker" --expected-sha "$expected_sha"

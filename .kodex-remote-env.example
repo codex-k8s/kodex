@@ -21,5 +21,4 @@ KODEX_REMOTE_GITHUB_ORGANIZATION=codex-k8s
 KODEX_REMOTE_GITHUB_TEAM=kodex-teleport-admins
 
 KODEX_REMOTE_STATE_DIRECTORY=/srv/kodex-dev/state
-KODEX_REMOTE_KUBECONFIG=/home/operator/.kube/kodex-dev-remote
 KODEX_REMOTE_KUBE_CONTEXT=default

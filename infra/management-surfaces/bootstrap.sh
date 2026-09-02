@@ -4,7 +4,7 @@ set -euo pipefail
 fail() { printf 'Management surfaces bootstrap failed: %s\n' "$*" >&2; exit 1; }
 usage() {
   printf '%s\n' \
-    "Usage: $0 --context <exact-context> --mode preflight|apply-monitoring|apply-surfaces|readback" \
+    "Usage: $0 --context <exact-context> --mode preflight|apply-monitoring|apply-surfaces|readback|reconcile" \
     '  --oidc-issuer <https-url> --oidc-connect-address <service.namespace.svc.cluster.local:port>' \
     '  --oidc-target-port <port> --control-center-host <dns> --grafana-host <dns>' \
     '  --headlamp-host <dns>' \
@@ -52,7 +52,7 @@ while (($# > 0)); do
 done
 
 [[ -n "$context" ]] || fail 'exact context is required'
-case "$mode" in preflight|apply-monitoring|apply-surfaces|readback) ;; *) fail 'mode is invalid' ;; esac
+case "$mode" in preflight|apply-monitoring|apply-surfaces|readback|reconcile) ;; *) fail 'mode is invalid' ;; esac
 [[ "$oidc_issuer" =~ ^https://[a-zA-Z0-9._:-]+/realms/[a-zA-Z0-9._-]+$ ]] || fail 'OIDC issuer is invalid'
 [[ "$oidc_connect_address" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?)\.([a-z0-9]([a-z0-9-]*[a-z0-9])?)\.svc\.cluster\.local:([1-9][0-9]{0,4})$ ]] ||
   fail 'OIDC connect address must identify an exact in-cluster Service'
@@ -60,8 +60,9 @@ oidc_service_name=${BASH_REMATCH[1]}
 oidc_service_namespace=${BASH_REMATCH[3]}
 oidc_service_port=${BASH_REMATCH[5]}
 ((10#$oidc_service_port <= 65535)) || fail 'OIDC connect Service port is invalid'
-[[ "$oidc_target_port" =~ ^[1-9][0-9]{0,4}$ ]] && ((10#$oidc_target_port <= 65535)) ||
+if [[ ! "$oidc_target_port" =~ ^[1-9][0-9]{0,4}$ ]] || ((10#$oidc_target_port > 65535)); then
   fail 'OIDC target port is invalid'
+fi
 for host in "$control_center_host" "$grafana_host" "$headlamp_host"; do
   [[ "$host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$host" == *.* ]] || fail 'surface host is invalid'
 done
@@ -223,7 +224,7 @@ render_oauth_values() {
   ' "$script_directory/oauth2-proxy-values.yaml" >"$output"
 }
 
-if [[ "$mode" == preflight ]]; then
+if [[ "$mode" == preflight || "$mode" == reconcile ]]; then
   helm template kodex-monitoring "$monitoring_chart" --namespace observability --values "$render_monitoring_values" >/dev/null
   for binding in \
     "control-center|kodex-system|$control_center_host|kodex-owner|$oidc_issuer" \
@@ -235,19 +236,21 @@ if [[ "$mode" == preflight ]]; then
     helm template "oauth2-$surface" "$oauth2_chart" --namespace "$namespace" --values "$values" >/dev/null
   done
   helm template kodex-headlamp "$headlamp_chart" --namespace platform-admin --values "$script_directory/headlamp-values.yaml" >/dev/null
-  printf 'Management surfaces preflight completed\n'
-  exit 0
+  if [[ "$mode" == preflight ]]; then
+    printf 'Management surfaces preflight completed\n'
+    exit 0
+  fi
 fi
 
 kubectl apply --server-side --field-manager=kodex-management -f "$script_directory/namespaces.yaml" >/dev/null
-if [[ "$mode" == apply-monitoring ]]; then
+if [[ "$mode" == apply-monitoring || "$mode" == reconcile ]]; then
   kubectl -n observability get secret grafana-admin >/dev/null 2>&1 || fail 'Grafana admin Secret is absent'
   recover_interrupted_helm_release kodex-monitoring observability
   helm upgrade --install kodex-monitoring "$monitoring_chart" --namespace observability \
     --values "$render_monitoring_values" --atomic --wait --timeout 20m
 fi
 
-if [[ "$mode" == apply-surfaces ]]; then
+if [[ "$mode" == apply-surfaces || "$mode" == reconcile ]]; then
   for binding in control-center:kodex-system grafana:observability headlamp:platform-admin; do
     surface=${binding%%:*}; namespace=${binding#*:}
     kubectl -n "$namespace" get secret "oauth2-$surface" >/dev/null 2>&1 || fail "OAuth2 Secret is absent: $surface"
@@ -271,7 +274,7 @@ if [[ "$mode" == apply-surfaces ]]; then
   done
 fi
 
-if [[ "$mode" == readback ]]; then
+if [[ "$mode" == readback || "$mode" == reconcile ]]; then
   for binding in \
     oauth2-control-center:kodex-system:kodex-owner \
     oauth2-grafana:observability:kodex-owner \

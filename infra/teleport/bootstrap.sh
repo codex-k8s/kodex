@@ -2,46 +2,41 @@
 set -euo pipefail
 
 fail() {
-  printf 'Kodex Teleport bootstrap failed: %s\n' "$*" >&2
+  printf 'Kodex Teleport route bootstrap failed: %s\n' "$*" >&2
   exit 1
 }
 
 usage() {
   printf '%s\n' \
     "Usage: $0 --context <exact-context> --mode preflight|apply|readback" \
-    '  --host <exact-DNS> --ingress-class <name> --cluster-issuer <name>' \
+    '  --host <exact-DNS> --backend-address <private-IPv4>' \
+    '  --backend-ca-file <path> --ingress-class <name> --cluster-issuer <name>' \
     '  --allowed-ipv4-addresses <comma-list> [--allowed-ipv6-addresses <comma-list>]' \
-    '  [--kube-cluster-name <name>]' \
-    '  [--github-client-id-file <path> --github-client-secret-file <path>' \
-    '   --github-organization <name> --github-team <slug>]' >&2
+    '  [--kubernetes-group <name>]' >&2
 }
 
 context=""
 mode=""
 host=""
+backend_address=""
+backend_ca_file=""
 ingress_class=""
 cluster_issuer=""
 allowed_ipv4_addresses=""
 allowed_ipv6_addresses=""
-kube_cluster_name=kodex-dev
-github_client_id_file=""
-github_client_secret_file=""
-github_organization=""
-github_team=""
+kubernetes_group=kodex-teleport-dev-observers
 while (($# > 0)); do
   case "$1" in
     --context) context=${2:-}; shift 2 ;;
     --mode) mode=${2:-}; shift 2 ;;
     --host) host=${2:-}; shift 2 ;;
+    --backend-address) backend_address=${2:-}; shift 2 ;;
+    --backend-ca-file) backend_ca_file=${2:-}; shift 2 ;;
     --ingress-class) ingress_class=${2:-}; shift 2 ;;
     --cluster-issuer) cluster_issuer=${2:-}; shift 2 ;;
     --allowed-ipv4-addresses) allowed_ipv4_addresses=${2:-}; shift 2 ;;
     --allowed-ipv6-addresses) allowed_ipv6_addresses=${2:-}; shift 2 ;;
-    --kube-cluster-name) kube_cluster_name=${2:-}; shift 2 ;;
-    --github-client-id-file) github_client_id_file=${2:-}; shift 2 ;;
-    --github-client-secret-file) github_client_secret_file=${2:-}; shift 2 ;;
-    --github-organization) github_organization=${2:-}; shift 2 ;;
-    --github-team) github_team=${2:-}; shift 2 ;;
+    --kubernetes-group) kubernetes_group=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -56,105 +51,51 @@ for dns_name in "$host" "$ingress_class" "$cluster_issuer"; do
   [[ "$dns_name" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'DNS-like argument is invalid'
 done
 [[ "$host" == *.* ]] || fail 'Teleport host must be an exact DNS name'
-[[ "$kube_cluster_name" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
-  fail 'Teleport Kubernetes cluster name is invalid'
-for command_name in curl helm jq kubectl sha256sum yq; do
+[[ "$kubernetes_group" =~ ^[a-z0-9]([a-z0-9:-]*[a-z0-9])?$ ]] ||
+  fail 'Teleport Kubernetes group is invalid'
+python3 - "$backend_address" <<'PY' || fail 'Teleport backend address must be a private non-loopback IPv4 address'
+import ipaddress
+import sys
+
+address = ipaddress.ip_address(sys.argv[1])
+if address.version != 4 or not address.is_private or address.is_loopback or address.is_unspecified:
+    raise SystemExit(1)
+PY
+[[ "$backend_ca_file" == /* && -f "$backend_ca_file" && ! -L "$backend_ca_file" ]] ||
+  fail 'Teleport backend CA file is invalid'
+openssl x509 -in "$backend_ca_file" -noout -checkend 2592000 >/dev/null ||
+  fail 'Teleport backend CA certificate expires too soon'
+for command_name in curl helm jq kubectl openssl python3 yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
-lock_file="$repository_root/tools/install/components.lock.json"
-version=$(jq -er '.charts[] | select(.name == "teleport-cluster") | .version' "$lock_file")
-repository=$(jq -er '.charts[] | select(.name == "teleport-cluster") | .repository' "$lock_file")
-chart=$(jq -er '.charts[] | select(.name == "teleport-cluster") | .chart' "$lock_file")
-expected_sha=$(jq -er '.charts[] | select(.name == "teleport-cluster") | .sha256' "$lock_file")
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$expected_sha" =~ ^[a-f0-9]{64}$ ]] ||
-  fail 'Teleport chart lock is invalid'
-
-temporary_directory=$(mktemp -d)
-cleanup() { rm -rf -- "$temporary_directory"; }
-trap cleanup EXIT
-helm pull "$chart" --repo "$repository" --version "$version" \
-  --destination "$temporary_directory" >/dev/null
-archive="$temporary_directory/$chart-$version.tgz"
-[[ -f "$archive" ]] || fail 'Teleport chart archive is absent'
-printf '%s  %s\n' "$expected_sha" "$archive" | sha256sum --check --status ||
-  fail 'Teleport chart digest mismatch'
-
-values_file="$temporary_directory/values.yaml"
-HOST="$host" KUBE_CLUSTER_NAME="$kube_cluster_name" yq -n -o=yaml '
-  .chartMode = "standalone" |
-  .clusterName = strenv(HOST) |
-  .kubeClusterName = strenv(KUBE_CLUSTER_NAME) |
-  .proxyProtocol = "off" |
-  .proxyProtocol style="double" |
-  .proxyListenerMode = "multiplex" |
-  .publicAddr = [strenv(HOST) + ":443"] |
-  .service.type = "ClusterIP" |
-  .annotations.service."traefik.ingress.kubernetes.io/service.serverstransport" =
-    "teleport-teleport-public@kubernetescrd" |
-  .ingress.enabled = true |
-  .ingress.suppressAutomaticWildcards = true |
-  .ingress.spec.ingressClassName = "traefik" |
-  .annotations.ingress."traefik.ingress.kubernetes.io/service.serversscheme" = "https" |
-  .tls.existingSecretName = "teleport-tls" |
-  .authentication.type = "github" |
-  .authentication.connectorName = "github" |
-  .authentication.localAuth = false |
-  .authentication.secondFactors = ["sso"] |
-  .persistence.enabled = true |
-  .persistence.volumeSize = "10Gi" |
-  .resources.requests.cpu = "250m" |
-  .resources.requests.memory = "512Mi" |
-  .podSecurityPolicy.enabled = false
-' >"$values_file"
-INGRESS_CLASS="$ingress_class" yq -i \
-  '.ingress.spec.ingressClassName = strenv(INGRESS_CLASS)' "$values_file"
-
-transport_file="$temporary_directory/servers-transport.yaml"
-HOST="$host" yq -n -o=yaml '
-  .apiVersion = "traefik.io/v1alpha1" |
-  .kind = "ServersTransport" |
-  .metadata.name = "teleport-public" |
-  .metadata.namespace = "teleport" |
-  .spec.serverName = strenv(HOST) |
-  .spec.insecureSkipVerify = false
-' >"$transport_file"
-apply_teleport_transport() {
-  kubectl apply --server-side --field-manager=kodex-teleport \
-    -f "$transport_file" >/dev/null
-  kubectl -n teleport annotate service teleport --overwrite \
-    'traefik.ingress.kubernetes.io/service.serverstransport=teleport-teleport-public@kubernetescrd' \
-    >/dev/null
-}
-
-helm template teleport "$archive" --namespace teleport --values "$values_file" >/dev/null ||
-  fail 'Teleport chart render failed'
-if [[ "$mode" == apply ]] && kubectl -n teleport get service teleport >/dev/null 2>&1; then
-  apply_teleport_transport
-fi
 "$repository_root/tools/dev/preflight-public-hosts.sh" --hosts "$host" \
   --allowed-ipv4-addresses "$allowed_ipv4_addresses" \
-  --allowed-ipv6-addresses "$allowed_ipv6_addresses"
+  --allowed-ipv6-addresses "$allowed_ipv6_addresses" \
+  --context "$context" --backend-address "$backend_address"
 if [[ "$mode" == preflight ]]; then
-  printf 'Kodex Teleport preflight completed\n'
+  printf 'Kodex Teleport route preflight completed\n'
   exit 0
 fi
 
-if [[ "$mode" == apply ]]; then
-  for credential_file in "$github_client_id_file" "$github_client_secret_file"; do
-    [[ "$credential_file" == /* && -f "$credential_file" && -s "$credential_file" &&
-      ! -L "$credential_file" && $((8#$(stat -c '%a' "$credential_file") & 8#077)) == 0 ]] ||
-      fail 'GitHub OAuth credential file is invalid or not private'
-  done
-  [[ "$github_organization" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$ ]] ||
-    fail 'GitHub organization is invalid'
-  [[ "$github_team" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] ||
-    fail 'GitHub team slug is invalid'
+namespace=teleport
+service_name=teleport-host
+transport_name=teleport-host
+certificate_name=teleport-tls
+role_name=kodex-teleport-dev-observer
+binding_name=kodex-teleport-dev-observers
 
-  kubectl create namespace teleport --dry-run=client -o yaml |
-    kubectl apply --server-side --field-manager=kodex-teleport -f - >/dev/null
+if [[ "$mode" == apply ]]; then
+  if helm --namespace "$namespace" status teleport >/dev/null 2>&1; then
+    helm --namespace "$namespace" uninstall teleport --wait --timeout 5m >/dev/null
+  fi
+  kubectl create namespace "$namespace" --dry-run=client -o yaml |
+    kubectl apply --server-side --field-manager=kodex-teleport-route -f - >/dev/null
+  kubectl -n "$namespace" delete deployment,statefulset,service,ingress \
+    -l app.kubernetes.io/instance=teleport --ignore-not-found --wait=true --timeout=5m >/dev/null
+
   HOST="$host" CLUSTER_ISSUER="$cluster_issuer" yq -n -o=yaml '
     .apiVersion = "cert-manager.io/v1" |
     .kind = "Certificate" |
@@ -166,73 +107,128 @@ if [[ "$mode" == apply ]]; then
     .spec.issuerRef.name = strenv(CLUSTER_ISSUER) |
     .spec.issuerRef.kind = "ClusterIssuer" |
     .spec.issuerRef.group = "cert-manager.io"
-  ' | kubectl apply --server-side --field-manager=kodex-teleport -f - >/dev/null
-  kubectl -n teleport wait --for=condition=Ready certificate/teleport-tls --timeout=10m >/dev/null ||
-    fail 'Teleport public certificate is not ready'
+  ' | kubectl apply --server-side --field-manager=kodex-teleport-route -f - >/dev/null
+  kubectl -n "$namespace" wait --for=condition=Ready "certificate/$certificate_name" \
+    --timeout=10m >/dev/null || fail 'Teleport public certificate is not ready'
 
-  helm upgrade --install teleport "$archive" --namespace teleport \
-    --values "$values_file" --atomic --wait --timeout 15m
-  apply_teleport_transport
+  kubectl -n "$namespace" create secret generic teleport-host-internal-ca \
+    --from-file=ca.crt="$backend_ca_file" --dry-run=client -o yaml |
+    kubectl apply --server-side --field-manager=kodex-teleport-route -f - >/dev/null
 
-  client_id=$(<"$github_client_id_file")
-  client_secret=$(<"$github_client_secret_file")
-  role_file="$temporary_directory/kodex-k8s-admin.json"
-  connector_file="$temporary_directory/github.json"
-  jq -n '{
-    kind:"role",version:"v7",metadata:{name:"kodex-k8s-admin"},
-    spec:{allow:{kubernetes_labels:{"*":"*"},kubernetes_groups:["system:masters"]}}
-  }' >"$role_file"
-  jq -n --arg client_id "$client_id" --arg client_secret "$client_secret" \
-    --arg redirect_url "https://$host/v1/webapi/github/callback" \
-    --arg organization "$github_organization" --arg team "$github_team" '{
-      kind:"github",version:"v3",metadata:{name:"github"},
-      spec:{display:"GitHub",client_id:$client_id,client_secret:$client_secret,
-        redirect_url:$redirect_url,teams_to_logins:null,
-        teams_to_roles:[{organization:$organization,team:$team,roles:["kodex-k8s-admin"]}]}
-    }' >"$connector_file"
-  chmod 0600 "$role_file" "$connector_file"
-  kubectl -n teleport exec -i deployment/teleport-auth -- tctl create -f - \
-    <"$role_file" >/dev/null
-  kubectl -n teleport exec -i deployment/teleport-auth -- tctl create -f - \
-    <"$connector_file" >/dev/null
-  unset client_id client_secret
+  yq -n -o=yaml '
+      .apiVersion = "v1" |
+      .kind = "Service" |
+      .metadata.name = "teleport-host" |
+      .metadata.namespace = "teleport" |
+      .metadata.labels."app.kubernetes.io/name" = "teleport-host-route" |
+      .metadata.labels."app.kubernetes.io/part-of" = "kodex-dev" |
+      .metadata.annotations."traefik.ingress.kubernetes.io/service.serverstransport" =
+        "teleport-teleport-host@kubernetescrd" |
+      .spec.ports = [{"name":"https","port":443,"protocol":"TCP","targetPort":3080}]
+    ' | kubectl apply --server-side --field-manager=kodex-teleport-route -f - >/dev/null
+  BACKEND_ADDRESS="$backend_address" yq -n -o=yaml '
+      .apiVersion = "discovery.k8s.io/v1" |
+      .kind = "EndpointSlice" |
+      .metadata.name = "teleport-host" |
+      .metadata.namespace = "teleport" |
+      .metadata.labels."kubernetes.io/service-name" = "teleport-host" |
+      .metadata.labels."app.kubernetes.io/part-of" = "kodex-dev" |
+      .addressType = "IPv4" |
+      .ports = [{"name":"https","protocol":"TCP","port":3080}] |
+      .endpoints = [{"addresses":[strenv(BACKEND_ADDRESS)],"conditions":{"ready":true}}]
+    ' | kubectl apply --server-side --field-manager=kodex-teleport-route -f - >/dev/null
+  HOST="$host" yq -n -o=yaml '
+      .apiVersion = "traefik.io/v1alpha1" |
+      .kind = "ServersTransport" |
+      .metadata.name = "teleport-host" |
+      .metadata.namespace = "teleport" |
+      .spec.serverName = strenv(HOST) |
+      .spec.rootCAsSecrets = ["teleport-host-internal-ca"] |
+      .spec.insecureSkipVerify = false
+    ' | kubectl apply --server-side --field-manager=kodex-teleport-route -f - >/dev/null
+  HOST="$host" INGRESS_CLASS="$ingress_class" yq -n -o=yaml '
+      .apiVersion = "networking.k8s.io/v1" |
+      .kind = "Ingress" |
+      .metadata.name = "teleport-host" |
+      .metadata.namespace = "teleport" |
+      .metadata.labels."app.kubernetes.io/part-of" = "kodex-dev" |
+      .metadata.annotations."traefik.ingress.kubernetes.io/router.entrypoints" = "websecure" |
+      .metadata.annotations."traefik.ingress.kubernetes.io/service.serversscheme" = "https" |
+      .spec.ingressClassName = strenv(INGRESS_CLASS) |
+      .spec.tls = [{"hosts":[strenv(HOST)],"secretName":"teleport-tls"}] |
+      .spec.rules = [{
+        "host":strenv(HOST),
+        "http":{"paths":[{"path":"/","pathType":"Prefix","backend":{"service":{"name":"teleport-host","port":{"number":443}}}}]}
+      }]
+    ' | kubectl apply --server-side --field-manager=kodex-teleport-route -f - >/dev/null
+
+  yq -n -o=yaml '
+      .apiVersion = "rbac.authorization.k8s.io/v1" |
+      .kind = "ClusterRole" |
+      .metadata.name = "kodex-teleport-dev-observer" |
+      .metadata.labels."app.kubernetes.io/part-of" = "kodex-dev" |
+      .rules = [
+        {"nonResourceURLs":["/api","/api/*","/apis","/apis/*","/healthz","/livez","/readyz","/version"],"verbs":["get"]},
+        {"apiGroups":[""],"resources":["configmaps","endpoints","events","namespaces","nodes","persistentvolumeclaims","persistentvolumes","pods","pods/log","replicationcontrollers","resourcequotas","serviceaccounts","services"],"verbs":["get","list","watch"]},
+        {"apiGroups":["apps"],"resources":["daemonsets","deployments","replicasets","statefulsets"],"verbs":["get","list","watch"]},
+        {"apiGroups":["batch"],"resources":["cronjobs","jobs"],"verbs":["get","list","watch"]},
+        {"apiGroups":["networking.k8s.io"],"resources":["ingresses","networkpolicies"],"verbs":["get","list","watch"]},
+        {"apiGroups":["cert-manager.io"],"resources":["certificates","certificaterequests","clusterissuers","issuers"],"verbs":["get","list","watch"]},
+        {"apiGroups":["apiextensions.k8s.io"],"resources":["customresourcedefinitions"],"verbs":["get","list","watch"]},
+        {"apiGroups":["admissionregistration.k8s.io"],"resources":["mutatingwebhookconfigurations","validatingadmissionpolicies","validatingadmissionpolicybindings","validatingwebhookconfigurations"],"verbs":["get","list","watch"]}
+      ]
+    ' | kubectl apply --server-side --field-manager=kodex-teleport-route -f - >/dev/null
+  KUBERNETES_GROUP="$kubernetes_group" yq -n -o=yaml '
+      .apiVersion = "rbac.authorization.k8s.io/v1" |
+      .kind = "ClusterRoleBinding" |
+      .metadata.name = "kodex-teleport-dev-observers" |
+      .metadata.labels."app.kubernetes.io/part-of" = "kodex-dev" |
+      .roleRef = {"apiGroup":"rbac.authorization.k8s.io","kind":"ClusterRole","name":"kodex-teleport-dev-observer"} |
+      .subjects = [{"apiGroup":"rbac.authorization.k8s.io","kind":"Group","name":strenv(KUBERNETES_GROUP)}]
+    ' | kubectl apply --server-side --field-manager=kodex-teleport-route -f - >/dev/null
 fi
 
-for deployment in teleport-auth teleport-proxy; do
-  kubectl -n teleport rollout status "deployment/$deployment" --timeout=5m >/dev/null ||
-    fail "Teleport deployment is unavailable: $deployment"
-done
-kubectl -n teleport get certificate teleport-tls -o json | jq -e '
+kubectl -n "$namespace" get certificate "$certificate_name" -o json | jq -e '
   any(.status.conditions[]?; .type == "Ready" and .status == "True")
 ' >/dev/null || fail 'Teleport certificate readback failed'
-kubectl -n teleport get service teleport -o json | jq -e '
-  .spec.type == "ClusterIP" and
-  ([.spec.ports[] | select(.name == "tls" and .port == 443)] | length) == 1 and
+kubectl -n "$namespace" get service "$service_name" -o json | jq -e '
+  .spec.clusterIP != null and
+  ([.spec.ports[] | select(.name == "https" and .port == 443 and .targetPort == 3080)] | length) == 1 and
   .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
-    "teleport-teleport-public@kubernetescrd"
-' >/dev/null || fail 'Teleport proxy Service readback failed'
-kubectl -n teleport get serverstransport teleport-public -o json | jq -e --arg host "$host" '
-  .spec.serverName == $host and .spec.insecureSkipVerify == false
-' >/dev/null || fail 'Teleport backend TLS identity readback failed'
-kubectl -n teleport get ingress teleport-proxy -o json | jq -e --arg host "$host" \
-  --arg ingress_class "$ingress_class" '
+    "teleport-teleport-host@kubernetescrd"
+' >/dev/null || fail 'Teleport host Service readback failed'
+kubectl -n "$namespace" get endpointslice "$service_name" -o json | jq -e \
+  --arg backend "$backend_address" '
+    .addressType == "IPv4" and
+    [.endpoints[] | select(.conditions.ready == true) | .addresses[]] == [$backend] and
+    [.ports[] | select(.name == "https" and .protocol == "TCP") | .port] == [3080]
+  ' >/dev/null || fail 'Teleport host EndpointSlice readback failed'
+kubectl -n "$namespace" get serverstransport "$transport_name" -o json | jq -e \
+  --arg host "$host" '
+    .spec.serverName == $host and
+    .spec.rootCAsSecrets == ["teleport-host-internal-ca"] and
+    .spec.insecureSkipVerify == false
+  ' >/dev/null || fail 'Teleport backend TLS identity readback failed'
+kubectl -n "$namespace" get ingress "$service_name" -o json | jq -e \
+  --arg host "$host" --arg ingress_class "$ingress_class" '
     .spec.ingressClassName == $ingress_class and
-    .spec.rules[0].host == $host and .spec.tls[0].secretName == "teleport-tls" and
-    .metadata.annotations["traefik.ingress.kubernetes.io/service.serversscheme"] == "https"
-  ' >/dev/null || fail 'Teleport Ingress readback failed'
-kubectl -n teleport exec deployment/teleport-auth -- \
-  tctl get role/kodex-k8s-admin --format=json | jq -e '
-    length == 1 and .[0].spec.allow.kubernetes_groups == ["system:masters"]
-  ' >/dev/null || fail 'Teleport Kubernetes administrator role readback failed'
-kubectl -n teleport exec deployment/teleport-auth -- tctl get github/github --format=json | jq -e \
-  --arg host "$host" --arg organization "$github_organization" --arg team "$github_team" '
-    length == 1 and
-    .[0].spec.redirect_url == ("https://" + $host + "/v1/webapi/github/callback") and
-    any(.[0].spec.teams_to_roles[]?;
-      .organization == $organization and .team == $team and
-      (.roles | index("kodex-k8s-admin") != null))
-  ' >/dev/null || fail 'Teleport GitHub connector readback failed'
+    .spec.rules[0].host == $host and
+    .spec.tls[0].secretName == "teleport-tls" and
+    .spec.rules[0].http.paths[0].backend.service.name == "teleport-host"
+  ' >/dev/null || fail 'Teleport host Ingress readback failed'
+kubectl get clusterrole "$role_name" -o json | jq -e '
+  all(.rules[]; ((.resources // []) | index("secrets")) == null) and
+  all(.rules[]; ((.verbs // []) | index("create")) == null) and
+  all(.rules[]; ((.verbs // []) | index("update")) == null) and
+  all(.rules[]; ((.verbs // []) | index("patch")) == null) and
+  all(.rules[]; ((.verbs // []) | index("delete")) == null)
+' >/dev/null || fail 'Teleport Kubernetes role is not bounded read-only access'
+kubectl get clusterrolebinding "$binding_name" -o json | jq -e \
+  --arg group "$kubernetes_group" '
+    .roleRef.name == "kodex-teleport-dev-observer" and
+    .subjects == [{"apiGroup":"rbac.authorization.k8s.io","kind":"Group","name":$group}]
+  ' >/dev/null || fail 'Teleport Kubernetes group binding readback failed'
 curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
   "https://$host/webapi/ping" | jq -e '.auth.type == "github"' >/dev/null ||
   fail 'Teleport public GitHub authentication endpoint readback failed'
-printf 'Kodex Teleport bootstrap completed: %s\n' "$mode"
+printf 'Kodex Teleport route bootstrap completed: %s\n' "$mode"

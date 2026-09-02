@@ -18,7 +18,7 @@ bash -n "$prepare_host" "$bootstrap_cluster"
 
 jq -e '
   .schemaVersion == 1 and
-  (.artifacts | length) == 10 and
+  (.artifacts | length) == 10 and (.charts | length) == 1 and
   ([.artifacts[].name] | unique | length) == 10 and
   all(.artifacts[];
     ((has("sha256") and (.sha256 | test("^[a-f0-9]{64}$"))) or
@@ -52,13 +52,22 @@ for exact_firewall_contract in \
   'ufw allow in on cni0 proto tcp from "$pod_cidr" to "$server_public_ip" port 10250' \
   'ufw allow in on cni0 proto tcp from "$pod_cidr" to "$host_service_address" port 3080' \
   'ufw allow in on cni0 proto tcp from "$pod_cidr" to "$host_service_address" port 18080' \
+  'ufw route allow in on cni0 out on cni0 from "$pod_cidr" to "$pod_cidr"' \
+  'ufw route allow in on cni0 out on flannel.1 from "$pod_cidr" to "$pod_cidr"' \
+  'ufw route allow in on flannel.1 out on cni0 from "$pod_cidr" to "$pod_cidr"' \
+  '"ufw route allow in on cni0 out on $public_interface proto tcp from $pod_cidr to any port 80"' \
+  '"ufw route allow in on cni0 out on $public_interface proto tcp from $pod_cidr to any port 443"' \
+  '"ufw route allow in on flannel.1 out on $public_interface proto tcp from $pod_cidr to any port 80"' \
+  '"ufw route allow in on flannel.1 out on $public_interface proto tcp from $pod_cidr to any port 443"' \
   'ufw route allow proto tcp from any to "$pod_cidr" port 80' \
   'ufw route allow proto tcp from any to "$pod_cidr" port 443' \
   'ufw route allow in on cni0 proto udp from "$pod_cidr" to "$nameserver" port 53' \
   'ufw route allow in on cni0 proto tcp from "$pod_cidr" to "$nameserver" port 53' \
   'normalize_ufw_rules' \
   'actual_rules=$(ufw show added' \
-  '[[ "$actual_rules" == "$expected_rules" ]]'; do
+  '[[ "$actual_rules" == "$expected_rules" ]]' \
+  'readback_k3s_forwarding' \
+  'Kubernetes NetworkPolicy hooks do not precede UFW forwarding'; do
   rg -Fq "$exact_firewall_contract" "$prepare_host" ||
     fail "exact firewall contract is absent: $exact_firewall_contract"
 done
@@ -116,9 +125,11 @@ done
 
 source <(sed -n '/^read_k3s_ipv4_nameservers() {$/,/^}$/p' "$prepare_host")
 source <(sed -n '/^require_k3s_ipv4_nameservers() {$/,/^}$/p' "$prepare_host")
+source <(sed -n '/^read_default_ipv4_interface() {$/,/^}$/p' "$prepare_host")
 source <(sed -n '/^normalize_ufw_rules() {$/,/^}$/p' "$prepare_host")
 source <(sed -n '/^write_expected_firewall_rules() {$/,/^}$/p' "$prepare_host")
 source <(sed -n '/^readback_firewall() {$/,/^}$/p' "$prepare_host")
+source <(sed -n '/^readback_k3s_forwarding() {$/,/^}$/p' "$prepare_host")
 normalized_declared=$(printf '%s\n' \
   'ufw route allow proto tcp from any to 10.42.0.0/16 port 80' | normalize_ufw_rules)
 normalized_reported=$(printf '%s\n' \
@@ -137,6 +148,14 @@ host_service_address=10.254.254.1
 k3s_resolver_file="$temporary_directory/resolv.conf"
 printf 'nameserver 1.1.1.1\n' >"$k3s_resolver_file"
 read_local_api_address() { printf '10.0.0.1'; }
+ip() {
+  case "$*" in
+    '-4 route show default') printf '%s\n' 'default via 203.0.113.1 dev eth0 proto dhcp' ;;
+    '-d link show dev cni0') printf '%s\n' '2: cni0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 state UP' '    bridge forward_delay 0' ;;
+    '-d link show dev flannel.1') printf '%s\n' '3: flannel.1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 state UNKNOWN' '    vxlan id 1 local 203.0.113.10 dev eth0 srcport 0 0 dstport 8472 nolearning' ;;
+    *) return 1 ;;
+  esac
+}
 systemctl() { return 1; }
 nft() { return 1; }
 expected_firewall_rules=$(write_expected_firewall_rules)
@@ -152,6 +171,26 @@ ufw() {
   fi
 }
 readback_firewall
+sysctl() { [[ "$*" == '-n net.ipv4.ip_forward' ]] && printf '1\n'; }
+iptables() {
+  [[ "$*" == '-w 5 -S FORWARD' ]] || return 1
+  printf '%s\n' \
+    '-A FORWARD -m comment --comment "kube-router netpol" -j KUBE-ROUTER-FORWARD' \
+    '-A FORWARD -m mark --mark 0x20000/0x20000 -j ACCEPT' \
+    '-A FORWARD -j ufw-before-forward'
+}
+readback_k3s_forwarding
+if (
+  iptables() {
+    printf '%s\n' \
+      '-A FORWARD -j ufw-before-forward' \
+      '-A FORWARD -j KUBE-ROUTER-FORWARD' \
+      '-A FORWARD -m mark --mark 0x20000/0x20000 -j ACCEPT'
+  }
+  readback_k3s_forwarding >/dev/null 2>&1
+); then
+  fail 'forwarding readback accepted UFW before Kubernetes NetworkPolicy'
+fi
 if (
   ufw() {
     if [[ "$*" == 'status verbose' ]]; then

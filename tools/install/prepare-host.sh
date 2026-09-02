@@ -151,6 +151,25 @@ require_k3s_ipv4_nameservers() {
     fail 'no IPv4 upstream DNS server is available for the exact firewall policy'
 }
 
+read_default_ipv4_interface() {
+  local route_output
+  local -a interfaces=()
+  route_output=$(ip -4 route show default) ||
+    fail 'default IPv4 route could not be read'
+  mapfile -t interfaces < <(awk '
+    $1 == "default" {
+      for (field_index = 1; field_index < NF; field_index++) {
+        if ($field_index == "dev") print $(field_index + 1)
+      }
+    }
+  ' <<<"$route_output" | sort -u)
+  ((${#interfaces[@]} == 1)) ||
+    fail 'exactly one default IPv4 interface is required'
+  [[ "${interfaces[0]}" =~ ^[[:alnum:]_.:-]+$ ]] ||
+    fail 'default IPv4 interface name is unsafe'
+  printf '%s' "${interfaces[0]}"
+}
+
 normalize_ufw_rules() {
   python3 /dev/fd/3 3<<'PY'
 import json
@@ -223,10 +242,11 @@ PY
 }
 
 write_expected_firewall_rules() {
-  local api_address nameserver
+  local api_address nameserver public_interface
   require_k3s_ipv4_nameservers
   api_address=$(read_local_api_address)
   [[ -n "$api_address" ]] || api_address=$server_public_ip
+  public_interface=$(read_default_ipv4_interface)
   printf '%s\n' \
     'ufw allow 22/tcp' \
     'ufw allow 80/tcp' \
@@ -235,6 +255,13 @@ write_expected_firewall_rules() {
     "ufw allow in on cni0 proto tcp from $pod_cidr to $server_public_ip port 10250" \
     "ufw allow in on cni0 proto tcp from $pod_cidr to $host_service_address port 3080" \
     "ufw allow in on cni0 proto tcp from $pod_cidr to $host_service_address port 18080" \
+    "ufw route allow in on cni0 out on cni0 from $pod_cidr to $pod_cidr" \
+    "ufw route allow in on cni0 out on flannel.1 from $pod_cidr to $pod_cidr" \
+    "ufw route allow in on flannel.1 out on cni0 from $pod_cidr to $pod_cidr" \
+    "ufw route allow in on cni0 out on $public_interface proto tcp from $pod_cidr to any port 80" \
+    "ufw route allow in on cni0 out on $public_interface proto tcp from $pod_cidr to any port 443" \
+    "ufw route allow in on flannel.1 out on $public_interface proto tcp from $pod_cidr to any port 80" \
+    "ufw route allow in on flannel.1 out on $public_interface proto tcp from $pod_cidr to any port 443" \
     "ufw route allow proto tcp from any to $pod_cidr port 80" \
     "ufw route allow proto tcp from any to $pod_cidr port 443"
   while IFS= read -r nameserver; do
@@ -245,11 +272,12 @@ write_expected_firewall_rules() {
 }
 
 configure_firewall() {
-  local api_address nameserver
+  local api_address nameserver public_interface
   remove_legacy_firewall
   require_k3s_ipv4_nameservers
   api_address=$(read_local_api_address)
   [[ -n "$api_address" ]] || api_address=$server_public_ip
+  public_interface=$(read_default_ipv4_interface)
   ufw --force reset >/dev/null
   ufw default deny incoming >/dev/null
   ufw default allow outgoing >/dev/null
@@ -265,6 +293,20 @@ configure_firewall() {
     comment 'Teleport backend from pods' >/dev/null
   ufw allow in on cni0 proto tcp from "$pod_cidr" to "$host_service_address" port 18080 \
     comment 'ACME preflight responder from pods' >/dev/null
+  ufw route allow in on cni0 out on cni0 from "$pod_cidr" to "$pod_cidr" \
+    comment 'K3s same-node pod overlay' >/dev/null
+  ufw route allow in on cni0 out on flannel.1 from "$pod_cidr" to "$pod_cidr" \
+    comment 'K3s pod overlay egress' >/dev/null
+  ufw route allow in on flannel.1 out on cni0 from "$pod_cidr" to "$pod_cidr" \
+    comment 'K3s pod overlay ingress' >/dev/null
+  ufw route allow in on cni0 out on "$public_interface" proto tcp \
+    from "$pod_cidr" to any port 80 comment 'K3s pod HTTP egress' >/dev/null
+  ufw route allow in on cni0 out on "$public_interface" proto tcp \
+    from "$pod_cidr" to any port 443 comment 'K3s pod HTTPS egress' >/dev/null
+  ufw route allow in on flannel.1 out on "$public_interface" proto tcp \
+    from "$pod_cidr" to any port 80 comment 'K3s remote pod HTTP egress' >/dev/null
+  ufw route allow in on flannel.1 out on "$public_interface" proto tcp \
+    from "$pod_cidr" to any port 443 comment 'K3s remote pod HTTPS egress' >/dev/null
   ufw route allow proto tcp from any to "$pod_cidr" port 80 \
     comment 'Traefik HTTP ingress DNAT' >/dev/null
   ufw route allow proto tcp from any to "$pod_cidr" port 443 \
@@ -293,6 +335,44 @@ readback_firewall() {
     fail 'active firewall policy could not be normalized'
   [[ "$actual_rules" == "$expected_rules" ]] ||
     fail 'host firewall rules differ from the exact supported policy'
+}
+
+readback_k3s_forwarding() {
+  local forward_rules kube_router_line policy_accept_line ufw_line link_details
+  [[ "$(sysctl -n net.ipv4.ip_forward)" == 1 ]] ||
+    fail 'IPv4 forwarding is disabled'
+  link_details=$(ip -d link show dev cni0) || fail 'cni0 interface is absent'
+  grep -Eq '<([^,>]*,)*UP(,[^>]*)*>' <<<"$link_details" ||
+    fail 'cni0 interface is down'
+  grep -Eq '(^|[[:space:]])bridge([[:space:]]|$)' <<<"$link_details" ||
+    fail 'cni0 interface is not a bridge'
+  link_details=$(ip -d link show dev flannel.1) || fail 'flannel.1 interface is absent'
+  grep -Eq '<([^,>]*,)*UP(,[^>]*)*>' <<<"$link_details" ||
+    fail 'flannel.1 interface is down'
+  grep -Eq 'vxlan id 1([^0-9]|$).*dstport 8472([^0-9]|$)' <<<"$link_details" ||
+    fail 'flannel.1 VXLAN settings differ from the supported profile'
+  forward_rules=$(iptables -w 5 -S FORWARD) ||
+    fail 'iptables FORWARD chain could not be read'
+  kube_router_line=$(awk '
+    $1 == "-A" && $2 == "FORWARD" && $NF == "KUBE-ROUTER-FORWARD" { count++; line=NR }
+    END { if (count == 1) print line; else exit 1 }
+  ' <<<"$forward_rules") || fail 'KUBE-ROUTER-FORWARD hook is not exact'
+  policy_accept_line=$(awk '
+    $1 == "-A" && $2 == "FORWARD" && $NF == "ACCEPT" {
+      for (field_index = 1; field_index < NF; field_index++) {
+        if ($field_index == "--mark" && $(field_index + 1) == "0x20000/0x20000") {
+          count++; line=NR
+        }
+      }
+    }
+    END { if (count == 1) print line; else exit 1 }
+  ' <<<"$forward_rules") || fail 'Kubernetes NetworkPolicy accept hook is not exact'
+  ufw_line=$(awk '
+    $1 == "-A" && $2 == "FORWARD" && $NF == "ufw-before-forward" { count++; line=NR }
+    END { if (count == 1) print line; else exit 1 }
+  ' <<<"$forward_rules") || fail 'UFW FORWARD hook is not exact'
+  ((kube_router_line < policy_accept_line && policy_accept_line < ufw_line)) ||
+    fail 'Kubernetes NetworkPolicy hooks do not precede UFW forwarding'
 }
 
 configure_hot_reload_sysctl() {
@@ -346,7 +426,7 @@ with open(sys.argv[1], encoding="utf-8") as source:
 if lock.get("schemaVersion") != 1:
     raise SystemExit(1)
 artifacts = lock.get("artifacts", [])
-if len(artifacts) != 10 or len(lock.get("charts", [])) != 2:
+if len(artifacts) != 10 or len(lock.get("charts", [])) != 1:
     raise SystemExit(1)
 for artifact in artifacts:
     sha256 = artifact.get("sha256", "")
@@ -583,6 +663,7 @@ done
 [[ "$api_ready" == true ]] || fail 'Kubernetes API did not become ready'
 [[ "$node_ready" == true ]] || fail 'no ready Kubernetes node became available'
 readback_k3s_resolver
+readback_k3s_forwarding
 readback_firewall
 readback_hot_reload_sysctl
 readback_provider_apparmor_profile
