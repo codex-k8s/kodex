@@ -380,8 +380,8 @@ fi
 
 extract_teleport_function() {
   local function_name=$1
-  awk -v signature="^${function_name}\\(\\) \\{$" '
-    $0 ~ signature { capture = 1 }
+  awk -v signature="${function_name}() {" '
+    $0 == signature { capture = 1 }
     capture { print }
     capture && /^}$/ { exit }
   ' "$repository_root/infra/teleport/bootstrap-host.sh"

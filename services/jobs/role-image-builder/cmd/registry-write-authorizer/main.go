@@ -16,12 +16,13 @@ import (
 )
 
 const (
-	expectedClientCN      = "kodex-buildkit-staging-push"
-	serverError           = "registry write authorizer failed"
-	denialLog             = "registry request denied"
-	registryHeaderTimeout = 5 * time.Second
-	registryStreamTimeout = 15 * time.Minute
-	registryIdleTimeout   = 30 * time.Second
+	expectedClientCN                     = "kodex-buildkit-staging-push"
+	evidenceBasicAuthenticationChallenge = `Basic realm="kodex-image-registry-evidence"`
+	serverError                          = "registry write authorizer failed"
+	denialLog                            = "registry request denied"
+	registryHeaderTimeout                = 5 * time.Second
+	registryStreamTimeout                = 15 * time.Minute
+	registryIdleTimeout                  = 30 * time.Second
 )
 
 type authorizationProfile struct {
@@ -68,7 +69,7 @@ func main() {
 		if profile.evidence &&
 			!authorizedEvidenceCredential(commonName, request.Header.Get("Authorization")) {
 			logRegistryDenial(profile, "application_credential", request.Method)
-			http.Error(writer, "request forbidden", http.StatusForbidden)
+			writeEvidenceCredentialDenial(writer, request.Header.Values("Authorization"))
 			return
 		}
 		target := *backend
@@ -98,6 +99,15 @@ func main() {
 	if err := server.ListenAndServeTLS("/identity/tls.crt", "/identity/tls.key"); err != nil {
 		log.Fatal(serverError)
 	}
+}
+
+func writeEvidenceCredentialDenial(writer http.ResponseWriter, authorization []string) {
+	status := http.StatusForbidden
+	if len(authorization) == 0 {
+		writer.Header().Set("WWW-Authenticate", evidenceBasicAuthenticationChallenge)
+		status = http.StatusUnauthorized
+	}
+	http.Error(writer, "request forbidden", status)
 }
 
 func newRegistryProxyClient() *http.Client {

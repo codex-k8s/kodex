@@ -15,7 +15,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 const testOrchestrationRevision = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -180,6 +182,93 @@ func TestControllerRejectsConcurrentPromotionJobs(t *testing.T) {
 	}
 }
 
+func TestControllerDoesNotMaterializePhaseForDeletingWorkspace(t *testing.T) {
+	client := fake.NewClientset(testPolicy())
+	controller, err := New(client, testRenderer{}, testConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 22, 12, 30, 0, 0, time.UTC)
+	controller.now = func() time.Time { return now }
+	ctx := context.Background()
+	if err := controller.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	workspaces, err := client.CoreV1().PersistentVolumeClaims(testConfig().Namespace).List(ctx, metav1.ListOptions{})
+	if err != nil || len(workspaces.Items) != 1 {
+		t.Fatalf("read admission workspace: count=%d err=%v", len(workspaces.Items), err)
+	}
+	workspace := workspaces.Items[0].DeepCopy()
+	id := workspace.Labels[idLabel]
+	deletionTimestamp := metav1.NewTime(now)
+	workspace.DeletionTimestamp = &deletionTimestamp
+	workspace.Finalizers = []string{"test.kodex.dev/retain-deleting-workspace"}
+	if _, err := client.CoreV1().PersistentVolumeClaims(testConfig().Namespace).Update(ctx, workspace, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.BatchV1().Jobs(testConfig().Namespace).Delete(ctx, "mc-admit-"+id+"-claim", metav1.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	client.ClearActions()
+
+	if err := controller.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.BatchV1().Jobs(testConfig().Namespace).Get(ctx, "mc-admit-"+id+"-claim", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("claim job was recreated for deleting workspace: %v", err)
+	}
+	for _, action := range client.Actions() {
+		if action.GetVerb() == "create" && action.GetResource().Resource == "jobs" {
+			t.Fatalf("job was materialized for deleting workspace: %#v", action)
+		}
+	}
+}
+
+func TestControllerDeletesOnlyManagedOrphanAdmissionJobWithUIDPrecondition(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 22, 12, 30, 0, 0, time.UTC)
+	runID := makeRunID(now, testOrchestrationRevision)
+	claim, err := (testRenderer{}).Render(ctx, testPolicy(), testConfig().Environment, runID, "claim")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := prepareRendered(claim, testConfig().Namespace, runID, "claim"); err != nil {
+		t.Fatal(err)
+	}
+	promote, err := (testRenderer{}).Render(ctx, testPolicy(), testConfig().Environment, runID, "promote")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := prepareRendered(promote, testConfig().Namespace, runID, "promote"); err != nil {
+		t.Fatal(err)
+	}
+	unmanaged := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "unmanaged-image-job", Namespace: testConfig().Namespace}}
+	client := fake.NewClientset(testPolicy(), claim.Job, promote.Job, unmanaged)
+	controller, err := New(client, testRenderer{}, testConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller.now = func() time.Time { return now }
+
+	if err := controller.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.BatchV1().Jobs(testConfig().Namespace).Get(ctx, claim.Job.Name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("managed orphan admission job remains: %v", err)
+	}
+	if _, err := client.BatchV1().Jobs(testConfig().Namespace).Get(ctx, promote.Job.Name, metav1.GetOptions{}); err != nil {
+		t.Fatalf("promotion job was deleted: %v", err)
+	}
+	if _, err := client.BatchV1().Jobs(testConfig().Namespace).Get(ctx, unmanaged.Name, metav1.GetOptions{}); err != nil {
+		t.Fatalf("unmanaged job was deleted: %v", err)
+	}
+	assertJobDeleteUIDPrecondition(t, client, claim.Job.Name, claim.Job.UID)
+	workspaces, err := client.CoreV1().PersistentVolumeClaims(testConfig().Namespace).List(ctx, metav1.ListOptions{})
+	if err != nil || len(workspaces.Items) != 0 {
+		t.Fatalf("new workspace was materialized during orphan cleanup: count=%d err=%v", len(workspaces.Items), err)
+	}
+}
+
 type testRenderer struct{}
 
 func (testRenderer) Render(_ context.Context, _ *corev1.ConfigMap, environment, runID, phase string) (Rendered, error) {
@@ -187,7 +276,7 @@ func (testRenderer) Render(_ context.Context, _ *corev1.ConfigMap, environment, 
 	automount := false
 	job := &batchv1.Job{TypeMeta: metav1.TypeMeta{APIVersion: "batch/v1", Kind: "Job"}, ObjectMeta: metav1.ObjectMeta{
 		Name: "mc-admit-" + id + "-" + phase, Namespace: testConfig().Namespace,
-		Labels: map[string]string{idLabel: id, phaseLabel: phase},
+		Labels: map[string]string{idLabel: id, phaseLabel: phase}, UID: types.UID("job-" + id + "-" + phase),
 	}, Spec: batchv1.JobSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 		ServiceAccountName: phaseAccounts[phase], AutomountServiceAccountToken: &automount,
 		RestartPolicy: corev1.RestartPolicyNever,
@@ -196,7 +285,7 @@ func (testRenderer) Render(_ context.Context, _ *corev1.ConfigMap, environment, 
 	result := Rendered{Job: job}
 	if phase == "claim" {
 		result.PVC = &corev1.PersistentVolumeClaim{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "PersistentVolumeClaim"},
-			ObjectMeta: metav1.ObjectMeta{Name: "mc-admit-" + id, Namespace: testConfig().Namespace, Labels: map[string]string{idLabel: id}},
+			ObjectMeta: metav1.ObjectMeta{Name: "mc-admit-" + id, Namespace: testConfig().Namespace, Labels: map[string]string{idLabel: id}, UID: types.UID("workspace-" + id)},
 			Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 				Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("2Gi")}}}}
 	}
@@ -265,6 +354,22 @@ func markJobFailed(t *testing.T, client *fake.Clientset, id, phase string) {
 	if _, err := client.BatchV1().Jobs(testConfig().Namespace).UpdateStatus(context.Background(), job, metav1.UpdateOptions{}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func assertJobDeleteUIDPrecondition(t *testing.T, client *fake.Clientset, name string, uid types.UID) {
+	t.Helper()
+	for _, action := range client.Actions() {
+		deleteAction, ok := action.(k8stesting.DeleteAction)
+		if !ok || action.GetResource().Resource != "jobs" || deleteAction.GetName() != name {
+			continue
+		}
+		preconditions := deleteAction.GetDeleteOptions().Preconditions
+		if preconditions == nil || preconditions.UID == nil || *preconditions.UID != uid {
+			t.Fatalf("unexpected admission Job delete preconditions: %#v", preconditions)
+		}
+		return
+	}
+	t.Fatal("admission Job delete action was not recorded")
 }
 
 func indexOf(values []string, value string) int {

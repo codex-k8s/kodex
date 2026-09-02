@@ -125,8 +125,14 @@ func (controller *Controller) Reconcile(ctx context.Context) error {
 		return err
 	}
 	now := controller.now().UTC()
-	if err := controller.reconcileAdmissions(ctx, policy, revision, jobs.Items, workspaces.Items, now); err != nil {
+	orphanCleanupPending, err := controller.deleteOrphanAdmissionJobs(ctx, jobs.Items, workspaces.Items)
+	if err != nil {
 		return err
+	}
+	if !orphanCleanupPending {
+		if err := controller.reconcileAdmissions(ctx, policy, revision, jobs.Items, workspaces.Items, now); err != nil {
+			return err
+		}
 	}
 	if err := controller.reconcilePromotions(ctx, policy, revision, jobs.Items, now); err != nil {
 		return err
@@ -166,6 +172,9 @@ func (controller *Controller) reconcileAdmissions(ctx context.Context, policy *c
 		runID := workspace.Annotations[runIDAnnotation]
 		if !validRunID(runID, revision) {
 			return errors.New("managed image admission run is invalid")
+		}
+		if workspace.DeletionTimestamp != nil {
+			continue
 		}
 		phase, terminal, failed := nextAdmissionPhase(workspace.Labels[idLabel], jobs)
 		if terminal || failed {
@@ -289,20 +298,56 @@ func (controller *Controller) deleteWorkspace(ctx context.Context, workspace *co
 }
 
 func (controller *Controller) deleteAdmissionJobs(ctx context.Context, id string, jobs []batchv1.Job) error {
-	propagation := metav1.DeletePropagationBackground
 	for index := range jobs {
 		job := &jobs[index]
 		if job.Labels[idLabel] != id || job.Labels[phaseLabel] == "promote" {
 			continue
 		}
-		options := metav1.DeleteOptions{PropagationPolicy: &propagation}
-		if job.UID != "" {
-			uid := job.UID
-			options.Preconditions = &metav1.Preconditions{UID: &uid}
+		if err := controller.deleteAdmissionJob(ctx, job, "delete terminal image admission job"); err != nil {
+			return err
 		}
-		if err := controller.client.BatchV1().Jobs(controller.config.Namespace).Delete(ctx, job.Name, options); err != nil && !apierrors.IsNotFound(err) {
-			return errors.New("delete terminal image admission job")
+	}
+	return nil
+}
+
+func (controller *Controller) deleteOrphanAdmissionJobs(ctx context.Context, jobs []batchv1.Job, workspaces []corev1.PersistentVolumeClaim) (bool, error) {
+	workspaceIDs := make(map[string]struct{}, len(workspaces))
+	for index := range workspaces {
+		workspaceIDs[workspaces[index].Labels[idLabel]] = struct{}{}
+	}
+	cleanupPending := false
+	for index := range jobs {
+		job := &jobs[index]
+		phase := job.Labels[phaseLabel]
+		if phase == "promote" {
+			continue
 		}
+		if _, exists := workspaceIDs[job.Labels[idLabel]]; exists {
+			continue
+		}
+		if !validManagedJob(job, controller.config.Namespace, phase) || !validRunIDShape(job.Annotations[runIDAnnotation]) {
+			return false, errors.New("orphan image admission job is invalid")
+		}
+		if err := controller.deleteAdmissionJob(ctx, job, "delete orphan image admission job"); err != nil {
+			return false, err
+		}
+		cleanupPending = true
+	}
+	return cleanupPending, nil
+}
+
+func (controller *Controller) deleteAdmissionJob(ctx context.Context, job *batchv1.Job, message string) error {
+	if job.UID == "" {
+		return errors.New("managed image admission job UID is invalid")
+	}
+	uid := job.UID
+	propagation := metav1.DeletePropagationBackground
+	options := metav1.DeleteOptions{
+		Preconditions:     &metav1.Preconditions{UID: &uid},
+		PropagationPolicy: &propagation,
+	}
+	if err := controller.client.BatchV1().Jobs(controller.config.Namespace).Delete(ctx, job.Name, options); err != nil && !apierrors.IsNotFound(err) {
+		return errors.New(message)
 	}
 	return nil
 }

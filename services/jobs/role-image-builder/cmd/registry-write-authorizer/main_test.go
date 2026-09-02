@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -134,6 +135,44 @@ func TestEvidenceApplicationCredentialIsExact(t *testing.T) {
 		) {
 			t.Fatal("invalid evidence probe credential was accepted")
 		}
+	}
+}
+
+func TestEvidenceApplicationCredentialDenialChallengesOnlyMissingCredential(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name             string
+		authorization    []string
+		wantStatus       int
+		wantAuthenticate string
+	}{
+		{
+			name:             "missing credential receives challenge",
+			wantStatus:       http.StatusUnauthorized,
+			wantAuthenticate: evidenceBasicAuthenticationChallenge,
+		},
+		{
+			name:          "wrong credential remains forbidden",
+			authorization: []string{"Basic invalid"},
+			wantStatus:    http.StatusForbidden,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			recorder := httptest.NewRecorder()
+			writeEvidenceCredentialDenial(recorder, test.authorization)
+			if recorder.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", recorder.Code, test.wantStatus)
+			}
+			if got := recorder.Header().Get("WWW-Authenticate"); got != test.wantAuthenticate {
+				t.Fatalf("WWW-Authenticate = %q, want %q", got, test.wantAuthenticate)
+			}
+			if body := recorder.Body.String(); body != "request forbidden\n" {
+				t.Fatalf("response body exposes unexpected detail: %q", body)
+			}
+		})
 	}
 }
 

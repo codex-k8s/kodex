@@ -73,8 +73,8 @@ keycloak_request() {
 
 extract_function() {
   local function_name=$1
-  awk -v signature="^${function_name}\\(\\) \\{$" '
-    $0 ~ signature { capture = 1 }
+  awk -v signature="${function_name}() {" '
+    $0 == signature { capture = 1 }
     capture { print }
     capture && /^}$/ { exit }
   ' "$bootstrap"
