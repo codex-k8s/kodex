@@ -268,6 +268,7 @@ fi
 for teleport_ownership_contract in \
   'infra/teleport/bootstrap-host.sh' \
   'infra/teleport/bootstrap.sh' \
+  'sudo -n env KUBECONFIG="$kubeconfig"' \
   'teleport_backend_address=10.254.254.1'; do
   rg -Fq -- "$teleport_ownership_contract" "$repository_root/tools/dev/remote-dev.sh" ||
     fail "host-owned Teleport orchestration is absent: $teleport_ownership_contract"

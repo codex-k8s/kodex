@@ -274,16 +274,18 @@ apply_teleport() {
     "${teleport_host_arguments[@]}"
   sudo -n "$repository_root/infra/teleport/bootstrap-host.sh" --mode apply \
     "${teleport_host_arguments[@]}"
-  KUBECONFIG="$kubeconfig" "$repository_root/infra/teleport/bootstrap.sh" --mode apply \
-    "${teleport_route_arguments[@]}"
+  sudo -n env KUBECONFIG="$kubeconfig" \
+    "$repository_root/infra/teleport/bootstrap.sh" --mode apply \
+      "${teleport_route_arguments[@]}"
 }
 
 readback_teleport() {
   prepare_teleport_credentials
   sudo -n "$repository_root/infra/teleport/bootstrap-host.sh" --mode readback \
     "${teleport_host_arguments[@]}"
-  KUBECONFIG="$kubeconfig" "$repository_root/infra/teleport/bootstrap.sh" --mode readback \
-    "${teleport_route_arguments[@]}"
+  sudo -n env KUBECONFIG="$kubeconfig" \
+    "$repository_root/infra/teleport/bootstrap.sh" --mode readback \
+      "${teleport_route_arguments[@]}"
 }
 
 if [[ "$command_name" == teleport ]]; then
