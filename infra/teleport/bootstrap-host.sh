@@ -358,7 +358,8 @@ HOST="$host" BACKEND_ADDRESS="$backend_address" TELEPORT_KUBECONFIG="$teleport_k
   .auth_service.authentication.local_auth == false and
   .proxy_service.enabled == true and
   .proxy_service.web_listen_addr == (strenv(BACKEND_ADDRESS) + ":3080") and
-  .proxy_service.public_addr == [strenv(HOST) + ":443"] and
+  (.proxy_service.public_addr | length) == 1 and
+  .proxy_service.public_addr[0] == (strenv(HOST) + ":443") and
   .proxy_service.trust_x_forwarded_for == true and
   .ssh_service.enabled == true and
   .ssh_service.labels.environment == "development" and

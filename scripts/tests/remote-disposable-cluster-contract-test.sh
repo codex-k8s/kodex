@@ -280,6 +280,9 @@ for teleport_tls_contract in \
   rg -Fq -- "$teleport_tls_contract" "$repository_root/infra/teleport/bootstrap-host.sh" ||
     fail "host Teleport backend trust contract is absent: $teleport_tls_contract"
 done
+rg -Fq '(.proxy_service.public_addr | length) == 1' \
+  "$repository_root/infra/teleport/bootstrap-host.sh" ||
+  fail 'host Teleport public address readback does not reject additional addresses'
 for teleport_kubeconfig_contract in \
   'install_teleport_kubeconfig' \
   '.clusters[0].name = strenv(KUBE_CLUSTER_NAME)' \
