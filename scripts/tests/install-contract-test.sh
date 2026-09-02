@@ -557,6 +557,10 @@ done
 for teleport_contract in \
   '.proxyListenerMode = "multiplex"' \
   '.service.type = "ClusterIP"' \
+  'teleport-teleport-public@kubernetescrd' \
+  '.kind = "ServersTransport"' \
+  '.spec.serverName = strenv(HOST)' \
+  '.spec.insecureSkipVerify = false' \
   '/v1/webapi/github/callback' \
   'kubernetes_groups:["system:masters"]' \
   'kubectl -n teleport exec -i deployment/teleport-auth -- tctl create -f -'; do

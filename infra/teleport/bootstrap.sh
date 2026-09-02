@@ -92,6 +92,8 @@ HOST="$host" KUBE_CLUSTER_NAME="$kube_cluster_name" yq -n -o=yaml '
   .proxyListenerMode = "multiplex" |
   .publicAddr = [strenv(HOST) + ":443"] |
   .service.type = "ClusterIP" |
+  .annotations.service."traefik.ingress.kubernetes.io/service.serverstransport" =
+    "teleport-teleport-public@kubernetescrd" |
   .ingress.enabled = true |
   .ingress.suppressAutomaticWildcards = true |
   .ingress.spec.ingressClassName = "traefik" |
@@ -110,8 +112,28 @@ HOST="$host" KUBE_CLUSTER_NAME="$kube_cluster_name" yq -n -o=yaml '
 INGRESS_CLASS="$ingress_class" yq -i \
   '.ingress.spec.ingressClassName = strenv(INGRESS_CLASS)' "$values_file"
 
+transport_file="$temporary_directory/servers-transport.yaml"
+HOST="$host" yq -n -o=yaml '
+  .apiVersion = "traefik.io/v1alpha1" |
+  .kind = "ServersTransport" |
+  .metadata.name = "teleport-public" |
+  .metadata.namespace = "teleport" |
+  .spec.serverName = strenv(HOST) |
+  .spec.insecureSkipVerify = false
+' >"$transport_file"
+apply_teleport_transport() {
+  kubectl apply --server-side --field-manager=kodex-teleport \
+    -f "$transport_file" >/dev/null
+  kubectl -n teleport annotate service teleport --overwrite \
+    'traefik.ingress.kubernetes.io/service.serverstransport=teleport-teleport-public@kubernetescrd' \
+    >/dev/null
+}
+
 helm template teleport "$archive" --namespace teleport --values "$values_file" >/dev/null ||
   fail 'Teleport chart render failed'
+if [[ "$mode" == apply ]] && kubectl -n teleport get service teleport >/dev/null 2>&1; then
+  apply_teleport_transport
+fi
 "$repository_root/tools/dev/preflight-public-hosts.sh" --hosts "$host" \
   --allowed-ipv4-addresses "$allowed_ipv4_addresses" \
   --allowed-ipv6-addresses "$allowed_ipv6_addresses"
@@ -150,6 +172,7 @@ if [[ "$mode" == apply ]]; then
 
   helm upgrade --install teleport "$archive" --namespace teleport \
     --values "$values_file" --atomic --wait --timeout 15m
+  apply_teleport_transport
 
   client_id=$(<"$github_client_id_file")
   client_secret=$(<"$github_client_secret_file")
@@ -184,8 +207,13 @@ kubectl -n teleport get certificate teleport-tls -o json | jq -e '
 ' >/dev/null || fail 'Teleport certificate readback failed'
 kubectl -n teleport get service teleport -o json | jq -e '
   .spec.type == "ClusterIP" and
-  ([.spec.ports[] | select(.name == "tls" and .port == 443)] | length) == 1
+  ([.spec.ports[] | select(.name == "tls" and .port == 443)] | length) == 1 and
+  .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
+    "teleport-teleport-public@kubernetescrd"
 ' >/dev/null || fail 'Teleport proxy Service readback failed'
+kubectl -n teleport get serverstransport teleport-public -o json | jq -e --arg host "$host" '
+  .spec.serverName == $host and .spec.insecureSkipVerify == false
+' >/dev/null || fail 'Teleport backend TLS identity readback failed'
 kubectl -n teleport get ingress teleport-proxy -o json | jq -e --arg host "$host" \
   --arg ingress_class "$ingress_class" '
     .spec.ingressClassName == $ingress_class and
