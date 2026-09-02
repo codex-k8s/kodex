@@ -581,7 +581,7 @@ for teleport_host_contract in \
   'https://$host/v1/webapi/github/callback' \
   'SSL_CERT_FILE="$trust_bundle_file" tctl "$@"' \
   'Environment=SSL_CERT_FILE=/var/lib/teleport/certs/trust-bundle.pem' \
-  'teleport_ctl --config="$config_file" get github/github --format=json'; do
+  'teleport_ctl --config="$config_file" get github/github --format=json --with-secrets'; do
   rg -Fq -- "$teleport_host_contract" "$repository_root/infra/teleport/bootstrap-host.sh" ||
     fail "Teleport host contract is absent: $teleport_host_contract"
 done

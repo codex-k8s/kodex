@@ -103,6 +103,8 @@ Teleport Community Edition использует отдельный GitHub OAuth 
 - пользовательский CA через `SSL_CERT_FILE` для приватного TLS backend.
 - static kubeconfig без взаимоисключающего `kube_cluster_name`; имя кластера
   задаётся единственным context `kodex-dev`.
+- exact connector readback через `tctl get --with-secrets`; значения credentials
+  сравниваются внутри процесса и никогда не выводятся.
 
 ## Установка
 

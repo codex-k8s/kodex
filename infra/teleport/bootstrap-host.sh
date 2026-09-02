@@ -388,7 +388,7 @@ teleport_ctl --config="$config_file" get "role/$role_name" --format=json | jq -e
     .[0].spec.options.create_desktop_user == false and
     .[0].spec.options.max_session_ttl == "8h0m0s"
   ' >/dev/null || fail 'Teleport bounded development role readback failed'
-teleport_ctl --config="$config_file" get github/github --format=json | jq -e \
+teleport_ctl --config="$config_file" get github/github --format=json --with-secrets | jq -e \
   --arg host "$host" --arg organization "$github_organization" --arg team "$github_team" \
   --rawfile client_id "$github_client_id_file" --rawfile client_secret "$github_client_secret_file" '
     length == 1 and
