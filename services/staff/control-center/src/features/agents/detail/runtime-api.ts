@@ -15,7 +15,7 @@ import type {
   RuntimeEnvironmentPage,
   RuntimeSelection,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate, type MutationHeaders } from "@/shared/api/mutation";
+import { mutateWithRetry, type MutationHeaders } from "@/shared/api/mutation";
 import { asProblem, unwrap } from "@/shared/api/problem";
 
 const readRetryDelaysMs = [0, 200, 600] as const;
@@ -67,23 +67,18 @@ export async function saveAgentRuntime(
   input: AgentRuntimeConfigurationInput,
   agentVersion: number,
 ): Promise<AgentRuntimeConfigurationView> {
-  return reconcileRuntimeMutation(
-    agentRef,
-    async () =>
-      (
-        await mutate(
-          (headers) =>
-            publishAgentRuntimeConfiguration({
-              path: { agentRef },
-              body: input,
-              headers: versionHeaders(headers),
-              signal: requestSignal(),
-            }),
-          agentVersion,
-        )
-      ).data,
-    (view) => runtimeConfigurationMatches(view, input),
-  );
+  return (
+    await mutateWithRetry(
+      (headers) =>
+        publishAgentRuntimeConfiguration({
+          path: { agentRef },
+          body: input,
+          headers: versionHeaders(headers),
+          signal: requestSignal(),
+        }),
+      agentVersion,
+    )
+  ).data;
 }
 
 export async function saveOverlayDraft(
@@ -91,23 +86,18 @@ export async function saveOverlayDraft(
   content: string,
   agentVersion: number,
 ): Promise<AgentRuntimeConfigurationView> {
-  return reconcileRuntimeMutation(
-    agentRef,
-    async () =>
-      (
-        await mutate(
-          (headers) =>
-            createConfigOverlayDraft({
-              path: { agentRef },
-              body: { content },
-              headers: versionHeaders(headers),
-              signal: requestSignal(),
-            }),
-          agentVersion,
-        )
-      ).data,
-    (view) => view.draftOverlay?.content === content,
-  );
+  return (
+    await mutateWithRetry(
+      (headers) =>
+        createConfigOverlayDraft({
+          path: { agentRef },
+          body: { content },
+          headers: versionHeaders(headers),
+          signal: requestSignal(),
+        }),
+      agentVersion,
+    )
+  ).data;
 }
 
 export async function changeOverlay(
@@ -119,26 +109,17 @@ export async function changeOverlay(
     action === "VALIDATE"
       ? validateConfigOverlayDraft
       : publishConfigOverlayDraft;
-  return reconcileRuntimeMutation(
-    agentRef,
-    async () =>
-      (
-        await mutate(
-          (headers) =>
-            request({
-              path: { agentRef },
-              headers: versionHeaders(headers),
-              signal: requestSignal(),
-            }),
-          agentVersion,
-        )
-      ).data,
-    action === "VALIDATE"
-      ? (view) => view.draftOverlay?.state === "VALID"
-      : (view) =>
-          view.draftOverlay === undefined &&
-          view.publishedOverlay.state === "PUBLISHED",
-  );
+  return (
+    await mutateWithRetry(
+      (headers) =>
+        request({
+          path: { agentRef },
+          headers: versionHeaders(headers),
+          signal: requestSignal(),
+        }),
+      agentVersion,
+    )
+  ).data;
 }
 
 export async function bindRuntimeEnvironment(
@@ -146,23 +127,18 @@ export async function bindRuntimeEnvironment(
   environmentRef: string,
   agentVersion: number,
 ): Promise<AgentRuntimeConfigurationView> {
-  return reconcileRuntimeMutation(
-    agentRef,
-    async () =>
-      (
-        await mutate(
-          (headers) =>
-            bindAgentRuntimeEnvironment({
-              path: { agentRef },
-              body: { environmentRef },
-              headers: versionHeaders(headers),
-              signal: requestSignal(),
-            }),
-          agentVersion,
-        )
-      ).data,
-    (view) => view.environment.ref === environmentRef,
-  );
+  return (
+    await mutateWithRetry(
+      (headers) =>
+        bindAgentRuntimeEnvironment({
+          path: { agentRef },
+          body: { environmentRef },
+          headers: versionHeaders(headers),
+          signal: requestSignal(),
+        }),
+      agentVersion,
+    )
+  ).data;
 }
 
 export async function searchRuntimeEnvironments(
@@ -209,53 +185,4 @@ async function readWithRetry<T>(
     }
   }
   throw lastProblem;
-}
-
-async function reconcileRuntimeMutation(
-  agentRef: string,
-  mutateRuntime: () => Promise<AgentRuntimeConfigurationView>,
-  matchesIntent: (view: AgentRuntimeConfigurationView) => boolean,
-): Promise<AgentRuntimeConfigurationView> {
-  try {
-    return await mutateRuntime();
-  } catch (error) {
-    const mutationProblem = asProblem(error);
-    if (!mutationProblem.retryable) throw mutationProblem;
-    try {
-      const authoritative = await loadAgentRuntime(agentRef);
-      if (matchesIntent(authoritative)) return authoritative;
-    } catch {
-      // Сохраняем исходную ошибку, если авторитетная сверка недоступна.
-    }
-    throw mutationProblem;
-  }
-}
-
-function runtimeConfigurationMatches(
-  view: AgentRuntimeConfigurationView,
-  input: AgentRuntimeConfigurationInput,
-): boolean {
-  const current = view.configuration;
-  return (
-    current.runtimeProfileRef === input.runtimeProfileRef &&
-    current.model === input.model &&
-    current.providerPolicy.mode === input.providerPolicyMode &&
-    providerAccountsMatch(
-      current.providerPolicy.accountCandidates,
-      input.providerAccounts,
-    )
-  );
-}
-
-function providerAccountsMatch(
-  current: ReadonlyArray<{ accountRef: string; weight: number }>,
-  requested: ReadonlyArray<{ accountRef: string; weight: number }>,
-): boolean {
-  if (current.length !== requested.length) return false;
-  const byReference = new Map(
-    current.map((item) => [item.accountRef, item.weight] as const),
-  );
-  return requested.every(
-    (item) => byReference.get(item.accountRef) === item.weight,
-  );
 }

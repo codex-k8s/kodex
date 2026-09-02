@@ -1,5 +1,7 @@
 import { asProblem, unwrap, type ApiReadback } from "@/shared/api/problem";
 
+const mutationRetryDelaysMs = [0, 200, 600] as const;
+
 interface GeneratedResponse<T> {
   data?: T;
   error?: unknown;
@@ -39,19 +41,60 @@ export function idempotencyKey(): string {
   return crypto.randomUUID();
 }
 
-export async function mutate<T>(
-  request: (headers: MutationHeaders) => Promise<GeneratedResponse<T>>,
-  version?: number,
-  requestIdempotencyKey = idempotencyKey(),
-): Promise<ApiReadback<NonNullable<T>>> {
+function mutationHeaders(
+  version: number | undefined,
+  requestIdempotencyKey: string,
+): MutationHeaders {
   const headers: MutationHeaders = {
     "Idempotency-Key": requestIdempotencyKey,
     "X-CSRF-Token": csrfToken(),
   };
   if (version !== undefined) headers["If-Match"] = etag(version);
+  return headers;
+}
+
+async function executeMutation<T>(
+  request: (headers: MutationHeaders) => Promise<GeneratedResponse<T>>,
+  headers: MutationHeaders,
+): Promise<ApiReadback<NonNullable<T>>> {
   try {
     return await unwrap(request(headers));
   } catch (error) {
     throw asProblem(error);
   }
+}
+
+export async function mutate<T>(
+  request: (headers: MutationHeaders) => Promise<GeneratedResponse<T>>,
+  version?: number,
+  requestIdempotencyKey = idempotencyKey(),
+): Promise<ApiReadback<NonNullable<T>>> {
+  return executeMutation(
+    request,
+    mutationHeaders(version, requestIdempotencyKey),
+  );
+}
+
+export async function mutateWithRetry<T>(
+  request: (headers: MutationHeaders) => Promise<GeneratedResponse<T>>,
+  version?: number,
+  requestIdempotencyKey = idempotencyKey(),
+): Promise<ApiReadback<NonNullable<T>>> {
+  const headers = mutationHeaders(version, requestIdempotencyKey);
+  for (const delayMs of mutationRetryDelaysMs) {
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) =>
+        globalThis.setTimeout(resolve, delayMs),
+      );
+    }
+    try {
+      return await executeMutation(request, headers);
+    } catch (error) {
+      const problem = asProblem(error);
+      if (!problem.retryable || delayMs === mutationRetryDelaysMs.at(-1)) {
+        throw problem;
+      }
+    }
+  }
+  throw new Error("Mutation retry attempts were not executed");
 }

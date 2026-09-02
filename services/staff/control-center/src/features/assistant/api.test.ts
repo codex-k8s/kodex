@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AssistantConversation } from "@/shared/api/generated/openapi/types.gen";
 
@@ -27,14 +27,6 @@ vi.mock("@/shared/api/problem", () => ({
   asProblem: (error: unknown) => error,
   unwrap: (value: unknown) => Promise.resolve(value),
 }));
-vi.mock("@/shared/api/mutation", () => ({
-  mutate: (request: (headers: Record<string, string>) => Promise<unknown>) =>
-    request({
-      "Idempotency-Key": "test-idempotency",
-      "X-CSRF-Token": "test-csrf",
-    }),
-}));
-
 import { appendTurn } from "@/features/assistant/api";
 
 function conversation(
@@ -61,13 +53,27 @@ function conversation(
 }
 
 describe("assistant api mutation reconciliation", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    vi.stubGlobal("crypto", {
+      randomUUID: () => "stable-assistant-idempotency-key",
+    });
+  });
 
-  it("принимает только один новый авторитетный USER-turn", async () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("повторяет turn с теми же key и полным payload", async () => {
+    vi.useFakeTimers();
     const initial = conversation([]);
-    const authoritative = conversation([
+    const ownResult = conversation([
       {
-        ref: "trn_user",
+        ref: "trn_own",
         sequence: 1,
         role: "USER",
         content: "Измени назначение",
@@ -78,31 +84,67 @@ describe("assistant api mutation reconciliation", () => {
     const uncertain = Object.assign(new Error("response body was lost"), {
       retryable: true,
     });
-    mocks.addAssistantTurn.mockRejectedValueOnce(uncertain);
-    mocks.listAssistantConversations.mockResolvedValueOnce({
-      data: { items: [authoritative] },
-    });
+    mocks.addAssistantTurn
+      .mockRejectedValueOnce(uncertain)
+      .mockResolvedValueOnce({ data: ownResult });
 
-    await expect(appendTurn(initial, "Измени назначение")).resolves.toBe(
-      authoritative,
+    const result = appendTurn(
+      initial,
+      "Измени назначение",
+      "attachment-set-own",
     );
-    expect(mocks.addAssistantTurn).toHaveBeenCalledTimes(1);
-    expect(mocks.listAssistantConversations).toHaveBeenCalledTimes(1);
+    await vi.runAllTimersAsync();
+    await expect(result).resolves.toBe(ownResult);
+
+    expect(mocks.addAssistantTurn).toHaveBeenCalledTimes(2);
+    expect(mocks.addAssistantTurn.mock.calls[0]?.[0]).toEqual(
+      mocks.addAssistantTurn.mock.calls[1]?.[0],
+    );
+    expect(mocks.addAssistantTurn.mock.calls[1]?.[0]).toEqual({
+      path: { conversationRef: "cnv_sales" },
+      body: {
+        content: "Измени назначение",
+        attachmentSetRef: "attachment-set-own",
+      },
+      headers: {
+        "Idempotency-Key": "stable-assistant-idempotency-key",
+        "X-CSRF-Token": "a".repeat(43),
+      },
+      signal: mocks.signal,
+    });
+    expect(mocks.listAssistantConversations).not.toHaveBeenCalled();
   });
 
-  it("не скрывает неопределённый ответ без точного нового turn", async () => {
+  it("не принимает совпавший turn из параллельной вкладки", async () => {
+    vi.useFakeTimers();
     const initial = conversation([]);
     const uncertain = Object.assign(new Error("response body was lost"), {
       retryable: true,
     });
-    mocks.addAssistantTurn.mockRejectedValueOnce(uncertain);
-    mocks.listAssistantConversations.mockResolvedValueOnce({
-      data: { items: [initial] },
+    mocks.addAssistantTurn.mockRejectedValue(uncertain);
+    mocks.listAssistantConversations.mockResolvedValue({
+      data: {
+        items: [
+          conversation([
+            {
+              ref: "trn_parallel_tab",
+              sequence: 1,
+              role: "USER",
+              content: "Измени назначение",
+              state: "QUEUED",
+              createdAt: "2026-09-02T00:00:01Z",
+            },
+          ]),
+        ],
+      },
     });
 
-    await expect(appendTurn(initial, "Измени назначение")).rejects.toBe(
-      uncertain,
-    );
-    expect(mocks.addAssistantTurn).toHaveBeenCalledTimes(1);
+    const result = appendTurn(initial, "Измени назначение", "attachment-own");
+    const rejected = expect(result).rejects.toBe(uncertain);
+    await vi.runAllTimersAsync();
+    await rejected;
+
+    expect(mocks.addAssistantTurn).toHaveBeenCalledTimes(3);
+    expect(mocks.listAssistantConversations).not.toHaveBeenCalled();
   });
 });

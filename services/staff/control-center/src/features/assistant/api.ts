@@ -19,7 +19,7 @@ import type {
   AssistantPlanOperationInput,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate } from "@/shared/api/mutation";
+import { mutate, mutateWithRetry } from "@/shared/api/mutation";
 import { asProblem, unwrap } from "@/shared/api/problem";
 
 const readRetryDelaysMs = [0, 200, 600] as const;
@@ -92,40 +92,19 @@ export async function appendTurn(
   content: string,
   attachmentSetRef?: string,
 ): Promise<AssistantConversation> {
-  const knownTurnRefs = new Set(conversation.turns.map((turn) => turn.ref));
-  try {
-    return (
-      await mutate((headers) =>
-        addAssistantTurn({
-          path: { conversationRef: conversation.ref },
-          body: { content, ...(attachmentSetRef ? { attachmentSetRef } : {}) },
-          headers: {
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-          },
-          signal: requestSignal(),
-        }),
-      )
-    ).data;
-  } catch (error) {
-    const mutationProblem = asProblem(error);
-    if (!mutationProblem.retryable) throw mutationProblem;
-    try {
-      const authoritative = (
-        await readConversations(conversation.projectRef)
-      ).find((item) => item.ref === conversation.ref);
-      const matchingTurns = authoritative?.turns.filter(
-        (turn) =>
-          turn.role === "USER" &&
-          turn.content === content &&
-          !knownTurnRefs.has(turn.ref),
-      );
-      if (authoritative && matchingTurns?.length === 1) return authoritative;
-    } catch {
-      // Сохраняем исходную ошибку, если авторитетная сверка недоступна.
-    }
-    throw mutationProblem;
-  }
+  return (
+    await mutateWithRetry((headers) =>
+      addAssistantTurn({
+        path: { conversationRef: conversation.ref },
+        body: { content, ...(attachmentSetRef ? { attachmentSetRef } : {}) },
+        headers: {
+          "Idempotency-Key": headers["Idempotency-Key"],
+          "X-CSRF-Token": headers["X-CSRF-Token"],
+        },
+        signal: requestSignal(),
+      }),
+    )
+  ).data;
 }
 
 async function readWithRetry<T>(request: () => Promise<T>): Promise<T> {
