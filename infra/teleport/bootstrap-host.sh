@@ -83,6 +83,10 @@ teleport_kubeconfig=$data_directory/kubeconfig
 unit_file=/etc/systemd/system/teleport.service
 role_name=kodex-dev-access
 
+teleport_ctl() {
+  SSL_CERT_FILE="$trust_bundle_file" tctl "$@"
+}
+
 validate_credential_file() {
   local path=$1
   [[ "$path" == /* && -f "$path" && -s "$path" && ! -L "$path" &&
@@ -297,11 +301,11 @@ if [[ "$mode" == apply ]]; then
   systemctl restart teleport
   for _ in $(seq 1 90); do
     systemctl is-active --quiet teleport &&
-      tctl --config="$config_file" status >/dev/null 2>&1 && break
+      teleport_ctl --config="$config_file" status >/dev/null 2>&1 && break
     sleep 2
   done
   systemctl is-active --quiet teleport || fail 'Teleport host service is unavailable'
-  tctl --config="$config_file" status >/dev/null 2>&1 || fail 'Teleport Auth Service is unavailable'
+  teleport_ctl --config="$config_file" status >/dev/null 2>&1 || fail 'Teleport Auth Service is unavailable'
 
   role_file=$temporary_directory/role.json
   connector_file=$temporary_directory/github.json
@@ -336,8 +340,8 @@ if [[ "$mode" == apply ]]; then
       }
     ' >"$connector_file"
   chmod 0600 "$role_file" "$connector_file"
-  tctl --config="$config_file" create -f "$role_file" >/dev/null
-  tctl --config="$config_file" create -f "$connector_file" >/dev/null
+  teleport_ctl --config="$config_file" create -f "$role_file" >/dev/null
+  teleport_ctl --config="$config_file" create -f "$connector_file" >/dev/null
 fi
 
 systemctl is-enabled --quiet teleport || fail 'Teleport host service is not enabled'
@@ -362,7 +366,7 @@ HOST="$host" BACKEND_ADDRESS="$backend_address" TELEPORT_KUBECONFIG="$teleport_k
   .kubernetes_service.kubeconfig_file == strenv(TELEPORT_KUBECONFIG) and
   .kubernetes_service.labels.environment == "development"
 ' "$config_file" >/dev/null || fail 'Teleport host service configuration differs from the supported profile'
-tctl --config="$config_file" get "role/$role_name" --format=json | jq -e \
+teleport_ctl --config="$config_file" get "role/$role_name" --format=json | jq -e \
   --arg login "$ssh_login" --arg group "$kubernetes_group" '
     length == 1 and
     .[0].spec.allow.logins == [$login] and
@@ -371,7 +375,7 @@ tctl --config="$config_file" get "role/$role_name" --format=json | jq -e \
     .[0].spec.allow.kubernetes_groups == [$group] and
     ((.[0].spec.allow.kubernetes_groups | index("system:masters")) == null)
   ' >/dev/null || fail 'Teleport bounded development role readback failed'
-tctl --config="$config_file" get github/github --format=json | jq -e \
+teleport_ctl --config="$config_file" get github/github --format=json | jq -e \
   --arg host "$host" --arg organization "$github_organization" --arg team "$github_team" '
     length == 1 and
     .[0].spec.redirect_url == ("https://" + $host + "/v1/webapi/github/callback") and

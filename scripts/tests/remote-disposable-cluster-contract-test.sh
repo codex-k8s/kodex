@@ -274,6 +274,7 @@ for teleport_ownership_contract in \
 done
 for teleport_tls_contract in \
   'Environment=SSL_CERT_FILE=/var/lib/teleport/certs/trust-bundle.pem' \
+  'SSL_CERT_FILE="$trust_bundle_file" tctl "$@"' \
   'cat "$system_ca_file" "$ca_certificate_file" >"$temporary_bundle"' \
   'openssl verify -CAfile "$trust_bundle_file" "$proxy_certificate_file"'; do
   rg -Fq -- "$teleport_tls_contract" "$repository_root/infra/teleport/bootstrap-host.sh" ||
