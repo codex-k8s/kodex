@@ -122,7 +122,7 @@ apply_teleport() {
   printf '%s' "$KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_ID" >"$client_id_file"
   printf '%s' "$KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET" >"$client_secret_file"
   chmod 0600 "$client_id_file" "$client_secret_file"
-  "$repository_root/infra/teleport/bootstrap.sh" --mode apply \
+  KUBECONFIG="$kubeconfig" "$repository_root/infra/teleport/bootstrap.sh" --mode apply \
     "${teleport_arguments[@]}" --github-client-id-file "$client_id_file" \
     --github-client-secret-file "$client_secret_file"
 }

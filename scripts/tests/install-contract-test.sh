@@ -537,6 +537,7 @@ for remote_contract in \
   'preflight-public-hosts.sh' \
   'prepare-playwright-browser.sh' \
   'KODEX_E2E_BASE_HOST_RESOLUTION=loopback' \
+  'KUBECONFIG="$kubeconfig" "$repository_root/infra/teleport/bootstrap.sh"' \
   'host-preflight|host-apply|host-readback|up|status|smoke|e2e|down|teleport' \
   'KODEX_REMOTE_TELEPORT_GITHUB_CLIENT_SECRET'; do
   rg -Fq -- "$remote_contract" \
