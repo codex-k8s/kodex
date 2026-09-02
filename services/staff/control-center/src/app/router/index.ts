@@ -1,6 +1,10 @@
 import { createRouter, createWebHistory } from "vue-router";
 
-import { lazyPage } from "./lazy-page";
+import {
+  clearLazyPageRecovery,
+  lazyPage,
+  recoverLazyPageNavigation,
+} from "./lazy-page";
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -189,6 +193,14 @@ export const router = createRouter({
     { path: "/:pathMatch(.*)*", redirect: "/" },
   ],
   scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
+});
+
+router.onError((error, to) => {
+  recoverLazyPageNavigation(error, to.fullPath);
+});
+
+router.afterEach((to, _from, failure) => {
+  if (!failure) clearLazyPageRecovery(to.fullPath);
 });
 
 declare module "vue-router" {

@@ -35,4 +35,10 @@ describe("bootstrap Control Center", () => {
     expect(viteConfigSource).toContain('"**/test-results/**"');
     expect(viteConfigSource).toContain('"**/playwright-report/**"');
   });
+
+  it("не подавляет Vite preload error до bounded router recovery", () => {
+    expect(mainSource).toContain('"vite:preloadError"');
+    expect(mainSource).not.toContain("event.preventDefault()");
+    expect(mainSource).not.toContain("window.location.reload()");
+  });
 });

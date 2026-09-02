@@ -13,11 +13,9 @@ import { configureApiClient } from "@/shared/api/client";
 import { setUnauthorizedHandler } from "@/shared/api/problem";
 import { loadRuntimeConfig } from "@/shared/config/runtime";
 
-window.addEventListener("vite:preloadError", (event) => {
-  event.preventDefault();
+window.addEventListener("vite:preloadError", () => {
   document.documentElement.dataset.kodexPreload = "failed";
   window.dispatchEvent(new Event("kodex:preload-error"));
-  console.error("Dynamic module loading failed; user refresh is required");
 });
 
 async function bootstrap(): Promise<void> {
