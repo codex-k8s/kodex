@@ -192,6 +192,15 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
   $intent == $parameters and
   $intent.providerAppArmorProfile == "kodex-provider-runtime"
 ' >/dev/null || fail 'provider AppArmor profile is not projected into admission parameters'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "platform-postgresql-exact-clients" and
+    any(.spec.ingress[].from[]?.podSelector.matchExpressions[]?;
+      .key == "app.kubernetes.io/name" and
+      .operator == "In" and
+      (.values | index("kodex-image-admission") != null)))
+' >/dev/null || fail 'PostgreSQL ingress omits protected image-admission jobs'
 expected_runtime_contract_digest=$(
   jq -cS . "$source_root/contracts/runtime-controller/v6/agent-runner-input.schema.json" |
     sha256sum | awk '{print $1}'

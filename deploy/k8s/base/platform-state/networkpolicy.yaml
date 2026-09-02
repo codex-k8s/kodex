@@ -26,6 +26,7 @@ spec:
                   - internal-rpc-authority-readback-attestor
                   - internal-rpc-authority-restore-controller
                   - internal-rpc-authority-restore-recovery
+                  - kodex-image-admission
                   - kodex-postgresql-runtime-credentials
                   - role-image-builder
                   - runtime-controller
