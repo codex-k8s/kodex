@@ -559,7 +559,7 @@ for teleport_contract in \
   '.service.type = "ClusterIP"' \
   '/v1/webapi/github/callback' \
   'kubernetes_groups:["system:masters"]' \
-  'tctl create -f -'; do
+  'kubectl -n teleport exec -i deployment/teleport-auth -- tctl create -f -'; do
   rg -Fq -- "$teleport_contract" "$repository_root/infra/teleport/bootstrap.sh" ||
     fail "Teleport access contract is absent: $teleport_contract"
 done

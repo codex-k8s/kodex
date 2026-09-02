@@ -168,9 +168,9 @@ if [[ "$mode" == apply ]]; then
         teams_to_roles:[{organization:$organization,team:$team,roles:["kodex-k8s-admin"]}]}
     }' >"$connector_file"
   chmod 0600 "$role_file" "$connector_file"
-  kubectl -n teleport exec deployment/teleport-auth -- tctl create -f - \
+  kubectl -n teleport exec -i deployment/teleport-auth -- tctl create -f - \
     <"$role_file" >/dev/null
-  kubectl -n teleport exec deployment/teleport-auth -- tctl create -f - \
+  kubectl -n teleport exec -i deployment/teleport-auth -- tctl create -f - \
     <"$connector_file" >/dev/null
   unset client_id client_secret
 fi
