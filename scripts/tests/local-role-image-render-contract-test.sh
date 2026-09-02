@@ -201,6 +201,17 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       .operator == "In" and
       (.values | index("kodex-image-admission") != null)))
 ' >/dev/null || fail 'PostgreSQL ingress omits protected image-admission jobs'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "internal-rpc-authority-readback-attestor-exact-paths" and
+    any(.spec.ingress[].from[]?.podSelector;
+      .matchLabels["app.kubernetes.io/name"] == "kodex-image-admission" and
+      any(.matchExpressions[]?;
+        .key == "kodex.dev/image-admission-phase" and
+        .operator == "In" and
+        (.values | sort) == (["admit","claim","promote"] | sort))))
+' >/dev/null || fail 'authority attestor ingress omits protected image-admission jobs'
 expected_runtime_contract_digest=$(
   jq -cS . "$source_root/contracts/runtime-controller/v6/agent-runner-input.schema.json" |
     sha256sum | awk '{print $1}'
