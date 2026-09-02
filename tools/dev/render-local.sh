@@ -1449,6 +1449,7 @@ RUNNER_IMAGE="$runner_image" yq -o=json -I=0 '.' "$output" | jq -s -e \
   --arg admissionImage "$image_admission_image" \
   --arg toolsImage "$image_admission_tools_image" \
   --arg authorityImage "$authority_image" \
+  --arg providerAppArmorProfile "$provider_apparmor_profile" \
   --arg runnerDigest "$runner_digest" '
   . as $resources |
   (first($resources[] | select(.kind == "ConfigMap" and
@@ -1462,6 +1463,7 @@ RUNNER_IMAGE="$runner_image" yq -o=json -I=0 '.' "$output" | jq -s -e \
   $intent.data.toolsImage == $toolsImage and
   $intent.data.admissionImage == $admissionImage and
   $intent.data.authorityImage == $authorityImage and
+  $intent.data.providerAppArmorProfile == $providerAppArmorProfile and
   $intent.data.pullRegistryHost == $pullHost and
   $intent.data.promotedPullRepository == ($pullHost + "/kodex/roles") and
   $intent.data.nodeReadbackImage ==

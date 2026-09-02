@@ -16,7 +16,9 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -30,6 +32,7 @@ const (
 	ProviderSocketPath           = "/run/kodex/provider/provider.sock"
 	maximumBrokerBytes           = 4 << 20
 	providerRefreshCommitTimeout = 40 * time.Second
+	providerSandboxProbeTimeout  = 5 * time.Second
 )
 
 var ErrProviderAuthentication = errors.New("Codex provider authentication is unavailable")
@@ -207,6 +210,9 @@ func ServeProviderBroker(ctx context.Context) error {
 	if err := unix.Prctl(unix.PR_SET_DUMPABLE, 0, 0, 0, 0); err != nil {
 		return errors.New("disable provider broker process inspection")
 	}
+	if err := verifyProviderSandbox(ctx, func(command *exec.Cmd) error { return command.Run() }); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(ProviderSocketPath), 0o770); err != nil {
 		return errors.New("create provider broker socket directory")
 	}
@@ -235,6 +241,23 @@ func ServeProviderBroker(ctx context.Context) error {
 		}
 		_ = connection.Close()
 	}
+}
+
+func verifyProviderSandbox(ctx context.Context, execute func(*exec.Cmd) error) error {
+	if execute == nil {
+		return errors.New("Codex provider sandbox probe is unavailable")
+	}
+	probeContext, cancel := context.WithTimeout(ctx, providerSandboxProbeTimeout)
+	defer cancel()
+	uid := strconv.Itoa(os.Geteuid())
+	command := exec.CommandContext(probeContext, "/usr/bin/bwrap", "--unshare-user", "--uid", uid, "--gid", uid,
+		"--ro-bind", "/", "/", "/usr/bin/true")
+	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}
+	command.Stdin, command.Stdout, command.Stderr = nil, io.Discard, io.Discard
+	if err := execute(command); err != nil {
+		return errors.New("Codex provider sandbox is unavailable")
+	}
+	return nil
 }
 
 func serveBrokerRequest(ctx context.Context, connection net.Conn) error {

@@ -24,6 +24,18 @@ case "$*" in
   'config view --minify --raw -o json')
     printf '%s\n' '{"clusters":[{"cluster":{"server":"https://127.0.0.1:6443","certificate-authority-data":"Zml4dHVyZS1jYQ=="}}]}'
     ;;
+  '-n kodex-system get configmap/kodex-image-admission-policy -o json')
+    printf '%s\n' '{"immutable":true,"data":{"providerAppArmorProfile":"kodex-provider-runtime"}}'
+    ;;
+  '-n kodex-system get deployment/runtime-controller -o json')
+    printf '%s\n' '{"spec":{"template":{"spec":{"containers":[{"name":"runtime-controller","env":[{"name":"RUNTIME_CONTROLLER_PROVIDER_APPARMOR_PROFILE","value":"kodex-provider-runtime"}]}]}}}}'
+    ;;
+  "-n kodex-runtime get pods -l runtime.kodex.dev/mode=warm -o json")
+    printf '%s\n' '{"items":[{"metadata":{"name":"system-assistant-warm"},"status":{"phase":"Running","containerStatuses":[{"name":"provider-runtime","ready":true}]},"spec":{"containers":[{"name":"provider-runtime","securityContext":{"runAsUser":10002,"runAsGroup":10002,"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"seccompProfile":{"type":"Unconfined"},"appArmorProfile":{"type":"Localhost","localhostProfile":"kodex-provider-runtime"}}}]}}]}'
+    ;;
+  -n\ kodex-runtime\ exec\ system-assistant-warm\ -c\ provider-runtime\ --\ sh\ -c*)
+    exit 0
+    ;;
   delete\ *) printf '%s\n' "$*" >>"${KODEX_TEST_DELETE_LOG:?}" ;;
   'get namespace kodex-runtime'|'get namespace kodex-system'|'get namespace identity'|'get namespace kodex-trust')
     exit 1

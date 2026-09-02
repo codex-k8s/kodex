@@ -321,6 +321,47 @@ readback_teleport() {
       "${teleport_route_arguments[@]}"
 }
 
+readback_provider_sandbox() {
+  local inventory pod_name
+  kubectl -n kodex-system get configmap/kodex-image-admission-policy -o json | jq -e '
+    .immutable == true and
+    .data.providerAppArmorProfile == "kodex-provider-runtime"
+  ' >/dev/null || fail 'provider AppArmor policy projection is invalid'
+  kubectl -n kodex-system get deployment/runtime-controller -o json | jq -e '
+    [.spec.template.spec.containers[] |
+      select(.name == "runtime-controller") | .env[] |
+      select(.name == "RUNTIME_CONTROLLER_PROVIDER_APPARMOR_PROFILE")] ==
+      [{name:"RUNTIME_CONTROLLER_PROVIDER_APPARMOR_PROFILE",value:"kodex-provider-runtime"}]
+  ' >/dev/null || fail 'runtime-controller does not consume the provider AppArmor profile'
+  inventory=$(kubectl -n kodex-runtime get pods \
+    -l 'runtime.kodex.dev/mode=warm' -o json) ||
+    fail 'warm runtime inventory is unavailable'
+  pod_name=$(jq -er '
+    [.items[] |
+      select(.metadata.deletionTimestamp == null and .status.phase == "Running") |
+      select(any(.status.containerStatuses[]?;
+        .name == "provider-runtime" and .ready == true))] |
+    if length == 1 then .[0].metadata.name
+    else error("one ready warm runtime is required") end
+  ' <<<"$inventory") || fail 'warm provider runtime is not ready'
+  jq -e --arg pod_name "$pod_name" '
+    .items[] | select(.metadata.name == $pod_name) |
+    .spec.containers[] | select(.name == "provider-runtime") |
+    .securityContext.runAsUser == 10002 and
+    .securityContext.runAsGroup == 10002 and
+    .securityContext.allowPrivilegeEscalation == false and
+    .securityContext.capabilities.drop == ["ALL"] and
+    .securityContext.seccompProfile.type == "Unconfined" and
+    .securityContext.appArmorProfile == {
+      type:"Localhost",localhostProfile:"kodex-provider-runtime"
+    }
+  ' <<<"$inventory" >/dev/null || fail 'warm provider runtime sandbox intent is invalid'
+  kubectl -n kodex-runtime exec "$pod_name" -c provider-runtime -- sh -c '
+    grep -Fx "kodex-provider-runtime (unconfined)" /proc/self/attr/current >/dev/null &&
+    bwrap --unshare-user --uid 10002 --gid 10002 --ro-bind / / true
+  ' >/dev/null || fail 'warm provider runtime sandbox readback failed'
+}
+
 if [[ "$command_name" == teleport ]]; then
   apply_teleport
   exit 0
@@ -334,20 +375,29 @@ case "$command_name" in
     "$repository_root/dev.sh" up --kubeconfig "$kubeconfig" --context "$context" \
       --state-directory "$state_directory" --cluster-marker "$cluster_marker" \
       --expected-sha "$expected_sha"
+    readback_provider_sandbox
     apply_teleport_route
     ;;
   status)
     "$repository_root/dev.sh" status --kubeconfig "$kubeconfig" \
       --context "$context" --state-directory "$state_directory" \
       --cluster-marker "$cluster_marker" --expected-sha "$expected_sha"
+    readback_provider_sandbox
     readback_teleport
     ;;
-  smoke|down)
+  smoke)
+    "$repository_root/dev.sh" "$command_name" --kubeconfig "$kubeconfig" \
+      --context "$context" --state-directory "$state_directory" \
+      --cluster-marker "$cluster_marker" --expected-sha "$expected_sha"
+    readback_provider_sandbox
+    ;;
+  down)
     "$repository_root/dev.sh" "$command_name" --kubeconfig "$kubeconfig" \
       --context "$context" --state-directory "$state_directory" \
       --cluster-marker "$cluster_marker" --expected-sha "$expected_sha"
     ;;
   e2e)
+    readback_provider_sandbox
     e2e_arguments=(--kubeconfig "$kubeconfig" --context "$context" \
       --state-directory "$state_directory" --cluster-marker "$cluster_marker" \
       --expected-sha "$expected_sha")
@@ -357,6 +407,7 @@ case "$command_name" in
       "$repository_root/dev.sh" e2e "${e2e_arguments[@]}"
     ;;
   acceptance)
+    readback_provider_sandbox
     readback_teleport
     acceptance_arguments=(--skip-build --kubeconfig "$kubeconfig" --context "$context" \
       --state-directory "$state_directory" --cluster-marker "$cluster_marker" \
@@ -365,6 +416,7 @@ case "$command_name" in
     [[ -z "$run_timeout_ms" ]] || acceptance_arguments+=(--run-timeout-ms "$run_timeout_ms")
     KODEX_E2E_BASE_HOST_RESOLUTION=loopback \
       "$repository_root/dev.sh" full-e2e "${acceptance_arguments[@]}"
+    readback_provider_sandbox
     readback_teleport
     ;;
 esac
