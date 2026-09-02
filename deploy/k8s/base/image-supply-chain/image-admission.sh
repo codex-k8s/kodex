@@ -68,6 +68,22 @@ require_policy() {
   done
 }
 
+prepare_offline_signing_config() {
+  signing_config=/work/cosign-signing-config.json
+  umask 077
+  cosign signing-config create \
+    --no-default-fulcio \
+    --no-default-rekor \
+    --no-default-oidc \
+    --no-default-tsa \
+    --out "$signing_config" >/dev/null || fail "offline signing configuration failed"
+  jq -e '
+    (. | keys | sort) == ["mediaType","rekorTlogConfig","tsaConfig"] and
+    .mediaType == "application/vnd.dev.sigstore.signingconfig.v0.2+json" and
+    .rekorTlogConfig == {} and .tsaConfig == {}
+  ' "$signing_config" >/dev/null || fail "offline signing configuration is invalid"
+}
+
 verify_runtime_config() {
   config_file=$1
   jq -e '
@@ -433,7 +449,7 @@ verify_recovered_evidence() {
     for signed_name in image-digest provenance native-provenance sbom vulnerability; do
       signed_file="$evidence_directory/$signed_name.json"
       [ "$signed_name" = image-digest ] && signed_file="$evidence_directory/image-digest.subject"
-      cosign verify-blob --key "$evidence_directory/cosign.pub" \
+      cosign verify-blob --insecure-ignore-tlog --key "$evidence_directory/cosign.pub" \
         --bundle "$evidence_directory/$signed_name.sigstore.json" "$signed_file" >/dev/null 2>&1 ||
         fail "durable evidence signature verification failed"
     done
@@ -682,11 +698,14 @@ case "${1:-}" in
       verify_image_and_provenance
       COSIGN_PASSWORD=$(cat /identity/cosign.password)
       export COSIGN_PASSWORD
+      prepare_offline_signing_config
       printf '%s\n' "$image_digest" >/work/image-digest.subject
       cosign sign-blob --yes --key /identity/cosign.key \
+        --signing-config /work/cosign-signing-config.json \
         --bundle /work/image-digest.sigstore.json /work/image-digest.subject >/dev/null
       for evidence in provenance native-provenance sbom vulnerability; do
         cosign sign-blob --yes --key /identity/cosign.key \
+          --signing-config /work/cosign-signing-config.json \
           --bundle "/work/$evidence.sigstore.json" "/work/$evidence.json" >/dev/null
       done
     fi
@@ -699,10 +718,12 @@ case "${1:-}" in
     signature_identity=not-applicable-rejected
     if [ "$verdict" = ACCEPTED ]; then
       login_registry "$staging_host" /identity/username /identity/password
-      cosign verify-blob --key /identity/cosign.pub --bundle /work/image-digest.sigstore.json /work/image-digest.subject \
+      cosign verify-blob --insecure-ignore-tlog --key /identity/cosign.pub \
+        --bundle /work/image-digest.sigstore.json /work/image-digest.subject \
         >/work/signature-verification.json
       for evidence in provenance native-provenance sbom vulnerability; do
-        cosign verify-blob --key /identity/cosign.pub --bundle "/work/$evidence.sigstore.json" "/work/$evidence.json" \
+        cosign verify-blob --insecure-ignore-tlog --key /identity/cosign.pub \
+          --bundle "/work/$evidence.sigstore.json" "/work/$evidence.json" \
           >"/work/$evidence-verification.json"
       done
       signature_identity=$(sha256sum /identity/cosign.pub | awk '{print $1}')

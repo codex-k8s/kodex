@@ -660,6 +660,27 @@ if grep -Eq 'cosign\.key|sign-blob' <<<"$promotion_body"; then
   echo "promotion received evidence signing authority" >&2
   exit 1
 fi
+admission_script="$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'cosign signing-config create' "$admission_script" || {
+  echo "image admission does not materialize an explicit signing configuration" >&2
+  exit 1
+}
+for offline_signing_contract in \
+  '--no-default-fulcio' \
+  '--no-default-rekor' \
+  '--no-default-oidc' \
+  '--no-default-tsa' \
+  '--signing-config /work/cosign-signing-config.json' \
+  '--insecure-ignore-tlog'; do
+  grep -Fq -- "$offline_signing_contract" "$admission_script" || {
+    echo "offline signing contract is absent: $offline_signing_contract" >&2
+    exit 1
+  }
+done
+[[ $(grep -Fc -- '--insecure-ignore-tlog' "$admission_script") -eq 3 ]] || {
+  echo "not every key-based blob verification disables the unavailable transparency log" >&2
+  exit 1
+}
 grep -Fq 'image-admission-bridge authorize-promotion' <<<"$promotion_body"
 authorize_line=$(grep -n 'image-admission-bridge authorize-promotion' <<<"$promotion_body" | cut -d: -f1)
 copy_line=$(grep -n 'regctl image copy "$evidence_reference"' <<<"$promotion_body" | cut -d: -f1)
@@ -677,6 +698,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --key) public_key=$2; shift 2 ;;
     --bundle) bundle=$2; shift 2 ;;
+    --insecure-ignore-tlog) shift ;;
     --*) exit 1 ;;
     *) payload=$1; shift ;;
   esac
