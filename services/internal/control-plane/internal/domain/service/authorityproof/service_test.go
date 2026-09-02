@@ -139,7 +139,7 @@ func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 		Audience: producer.ApplicationCredentialAudience,
 		Subject:  "kodex-system-subject", CallerSPIFFEID: producer.CallerSPIFFEID,
 		WorkloadID: producer.CallerWorkloadID, OrganizationID: "kodex-installation",
-		Revision: 7, JTI: uuid.NewString(), IssuedAt: now.Unix(), NotBefore: now.Unix(),
+		Revision: 7, CredentialGeneration: 1, JTI: uuid.NewString(), IssuedAt: now.Unix(), NotBefore: now.Unix(),
 		ExpiresAt: now.Add(workerGrantTTL).Unix(),
 	}
 	compact, err := internalrpcauth.SignCanonicalJSON(claims, key, internalrpcauth.ProtectedHeaderExpectation{
@@ -151,6 +151,18 @@ func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 	if _, err := service.verifyWorkerGrant(compact, producer); err != nil {
 		t.Fatalf("корректный worker grant отклонён: %v", err)
 	}
+
+	claims.CredentialGeneration = 2
+	compact, err = internalrpcauth.SignCanonicalJSON(claims, key, internalrpcauth.ProtectedHeaderExpectation{
+		Type: workerGrantType, KeyID: key.KeyID,
+	})
+	if err != nil {
+		t.Fatalf("подписать grant с неверным поколением: %v", err)
+	}
+	if _, err := service.verifyWorkerGrant(compact, producer); err == nil {
+		t.Fatal("worker grant с поколением другого ключа был принят")
+	}
+	claims.CredentialGeneration = 1
 
 	claims.Audience = "urn:kodex:platform-worker:another-workload"
 	compact, err = internalrpcauth.SignCanonicalJSON(claims, key, internalrpcauth.ProtectedHeaderExpectation{

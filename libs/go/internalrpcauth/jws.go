@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -66,6 +67,27 @@ type ES256Key struct {
 // PublicOnly возвращает копию без приватного материала.
 func (key ES256Key) PublicOnly() ES256Key {
 	return ES256Key{KeyID: key.KeyID, Public: key.Public}
+}
+
+// KeyGeneration возвращает положительное поколение из канонического суффикса
+// kid вида "<identity>-g<N>". Поколение связывает credential с ключом и не
+// меняется при штатном обновлении короткоживущего токена.
+func KeyGeneration(keyID string) (uint64, error) {
+	separator := strings.LastIndex(keyID, "-g")
+	if separator < 1 || separator+2 >= len(keyID) {
+		return 0, ErrKey
+	}
+	raw := keyID[separator+2:]
+	if raw[0] == '0' || strings.IndexFunc(raw, func(value rune) bool {
+		return value < '0' || value > '9'
+	}) >= 0 {
+		return 0, ErrKey
+	}
+	generation, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil || generation == 0 || generation > 9007199254740991 {
+		return 0, ErrKey
+	}
+	return generation, nil
 }
 
 // SignCanonicalJSON канонизирует JSON и создаёт compact ES256 JWS.

@@ -221,6 +221,29 @@ func TestGenerateMarshalAndParseES256Key(t *testing.T) {
 	}
 }
 
+func TestKeyGeneration(t *testing.T) {
+	t.Parallel()
+	for keyID, expected := range map[string]uint64{
+		"runtime-controller-platform-worker-g1": 1,
+		"issuer-g42":                            42,
+		"issuer-g9007199254740991":              9007199254740991,
+	} {
+		keyID, expected := keyID, expected
+		t.Run(keyID, func(t *testing.T) {
+			t.Parallel()
+			actual, err := KeyGeneration(keyID)
+			if err != nil || actual != expected {
+				t.Fatalf("KeyGeneration(%q) = %d, %v; ожидалось %d", keyID, actual, err, expected)
+			}
+		})
+	}
+	for _, keyID := range []string{"", "g1", "issuer", "issuer-g", "issuer-g0", "issuer-g01", "issuer-g-1", "issuer-g9007199254740992"} {
+		if _, err := KeyGeneration(keyID); !errors.Is(err, ErrKey) {
+			t.Fatalf("неканонический kid %q принят: %v", keyID, err)
+		}
+	}
+}
+
 func testJWK(t *testing.T, keyID string) ES256Key {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

@@ -36,6 +36,49 @@ func TestRotateWritesExactBoundedGrant(t *testing.T) {
 	}
 }
 
+func TestRotateAdvancesGrantRevisionWithoutChangingCredentialGeneration(t *testing.T) {
+	t.Parallel()
+	directory := t.TempDir()
+	key, err := internalrpcauth.GenerateES256Key("image-promotion-platform-worker-g7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration := config{WorkloadID: "image-promotion", OutputFile: filepath.Join(directory, "application-grant.jws")}
+	first := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
+	if err := rotate(configuration, key, func() time.Time { return first }); err != nil {
+		t.Fatal(err)
+	}
+	firstClaims := readTestClaims(t, configuration.OutputFile, key)
+	second := first.Add(time.Minute)
+	if err := rotate(configuration, key, func() time.Time { return second }); err != nil {
+		t.Fatal(err)
+	}
+	secondClaims := readTestClaims(t, configuration.OutputFile, key)
+	if firstClaims.Revision >= secondClaims.Revision || firstClaims.JTI == secondClaims.JTI {
+		t.Fatal("штатное обновление не выпустило новый grant")
+	}
+	if firstClaims.CredentialGeneration != 7 || secondClaims.CredentialGeneration != 7 {
+		t.Fatalf("поколение credential изменилось при обновлении: %d -> %d", firstClaims.CredentialGeneration, secondClaims.CredentialGeneration)
+	}
+}
+
+func readTestClaims(t *testing.T, path string, key internalrpcauth.ES256Key) claims {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verified, err := internalrpcauth.VerifyCanonicalJSON(string(raw), key.PublicOnly(), internalrpcauth.ProtectedHeaderExpectation{Type: grantType, KeyID: key.KeyID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value claims
+	if err := internalrpcauth.DecodeCanonicalJSON(verified.CanonicalPayload, &value); err != nil {
+		t.Fatal(err)
+	}
+	return value
+}
+
 func TestWriteAtomicRejectsSymlinkDirectory(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
