@@ -37,8 +37,9 @@ ipv6_ingress_bridge_script="$script_directory/configure-ipv6-ingress-bridge.sh"
 provider_apparmor_profile_source="$script_directory/../../infra/apparmor/kodex-provider-runtime"
 provider_apparmor_profile_target=/etc/apparmor.d/kodex-provider-runtime
 pod_cidr=10.42.0.0/16
-service_cidr=10.43.0.0/16
+host_service_address=10.254.254.1
 k3s_resolver_file=/etc/rancher/k3s/resolv.conf
+hot_reload_sysctl_file=/etc/sysctl.d/99-kodex-hot-reload.conf
 local_api_interface=kodex-api0
 local_api_service=kodex-local-api-address.service
 
@@ -93,8 +94,8 @@ configure_k3s_resolver() {
   temporary_file=$(mktemp)
   awk '
     $1 == "nameserver" &&
+    $2 ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/ &&
     $2 !~ /^127\./ &&
-    $2 != "::1" &&
     !seen[$2]++ &&
     count < 3 {
       print "nameserver " $2
@@ -120,7 +121,7 @@ readback_k3s_resolver() {
   awk '
     $1 == "search" || $1 == "domain" { exit 1 }
     $1 == "nameserver" {
-      if ($2 ~ /^127\./ || $2 == "::1" || seen[$2]++) exit 1
+      if ($2 !~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/ || $2 ~ /^127\./ || seen[$2]++) exit 1
       count++
     }
     END { if (count < 1 || count > 3) exit 1 }
@@ -137,8 +138,118 @@ remove_legacy_firewall() {
   fi
 }
 
+read_k3s_ipv4_nameservers() {
+  awk '
+    $1 == "nameserver" && $2 ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/ && !seen[$2]++ {
+      print $2
+    }
+  ' "$k3s_resolver_file"
+}
+
+require_k3s_ipv4_nameservers() {
+  [[ "$(read_k3s_ipv4_nameservers | wc -l)" -ge 1 ]] ||
+    fail 'no IPv4 upstream DNS server is available for the exact firewall policy'
+}
+
+normalize_ufw_rules() {
+  python3 /dev/fd/3 3<<'PY'
+import json
+import re
+import shlex
+import sys
+
+normalized = []
+for raw_line in sys.stdin:
+    line = raw_line.strip()
+    if not line or line.startswith("Added user rules"):
+        continue
+    tokens = shlex.split(line)
+    if not tokens or tokens[0] != "ufw":
+        raise SystemExit(1)
+    position = 1
+    routed = position < len(tokens) and tokens[position] == "route"
+    position += int(routed)
+    if position >= len(tokens) or tokens[position] != "allow":
+        raise SystemExit(1)
+    position += 1
+    if position < len(tokens) and re.fullmatch(r"[0-9]+/(tcp|udp)", tokens[position]):
+        service = tokens[position]
+        position += 1
+        if position < len(tokens):
+            if position + 2 != len(tokens) or tokens[position] != "comment":
+                raise SystemExit(1)
+            position += 2
+        normalized.append({"route": routed, "service": service})
+        continue
+    rule = {
+        "route": routed,
+        "protocol": "any",
+        "source": "any",
+        "destination": "any",
+        "port": "any",
+        "inInterface": "",
+        "outInterface": "",
+    }
+    seen = set()
+    while position < len(tokens):
+        token = tokens[position]
+        if token == "comment":
+            if position + 2 != len(tokens):
+                raise SystemExit(1)
+            position += 2
+            continue
+        if token in ("in", "out"):
+            if token in seen or position + 2 >= len(tokens) or tokens[position + 1] != "on":
+                raise SystemExit(1)
+            rule[f"{token}Interface"] = tokens[position + 2]
+            seen.add(token)
+            position += 3
+            continue
+        field = {
+            "proto": "protocol",
+            "from": "source",
+            "to": "destination",
+            "port": "port",
+        }.get(token)
+        if field is None or field in seen or position + 1 >= len(tokens):
+            raise SystemExit(1)
+        rule[field] = tokens[position + 1]
+        seen.add(field)
+        position += 2
+    normalized.append(rule)
+for rule in sorted(normalized, key=lambda value: json.dumps(value, sort_keys=True)):
+    print(json.dumps(rule, sort_keys=True, separators=(",", ":")))
+PY
+}
+
+write_expected_firewall_rules() {
+  local api_address nameserver
+  require_k3s_ipv4_nameservers
+  api_address=$(read_local_api_address)
+  [[ -n "$api_address" ]] || api_address=$server_public_ip
+  printf '%s\n' \
+    'ufw allow 22/tcp' \
+    'ufw allow 80/tcp' \
+    'ufw allow 443/tcp' \
+    "ufw allow in on cni0 proto tcp from $pod_cidr to $api_address port 6443" \
+    "ufw allow in on cni0 proto tcp from $pod_cidr to $server_public_ip port 10250" \
+    "ufw allow in on cni0 proto tcp from $pod_cidr to $host_service_address port 3080" \
+    "ufw allow in on cni0 proto tcp from $pod_cidr to $host_service_address port 18080" \
+    "ufw route allow proto tcp from any to $pod_cidr port 80" \
+    "ufw route allow proto tcp from any to $pod_cidr port 443"
+  while IFS= read -r nameserver; do
+    printf '%s\n' \
+      "ufw route allow in on cni0 proto udp from $pod_cidr to $nameserver port 53" \
+      "ufw route allow in on cni0 proto tcp from $pod_cidr to $nameserver port 53"
+  done < <(read_k3s_ipv4_nameservers)
+}
+
 configure_firewall() {
+  local api_address nameserver
   remove_legacy_firewall
+  require_k3s_ipv4_nameservers
+  api_address=$(read_local_api_address)
+  [[ -n "$api_address" ]] || api_address=$server_public_ip
   ufw --force reset >/dev/null
   ufw default deny incoming >/dev/null
   ufw default allow outgoing >/dev/null
@@ -146,16 +257,29 @@ configure_firewall() {
   ufw allow 22/tcp comment SSH >/dev/null
   ufw allow 80/tcp comment 'HTTP ingress' >/dev/null
   ufw allow 443/tcp comment 'HTTPS ingress' >/dev/null
-  ufw allow from "$pod_cidr" comment 'K3s pods' >/dev/null
-  ufw allow from "$service_cidr" comment 'K3s services' >/dev/null
-  ufw route allow from "$pod_cidr" comment 'K3s pod forwarding' >/dev/null
-  ufw route allow proto tcp to "$pod_cidr" port 80 comment 'K3s HTTP ingress DNAT' >/dev/null
-  ufw route allow proto tcp to "$pod_cidr" port 443 comment 'K3s HTTPS ingress DNAT' >/dev/null
+  ufw allow in on cni0 proto tcp from "$pod_cidr" to "$api_address" port 6443 \
+    comment 'K3s API from pods' >/dev/null
+  ufw allow in on cni0 proto tcp from "$pod_cidr" to "$server_public_ip" port 10250 \
+    comment 'Kubelet metrics from pods' >/dev/null
+  ufw allow in on cni0 proto tcp from "$pod_cidr" to "$host_service_address" port 3080 \
+    comment 'Teleport backend from pods' >/dev/null
+  ufw allow in on cni0 proto tcp from "$pod_cidr" to "$host_service_address" port 18080 \
+    comment 'ACME preflight responder from pods' >/dev/null
+  ufw route allow proto tcp from any to "$pod_cidr" port 80 \
+    comment 'Traefik HTTP ingress DNAT' >/dev/null
+  ufw route allow proto tcp from any to "$pod_cidr" port 443 \
+    comment 'Traefik HTTPS ingress DNAT' >/dev/null
+  while IFS= read -r nameserver; do
+    ufw route allow in on cni0 proto udp from "$pod_cidr" to "$nameserver" port 53 \
+      comment 'K3s upstream DNS UDP' >/dev/null
+    ufw route allow in on cni0 proto tcp from "$pod_cidr" to "$nameserver" port 53 \
+      comment 'K3s upstream DNS TCP' >/dev/null
+  done < <(read_k3s_ipv4_nameservers)
   ufw --force enable >/dev/null
 }
 
 readback_firewall() {
-  local status
+  local status expected_rules actual_rules
   command -v nft >/dev/null 2>&1 && nft list table inet kodex_fw >/dev/null 2>&1 &&
     fail 'legacy kodex_fw nftables policy is active'
   systemctl is-enabled --quiet nftables && fail 'nftables autoload remains enabled'
@@ -163,11 +287,43 @@ readback_firewall() {
   grep -Fq 'Status: active' <<<"$status" || fail 'host firewall is inactive'
   grep -Fq 'Default: deny (incoming), allow (outgoing), deny (routed)' <<<"$status" ||
     fail 'host firewall defaults differ from the supported policy'
-  for expected_rule in \
-    '22/tcp' '80/tcp' '443/tcp' "$pod_cidr" "$service_cidr" \
-    'K3s pod forwarding' 'K3s HTTP ingress DNAT' 'K3s HTTPS ingress DNAT'; do
-    grep -Fq "$expected_rule" <<<"$status" || fail "host firewall rule is absent: $expected_rule"
-  done
+  expected_rules=$(write_expected_firewall_rules | normalize_ufw_rules) ||
+    fail 'expected firewall policy could not be normalized'
+  actual_rules=$(ufw show added | normalize_ufw_rules) ||
+    fail 'active firewall policy could not be normalized'
+  [[ "$actual_rules" == "$expected_rules" ]] ||
+    fail 'host firewall rules differ from the exact supported policy'
+}
+
+configure_hot_reload_sysctl() {
+  cat <<'EOF' | install -m 0644 /dev/stdin "$hot_reload_sysctl_file"
+# Управляется Kodex для host-owned hot reload контура.
+fs.inotify.max_user_instances = 1024
+fs.inotify.max_user_watches = 524288
+EOF
+  sysctl --load "$hot_reload_sysctl_file" >/dev/null ||
+    fail 'hot reload sysctl settings could not be applied'
+}
+
+readback_hot_reload_sysctl() {
+  local expected_file
+  [[ -f "$hot_reload_sysctl_file" && ! -L "$hot_reload_sysctl_file" ]] ||
+    fail 'hot reload sysctl file is absent or unsafe'
+  expected_file=$(mktemp)
+  cat >"$expected_file" <<'EOF'
+# Управляется Kodex для host-owned hot reload контура.
+fs.inotify.max_user_instances = 1024
+fs.inotify.max_user_watches = 524288
+EOF
+  cmp -s "$expected_file" "$hot_reload_sysctl_file" || {
+    rm -f -- "$expected_file"
+    fail 'hot reload sysctl file differs from the repository contract'
+  }
+  rm -f -- "$expected_file"
+  [[ "$(sysctl -n fs.inotify.max_user_instances)" == 1024 ]] ||
+    fail 'fs.inotify.max_user_instances differs from the supported value'
+  [[ "$(sysctl -n fs.inotify.max_user_watches)" == 524288 ]] ||
+    fail 'fs.inotify.max_user_watches differs from the supported value'
 }
 
 if [[ "$mode" == apply ]]; then
@@ -189,8 +345,18 @@ with open(sys.argv[1], encoding="utf-8") as source:
     lock = json.load(source)
 if lock.get("schemaVersion") != 1:
     raise SystemExit(1)
-if len(lock.get("artifacts", [])) != 8 or len(lock.get("charts", [])) != 2:
+artifacts = lock.get("artifacts", [])
+if len(artifacts) != 10 or len(lock.get("charts", [])) != 2:
     raise SystemExit(1)
+for artifact in artifacts:
+    sha256 = artifact.get("sha256", "")
+    integrity = artifact.get("integrity", "")
+    if bool(sha256) == bool(integrity):
+        raise SystemExit(1)
+    if sha256 and (len(sha256) != 64 or any(char not in "0123456789abcdef" for char in sha256)):
+        raise SystemExit(1)
+    if integrity and not integrity.startswith("sha512-"):
+        raise SystemExit(1)
 PY
 
 "$ipv6_ingress_bridge_script" --mode preflight \
@@ -215,6 +381,29 @@ download_artifact() {
   [[ "$actual_sha" == "$expected_sha" ]] || fail "artifact digest mismatch: $name"
 }
 
+download_integrity_artifact() {
+  local name=$1 output=$2 url expected_integrity actual_integrity
+  url=$(jq -er --arg name "$name" '.artifacts[] | select(.name == $name) | .url' "$lock_file")
+  expected_integrity=$(jq -er --arg name "$name" \
+    '.artifacts[] | select(.name == $name) | .integrity' "$lock_file")
+  curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+    --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 15 \
+    "$url" --output "$output"
+  actual_integrity="sha512-$(openssl dgst -sha512 -binary "$output" | base64 -w0)"
+  [[ "$actual_integrity" == "$expected_integrity" ]] ||
+    fail "artifact integrity mismatch: $name"
+}
+
+extract_npm_package() {
+  local archive=$1 target=$2
+  tar -tzf "$archive" | awk '
+    !/^package\// || /(^|\/)\.\.(\/|$)/ || /^\// { exit 1 }
+  ' || fail 'npm package archive contains an unsafe path'
+  install -d -m 0755 "$target"
+  tar -xzf "$archive" -C "$target" --strip-components=1 \
+    --no-same-owner --no-same-permissions
+}
+
 if [[ "$mode" == apply ]]; then
   temporary_directory=$(mktemp -d)
   trap 'rm -rf -- "$temporary_directory"' EXIT
@@ -231,8 +420,21 @@ if [[ "$mode" == apply ]]; then
   for node_command in node npm npx corepack; do
     ln -sfn "/usr/local/node/bin/$node_command" "/usr/local/bin/$node_command"
   done
-  npm install --global --no-audit --no-fund '@openai/codex@0.152.0' >/dev/null
-  ln -sfn /usr/local/node/bin/codex /usr/local/bin/codex
+  # Сетевой npm install '@openai/codex@0.152.0' намеренно запрещён: пакеты
+  # извлекаются только после проверки repo-owned SHA-512 без lifecycle scripts.
+  codex_install_root=/usr/local/lib/kodex-cli
+  download_integrity_artifact codex-cli "$temporary_directory/codex-cli.tgz"
+  download_integrity_artifact codex-linux-x64 "$temporary_directory/codex-linux-x64.tgz"
+  rm -rf -- "$codex_install_root"
+  extract_npm_package "$temporary_directory/codex-cli.tgz" \
+    "$codex_install_root/node_modules/@openai/codex"
+  extract_npm_package "$temporary_directory/codex-linux-x64.tgz" \
+    "$codex_install_root/node_modules/@openai/codex-linux-x64"
+  chown -R root:root "$codex_install_root"
+  chmod -R go-w "$codex_install_root"
+  chmod 0755 "$codex_install_root/node_modules/@openai/codex/bin/codex.js"
+  ln -sfn "$codex_install_root/node_modules/@openai/codex/bin/codex.js" \
+    /usr/local/bin/codex
 
   configure_provider_apparmor_profile
 
@@ -251,7 +453,9 @@ if [[ "$mode" == apply ]]; then
 
   download_artifact teleport-client "$temporary_directory/teleport-client.tar.gz"
   tar -xzf "$temporary_directory/teleport-client.tar.gz" -C "$temporary_directory" \
-    teleport/tsh
+    teleport/teleport teleport/tctl teleport/tsh
+  install -m 0755 "$temporary_directory/teleport/teleport" /usr/local/bin/teleport
+  install -m 0755 "$temporary_directory/teleport/tctl" /usr/local/bin/tctl
   install -m 0755 "$temporary_directory/teleport/tsh" /usr/local/bin/tsh
 
   download_artifact k3s "$temporary_directory/k3s"
@@ -308,6 +512,7 @@ ExecStart=/usr/local/bin/k3s server --config /etc/rancher/k3s/config.yaml
 WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
+  configure_hot_reload_sysctl
   configure_firewall
   systemctl enable --now docker >/dev/null
   if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != root ]]; then
@@ -321,9 +526,45 @@ systemctl is-active --quiet k3s || fail 'k3s service is not active'
 for command_name in certutil codex cosign dig docker go helm node npm kubectl nsc tsh yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "installed command is absent: $command_name"
 done
+for command_name in tctl teleport; do
+  command -v "$command_name" >/dev/null 2>&1 || fail "installed command is absent: $command_name"
+done
+locked_artifact_version() {
+  jq -er --arg name "$1" '.artifacts[] | select(.name == $name) | .version' "$lock_file"
+}
+require_locked_version() {
+  local name=$1 actual=$2 expected
+  expected=$(locked_artifact_version "$name")
+  [[ "${actual#v}" == "${expected#v}" ]] ||
+    fail "installed $name version differs from the component lock"
+}
+require_locked_version go "$(/usr/local/bin/go version | awk 'NR == 1 {sub(/^go/, "", $3); print $3}')"
+require_locked_version node "$(/usr/local/bin/node --version)"
+require_locked_version helm "$(/usr/local/bin/helm version --short | sed 's/+.*$//')"
+require_locked_version yq "$(/usr/local/bin/yq --version | awk 'NR == 1 {print $NF}')"
+require_locked_version cosign "$(/usr/local/bin/cosign version --json | jq -er .gitVersion)"
+require_locked_version nsc "$(/usr/local/bin/nsc --version | awk 'NR == 1 {print $NF}')"
+require_locked_version k3s "$(K3S_CONFIG_FILE=/dev/null /usr/local/bin/k3s --version | awk 'NR == 1 {print $3}')"
 teleport_client_version=$(jq -er '.artifacts[] | select(.name == "teleport-client") | .version' "$lock_file")
 [[ "$(tsh version --format=json | jq -r .version)" == "$teleport_client_version" ]] ||
   fail 'installed Teleport client version differs from the component lock'
+for teleport_command in teleport tctl; do
+  teleport_version=$(/usr/local/bin/"$teleport_command" version | awk '
+    NR == 1 && $1 == "Teleport" { sub(/^v/, "", $2); print $2 }
+  ')
+  [[ "$teleport_version" == "$teleport_client_version" ]] ||
+    fail "installed $teleport_command version differs from the component lock"
+done
+codex_version=$(runuser --user nobody -- env HOME=/tmp /usr/local/bin/codex --version |
+  awk 'NR == 1 && $1 == "codex-cli" {print $2}')
+require_locked_version codex-cli "$codex_version"
+codex_package_root=/usr/local/lib/kodex-cli/node_modules/@openai
+jq -e --arg version "$(locked_artifact_version codex-cli)" '.version == $version' \
+  "$codex_package_root/codex/package.json" >/dev/null ||
+  fail 'installed Codex CLI package version differs from the component lock'
+jq -e --arg version "$(locked_artifact_version codex-linux-x64)" '.version == $version' \
+  "$codex_package_root/codex-linux-x64/package.json" >/dev/null ||
+  fail 'installed Codex platform package version differs from the component lock'
 systemctl is-active --quiet docker || fail 'Docker service is not active'
 docker buildx version >/dev/null 2>&1 || fail 'Docker buildx is unavailable'
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
@@ -343,6 +584,7 @@ done
 [[ "$node_ready" == true ]] || fail 'no ready Kubernetes node became available'
 readback_k3s_resolver
 readback_firewall
+readback_hot_reload_sysctl
 readback_provider_apparmor_profile
 if [[ "$mode" == apply ]]; then
   "$ipv6_ingress_bridge_script" --mode apply \

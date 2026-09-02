@@ -20,6 +20,18 @@
       "sha256": "ab343a1b747c7cbf3630dfd7dbf818c5423fab2eb4f5ad1afc896f6bd121a917"
     },
     {
+      "name": "codex-cli",
+      "version": "0.152.0",
+      "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.152.0.tgz",
+      "integrity": "sha512-Vx0tg/J5SbxYYGJazTtL/XySK9Dlqc5KW1MZM71NMwVci/4F1ap+FfSKPFTlrICEtOTuq3KNcWSdv9oMGdPuRw=="
+    },
+    {
+      "name": "codex-linux-x64",
+      "version": "0.152.0-linux-x64",
+      "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.152.0-linux-x64.tgz",
+      "integrity": "sha512-Isn/g5EZTaNbwZtaIuz67U1FNDEVVeMpS4xiR+c1dpOPL2xxrGNtdAothOW2YKsb96OsS+QfClziFb4qxesWDA=="
+    },
+    {
       "name": "helm",
       "version": "v4.2.4",
       "url": "https://get.helm.sh/helm-v4.2.4-linux-amd64.tar.gz",

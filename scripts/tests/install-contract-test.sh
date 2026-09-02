@@ -482,9 +482,14 @@ for firewall_contract in \
   'nft delete table inet kodex_fw' \
   'ufw --force reset' \
   'ufw default deny routed' \
-  'ufw route allow from "$pod_cidr"' \
-  'ufw route allow proto tcp to "$pod_cidr" port 80' \
-  'ufw route allow proto tcp to "$pod_cidr" port 443'; do
+  'ufw allow in on cni0 proto tcp from "$pod_cidr" to "$api_address" port 6443' \
+  'ufw allow in on cni0 proto tcp from "$pod_cidr" to "$server_public_ip" port 10250' \
+  'ufw allow in on cni0 proto tcp from "$pod_cidr" to "$host_service_address" port 3080' \
+  'ufw allow in on cni0 proto tcp from "$pod_cidr" to "$host_service_address" port 18080' \
+  'ufw route allow proto tcp from any to "$pod_cidr" port 80' \
+  'ufw route allow proto tcp from any to "$pod_cidr" port 443' \
+  'ufw show added' \
+  'host firewall rules differ from the exact supported policy'; do
   rg -Fq "$firewall_contract" "$repository_root/tools/install/prepare-host.sh" ||
     fail "bare-metal firewall contract is absent: $firewall_contract"
 done
