@@ -88,6 +88,13 @@ async function openKodex(page: Page, newConversation = false): Promise<void> {
   const dialog = page.getByRole("dialog", { name: "Kodex" });
   await expect(dialog).toBeVisible();
   if (!newConversation) return;
+  await startNewKodexConversation(page, dialog);
+}
+
+async function startNewKodexConversation(
+  page: Page,
+  dialog: Locator,
+): Promise<void> {
   const createButton = dialog.getByRole("button", {
     name: "Новый диалог",
     exact: true,
@@ -614,7 +621,8 @@ test.describe("web-only fresh installation", () => {
     }
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
+    const dialog = page.getByRole("dialog", { name: "Kodex" });
+    await expect(dialog).toBeVisible();
 
     if (discoveryMode && projectRef) {
       await gotoWithRetry(page, `/projects/${projectRef}`);
@@ -630,6 +638,8 @@ test.describe("web-only fresh installation", () => {
       await waitForConnected(page);
       return;
     }
+
+    if (discoveryMode) await startNewKodexConversation(page, dialog);
 
     const prompt = [
       `Создай один Проект с точным названием «${projectName}».`,
