@@ -324,7 +324,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       .name == "dev-go-sumdb" and (.hostPath.path | endswith("/go-sumdb"))) and
     any(.spec.template.spec.volumes[];
       .name == "dev-build-publisher" and
-      (.hostPath.path | endswith("/go-build/internal-rpc-authority-publisher-publisher"))) and
+      (.hostPath.path | endswith("/go-build-v2/internal-rpc-authority-publisher-publisher"))) and
     any(.spec.template.spec.containers[];
       .name == "publisher" and .command == ["/workspace/tools/dev/run-go-hot-reload.sh"] and
       any(.volumeMounts[]; .name == "dev-go-tools" and .mountPath == "/go/tools" and

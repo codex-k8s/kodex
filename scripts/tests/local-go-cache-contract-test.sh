@@ -23,7 +23,9 @@ grep -Fq '{"name":"GOMODCACHE","value":"/go/pkg/mod"}' "$renderer" ||
   fail 'workloads do not use the shared module cache'
 grep -Fq '{"name":"dev-go-mod","mountPath":"/go/pkg/mod","readOnly":true}' "$renderer" ||
   fail 'shared module cache is not mounted read-only'
-grep -Fq 'build_cache_path="$cache_root/go-build/$cache_key"' "$renderer" ||
+grep -Fq 'go_build_cache="$cache_root/go-build-v2"' "$renderer" ||
+  fail 'versioned Go build cache root is absent'
+grep -Fq 'build_cache_path="$go_build_cache/$cache_key"' "$renderer" ||
   fail 'workload-specific writable build cache is absent'
 if grep -Fq '"/go/pkg/mod/" + strenv(CACHE_KEY)' "$renderer"; then
   fail 'per-container module cache fragmentation is present'

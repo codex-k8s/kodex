@@ -165,14 +165,15 @@ air_version=$(jq -er '.tools.air.version' "$lock_file") || fail 'Air version loc
 # mounted read-only. Only workload-specific build caches remain writable.
 go_module_cache="$cache_root/go-mod-v2"
 go_sumdb_cache="$cache_root/go-sumdb"
-go_prime_cache="$cache_root/go-build/host-prime"
+go_build_cache="$cache_root/go-build-v2"
+go_prime_cache="$go_build_cache/host-prime"
 install -d -m 0755 \
   "$go_module_cache/cache/download/sumdb/sum.golang.org" \
   "$go_sumdb_cache/sum.golang.org" \
   "$cache_root/go-tools" \
   "$cache_root/node-modules"
 install -d -m 0777 "$go_prime_cache"
-install -d -m 0755 "$cache_root/go-build"
+install -d -m 0755 "$go_build_cache"
 chmod -R u+rwX \
   "$go_module_cache" \
   "$go_sumdb_cache" \
@@ -647,7 +648,7 @@ patch_go_container() {
   command_args=$(printf '%s\n' "$@" | jq -Rsc 'split("\n") | map(select(length > 0))')
   cache_key="$workload-$container"
   build_volume="dev-build-$container"
-  build_cache_path="$cache_root/go-build/$cache_key"
+  build_cache_path="$go_build_cache/$cache_key"
   install -d -m 0777 "$build_cache_path"
   add_development_volumes "$kind" "$workload"
   KIND="$kind" WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
@@ -704,7 +705,7 @@ patch_go_init_container() {
   local cache_key build_volume build_cache_path
   cache_key="$workload-$container"
   build_volume="dev-build-$container"
-  build_cache_path="$cache_root/go-build/$cache_key"
+  build_cache_path="$go_build_cache/$cache_key"
   install -d -m 0777 "$build_cache_path"
   WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
   BUILD_VOLUME="$build_volume" BUILD_CACHE_PATH="$build_cache_path" \
@@ -764,7 +765,7 @@ patch_go_job() {
   args_json=$(printf '%s\n' "$@" | jq -Rsc 'split("\n") | map(select(length > 0))')
   cache_key="$workload-$container"
   build_volume="dev-build-$container"
-  build_cache_path="$cache_root/go-build/$cache_key"
+  build_cache_path="$go_build_cache/$cache_key"
   install -d -m 0777 "$build_cache_path"
   add_development_volumes Job "$workload"
   WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
