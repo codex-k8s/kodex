@@ -125,7 +125,8 @@ readback_k3s_resolver() {
     }
     END { if (count < 1 || count > 3) exit 1 }
   ' "$k3s_resolver_file" || fail 'dedicated k3s resolver is unsafe'
-  grep -Fxq "resolv-conf: \"$k3s_resolver_file\"" /etc/rancher/k3s/config.yaml ||
+  K3S_RESOLVER_FILE="$k3s_resolver_file" yq -e \
+    '."resolv-conf" == strenv(K3S_RESOLVER_FILE)' /etc/rancher/k3s/config.yaml >/dev/null ||
     fail 'k3s does not use the dedicated resolver file'
 }
 
