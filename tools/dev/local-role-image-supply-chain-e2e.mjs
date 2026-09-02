@@ -169,6 +169,12 @@ function exactDigest(value, field) {
   return value;
 }
 
+function exactSHA256(value, field) {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value))
+    fail(`${field} is invalid`);
+  return value;
+}
+
 function exactImage(value, field) {
   if (
     typeof value !== "string" ||
@@ -258,6 +264,7 @@ async function prepare() {
   const deadline = Date.now() + timeoutMilliseconds;
   let detail;
   let buildRef = "";
+  let promotionRequested = false;
   while (Date.now() < deadline) {
     detail = await request(
       "GET",
@@ -278,6 +285,36 @@ async function prepare() {
       fail(
         `RoleImage build terminated at ${String(failedBuild.stage)} (${String(failedBuild.diagnosticCode ?? failedBuild.safeErrorCode ?? "UNKNOWN")})`,
       );
+    }
+    if (
+      !promotionRequested &&
+      detail.activeArtifact?.admissionVerdict === "ACCEPTED" &&
+      detail.recipe?.promotedImageReady !== true
+    ) {
+      const artifactRef = boundedString(
+        detail.activeArtifact.ref,
+        "admitted artifact ref",
+      );
+      const provenanceSHA256 = exactSHA256(
+        detail.activeArtifact.provenanceSha256,
+        "admitted artifact provenance",
+      );
+      const recipeVersion = Number(detail.recipe?.version);
+      if (!Number.isSafeInteger(recipeVersion) || recipeVersion < 1)
+        fail("recipe version for promotion is invalid");
+      await request(
+        "POST",
+        `/api/v1/projects/${encodeURIComponent(projectRef)}/role-image-recipes/${encodeURIComponent(recipeRef)}/promotions`,
+        {
+          body: {
+            imageArtifactRef: artifactRef,
+            expectedProvenanceSha256: provenanceSHA256,
+          },
+          version: recipeVersion,
+          expectedStatus: 202,
+        },
+      );
+      promotionRequested = true;
     }
     if (
       detail.activeArtifact?.admissionVerdict === "ACCEPTED" &&
