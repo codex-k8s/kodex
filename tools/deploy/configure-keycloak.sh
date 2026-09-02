@@ -444,7 +444,7 @@ if [[ "$mode" == apply ]]; then
   reconcile_mapper "$control_center_id" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
   reconcile_mapper "$control_center_id" kodex-groups oidc-group-membership-mapper \
-    '{"claim.name":"groups","full.path":"false","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+    '{"claim.name":"groups","full.path":"false","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
 
   owner_count=$(keycloak_request get users -r "$realm" -q "username=$owner_username" |
     jq -r --arg username "$owner_username" '[.[] | select(.username == $username)] | length')
@@ -507,7 +507,7 @@ organization_mapper_config=$(jq -cn --arg value "$organization_id" '{
 session_mapper_config='{"claim.name":"session_revision","claim.value":"1","jsonType.label":"long","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
 audience_mapper_config='{"included.client.audience":"kodex-control-api","access.token.claim":"true","id.token.claim":"false","userinfo.token.claim":"false","introspection.token.claim":"true"}'
 roles_mapper_config='{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
-groups_mapper_config='{"claim.name":"groups","full.path":"false","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+groups_mapper_config='{"claim.name":"groups","full.path":"false","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
 require_mapper_exact "$mapper_json" kodex-organization-id oidc-hardcoded-claim-mapper \
   "$organization_mapper_config" || fail 'OIDC claim mapper readback failed'
 require_mapper_exact "$mapper_json" kodex-session-revision oidc-hardcoded-claim-mapper \
