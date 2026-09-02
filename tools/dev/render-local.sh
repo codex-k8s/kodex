@@ -28,7 +28,7 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --source-root <path> --cache-root <path> --output <path>" \
     '  --public-host <dns> --oidc-host <dns> --kubernetes-service-cidr <cidr>' \
-    '  [--ingress-class <name>] [--cluster-issuer <name>]' \
+    '  [--ingress-class <name>] [--cluster-issuer <name>] [--tls-mode local-ca|public-acme]' \
     '  --kubernetes-endpoint-cidr <cidr> --kubernetes-endpoint-port <port>' \
     '  --runner-image <repository@sha256:digest>' \
     '  --session-archive-image <repository@sha256:digest>' \
@@ -51,6 +51,7 @@ public_host=""
 oidc_host=""
 ingress_class=traefik
 cluster_issuer=kodex-local
+tls_mode=local-ca
 kubernetes_service_cidr=""
 kubernetes_endpoint_cidr=""
 kubernetes_endpoint_port=""
@@ -75,6 +76,7 @@ while (($# > 0)); do
     --oidc-host) oidc_host=${2:-}; shift 2 ;;
     --ingress-class) ingress_class=${2:-}; shift 2 ;;
     --cluster-issuer) cluster_issuer=${2:-}; shift 2 ;;
+    --tls-mode) tls_mode=${2:-}; shift 2 ;;
     --kubernetes-service-cidr) kubernetes_service_cidr=${2:-}; shift 2 ;;
     --kubernetes-endpoint-cidr) kubernetes_endpoint_cidr=${2:-}; shift 2 ;;
     --kubernetes-endpoint-port) kubernetes_endpoint_port=${2:-}; shift 2 ;;
@@ -108,6 +110,7 @@ done
   fail 'development ingress class is invalid'
 [[ "$cluster_issuer" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
   fail 'development cluster issuer is invalid'
+case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is invalid' ;; esac
 [[ "$kubernetes_service_cidr" =~ /32$ && "$kubernetes_endpoint_cidr" =~ /32$ ]] ||
   fail 'Kubernetes API CIDRs are invalid'
 [[ "$kubernetes_endpoint_port" =~ ^[1-9][0-9]{0,4}$ ]] || fail 'Kubernetes API port is invalid'
@@ -830,9 +833,16 @@ patch_go_job internal-rpc-authority-migrate migrate services/internal/internal-r
 patch_go_job control-plane-migrate migrate services/internal/control-plane ./cmd/cli up
 patch_go_job control-plane-broker-bootstrap bootstrap services/internal/control-plane ./cmd/cli broker bootstrap
 
+frontend_middlewares=kodex-system-staff-control-center-retry@kubernetescrd
+api_middlewares=""
+if [[ "$tls_mode" == public-acme ]]; then
+  frontend_middlewares=kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd
+  api_middlewares=kodex-system-oauth2-control-center-auth@kubernetescrd
+fi
 NODE_IMAGE='docker.io/library/node:24.17.0-alpine3.23@sha256:7c70d1235c0b4c2bc9eeed5393d19f1bbdde6885ba0d58ba62bb385d7b0f3ff1' \
 SOURCE_ROOT="$source_root" CACHE_ROOT="$cache_root" PUBLIC_HOST="$public_host" \
-SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" yq -i '
+SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" \
+FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" yq -i '
   with(select(.kind == "ServersTransport" and .metadata.name == "staff-control-center");
     .metadata.name = "control-api-gateway" |
     .spec = {
@@ -889,11 +899,12 @@ SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" yq -i '
   ) |
   with(select(.kind == "Ingress" and .metadata.name == "staff-control-center");
     .metadata.annotations."traefik.ingress.kubernetes.io/router.middlewares" =
-      "kodex-system-staff-control-center-retry@kubernetescrd" |
+      strenv(FRONTEND_MIDDLEWARES) |
     .spec.rules[].http.paths[].backend.service.port.name = "http"
   ) |
   with(select(.kind == "Ingress" and .metadata.name == "staff-control-center-api");
-    del(.metadata.annotations."traefik.ingress.kubernetes.io/router.middlewares") |
+    .metadata.annotations."traefik.ingress.kubernetes.io/router.middlewares" =
+      strenv(API_MIDDLEWARES) |
     .spec.rules[].http.paths[].backend.service = {
       "name":"control-api-gateway","port":{"name":"https"}
     }
@@ -1065,7 +1076,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
 ' >/dev/null || fail 'runtime-controller image annotations do not match effective local containers'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center")' "$output" >/dev/null ||
   fail 'frontend development workload is absent'
-yq -o=json -I=0 '.' "$output" | jq -s -e '
+yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
   any(.[];
     .kind == "ServersTransport" and .metadata.name == "control-api-gateway" and
     .metadata.namespace == "kodex-system" and
@@ -1079,6 +1090,10 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
       "kodex-system-control-api-gateway@kubernetescrd") and
   any(.[];
     .kind == "Ingress" and .metadata.name == "staff-control-center-api" and
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      (if $tls_mode == "public-acme" then
+        "kodex-system-oauth2-control-center-auth@kubernetescrd"
+      else "" end) and
     .spec.rules[0].http.paths == [{
       path:"/api/v1",pathType:"Prefix",
       backend:{service:{name:"control-api-gateway",port:{name:"https"}}}
@@ -1086,7 +1101,9 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
   any(.[];
     .kind == "Ingress" and .metadata.name == "staff-control-center" and
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
-      "kodex-system-staff-control-center-retry@kubernetescrd") and
+      (if $tls_mode == "public-acme" then
+        "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"
+      else "kodex-system-staff-control-center-retry@kubernetescrd" end)) and
   any(.[];
     .kind == "Middleware" and .metadata.name == "staff-control-center-retry" and
     .metadata.namespace == "kodex-system" and

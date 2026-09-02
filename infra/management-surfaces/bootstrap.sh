@@ -361,7 +361,7 @@ if [[ "$mode" == readback || "$mode" == reconcile ]]; then
   done
   kubectl -n kodex-system get ingress staff-control-center -o json | jq -e '
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
-      "kodex-system-oauth2-control-center-chain@kubernetescrd"
+      "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"
   ' >/dev/null || fail 'Control Center OAuth2 middleware is absent'
   kubectl -n kodex-system get ingress staff-control-center-api -o json | jq -e '
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
@@ -370,13 +370,9 @@ if [[ "$mode" == readback || "$mode" == reconcile ]]; then
     .spec.rules[0].http.paths == [{
       path:"/api/v1",
       pathType:"Prefix",
-      backend:{service:{name:"staff-control-center",port:{name:"https"}}}
+      backend:{service:{name:"control-api-gateway",port:{name:"https"}}}
     }]
   ' >/dev/null || fail 'Control Center API must preserve application authorization responses'
-  kubectl -n kodex-system get service staff-control-center -o json | jq -e '
-    .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
-      "kodex-system-staff-control-center@kubernetescrd"
-  ' >/dev/null || fail 'Control Center Service does not select its TLS ServersTransport'
 fi
 
 printf 'Management surfaces bootstrap completed: %s\n' "$mode"

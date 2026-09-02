@@ -138,6 +138,7 @@ render="$temporary_directory/render.yaml"
   --source-root "$source_root" --cache-root "$cache_root" --output "$render" \
   --public-host control.127.0.0.1.nip.io \
   --oidc-host sso.127.0.0.1.nip.io \
+  --tls-mode public-acme \
   --kubernetes-service-cidr 10.43.0.1/32 \
   --kubernetes-endpoint-cidr 127.0.0.1/32 --kubernetes-endpoint-port 6443 \
   --runner-image registry.local.kodex/kodex/agent-runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
@@ -235,6 +236,19 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       (.verbs | sort) == (["create","delete","get","list"] | sort)))
 ' >/dev/null || fail 'image admission controller cannot clean terminal jobs and workspaces'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "Ingress" and .metadata.name == "staff-control-center" and
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd" and
+    .spec.rules[0].http.paths[0].backend.service.port.name == "http") and
+  any(.[];
+    .kind == "Ingress" and .metadata.name == "staff-control-center-api" and
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      "kodex-system-oauth2-control-center-auth@kubernetescrd" and
+    .spec.rules[0].http.paths[0].backend.service ==
+      {name:"control-api-gateway",port:{name:"https"}})
+' >/dev/null || fail 'public hot-reload render does not enforce Control Center OAuth routing'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
   all(.[] | select(.kind == "Deployment" or .kind == "StatefulSet" or
       .kind == "Job");
     all(((.spec.template.spec.initContainers // []) +
@@ -253,7 +267,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
         (.spec.template.spec.containers // []))[];
       all((.env // [])[];
         .valueFrom.configMapKeyRef.name != "kodex-image-admission-policy"))) and
-  any(.[ ];
+  any(.[];
     .kind == "Deployment" and .metadata.name == "runtime-controller" and
     .spec.template.metadata.annotations["kodex.dev/controller-image"] ==
       ([.spec.template.spec.containers[] |

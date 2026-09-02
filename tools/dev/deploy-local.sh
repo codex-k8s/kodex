@@ -9,19 +9,21 @@ fail() {
 usage() {
   printf '%s\n' \
     'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
-    '  --render <path> --state-directory <path>' >&2
+    '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' >&2
 }
 
 context=""
 mode=""
 render=""
 state_directory=""
+tls_mode=local-ca
 while (($# > 0)); do
   case "$1" in
     --context) context=${2:-}; shift 2 ;;
     --mode) mode=${2:-}; shift 2 ;;
     --render) render=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
+    --tls-mode) tls_mode=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -29,6 +31,7 @@ done
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
+case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is invalid' ;; esac
 [[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / && -d "$state_directory" &&
   ! -L "$state_directory" ]] || fail 'state directory is invalid'
@@ -94,16 +97,26 @@ readback_local_frontend_transport() {
     .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
       "kodex-system-control-api-gateway@kubernetescrd"
   ' >/dev/null || fail 'local Control API Service transport readback failed'
-  kubectl -n "$namespace" get ingress/staff-control-center-api -o json | jq -e '
+  kubectl -n "$namespace" get ingress/staff-control-center-api -o json | jq -e \
+    --arg tls_mode "$tls_mode" '
     .spec.rules[0].http.paths == [{
       path:"/api/v1",pathType:"Prefix",
       backend:{service:{name:"control-api-gateway",port:{name:"https"}}}
-    }]
+    }] and
+    (if $tls_mode == "public-acme" then
+      .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+        "kodex-system-oauth2-control-center-auth@kubernetescrd"
+    else
+      (.metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] // "") == ""
+    end)
   ' >/dev/null || fail 'local Control API direct Ingress readback failed'
-  kubectl -n "$namespace" get ingress/staff-control-center -o json | jq -e '
+  kubectl -n "$namespace" get ingress/staff-control-center -o json | jq -e \
+    --arg tls_mode "$tls_mode" '
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
-      "kodex-system-staff-control-center-retry@kubernetescrd"
-  ' >/dev/null || fail 'local frontend retry Ingress readback failed'
+      (if $tls_mode == "public-acme" then
+        "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"
+      else "kodex-system-staff-control-center-retry@kubernetescrd" end)
+  ' >/dev/null || fail 'local frontend middleware Ingress readback failed'
   kubectl -n "$namespace" get middleware.traefik.io/staff-control-center-retry -o json | jq -e '
     .spec.retry == {attempts:4,initialInterval:"100ms"}
   ' >/dev/null || fail 'local frontend retry Middleware readback failed'

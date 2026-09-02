@@ -435,7 +435,8 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
       --source-root "$repository_root" --state-directory "$state_directory"
   fi
   "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
-    --render "$state_directory/render.yaml" --state-directory "$state_directory"
+    --render "$state_directory/render.yaml" --state-directory "$state_directory" \
+    --tls-mode "$tls_mode"
   if [[ "$command_name" == status ]]; then
     printf 'Control Center: https://%s\nCredentials: %s\n' "$public_host" "$credentials_file"
     exit 0
@@ -644,6 +645,7 @@ api_endpoint_port=$(jq -er '
   --cache-root "$state_directory/cache" --output "$state_directory/render.yaml" \
   --public-host "$public_host" --oidc-host "$oidc_host" \
   --ingress-class "$ingress_class" --cluster-issuer "$cluster_issuer" \
+  --tls-mode "$tls_mode" \
   --kubernetes-service-cidr "$api_service_ip/32" \
   --kubernetes-endpoint-cidr "$api_endpoint_ip/32" \
   --kubernetes-endpoint-port "$api_endpoint_port" \
@@ -661,7 +663,8 @@ api_endpoint_port=$(jq -er '
   --role-image-input-source-sha256 "$role_image_input_source_sha256"
 record_source_provenance_evidence "$state_directory/source-provenance-up.json" up
 "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode apply \
-  --render "$state_directory/render.yaml" --state-directory "$state_directory"
+  --render "$state_directory/render.yaml" --state-directory "$state_directory" \
+  --tls-mode "$tls_mode"
 commit_local_authority_source_state
 
 management_surface_arguments=(
@@ -712,7 +715,8 @@ for metadata_file in "${provider_metadata[@]}"; do
 done
 if ((restored_provider_accounts > 0)); then
   "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
-    --render "$state_directory/render.yaml" --state-directory "$state_directory"
+    --render "$state_directory/render.yaml" --state-directory "$state_directory" \
+    --tls-mode "$tls_mode"
 fi
 
 "$repository_root/tools/deploy/configure-keycloak.sh" --context "$context" --mode readback \
