@@ -42,8 +42,10 @@ describe("provider account layout", () => {
     expect(runtime).not.toContain("accountCatalogUnavailable");
     expect(runtime).not.toContain("ServerOff");
     expect(runtime).toContain(
-      '@eligibility-change="providerAccountsEligible = $event"',
+      '@eligibility-state-change="providerAccountEligibility = $event"',
     );
+    expect(selector).toContain('"CONNECTING"');
+    expect(selector).toContain("controller.abort()");
   });
 
   it("сохраняет стабильную responsive компоновку", () => {

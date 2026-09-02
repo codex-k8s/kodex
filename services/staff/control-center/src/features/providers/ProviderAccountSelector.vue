@@ -33,11 +33,14 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: ProviderAccountCandidate[]];
-  "eligibility-change": [eligible: boolean];
+  "eligibility-state-change": [state: ProviderAccountEligibilityState];
 }>();
+
+type ProviderAccountEligibilityState = "CONNECTING" | "READY" | "UNAVAILABLE";
 
 const open = ref(false);
 const resolved = ref<Record<string, ProviderAccount>>({});
+const resolvingSelection = ref(false);
 
 const definitionKey = computed(() =>
   props.definitionKey === "openai-codex"
@@ -63,6 +66,10 @@ const selectionEligible = computed(
         isRuntimeEligible(account),
     ),
 );
+const eligibilityState = computed<ProviderAccountEligibilityState>(() => {
+  if (resolvingSelection.value) return "CONNECTING";
+  return selectionEligible.value ? "READY" : "UNAVAILABLE";
+});
 
 const { hasMore, items, loadMore, loadingMore, phase, query, refresh } =
   useAsyncEntityCollection<AccountOption>(
@@ -94,18 +101,30 @@ const { hasMore, items, loadMore, loadingMore, phase, query, refresh } =
   );
 
 watch(
-  () => [...selectedRefs.value],
-  async (refs) => {
-    const missing = refs.filter((ref) => !resolved.value[ref]);
-    if (!missing.length) return;
-    const results = await Promise.allSettled(
-      missing.map((ref) => loadProviderAccount(ref)),
+  () => ({ definitionKey: definitionKey.value, refs: [...selectedRefs.value] }),
+  async (selection, _previous, onCleanup) => {
+    const controller = new AbortController();
+    onCleanup(() => {
+      controller.abort();
+    });
+    const missing = selection.refs.filter(
+      (ref) => resolved.value[ref]?.definitionKey !== selection.definitionKey,
     );
+    if (!selection.definitionKey || !missing.length) {
+      resolvingSelection.value = false;
+      return;
+    }
+    resolvingSelection.value = true;
+    const results = await Promise.allSettled(
+      missing.map((ref) => loadProviderAccount(ref, controller.signal)),
+    );
+    if (controller.signal.aborted) return;
     const additions: Record<string, ProviderAccount> = {};
     for (const result of results)
       if (result.status === "fulfilled")
         additions[result.value.ref] = result.value;
     resolved.value = { ...resolved.value, ...additions };
+    resolvingSelection.value = false;
   },
   { immediate: true },
 );
@@ -120,11 +139,10 @@ watch(
       emit("update:modelValue", normalized);
   },
 );
-watch(selectionEligible, (eligible) => emit("eligibility-change", eligible), {
+watch(eligibilityState, (state) => emit("eligibility-state-change", state), {
   immediate: true,
 });
 watch(definitionKey, () => {
-  resolved.value = {};
   if (open.value) refresh();
 });
 

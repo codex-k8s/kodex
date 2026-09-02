@@ -1221,7 +1221,11 @@ test.describe("web-only fresh installation", () => {
       .locator(".runtime-panel__account-capability")
       .locator(".status-badge")
       .first();
-    let runtimeChanged = false;
+    await expect(accountStatus).not.toHaveAttribute(
+      "data-state",
+      "CONNECTING",
+      { timeout: 30_000 },
+    );
     if ((await accountStatus.getAttribute("data-state")) === "UNAVAILABLE") {
       const selectedRows = accountSelector.locator(
         ".provider-selector__selected-row",
@@ -1244,43 +1248,40 @@ test.describe("web-only fresh installation", () => {
       await eligibleAccount.click();
       await accountPicker.click();
       await expect(accountStatus).toHaveAttribute("data-state", "READY");
-      runtimeChanged = true;
     }
 
     const policy = runtimePanel.getByLabel("Политика учётных записей");
     const policyBefore = await policy.inputValue();
-    const policyAfter = "LEAST_USED";
-    if (policyBefore !== policyAfter) {
-      await policy.selectOption(policyAfter);
-      runtimeChanged = true;
-    }
-    if (runtimeChanged) {
-      const runtimePublication = page.waitForResponse(
-        (response) =>
-          response.request().method() === "PUT" &&
-          new URL(response.url()).pathname ===
-            `/api/v1/agents/${coordinatorRef}/runtime-configuration`,
-      );
-      await runtimePanel
-        .getByRole("button", { name: "Сохранить runtime" })
-        .click();
-      const publicationResponse = await runtimePublication;
-      const publicationProblem =
-        publicationResponse.status() === 200
-          ? undefined
-          : ((await publicationResponse.json()) as {
-              code?: string;
-              detail?: string;
-            });
-      expect(
-        publicationResponse.status(),
-        JSON.stringify({
-          ifMatch: publicationResponse.request().headers()["if-match"],
-          code: publicationProblem?.code,
-          detail: publicationProblem?.detail,
-        }),
-      ).toBe(200);
-    }
+    const policyAfter =
+      policyBefore === "LEAST_USED" ? "WEIGHTED" : "LEAST_USED";
+    await policy.selectOption(policyAfter);
+    const saveRuntimeButton = runtimePanel.getByRole("button", {
+      name: "Сохранить runtime",
+    });
+    await expect(saveRuntimeButton).toBeEnabled();
+    const runtimePublication = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PUT" &&
+        new URL(response.url()).pathname ===
+          `/api/v1/agents/${coordinatorRef}/runtime-configuration`,
+    );
+    await saveRuntimeButton.click();
+    const publicationResponse = await runtimePublication;
+    const publicationProblem =
+      publicationResponse.status() === 200
+        ? undefined
+        : ((await publicationResponse.json()) as {
+            code?: string;
+            detail?: string;
+          });
+    expect(
+      publicationResponse.status(),
+      JSON.stringify({
+        ifMatch: publicationResponse.request().headers()["if-match"],
+        code: publicationProblem?.code,
+        detail: publicationProblem?.detail,
+      }),
+    ).toBe(200);
     await expect(policy).toHaveValue(policyAfter);
 
     const overlayEditor = runtimePanel.getByRole("textbox", {

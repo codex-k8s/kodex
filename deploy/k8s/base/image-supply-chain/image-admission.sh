@@ -2,6 +2,12 @@
 set -eu
 
 admission_phase=${1:-}
+CLAIM_RETRY_ATTEMPT_LIMIT=120
+CLAIM_RETRY_DELAY_SECONDS=5
+CLAIM_RETRY_DIAGNOSTIC_INTERVAL=12
+CLAIM_RETRY_DIAGNOSTIC_MAX_BYTES=160
+CLAIM_RETRY_DIAGNOSTIC_PREFIX='image admission bridge claim retry'
+CLAIM_RETRY_STORAGE_FAILURE='claim retry diagnostic storage is unavailable'
 
 fail() {
   if [ "$admission_phase" = scan ] || [ "$admission_phase" = sign ]; then
@@ -195,28 +201,79 @@ load_promotion_claim() {
   staging_host=${source_ref%%/*}
 }
 
-claim_promotion() {
-  remaining=120
-  while [ "$remaining" -gt 0 ]; do
-    if image-admission-bridge claim-promotion 2>/dev/null; then
+classify_claim_retry_error() {
+  error_file=$1
+  if grep -Eiq 'x509|tls|certificate|handshake' "$error_file"; then
+    printf '%s\n' transport-trust
+  elif grep -Eiq 'code = (Unauthenticated|PermissionDenied)' "$error_file"; then
+    printf '%s\n' authorization
+  elif grep -Eiq 'code = NotFound|no (image )?(admission|promotion) (work|claim)' "$error_file"; then
+    printf '%s\n' no-work
+  elif grep -Eiq 'code = (Unavailable|DeadlineExceeded|ResourceExhausted)|context deadline exceeded|connection refused|no such host|transport is closing' "$error_file"; then
+    printf '%s\n' dependency-unavailable
+  elif grep -Eiq 'code = (Aborted|FailedPrecondition|AlreadyExists)|conflict|stale|fence' "$error_file"; then
+    printf '%s\n' owner-state-conflict
+  elif grep -Eiq 'required image owner environment is invalid|image owner path is invalid|bounded image owner state' "$error_file"; then
+    printf '%s\n' local-configuration
+  else
+    printf '%s\n' unclassified
+  fi
+}
+
+emit_claim_retry_diagnostic() {
+  operation=$1
+  attempt=$2
+  classification=$3
+  diagnostic=$(printf '%s: operation=%s attempt=%s/%s class=%s' \
+    "$CLAIM_RETRY_DIAGNOSTIC_PREFIX" "$operation" "$attempt" \
+    "$CLAIM_RETRY_ATTEMPT_LIMIT" "$classification")
+  printf '%.*s\n' "$CLAIM_RETRY_DIAGNOSTIC_MAX_BYTES" "$diagnostic" >&2
+}
+
+claim_owner_work() {
+  operation=$1
+  unavailable_reason=$2
+  attempt=1
+  claim_retry_error_file="/tmp/image-admission-bridge-${operation}.$$.stderr"
+  rm -f -- "$claim_retry_error_file"
+  (umask 077 && : >"$claim_retry_error_file") || fail "$CLAIM_RETRY_STORAGE_FAILURE"
+  trap 'rm -f -- "$claim_retry_error_file"' EXIT HUP INT TERM
+  while [ "$attempt" -le "$CLAIM_RETRY_ATTEMPT_LIMIT" ]; do
+    : >"$claim_retry_error_file" || fail "$CLAIM_RETRY_STORAGE_FAILURE"
+    claim_succeeded=false
+    case "$operation" in
+      claim)
+        image-admission-bridge claim 2>"$claim_retry_error_file" && claim_succeeded=true
+        ;;
+      claim-promotion)
+        image-admission-bridge claim-promotion 2>"$claim_retry_error_file" && claim_succeeded=true
+        ;;
+      *) fail "claim retry operation is invalid" ;;
+    esac
+    if [ "$claim_succeeded" = true ]; then
+      rm -f -- "$claim_retry_error_file"
+      trap - EXIT HUP INT TERM
       return 0
     fi
-    remaining=$((remaining - 1))
-    sleep 5
+    if [ "$attempt" -eq 1 ] || [ "$attempt" -eq "$CLAIM_RETRY_ATTEMPT_LIMIT" ] ||
+      [ $((attempt % CLAIM_RETRY_DIAGNOSTIC_INTERVAL)) -eq 0 ]; then
+      classification=$(classify_claim_retry_error "$claim_retry_error_file")
+      emit_claim_retry_diagnostic "$operation" "$attempt" "$classification"
+    fi
+    attempt=$((attempt + 1))
+    sleep "$CLAIM_RETRY_DELAY_SECONDS"
   done
-  fail "owner promotion work is unavailable"
+  rm -f -- "$claim_retry_error_file"
+  trap - EXIT HUP INT TERM
+  fail "$unavailable_reason"
+}
+
+claim_promotion() {
+  claim_owner_work claim-promotion "owner promotion work is unavailable"
 }
 
 claim_admission() {
-  remaining=120
-  while [ "$remaining" -gt 0 ]; do
-    if image-admission-bridge claim 2>/dev/null; then
-      return 0
-    fi
-    remaining=$((remaining - 1))
-    sleep 5
-  done
-  fail "owner admission work is unavailable"
+  claim_owner_work claim "owner admission work is unavailable"
 }
 
 evidence_entries() {

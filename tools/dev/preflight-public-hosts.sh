@@ -143,7 +143,7 @@ cleanup() {
 trap cleanup EXIT
 
 verify_external_http01() {
-  local host=$1 submission probe_id result status
+  local host=$1 submission probe_id result status readback_received=false
   submission=$(jq -cn --arg domain "$host" --arg path "$challenge_token" \
     --arg expected "$challenge_token" '{method:"http-01",domain:$domain,
       options:{http_request_path:$path,http_expect_response:$expected}}' |
@@ -155,10 +155,16 @@ verify_external_http01() {
     select(type == "number" and . > 0 and floor == .)
   ' <<<"$submission") || fail "external HTTP-01 probe response is invalid: $host"
   for _ in $(seq 1 90); do
-    result=$(curl --fail --silent --show-error --max-time 10 \
-      -H 'accept: application/json' "https://letsdebug.net/$host/$probe_id") ||
-      fail "external HTTP-01 probe readback failed: $host"
-    status=$(jq -r '.status // ""' <<<"$result")
+    if ! result=$(curl --fail --silent --show-error --max-time 10 \
+      -H 'accept: application/json' "https://letsdebug.net/$host/$probe_id"); then
+      sleep 1
+      continue
+    fi
+    if ! status=$(jq -r '.status // ""' <<<"$result"); then
+      sleep 1
+      continue
+    fi
+    readback_received=true
     if [[ "$status" == Complete ]]; then
       jq -e --arg host "$host" --argjson id "$probe_id" '
         .domain == $host and .id == $id and .method == "http-01" and
@@ -171,11 +177,13 @@ verify_external_http01() {
       fail "external HTTP-01 probe entered an unexpected state: $host"
     sleep 1
   done
+  [[ "$readback_received" == true ]] ||
+    fail "external HTTP-01 probe readback failed: $host"
   fail "external HTTP-01 probe timed out: $host"
 }
 
 verify_external_https_port() {
-  local host=$1 submission request_id result successful
+  local host=$1 submission request_id result successful readback_received=false
   submission=$(curl --fail --silent --show-error --max-time 20 \
     -H 'accept: application/json' --get \
     --data-urlencode "host=$host:443" --data-urlencode 'max_nodes=3' \
@@ -186,17 +194,25 @@ verify_external_https_port() {
     .request_id | select(type == "string" and test("^[A-Za-z0-9_-]+$"))
   ' <<<"$submission") || fail "external HTTPS port probe response is invalid: $host"
   for _ in $(seq 1 30); do
-    result=$(curl --fail --silent --show-error --max-time 10 \
-      -H 'accept: application/json' "https://check-host.net/check-result/$request_id") ||
-      fail "external HTTPS port probe readback failed: $host"
-    successful=$(jq '[to_entries[] | .value[]? |
+    if ! result=$(curl --fail --silent --show-error --max-time 10 \
+      -H 'accept: application/json' "https://check-host.net/check-result/$request_id"); then
+      sleep 1
+      continue
+    fi
+    if ! successful=$(jq '[to_entries[] | .value[]? |
       select(type == "object" and has("time") and (.time | type == "number"))] | length' \
-      <<<"$result") || fail "external HTTPS port probe result is invalid: $host"
+      <<<"$result"); then
+      sleep 1
+      continue
+    fi
+    readback_received=true
     if ((successful >= 1)); then
       return
     fi
     sleep 1
   done
+  [[ "$readback_received" == true ]] ||
+    fail "external HTTPS port probe readback failed: $host"
   fail "external HTTPS port is unreachable: $host"
 }
 

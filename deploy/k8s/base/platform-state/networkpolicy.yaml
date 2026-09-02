@@ -26,11 +26,18 @@ spec:
                   - internal-rpc-authority-readback-attestor
                   - internal-rpc-authority-restore-controller
                   - internal-rpc-authority-restore-recovery
-                  - kodex-image-admission
                   - kodex-postgresql-runtime-credentials
                   - role-image-builder
                   - runtime-controller
                   - secret-broker
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kodex-image-admission
+              app.kubernetes.io/component: image-admission
+            matchExpressions:
+              - key: kodex.dev/image-admission-phase
+                operator: In
+                values: [claim, admit, promote]
       ports:
         - protocol: TCP
           port: 5432

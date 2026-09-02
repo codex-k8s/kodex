@@ -196,10 +196,13 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
   any(.[];
     .kind == "NetworkPolicy" and
     .metadata.name == "platform-postgresql-exact-clients" and
-    any(.spec.ingress[].from[]?.podSelector.matchExpressions[]?;
-      .key == "app.kubernetes.io/name" and
-      .operator == "In" and
-      (.values | index("kodex-image-admission") != null)))
+    any(.spec.ingress[].from[]?.podSelector;
+      .matchLabels["app.kubernetes.io/name"] == "kodex-image-admission" and
+      .matchLabels["app.kubernetes.io/component"] == "image-admission" and
+      any(.matchExpressions[]?;
+        .key == "kodex.dev/image-admission-phase" and
+        .operator == "In" and
+        (.values | sort) == (["admit","claim","promote"] | sort))))
 ' >/dev/null || fail 'PostgreSQL ingress omits protected image-admission jobs'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   any(.[];
@@ -207,11 +210,46 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .metadata.name == "internal-rpc-authority-readback-attestor-exact-paths" and
     any(.spec.ingress[].from[]?.podSelector;
       .matchLabels["app.kubernetes.io/name"] == "kodex-image-admission" and
+      .matchLabels["app.kubernetes.io/component"] == "image-admission" and
       any(.matchExpressions[]?;
         .key == "kodex.dev/image-admission-phase" and
         .operator == "In" and
         (.values | sort) == (["admit","claim","promote"] | sort))))
 ' >/dev/null || fail 'authority attestor ingress omits protected image-admission jobs'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  all(.[] | select(.kind == "NetworkPolicy");
+    all((
+      ([.spec.podSelector // empty] +
+       [.spec.ingress[]?.from[]?.podSelector // empty] +
+       [.spec.egress[]?.to[]?.podSelector // empty])[]
+    );
+      (((.matchLabels["kodex.dev/image-admission-phase"]? != null) or
+        any(.matchExpressions[]?;
+          .key == "kodex.dev/image-admission-phase")) | not) or
+      (.matchLabels["app.kubernetes.io/name"] == "kodex-image-admission" and
+       .matchLabels["app.kubernetes.io/component"] == "image-admission")))
+' >/dev/null || fail 'image-admission NetworkPolicy selector is based on phase without exact workload identity'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "kodex-image-registry-promotion" and
+    any(.spec.ingress[].from[]?.podSelector;
+      .matchLabels["app.kubernetes.io/name"] == "release-artifact-materializer" and
+      .matchLabels["app.kubernetes.io/component"] == "release-bootstrap" and
+      .matchLabels["kodex.dev/release-artifact-materializer"] == "true"))
+' >/dev/null || fail 'promotion registry ingress does not bind the materializer to its exact workload identity'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "kodex-image-admission-controller-jobs" and
+    any(.spec.validations[]?.expression;
+      contains("object.metadata.labels['"'"'app.kubernetes.io/name'"'"'] == '"'"'kodex-image-admission'"'"'") and
+      contains("object.metadata.labels['"'"'app.kubernetes.io/component'"'"'] == '"'"'image-admission'"'"'") and
+      contains("object.spec.template.metadata.labels['"'"'kodex.dev/image-admission-phase'"'"'] ==") and
+      contains("variables.phase") and
+      contains("object.spec.template.metadata.labels['"'"'kodex.dev/image-admission-id'"'"'] ==") and
+      contains("variables.admissionId")))
+' >/dev/null || fail 'image-admission admission policy does not bind Job and PodTemplate identities'
 expected_runtime_contract_digest=$(
   jq -cS . "$source_root/contracts/runtime-controller/v6/agent-runner-input.schema.json" |
     sha256sum | awk '{print $1}'

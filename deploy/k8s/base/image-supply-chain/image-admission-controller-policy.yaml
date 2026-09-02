@@ -82,7 +82,17 @@ spec:
         variables.admissionId.matches('^[a-f0-9]{32}$') &&
         object.metadata.name ==
           'mc-admit-' + variables.admissionId + '-' + variables.phase &&
+        object.metadata.labels['app.kubernetes.io/name'] == 'kodex-image-admission' &&
+        object.metadata.labels['app.kubernetes.io/component'] == 'image-admission' &&
         object.metadata.labels['kodex.dev/image-admission-orchestrated'] == 'true' &&
+        object.spec.template.metadata.labels['app.kubernetes.io/name'] ==
+          'kodex-image-admission' &&
+        object.spec.template.metadata.labels['app.kubernetes.io/component'] ==
+          'image-admission' &&
+        object.spec.template.metadata.labels['kodex.dev/image-admission-phase'] ==
+          variables.phase &&
+        object.spec.template.metadata.labels['kodex.dev/image-admission-id'] ==
+          variables.admissionId &&
         has(object.metadata.annotations) &&
         object.metadata.annotations['kodex.dev/admission-run-id'].matches(
           '^v[0-9]{14}-[a-f0-9]{40}$') &&
