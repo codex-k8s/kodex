@@ -1413,6 +1413,30 @@ func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, reposito
 	if fastPathErr != nil {
 		t.Fatalf("unchanged OIDC groups waited for subject lock: %v", fastPathErr)
 	}
+	if _, err := repository.pool.Exec(ctx, `
+		UPDATE control_plane.oidc_groups
+		SET last_seen_at = clock_timestamp() - interval '25 hours'
+		WHERE organization_id = $1::uuid AND display_name = $2
+	`, owner.AuthorityTenant, groupedOwner.ExternalGroups[0]); err != nil {
+		t.Fatalf("age synchronized OIDC group: %v", err)
+	}
+	if _, err := repository.ResolveProofAuthority(ctx, groupedOwner); err != nil {
+		t.Fatalf("refresh unchanged stale OIDC group: %v", err)
+	}
+	var refreshedGroups int
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM control_plane.oidc_groups oidc_group
+		JOIN control_plane.oidc_group_memberships membership ON membership.group_id = oidc_group.id
+		WHERE oidc_group.organization_id = $1::uuid
+		  AND oidc_group.display_name = $2
+		  AND oidc_group.state = 'ACTIVE'
+		  AND oidc_group.last_seen_at >= clock_timestamp() - interval '1 minute'
+		  AND membership.subject_id = $3::uuid
+		  AND membership.subject_session_revision = $4
+	`, owner.AuthorityTenant, groupedOwner.ExternalGroups[0], owner.ActorID, groupedOwner.ExternalSessionRevision).Scan(&refreshedGroups); err != nil || refreshedGroups != 1 {
+		t.Fatalf("refreshed unchanged OIDC group readback: groups=%d err=%v", refreshedGroups, err)
+	}
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatalf("construct enterprise access service: %v", err)
