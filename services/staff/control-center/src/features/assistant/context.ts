@@ -20,6 +20,18 @@ export interface ResolvedAssistantContext {
   projectRef?: string;
 }
 
+export function assistantContextIdentity(
+  context: AssistantContextDescriptor,
+  projectRef?: string,
+): string {
+  return [
+    projectRef ?? "",
+    context.route,
+    context.entityKind,
+    context.entityRef,
+  ].join(":");
+}
+
 function routeParameter(
   route: RouteLocationNormalizedLoaded,
   name: string,

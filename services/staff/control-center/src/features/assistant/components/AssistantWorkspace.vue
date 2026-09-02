@@ -24,6 +24,7 @@ import {
 import { useI18n } from "vue-i18n";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
+import { assistantContextIdentity } from "@/features/assistant/context";
 import { openAssistantEvent } from "@/features/assistant/events";
 import {
   assistantEffectiveRuntimeState,
@@ -131,15 +132,9 @@ const canStartConversation = computed(
 );
 const isRunContext = computed(() => props.context.entityKind === "RUN");
 
-function contextKey(): string {
-  return [
-    props.projectRef ?? "",
-    props.context.route,
-    props.context.entityKind,
-    props.context.entityRef,
-    props.context.entityVersion ?? "",
-  ].join(":");
-}
+const contextIdentity = computed(() =>
+  assistantContextIdentity(props.context, props.projectRef),
+);
 
 function handleOpenAssistant(): void {
   void show();
@@ -293,13 +288,24 @@ function documentPointerDown(event: PointerEvent): void {
     historyOpen.value = false;
 }
 
-watch(contextKey, () => {
+watch(contextIdentity, () => {
   store.setContext(props.context, props.projectRef);
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
   attachmentComposer.value?.clear();
   if (open.value) void store.load(props.context, props.projectRef);
 });
+watch(
+  [() => props.context, () => props.projectRef] as const,
+  ([nextContext, nextProjectRef], [previousContext, previousProjectRef]) => {
+    if (
+      assistantContextIdentity(nextContext, nextProjectRef) !==
+      assistantContextIdentity(previousContext, previousProjectRef)
+    )
+      return;
+    store.setContext(nextContext, nextProjectRef);
+  },
+);
 watch(
   () => props.refreshRevision,
   (value, previous) => {
