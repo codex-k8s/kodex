@@ -17,6 +17,7 @@ const maxTransitions = 5;
 type AuthSurface =
   | "authenticated-ui"
   | "application-failure"
+  | "frontend-retry"
   | "frontend-sign-in"
   | "identity-provider"
   | "pending";
@@ -104,7 +105,7 @@ export async function authenticateOwner(
       };
     }
 
-    if (surface === "frontend-sign-in") {
+    if (surface === "frontend-sign-in" || surface === "frontend-retry") {
       if (options.mode === "cold" && identitySubmissions < 1) {
         throw authenticationError(
           page,
@@ -132,7 +133,7 @@ export async function authenticateOwner(
         ownerSessionStatuses,
       );
       if (
-        surface === "frontend-sign-in" &&
+        surface === "frontend-retry" &&
         frontendOIDCAttempts < maxFrontendOIDCAttempts
       ) {
         reportFrontendOIDCRetry(page, frontendOIDCAttempts);
@@ -282,7 +283,14 @@ async function startFrontendOIDCTransition(
         progress.frontendOIDCAttempts,
       );
     }
-    if (surface === "frontend-sign-in") return surface;
+    if (surface === "frontend-sign-in") {
+      throw authenticationError(
+        page,
+        "the frontend sign-in gate did not start an observable OIDC transition",
+        progress.identitySubmissions,
+        progress.frontendOIDCAttempts,
+      );
+    }
     throw authenticationError(
       page,
       authenticationProgressObserved
@@ -444,7 +452,7 @@ async function detectAuthSurface(page: Page): Promise<AuthSurface> {
         .getByRole("button", { name: "Повторить", exact: true })
         .isVisible()
     ) {
-      return "frontend-sign-in";
+      return "frontend-retry";
     }
   } catch {
     // Navigation may replace the execution context between locator probes.
