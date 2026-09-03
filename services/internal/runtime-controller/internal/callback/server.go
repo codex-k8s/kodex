@@ -1218,8 +1218,11 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	resolved, err := server.control.Runtime.ResolveIntegrationInvocation(requestContext, &controlplanev1.ResolveIntegrationInvocationRequest{RunRef: input.RunRef, NodeRef: input.NodeRef, ConnectionRef: connection, CapabilityKey: capability, BoundedInput: structure, IdempotencyKey: stableKey(input.LeaseRef, string(callID))})
 	cancel()
-	if err != nil || resolved.GetInvocationRef() == "" {
-		return nil, errors.New("resolve integration invocation")
+	if err != nil {
+		return nil, fmt.Errorf("resolve integration invocation: %w", err)
+	}
+	if resolved.GetInvocationRef() == "" {
+		return nil, errors.New("resolve integration invocation: empty reference")
 	}
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
@@ -1228,7 +1231,7 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 		state, readErr := server.control.Runtime.GetIntegrationInvocation(readContext, &controlplanev1.GetIntegrationInvocationRequest{InvocationRef: resolved.GetInvocationRef()})
 		readCancel()
 		if readErr != nil {
-			return nil, errors.New("read integration invocation")
+			return nil, fmt.Errorf("read integration invocation: %w", readErr)
 		}
 		switch state.GetState() {
 		case "SUCCEEDED":

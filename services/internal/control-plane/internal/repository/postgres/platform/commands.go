@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type commandOutcome struct {
@@ -748,6 +749,18 @@ func resolveEnabledRuntime(ctx context.Context, tx pgx.Tx, ref string) (entity.R
 func mapWriteError(err error) error {
 	if err == nil {
 		return nil
+	}
+	if serializableTransactionConflict(err) {
+		return errors.Join(errSerializableTransactionRetry, errs.ErrUnavailable)
+	}
+	var pgError *pgconn.PgError
+	if errors.As(err, &pgError) {
+		switch pgError.Code {
+		case "23505":
+			return errs.ErrConflict
+		case "23503", "23514":
+			return errs.ErrInvalid
+		}
 	}
 	message := err.Error()
 	if strings.Contains(message, "duplicate key") || strings.Contains(message, "unique constraint") {
@@ -1629,7 +1642,7 @@ func (repository *Repository) emitCommandOutcomePlatformEvent(ctx context.Contex
 func (repository *Repository) emitPlatformEventSnapshot(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string, aggregateVersion int64, state string) error {
 	var sequence int64
 	if err := tx.QueryRow(ctx, queryCommandsEmitplatformeventUpdateInstallationPlatformSequence).Scan(&sequence); err != nil {
-		return errs.ErrUnavailable
+		return serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	eventID := uuid.New()
 	data := map[string]any{"kind": platformEventKind(eventName), "safeSummary": summary}
@@ -1642,7 +1655,7 @@ func (repository *Repository) emitPlatformEventSnapshot(ctx context.Context, tx 
 	}
 	subject := "control_plane.platform." + scope.organizationRef + ".events"
 	if _, err := tx.Exec(ctx, queryCommandsEmitplatformeventInsertOutboxEventsEventIdOrderingKeyPayload, eventID, subject, "platform:"+scope.organizationRef, sequence, asJSON(payload)); err != nil {
-		return errs.ErrUnavailable
+		return serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	return nil
 }
@@ -1656,11 +1669,11 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 	var rootRef, projectRef string
 	var projectValue any
 	if err := tx.QueryRow(ctx, queryCommandsEmitruneventUpdateRunsEventSequenceGraphRevisionUpdatedAt, rootRunID).Scan(&rootRef, &sequence, &version); err != nil {
-		return entity.RunEvent{}, errs.ErrUnavailable
+		return entity.RunEvent{}, serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	if projectID != "" {
 		if err := tx.QueryRow(ctx, queryCommandsEmitruneventSelectProjectsId, projectID).Scan(&projectRef); err != nil {
-			return entity.RunEvent{}, errs.ErrUnavailable
+			return entity.RunEvent{}, serializableTransactionError(err, errs.ErrUnavailable)
 		}
 		projectValue = projectID
 	}
@@ -1688,7 +1701,7 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 	actor, messageKind := runEventPresentation(scope, eventType, delta)
 	event := entity.RunEvent{Ref: ref, RunRef: rootRef, Sequence: sequence, GraphRevision: delta.Run.GraphRevision, Type: eventType, NodeRef: nodeRef, EdgeRef: edgeRef, GateRef: gateRef, ArtifactRef: artifactRef, IncidentRef: incidentRef, Summary: safeSummary, RunState: runState, NodeState: nodeState, MessageKind: messageKind, Actor: actor, OccurredAt: time.Now().UTC(), Delta: delta}
 	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertRunEventsEventIdOrganizationIdRootRunId, eventID, ref, scope.organizationID, projectValue, rootRunID, aggregateRef, version, sequence, eventType, nodeRef, edgeRef, gateRef, artifactRef, safeSummary, runState, nodeState, asJSON(delta), scope.actorRef, event.OccurredAt, actor.Kind, actor.Ref, actor.Name, messageKind, nil); err != nil {
-		return entity.RunEvent{}, errs.ErrUnavailable
+		return entity.RunEvent{}, serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	data := map[string]any{"kind": eventKind(eventType), "runRef": rootRef, "safeSummary": safeSummary,
 		"actor": map[string]string{"kind": actor.Kind, "ref": actor.Ref, "name": actor.Name}, "messageKind": messageKind}
@@ -1709,7 +1722,7 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 	}
 	subject := "control_plane.run." + scope.organizationRef + "." + rootRef + ".events"
 	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertOutboxEventsEventIdOrderingKeyPayload, eventID, subject, "run:"+rootRef, sequence, asJSON(payload)); err != nil {
-		return entity.RunEvent{}, errs.ErrUnavailable
+		return entity.RunEvent{}, serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	// Org-wide stream получает только безопасный invalidation-сигнал. Полная
 	// delta остаётся в авторитетном run event store и защищённом run stream.

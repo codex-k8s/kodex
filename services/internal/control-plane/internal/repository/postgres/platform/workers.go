@@ -762,6 +762,12 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 }
 
 func (repository *Repository) ResolveIntegrationInvocation(ctx context.Context, principal value.Principal, input map[string]string, boundedInput map[string]any) (map[string]any, error) {
+	return retrySerializableTransaction(ctx, func() (map[string]any, error) {
+		return repository.resolveIntegrationInvocation(ctx, principal, input, boundedInput)
+	})
+}
+
+func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, principal value.Principal, input map[string]string, boundedInput map[string]any) (map[string]any, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, err
@@ -786,6 +792,9 @@ func (repository *Repository) ResolveIntegrationInvocation(ctx context.Context, 
 		&resourceKind, &encodedScope, &resourceScopeDigest,
 	)
 	if err != nil {
+		if serializableTransactionConflict(err) {
+			return nil, serializableTransactionError(err, errs.ErrUnavailable)
+		}
 		return nil, errs.ErrForbidden
 	}
 	definition, exists := repository.integrationDefinitions[definitionKey]
@@ -824,7 +833,7 @@ func (repository *Repository) ResolveIntegrationInvocation(ctx context.Context, 
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errs.ErrIdempotencyReuse
 		}
-		return nil, mapWriteError(err)
+		return nil, serializableTransactionError(err, mapWriteError(err))
 	}
 	gateRef := ""
 	if resolvedState == "WAITING_APPROVAL" {
@@ -835,13 +844,13 @@ func (repository *Repository) ResolveIntegrationInvocation(ctx context.Context, 
 			if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertGateNode,
 				gateNodeRef, scope.organizationID, rootRunID, runID, nodeID,
 			).Scan(&gateNodeID); err != nil {
-				return nil, errs.ErrUnavailable
+				return nil, serializableTransactionError(err, errs.ErrUnavailable)
 			}
 			edgeRef, _ := newRef("edg")
 			if _, err := tx.Exec(ctx, queryWorkersResolveintegrationinvocationInsertGateEdge,
 				edgeRef, scope.organizationID, rootRunID, nodeID, gateNodeID,
 			); err != nil {
-				return nil, errs.ErrUnavailable
+				return nil, serializableTransactionError(err, errs.ErrUnavailable)
 			}
 			gateRef, _ = newRef("gat")
 			var gateID string
@@ -849,10 +858,10 @@ func (repository *Repository) ResolveIntegrationInvocation(ctx context.Context, 
 				gateRef, scope.organizationID, projectID, rootRunID, gateNodeID,
 				truncate(input["capability_key"]+" "+string(encodedScope), 1000), invocationID,
 			).Scan(&gateID); err != nil {
-				return nil, errs.ErrUnavailable
+				return nil, serializableTransactionError(err, errs.ErrUnavailable)
 			}
 			if _, err := tx.Exec(ctx, queryWorkersResolveintegrationinvocationUpdateRunWaitingHuman, rootRunID); err != nil {
-				return nil, errs.ErrUnavailable
+				return nil, serializableTransactionError(err, errs.ErrUnavailable)
 			}
 			if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, gateRef,
 				"OWNER_GATE_OPENED", gateNodeRef, edgeRef, gateRef, "", "i18n:INTEGRATION_EFFECT_OWNER_DECISION_REQUIRED",
@@ -861,11 +870,11 @@ func (repository *Repository) ResolveIntegrationInvocation(ctx context.Context, 
 				return nil, err
 			}
 		} else if err != nil {
-			return nil, errs.ErrUnavailable
+			return nil, serializableTransactionError(err, errs.ErrUnavailable)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, errs.ErrConflict
+		return nil, serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	return map[string]any{
 		"invocationRef": resolvedRef, "grantRef": grantRef, "operation": capability.Operation,
