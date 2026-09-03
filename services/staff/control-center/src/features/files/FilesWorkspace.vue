@@ -1950,8 +1950,12 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border);
 }
 .files-workspace__toolbar select {
+  width: 148px;
   min-height: 36px;
   max-width: 168px;
+}
+.files-workspace__toolbar > label:not(.files-workspace__search) {
+  flex: 0 0 auto;
 }
 .files-workspace__search {
   display: flex;
@@ -2394,6 +2398,14 @@ onBeforeUnmount(() => {
   justify-content: center;
   margin-top: 8px;
 }
+@media (max-width: 1500px) {
+  .files-workspace__toolbar {
+    flex-wrap: wrap;
+  }
+  .files-workspace__search {
+    flex-basis: 100%;
+  }
+}
 @media (max-width: 980px) {
   .files-workspace__layout--details {
     grid-template-columns: minmax(0, 1fr) minmax(220px, 250px);
@@ -2419,6 +2431,7 @@ onBeforeUnmount(() => {
     flex-basis: 100%;
   }
   .files-workspace__toolbar select {
+    width: auto;
     max-width: calc(50vw - 20px);
   }
   .files-workspace__count,

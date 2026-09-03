@@ -3431,32 +3431,69 @@ test.describe("web-only fresh installation", () => {
     await gotoWithRetry(page, `/projects/${projectRef}/runs/${workflowRunRef}`);
     const workspace = page.locator(".run-workspace");
     await expectInsideViewport(page, workspace, "run workspace at 1440");
-    await expectInsideViewport(
+    const summaryBox = await expectInsideViewport(
       page,
       workspace.locator(".run-canvas-summary"),
       "run summary at 1440",
     );
-    await expectInsideViewport(
+    const workspaceToolbarBox = await expectInsideViewport(
+      page,
+      workspace.locator(".run-workspace-toolbar"),
+      "run workspace toolbar at 1440",
+    );
+    const graphToolbarBox = await expectInsideViewport(
       page,
       workspace.locator(".graph-toolbar"),
       "graph toolbar at 1440",
     );
-    await expectInsideViewport(
+    const legendBox = await expectInsideViewport(
       page,
       workspace.locator(".graph-legend"),
       "graph legend at 1440",
     );
+    const minimapBox = await expectInsideViewport(
+      page,
+      workspace.locator(".vue-flow__minimap"),
+      "graph minimap at 1440",
+    );
+    const overlays = [
+      { label: "summary", box: summaryBox },
+      { label: "workspace toolbar", box: workspaceToolbarBox },
+      { label: "graph toolbar", box: graphToolbarBox },
+      { label: "legend", box: legendBox },
+      { label: "minimap", box: minimapBox },
+    ];
+    const graphNodes = workspace.locator(".vue-flow__node");
+    await expect.poll(() => graphNodes.count()).toBeGreaterThan(0);
+    for (let index = 0; index < (await graphNodes.count()); index += 1) {
+      const node = {
+        label: `graph node ${String(index + 1)}`,
+        box: await visualBox(
+          graphNodes.nth(index),
+          `graph node ${String(index + 1)}`,
+        ),
+      };
+      for (const overlay of overlays) expectNoIntersection(node, overlay);
+    }
     await attachVisualEvidence(page, testInfo, "visual-1440x900-run-canvas");
 
     await gotoWithRetry(
       page,
       `/projects/${projectRef}/files?artifactRef=${encodeURIComponent(uploadedArtifactRef)}`,
     );
-    await expectInsideViewport(
+    const filesWorkspace = page.locator(".files-workspace");
+    await waitForFilesWorkspaceArtifact(
       page,
-      page.locator(".files-workspace"),
-      "files workspace at 1440",
+      filesWorkspace.locator(".file-details"),
     );
+    await expectInsideViewport(page, filesWorkspace, "files workspace at 1440");
+    const filterWidths = await filesWorkspace
+      .locator(".files-workspace__toolbar select")
+      .evaluateAll((selects) =>
+        selects.map((select) => select.getBoundingClientRect().width),
+      );
+    expect(filterWidths.length).toBeGreaterThanOrEqual(4);
+    for (const width of filterWidths) expect(width).toBeGreaterThanOrEqual(120);
     await attachVisualEvidence(
       page,
       testInfo,
@@ -3467,12 +3504,11 @@ test.describe("web-only fresh installation", () => {
       page,
       `/projects/${projectRef}/agents/${coordinatorRef}`,
     );
+    await expectPageHeading(page, coordinatorName);
     await openKodex(page);
-    await expectInsideViewport(
-      page,
-      page.getByRole("dialog", { name: "Kodex" }),
-      "Kodex drawer at 1440",
-    );
+    const drawer = page.getByRole("dialog", { name: "Kodex" });
+    await expect(drawer).toHaveAttribute("aria-busy", "false");
+    await expectInsideViewport(page, drawer, "Kodex drawer at 1440");
     await attachVisualEvidence(
       page,
       testInfo,

@@ -184,7 +184,7 @@ async function fit(userInitiated = true): Promise<void> {
   if (userInitiated) userAdjustedView.value = true;
   programmaticViewportChange.value = true;
   try {
-    await fitView(runGraphFitViewOptions);
+    await fitView(runGraphFitViewOptions(window.innerWidth));
   } finally {
     programmaticViewportChange.value = false;
   }

@@ -139,13 +139,16 @@ wrapper `tsh-kodex` с отдельным `HOME`:
 
 ```bash
 tsh-kodex login --proxy=teleport.kodex.works:443 --auth=github
-tsh-kodex ssh kodex-teleport@kodex.works
+tsh-kodex ssh kodex-teleport@kodex-dev
 tsh-kodex kube login kodex-dev
 KUBECONFIG="$HOME/.tsh-kodex-home/.kube/config" kubectl get --raw=/readyz
 KUBECONFIG="$HOME/.tsh-kodex-home/.kube/config" kubectl auth can-i get pods --all-namespaces
 KUBECONFIG="$HOME/.tsh-kodex-home/.kube/config" kubectl auth can-i get secrets --all-namespaces
 KUBECONFIG="$HOME/.tsh-kodex-home/.kube/config" kubectl auth can-i create clusterrolebindings
 ```
+
+`teleport.kodex.works` является адресом Proxy, а `kodex-dev` — именем
+зарегистрированного SSH node; эти адреса не взаимозаменяемы.
 
 Ожидаемый результат: SSH, `/readyz` и чтение pod разрешены; чтение Secret и
 создание ClusterRoleBinding запрещены. Break-glass SSH-сессию нельзя закрывать,
