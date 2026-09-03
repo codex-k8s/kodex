@@ -105,12 +105,17 @@ interface GitHubIssue {
 test.describe("deployed local integration path", () => {
   test.describe.configure({ mode: "serial" });
 
-  test("synthetic READ/WRITE, Human Gate и exact retry", async ({ page }) => {
+  test("synthetic READ/WRITE, Human Gate и exact retry", async ({
+    browserDiagnostics,
+    page,
+  }) => {
     const journal = `${environment.resourcePrefix}-journal`;
     const replayValue = `kodex-e2e-replay:${environment.resourcePrefix}`;
     const readbackURL = syntheticReadbackURL();
 
-    await gotoWithRetry(page, "/projects");
+    await browserDiagnostics.withExpectedNetworkInterruption(page, () =>
+      gotoWithRetry(page, "/projects"),
+    );
     const initial = await readSyntheticDiagnostic(readbackURL, journal);
     expect(initial).toMatchObject({ journal, count: 0, replay_count: 0 });
 
