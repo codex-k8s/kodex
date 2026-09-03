@@ -1196,6 +1196,15 @@ test.describe("web-only fresh installation", () => {
         name: "Модель и среда выполнения",
       }),
     ).toBeVisible();
+    await expect(page).toHaveURL(
+      (url) => url.searchParams.get("tab") === "runtime",
+    );
+    await page.reload();
+    await expect(
+      runtimePanel.getByRole("heading", {
+        name: "Модель и среда выполнения",
+      }),
+    ).toBeVisible();
 
     const providerPicker = runtimePanel.getByRole("button", {
       name: "Выберите провайдера",
