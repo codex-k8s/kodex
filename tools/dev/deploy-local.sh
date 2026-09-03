@@ -265,22 +265,40 @@ reconcile_local_mutable_configmaps() {
   ' "$render" | sort -u)
 }
 
+wait_for_pod_uid_replacement() {
+  local pod=$1 previous_uid=$2 deadline=$((SECONDS + 180)) current current_uid
+  while ((SECONDS < deadline)); do
+    current=$(kubectl -n "$namespace" get "pod/$pod" -o json 2>/dev/null || true)
+    if [[ -z "$current" ]]; then
+      return
+    fi
+    current_uid=$(jq -r '.metadata.uid // ""' <<<"$current")
+    if [[ -n "$current_uid" && "$current_uid" != "$previous_uid" ]]; then
+      return
+    fi
+    sleep 1
+  done
+  kubectl -n "$namespace" get "pod/$pod" -o wide >&2 || true
+  fail "local StatefulSet Pod retained its previous UID after deletion: $pod"
+}
+
 reconcile_local_statefulset_rollout() {
-  local workload state current_revision update_revision pod
+  local workload state current_revision update_revision pod pod_uid
   for workload in "$@"; do
     state=$(kubectl -n "$namespace" get "statefulset/$workload" -o json)
     current_revision=$(jq -r '.status.currentRevision // ""' <<<"$state")
     update_revision=$(jq -r '.status.updateRevision // ""' <<<"$state")
     [[ -n "$current_revision" && -n "$update_revision" &&
       "$current_revision" != "$update_revision" ]] || continue
-    while IFS= read -r pod; do
-      [[ -n "$pod" ]] || continue
-      kubectl -n "$namespace" delete "pod/$pod" --ignore-not-found --wait=true --timeout=3m >/dev/null
+    while IFS=$'\t' read -r pod pod_uid; do
+      [[ -n "$pod" && -n "$pod_uid" ]] || continue
+      kubectl -n "$namespace" delete "pod/$pod" --ignore-not-found --wait=false >/dev/null
+      wait_for_pod_uid_replacement "$pod" "$pod_uid"
     done < <(kubectl -n "$namespace" get pods -o json | jq -r --arg workload "$workload" '
       .items[] |
       select(any(.metadata.ownerReferences[]?;
         .kind == "StatefulSet" and .name == $workload)) |
-      .metadata.name
+      [.metadata.name, .metadata.uid] | @tsv
     ')
   done
 }
