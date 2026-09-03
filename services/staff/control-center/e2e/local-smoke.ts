@@ -46,7 +46,7 @@ test("локальный OIDC, API и основные экраны доступ
   const logout = page.getByRole("button", { name: "Выйти", exact: true });
   await currentUserMenu.click();
   await expect(logout).toBeVisible();
-  await page.locator("main").click({ position: { x: 1, y: 1 } });
+  await page.locator("main").getByRole("heading").first().click();
   await expect(logout).toBeHidden();
 
   const projectsReadback = await page.evaluate(async () => {
