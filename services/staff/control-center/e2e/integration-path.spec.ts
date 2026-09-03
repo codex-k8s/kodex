@@ -474,6 +474,7 @@ test.describe("deployed local integration path", () => {
     );
     let apiKey: string | undefined = await readProviderAPIKey();
     let account: ProviderAccount | undefined;
+    let credentialActivated = false;
 
     try {
       await gotoWithRetry(page, "/administration/providers");
@@ -527,6 +528,7 @@ test.describe("deployed local integration path", () => {
         state: "AUTHORIZED",
       });
       expect(account.externalAccountMasked).not.toBe("");
+      credentialActivated = true;
       await expect(
         authorizationDialog.getByText(
           "Учётная запись авторизована и готова к использованию.",
@@ -590,12 +592,14 @@ test.describe("deployed local integration path", () => {
             ready: false,
             state: "REVOKED",
           });
-          await expect
-            .poll(() => verifyProviderCredentialCleanup(account?.ref ?? ""), {
-              timeout: 180_000,
-              intervals: [250, 1_000, 2_000, 5_000],
-            })
-            .toBe(true);
+          if (credentialActivated) {
+            await expect
+              .poll(() => verifyProviderCredentialCleanup(account?.ref ?? ""), {
+                timeout: 180_000,
+                intervals: [250, 1_000, 2_000, 5_000],
+              })
+              .toBe(true);
+          }
         }
       }
     }
