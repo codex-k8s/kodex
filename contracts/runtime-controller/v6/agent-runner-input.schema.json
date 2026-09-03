@@ -316,7 +316,7 @@
         "capability_key": {"type": "string", "minLength": 1, "maxLength": 255},
         "capability_name": {"type": "string", "minLength": 1, "maxLength": 160},
         "capability_description": {"type": "string", "maxLength": 2000},
-        "risk": {"enum": ["LOW", "MEDIUM", "HIGH"]}
+        "risk": {"enum": ["READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"]}
       }
     },
     "assistant_context": {

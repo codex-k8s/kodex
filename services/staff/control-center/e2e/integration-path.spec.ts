@@ -843,6 +843,14 @@ async function waitForTerminalRun(
         );
         if (!observed) return "PENDING";
         current = observed;
+        if (
+          terminalStates.has(current.state) &&
+          current.state !== expectedState
+        ) {
+          throw new Error(
+            `Run ${runRef} reached ${current.state} instead of ${expectedState}: ${current.safeErrorCode ?? "UNKNOWN"}`,
+          );
+        }
         return terminalStates.has(current.state) ? current.state : "PENDING";
       },
       { timeout: environment.runTimeoutMs, intervals: [500, 1_000, 2_000] },

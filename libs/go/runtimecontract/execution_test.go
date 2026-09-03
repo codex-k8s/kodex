@@ -85,7 +85,7 @@ func TestRunnerInputNestedCatalogMatchesV6SchemaBoundary(t *testing.T) {
 	valid.IntegrationGrants = []RunnerIntegrationGrant{{
 		Ref: "grant_abcdefgh", ConnectionRef: "conn_abcdefgh", DefinitionKey: "crm",
 		ConnectionName: "CRM", CapabilityKey: "crm.read", CapabilityName: "Read CRM",
-		CapabilityDescription: "Read bounded CRM records.", Risk: "LOW",
+		CapabilityDescription: "Read bounded CRM records.", Risk: "READ",
 	}}
 	valid.Capabilities = []string{"crm.read"}
 	if err := valid.Validate(); err != nil {

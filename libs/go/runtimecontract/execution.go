@@ -350,7 +350,7 @@ func validIntegrationGrants(grants []RunnerIntegrationGrant) bool {
 			grant.CapabilityKey == "" || len(grant.CapabilityKey) > 255 ||
 			grant.CapabilityName == "" || len(grant.CapabilityName) > 160 ||
 			len(grant.CapabilityDescription) > 2000 ||
-			!containsString([]string{"LOW", "MEDIUM", "HIGH"}, grant.Risk) {
+			!containsString([]string{"READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"}, grant.Risk) {
 			return false
 		}
 	}
