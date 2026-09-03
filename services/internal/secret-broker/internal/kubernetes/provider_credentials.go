@@ -40,7 +40,7 @@ const (
 
 var (
 	providerReferencePattern             = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{7,95}$`)
-	providerCleanupReferencePattern      = regexp.MustCompile(`^[a-z0-9_-]+$`)
+	providerCleanupReferencePattern      = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 	providerCredentialNamePattern        = regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$`)
 	providerCredentialUIDPattern         = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 	ErrProviderAttemptNotFound           = errors.New("provider authorization attempt is not found")
