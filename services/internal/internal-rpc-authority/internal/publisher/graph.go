@@ -256,8 +256,10 @@ func (graph *Graph) Publish(
 	persisted := publication
 	if found {
 		if existing.IntentID != publication.IntentID {
-			return model.AuthoritySnapshotPublication{}, errors.New(
-				"durable authority snapshot intent mutation rejected",
+			return model.AuthoritySnapshotPublication{}, fmt.Errorf(
+				"durable authority snapshot intent mutation rejected: stored content %s, desired content %s",
+				existing.SourceDigestSHA256,
+				publication.SourceDigestSHA256,
 			)
 		}
 		if existing.InputDigestSHA256 != publication.InputDigestSHA256 {
