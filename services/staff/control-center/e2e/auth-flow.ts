@@ -8,7 +8,6 @@ import {
 import { gotoWithRetry } from "./helpers";
 
 const authenticationTimeoutMs = 100_000;
-const blankCallbackRecoveryMs = 5_000;
 const frontendOIDCRetryTimeoutMs = 7_500;
 const maxFrontendOIDCAttempts = 2;
 const surfacePollIntervalMs = 250;
@@ -198,7 +197,6 @@ async function startFrontendOIDCTransition(
   ownerSessionStatuses: number[],
 ): Promise<Exclude<AuthSurface, "pending">> {
   const frontendOrigin = new URL(page.url()).origin;
-  const blankCallbackDeadline = Date.now() + blankCallbackRecoveryMs;
   let authenticationProgressObserved = false;
   let failedResponse: string | undefined;
   const recordNavigation = (frame: Frame): void => {
@@ -245,23 +243,6 @@ async function startFrontendOIDCTransition(
       surface = await detectAuthSurface(page);
       if (surface !== "pending" && surface !== "frontend-sign-in") {
         return surface;
-      }
-      if (
-        !authenticationProgressObserved &&
-        Date.now() >= blankCallbackDeadline &&
-        new URL(page.url()).pathname === "/auth/callback" &&
-        (await hasBlankApplicationDocument(page, frontendOrigin))
-      ) {
-        await gotoWithRetry(
-          page,
-          "/",
-          {
-            timeout: remainingTimeout(deadline),
-            waitUntil: "domcontentloaded",
-          },
-          { appShell: false },
-        );
-        return await waitForAuthSurface(page, deadline, undefined, progress);
       }
       authenticationProgressObserved ||= isOIDCProgressLocation(
         page.url(),
