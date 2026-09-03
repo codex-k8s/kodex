@@ -333,6 +333,11 @@ export const useAccessStore = defineStore("access", () => {
         )
       : await api.addAccessBinding(input as AccessBindingInput);
     await loadBindings();
+    bindings.value = appendUnique(
+      bindings.value,
+      [binding],
+      (item) => item.ref,
+    );
     return binding;
   }
 

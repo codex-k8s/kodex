@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AccessBinding } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
 
 const fetchAccessSubjects = vi.hoisted(() => vi.fn());
@@ -10,6 +11,7 @@ const fetchProjectMemberships = vi.hoisted(() => vi.fn());
 const fetchAccessRoles = vi.hoisted(() => vi.fn());
 const fetchAccessRoleVersions = vi.hoisted(() => vi.fn());
 const addAccessRole = vi.hoisted(() => vi.fn());
+const addAccessBinding = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/access/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/access/api")>()),
@@ -20,6 +22,7 @@ vi.mock("@/features/access/api", async (importOriginal) => ({
   fetchAccessRoles,
   fetchAccessRoleVersions,
   addAccessRole,
+  addAccessBinding,
 }));
 
 import { useAccessStore } from "@/features/access/store";
@@ -53,6 +56,7 @@ function accessRole(ref: string, name = ref) {
     state: "ACTIVE" as const,
     currentVersion: {
       ref: `${ref}_v1`,
+      roleRef: ref,
       revision: 1,
       name,
       description: "Точечный запуск сотрудника",
@@ -71,6 +75,26 @@ function accessRole(ref: string, name = ref) {
   };
 }
 
+function accessBinding(ref: string): AccessBinding {
+  const role = accessRole(`role_${ref}`);
+  return {
+    ref,
+    version: 1,
+    state: "ACTIVE",
+    subject: subject("subject_sales"),
+    roleVersion: role.currentVersion,
+    scope: {
+      kind: "RESOURCE_INSTANCE",
+      projectRef: "project_sales",
+      resourceKind: "AGENT",
+      resourceRef: "agent_coordinator",
+    },
+    conditions: { requireOwner: false },
+    createdAt: "2026-09-03T00:00:00Z",
+    updatedAt: "2026-09-03T00:00:00Z",
+  };
+}
+
 describe("access store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -81,6 +105,7 @@ describe("access store", () => {
     fetchAccessRoles.mockReset();
     fetchAccessRoleVersions.mockReset();
     addAccessRole.mockReset();
+    addAccessBinding.mockReset();
   });
 
   it("не позволяет старому поиску участников заменить новый", async () => {
@@ -191,6 +216,32 @@ describe("access store", () => {
     expect(store.roles).toHaveLength(51);
     expect(store.roleNextPageToken).toBe("role_49");
     expect(fetchAccessRoleVersions).toHaveBeenCalledWith(created.ref);
+  });
+
+  it("оставляет созданную привязку видимой, если первая страница readback её не содержит", async () => {
+    const created = accessBinding("binding_created");
+    const firstPage = Array.from({ length: 50 }, (_, index) =>
+      accessBinding(`binding_${String(index).padStart(2, "0")}`),
+    );
+    addAccessBinding.mockResolvedValue(created);
+    fetchAccessBindings.mockResolvedValue({
+      items: firstPage,
+      nextPageToken: "binding_49",
+    });
+    const store = useAccessStore();
+
+    const result = await store.saveBinding({
+      subjectKind: created.subject.kind,
+      subjectRef: created.subject.ref,
+      roleVersionRef: created.roleVersion.ref,
+      scope: created.scope,
+      conditions: created.conditions,
+    });
+
+    expect(result).toEqual(created);
+    expect(store.bindings).toContainEqual(created);
+    expect(store.bindings).toHaveLength(51);
+    expect(store.bindingNextPageToken).toBe("binding_49");
   });
 
   it("собирает все страницы активных ролей для новой привязки", async () => {
