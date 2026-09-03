@@ -1,12 +1,119 @@
+import { randomUUID } from "node:crypto";
 import { fileURLToPath, URL } from "node:url";
-
 import vue from "@vitejs/plugin-vue";
-import type { FileSystemServeOptions } from "vite";
+import type { FileSystemServeOptions, Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
 const developmentPublicHost = process.env.KODEX_DEV_PUBLIC_HOST;
 const developmentApiTarget = process.env.KODEX_DEV_API_TARGET;
 const controlCenterRoot = fileURLToPath(new URL(".", import.meta.url));
+const remoteDevelopmentEnabled = Boolean(
+  developmentPublicHost && developmentApiTarget,
+);
+
+export const controlCenterReloadPollIntervalMs = 1_000;
+const controlCenterReloadClientPath = "/__kodex_dev_reload.js";
+const controlCenterRevisionPath = "/__kodex_dev_revision";
+const viteHMRClientScriptPattern =
+  /<script\s+type=["']module["']\s+src=["'][^"']*\/@vite\/client["']><\/script>\s*/u;
+
+export function withoutViteHMRClient(html: string): string {
+  return html.replace(viteHMRClientScriptPattern, "");
+}
+
+function controlCenterRemoteReloadPlugin(): Plugin {
+  const serverRevision = randomUUID();
+  let revision = 0;
+  return {
+    name: "kodex:remote-live-reload",
+    apply: "serve",
+    configureServer(server) {
+      const advanceRevision = (): void => {
+        revision += 1;
+      };
+      server.watcher.on("add", advanceRevision);
+      server.watcher.on("change", advanceRevision);
+      server.watcher.on("unlink", advanceRevision);
+      server.middlewares.use((request, response, next) => {
+        const pathname = new URL(request.url ?? "/", "http://kodex.invalid")
+          .pathname;
+        let body: string | undefined;
+        let contentType: string | undefined;
+        if (pathname === controlCenterRevisionPath) {
+          body = `${serverRevision}:${String(revision)}`;
+          contentType = "text/plain; charset=utf-8";
+        } else if (pathname === controlCenterReloadClientPath) {
+          body = remoteReloadClientSource();
+          contentType = "application/javascript; charset=utf-8";
+        }
+        if (body === undefined || contentType === undefined) {
+          next();
+          return;
+        }
+        response.statusCode = 200;
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader("Content-Type", contentType);
+        response.setHeader("Content-Length", Buffer.byteLength(body));
+        response.end(body);
+      });
+      server.httpServer?.once("close", () => {
+        server.watcher.off("add", advanceRevision);
+        server.watcher.off("change", advanceRevision);
+        server.watcher.off("unlink", advanceRevision);
+      });
+    },
+    transformIndexHtml: {
+      order: "post",
+      handler(html) {
+        return {
+          html: withoutViteHMRClient(html),
+          tags: [
+            {
+              tag: "script",
+              attrs: { src: controlCenterReloadClientPath, type: "module" },
+              injectTo: "body",
+            },
+          ],
+        };
+      },
+    },
+  };
+}
+
+function remoteReloadClientSource(): string {
+  return `
+const revisionEndpoint = ${JSON.stringify(controlCenterRevisionPath)};
+const pollIntervalMs = ${String(controlCenterReloadPollIntervalMs)};
+let observedRevision;
+
+async function pollRevision() {
+  try {
+    const response = await fetch(revisionEndpoint, {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    const responseLocation = new URL(response.url);
+    if (
+      response.ok &&
+      responseLocation.origin === window.location.origin &&
+      responseLocation.pathname === revisionEndpoint
+    ) {
+      const revision = await response.text();
+      if (observedRevision !== undefined && revision !== observedRevision) {
+        window.location.reload();
+        return;
+      }
+      observedRevision = revision;
+    }
+  } catch {
+    // Следующий bounded poll восстановит live reload после краткого outage.
+  }
+  window.setTimeout(pollRevision, pollIntervalMs);
+}
+
+void pollRevision();
+`;
+}
 
 export const controlCenterFileSystemBoundary = {
   strict: true,
@@ -37,7 +144,10 @@ export const controlCenterFileSystemBoundary = {
 } satisfies FileSystemServeOptions;
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    ...(remoteDevelopmentEnabled ? [controlCenterRemoteReloadPlugin()] : []),
+  ],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
@@ -52,14 +162,12 @@ export default defineConfig({
     ...(developmentPublicHost && developmentApiTarget
       ? {
           allowedHosts: [developmentPublicHost],
-          hmr: {
-            clientPort: 443,
-            host: developmentPublicHost,
-            protocol: "wss",
-          },
+          hmr: false,
+          ws: false,
           watch: {
             ignored: [
               "**/.auth/**",
+              "**/e2e/**",
               "**/test-results/**",
               "**/playwright-report/**",
             ],

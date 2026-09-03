@@ -3,7 +3,11 @@ import { fileURLToPath, URL } from "node:url";
 import { isFileLoadingAllowed, normalizePath, resolveConfig } from "vite";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import viteConfig, { controlCenterFileSystemBoundary } from "../../vite.config";
+import viteConfig, {
+  controlCenterFileSystemBoundary,
+  controlCenterReloadPollIntervalMs,
+  withoutViteHMRClient,
+} from "../../vite.config";
 
 const controlCenterRoot = fileURLToPath(new URL("../..", import.meta.url));
 const repositoryRoot = fileURLToPath(
@@ -43,6 +47,17 @@ describe("filesystem boundary Vite dev-server", () => {
         asFileSystemPath(`${repositoryRoot}/AGENTS.md`),
       ),
     ).toBe(false);
+  });
+
+  it("проверяет remote revision с bounded интервалом", () => {
+    expect(controlCenterReloadPollIntervalMs).toBe(1_000);
+  });
+
+  it("заменяет встроенный Vite HMR client на remote polling reload", () => {
+    expect(
+      withoutViteHMRClient(`<!doctype html>
+<html><head><script type="module" src="/@vite/client"></script></head></html>`),
+    ).toBe("<!doctype html>\n<html><head></head></html>");
   });
 
   it.each([

@@ -1,3 +1,6 @@
+import { rm } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
 import { authenticateOwner } from "./auth-flow";
@@ -34,6 +37,50 @@ test.describe("OIDC-сессия владельца", () => {
     await writeStorageState(environment.outputStorageState, bootstrap);
   });
 
+  test("dev watcher не перезагружает страницу при записи OIDC storage state", async ({
+    browser,
+  }) => {
+    const context = await warmOwnerContext(browser);
+    const page = await context.newPage();
+    let viteHMRFramesReceived = 0;
+    page.on("websocket", (socket) => {
+      if (new URL(socket.url()).searchParams.has("token")) {
+        socket.on("framereceived", () => {
+          viteHMRFramesReceived += 1;
+        });
+      }
+    });
+    const probePath = fileURLToPath(
+      new URL("../.auth/watcher-probe.json", import.meta.url),
+    );
+
+    try {
+      await authenticateOwner(page, undefined, { mode: "warm" });
+      await expect(page.locator(".app-shell")).toBeVisible();
+      const documentMarker = await page.evaluate(() => {
+        const marker = crypto.randomUUID();
+        document.documentElement.dataset.oidcWatcherProbe = marker;
+        return marker;
+      });
+      const bootstrap = withoutKodexAPICookies(await context.storageState());
+
+      await writeStorageState(probePath, bootstrap);
+      // Покрывает несколько циклов polling watcher и возможный debounce Vite.
+      await page.waitForTimeout(12_000);
+
+      await expect(page.locator(".app-shell")).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.dataset.oidcWatcherProbe,
+        ),
+      ).toBe(documentMarker);
+      expect(viteHMRFramesReceived).toBe(0);
+    } finally {
+      await context.close();
+      await rm(probePath, { force: true });
+    }
+  });
+
   test("warm OIDC дожидается медленного callback в общем auth budget", async ({
     browser,
   }) => {
@@ -46,18 +93,10 @@ test.describe("OIDC-сессия владельца", () => {
         return;
       }
       delayedRequests += 1;
-      const interceptedAt = Date.now();
-      const response = await route.fetch();
-      const remainingDelayMs = Math.max(
-        0,
-        delayedSessionResponseMs - (Date.now() - interceptedAt),
+      await new Promise<void>((resolve) =>
+        globalThis.setTimeout(resolve, delayedSessionResponseMs),
       );
-      if (remainingDelayMs > 0) {
-        await new Promise<void>((resolve) =>
-          globalThis.setTimeout(resolve, remainingDelayMs),
-        );
-      }
-      await route.fulfill({ response });
+      await route.continue();
     });
 
     try {

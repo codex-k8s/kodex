@@ -34,7 +34,11 @@ describe("bootstrap Control Center", () => {
   });
 
   it("не наблюдает browser test artifacts и сохранённую OIDC-сессию", () => {
+    expect(viteConfigSource).toContain("hmr: false");
+    expect(viteConfigSource).toContain("ws: false");
+    expect(viteConfigSource).toContain('"/__kodex_dev_revision"');
     expect(viteConfigSource).toContain('"**/.auth/**"');
+    expect(viteConfigSource).toContain('"**/e2e/**"');
     expect(viteConfigSource).toContain('"**/test-results/**"');
     expect(viteConfigSource).toContain('"**/playwright-report/**"');
   });
