@@ -263,6 +263,8 @@ test.describe("deployed local integration path", () => {
     });
     expect(connection.name).toContain("synthetic updated");
     expect(connection.publicConfiguration).toEqual({ journal });
+    connection = await commandConnection(page, connection, "DISABLE");
+    expect(connection.state).toBe("DISABLED");
     connection = await deleteConnection(page, connection);
     expect(connection.state).toBe("DELETED");
   });
