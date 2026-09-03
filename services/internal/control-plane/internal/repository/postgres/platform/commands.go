@@ -2202,10 +2202,14 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	runState := "RUNNING"
 	if payload.Decision == "REJECT" {
 		nodeState = "FAILED"
-		runState = "FAILED"
+		if integrationInvocationID == "" {
+			runState = "FAILED"
+		}
 	} else if payload.Decision == "CANCEL" {
 		nodeState = "CANCELLED"
-		runState = "CANCELLED"
+		if integrationInvocationID == "" {
+			runState = "CANCELLED"
+		}
 	}
 	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunNodesStateFinishedAtVersion, nodeID, nodeState); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable

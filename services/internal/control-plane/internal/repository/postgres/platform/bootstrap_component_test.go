@@ -2237,8 +2237,11 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 		Mutation: value.Mutation{IdempotencyKey: "integration-effect-reject", ExpectedVersion: &gateVersion},
 		Payload:  command.GateResolutionInput{GateRef: stringMap(rejected, "gateRef"), Decision: "REJECT", Comment: "Reject exact journal write"},
 	})
-	if err != nil || rejection.Gate == nil || rejection.Gate.State != "REJECTED" || rejection.Run == nil || rejection.Run.State != "FAILED" {
+	if err != nil || rejection.Gate == nil || rejection.Gate.State != "REJECTED" || rejection.Run == nil || rejection.Run.State != "RUNNING" {
 		t.Fatalf("reject integration effect: gate=%#v run=%#v err=%v", rejection.Gate, rejection.Run, err)
+	}
+	if rejection.Graph == nil || graphNodeState(rejection.Graph.Nodes, "ROOT_PROCESS") != "RUNNING" {
+		t.Fatalf("rejected integration effect terminated the active root graph: %#v", rejection.Graph)
 	}
 	afterRejection, err := service.ClaimIntegrationInvocations(ctx, gateway, "integration-gateway-component", 1)
 	if err != nil || len(afterRejection) != 0 {
