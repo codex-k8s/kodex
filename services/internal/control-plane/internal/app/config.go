@@ -16,7 +16,7 @@ import (
 const (
 	providerTarget                  = "dns:///secret-broker.kodex-system.svc:8443"
 	providerTLSServerName           = "secret-broker.kodex-system.svc.cluster.local"
-	providerAuthorityResolverTarget = "dns:///control-plane.kodex-system.svc:8443"
+	providerAuthorityResolverTarget = "dns:///127.0.0.1:8443"
 	providerAuthorityResolverSNI    = "control-plane.kodex-system.svc.cluster.local"
 )
 

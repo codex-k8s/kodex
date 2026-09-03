@@ -4,6 +4,9 @@ import "testing"
 
 func TestProviderCredentialBoundarySeparatesResolverAndTarget(t *testing.T) {
 	t.Parallel()
+	if providerAuthorityResolverTarget != "dns:///127.0.0.1:8443" {
+		t.Fatal("provider authority resolver must use the local sidecar endpoint")
+	}
 	valid := Config{
 		ClientCAFile:                  "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
 		SecretBrokerTarget:            providerTarget,
