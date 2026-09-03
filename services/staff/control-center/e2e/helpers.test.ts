@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   navigationReachedExpectedPath,
   readJsonWithNetworkRetry,
+  retryIdempotentBrowserAction,
   retryableProviderResult,
   retryReadOnlyBrowserAction,
 } from "./helpers";
@@ -104,6 +105,23 @@ describe("read-only JSON readback в браузере", () => {
 
     await expect(retryReadOnlyBrowserAction(page, action)).resolves.toEqual({
       ready: true,
+    });
+    expect(action).toHaveBeenCalledTimes(2);
+    expect(waitForTimeout).toHaveBeenCalledWith(200);
+  });
+
+  test("повторяет idempotent mutation с тем же callback после сетевого сбоя", async () => {
+    const action = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("page.evaluate: TypeError: Failed to fetch"),
+      )
+      .mockResolvedValueOnce({ status: 409 });
+    const waitForTimeout = vi.fn().mockResolvedValue(undefined);
+    const page = { waitForTimeout } as unknown as Page;
+
+    await expect(retryIdempotentBrowserAction(page, action)).resolves.toEqual({
+      status: 409,
     });
     expect(action).toHaveBeenCalledTimes(2);
     expect(waitForTimeout).toHaveBeenCalledWith(200);

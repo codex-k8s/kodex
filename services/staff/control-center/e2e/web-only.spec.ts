@@ -30,6 +30,7 @@ import {
   launchAgent,
   publishAgent,
   readJsonWithNetworkRetry,
+  retryIdempotentBrowserAction,
   retryableProviderResult,
   retryReadOnlyBrowserAction,
   routeRef,
@@ -1140,9 +1141,18 @@ test.describe("web-only fresh installation", () => {
             `/api/v1/projects/${projectRef}/runtime-environments`,
       );
       await page.getByRole("button", { name: "Создать", exact: true }).click();
-      expect((await creation).status()).toBe(201);
-      await expect(page).toHaveURL(/\/environments\/[^/]+$/);
-      runtimeEnvironmentRef = routeRef(page, "environments");
+      const creationResponse = await creation;
+      expect(creationResponse.status()).toBe(201);
+      const createdEnvironment = (await creationResponse.json()) as {
+        ref?: string;
+      };
+      expect(createdEnvironment.ref).toMatch(/^renv_[A-Za-z0-9_-]+$/);
+      runtimeEnvironmentRef = createdEnvironment.ref ?? "";
+      await expect(page).toHaveURL(
+        (url) =>
+          url.pathname ===
+          `/projects/${projectRef}/environments/${runtimeEnvironmentRef}`,
+      );
       persistRefs();
       await page.getByRole("tab", { name: "Переменные", exact: true }).click();
       await expect(page.getByLabel("Имя переменной")).toHaveValue("E2E_MODE");
@@ -2117,109 +2127,115 @@ test.describe("web-only fresh installation", () => {
       "Сначала выдайте всем выбранным ИИ-сотрудникам возможность «Файлы»",
     );
 
-    const forgedResult = await page.evaluate(
-      async ({ expectedFileName, expectedProjectRef, targetRef, title }) => {
-        const artifactResponse = await fetch(
-          `/api/v1/projects/${encodeURIComponent(expectedProjectRef)}/artifacts?pageSize=100`,
-        );
-        const artifactPage = (await artifactResponse.json()) as {
-          items: Array<{ fileName: string; ref: string }>;
-        };
-        const artifactRef = artifactPage.items.find(
-          (item) => item.fileName === expectedFileName,
-        )?.ref;
-        if (!artifactRef) throw new Error("E2E artifact is absent");
-        const csrfPrefix = "__Host-kodex-csrf=";
-        const csrf = document.cookie
-          .split(";")
-          .map((part) => part.trim())
-          .find((part) => part.startsWith(csrfPrefix))
-          ?.slice(csrfPrefix.length);
-        if (!csrf) throw new Error("E2E CSRF cookie is absent");
-        const mutationHeaders = (): Record<string, string> => ({
-          "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
-          "X-CSRF-Token": decodeURIComponent(csrf),
-        });
-        const draftResponse = await fetch(
-          `/api/v1/projects/${encodeURIComponent(expectedProjectRef)}/attachment-sets`,
-          {
-            method: "POST",
-            headers: mutationHeaders(),
-            body: JSON.stringify({
-              purpose: "RUN_INPUT",
-              artifactRefs: [artifactRef],
-            }),
-          },
-        );
-        if (!draftResponse.ok)
-          throw new Error(
-            `E2E AttachmentSet draft failed: ${String(draftResponse.status)}`,
+    const idempotencyKeys = await page.evaluate(() => ({
+      attachmentSet: crypto.randomUUID(),
+      finalization: crypto.randomUUID(),
+      run: crypto.randomUUID(),
+    }));
+    const forgedResult = await retryIdempotentBrowserAction(page, () =>
+      page.evaluate(
+        async ({
+          artifactRef,
+          expectedProjectRef,
+          idempotencyKeys,
+          targetRef,
+          title,
+        }) => {
+          const csrfPrefix = "__Host-kodex-csrf=";
+          const csrf = document.cookie
+            .split(";")
+            .map((part) => part.trim())
+            .find((part) => part.startsWith(csrfPrefix))
+            ?.slice(csrfPrefix.length);
+          if (!csrf) throw new Error("E2E CSRF cookie is absent");
+          const mutationHeaders = (
+            idempotencyKey: string,
+          ): Record<string, string> => ({
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKey,
+            "X-CSRF-Token": decodeURIComponent(csrf),
+          });
+          const draftResponse = await fetch(
+            `/api/v1/projects/${encodeURIComponent(expectedProjectRef)}/attachment-sets`,
+            {
+              method: "POST",
+              headers: mutationHeaders(idempotencyKeys.attachmentSet),
+              body: JSON.stringify({
+                purpose: "RUN_INPUT",
+                artifactRefs: [artifactRef],
+              }),
+            },
           );
-        const draft = (await draftResponse.json()) as {
-          ref: string;
-          version: number;
-        };
-        const finalizeResponse = await fetch(
-          `/api/v1/attachment-sets/${encodeURIComponent(draft.ref)}/finalization`,
-          {
+          if (!draftResponse.ok)
+            throw new Error(
+              `E2E AttachmentSet draft failed: ${String(draftResponse.status)}`,
+            );
+          const draft = (await draftResponse.json()) as {
+            ref: string;
+            version: number;
+          };
+          const finalizeResponse = await fetch(
+            `/api/v1/attachment-sets/${encodeURIComponent(draft.ref)}/finalization`,
+            {
+              method: "POST",
+              headers: {
+                ...mutationHeaders(idempotencyKeys.finalization),
+                "If-Match": `"${String(draft.version)}"`,
+              },
+            },
+          );
+          if (!finalizeResponse.ok)
+            throw new Error(
+              `E2E AttachmentSet finalization failed: ${String(finalizeResponse.status)}`,
+            );
+          const attachmentSet = (await finalizeResponse.json()) as {
+            ref: string;
+          };
+          const beforeResponse = await fetch(
+            `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
+          );
+          const before = (await beforeResponse.json()) as {
+            items: Array<{ title: string }>;
+          };
+          const response = await fetch("/api/v1/runs", {
             method: "POST",
             headers: {
-              ...mutationHeaders(),
-              "If-Match": `"${String(draft.version)}"`,
+              "Content-Type": "application/json",
+              "Idempotency-Key": idempotencyKeys.run,
+              "X-CSRF-Token": decodeURIComponent(csrf),
             },
-          },
-        );
-        if (!finalizeResponse.ok)
-          throw new Error(
-            `E2E AttachmentSet finalization failed: ${String(finalizeResponse.status)}`,
+            body: JSON.stringify({
+              projectRef: expectedProjectRef,
+              targetRef,
+              targetType: "AGENT",
+              title,
+              task: "Эта подделанная команда не должна создать Run.",
+              attachmentSetRef: attachmentSet.ref,
+            }),
+          });
+          const problem = (await response.json()) as { code?: string };
+          const afterResponse = await fetch(
+            `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
           );
-        const attachmentSet = (await finalizeResponse.json()) as {
-          ref: string;
-        };
-        const beforeResponse = await fetch(
-          `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
-        );
-        const before = (await beforeResponse.json()) as {
-          items: Array<{ title: string }>;
-        };
-        const response = await fetch("/api/v1/runs", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Key": crypto.randomUUID(),
-            "X-CSRF-Token": decodeURIComponent(csrf),
-          },
-          body: JSON.stringify({
-            projectRef: expectedProjectRef,
-            targetRef,
-            targetType: "AGENT",
-            title,
-            task: "Эта подделанная команда не должна создать Run.",
-            attachmentSetRef: attachmentSet.ref,
-          }),
-        });
-        const problem = (await response.json()) as { code?: string };
-        const afterResponse = await fetch(
-          `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
-        );
-        const after = (await afterResponse.json()) as {
-          items: Array<{ title: string }>;
-        };
-        return {
-          afterCount: after.items.length,
-          beforeCount: before.items.length,
-          code: problem.code ?? "",
-          created: after.items.some((run) => run.title === title),
-          status: response.status,
-        };
-      },
-      {
-        expectedFileName: uploadedFileName,
-        expectedProjectRef: projectRef,
-        targetRef: analystRef,
-        title: `${environment.resourcePrefix} — запрещённый запуск с файлом`,
-      },
+          const after = (await afterResponse.json()) as {
+            items: Array<{ title: string }>;
+          };
+          return {
+            afterCount: after.items.length,
+            beforeCount: before.items.length,
+            code: problem.code ?? "",
+            created: after.items.some((run) => run.title === title),
+            status: response.status,
+          };
+        },
+        {
+          artifactRef: uploadedArtifactRef,
+          expectedProjectRef: projectRef,
+          idempotencyKeys,
+          targetRef: analystRef,
+          title: `${environment.resourcePrefix} — запрещённый запуск с файлом`,
+        },
+      ),
     );
     expect(forgedResult.status).toBe(409);
     expect(forgedResult.code).not.toBe("");
