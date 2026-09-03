@@ -25,6 +25,19 @@ export interface AuthenticationOptions {
   readonly mode: "cold" | "local" | "warm";
 }
 
+export interface AuthenticationResult {
+  readonly frontendOIDCAttempts: number;
+  readonly identitySubmissions: number;
+  readonly ownerSessionStatuses: readonly number[];
+}
+
+export interface AuthenticationDocumentSnapshot {
+  readonly appChildElementCount: number | undefined;
+  readonly bodyText: string;
+  readonly origin: string;
+  readonly pathname: string;
+}
+
 interface AuthProgress {
   readonly frontendOIDCAttempts: number;
   readonly identitySubmissions: number;
@@ -34,10 +47,11 @@ export async function authenticateOwner(
   page: Page,
   credentials: OwnerCredentials | undefined,
   options: AuthenticationOptions,
-): Promise<void> {
+): Promise<AuthenticationResult> {
   const deadline = Date.now() + authenticationTimeoutMs;
   let identitySubmissions = 0;
   let frontendOIDCAttempts = 0;
+  const ownerSessionStatuses: number[] = [];
 
   await gotoWithRetry(
     page,
@@ -78,7 +92,11 @@ export async function authenticateOwner(
       }
       await waitForVisibleImages(page, deadline);
       await waitForAuthenticationNavigation(page, deadline);
-      return;
+      return {
+        frontendOIDCAttempts,
+        identitySubmissions,
+        ownerSessionStatuses,
+      };
     }
 
     if (surface === "frontend-sign-in") {
@@ -99,10 +117,15 @@ export async function authenticateOwner(
         );
       }
       frontendOIDCAttempts += 1;
-      surface = await startFrontendOIDCTransition(page, deadline, {
-        identitySubmissions,
-        frontendOIDCAttempts,
-      });
+      surface = await startFrontendOIDCTransition(
+        page,
+        deadline,
+        {
+          identitySubmissions,
+          frontendOIDCAttempts,
+        },
+        ownerSessionStatuses,
+      );
       if (
         surface === "frontend-sign-in" &&
         frontendOIDCAttempts < maxFrontendOIDCAttempts
@@ -166,6 +189,7 @@ async function startFrontendOIDCTransition(
   page: Page,
   deadline: number,
   progress: AuthProgress,
+  ownerSessionStatuses: number[],
 ): Promise<Exclude<AuthSurface, "pending">> {
   const frontendOrigin = new URL(page.url()).origin;
   const blankCallbackDeadline = Date.now() + blankCallbackRecoveryMs;
@@ -179,6 +203,9 @@ async function startFrontendOIDCTransition(
     );
   };
   const recordFailedResponse = (response: Response): void => {
+    if (isOwnerSessionCreationResponse(response, frontendOrigin)) {
+      ownerSessionStatuses.push(response.status());
+    }
     if (response.status() < 400 || !isAuthenticationResponse(response)) return;
     failedResponse = `${String(response.status())}:${response.request().method()}:${safeLocation(response.url())}`;
   };
@@ -209,7 +236,7 @@ async function startFrontendOIDCTransition(
       if (
         Date.now() >= blankCallbackDeadline &&
         new URL(page.url()).pathname === "/auth/callback" &&
-        (await hasBlankApplicationDocument(page))
+        (await hasBlankApplicationDocument(page, frontendOrigin))
       ) {
         await gotoWithRetry(
           page,
@@ -308,7 +335,7 @@ async function waitForAuthSurface(
       previous === undefined &&
       !retriedBlankInitialDocument &&
       Date.now() >= initialDeadline &&
-      (await hasBlankApplicationDocument(page))
+      (await hasBlankApplicationDocument(page, new URL(page.url()).origin))
     ) {
       retriedBlankInitialDocument = true;
       await page.reload({
@@ -331,19 +358,40 @@ async function waitForAuthSurface(
   );
 }
 
-async function hasBlankApplicationDocument(page: Page): Promise<boolean> {
+async function hasBlankApplicationDocument(
+  page: Page,
+  frontendOrigin: string,
+): Promise<boolean> {
   try {
-    return await page.evaluate(() => {
+    const snapshot = await page.evaluate(() => {
       const application = document.querySelector("#app");
-      return (
-        document.body.textContent.trim() === "" &&
-        application instanceof HTMLElement &&
-        application.childElementCount === 0
-      );
+      return {
+        appChildElementCount:
+          application instanceof HTMLElement
+            ? application.childElementCount
+            : undefined,
+        bodyText: document.body.textContent,
+        origin: window.location.origin,
+        pathname: window.location.pathname,
+      } satisfies AuthenticationDocumentSnapshot;
     });
+    return isRecoverableBlankFrontendDocument(snapshot, frontendOrigin);
   } catch {
     return false;
   }
+}
+
+export function isRecoverableBlankFrontendDocument(
+  snapshot: AuthenticationDocumentSnapshot,
+  frontendOrigin: string,
+): boolean {
+  return (
+    snapshot.origin === frontendOrigin &&
+    (snapshot.pathname === "/" || snapshot.pathname === "/auth/callback") &&
+    snapshot.bodyText.trim() === "" &&
+    (snapshot.appChildElementCount === undefined ||
+      snapshot.appChildElementCount === 0)
+  );
 }
 
 async function detectAuthSurface(page: Page): Promise<AuthSurface> {
@@ -443,6 +491,22 @@ function isAuthenticationResponse(response: Response): boolean {
       path.includes("/protocol/openid-connect/") ||
       path.endsWith("/authorize") ||
       path.endsWith("/token")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isOwnerSessionCreationResponse(
+  response: Response,
+  frontendOrigin: string,
+): boolean {
+  try {
+    const location = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      location.origin === frontendOrigin &&
+      location.pathname === "/api/v1/session"
     );
   } catch {
     return false;

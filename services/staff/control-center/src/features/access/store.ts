@@ -281,6 +281,7 @@ export const useAccessStore = defineStore("access", () => {
       ? await api.addAccessRoleVersion(current, input)
       : await api.addAccessRole(input);
     await loadRoles();
+    roles.value = appendUnique(roles.value, [role], (item) => item.ref);
     await loadRoleVersions(role.ref);
     return role;
   }

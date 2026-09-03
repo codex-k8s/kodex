@@ -109,19 +109,57 @@ export async function gotoWithRetry(
       if (requirements.appShell !== false) {
         await expect(page.locator("#app")).toBeVisible();
         await expect(page.locator("#main-content")).toBeVisible();
+        await page.evaluate(
+          () =>
+            new Promise<void>((resolve) => {
+              window.requestAnimationFrame(() =>
+                window.requestAnimationFrame(() => resolve()),
+              );
+            }),
+        );
+        if (!navigationReachedExpectedPath(url, page.url())) {
+          throw new Error(
+            `Navigation ended at unexpected path: expected=${requestedNavigationPath(url)} actual=${safeNavigationPath(page.url())}`,
+          );
+        }
       }
       return;
     } catch (error) {
       const emptyAppShell =
         requirements.appShell !== false && (await hasEmptyAppShell(page));
+      const unexpectedPath =
+        error instanceof Error &&
+        error.message.startsWith("Navigation ended at unexpected path:");
       if (
         index === retryDelays.length - 1 ||
         !(error instanceof Error) ||
-        (!error.message.includes("net::ERR_NETWORK_CHANGED") && !emptyAppShell)
+        (!error.message.includes("net::ERR_NETWORK_CHANGED") &&
+          !emptyAppShell &&
+          !unexpectedPath)
       ) {
         throw error;
       }
     }
+  }
+}
+
+export function navigationReachedExpectedPath(
+  requestedURL: string,
+  actualURL: string,
+): boolean {
+  const expected = requestedNavigationPath(requestedURL);
+  const actual = safeNavigationPath(actualURL);
+  if (expected === "/onboarding") {
+    return actual === expected || actual === "/";
+  }
+  return actual === expected;
+}
+
+function requestedNavigationPath(raw: string): string {
+  try {
+    return new URL(raw, "https://kodex.invalid").pathname.slice(0, 512);
+  } catch {
+    return "invalid-url";
   }
 }
 

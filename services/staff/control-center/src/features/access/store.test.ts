@@ -7,6 +7,9 @@ const fetchAccessSubjects = vi.hoisted(() => vi.fn());
 const fetchAccessBindings = vi.hoisted(() => vi.fn());
 const fetchPlatformMemberships = vi.hoisted(() => vi.fn());
 const fetchProjectMemberships = vi.hoisted(() => vi.fn());
+const fetchAccessRoles = vi.hoisted(() => vi.fn());
+const fetchAccessRoleVersions = vi.hoisted(() => vi.fn());
+const addAccessRole = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/access/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/access/api")>()),
@@ -14,6 +17,9 @@ vi.mock("@/features/access/api", async (importOriginal) => ({
   fetchAccessBindings,
   fetchPlatformMemberships,
   fetchProjectMemberships,
+  fetchAccessRoles,
+  fetchAccessRoleVersions,
+  addAccessRole,
 }));
 
 import { useAccessStore } from "@/features/access/store";
@@ -39,6 +45,32 @@ function subject(ref: string) {
   };
 }
 
+function accessRole(ref: string, name = ref) {
+  return {
+    ref,
+    version: 1,
+    kind: "CUSTOM" as const,
+    state: "ACTIVE" as const,
+    currentVersion: {
+      ref: `${ref}_v1`,
+      revision: 1,
+      name,
+      description: "Точечный запуск сотрудника",
+      permissionKeys: ["agent.read", "agent.run"],
+      allowedScopes: ["RESOURCE_INSTANCE" as const],
+      changeComment: "Проверка RBAC",
+      createdAt: "2026-09-03T00:00:00Z",
+      createdBy: {
+        ref: "subject_owner",
+        displayName: "Владелец",
+        emailMasked: "o***@kodex.local",
+      },
+    },
+    bindingCount: 0,
+    updatedAt: "2026-09-03T00:00:00Z",
+  };
+}
+
 describe("access store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -46,6 +78,9 @@ describe("access store", () => {
     fetchAccessBindings.mockReset();
     fetchPlatformMemberships.mockReset();
     fetchProjectMemberships.mockReset();
+    fetchAccessRoles.mockReset();
+    fetchAccessRoleVersions.mockReset();
+    addAccessRole.mockReset();
   });
 
   it("не позволяет старому поиску участников заменить новый", async () => {
@@ -125,5 +160,36 @@ describe("access store", () => {
     expect(fetchProjectMemberships).toHaveBeenCalledWith("project_sales");
     expect(store.platformMemberships).toEqual([platformMembership]);
     expect(store.projectMemberships).toEqual([projectMembership]);
+  });
+
+  it("оставляет созданную роль видимой, если первая страница readback её не содержит", async () => {
+    const created = accessRole(
+      "role_created",
+      "e2e — точечный запуск сотрудника",
+    );
+    const firstPage = Array.from({ length: 50 }, (_, index) =>
+      accessRole(`role_${String(index).padStart(2, "0")}`),
+    );
+    addAccessRole.mockResolvedValue(created);
+    fetchAccessRoles.mockResolvedValue({
+      items: firstPage,
+      nextPageToken: "role_49",
+    });
+    fetchAccessRoleVersions.mockResolvedValue({ role: created, items: [] });
+    const store = useAccessStore();
+
+    const result = await store.saveRole({
+      name: created.currentVersion.name,
+      description: created.currentVersion.description,
+      permissionKeys: created.currentVersion.permissionKeys,
+      allowedScopes: created.currentVersion.allowedScopes,
+      changeComment: created.currentVersion.changeComment,
+    });
+
+    expect(result).toEqual(created);
+    expect(store.roles).toContainEqual(created);
+    expect(store.roles).toHaveLength(51);
+    expect(store.roleNextPageToken).toBe("role_49");
+    expect(fetchAccessRoleVersions).toHaveBeenCalledWith(created.ref);
   });
 });

@@ -232,6 +232,7 @@ export const usePlatformStore = defineStore("platform", () => {
   const projectMembershipActions = ref<NextAction[]>([]);
   const projectCollectionActions = ref<NextAction[]>([]);
   const integrationDefinitionActions = ref<NextAction[]>([]);
+  const integrationCoreReady = ref<boolean>();
   const conversations = reactive<Record<string, AssistantConversation>>({});
   const assistant = ref<SystemAssistant>();
   const auditEvents = ref<AuditEvent[]>([]);
@@ -900,12 +901,14 @@ export const usePlatformStore = defineStore("platform", () => {
         ]);
         return {
           definitions: definitionPage.data.items,
+          coreReady: definitionPage.data.coreReady,
           definitionActions: definitionPage.data.nextActions,
           connections: connectionPage.data.items,
         };
       },
       (value) => {
         replaceByKey(definitions, value.definitions, (item) => item.key);
+        integrationCoreReady.value = value.coreReady;
         integrationDefinitionActions.value = value.definitionActions;
         replace(connections, value.connections);
       },
@@ -1866,6 +1869,7 @@ export const usePlatformStore = defineStore("platform", () => {
     projectMembershipActions.value = [];
     projectCollectionActions.value = [];
     integrationDefinitionActions.value = [];
+    integrationCoreReady.value = undefined;
     assistant.value = undefined;
     auditEvents.value = [];
     auditNextPageToken.value = undefined;
@@ -1908,6 +1912,7 @@ export const usePlatformStore = defineStore("platform", () => {
     projectMembershipActions,
     projectCollectionActions,
     integrationDefinitionActions,
+    integrationCoreReady,
     conversations,
     assistant,
     auditEvents,

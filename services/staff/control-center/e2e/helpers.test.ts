@@ -2,10 +2,40 @@ import type { Page } from "@playwright/test";
 import { describe, expect, test, vi } from "vitest";
 
 import {
+  navigationReachedExpectedPath,
   readJsonWithNetworkRetry,
   retryableProviderResult,
   retryReadOnlyBrowserAction,
 } from "./helpers";
+
+describe("готовность E2E-навигации", () => {
+  test("не принимает redirect с Project detail на список Проектов", () => {
+    expect(
+      navigationReachedExpectedPath(
+        "/projects/prj_expected",
+        "https://control.kodex.example/projects/",
+      ),
+    ).toBe(false);
+  });
+
+  test("принимает точный pathname независимо от query", () => {
+    expect(
+      navigationReachedExpectedPath(
+        "/projects/prj_expected/runs/new?targetType=AGENT",
+        "https://control.kodex.example/projects/prj_expected/runs/new?targetType=AGENT",
+      ),
+    ).toBe(true);
+  });
+
+  test("сохраняет разрешённый redirect завершённого onboarding", () => {
+    expect(
+      navigationReachedExpectedPath(
+        "/onboarding",
+        "https://control.kodex.example/",
+      ),
+    ).toBe(true);
+  });
+});
 
 describe("повтор временного сбоя провайдера системного помощника", () => {
   test.each(["RUNTIME_PROVIDER_UNAVAILABLE", "RUNTIMEPROVIDERUNAVAILABLE"])(

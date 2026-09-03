@@ -1113,8 +1113,7 @@ const ru = {
     grants: "Разрешения сотрудникам и Процессам",
     unavailable: "Сейчас недоступна — core-платформа продолжает работать",
     disabled: "Подключение отключено",
-    noConnections:
-      "Подключений пока нет. Core-платформа полностью доступна без них.",
+    noConnections: "Откройте каталог, чтобы настроить нужную внешнюю систему.",
     credentialSetup:
       "После создания подключения защищённые учётные данные настраиваются через разрешённый способ материализации этой установки.",
     credentialValue: "Секретное значение",
@@ -1205,6 +1204,7 @@ const ru = {
     noPackagesHint: "Измените поиск или выбранную категорию.",
     zeroConnectionsReady:
       "Платформа полностью работоспособна без внешних подключений.",
+    noConnectionsYet: "Подключений пока нет",
     connectionsTitle: "Рабочие подключения",
     connectionsDescription:
       "Health, учётные данные и доступные серверные команды каждого подключения.",
@@ -3289,7 +3289,7 @@ const en = {
     unavailable: "Currently unavailable — core platform keeps working",
     disabled: "Connection disabled",
     noConnections:
-      "No connections yet. The core platform is fully available without them.",
+      "Open the catalog to configure the external system you need.",
     credentialSetup:
       "After the connection is created, protected credentials are configured through the deployment's authorized materialization method.",
     credentialValue: "Secret value",
@@ -3380,6 +3380,7 @@ const en = {
     noPackagesHint: "Change the search text or selected category.",
     zeroConnectionsReady:
       "The platform remains fully operational without external connections.",
+    noConnectionsYet: "No connections yet",
     connectionsTitle: "Active connections",
     connectionsDescription:
       "Health, credential state, and server-authorized actions for each connection.",
