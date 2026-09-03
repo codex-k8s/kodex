@@ -4,4 +4,6 @@ SELECT
     source_digest_sha256
 FROM internal_rpc_authority.authority_snapshot_history
 ORDER BY source_revision DESC
-LIMIT 32;
+-- One extra row keeps an already persisted current revision available so the
+-- publisher can remove it and rebuild the exact same 32-entry predecessor window.
+LIMIT 33;
