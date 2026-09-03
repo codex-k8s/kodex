@@ -133,7 +133,8 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 			IncludeOnly: includeOnly, Set: environmentSet},
 		MCPServers: map[string]mcpServerConfig{"kodex": {URL: mcpURL,
 			BearerTokenEnvVar: "KODEX_MCP_PROXY_TOKEN", DefaultToolsApprovalMode: "approve",
-			Required: true, StartupTimeoutSeconds: 15, ToolTimeoutSeconds: 60}}}
+			Required: true, StartupTimeoutSeconds: 15,
+			ToolTimeoutSeconds: runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds}}}
 	var raw bytes.Buffer
 	if err := toml.NewEncoder(&raw).Encode(config); err != nil {
 		return errors.New("encode Codex configuration")

@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"golang.org/x/sys/unix"
 )
@@ -206,7 +207,8 @@ func exactMCPTransport(binding model.TLSBinding) (*http.Transport, error) {
 		MaxVersion: tls.VersionTLS13, ServerName: binding.ServerName, RootCAs: roots,
 		Certificates: []tls.Certificate{certificate}}, DisableCompression: true,
 		MaxIdleConns: 2, MaxIdleConnsPerHost: 2, TLSHandshakeTimeout: 5 * time.Second,
-		ResponseHeaderTimeout: 10 * time.Second, MaxResponseHeaderBytes: 16 << 10}, nil
+		ResponseHeaderTimeout:  time.Duration(runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds+5) * time.Second,
+		MaxResponseHeaderBytes: 16 << 10}, nil
 }
 
 func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token string) error {

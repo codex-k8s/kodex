@@ -146,8 +146,9 @@ func New(config Config, manager *workload.Manager, control *controlplaneclient.C
 	}
 	server := &Server{config: config, manager: manager, control: control, coordinator: coordinator, logger: logger}
 	server.http = &http.Server{Addr: config.Listen, Handler: http.HandlerFunc(server.route), TLSConfig: tlsConfig,
-		ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 35 * time.Second,
-		IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
+		ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 30 * time.Second,
+		WriteTimeout: time.Duration(runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds+10) * time.Second,
+		IdleTimeout:  60 * time.Second, MaxHeaderBytes: 16 << 10}
 	return server, nil
 }
 
