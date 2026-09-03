@@ -12,6 +12,8 @@ const remoteDevelopmentEnabled = Boolean(
 );
 
 export const controlCenterReloadPollIntervalMs = 1_000;
+export const controlCenterRemoteHMRPort = 24_678;
+export const controlCenterRemoteHMRClientPort = 9;
 const controlCenterReloadClientPath = "/__kodex_dev_reload.js";
 const controlCenterRevisionPath = "/__kodex_dev_revision";
 const viteHMRClientScriptPattern =
@@ -162,8 +164,15 @@ export default defineConfig({
     ...(developmentPublicHost && developmentApiTarget
       ? {
           allowedHosts: [developmentPublicHost],
-          hmr: false,
-          ws: false,
+          // Vite client нужен CSS-модулям, но его HMR transport не должен
+          // занимать публичный WebSocket proxy; reload выполняет polling выше.
+          hmr: {
+            clientPort: controlCenterRemoteHMRClientPort,
+            host: "127.0.0.1",
+            overlay: false,
+            port: controlCenterRemoteHMRPort,
+            protocol: "ws",
+          },
           watch: {
             ignored: [
               "**/.auth/**",

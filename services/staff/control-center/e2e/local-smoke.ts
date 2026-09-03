@@ -97,7 +97,11 @@ test("локальный OIDC, API и основные экраны доступ
     ).toBeVisible();
   }
   await page.getByRole("button", { name: "Открыть Kodex" }).click();
-  await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
+  const assistant = page.getByRole("dialog", { name: "Kodex" });
+  await expect(assistant).toBeVisible();
+  await expect(
+    assistant.getByRole("button", { name: "Новый диалог", exact: true }),
+  ).toBeEnabled();
   expect(browserFailures).toEqual([]);
   await writeStorageState(
     environment.outputStorageState,

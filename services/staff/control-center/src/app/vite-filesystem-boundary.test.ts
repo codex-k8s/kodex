@@ -5,6 +5,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import viteConfig, {
   controlCenterFileSystemBoundary,
+  controlCenterRemoteHMRClientPort,
+  controlCenterRemoteHMRPort,
   controlCenterReloadPollIntervalMs,
   withoutViteHMRClient,
 } from "../../vite.config";
@@ -51,6 +53,11 @@ describe("filesystem boundary Vite dev-server", () => {
 
   it("проверяет remote revision с bounded интервалом", () => {
     expect(controlCenterReloadPollIntervalMs).toBe(1_000);
+  });
+
+  it("отделяет Vite HMR transport от рабочего WebSocket proxy", () => {
+    expect(controlCenterRemoteHMRPort).toBe(24_678);
+    expect(controlCenterRemoteHMRClientPort).toBe(9);
   });
 
   it("заменяет встроенный Vite HMR client на remote polling reload", () => {
