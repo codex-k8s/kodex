@@ -240,17 +240,18 @@ finalize() {
 }
 trap finalize EXIT
 
-common_arguments=(
+e2e_arguments=(
   --kubeconfig "$kubeconfig"
   --context "$context"
   --state-directory "$state_directory"
 )
-[[ -z "$cluster_marker" ]] || common_arguments+=(--cluster-marker "$cluster_marker")
-[[ -z "$expected_sha" ]] || common_arguments+=(--expected-sha "$expected_sha")
+deployment_arguments=("${e2e_arguments[@]}")
+[[ -z "$cluster_marker" ]] || deployment_arguments+=(--cluster-marker "$cluster_marker")
+[[ -z "$expected_sha" ]] || deployment_arguments+=(--expected-sha "$expected_sha")
 if [[ "$skip_build" == true ]]; then
-  run_phase local-readback "$repository_root/dev.sh" status "${common_arguments[@]}"
+  run_phase local-readback "$repository_root/dev.sh" status "${deployment_arguments[@]}"
 else
-  run_phase local-render-deploy "$repository_root/dev.sh" up "${common_arguments[@]}"
+  run_phase local-render-deploy "$repository_root/dev.sh" up "${deployment_arguments[@]}"
 fi
 hot_reload_arguments=(
   --kubeconfig "$kubeconfig"
@@ -265,7 +266,7 @@ if batch_selected hot-reload; then
 fi
 if batch_selected browser; then
   run_phase browser-auth-and-full-e2e "$repository_root/dev.sh" e2e \
-    "${common_arguments[@]}" --resource-prefix "$resource_prefix" \
+    "${deployment_arguments[@]}" --resource-prefix "$resource_prefix" \
     --run-timeout-ms "$run_timeout_ms"
 fi
 run_deployed_integration_e2e() {
@@ -304,20 +305,20 @@ if batch_selected role-image; then
   run_phase role-image-build-admit-promote-runtime-readback env \
     KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
     "$repository_root/scripts/tests/local-role-image-supply-chain-e2e.sh" \
-    "${common_arguments[@]}" --resource-prefix "$resource_prefix" \
+    "${e2e_arguments[@]}" --resource-prefix "$resource_prefix" \
     --timeout-seconds "$((run_timeout_ms / 1000))"
 fi
 if batch_selected archive; then
   run_phase session-archive-write-restore-delete-readback env \
     KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
     "$repository_root/scripts/tests/local-session-archive-e2e.sh" \
-    "${common_arguments[@]}"
+    "${e2e_arguments[@]}"
 fi
 if batch_selected backup; then
   run_phase backup-and-disposable-restore-drill env \
     KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
     "$repository_root/scripts/tests/local-backup-restore-e2e.sh" \
-    "${common_arguments[@]}"
+    "${e2e_arguments[@]}"
 fi
 for target in "${targets[@]}"; do
   run_phase "additional:$target" make --no-print-directory -C "$repository_root" "$target"

@@ -96,6 +96,11 @@ done
 chmod +x "$fake_bin"/* "$fixture_root/dev.sh" \
   "$fixture_root/tools/dev/full-local-e2e.sh" "$fixture_root/tools/dev/verify-hot-reload.sh" \
   "$fixture_root/scripts/tests"/*.sh
+git -C "$fixture_root" init -q
+git -C "$fixture_root" add .
+git -C "$fixture_root" -c user.name=fixture -c user.email=fixture@kodex.local \
+  commit -qm fixture
+fixture_sha=$(git -C "$fixture_root" rev-parse HEAD)
 
 export PATH="$fake_bin:$PATH"
 export KODEX_TEST_COMMAND_LOG="$command_log"
@@ -196,6 +201,18 @@ jq -e '
     "backup-and-disposable-restore-drill"]
 ' "$state_directory/e2e/contract-batches-summary.json" >/dev/null ||
   fail 'selected batch summary or canonical order is invalid'
+
+: >"$command_log"
+"$fixture_root/tools/dev/full-local-e2e.sh" --skip-build \
+  --kubeconfig "$kubeconfig" --context fixture-local \
+  --state-directory "$state_directory" --resource-prefix contract-arguments \
+  --cluster-marker /var/lib/kodex-dev/cluster-identity.json \
+  --expected-sha "$fixture_sha" --run-timeout-ms 60000 --batch role-image >/dev/null
+grep -Fq 'dev status --kubeconfig '"$kubeconfig"' --context fixture-local --state-directory '"$state_directory"' --cluster-marker /var/lib/kodex-dev/cluster-identity.json --expected-sha '"$fixture_sha" \
+  "$command_log" || fail 'deployment readback did not receive attestation arguments'
+role_image_command=$(grep -F 'storage-e2e local-role-image-supply-chain-e2e.sh ' "$command_log")
+[[ "$role_image_command" != *'--cluster-marker'* && "$role_image_command" != *'--expected-sha'* ]] ||
+  fail 'RoleImage E2E received unsupported deployment arguments'
 
 if "$fixture_root/tools/dev/full-local-e2e.sh" --check \
   --kubeconfig "$kubeconfig" --context production-cluster \
