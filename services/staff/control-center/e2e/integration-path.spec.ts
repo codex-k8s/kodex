@@ -592,10 +592,12 @@ async function testConnection(
   await expect
     .poll(
       async () => {
-        current = await readAPI<Connection>(
+        const observed = await readAPIDuringPoll<Connection>(
           page,
           `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}`,
         );
+        if (!observed) return current.state;
+        current = observed;
         return current.state;
       },
       { timeout: 120_000, intervals: [250, 1_000, 2_000] },
@@ -888,6 +890,19 @@ async function readAPI<T>(page: Page, path: string): Promise<T> {
     );
   }
   return result.body as T;
+}
+
+async function readAPIDuringPoll<T>(
+  page: Page,
+  path: string,
+): Promise<T | undefined> {
+  try {
+    return await readAPI<T>(page, path);
+  } catch (error) {
+    // Playwright does not retry expect.poll callback exceptions.
+    if (String(error).includes("TypeError: Failed to fetch")) return undefined;
+    throw error;
+  }
 }
 
 async function mutateAPI<T>(
