@@ -1201,7 +1201,7 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 	capability, _ := arguments["capability_key"].(string)
 	allowed := false
 	for _, grant := range input.IntegrationGrants {
-		if grant.ConnectionRef == connection && grant.CapabilityKey == capability && grant.Risk != "HIGH" {
+		if grant.ConnectionRef == connection && grant.CapabilityKey == capability {
 			allowed = true
 			break
 		}
@@ -1232,7 +1232,7 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 		switch state.GetState() {
 		case "SUCCEEDED":
 			return map[string]any{"ok": true, "result": state.GetResultSummary()}, nil
-		case "FAILED", "CANCELLED":
+		case "FAILED", "REJECTED", "CANCELLED":
 			return map[string]any{"ok": false, "error_code": state.GetSafeErrorCode()}, nil
 		}
 		select {
