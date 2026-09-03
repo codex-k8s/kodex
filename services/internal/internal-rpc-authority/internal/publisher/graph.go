@@ -255,13 +255,29 @@ func (graph *Graph) Publish(
 	}
 	persisted := publication
 	if found {
-		if existing.IntentID != publication.IntentID ||
-			existing.InputDigestSHA256 != publication.InputDigestSHA256 ||
-			existing.SourceDigestSHA256 != publication.SourceDigestSHA256 ||
-			existing.PolicyRevision != publication.PolicyRevision ||
-			existing.SignerGeneration != publication.SignerGeneration {
+		if existing.IntentID != publication.IntentID {
 			return model.AuthoritySnapshotPublication{}, errors.New(
-				"durable authority snapshot publication mutation rejected",
+				"durable authority snapshot intent mutation rejected",
+			)
+		}
+		if existing.InputDigestSHA256 != publication.InputDigestSHA256 {
+			return model.AuthoritySnapshotPublication{}, errors.New(
+				"durable authority snapshot input mutation rejected",
+			)
+		}
+		if existing.SourceDigestSHA256 != publication.SourceDigestSHA256 {
+			return model.AuthoritySnapshotPublication{}, errors.New(
+				"durable authority snapshot content mutation rejected",
+			)
+		}
+		if existing.PolicyRevision != publication.PolicyRevision {
+			return model.AuthoritySnapshotPublication{}, errors.New(
+				"durable authority snapshot policy mutation rejected",
+			)
+		}
+		if existing.SignerGeneration != publication.SignerGeneration {
+			return model.AuthoritySnapshotPublication{}, errors.New(
+				"durable authority snapshot signer mutation rejected",
 			)
 		}
 		verifiedPayload, verifyErr := snapshot.VerifyPublisherSnapshotCompact(
