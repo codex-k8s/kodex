@@ -46,10 +46,11 @@ test.describe("OIDC-сессия владельца", () => {
         return;
       }
       delayedRequests += 1;
+      const response = await route.fetch();
       await new Promise<void>((resolve) =>
         globalThis.setTimeout(resolve, delayedSessionResponseMs),
       );
-      await route.continue();
+      await route.fulfill({ response });
     });
 
     try {
