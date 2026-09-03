@@ -183,37 +183,56 @@ verify_external_http01() {
 }
 
 verify_external_https_port() {
-  local host=$1 submission request_id result successful readback_received=false
-  submission=$(curl --fail --silent --show-error --max-time 20 \
-    -H 'accept: application/json' --get \
-    --data-urlencode "host=$host:443" --data-urlencode 'max_nodes=3' \
-    https://check-host.net/check-tcp) ||
-    fail "external HTTPS port probe could not be submitted: $host"
-  request_id=$(jq -er '
-    select(.ok == 1 and (.nodes | type == "object") and (.nodes | length) >= 1) |
-    .request_id | select(type == "string" and test("^[A-Za-z0-9_-]+$"))
-  ' <<<"$submission") || fail "external HTTPS port probe response is invalid: $host"
-  for _ in $(seq 1 30); do
-    if ! result=$(curl --fail --silent --show-error --max-time 10 \
-      -H 'accept: application/json' "https://check-host.net/check-result/$request_id"); then
-      sleep 1
-      continue
+  local host=$1 submission request_id result successful
+  local submission_received=false readback_received=false
+  for _ in $(seq 1 3); do
+    if submission=$(curl --fail --silent --show-error --max-time 20 \
+      -H 'accept: application/json' --get \
+      --data-urlencode "host=$host:443" --data-urlencode 'max_nodes=3' \
+      https://check-host.net/check-tcp) &&
+      request_id=$(jq -er '
+        select(.ok == 1 and (.nodes | type == "object") and (.nodes | length) >= 1) |
+        .request_id | select(type == "string" and test("^[A-Za-z0-9_-]+$"))
+      ' <<<"$submission"); then
+      submission_received=true
+      break
     fi
-    if ! successful=$(jq '[to_entries[] | .value[]? |
-      select(type == "object" and has("time") and (.time | type == "number"))] | length' \
-      <<<"$result"); then
-      sleep 1
-      continue
-    fi
-    readback_received=true
-    if ((successful >= 1)); then
-      return
-    fi
-    sleep 1
+    sleep 2
   done
-  [[ "$readback_received" == true ]] ||
-    fail "external HTTPS port probe readback failed: $host"
-  fail "external HTTPS port is unreachable: $host"
+  if [[ "$submission_received" == true ]]; then
+    for _ in $(seq 1 30); do
+      if ! result=$(curl --fail --silent --show-error --max-time 10 \
+        -H 'accept: application/json' "https://check-host.net/check-result/$request_id"); then
+        sleep 1
+        continue
+      fi
+      if ! successful=$(jq '[to_entries[] | .value[]? |
+        select(type == "object" and has("time") and (.time | type == "number"))] | length' \
+        <<<"$result"); then
+        sleep 1
+        continue
+      fi
+      readback_received=true
+      if ((successful >= 1)); then
+        return
+      fi
+      sleep 1
+    done
+  fi
+
+  printf 'Primary external HTTPS port probe is inconclusive; trying the fallback: %s\n' \
+    "$host" >&2
+  result=$(curl --fail --silent --show-error --max-time 30 \
+    -H 'accept: application/json' "https://tcpdata.com/port/$host/443") || {
+      [[ "$submission_received" == true && "$readback_received" == true ]] &&
+        fail "external HTTPS port is unreachable: $host"
+      fail "external HTTPS port probes are unavailable: $host"
+    }
+  jq -e --arg host "$host" '
+    .host == $host and .port == 443 and .status == "open" and
+    .protocol == "https" and
+    (.response_time_ms | type == "number" and . >= 0)
+  ' <<<"$result" >/dev/null || fail "fallback external HTTPS port probe failed: $host"
 }
 
 install -d -m 0700 "$temporary_directory/.well-known/acme-challenge"
