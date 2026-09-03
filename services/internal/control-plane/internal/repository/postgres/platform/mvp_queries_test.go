@@ -100,6 +100,31 @@ func TestProviderAccountEnabledTransitionMatrix(t *testing.T) {
 	}
 }
 
+func TestValidStableKey(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		value string
+		valid bool
+	}{
+		{value: "openai-codex", valid: true},
+		{value: "provider_2", valid: true},
+		{value: "a0", valid: true},
+		{value: "a", valid: false},
+		{value: "0provider", valid: false},
+		{value: "Provider", valid: false},
+		{value: "provider.key", valid: false},
+		{value: "provider key", valid: false},
+	}
+	for _, test := range tests {
+		t.Run(test.value, func(t *testing.T) {
+			t.Parallel()
+			if got := validStableKey(test.value); got != test.valid {
+				t.Fatalf("validStableKey(%q) = %t, want %t", test.value, got, test.valid)
+			}
+		})
+	}
+}
+
 func TestRuntimeEnvironmentReadinessRequiresCurrentRoleRuntimeContract(t *testing.T) {
 	t.Parallel()
 	const currentContractRevision = 7

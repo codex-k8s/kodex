@@ -143,7 +143,7 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		return repository.resolveCommandTarget(ctx, tx, current, "schedule.manage", "SCHEDULE", payload.Ref, payload.ProjectRef)
 	case command.ProviderAccountInput:
 		if input.Kind == command.CreateProviderAccount {
-			return "provider.account.manage", organization, nil
+			return "provider.account.manage", resolvedAccessTarget{scope: providerAccountCollectionTarget()}, nil
 		}
 		permission := "provider.account.manage"
 		switch input.Kind {

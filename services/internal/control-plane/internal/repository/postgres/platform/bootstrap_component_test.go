@@ -735,6 +735,20 @@ func testProviderAccountApplicationAccess(t *testing.T, ctx context.Context, rep
 		!contains(ownerItems[0].NextActions, "REVOKE") {
 		t.Fatalf("owner provider account actions: items=%#v actions=%v err=%v", ownerItems, ownerActions, err)
 	}
+	created, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateProviderAccount, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-account-owner-create"},
+		Payload: command.ProviderAccountInput{
+			DefinitionKey: "openai-codex", Name: "Provider account owner API key",
+		},
+	})
+	if err != nil || created.ProviderAccount == nil || created.ProviderAccount.State != "PENDING_AUTHORIZATION" {
+		t.Fatalf("owner create provider account: account=%#v err=%v", created.ProviderAccount, err)
+	}
+	ownerItems, _, _, err = service.ListProviderAccounts(ctx, owner, query.Filter{Page: query.Page{Size: 20}})
+	if err != nil {
+		t.Fatalf("list provider accounts after owner create: %v", err)
+	}
 	providerAccess, err := service.QueryEffectiveAccess(ctx, owner, "", entity.AccessScope{
 		Kind: "RESOURCE_INSTANCE", ResourceKind: "PROVIDER_ACCOUNT", ResourceRef: ownerItems[0].Ref,
 	}, []string{"provider.account.view"}, time.Time{})
