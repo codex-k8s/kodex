@@ -140,6 +140,7 @@ import {
   normalizeProblem,
   unwrap,
 } from "@/shared/api/problem";
+import { readWithRetry } from "@/shared/api/read-retry";
 import {
   mergeRunGraph,
   reduceRunEvent,
@@ -254,7 +255,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loading[key] = true;
     Reflect.deleteProperty(problems, key);
     try {
-      const value = await request();
+      const value = await readWithRetry(request);
       if (generation.get(key) !== current) return;
       apply(value);
     } catch (error) {

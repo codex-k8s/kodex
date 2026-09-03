@@ -425,10 +425,10 @@ async function detectAuthSurface(page: Page): Promise<AuthSurface> {
       return "frontend-sign-in";
     }
     if (
-      new URL(page.url()).pathname === "/auth/callback" &&
-      (await page
+      await page
+        .locator(".auth-gate")
         .getByRole("button", { name: "Повторить", exact: true })
-        .isVisible())
+        .isVisible()
     ) {
       return "frontend-sign-in";
     }

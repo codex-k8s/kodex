@@ -192,4 +192,33 @@ describe("access store", () => {
     expect(store.roleNextPageToken).toBe("role_49");
     expect(fetchAccessRoleVersions).toHaveBeenCalledWith(created.ref);
   });
+
+  it("собирает все страницы активных ролей для новой привязки", async () => {
+    const firstPage = Array.from({ length: 50 }, (_, index) =>
+      accessRole(`role_${String(index).padStart(2, "0")}`),
+    );
+    const expected = accessRole("role_target", "Точечный запуск сотрудника");
+    fetchAccessRoles
+      .mockResolvedValueOnce({
+        items: firstPage,
+        nextPageToken: "role_49",
+      })
+      .mockResolvedValueOnce({ items: [expected] });
+    const store = useAccessStore();
+
+    await store.loadBindingRoles();
+
+    expect(fetchAccessRoles).toHaveBeenNthCalledWith(1, {
+      includeArchived: false,
+      pageToken: undefined,
+    });
+    expect(fetchAccessRoles).toHaveBeenNthCalledWith(2, {
+      includeArchived: false,
+      pageToken: "role_49",
+    });
+    expect(store.bindingRoles).toHaveLength(51);
+    expect(store.bindingRoles).toContainEqual(expected);
+    expect(store.roles).toEqual([]);
+    expect(store.roleNextPageToken).toBeUndefined();
+  });
 });

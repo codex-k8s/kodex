@@ -62,13 +62,26 @@ const binding: AccessBinding = {
 
 interface AccessSetup {
   archiveRole: (role: AccessRole) => void;
+  bindingDialog: { value: boolean };
   confirmMutation: () => Promise<void>;
   confirmation: {
     value?:
       | { kind: "ARCHIVE_ROLE"; role: AccessRole }
       | { kind: "REVOKE_BINDING"; binding: AccessBinding };
   };
+  createBinding: () => Promise<void>;
   revokeBinding: (binding: AccessBinding) => void;
+}
+
+function deferred(): {
+  promise: Promise<void>;
+  resolve: () => void;
+} {
+  let resolve!: () => void;
+  const promise = new Promise<void>((ready) => {
+    resolve = ready;
+  });
+  return { promise, resolve };
 }
 
 function configureStore() {
@@ -143,5 +156,21 @@ describe("AccessPage lifecycle confirmations", () => {
     expect(source).toContain("<ModalDialog");
     expect(source).toContain('@click="confirmMutation"');
     expect(source).not.toContain("window.confirm");
+  });
+
+  it("открывает новую привязку только после полного каталога ролей", async () => {
+    const { access, setup } = await setupPage();
+    const catalog = deferred();
+    const loadBindingRoles = vi
+      .spyOn(access, "loadBindingRoles")
+      .mockReturnValue(catalog.promise);
+
+    const open = setup.createBinding();
+
+    expect(loadBindingRoles).toHaveBeenCalledOnce();
+    expect(setup.bindingDialog.value).toBe(false);
+    catalog.resolve();
+    await open;
+    expect(setup.bindingDialog.value).toBe(true);
   });
 });

@@ -28,7 +28,9 @@ describe("bootstrap Control Center", () => {
     expect(authGateSource).toContain("session.phase === 'checking'");
     expect(authGateSource).toContain('role="status"');
     expect(authGateSource).toContain("<ProblemNotice");
-    expect(authGateSource).toContain('@retry="session.probe"');
+    expect(authGateSource).toContain('@click="startLogin"');
+    expect(authGateSource).toContain("session.beginLogin().catch");
+    expect(authGateSource).toContain('@retry="retryAuthentication"');
   });
 
   it("не наблюдает каталоги с результатами browser tests", () => {

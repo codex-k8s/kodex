@@ -106,6 +106,8 @@ export const useSessionStore = defineStore("session", () => {
   );
   const pendingRuntimeSecretRevealState = ref<PendingRuntimeSecretReveal>();
   let generation = 0;
+  const loginFailed = ref(false);
+  let loginRedirectRequest: Promise<void> | undefined;
   let loginCompletionRequest: Promise<LoginCompletion> | undefined;
   let renewalTimer: number | undefined;
   let renewalRequest: Promise<void> | undefined;
@@ -126,11 +128,13 @@ export const useSessionStore = defineStore("session", () => {
       runtimeEnvironmentPolicyReauthCompletionStorageKey,
     );
     pendingRuntimeSecretRevealState.value = undefined;
+    loginFailed.value = false;
     phase.value = "unauthenticated";
   }
 
   async function probe(): Promise<void> {
     const current = ++generation;
+    loginFailed.value = false;
     phase.value = "checking";
     problem.value = undefined;
     for (let attempt = 0; ; attempt += 1) {
@@ -165,12 +169,35 @@ export const useSessionStore = defineStore("session", () => {
   }
 
   async function beginLogin(): Promise<void> {
+    if (loginRedirectRequest) return await loginRedirectRequest;
+    const current = ++generation;
+    loginFailed.value = false;
+    phase.value = "checking";
+    problem.value = undefined;
     window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
     window.sessionStorage.removeItem(
       runtimeEnvironmentPolicyReauthCompletionStorageKey,
     );
     pendingRuntimeSecretRevealState.value = undefined;
-    await oidcManager().signinRedirect();
+    const pending = (async () => {
+      try {
+        await oidcManager().signinRedirect();
+      } catch (error) {
+        const normalized = asProblem(error);
+        if (current === generation) {
+          problem.value = normalized;
+          loginFailed.value = true;
+          phase.value = normalized.kind === "forbidden" ? "forbidden" : "error";
+        }
+        throw normalized;
+      }
+    })();
+    loginRedirectRequest = pending;
+    try {
+      await pending;
+    } finally {
+      if (loginRedirectRequest === pending) loginRedirectRequest = undefined;
+    }
   }
 
   async function beginRuntimeSecretRevealReauth(input: {
@@ -433,6 +460,7 @@ export const useSessionStore = defineStore("session", () => {
   return {
     phase,
     problem,
+    loginFailed,
     canLogout,
     probe,
     beginLogin,

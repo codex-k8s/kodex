@@ -330,6 +330,7 @@ describe("platform store", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -666,6 +667,27 @@ describe("platform store", () => {
 
     expect(store.problems.projects?.kind).toBe("forbidden");
     expect(store.problems.projects?.code).toBe("PROJECT_ACCESS_DENIED");
+    expect(store.loading.projects).toBe(false);
+  });
+
+  it("восстанавливает безопасную загрузку после временного сетевого сбоя", async () => {
+    vi.useFakeTimers();
+    listProjectsMock
+      .mockResolvedValueOnce({
+        error: { status: 0, code: "UNKNOWN", retryable: true },
+      })
+      .mockResolvedValueOnce(response([project("project_recovered")]));
+    const store = usePlatformStore();
+
+    const loading = store.loadProjects();
+    await vi.runAllTimersAsync();
+    await loading;
+
+    expect(listProjectsMock).toHaveBeenCalledTimes(2);
+    expect(store.projectList.map((item) => item.ref)).toEqual([
+      "project_recovered",
+    ]);
+    expect(store.problems.projects).toBeUndefined();
     expect(store.loading.projects).toBe(false);
   });
 
