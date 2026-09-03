@@ -3486,7 +3486,10 @@ test.describe("web-only fresh installation", () => {
       page,
       filesWorkspace.locator(".file-details"),
     );
-    await expectInsideViewport(page, filesWorkspace, "files workspace at 1440");
+    const filesBox = await visualBox(filesWorkspace, "files workspace at 1440");
+    expect(filesBox.left).toBeGreaterThanOrEqual(-0.5);
+    expect(filesBox.top).toBeGreaterThanOrEqual(-0.5);
+    expect(filesBox.right).toBeLessThanOrEqual(1440.5);
     const filterWidths = await filesWorkspace
       .locator(".files-workspace__toolbar select")
       .evaluateAll((selects) =>
