@@ -33,7 +33,8 @@ describe("bootstrap Control Center", () => {
     expect(authGateSource).toContain('@retry="retryAuthentication"');
   });
 
-  it("не наблюдает каталоги с результатами browser tests", () => {
+  it("не наблюдает browser test artifacts и сохранённую OIDC-сессию", () => {
+    expect(viteConfigSource).toContain('"**/.auth/**"');
     expect(viteConfigSource).toContain('"**/test-results/**"');
     expect(viteConfigSource).toContain('"**/playwright-report/**"');
   });
