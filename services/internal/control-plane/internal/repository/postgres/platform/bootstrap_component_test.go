@@ -2186,6 +2186,12 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 		t.Fatalf("claim rejected effect runtime: claims=%d err=%v", len(rejectedExecutionResult.RuntimeItems), err)
 	}
 	rejectedExecution := rejectedExecutionResult.RuntimeItems[0]
+	integrationGrants, ok := rejectedExecution["integrationGrants"].([]map[string]string)
+	if !ok || len(integrationGrants) != 2 ||
+		integrationGrants[0]["capabilityKey"] != "synthetic.journal.read" ||
+		integrationGrants[1]["capabilityKey"] != "synthetic.journal.write" {
+		t.Fatalf("claimed runtime lost integration grants: %#v", rejectedExecution["integrationGrants"])
+	}
 	readResolved, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, map[string]string{
 		"run_ref": stringMap(rejectedExecution, "runRef"), "node_ref": stringMap(rejectedExecution, "nodeRef"),
 		"connection_ref": created.Connection.Ref, "capability_key": "synthetic.journal.read",

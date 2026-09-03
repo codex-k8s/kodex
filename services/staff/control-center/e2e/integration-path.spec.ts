@@ -333,7 +333,7 @@ test.describe("deployed local integration path", () => {
         expectedStatus: 201,
       });
       connection = await mutateAPI<Connection>(page, {
-        method: "POST",
+        method: "PUT",
         path: `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}/credential`,
         body: { value: token },
         version: connection.version,
