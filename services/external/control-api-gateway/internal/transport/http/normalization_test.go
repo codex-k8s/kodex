@@ -151,6 +151,21 @@ func TestMessageMapNormalizesProviderEnumsToOpenAPIValues(t *testing.T) {
 	}
 }
 
+func TestMessageMapMaterializesRequiredProviderAccountZeroValues(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.ProviderAccount{
+		Ref:   "pacc-revoked",
+		State: controlplanev1.ProviderAccountState_PROVIDER_ACCOUNT_STATE_REVOKED,
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["externalAccountMasked"] != "" || value["enabled"] != false || value["ready"] != false {
+		t.Fatalf("обязательные нулевые поля provider account потеряны: %#v", value)
+	}
+}
+
 func TestMessageMapNormalizesRunEventEnumsToOpenAPIValues(t *testing.T) {
 	t.Parallel()
 
